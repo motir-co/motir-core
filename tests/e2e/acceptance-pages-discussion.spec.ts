@@ -3,7 +3,7 @@
 // SERVED app: the empty Discussion panel, a comment with its author and time, a
 // reply that has no Reply of its own, a mention picked from the picker and drawn
 // as a chip, an edit with its Edited marker that another member cannot touch,
-// resolve and reopen across a reload, a viewer's read-only panel, a delete, and
+// resolve and reopen across a fresh load, a viewer's read-only panel, a delete, and
 // an archived page whose discussion is read-only until a manager deletes the
 // page and its comments with it. One test, one chapter per recipe step, named
 // `Step 1` to `Step 9`.
@@ -381,8 +381,10 @@ test('Members discuss a page as a whole, a viewer reads it, and it goes with the
       await expect(switchOf(panel, D.listResolved)).toHaveText(counted(D.listResolved, 1));
       await beat();
 
-      // A reload reads both lists from the server again.
-      await page.reload();
+      // A fresh load reads both lists from the server again. The page's bare
+      // address, not a reload: focusing a thread names it in the address
+      // (`?thread=`, MOTIR-10902), and loading that link opens the panel at it.
+      await page.goto(`/pages/${s.pageId}`);
       await expect(control(page)).toBeVisible();
       panel = await openPanel(page, s.pageId);
       await expect(threadOf(openList(panel), rootId)).toHaveCount(0);
@@ -445,7 +447,8 @@ test('Members discuss a page as a whole, a viewer reads it, and it goes with the
     await expect(threadOf(openList(panel), mentionId)).toHaveCount(0);
     await expect(control(page)).toHaveAccessibleName(`${D.open}, ${plural(D.openCount, 1)}`);
 
-    await page.reload();
+    // The bare address, for the reason Step 6 gives.
+    await page.goto(`/pages/${s.pageId}`);
     await expect(control(page)).toBeVisible();
     panel = await openPanel(page, s.pageId);
     await expect(threadOf(openList(panel), rootId)).toBeVisible();

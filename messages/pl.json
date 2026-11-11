@@ -16940,7 +16940,19 @@
         "replyDepth": "Możesz odpowiedzieć tylko na pierwszy komentarz w wątku."
       },
       "readOnlyViewer": "Możesz czytać tę dyskusję, ale Twoja rola nie pozwala jej komentować.",
-      "readOnlyArchived": "Ta strona jest zarchiwizowana, więc jej dyskusja jest tylko do odczytu."
+      "readOnlyArchived": "Ta strona jest zarchiwizowana, więc jej dyskusja jest tylko do odczytu.",
+      "inline": {
+        "tooltipOne": "Komentarz od {name}",
+        "tooltipMany": "Komentarze tutaj: {count}",
+        "quoteLabel": "Cytowany fragment: {quote}",
+        "gone": "Tego fragmentu nie ma już na tej stronie.",
+        "action": "Skomentuj",
+        "actionLabel": "Skomentuj zaznaczony tekst",
+        "editorLabel": "Skomentuj ten fragment",
+        "anchorRefused": "Tego fragmentu nie można już zakotwiczyć. Zaznacz go ponownie i skomentuj.",
+        "notHere": "Tego komentarza nie ma już na tej stronie.",
+        "showInPage": "Pokaż na stronie"
+      }
     },
     "archive": {
       "menuItem": "Archiwizuj…",

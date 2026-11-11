@@ -16940,7 +16940,19 @@
         "replyDepth": "Vous ne pouvez répondre qu'au premier commentaire d'un fil."
       },
       "readOnlyViewer": "Vous pouvez lire cette discussion, mais votre rôle ne permet pas de la commenter.",
-      "readOnlyArchived": "Cette page est archivée : sa discussion est en lecture seule."
+      "readOnlyArchived": "Cette page est archivée : sa discussion est en lecture seule.",
+      "inline": {
+        "tooltipOne": "Commentaire de {name}",
+        "tooltipMany": "{count} commentaires ici",
+        "quoteLabel": "Passage cité : {quote}",
+        "gone": "Le passage ne figure plus sur cette page.",
+        "action": "Commenter",
+        "actionLabel": "Commenter le texte sélectionné",
+        "editorLabel": "Commenter ce passage",
+        "anchorRefused": "Ce passage ne peut plus être ancré. Sélectionnez-le à nouveau et commentez.",
+        "notHere": "Ce commentaire ne figure plus sur cette page.",
+        "showInPage": "Afficher dans la page"
+      }
     },
     "archive": {
       "menuItem": "Archiver…",

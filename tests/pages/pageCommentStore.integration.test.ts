@@ -309,12 +309,13 @@ describe('page comments through the adapter', () => {
         anchor: { bytes: Uint8Array.from([0, 255, 3, 128]), quote: 'this sentence' },
       }),
     );
-    expect(inline.anchor).toEqual({ quote: 'this sentence' });
+    expect(inline.anchor).toEqual({ bytes: 'AP8DgA==', quote: 'this sentence' });
     const rows = await adminDb.pageComment.findMany({ orderBy: { createdAt: 'asc' } });
     expect(rows.map((r) => r.id)).toEqual([plain.id, inline.id]);
     expect(rows[0]).toMatchObject({ anchor: null, anchorQuote: null });
     expect([...rows[1]!.anchor!]).toEqual([0, 255, 3, 128]);
     expect(rows[1]!.anchorQuote).toBe('this sentence');
+    expect([...Buffer.from(inline.anchor!.bytes, 'base64')]).toEqual([...rows[1]!.anchor!]);
   });
 
   it('refuses every write on an archived page and still lists its threads', async () => {
@@ -451,5 +452,34 @@ describe('page comments through the adapter', () => {
       counts: { open: 0, resolved: 0 },
       locked: null,
     });
+  });
+
+  it('findPageComment answers the stored row joined and unlocked, null when absent or out of context', async () => {
+    const t = await makeTenant('l');
+    const other = await makeTenant('m');
+    const clock = steppingClock();
+    const inline = await inTenant(t, t.ownerId, (s) =>
+      createPageComment(s, clock, {
+        ...scope(t, owner(t)),
+        bodyMd: 'Inline',
+        anchor: { bytes: Uint8Array.from([5, 6, 7]), quote: 'the passage' },
+      }),
+    );
+    await inTenant(t, t.memberId, (s) =>
+      resolvePageCommentThread(s, clock, { ...scope(t, member(t)), commentId: inline.id }),
+    );
+    const found = await inTenant(t, t.ownerId, (s) => s.findPageComment(inline.id));
+    expect(found).toMatchObject({
+      id: inline.id,
+      pageId: t.pageId,
+      parentCommentId: null,
+      author: { id: t.ownerId, name: 'Owner l' },
+      resolvedBy: { id: t.memberId, name: 'Member l' },
+      anchorQuote: 'the passage',
+    });
+    expect([...found!.anchor!]).toEqual([5, 6, 7]);
+    expect(await inTenant(t, t.ownerId, (s) => s.findPageComment('missing'))).toBeNull();
+    // Bound to another workspace, the policy does not admit the row.
+    expect(await inTenant(other, other.ownerId, (s) => s.findPageComment(inline.id))).toBeNull();
   });
 });

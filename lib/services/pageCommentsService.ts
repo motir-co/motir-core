@@ -3,8 +3,10 @@ import {
   createPageComment,
   deletePageComment,
   editPageComment,
+  listPageAnchoredRoots,
   listPageCommentThreads,
   pageStoreFor,
+  readPageCommentThread,
   reopenPageCommentThread,
   replyToPageComment,
   resolvePageCommentThread,
@@ -171,6 +173,48 @@ export const pageCommentsService = {
       ...thread.replies.map((reply) => reply.bodyMd),
     ]);
     return { ...answer, workItemRefs: await resolveMarkdownBodiesWorkItemRefs(bodies, ctx) };
+  },
+
+  /**
+   * The page's open ANCHORED roots, without replies, and its open count — what a
+   * page load hands the live editor to wash (MOTIR-10899) and the Discussion
+   * chip. The list's gate and context; no capabilities and no work-item
+   * summaries, which only the panel's own reads need.
+   */
+  async listAnchoredRoots(
+    ctx: ServiceContext,
+    input: PageScope,
+  ): Promise<{ roots: PageCommentDto[]; openCount: number }> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      const read = await listPageAnchoredRoots(pageStoreFor(tx), input);
+      return { roots: read.roots, openCount: read.counts.open };
+    });
+  },
+
+  /**
+   * One thread by a comment's id, wherever it sits in either list — the read a
+   * thread link resolves against. The list's gate and context, line for line:
+   * a viewer reads it, and a page outside the caller's project answers the same
+   * refusal the list does. No capabilities and no counts: the panel reads those
+   * from its lists. The live summaries of every work item the root and its
+   * replies link ride beside it, since a thread outside the loaded list has no
+   * chip data anywhere else.
+   */
+  async readPageThread(
+    ctx: ServiceContext,
+    input: PageCommentTargetInput,
+  ): Promise<WithWorkItemRefs<PageCommentThreadDto>> {
+    const thread = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      return readPageCommentThread(pageStoreFor(tx), {
+        projectId: input.projectId,
+        pageId: input.pageId,
+        commentId: input.commentId,
+      });
+    });
+    const bodies = [thread.bodyMd, ...thread.replies.map((reply) => reply.bodyMd)];
+    return { ...thread, workItemRefs: await resolveMarkdownBodiesWorkItemRefs(bodies, ctx) };
   },
 
   /** Start a thread; an `anchor` makes it inline (the epic's inline story). */

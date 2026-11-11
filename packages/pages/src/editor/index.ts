@@ -10,6 +10,42 @@
 export { PageEditor, type PageEditorProps, type PageEditorTheme } from './PageEditor';
 export type { PageEditorMessages } from './messages';
 export type { SaveStatus } from './autosave';
+export {
+  createInlineComments,
+  inlineCommentDecorations,
+  inlineCommentsKey,
+  partitionWashes,
+  refreshInlineComments,
+  type InlineCommentDecorationsOptions,
+  type InlineCommentInputs,
+  type InlineComments,
+  type PageAnchorSpan,
+  type PageAnchorStretch,
+  type PageAnchorTarget,
+  type PageAnchorWash,
+  type PageInlineAnchorVerdicts,
+  type PageInlineThreadView,
+} from './anchors';
+export {
+  PASSAGE_COMMENT_KEY,
+  PASSAGE_WIDE_MIN,
+  capturePassageAnchor,
+  isPassageCommentKey,
+  placeAction,
+  placeComposer,
+  readPassageSelection,
+  selectionIsCommentable,
+  type PagePassageAnchor,
+  type PagePassagePlacement,
+  type PagePassageRange,
+  type PagePassageViewport,
+} from './passageComment';
+export {
+  PassageCommentAction,
+  PassageCommentComposer,
+  type PagePassageCommentProps,
+  type PagePassageComposerRenderProps,
+} from './PassageCommentSurface';
 export type {
   AvailableWorkItemRefView,
   WorkItemCandidate,

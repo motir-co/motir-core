@@ -30,6 +30,7 @@ const { PATCH: EDIT, DELETE: REMOVE } =
 const { POST: REPLY } = await import('@/app/api/pages/[pageId]/comments/[commentId]/replies/route');
 const { POST: RESOLVE, DELETE: REOPEN } =
   await import('@/app/api/pages/[pageId]/comments/[commentId]/resolution/route');
+const { GET: THREAD } = await import('@/app/api/pages/[pageId]/comments/[commentId]/thread/route');
 const { pagesService } = await import('@/lib/services/pagesService');
 const { db } = await import('@/lib/db');
 const { projectsService } = await import('@/lib/services/projectsService');
@@ -155,6 +156,11 @@ const reopen = (pageId: string, commentId: string) =>
     new Request(`${BASE}/${pageId}/comments/${commentId}/resolution`, { method: 'DELETE' }),
     commentParams(pageId, commentId),
   );
+const thread = (pageId: string, commentId: string) =>
+  THREAD(
+    new Request(`${BASE}/${pageId}/comments/${commentId}/thread`),
+    commentParams(pageId, commentId),
+  );
 
 async function newThread(pageId: string, bodyMd = 'Root'): Promise<{ id: string }> {
   const res = await create(pageId, { bodyMd });
@@ -179,6 +185,7 @@ describe('the session and project gates', () => {
       () => remove(f.pageId, 'c'),
       () => resolve(f.pageId, 'c'),
       () => reopen(f.pageId, 'c'),
+      () => thread(f.pageId, 'c'),
     ];
     for (const call of calls) expect((await call()).status).toBe(401);
     session.current = { user: { id: f.manager.userId } };
@@ -288,7 +295,7 @@ describe('POST /api/pages/[pageId]/comments', () => {
     });
   });
 
-  it('stores a base64 anchor’s bytes and answers only its quote', async () => {
+  it('stores a base64 anchor’s bytes and answers both parts, the bytes as stored', async () => {
     const f = await makeFixture();
     as(f.manager);
     const bytes = Uint8Array.from([0, 1, 254, 255, 9]);
@@ -298,10 +305,32 @@ describe('POST /api/pages/[pageId]/comments', () => {
     });
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.anchor).toEqual({ quote: 'the passage' });
+    expect(body.anchor).toEqual({ bytes: 'AAH+/wk=', quote: 'the passage' });
     const row = await adminDb.pageComment.findUniqueOrThrow({ where: { id: body.id } });
     expect([...row.anchor!]).toEqual([...bytes]);
+    expect([...Buffer.from(body.anchor.bytes, 'base64')]).toEqual([...row.anchor!]);
     expect(row.anchorQuote).toBe('the passage');
+  });
+
+  it('accepts back the bytes a read returned, storing them byte-identical', async () => {
+    const f = await makeFixture();
+    as(f.manager);
+    const bytes = Uint8Array.from([1, 0, 0, 0, 3, 250, 251, 252, 0, 128]);
+    const first = await (
+      await create(f.pageId, {
+        bodyMd: 'First',
+        anchor: { bytes: Buffer.from(bytes).toString('base64'), quote: 'the passage' },
+      })
+    ).json();
+    const again = await create(f.pageId, { bodyMd: 'Again', anchor: first.anchor });
+    expect(again.status).toBe(201);
+    const second = await again.json();
+    expect(second.anchor).toEqual(first.anchor);
+    const rows = await adminDb.pageComment.findMany({
+      where: { id: { in: [first.id, second.id] } },
+    });
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect([...row.anchor!]).toEqual([...bytes]);
   });
 
   it('answers 400 for malformed input, and the package’s own codes for blank content', async () => {
@@ -422,6 +451,55 @@ describe('POST / DELETE …/resolution', () => {
       expect(onReply.status).toBe(422);
       expect(await onReply.json()).toMatchObject({ code: 'PAGE_COMMENT_NOT_ROOT' });
     }
+  });
+});
+
+describe('GET …/[commentId]/thread', () => {
+  it('answers a viewer the thread a root or a reply id sits in, with its workItemRefs', async () => {
+    const f = await makeFixture();
+    const viewer = await actorAs(f, 'reader', 'viewer');
+    as(f.manager);
+    const root = await newThread(f.pageId, 'Root body');
+    const child = await (await reply(f.pageId, root.id, { bodyMd: 'A reply' })).json();
+    const listed = (await (await list(f.pageId)).json()).threads[0];
+
+    as(viewer);
+    for (const id of [root.id, child.id]) {
+      const res = await thread(f.pageId, id);
+      expect(res.status).toBe(200);
+      const { workItemRefs, ...body } = await res.json();
+      expect(body.id).toBe(root.id);
+      expect(body.replies.map((r: { id: string }) => r.id)).toEqual([child.id]);
+      expect(body).toEqual(listed);
+      expect(workItemRefs).toEqual({});
+    }
+  });
+
+  it('answers 404 PAGE_COMMENT_NOT_FOUND for an unknown id or another page’s comment, and PAGE_NOT_FOUND for another project’s page', async () => {
+    const f = await makeFixture();
+    as(f.manager);
+    const root = await newThread(f.pageId);
+    const sibling = await pagesService.createPage(f.manager, {
+      projectId: f.projectId,
+      title: 'Sibling',
+    });
+
+    for (const [pageId, id] of [
+      [f.pageId, 'missing'],
+      [sibling.id, root.id],
+    ] as const) {
+      const res = await thread(pageId, id);
+      expect(res.status).toBe(404);
+      expect(await res.json()).toMatchObject({ code: 'PAGE_COMMENT_NOT_FOUND' });
+    }
+
+    const elsewhere = await pagesService.createPage(f.manager, {
+      projectId: f.otherProjectId,
+      title: 'Elsewhere',
+    });
+    const res = await thread(elsewhere.id, root.id);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: 'PAGE_NOT_FOUND' });
   });
 });
 

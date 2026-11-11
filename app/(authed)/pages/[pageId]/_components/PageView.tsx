@@ -1,25 +1,37 @@
 'use client';
 
-import { lazy, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { History, Info, MessageSquare, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
 import { useToast } from '@/components/ui/Toast';
-import type { PageSaveStatus } from '@/components/pages/PageEditorHost';
+import type {
+  PageAnchorVerdicts,
+  PageEditorHostPassageComment,
+  PagePassage,
+  PageSaveStatus,
+} from '@/components/pages/PageEditorHost';
 import {
   PageArchivedBanner,
   type ArchivedPageInfo,
 } from '@/components/pages/archive/PageArchivedBanner';
 import type { RestorePageVersionResultDto } from '@/lib/dto/pages';
+import type { PageCommentDto } from '@/lib/pages';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { IssueQuickViewController } from '@/app/(authed)/items/_components/IssueQuickViewController';
 import { cn } from '@/lib/utils/cn';
 import { HistoryNotice, PageHistoryPanel } from './PageHistoryPanel';
 import { LinkedWorkItemsStrip } from './LinkedWorkItemsStrip';
 import { PageActionsMenu } from './PageActionsMenu';
-import { PageDiscussionPanel } from './PageDiscussionPanel';
+import {
+  PageDiscussionPanel,
+  type PageThreadArrival,
+  type PostedPageThread,
+} from './PageDiscussionPanel';
+import { shallowPush, shallowReplace } from '@/lib/navigation/shallowUrl';
+import { createPageComment, type PageCommentRefusal } from './pageCommentsClient';
 import { PageVersionRestore, type RestoreRefusal } from './PageVersionRestore';
 import { PageVersionView } from './PageVersionView';
 
@@ -75,8 +87,19 @@ export interface PageViewProps {
    * members, handed only to a reader who holds `comment:add` on a live page.
    */
   mentionCandidates?: MentionCandidate[];
+  /**
+   * `comment:add` on a LIVE page (MOTIR-10900) — the editor offers the Selection
+   * action only when it is set; otherwise no action is drawn, never a disabled one.
+   */
+  mayComment?: boolean;
   /** Open threads on the page, read on the server, for the Discussion control's chip. */
   openThreadCount?: number;
+  /**
+   * The page's open ANCHORED roots, read on the server (MOTIR-10899) — handed to
+   * the LIVE editor only, which washes each one's passage. The History column's
+   * version is given none, so it draws no wash.
+   */
+  inlineThreads?: PageCommentDto[];
   /** `PAGE_TITLE_MAX_LENGTH`, handed down so this client file imports no package. */
   titleMaxLength: number;
 }
@@ -90,6 +113,30 @@ const TITLE_CLASS = 'block w-full font-serif text-2xl leading-8 font-semibold te
 /** No roster: the reader holds no `comment:add` here, or the page is archived. */
 const EMPTY_ROSTER: MentionCandidate[] = [];
 
+/** No anchored threads on the page. */
+const NO_INLINE_THREADS: PageCommentDto[] = [];
+
+/** A passage to bring into view, and whether it takes focus (Show in page). */
+interface PassageRequest {
+  readonly threadId: string;
+  readonly seq: number;
+  readonly focus: boolean;
+}
+
+/**
+ * Scroll a washed passage into view — only when it is not already, instantly
+ * under reduced motion — and, for the keyboard route, move focus onto it.
+ */
+function revealPassage(wash: HTMLElement, focus: boolean): void {
+  const box = wash.getBoundingClientRect();
+  const height = window.innerHeight || document.documentElement.clientHeight;
+  if (box.top < 0 || box.bottom > height) {
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    wash.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+  }
+  if (focus) wash.focus({ preventScroll: true });
+}
+
 type RenameError = { kind: 'tooLong'; limit: number } | { kind: 'failed' } | null;
 
 export function PageView({
@@ -97,7 +144,9 @@ export function PageView({
   viewerId,
   viewerName = '',
   mentionCandidates = EMPTY_ROSTER,
+  mayComment = false,
   openThreadCount = 0,
+  inlineThreads = NO_INLINE_THREADS,
   titleMaxLength,
 }: PageViewProps) {
   const t = useTranslations('pages');
@@ -118,8 +167,13 @@ export function PageView({
     const raw = Number(searchParams?.get('version'));
     return Number.isInteger(raw) && raw > 0 ? raw : null;
   })();
-  const [historyOpen, setHistoryOpen] = useState(linkedVersion !== null);
-  const [selected, setSelected] = useState<number | null>(linkedVersion);
+  // A link to ONE THREAD — `?thread=<rootCommentId>` (MOTIR-10902) — opens the
+  // discussion at it instead, and wins over a version link: the two share a column.
+  const linkedThread = searchParams?.get('thread') || null;
+  const [historyOpen, setHistoryOpen] = useState(linkedVersion !== null && linkedThread === null);
+  const [selected, setSelected] = useState<number | null>(
+    linkedThread === null ? linkedVersion : null,
+  );
   const [goneNumber, setGoneNumber] = useState<number | null>(null);
   const [listKey, setListKey] = useState(0);
 
@@ -144,8 +198,85 @@ export function PageView({
   // The panel shares History's right-hand column, and only one of the two is
   // open at a time: opening either closes the other. The control's open count
   // is owned here, seeded by the server's read, so the panel's writes move it.
-  const [discussionOpen, setDiscussionOpen] = useState(false);
+  const [discussionOpen, setDiscussionOpen] = useState(linkedThread !== null);
   const [openCount, setOpenCount] = useState(openThreadCount);
+
+  // ── Inline threads (Story MOTIR-10867 · MOTIR-10899 · MOTIR-10901) ────────
+  // The ONE list of anchored roots the live editor washes, owned here because
+  // this view is the nearest owner of both the editor and the panel: seeded from
+  // the server's read, kept in step with it, and changed by the panel's reports
+  // (an upsert by id; a deleted root, or one with no anchor, leaves the list).
+  // The editor answers each root's verdict after a pass; a root answered `null`
+  // is gone, and a root with no answer yet is NOT — the editor is lazy, and the
+  // History column's version is handed no roots at all.
+  const [seededThreads, setSeededThreads] = useState(inlineThreads);
+  const [inlineRoots, setInlineRoots] = useState<PageCommentDto[]>(inlineThreads);
+  if (seededThreads !== inlineThreads) {
+    setSeededThreads(inlineThreads);
+    setInlineRoots(inlineThreads);
+  }
+  const [verdicts, setVerdicts] = useState<PageAnchorVerdicts>({});
+  const goneThreadIds = useMemo(
+    () =>
+      new Set(
+        Object.entries(verdicts)
+          .filter(([, range]) => range === null)
+          .map(([id]) => id),
+      ),
+    [verdicts],
+  );
+  const onInlineThreadChange = useCallback((rootId: string, thread: PageCommentDto | null) => {
+    setInlineRoots((prev) => {
+      const rest = prev.filter((root) => root.id !== rootId);
+      if (thread === null || thread.anchor === null) return rest;
+      const at = prev.findIndex((root) => root.id === rootId);
+      if (at < 0) return [...prev, thread];
+      return prev.map((root) => (root.id === rootId ? thread : root));
+    });
+  }, []);
+
+  // ── Comment on a passage (MOTIR-10900) ────────────────────────────────────
+  // The editor's Inline composer posts through here: the thread joins the roots
+  // the editor washes at once, the Discussion count moves, and an open panel puts
+  // it on top of Open. A refusal is the composer's own line, its words kept.
+  const tDiscussion = useTranslations('pages.discussion');
+  const tComments = useTranslations('comments');
+  const [postedThread, setPostedThread] = useState<PostedPageThread | null>(null);
+  const passageRefusal = useCallback(
+    (refusal: PageCommentRefusal): string => {
+      switch (refusal.code) {
+        case 'PAGE_COMMENT_ANCHOR_INVALID':
+        case 'BAD_REQUEST':
+          return tDiscussion('inline.anchorRefused');
+        case 'PAGE_ARCHIVED':
+          return tDiscussion('writeFailed.archived');
+        case 'PAGE_COMMENT_BODY_EMPTY':
+          return tComments('errors.empty');
+      }
+      if (refusal.status === 403) return tComments('errors.forbidden');
+      return tDiscussion('writeFailed.post');
+    },
+    [tDiscussion, tComments],
+  );
+  const onPassageSubmit = useCallback(
+    async (anchor: PagePassage, bodyMd: string): Promise<string | null> => {
+      const res = await createPageComment(page.id, bodyMd, anchor);
+      if (!res.ok) return passageRefusal(res);
+      const { workItemRefs: refs, ...thread } = res.data;
+      const { replies: _replies, ...root } = thread;
+      onInlineThreadChange(root.id, root);
+      // An open panel counts the thread it is handed; a closed one is not there to.
+      if (!discussionOpen) setOpenCount((count) => count + 1);
+      setPostedThread({ thread, workItemRefs: refs });
+      return null;
+    },
+    [page.id, passageRefusal, onInlineThreadChange, discussionOpen],
+  );
+  const passageComment = useMemo<PageEditorHostPassageComment | undefined>(
+    () =>
+      mayComment && !page.archived ? { mentionCandidates, onSubmit: onPassageSubmit } : undefined,
+    [mayComment, page.archived, mentionCandidates, onPassageSubmit],
+  );
 
   /** History closed, with its compare and notices — focus is the caller's. */
   const resetHistory = useCallback(() => {
@@ -161,15 +292,151 @@ export function PageView({
     historyButtonRef.current?.focus();
   }, [resetHistory]);
 
+  // ── Focus both ways and the thread link (MOTIR-10902) ─────────────────────
+  // The thread in focus is ONE value here: the panel rings and focuses it, the
+  // editor emphasises its passage, and the address names it. An ARRIVAL is a
+  // request for the panel to land on a thread (the address, or a click on a
+  // wash); a PASSAGE REQUEST asks for the passage to be brought into view once
+  // the editor has answered where it is. Every write to the address is a shallow
+  // push, and `writtenThread` is the last one this tab wrote — so reading our own
+  // push back is never mistaken for a new link.
+  const [focusedThreadId, setFocusedThreadId] = useState<string | null>(linkedThread);
+  /** The focused thread holds KEYBOARD focus in the panel (see `onThreadFocus`). */
+  const [threadRing, setThreadRing] = useState(false);
+  const [arrival, setArrival] = useState<PageThreadArrival | null>(
+    linkedThread === null ? null : { threadId: linkedThread, seq: 1 },
+  );
+  const [passageRequest, setPassageRequest] = useState<PassageRequest | null>(
+    linkedThread === null ? null : { threadId: linkedThread, seq: 1, focus: false },
+  );
+  const [writtenThread, setWrittenThread] = useState<string | null>(linkedThread);
+  const [seenLinkedThread, setSeenLinkedThread] = useState<string | null>(linkedThread);
+  if (linkedThread !== seenLinkedThread) {
+    // The address changed under us — a link followed on this page, or Back.
+    setSeenLinkedThread(linkedThread);
+    if (linkedThread !== null && linkedThread !== writtenThread) {
+      resetHistory();
+      setDiscussionOpen(true);
+      setArrival({ threadId: linkedThread, seq: (arrival?.seq ?? 0) + 1 });
+      setPassageRequest({
+        threadId: linkedThread,
+        seq: (passageRequest?.seq ?? 0) + 1,
+        focus: false,
+      });
+      setFocusedThreadId(linkedThread);
+      setWrittenThread(linkedThread);
+    }
+  }
+
+  /** Name `threadId` in the address — a new history entry, only when it changes. */
+  const writeAddress = useCallback((threadId: string | null) => {
+    const url = new URL(window.location.href);
+    if ((url.searchParams.get('thread') || null) !== threadId) {
+      if (threadId === null) {
+        url.searchParams.delete('thread');
+        // Closing is not somewhere Back should return to.
+        shallowReplace(`${url.pathname}${url.search}${url.hash}`);
+      } else {
+        url.searchParams.set('thread', threadId);
+        shallowPush(`${url.pathname}${url.search}${url.hash}`);
+      }
+    }
+    setWrittenThread(threadId);
+  }, []);
+
+  const requestPassage = useCallback((threadId: string, focus: boolean) => {
+    setPassageRequest((prev) => ({ threadId, seq: (prev?.seq ?? 0) + 1, focus }));
+  }, []);
+
   const closeDiscussion = useCallback(() => {
     setDiscussionOpen(false);
+    setThreadRing(false);
+    setArrival(null);
+    setFocusedThreadId(null);
+    // A closed panel shows no thread, so the address names none.
+    writeAddress(null);
     discussionButtonRef.current?.focus();
-  }, []);
+  }, [writeAddress]);
+
+  /** A click (or Enter) on a wash: the panel opens at that thread. */
+  const onInlineThreadClick = useCallback(
+    (threadId: string) => {
+      resetHistory();
+      setDiscussionOpen(true);
+      setArrival((prev) => ({ threadId, seq: (prev?.seq ?? 0) + 1 }));
+      setFocusedThreadId(threadId);
+      writeAddress(threadId);
+    },
+    [resetHistory, writeAddress],
+  );
+
+  /**
+   * A thread focused in the panel: its passage comes into view, emphasised. From
+   * the keyboard it also draws the Wash focus ring and tooltip (focus stays in
+   * the panel), for as long as focus is in that thread.
+   */
+  const onThreadFocus = useCallback(
+    (threadId: string, keyboard: boolean) => {
+      setThreadRing(keyboard);
+      if (threadId === focusedThreadId) return;
+      setFocusedThreadId(threadId);
+      requestPassage(threadId, false);
+      writeAddress(threadId);
+    },
+    [focusedThreadId, requestPassage, writeAddress],
+  );
+  const onThreadBlur = useCallback(() => setThreadRing(false), []);
+
+  /** Below 1280px: the sheet closes and the passage is brought into view, focused. */
+  const onShowInPage = useCallback(
+    (threadId: string) => {
+      setDiscussionOpen(false);
+      setThreadRing(false);
+      setArrival(null);
+      writeAddress(null);
+      setFocusedThreadId(threadId);
+      requestPassage(threadId, true);
+    },
+    [requestPassage, writeAddress],
+  );
+
+  // Bring a requested passage into view once the editor has answered where it
+  // is. A thread with no wash — resolved, gone, page-level, or not handed to the
+  // editor at all — is focused in the panel and scrolls nothing.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const handledRequest = useRef(0);
+  useEffect(() => {
+    const request = passageRequest;
+    if (!request || handledRequest.current === request.seq) return;
+    const root = inlineRoots.find((item) => item.id === request.threadId);
+    const verdict = verdicts[request.threadId];
+    if (!root || root.resolvedAt !== null || verdict === null) {
+      handledRequest.current = request.seq;
+      return;
+    }
+    // The editor has not answered for it yet (it loads lazily): wait for it.
+    if (verdict === undefined) return;
+    const frame = requestAnimationFrame(() => {
+      handledRequest.current = request.seq;
+      const washes = Array.from(
+        bodyRef.current?.querySelectorAll<HTMLElement>('[data-wash-ids]') ?? [],
+      ).filter((element) => element.dataset['washIds']?.split(' ').includes(request.threadId));
+      const wash =
+        washes.find((element) => element.dataset['washState'] === 'emphasis') ?? washes[0];
+      if (wash) revealPassage(wash, request.focus);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [passageRequest, inlineRoots, verdicts]);
 
   const toggleHistory = () => {
     if (historyOpen) {
       closeHistory();
       return;
+    }
+    if (discussionOpen) {
+      setArrival(null);
+      setFocusedThreadId(null);
+      writeAddress(null);
     }
     setDiscussionOpen(false);
     setHistoryOpen(true);
@@ -361,7 +628,7 @@ export function PageView({
           aria-label={comparing ? t('history.compare.label', { number: selected }) : undefined}
           className={cn('mt-3', comparing && 'grid gap-4 lg:grid-cols-2')}
         >
-          <div className={cn('min-w-0', comparing && 'flex flex-col gap-2')}>
+          <div ref={bodyRef} className={cn('min-w-0', comparing && 'flex flex-col gap-2')}>
             {comparing ? (
               <span className="text-[13.5px] font-semibold text-(--el-text)">
                 {t('history.compare.current')}
@@ -369,12 +636,18 @@ export function PageView({
             ) : null}
             <PageEditorHost
               key={generation}
+              focusedInlineThreadId={focusedThreadId}
+              focusedInlineThreadRing={threadRing}
+              onInlineThreadClick={onInlineThreadClick}
               pageId={page.id}
               bodyState={bodyState}
               canEdit={page.canEdit}
               onSaveStatusChange={setSaveStatus}
               projectId={page.projectId}
               workItemRefs={page.workItemRefs}
+              inlineThreads={inlineRoots}
+              onInlineAnchorsResolved={setVerdicts}
+              passageComment={passageComment}
             />
           </div>
           {comparing ? (
@@ -456,6 +729,13 @@ export function PageView({
           mentionCandidates={archived ? EMPTY_ROSTER : mentionCandidates}
           onClose={closeDiscussion}
           onOpenCountChange={setOpenCount}
+          goneThreadIds={goneThreadIds}
+          onInlineThreadChange={onInlineThreadChange}
+          postedThread={postedThread}
+          arrival={arrival}
+          onThreadFocus={onThreadFocus}
+          onThreadBlur={onThreadBlur}
+          onShowInPage={onShowInPage}
         />
       ) : null}
       {/* A chip's click opens the item's quick-view peek (`?peek=<key>`), as it

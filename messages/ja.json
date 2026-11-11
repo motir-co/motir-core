@@ -16937,7 +16937,19 @@
         "replyDepth": "返信できるのはスレッドの最初のコメントだけです。"
       },
       "readOnlyViewer": "このディスカッションは閲覧できますが、あなたのロールではコメントできません。",
-      "readOnlyArchived": "このページはアーカイブされているため、ディスカッションは読み取り専用です。"
+      "readOnlyArchived": "このページはアーカイブされているため、ディスカッションは読み取り専用です。",
+      "inline": {
+        "tooltipOne": "{name} さんのコメント",
+        "tooltipMany": "ここに {count} 件のコメント",
+        "quoteLabel": "引用された箇所: {quote}",
+        "gone": "この箇所はもうこのページにありません。",
+        "action": "コメント",
+        "actionLabel": "選択したテキストにコメント",
+        "editorLabel": "この箇所にコメント",
+        "anchorRefused": "この箇所はもう固定できません。もう一度選択してコメントしてください。",
+        "notHere": "そのコメントはもうこのページにありません。",
+        "showInPage": "ページで表示"
+      }
     },
     "archive": {
       "menuItem": "アーカイブ…",

@@ -422,6 +422,12 @@ export class MemoryPageStore implements PageStore {
     return row ? this.joined(row) : null;
   }
 
+  async findPageComment(commentId: string): Promise<PageCommentRow | null> {
+    this.record('findPageComment', commentId);
+    const row = this.comments.get(commentId);
+    return row ? this.joined(row) : null;
+  }
+
   async insertPageComment(row: PageCommentInsert): Promise<PageCommentRow> {
     this.record('insertPageComment', row);
     this.nextId += 1;

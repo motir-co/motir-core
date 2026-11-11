@@ -17,9 +17,31 @@ import { TriangleAlert } from 'lucide-react';
 import * as Y from 'yjs';
 import { pageExtensions } from '../document/extensions';
 import { PAGE_FRAGMENT } from '../document/schema';
+import {
+  createInlineComments,
+  refreshInlineComments,
+  type PageAnchorTarget,
+  type PageInlineAnchorVerdicts,
+  type PageInlineThreadView,
+} from './anchors';
 import { startAutosave, type SaveStatus } from './autosave';
 import { codeBlockLanguage } from './codeBlockLanguage';
 import type { PageEditorMessages } from './messages';
+import {
+  capturePassageAnchor,
+  isPassageCommentKey,
+  placeAction,
+  placeComposer,
+  readPassageSelection,
+  selectionIsCommentable,
+  type PagePassageAnchor,
+  type PagePassagePlacement,
+} from './passageComment';
+import {
+  PassageCommentAction,
+  PassageCommentComposer,
+  type PagePassageCommentProps,
+} from './PassageCommentSurface';
 import { PageEditorToolbar } from './PageEditorToolbar';
 import { SaveIndicator } from './SaveIndicator';
 import { PAGE_EDITOR_CSS } from './styles';
@@ -125,9 +147,79 @@ export interface PageEditorProps<C extends WorkItemCandidate = WorkItemCandidate
    * rendered did not open the item itself.
    */
   onOpenWorkItem?: (id: string) => void;
+  /**
+   * Every anchored root of the page's inline threads (MOTIR-10899), resolved ones
+   * included — the editor skips those. Supplied → the Passage wash is drawn over
+   * each open thread's passage; omitted (the History column's version) → no
+   * plugin exists at all. Whether it is supplied is read once, at mount.
+   */
+  inlineThreads?: readonly PageInlineThreadView[];
+  /** The thread whose passage wears the emphasis state. */
+  focusedInlineThreadId?: string | null;
+  /**
+   * The focused thread was reached from the KEYBOARD in the panel (MOTIR-10902):
+   * its passage also draws the Wash focus ring and the Passage tooltip, while
+   * focus stays in the panel.
+   */
+  focusedInlineThreadRing?: boolean;
+  /** A click on a wash: the root whose range begins first over that stretch. */
+  onInlineThreadClick?: (rootId: string) => void;
+  /** After each resolve pass that changed the answer: every root's range, or `null` for gone. */
+  onInlineAnchorsResolved?: (verdicts: PageInlineAnchorVerdicts) => void;
+  /**
+   * Comment on a passage (MOTIR-10900). Supplied → a commentable selection, in
+   * the editable body and the read-only body alike, offers the Selection action
+   * (and `Mod-Shift-m`), which opens the Inline composer; omitted → nothing is
+   * offered, never a disabled action. The host supplies it only on a live page
+   * to a reader holding `comment:add`.
+   */
+  passageComment?: PagePassageCommentProps;
 }
 
 const NO_REFS: Record<string, WorkItemRefView> = {};
+const NO_THREADS: readonly PageInlineThreadView[] = [];
+
+/** Where the Passage tooltip sits in the body wrapper, and what it says. */
+interface PassageTip {
+  readonly text: string;
+  readonly left: number;
+  readonly top: number;
+}
+
+/** The tooltip's place: 8px above the washed text's first line (the CSS lifts it). */
+function tipPosition(element: HTMLElement): { left: number; top: number } {
+  const wrapper = element.closest('[data-mention-anchor]');
+  const line = element.getClientRects()[0] ?? element.getBoundingClientRect();
+  const box = wrapper?.getBoundingClientRect();
+  return {
+    left: Math.round(line.left - (box?.left ?? 0)),
+    top: Math.round(line.top - (box?.top ?? 0)),
+  };
+}
+
+/** The open Inline composer: the passage it captured, and where it sits. */
+interface OpenComposer {
+  readonly anchor: PagePassageAnchor;
+  readonly placement: PagePassagePlacement;
+}
+
+/** The window's selection, measured against the body wrapper — or `null`. */
+function measureSelection(view: Editor['view'], wrapper: HTMLElement | null) {
+  if (!wrapper) return null;
+  const range = readPassageSelection(view);
+  if (!range || !selectionIsCommentable(view.state.doc, range)) return null;
+  const selection = view.dom.ownerDocument.getSelection();
+  /* v8 ignore next -- readPassageSelection already proved a range exists */
+  if (!selection || selection.rangeCount === 0) return null;
+  const rects = Array.from(selection.getRangeAt(0).getClientRects());
+  const win = view.dom.ownerDocument.defaultView;
+  return {
+    range,
+    box: wrapper.getBoundingClientRect(),
+    rects,
+    viewport: { width: win?.innerWidth ?? 0, height: win?.innerHeight ?? 0 },
+  };
+}
 
 /** The first image in a paste, drop or picker payload, if any. */
 function pickImage(files: FileList | null | undefined): File | null {
@@ -162,6 +254,12 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
   workItemHref,
   renderPickerRow = defaultPickerRow,
   onOpenWorkItem,
+  inlineThreads,
+  focusedInlineThreadId = null,
+  focusedInlineThreadRing = false,
+  onInlineThreadClick,
+  onInlineAnchorsResolved,
+  passageComment,
 }: PageEditorProps<C>) {
   // The document lives as long as the component; `initialState` is read once.
   const [doc] = useState(() => loadDoc(initialState));
@@ -235,6 +333,45 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
   // page is read again.
   const [pickedRefs, setPickedRefs] = useState<Record<string, AvailableWorkItemRefView>>({});
 
+  // ── The Passage wash (MOTIR-10899) ────────────────────────────────────────
+  // The extension reads its inputs from a box of its own, so a new list or a new
+  // focus never re-creates the editor; `refreshInlineComments` tells it they
+  // moved. Whether the wash exists at all is read once, at mount.
+  const [passageTip, setPassageTip] = useState<PassageTip | null>(null);
+  const [inline] = useState(() => (inlineThreads === undefined ? null : createInlineComments(doc)));
+  // A layout effect, so the inputs are current before the extension's first pass
+  // (it runs in a microtask after the editor is created in a passive effect).
+  useLayoutEffect(() => {
+    const threads = inlineThreads ?? NO_THREADS;
+    inline?.setInputs({
+      threads,
+      focusedThreadId: focusedInlineThreadId,
+      onResolved: onInlineAnchorsResolved,
+      onClick: onInlineThreadClick,
+      onTarget: (target: PageAnchorTarget | null) => {
+        if (target === null) {
+          setPassageTip(null);
+          return;
+        }
+        const author = threads.find((t) => t.id === target.ids[0])?.authorName ?? '';
+        setPassageTip({
+          text:
+            target.ids.length > 1
+              ? messages.passage.overlapCount(target.ids.length)
+              : messages.passage.byAuthor(author),
+          ...tipPosition(target.element),
+        });
+      },
+    });
+  }, [
+    inline,
+    inlineThreads,
+    focusedInlineThreadId,
+    onInlineAnchorsResolved,
+    onInlineThreadClick,
+    messages.passage,
+  ]);
+
   const editor = useEditor({
     immediatelyRender: false,
     editable,
@@ -281,6 +418,7 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
       Collaboration.configure({ document: doc, field: PAGE_FRAGMENT }),
       Placeholder.configure({ placeholder: messages.bodyPlaceholder }),
       codeBlockLanguage(messages.codeLanguage),
+      ...(inline ? [inline.extension] : []),
     ],
     editorProps: {
       attributes: {
@@ -312,9 +450,94 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
     editorRef.current = editor;
   }, [editor]);
 
+  // ── Comment on a passage (MOTIR-10900) ────────────────────────────────────
+  // The action follows the window's selection; it is measured after the press
+  // ends (never mid-drag) and coalesced to one frame. The composer captures its
+  // passage once, at open, and keeps it whatever the selection does after.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [passageAction, setPassageAction] = useState<PagePassagePlacement | null>(null);
+  const [composer, setComposer] = useState<OpenComposer | null>(null);
+  const mayCommentOnPassage = passageComment !== undefined;
+  const composerOpen = composer !== null;
+
+  const openComposer = useCallback(() => {
+    const current = editorRef.current;
+    if (!current || current.isDestroyed) return false;
+    const measured = measureSelection(current.view, bodyRef.current);
+    if (!measured) return false;
+    const anchor = capturePassageAnchor(doc, measured.range);
+    if (!anchor) return false;
+    setPassageAction(null);
+    setComposer({
+      anchor,
+      placement: placeComposer(measured.box, measured.rects, measured.viewport),
+    });
+    return true;
+  }, [doc]);
+
+  const closeComposer = useCallback(() => {
+    setComposer(null);
+    const current = editorRef.current;
+    // Back to the body a writer was typing in; a reader's read-only body takes no focus.
+    if (current && !current.isDestroyed && current.isEditable) current.view.focus();
+  }, []);
+
+  useEffect(() => {
+    // Not offered, or the composer is open: the action is not drawn (see below).
+    if (!editor || !mayCommentOnPassage || composerOpen) return;
+    const ownerDocument = editor.view.dom.ownerDocument;
+    const win = ownerDocument.defaultView;
+    let pressed = false;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      if (pressed || editor.isDestroyed) return;
+      const measured = measureSelection(editor.view, bodyRef.current);
+      setPassageAction(
+        measured ? placeAction(measured.box, measured.rects, measured.viewport) : null,
+      );
+    };
+    const schedule = () => {
+      if (frame === 0) frame = requestAnimationFrame(update);
+    };
+    const onPress = () => {
+      pressed = true;
+      setPassageAction(null);
+    };
+    const onRelease = () => {
+      pressed = false;
+      schedule();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isPassageCommentKey(event) || event.defaultPrevented) return;
+      if (openComposer()) event.preventDefault();
+    };
+    const dom = editor.view.dom;
+    dom.addEventListener('pointerdown', onPress);
+    ownerDocument.addEventListener('pointerup', onRelease);
+    ownerDocument.addEventListener('selectionchange', schedule);
+    ownerDocument.addEventListener('keydown', onKeyDown);
+    win?.addEventListener('resize', schedule);
+    schedule();
+    return () => {
+      cancelAnimationFrame(frame);
+      dom.removeEventListener('pointerdown', onPress);
+      ownerDocument.removeEventListener('pointerup', onRelease);
+      ownerDocument.removeEventListener('selectionchange', schedule);
+      ownerDocument.removeEventListener('keydown', onKeyDown);
+      win?.removeEventListener('resize', schedule);
+    };
+  }, [editor, mayCommentOnPassage, composerOpen, openComposer]);
+
   useEffect(() => {
     editor?.setEditable(editable);
   }, [editor, editable]);
+
+  // A new list or a new focus: redraw the emphasis and resolve again.
+  useEffect(() => {
+    if (!editor || !inline || editor.isDestroyed) return;
+    refreshInlineComments(editor.view, focusedInlineThreadId, focusedInlineThreadRing);
+  }, [editor, inline, inlineThreads, focusedInlineThreadId, focusedInlineThreadRing]);
 
   const onPickImage = useCallback(() => fileInputRef.current?.click(), []);
   const onMentionWorkItem = useCallback(() => {
@@ -451,7 +674,7 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
           {messages.imageUploadFailed}
         </p>
       ) : null}
-      <div data-mention-anchor className="relative pt-4 pb-2">
+      <div ref={bodyRef} data-mention-anchor className="relative pt-4 pb-2">
         <MentionChipContext.Provider value={chipContext}>
           <EmbedCardContext.Provider value={cardContext}>
             {editor ? <EditorContent editor={editor} /> : null}
@@ -478,6 +701,35 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
               }
             />
           </div>
+        ) : null}
+        {passageTip ? (
+          // The Passage tooltip: in the body's positioned wrapper like the
+          // picker, out of the text's flow, and holding no control.
+          <div
+            role="tooltip"
+            className="motir-passage-tip"
+            style={{ left: passageTip.left, top: passageTip.top }}
+          >
+            {passageTip.text}
+          </div>
+        ) : null}
+        {passageAction && passageComment && !composer ? (
+          <PassageCommentAction
+            placement={passageAction}
+            messages={messages.passageComment}
+            onChoose={() => void openComposer()}
+          />
+        ) : null}
+        {composer && passageComment ? (
+          <PassageCommentComposer
+            // A new passage is a new composer: its editor starts empty.
+            key={composer.anchor.bytes}
+            anchor={composer.anchor}
+            placement={composer.placement}
+            messages={messages.passageComment}
+            onClose={closeComposer}
+            renderComposer={passageComment.renderComposer}
+          />
         ) : null}
       </div>
       {editable ? (

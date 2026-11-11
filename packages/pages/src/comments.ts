@@ -77,10 +77,22 @@ export interface PageCommentDto {
   /** On a resolved root: who resolved it, `null` once that user is deleted. */
   readonly resolvedBy: PageCommentPersonDto | null;
   /**
-   * On an inline root: the text it quotes. The anchor's position bytes are not
-   * sent — the inline story adds what its highlight reads.
+   * On an inline root: the passage it is anchored to — `null` on a page-level
+   * root and on every reply.
    */
-  readonly anchor: { readonly quote: string } | null;
+  readonly anchor: PageCommentAnchorDto | null;
+}
+
+/**
+ * An inline root's anchor on the wire. `bytes` is the stored position pair,
+ * verbatim, as STANDARD padded base64 — the form the create door accepts, so
+ * a value read here can be posted back unchanged. Decoding it and resolving it
+ * against the page's document is the anchor codec's (`document/anchor.ts`).
+ */
+export interface PageCommentAnchorDto {
+  readonly bytes: string;
+  /** The text the passage held when the thread was started. */
+  readonly quote: string;
 }
 
 /** A thread: its root and every reply, oldest first. */
@@ -104,6 +116,19 @@ export interface DeletePageCommentResult {
 
 const iso = (at: Date | null): string | null => (at === null ? null : at.toISOString());
 
+/** Standard padded base64 of a byte string (not the cursors' base64url). */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/** Both parts or none: a row that broke the pair answers `null`, never half an anchor. */
+function toAnchorDto(row: PageCommentRow): PageCommentAnchorDto | null {
+  if (row.anchor === null || row.anchorQuote === null) return null;
+  return { bytes: bytesToBase64(row.anchor), quote: row.anchorQuote };
+}
+
 /** A stored comment as the panel reads it. */
 export function toPageCommentDto(row: PageCommentRow): PageCommentDto {
   return {
@@ -118,7 +143,7 @@ export function toPageCommentDto(row: PageCommentRow): PageCommentDto {
     resolvedBy: row.resolvedBy
       ? { id: row.resolvedBy.id, name: row.resolvedBy.name, image: row.resolvedBy.image }
       : null,
-    anchor: row.anchorQuote === null ? null : { quote: row.anchorQuote },
+    anchor: toAnchorDto(row),
   };
 }
 
@@ -201,8 +226,11 @@ function requireAnchor(anchor: PageCommentAnchorInput | undefined): PageCommentA
   return anchor;
 }
 
-/** A read: the page, archived or not, in the caller's project. */
-async function readablePage(store: PageStore, scope: PageCommentScope): Promise<PageRow> {
+/** A read: the page, archived or not, in the caller's project. It consults no actor. */
+async function readablePage(
+  store: PageStore,
+  scope: Pick<PageCommentScope, 'pageId' | 'projectId'>,
+): Promise<PageRow> {
   const page = await store.findPage(scope.pageId);
   if (!page || page.projectId !== scope.projectId) throw new PageNotFoundError(scope.pageId);
   return page;
@@ -307,6 +335,43 @@ export async function listPageCommentThreads(
         : null,
     counts: await store.countPageCommentRoots(page.id),
   };
+}
+
+// ── The page's anchored roots (MOTIR-10899) ─────────────────────────────────
+
+/** The open anchored roots the live editor washes, and the open count for the Discussion chip. */
+export interface PageAnchoredRoots {
+  readonly roots: PageCommentDto[];
+  readonly counts: PageCommentCounts;
+}
+
+/**
+ * Every OPEN root that carries an anchor, oldest first, with no replies — what a
+ * page load hands the editor to wash. It walks the roots index alone: no reply
+ * rows are read, and nothing a reply links is resolved, so the cost follows the
+ * number of threads, not the length of the discussion.
+ */
+export async function listPageAnchoredRoots(
+  store: PageStore,
+  scope: Pick<PageCommentScope, 'pageId' | 'projectId'>,
+): Promise<PageAnchoredRoots> {
+  const page = await readablePage(store, scope);
+  const roots: PageCommentDto[] = [];
+  let after: PageCommentRootKey | null = null;
+  for (;;) {
+    const rows = await store.findPageCommentRoots({
+      pageId: page.id,
+      status: 'open',
+      order: 'asc',
+      after,
+      limit: PAGE_COMMENT_THREADS_MAX_LIMIT,
+    });
+    for (const row of rows) if (row.anchor !== null) roots.push(toPageCommentDto(row));
+    const last = rows.at(-1);
+    if (!last || rows.length < PAGE_COMMENT_THREADS_MAX_LIMIT) break;
+    after = rootKey(last, 'open');
+  }
+  return { roots, counts: await store.countPageCommentRoots(page.id) };
 }
 
 // ── Create and reply ────────────────────────────────────────────────────────
@@ -445,4 +510,36 @@ export async function reopenPageCommentThread(
   assertRoot(root);
   if (root.resolvedAt === null) return threadOf(store, root);
   return threadOf(store, await store.setPageCommentResolved(root.id, null, null));
+}
+
+// ── Read one thread ─────────────────────────────────────────────────────────
+
+/** A read of one thread by a comment's id. A read consults no actor. */
+export interface ReadPageCommentThreadInput {
+  readonly pageId: string;
+  /** The project the caller acts in; a page from another reads as missing. */
+  readonly projectId: string;
+  /** The thread's root, or any reply in it. */
+  readonly commentId: string;
+}
+
+/**
+ * One thread by id, wherever it sits in either list — the read a thread link
+ * resolves against. A reply's id answers the thread it sits in. Built through
+ * `threadOf`, the same builder every other thread answer uses, so it cannot
+ * drift from the list's answer for the same thread. Takes no lock and writes
+ * nothing; an archived page still reads, since reading is not a write.
+ * `PageCommentNotFoundError` for an id that names no comment on THIS page.
+ */
+export async function readPageCommentThread(
+  store: PageStore,
+  input: ReadPageCommentThreadInput,
+): Promise<PageCommentThreadDto> {
+  const page = await readablePage(store, input);
+  const named = await store.findPageComment(input.commentId);
+  if (!named || named.pageId !== page.id) throw new PageCommentNotFoundError(input.commentId);
+  if (named.parentCommentId === null) return threadOf(store, named);
+  const root = await store.findPageComment(named.parentCommentId);
+  if (!root || root.pageId !== page.id) throw new PageCommentNotFoundError(input.commentId);
+  return threadOf(store, root);
 }

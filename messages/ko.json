@@ -16934,7 +16934,19 @@
         "replyDepth": "스레드의 첫 번째 댓글에만 답글을 달 수 있습니다."
       },
       "readOnlyViewer": "이 토론을 읽을 수 있지만, 현재 역할로는 댓글을 달 수 없습니다.",
-      "readOnlyArchived": "이 페이지는 보관되어 토론이 읽기 전용입니다."
+      "readOnlyArchived": "이 페이지는 보관되어 토론이 읽기 전용입니다.",
+      "inline": {
+        "tooltipOne": "{name} 님의 댓글",
+        "tooltipMany": "여기에 댓글 {count}개",
+        "quoteLabel": "인용된 구절: {quote}",
+        "gone": "이 구절은 더 이상 이 페이지에 없습니다.",
+        "action": "댓글",
+        "actionLabel": "선택한 텍스트에 댓글 달기",
+        "editorLabel": "이 구절에 댓글 달기",
+        "anchorRefused": "이 구절은 더 이상 고정할 수 없습니다. 다시 선택하고 댓글을 달아 주세요.",
+        "notHere": "그 댓글은 더 이상 이 페이지에 없습니다.",
+        "showInPage": "페이지에서 보기"
+      }
     },
     "archive": {
       "menuItem": "보관…",

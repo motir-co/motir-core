@@ -162,4 +162,32 @@ export interface PageEditorMessages {
     body: string;
     reload: string;
   };
+  /**
+   * `pages.discussion.inline.tooltip*` — the Passage tooltip over a commented
+   * passage (MOTIR-10899, `design/pages/design-notes.md` § _Commenting on a
+   * passage_): one thread names its author, an overlapped stretch counts them.
+   */
+  passage: {
+    /** `inline.tooltipOne` — "Comment by {name}". */
+    byAuthor: (name: string) => string;
+    /** `inline.tooltipMany` — "{count} comments here". */
+    overlapCount: (count: number) => string;
+  };
+  /**
+   * `pages.discussion.inline.*` — the Selection action and the Inline composer's
+   * frame (MOTIR-10900). The comment editor inside the frame is the host's, with
+   * its own copy.
+   */
+  passageComment: {
+    /** `inline.action` — the action's visible label ("Comment"). */
+    action: string;
+    /** `inline.actionLabel` — its accessible name ("Comment on the selected text"). */
+    actionLabel: string;
+    /** `inline.editorLabel` — the composer group's name ("Comment on this passage"). */
+    composerLabel: string;
+    /** `common.close` — the composer's close control. */
+    close: string;
+    /** `inline.quoteLabel` — the Quote slot's name, "Quoted passage: {quote}". */
+    quoteLabel: (quote: string) => string;
+  };
 }

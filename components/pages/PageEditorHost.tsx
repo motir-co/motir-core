@@ -6,9 +6,16 @@ import {
   PageBodyTooLargeError,
   PageEditor,
   type AvailableWorkItemRefView,
+  type PageCommentDto,
   type PageEditorMessages,
+  type PageInlineAnchorVerdicts,
+  type PageInlineThreadView,
+  type PagePassageAnchor,
+  type PagePassageCommentProps,
   type SaveStatus,
 } from '@motir/pages';
+import { CommentComposer } from '@/app/(authed)/items/[key]/_components/CommentComposer';
+import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
 import { WorkItemEmbedCard } from '@/components/pages/WorkItemEmbedCard';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import {
@@ -39,6 +46,11 @@ import '@/components/ui/markdown-editor.css';
 //    `markdownEditor.codeLanguage`.
 //  • `theme` — `useOptionalTheme()`'s resolved pattern, as `MarkdownEditor` reads it.
 //  • `initialState` — the DTO's base64 Yjs state, decoded once.
+//  • the PASSAGE WASH (MOTIR-10899): `inlineThreads` are the page's anchored
+//    roots as the thread read answers them (`PageCommentDto`), mapped ONCE here
+//    to the editor's view — the anchor's base64 decoded with this file's
+//    `decodeBase64`, so the package holds bytes and the product keeps one decoder
+//    for the value. Omitted (the History column's version) → no wash at all.
 //  • the work-item MENTION (MOTIR-7574, `design/pages/design-notes.md`
 //    § _Mention a work item_): `searchWorkItems` is the shipped mention search
 //    narrowed to the page's project (and rejecting on a refused search, so the
@@ -126,6 +138,8 @@ function usePageEditorMessages(): PageEditorMessages {
   const tArchive = useTranslations('pages.archive.refusal');
   const tMention = useTranslations('pages.mention');
   const tEmbed = useTranslations('pages.embed');
+  const tInline = useTranslations('pages.discussion.inline');
+  const tCommon = useTranslations('common');
   return useMemo(
     () => ({
       bodyLabel: t('bodyLabel'),
@@ -213,8 +227,19 @@ function usePageEditorMessages(): PageEditorMessages {
         body: tArchive('editingArchivedBody'),
         reload: tArchive('reload'),
       },
+      passage: {
+        byAuthor: (name: string) => tInline('tooltipOne', { name }),
+        overlapCount: (count: number) => tInline('tooltipMany', { count }),
+      },
+      passageComment: {
+        action: tInline('action'),
+        actionLabel: tInline('actionLabel'),
+        composerLabel: tInline('editorLabel'),
+        close: tCommon('close'),
+        quoteLabel: (quote: string) => tInline('quoteLabel', { quote }),
+      },
     }),
-    [t, tMarkdown, tArchive, tMention, tEmbed],
+    [t, tMarkdown, tArchive, tMention, tEmbed, tInline, tCommon],
   );
 }
 
@@ -265,6 +290,47 @@ export function openWorkItemPeek(identifier: string): void {
   shallowPush(`${window.location.pathname}?${params.toString()}`);
 }
 
+/**
+ * The page's anchored roots as the editor draws them: every root carrying an
+ * anchor, resolved ones included (the editor skips those), its bytes decoded.
+ */
+export function toInlineThreadViews(roots: readonly PageCommentDto[]): PageInlineThreadView[] {
+  return roots.flatMap((root) =>
+    root.anchor === null
+      ? []
+      : [
+          {
+            id: root.id,
+            anchor: decodeBase64(root.anchor.bytes),
+            quote: root.anchor.quote,
+            authorName: root.author.name,
+            resolvedAt: root.resolvedAt,
+          },
+        ],
+  );
+}
+
+/** A captured passage, `{ bytes: base64, quote }` — the create door's `anchor`. */
+export type PagePassage = PagePassageAnchor;
+
+/**
+ * Comment on a passage (MOTIR-10900), handed by a page whose reader holds
+ * `comment:add` on a live page — and only then, so a reader without it is offered
+ * no action at all.
+ */
+export interface PageEditorHostPassageComment {
+  /** The project's members for the composer's mention picker. */
+  mentionCandidates: MentionCandidate[];
+  /**
+   * Start a thread on `anchor`. Resolve to the refusal line to show, or `null`
+   * once the thread is posted (the composer then closes).
+   */
+  onSubmit: (anchor: PagePassage, bodyMd: string) => Promise<string | null>;
+}
+
+/** Each anchored root's range after a resolve pass, `null` when gone — for the page around it. */
+export type PageAnchorVerdicts = PageInlineAnchorVerdicts;
+
 /** The live editor's save status, for the page around it (`@motir/pages`' `SaveStatus`). */
 export type PageSaveStatus = SaveStatus;
 
@@ -286,9 +352,56 @@ export interface PageEditorHostProps {
   projectId?: string;
   /** `PageDto.workItemRefs` — the live summary of every work item the body mentions. */
   workItemRefs?: WorkItemRefMap;
+  /**
+   * The page's anchored thread roots (MOTIR-10899) — supplied only to the LIVE
+   * editor, so the History column's version draws no wash.
+   */
+  inlineThreads?: readonly PageCommentDto[];
+  /** The thread whose passage wears the emphasis state. */
+  focusedInlineThreadId?: string | null;
+  /** That thread was reached from the keyboard: its passage draws the focus ring and tooltip. */
+  focusedInlineThreadRing?: boolean;
+  /** A click on a passage's wash, with the thread it opens. */
+  onInlineThreadClick?: (rootId: string) => void;
+  /** Each anchored root's range after a resolve pass, `null` when its passage is gone. */
+  onInlineAnchorsResolved?: (verdicts: PageInlineAnchorVerdicts) => void;
+  /** Comment on a passage; omitted → the editor offers no Selection action. */
+  passageComment?: PageEditorHostPassageComment;
 }
 
 const NO_REFS: WorkItemRefMap = {};
+
+/**
+ * The Inline composer's body: the shipped `CommentComposer` in its reply shape
+ * (the editor open at once, Cancel and Comment) — the design's "shipped comment
+ * editor", posting with the passage the frame captured.
+ */
+function PassageComposer({
+  anchor,
+  close,
+  passage,
+}: {
+  anchor: PagePassage;
+  close: () => void;
+  passage: PageEditorHostPassageComment;
+}) {
+  const tInline = useTranslations('pages.discussion.inline');
+  const tDiscussion = useTranslations('pages.discussion');
+  return (
+    <CommentComposer
+      mode="reply"
+      label={tInline('editorLabel')}
+      submitLabel={tDiscussion('comment')}
+      mentionCandidates={passage.mentionCandidates}
+      onSubmit={async (bodyMd) => {
+        const refusal = await passage.onSubmit(anchor, bodyMd);
+        if (refusal === null) close();
+        return refusal;
+      }}
+      onCancel={close}
+    />
+  );
+}
 
 export function PageEditorHost({
   pageId,
@@ -297,12 +410,22 @@ export function PageEditorHost({
   onSaveStatusChange: onStatus,
   projectId,
   workItemRefs = NO_REFS,
+  inlineThreads,
+  focusedInlineThreadId,
+  focusedInlineThreadRing,
+  onInlineThreadClick,
+  onInlineAnchorsResolved,
+  passageComment,
 }: PageEditorHostProps) {
   const messages = usePageEditorMessages();
   const theme = useOptionalTheme()?.resolvedPattern ?? 'light';
   // Read once: the editor reads `initialState` at mount and owns the doc after.
   const [initialState] = useState(() => decodeBase64(bodyState));
 
+  const inlineThreadViews = useMemo(
+    () => (inlineThreads === undefined ? undefined : toInlineThreadViews(inlineThreads)),
+    [inlineThreads],
+  );
   const saveUpdate = useCallback((update: Uint8Array) => sendPageUpdate(pageId, update), [pageId]);
   const uploadImage = useCallback((file: File) => uploadPageImage(pageId, file), [pageId]);
   const searchWorkItems = useMemo(
@@ -318,6 +441,18 @@ export function PageEditorHost({
       if (ref?.accessible) openWorkItemPeek(ref.identifier);
     },
     [workItemRefs],
+  );
+
+  const passageCommentProps = useMemo<PagePassageCommentProps | undefined>(
+    () =>
+      passageComment
+        ? {
+            renderComposer: ({ anchor, close }) => (
+              <PassageComposer anchor={anchor} close={close} passage={passageComment} />
+            ),
+          }
+        : undefined,
+    [passageComment],
   );
 
   // ── The leave guard ───────────────────────────────────────────────────────
@@ -385,6 +520,12 @@ export function PageEditorHost({
       workItemHref={pageWorkItemHref}
       renderPickerRow={renderPageMentionRow}
       onOpenWorkItem={onOpenWorkItem}
+      inlineThreads={inlineThreadViews}
+      focusedInlineThreadId={focusedInlineThreadId}
+      focusedInlineThreadRing={focusedInlineThreadRing}
+      onInlineThreadClick={onInlineThreadClick}
+      onInlineAnchorsResolved={onInlineAnchorsResolved}
+      passageComment={passageCommentProps}
     />
   );
 }

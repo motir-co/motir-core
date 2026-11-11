@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Archive, CircleCheck, Eye, MessageSquare, TriangleAlert, X } from 'lucide-react';
+import { Archive, CircleCheck, Eye, Info, MessageSquare, TriangleAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Segmented } from '@/components/ui/Segmented';
@@ -15,6 +15,7 @@ import {
   deletePageComment,
   editPageComment,
   listPageComments,
+  readPageThread,
   reopenPageCommentThread,
   replyToPageComment,
   resolvePageCommentThread,
@@ -87,7 +88,59 @@ export interface PageDiscussionPanelProps {
   onClose: () => void;
   /** The open count changed — the Discussion control's chip follows it. */
   onOpenCountChange?: (count: number) => void;
+  /**
+   * The roots whose passage the page's editor answered GONE (MOTIR-10901). A set,
+   * not a map of booleans: a root with no entry has not been answered for (the
+   * editor is lazy, and the History column mounts none), which is not gone.
+   */
+  goneThreadIds?: ReadonlySet<string>;
+  /**
+   * A thread's resolution changed through this panel — Resolve and Reopen with
+   * the thread the route answered, a deleted root with `null` — so the page can
+   * keep the roots its editor washes in step. A refused write raises nothing.
+   */
+  onInlineThreadChange?: (rootId: string, thread: PageCommentDto | null) => void;
+  /**
+   * The latest thread started OUTSIDE the panel — on a passage, from the editor's
+   * Inline composer (MOTIR-10900). A new object is a new thread: it goes on top
+   * of Open and is counted. The one a panel mounts with is already in the read.
+   */
+  postedThread?: PostedPageThread | null;
+  /**
+   * Land on a thread (MOTIR-10902) — the address named it, or its wash was
+   * clicked. A new object is a new arrival: the thread's list is shown, the thread
+   * wears the Arrival ring and takes focus. A thread the loaded lists do not hold
+   * is read by id; the Not-here line answers only that read's not-found.
+   */
+  arrival?: PageThreadArrival | null;
+  /** Focus moved into a thread — the page brings its passage into view. */
+  onThreadFocus?: (threadId: string, keyboard: boolean) => void;
+  /** Focus left a thread for somewhere outside it. */
+  onThreadBlur?: (threadId: string) => void;
+  /** Below 1280px, an inline thread's Show in page. */
+  onShowInPage?: (threadId: string) => void;
 }
+
+/** A request to land on one thread; `seq` tells two arrivals at one thread apart. */
+export interface PageThreadArrival {
+  readonly threadId: string;
+  readonly seq: number;
+}
+
+/** Where an arrival stands: reading the thread by id, landed, or not on the page. */
+interface ArrivalState {
+  readonly seq: number;
+  readonly threadId: string;
+  readonly phase: 'reading' | 'here' | 'notHere' | 'unread';
+}
+
+/** A thread posted outside the panel, with the work items its body links. */
+export interface PostedPageThread {
+  readonly thread: PageCommentThreadDto;
+  readonly workItemRefs: WorkItemRefMap;
+}
+
+const NO_GONE: ReadonlySet<string> = new Set();
 
 /** The key a list is ordered by, newest first. */
 function sortKey(thread: PageCommentThreadDto): string {
@@ -146,6 +199,13 @@ export function PageDiscussionPanel({
   mentionCandidates,
   onClose,
   onOpenCountChange,
+  goneThreadIds = NO_GONE,
+  onInlineThreadChange,
+  postedThread = null,
+  arrival = null,
+  onThreadFocus,
+  onThreadBlur,
+  onShowInPage,
 }: PageDiscussionPanelProps) {
   const t = useTranslations('pages.discussion');
   const tc = useTranslations('comments');
@@ -167,6 +227,8 @@ export function PageDiscussionPanel({
   const listSeq = useRef<Record<ListKind, number>>({ open: 0, resolved: 0 });
   const moreSeq = useRef<Record<ListKind, number>>({ open: 0, resolved: 0 });
   const targetSeq = useRef(new Map<string, number>());
+  /** An arrival's thread waiting for its list's read to answer (see `applyList`). */
+  const pinned = useRef<{ kind: ListKind; thread: PageCommentThreadDto } | null>(null);
 
   const stamp = (target: string) => {
     const seq = (targetSeq.current.get(target) ?? 0) + 1;
@@ -203,11 +265,19 @@ export function PageDiscussionPanel({
         setLists((prev) => ({ ...prev, [kind]: { ...prev[kind], kind: 'failed' } }));
         return;
       }
+      // An arrival read by id that this list's window does not hold stays on top
+      // of it, once — so a thread past the first page is still the one focused.
+      const pin = pinned.current;
+      const threads = [...res.data.threads];
+      if (pin && pin.kind === kind) {
+        pinned.current = null;
+        if (!threads.some((thread) => thread.id === pin.thread.id)) threads.unshift(pin.thread);
+      }
       setLists((prev) => ({
         ...prev,
         [kind]: {
           kind: 'ready',
-          threads: [...res.data.threads],
+          threads,
           nextCursor: res.data.nextCursor,
           more: 'idle',
         },
@@ -343,6 +413,84 @@ export function PageDiscussionPanel({
       return { ...prev, [id]: message };
     });
 
+  // ── Arrival (MOTIR-10902) ─────────────────────────────────────────────────
+  // A thread the loaded lists hold lands at once, with no read; any other is
+  // read by id, which answers it whatever page of either list it sits on.
+  const [arrived, setArrived] = useState<ArrivalState | null>(null);
+  const [seenArrival, setSeenArrival] = useState<PageThreadArrival | null>(null);
+  if (arrival !== seenArrival) {
+    setSeenArrival(arrival);
+    if (arrival === null) setArrived(null);
+    else {
+      const held = (['open', 'resolved'] as const).find((kind) =>
+        lists[kind].threads.some((thread) => thread.id === arrival.threadId),
+      );
+      if (held) setActive(held);
+      setArrived({
+        seq: arrival.seq,
+        threadId: arrival.threadId,
+        phase: held ? 'here' : 'reading',
+      });
+    }
+  }
+  // `show` reads this render's lists; the read below answers after a later one.
+  const showRef = useRef(show);
+  useEffect(() => {
+    showRef.current = show;
+  });
+  useEffect(() => {
+    if (arrived?.phase !== 'reading') return;
+    const { seq, threadId } = arrived;
+    let current = true;
+    void readPageThread(pageId, threadId).then((res) => {
+      if (!current || !alive.current) return;
+      if (!res.ok) {
+        // Not on this page, or not the reader's to see: the Not-here line. Any
+        // other failure lands nowhere and says nothing about the thread.
+        const notHere =
+          res.code === 'PAGE_COMMENT_NOT_FOUND' || res.status === 404 || res.status === 403;
+        if (notHere) showRef.current('open');
+        setArrived({ seq, threadId, phase: notHere ? 'notHere' : 'unread' });
+        return;
+      }
+      const { workItemRefs: refs, ...thread } = res.data;
+      const kind: ListKind = thread.resolvedAt === null ? 'open' : 'resolved';
+      setWorkItemRefs((prev) => ({ ...prev, ...refs }));
+      pinned.current = { kind, thread };
+      setLists((prev) => {
+        const list = prev[kind];
+        if (list.kind !== 'ready') return prev;
+        pinned.current = null;
+        if (list.threads.some((item) => item.id === thread.id)) return prev;
+        return { ...prev, [kind]: { ...list, threads: [thread, ...list.threads] } };
+      });
+      showRef.current(kind);
+      // A reply's id answers its thread: the ROOT is what lands.
+      setArrived({ seq, threadId: thread.id, phase: 'here' });
+    });
+    return () => {
+      current = false;
+    };
+  }, [arrived, pageId]);
+
+  // A thread posted on a passage while the panel is open (MOTIR-10900): on top of
+  // Open, as the panel's own composer places one, and counted. Adjusted during
+  // render from the prop's identity, so it lands in the same commit as the wash.
+  const [seenPosted, setSeenPosted] = useState(postedThread);
+  if (postedThread !== seenPosted) {
+    setSeenPosted(postedThread);
+    if (postedThread !== null) {
+      const { thread, workItemRefs: refs } = postedThread;
+      setLists((prev) =>
+        prev.open.threads.some((item) => item.id === thread.id)
+          ? prev
+          : { ...prev, open: { ...prev.open, threads: [thread, ...prev.open.threads] } },
+      );
+      adjustCounts({ open: 1 });
+      mergeRefs(refs);
+    }
+  }
+
   async function submitComment(bodyMd: string): Promise<string | null> {
     const res = await createPageComment(pageId, bodyMd);
     if (!res.ok) return failure(res, 'post');
@@ -406,6 +554,7 @@ export function PageDiscussionPanel({
       setLists((prev) => mapThread(prev, thread.id, () => null));
       adjustCounts({ open: -1 });
       setThreadError(thread.id, null);
+      onInlineThreadChange?.(thread.id, null);
     } else {
       setLists((prev) =>
         mapThread(prev, thread.id, (item) => ({
@@ -447,6 +596,8 @@ export function PageDiscussionPanel({
     if (!isLatest(key, seq)) return;
     if (res.ok) {
       setLists((prev) => placeThread(prev, res.data));
+      const { replies: _replies, ...root } = res.data;
+      onInlineThreadChange?.(thread.id, root);
       return;
     }
     // Refused: back where it was, with the reason at its foot.
@@ -512,6 +663,7 @@ export function PageDiscussionPanel({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           <div className="flex flex-col">
+            {arrived?.phase === 'notHere' && active === 'open' ? <NotHereLine /> : null}
             {known && !canWrite ? <ReadOnlyLine archived={archived} /> : null}
             {active === 'open' && canWrite && list.kind === 'ready' ? (
               <div className="pb-1">
@@ -553,6 +705,15 @@ export function PageDiscussionPanel({
                       currentUserId={currentUserId}
                       mentionCandidates={mentionCandidates}
                       workItemRefs={workItemRefs}
+                      gone={goneThreadIds.has(thread.id)}
+                      arrivalSeq={
+                        arrived?.phase === 'here' && arrived.threadId === thread.id
+                          ? arrived.seq
+                          : null
+                      }
+                      onFocusThread={onThreadFocus}
+                      onBlurThread={onThreadBlur}
+                      onShowInPage={onShowInPage ? () => onShowInPage(thread.id) : undefined}
                       error={threadErrors[thread.id] ?? null}
                       onReply={(bodyMd) => submitReply(thread.id, bodyMd)}
                       onEdit={(commentId, bodyMd) => submitEdit(thread.id, commentId, bodyMd)}
@@ -603,6 +764,21 @@ export function PageDiscussionPanel({
 }
 
 /** Why this reader has no controls: their role, or the archived page. */
+/** The Not-here line: the thread the address named is no longer on this page. */
+function NotHereLine() {
+  const t = useTranslations('pages.discussion.inline');
+  return (
+    <p
+      role="status"
+      data-testid="page-thread-not-here"
+      className="mb-2 flex items-center gap-2 rounded-(--radius-control) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y-8) font-sans text-xs text-(--el-text-secondary)"
+    >
+      <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      {t('notHere')}
+    </p>
+  );
+}
+
 function ReadOnlyLine({ archived }: { archived: boolean }) {
   const t = useTranslations('pages.discussion');
   const Icon = archived ? Archive : Eye;

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  PAGE_COMMENT_THREADS_DEFAULT_LIMIT,
   PAGE_COMMENT_THREADS_MAX_LIMIT,
   PageArchivedError,
   PageCommentAnchorInvalidError,
@@ -18,12 +19,16 @@ import {
   deletePageComment,
   editPageComment,
   encodePageCommentCursor,
+  listPageAnchoredRoots,
   listPageCommentThreads,
   pageCommentThreadsLimit,
+  readPageCommentThread,
   reopenPageCommentThread,
   replyToPageComment,
   resolvePageCommentThread,
+  toPageCommentDto,
   type PageCommentActor,
+  type PageCommentRow,
 } from '../src';
 import { FixedClock, MemoryPageStore } from './fakes/memoryPageStore';
 
@@ -104,16 +109,27 @@ describe('createPageComment', () => {
     });
   });
 
-  it('stores an anchor’s bytes unchanged and returns only its quote', async () => {
+  it('stores an anchor’s bytes unchanged and returns both parts — the bytes as padded base64', async () => {
     const thread = await createPageComment(store, clock, {
       ...scope(),
       bodyMd: 'Inline',
       anchor: { bytes: Uint8Array.from([7, 8, 9]), quote: 'the quoted text' },
     });
-    expect(thread.anchor).toEqual({ quote: 'the quoted text' });
+    // [7, 8, 9] is "BwgJ" — and a two-byte value needs padding, below.
+    expect(thread.anchor).toEqual({ bytes: 'BwgJ', quote: 'the quoted text' });
     const stored = store.comments.get(thread.id)!;
     expect([...stored.anchor!]).toEqual([7, 8, 9]);
     expect(stored.anchorQuote).toBe('the quoted text');
+    expect([...Buffer.from(thread.anchor!.bytes, 'base64')]).toEqual([...stored.anchor!]);
+  });
+
+  it('emits STANDARD padded base64, never the cursors’ url-safe form', async () => {
+    const thread = await createPageComment(store, clock, {
+      ...scope(),
+      bodyMd: 'Inline',
+      anchor: { bytes: Uint8Array.from([251, 255]), quote: 'q' },
+    });
+    expect(thread.anchor!.bytes).toBe('+/8=');
   });
 
   it('refuses empty anchor bytes and a blank quote, writing nothing', async () => {
@@ -401,6 +417,106 @@ describe('the page a write lands on', () => {
   });
 });
 
+describe('the anchor on a read', () => {
+  const inline = () =>
+    createPageComment(store, clock, {
+      ...scope(),
+      bodyMd: 'Inline',
+      anchor: { bytes: Uint8Array.from([1, 2, 3]), quote: 'the passage' },
+    });
+
+  it('lists an anchored root with both parts beside a page-level root, and its reply carries none', async () => {
+    const anchored = await inline();
+    const plain = await root('Page-level');
+    await reply(anchored.id, 'On the passage');
+    const page = await listPageCommentThreads(store, { ...scope(), status: 'open' });
+    const byId = new Map(page.threads.map((t) => [t.id, t]));
+    expect(byId.get(anchored.id)!.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
+    expect(byId.get(plain.id)!.anchor).toBeNull();
+    expect(byId.get(anchored.id)!.replies.map((r) => r.anchor)).toEqual([null]);
+  });
+
+  it('keeps the anchor through resolve and reopen', async () => {
+    const anchored = await inline();
+    const resolved = await resolvePageCommentThread(store, clock, {
+      ...scope(),
+      commentId: anchored.id,
+    });
+    expect(resolved.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
+    const done = await listPageCommentThreads(store, { ...scope(), status: 'resolved' });
+    expect(done.threads[0]!.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
+    const reopened = await reopenPageCommentThread(store, { ...scope(), commentId: anchored.id });
+    expect(reopened.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
+  });
+});
+
+describe('listPageAnchoredRoots', () => {
+  const inline = (quote: string) => {
+    tick();
+    return createPageComment(store, clock, {
+      ...scope(),
+      bodyMd: 'Inline',
+      anchor: { bytes: Uint8Array.from([1, 2, 3]), quote },
+    });
+  };
+
+  it('answers the open anchored roots oldest first, with no replies and no reply read', async () => {
+    const first = await inline('first');
+    await root('Page-level');
+    const second = await inline('second');
+    await reply(first.id);
+    const settled = await inline('settled');
+    await resolvePageCommentThread(store, clock, { ...scope(), commentId: settled.id });
+    const before = store.called('findPageCommentReplies');
+
+    const read = await listPageAnchoredRoots(store, scope());
+    expect(read.roots.map((r) => r.id)).toEqual([first.id, second.id]);
+    expect(read.roots[0]!.anchor).toEqual({ bytes: 'AQID', quote: 'first' });
+    expect(read.roots[0]).not.toHaveProperty('replies');
+    expect(read.counts).toEqual({ open: 3, resolved: 1 });
+    expect(store.called('findPageCommentReplies')).toBe(before);
+  });
+
+  it('walks past a full page of roots', async () => {
+    const made: string[] = [];
+    for (let i = 0; i < PAGE_COMMENT_THREADS_MAX_LIMIT + 2; i += 1)
+      made.push((await inline(`q${i}`)).id);
+    const read = await listPageAnchoredRoots(store, scope());
+    expect(read.roots.map((r) => r.id)).toEqual(made);
+  });
+
+  it('refuses a page outside the project', async () => {
+    const err = await refused(listPageAnchoredRoots(store, { pageId, projectId: 'elsewhere' }));
+    expect(err).toBeInstanceOf(PageNotFoundError);
+  });
+});
+
+describe('toPageCommentDto', () => {
+  const row = (anchor: Uint8Array | null, anchorQuote: string | null): PageCommentRow => ({
+    id: 'c1',
+    workspaceId: 'w1',
+    projectId: 'p1',
+    pageId,
+    parentCommentId: null,
+    authorId: 'u1',
+    author: { id: 'u1', name: 'Ada', image: null },
+    bodyMd: 'x',
+    editedAt: null,
+    createdAt: new Date(0),
+    resolvedAt: null,
+    resolvedById: null,
+    resolvedBy: null,
+    anchor,
+    anchorQuote,
+  });
+
+  it('answers a null anchor for a row carrying only one part, and never throws', () => {
+    expect(toPageCommentDto(row(Uint8Array.from([1]), null)).anchor).toBeNull();
+    expect(toPageCommentDto(row(null, 'orphan quote')).anchor).toBeNull();
+    expect(toPageCommentDto(row(null, null)).anchor).toBeNull();
+  });
+});
+
 describe('listPageCommentThreads', () => {
   it('lists open roots oldest first, each with its replies oldest first, and both counts', async () => {
     const a = await root('A');
@@ -525,5 +641,100 @@ describe('the cursor codec', () => {
     const raw = encodePageCommentCursor(cursor);
     expect(raw).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(decodePageCommentCursor(raw)).toEqual(cursor);
+  });
+});
+
+describe('readPageCommentThread', () => {
+  const read = (commentId: string, id = pageId) =>
+    readPageCommentThread(store, { projectId: 'p1', pageId: id, commentId });
+
+  it('answers a root’s whole thread, deep-equal to what the list answers for it', async () => {
+    const thread = await root('Root');
+    const r1 = await reply(thread.id, 'one');
+    const r2 = await reply(thread.id, 'two', other);
+    const byId = await read(thread.id);
+    expect(byId.replies.map((r) => r.id)).toEqual([r1.id, r2.id]);
+    const listed = await listPageCommentThreads(store, { ...scope(), status: 'open' });
+    expect(byId).toEqual(listed.threads.find((t) => t.id === thread.id));
+  });
+
+  it('answers a root past the first page of its list, with all its replies', async () => {
+    for (let i = 0; i < PAGE_COMMENT_THREADS_DEFAULT_LIMIT; i += 1) await root(`r${i}`);
+    const deep = await root('Past the first page');
+    const r = await reply(deep.id, 'its reply');
+    const first = await listPageCommentThreads(store, { ...scope(), status: 'open' });
+    expect(first.threads.map((t) => t.id)).not.toContain(deep.id);
+    const byId = await read(deep.id);
+    expect(byId).toMatchObject({ id: deep.id, bodyMd: 'Past the first page' });
+    expect(byId.replies.map((x) => x.id)).toEqual([r.id]);
+  });
+
+  it('carries the resolved state, and clears it after a reopen', async () => {
+    const thread = await root();
+    await resolvePageCommentThread(store, clock, { ...scope(other), commentId: thread.id });
+    expect(await read(thread.id)).toMatchObject({
+      resolvedAt: clock.current.toISOString(),
+      resolvedBy: { id: 'u2', name: 'Bo', image: null },
+    });
+    await reopenPageCommentThread(store, { ...scope(), commentId: thread.id });
+    expect(await read(thread.id)).toMatchObject({ resolvedAt: null, resolvedBy: null });
+  });
+
+  it('answers a reply’s id with the whole thread it sits in', async () => {
+    const thread = await root();
+    const r1 = await reply(thread.id, 'one');
+    const r2 = await reply(thread.id, 'two');
+    const byReply = await read(r2.id);
+    expect(byReply.id).toBe(thread.id);
+    expect(byReply.replies.map((r) => r.id)).toEqual([r1.id, r2.id]);
+  });
+
+  it('refuses a missing id and another page’s comment as not found, and another project’s page', async () => {
+    const thread = await root();
+    const otherPage = (
+      await createPage(store, clock, {
+        workspaceId: 'w1',
+        projectId: 'p1',
+        actorId: 'u1',
+        title: 'Other',
+        parent: { kind: 'root' },
+      })
+    ).id;
+    for (const err of [await refused(read('missing')), await refused(read(thread.id, otherPage))]) {
+      expect(err).toBeInstanceOf(PageCommentNotFoundError);
+      expect(err).toMatchObject({ code: 'PAGE_COMMENT_NOT_FOUND', status: 404 });
+    }
+    const elsewhere = await refused(
+      readPageCommentThread(store, { projectId: 'p2', pageId, commentId: thread.id }),
+    );
+    expect(elsewhere).toBeInstanceOf(PageNotFoundError);
+    expect(elsewhere).toMatchObject({ code: 'PAGE_NOT_FOUND', status: 404 });
+  });
+
+  it('refuses a reply whose root is missing as not found', async () => {
+    const thread = await root();
+    const r = await reply(thread.id);
+    // A reply row whose root has gone (the cascade normally takes it too).
+    store.comments.delete(thread.id);
+    expect(await refused(read(r.id))).toBeInstanceOf(PageCommentNotFoundError);
+  });
+
+  it('reads on an archived page', async () => {
+    const thread = await root();
+    await archivePage(store, clock, { projectId: 'p1', pageId, actorId: 'u1' });
+    expect((await read(thread.id)).id).toBe(thread.id);
+  });
+
+  it('writes nothing and locks nothing', async () => {
+    const thread = await root();
+    await reply(thread.id);
+    const before = writes();
+    const locks = store.called('lockPageComment');
+    const rows = JSON.stringify([...store.comments.values()]);
+    await read(thread.id);
+    expect(writes()).toBe(before);
+    expect(store.called('lockPageComment')).toBe(locks);
+    expect(store.called('findPageComment')).toBeGreaterThan(0);
+    expect(JSON.stringify([...store.comments.values()])).toBe(rows);
   });
 });

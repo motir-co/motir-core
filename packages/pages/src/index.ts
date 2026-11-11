@@ -19,6 +19,7 @@ export * from './document/extensions';
 export * from './document/schema';
 export { parseMarkdown, serializeMarkdown } from './document/markdown';
 export * from './document/convert';
+export * from './document/anchor';
 export { extractLinks } from './document/links';
 export * from './store';
 export * from './save';
@@ -33,6 +34,15 @@ export {
   type PageEditorProps,
   type PageEditorTheme,
   type SaveStatus,
+  type PageAnchorStretch,
+  type PageAnchorWash,
+  type PageInlineAnchorVerdicts,
+  type PageInlineThreadView,
+  partitionWashes,
+  PASSAGE_COMMENT_KEY,
+  type PagePassageAnchor,
+  type PagePassageCommentProps,
+  type PagePassageComposerRenderProps,
   type AvailableWorkItemRefView,
   type WorkItemCandidate,
   type WorkItemRefView,

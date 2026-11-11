@@ -16940,7 +16940,19 @@
         "replyDepth": "Sie können nur auf den ersten Kommentar eines Threads antworten."
       },
       "readOnlyViewer": "Sie können diese Diskussion lesen, aber mit Ihrer Rolle nicht kommentieren.",
-      "readOnlyArchived": "Diese Seite ist archiviert, daher ist ihre Diskussion schreibgeschützt."
+      "readOnlyArchived": "Diese Seite ist archiviert, daher ist ihre Diskussion schreibgeschützt.",
+      "inline": {
+        "tooltipOne": "Kommentar von {name}",
+        "tooltipMany": "{count} Kommentare hier",
+        "quoteLabel": "Zitierte Passage: {quote}",
+        "gone": "Die Passage ist nicht mehr auf dieser Seite.",
+        "action": "Kommentieren",
+        "actionLabel": "Markierten Text kommentieren",
+        "editorLabel": "Diese Passage kommentieren",
+        "anchorRefused": "Diese Passage kann nicht mehr verankert werden. Markieren Sie sie erneut und kommentieren Sie.",
+        "notHere": "Dieser Kommentar ist nicht mehr auf dieser Seite.",
+        "showInPage": "Auf der Seite zeigen"
+      }
     },
     "archive": {
       "menuItem": "Archivieren…",
