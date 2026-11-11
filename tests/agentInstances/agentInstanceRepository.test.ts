@@ -458,6 +458,46 @@ describe('agentInstanceRepository', () => {
     await adminDb.agentInstance.update({ where: { id: a.id }, data: { deletedAt: new Date() } });
     expect(await atFigure(2)).toBe(0);
   });
+
+  it('counts the live instances of one state on an app with no account — the install fleet’s hibernated (MOTIR-10887)', async () => {
+    const f = await seedFixture();
+    const app = 'motir-install-fleet';
+    const shard = await adminDb.fleetShard.create({
+      data: {
+        name: `hoster-${seq++}`,
+        fleetKind: 'agent_instance',
+        provider: 'aws',
+        role: 'primary',
+        state: 'active',
+        githubOrg: 'motir-fleet-use1-1',
+        githubInstallationId: '9001',
+        awsAccountId: '111100000043',
+        awsRegion: 'us-east-1',
+        credentialRef: 'REF',
+      },
+    });
+    const at = async (name: string, state: 'running' | 'hibernated', over = {}) => {
+      const row = await createInstance(f, { name });
+      await adminDb.agentInstance.update({
+        where: { id: row.id },
+        data: { flyApp: app, state, ...over },
+      });
+    };
+    await at('a', 'hibernated');
+    await at('b', 'hibernated');
+    await at('c', 'running');
+    // Not counted: deleted, on an account, on another app.
+    await at('d', 'hibernated', { deletedAt: new Date() });
+    await at('e', 'hibernated', { fleetShardId: shard.id });
+    await at('f', 'hibernated', { flyApp: 'another-app' });
+
+    const count = (state: 'running' | 'hibernated') =>
+      withSystemContext((tx) =>
+        agentInstanceRepository.countLiveInUnshardedAppByState(app, state, tx),
+      );
+    expect(await count('hibernated')).toBe(2);
+    expect(await count('running')).toBe(1);
+  });
 });
 
 describe('agentInstanceIntervalRepository', () => {

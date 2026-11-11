@@ -367,7 +367,10 @@ export const PLATFORM_AUDIT_ACTIONS = {
   /**
    * /admin/fleet-status read its images' publish records back out of this log
    * (MOTIR-10886) — the newest `fleet.image.publish` per image, for each card's
-   * Audit line and its progress, done and failed bands.
+   * Audit line and its progress, done and failed bands. The Pools section
+   * (MOTIR-10887) writes it too, with `fleet_pools.install` as `targetId` and
+   * `{ quotaRead }` as `metadata`, when it reads the install fleet's EC2 vCPU
+   * quota and records when that quota was last read.
    */
   'fleet.status.read': { kind: 'read', reason: 'never' },
   /**

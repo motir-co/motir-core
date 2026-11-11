@@ -9,7 +9,7 @@ import {
 } from './dispatch.js';
 import { execCommand, workReachedRemote, type CommandRunner } from './git.js';
 import type { DispatchPrompt, MotirClient } from './client.js';
-import type { ParsedAgentCommand } from './agentProfiles.js';
+import { withFreshSessionId, type ParsedAgentCommand } from './agentProfiles.js';
 import { createLegLogTee } from './agentLogTee.js';
 import { fetchPresignedAsset, materializeDesignsFor } from './designFiles.js';
 import { nullDispatchRunReporter, type DispatchRunReporter } from './dispatchRunReporter.js';
@@ -166,7 +166,10 @@ export interface DispatchLegInput {
 }
 
 export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchLegVerdict> {
-  const { client, rootDir, key, dispatch, agent, targets, primary } = input;
+  const { client, rootDir, key, dispatch, targets, primary } = input;
+  // THIS leg's own conversation (MOTIR-10983): a command resolved once per run carries
+  // ONE Motir-chosen session id, and an agent refuses a second spawn on an id in use.
+  const agent = withFreshSessionId(input.agent);
   const over = targets.length > 0 ? targets : [primary];
   const reporter = input.reporter ?? nullDispatchRunReporter;
 

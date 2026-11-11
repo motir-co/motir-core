@@ -4,6 +4,8 @@ import type { DispatchTarget } from '../src/dispatch.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
 import type { AgentRunResult } from '../src/agentRun.js';
 import type { DispatchPrompt } from '../src/client.js';
+import type { ParsedAgentCommand } from '../src/agentProfiles.js';
+import { agentModeAgent } from '../src/commands/dispatch.js';
 
 // THE DISPATCH LEG (Story MOTIR-3655 · MOTIR-3695) — the ONE implementation of
 // materialize, spawn, and decide what happened, now shared by `motir run` and
@@ -314,6 +316,50 @@ describe('the agent’s session id is recorded on the run (MOTIR-8980)', () => {
   it('is an explicit null when there is none', async () => {
     const out = await events({}, undefined);
     expect(out.find((e) => e.kind === 'agent_exited')!.data).toMatchObject({ sessionId: null });
+  });
+  // MOTIR-10983 — `motir batch` and `motir run` hand every leg the ONE agent they
+  // resolved; a Motir-chosen id baked into it must not be spawned twice.
+  it('spawns each leg of one resolved agent with its OWN Motir-chosen session id', async () => {
+    const agent = agentModeAgent({ MOTIR_SANDBOX_AGENT: 'claude' });
+    const spawned: ParsedAgentCommand[] = [];
+    const started: unknown[] = [];
+    const verdicts = [];
+    for (const key of ['PROD-1', 'PROD-2']) {
+      const primary = target();
+      verdicts.push(
+        await runDispatchLeg({
+          client: {
+            getWorkItem: async () => ({ item: { status: 'in_progress' } }) as never,
+            listWorkItemDesigns: async () => ({ designs: [] }),
+          },
+          rootDir: ROOT,
+          key,
+          dispatch: PROMPT,
+          agent,
+          targets: [primary],
+          primary,
+          sessionBranch: null,
+          onMaterialization: () => undefined,
+          beforeSpawn: () => undefined,
+          runAgentFn: async ({ command }) => {
+            spawned.push(command);
+            return { exitCode: 0, signal: null, model: null, sessionId: command.stream!.sessionId };
+          },
+          run: git(true),
+          reporter: {
+            event: (e: { kind: string; data?: unknown }) => {
+              if (e.kind === 'agent_started') started.push(e.data);
+            },
+          } as never,
+        }),
+      );
+    }
+    const ids = spawned.map((c) => c.args[c.args.indexOf('--session-id') + 1]);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).not.toContain(agent.stream!.sessionId);
+    expect(spawned.map((c) => c.stream!.sessionId)).toEqual(ids);
+    expect(started).toEqual(ids.map((sessionId) => ({ agent: 'claude', sessionId })));
+    expect(verdicts.map((v) => v.kind === 'succeeded' && v.sessionId)).toEqual(ids);
   });
 });
 
