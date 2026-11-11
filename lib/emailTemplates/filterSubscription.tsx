@@ -125,7 +125,7 @@ const fallbackLinkRow = {
 };
 const fallbackLink = { color: EMAIL_LINK, wordBreak: 'break-all' as const };
 const hr = { borderColor: '#e5e7eb', margin: '8px 0 16px' };
-const reason = { color: '#9ca3af', fontSize: '12px', margin: '0 0 8px' };
+const reason = { color: '#6b7280', fontSize: '12px', margin: '0 0 8px' };
 const unsubscribeRow = { fontSize: '12px', margin: '0 0 8px' };
 const unsubscribeLink = { color: '#6b7280', textDecoration: 'underline' };
 

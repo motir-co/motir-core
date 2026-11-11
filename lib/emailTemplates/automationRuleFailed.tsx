@@ -70,7 +70,7 @@ const fallbackLinkRow = {
   margin: '0 0 24px',
 };
 const fallbackLink = { color: EMAIL_LINK, wordBreak: 'break-all' as const };
-const reason = { color: '#9ca3af', fontSize: '12px', margin: '0 0 24px' };
+const reason = { color: '#6b7280', fontSize: '12px', margin: '0 0 24px' };
 
 export async function automationRuleFailedEmail(
   props: AutomationRuleFailedEmailProps,
