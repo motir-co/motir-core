@@ -544,3 +544,22 @@ function organizationIds(
 ): Promise<string[]> {
   return organizationRepository.listMetaIdsInTx(tx);
 }
+
+describe('the install fleet’s machine size (MOTIR-10887)', () => {
+  it('every eligible kind boots the default type, sized from the instance-type map', async () => {
+    const { AWS_DEFAULT_INSTANCE_TYPE } = await import('@motir/orchestrator');
+    const fleet = await import('@/lib/ciFleet/installFleet');
+    expect(fleet.INSTALL_FLEET_ELIGIBLE_KINDS).toEqual([
+      'hosted_agent',
+      'code_graph_index',
+      'agent_instance',
+    ]);
+    for (const kind of fleet.INSTALL_FLEET_ELIGIBLE_KINDS) {
+      expect(fleet.installFleetInstanceType(kind)).toBe(AWS_DEFAULT_INSTANCE_TYPE);
+      expect(fleet.installFleetMachineVcpu(kind)).toBe(2);
+    }
+    expect(fleet.ec2InstanceTypeVcpu('m6i.large')).toBe(2);
+    // A type the map does not size is unknown — never a guessed figure.
+    expect(fleet.ec2InstanceTypeVcpu('x9z.metal')).toBeNull();
+  });
+});
