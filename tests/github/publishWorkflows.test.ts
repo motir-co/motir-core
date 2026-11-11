@@ -95,6 +95,22 @@ describe('the transport', () => {
   });
 });
 
+describe('the run id segment', () => {
+  it.each([0, -1, 1.5, 1e21, Number.NaN])(
+    'a run id GitHub could not have issued (%s) makes no request',
+    async (runId) => {
+      await expect(publishWorkflowsClient.run(REPO, runId, null)).rejects.toMatchObject({
+        status: null,
+        detail: 'the run id is not one GitHub could have issued',
+      });
+      await expect(publishWorkflowsClient.failureDetail(REPO, runId, null)).rejects.toMatchObject({
+        status: null,
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+});
+
 describe('dispatch', () => {
   it('posts ref, inputs and return_run_details, then reads the run it names', async () => {
     routes.push([

@@ -66,6 +66,24 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+/** A run id as GitHub issues them: a positive integer, written in plain digits. */
+const RUN_ID = /^[1-9][0-9]{0,15}$/;
+
+/**
+ * The run-id path segment. ⚠️ A run id reaches this file from the page's poll,
+ * i.e. from the browser, so it is held to the digits GitHub issues before it is
+ * written into a URL — `lib/github/checkRuns.ts`'s rule: `Number.isInteger`
+ * admits `1e21` (which stringifies to `1e+21`) and negatives. A value outside
+ * it makes no request at all.
+ */
+function runSegment(runId: number): string {
+  const segment = String(runId);
+  if (!RUN_ID.test(segment)) {
+    throw new PublishWorkflowError(null, 'the run id is not one GitHub could have issued');
+  }
+  return segment;
+}
+
 const repoPath = (repo: RepoRef) =>
   `/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`;
 
@@ -206,7 +224,8 @@ export const publishWorkflowsClient = {
 
   /** One run, by id. */
   async run(repo: RepoRef, runId: number, token: string | null): Promise<PublishWorkflowRun> {
-    const { status, body } = await call('GET', `${repoPath(repo)}/actions/runs/${runId}`, token);
+    const id = runSegment(runId);
+    const { status, body } = await call('GET', `${repoPath(repo)}/actions/runs/${id}`, token);
     const run = toRun(body);
     if (!run) throw new PublishWorkflowError(status, 'the run carried no id or status');
     return run;
@@ -228,9 +247,10 @@ export const publishWorkflowsClient = {
    * step that failed. Null when no job failed.
    */
   async failureDetail(repo: RepoRef, runId: number, token: string | null): Promise<string | null> {
+    const id = runSegment(runId);
     const { body } = await call(
       'GET',
-      `${repoPath(repo)}/actions/runs/${runId}/jobs?filter=latest&per_page=100`,
+      `${repoPath(repo)}/actions/runs/${id}/jobs?filter=latest&per_page=100`,
       token,
     );
     const jobs = asRecord(body)?.['jobs'];
