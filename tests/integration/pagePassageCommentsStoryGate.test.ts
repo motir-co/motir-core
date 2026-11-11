@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { WorkspaceRole } from '@/generated/prisma/client';
-import { anchorDocument, anchorFromSelection, resolveStoredAnchor } from '@motir/pages';
+import { anchorDocument, anchorFromSelection, resolveStoredAnchor } from '@/lib/pages';
 
 // STORY MOTIR-10867's INTEGRATION GATE (MOTIR-10903) — COMMENT ON A PASSAGE,
 // assembled, on real Postgres, through the real doors.
