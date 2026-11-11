@@ -344,10 +344,11 @@ describe('3 · an unwatched failure is recorded, not discarded', () => {
           createdAt: new Date(Date.now() - 72 * HOUR),
         },
       });
+      // A JUDGED failure: a `model_unavailable` one is resumed by itself since MOTIR-10968.
       getJobMock.mockImplementation(async (jobId: string) => ({
         jobId,
         status: 'failed',
-        error: { code: 'MOTIR_AI_UNAVAILABLE', message: 'gateway 503' },
+        error: { code: 'MOTIR_AI_JOB_FAILED', message: 'the planner model returned an error' },
       }));
 
       await new JobTestEngine({ function: abandonedPlanSweep }).execute();
@@ -626,10 +627,12 @@ describe('13 · concurrency across the chain', () => {
         fx = await makeWorkItemFixture();
         const f = await sessionWithPlan('job-r');
         await ageEverything(f.sessionId, f.planId, 3 * HOUR);
+        // A JUDGED failure, so neither recorder resumes it (MOTIR-10968 resumes a
+        // `model_unavailable` one): the race is about the one record.
         getJobMock.mockResolvedValue({
           jobId: 'job-r',
           status: 'failed',
-          error: { code: 'MOTIR_AI_UNAVAILABLE' },
+          error: { code: 'MOTIR_AI_JOB_FAILED' },
         });
 
         const results = await Promise.allSettled([

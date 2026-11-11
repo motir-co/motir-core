@@ -70,7 +70,10 @@ const REAPED = new MotirAiUnavailableError(
   'the worker holding this job stopped renewing its lease',
 );
 const lost = { readJob: async () => ({ error: REAPED, walkStop: null, lostMachine: true }) };
-const judged = { readJob: async () => ({ error: REAPED, walkStop: null, lostMachine: false }) };
+// A failure motir-ai JUDGED (`job_failed`). Not the provider: a `model_unavailable` stop is
+// resumed once by itself since MOTIR-10968 (`providerAutoResume.test.ts`).
+const JUDGED = { code: 'MOTIR_AI_JOB_FAILED', message: 'the planner model returned an error' };
+const judged = { readJob: async () => ({ error: JUDGED, walkStop: null, lostMachine: false }) };
 
 /**
  * An open `conversation` session whose current attempt is `job-1`, writing a `generating`
@@ -125,8 +128,10 @@ async function walk(opts: { proposals?: number; failed?: boolean; silentMs?: num
 
 const sessionRow = (id: string) => adminDb.planChangeSession.findUniqueOrThrow({ where: { id } });
 const planRow = (id: string) => adminDb.plan.findUniqueOrThrow({ where: { id } });
-const settle = (jobId: string, deps = lost) =>
-  planSessionEndService.settleFailedJob(jobId, me(), { status: 'failed' }, deps);
+const settle = (
+  jobId: string,
+  deps: Parameters<typeof planSessionEndService.settleFailedJob>[3] = lost,
+) => planSessionEndService.settleFailedJob(jobId, me(), { status: 'failed' }, deps);
 const state = (status: PlanJobStateDto['status'], failure: PlanJobStateDto['failure'] = null) =>
   ({ jobId: 'job-1', status, reachable: true, failure }) as PlanJobStateDto;
 
@@ -390,6 +395,7 @@ describe('the failure-recording paths stay safe around the resume', () => {
       sessionId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
+      cause: 'lost_machine',
     });
 
     expect(out).toEqual({ started: false, reason: 'submit_refused' });

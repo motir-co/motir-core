@@ -899,20 +899,28 @@ export const planChangeSessionRepository = {
    * moves it, so two callers racing from `max - 1` cannot both pass. Answers the
    * new count, or `null` when the session is ended, unknown or at its bound —
    * nothing was written then.
+   *
+   * `once: true` is a resume for the PROVIDER being unavailable (MOTIR-10968): it
+   * also stamps `provider_auto_resumed_at`, and is refused when that is already set,
+   * in the same statement — so a session gets ONE such resume however its callers race.
    */
   async recordAutoResume(
     id: string,
-    args: { at: Date; max: number },
+    args: { at: Date; max: number; once?: boolean },
     tx: Prisma.TransactionClient,
   ): Promise<number | null> {
+    const once = args.once === true;
     const rows = await tx.$queryRaw<Array<{ auto_resume_count: number }>>`
       UPDATE "plan_change_session"
          SET "auto_resume_count" = "auto_resume_count" + 1,
              "last_auto_resumed_at" = ${args.at},
+             "provider_auto_resumed_at" = CASE WHEN ${once} THEN ${args.at}
+                                               ELSE "provider_auto_resumed_at" END,
              "updated_at" = ${args.at}
        WHERE "id" = ${id}
          AND "ended_at" IS NULL
          AND "auto_resume_count" < ${args.max}
+         AND (NOT ${once} OR "provider_auto_resumed_at" IS NULL)
       RETURNING "auto_resume_count"
     `;
     return rows[0]?.auto_resume_count ?? null;

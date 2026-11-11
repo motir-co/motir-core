@@ -9993,6 +9993,13 @@ model PlanChangeSession {
   autoResumeCount      Int                       @default(0) @map("auto_resume_count")
   /// When Motir last resumed this conversation by itself. Null until the first.
   lastAutoResumedAt    DateTime?                 @map("last_auto_resumed_at")
+  /// When Motir resumed this conversation by itself because the AI PROVIDER was
+  /// unavailable (`failure_reason = model_unavailable`, MOTIR-10968). Null until then,
+  /// and never cleared: that cause buys ONE automatic resume per session, whatever lost
+  /// machines it also had. That resume also counts in `autoResumeCount`, so the shared
+  /// bound holds over both causes. Set by `recordAutoResume` in the statement that
+  /// bumps the count, which refuses when it is already set.
+  providerResumedAt    DateTime?                 @map("provider_auto_resumed_at")
   createdAt            DateTime                  @default(now()) @map("created_at")
   updatedAt            DateTime                  @updatedAt @map("updated_at")
 

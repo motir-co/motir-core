@@ -13,6 +13,7 @@ import {
 } from '@/lib/planChange/errors';
 import {
   AUTO_RESUMES_PER_SESSION,
+  type AutoResumeCause,
   sessionWaitingState,
 } from '@/lib/planChange/sessionWaitingState';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
@@ -228,9 +229,12 @@ async function bind(pctx: ProjectContext, target: ResumeTarget, jobId: string): 
 // THE AUTOMATIC RESUME (Story MOTIR-8301 · MOTIR-8307). A hosted walk whose machine was LOST —
 // motir-ai reaped its job — and whose plan already holds a proposal is resumed by core itself:
 // the same plan, the same session, signed as the session's STARTER (who is metered, and whose
-// access is checked), at most `AUTO_RESUMES_PER_SESSION` times per session. Every other failure
-// waits in To resume as before. The two callers are the places a failure is RECORDED — the
-// relays' `settleFailedJob` and the sweep's session arm — and nothing else calls it.
+// access is checked), at most `AUTO_RESUMES_PER_SESSION` times per session. A walk recorded
+// failed because the AI PROVIDER was unavailable (`model_unavailable`, MOTIR-10968) is resumed
+// the same way, under the same bound, and only ONCE per session for that cause. Every other
+// failure waits in To resume as before. The two callers are the places a failure is RECORDED —
+// the relays' `settleFailedJob` and the sweep's session arm — and nothing else calls it; each
+// names the cause with `autoResumeCauseOf`.
 //
 // SAME ORDER AND SAME TRADE AS THE MANUAL RESUME: submit (a metered side effect, outside any
 // transaction), then bind. Everything knowable beforehand — the bound, the proposal, the state,
@@ -269,11 +273,18 @@ type AutoResumePrecheck =
   | { ok: true; target: ResumeTarget; starterCtx: ProjectContext }
   | { ok: false; reason: AutoResumeSkip };
 
-async function precheckAutomatic(input: {
+/** What the two failure-recording paths hand the automatic resume. */
+export interface AutoResumeInput {
   sessionId: string;
   workspaceId: string;
   projectId: string;
-}): Promise<AutoResumePrecheck> {
+  /** Why it qualifies (`autoResumeCauseOf`). Omitted reads as `lost_machine`, MOTIR-8307's only cause. */
+  cause?: AutoResumeCause;
+}
+
+async function precheckAutomatic(
+  input: AutoResumeInput & { cause: AutoResumeCause },
+): Promise<AutoResumePrecheck> {
   return withWorkspaceServiceContext(input.workspaceId, async (tx) => {
     const session = await planChangeSessionRepository.findByIdInProject(
       input.sessionId,
@@ -290,6 +301,12 @@ async function precheckAutomatic(input: {
     if (session.failureResumable === false) return { ok: false, reason: 'not_resumable' };
     if (session.autoResumeCount >= AUTO_RESUMES_PER_SESSION) {
       return { ok: false, reason: 'bound_spent' };
+    }
+    // THE PROVIDER CAUSE IS READ BACK FROM THE ROW (MOTIR-10968), not taken on the caller's word,
+    // and buys one resume per session: a second provider stop waits for the person.
+    if (input.cause === 'model_unavailable') {
+      if (session.failureReason !== 'model_unavailable') return { ok: false, reason: 'not_failed' };
+      if (session.providerResumedAt) return { ok: false, reason: 'bound_spent' };
     }
     const plan = await planRepository.findLatestForResume(session.id, tx);
     if (!plan || plan.status !== 'generating' || plan.sourceJobId !== session.failedJobId) {
@@ -321,7 +338,7 @@ async function precheckAutomatic(input: {
 }
 
 async function attemptAutomatic(
-  input: { sessionId: string; workspaceId: string; projectId: string },
+  input: AutoResumeInput & { cause: AutoResumeCause },
   onPlan: (planId: string) => void,
 ): Promise<AutoResumeOutcome> {
   const pre = await precheckAutomatic(input);
@@ -365,7 +382,7 @@ async function attemptAutomatic(
         await bindWithin(tx, target, jobId, now, starterCtx.workspaceId);
         const n = await planChangeSessionRepository.recordAutoResume(
           target.sessionId,
-          { at: now, max: AUTO_RESUMES_PER_SESSION },
+          { at: now, max: AUTO_RESUMES_PER_SESSION, once: input.cause === 'model_unavailable' },
           tx,
         );
         if (n === null) throw new AutoResumeBoundSpent();
@@ -423,24 +440,21 @@ export const planSessionResumeService = {
   },
 
   /**
-   * RESUME A LOST MACHINE'S PLAN AUTOMATICALLY (MOTIR-8307) — see the header above. Called only
-   * by the two places a failure is recorded, after it is recorded. Every skip is a value, and
-   * every outcome is logged on one line.
+   * RESUME A FAILED PLAN AUTOMATICALLY (MOTIR-8307 · MOTIR-10968) — a lost machine, or an
+   * unavailable provider once; see the header above. Called only by the two places a failure is
+   * recorded, after it is recorded. Every skip is a value, and every outcome is logged on one line.
    */
-  async resumeAutomatically(input: {
-    sessionId: string;
-    workspaceId: string;
-    projectId: string;
-  }): Promise<AutoResumeOutcome> {
+  async resumeAutomatically(input: AutoResumeInput): Promise<AutoResumeOutcome> {
+    const cause = input.cause ?? 'lost_machine';
     let planId = 'none';
-    const outcome = await attemptAutomatic(input, (id) => {
+    const outcome = await attemptAutomatic({ ...input, cause }, (id) => {
       planId = id;
     });
     const result = outcome.started
       ? `started job ${outcome.jobId} (${outcome.count}/${AUTO_RESUMES_PER_SESSION})`
       : `skipped: ${outcome.reason}`;
     // eslint-disable-next-line no-console -- the one-line auto-resume trace the card asks for
-    console.info(`[auto-resume] session ${input.sessionId} plan ${planId} → ${result}`);
+    console.info(`[auto-resume] session ${input.sessionId} plan ${planId} (${cause}) → ${result}`);
     return outcome;
   },
 };
