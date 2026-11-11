@@ -16,6 +16,7 @@ import {
   resolveAnchor,
   resolveAnchors,
   resolveStoredAnchor,
+  sameAsQuote,
   type PageAnchorDocument,
   type PageAnchorRange,
 } from '../../src';
@@ -237,15 +238,89 @@ describe('resolveAnchor, after the page is edited', () => {
     const afterDelete = new Y.Doc();
     Y.applyUpdate(afterDelete, stateOf(ydoc));
     Y.applyUpdate(afterDelete, stateOf(b));
-    expect(resolveStoredAnchor(selection.bytes, stateOf(afterDelete))).toBeNull();
+    expect(resolveStoredAnchor(selection.bytes, stateOf(afterDelete), selection.quote)).toBeNull();
 
     undo.undo();
     // Live, in the document that undid it…
-    expect(covered(b, resolveAnchor(selection.pair, b))).toBe(PASSAGE);
+    expect(covered(b, resolveAnchor(selection.pair, b, selection.quote))).toBe(PASSAGE);
     // …and in a state merged from it, which no longer knows which items replaced which.
     Y.applyUpdate(afterDelete, stateOf(b));
     const restored = stateOf(afterDelete);
-    expect(covered(restored, resolveStoredAnchor(selection.bytes, restored))).toBe(PASSAGE);
+    expect(covered(restored, resolveStoredAnchor(selection.bytes, restored, selection.quote))).toBe(
+      PASSAGE,
+    );
+  });
+
+  it('never re-attaches a deleted passage to new text typed in its place', () => {
+    const { ydoc, selection } = anchored();
+    const t = textOf(ydoc, 1);
+    const at = t.toString().indexOf(PASSAGE);
+    t.delete(at, PASSAGE.length);
+    t.insert(at, 'Totally different text.');
+    expect(resolveAnchor(selection.pair, ydoc, selection.quote)).toBeNull();
+    expect(resolveStoredAnchor(selection.bytes, stateOf(ydoc), selection.quote)).toBeNull();
+  });
+
+  it('never re-attaches a passage deleted at a paragraph’s end to a sentence appended there', () => {
+    const ydoc = ydocOf(body(para(text(`Opening words. ${PASSAGE}`)), para(text('Next.'))));
+    const d = anchorDocument(ydoc);
+    const { from, to } = rangeOf(d, PASSAGE);
+    const selection = anchorFromSelection(d, from, to)!;
+    const t = textOf(ydoc, 0);
+    t.delete(t.toString().indexOf(PASSAGE), PASSAGE.length);
+    expect(resolveAnchor(selection.pair, ydoc, selection.quote)).toBeNull();
+    t.insert(t.length, 'A brand new sentence.');
+    expect(resolveAnchor(selection.pair, ydoc, selection.quote)).toBeNull();
+  });
+
+  it('brings back a restored passage that was edited after it was quoted', () => {
+    const { ydoc, selection } = anchored();
+    const t = textOf(ydoc, 1);
+    const at = t.toString().indexOf(PASSAGE);
+    t.delete(at, PASSAGE.length);
+    // A version restore inserts the version's text as new items: here, the
+    // passage as it read after an edit inside it.
+    t.insert(at, 'Brave and new world.');
+    expect(covered(ydoc, resolveAnchor(selection.pair, ydoc, selection.quote))).toBe(
+      'Brave and new world.',
+    );
+    // Without the quote there is nothing to check the text against: gone.
+    expect(resolveAnchor(selection.pair, ydoc)).toBeNull();
+  });
+});
+
+describe('sameAsQuote', () => {
+  it('holds for the quote itself, folded case and spacing, and a passage that kept half its words', () => {
+    expect(sameAsQuote('Brave new world.', 'Brave new world.')).toBe(true);
+    expect(sameAsQuote('  brave   NEW world ', 'Brave new world.')).toBe(true);
+    expect(
+      sameAsQuote('The rollout starts early from Monday', 'The rollout starts on Monday'),
+    ).toBe(true);
+  });
+
+  it('fails for unrelated text, for text with no words, and for a lone shared word', () => {
+    expect(sameAsQuote('Totally different text.', 'Brave new world.')).toBe(false);
+    expect(sameAsQuote('— … —', 'Brave new world.')).toBe(false);
+    expect(sameAsQuote('Brave', '…')).toBe(false);
+    expect(sameAsQuote('A whole new paragraph about something else', 'Brave new world.')).toBe(
+      false,
+    );
+  });
+
+  it('splits scripts written without spaces into words', () => {
+    expect(sameAsQuote('今日は良い天気です', '今日は良い天気です')).toBe(true);
+    expect(sameAsQuote('明日は会議があります', '今日は良い天気です')).toBe(false);
+  });
+
+  it('compares a quote cut at the maximum with the same length of text', () => {
+    const long = Array.from({ length: 400 }, (_, i) => `word${i}`).join(' ');
+    const quote = `${Array.from(long)
+      .slice(0, PAGE_ANCHOR_QUOTE_MAX - 1)
+      .join('')}…`;
+    expect(Array.from(quote)).toHaveLength(PAGE_ANCHOR_QUOTE_MAX);
+    // The tail past the cut is not counted against the passage.
+    expect(sameAsQuote(`${long} and a long tail of new words`, quote)).toBe(true);
+    expect(sameAsQuote(long.replace(/word/g, 'term'), quote)).toBe(false);
   });
 });
 

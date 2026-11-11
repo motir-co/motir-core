@@ -5,12 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { memberPageContext, pageMembers, pageScope } from '@/lib/pages/projectPageContext';
 import { pageCommentsService } from '@/lib/services/pageCommentsService';
 import { pagesService } from '@/lib/services/pagesService';
-import {
-  PAGE_COMMENT_THREADS_MAX_LIMIT,
-  PAGE_TITLE_MAX_LENGTH,
-  PageNotFoundError,
-  type PageCommentDto,
-} from '@/lib/pages';
+import { PAGE_TITLE_MAX_LENGTH, PageNotFoundError, type PageCommentDto } from '@/lib/pages';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { PageDto, PageTrailDto, PageTreeLevelDto } from '@/lib/dto/pages';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -157,26 +152,13 @@ interface InlineThreadsRead {
 async function loadInlineThreads(pageId: string): Promise<InlineThreadsRead> {
   const scope = await loadScope();
   try {
-    let openCount = 0;
-    const inlineThreads: PageCommentDto[] = [];
-    let cursor: string | undefined;
-    do {
-      const read = await pageCommentsService.listPageThreads(scope.service, {
-        projectId: scope.projectId,
-        pageId,
-        status: 'open',
-        cursor,
-        limit: PAGE_COMMENT_THREADS_MAX_LIMIT,
-      });
-      openCount = read.counts.open;
-      for (const thread of read.threads) {
-        if (thread.anchor === null) continue;
-        const { replies: _replies, ...root } = thread;
-        inlineThreads.push(root);
-      }
-      cursor = read.nextCursor ?? undefined;
-    } while (cursor !== undefined);
-    return { openCount, inlineThreads };
+    // Roots only: the editor washes anchored roots, and the chip wants a count —
+    // no replies and no work-item summaries are read for either.
+    const read = await pageCommentsService.listAnchoredRoots(scope.service, {
+      projectId: scope.projectId,
+      pageId,
+    });
+    return { openCount: read.openCount, inlineThreads: read.roots };
   } catch (err) {
     console.error('[pages] the open discussion could not be read', err);
     return { openCount: 0, inlineThreads: [] };

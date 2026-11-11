@@ -370,6 +370,27 @@ describe('the wash follows the reader’s own edits', () => {
   });
 });
 
+describe('a passage replaced by typing', () => {
+  it('draws nothing over the new text and reports the thread gone (agent review, MOTIR-10867)', async () => {
+    const state = stateFromMarkdown(BODY);
+    const h = mount({
+      initialState: state,
+      inlineThreads: [thread(state, 'r1', 'one we discuss')],
+    });
+    await flush();
+    act(() => {
+      const at = livePos(h.editor, 'one we discuss');
+      h.editor.commands.insertContentAt(
+        { from: at, to: at + 'one we discuss'.length },
+        'totally different text',
+      );
+    });
+    await flush();
+    expect(h.washes()).toEqual([]);
+    expect(h.verdicts.at(-1)).toEqual({ r1: null });
+  });
+});
+
 describe('which threads draw', () => {
   it('draws nothing for a resolved root, and draws it again once reopened', async () => {
     const state = stateFromMarkdown(BODY);
@@ -554,6 +575,37 @@ describe('emphasis, click and the tooltip', () => {
     act(() => {
       fireEvent.mouseLeave(h.surface);
     });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(h.updates).toEqual([]);
+  });
+
+  it('draws the focus ring and tooltip for a thread reached from the keyboard, without taking focus (MOTIR-10902)', async () => {
+    const state = stateFromMarkdown(BODY);
+    const h = mount({
+      initialState: state,
+      inlineThreads: twoThreads(state),
+      focusedInlineThreadId: 'a',
+    });
+    await flush();
+    expect(h.washes()[0]!.hasAttribute('data-wash-ring')).toBe(false);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    h.rerender({
+      inlineThreads: twoThreads(state),
+      focusedInlineThreadId: 'a',
+      focusedInlineThreadRing: true,
+    });
+    await flush();
+    const ringed = h.washes().filter((el) => el.hasAttribute('data-wash-ring'));
+    expect(ringed.map((el) => el.dataset['washIds'])).toEqual(['a']);
+    expect(screen.getByRole('tooltip').textContent).toBe('Comment by Ann Lee');
+    expect(h.surface.contains(document.activeElement)).toBe(false);
+
+    // Focus leaves the thread: the ring and the tooltip go, the emphasis stays.
+    h.rerender({ inlineThreads: twoThreads(state), focusedInlineThreadId: 'a' });
+    await flush();
+    expect(h.washes().some((el) => el.hasAttribute('data-wash-ring'))).toBe(false);
+    expect(h.washes()[0]!.dataset['washState']).toBe('emphasis');
     expect(screen.queryByRole('tooltip')).toBeNull();
     expect(h.updates).toEqual([]);
   });

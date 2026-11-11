@@ -168,6 +168,8 @@ export const inlineCommentsKey = new PluginKey<InlineCommentsState>('motirInline
 interface InlineCommentsState {
   readonly washes: readonly PageAnchorWash[];
   readonly focusedId: string | null;
+  /** The focused thread was reached from the keyboard: its passage wears the Wash focus ring. */
+  readonly ring: boolean;
   readonly hoverId: string | null;
   /** Bumped when the inputs change, so the view runs a pass. */
   readonly version: number;
@@ -176,7 +178,7 @@ interface InlineCommentsState {
 
 type InlineCommentsMeta =
   | { readonly type: 'washes'; readonly washes: readonly PageAnchorWash[] }
-  | { readonly type: 'inputs'; readonly focusedId: string | null }
+  | { readonly type: 'inputs'; readonly focusedId: string | null; readonly ring: boolean }
   | { readonly type: 'hover'; readonly id: string | null };
 
 /** A wash moved through a transaction's mapping, or dropped when its text went. */
@@ -215,6 +217,7 @@ function buildDecorations(
   washes: readonly PageAnchorWash[],
   focusedId: string | null,
   hoverId: string | null,
+  ring = false,
 ): DecorationSet {
   const decorations: Decoration[] = [];
   for (const wash of washes) {
@@ -226,6 +229,9 @@ function buildDecorations(
         'data-wash-state': emphasis ? 'emphasis' : 'rest',
       };
       if (emphasis) attrs['tabindex'] = '-1';
+      // The keyboard route (MOTIR-10902): the thread focused in the panel draws
+      // its passage's focus ring without taking focus out of the panel.
+      if (emphasis && ring) attrs['data-wash-ring'] = '';
       if (hoverId !== null && stretch.ids.includes(hoverId)) attrs['data-wash-hover'] = '';
       decorations.push(...stretchDecorations(doc, stretch, attrs));
     }
@@ -275,6 +281,7 @@ function inlineCommentsPlugin({ doc, read }: InlineCommentDecorationsOptions): P
       init: () => ({
         washes: [],
         focusedId: read().focusedThreadId,
+        ring: false,
         hoverId: null,
         version: 0,
         decorations: DecorationSet.empty,
@@ -282,7 +289,7 @@ function inlineCommentsPlugin({ doc, read }: InlineCommentDecorationsOptions): P
       apply: (tr: Transaction, prev, _old, next) => {
         const meta = tr.getMeta(inlineCommentsKey) as InlineCommentsMeta | undefined;
         if (!tr.docChanged && meta === undefined) return prev;
-        let { washes, focusedId, hoverId, version } = prev;
+        let { washes, focusedId, ring, hoverId, version } = prev;
         if (tr.docChanged) {
           washes = washes
             .map((w) => mapWash(w, tr.mapping))
@@ -291,15 +298,17 @@ function inlineCommentsPlugin({ doc, read }: InlineCommentDecorationsOptions): P
         if (meta?.type === 'washes') washes = meta.washes;
         if (meta?.type === 'inputs') {
           focusedId = meta.focusedId;
+          ring = meta.ring;
           version += 1;
         }
         if (meta?.type === 'hover') hoverId = meta.id;
         return {
           washes,
           focusedId,
+          ring,
           hoverId,
           version,
-          decorations: buildDecorations(next.doc, washes, focusedId, hoverId),
+          decorations: buildDecorations(next.doc, washes, focusedId, hoverId, ring),
         };
       },
     },
@@ -357,6 +366,7 @@ function inlineCommentsPlugin({ doc, read }: InlineCommentDecorationsOptions): P
         const inputs = read();
         const pairs: (PageAnchorPair | null)[] = inputs.threads.map((t) => decodeAnchor(t.anchor));
         const decodable = pairs.filter((p): p is PageAnchorPair => p !== null);
+        const quotes = inputs.threads.filter((_, i) => pairs[i] !== null).map((t) => t.quote);
         let ranges: (PageAnchorRange | null)[] = [];
         if (decodable.length > 0) {
           const body = anchorDocument(doc);
@@ -367,10 +377,13 @@ function inlineCommentsPlugin({ doc, read }: InlineCommentDecorationsOptions): P
               if (retries < SETTLE_RETRIES) {
                 retries += 1;
                 setTimeout(schedule, 0);
+              } else {
+                // Given up on this one; the next update's pass waits afresh.
+                retries = 0;
               }
               return;
             }
-            ranges = resolveAnchors(decodable, body);
+            ranges = resolveAnchors(decodable, body, quotes);
           }
         }
         retries = 0;
@@ -398,6 +411,24 @@ function inlineCommentsPlugin({ doc, read }: InlineCommentDecorationsOptions): P
         }
       };
 
+      // The ring's tooltip: shown against the ringed passage once it is drawn,
+      // and taken down when the ring goes. Outside the view update, which must
+      // not dispatch.
+      let ringShown = false;
+      const syncRing = () => {
+        if (destroyed) return;
+        const ringed = inlineCommentsKey.getState(editorView.state)?.ring
+          ? washTarget(editorView.dom.querySelector('[data-wash-ring]'))
+          : null;
+        if (ringed) {
+          ringShown = true;
+          setTarget(editorView, ringed);
+        } else if (ringShown) {
+          ringShown = false;
+          setTarget(editorView, null);
+        }
+      };
+
       function schedule() {
         if (scheduled || destroyed) return;
         scheduled = true;
@@ -408,8 +439,12 @@ function inlineCommentsPlugin({ doc, read }: InlineCommentDecorationsOptions): P
       schedule();
       return {
         update: (view, prevState) => {
-          const before = inlineCommentsKey.getState(prevState)?.version;
-          if (inlineCommentsKey.getState(view.state)?.version !== before) schedule();
+          const prev = inlineCommentsKey.getState(prevState);
+          const now = inlineCommentsKey.getState(view.state);
+          if (now?.version !== prev?.version) schedule();
+          if ((now?.ring || ringShown) && now?.decorations !== prev?.decorations) {
+            queueMicrotask(syncRing);
+          }
         },
         destroy: () => {
           destroyed = true;
@@ -451,10 +486,14 @@ export function createInlineComments(doc: Y.Doc): InlineComments {
 }
 
 /** Tell the extension its inputs changed: redraw the focus and resolve again. */
-export function refreshInlineComments(view: EditorView, focusedId: string | null): void {
+export function refreshInlineComments(
+  view: EditorView,
+  focusedId: string | null,
+  ring = false,
+): void {
   view.dispatch(
     view.state.tr
-      .setMeta(inlineCommentsKey, { type: 'inputs', focusedId } satisfies InlineCommentsMeta)
+      .setMeta(inlineCommentsKey, { type: 'inputs', focusedId, ring } satisfies InlineCommentsMeta)
       .setMeta('addToHistory', false),
   );
 }

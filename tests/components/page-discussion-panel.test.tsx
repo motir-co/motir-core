@@ -1410,8 +1410,33 @@ describe('PageDiscussionPanel — arrival (MOTIR-10902)', () => {
     expect(article.dataset['threadArrived']).toBe('true');
     expect(article.className).toContain('ring-(--focus-ring-color)');
     expect(document.activeElement).toBe(article);
-    expect(onThreadFocus).toHaveBeenCalledWith(target.id);
+    // Whether this focus counts as the keyboard's is the browser's call
+    // (`:focus-visible`); the panel reports what it judged.
+    expect(onThreadFocus).toHaveBeenCalledWith(target.id, expect.any(Boolean));
     expect(client.readPageThread).not.toHaveBeenCalled();
+  });
+
+  it('reports a thread reached by the keyboard, and focus leaving it, but not focus moving inside it', async () => {
+    const onThreadFocus = vi.fn();
+    const onThreadBlur = vi.fn();
+    const target = thread(BO, [], { anchor: PASSAGE });
+    client.listPageComments.mockResolvedValueOnce(list([target]));
+    await mountPanel({ onThreadFocus, onThreadBlur });
+    const article = screen.getByTestId(`page-thread-${target.id}`);
+    const [first, second] = within(article).getAllByRole('button');
+    const visible = vi.spyOn(Element.prototype, 'matches').mockImplementation(function (
+      this: Element,
+      selector: string,
+    ) {
+      return selector === ':focus-visible';
+    });
+    act(() => first!.focus());
+    expect(onThreadFocus).toHaveBeenLastCalledWith(target.id, true);
+    visible.mockRestore();
+    act(() => second!.focus());
+    expect(onThreadBlur).not.toHaveBeenCalled();
+    act(() => second!.blur());
+    expect(onThreadBlur).toHaveBeenCalledWith(target.id);
   });
 
   it('reads a resolved thread by id, switches to Resolved and puts it on top, focused', async () => {

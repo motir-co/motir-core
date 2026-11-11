@@ -301,6 +301,8 @@ export function PageView({
   // push, and `writtenThread` is the last one this tab wrote — so reading our own
   // push back is never mistaken for a new link.
   const [focusedThreadId, setFocusedThreadId] = useState<string | null>(linkedThread);
+  /** The focused thread holds KEYBOARD focus in the panel (see `onThreadFocus`). */
+  const [threadRing, setThreadRing] = useState(false);
   const [arrival, setArrival] = useState<PageThreadArrival | null>(
     linkedThread === null ? null : { threadId: linkedThread, seq: 1 },
   );
@@ -348,6 +350,7 @@ export function PageView({
 
   const closeDiscussion = useCallback(() => {
     setDiscussionOpen(false);
+    setThreadRing(false);
     setArrival(null);
     setFocusedThreadId(null);
     // A closed panel shows no thread, so the address names none.
@@ -367,9 +370,14 @@ export function PageView({
     [resetHistory, writeAddress],
   );
 
-  /** A thread focused in the panel: its passage comes into view, emphasised. */
+  /**
+   * A thread focused in the panel: its passage comes into view, emphasised. From
+   * the keyboard it also draws the Wash focus ring and tooltip (focus stays in
+   * the panel), for as long as focus is in that thread.
+   */
   const onThreadFocus = useCallback(
-    (threadId: string) => {
+    (threadId: string, keyboard: boolean) => {
+      setThreadRing(keyboard);
       if (threadId === focusedThreadId) return;
       setFocusedThreadId(threadId);
       requestPassage(threadId, false);
@@ -377,11 +385,13 @@ export function PageView({
     },
     [focusedThreadId, requestPassage, writeAddress],
   );
+  const onThreadBlur = useCallback(() => setThreadRing(false), []);
 
   /** Below 1280px: the sheet closes and the passage is brought into view, focused. */
   const onShowInPage = useCallback(
     (threadId: string) => {
       setDiscussionOpen(false);
+      setThreadRing(false);
       setArrival(null);
       writeAddress(null);
       setFocusedThreadId(threadId);
@@ -627,6 +637,7 @@ export function PageView({
             <PageEditorHost
               key={generation}
               focusedInlineThreadId={focusedThreadId}
+              focusedInlineThreadRing={threadRing}
               onInlineThreadClick={onInlineThreadClick}
               pageId={page.id}
               bodyState={bodyState}
@@ -723,6 +734,7 @@ export function PageView({
           postedThread={postedThread}
           arrival={arrival}
           onThreadFocus={onThreadFocus}
+          onThreadBlur={onThreadBlur}
           onShowInPage={onShowInPage}
         />
       ) : null}

@@ -114,7 +114,9 @@ export interface PageDiscussionPanelProps {
    */
   arrival?: PageThreadArrival | null;
   /** Focus moved into a thread — the page brings its passage into view. */
-  onThreadFocus?: (threadId: string) => void;
+  onThreadFocus?: (threadId: string, keyboard: boolean) => void;
+  /** Focus left a thread for somewhere outside it. */
+  onThreadBlur?: (threadId: string) => void;
   /** Below 1280px, an inline thread's Show in page. */
   onShowInPage?: (threadId: string) => void;
 }
@@ -202,6 +204,7 @@ export function PageDiscussionPanel({
   postedThread = null,
   arrival = null,
   onThreadFocus,
+  onThreadBlur,
   onShowInPage,
 }: PageDiscussionPanelProps) {
   const t = useTranslations('pages.discussion');
@@ -709,6 +712,7 @@ export function PageDiscussionPanel({
                           : null
                       }
                       onFocusThread={onThreadFocus}
+                      onBlurThread={onThreadBlur}
                       onShowInPage={onShowInPage ? () => onShowInPage(thread.id) : undefined}
                       error={threadErrors[thread.id] ?? null}
                       onReply={(bodyMd) => submitReply(thread.id, bodyMd)}

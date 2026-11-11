@@ -62,8 +62,14 @@ export interface PageCommentThreadProps {
   onReopen: () => void;
   /** The arrival that landed on this thread, or `null`: the ring, and focus on each new one. */
   arrivalSeq?: number | null;
-  /** Focus moved into this thread. */
-  onFocusThread?: (threadId: string) => void;
+  /**
+   * Focus moved into this thread; `keyboard` when it got there by the keyboard
+   * (the focused element matches `:focus-visible`) — the keyboard route onto
+   * its passage (MOTIR-10902).
+   */
+  onFocusThread?: (threadId: string, keyboard: boolean) => void;
+  /** Focus left this thread for somewhere outside it. */
+  onBlurThread?: (threadId: string) => void;
   /** Show in page (below 1280px only); omitted → not drawn. */
   onShowInPage?: () => void;
 }
@@ -84,6 +90,7 @@ export function PageCommentThread({
   onReopen,
   arrivalSeq = null,
   onFocusThread,
+  onBlurThread,
   onShowInPage,
 }: PageCommentThreadProps) {
   const t = useTranslations('pages.discussion');
@@ -118,7 +125,12 @@ export function PageCommentThread({
       data-thread-anchor={thread.anchor === null ? 'page' : showGone ? 'gone' : 'inline'}
       data-thread-arrived={arrived ? 'true' : undefined}
       tabIndex={arrived ? -1 : undefined}
-      onFocus={() => onFocusThread?.(thread.id)}
+      onFocus={(event) => onFocusThread?.(thread.id, isKeyboardFocus(event.target))}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          onBlurThread?.(thread.id);
+        }
+      }}
       className={cn(
         'flex flex-col gap-3 border-b border-(--el-border-soft) py-4 last:border-b-0 focus:outline-none',
         arrived &&
@@ -250,4 +262,14 @@ function ResolvedLine({ thread }: { thread: PageCommentThreadDto }) {
       </span>
     </p>
   );
+}
+
+/** True when focus reached `target` by the keyboard, as the browser judges it. */
+function isKeyboardFocus(target: EventTarget): boolean {
+  try {
+    return (target as Element).matches(':focus-visible');
+  } catch {
+    // An engine that cannot parse the selector has no keyboard route to draw.
+    return false;
+  }
 }

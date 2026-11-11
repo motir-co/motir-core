@@ -34,6 +34,15 @@ import { PAGE_FRAGMENT, pageSchema } from './schema';
 //     and not restored leaves the two neighbours adjacent: the outer range is
 //     empty too, and the answer is gone.
 //
+//     The outer pair covers ANY text later written between those neighbours,
+//     not only restored text: delete a sentence and type its replacement, and
+//     the pair covers the replacement. So the fallback is accepted only when
+//     the text it covers is recognisably the passage the thread QUOTED (see
+//     `sameAsQuote`), and with no quote to check against it is not consulted.
+//     This is the quote re-anchoring web annotators do (a stored text quote
+//     matched approximately); the inner pair never needs it, because it binds
+//     to the passage's own characters.
+//
 // A position that cannot be placed — an item the document does not hold (another
 // page's body), one inside a deleted block, one the ProseMirror mapping cannot
 // convert — answers NOTHING. Nothing here falls back to a nearest plausible
@@ -229,26 +238,99 @@ function resolveInner(d: PageAnchorDocument, pair: PageAnchorPair): PageAnchorRa
   return textRange(d, place(d, pair.start), place(d, pair.end));
 }
 
-/** Where a pair's passage now is, or `null` when it is gone (see the header). */
-function resolveIn(d: PageAnchorDocument, pair: PageAnchorPair): PageAnchorRange | null {
-  return resolveInner(d, pair) ?? textRange(d, place(d, pair.before), place(d, pair.after));
+// ── Is the fallback's text still the quoted passage? ────────────────────────
+
+/**
+ * The share of the quote's words a restored passage must keep, in order. A
+ * restore can bring back a passage that was edited after it was quoted (the
+ * version restored holds the edit), so equality is too strict; text typed
+ * fresh in the passage's place shares next to none of them.
+ */
+export const PAGE_ANCHOR_RESTORE_MATCH = 0.5;
+
+const WORDS =
+  typeof Intl !== 'undefined' && 'Segmenter' in Intl
+    ? new Intl.Segmenter(undefined, { granularity: 'word' })
+    : null;
+
+/** A text's words, case- and width-folded. Scripts written without spaces split per word too. */
+function words(text: string): string[] {
+  const folded = text.normalize('NFKC').toLocaleLowerCase();
+  if (WORDS === null) return folded.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const out: string[] = [];
+  for (const part of WORDS.segment(folded)) if (part.isWordLike) out.push(part.segment);
+  return out;
 }
 
-/** Where a passage is now, against a page body; `null` when it is gone. Recomputed every call. */
+/** The length of the longest common subsequence of two word lists. */
+function commonRun(a: readonly string[], b: readonly string[]): number {
+  let prev = new Array<number>(b.length + 1).fill(0);
+  for (const word of a) {
+    const next = new Array<number>(b.length + 1).fill(0);
+    for (let j = 0; j < b.length; j += 1) {
+      next[j + 1] = word === b[j] ? prev[j]! + 1 : Math.max(prev[j + 1]!, next[j]!);
+    }
+    prev = next;
+  }
+  return prev[b.length]!;
+}
+
+/**
+ * True when `text` is recognisably the passage `quote` was taken from: at least
+ * `PAGE_ANCHOR_RESTORE_MATCH` of the longer of the two word lists appears in
+ * both, in order. A quote cut at `PAGE_ANCHOR_QUOTE_MAX` is compared with the
+ * same length of `text`.
+ */
+export function sameAsQuote(text: string, quote: string): boolean {
+  const cut = quote.endsWith('…') && Array.from(quote).length === PAGE_ANCHOR_QUOTE_MAX;
+  const head = cut ? quote.slice(0, -1) : quote;
+  const candidate = cut ? Array.from(text.trim()).slice(0, Array.from(head).length).join('') : text;
+  const a = words(head);
+  const b = words(candidate);
+  if (a.length === 0 || b.length === 0) return false;
+  return commonRun(a, b) >= PAGE_ANCHOR_RESTORE_MATCH * Math.max(a.length, b.length);
+}
+
+/**
+ * Where a pair's passage now is, or `null` when it is gone (see the header).
+ * The outer pair answers only for text that matches `quote`.
+ */
+function resolveIn(
+  d: PageAnchorDocument,
+  pair: PageAnchorPair,
+  quote: string | null | undefined,
+): PageAnchorRange | null {
+  const inner = resolveInner(d, pair);
+  if (inner !== null || !quote) return inner;
+  const outer = textRange(d, place(d, pair.before), place(d, pair.after));
+  if (outer === null) return null;
+  return sameAsQuote(rangeText(d.doc, outer.from, outer.to), quote) ? outer : null;
+}
+
+/**
+ * Where a passage is now, against a page body; `null` when it is gone.
+ * Recomputed every call. `quote` is the text the thread quoted; without it a
+ * deleted-then-restored passage is not looked for (see the header).
+ */
 export function resolveAnchor(
   pair: PageAnchorPair,
   source: PageAnchorSource,
+  quote?: string | null,
 ): PageAnchorRange | null {
-  return resolveIn(toAnchorDocument(source), pair);
+  return resolveIn(toAnchorDocument(source), pair, quote);
 }
 
-/** `resolveAnchor` for each pair, in order, reading the page body ONCE for the list. */
+/**
+ * `resolveAnchor` for each pair, in order, reading the page body ONCE for the
+ * list. `quotes[i]` is pair i's quote.
+ */
 export function resolveAnchors(
   pairs: readonly PageAnchorPair[],
   source: PageAnchorSource,
+  quotes: readonly (string | null | undefined)[] = [],
 ): (PageAnchorRange | null)[] {
   const d = toAnchorDocument(source);
-  return pairs.map((pair) => resolveIn(d, pair));
+  return pairs.map((pair, i) => resolveIn(d, pair, quotes[i]));
 }
 
 const POSITION_ORDER = ['start', 'end', 'before', 'after'] as const;
@@ -309,7 +391,8 @@ export function decodeAnchor(bytes: Uint8Array): PageAnchorPair | null {
 export function resolveStoredAnchor(
   bytes: Uint8Array,
   source: PageAnchorSource,
+  quote?: string | null,
 ): PageAnchorRange | null {
   const pair = decodeAnchor(bytes);
-  return pair === null ? null : resolveAnchor(pair, source);
+  return pair === null ? null : resolveAnchor(pair, source, quote);
 }

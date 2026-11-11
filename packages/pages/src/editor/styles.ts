@@ -166,7 +166,8 @@ export const PAGE_EDITOR_CSS = `
 }
 .motir-page-editor .motir-prose .motir-wash.is-overlap { box-shadow: inset 0 1px 0 var(--el-accent-on-surface); }
 .motir-page-editor .motir-prose .motir-wash[data-wash-state='emphasis']:focus { outline: none; }
-.motir-page-editor .motir-prose .motir-wash[data-wash-state='emphasis']:focus-visible {
+.motir-page-editor .motir-prose .motir-wash[data-wash-state='emphasis']:focus-visible,
+.motir-page-editor .motir-prose .motir-wash[data-wash-ring] {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: 2px;
 }

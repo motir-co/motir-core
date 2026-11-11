@@ -156,6 +156,12 @@ export interface PageEditorProps<C extends WorkItemCandidate = WorkItemCandidate
   inlineThreads?: readonly PageInlineThreadView[];
   /** The thread whose passage wears the emphasis state. */
   focusedInlineThreadId?: string | null;
+  /**
+   * The focused thread was reached from the KEYBOARD in the panel (MOTIR-10902):
+   * its passage also draws the Wash focus ring and the Passage tooltip, while
+   * focus stays in the panel.
+   */
+  focusedInlineThreadRing?: boolean;
   /** A click on a wash: the root whose range begins first over that stretch. */
   onInlineThreadClick?: (rootId: string) => void;
   /** After each resolve pass that changed the answer: every root's range, or `null` for gone. */
@@ -250,6 +256,7 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
   onOpenWorkItem,
   inlineThreads,
   focusedInlineThreadId = null,
+  focusedInlineThreadRing = false,
   onInlineThreadClick,
   onInlineAnchorsResolved,
   passageComment,
@@ -529,8 +536,8 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
   // A new list or a new focus: redraw the emphasis and resolve again.
   useEffect(() => {
     if (!editor || !inline || editor.isDestroyed) return;
-    refreshInlineComments(editor.view, focusedInlineThreadId);
-  }, [editor, inline, inlineThreads, focusedInlineThreadId]);
+    refreshInlineComments(editor.view, focusedInlineThreadId, focusedInlineThreadRing);
+  }, [editor, inline, inlineThreads, focusedInlineThreadId, focusedInlineThreadRing]);
 
   const onPickImage = useCallback(() => fileInputRef.current?.click(), []);
   const onMentionWorkItem = useCallback(() => {

@@ -359,6 +359,8 @@ export interface PageEditorHostProps {
   inlineThreads?: readonly PageCommentDto[];
   /** The thread whose passage wears the emphasis state. */
   focusedInlineThreadId?: string | null;
+  /** That thread was reached from the keyboard: its passage draws the focus ring and tooltip. */
+  focusedInlineThreadRing?: boolean;
   /** A click on a passage's wash, with the thread it opens. */
   onInlineThreadClick?: (rootId: string) => void;
   /** Each anchored root's range after a resolve pass, `null` when its passage is gone. */
@@ -410,6 +412,7 @@ export function PageEditorHost({
   workItemRefs = NO_REFS,
   inlineThreads,
   focusedInlineThreadId,
+  focusedInlineThreadRing,
   onInlineThreadClick,
   onInlineAnchorsResolved,
   passageComment,
@@ -519,6 +522,7 @@ export function PageEditorHost({
       onOpenWorkItem={onOpenWorkItem}
       inlineThreads={inlineThreadViews}
       focusedInlineThreadId={focusedInlineThreadId}
+      focusedInlineThreadRing={focusedInlineThreadRing}
       onInlineThreadClick={onInlineThreadClick}
       onInlineAnchorsResolved={onInlineAnchorsResolved}
       passageComment={passageCommentProps}

@@ -291,10 +291,17 @@ async function captured(pageId: string, needle: string) {
 /** Where the stored anchor of comment `id` lands on the page's stored body now. */
 async function resolvedNow(pageId: string, id: string) {
   const [row, page] = await Promise.all([
-    adminDb.pageComment.findUniqueOrThrow({ where: { id }, select: { anchor: true } }),
+    adminDb.pageComment.findUniqueOrThrow({
+      where: { id },
+      select: { anchor: true, anchorQuote: true },
+    }),
     pageRow(pageId),
   ]);
-  return resolveStoredAnchor(new Uint8Array(row.anchor!), new Uint8Array(page.bodyState));
+  return resolveStoredAnchor(
+    new Uint8Array(row.anchor!),
+    new Uint8Array(page.bodyState),
+    row.anchorQuote,
+  );
 }
 
 async function saveEdit(t: Tenant, needle: string, replacement: string) {
@@ -373,6 +380,22 @@ describe('seam 1 — the anchor the editor captures is the anchor the page resol
       await as(a, () => client.listPageComments(t.pageId, { status: 'open' })),
     );
     expect(listed.threads[0]!.anchor).toEqual({ bytes: toBase64(cap.bytes), quote: PASSAGE });
+  });
+
+  it('stays gone when new text is written where the passage was', async () => {
+    const t = await makeTenant('rewritten', 'PPR');
+    const a = await memberOf(t, 'a', 'member');
+    const cap = await captured(t.pageId, PASSAGE);
+    const root = expectOk(
+      await as(a, () =>
+        client.createPageComment(t.pageId, 'Which workspace?', {
+          bytes: toBase64(cap.bytes),
+          quote: cap.quote,
+        }),
+      ),
+    );
+    await saveEdit(t, PASSAGE, 'Nobody commented on this replacement sentence at all.');
+    expect(await resolvedNow(t.pageId, root.id)).toBeNull();
   });
 
   it('is gone once the passage is emptied to whitespace', async () => {

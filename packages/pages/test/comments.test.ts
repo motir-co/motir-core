@@ -19,6 +19,7 @@ import {
   deletePageComment,
   editPageComment,
   encodePageCommentCursor,
+  listPageAnchoredRoots,
   listPageCommentThreads,
   pageCommentThreadsLimit,
   readPageCommentThread,
@@ -446,6 +447,47 @@ describe('the anchor on a read', () => {
     expect(done.threads[0]!.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
     const reopened = await reopenPageCommentThread(store, { ...scope(), commentId: anchored.id });
     expect(reopened.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
+  });
+});
+
+describe('listPageAnchoredRoots', () => {
+  const inline = (quote: string) => {
+    tick();
+    return createPageComment(store, clock, {
+      ...scope(),
+      bodyMd: 'Inline',
+      anchor: { bytes: Uint8Array.from([1, 2, 3]), quote },
+    });
+  };
+
+  it('answers the open anchored roots oldest first, with no replies and no reply read', async () => {
+    const first = await inline('first');
+    await root('Page-level');
+    const second = await inline('second');
+    await reply(first.id);
+    const settled = await inline('settled');
+    await resolvePageCommentThread(store, clock, { ...scope(), commentId: settled.id });
+    const before = store.called('findPageCommentReplies');
+
+    const read = await listPageAnchoredRoots(store, scope());
+    expect(read.roots.map((r) => r.id)).toEqual([first.id, second.id]);
+    expect(read.roots[0]!.anchor).toEqual({ bytes: 'AQID', quote: 'first' });
+    expect(read.roots[0]).not.toHaveProperty('replies');
+    expect(read.counts).toEqual({ open: 3, resolved: 1 });
+    expect(store.called('findPageCommentReplies')).toBe(before);
+  });
+
+  it('walks past a full page of roots', async () => {
+    const made: string[] = [];
+    for (let i = 0; i < PAGE_COMMENT_THREADS_MAX_LIMIT + 2; i += 1)
+      made.push((await inline(`q${i}`)).id);
+    const read = await listPageAnchoredRoots(store, scope());
+    expect(read.roots.map((r) => r.id)).toEqual(made);
+  });
+
+  it('refuses a page outside the project', async () => {
+    const err = await refused(listPageAnchoredRoots(store, { pageId, projectId: 'elsewhere' }));
+    expect(err).toBeInstanceOf(PageNotFoundError);
   });
 });
 

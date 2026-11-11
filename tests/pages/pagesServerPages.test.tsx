@@ -529,7 +529,7 @@ describe('/pages/<id> — the discussion’s server reads (MOTIR-10874)', () => 
     });
     reader.current = f.manager;
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(pageCommentsService, 'listPageThreads').mockRejectedValueOnce(new Error('down'));
+    vi.spyOn(pageCommentsService, 'listAnchoredRoots').mockRejectedValueOnce(new Error('down'));
     vi.spyOn(assignableMembersService, 'list').mockRejectedValueOnce(new Error('down'));
     const view = findFirst<DiscussionProps>(
       await renderTree(AddressPage.default, params(page.id)),

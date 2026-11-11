@@ -337,6 +337,43 @@ export async function listPageCommentThreads(
   };
 }
 
+// ── The page's anchored roots (MOTIR-10899) ─────────────────────────────────
+
+/** The open anchored roots the live editor washes, and the open count for the Discussion chip. */
+export interface PageAnchoredRoots {
+  readonly roots: PageCommentDto[];
+  readonly counts: PageCommentCounts;
+}
+
+/**
+ * Every OPEN root that carries an anchor, oldest first, with no replies — what a
+ * page load hands the editor to wash. It walks the roots index alone: no reply
+ * rows are read, and nothing a reply links is resolved, so the cost follows the
+ * number of threads, not the length of the discussion.
+ */
+export async function listPageAnchoredRoots(
+  store: PageStore,
+  scope: Pick<PageCommentScope, 'pageId' | 'projectId'>,
+): Promise<PageAnchoredRoots> {
+  const page = await readablePage(store, scope);
+  const roots: PageCommentDto[] = [];
+  let after: PageCommentRootKey | null = null;
+  for (;;) {
+    const rows = await store.findPageCommentRoots({
+      pageId: page.id,
+      status: 'open',
+      order: 'asc',
+      after,
+      limit: PAGE_COMMENT_THREADS_MAX_LIMIT,
+    });
+    for (const row of rows) if (row.anchor !== null) roots.push(toPageCommentDto(row));
+    const last = rows.at(-1);
+    if (!last || rows.length < PAGE_COMMENT_THREADS_MAX_LIMIT) break;
+    after = rootKey(last, 'open');
+  }
+  return { roots, counts: await store.countPageCommentRoots(page.id) };
+}
+
 // ── Create and reply ────────────────────────────────────────────────────────
 
 export interface CreatePageCommentInput extends PageCommentScope {

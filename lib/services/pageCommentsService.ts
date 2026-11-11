@@ -3,6 +3,7 @@ import {
   createPageComment,
   deletePageComment,
   editPageComment,
+  listPageAnchoredRoots,
   listPageCommentThreads,
   pageStoreFor,
   readPageCommentThread,
@@ -172,6 +173,23 @@ export const pageCommentsService = {
       ...thread.replies.map((reply) => reply.bodyMd),
     ]);
     return { ...answer, workItemRefs: await resolveMarkdownBodiesWorkItemRefs(bodies, ctx) };
+  },
+
+  /**
+   * The page's open ANCHORED roots, without replies, and its open count — what a
+   * page load hands the live editor to wash (MOTIR-10899) and the Discussion
+   * chip. The list's gate and context; no capabilities and no work-item
+   * summaries, which only the panel's own reads need.
+   */
+  async listAnchoredRoots(
+    ctx: ServiceContext,
+    input: PageScope,
+  ): Promise<{ roots: PageCommentDto[]; openCount: number }> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      const read = await listPageAnchoredRoots(pageStoreFor(tx), input);
+      return { roots: read.roots, openCount: read.counts.open };
+    });
   },
 
   /**
