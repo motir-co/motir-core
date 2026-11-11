@@ -541,6 +541,13 @@ describe('github.fetchWorkflowRunJobs (MOTIR-1896)', () => {
     _resetInstallationTokenCache();
     vi.stubEnv('GITHUB_APP_ID', '999');
     vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+    // Which App mints the token follows `motirOwnedOrgLogins()`, which reads the
+    // worker's `fleet_shard` rows: a fleet test earlier in the same worker can
+    // leave a `motir-projects` account behind and make that owner Motir's, so the
+    // PROVISIONING App is picked. These tests are about the jobs endpoint, not the
+    // role — configure both Apps so the result does not depend on file order.
+    vi.stubEnv('GITHUB_STUDIO_APP_ID', '998');
+    vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   });
 
   afterEach(() => {

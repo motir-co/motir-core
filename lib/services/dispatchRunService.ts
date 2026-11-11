@@ -251,7 +251,9 @@ export interface CloseDispatchRunInput {
   /**
    * The run's terminal status. Omitted, it is DERIVED from the stop reason —
    * `halted` is a failure, everything else is not — which is the mapping every
-   * caller would otherwise re-implement, differently.
+   * caller would otherwise re-implement, differently. Either way the close
+   * corrects it by the run's legs: a run any of whose legs failed is not stored
+   * as a success (`closingStatus`, MOTIR-10984).
    */
   status?: 'succeeded' | 'failed' | 'cancelled' | 'timed_out' | undefined;
   /**
@@ -367,6 +369,42 @@ function statusForStopReason(
   if (stopReason === 'interrupted') return 'cancelled';
   if (stopReason === 'abandoned') return 'timed_out';
   return 'succeeded';
+}
+
+type ClosedRunStatus = 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
+
+/**
+ * The status the close WRITES — the stated one ({@link statusForStopReason}, or
+ * the caller's own), corrected by what the run's LEGS say (MOTIR-10984).
+ *
+ * A stop reason says WHY the loop ended; it does not say whether the work got
+ * done. An adopted scope drains with `keepGoing` (MOTIR-6558), so a card that
+ * fails does not halt the loop: the drain skips its dependents and closes
+ * `drained` — which is still true, nothing was left to try — and a run that built
+ * one card of four was recorded `succeeded`. The legs are known here, in the
+ * close's own transaction, so the status is derived from them rather than
+ * trusted to the client.
+ *
+ *   * A leg REPORTED `failed` makes the run `failed`, whatever stop reason the
+ *     client sent — `interrupted` included: a card had already failed before
+ *     anybody stopped the run, and a `cancelled` run reads as a decision rather
+ *     than a fault.
+ *   * Only a REPORTED failure counts, read before this close settles anything. A
+ *     leg the close itself settles from `running` to `failed` means *nobody
+ *     reported an outcome*, not *the agent failed* — under `interrupted` it is
+ *     the Ctrl-C that stopped that very agent, under `abandoned` the reap that
+ *     found it dead — and a run that delivered and closed without its last
+ *     `card_settled` must not be sent to To fix for a missing report.
+ *   * `failed` and `timed_out` stand as stated. `timed_out` is the reap's or a
+ *     supervisor's word for a run that died, which says more than `failed` would,
+ *     and both are doors a dead run is continued through.
+ */
+function closingStatus(
+  stated: ClosedRunStatus,
+  legs: readonly { disposition: DispatchCardDisposition }[],
+): ClosedRunStatus {
+  if (stated === 'failed' || stated === 'timed_out') return stated;
+  return legs.some((leg) => leg.disposition === 'failed') ? 'failed' : stated;
 }
 
 /**
@@ -1932,10 +1970,13 @@ export const dispatchRunService = {
     }
 
     const endedAt = input.endedAt ?? new Date();
+    // The legs as the run REPORTED them, read under the run's lock and before the
+    // settle below — the status is derived from them (MOTIR-10984).
+    const legs = await dispatchRunCardRepository.listByRun(runId, tx);
     await dispatchRunRepository.update(
       runId,
       {
-        status: input.status ?? statusForStopReason(input.stopReason),
+        status: closingStatus(input.status ?? statusForStopReason(input.stopReason), legs),
         stopReason: input.stopReason,
         endedAt,
       },
@@ -1945,7 +1986,6 @@ export const dispatchRunService = {
     // Settle whatever the run left in flight. One update per leg rather than
     // an `updateMany`, because the target disposition DEPENDS on where each
     // leg was — a `queued` card was never reached, a `running` one was.
-    const legs = await dispatchRunCardRepository.listByRun(runId, tx);
     for (const leg of legs) {
       if (!NON_TERMINAL.includes(leg.disposition)) continue;
       await dispatchRunCardRepository.update(
