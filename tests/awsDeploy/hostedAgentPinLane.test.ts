@@ -43,7 +43,14 @@ interface Job {
   steps: Step[];
 }
 interface Workflow {
-  on: Record<string, { paths?: string[]; branches?: string[] }>;
+  on: Record<
+    string,
+    {
+      paths?: string[];
+      branches?: string[];
+      inputs?: Record<string, { type: string; required?: boolean }>;
+    }
+  >;
   env?: Record<string, string>;
   jobs: Record<string, Job>;
 }
@@ -104,8 +111,29 @@ describe("the image lane's pin job", () => {
 
   it('runs after the build-and-publish job, on a push to main only', () => {
     expect(pin.needs).toBe('hosted-agent-image');
-    expect(pin.if).toBe("${{ github.event_name == 'push' }}");
+    expect(pin.if).toContain('!cancelled()');
+    expect(pin.if).toContain(
+      "github.event_name == 'push' && needs.hosted-agent-image.result == 'success'",
+    );
     expect(lane.on.push?.branches).toEqual(['main']);
+  });
+
+  it('a Publish latest dispatch (MOTIR-10886) pins a published digest without building', () => {
+    expect(lane.on.workflow_dispatch?.inputs?.['digest']).toMatchObject({
+      type: 'string',
+      required: true,
+    });
+    expect(lane.on.workflow_dispatch?.inputs?.['source_commit']?.type).toBe('string');
+    expect(build.if).toBe("${{ github.event_name != 'workflow_dispatch' }}");
+    expect(pin.if).toContain("github.event_name == 'workflow_dispatch'");
+    const open = step((s) => !!s.run?.includes('gh pr create'));
+    expect(open.env?.BUILT_FROM).toBe('${{ inputs.source_commit || github.sha }}');
+    const queue = step((s) => !!s.run?.includes('gh pr merge'));
+    expect(queue.if).toBe(
+      "${{ github.event_name == 'workflow_dispatch' && steps.write.outputs.changed == 'true' }}",
+    );
+    expect(queue.run).toContain('--head "$PIN_BRANCH"');
+    expect(queue.run).toContain('--auto');
   });
 
   it('writes the pin file the deploy reads, on one fixed branch', () => {
@@ -115,7 +143,7 @@ describe("the image lane's pin job", () => {
     });
     const write = step((s) => s.id === 'write');
     expect(write.env?.REFERENCE).toBe(
-      '${{ env.IMAGE }}@${{ needs.hosted-agent-image.outputs.digest }}',
+      '${{ env.IMAGE }}@${{ inputs.digest || needs.hosted-agent-image.outputs.digest }}',
     );
     expect(lane.env?.IMAGE).toBe(REPOSITORY);
     expect(write.run).toContain(`printf '%s\\n' "$REFERENCE" > "$PIN_FILE"`);

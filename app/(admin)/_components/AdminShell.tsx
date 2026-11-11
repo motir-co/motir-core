@@ -7,14 +7,15 @@ import {
   Activity,
   BookOpen,
   Bot,
+  Boxes,
   Building2,
   Coins,
   Gauge,
   Layers,
   Lightbulb,
   LogOut,
-  ScrollText,
   ScanSearch,
+  ScrollText,
   Search,
   Server,
   ServerCog,
@@ -63,6 +64,7 @@ export interface AdminShellLabels {
   navJobs: string;
   /** Operations → Fleet settings (MOTIR-8715), superadmin only. */
   navFleetSettings: string;
+  navFleetStatus: string;
   /** Operations → Provider capacity (MOTIR-9614), visible to every staff role. */
   navCapacity: string;
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
@@ -188,6 +190,14 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
                 label: labels.navFleetSettings,
                 href: '/admin/fleet-settings',
                 active: pathname === '/admin/fleet-settings',
+              },
+              // Whether production runs the newest of each image (MOTIR-10886,
+              // design MOTIR-10885): directly after Fleet settings, superadmin only.
+              {
+                icon: <Boxes />,
+                label: labels.navFleetStatus,
+                href: '/admin/fleet-status',
+                active: pathname === '/admin/fleet-status',
               },
             ]
           : []),

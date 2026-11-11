@@ -59,6 +59,22 @@ on:
       - '.github/workflows/hosted-agent-image.yml'
       - '.github/actions/buildx/**'
       - '.github/actions/pnpm/**'
+  # PUBLISH LATEST from the console's Fleet status page (MOTIR-10886): pin a
+  # digest this lane ALREADY published, without building anything. Only the `pin`
+  # job runs; it opens (or updates) the same pin pull request a publish opens and
+  # queues it to merge, because the press is the deliberate pin. The pull
+  # request's own `Hosted agent pin` check still proves the image it names.
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: 'The published digest to pin (sha256:<64 hex>), from the newest :main build'
+        type: string
+        required: true
+      source_commit:
+        description: 'The commit that image was built from (its org.opencontainers.image.revision)'
+        type: string
+        required: false
+        default: ''
 
 # A pull request's newer push supersedes its older run. A publish is never
 # cancelled mid-push — a half-cancelled push leaves a tag naming a manifest
@@ -76,6 +92,9 @@ env:
 jobs:
   hosted-agent-image:
     name: Build, prove, publish
+    # A Publish latest dispatch pins an image that is already published: nothing
+    # is built.
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No run on record yet — this lane is new (MOTIR-687). The floor is set from
     # its nearest neighbour, `sandbox-images.yml`'s base job (observed 2.8–8.3
@@ -226,7 +245,13 @@ jobs:
   pin:
     name: Open the pin pull request
     needs: hosted-agent-image
-    if: ${{ github.event_name == 'push' }}
+    # After a publish from `main`, or on a Publish latest dispatch (the build job
+    # is skipped then, so `!cancelled()` keeps this job from being skipped with it).
+    if: >-
+      ${{ !cancelled() && (
+        (github.event_name == 'push' && needs.hosted-agent-image.result == 'success') ||
+        github.event_name == 'workflow_dispatch'
+      ) }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No run on record — the job is new (MOTIR-10882). It checks out, writes one
     # line and opens a pull request: the 10-minute short-job floor, stated as a
@@ -252,7 +277,7 @@ jobs:
       - name: Write the published digest into the pin file
         id: write
         env:
-          REFERENCE: ${{ env.IMAGE }}@${{ needs.hosted-agent-image.outputs.digest }}
+          REFERENCE: ${{ env.IMAGE }}@${{ inputs.digest || needs.hosted-agent-image.outputs.digest }}
         run: |
           set -euo pipefail
           if ! [[ "$REFERENCE" =~ ^ghcr\.io/motir-co/motir-hosted-agent@sha256:[a-f0-9]{64}$ ]]; then
@@ -270,8 +295,8 @@ jobs:
         if: ${{ steps.write.outputs.changed == 'true' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          REFERENCE: ${{ env.IMAGE }}@${{ needs.hosted-agent-image.outputs.digest }}
-          BUILT_FROM: ${{ github.sha }}
+          REFERENCE: ${{ env.IMAGE }}@${{ inputs.digest || needs.hosted-agent-image.outputs.digest }}
+          BUILT_FROM: ${{ inputs.source_commit || github.sha }}
         run: |
           set -euo pipefail
           # Authored as Yue with NO co-author trailer: motir-core's `license/cla`
@@ -297,3 +322,20 @@ jobs:
           fi
           gh pr create --base main --head "$PIN_BRANCH" --title "$title" --body "$body"
           echo "::notice::Opened the pin pull request for ${REFERENCE}."
+      # Publish latest is the deliberate pin (MOTIR-10886): the superadmin who
+      # pressed it confirmed the from → to and the roll, so the pin pull request
+      # is queued to merge as soon as its checks pass. A refused queue fails the
+      # run, so the page reports the error instead of a pin that never lands.
+      - name: Queue the pin pull request to merge
+        if: ${{ github.event_name == 'workflow_dispatch' && steps.write.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          number="$(gh pr list --head "$PIN_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$number" ]; then
+            echo "::error::no open pin pull request on ${PIN_BRANCH} to queue"
+            exit 1
+          fi
+          gh pr merge "$number" --auto
+          echo "::notice::Queued pin pull request #${number} to merge."

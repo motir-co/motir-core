@@ -50,6 +50,20 @@ on:
         description: 'Build + assert + prove only; skip the GHCR push'
         type: boolean
         default: false
+      # PUBLISH LATEST from the console's Fleet status page (MOTIR-10886): pin a
+      # release this lane ALREADY published. With `pin_digest` set nothing is
+      # built or pushed; only the `pin` job runs, and it queues its pull request
+      # to merge, because the press is the deliberate pin.
+      pin_digest:
+        description: 'Pin this already-published digest (sha256:<64 hex>) instead of releasing'
+        type: string
+        required: false
+        default: ''
+      pin_version:
+        description: 'The runner-v* version that digest was released as (x.y.z), with pin_digest'
+        type: string
+        required: false
+        default: ''
 
 # Never let two releases of the same tag run concurrently, and never cancel one
 # in flight — a half-cancelled push leaves a tag pointing at a manifest whose
@@ -61,6 +75,8 @@ concurrency:
 jobs:
   version:
     name: Resolve the version
+    # A pin dispatch releases nothing, so it resolves no version either.
+    if: ${{ !inputs.pin_digest }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.05 min on run 30761169237 → 10 (the short-job floor). It runs
     # one `jq` over `package.json` and writes an output; the floor is entirely
@@ -112,8 +128,14 @@ jobs:
   pin:
     name: Open the pin pull request
     needs: [version, release]
-    # A dry run publishes nothing, so there is no reference to pin.
-    if: ${{ github.event_name == 'push' }}
+    # After a tag's release, or on a Publish latest pin dispatch (both jobs above
+    # are skipped then, so `!cancelled()` keeps this one from being skipped with
+    # them). A dry run publishes nothing, so there is no reference to pin.
+    if: >-
+      ${{ !cancelled() && (
+        (github.event_name == 'push' && needs.release.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.pin_digest != '')
+      ) }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # NO run on record — the job is new. A checkout of `main`, one file write and
     # a pull-request call: the 10-minute short-job floor, stated as a floor.
@@ -139,13 +161,18 @@ jobs:
       - name: Write the published reference into the pin
         id: write
         env:
-          DIGEST: ${{ needs.release.outputs.digest }}
+          DIGEST: ${{ inputs.pin_digest || needs.release.outputs.digest }}
+          VERSION: ${{ inputs.pin_version || needs.version.outputs.version }}
           IMAGE: ghcr.io/motir-co/motir-ci-runner
           PIN: infra/image-pins/motir-runner-image
         run: |
           set -euo pipefail
           if ! [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
             echo "::error::the release published no digest ('${DIGEST}'), so there is nothing to pin."
+            exit 1
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'${VERSION}' is not a runner-v* release version (x.y.z)."
             exit 1
           fi
           ref="${IMAGE}@${DIGEST}"
@@ -160,7 +187,7 @@ jobs:
       - name: Open or update the pin pull request
         if: ${{ steps.write.outputs.changed == 'true' }}
         env:
-          VERSION: ${{ needs.version.outputs.version }}
+          VERSION: ${{ inputs.pin_version || needs.version.outputs.version }}
           REF: ${{ steps.write.outputs.ref }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PIN: infra/image-pins/motir-runner-image
@@ -193,3 +220,20 @@ jobs:
           fi
           gh pr create --base main --head "$branch" --title "$title" --body "$body"
           echo "::notice::Opened the pull request that pins runner-v${VERSION}."
+      # Publish latest is the deliberate pin (MOTIR-10886): the superadmin who
+      # pressed it confirmed the from → to and the roll, so the pin pull request
+      # is queued to merge as soon as its checks pass. A refused queue fails the
+      # run, so the page reports the error instead of a pin that never lands.
+      - name: Queue the pin pull request to merge
+        if: ${{ github.event_name == 'workflow_dispatch' && steps.write.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          number="$(gh pr list --head chore/runner-image-pin --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$number" ]; then
+            echo "::error::no open pin pull request on chore/runner-image-pin to queue"
+            exit 1
+          fi
+          gh pr merge "$number" --auto
+          echo "::notice::Queued pin pull request #${number} to merge."

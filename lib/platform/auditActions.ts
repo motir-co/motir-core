@@ -353,6 +353,24 @@ export const PLATFORM_AUDIT_ACTIONS = {
   'fleet.agent_hosting.enable': { kind: 'write', reason: 'required' },
   'fleet.agent_hosting.disable': { kind: 'write', reason: 'required' },
   /**
+   * PUBLISH LATEST was pressed on /admin/fleet-status (MOTIR-10886): a
+   * superadmin dispatched the publish workflow of one image Motir boots — the
+   * hosted-agent pin, the runner pin, or the sandbox release re-run. The row is
+   * written in the transaction that dispatches, so a refused dispatch leaves no
+   * row. Target is `platform` with `fleet_image.<image>` as `targetId`;
+   * `metadata` carries `{ image, workflow, ref, from, to, runId, runUrl,
+   * runNumber }`. `inherited`: the confirm dialog carries no reason field
+   * (approved design MOTIR-10885), so the service writes a default reason —
+   * the `planner_finding.triage` precedent.
+   */
+  'fleet.image.publish': { kind: 'write', reason: 'inherited' },
+  /**
+   * /admin/fleet-status read its images' publish records back out of this log
+   * (MOTIR-10886) — the newest `fleet.image.publish` per image, for each card's
+   * Audit line and its progress, done and failed bands.
+   */
+  'fleet.status.read': { kind: 'read', reason: 'never' },
+  /**
    * A fleet ACCOUNT was added to, or resumed in, a fleet kind's pool by
    * `fleet-admin add-shard` (Story MOTIR-8953 · MOTIR-8967) — one row per run,
    * written after its steps, carrying `{ fleetKind, provider, steps,

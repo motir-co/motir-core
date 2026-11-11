@@ -10754,7 +10754,8 @@
       "navFleetSettings": "Paramètres de la flotte",
       "navCapacity": "Capacité des fournisseurs",
       "navJobs": "Tâches",
-      "navStarters": "Starters"
+      "navStarters": "Starters",
+      "navFleetStatus": "État de la flotte"
     },
     "nav": {
       "overview": "Vue d'ensemble",
@@ -10967,6 +10968,12 @@
               "list": "A listé les requêtes de capacité de la flotte",
               "link": "A lié une requête de capacité à une hausse de quota",
               "close": "A clôturé une requête de capacité de la flotte"
+            },
+            "image": {
+              "publish": "A publié une image de la flotte"
+            },
+            "status": {
+              "read": "A lu l’état de la flotte"
             }
           },
           "idea": {
@@ -13544,6 +13551,176 @@
           "body": "L’endroit où les nouveaux agents sont créés n’a pas pu être lu, donc aucun état n’est affiché et aucun interrupteur n’est proposé. Il s’agit d’une erreur de lecture : rien n’a changé, et aucune valeur n’est devinée.",
           "retry": "Réessayer"
         }
+      }
+    },
+    "fleetStatus": {
+      "breadcrumb": "Opérations · État de la flotte",
+      "title": "État de la flotte",
+      "subtitle": "Si la production exécute la plus récente de chaque image que Motir démarre, et à quel point chaque pool de la flotte est rempli. Lu au chargement de la page. Publier la dernière est la seule action ici, et chaque clic est écrit dans le journal d’audit.",
+      "images": {
+        "title": "Images",
+        "subtitle": "Les trois images que la production démarre. Chacune est comparée à la plus récente publiée ; quand la production est en retard, Publier la dernière la fait avancer via le workflow de publication propre à cette image."
+      },
+      "image": {
+        "hosted": {
+          "title": "Image de l’agent hébergé",
+          "subtitle": "Ce que démarre chaque exécution hébergée. Épinglée par MOTIR_HOSTED_AGENT_IMAGE ; la plus récente est le dernier build main de ghcr.io/motir-co/motir-hosted-agent."
+        },
+        "runner": {
+          "title": "Image du runner CI",
+          "subtitle": "Ce dans quoi s’exécute chaque job CI de la flotte. Épinglée par MOTIR_RUNNER_IMAGE ; la plus récente est la dernière release runner-v*."
+        },
+        "sandbox": {
+          "title": "Images des instances d’agent",
+          "subtitle": "Le bac à sable où tournent les agents, un tag par profil sur ghcr.io/motir-co/motir-sandbox. Complète quand chaque profil a son tag à la dernière release cli-v*."
+        }
+      },
+      "imageName": {
+        "hosted": "image de l’agent hébergé",
+        "runner": "image du runner CI",
+        "sandbox": "images des instances d’agent"
+      },
+      "source": {
+        "ghcr": "GHCR",
+        "github": "GitHub",
+        "aws": "AWS"
+      },
+      "verdict": {
+        "upToDate": "À jour",
+        "daysBehind": "{count, plural, one {# jour de retard} other {# jours de retard}}",
+        "releasesBehind": "{count, plural, one {# release de retard} other {# releases de retard}}",
+        "releaseNeeded": "Release nécessaire",
+        "tagsMissing": "{missing} tags sur {total} manquants",
+        "publishing": "Publication en cours",
+        "publishFailed": "Échec de la publication",
+        "notRead": "Non lu"
+      },
+      "compare": {
+        "pinned": "Épinglée en production",
+        "newestBuild": "Dernier build main",
+        "newestRelease": "Dernière release",
+        "builtFrom": "Construite depuis <commit>{commit}</commit>",
+        "noCommit": "Aucun commit de build enregistré",
+        "same": "Identique à l’épinglée",
+        "unknownRelease": "Aucun tag de release ne désigne ces octets"
+      },
+      "gap": {
+        "hosted": "{count, plural, one {# commit} other {# commits}} sur packages/cli entre le build épinglé et le plus récent.",
+        "runner": "({tags}) · {days, plural, one {# jour} other {# jours}} · {commits, plural, one {# commit} other {# commits}} sur infra/ci-runner.",
+        "runnerNoTags": "{days, plural, one {# jour} other {# jours}} · {commits, plural, one {# commit} other {# commits}} sur infra/ci-runner.",
+        "link": "Voir les commits"
+      },
+      "unreleased": {
+        "title": "Fusionnés depuis {release}, dans aucune release",
+        "count": "{count, plural, one {# modification} other {# modifications}} sur infra/ci-runner"
+      },
+      "releaseNeeded": "<strong>Une release est nécessaire.</strong> Ces modifications n’atteignent la flotte que dans une nouvelle release du runner, et cette page n’en crée pas. Poussez le tag <mono>{tag}</mono> ; la chaîne de release la publie alors et la ligne propose Publier la dernière.",
+      "ami": {
+        "title": "AMI du runner · lecture seule",
+        "current": "À jour",
+        "stale": "Obsolète",
+        "notRead": "Non lu",
+        "pinned": "AMI épinglée",
+        "name": "Nom",
+        "builtFrom": "Construite depuis",
+        "contains": "Contient chaque modification fusionnée sur infra/ci-runner-aws",
+        "after": "{count, plural, one {# modification fusionnée sur infra/ci-runner-aws est arrivée après} other {# modifications fusionnées sur infra/ci-runner-aws sont arrivées après}}",
+        "note": "L’AMI est publiée par sa propre chaîne ci-runner-ami-v* et épinglée dans motir-infra, elle n’a donc pas de bouton ici. Lue via le rôle de runner de la flotte de {account}.",
+        "notReadBody": "{ami} est épinglée, mais son build n’a pas pu être lu, donc son commit de build est inconnu. Elle n’est pas affichée comme à jour.",
+        "unset": "Aucune AMI de runner n’est épinglée sur ce déploiement (MOTIR_AWS_RUNNER_AMI_ID n’est pas défini)."
+      },
+      "sandbox": {
+        "newest": "Dernière release <mono>{release}</mono> · {date} · construite depuis <mono>{commit}</mono>",
+        "tagsAt": "Tags à {release}",
+        "allPublished": "Les {total} publiés",
+        "somePublished": "{published} sur {total} publiés · {missing} manquants",
+        "published": "Publié",
+        "missing": "Manquant",
+        "incomplete": "<strong>Release incomplète.</strong> {profiles} n’ont pas de tag {version}, donc les agents de ces profils reçoivent toujours {previous}.",
+        "incompleteNoPrevious": "<strong>Release incomplète.</strong> {profiles} n’ont pas de tag {version}.",
+        "allCurrent": "Chaque agent actif exécute {version}.",
+        "older": "<strong>{count, plural, one {# agent actif exécute} other {# agents actifs exécutent}} une version plus ancienne.</strong> Leurs propriétaires voient « Mise à jour disponible » sur l’agent ; rien ici ne les redémarre."
+      },
+      "publish": {
+        "button": "Publier la dernière",
+        "republish": "Republier",
+        "note": {
+          "hosted": "Épingle le dernier build main via le workflow d’épinglage de l’agent hébergé. Le web et le worker basculent dessus.",
+          "runner": "Épingle {release} via le workflow d’épinglage du runner. Le web et le worker basculent dessus.",
+          "sandbox": "Republie {release}. Seuls les {count} tags manquants sont poussés ; rien ne bascule en production.",
+          "hostedCurrent": "Rien de plus récent à publier. La production épingle le dernier build main.",
+          "runnerCurrent": "Rien de plus récent à publier. La production épingle la dernière release du runner.",
+          "runnerReleaseNeeded": "Rien de plus récent à publier : la production épingle la dernière release. Les modifications fusionnées ci-dessus ont d’abord besoin d’une release.",
+          "sandboxCurrent": "Rien de plus récent à publier. Chaque profil a son tag à la dernière release.",
+          "sandboxOld": "{release} a été créée avant qu’une réexécution puisse ne pousser que les tags manquants, donc la réexécuter repousserait chaque tag. Créez plutôt une nouvelle release cli-v*.",
+          "running": "Une exécution du workflow de publication de cette image est déjà en cours. Publier la dernière est désactivé jusqu’à sa fin.",
+          "done": "Rien de plus récent à publier."
+        }
+      },
+      "confirm": {
+        "hostedTitle": "Publier la dernière image de l’agent hébergé ?",
+        "runnerTitle": "Publier {release} ?",
+        "sandboxTitle": "Republier {release} ?",
+        "from": "De",
+        "to": "Vers",
+        "cancel": "Annuler",
+        "audited": "Enregistré dans le journal d’audit à votre nom, {email}.",
+        "sandboxFrom": "{published} tags sur {total} à {version}",
+        "hostedBody": "Ceci démarre le workflow d’épinglage de l’agent hébergé. Il déplace MOTIR_HOSTED_AGENT_IMAGE vers le dernier build et déploie : <strong>le web et le worker basculent</strong> sur le nouvel épinglage, et les exécutions hébergées démarrées après la bascule démarrent la nouvelle image.",
+        "runnerBody": "Ceci démarre le workflow d’épinglage du runner. Il déplace MOTIR_RUNNER_IMAGE vers {release} et déploie : <strong>le web et le worker basculent</strong> sur le nouvel épinglage. L’AMI du runner n’est pas modifiée.",
+        "sandboxBody": "Ceci réexécute la release du bac à sable pour {release} et ne pousse que les tags manquants : {missing}. {published} sont déjà publiés et ne sont pas repoussés. <strong>Rien ne bascule en production.</strong>",
+        "sandboxBodyNonePublished": "Ceci réexécute la release du bac à sable pour {release} et ne pousse que les tags manquants : {missing}. <strong>Rien ne bascule en production.</strong>"
+      },
+      "progress": {
+        "title": "Publication en cours.",
+        "body": "Le workflow de publication s’exécute ; cette ligne se met à jour quand il se termine.",
+        "started": "· démarré {age} par {email}",
+        "startedNoActor": "· démarré {age}",
+        "button": "Publication…"
+      },
+      "done": {
+        "title": "Publié.",
+        "pin": "La production épingle maintenant {to} ({digest}).",
+        "sandbox": "Chaque profil a maintenant son tag à {version}."
+      },
+      "failed": {
+        "title": "Échec de la publication {age}.",
+        "body": "L’exécution du workflow s’est terminée avec cette erreur, et la production épingle toujours ce qu’elle épinglait avant :",
+        "noDetail": "GitHub n’a enregistré aucun message d’erreur pour cette exécution ; ouvrez l’exécution pour voir son journal.",
+        "retry": "Réessayer"
+      },
+      "workflow": {
+        "hosted": "Épinglage de l’agent hébergé",
+        "runner": "Épinglage du runner",
+        "sandbox": "Release du bac à sable {tag}",
+        "run": "{workflow} · exécution n° {number}",
+        "runNoNumber": "{workflow} · exécution"
+      },
+      "audit": {
+        "last": "Dernière publication depuis cette page par {email} le {when}.",
+        "never": "Jamais publié depuis cette page.",
+        "started": "Publication démarrée par {email} le {when}.",
+        "link": "Journal d’audit"
+      },
+      "imageError": {
+        "title": "Impossible de lire : {image}",
+        "body": "{source} n’a pas répondu, donc rien n’est chargé ici, et rien de tout cela ne signifie à jour. Publier la dernière reste désactivé jusqu’à la lecture. Les autres images et les pools ne sont pas affectés. Rechargez pour réessayer."
+      },
+      "unset": {
+        "title": "Non configuré ici",
+        "body": "{variable} n’est pas défini sur ce déploiement, il n’y a donc aucun épinglage à comparer."
+      },
+      "loading": "Chargement : {image}",
+      "publishError": {
+        "title": "Publier la dernière n’a pas démarré.",
+        "running": "Une exécution du workflow de publication de cette image est déjà en cours ; rien de nouveau n’a été démarré.",
+        "up_to_date": "La production exécute déjà la dernière image ; rien n’a été démarré.",
+        "release_needed": "La production épingle déjà la dernière release ; les modifications fusionnées ont d’abord besoin d’une release.",
+        "not_republishable": "Cette release ne peut pas être réexécutée pour ses seuls tags manquants ; rien n’a été démarré.",
+        "not_read": "L’image n’a pas pu être lue à l’instant, donc rien n’a été démarré.",
+        "unset": "Cette image n’est pas configurée sur ce déploiement.",
+        "failed": "GitHub n’a pas démarré le workflow :",
+        "notPermitted": "Seul un superadmin peut publier depuis cette page."
       }
     },
     "capacity": {

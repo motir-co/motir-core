@@ -66,8 +66,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+      # Also on a dispatch ON A TAG — the console's Publish latest re-publish of a
+      # release (MOTIR-10886) runs on the `cli-v*` ref itself.
       - name: Compare the tag against packages/cli/package.json
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/cli-v')
         run: |
           set -euo pipefail
           TAG_VERSION="${GITHUB_REF_NAME#cli-v}"
@@ -163,7 +165,14 @@ jobs:
     needs: images
     # Only a real tag has something to record: a dry-run dispatch publishes
     # nothing, so there are no digests to read and no release to write about.
-    if: ${{ github.event_name == 'push' }}
+    # A non-dry dispatch ON A `cli-v*` TAG is a real release too: it is how the
+    # console's Publish latest re-publishes a partial release (MOTIR-10886), and
+    # the tags it pushes need their digests recorded like a tag push's.
+    if: >-
+      ${{ github.event_name == 'push' || (
+        github.event_name == 'workflow_dispatch' && !inputs.dry_run &&
+        startsWith(github.ref, 'refs/tags/cli-v')
+      ) }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # NO run on record — it is gated `if: github.event_name == 'push'` and the
     # five most recent runs of this workflow were dispatches, so it has been

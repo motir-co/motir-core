@@ -267,6 +267,16 @@ export const imageCatalog = {
   },
 };
 
+/**
+ * The registry this catalog reads — the live GHCR client, or the one a test set
+ * through {@link imageCatalogSeam}. The Fleet status page (MOTIR-10886) asks it
+ * which `<profile>-<version>` tags the sandbox repository holds, so the page and
+ * the catalog read the same registry the same way.
+ */
+export function catalogRegistry(): ImageRegistry {
+  return registry;
+}
+
 /** Test seam: the registry, the clock, the fake fleet's newest version, and a reset. */
 export const imageCatalogSeam = {
   setRegistry(next: ImageRegistry | null): void {

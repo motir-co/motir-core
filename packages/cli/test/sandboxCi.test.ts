@@ -823,7 +823,11 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
       // workflow, which includes the anonymous-pull and command checks — the
       // record is written only about images that passed them.
       expect(readmeJob).toContain('needs: images');
-      expect(readmeJob).toContain("if: ${{ github.event_name == 'push' }}");
+      expect(readmeJob).toContain("github.event_name == 'push' || (");
+      // A Publish latest re-publish (MOTIR-10886) is a non-dry dispatch on the
+      // `cli-v*` tag itself, and its pushed tags are recorded too.
+      expect(readmeJob).toContain("github.event_name == 'workflow_dispatch' && !inputs.dry_run &&");
+      expect(readmeJob).toContain("startsWith(github.ref, 'refs/tags/cli-v')");
     });
 
     it('edits MAIN, not the tag it was triggered by', () => {
