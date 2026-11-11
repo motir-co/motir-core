@@ -42,6 +42,11 @@ export function resetHostedRun(): void {
 /**
  * The line every hosted pull request ends with (decision §6): the dispatcher's
  * Motir name, the card and the run. Null on a local run.
+ *
+ * The run links to `/runs?run=<id>` — the run modal on the runs page, the same
+ * form `runUrlOf` (`lib/mappers/orgFleetMappers.ts`) builds. There is no
+ * `/runs/<id>` route (MOTIR-10973; the item page made the same mistake in
+ * MOTIR-5398).
  */
 export function hostedAttributionLine(a: HostedAttribution | null = active): string | null {
   if (!a) return null;
@@ -50,7 +55,7 @@ export function hostedAttributionLine(a: HostedAttribution | null = active): str
   return (
     `${ATTRIBUTION_MARKER}\n${who} through a Motir hosted run — ` +
     `card [${a.targetKey}](${server}/items/${a.targetKey}) · ` +
-    `run [${a.runId}](${server}/runs/${a.runId}).`
+    `run [${a.runId}](${server}/runs?run=${encodeURIComponent(a.runId)}).`
   );
 }
 

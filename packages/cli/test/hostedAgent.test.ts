@@ -285,7 +285,7 @@ describe('runAgent with the hosted launcher', () => {
     const message = args[4]!;
     expect(message.startsWith('PROMPT PROD-7')).toBe(true);
     expect(message).toContain('Dispatched by Yue Zhu');
-    expect(message).toContain('https://app.motir.test/runs/run_1');
+    expect(message).toContain('https://app.motir.test/runs?run=run_1');
     expect((opts.stdio as unknown[])[0]).toBe('ignore');
     const env = opts.env!;
     expect(env['MOTIR_RUN_TOKEN']).toBeUndefined();
