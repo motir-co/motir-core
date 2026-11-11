@@ -77,7 +77,7 @@ import {
   sessionBranchName,
   type CommandRunner,
 } from '../git.js';
-import { deriveAgentHarness } from '../agentProfiles.js';
+import { deriveAgentHarness, withFreshSessionId } from '../agentProfiles.js';
 import { runCiWatchPhase } from '../ciWatch.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
@@ -1339,11 +1339,19 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   });
   reporter.event({ kind: 'prompt_issued', workItemKey: item.key });
 
+  // THIS card's own conversation (MOTIR-10983). The run resolved its agent ONCE, so a
+  // Motir-chosen session id is the same on every card's command, and the agent refuses
+  // the second spawn on an id already in use. Each card gets its own, and records it.
+  const legAgent = withFreshSessionId(agent.parsed);
   const started = clock();
   reporter.event({
     kind: 'agent_started',
     workItemKey: item.key,
-    data: { agent: agent.parsed.binary },
+    data: {
+      agent: legAgent.binary,
+      // Known before the spawn, as `dispatchLeg` records it (MOTIR-8980).
+      ...(legAgent.stream?.sessionId ? { sessionId: legAgent.stream.sessionId } : {}),
+    },
   });
   // The producer for the `log` event kind (MOTIR-3961). `null` unless the
   // operator passed `--report-log`, and then the spawn is unchanged.
@@ -1359,7 +1367,7 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
     ...(input.checkpointIntervalMs ? { intervalMs: input.checkpointIntervalMs } : {}),
   });
   const result = await runAgentFn({
-    command: agent.parsed,
+    command: legAgent,
     prompt: dispatch.prompt,
     cwd: target.cwd,
     ...(logTee ? { onOutput: logTee.write } : {}),
