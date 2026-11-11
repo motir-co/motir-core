@@ -10,6 +10,7 @@ import {
   type DispatchRecord,
   type PlanningRecord,
   type RepoSession,
+  type SessionPrContainer,
   type SkipRecord,
   type StopReason,
 } from '../autoLoop.js';
@@ -105,6 +106,13 @@ export interface ScopeDrainInput {
   materialize?: boolean;
   /** Prepare each leg's checkouts before its spawn — a hosted run's code graph (MOTIR-6560). */
   prepareCheckouts?: (cwds: string[]) => void;
+  /**
+   * The WORK ITEM this scope was launched against — its key and title
+   * (MOTIR-10985). The session pull request is that item's from the first
+   * landed card: opened as a draft titled for it, and linked to it. Absent on a
+   * sprint scope, which has no item to name.
+   */
+  container?: SessionPrContainer;
   /**
    * `branch` is a DEAD run's session branch being resumed (MOTIR-6535): reuse it,
    * and merge `origin/main` into it before the first child. Unset for a fresh run.
@@ -420,15 +428,21 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
         // not been built. Bug MOTIR-3268's hold carried that invariant by opening
         // nothing at all; the draft carries it without withholding CI.
         //
-        // ⚠️ AND IT IS ALSO WHAT LINKS IT (MOTIR-4969). A scoped run over a story
-        // carries that story's children, so the parent partition of `records` is
-        // `shared-parent` from the second landed card onward and the session pull
-        // request declares the STORY it delivers. The arm is read off the carried
-        // set rather than off this lane's name — `motir run sprint` comes through
-        // here too, spans parents, and must invent no story.
+        // ⚠️ AND IT IS ALSO WHAT LINKS IT (MOTIR-4969 · MOTIR-10985). A scoped
+        // run over a work item hands the drain that item as `container`, so the
+        // draft is titled for the story and linked to it at the FIRST landed card.
+        // Waiting for the carried set to read `shared-parent` left a one-card run
+        // titled for its card and linked to nothing — and the card's agent, told
+        // it was "the first", opened a ready pull request of its own. `motir run
+        // sprint` names no container: it spans parents and must invent no story,
+        // so it keeps the partition's arms.
         if (landedWork(record)) {
           for (const repoSession of repo ?? []) {
-            await ensureRepoPullRequest(repoSession, runId, run, { client, carried: records });
+            await ensureRepoPullRequest(repoSession, runId, run, {
+              client,
+              carried: records,
+              ...(input.container ? { container: input.container } : {}),
+            });
           }
         }
 
@@ -609,6 +623,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
     // A scoped run REFUSES `--auto-approve-replan` (`autoOnlyFlagError`), so it
     // never makes a lane decision — there is nothing here that could fill this.
     lanes: [],
+    ...(input.container ? { container: input.container } : {}),
     stopReason,
     ...(gatedOn ? { gatedOn } : {}),
   };

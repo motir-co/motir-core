@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { closeOutContainer, ensureRepoPullRequest } from '../src/commands/auto.js';
 import {
+  deliveredContainerKey,
   sessionPrScope,
   sessionPrTitle,
   type AutoSummary,
@@ -487,5 +488,117 @@ describe('closeOutContainer moves the container to Implemented', () => {
       summaryOf([record({ key: 'PROD-2' }), record({ key: 'PROD-3', outcome: 'failed' })], [pr()]),
     );
     expect(fake.calls).toEqual([]);
+  });
+});
+
+// ── a SCOPED run names its work item up front (MOTIR-10985) ─────────────────
+//
+// The partition reads `one-card` until a second card lands, so a story run's
+// first card used to title the draft for itself and link no story. A scoped run
+// knows the story before it starts, and that knowledge wins over the partition —
+// while `motir auto` and a sprint scope, which pass none, keep every arm above.
+
+describe('a scoped run’s container decides the title and the link (MOTIR-10985)', () => {
+  const STORY = { key: 'PROD-1', title: 'Agents read and add a page’s discussion' };
+
+  it('deliveredContainerKey: the container whatever the partition, else only `shared-parent`', () => {
+    expect(deliveredContainerKey([], STORY)).toBe('PROD-1');
+    expect(deliveredContainerKey([record({ key: 'PROD-2' })], STORY)).toBe('PROD-1');
+    expect(
+      deliveredContainerKey(
+        [record({ key: 'PROD-2' }), record({ key: 'PROD-9', parentKey: 'PROD-8' })],
+        STORY,
+      ),
+    ).toBe('PROD-1');
+    // Without one: today's arms, unchanged.
+    expect(deliveredContainerKey([record({ key: 'PROD-2' })])).toBeNull();
+    expect(deliveredContainerKey([record({ key: 'PROD-2' }), record({ key: 'PROD-3' })])).toBe(
+      'PROD-1',
+    );
+    expect(
+      deliveredContainerKey([
+        record({ key: 'PROD-2' }),
+        record({ key: 'PROD-9', parentKey: 'PROD-8' }),
+      ]),
+    ).toBeNull();
+  });
+
+  it('sessionPrTitle names the container for none, one or many cards, and fits the budget', () => {
+    expect(sessionPrTitle('run-1', [], STORY)).toBe(`PROD-1 ${STORY.title}`);
+    expect(sessionPrTitle('run-1', [record({ key: 'PROD-2' })], STORY)).toBe(
+      `PROD-1 ${STORY.title}`,
+    );
+    expect(sessionPrTitle('run-1', [], { key: 'PROD-1', title: '' })).toBe('PROD-1');
+    const long = sessionPrTitle('run-1', [], { key: 'PROD-1', title: 'x'.repeat(200) });
+    expect(long.length).toBeLessThanOrEqual(72);
+    expect(long.startsWith('PROD-1 x')).toBe(true);
+    expect(long.endsWith('…')).toBe(true);
+    // Without one, the one-card arm still names the card.
+    expect(sessionPrTitle('run-1', [record({ key: 'PROD-2' })])).toBe('PROD-2 Item PROD-2');
+  });
+
+  it('ensureRepoPullRequest opens a DRAFT titled for the container and links it at the FIRST card', async () => {
+    const log: string[] = [];
+    const run: CommandRunner = (bin, args) => {
+      log.push(`${bin} ${args.join(' ')}`);
+      if (bin === 'git' && args[0] === 'rev-list') return OK('3');
+      if (bin === 'gh' && args[1] === 'list') return OK('');
+      if (bin === 'gh' && args[1] === 'create') return OK('https://github.test/pull/9001');
+      return OK('');
+    };
+    const fake = fakeClient();
+
+    await ensureRepoPullRequest(
+      { repoName: 'motir-core', cwd: '/tmp/motir-core', branch: 'motir/auto-x', keys: ['PROD-2'] },
+      'run-1',
+      run,
+      { client: fake.client, carried: [record({ key: 'PROD-2' })], container: STORY },
+    );
+
+    const create = log.find((line) => line.startsWith('gh pr create'))!;
+    expect(create).toContain('--draft');
+    expect(create).toContain(`--title PROD-1 ${STORY.title}`);
+    expect(fake.links).toEqual([
+      {
+        key: 'PROD-1',
+        url: 'https://github.test/pull/9001',
+        headRef: 'motir/auto-x',
+        baseRef: 'main',
+      },
+    ]);
+  });
+
+  it('closeOutContainer links and flips the container on a ONE-card run', async () => {
+    const fake = fakeClient();
+    const summary = summaryOf([record({ key: 'PROD-2' })], [pr()], { container: STORY });
+
+    await closeOutContainer(fake.client, summary);
+
+    expect(fake.calls).toEqual(['link:PROD-1', 'transition:PROD-1:implemented']);
+  });
+
+  it('closeOutContainer names the container in what it reports while it holds it', async () => {
+    const fake = fakeClient();
+    let stderr = '';
+    vi.mocked(process.stderr.write).mockImplementation((chunk) => {
+      stderr += String(chunk);
+      return true;
+    });
+
+    await closeOutContainer(
+      fake.client,
+      summaryOf([record({ key: 'PROD-2' })], [pr()], {
+        container: STORY,
+        outstanding: { containerKey: 'PROD-1', keys: ['PROD-3'] },
+      }),
+    );
+    await closeOutContainer(
+      fake.client,
+      summaryOf([record({ key: 'PROD-2' })], [pr({ draft: true })], { container: STORY }),
+    );
+
+    expect(fake.transitions).toEqual([]);
+    expect(stderr).toContain('PROD-1 stays as it is: 1 of its children have not landed (PROD-3)');
+    expect(stderr).toContain('PROD-1 stays as it is: motir/auto-x is still a draft.');
   });
 });

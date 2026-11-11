@@ -1236,6 +1236,16 @@ export async function runCommand(
         clock: deps.clock ?? Date.now,
         runAgentFn: deps.runAgentFn ?? runAgent,
         reporter,
+        // MOTIR-10985 — the work item the session pull request is titled for and
+        // linked to from its first landed card. A sprint scope names none.
+        ...(decision.target.kind === 'work_item'
+          ? {
+              container: {
+                key: decision.target.key,
+                title: decision.title ?? claimed.claim?.scope.name ?? '',
+              },
+            }
+          : {}),
         // A hosted workspace starts EMPTY: every repository a leg ships in is
         // cloned before its session branch is made, as `motir auto` does.
         materialize: adopted !== null,
@@ -1542,6 +1552,10 @@ export async function runClaimedScope(input: ClaimedScopeRunInput): Promise<void
     clock: deps.clock ?? Date.now,
     runAgentFn: deps.runAgentFn ?? runAgent,
     reporter,
+    // MOTIR-10985 — the claimed work item, whose title the claim carries.
+    ...(decision.target.kind === 'work_item'
+      ? { container: { key: decision.target.key, title: claimed.claim.scope.name } }
+      : {}),
   });
   // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
   // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain

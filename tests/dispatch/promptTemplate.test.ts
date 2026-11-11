@@ -3667,3 +3667,138 @@ describe('the NO MOTIR TOOLS delivery route (MOTIR-10877)', () => {
     expect(namesDeliveryFileRoute(source({ runnerPostsAgentReport: true }), null)).toBe(false);
   });
 });
+
+// ── WHO OWNS A SCOPED RUN'S SESSION PULL REQUEST (MOTIR-10985) ─────────────
+//
+// A story run's first card was told "If it does not exist yet, you are the
+// first: open it" — and in a scoped run the first card is ALWAYS the first. Its
+// agent opened a READY pull request titled for itself, and the CLI then adopted
+// it instead of opening the story's draft. So every card of a scoped run is told
+// the pull request is the RUN's, and the unscoped lane keeps its fallback.
+
+describe('a SCOPED run’s card never opens or edits the session pull request (MOTIR-10985)', () => {
+  const SESSION = 'motir/auto-20261111-172000';
+  const flat = (prompt: string) => prompt.replace(/\s*\n\s*/g, ' ');
+  /** The FIRST child: nothing integrated yet, so only the run's seed names the branch. */
+  const first = () =>
+    source({ key: 'PROD-7', sessionBranch: SESSION, runTargetKey: 'PROD-1', blockerKeys: [] });
+  /** A LATER child: it inherits the lineage the first one integrated. */
+  const later = () =>
+    source({
+      key: 'PROD-8',
+      title: 'Wire the filter bar to the URL',
+      sessionBranch: SESSION,
+      runTargetKey: 'PROD-1',
+      blockerKeys: ['PROD-7'],
+    });
+  const CONTINUE = {
+    deadRunId: 'run_dead',
+    endedHow: 'the run stopped reporting',
+    lastHeardAt: '2026-11-11T17:20:00.000Z',
+    dispatcherName: 'Mara S.',
+    branch: 'subtask/PROD-7-add-the-ready-set-filter-bar',
+    pullRequest: null,
+  };
+
+  /** No instruction anywhere in the prompt to open the pull request when it is missing. */
+  function expectNoOpenFallback(prompt: string): void {
+    const text = flat(prompt);
+    expect(text).not.toContain('you are the first');
+    expect(text).not.toContain('open it, from that branch');
+    expect(text).not.toContain('open it from that branch');
+    expect(text).not.toContain('open it only if');
+    expect(text).not.toContain('or open it from that branch if');
+  }
+
+  it.each([
+    ['the FIRST child', first],
+    ['a LATER child', later],
+  ])('%s is told not to create or edit it, and is given no fallback to open it', (_label, src) => {
+    const { prompt, workflowMode } = assembleDispatchPrompt(src());
+    expect(workflowMode).toBe('session_lineage');
+    const text = flat(prompt);
+    expect(text).toContain(
+      `7. Do NOT open a pull request, and do NOT create or edit the session pull request from ${SESSION}.`,
+    );
+    expect(text).toContain('It belongs to the run launched against PROD-1');
+    expect(text).toContain('the run opens it as a DRAFT when the first card lands');
+    expect(text).toContain('If it exists, link your item to it (step 8).');
+    expect(text).toContain('If it does not exist yet, skip step 8 and do not open it');
+    // FINISHED step 3 says the same, rather than "open it if you are the first".
+    expect(text).toContain(
+      `3. find the session pull request for this repository (\`gh pr list --head ${SESSION}\`). Do NOT open or edit it`,
+    );
+    expect(text).toContain('If it does not exist yet, skip step 4');
+    // The link and the stop are kept.
+    expect(text).toContain(`8. LINK it: call the link_pull_request tool with key ${src().key}`);
+    expect(text).toContain('9. STOP.');
+    expectNoOpenFallback(prompt);
+  });
+
+  it('holds across a repository SET: no repository’s session pull request is the agent’s', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ sessionBranch: SESSION, runTargetKey: 'PROD-1', targetRepos: TWO_REPOS }),
+    );
+    const text = flat(prompt);
+    expect(text).toContain('do NOT create or edit the session pull request');
+    expect(text).toContain('none of its session pull requests is yours to open or edit.');
+    expect(text).toContain('Then, in EACH repository whose session pull request you found:');
+    expect(text).not.toContain('you found or opened');
+    expectNoOpenFallback(prompt);
+  });
+
+  it('holds on a CONTINUE of a scoped card, single- and multi-repository', () => {
+    const single = assembleDispatchPrompt(
+      source({ sessionBranch: SESSION, runTargetKey: 'PROD-1', continueFrom: CONTINUE }),
+    ).prompt;
+    expect(flat(single)).toContain('9. Do NOT open a pull request, and do NOT create or edit');
+    expect(flat(single)).toContain('link your item to it (step 10)');
+    expectNoOpenFallback(single);
+
+    const multi = assembleDispatchPrompt(
+      source({
+        sessionBranch: SESSION,
+        runTargetKey: 'PROD-1',
+        targetRepos: TWO_REPOS,
+        continueFrom: {
+          ...CONTINUE,
+          branches: [
+            { repository: 'motir-core', branch: CONTINUE.branch, pullRequest: null },
+            { repository: 'motir-ai', branch: CONTINUE.branch, pullRequest: null },
+          ],
+        },
+      }),
+    ).prompt;
+    expect(flat(multi)).toContain('do NOT create or edit the session pull request');
+    expect(flat(multi)).toContain('In EACH repository whose session pull request you found:');
+    expectNoOpenFallback(multi);
+  });
+
+  it('the UNSCOPED lane (`motir auto`) keeps today’s text, fallback included', () => {
+    for (const runTargetKey of [null, undefined, 'PROD-7']) {
+      const { prompt } = assembleDispatchPrompt(
+        source({ sessionBranch: SESSION, ...(runTargetKey === undefined ? {} : { runTargetKey }) }),
+      );
+      expect(prompt).toContain('7. Do NOT open a pull request of your own.');
+      expect(prompt).toContain('If it does not exist yet, you are the');
+      expect(flat(prompt)).toContain('or open it from that branch if you are the first item');
+      expect(prompt).not.toContain('do NOT create or edit the session pull');
+    }
+    const multi = assembleDispatchPrompt(
+      source({ sessionBranch: SESSION, runTargetKey: null, targetRepos: TWO_REPOS }),
+    ).prompt;
+    expect(flat(multi)).toContain('none yet, you are the first: open it from that branch');
+    const cont = assembleDispatchPrompt(
+      source({ sessionBranch: SESSION, runTargetKey: null, continueFrom: CONTINUE }),
+    ).prompt;
+    expect(flat(cont)).toContain('open it only if it does not.');
+  });
+
+  it('a card with NO session branch keeps its own pull request, scoped or not', () => {
+    const { prompt, workflowMode } = assembleDispatchPrompt(
+      source({ sessionBranch: null, runTargetKey: 'PROD-1' }),
+    );
+    expect(workflowMode).toBe('per_item_pr');
+    expect(prompt).toContain('This item has no session lineage, so it ships as ONE pull request');
+  });
+});

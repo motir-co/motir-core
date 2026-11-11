@@ -325,8 +325,14 @@ export type ScopeDecision =
    */
   | { action: 'leaf'; detail: WorkItemDetail }
   /** Run these leaves. A work-item scope carries the target's own verdict
-   *  from the same read, so `--allow-soft-block` never re-fetches it. */
-  | { action: 'scope'; target: ScopeTarget; readiness?: WorkItemDetail['readiness'] }
+   *  from the same read, so `--allow-soft-block` never re-fetches it — and its
+   *  TITLE, which the session pull request is named for (MOTIR-10985). */
+  | {
+      action: 'scope';
+      target: ScopeTarget;
+      readiness?: WorkItemDetail['readiness'];
+      title?: string;
+    }
   /** Handled here; the run is over and nothing further should happen. */
   | { action: 'stop' };
 
@@ -353,7 +359,9 @@ export async function resolveScopeTarget(
   });
 
   if (shape.kind === 'leaf') return { action: 'leaf', detail };
-  if (shape.kind === 'scope') return { action: 'scope', target, readiness: detail.readiness };
+  if (shape.kind === 'scope') {
+    return { action: 'scope', target, readiness: detail.readiness, title: detail.item.title };
+  }
   if (shape.kind === 'refuse_epic') {
     const { message, hint } = epicRefusal(detail.item.identifier);
     throw new CliError(message, { hint });

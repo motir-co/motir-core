@@ -2053,6 +2053,7 @@ function multiRepoSessionLineageWorkflow(
   sessionBranch: string,
 ): string[] {
   const branch = cardBranch(src);
+  const target = scopedRunTarget(src);
   const lines: string[] = [
     `This item inherits the session branch ${sessionBranch}, and it ships in`,
     `${repos.length} repositories. The lineage is the SAME branch name in each of them:`,
@@ -2082,14 +2083,28 @@ function multiRepoSessionLineageWorkflow(
     `sessionBranch ${sessionBranch}. One call for the item, not one per repository —`,
     'the item records a single session branch, which is why the name is shared.',
     '',
-    'Do NOT open a pull request OF YOUR OWN in any repository. The session branch has',
-    'one review surface per repository, and the run opens it at the first item that',
-    'reaches Implemented there — so it usually already exists by the time you get',
-    `here (\`gh pr list --head ${sessionBranch}\`). If a repository you touched has`,
-    'none yet, you are the first: open it from that branch, targeting its default',
-    'branch.',
-    '',
-    'Then, in EACH repository whose session pull request you found or opened:',
+    ...(target
+      ? [
+          ...scopedSessionPrLines(target, sessionBranch, {
+            lead: '',
+            pad: '',
+            link: 'the link below',
+          }),
+          'That holds in EVERY repository: none of its session pull requests is yours',
+          'to open or edit.',
+          '',
+          'Then, in EACH repository whose session pull request you found:',
+        ]
+      : [
+          'Do NOT open a pull request OF YOUR OWN in any repository. The session branch has',
+          'one review surface per repository, and the run opens it at the first item that',
+          'reaches Implemented there — so it usually already exists by the time you get',
+          `here (\`gh pr list --head ${sessionBranch}\`). If a repository you touched has`,
+          'none yet, you are the first: open it from that branch, targeting its default',
+          'branch.',
+          '',
+          'Then, in EACH repository whose session pull request you found or opened:',
+        ]),
     ...linkingStep(src, sessionBranch, 1, {
       trailer: [
         'ONCE PER REPOSITORY, and once per item — several items link the same session',
@@ -2227,11 +2242,54 @@ function perItemPrWorkflow(src: DispatchPromptSource): string[] {
   ];
 }
 
+/**
+ * The RUN TARGET this item is one card of, when that is ANOTHER item — a scoped
+ * run's story (MOTIR-5334) — else `null`, meaning the item is its own target.
+ */
+function scopedRunTarget(src: DispatchPromptSource): string | null {
+  return src.runTargetKey && src.runTargetKey !== src.key ? src.runTargetKey : null;
+}
+
+/**
+ * WHO OWNS A SCOPED RUN'S SESSION PULL REQUEST (MOTIR-10985) — the RUN, never a
+ * card's agent.
+ *
+ * The lineage grammar used to end in a fallback: *"If it does not exist yet, you
+ * are the first: open it."* In a scoped run the first card is ALWAYS the first,
+ * and its agent opened the pull request before the CLI's post-leg step ran —
+ * ready for review and titled for that one card — and the CLI then adopted it as
+ * `existing` instead of opening its draft. So in a scoped run the agent is told
+ * the pull request is the run's, to link its card to it if it is there, and to
+ * leave it alone if it is not. The unscoped lane (`motir auto`) keeps the
+ * fallback, unchanged.
+ *
+ * `lead` is the first line's prefix (the step number, or nothing), `pad` the
+ * indent of the lines after it, and `link` how the linking instruction is
+ * referred to — "step 8", or "the link below".
+ */
+function scopedSessionPrLines(
+  target: string,
+  sessionBranch: string,
+  opts: { lead: string; pad: string; link: string },
+): string[] {
+  const { lead, pad, link } = opts;
+  return [
+    `${lead}Do NOT open a pull request, and do NOT create or edit the session pull`,
+    `${pad}request from ${sessionBranch}. It belongs to the run launched against ${target}:`,
+    `${pad}the run opens it as a DRAFT when the first card lands, titles it for`,
+    `${pad}${target}, links it to ${target}, rewrites its body and marks it ready once`,
+    `${pad}every card has landed. Look for it with \`gh pr list --head ${sessionBranch}\`.`,
+    `${pad}If it exists, link your item to it (${link}). If it does not exist yet, skip`,
+    `${pad}${link} and do not open it: the run links ${target} to it when it opens it.`,
+  ];
+}
+
 /** The session-lineage GIT WORKFLOW: branch from / integrate into the inherited
  *  session branch, then report it with `mark_integrated`. */
 function sessionLineageWorkflow(src: DispatchPromptSource, sessionBranch: string): string[] {
   const branch = `${branchPrefix(src.type)}/${src.key}-${branchSlug(src.title)}`;
   const dir = worktreeDir(src.targetRepo, src.key);
+  const target = scopedRunTarget(src);
   return [
     `This item inherits the session branch ${sessionBranch}: the work it depends on`,
     'is integrated there and awaiting ONE human review, so this work joins the SAME',
@@ -2245,12 +2303,16 @@ function sessionLineageWorkflow(src: DispatchPromptSource, sessionBranch: string
     `5. Integrate the commit into ${sessionBranch} and push that branch.`,
     `6. Report it: call the mark_integrated tool with key ${src.key} and`,
     `   sessionBranch ${sessionBranch}.`,
-    '7. Do NOT open a pull request of your own. The session branch has ONE review',
-    `   surface: a pull request from ${sessionBranch}, which the run opens at the`,
-    '   first item that reaches Implemented in this repository. So by the time you',
-    '   are reading this it USUALLY ALREADY EXISTS — find it with',
-    `   \`gh pr list --head ${sessionBranch}\`. If it does not exist yet, you are the`,
-    '   first: open it, from that branch, targeting main.',
+    ...(target
+      ? scopedSessionPrLines(target, sessionBranch, { lead: '7. ', pad: '   ', link: 'step 8' })
+      : [
+          '7. Do NOT open a pull request of your own. The session branch has ONE review',
+          `   surface: a pull request from ${sessionBranch}, which the run opens at the`,
+          '   first item that reaches Implemented in this repository. So by the time you',
+          '   are reading this it USUALLY ALREADY EXISTS — find it with',
+          `   \`gh pr list --head ${sessionBranch}\`. If it does not exist yet, you are the`,
+          '   first: open it, from that branch, targeting main.',
+        ]),
     ...linkingStep(src, sessionBranch, 8),
     '9. STOP. Do not merge that pull request and do not delete the branch.',
   ];
@@ -2422,12 +2484,20 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
   // both lanes and the order is what this section is for. What differs is one
   // line — whether the pull request is something you open or something the run
   // has already opened — so that line varies and nothing else does.
+  const target = scopedRunTarget(src);
   const finished = sessionBranch
-    ? [
-        '    3. find the session pull request for this repository',
-        `       (\`gh pr list --head ${sessionBranch}\`), or open it from that branch if`,
-        '       you are the first item to reach this point in it',
-      ]
+    ? target
+      ? [
+          // MOTIR-10985 — the scoped run's pull request is the RUN's.
+          '    3. find the session pull request for this repository',
+          `       (\`gh pr list --head ${sessionBranch}\`). Do NOT open or edit it: the run`,
+          `       launched against ${target} opens it. If it does not exist yet, skip step 4`,
+        ]
+      : [
+          '    3. find the session pull request for this repository',
+          `       (\`gh pr list --head ${sessionBranch}\`), or open it from that branch if`,
+          '       you are the first item to reach this point in it',
+        ]
     : openPullRequestStep();
   return [
     'Two outcomes end this work, and the loop can only tell them apart if you SAY',
@@ -3522,6 +3592,7 @@ function continueWorkflow(
   const branch = cf.branch;
   const dir = worktreeDir(src.targetRepo, src.key);
   const base = sessionBranch ?? 'main';
+  const target = scopedRunTarget(src);
   const lines = [
     `This is a CONTINUE: the work is already on ${branch}. Check that branch out —`,
     'never create a new one.',
@@ -3543,9 +3614,17 @@ function continueWorkflow(
       `7. Integrate the commit into ${sessionBranch} and push that branch.`,
       `8. Report it: call the mark_integrated tool with key ${src.key} and`,
       `   sessionBranch ${sessionBranch}.`,
-      '9. Do NOT open a pull request of your own. The session pull request from',
-      `   ${sessionBranch} usually already exists (\`gh pr list --head ${sessionBranch}\`);`,
-      '   open it only if it does not.',
+      ...(target
+        ? scopedSessionPrLines(target, sessionBranch, {
+            lead: '9. ',
+            pad: '   ',
+            link: 'step 10',
+          })
+        : [
+            '9. Do NOT open a pull request of your own. The session pull request from',
+            `   ${sessionBranch} usually already exists (\`gh pr list --head ${sessionBranch}\`);`,
+            '   open it only if it does not.',
+          ]),
       ...linkingStep(src, sessionBranch, 10),
       '11. STOP. Do not merge that pull request and do not delete the branch.',
     ];
@@ -3573,6 +3652,7 @@ function multiRepoContinueWorkflow(
   repos: ContinueFromBranch[],
   sessionBranch: string | null,
 ): string[] {
+  const target = scopedRunTarget(src);
   const baseOf = (repository: string | null): string =>
     sessionBranch ??
     (src.targetRepos ?? []).find((r) => r.name === repository)?.defaultBranch ??
@@ -3623,9 +3703,25 @@ function multiRepoContinueWorkflow(
     lines.push(
       '',
       `Then report it ONCE: call the mark_integrated tool with key ${src.key} and`,
-      `sessionBranch ${sessionBranch}. Do NOT open a pull request of your own; in EACH`,
-      'repository, find the session pull request (`gh pr list --head ' + sessionBranch + '`),',
-      'open it only if it does not exist, and:',
+      ...(target
+        ? [
+            `sessionBranch ${sessionBranch}.`,
+            '',
+            ...scopedSessionPrLines(target, sessionBranch, {
+              lead: '',
+              pad: '',
+              link: 'the link below',
+            }),
+            '',
+            'In EACH repository whose session pull request you found:',
+          ]
+        : [
+            `sessionBranch ${sessionBranch}. Do NOT open a pull request of your own; in EACH`,
+            'repository, find the session pull request (`gh pr list --head ' +
+              sessionBranch +
+              '`),',
+            'open it only if it does not exist, and:',
+          ]),
       ...linkingStep(src, sessionBranch, 1, {
         trailer: ['ONCE PER REPOSITORY.'],
       }),
