@@ -169,7 +169,7 @@ function emitPageCommentCreated(
   ctx: ServiceContext,
   input: { projectId: string; pageId: string; commentId: string; threadRootCommentId: string },
   mentionedUserIds: string[],
-  isReply: boolean,
+  kind: { isReply: boolean; isEdit: boolean },
 ): Promise<void> {
   return sendEvent('page/comment.created', {
     workspaceId: ctx.workspaceId,
@@ -179,7 +179,8 @@ function emitPageCommentCreated(
     threadRootCommentId: input.threadRootCommentId,
     authorId: ctx.userId,
     mentionedUserIds,
-    isReply,
+    isReply: kind.isReply,
+    isEdit: kind.isEdit,
   });
 }
 
@@ -302,7 +303,7 @@ export const pageCommentsService = {
         threadRootCommentId: thread.id,
       },
       mentionedUserIds,
-      false,
+      { isReply: false, isEdit: false },
     );
     return withRefs(thread, ctx);
   },
@@ -332,7 +333,7 @@ export const pageCommentsService = {
         threadRootCommentId: reply.parentCommentId ?? input.parentCommentId,
       },
       mentionedUserIds,
-      true,
+      { isReply: true, isEdit: false },
     );
     return withRefs(reply, ctx);
   },
@@ -367,7 +368,7 @@ export const pageCommentsService = {
           threadRootCommentId: comment.parentCommentId ?? comment.id,
         },
         added,
-        comment.parentCommentId !== null,
+        { isReply: comment.parentCommentId !== null, isEdit: true },
       );
     }
     return withRefs(comment, ctx);

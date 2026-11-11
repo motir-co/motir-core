@@ -526,6 +526,7 @@ describe('pageCommentsService — the page/comment.created event', () => {
         authorId: f.owner.userId,
         mentionedUserIds: [ben.userId, ana.userId],
         isReply: false,
+        isEdit: false,
       },
     ]);
     expect(readable).toEqual([true]);
@@ -591,6 +592,7 @@ describe('pageCommentsService — the page/comment.created event', () => {
         authorId: ana.userId,
         mentionedUserIds: [],
         isReply: true,
+        isEdit: false,
       }),
       expect.objectContaining({
         commentId: loud.id,
@@ -668,6 +670,7 @@ describe('pageCommentsService — the page/comment.created event', () => {
         authorId: f.owner.userId,
         mentionedUserIds: [ben.userId],
         isReply: true,
+        isEdit: true,
       },
     ]);
   });
@@ -687,6 +690,7 @@ describe('pageCommentsService — the page/comment.created event', () => {
       authorId: f.owner.userId,
       mentionedUserIds: [ana.userId],
       isReply: false,
+      isEdit: true,
     });
   });
 

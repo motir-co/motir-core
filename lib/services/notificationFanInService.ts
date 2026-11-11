@@ -505,7 +505,9 @@ export const notificationFanInService = {
       if (!project) return null;
 
       const participants: string[] = [];
-      if (event.isReply) {
+      // An edit tells only the people it ADDED: the thread heard about this reply when
+      // it was posted, so its participants get nothing further (MOTIR-10925).
+      if (event.isReply && !event.isEdit) {
         const root = await pageStoreFor(tx).findPageComment(event.threadRootCommentId);
         if (root) participants.push(root.authorId);
         // Oldest first; only the replies BEFORE this one are its thread's people,

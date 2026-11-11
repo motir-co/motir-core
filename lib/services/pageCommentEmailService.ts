@@ -77,7 +77,9 @@ export const pageCommentEmailService = {
       const page = await pageRepository.findById(comment.pageId, tx);
       if (!page) return null;
       const participants: string[] = [];
-      if (input.isReply) {
+      // An edit tells only the people it ADDED: the thread heard about this reply when
+      // it was posted, so its participants get nothing further (MOTIR-10925).
+      if (input.isReply && !input.isEdit) {
         const root = await pageStoreFor(tx).findPageComment(input.threadRootCommentId);
         if (!root) return null;
         participants.push(root.authorId);

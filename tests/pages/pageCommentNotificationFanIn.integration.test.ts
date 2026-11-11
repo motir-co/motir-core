@@ -242,6 +242,36 @@ describe('fanInPageComment — a reply', () => {
     // A keeps the one row it already had for this comment.
     expect(rows.filter((r) => r.recipientUserId === t.a.userId)).toHaveLength(1);
   });
+
+  it('an edit never tells the thread again, even someone who turned replies on since', async () => {
+    const t = await makeTenant();
+    const { root } = await startThread(t, t.a, 'Root');
+    await notificationPreferencesService.setPreference(t.a.userId, {
+      eventType: 'commented',
+      channel: 'in_app',
+      enabled: false,
+    });
+    const { row, event } = await reply(t, t.b, root.id, 'Hello');
+    expect(await notificationFanInService.fanInPageComment(event)).toEqual({ writtenUserIds: [] });
+    await notificationPreferencesService.setPreference(t.a.userId, {
+      eventType: 'commented',
+      channel: 'in_app',
+      enabled: true,
+    });
+
+    await pageCommentsService.editPageCommentBody(t.b, {
+      ...on(t),
+      commentId: row.id,
+      bodyMd: `Hello ${token(t.c)}`,
+    });
+    const refire = lastEvent();
+    expect(refire).toMatchObject({ isReply: true, isEdit: true, mentionedUserIds: [t.c.userId] });
+
+    expect(await notificationFanInService.fanInPageComment(refire)).toEqual({
+      writtenUserIds: [t.c.userId],
+    });
+    expect((await rowsFor(row.id)).map((r) => r.recipientUserId)).toEqual([t.c.userId]);
+  });
 });
 
 describe('fanInPageComment — exclusions and gates', () => {

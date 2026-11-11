@@ -274,7 +274,7 @@ describe('pageCommentEmailService.fanOut — idempotency and races', () => {
     expect(sends(from).map((s) => s.idempotencyKey)).toEqual(first);
   });
 
-  it('an edit re-fire on a reply mails only the added person new; the thread’s keys repeat', async () => {
+  it('an edit re-fire on a reply mails only the added person, never the thread again', async () => {
     const t = await makeTenant();
     const { root } = await thread(t, t.a, 'Root');
     const { row, event } = await reply(t, t.b, root.id, 'Hello');
@@ -292,9 +292,12 @@ describe('pageCommentEmailService.fanOut — idempotency and races', () => {
     expect(refire.mentionedUserIds).toEqual([t.c.userId]);
     from = captured.events.length;
     await pageCommentEmailService.fanOut(refire);
-    const keys = sends(from).map((s) => s.idempotencyKey);
-    // A's key is the one already sent, so the email.send dedup collapses it; C's is new.
-    expect(keys.filter((k) => !before.has(k))).toEqual([`page-comment:${row.id}:${t.c.userId}`]);
+    // The edit is marked, so the thread's earlier people are not recomputed at all:
+    // A gets no second send, whatever the email.send dedup horizon (MOTIR-10925).
+    expect(refire.isEdit).toBe(true);
+    expect(sends(from).map((s) => s.idempotencyKey)).toEqual([
+      `page-comment:${row.id}:${t.c.userId}`,
+    ]);
   });
 
   it('a deleted comment, a missing thread root, a missing page and a vanished project send nothing', async () => {

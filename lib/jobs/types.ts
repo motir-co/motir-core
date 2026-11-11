@@ -131,6 +131,12 @@ export interface PageCommentCreatedData {
   /** Validated mentionable ids; on an edit, ONLY the ids the edit added. */
   mentionedUserIds: string[];
   isReply: boolean;
+  /**
+   * True on an edit's re-fire. An edit tells ONLY the people it added: a
+   * consumer skips the thread's participants, so a late edit never re-sends a
+   * reply notice whatever its dedup horizon (MOTIR-10925).
+   */
+  isEdit: boolean;
 }
 
 /**
