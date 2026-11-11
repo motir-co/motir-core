@@ -71,8 +71,28 @@ vi.mock('next/navigation', () => ({
 
 // For the PageView block: the editor, the strip, the quick view and History's
 // list are not this card's; History's panel is a stand-in aside.
+// The live editor's stand-in records what it is handed (MOTIR-10901), so a
+// PageView case can see the roots it washes and answer their verdicts.
+const host = vi.hoisted(() => ({
+  props: null as null | {
+    inlineThreads?: { id: string; resolvedAt: string | null; anchor: unknown }[];
+    onInlineAnchorsResolved?: (
+      verdicts: Record<string, { from: number; to: number } | null>,
+    ) => void;
+    passageComment?: {
+      mentionCandidates: unknown[];
+      onSubmit: (
+        anchor: { bytes: string; quote: string },
+        bodyMd: string,
+      ) => Promise<string | null>;
+    };
+  },
+}));
 vi.mock('@/components/pages/PageEditorHost', () => ({
-  default: () => <div data-testid="editor-stub" />,
+  default: (props: NonNullable<typeof host.props>) => {
+    host.props = props;
+    return <div data-testid="editor-stub" />;
+  },
 }));
 vi.mock('@/app/(authed)/pages/[pageId]/_components/LinkedWorkItemsStrip', () => ({
   LinkedWorkItemsStrip: () => null,
@@ -273,7 +293,126 @@ describe('PageDiscussionPanel — reads', () => {
       list([thread(BO, [], { anchor: { bytes: 'AQID', quote: 'the rollout plan' } })]),
     );
     await mountPanel();
-    expect(screen.getByTestId('page-thread-quote').textContent).toBe('the rollout plan');
+    const quote = screen.getByTestId('page-thread-quote');
+    expect(quote.textContent).toBe('the rollout plan');
+    // Clamped to three lines visually; the whole quote names the slot.
+    expect(quote.querySelector('.line-clamp-3')?.textContent).toBe('the rollout plan');
+    expect(quote.getAttribute('aria-label')).toBe('Quoted passage: the rollout plan');
+  });
+});
+
+describe('PageDiscussionPanel — the inline presentation (MOTIR-10901)', () => {
+  const ANCHOR = { bytes: 'AQID', quote: 'the rollout plan' };
+
+  it('draws the Gone note under a gone thread’s quote, keeping its place and every action', async () => {
+    const gone = thread(ME, [comment(BO)], { anchor: ANCHOR });
+    const present = thread(BO, [], { anchor: { bytes: 'AQIE', quote: 'the budget' } });
+    const pageLevel = thread(BO);
+    client.listPageComments.mockResolvedValueOnce(list([pageLevel, gone, present]));
+    await mountPanel({ goneThreadIds: new Set([gone.id]) });
+
+    const articles = within(openList()).getAllByRole('article');
+    expect(articles.map((a) => a.getAttribute('data-thread-anchor'))).toEqual([
+      'page',
+      'gone',
+      'inline',
+    ]);
+    const row = articles[1]!;
+    const note = within(row).getByTestId('page-thread-gone-note');
+    expect(note.textContent).toBe('The passage is no longer in this page.');
+    expect(note.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(within(row).getByTestId('page-thread-quote').textContent).toBe('the rollout plan');
+    for (const name of ['Resolve', 'Reply', 'Edit', 'Delete']) {
+      expect(within(row).getAllByRole('button', { name }).length).toBeGreaterThan(0);
+    }
+    expect(within(articles[2]!).queryByTestId('page-thread-gone-note')).toBeNull();
+  });
+
+  it('draws no note for a thread with no answer yet — no set, or an id not in it', async () => {
+    const inline = thread(BO, [], { anchor: ANCHOR });
+    client.listPageComments.mockResolvedValueOnce(list([inline]));
+    await mountPanel();
+    expect(screen.queryByTestId('page-thread-gone-note')).toBeNull();
+    expect(threadOf(BO.name).getAttribute('data-thread-anchor')).toBe('inline');
+    cleanup();
+    client.listPageComments.mockResolvedValueOnce(list([inline]));
+    await mountPanel({ goneThreadIds: new Set(['someone-else']) });
+    expect(screen.queryByTestId('page-thread-gone-note')).toBeNull();
+  });
+
+  it('draws no note on a resolved thread, and the note returns when it is reopened still gone', async () => {
+    const root = thread(BO, [], { anchor: ANCHOR });
+    const onInlineThreadChange = vi.fn();
+    client.listPageComments
+      .mockResolvedValueOnce(list([root], { counts: { open: 1, resolved: 0 } }))
+      .mockResolvedValueOnce(list([], { counts: { open: 1, resolved: 0 } }));
+    await mountPanel({ goneThreadIds: new Set([root.id]), onInlineThreadChange });
+    await act(async () => fireEvent.click(switchButton('Resolved')));
+    await act(async () => fireEvent.click(switchButton('Open')));
+    const resolved = { ...root, resolvedAt: new Date().toISOString(), resolvedBy: ME };
+    client.resolvePageCommentThread.mockResolvedValueOnce(ok(resolved));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Resolve' })));
+    const { replies: _r, ...resolvedRoot } = resolved;
+    expect(onInlineThreadChange).toHaveBeenLastCalledWith(root.id, resolvedRoot);
+
+    await act(async () => fireEvent.click(switchButton('Resolved')));
+    const article = threadOf(BO.name);
+    expect(within(article).getByTestId('page-thread-quote')).toBeTruthy();
+    expect(within(article).getByText(/^Resolved by Ana Ruiz · /)).toBeTruthy();
+    expect(within(article).queryByTestId('page-thread-gone-note')).toBeNull();
+    expect(article.getAttribute('data-thread-anchor')).toBe('inline');
+
+    client.reopenPageCommentThread.mockResolvedValueOnce(ok(root));
+    await act(async () => fireEvent.click(within(article).getByRole('button', { name: 'Reopen' })));
+    const { replies: _r2, ...reopened } = root;
+    expect(onInlineThreadChange).toHaveBeenLastCalledWith(root.id, reopened);
+    await act(async () => fireEvent.click(switchButton('Open')));
+    expect(within(threadOf(BO.name)).getByTestId('page-thread-gone-note')).toBeTruthy();
+  });
+
+  it('takes the note away when the id leaves the set, with no re-read', async () => {
+    const root = thread(BO, [], { anchor: ANCHOR });
+    client.listPageComments.mockResolvedValueOnce(list([root]));
+    const utils = await mountPanel({ goneThreadIds: new Set([root.id]) });
+    expect(screen.getByTestId('page-thread-gone-note')).toBeTruthy();
+    utils.rerender(
+      <PageDiscussionPanel
+        pageId="page-1"
+        archived={false}
+        currentUserId={ME.id}
+        currentUserName={ME.name}
+        mentionCandidates={CANDIDATES}
+        onClose={onClose}
+        goneThreadIds={new Set()}
+      />,
+    );
+    expect(screen.queryByTestId('page-thread-gone-note')).toBeNull();
+    expect(screen.getByTestId('page-thread-quote')).toBeTruthy();
+    expect(client.listPageComments).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a deleted root with null, and nothing for a refused write', async () => {
+    const mine = thread(ME, [], { anchor: ANCHOR });
+    const onInlineThreadChange = vi.fn();
+    client.listPageComments.mockResolvedValueOnce(list([mine]));
+    await mountPanel({ onInlineThreadChange });
+    client.resolvePageCommentThread.mockResolvedValueOnce(refused(500, null));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Resolve' })));
+    expect(onInlineThreadChange).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    client.deletePageComment.mockResolvedValueOnce(refused(500, null));
+    await act(async () =>
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' })),
+    );
+    expect(onInlineThreadChange).not.toHaveBeenCalled();
+    client.deletePageComment.mockResolvedValueOnce(
+      ok({ commentId: mine.id, parentCommentId: null, replyCount: 0 }),
+    );
+    await act(async () =>
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' })),
+    );
+    expect(onInlineThreadChange).toHaveBeenCalledWith(mine.id, null);
   });
 });
 
@@ -991,6 +1130,100 @@ describe('PageView — the Discussion control', () => {
     expect(document.getElementById('page-discussion')).toBeNull();
   });
 
+  it('hands the live editor the anchored roots and keeps them in step with the panel (MOTIR-10901)', async () => {
+    const seeded = comment(BO, { anchor: { bytes: 'AQID', quote: 'the rollout plan' } });
+    const other = comment(ME, { anchor: { bytes: 'AQIE', quote: 'the budget' } });
+    const posted = thread(ME, [], { anchor: { bytes: 'AQIF', quote: 'a new passage' } });
+    const pageLevel = thread(BO);
+    host.props = null;
+    render(
+      <Suspense fallback={<p>frame</p>}>
+        <PageView
+          page={{ id: 'page-1', title: 'Plan', bodyState: 'AAA=', canEdit: false }}
+          viewerId={ME.id}
+          viewerName={ME.name}
+          mentionCandidates={CANDIDATES}
+          openThreadCount={2}
+          inlineThreads={[seeded, other]}
+          titleMaxLength={255}
+        />
+      </Suspense>,
+    );
+    await screen.findByTestId('editor-stub');
+    expect(host.props!.inlineThreads!.map((t) => t.id)).toEqual([seeded.id, other.id]);
+
+    // The editor answers: the first passage is gone, the second present.
+    await act(async () =>
+      host.props!.onInlineAnchorsResolved!({ [seeded.id]: null, [other.id]: { from: 1, to: 4 } }),
+    );
+    const seededThread = { ...seeded, replies: [] };
+    const otherThread = { ...other, replies: [] };
+    client.listPageComments.mockResolvedValue(
+      list([seededThread, otherThread, posted, pageLevel], { counts: { open: 4, resolved: 0 } }),
+    );
+    await act(async () => fireEvent.click(control()));
+    expect(
+      within(screen.getByTestId(`page-thread-${seeded.id}`)).getByTestId('page-thread-gone-note'),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId(`page-thread-${other.id}`)).queryByTestId('page-thread-gone-note'),
+    ).toBeNull();
+
+    // Resolving hands the editor the route's resolved timestamp.
+    const resolvedAt = new Date().toISOString();
+    client.resolvePageCommentThread.mockResolvedValueOnce(
+      ok({ ...otherThread, resolvedAt, resolvedBy: ME }),
+    );
+    await act(async () =>
+      fireEvent.click(
+        within(screen.getByTestId(`page-thread-${other.id}`)).getByRole('button', {
+          name: 'Resolve',
+        }),
+      ),
+    );
+    expect(host.props!.inlineThreads!.find((t) => t.id === other.id)!.resolvedAt).toBe(resolvedAt);
+
+    // A root the page's read did not carry is added; a page-level one is not.
+    client.resolvePageCommentThread.mockResolvedValueOnce(
+      ok({ ...posted, resolvedAt, resolvedBy: ME }),
+    );
+    await act(async () =>
+      fireEvent.click(
+        within(screen.getByTestId(`page-thread-${posted.id}`)).getByRole('button', {
+          name: 'Resolve',
+        }),
+      ),
+    );
+    client.resolvePageCommentThread.mockResolvedValueOnce(
+      ok({ ...pageLevel, resolvedAt, resolvedBy: ME }),
+    );
+    await act(async () =>
+      fireEvent.click(
+        within(screen.getByTestId(`page-thread-${pageLevel.id}`)).getByRole('button', {
+          name: 'Resolve',
+        }),
+      ),
+    );
+    expect(host.props!.inlineThreads!.map((t) => t.id)).toEqual([seeded.id, other.id, posted.id]);
+
+    // Reopening clears it again.
+    client.listPageComments.mockResolvedValueOnce(
+      list([{ ...otherThread, resolvedAt, resolvedBy: ME }], { counts: { open: 2, resolved: 1 } }),
+    );
+    await act(async () => fireEvent.click(switchButton('Resolved')));
+    client.reopenPageCommentThread.mockResolvedValueOnce(ok(otherThread));
+    await act(async () =>
+      fireEvent.click(
+        within(screen.getByTestId(`page-thread-${other.id}`)).getByRole('button', {
+          name: 'Reopen',
+        }),
+      ),
+    );
+    expect(host.props!.inlineThreads!.find((t) => t.id === other.id)!.resolvedAt).toBeNull();
+    // Nothing here read the list again for any of it.
+    expect(client.listPageComments).toHaveBeenCalledTimes(2);
+  });
+
   it('hands an archived page no roster and the archive line', async () => {
     client.listPageComments.mockResolvedValue(
       list([], { capabilities: { canComment: false, canModerate: true } }),
@@ -1024,5 +1257,111 @@ describe('PageView — the Discussion control', () => {
     expect(
       await screen.findByText('This page is archived, so its discussion is read-only.'),
     ).toBeTruthy();
+  });
+});
+
+describe('PageView — comment on a passage (MOTIR-10900)', () => {
+  const PASSAGE = { bytes: 'AQIG', quote: 'the launch date' };
+
+  function mountView(over: { mayComment?: boolean; archived?: boolean; openThreadCount?: number }) {
+    client.listPageComments.mockResolvedValue(list([]));
+    host.props = null;
+    render(
+      <Suspense fallback={<p>frame</p>}>
+        <PageView
+          page={{
+            id: 'page-1',
+            title: 'Plan',
+            bodyState: 'AAA=',
+            canEdit: false,
+            ...(over.archived
+              ? {
+                  archived: {
+                    archivedAt: '2026-11-10T10:00:00.000Z',
+                    archivedBy: null,
+                    archiveRoot: null,
+                    canRestore: false,
+                    canDelete: false,
+                    subPageCount: 0,
+                  },
+                }
+              : {}),
+          }}
+          viewerId={ME.id}
+          viewerName={ME.name}
+          mentionCandidates={CANDIDATES}
+          mayComment={over.mayComment}
+          openThreadCount={over.openThreadCount ?? 0}
+          titleMaxLength={255}
+        />
+      </Suspense>,
+    );
+    return screen.findByTestId('editor-stub');
+  }
+  const submit = (bodyMd = 'When is it?') =>
+    act(() => host.props!.passageComment!.onSubmit(PASSAGE, bodyMd));
+
+  it('hands the editor no passage capability without comment:add, or on an archived page', async () => {
+    await mountView({});
+    expect(host.props!.passageComment).toBeUndefined();
+    cleanup();
+    await mountView({ mayComment: true, archived: true });
+    expect(host.props!.passageComment).toBeUndefined();
+  });
+
+  it('posts with the anchor, washes the new root and counts it while the panel is closed', async () => {
+    await mountView({ mayComment: true, openThreadCount: 1 });
+    expect(host.props!.passageComment!.mentionCandidates).toBe(CANDIDATES);
+    const posted = thread(ME, [], { anchor: PASSAGE });
+    client.createPageComment.mockResolvedValueOnce(ok({ ...posted, workItemRefs: {} }));
+    expect(await submit()).toBeNull();
+    expect(client.createPageComment).toHaveBeenCalledWith('page-1', 'When is it?', PASSAGE);
+    expect(host.props!.inlineThreads!.map((t) => t.id)).toEqual([posted.id]);
+    expect(screen.getByTestId('page-discussion-count').textContent).toBe('2');
+  });
+
+  it('puts the new thread on top of an open panel’s Open list, counted once', async () => {
+    await mountView({ mayComment: true });
+    const older = thread(BO);
+    client.listPageComments.mockResolvedValue(list([older], { counts: { open: 1, resolved: 0 } }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Discussion/ })));
+    await screen.findByTestId(`page-thread-${older.id}`);
+    const posted = thread(ME, [], { anchor: PASSAGE });
+    client.createPageComment.mockResolvedValueOnce(ok({ ...posted, workItemRefs: {} }));
+    expect(await submit()).toBeNull();
+    const items = within(screen.getByRole('list', { name: /open/i })).getAllByRole('listitem');
+    expect(within(items[0]!).getByTestId(`page-thread-${posted.id}`)).toBeTruthy();
+    expect(items).toHaveLength(2);
+    expect(screen.getByTestId('page-discussion-count').textContent).toBe('2');
+  });
+
+  it('answers each refusal with the composer’s own line and changes nothing', async () => {
+    await mountView({ mayComment: true });
+    const cases: [ReturnType<typeof refused>, string][] = [
+      [
+        refused(400, 'PAGE_COMMENT_ANCHOR_INVALID'),
+        'This passage can no longer be anchored. Select it again and comment.',
+      ],
+      [
+        refused(400, 'BAD_REQUEST'),
+        'This passage can no longer be anchored. Select it again and comment.',
+      ],
+      [
+        refused(409, 'PAGE_ARCHIVED'),
+        'This page was archived, so its discussion is now read-only.',
+      ],
+      [refused(400, 'PAGE_COMMENT_BODY_EMPTY'), "A comment can't be empty."],
+      [refused(403, null), "You don't have permission to do that."],
+      [
+        refused(0, 'NETWORK'),
+        'Couldn’t post your comment. Your text is still here, so you can try again.',
+      ],
+    ];
+    for (const [refusal, line] of cases) {
+      client.createPageComment.mockResolvedValueOnce(refusal);
+      expect(await submit()).toBe(line);
+    }
+    expect(host.props!.inlineThreads).toEqual([]);
+    expect(screen.queryByTestId('page-discussion-count')).toBeNull();
   });
 });

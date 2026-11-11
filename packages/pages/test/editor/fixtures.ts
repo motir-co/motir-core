@@ -110,6 +110,17 @@ export const MESSAGES: PageEditorMessages = {
     body: 'Someone archived it while you were editing.',
     reload: 'Reload page',
   },
+  passage: {
+    byAuthor: (name) => `Comment by ${name}`,
+    overlapCount: (count) => `${count} comments here`,
+  },
+  passageComment: {
+    action: 'Comment',
+    actionLabel: 'Comment on the selected text',
+    composerLabel: 'Comment on this passage',
+    close: 'Close',
+    quoteLabel: (quote) => `Quoted passage: ${quote}`,
+  },
 };
 
 /** The rejection the host raises for the save route's 413. */

@@ -16839,7 +16839,17 @@
         "replyDepth": "You can only reply to the first comment in a thread."
       },
       "readOnlyViewer": "You can read this discussion, but your role can’t comment on it.",
-      "readOnlyArchived": "This page is archived, so its discussion is read-only."
+      "readOnlyArchived": "This page is archived, so its discussion is read-only.",
+      "inline": {
+        "tooltipOne": "Comment by {name}",
+        "tooltipMany": "{count} comments here",
+        "quoteLabel": "Quoted passage: {quote}",
+        "gone": "The passage is no longer in this page.",
+        "action": "Comment",
+        "actionLabel": "Comment on the selected text",
+        "editorLabel": "Comment on this passage",
+        "anchorRefused": "This passage can no longer be anchored. Select it again and comment."
+      }
     },
     "archive": {
       "menuItem": "Archive…",

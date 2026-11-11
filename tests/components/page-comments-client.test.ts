@@ -44,6 +44,12 @@ describe('pageCommentsClient', () => {
     const cases: [() => Promise<unknown>, string, string, unknown][] = [
       [() => createPageComment('p', 'Hi'), '/api/pages/p/comments', 'POST', { bodyMd: 'Hi' }],
       [
+        () => createPageComment('p', 'On this', { bytes: 'AQI=', quote: 'the passage' }),
+        '/api/pages/p/comments',
+        'POST',
+        { bodyMd: 'On this', anchor: { bytes: 'AQI=', quote: 'the passage' } },
+      ],
+      [
         () => replyToPageComment('p', 'r', 'Yes'),
         '/api/pages/p/comments/r/replies',
         'POST',

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { CircleCheck, RotateCcw } from 'lucide-react';
+import { CircleCheck, RotateCcw, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
@@ -16,9 +16,17 @@ import { PageCommentItem } from './PageCommentItem';
 // the shipped reply rail, the reply composer at the rail's foot, the
 // write-failed line and the thread action (Resolve or Reopen).
 //
-// ⚠️ THE QUOTE SLOT is reserved for the inline-comment work and is drawn only
-// for a thread that carries an `anchor`. Every thread this story creates is
-// page-level (`anchor: null`), so for them it is not rendered at all.
+// ⚠️ THE QUOTE SLOT is drawn only for a thread that carries an `anchor` (an
+// inline thread, MOTIR-10867); a page-level thread draws none. Its text is
+// clamped to three lines, visually only — the whole quote stays in the DOM and
+// in the slot's accessible name (`design/pages/design-notes.md` § Commenting on
+// a passage, the Quote slot).
+//
+// ⚠️ THE GONE NOTE (MOTIR-10901) says the passage is no longer in the page. It is
+// drawn only when the page's editor ANSWERED that the passage resolves to
+// nothing (`gone`) and only on an unresolved thread — a resolved thread
+// highlights nothing, and "no answer yet" is not gone. `data-thread-anchor`
+// reads what the row shows: `page`, `inline` or `gone`.
 //
 // ⚠️ A RESOLVED THREAD READS UNTIL IT IS REOPENED: no Reply, Edit or Delete in
 // it — Reopen is its one action.
@@ -33,6 +41,11 @@ export interface PageCommentThreadProps {
   mentionCandidates: MentionCandidate[];
   /** The work items the page's threads link (the list read's `workItemRefs`). */
   workItemRefs: WorkItemRefMap;
+  /**
+   * The page's editor answered that this thread's passage resolves to nothing.
+   * Drawn as the Gone note only while the thread is unresolved.
+   */
+  gone?: boolean;
   /** A failed Resolve / Reopen, shown at the thread's foot. */
   error?: string | null;
   onReply: (bodyMd: string) => Promise<string | null>;
@@ -49,6 +62,7 @@ export function PageCommentThread({
   currentUserId,
   mentionCandidates,
   workItemRefs,
+  gone = false,
   error = null,
   onReply,
   onEdit,
@@ -70,21 +84,35 @@ export function PageCommentThread({
   }
 
   const rail = thread.replies.length > 0 || (writable && replying);
+  const showGone = thread.anchor !== null && gone && !resolved;
 
   return (
     <article
       aria-label={t('threadLabel', { name: thread.author.name })}
       data-testid={`page-thread-${thread.id}`}
+      data-thread-anchor={thread.anchor === null ? 'page' : showGone ? 'gone' : 'inline'}
       className="flex flex-col gap-3 border-b border-(--el-border-soft) py-4 last:border-b-0"
     >
       {resolved ? <ResolvedLine thread={thread} /> : null}
       {thread.anchor ? (
-        <blockquote
-          data-testid="page-thread-quote"
-          className="rounded-(--radius-control) border-l-2 border-(--el-border-strong) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y) text-[13px] text-(--el-text-secondary)"
-        >
-          {thread.anchor.quote}
-        </blockquote>
+        <div className="flex flex-col gap-1.5">
+          <blockquote
+            data-testid="page-thread-quote"
+            aria-label={t('inline.quoteLabel', { quote: thread.anchor.quote })}
+            className="rounded-(--radius-control) border-l-2 border-(--el-border-strong) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y) text-[13px] text-(--el-text-secondary)"
+          >
+            <span className="line-clamp-3">{thread.anchor.quote}</span>
+          </blockquote>
+          {showGone ? (
+            <p
+              data-testid="page-thread-gone-note"
+              className="flex items-center gap-1.5 text-[12.5px] text-(--el-text-secondary)"
+            >
+              <Unlink className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {t('inline.gone')}
+            </p>
+          ) : null}
+        </div>
       ) : null}
       <PageCommentItem
         comment={thread}

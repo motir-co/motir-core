@@ -8,8 +8,15 @@ import {
   PageEditorHost,
   openWorkItemPeek,
   renderPageWorkItemChip,
+  toInlineThreadViews,
 } from '@/components/pages/PageEditorHost';
-import { applyUpdate, emptyState, markdownToUpdate } from '@/lib/pages';
+import {
+  anchorFromSelection,
+  applyUpdate,
+  emptyState,
+  markdownToUpdate,
+  type PageCommentDto,
+} from '@/lib/pages';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 // The page editor host's MENTION binding (Story MOTIR-5747 · MOTIR-7574): the
@@ -252,5 +259,146 @@ describe('the picker searches the page’s project', () => {
     cleanup();
     await mount({ canEdit: false });
     expect(screen.queryByRole('toolbar')).toBeNull();
+  });
+});
+
+describe('the passage wash (MOTIR-10899)', () => {
+  const state = Buffer.from(BODY, 'base64');
+  // "See" — the first three characters of the first paragraph.
+  const anchor = anchorFromSelection(new Uint8Array(state), 1, 4)!;
+  const root = (over: Partial<PageCommentDto> = {}): PageCommentDto => ({
+    id: 'root-1',
+    pageId: 'page-1',
+    parentCommentId: null,
+    author: { id: 'u1', name: 'Ann Lee', image: null },
+    bodyMd: 'About this',
+    editedAt: null,
+    createdAt: '2026-11-10T10:00:00.000Z',
+    resolvedAt: null,
+    resolvedBy: null,
+    anchor: { bytes: Buffer.from(anchor.bytes).toString('base64'), quote: anchor.quote },
+    ...over,
+  });
+
+  it('maps every anchored root to the editor’s view, decoding the bytes, and drops page-level ones', () => {
+    const resolvedAt = '2026-11-10T11:00:00.000Z';
+    expect(
+      toInlineThreadViews([
+        root(),
+        root({ id: 'page-level', anchor: null }),
+        root({ id: 'r2', resolvedAt }),
+      ]),
+    ).toEqual([
+      { id: 'root-1', anchor: anchor.bytes, quote: 'See', authorName: 'Ann Lee', resolvedAt: null },
+      { id: 'r2', anchor: anchor.bytes, quote: 'See', authorName: 'Ann Lee', resolvedAt },
+    ]);
+  });
+
+  it('washes the passage in the live editor, reports its verdict and names the author in the tooltip', async () => {
+    const verdicts: unknown[] = [];
+    const onClick = vi.fn();
+    const { surface } = await mount({
+      inlineThreads: [root()],
+      onInlineAnchorsResolved: (v) => verdicts.push(v),
+      onInlineThreadClick: onClick,
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const wash = surface.querySelector<HTMLElement>('[data-wash-ids]')!;
+    expect(wash.textContent).toBe('See');
+    expect(verdicts.at(-1)).toEqual({ 'root-1': { from: 1, to: 4 } });
+    act(() => {
+      fireEvent.mouseOver(wash);
+    });
+    expect(screen.getByRole('tooltip').textContent).toBe('Comment by Ann Lee');
+    fireEvent.click(wash);
+    expect(onClick).toHaveBeenCalledWith('root-1');
+  });
+
+  it('draws no wash where the host is given no inline roots', async () => {
+    const { surface } = await mount({ canEdit: false });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(surface.querySelector('[data-wash-ids]')).toBeNull();
+  });
+});
+
+describe('comment on a passage (MOTIR-10900)', () => {
+  const frames = () =>
+    act(async () => {
+      for (let i = 0; i < 3; i += 1) await new Promise((r) => requestAnimationFrame(() => r(null)));
+    });
+
+  /** Select "See" — the first three characters of the body — as a reader's drag would. */
+  async function selectSee(surface: HTMLElement) {
+    const walker = document.createTreeWalker(surface, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node && !(node.textContent ?? '').startsWith('See')) node = walker.nextNode();
+    document.getSelection()!.setBaseAndExtent(node!, 0, node!, 3);
+    document.dispatchEvent(new Event('selectionchange'));
+    await frames();
+  }
+
+  afterEach(() => document.getSelection()?.removeAllRanges());
+
+  it('offers no action without the capability', async () => {
+    const { surface } = await mount({ canEdit: false });
+    await selectSee(surface);
+    expect(screen.queryByRole('button', { name: 'Comment on the selected text' })).toBeNull();
+  });
+
+  it('opens the shipped composer on the passage, posts with its anchor and closes on success', async () => {
+    const onSubmit = vi
+      .fn<(anchor: { bytes: string; quote: string }, bodyMd: string) => Promise<string | null>>()
+      .mockResolvedValueOnce('This passage can no longer be anchored. Select it again and comment.')
+      .mockResolvedValueOnce(null);
+    const { surface } = await mount({
+      canEdit: false,
+      passageComment: { mentionCandidates: [], onSubmit },
+    });
+    await selectSee(surface);
+    const action = screen.getByRole('button', { name: 'Comment on the selected text' });
+    expect(action.textContent).toBe('Comment');
+    fireEvent.click(action);
+    await frames();
+    const group = screen.getByRole('group', { name: 'Comment on this passage' });
+    expect(within(group).getByTestId('passage-composer-quote').textContent).toBe('See');
+    expect(within(group).getByRole('button', { name: 'Close' })).toBeTruthy();
+    const field = await within(group).findByRole('textbox', { name: 'Comment on this passage' });
+    await act(async () => {
+      (field as HTMLElement & { editor: Editor }).editor.commands.insertContent('Why this word?');
+    });
+    const submit = within(group).getByRole('button', { name: 'Comment' });
+    await act(async () => {
+      fireEvent.click(submit);
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const [anchor, bodyMd] = onSubmit.mock.calls[0]!;
+    expect(anchor.quote).toBe('See');
+    expect(bodyMd).toBe('Why this word?');
+    const state = new Uint8Array(Buffer.from(BODY, 'base64'));
+    expect(anchor.bytes).toBe(
+      Buffer.from(anchorFromSelection(state, 1, 4)!.bytes).toString('base64'),
+    );
+    // A refusal keeps the composer open with its line.
+    expect(within(group).getByRole('alert').textContent).toContain('can no longer be anchored');
+    await act(async () => {
+      fireEvent.click(submit);
+    });
+    expect(screen.queryByRole('group', { name: 'Comment on this passage' })).toBeNull();
+  });
+
+  it('closes on Cancel without posting', async () => {
+    const onSubmit = vi.fn();
+    const { surface } = await mount({ passageComment: { mentionCandidates: [], onSubmit } });
+    await selectSee(surface);
+    fireEvent.click(screen.getByRole('button', { name: 'Comment on the selected text' }));
+    await frames();
+    const group = screen.getByRole('group', { name: 'Comment on this passage' });
+    fireEvent.click(within(group).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('group', { name: 'Comment on this passage' })).toBeNull();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

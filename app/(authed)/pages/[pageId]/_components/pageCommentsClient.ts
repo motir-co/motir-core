@@ -102,12 +102,25 @@ export function listPageComments(
   return call(`${commentsPath(pageId)}?${params}`);
 }
 
-/** Start a page-level thread — the new thread, open, with no replies. */
+/** A passage to anchor a new thread to: the codec's bytes as base64, and its quote. */
+export interface PageCommentAnchorPayload {
+  readonly bytes: string;
+  readonly quote: string;
+}
+
+/**
+ * Start a thread — the new thread, open, with no replies. Page-level without an
+ * `anchor`; on a passage with one (MOTIR-10900).
+ */
 export function createPageComment(
   pageId: string,
   bodyMd: string,
+  anchor?: PageCommentAnchorPayload,
 ): Promise<PageCommentResult<WithWorkItemRefs<PageCommentThreadDto>>> {
-  return call(commentsPath(pageId), sendJson('POST', { bodyMd }));
+  return call(
+    commentsPath(pageId),
+    sendJson('POST', anchor === undefined ? { bodyMd } : { bodyMd, anchor }),
+  );
 }
 
 /** Reply to a thread's root — the new reply. */

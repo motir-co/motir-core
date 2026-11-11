@@ -65,7 +65,7 @@ const { PageTree } = await import('@/components/pages/tree/PageTree');
 const { PageBreadcrumb } = await import('@/components/pages/tree/PageBreadcrumb');
 const { PageSidebarLayout } = await import('@/components/pages/tree/PageSidebarLayout');
 const { foldersService } = await import('@/lib/services/foldersService');
-const { PAGE_TITLE_MAX_LENGTH } = await import('@/lib/pages');
+const { PAGE_COMMENT_THREADS_MAX_LIMIT, PAGE_TITLE_MAX_LENGTH } = await import('@/lib/pages');
 const { pagesService } = await import('@/lib/services/pagesService');
 const { pageCommentsService } = await import('@/lib/services/pageCommentsService');
 const { assignableMembersService } = await import('@/lib/services/assignableMembersService');
@@ -466,6 +466,7 @@ describe('/pages/<id> — the discussion’s server reads (MOTIR-10874)', () => 
     viewerName: string;
     mentionCandidates: { id: string; name: string; email: string }[];
     openThreadCount: number;
+    inlineThreads: { id: string; anchor: { bytes: string; quote: string }; replies?: unknown }[];
   };
 
   it('hands a member the roster and the open count; a viewer and an archived page no roster', async () => {
@@ -535,8 +536,67 @@ describe('/pages/<id> — the discussion’s server reads (MOTIR-10874)', () => 
       PageView,
     )!;
     expect(view.props.openThreadCount).toBe(0);
+    expect(view.props.inlineThreads).toEqual([]);
     expect(view.props.mentionCandidates).toEqual([]);
     expect(error).toHaveBeenCalledTimes(2);
+  });
+
+  it('hands down every OPEN anchored root, following the list past its first page (MOTIR-10899)', async () => {
+    const f = await makeFixture();
+    const projectId = f.manager.projectId;
+    const page = await pagesService.createPage(f.manager, { projectId, title: 'Runbook' });
+    const bytes = (n: number) => new Uint8Array([1, n, 2, 3]);
+    const anchored: string[] = [];
+    // More anchored threads than one page of the list holds, a page-level one,
+    // and a resolved anchored one.
+    for (let i = 0; i < PAGE_COMMENT_THREADS_MAX_LIMIT + 2; i += 1) {
+      const root = await pageCommentsService.postPageComment(f.manager, {
+        projectId,
+        pageId: page.id,
+        bodyMd: `Inline ${i}`,
+        anchor: { bytes: bytes(i), quote: `passage ${i}` },
+      });
+      anchored.push(root.id);
+    }
+    const pageLevel = await pageCommentsService.postPageComment(f.manager, {
+      projectId,
+      pageId: page.id,
+      bodyMd: 'About the page',
+    });
+    await pageCommentsService.postPageReply(f.manager, {
+      projectId,
+      pageId: page.id,
+      parentCommentId: anchored[0]!,
+      bodyMd: 'A reply',
+    });
+    const resolved = await pageCommentsService.postPageComment(f.manager, {
+      projectId,
+      pageId: page.id,
+      bodyMd: 'Settled',
+      anchor: { bytes: bytes(99), quote: 'settled passage' },
+    });
+    await pageCommentsService.resolvePageThread(f.manager, {
+      projectId,
+      pageId: page.id,
+      commentId: resolved.id,
+    });
+
+    reader.current = await readerAs(f, 'viewer', 'viewer');
+    const view = findFirst<DiscussionProps>(
+      await renderTree(AddressPage.default, params(page.id)),
+      PageView,
+    )!;
+    expect(view.props.openThreadCount).toBe(anchored.length + 1);
+    const ids = view.props.inlineThreads.map((t) => t.id);
+    expect([...ids].sort()).toEqual([...anchored].sort());
+    expect(ids).not.toContain(pageLevel.id);
+    const first = view.props.inlineThreads.find((t) => t.id === anchored[0])!;
+    expect(first.anchor).toEqual({
+      bytes: Buffer.from(bytes(0)).toString('base64'),
+      quote: 'passage 0',
+    });
+    // The roots travel without their replies.
+    expect(first.replies).toBeUndefined();
   });
 });
 

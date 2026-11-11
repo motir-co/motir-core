@@ -87,7 +87,33 @@ export interface PageDiscussionPanelProps {
   onClose: () => void;
   /** The open count changed — the Discussion control's chip follows it. */
   onOpenCountChange?: (count: number) => void;
+  /**
+   * The roots whose passage the page's editor answered GONE (MOTIR-10901). A set,
+   * not a map of booleans: a root with no entry has not been answered for (the
+   * editor is lazy, and the History column mounts none), which is not gone.
+   */
+  goneThreadIds?: ReadonlySet<string>;
+  /**
+   * A thread's resolution changed through this panel — Resolve and Reopen with
+   * the thread the route answered, a deleted root with `null` — so the page can
+   * keep the roots its editor washes in step. A refused write raises nothing.
+   */
+  onInlineThreadChange?: (rootId: string, thread: PageCommentDto | null) => void;
+  /**
+   * The latest thread started OUTSIDE the panel — on a passage, from the editor's
+   * Inline composer (MOTIR-10900). A new object is a new thread: it goes on top
+   * of Open and is counted. The one a panel mounts with is already in the read.
+   */
+  postedThread?: PostedPageThread | null;
 }
+
+/** A thread posted outside the panel, with the work items its body links. */
+export interface PostedPageThread {
+  readonly thread: PageCommentThreadDto;
+  readonly workItemRefs: WorkItemRefMap;
+}
+
+const NO_GONE: ReadonlySet<string> = new Set();
 
 /** The key a list is ordered by, newest first. */
 function sortKey(thread: PageCommentThreadDto): string {
@@ -146,6 +172,9 @@ export function PageDiscussionPanel({
   mentionCandidates,
   onClose,
   onOpenCountChange,
+  goneThreadIds = NO_GONE,
+  onInlineThreadChange,
+  postedThread = null,
 }: PageDiscussionPanelProps) {
   const t = useTranslations('pages.discussion');
   const tc = useTranslations('comments');
@@ -343,6 +372,24 @@ export function PageDiscussionPanel({
       return { ...prev, [id]: message };
     });
 
+  // A thread posted on a passage while the panel is open (MOTIR-10900): on top of
+  // Open, as the panel's own composer places one, and counted. Adjusted during
+  // render from the prop's identity, so it lands in the same commit as the wash.
+  const [seenPosted, setSeenPosted] = useState(postedThread);
+  if (postedThread !== seenPosted) {
+    setSeenPosted(postedThread);
+    if (postedThread !== null) {
+      const { thread, workItemRefs: refs } = postedThread;
+      setLists((prev) =>
+        prev.open.threads.some((item) => item.id === thread.id)
+          ? prev
+          : { ...prev, open: { ...prev.open, threads: [thread, ...prev.open.threads] } },
+      );
+      adjustCounts({ open: 1 });
+      mergeRefs(refs);
+    }
+  }
+
   async function submitComment(bodyMd: string): Promise<string | null> {
     const res = await createPageComment(pageId, bodyMd);
     if (!res.ok) return failure(res, 'post');
@@ -406,6 +453,7 @@ export function PageDiscussionPanel({
       setLists((prev) => mapThread(prev, thread.id, () => null));
       adjustCounts({ open: -1 });
       setThreadError(thread.id, null);
+      onInlineThreadChange?.(thread.id, null);
     } else {
       setLists((prev) =>
         mapThread(prev, thread.id, (item) => ({
@@ -447,6 +495,8 @@ export function PageDiscussionPanel({
     if (!isLatest(key, seq)) return;
     if (res.ok) {
       setLists((prev) => placeThread(prev, res.data));
+      const { replies: _replies, ...root } = res.data;
+      onInlineThreadChange?.(thread.id, root);
       return;
     }
     // Refused: back where it was, with the reason at its foot.
@@ -553,6 +603,7 @@ export function PageDiscussionPanel({
                       currentUserId={currentUserId}
                       mentionCandidates={mentionCandidates}
                       workItemRefs={workItemRefs}
+                      gone={goneThreadIds.has(thread.id)}
                       error={threadErrors[thread.id] ?? null}
                       onReply={(bodyMd) => submitReply(thread.id, bodyMd)}
                       onEdit={(commentId, bodyMd) => submitEdit(thread.id, commentId, bodyMd)}

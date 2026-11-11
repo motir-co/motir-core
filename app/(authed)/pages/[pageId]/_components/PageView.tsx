@@ -1,25 +1,32 @@
 'use client';
 
-import { lazy, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { History, Info, MessageSquare, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
 import { useToast } from '@/components/ui/Toast';
-import type { PageSaveStatus } from '@/components/pages/PageEditorHost';
+import type {
+  PageAnchorVerdicts,
+  PageEditorHostPassageComment,
+  PagePassage,
+  PageSaveStatus,
+} from '@/components/pages/PageEditorHost';
 import {
   PageArchivedBanner,
   type ArchivedPageInfo,
 } from '@/components/pages/archive/PageArchivedBanner';
 import type { RestorePageVersionResultDto } from '@/lib/dto/pages';
+import type { PageCommentDto } from '@/lib/pages';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { IssueQuickViewController } from '@/app/(authed)/items/_components/IssueQuickViewController';
 import { cn } from '@/lib/utils/cn';
 import { HistoryNotice, PageHistoryPanel } from './PageHistoryPanel';
 import { LinkedWorkItemsStrip } from './LinkedWorkItemsStrip';
 import { PageActionsMenu } from './PageActionsMenu';
-import { PageDiscussionPanel } from './PageDiscussionPanel';
+import { PageDiscussionPanel, type PostedPageThread } from './PageDiscussionPanel';
+import { createPageComment, type PageCommentRefusal } from './pageCommentsClient';
 import { PageVersionRestore, type RestoreRefusal } from './PageVersionRestore';
 import { PageVersionView } from './PageVersionView';
 
@@ -75,8 +82,19 @@ export interface PageViewProps {
    * members, handed only to a reader who holds `comment:add` on a live page.
    */
   mentionCandidates?: MentionCandidate[];
+  /**
+   * `comment:add` on a LIVE page (MOTIR-10900) — the editor offers the Selection
+   * action only when it is set; otherwise no action is drawn, never a disabled one.
+   */
+  mayComment?: boolean;
   /** Open threads on the page, read on the server, for the Discussion control's chip. */
   openThreadCount?: number;
+  /**
+   * The page's open ANCHORED roots, read on the server (MOTIR-10899) — handed to
+   * the LIVE editor only, which washes each one's passage. The History column's
+   * version is given none, so it draws no wash.
+   */
+  inlineThreads?: PageCommentDto[];
   /** `PAGE_TITLE_MAX_LENGTH`, handed down so this client file imports no package. */
   titleMaxLength: number;
 }
@@ -90,6 +108,9 @@ const TITLE_CLASS = 'block w-full font-serif text-2xl leading-8 font-semibold te
 /** No roster: the reader holds no `comment:add` here, or the page is archived. */
 const EMPTY_ROSTER: MentionCandidate[] = [];
 
+/** No anchored threads on the page. */
+const NO_INLINE_THREADS: PageCommentDto[] = [];
+
 type RenameError = { kind: 'tooLong'; limit: number } | { kind: 'failed' } | null;
 
 export function PageView({
@@ -97,7 +118,9 @@ export function PageView({
   viewerId,
   viewerName = '',
   mentionCandidates = EMPTY_ROSTER,
+  mayComment = false,
   openThreadCount = 0,
+  inlineThreads = NO_INLINE_THREADS,
   titleMaxLength,
 }: PageViewProps) {
   const t = useTranslations('pages');
@@ -146,6 +169,83 @@ export function PageView({
   // is owned here, seeded by the server's read, so the panel's writes move it.
   const [discussionOpen, setDiscussionOpen] = useState(false);
   const [openCount, setOpenCount] = useState(openThreadCount);
+
+  // ── Inline threads (Story MOTIR-10867 · MOTIR-10899 · MOTIR-10901) ────────
+  // The ONE list of anchored roots the live editor washes, owned here because
+  // this view is the nearest owner of both the editor and the panel: seeded from
+  // the server's read, kept in step with it, and changed by the panel's reports
+  // (an upsert by id; a deleted root, or one with no anchor, leaves the list).
+  // The editor answers each root's verdict after a pass; a root answered `null`
+  // is gone, and a root with no answer yet is NOT — the editor is lazy, and the
+  // History column's version is handed no roots at all.
+  const [seededThreads, setSeededThreads] = useState(inlineThreads);
+  const [inlineRoots, setInlineRoots] = useState<PageCommentDto[]>(inlineThreads);
+  if (seededThreads !== inlineThreads) {
+    setSeededThreads(inlineThreads);
+    setInlineRoots(inlineThreads);
+  }
+  const [verdicts, setVerdicts] = useState<PageAnchorVerdicts>({});
+  const goneThreadIds = useMemo(
+    () =>
+      new Set(
+        Object.entries(verdicts)
+          .filter(([, range]) => range === null)
+          .map(([id]) => id),
+      ),
+    [verdicts],
+  );
+  const onInlineThreadChange = useCallback((rootId: string, thread: PageCommentDto | null) => {
+    setInlineRoots((prev) => {
+      const rest = prev.filter((root) => root.id !== rootId);
+      if (thread === null || thread.anchor === null) return rest;
+      const at = prev.findIndex((root) => root.id === rootId);
+      if (at < 0) return [...prev, thread];
+      return prev.map((root) => (root.id === rootId ? thread : root));
+    });
+  }, []);
+
+  // ── Comment on a passage (MOTIR-10900) ────────────────────────────────────
+  // The editor's Inline composer posts through here: the thread joins the roots
+  // the editor washes at once, the Discussion count moves, and an open panel puts
+  // it on top of Open. A refusal is the composer's own line, its words kept.
+  const tDiscussion = useTranslations('pages.discussion');
+  const tComments = useTranslations('comments');
+  const [postedThread, setPostedThread] = useState<PostedPageThread | null>(null);
+  const passageRefusal = useCallback(
+    (refusal: PageCommentRefusal): string => {
+      switch (refusal.code) {
+        case 'PAGE_COMMENT_ANCHOR_INVALID':
+        case 'BAD_REQUEST':
+          return tDiscussion('inline.anchorRefused');
+        case 'PAGE_ARCHIVED':
+          return tDiscussion('writeFailed.archived');
+        case 'PAGE_COMMENT_BODY_EMPTY':
+          return tComments('errors.empty');
+      }
+      if (refusal.status === 403) return tComments('errors.forbidden');
+      return tDiscussion('writeFailed.post');
+    },
+    [tDiscussion, tComments],
+  );
+  const onPassageSubmit = useCallback(
+    async (anchor: PagePassage, bodyMd: string): Promise<string | null> => {
+      const res = await createPageComment(page.id, bodyMd, anchor);
+      if (!res.ok) return passageRefusal(res);
+      const { workItemRefs: refs, ...thread } = res.data;
+      const { replies: _replies, ...root } = thread;
+      onInlineThreadChange(root.id, root);
+      // An open panel counts the thread it is handed; a closed one is not there to.
+      if (!discussionOpen) setOpenCount((count) => count + 1);
+      setPostedThread({ thread, workItemRefs: refs });
+      return null;
+    },
+    [page.id, passageRefusal, onInlineThreadChange, discussionOpen],
+  );
+  const passageComment = useMemo<PageEditorHostPassageComment | undefined>(
+    () =>
+      mayComment && !page.archived ? { mentionCandidates, onSubmit: onPassageSubmit } : undefined,
+    [mayComment, page.archived, mentionCandidates, onPassageSubmit],
+  );
 
   /** History closed, with its compare and notices — focus is the caller's. */
   const resetHistory = useCallback(() => {
@@ -375,6 +475,9 @@ export function PageView({
               onSaveStatusChange={setSaveStatus}
               projectId={page.projectId}
               workItemRefs={page.workItemRefs}
+              inlineThreads={inlineRoots}
+              onInlineAnchorsResolved={setVerdicts}
+              passageComment={passageComment}
             />
           </div>
           {comparing ? (
@@ -456,6 +559,9 @@ export function PageView({
           mentionCandidates={archived ? EMPTY_ROSTER : mentionCandidates}
           onClose={closeDiscussion}
           onOpenCountChange={setOpenCount}
+          goneThreadIds={goneThreadIds}
+          onInlineThreadChange={onInlineThreadChange}
+          postedThread={postedThread}
         />
       ) : null}
       {/* A chip's click opens the item's quick-view peek (`?peek=<key>`), as it

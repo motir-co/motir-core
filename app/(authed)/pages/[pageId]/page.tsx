@@ -5,7 +5,12 @@ import { getTranslations } from 'next-intl/server';
 import { memberPageContext, pageMembers, pageScope } from '@/lib/pages/projectPageContext';
 import { pageCommentsService } from '@/lib/services/pageCommentsService';
 import { pagesService } from '@/lib/services/pagesService';
-import { PAGE_TITLE_MAX_LENGTH, PageNotFoundError } from '@/lib/pages';
+import {
+  PAGE_COMMENT_THREADS_MAX_LIMIT,
+  PAGE_TITLE_MAX_LENGTH,
+  PageNotFoundError,
+  type PageCommentDto,
+} from '@/lib/pages';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { PageDto, PageTrailDto, PageTreeLevelDto } from '@/lib/dto/pages';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -134,24 +139,47 @@ async function loadSubPageCount(pageId: string): Promise<number> {
   }
 }
 
+/** The open threads' read: the Discussion chip's count and the anchored roots. */
+interface InlineThreadsRead {
+  openCount: number;
+  /** Every OPEN root carrying an anchor, without its replies — the Passage wash's input. */
+  inlineThreads: PageCommentDto[];
+}
+
 /**
- * The page's OPEN thread count for the Discussion control's chip (MOTIR-10874) —
- * `0` when it cannot be read, which costs the chip, not the page. The panel reads
- * its own lists when it opens.
+ * The page's OPEN threads, read on the server (MOTIR-10874 · MOTIR-10899): the
+ * count for the Discussion control's chip, and every anchored root for the
+ * Passage wash, so a passage is washed on load without the panel being opened.
+ * The list is followed to the end of its cursor — a highlight must not be missing
+ * because its thread fell past the first page. A failed read costs the chip and
+ * the washes, never the page. The panel reads its own lists when it opens.
  */
-async function loadOpenThreadCount(pageId: string): Promise<number> {
+async function loadInlineThreads(pageId: string): Promise<InlineThreadsRead> {
   const scope = await loadScope();
   try {
-    const read = await pageCommentsService.listPageThreads(scope.service, {
-      projectId: scope.projectId,
-      pageId,
-      status: 'open',
-      limit: 1,
-    });
-    return read.counts.open;
+    let openCount = 0;
+    const inlineThreads: PageCommentDto[] = [];
+    let cursor: string | undefined;
+    do {
+      const read = await pageCommentsService.listPageThreads(scope.service, {
+        projectId: scope.projectId,
+        pageId,
+        status: 'open',
+        cursor,
+        limit: PAGE_COMMENT_THREADS_MAX_LIMIT,
+      });
+      openCount = read.counts.open;
+      for (const thread of read.threads) {
+        if (thread.anchor === null) continue;
+        const { replies: _replies, ...root } = thread;
+        inlineThreads.push(root);
+      }
+      cursor = read.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    return { openCount, inlineThreads };
   } catch (err) {
-    console.error('[pages] the open discussion count could not be read', err);
-    return 0;
+    console.error('[pages] the open discussion could not be read', err);
+    return { openCount: 0, inlineThreads: [] };
   }
 }
 
@@ -220,10 +248,12 @@ export default async function PageAtItsAddress({ params }: Params) {
   // root instead, and a live page needs no count until someone asks to archive it.
   const archivedRoot =
     page.archivedAt !== null && (page.archiveRoot === null || page.archiveRoot.id === page.id);
-  const [subPageCount, openThreadCount, mentionCandidates] = await Promise.all([
+  // `comment:add` on a LIVE page: the roster, and the editor's Selection action (MOTIR-10900).
+  const mayComment = page.archivedAt === null && held.has('comment:add');
+  const [subPageCount, openThreads, mentionCandidates] = await Promise.all([
     archivedRoot ? loadSubPageCount(page.id) : 0,
-    loadOpenThreadCount(page.id),
-    loadMentionRoster(page.archivedAt === null && held.has('comment:add')),
+    loadInlineThreads(page.id),
+    loadMentionRoster(mayComment),
   ]);
 
   return (
@@ -250,7 +280,9 @@ export default async function PageAtItsAddress({ params }: Params) {
           viewerId={viewerId}
           viewerName={context.actorName ?? ''}
           mentionCandidates={mentionCandidates}
-          openThreadCount={openThreadCount}
+          mayComment={mayComment}
+          openThreadCount={openThreads.openCount}
+          inlineThreads={openThreads.inlineThreads}
           page={{
             id: page.id,
             title: page.title,
