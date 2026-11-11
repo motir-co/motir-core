@@ -9,8 +9,21 @@
 # validate job runs on every pull request.
 #
 # The build VM runs in the account's DEFAULT VPC unless `subnet_id` names one.
-# Packer creates its own temporary key pair and security group, and removes
-# both, but it does not create a VPC or a subnet.
+# With `security_group_id` given, Packer creates no security group; without it,
+# Packer creates a temporary one and removes it. It always creates a temporary
+# key pair, tagged with `run_tags`, and it never creates a VPC or a subnet.
+#
+# THE BUILD TAG (MOTIR-10909). The services-account build role (motir-infra's
+# `motir-ami-build`, MOTIR-10910) may create a resource only when the create
+# itself carries `motir-shard = motir-ami-build`, and may act only on resources
+# that carry it. So the tag is written AT CREATE, never after:
+#   - `run_tags`        -> RunInstances' instance and network interface, the
+#                          temporary key pair, and CreateImage's image and its
+#                          snapshots (Packer attaches the run tags to the AMI
+#                          unless `skip_ami_run_tags` is set, which it is not);
+#   - `run_volume_tags` -> RunInstances' volumes.
+# It is deliberately NOT in `tags` or `snapshot_tags`: Packer applies those with
+# a later CreateTags, which the role allows for every key except the build tag's.
 
 packer {
   required_plugins {
@@ -122,6 +135,16 @@ variable "subnet_id" {
   description = "The subnet the build VM runs in. Empty: the account's default VPC."
 }
 
+variable "security_group_id" {
+  type        = string
+  default     = ""
+  description = "The security group the build VM runs in; it must admit SSH and belong to subnet_id's VPC. Empty: Packer creates a temporary one."
+  validation {
+    condition     = var.security_group_id == "" || can(regex("^sg-[0-9a-f]+$", var.security_group_id))
+    error_message = "The security_group_id must be empty or a security group id (sg-...)."
+  }
+}
+
 # Canonical's own public parameter: the latest Ubuntu 24.04 amd64 gp3 AMI at
 # build time. No AMI id is written down anywhere; the one used is recorded in
 # the BaseAmi tag.
@@ -131,6 +154,9 @@ data "amazon-parameterstore" "ubuntu_noble" {
 }
 
 locals {
+  # The tag the build role keys on — motir-infra's BuildTagKey / BuildTagValue
+  # stack outputs. See THE BUILD TAG at the top.
+  build_tag = { "motir-shard" = "motir-ami-build" }
   timestamp = formatdate("YYYYMMDDhhmm", timestamp())
   ami_name  = "motir-ci-runner-${var.runner_version}-${local.timestamp}-${substr(var.git_sha, 0, 7)}"
   tags = {
@@ -149,6 +175,10 @@ source "amazon-ebs" "runner" {
   subnet_id     = var.subnet_id
   ssh_username  = "ubuntu"
 
+  # Given: Packer launches into it and creates no group. Empty: Packer creates
+  # a temporary group (an account whose role may create one).
+  security_group_id = var.security_group_id
+
   temporary_key_pair_type = "ed25519"
 
   ami_name        = local.ami_name
@@ -164,9 +194,11 @@ source "amazon-ebs" "runner" {
   # Left unencrypted so it can be shared with member accounts; it holds no secret.
   encrypt_boot = false
 
-  tags          = local.tags
-  snapshot_tags = local.tags
-  run_tags      = { Name = "packer-${local.ami_name}" }
+  # The build tag only at create (run_tags, run_volume_tags); see THE BUILD TAG.
+  tags            = local.tags
+  snapshot_tags   = local.tags
+  run_tags        = merge(local.build_tag, { Name = "packer-${local.ami_name}" })
+  run_volume_tags = merge(local.build_tag, { Name = "packer-${local.ami_name}" })
 
   metadata_options {
     http_endpoint               = "enabled"

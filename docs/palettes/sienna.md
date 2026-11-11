@@ -1,10 +1,12 @@
 # Palette — Sienna (`data-palette="sienna"`)
 
 > Mistral AI's **flame-orange** — the whole Mediterranean palette. Registered in
-> [`lib/theme/palettes.ts`](../../lib/theme/palettes.ts); its override lives in
-> the **AXIS 1 (COLOUR)** section of
-> [`app/globals.css`](../../app/globals.css) as the `[data-palette='sienna']`
-> block (light) + a `[data-palette='sienna'][data-theme='dark']` companion.
+> [`packages/design-system/src/theme/palettes.ts`](../../packages/design-system/src/theme/palettes.ts);
+> its override lives in the **AXIS 1 (COLOUR)** section of
+> [`packages/design-system/theme.css`](../../packages/design-system/theme.css) (which
+> `app/globals.css` imports) as the `[data-palette='sienna']` light block plus a dark
+> companion selected by both `[data-theme='dark'] [data-palette='sienna']:not([data-theme])`
+> and `[data-palette='sienna'][data-theme='dark']`.
 
 **Tagline:** Warm and vivid — Mistral flame-orange over the Mediterranean
 warm-cream surfaces; dark labels on the flame.
