@@ -582,21 +582,32 @@ function recordOf(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+/** Why an anonymous read of an image's config failed — {@link ImageLabelsRead}'s reasons. */
+type ImageReadFailure = Exclude<ImageLabelsRead, { ok: true }>;
+
+/** What {@link readImageConfig} answered: the config and the digests on the way to it. */
+type ImageConfigRead =
+  | {
+      readonly ok: true;
+      /** The digest the registry answered for the reference itself — an index's
+       *  own digest for a multi-platform push, which is what a digest pin names. */
+      readonly referenceDigest: string | null;
+      /** The digest of the platform manifest the config was read from. */
+      readonly digest: string | null;
+      readonly config: Record<string, unknown>;
+    }
+  | ImageReadFailure;
+
 /**
- * The LABELS of a PUBLIC image's config, read ANONYMOUSLY for one platform
- * (MOTIR-10290) — how the fleet learns what the runner image it pins says about
- * itself (`co.motir.ci-runner.tools`), with no second copy of that list anywhere.
- *
  * The standard three reads behind the challenge → anonymous-token dance
  * {@link probeImagePull} makes: the manifest at the reference (an INDEX for a
  * multi-platform push, resolved to `platform`'s entry), that platform's
- * manifest, and its config blob. NEVER THROWS: every failure is an answer the
- * caller shows as "could not read the image", never as an image with no labels.
+ * manifest, and its config blob. NEVER THROWS.
  */
-export async function readImageLabels(
+async function readImageConfig(
   image: string,
-  platform: { os: string; architecture: string } = { os: 'linux', architecture: 'amd64' },
-): Promise<ImageLabelsRead> {
+  platform: { os: string; architecture: string },
+): Promise<ImageConfigRead> {
   const parsed = parseImageReference(image);
   if (!parsed) {
     return {
@@ -606,7 +617,7 @@ export async function readImageLabels(
       detail: 'the image reference could not be parsed as [registry/]repository[:tag|@digest]',
     };
   }
-  const fail = (reason: Exclude<ImageLabelsRead, { ok: true }>['reason'], detail: string) =>
+  const fail = (reason: ImageReadFailure['reason'], detail: string) =>
     ({ ok: false, reference: image, reason, detail }) as const;
   const base = `https://${parsed.registry}/v2/${parsed.repository}`;
   let authorization: string | null = null;
@@ -636,7 +647,8 @@ export async function readImageLabels(
   try {
     let res = await get(`${base}/manifests/${parsed.reference}`, MANIFEST_ACCEPT);
     if (!res.ok) return refusal(res, 'manifest');
-    let digest = res.headers.get('docker-content-digest');
+    const referenceDigest = res.headers.get('docker-content-digest');
+    let digest = referenceDigest;
     let manifest = recordOf(await res.json().catch(() => null));
     if (!manifest) return fail('malformed', 'the manifest was not a JSON object');
     const mediaType = String(manifest['mediaType'] ?? res.headers.get('content-type') ?? '');
@@ -664,13 +676,68 @@ export async function readImageLabels(
     if (!res.ok) return refusal(res, 'config blob');
     const config = recordOf(await res.json().catch(() => null));
     if (!config) return fail('malformed', 'the config blob was not a JSON object');
-    const raw = recordOf(recordOf(config['config'])?.['Labels']) ?? {};
-    const labels: Record<string, string> = {};
-    for (const [key, value] of Object.entries(raw)) {
-      if (typeof value === 'string') labels[key] = value;
-    }
-    return { ok: true, reference: image, digest, labels };
+    return { ok: true, referenceDigest, digest, config };
   } catch (err) {
     return fail('unreachable', `the registry could not be reached: ${detailOf(err)}`);
   }
+}
+
+/**
+ * The LABELS of a PUBLIC image's config, read ANONYMOUSLY for one platform
+ * (MOTIR-10290) — how the fleet learns what the runner image it pins says about
+ * itself (`co.motir.ci-runner.tools`), with no second copy of that list anywhere.
+ *
+ * The three reads of {@link readImageConfig}. NEVER THROWS: every failure is an
+ * answer the caller shows as "could not read the image", never as an image with
+ * no labels.
+ */
+export async function readImageLabels(
+  image: string,
+  platform: { os: string; architecture: string } = { os: 'linux', architecture: 'amd64' },
+): Promise<ImageLabelsRead> {
+  const read = await readImageConfig(image, platform);
+  if (!read.ok) return read;
+  const raw = recordOf(recordOf(read.config['config'])?.['Labels']) ?? {};
+  const labels: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === 'string') labels[key] = value;
+  }
+  return { ok: true, reference: image, digest: read.digest, labels };
+}
+
+/** What {@link readImageCreated} answered: what a reference resolves to and when it was built. */
+export type ImageCreatedRead =
+  | {
+      readonly ok: true;
+      readonly reference: string;
+      /** The digest the reference resolves to, as a digest pin of it would name it
+       *  (an index's own digest for a multi-platform push); null when the registry
+       *  sent no `Docker-Content-Digest`. */
+      readonly digest: string | null;
+      /** The config's `created` time, as ISO 8601; null when it records none. */
+      readonly createdAt: string | null;
+    }
+  | ImageReadFailure;
+
+/**
+ * Which image a PUBLIC reference — typically a TAG such as `:main` — resolves to
+ * now, and when that image was built (MOTIR-10882): the digest the registry
+ * answers for the reference, and the `created` time of its config. How the daily
+ * health check tells that the hosted-agent pin has fallen behind the newest
+ * build. The three reads of {@link readImageConfig}; NEVER THROWS.
+ */
+export async function readImageCreated(
+  image: string,
+  platform: { os: string; architecture: string } = { os: 'linux', architecture: 'amd64' },
+): Promise<ImageCreatedRead> {
+  const read = await readImageConfig(image, platform);
+  if (!read.ok) return read;
+  const created = read.config['created'];
+  const time = typeof created === 'string' ? Date.parse(created) : Number.NaN;
+  return {
+    ok: true,
+    reference: image,
+    digest: read.referenceDigest,
+    createdAt: Number.isNaN(time) ? null : new Date(time).toISOString(),
+  };
 }

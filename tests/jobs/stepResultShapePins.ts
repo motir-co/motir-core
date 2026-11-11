@@ -367,6 +367,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ detail: string; reference: string; verdict: "indeterminate" } | { detail: string; reference: string; verdict: "unpullable" } | { detail: string; verdict: "not_applicable" } | { digest: null | string; reference: string; verdict: "bootable" }',
   },
+  // The hosted-agent image lag probe (MOTIR-10882): the pin judged against the
+  // newest `main` build the image lane published.
+  'hosted-agent-image-lag': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ checkedAt: string; detail: string; phase: "pin" | "registry"; reference: string; verdict: "indeterminate" } | { checkedAt: string; detail: string; verdict: "not_applicable" } | { checkedAt: string; lag: { behindHours: null | number; pinnedCreatedAt: null | string; unpinnedHours: number }; main: { createdAt: null | string; digest: string; reference: string }; pinned: string; verdict: "lagging" } | { checkedAt: string; lag: { behindHours: null | number; pinnedCreatedAt: null | string; unpinnedHours: number }; main: { createdAt: null | string; digest: string; reference: string }; pinned: string; verdict: "pending" } | { checkedAt: string; main: { createdAt: null | string; digest: string; reference: string }; pinned: string; verdict: "current" }',
+  },
   'purge-retained-organizations': {
     file: 'lib/jobs/definitions/organizationRetentionPurge.ts',
     shape:

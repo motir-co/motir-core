@@ -1,0 +1,75 @@
+# The HOSTED-AGENT PIN check (MOTIR-10882): the check of the pull request that
+# moves `infra/image-pins/motir-hosted-agent-image`, the one place production's
+# `MOTIR_HOSTED_AGENT_IMAGE` is written down.
+#
+# `hosted-agent-image.yml` proves an image from SOURCE before it publishes it,
+# and its `pin` job then opens a pull request naming the published digest. That
+# pull request changes no source, so this check proves the IMAGE IT NAMES:
+#
+#   - the file is one line naming ghcr.io/motir-co/motir-hosted-agent by digest;
+#   - the image pulls ANONYMOUSLY, with an empty Docker config, as an
+#     agent-runner VM pulls it (it has no instance profile and no registry
+#     credential — docs/decisions/hosted-agent-run.md §6);
+#   - the image lane's smoke test and offline provider probe pass against it.
+#
+# A person who edits the pin by hand (a rollback to an older digest, say) gets
+# the same proof.
+
+name: Hosted agent pin
+
+on:
+  pull_request:
+    paths:
+      - 'infra/image-pins/motir-hosted-agent-image'
+      - '.github/workflows/hosted-agent-pin.yml'
+
+concurrency:
+  group: hosted-agent-pin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hosted-agent-pin:
+    name: Prove the pinned image
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # No run on record — the lane is new (MOTIR-10882). It pulls one image and
+    # runs the two image tests `hosted-agent-image.yml` runs after its build, so
+    # it takes that lane's 25-minute floor, which also covers a build.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Read the pin
+        id: pin
+        run: |
+          set -euo pipefail
+          file=infra/image-pins/motir-hosted-agent-image
+          if [ "$(grep -c '' "$file")" -ne 1 ]; then
+            echo "::error::$file must hold exactly one line"
+            exit 1
+          fi
+          image="$(head -n 1 "$file")"
+          if ! [[ "$image" =~ ^ghcr\.io/motir-co/motir-hosted-agent@sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::$file must name ghcr.io/motir-co/motir-hosted-agent@sha256:<64 hex>, not '$image'"
+            exit 1
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+      - name: Pull it anonymously
+        env:
+          IMAGE: ${{ steps.pin.outputs.image }}
+        run: |
+          set -euo pipefail
+          # An empty config: no credential this runner holds can make the pull pass.
+          DOCKER_CONFIG="$(mktemp -d)" docker pull "$IMAGE"
+      - uses: ./.github/actions/pnpm
+      - run: pnpm install --frozen-lockfile --filter @motir/cli
+        env:
+          HUSKY: '0'
+      - name: Smoke the pinned image
+        env:
+          MOTIR_HOSTED_AGENT_IMAGE: ${{ steps.pin.outputs.image }}
+        run: pnpm --filter @motir/cli exec vitest run sandbox/hosted/smoke.test.ts
+      - name: Probe the providers offline
+        env:
+          MOTIR_HOSTED_AGENT_IMAGE: ${{ steps.pin.outputs.image }}
+        run: pnpm --filter @motir/cli exec vitest run sandbox/hosted/providerProbe.test.ts

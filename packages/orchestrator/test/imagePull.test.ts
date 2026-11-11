@@ -5,6 +5,7 @@ import {
   parseBearerChallenge,
   parseImageReference,
   probeImagePull,
+  readImageCreated,
   readImageLabels,
 } from '../src/index';
 
@@ -730,6 +731,47 @@ describe('readImageLabels — what the pinned image says about itself (MOTIR-102
     expect(await readImageLabels(PUBLIC_IMAGE)).toMatchObject({
       ok: false,
       reason: 'unauthorized',
+    });
+  });
+  // MOTIR-10882 — the same three reads, answering what a TAG resolves to and when
+  // that image was built: the reference's own digest (the index's, which is what a
+  // digest pin names), not the platform manifest's.
+  describe('readImageCreated (MOTIR-10882)', () => {
+    it("answers the reference's own digest and the config's created time", async () => {
+      vi.stubGlobal(
+        'fetch',
+        registry({ config: () => json(200, { created: '2026-11-09T08:00:00.123456789Z' }) }),
+      );
+      expect(await readImageCreated('ghcr.io/motir-co/motir-hosted-agent:main')).toEqual({
+        ok: true,
+        reference: 'ghcr.io/motir-co/motir-hosted-agent:main',
+        digest: INDEX,
+        createdAt: '2026-11-09T08:00:00.123Z',
+      });
+    });
+
+    it('answers a null time when the config records none or an unreadable one', async () => {
+      for (const config of [{}, { created: 'yesterday' }, { created: 7 }]) {
+        vi.stubGlobal('fetch', registry({ config: () => json(200, config) }));
+        expect(await readImageCreated(PUBLIC_IMAGE)).toMatchObject({ ok: true, createdAt: null });
+      }
+    });
+
+    it('answers a null digest when the registry sends none', async () => {
+      vi.stubGlobal(
+        'fetch',
+        registry({
+          manifest: () => json(200, { config: { digest: CONFIG } }),
+          config: () => json(200, { created: '2026-11-09T08:00:00Z' }),
+        }),
+      );
+      expect(await readImageCreated(PUBLIC_IMAGE)).toMatchObject({ ok: true, digest: null });
+    });
+
+    it('passes every failure through as its reason', async () => {
+      vi.stubGlobal('fetch', registry({ manifest: () => json(404, {}) }));
+      expect(await readImageCreated(PUBLIC_IMAGE)).toMatchObject({ ok: false, reason: 'absent' });
+      expect(await readImageCreated('   ')).toMatchObject({ ok: false, reason: 'unparseable' });
     });
   });
 });
