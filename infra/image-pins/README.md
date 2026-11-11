@@ -5,15 +5,17 @@ is the Secrets Manager secret it writes, under `<prefix>/core/`, and its one lin
 is a pull-by-digest reference: `ghcr.io/<owner>/<name>@sha256:<64 hex>`, never a
 tag.
 
-| file                 | secret                                                 | read by                                                  | bumped by                                            |
-| -------------------- | ------------------------------------------------------ | -------------------------------------------------------- | ---------------------------------------------------- |
-| `motir-runner-image` | `motir/core/motir-runner-image` (`MOTIR_RUNNER_IMAGE`) | the fleet's readiness and health probes, the Fly adapter | `release-runner-image.yml`, on every `runner-v*` tag |
+| file                       | secret                                                             | read by                                                  | bumped by                                                                        |
+| -------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `motir-hosted-agent-image` | `motir/core/motir-hosted-agent-image` (`MOTIR_HOSTED_AGENT_IMAGE`) | the hosted-run orchestrator, on Fly and AWS              | `hosted-agent-image.yml`'s `pin` job, on every publish from `main` (MOTIR-10882) |
+| `motir-runner-image`       | `motir/core/motir-runner-image` (`MOTIR_RUNNER_IMAGE`)             | the fleet's readiness and health probes, the Fly adapter | `release-runner-image.yml`, on every `runner-v*` tag                             |
 
 ## How a pin moves (MOTIR-10883)
 
-1. **The release lane opens the pull request.** A `runner-v*` tag builds, proves
+1. **The release lane opens the pull request.** A `runner-v*` tag (or, for the
+   hosted-agent image, a `packages/cli/**` merge to `main`) builds, proves
    and publishes the image, pulls it back by digest, and then opens (or updates)
-   the one pull request on `chore/runner-image-pin` that writes the published
+   the one pull request on `chore/runner-image-pin` (`chore/hosted-agent-image-pin`) that writes the published
    reference here. The tag is the deliberate release; merging the pull request is
    the deliberate pin.
 2. **The AWS deploy of the merge applies it.** `.github/workflows/aws-deploy.yml`

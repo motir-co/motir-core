@@ -55,9 +55,13 @@ pin: its name is a secret under `<prefix>/core/`, and its line is a
 pull-by-digest reference (MOTIR-10883, `infra/image-pins/README.md`). After the
 migrate task and before the roll, the script writes each pin whose secret holds
 another value, so the tasks the roll starts read it; ECS reads secrets only at
-task start. A failed roll puts the previous value back beside the services. The
+task start. A failed roll puts the previous value back before it rolls the
+services back, so the tasks the rollback starts read the old image. The
 directory is the only place a pin is written: a release lane opens the pull
-request that changes it, and reverting that pull request rolls it back.
+request that changes it, and reverting that pull request rolls it back. The
+pins are `motir-runner-image` (MOTIR-10883) and `motir-hosted-agent-image`
+(MOTIR-10882); the daily health check's `hosted-agent-image-lag` step fails when
+the hosted-agent pin lags `main`'s newest build.
 
 The deploy role needs motir-infra's `WriteImagePins` statement for this. Until
 it is deployed the pin reads `not_granted` on the result line and the services

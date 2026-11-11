@@ -32,6 +32,9 @@ import {
 const ENV = { AWS_REGION: 'us-east-1', AWS_DEPLOY_NAME_PREFIX: PREFIX };
 const V024 = `ghcr.io/motir-co/motir-ci-runner@sha256:46ed04438d0ecf403a9fee916373ad10327ebfbdee8e6114678b70dae07c860a`;
 const V026 = `ghcr.io/motir-co/motir-ci-runner@sha256:bf38f5940e5a327ad171cabb6f9bbe41db2ba1e7a0abb5c5ff8f9a81d9e1f6cc`;
+/** Build sha-ca74591b, the interim re-pin of 2026-11-10 (MOTIR-10882). */
+const HOSTED_AGENT_CA74591B =
+  'ghcr.io/motir-co/motir-hosted-agent@sha256:035f996160f027655ac677135faa512277559608819a4cb8a89337ba435be4f7';
 const SECRET = pinSecretId(PREFIX, 'motir-runner-image');
 const log = () => {};
 
@@ -64,19 +67,23 @@ async function deploy(aws: FakeDeployAws, dir: string, extra: string[] = []) {
 }
 
 describe('the checked-in pin', () => {
-  it('pins production to runner-v0.2.6, the release that records its tool list', () => {
+  it('pins production to runner-v0.2.6 and the hosted-agent build that carries MOTIR-10705', () => {
     const pins = readImagePins(IMAGE_PINS_DIR);
-    expect(pins).toEqual([{ name: 'motir-runner-image', value: V026 }]);
+    expect(pins).toEqual([
+      { name: 'motir-hosted-agent-image', value: HOSTED_AGENT_CA74591B },
+      { name: 'motir-runner-image', value: V026 },
+    ]);
   });
 
   it('holds exactly the pinned secrets, and only notes besides them', () => {
     const files = readdirSync(IMAGE_PINS_DIR).filter((f) => !f.endsWith('.md'));
     expect(files.sort()).toEqual([...PINNED_SECRETS].sort());
-    expect(readFileSync(join(IMAGE_PINS_DIR, 'README.md'), 'utf8')).toContain('motir-runner-image');
+    const readme = readFileSync(join(IMAGE_PINS_DIR, 'README.md'), 'utf8');
+    for (const name of PINNED_SECRETS) expect(readme).toContain(`\`${name}\``);
   });
 
   it("holds the list to the secrets motir-infra's deploy role may write (DEPLOY_PINNED_SECRETS)", () => {
-    expect([...PINNED_SECRETS]).toEqual(['motir-runner-image']);
+    expect([...PINNED_SECRETS]).toEqual(['motir-hosted-agent-image', 'motir-runner-image']);
   });
 });
 
@@ -193,6 +200,7 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
     expect(code).toBe(0);
     expect(aws.secrets.get(SECRET)).toBe(V026);
     expect(result?.['pins']).toEqual([
+      { name: 'motir-hosted-agent-image', value: HOSTED_AGENT_CA74591B, state: 'written' },
       { name: 'motir-runner-image', value: V026, state: 'written' },
     ]);
     const methods = aws.methods();
@@ -207,10 +215,17 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
     const { code, result } = await deploy(aws, IMAGE_PINS_DIR);
     expect(code).toBe(1);
     expect(aws.secrets.get(SECRET)).toBe(V024);
+    // The hosted-agent secret held nothing before, so there is nothing to put back.
     expect(result?.['pins']).toEqual([
+      { name: 'motir-hosted-agent-image', value: HOSTED_AGENT_CA74591B, state: 'written' },
       { name: 'motir-runner-image', value: V026, state: 'restored' },
     ]);
     expect(result?.['recorded']).toBe(false);
+    // The restore lands before the rollback's updateService calls start tasks (MOTIR-10882).
+    const methods = aws.methods();
+    const restore = methods.lastIndexOf('putSecretValue');
+    expect(restore).toBeGreaterThan(methods.indexOf('updateService'));
+    expect(restore).toBeLessThan(methods.lastIndexOf('updateService'));
   });
 
   it('stops before any service changes when the secret write is refused', async () => {
@@ -229,6 +244,7 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
     const { code, result } = await deploy(aws, IMAGE_PINS_DIR);
     expect(code).toBe(0);
     expect(result?.['pins']).toEqual([
+      { name: 'motir-hosted-agent-image', value: HOSTED_AGENT_CA74591B, state: 'not_granted' },
       { name: 'motir-runner-image', value: V026, state: 'not_granted' },
     ]);
     expect(aws.methods()).toContain('updateService');

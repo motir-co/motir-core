@@ -168,8 +168,10 @@ async function roll(
   } catch (err) {
     log(`roll: ${err instanceof Error ? err.message : 'failed'}`);
   }
-  await rollBack(aws, target.cluster, services, updated, log);
+  // The pins go back FIRST: a task reads a secret only when it starts, and the
+  // rollback starts tasks. restorePins never throws, so the rollback always runs.
   await restorePins(aws, options.namePrefix, pinned.applied, pinned.previous, log);
+  await rollBack(aws, target.cluster, services, updated, log);
   const superseded = result.services.filter((s) => s.rolloutState === 'SUPERSEDED');
   if (superseded.length > 0) {
     const names = superseded.map((s) => s.name).join(', ');

@@ -2496,7 +2496,8 @@ holds no Motir token, so it writes each pull request URL into `$MOTIR_AGENT_REPO
 `"pullRequests"`, and the CLI links it when the agent exits, before the card moves to
 Implemented. With no URL in the file, the CLI links the work branch's open pull request. A run
 that pushed work and could link no pull request leaves the card In Progress and says which
-branch.
+branch, and so does one that linked one repository's pull request while another repository's
+pushed work stayed unlinked (MOTIR-10888).
 
 #### `unlink_pull_request`
 

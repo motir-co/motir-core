@@ -1717,7 +1717,11 @@ exits, the CLI links each pull request (or, with none in the file, the work
 branch's open pull request from `gh pr view`), then publishes the How to test with
 each repository's pushed head, then moves the card to Implemented, in that order.
 A run that pushed work but could link no pull request leaves the card In Progress,
-names the branch on the run's leg, and exits 1.
+names the branch on the run's leg, and exits 1. So does a card in several
+repositories where one pull request linked and another repository's pushed work
+did not (MOTIR-10888): the leg names the unlinked branch beside the pull requests
+that linked, and the CLI prints the branches left to link by hand. A listed
+repository the run pushed nothing to holds nothing back; the leg records it.
 
 ### Headless recipes
 

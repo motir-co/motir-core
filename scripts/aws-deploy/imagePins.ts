@@ -31,7 +31,7 @@ import type { DeployLog } from './migrateRun';
 export const IMAGE_PINS_DIR = 'infra/image-pins';
 
 /** Every secret a pin may write, by its name under `<prefix>/core/`. */
-export const PINNED_SECRETS = ['motir-runner-image'] as const;
+export const PINNED_SECRETS = ['motir-hosted-agent-image', 'motir-runner-image'] as const;
 
 export type PinnedSecret = (typeof PINNED_SECRETS)[number];
 
