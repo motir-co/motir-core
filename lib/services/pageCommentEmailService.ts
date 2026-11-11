@@ -4,7 +4,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { mentionExcerpt } from '@/lib/mentions/excerpt';
 import { NOTIFICATION_EVENT_TYPE } from '@/lib/notifications/preferences';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { pageCommentRepository } from '@/lib/repositories/pageCommentRepository';
+import { pageStoreFor } from '@/lib/pages';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { resolveRecipientLocales } from '@/lib/services/emailRecipientLocale';
@@ -71,18 +71,18 @@ export const pageCommentEmailService = {
     // USERLESS: a job has no session, so the reads bind the WORKSPACE tier from the
     // trusted id the emitting service stamped on the event.
     const subject = await withWorkspaceServiceContext(input.workspaceId, async (tx) => {
-      const comment = await pageCommentRepository.findById(input.commentId, tx);
+      const comment = await pageStoreFor(tx).findPageComment(input.commentId);
       if (!comment || comment.pageId !== input.pageId) return null;
       // Archived pages come back too: the thread stays readable, so it still notifies.
       const page = await pageRepository.findById(comment.pageId, tx);
       if (!page) return null;
       const participants: string[] = [];
       if (input.isReply) {
-        const root = await pageCommentRepository.findById(input.threadRootCommentId, tx);
+        const root = await pageStoreFor(tx).findPageComment(input.threadRootCommentId);
         if (!root) return null;
         participants.push(root.authorId);
         // Oldest first — only the people who spoke BEFORE this reply hear about it.
-        for (const reply of await pageCommentRepository.findReplies([root.id], tx)) {
+        for (const reply of await pageStoreFor(tx).findPageCommentReplies([root.id])) {
           if (reply.id === comment.id) break;
           participants.push(reply.authorId);
         }

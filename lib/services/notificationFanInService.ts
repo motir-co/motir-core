@@ -2,7 +2,7 @@ import { Prisma, type WorkItem } from '@/generated/prisma/client';
 import { readWorkItemForService } from '@/lib/workspaces/tenantRead';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
-import { pageCommentRepository } from '@/lib/repositories/pageCommentRepository';
+import { pageStoreFor } from '@/lib/pages';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
@@ -496,7 +496,7 @@ export const notificationFanInService = {
     // workspace is invisible under that binding and resolves to nothing.
     const subject = await withWorkspaceServiceContext(event.workspaceId, async (tx) => {
       // Not `lockById`: a job that reads in order to notify must hold no row lock.
-      const comment = await pageCommentRepository.findById(event.commentId, tx);
+      const comment = await pageStoreFor(tx).findPageComment(event.commentId);
       if (!comment || comment.workspaceId !== event.workspaceId) return null;
       // Archived pages come back too — an archived thread still notifies.
       const page = await pageRepository.findById(comment.pageId, tx);
@@ -506,11 +506,11 @@ export const notificationFanInService = {
 
       const participants: string[] = [];
       if (event.isReply) {
-        const root = await pageCommentRepository.findById(event.threadRootCommentId, tx);
+        const root = await pageStoreFor(tx).findPageComment(event.threadRootCommentId);
         if (root) participants.push(root.authorId);
         // Oldest first; only the replies BEFORE this one are its thread's people,
         // so an edit's re-fire recomputes a subset and never adds a participant.
-        const replies = await pageCommentRepository.findReplies([event.threadRootCommentId], tx);
+        const replies = await pageStoreFor(tx).findPageCommentReplies([event.threadRootCommentId]);
         for (const reply of replies) {
           if (reply.id === comment.id) break;
           participants.push(reply.authorId);
