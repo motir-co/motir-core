@@ -58,6 +58,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     // a `Partial` and TypeScript only drops `undefined` from a key the target
     // already declares.
     subject: null,
+    initRepositoryName: null,
     implementationSource: null,
     implementationHarness: null,
     implementationModel: null,

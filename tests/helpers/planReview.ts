@@ -57,6 +57,7 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     // optional in the override, because `...over` spreads a `Partial` and TypeScript
     // only drops `undefined` from a spread key the target already declares.
     subject: null,
+    initRepositoryName: null,
     status: null,
     statusLabel: null,
     statusCategory: null,

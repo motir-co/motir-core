@@ -879,6 +879,15 @@ export interface PlanReviewItemDto {
    * for a long time.
    */
   subject: string | null;
+  /**
+   * The repository an INIT card declares it will create (MOTIR-11051) — `add`-ONLY,
+   * because `PlanItemPatch` has no twin: nothing may re-declare a repository on
+   * an existing card. Carried for PARITY, not drawn: no review component renders
+   * it, and a reviewer reads which repository the card creates from the card's
+   * own title and body, which the planner writes. Null where the proposal
+   * declares none — every card that is not an init card.
+   */
+  initRepositoryName: string | null;
   /** The target's current status key — null for an un-materialized `add` (it is
    *  not a work item yet); the live status for every proposal that has one. */
   status: string | null;

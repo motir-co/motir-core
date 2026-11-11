@@ -417,6 +417,20 @@ export interface PlanItemProposedFields {
    */
   subject?: string | null;
   /**
+   * THE REPOSITORY AN INIT CARD WILL CREATE (MOTIR-11051, Story MOTIR-10162) —
+   * the BARE name, legal only beside `subject: 'init'`
+   * (`lib/plans/validateProposedInitRepository.ts`). Settled at the APPEND like
+   * {@link subject}: NOT a key of `PlanItemPatch`, carried by no correction door,
+   * and written onto the work item's own `initRepositoryName` column at approve.
+   *
+   * ⚠️ DELIBERATELY NOT A SIXTH SPELLING OF THE REPOSITORY AXIS. A pin is resolved
+   * against the project's set at approve; this value is resolved against nothing,
+   * because the repository it names does not exist yet — and it is REFUSED beside
+   * any pin (`targetRepo`, `targetRepos`, `targetRepositories`,
+   * `targetRepositoryRef`, `targetRepoRole`).
+   */
+  initRepositoryName?: string | null;
+  /**
    * Whether an AUTHOR SESSION finished writing this card (MOTIR-10490) — planner
    * state about the card, never a field of it. `true` is written; absent or
    * `null` reads not written. A driver sets or clears it through the deepen

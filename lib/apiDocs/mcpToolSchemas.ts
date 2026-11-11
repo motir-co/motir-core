@@ -288,6 +288,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   description:
                     'WHICH SUBJECT MATTER to compose this leaf’s rule packs from — the FOURTH selector coordinate, `pack(phase, kind, type, subject)`. DERIVE IT AT `lay`, beside `type`, so the coordinate is written BEFORE an authoring pass composes its prompt: a value written afterwards is a default rather than a selector. OMIT IT when no member clearly fits — a wrong member composes rules whose situation cannot occur for this card while looking deliberate, and omission is the right answer far more often than the vocabulary suggests. A leaf has ONE subject: wanting two is a SPLIT signal, exactly as wanting two repositories is. MEMBERSHIP IS NOT VALIDATED HERE — the vocabulary is the rule-pack file set, so a well-formed unrecognised member is accepted and refused one hop later by the rule-pack resolver. Shape only: a lowercase slug of at most 32 characters. Legal on EVERY kind — a container carries one too.',
                 },
+                initRepositoryName: {
+                  type: 'string',
+                  description:
+                    'The BARE name of the repository an INIT card will create (e.g. `motir-infra`) — the card’s own declaration, NOT a repository pin. The repository need not exist yet, and nothing resolves this name against the project’s repository set. Refused unless `subject` is `init`, refused beside any pin (`targetRepo`, `targetRepos`, `targetRepositories`, `targetRepositoryRef`, `targetRepoRole`), and refused for a name with an owner (`/`) or whitespace. Settled at the append: no correction door re-declares it, and approve writes it onto the created card.',
+                },
               },
               required: ['title'],
               additionalProperties: false,

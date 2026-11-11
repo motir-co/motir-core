@@ -74,6 +74,7 @@ import {
 } from '@/lib/repositories/workItemRevisionRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
+import { assertProposedInitRepository } from '@/lib/plans/validateProposedInitRepository';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
@@ -933,6 +934,14 @@ function validateProposal(p: ProposalInput): void {
       p.proposedFields.targetRepos,
       p.proposedFields.targetRepositories,
       p.proposedFields.targetRepositoryRef,
+    );
+    // An INIT card's declared repository (MOTIR-11051) — legal only with the
+    // `init` subject, never beside a pin, and a bare name. Pure, so it runs here
+    // where a refused batch writes no proposal row; the value is reachable by no
+    // correction door, so the close and approve never need to re-check it.
+    assertProposedInitRepository(
+      p.proposedFields,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
   } else if (p.op === 'modify') {
     if (!p.workItemId) throw new InvalidProposalError('A `modify` proposal requires workItemId.');
@@ -3224,6 +3233,11 @@ async function materialize(
       // Absent = the proposal carried none, which stores `null` exactly as it
       // did before the field existed — the axis is purely additive.
       subject: pf.subject ?? null,
+      // The repository an INIT card will create (MOTIR-11051) — a fact about the
+      // CARD, not only about a proposal that stops existing here. Never a pin:
+      // the repository columns below stay exactly what the pin axis says, which
+      // for an init card is nothing (the append refuses the pair).
+      initRepositoryName: pf.initRepositoryName ?? null,
       type: (pf.type as WorkItemCreateInput['type']) ?? null,
       executor: (pf.executor as WorkItemCreateInput['executor']) ?? null,
       // Leaf sizing (MOTIR-1433): flow the validated point + minute estimates

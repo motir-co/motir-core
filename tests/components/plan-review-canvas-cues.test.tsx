@@ -129,6 +129,7 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
     executor: null,
     planningProvenance: null,
     subject: null,
+    initRepositoryName: null,
     status: null,
     statusLabel: null,
     statusCategory: null,

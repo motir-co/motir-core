@@ -4508,6 +4508,15 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
   `update_work_item` — a field the approver never saw, written into a card they
   had already approved. `update_plan_item` (the deepen turn) still refuses all
   three, deliberately: a deepen may not change where a card SHIPS.
+- **`proposedFields.initRepositoryName`** (`add` only, MOTIR-11051) — the BARE
+  name of the repository an **init** card will create (`subject: "init"`): the
+  card's own declaration, **not a repository pin**. The repository need not
+  exist yet, and nothing resolves the name against the project's set. Refused
+  (`INVALID_PROPOSAL`) without the `init` subject, beside any pin (`targetRepo`,
+  `targetRepos`, `targetRepositories`, `targetRepositoryRef`, `targetRepoRole`),
+  and for a name carrying an owner (`/`) or whitespace. Settled at the append —
+  no `patch` key or correction re-declares it — and approve writes it onto the
+  created card, whose repository columns stay empty.
 - **`proposedFields.todos`** (`add` only, leaf kinds only) — the card's **ORDERED
   STEPS**, written as its to-do list. **Array order is list order**, and
   approving the plan writes one real to-do row per element, none ticked. A

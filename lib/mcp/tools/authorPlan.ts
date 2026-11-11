@@ -498,6 +498,18 @@ const proposedFieldsSchema = z
           'accepted and refused one hop later by the rule-pack resolver. Shape only: a ' +
           'lowercase slug of at most 32 characters. Legal on EVERY kind — a container carries one too.',
       ),
+    initRepositoryName: z
+      .string()
+      .optional()
+      .describe(
+        'The BARE name of the repository an INIT card will create (e.g. `motir-infra`) — the ' +
+          'card’s own declaration, NOT a repository pin. The repository need not exist yet, and ' +
+          'nothing resolves this name against the project’s repository set. Refused unless ' +
+          '`subject` is `init`, refused beside any pin (`targetRepo`, `targetRepos`, ' +
+          '`targetRepositories`, `targetRepositoryRef`, `targetRepoRole`), and refused for a ' +
+          'name with an owner (`/`) or whitespace. Settled at the append: no correction door ' +
+          're-declares it, and approve writes it onto the created card.',
+      ),
   })
   .describe('The proposed item’s fields. Required on an `add`, ignored otherwise.');
 

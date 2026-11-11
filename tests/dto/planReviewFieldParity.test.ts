@@ -333,6 +333,13 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
         "this pass with a coordinate an earlier pass derived — `explanationSource`'s failure " +
         'mode, one field over.',
     },
+    initRepositoryName: {
+      addOnly:
+        'MOTIR-11051 — the repository an INIT card will create, settled at the append. ' +
+        '`PlanItemPatch` has no twin (nothing may re-declare a repository on an existing card), ' +
+        "so a `modify` declares none, and reporting the TARGET's would show a declaration this " +
+        'proposal never made.',
+    },
   };
 
   it('states an op disposition for EVERY proposed field', () => {
@@ -393,6 +400,7 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     // three others are each here for a different reason, stated at their fields.
     expect(addOnly.sort()).toEqual([
       'explanationSource',
+      'initRepositoryName',
       'planningProvenance',
       'subject',
       'targetRepositories',

@@ -1897,6 +1897,10 @@ export const planReviewService = {
         // coordinate an earlier one derived, which is the `explanationSource`
         // mistake one field up. The op-axis guard is where that is written down.
         subject: item.op === 'add' ? (proposed?.subject ?? null) : null,
+        // The repository an INIT card will create (MOTIR-11051) — add-only on
+        // `subject`'s terms: `PlanItemPatch` has no twin, so a `modify` declares
+        // none. Carried for parity; no review component draws it.
+        initRepositoryName: item.op === 'add' ? (proposed?.initRepositoryName ?? null) : null,
         // Same rule, same source, same read (MOTIR-3160): a materialized `add`
         // has a live status because it is a live work item. Populating the
         // identifier off `target` and leaving the status null would split one

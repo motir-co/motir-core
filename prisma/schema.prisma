@@ -3036,6 +3036,17 @@ model WorkItem {
   // above, for the same reason stated there (fast-moving names, no migration
   // per member).
   subject                 String?
+  // THE REPOSITORY AN INIT CARD WILL CREATE (MOTIR-11051, Story MOTIR-10162) —
+  // the bare name a card whose `subject` is the `init` member DECLARES, written
+  // here at approve from the proposal that laid it. ⚠️ NEVER A PIN: no foreign key,
+  // no index, no backfill, and never resolved against the project's repository set
+  // — the whole point is that no such repository exists yet. A card carrying it has
+  // no `targetRepo`, no `targetRepos` and no item↔repository join row (the append
+  // refuses the pair). The routing pass that points the cards waiting on this one
+  // at the created repository reads it, case-insensitively. Settled at the lay and
+  // re-pointable by no door. NULL on every other card, and on every row written
+  // before this column existed.
+  initRepositoryName      String?
   // The agile STORY-POINT estimate (Story 4.3) — SEPARATE from the `estimateMinutes`
   // TIME estimate above; both columns coexist and the project's `estimationStatistic`
   // config picks which one is THE planning estimate the surfaces display + roll up.
