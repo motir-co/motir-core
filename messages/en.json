@@ -3083,8 +3083,8 @@
             "desc": "Someone @-mentions you in a comment or description."
           },
           "commented": {
-            "label": "Commented on an item you're involved in",
-            "desc": "A new comment on an item you reported, are assigned, or commented on."
+            "label": "Comments on your items or in your page discussions",
+            "desc": "A new comment on an item you reported, are assigned, or commented on — or a reply in a page discussion you started or took part in."
           },
           "assigned": {
             "label": "Assigned to you",
@@ -3114,7 +3114,7 @@
         "soon": "Soon",
         "cellAria": "{channel} for {event}",
         "cellAriaSoon": "{channel} for {event} (coming soon)",
-        "defaultsNote": "Direct events — mentions, comments on your items, and assignments — default on for both channels. An untouched row uses that default (it is not off until you turn it off).",
+        "defaultsNote": "Direct events — mentions, comments on your items, replies in your page discussions, and assignments — default on for both channels. An untouched row uses that default (it is not off until you turn it off).",
         "status": {
           "saving": "Saving…",
           "saved": "Saved",
