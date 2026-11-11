@@ -370,6 +370,16 @@ export interface AutoSummary {
    * Absent on a run with no container to re-read (`motir auto`, a sprint scope).
    */
   outstanding?: { containerKey: string; keys: string[] };
+  /**
+   * The WORK ITEM a scoped run was launched against (MOTIR-10985) — the story
+   * whose session pull request this run delivers. Known before the first card
+   * starts, so the pull request is titled for it and linked to it from the first
+   * landed card rather than inferred from the carried set's parent partition,
+   * which reads `one-card` until a second card lands.
+   *
+   * Absent on `motir auto` and on a sprint scope, which keep the partition's arms.
+   */
+  container?: SessionPrContainer;
   stopReason: StopReason;
   /** On a `gated` stop: the gate cards still awaiting a person, in order. */
   gatedOn?: string[];
@@ -549,6 +559,30 @@ export function sessionPrScope(
   return shared ? { arm: 'shared-parent', key: shared } : { arm: 'many-parents' };
 }
 
+/** The work item a scoped run delivers — its key and title (MOTIR-10985). */
+export interface SessionPrContainer {
+  key: string;
+  title: string;
+}
+
+/**
+ * Which work item a session pull request DELIVERS, beside the cards its agents
+ * link themselves (MOTIR-4969 · MOTIR-10985) — or `null` for none.
+ *
+ * A scoped run names it up front, so the answer is that item from the first
+ * landed card on. Otherwise it is the carried set's shared parent, and only
+ * that: a `one-card` run's pull request is the card's own, and a `many-parents`
+ * run must not invent a story to name.
+ */
+export function deliveredContainerKey(
+  carried: readonly Pick<DispatchRecord, 'key' | 'parentKey'>[],
+  container?: SessionPrContainer,
+): string | null {
+  if (container) return container.key;
+  const scope = sessionPrScope(carried);
+  return scope.arm === 'shared-parent' ? scope.key : null;
+}
+
 /** The PR title for a session branch. Carries a `MOTIR-<n>` only in its
  *  one-card arm, where the claim is true; see
  *  {@link import('./git.js').sessionBranchName} for why a session PR must not
@@ -563,7 +597,14 @@ export function sessionPrScope(
 export function sessionPrTitle(
   runId: string,
   carried: readonly Pick<DispatchRecord, 'key' | 'title' | 'parentKey'>[],
+  /**
+   * A scoped run's work item (MOTIR-10985). The pull request is that item's
+   * from its first card to its last, so its title names it whatever the carried
+   * set's partition would say — one card, or none yet.
+   */
+  container?: SessionPrContainer,
 ): string {
+  if (container) return fitTitle(`${container.key}${container.title ? ` ${container.title}` : ''}`);
   const count = carried.length;
   const scope = sessionPrScope(carried);
 

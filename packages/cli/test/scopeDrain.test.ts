@@ -254,6 +254,8 @@ async function drive(
     client?: (c: MotirClient) => MotirClient;
     /** Collects the run's events, for the assertions on what the record says. */
     events?: DispatchRunEventInput[];
+    /** The work item the scope was launched against (MOTIR-10985). */
+    container?: ScopeDrainInput['container'];
     /** The agent the run resolved — a typed command unless a test names one. */
     agent?: ParsedAgentCommand;
     /** Collects every command a leg spawned, with its key (MOTIR-10983). */
@@ -281,6 +283,7 @@ async function drive(
       : {}),
     branch: 'motir/auto-x',
     run: over.run ?? GIT,
+    ...(over.container ? { container: over.container } : {}),
     clock: () => 0,
     runAgentFn: async ({ prompt, command }) => {
       const key = prompt.replace('PROMPT ', '');
@@ -903,6 +906,133 @@ describe('the scoped drain declares what its session pull request delivers', () 
     await closeOutContainer(session().client, summary);
 
     expect(fake.transitions).toEqual(['PROD-1:implemented']);
+  });
+});
+
+// ── a STORY scope's draft is the story's from its first card (MOTIR-10985) ──
+//
+// A story run's first card used to land in a set of ONE — `one-card`, which
+// titles the pull request for that card and links no story — so the story was
+// linked only from the second card. A scope knows its work item before the
+// first card starts, and hands it to the drain as `container`.
+
+describe('a story scope opens the story’s DRAFT at its first landed card (MOTIR-10985)', () => {
+  const STORY = { key: 'PROD-1', title: 'Agents read and add a page’s discussion' };
+  const PR = 'https://github.test/pull/9001';
+
+  it('ONE landed card: a DRAFT, titled for the story, linked to the story', async () => {
+    const { run, log } = recordingGit();
+
+    await drive([member('PROD-2')], { 'PROD-2': [] }, { run, container: STORY });
+
+    expect(created(log)).toHaveLength(1);
+    const argv = created(log)[0]!;
+    expect(argv).toContain('--draft');
+    expect(argv).toContain(`--title ${STORY.key} ${STORY.title}`);
+    expect(argv).not.toContain('--title PROD-2');
+    // The story, and the landed card — whose agent found no PR to link to yet.
+    expect(fake.links).toEqual([`PROD-1@${PR}`, `PROD-2@${PR}`]);
+  });
+
+  it('later cards find the SAME pull request, and the close-out readies it once every child landed', async () => {
+    const { run, log } = recordingGit();
+
+    const summary = await drive(
+      [member('PROD-2'), member('PROD-3'), member('PROD-4')],
+      { 'PROD-3': ['PROD-2'], 'PROD-4': ['PROD-3'] },
+      { run, container: STORY },
+    );
+
+    expect(created(log)).toHaveLength(1);
+    // Re-declared on every landed card — an idempotent upsert — the story and its cards.
+    expect(new Set(fake.links)).toEqual(
+      new Set(['PROD-1', 'PROD-2', 'PROD-3', 'PROD-4'].map((k) => `${k}@${PR}`)),
+    );
+    expect(summary.container).toEqual(STORY);
+
+    closeOutRepos(summary, run);
+
+    const edit = log.findIndex((line) => line.startsWith('gh pr edit'));
+    const ready = log.findIndex((line) => line.startsWith('gh pr ready'));
+    expect(log[edit]).toContain(`--title ${STORY.key} ${STORY.title}`);
+    expect(ready).toBeGreaterThan(edit);
+    expect(summary.prs[0]).toMatchObject({ url: PR, outcome: 'existing' });
+    expect(summary.prs[0]?.draft).toBeUndefined();
+    expect(created(log)).toHaveLength(1);
+
+    statusOf.set('PROD-1', 'in_progress');
+    await closeOutContainer(session().client, summary);
+    expect(fake.transitions).toEqual(['PROD-1:implemented']);
+  });
+
+  it('a story with ONE child is told it is built by the close-out, as a bigger one is', async () => {
+    const { run } = recordingGit();
+    const summary = await drive([member('PROD-2')], { 'PROD-2': [] }, { run, container: STORY });
+
+    closeOutRepos(summary, run);
+    statusOf.set('PROD-1', 'in_progress');
+    await closeOutContainer(session().client, summary);
+
+    expect(fake.transitions).toEqual(['PROD-1:implemented']);
+  });
+
+  it('a FAILED child leaves it a DRAFT, and the story is not told it is built', async () => {
+    const { run, log } = recordingGit();
+
+    const summary = await drive(
+      [member('PROD-2'), member('PROD-3')],
+      {},
+      {
+        run,
+        container: STORY,
+        opts: { keepGoing: true },
+        agentResults: (key) => ({ exitCode: key === 'PROD-3' ? 1 : 0, signal: null }),
+      },
+    );
+    expect(summary.records.map((r) => r.outcome)).toEqual(['integrated', 'failed']);
+    // The failed card did not land, so it is not linked.
+    expect(fake.links).toEqual([`PROD-1@${PR}`, `PROD-2@${PR}`]);
+
+    // The close-out's re-read names the child that did not land.
+    closeOutRepos(summary, run, { containerKey: 'PROD-1', openChildren: ['PROD-3'] });
+
+    expect(log.some((line) => line.startsWith('gh pr ready'))).toBe(false);
+    expect(summary.prs[0]).toMatchObject({ draft: true });
+    await closeOutContainer(session().client, summary);
+    expect(fake.transitions).toEqual([]);
+  });
+
+  it('a SKIPPED child (waiting on a gate) leaves it a DRAFT too', async () => {
+    const { run, log } = recordingGit();
+    typeOf.set('PROD-2', 'design');
+
+    const summary = await drive(
+      [member('PROD-2', { type: 'design' }), member('PROD-3')],
+      { 'PROD-3': ['PROD-2'] },
+      { run, container: STORY },
+    );
+    expect(summary.skipped.map((s) => s.key)).toEqual(['PROD-3']);
+
+    closeOutRepos(summary, run, { containerKey: 'PROD-1', openChildren: ['PROD-3'] });
+
+    expect(created(log)[0]).toContain(`--title ${STORY.key} ${STORY.title}`);
+    expect(log.some((line) => line.startsWith('gh pr ready'))).toBe(false);
+    expect(summary.prs[0]).toMatchObject({ draft: true });
+  });
+
+  it('a scope with NO work item (a sprint) keeps today’s titles and links nothing for one card', async () => {
+    const { run, log } = recordingGit();
+
+    const summary = await drive([member('PROD-2')], { 'PROD-2': [] }, { run });
+
+    // The eager open's title is the run's, and the close-out's names the one card.
+    expect(created(log)[0]).toContain('--title Motir auto run x — 0 work items');
+    closeOutRepos(summary, run);
+    expect(log.find((line) => line.startsWith('gh pr edit'))).toContain(
+      '--title PROD-2 Item PROD-2',
+    );
+    expect(fake.links).toEqual([]);
+    expect(summary.container).toBeUndefined();
   });
 });
 

@@ -361,6 +361,14 @@ describe('motir continue <PARENT>', () => {
     expect(h.commands.some((c) => c.startsWith('gh pr create'))).toBe(false);
     // The run is the server's, adopted — never a second one opened.
     expect(h.calls.map((c) => c.tool)).not.toContain('open_run');
+    // MOTIR-10985 — the reused draft is the PARENT's: linked to it from the first
+    // card this continue lands, whatever the carried set's partition reads.
+    const linked = h.calls
+      .filter((c) => c.tool === 'link_pr')
+      .map((c) => (c.args as { key: string }).key);
+    expect(linked.length).toBeGreaterThan(0);
+    expect(linked).toContain('PROD-1');
+    expect(linked).toContain('PROD-3');
   });
 });
 
