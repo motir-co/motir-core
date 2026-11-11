@@ -16842,7 +16842,19 @@
         "replyDepth": "Puoi rispondere solo al primo commento di un thread."
       },
       "readOnlyViewer": "Puoi leggere questa discussione, ma il tuo ruolo non consente di commentarla.",
-      "readOnlyArchived": "Questa pagina è archiviata, quindi la sua discussione è di sola lettura."
+      "readOnlyArchived": "Questa pagina è archiviata, quindi la sua discussione è di sola lettura.",
+      "inline": {
+        "tooltipOne": "Commento di {name}",
+        "tooltipMany": "{count} commenti qui",
+        "quoteLabel": "Passaggio citato: {quote}",
+        "gone": "Il passaggio non è più in questa pagina.",
+        "action": "Commenta",
+        "actionLabel": "Commenta il testo selezionato",
+        "editorLabel": "Commenta questo passaggio",
+        "anchorRefused": "Questo passaggio non può più essere ancorato. Selezionalo di nuovo e commenta.",
+        "notHere": "Quel commento non è più in questa pagina.",
+        "showInPage": "Mostra nella pagina"
+      }
     },
     "archive": {
       "menuItem": "Archivia…",

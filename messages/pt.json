@@ -16842,7 +16842,19 @@
         "replyDepth": "Você só pode responder ao primeiro comentário de um tópico."
       },
       "readOnlyViewer": "Você pode ler esta discussão, mas sua função não pode comentar nela.",
-      "readOnlyArchived": "Esta página está arquivada, então a discussão é somente leitura."
+      "readOnlyArchived": "Esta página está arquivada, então a discussão é somente leitura.",
+      "inline": {
+        "tooltipOne": "Comentário de {name}",
+        "tooltipMany": "{count} comentários aqui",
+        "quoteLabel": "Trecho citado: {quote}",
+        "gone": "O trecho não está mais nesta página.",
+        "action": "Comentar",
+        "actionLabel": "Comentar o texto selecionado",
+        "editorLabel": "Comentar este trecho",
+        "anchorRefused": "Não é mais possível ancorar este trecho. Selecione-o de novo e comente.",
+        "notHere": "Esse comentário não está mais nesta página.",
+        "showInPage": "Mostrar na página"
+      }
     },
     "archive": {
       "menuItem": "Arquivar…",

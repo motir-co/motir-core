@@ -16842,7 +16842,19 @@
         "replyDepth": "Solo puedes responder al primer comentario de un hilo."
       },
       "readOnlyViewer": "Puedes leer este debate, pero tu rol no puede comentar en él.",
-      "readOnlyArchived": "Esta página está archivada, así que su debate es de solo lectura."
+      "readOnlyArchived": "Esta página está archivada, así que su debate es de solo lectura.",
+      "inline": {
+        "tooltipOne": "Comentario de {name}",
+        "tooltipMany": "{count} comentarios aquí",
+        "quoteLabel": "Pasaje citado: {quote}",
+        "gone": "El pasaje ya no está en esta página.",
+        "action": "Comentar",
+        "actionLabel": "Comentar el texto seleccionado",
+        "editorLabel": "Comentar este pasaje",
+        "anchorRefused": "Este pasaje ya no se puede anclar. Vuelve a seleccionarlo y comenta.",
+        "notHere": "Ese comentario ya no está en esta página.",
+        "showInPage": "Mostrar en la página"
+      }
     },
     "archive": {
       "menuItem": "Archivar…",

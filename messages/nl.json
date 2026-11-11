@@ -16842,7 +16842,19 @@
         "replyDepth": "Je kunt alleen reageren op de eerste opmerking in een thread."
       },
       "readOnlyViewer": "Je kunt deze discussie lezen, maar met je rol kun je er niet op reageren.",
-      "readOnlyArchived": "Deze pagina is gearchiveerd, dus de discussie is alleen-lezen."
+      "readOnlyArchived": "Deze pagina is gearchiveerd, dus de discussie is alleen-lezen.",
+      "inline": {
+        "tooltipOne": "Reactie van {name}",
+        "tooltipMany": "{count} reacties hier",
+        "quoteLabel": "Geciteerde passage: {quote}",
+        "gone": "De passage staat niet meer op deze pagina.",
+        "action": "Reageren",
+        "actionLabel": "Reageren op de geselecteerde tekst",
+        "editorLabel": "Reageren op deze passage",
+        "anchorRefused": "Deze passage kan niet meer worden verankerd. Selecteer hem opnieuw en reageer.",
+        "notHere": "Die reactie staat niet meer op deze pagina.",
+        "showInPage": "Tonen op de pagina"
+      }
     },
     "archive": {
       "menuItem": "Archiveren…",

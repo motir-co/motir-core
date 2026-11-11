@@ -16833,7 +16833,19 @@
         "replyDepth": "只能回复讨论中的第一条评论。"
       },
       "readOnlyViewer": "你可以阅读此讨论，但你的角色不能发表评论。",
-      "readOnlyArchived": "此页面已归档，其讨论为只读。"
+      "readOnlyArchived": "此页面已归档，其讨论为只读。",
+      "inline": {
+        "tooltipOne": "{name} 的评论",
+        "tooltipMany": "此处有 {count} 条评论",
+        "quoteLabel": "引用的段落：{quote}",
+        "gone": "该段落已不在此页面中。",
+        "action": "评论",
+        "actionLabel": "评论所选文本",
+        "editorLabel": "评论此段落",
+        "anchorRefused": "此段落已无法锚定。请重新选择后再评论。",
+        "notHere": "该评论已不在此页面上。",
+        "showInPage": "在页面中显示"
+      }
     },
     "archive": {
       "menuItem": "归档…",
