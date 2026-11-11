@@ -17,6 +17,10 @@
 #                         can launch it. Unset: the AMI stays private.
 #   AMI_BUILD_SUBNET_ID   optional: the subnet the build VM runs in. Unset: the
 #                         build account's default VPC.
+#   AMI_BUILD_SECURITY_GROUP_ID
+#                         optional: the security group the build VM runs in, so
+#                         Packer creates none. Needs AMI_BUILD_SUBNET_ID, the
+#                         group's own subnet. Unset: Packer makes a temporary one.
 #   GITHUB_SHA / GITHUB_REF_NAME / GITHUB_STEP_SUMMARY   set in Actions; the
 #                         commit, the release tag, and where the summary goes.
 #
@@ -63,6 +67,10 @@ packer_vars() {
       || die "AWS_ORG_ARN is not an Organization ARN: ${AWS_ORG_ARN}"
     org_arns="[\"${AWS_ORG_ARN}\"]"
   fi
+  # A group belongs to one VPC, and the default VPC is not the build network's.
+  if [ -n "${AMI_BUILD_SECURITY_GROUP_ID:-}" ] && [ -z "${AMI_BUILD_SUBNET_ID:-}" ]; then
+    die "AMI_BUILD_SECURITY_GROUP_ID is set without AMI_BUILD_SUBNET_ID"
+  fi
   VARS=(
     -var "runner_version=$(pin RUNNER_VERSION)"
     -var "runner_sha256=$(pin RUNNER_SHA256)"
@@ -77,6 +85,7 @@ packer_vars() {
     -var "version=$(release_version "${sha}")"
     -var "org_arns=${org_arns}"
     -var "subnet_id=${AMI_BUILD_SUBNET_ID:-}"
+    -var "security_group_id=${AMI_BUILD_SECURITY_GROUP_ID:-}"
   )
 }
 

@@ -77,17 +77,63 @@ infra/ci-runner-aws/build-ami.sh validate
 
 ### What the workflow reads
 
-| Name                            | Kind     | What                                                                                              |
-| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------- |
-| `MOTIR_AWS_AMI_BUILD_ROLE_ARN`  | secret   | The IAM role the build assumes over GitHub OIDC. No access key exists anywhere.                   |
-| `MOTIR_AWS_ORG_ARN`             | variable | The AWS Organization given launch permission, so every shard (member) account can launch the AMI. |
-| `MOTIR_AWS_AMI_BUILD_SUBNET_ID` | variable | Optional. The subnet the build VM runs in.                                                        |
+| Name                                    | Kind     | What                                                                                                      |
+| --------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------- |
+| `MOTIR_AWS_AMI_BUILD_ROLE_ARN`          | secret   | The IAM role the build assumes over GitHub OIDC. No access key exists anywhere.                           |
+| `MOTIR_AWS_ORG_ARN`                     | variable | The AWS Organization given launch permission, so every shard (member) account can launch the AMI.         |
+| `MOTIR_AWS_AMI_BUILD_SUBNET_ID`         | variable | Optional. The subnet the build VM runs in.                                                                |
+| `MOTIR_AWS_AMI_BUILD_SECURITY_GROUP_ID` | variable | Optional. The security group the build VM runs in, so Packer creates none. Needs the subnet variable too. |
 
-⚠️ **Packer does not create a VPC or a subnet.** It creates a temporary key pair and security
-group and removes both, but the build VM runs in the build account's **default VPC** unless
+In the services account both variables are required: they are the `motir-ami-build` stack's
+`BuildSubnetId` and `BuildSecurityGroupId` outputs (motir-infra, MOTIR-10910), and the build
+role may launch into nothing else. `MOTIR_AWS_AMI_BUILD_ROLE_ARN` is the same stack's
+`BuildRoleArn`. `build-ami.sh` refuses a security group with no subnet, because a group
+belongs to one VPC and the default VPC is not the build network's.
+
+⚠️ **Packer does not create a VPC or a subnet.** It creates a temporary key pair and removes
+it, and, unless `MOTIR_AWS_AMI_BUILD_SECURITY_GROUP_ID` names one, a temporary security group
+too. The build VM runs in the build account's **default VPC** unless
 `MOTIR_AWS_AMI_BUILD_SUBNET_ID` names a subnet (with a route to the internet and public IPs
 on launch). An account without a default VPC can get one back with
 `aws ec2 create-default-vpc --region us-east-1`.
+
+### The build tag
+
+Everything the build creates carries **`motir-shard = motir-ami-build`** (the stack's
+`BuildTagKey` / `BuildTagValue` outputs): the build VM, its network interface and volumes, the
+temporary key pair, the AMI and its snapshots. The services-account build role may create a
+resource only when the create itself carries the tag, and may stop, terminate, delete,
+deregister or share only what carries it, so it cannot touch the install fleet's VMs, volumes
+or images. Packer is made to write the tag at create:
+
+- `run_tags` carries it to RunInstances (instance and interface), CreateKeyPair, and
+  CreateImage, which tags the AMI and its snapshots with the run tags;
+- `run_volume_tags` carries it to the build VM's volumes;
+- `tags` and `snapshot_tags` do **not** carry it. Packer writes those with a later
+  CreateTags, which the role allows for any key except the build tag's.
+
+So never set `skip_ami_run_tags`, and never add the build tag to `tags` or `snapshot_tags`:
+either fails the build with an access denial. `tests/ciFleet/awsRunnerAmi.test.ts` holds all
+three. The role grants no `CopyImage`, so the template uses no `ami_regions` and no
+copy-to-encrypt step.
+
+### An image built elsewhere is copied in before it is pinned
+
+The images every pool boots are owned by the services account (MOTIR-10909). An AMI built in
+any other account — the retired `ci-ami-build` account, or a hand build — is never set as
+`MOTIR_AWS_RUNNER_AMI_ID` where it is. A person with services-account access copies it there
+first, then shares the copy with the Organization, and pins the copy's id:
+
+```sh
+aws ec2 copy-image --region us-east-1 --source-region us-east-1 --source-image-id ami-… --name motir-ci-runner-… --copy-image-tags
+```
+
+```sh
+aws ec2 modify-image-attribute --region us-east-1 --image-id ami-… --launch-permission "Add=[{OrganizationArn=arn:aws:organizations::…:organization/o-…}]"
+```
+
+The build role cannot do this: it has no `CopyImage`, because that action authorises only the
+copy and so cannot be held to a build-tagged source.
 
 Sharing is AMI launch permission only. EC2 cannot share a snapshot with an Organization,
 and launching an unencrypted AMI shared this way needs no snapshot permission.

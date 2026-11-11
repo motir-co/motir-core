@@ -616,6 +616,119 @@ describe('the release workflow', () => {
   });
 });
 
+describe('the services-account build role (MOTIR-10911) — the build tag at create, a given network', () => {
+  const BUILD_TAG = /"motir-shard"\s+= "motir-ami-build"/;
+  const source = () => hclBlock(template, /source "amazon-ebs" "runner"/);
+  /** The right-hand side of `<name> = …` inside the source block. */
+  const assigned = (name: string): string => {
+    const m = new RegExp(`^\\s+${name}\\s+= (.+)$`, 'm').exec(code(source()));
+    if (!m) throw new Error(`the source block assigns no ${name}`);
+    return m[1]!;
+  };
+
+  it('defines the build tag once, as motir-infra’s BuildTagKey / BuildTagValue', () => {
+    expect(hclBlock(template, /build_tag = \{/)).toMatch(BUILD_TAG);
+    expect(code(template).match(/motir-ami-build/g)).toHaveLength(1);
+  });
+
+  it('puts it on the build VM, its interface and key pair (run_tags) and its volumes (run_volume_tags)', () => {
+    expect(assigned('run_tags')).toMatch(/^merge\(local\.build_tag, \{/);
+    expect(assigned('run_volume_tags')).toMatch(/^merge\(local\.build_tag, \{/);
+  });
+
+  it('puts it on the AMI and its snapshots through CreateImage’s run tags, never a later CreateTags', () => {
+    // Packer attaches run_tags to CreateImage (image + snapshot) unless this is set.
+    expect(code(template)).not.toContain('skip_ami_run_tags');
+    // tags / snapshot_tags go through CreateTags, which the role refuses for the build tag's key.
+    expect(assigned('tags')).toBe('local.tags');
+    expect(assigned('snapshot_tags')).toBe('local.tags');
+    expect(hclBlock(template, /^\s+tags = \{/m)).not.toContain('motir-shard');
+  });
+
+  it('launches into the given security group, so Packer creates none', () => {
+    const variable = hclBlock(template, /variable "security_group_id"/);
+    expect(variable).toContain('default     = ""');
+    expect(variable).toContain('^sg-[0-9a-f]+$');
+    expect(assigned('security_group_id')).toBe('var.security_group_id');
+    expect(assigned('subnet_id')).toBe('var.subnet_id');
+    // Nothing that would make Packer open a group of its own.
+    expect(code(source())).not.toMatch(/temporary_security_group_source|security_group_filter/);
+  });
+
+  it('uses the SSH communicator over the tagged temporary key pair, and no instance profile', () => {
+    expect(assigned('ssh_username')).toBe('"ubuntu"');
+    expect(assigned('temporary_key_pair_type')).toBe('"ed25519"');
+    // The role has no iam:PassRole and no CopyImage.
+    expect(code(source())).not.toMatch(
+      /iam_instance_profile|ssh_interface\s+= "session_manager"|ami_regions|kms_key_id/,
+    );
+  });
+
+  it('the release workflow passes the security group from a repository variable', () => {
+    const build = workflow.jobs.build!;
+    const step = build.steps.find((s) => s.run === 'infra/ci-runner-aws/build-ami.sh build')!;
+    expect(step.env).toMatchObject({
+      AMI_BUILD_SUBNET_ID: '${{ vars.MOTIR_AWS_AMI_BUILD_SUBNET_ID }}',
+      AMI_BUILD_SECURITY_GROUP_ID: '${{ vars.MOTIR_AWS_AMI_BUILD_SECURITY_GROUP_ID }}',
+    });
+  });
+
+  /** Runs build-ami.sh validate with a stub packer that records its arguments. */
+  function validate(env: Record<string, string>): { status: number; args: string; stderr: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'motir-build-ami-'));
+    const log = join(dir, 'packer.log');
+    writeFileSync(join(dir, 'packer'), `#!/usr/bin/env bash\nprintf '%s\\n' "$@" >>"${log}"\n`, {
+      mode: 0o755,
+    });
+    try {
+      execFileSync('bash', [join(AWS_DIR, 'build-ami.sh'), 'validate'], {
+        env: {
+          NODE_ENV: 'test',
+          PATH: `${dir}:${process.env['PATH'] ?? '/usr/bin:/bin'}`,
+          GITHUB_SHA: 'a'.repeat(40),
+          ...env,
+        },
+        stdio: 'pipe',
+      });
+      return { status: 0, args: readFileSync(log, 'utf8'), stderr: '' };
+    } catch (error) {
+      const e = error as { status: number; stderr: Buffer };
+      return { status: e.status, args: '', stderr: e.stderr.toString() };
+    }
+  }
+
+  it('build-ami.sh hands Packer the subnet and the security group it is given', () => {
+    const { status, args } = validate({
+      AMI_BUILD_SUBNET_ID: 'subnet-0123456789abcdef0',
+      AMI_BUILD_SECURITY_GROUP_ID: 'sg-0123456789abcdef0',
+    });
+    expect(status).toBe(0);
+    expect(args).toContain('subnet_id=subnet-0123456789abcdef0\n');
+    expect(args).toContain('security_group_id=sg-0123456789abcdef0\n');
+  });
+
+  it('build-ami.sh passes an empty group when none is given, so the default VPC still validates', () => {
+    const { status, args } = validate({});
+    expect(status).toBe(0);
+    expect(args).toContain('subnet_id=\n');
+    expect(args).toContain('security_group_id=\n');
+  });
+
+  it('build-ami.sh refuses a security group with no subnet', () => {
+    const { status, stderr } = validate({ AMI_BUILD_SECURITY_GROUP_ID: 'sg-0123456789abcdef0' });
+    expect(status).not.toBe(0);
+    expect(stderr).toContain('AMI_BUILD_SECURITY_GROUP_ID is set without AMI_BUILD_SUBNET_ID');
+  });
+
+  it('the README documents the build tag, both variables and the copy-before-pin rule', () => {
+    expect(readme).toContain('motir-shard = motir-ami-build');
+    expect(readme).toContain('MOTIR_AWS_AMI_BUILD_SUBNET_ID');
+    expect(readme).toContain('MOTIR_AWS_AMI_BUILD_SECURITY_GROUP_ID');
+    expect(readme).toContain('aws ec2 copy-image');
+    expect(readme).toContain('--launch-permission');
+  });
+});
+
 describe('container mode (MOTIR-9419) — the same AMI runs ONE digest-pinned image', () => {
   const hook = code(prepare);
   const parse = code(parser);
