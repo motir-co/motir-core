@@ -6090,7 +6090,9 @@
       "accessRefused": "<s>{project}</s>'s code is ready, but you can't open it yet — try sending the invitation again",
       "reviewToRun": "A review of <s>{key}</s> is waiting for your agent",
       "reviewSentBack": "An agent asked for changes on <s>{key}</s>",
-      "agentHibernatedByAdmin": "<s>{actor}</s> hibernated your agent <s>{agent}</s>"
+      "agentHibernatedByAdmin": "<s>{actor}</s> hibernated your agent <s>{agent}</s>",
+      "pageMentioned": "<s>{actor}</s> mentioned you on <s>{page}</s>",
+      "pageReplied": "<s>{actor}</s> replied to a thread on <s>{page}</s>"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "An organization admin stopped it at {time}. Its files are kept; wake it from Agents."
