@@ -71,8 +71,6 @@ export function PassageCommentAction({
 
 /** Focusable things inside the composer, the editor first. */
 const EDITABLE = '[contenteditable="true"], textarea, input:not([type="hidden"])';
-/** The host's editor mounts after the frame; wait at most this many frames for it. */
-const FOCUS_FRAMES = 30;
 
 /** The Inline composer's frame around the host's composer. */
 export function PassageCommentComposer({
@@ -90,29 +88,34 @@ export function PassageCommentComposer({
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
 
-  // Focus moves into the editor on open — it mounts a few frames after the frame
-  // does (the shipped editor renders on the client only), so wait for it, and
-  // land on the frame itself if it never appears.
+  // Focus moves into the editor on open. The shipped editor renders on the
+  // client only, so it mounts some time after the frame does — how long depends
+  // on the machine, not on a frame count. The frame takes focus at once (so the
+  // body lets go and Esc already works), and focus moves on into the editor the
+  // moment it appears, unless the reader has put it somewhere else meanwhile.
   useEffect(() => {
-    let frame = 0;
-    let handle = 0;
-    const tryFocus = () => {
-      const root = frameRef.current;
-      if (!root) return;
-      const target = root.querySelector<HTMLElement>(EDITABLE);
-      if (target) {
-        target.focus();
-        return;
-      }
-      frame += 1;
-      if (frame >= FOCUS_FRAMES) {
-        root.focus();
-        return;
-      }
-      handle = requestAnimationFrame(tryFocus);
-    };
-    tryFocus();
-    return () => cancelAnimationFrame(handle);
+    const root = frameRef.current;
+    if (!root) return;
+    const editable = () => root.querySelector<HTMLElement>(EDITABLE);
+    const present = editable();
+    if (present) {
+      present.focus();
+      return;
+    }
+    root.focus();
+    const observer = new MutationObserver(() => {
+      const target = editable();
+      if (!target) return;
+      observer.disconnect();
+      if (root.ownerDocument.activeElement === root) target.focus();
+    });
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['contenteditable'],
+    });
+    return () => observer.disconnect();
   }, []);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {

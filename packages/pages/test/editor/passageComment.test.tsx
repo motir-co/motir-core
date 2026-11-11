@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { useEffect, useState } from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Editor } from '@tiptap/react';
 import type { EditorView } from '@tiptap/pm/view';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -485,6 +486,51 @@ describe('the Inline composer', () => {
     document.getSelection()!.removeAllRanges();
     fireEvent.click(action);
     expect(h.composer()).toBeNull();
+  });
+
+  it('moves focus into an editor that mounts late, however late', async () => {
+    function LateEditor() {
+      const [ready, setReady] = useState(false);
+      useEffect(() => {
+        const timer = setTimeout(() => setReady(true), 50);
+        return () => clearTimeout(timer);
+      }, []);
+      return ready ? (
+        <div contentEditable suppressContentEditableWarning aria-label="Late" />
+      ) : null;
+    }
+    const h = mount({ passageComment: { renderComposer: () => <LateEditor /> } });
+    await frames();
+    select(h.surface, 'closing line');
+    await frames();
+    fireEvent.click(h.action()!);
+    await frames();
+    // Until the editor exists the frame holds focus, so the body has let go.
+    expect(document.activeElement).toBe(h.composer());
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Late'));
+  });
+
+  it('leaves focus alone when the reader moved it before the editor mounted', async () => {
+    function LateEditor() {
+      const [ready, setReady] = useState(false);
+      useEffect(() => {
+        const timer = setTimeout(() => setReady(true), 50);
+        return () => clearTimeout(timer);
+      }, []);
+      return ready ? (
+        <div contentEditable suppressContentEditableWarning aria-label="Late" />
+      ) : null;
+    }
+    const h = mount({ passageComment: { renderComposer: () => <LateEditor /> } });
+    await frames();
+    select(h.surface, 'closing line');
+    await frames();
+    fireEvent.click(h.action()!);
+    await frames();
+    const close = h.composer()!.querySelector<HTMLElement>('button')!;
+    close.focus();
+    await waitFor(() => expect(h.composer()!.querySelector('[aria-label="Late"]')).not.toBeNull());
+    expect(document.activeElement).toBe(close);
   });
 
   it('lands focus on the frame when the host draws nothing editable', async () => {
