@@ -1731,6 +1731,41 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_page_comments: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      limit: {
+        type: 'integer',
+        exclusiveMinimum: 0,
+        description: 'Threads per list (default 20, at most 50; a larger number is clamped).',
+      },
+      openCursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The `open.nextCursor` a previous call returned — pages the OPEN list only. A cursor issued for the other list is refused `PAGE_COMMENT_CURSOR_INVALID`.',
+      },
+      resolvedCursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The `resolved.nextCursor` a previous call returned — pages the RESOLVED list only. A cursor issued for the other list is refused `PAGE_COMMENT_CURSOR_INVALID`.',
+      },
+    },
+    required: ['projectKey', 'pageId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_plan: {
     type: 'object',
     properties: {
@@ -5144,6 +5179,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_coding_convention: 'Get coding convention',
   get_design: 'Get design',
   get_page: 'Get page',
+  get_page_comments: 'Get page comments',
   get_plan: 'Read plan proposals',
   get_plan_authoring_state: 'Read which proposals are authored',
   get_plan_code_reads: 'Read what each planning session read',
@@ -5464,6 +5500,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   get_design: { title: 'Get design', readOnlyHint: true, openWorldHint: false },
   get_page: { title: 'Get page', readOnlyHint: true, openWorldHint: false },
+  get_page_comments: { title: 'Get page comments', readOnlyHint: true, openWorldHint: false },
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
   get_plan_authoring_state: {
     title: 'Read which proposals are authored',

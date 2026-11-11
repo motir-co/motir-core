@@ -366,6 +366,12 @@ export const EXEMPT_TOOLS = {
     '`version` block of a one-version read, so this payload cannot be derived from it; both ' +
     'are presented from the same `PageMarkdownDto`. `revision` is load-bearing: it is what ' +
     '`update_page` must send back (MOTIR-7410).',
+  get_page_comments:
+    'Returns a page’s DISCUSSION — `{ pageId, counts, open: { threads, nextCursor }, ' +
+    'resolved: { threads, nextCursor } }`, each root with its replies, its `quote` and the ' +
+    '`anchored` verdict computed against the page’s current body (MOTIR-10978). `/api/v1` ' +
+    'publishes no page-comments resource (`app/api/v1/pages/[pageId]` holds archive, ' +
+    'placement, restore and work-items only), so there is no shared shape to derive from.',
   create_page:
     'Returns the new PAGE exactly as `get_page` reads it (MOTIR-7411) — a superset of the ' +
     '`/api/v1` `Page` resource, for the reason `get_page` gives, so there is no shared shape ' +

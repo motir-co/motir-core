@@ -348,6 +348,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   list_work_item_todos: { readOnlyHint: true, openWorldHint: false },
   // R: getPage.ts → pagesService.getPageMarkdown — no lock, no write
   get_page: { readOnlyHint: true, openWorldHint: false },
+  // R: getPageComments.ts → pageCommentsService.listPageThreads (×2) + pagesService.getPage — anchored verdict computed, never written back
+  get_page_comments: { readOnlyHint: true, openWorldHint: false },
   // W: createPage.ts → pagesService.createPageFromMarkdown — inserts a page; additive
   create_page: {
     readOnlyHint: false,

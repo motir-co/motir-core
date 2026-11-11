@@ -220,6 +220,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // MOTIR-7410 — a page read. Mapped into the RETIRED vocabulary only because
   // this table is total over the registry; its real gate is `page:view`.
   get_page: 'read',
+  // MOTIR-10978 — the page-discussion read, filed under `read` for totality only;
+  // its real gate is `page:view`, like `get_page`'s.
+  get_page_comments: 'read',
   // MOTIR-7411 — the page writes. Filed under `work_items:write` for totality
   // only; their real gate is `page:edit`.
   create_page: 'work_items:write',
