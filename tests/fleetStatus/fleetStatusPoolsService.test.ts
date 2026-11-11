@@ -423,7 +423,7 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
   });
 
   it('is refused below superadmin, and reads nothing', async () => {
-    currentPrincipal = { ...currentPrincipal, role: 'admin' };
+    currentPrincipal = { ...currentPrincipal, role: 'operator' };
     const reader = quota(8);
     await expect(
       service.readInstallFleet(currentPrincipal, { now: NOW, reader }),
@@ -595,7 +595,7 @@ describe('fleetStatusPoolsService.readAddShard', () => {
         {
           ...ci,
           accounts: [...ci.accounts, { ...ci.accounts[0]!, name: 'ci-gone' }],
-          spares: [{ ...(ci.accounts[0] as never), name: 'ci-gone-spare' }],
+          spares: [{ ...ci.accounts[0]!, name: 'ci-gone-spare' }],
         },
       ],
     } as never);
