@@ -159,6 +159,7 @@ import { UPDATE_FOLDER_TOOL_NAME, registerUpdateFolder } from './tools/updateFol
 import { DELETE_FOLDER_TOOL_NAME, registerDeleteFolder } from './tools/deleteFolder';
 import { GET_PAGE_TOOL_NAME, registerGetPage } from './tools/getPage';
 import { GET_PAGE_COMMENTS_TOOL_NAME, registerGetPageComments } from './tools/getPageComments';
+import { ADD_PAGE_COMMENT_TOOL_NAME, registerAddPageComment } from './tools/addPageComment';
 import { CREATE_PAGE_TOOL_NAME, registerCreatePage } from './tools/createPage';
 import { UPDATE_PAGE_TOOL_NAME, registerUpdatePage } from './tools/updatePage';
 import { RENAME_PAGE_TOOL_NAME, registerRenamePage } from './tools/renamePage';
@@ -327,6 +328,7 @@ export const MCP_TOOL_NAMES = [
   DELETE_FOLDER_TOOL_NAME,
   GET_PAGE_TOOL_NAME,
   GET_PAGE_COMMENTS_TOOL_NAME,
+  ADD_PAGE_COMMENT_TOOL_NAME,
   CREATE_PAGE_TOOL_NAME,
   UPDATE_PAGE_TOOL_NAME,
   RENAME_PAGE_TOOL_NAME,
@@ -633,6 +635,8 @@ export function registerMcpTools(
   registerGetPage(target, resolveContext);
   // A page's discussion (MOTIR-10978) — both thread lists, over `pageCommentsService`.
   registerGetPageComments(target, resolveContext);
+  // …and an agent takes part in it (MOTIR-10979): a page-level comment or a reply.
+  registerAddPageComment(target, resolveContext);
   registerCreatePage(target, resolveContext);
   registerUpdatePage(target, resolveContext);
   registerRenamePage(target, resolveContext);

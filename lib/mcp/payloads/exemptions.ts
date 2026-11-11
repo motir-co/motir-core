@@ -372,6 +372,12 @@ export const EXEMPT_TOOLS = {
     '`anchored` verdict computed against the page’s current body (MOTIR-10978). `/api/v1` ' +
     'publishes no page-comments resource (`app/api/v1/pages/[pageId]` holds archive, ' +
     'placement, restore and work-items only), so there is no shared shape to derive from.',
+  add_page_comment:
+    'Returns the WRITTEN page comment — `{ id, parentCommentId, author, bodyMd, createdAt, ' +
+    'editedAt, resolvedAt, resolvedBy, quote, anchored }`, through `get_page_comments`’ own ' +
+    '`toPageCommentView` so both tools show one comment shape (MOTIR-10979). `/api/v1` ' +
+    'publishes no page-comments resource (`app/api/v1/pages/[pageId]` holds archive, ' +
+    'placement, restore, route.ts and work-items), so there is no shared shape to derive from.',
   create_page:
     'Returns the new PAGE exactly as `get_page` reads it (MOTIR-7411) — a superset of the ' +
     '`/api/v1` `Page` resource, for the reason `get_page` gives, so there is no shared shape ' +

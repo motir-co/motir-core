@@ -144,13 +144,19 @@ describe('permissionDenial — pure decision over the whole registry', () => {
     );
   });
 
-  it('withholding comment:add stops the three comment writes and NOTHING else', () => {
+  it('withholding comment:add stops the four comment writes and NOTHING else', () => {
     // MOTIR-5295: `edit_comment` / `delete_comment` take the add's key — the
     // author who may write a comment may correct it — so the set is the three
     // writes of a comment and no other tool.
+    // MOTIR-10979: `add_page_comment` is the page-comment write, on the same key.
     const noComments = GRANTABLE_PERMISSIONS.filter((k) => k !== 'comment:add');
     const blocked = MCP_TOOL_NAMES.filter((n) => permissionDenial(n, noComments) !== null);
-    expect([...blocked].sort()).toEqual(['add_comment', 'delete_comment', 'edit_comment']);
+    expect([...blocked].sort()).toEqual([
+      'add_comment',
+      'add_page_comment',
+      'delete_comment',
+      'edit_comment',
+    ]);
   });
 
   it('fails CLOSED on a tool name that maps to no permission', () => {

@@ -350,6 +350,13 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   get_page: { readOnlyHint: true, openWorldHint: false },
   // R: getPageComments.ts → pageCommentsService.listPageThreads (×2) + pagesService.getPage — anchored verdict computed, never written back
   get_page_comments: { readOnlyHint: true, openWorldHint: false },
+  // W: addPageComment.ts → pageCommentsService.postPageComment / postPageReply — each only inserts a comment row; a repeat posts a second one
+  add_page_comment: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // W: createPage.ts → pagesService.createPageFromMarkdown — inserts a page; additive
   create_page: {
     readOnlyHint: false,
