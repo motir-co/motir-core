@@ -10752,6 +10752,7 @@
       "navIdeas": "Ideen",
       "navRunModels": "Modelle für gehostete Läufe",
       "navFleetSettings": "Flotteneinstellungen",
+      "navServices": "Dienste",
       "navCapacity": "Anbieterkapazität",
       "navJobs": "Aufträge",
       "navStarters": "Starter"
@@ -13544,6 +13545,103 @@
           "body": "Wo neue Agenten erstellt werden, konnte nicht gelesen werden, daher wird kein Zustand angezeigt und kein Schalter angeboten. Dies ist ein Lesefehler – nichts hat sich geändert, und kein Wert wird geraten.",
           "retry": "Erneut versuchen"
         }
+      }
+    },
+    "services": {
+      "breadcrumb": "Betrieb · Dienste",
+      "title": "Dienste",
+      "subtitle": "Was Motir selbst in seinem AWS-Konto ({account}) betreibt: jeder ECS-Dienst im Cluster {cluster}, seine Tasks und ihre Größe, gemessen am Fargate-vCPU-Kontingent des Kontos. Bei jedem Laden der Seite von AWS gelesen. Nur lesend.",
+      "accountUnknown": "—",
+      "readAt": "Von AWS gelesen {age} · {time} UTC",
+      "readFailedAt": "Lesen aus AWS um {time} UTC fehlgeschlagen",
+      "card": {
+        "title": "ECS-Dienste · Cluster {cluster}",
+        "subtitle": "Jeder Dienst im Cluster {cluster} auf Fargate, seine laufenden Tasks und ihre Größe sowie die Summe gemessen am Fargate-vCPU-Kontingent"
+      },
+      "pill": {
+        "count": "{count, plural, one {# Dienst} other {# Dienste}}",
+        "rolling": "{count} im Rollout",
+        "rolloutFailed": "{count, plural, one {# Rollout fehlgeschlagen} other {# Rollouts fehlgeschlagen}}",
+        "short": "{count, plural, one {# Dienst mit zu wenigen Tasks} other {# Dienste mit zu wenigen Tasks}}"
+      },
+      "verdict": {
+        "under": "{percent} % des Fargate-Kontingents",
+        "over70": "Über 70 % des Fargate-Kontingents",
+        "atQuota": "Am Fargate-Kontingent",
+        "notRead": "Fargate-Kontingent nicht gelesen",
+        "notReadLabel": "Fargate-Kontingent nicht von AWS gelesen",
+        "clusterNotRead": "Cluster nicht gelesen"
+      },
+      "col": {
+        "service": "Dienst",
+        "tasks": "Tasks",
+        "vcpuPerTask": "vCPU pro Task",
+        "memoryPerTask": "Arbeitsspeicher pro Task",
+        "vcpu": "vCPU",
+        "deployment": "Bereitstellung"
+      },
+      "caption": "ECS-Dienste im Cluster {cluster}, mit der Summe gemessen am Fargate-On-Demand-vCPU-Kontingent",
+      "taskDefinition": "Task-Definition {family}:{revision}",
+      "tasks": {
+        "running": "{n} laufend",
+        "partial": "{running} von {desired} laufend",
+        "rolling": "gewünscht {desired} · {old} alt + {new} neu",
+        "notStarted": "{n} nicht gestartet",
+        "scaledToZero": "Auf 0 skaliert"
+      },
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} MB",
+        "gb": "{n} GB"
+      },
+      "deploy": {
+        "steady": "Stabil",
+        "onRevision": "auf Revision {revision}",
+        "notRolling": "Kein Rollout",
+        "rolling": "Rollout · läuft",
+        "rollingDetail": "Revision {from} → {to} · {new} von {desired} neu gestartet",
+        "failed": "Rollout fehlgeschlagen",
+        "failedDetail": "Revision {to} gestoppt · weiterhin auf {from}",
+        "started": "gestartet {age}"
+      },
+      "total": {
+        "label": "Summe",
+        "services": "{count, plural, one {# Dienst} other {# Dienste}}",
+        "desired": "gewünscht {n}",
+        "inUse": "in Verwendung",
+        "share": "{percent} % des Fargate-Kontingents",
+        "toGo": "noch {n} vCPU bis 70 %",
+        "over70": "Über 70 %",
+        "leftBeforeQuota": "noch {n} vCPU bis zum Kontingent",
+        "atQuota": "Am Kontingent",
+        "noneLeft": "keine vCPU frei · ein neuer Task startet nicht",
+        "overBy": "{n} vCPU darüber · ein neuer Task startet nicht",
+        "shareNotKnown": "des Fargate-Kontingents · unbekannt, solange das Kontingent nicht gelesen ist"
+      },
+      "quota": {
+        "label": "Fargate-Kontingent",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "gelesen {age}",
+        "notRead": "Nicht gelesen",
+        "notReadLabel": "Kontingent nicht von AWS gelesen",
+        "lastRead": "zuletzt gelesen {age}",
+        "neverRead": "nie gelesen",
+        "body": "Das Fargate-Limit für dieses Konto und diese Region. Die EC2-Maschinen der Flotte zählen gegen ein separates EC2-Kontingent, unter Flottenstatus.",
+        "bodyNotRead": "Service Quotas hat nicht geantwortet, daher wird der Anteil am Kontingent nicht angezeigt. Die verwendeten vCPU werden am Cluster gemessen und bleiben eine Zahl."
+      },
+      "notAvailable": "Nicht verfügbar",
+      "error": {
+        "title": "ECS hat nicht geantwortet",
+        "body": "Cluster {cluster} konnte gerade nicht gelesen werden, daher werden kein Dienst und keine Summe angezeigt, und kein früherer Wert tritt an ihre Stelle. {last} Laden Sie die Seite neu, um es erneut zu versuchen.",
+        "lastRead": "Zuletzt gelesen {age}, um {time} UTC.",
+        "neverRead": "Kein früheres Lesen erfasst."
+      },
+      "loading": "Cluster und Fargate-Kontingent werden von AWS gelesen…",
+      "readOnly": "Nur lesend. Um einen Dienst zu skalieren, neu zu starten oder bereitzustellen, verwenden Sie seinen Deploy-Workflow oder die AWS-Konsole. Die Zeilen werden aus dem Cluster gelesen, sodass ein neuer Dienst beim nächsten Laden erscheint.",
+      "phone": {
+        "listLabel": "ECS-Dienste im Cluster {cluster}",
+        "perTask": "Pro Task"
       }
     },
     "capacity": {

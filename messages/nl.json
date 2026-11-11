@@ -10752,6 +10752,7 @@
       "navIdeas": "Ideeën",
       "navRunModels": "Modellen voor gehoste runs",
       "navFleetSettings": "Vlootinstellingen",
+      "navServices": "Services",
       "navCapacity": "Providercapaciteit",
       "navJobs": "Taken",
       "navStarters": "Starters"
@@ -13544,6 +13545,103 @@
           "body": "Waar nieuwe agents worden aangemaakt, kon niet worden gelezen, dus er wordt geen status getoond en geen schakelaar aangeboden. Dit is een leesfout — er is niets veranderd en er wordt geen waarde geraden.",
           "retry": "Opnieuw proberen"
         }
+      }
+    },
+    "services": {
+      "breadcrumb": "Beheer · Services",
+      "title": "Services",
+      "subtitle": "Wat Motir zelf in zijn AWS-account ({account}) draait: elke ECS-service in cluster {cluster}, de taken en hun grootte, afgezet tegen het Fargate-vCPU-quotum van het account. Bij elke keer laden van de pagina uit AWS gelezen. Alleen-lezen.",
+      "accountUnknown": "—",
+      "readAt": "Gelezen uit AWS {age} · {time} UTC",
+      "readFailedAt": "Lezen uit AWS mislukt om {time} UTC",
+      "card": {
+        "title": "ECS-services · cluster {cluster}",
+        "subtitle": "Elke service in cluster {cluster} op Fargate, de actieve taken en hun grootte, en het totaal afgezet tegen het Fargate-vCPU-quotum"
+      },
+      "pill": {
+        "count": "{count, plural, one {# service} other {# services}}",
+        "rolling": "{count} in uitrol",
+        "rolloutFailed": "{count, plural, one {# uitrol mislukt} other {# uitrollen mislukt}}",
+        "short": "{count, plural, one {# service komt taken tekort} other {# services komen taken tekort}}"
+      },
+      "verdict": {
+        "under": "{percent}% van het Fargate-quotum",
+        "over70": "Boven 70% van het Fargate-quotum",
+        "atQuota": "Op het Fargate-quotum",
+        "notRead": "Fargate-quotum niet gelezen",
+        "notReadLabel": "Fargate-quotum niet gelezen van AWS",
+        "clusterNotRead": "Cluster niet gelezen"
+      },
+      "col": {
+        "service": "Service",
+        "tasks": "Taken",
+        "vcpuPerTask": "vCPU per taak",
+        "memoryPerTask": "Geheugen per taak",
+        "vcpu": "vCPU",
+        "deployment": "Uitrol"
+      },
+      "caption": "ECS-services in cluster {cluster}, met het totaal afgezet tegen het Fargate On-Demand-vCPU-quotum",
+      "taskDefinition": "taakdefinitie {family}:{revision}",
+      "tasks": {
+        "running": "{n} actief",
+        "partial": "{running} van {desired} actief",
+        "rolling": "gewenst {desired} · {old} oud + {new} nieuw",
+        "notStarted": "{n} niet gestart",
+        "scaledToZero": "Geschaald naar 0"
+      },
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} MB",
+        "gb": "{n} GB"
+      },
+      "deploy": {
+        "steady": "Stabiel",
+        "onRevision": "op revisie {revision}",
+        "notRolling": "Geen uitrol",
+        "rolling": "Uitrol · bezig",
+        "rollingDetail": "revisie {from} → {to} · {new} van {desired} nieuw actief",
+        "failed": "Uitrol mislukt",
+        "failedDetail": "revisie {to} gestopt · nog op {from}",
+        "started": "gestart {age}"
+      },
+      "total": {
+        "label": "Totaal",
+        "services": "{count, plural, one {# service} other {# services}}",
+        "desired": "gewenst {n}",
+        "inUse": "in gebruik",
+        "share": "{percent}% van het Fargate-quotum",
+        "toGo": "nog {n} vCPU tot 70%",
+        "over70": "Boven 70%",
+        "leftBeforeQuota": "nog {n} vCPU tot het quotum",
+        "atQuota": "Op het quotum",
+        "noneLeft": "geen vCPU over · een nieuwe taak start niet",
+        "overBy": "{n} vCPU erboven · een nieuwe taak start niet",
+        "shareNotKnown": "van het Fargate-quotum · onbekend zolang het quotum niet is gelezen"
+      },
+      "quota": {
+        "label": "Fargate-quotum",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "gelezen {age}",
+        "notRead": "Niet gelezen",
+        "notReadLabel": "Quota niet gelezen van AWS",
+        "lastRead": "laatst gelezen {age}",
+        "neverRead": "nooit gelezen",
+        "body": "De Fargate-limiet voor dit account en deze regio. De EC2-machines van de vloot tellen mee voor een apart EC2-quotum, op Vlootstatus.",
+        "bodyNotRead": "Service Quotas antwoordde niet, dus het aandeel van het quotum wordt niet getoond. De vCPU in gebruik wordt gemeten op het cluster en blijft een getal."
+      },
+      "notAvailable": "Niet beschikbaar",
+      "error": {
+        "title": "ECS antwoordde niet",
+        "body": "Cluster {cluster} kon nu niet worden gelezen, dus er wordt geen service en geen totaal getoond, en geen eerder getal komt in de plaats. {last} Laad opnieuw om het nog eens te proberen.",
+        "lastRead": "Het werd voor het laatst gelezen {age}, om {time} UTC.",
+        "neverRead": "Er is geen eerdere lezing vastgelegd."
+      },
+      "loading": "Het cluster en het Fargate-quotum worden uit AWS gelezen…",
+      "readOnly": "Alleen-lezen. Gebruik de deploy-workflow van een service of de AWS-console om hem te schalen, te herstarten of uit te rollen. De rijen komen uit het cluster, dus een nieuwe service verschijnt bij de volgende keer laden.",
+      "phone": {
+        "listLabel": "ECS-services in cluster {cluster}",
+        "perTask": "Per taak"
       }
     },
     "capacity": {

@@ -10752,6 +10752,7 @@
       "navIdeas": "Pomysły",
       "navRunModels": "Modele hostowanych uruchomień",
       "navFleetSettings": "Ustawienia floty",
+      "navServices": "Usługi",
       "navCapacity": "Pojemność dostawców",
       "navJobs": "Zadania",
       "navStarters": "Szablony"
@@ -13544,6 +13545,103 @@
           "body": "Nie udało się odczytać, gdzie tworzone są nowe agenty, więc nie jest wyświetlany żaden stan ani przełącznik. To błąd odczytu — nic się nie zmieniło i żadna wartość nie jest zgadywana.",
           "retry": "Ponów"
         }
+      }
+    },
+    "services": {
+      "breadcrumb": "Operacje · Usługi",
+      "title": "Usługi",
+      "subtitle": "Co Motir uruchamia na własnym koncie AWS ({account}): każda usługa ECS w klastrze {cluster}, jej zadania i ich rozmiar, w odniesieniu do limitu vCPU Fargate konta. Odczytywane z AWS przy każdym załadowaniu strony. Tylko do odczytu.",
+      "accountUnknown": "—",
+      "readAt": "Odczytano z AWS {age} · {time} UTC",
+      "readFailedAt": "Odczyt z AWS nie powiódł się o {time} UTC",
+      "card": {
+        "title": "Usługi ECS · klaster {cluster}",
+        "subtitle": "Każda usługa w klastrze {cluster} na Fargate, jej działające zadania i ich rozmiar oraz suma w odniesieniu do limitu vCPU Fargate"
+      },
+      "pill": {
+        "count": "{count, plural, one {# usługa} few {# usługi} many {# usług} other {# usługi}}",
+        "rolling": "{count} we wdrażaniu",
+        "rolloutFailed": "{count, plural, one {# nieudane wdrożenie} few {# nieudane wdrożenia} many {# nieudanych wdrożeń} other {# nieudanego wdrożenia}}",
+        "short": "{count, plural, one {# usługa z brakiem zadań} few {# usługi z brakiem zadań} many {# usług z brakiem zadań} other {# usługi z brakiem zadań}}"
+      },
+      "verdict": {
+        "under": "{percent}% limitu Fargate",
+        "over70": "Powyżej 70% limitu Fargate",
+        "atQuota": "Na limicie Fargate",
+        "notRead": "Limit Fargate nieodczytany",
+        "notReadLabel": "Limit Fargate nieodczytany z AWS",
+        "clusterNotRead": "Klaster nieodczytany"
+      },
+      "col": {
+        "service": "Usługa",
+        "tasks": "Zadania",
+        "vcpuPerTask": "vCPU na zadanie",
+        "memoryPerTask": "Pamięć na zadanie",
+        "vcpu": "vCPU",
+        "deployment": "Wdrożenie"
+      },
+      "caption": "Usługi ECS w klastrze {cluster}, z sumą w odniesieniu do limitu vCPU Fargate On-Demand",
+      "taskDefinition": "definicja zadania {family}:{revision}",
+      "tasks": {
+        "running": "{n} działa",
+        "partial": "{running} z {desired} działa",
+        "rolling": "docelowo {desired} · {old} starych + {new} nowych",
+        "notStarted": "{n} nieuruchomionych",
+        "scaledToZero": "Przeskalowano do 0"
+      },
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} MB",
+        "gb": "{n} GB"
+      },
+      "deploy": {
+        "steady": "Stabilne",
+        "onRevision": "na rewizji {revision}",
+        "notRolling": "Brak wdrożenia",
+        "rolling": "Wdrażanie · w toku",
+        "rollingDetail": "rewizja {from} → {to} · {new} z {desired} nowych działa",
+        "failed": "Wdrożenie nieudane",
+        "failedDetail": "rewizja {to} zatrzymana · nadal na {from}",
+        "started": "rozpoczęto {age}"
+      },
+      "total": {
+        "label": "Suma",
+        "services": "{count, plural, one {# usługa} few {# usługi} many {# usług} other {# usługi}}",
+        "desired": "docelowo {n}",
+        "inUse": "w użyciu",
+        "share": "{percent}% limitu Fargate",
+        "toGo": "jeszcze {n} vCPU do 70%",
+        "over70": "Powyżej 70%",
+        "leftBeforeQuota": "jeszcze {n} vCPU do limitu",
+        "atQuota": "Na limicie",
+        "noneLeft": "brak wolnych vCPU · nowe zadanie się nie uruchomi",
+        "overBy": "{n} vCPU ponad · nowe zadanie się nie uruchomi",
+        "shareNotKnown": "limitu Fargate · nieznane, dopóki limit nie zostanie odczytany"
+      },
+      "quota": {
+        "label": "Limit Fargate",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "odczytano {age}",
+        "notRead": "Nieodczytany",
+        "notReadLabel": "Limit nieodczytany z AWS",
+        "lastRead": "ostatni odczyt {age}",
+        "neverRead": "nigdy nie odczytano",
+        "body": "Limit Fargate dla tego konta i regionu. Maszyny EC2 floty liczą się do osobnego limitu EC2, w sekcji Stan floty.",
+        "bodyNotRead": "Service Quotas nie odpowiedział, więc udział w limicie nie jest pokazany. Używane vCPU są mierzone w klastrze i pozostają liczbą."
+      },
+      "notAvailable": "Niedostępne",
+      "error": {
+        "title": "ECS nie odpowiedział",
+        "body": "Nie udało się teraz odczytać klastra {cluster}, więc nie jest pokazana żadna usługa ani suma, i żadna wcześniejsza wartość ich nie zastępuje. {last} Odśwież, aby spróbować ponownie.",
+        "lastRead": "Ostatnio odczytano {age}, o {time} UTC.",
+        "neverRead": "Brak wcześniejszego odczytu."
+      },
+      "loading": "Odczyt klastra i limitu Fargate z AWS…",
+      "readOnly": "Tylko do odczytu. Aby przeskalować, zrestartować lub wdrożyć usługę, użyj jej workflow wdrożenia lub konsoli AWS. Wiersze pochodzą z klastra, więc nowa usługa pojawi się przy następnym załadowaniu.",
+      "phone": {
+        "listLabel": "Usługi ECS w klastrze {cluster}",
+        "perTask": "Na zadanie"
       }
     },
     "capacity": {
