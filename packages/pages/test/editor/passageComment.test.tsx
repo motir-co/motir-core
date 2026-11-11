@@ -44,6 +44,21 @@ const rect = (left: number, top: number, right: number, bottom: number): DOMRect
 
 const key = (init: KeyboardEventInit) => new KeyboardEvent('keydown', init);
 
+/** A host editor that mounts only when the test says so, behind a loading line. */
+let revealLateEditor: () => void = () => {};
+function LateEditor() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    revealLateEditor = () => setReady(true);
+  }, []);
+  // The loading line is a change inside the frame that is not the editor.
+  return ready ? (
+    <div contentEditable suppressContentEditableWarning aria-label="Late" />
+  ) : (
+    <p>Loading</p>
+  );
+}
+
 describe('isPassageCommentKey', () => {
   it('matches Mod-Shift-m with ⌘ or Ctrl, and nothing else', () => {
     expect(isPassageCommentKey(key({ code: 'KeyM', shiftKey: true, metaKey: true }))).toBe(true);
@@ -489,16 +504,6 @@ describe('the Inline composer', () => {
   });
 
   it('moves focus into an editor that mounts late, however late', async () => {
-    function LateEditor() {
-      const [ready, setReady] = useState(false);
-      useEffect(() => {
-        const timer = setTimeout(() => setReady(true), 50);
-        return () => clearTimeout(timer);
-      }, []);
-      return ready ? (
-        <div contentEditable suppressContentEditableWarning aria-label="Late" />
-      ) : null;
-    }
     const h = mount({ passageComment: { renderComposer: () => <LateEditor /> } });
     await frames();
     select(h.surface, 'closing line');
@@ -507,20 +512,11 @@ describe('the Inline composer', () => {
     await frames();
     // Until the editor exists the frame holds focus, so the body has let go.
     expect(document.activeElement).toBe(h.composer());
+    act(() => revealLateEditor());
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Late'));
   });
 
   it('leaves focus alone when the reader moved it before the editor mounted', async () => {
-    function LateEditor() {
-      const [ready, setReady] = useState(false);
-      useEffect(() => {
-        const timer = setTimeout(() => setReady(true), 50);
-        return () => clearTimeout(timer);
-      }, []);
-      return ready ? (
-        <div contentEditable suppressContentEditableWarning aria-label="Late" />
-      ) : null;
-    }
     const h = mount({ passageComment: { renderComposer: () => <LateEditor /> } });
     await frames();
     select(h.surface, 'closing line');
@@ -529,6 +525,7 @@ describe('the Inline composer', () => {
     await frames();
     const close = h.composer()!.querySelector<HTMLElement>('button')!;
     close.focus();
+    act(() => revealLateEditor());
     await waitFor(() => expect(h.composer()!.querySelector('[aria-label="Late"]')).not.toBeNull());
     expect(document.activeElement).toBe(close);
   });

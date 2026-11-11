@@ -94,8 +94,8 @@ export function PassageCommentComposer({
   // body lets go and Esc already works), and focus moves on into the editor the
   // moment it appears, unless the reader has put it somewhere else meanwhile.
   useEffect(() => {
-    const root = frameRef.current;
-    if (!root) return;
+    // The frame is drawn unconditionally, so its ref is set before any effect runs.
+    const root = frameRef.current!;
     const editable = () => root.querySelector<HTMLElement>(EDITABLE);
     const present = editable();
     if (present) {
