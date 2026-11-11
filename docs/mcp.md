@@ -2553,6 +2553,61 @@ link was made against, and a correction door a token cannot reach while it can
 reach the door that creates the mistake would be worse than no door at all. It is
 already in the CLI's fixed grant.
 
+#### `create_project_repository`
+
+**Create ONE repository in a project's repository set and establish it** — the
+call an init card's run makes for the repository its card declares
+(`initRepositoryName`). It appends a `proposed` row for `name`, then runs the
+establish pass over exactly that row: create the repository, seed it, mirror it
+and settle the row. (Story MOTIR-10162 · MOTIR-11038.)
+
+| Input        | Type   | Required | Notes                                                                                                             |
+| ------------ | ------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `projectKey` | string | yes      | The project key, e.g. `ACME`.                                                                                     |
+| `name`       | string | yes      | The BARE repository name — no owner, no `/`. Matched against the project's rows case-insensitively.               |
+| `role`       | string | yes      | One of `web` · `api` · `mobile` · `shared` · `infra` · `other`.                                                   |
+| `starterKey` | string | no       | A starter (seed-registry) key. **Omitted means an EMPTY base** (`initialised`), never the role's default starter. |
+
+**Output** — `structuredContent`: `outcome`, `row` (the project-repository row as
+it stands after the call) and `establish` — the establish pass's own per-row
+`outcome`, `failureCode` and `failureReason`, verbatim.
+
+- `outcome: "created"` — this call appended the row, and it is settled.
+- `outcome: "adopted"` — the row was already in the project with the same base
+  and role (`proposed` or `failed`), and this call established it. Not the same
+  fact as the pass's own `establish.outcome: "adopted"`, which means the
+  repository already existed on the host.
+- `outcome: "already_settled"` — the row was already `created`, `connected` or
+  `skipped`; nothing was written.
+
+⚠️ **Replay-safe.** Repeating the identical call finds the row it made and writes
+nothing — the same row id, no second repository — so a retried init is never a
+second repository.
+
+**Refusals** — each a tool error carrying its own code:
+
+- `REPO_EXISTS_WITH_OTHER_SPEC` — the project already holds a row with this name
+  asked for with a different base or a different role. The message names the
+  field and both values; the row is left exactly as it was.
+- `REPO_ESTABLISH_BUSY` — another run holds the row `creating`, or this call lost
+  the claim race. Nothing was written.
+- A failed attempt answers the row's OWN `failureCode` verbatim with its
+  `failureReason` — for example `REPO_NAME_TAKEN_ON_HOST` when the name is taken
+  on the git host. The row stays `failed` and resumable: a repeat call
+  re-attempts it rather than appending another.
+- The set's own refusals answer their codes: `PROJECT_REPO_NAME_TAKEN`,
+  `PROJECT_REPO_INVALID_FIELD`, `PROJECT_REPO_LINK_CONFLICT`,
+  `PROJECT_REPO_ILLEGAL_TRANSITION`, `PROJECT_REPO_SEED_REFUSED`,
+  `REALIZED_REPO_ALREADY_CLAIMED`; and the establish pass's paid-AI-plan
+  precondition answers `ai_plan_required` / `plan_unknown`.
+- An unknown project key, or another workspace's, is `PROJECT_NOT_FOUND`, and no
+  row is written.
+
+Requires `repository:manage` on the project — the key the repository-set service
+asserts on every write. The CLI's fixed grant carries it (widened for this tool,
+`docs/decisions/token-permissions.md` AMENDMENT), and a token still reaches it
+only where its owner's role holds the key.
+
 #### `attach_file`
 
 Put a **file on a work item** — so a reader sees the deliverable on the card

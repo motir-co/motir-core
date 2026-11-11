@@ -3,6 +3,7 @@ import {
   ACCEPTANCE_PUBLISH_PERMISSION,
   DEFAULT_TOKEN_GRANT,
   GRANTABLE_PERMISSIONS,
+  grantableFor,
   IRREVERSIBLE_PERMISSIONS,
   UNGRANTABLE_PERMISSIONS,
   V1_ONLY_PERMISSIONS,
@@ -119,6 +120,23 @@ describe('grantAllows', () => {
 
   it('refuses everything on an empty grant', () => {
     for (const key of GRANTABLE_PERMISSIONS) expect(grantAllows([], key)).toBe(false);
+  });
+});
+
+describe('repository:manage (MOTIR-11038)', () => {
+  it('is grantable by derivation from create_project_repository, and in the default grant', () => {
+    expect(TOOL_PERMISSIONS.create_project_repository).toBe('repository:manage');
+    expect(GRANTABLE_PERMISSIONS).toContain('repository:manage');
+    expect(DEFAULT_TOKEN_GRANT).toContain('repository:manage');
+  });
+
+  it('is offered by grantableFor only to an actor who already holds it', () => {
+    expect(grantableFor(new Set(['project:browse', 'repository:manage']))).toContain(
+      'repository:manage',
+    );
+    expect(grantableFor(new Set(['project:browse', 'work_item:edit']))).not.toContain(
+      'repository:manage',
+    );
   });
 });
 
@@ -343,6 +361,9 @@ describe('expandStoredGrant — reading a row written before this story', () => 
       // MOTIR-10183 — `update_coding_convention` makes `ai:configure` grantable;
       // no legacy scope ever conferred it, so a stale row never gains it.
       'ai:configure',
+      // MOTIR-11038 — `create_project_repository` makes `repository:manage`
+      // grantable; no legacy scope ever conferred it, so a stale row never gains it.
+      'repository:manage',
     ];
     expect(GRANTABLE_PERMISSIONS).toContain('page:view');
     expect(GRANTABLE_PERMISSIONS).toContain('page:edit');

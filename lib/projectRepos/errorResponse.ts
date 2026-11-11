@@ -18,6 +18,8 @@ import {
   ProjectRepoTakeoverStateError,
   RealizedRepoAlreadyClaimedError,
   RepoTransferRefusedError,
+  RepoEstablishBusyError,
+  RepoExistsWithOtherSpecError,
 } from '@/lib/projectRepos/errors';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 
@@ -78,7 +80,10 @@ export function mapProjectRepoError(err: unknown): NextResponse | null {
     err instanceof ProjectRepoStateTransitionError ||
     err instanceof ProjectRepoNotTransferableError ||
     err instanceof ProjectRepoTakeoverStateError ||
-    err instanceof GithubIdentityRequiredError
+    err instanceof GithubIdentityRequiredError ||
+    // MOTIR-11038 — the creation door's two dispositions, for its v1 transport.
+    err instanceof RepoExistsWithOtherSpecError ||
+    err instanceof RepoEstablishBusyError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }

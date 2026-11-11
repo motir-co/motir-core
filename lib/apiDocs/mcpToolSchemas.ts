@@ -1234,6 +1234,38 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  create_project_repository: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key, e.g. "ACME" — the project whose repository set gains the row.',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The BARE repository name to create, e.g. "acme-infra" — no owner, no "/". The name an init card declares as its `initRepositoryName`. Matched against the project\'s rows case-insensitively, as the git host matches names.',
+      },
+      role: {
+        type: 'string',
+        enum: ['web', 'api', 'mobile', 'shared', 'infra', 'other'],
+        description:
+          "The repository's role in the project — one of web · api · mobile · shared · infra · other.",
+      },
+      starterKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'A starter (seed-registry) key the repository starts from. OMIT it for an EMPTY base — omission never means the role\'s default starter, so "no starter covers this base" is expressible.',
+      },
+    },
+    required: ['projectKey', 'name', 'role'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   create_sprint: {
     type: 'object',
     properties: {
@@ -5131,6 +5163,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   create_folder: 'Create folder',
   create_page: 'Create page',
   create_plan: 'Open a plan to propose into',
+  create_project_repository: 'Create project repository',
   create_sprint: 'Create sprint',
   create_work_item: 'Create work item',
   delete_comment: 'Delete comment',
@@ -5384,6 +5417,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     destructiveHint: false,
     idempotentHint: false,
     openWorldHint: false,
+  },
+  create_project_repository: {
+    title: 'Create project repository',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
   },
   create_sprint: {
     title: 'Create sprint',

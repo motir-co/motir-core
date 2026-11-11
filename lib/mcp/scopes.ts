@@ -382,6 +382,10 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // scope rather than an item edit, and the real gate is the PERMISSION
   // (`work_item:edit`, in `toolPermissions.ts`) — the same key the link asserts.
   unlink_pull_request: 'work_items:write',
+  // `create_project_repository` (MOTIR-11038) — filed under `work_items:write` for
+  // totality only; its real gate is `repository:manage`, which no legacy scope
+  // confers, so a stale row never starts creating repositories.
+  create_project_repository: 'work_items:write',
   // `find_work_items_for_pull_request` (MOTIR-10331) — a READ of delivery rows,
   // filed under its siblings' bucket rather than `read` because its gate is the
   // edit key (`work_item:edit`, in `toolPermissions.ts`): a legacy `read` row

@@ -96,6 +96,10 @@ describe('the tool is reachable by the caller it was built for', () => {
       // the argument is at the constant. `page:delete` stays out.
       'page:view',
       'page:edit',
+      // MOTIR-11038 — `repository:manage`, for `create_project_repository`: an init
+      // card's agent creates the repository its card declares. The argument and the
+      // measured blast radius are at the constant.
+      'repository:manage',
       'ai:plan',
     ]);
   });

@@ -367,6 +367,12 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // creates the mistake is strictly worse than no door at all. `CLI_TOKEN_GRANT`
   // already carries `work_item:edit`, so nothing is widened here either.
   unlink_pull_request: 'work_item:edit',
+  // `create_project_repository` (Story MOTIR-10162 · MOTIR-11038) — appends a row
+  // to the project's repository set and establishes it. `projectRepoSetService`
+  // asserts `repository:manage` on every write to the set, so the row names that
+  // key and nothing narrower. It is the FIRST MCP tool to assert it, so the key
+  // becomes grantable by derivation; `CLI_TOKEN_GRANT` is WIDENED for it below.
+  create_project_repository: 'repository:manage',
   // `find_work_items_for_pull_request` (MOTIR-10331) — a READ, gated on the edit
   // key on purpose: its only use is to submit a review verdict for the cards it
   // returns, which needs `work_item:edit`. The service asserts it on every
@@ -725,6 +731,25 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
   // `motir login`; nothing rewrites a live credential's row (§5).
   'page:view',
   'page:edit',
+  // ⚠️ `repository:manage` — WIDENED DELIBERATELY for `create_project_repository`
+  // (Story MOTIR-10162 · MOTIR-11038), argued here on the terms the `lesson:*` and
+  // `page:*` keys above were. It sits after `page:edit` because that is catalog
+  // order (after `sprint:manage`, which this set does not hold).
+  //
+  // The argument: an init card's agent, driving the CLI, is THE caller the tool
+  // exists for — it creates the repository its card declares. The dispatch seam
+  // refuses before any handler runs, so without the key the tool would register,
+  // pass every suite against a wider token, and refuse that agent (MOTIR-3058,
+  // MOTIR-3051 above).
+  //
+  // The blast radius, measured rather than assumed: on the MCP surface this tool
+  // is the ONLY row asserting the key; no `/api/v1` operation declares it (the v1
+  // project-repositories route reads on `project:browse`); and the token still
+  // reaches it only where its OWNER's role holds `repository:manage` on the
+  // project. So what a device-minted credential gains is this one door: create a
+  // repository and settle its row. It cannot remove, move, re-point or take over
+  // a row — those writes have no token-reachable door.
+  'repository:manage',
   'ai:plan',
 ];
 

@@ -526,6 +526,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '0dd646f57b25',
   },
+  create_project_repository: {
+    // MOTIR-11038 (Story MOTIR-10162).
+    summary:
+      'Create one repository in a project’s repository set and establish it — the call an init ' +
+      'card makes. Replay-safe: repeating the call finds the row it made and writes nothing.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: 'e7024f995f0d',
+  },
   get_work_item: {
     // Re-pinned for MOTIR-3096, summary UNCHANGED and deliberately so: the tool
     // gained an optional `planId` that answers the SAME question over the live

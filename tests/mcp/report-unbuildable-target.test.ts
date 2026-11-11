@@ -193,6 +193,9 @@ describe('registered, permissioned, declared (criteria 1, 2, 7)', () => {
         // the argument is at the constant. `page:delete` stays out.
         'page:view',
         'page:edit',
+        // MOTIR-11038 — `repository:manage`, for `create_project_repository`; the
+        // argument is at the constant (a stated widening, not an unrelated one).
+        'repository:manage',
         'ai:plan',
       ]),
     );
