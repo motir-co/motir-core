@@ -22,6 +22,7 @@ import type {
   ShardAccountDTO,
   ShardBlockDTO,
   ShardPoolDTO,
+  ShardSizeSourceDTO,
 } from '@/lib/dto/fleetStatusPools';
 import type { PlatformPoolBlockDTO } from '@/lib/dto/platformFleetPools';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
@@ -165,6 +166,23 @@ export function judgeInstallBlock(
 
 type AwsPoolBlock = Extract<PlatformPoolBlockDTO, { provider: 'aws' }>;
 
+/**
+ * Which limit sets the account's size: the override, else whichever of the
+ * granted quota and the machine limit `shardAdmissionCeiling` took the minimum
+ * of. A tie reads as the granted quota, the one Monitoring → Pools shows.
+ */
+function accountSizeSource(
+  shard: FleetShard,
+  override: number | null,
+  sizeMachines: number | null,
+): ShardSizeSourceDTO | null {
+  if (override !== null) return 'override';
+  if (sizeMachines === null) return null;
+  if (shard.vcpuQuota === null) return 'machineLimit';
+  const fromQuota = shardAdmissionCeiling({ vcpuQuota: shard.vcpuQuota, machineLimit: null });
+  return fromQuota === sizeMachines ? 'granted' : 'machineLimit';
+}
+
 function accountRow(
   shard: FleetShard,
   role: 'shared' | 'spare',
@@ -185,7 +203,7 @@ function accountRow(
     role,
     state: shard.state,
     sizeMachines,
-    sizeSource: override !== null ? 'override' : sizeMachines === null ? null : 'granted',
+    sizeSource: accountSizeSource(shard, override, sizeMachines),
     grantedVcpu,
     grantedReadAt,
     running,

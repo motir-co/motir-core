@@ -14268,6 +14268,7 @@
           "spare": "Zapasowe"
         },
         "fromGranted": "z {vcpu} przyznanych vCPU",
+        "fromMachineLimit": "z limitu maszyn",
         "setByAdmin": "ustawione przez administratora platformy",
         "spareNotCounted": "konto zapasowe, nie liczone",
         "runningCell": "{count} · {vcpu} vCPU",

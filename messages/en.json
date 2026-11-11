@@ -14265,6 +14265,7 @@
           "spare": "Spare"
         },
         "fromGranted": "from {vcpu} vCPU granted",
+        "fromMachineLimit": "from its machine limit",
         "setByAdmin": "set by a platform admin",
         "spareNotCounted": "the spare, not counted",
         "runningCell": "{count} · {vcpu} vCPU",

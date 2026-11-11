@@ -14268,6 +14268,7 @@
           "spare": "Reserve"
         },
         "fromGranted": "uit {vcpu} toegekende vCPU",
+        "fromMachineLimit": "uit de machinelimiet",
         "setByAdmin": "ingesteld door een platformbeheerder",
         "spareNotCounted": "de reserve, niet geteld",
         "runningCell": "{count} · {vcpu} vCPU",

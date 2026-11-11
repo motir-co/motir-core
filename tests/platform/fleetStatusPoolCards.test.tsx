@@ -442,6 +442,28 @@ describe('the add-shard card', () => {
     ).toBe(mon.notReadLabel);
   });
 
+  it('an account sized by its machine limit says so, never a granted vCPU of 0', async () => {
+    const root = await shardCard(
+      block([
+        awsPool({
+          accounts: [
+            acct({ name: 'ci-limit', sizeMachines: 40, sizeSource: 'machineLimit' }),
+            acct({
+              name: 'ci-limit-only',
+              sizeMachines: 12,
+              sizeSource: 'machineLimit',
+              grantedVcpu: null,
+            }),
+          ],
+        }),
+      ]),
+    );
+    const table = root.querySelector('#pool-ci_runner-accounts')!;
+    const size = (name: string) => cells(table.querySelector(`tr[data-account="${name}"]`)!)[3];
+    expect(size('ci-limit')).toBe('40 machinesfrom its machine limit');
+    expect(size('ci-limit-only')).toBe('12 machinesfrom its machine limit');
+  });
+
   it('a pool whose size is unknown reads Not available with how many are not read (Panel 9)', async () => {
     const root = await shardCard(
       block([awsPool({ sizeMachines: null, notReadCount: 1, percent: null, flag: null })]),

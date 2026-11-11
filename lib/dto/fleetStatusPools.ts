@@ -66,8 +66,10 @@ export type InstallFleetBlockDTO =
 
 /** Where an account's size comes from. */
 export type ShardSizeSourceDTO =
-  /** `shardAdmissionCeiling` over the granted vCPU quota. */
+  /** `shardAdmissionCeiling`, bound by the granted vCPU quota. */
   | 'granted'
+  /** `shardAdmissionCeiling`, bound by the account's machine limit (or no quota read). */
+  | 'machineLimit'
   /** `admissionCeilingOverride`, set by a platform admin. */
   | 'override';
 

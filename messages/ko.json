@@ -14262,6 +14262,7 @@
           "spare": "예비"
         },
         "fromGranted": "부여된 {vcpu} vCPU 기준",
+        "fromMachineLimit": "머신 한도 기준",
         "setByAdmin": "플랫폼 관리자가 설정",
         "spareNotCounted": "예비 계정, 집계 제외",
         "runningCell": "{count} · {vcpu} vCPU",

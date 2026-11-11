@@ -779,9 +779,9 @@ function AccountRow({
                 ? t('shard.spareNotCounted')
                 : account.sizeSource === 'override'
                   ? t('shard.setByAdmin')
-                  : t('shard.fromGranted', {
-                      vcpu: format.number(account.grantedVcpu ?? 0),
-                    })}
+                  : account.sizeSource === 'granted' && account.grantedVcpu !== null
+                    ? t('shard.fromGranted', { vcpu: format.number(account.grantedVcpu) })
+                    : t('shard.fromMachineLimit')}
             </Sub>
           </>
         )}

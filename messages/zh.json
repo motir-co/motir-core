@@ -14259,6 +14259,7 @@
           "spare": "备用"
         },
         "fromGranted": "来自已授予的 {vcpu} vCPU",
+        "fromMachineLimit": "来自其机器上限",
         "setByAdmin": "由平台管理员设置",
         "spareNotCounted": "备用账户，不计入",
         "runningCell": "{count} · {vcpu} vCPU",

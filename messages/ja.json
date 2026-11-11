@@ -14265,6 +14265,7 @@
           "spare": "予備"
         },
         "fromGranted": "付与された {vcpu} vCPU から",
+        "fromMachineLimit": "マシン上限から",
         "setByAdmin": "プラットフォーム管理者が設定",
         "spareNotCounted": "予備のため数えません",
         "runningCell": "{count} · {vcpu} vCPU",

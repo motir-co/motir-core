@@ -11099,6 +11099,7 @@
   "platformAdmin.fleetStatus.shard.accounts.col.paused": "Paused until",
   "platformAdmin.fleetStatus.shard.role.spare": "Spare",
   "platformAdmin.fleetStatus.shard.fromGranted": "from {vcpu} vCPU granted",
+  "platformAdmin.fleetStatus.shard.fromMachineLimit": "from its machine limit",
   "platformAdmin.fleetStatus.shard.setByAdmin": "set by a platform admin",
   "platformAdmin.fleetStatus.shard.spareNotCounted": "the spare, not counted",
   "platformAdmin.fleetStatus.shard.runningCell": "{count} · {vcpu} vCPU",

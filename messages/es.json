@@ -14268,6 +14268,7 @@
           "spare": "Reserva"
         },
         "fromGranted": "de {vcpu} vCPU concedidas",
+        "fromMachineLimit": "de su límite de máquinas",
         "setByAdmin": "fijado por un administrador de la plataforma",
         "spareNotCounted": "la reserva, no contada",
         "runningCell": "{count} · {vcpu} vCPU",

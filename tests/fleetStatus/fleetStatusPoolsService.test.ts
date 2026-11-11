@@ -123,6 +123,7 @@ async function account(
     state?: 'active' | 'provisioning' | 'disabled';
     fleetKind?: FleetWorkloadKind;
     override?: number;
+    machineLimit?: number;
     pausedUntil?: Date;
     pausedReason?: 'capacity_refused' | 'provider_unavailable';
   } = {},
@@ -143,10 +144,11 @@ async function account(
     limits: granted === null ? {} : { vcpuQuota: granted },
     limitsSource: granted === null ? {} : { vcpuQuota: 'provider_read' },
   });
-  if (options.override !== undefined || options.pausedUntil) {
+  if (options.override !== undefined || options.pausedUntil || options.machineLimit !== undefined) {
     await adminDb.fleetShard.update({
       where: { id: shard.id },
       data: {
+        machineLimit: options.machineLimit ?? null,
         admissionCeilingOverride: options.override ?? null,
         admissionPausedUntil: options.pausedUntil ?? null,
         admissionPausedReason: options.pausedReason ?? null,
@@ -519,6 +521,30 @@ describe('fleetStatusPoolsService.readAddShard', () => {
         .map((p) => p.fleetKind),
     ).toEqual(['hosted_agent', 'code_graph_index', 'agent_instance']);
     expect(throwing).not.toHaveBeenCalled();
+  });
+
+  it('says the machine limit sets an account’s size when it binds or no quota is read', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    // 256 granted ÷ 2 = 128, under a limit of 200: the quota binds.
+    await account('ci-quota', { granted: 256, machineLimit: 200 });
+    // 256 granted ÷ 2 = 128, over a limit of 40: the limit binds.
+    await account('ci-limit', { granted: 256, machineLimit: 40 });
+    // No quota read, only a limit.
+    await account('ci-limit-only', { granted: null, machineLimit: 12 });
+
+    const block = await service.readAddShard(currentPrincipal, { now: NOW });
+    expect(
+      awsPool(block, 'ci_runner').accounts.map((a) => [
+        a.name,
+        a.sizeMachines,
+        a.sizeSource,
+        a.grantedVcpu,
+      ]),
+    ).toEqual([
+      ['ci-quota', 128, 'granted', 256],
+      ['ci-limit', 40, 'machineLimit', 256],
+      ['ci-limit-only', 12, 'machineLimit', null],
+    ]);
   });
 
   it('flags near size at 70% and at size at 100%', async () => {
