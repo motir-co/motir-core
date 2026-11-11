@@ -332,6 +332,15 @@ function inlineCommentsPlugin({ doc, read }: InlineCommentDecorationsOptions): P
       },
       handleKeyDown: (view, event) => {
         if (event.key === 'Escape' && target !== null) setTarget(view, null);
+        // A passage reached from the keyboard (the emphasised stretch takes focus)
+        // is activated as a click would: Enter opens its thread (MOTIR-10902).
+        if (event.key === 'Enter') {
+          const hit = washTarget(event.target);
+          if (hit && hit.element === view.dom.ownerDocument.activeElement) {
+            read().onClick?.(hit.ids[0]!);
+            return true;
+          }
+        }
         return false;
       },
     },

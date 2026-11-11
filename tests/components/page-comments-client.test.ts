@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createPageComment,
+  readPageThread,
   deletePageComment,
   editPageComment,
   listPageComments,
@@ -38,6 +39,13 @@ describe('pageCommentsClient', () => {
     fetchMock.mockResolvedValueOnce(json(body));
     await listPageComments('p', { status: 'open' });
     expect(lastCall()[0]).toBe('/api/pages/p/comments?status=open');
+  });
+
+  it('reads one thread by a comment id, escaping both ids (MOTIR-10902)', async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: 'r' }));
+    expect(await readPageThread('p 1', 'c/1')).toEqual({ ok: true, data: { id: 'r' } });
+    expect(lastCall()[0]).toBe('/api/pages/p%201/comments/c%2F1/thread');
+    expect(lastCall()[1]).toBeUndefined();
   });
 
   it('sends every write to its route with its method and body', async () => {

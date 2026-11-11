@@ -123,6 +123,18 @@ export function createPageComment(
   );
 }
 
+/**
+ * One thread by a comment's id, wherever it sits in either list (MOTIR-10902) —
+ * the read a `?thread=<id>` arrival resolves against. A reply's id answers the
+ * thread it sits in; `PAGE_COMMENT_NOT_FOUND` when the page holds no such comment.
+ */
+export function readPageThread(
+  pageId: string,
+  commentId: string,
+): Promise<PageCommentResult<WithWorkItemRefs<PageCommentThreadDto>>> {
+  return call(commentsPath(pageId, commentId, 'thread'));
+}
+
 /** Reply to a thread's root — the new reply. */
 export function replyToPageComment(
   pageId: string,

@@ -495,6 +495,25 @@ describe('emphasis, click and the tooltip', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('activates a passage reached from the keyboard with Enter, and leaves Enter alone elsewhere (MOTIR-10902)', async () => {
+    const state = stateFromMarkdown(BODY);
+    const h = mount({
+      initialState: state,
+      inlineThreads: twoThreads(state),
+      focusedInlineThreadId: 'b',
+    });
+    await flush();
+    const emphasised = h.washes()[1]!;
+    // Enter on a wash that does not hold focus is typing, not activation.
+    fireEvent.keyDown(emphasised, { key: 'Enter' });
+    expect(h.onClick).not.toHaveBeenCalled();
+    act(() => emphasised.focus());
+    fireEvent.keyDown(emphasised, { key: 'Enter' });
+    expect(h.onClick).toHaveBeenCalledWith('b');
+    fireEvent.keyDown(emphasised, { key: 'a' });
+    expect(h.onClick).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the Passage tooltip on hover — a name for one thread, a count for several — and Esc dismisses it', async () => {
     const state = stateFromMarkdown(BODY);
     const h = mount({ initialState: state, inlineThreads: twoThreads(state) });

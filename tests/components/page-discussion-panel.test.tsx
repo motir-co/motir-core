@@ -27,6 +27,7 @@ const client = {
   deletePageComment: vi.fn(),
   resolvePageCommentThread: vi.fn(),
   reopenPageCommentThread: vi.fn(),
+  readPageThread: vi.fn(),
 };
 
 vi.mock('@/app/(authed)/pages/[pageId]/_components/pageCommentsClient', () => ({
@@ -37,6 +38,7 @@ vi.mock('@/app/(authed)/pages/[pageId]/_components/pageCommentsClient', () => ({
   deletePageComment: (...args: unknown[]) => client.deletePageComment(...args),
   resolvePageCommentThread: (...args: unknown[]) => client.resolvePageCommentThread(...args),
   reopenPageCommentThread: (...args: unknown[]) => client.reopenPageCommentThread(...args),
+  readPageThread: (...args: unknown[]) => client.readPageThread(...args),
 }));
 
 // The composer embeds the client-only Tiptap MarkdownEditor — a labelled
@@ -62,9 +64,11 @@ vi.mock('@/components/ui/MarkdownEditor', () => ({
   ),
 }));
 
+// The address a PageView case opens on (MOTIR-10902's `?thread=`).
+const nav = vi.hoisted(() => ({ params: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => nav.params,
   // A `motir:` card chip reads the path for its quick-view link.
   usePathname: () => '/pages/page-1',
 }));
@@ -79,6 +83,8 @@ const host = vi.hoisted(() => ({
     onInlineAnchorsResolved?: (
       verdicts: Record<string, { from: number; to: number } | null>,
     ) => void;
+    focusedInlineThreadId?: string | null;
+    onInlineThreadClick?: (rootId: string) => void;
     passageComment?: {
       mentionCandidates: unknown[];
       onSubmit: (
@@ -91,7 +97,20 @@ const host = vi.hoisted(() => ({
 vi.mock('@/components/pages/PageEditorHost', () => ({
   default: (props: NonNullable<typeof host.props>) => {
     host.props = props;
-    return <div data-testid="editor-stub" />;
+    // One stretch per root, emphasised as the editor would, so a PageView case
+    // can see which passage is brought into view and focused (MOTIR-10902).
+    return (
+      <div data-testid="editor-stub">
+        {(props.inlineThreads ?? []).map((root) => (
+          <span
+            key={root.id}
+            data-wash-ids={root.id}
+            data-wash-state={props.focusedInlineThreadId === root.id ? 'emphasis' : 'rest'}
+            tabIndex={-1}
+          />
+        ))}
+      </div>
+    );
   },
 }));
 vi.mock('@/app/(authed)/pages/[pageId]/_components/LinkedWorkItemsStrip', () => ({
@@ -1363,5 +1382,305 @@ describe('PageView — comment on a passage (MOTIR-10900)', () => {
     }
     expect(host.props!.inlineThreads).toEqual([]);
     expect(screen.queryByTestId('page-discussion-count')).toBeNull();
+  });
+});
+
+describe('PageDiscussionPanel — arrival (MOTIR-10902)', () => {
+  const PASSAGE = { bytes: 'AQIH', quote: 'the second milestone' };
+
+  it('lands on a thread the loaded list holds with no read: the ring, focus, and the report', async () => {
+    const target = thread(BO, [], { anchor: PASSAGE });
+    const onThreadFocus = vi.fn();
+    client.listPageComments.mockResolvedValueOnce(list([thread(ME), target]));
+    const view = await mountPanel({ onThreadFocus });
+    view.rerender(
+      <PageDiscussionPanel
+        pageId="page-1"
+        archived={false}
+        currentUserId={ME.id}
+        currentUserName={ME.name}
+        mentionCandidates={CANDIDATES}
+        onClose={onClose}
+        onThreadFocus={onThreadFocus}
+        arrival={{ threadId: target.id, seq: 1 }}
+      />,
+    );
+    await act(async () => {});
+    const article = screen.getByTestId(`page-thread-${target.id}`);
+    expect(article.dataset['threadArrived']).toBe('true');
+    expect(article.className).toContain('ring-(--focus-ring-color)');
+    expect(document.activeElement).toBe(article);
+    expect(onThreadFocus).toHaveBeenCalledWith(target.id);
+    expect(client.readPageThread).not.toHaveBeenCalled();
+  });
+
+  it('reads a resolved thread by id, switches to Resolved and puts it on top, focused', async () => {
+    const resolved = thread(BO, [], {
+      anchor: PASSAGE,
+      resolvedAt: '2026-11-10T12:00:00.000Z',
+      resolvedBy: ME,
+    });
+    const other = thread(ME, [], { resolvedAt: '2026-11-10T13:00:00.000Z', resolvedBy: ME });
+    client.listPageComments
+      .mockResolvedValueOnce(list([thread(ME)]))
+      .mockResolvedValueOnce(list([other], { nextCursor: 'more' }));
+    client.readPageThread.mockResolvedValueOnce(ok({ ...resolved, workItemRefs: {} }));
+    await mountPanel({ arrival: { threadId: 'reply-of-it', seq: 1 } });
+    await act(async () => {});
+    expect(client.readPageThread).toHaveBeenCalledWith('page-1', 'reply-of-it');
+    expect(switchButton('Resolved').getAttribute('aria-pressed')).toBe('true');
+    const items = within(screen.getByRole('list', { name: 'Resolved threads' })).getAllByRole(
+      'listitem',
+    );
+    expect(within(items[0]!).getByTestId(`page-thread-${resolved.id}`)).toBeTruthy();
+    expect(items).toHaveLength(2);
+    expect(document.activeElement).toBe(screen.getByTestId(`page-thread-${resolved.id}`));
+  });
+
+  it('keeps a thread past the loaded window on top once the Open list answers', async () => {
+    const far = thread(BO, [], { anchor: PASSAGE });
+    const pending = deferred<PageCommentResult<PageDiscussionList>>();
+    client.listPageComments.mockReturnValueOnce(pending.promise);
+    client.readPageThread.mockResolvedValueOnce(ok({ ...far, workItemRefs: {} }));
+    await mountPanel({ arrival: { threadId: far.id, seq: 1 } });
+    await act(async () => pending.resolve(list([thread(ME)], { nextCursor: 'c' })));
+    const items = within(openList()).getAllByRole('listitem');
+    expect(within(items[0]!).getByTestId(`page-thread-${far.id}`)).toBeTruthy();
+    expect(screen.getByTestId(`page-thread-${far.id}`).dataset['threadArrived']).toBe('true');
+  });
+
+  it('draws the Not-here line for a thread the by-id read does not find, with nothing focused', async () => {
+    client.listPageComments.mockResolvedValueOnce(list([thread(ME)]));
+    client.readPageThread.mockResolvedValueOnce(refused(404, 'PAGE_COMMENT_NOT_FOUND'));
+    await mountPanel({ arrival: { threadId: 'gone-id', seq: 1 } });
+    await act(async () => {});
+    expect(screen.getByRole('status').textContent).toBe('That comment is no longer on this page.');
+    expect(document.querySelector('[data-thread-arrived]')).toBeNull();
+  });
+
+  it('lands nowhere and says nothing when the by-id read fails for another reason', async () => {
+    client.listPageComments.mockResolvedValueOnce(list([thread(ME)]));
+    client.readPageThread.mockResolvedValueOnce(refused(0, 'NETWORK'));
+    await mountPanel({ arrival: { threadId: 'some-id', seq: 1 } });
+    await act(async () => {});
+    expect(screen.queryByTestId('page-thread-not-here')).toBeNull();
+    expect(document.querySelector('[data-thread-arrived]')).toBeNull();
+  });
+
+  it('offers Show in page on an open inline thread only, below 1280px', async () => {
+    const inline = thread(BO, [], { anchor: PASSAGE });
+    const gone = thread(BO, [], { anchor: { bytes: 'AQII', quote: 'old text' } });
+    const pageLevel = thread(ME);
+    const onShowInPage = vi.fn();
+    client.listPageComments.mockResolvedValueOnce(list([inline, gone, pageLevel]));
+    await mountPanel({ onShowInPage, goneThreadIds: new Set([gone.id]) });
+    const show = within(screen.getByTestId(`page-thread-${inline.id}`)).getByRole('button', {
+      name: 'Show in page',
+    });
+    expect(show.className).toContain('xl:hidden');
+    for (const id of [gone.id, pageLevel.id]) {
+      expect(
+        within(screen.getByTestId(`page-thread-${id}`)).queryByRole('button', {
+          name: 'Show in page',
+        }),
+      ).toBeNull();
+    }
+    fireEvent.click(show);
+    expect(onShowInPage).toHaveBeenCalledWith(inline.id);
+  });
+
+  it('draws Show in page for a reader who may not write, in an action row of its own', async () => {
+    const inline = thread(BO, [], { anchor: PASSAGE });
+    client.listPageComments.mockResolvedValueOnce(
+      list([inline], { capabilities: { canComment: false, canModerate: false } }),
+    );
+    await mountPanel({ onShowInPage: vi.fn() });
+    const article = screen.getByTestId(`page-thread-${inline.id}`);
+    expect(within(article).getByRole('button', { name: 'Show in page' })).toBeTruthy();
+    expect(within(article).queryByRole('button', { name: 'Resolve' })).toBeNull();
+  });
+});
+
+describe('PageView — focus both ways and the thread link (MOTIR-10902)', () => {
+  const PASSAGE = { bytes: 'AQIJ', quote: 'the second milestone' };
+  let scrolled: HTMLElement[];
+
+  beforeEach(() => {
+    scrolled = [];
+    nav.params = new URLSearchParams();
+    window.history.replaceState(null, '', '/pages/page-1');
+    vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      scrolled.push(this);
+    });
+    // Off-screen, so the reveal scrolls.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 5000,
+      bottom: 5020,
+    } as DOMRect);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    nav.params = new URLSearchParams();
+  });
+
+  function mountView(roots: PageCommentDto[], extra: { version?: boolean } = {}) {
+    host.props = null;
+    return render(
+      <Suspense fallback={<p>frame</p>}>
+        <PageView
+          page={{ id: 'page-1', title: 'Plan', bodyState: 'AAA=', canEdit: false }}
+          viewerId={ME.id}
+          viewerName={ME.name}
+          mentionCandidates={CANDIDATES}
+          openThreadCount={roots.length}
+          inlineThreads={roots}
+          titleMaxLength={255}
+          {...extra}
+        />
+      </Suspense>,
+    );
+  }
+  const frame = () => act(async () => new Promise<void>((r) => requestAnimationFrame(() => r())));
+  const wash = (id: string) => document.querySelector<HTMLElement>(`[data-wash-ids="${id}"]`)!;
+
+  it('arrives from the address: the panel at the thread (History closed), its passage scrolled to and emphasised', async () => {
+    const root = comment(BO, { anchor: PASSAGE });
+    nav.params = new URLSearchParams({ thread: root.id, version: '3' });
+    client.listPageComments.mockResolvedValue(list([{ ...root, replies: [] }]));
+    client.readPageThread.mockResolvedValue(ok({ ...root, replies: [], workItemRefs: {} }));
+    mountView([root]);
+    await screen.findByTestId('editor-stub');
+    await act(async () => {});
+    expect(document.getElementById('page-discussion')).toBeTruthy();
+    expect(document.getElementById('page-history')).toBeNull();
+    expect(host.props!.focusedInlineThreadId).toBe(root.id);
+    expect(screen.getByTestId(`page-thread-${root.id}`).dataset['threadArrived']).toBe('true');
+    // The editor answers where the passage is: then it is brought into view.
+    expect(scrolled).toEqual([]);
+    await act(async () => host.props!.onInlineAnchorsResolved!({ [root.id]: { from: 1, to: 9 } }));
+    await frame();
+    expect(scrolled).toContain(wash(root.id));
+    expect(wash(root.id).dataset['washState']).toBe('emphasis');
+  });
+
+  it('scrolls nothing for a thread with no wash — resolved, gone or page-level', async () => {
+    const goneRoot = comment(BO, { anchor: PASSAGE });
+    nav.params = new URLSearchParams({ thread: goneRoot.id });
+    client.listPageComments.mockResolvedValue(list([{ ...goneRoot, replies: [] }]));
+    client.readPageThread.mockResolvedValue(ok({ ...goneRoot, replies: [], workItemRefs: {} }));
+    mountView([goneRoot]);
+    await screen.findByTestId('editor-stub');
+    await act(async () => host.props!.onInlineAnchorsResolved!({ [goneRoot.id]: null }));
+    await frame();
+    expect(scrolled).toEqual([]);
+    cleanup();
+    const pageLevel = thread(ME);
+    nav.params = new URLSearchParams({ thread: pageLevel.id });
+    client.listPageComments.mockResolvedValue(list([pageLevel]));
+    client.readPageThread.mockResolvedValue(ok({ ...pageLevel, workItemRefs: {} }));
+    mountView([]);
+    await screen.findByTestId('editor-stub');
+    await act(async () => {});
+    await frame();
+    expect(screen.getByTestId(`page-thread-${pageLevel.id}`).dataset['threadArrived']).toBe('true');
+    expect(scrolled).toEqual([]);
+  });
+
+  it('opens the panel at a clicked wash and names it in the address; closing removes it', async () => {
+    const root = comment(BO, { anchor: PASSAGE });
+    client.listPageComments.mockResolvedValue(list([{ ...root, replies: [] }]));
+    client.readPageThread.mockResolvedValue(ok({ ...root, replies: [], workItemRefs: {} }));
+    mountView([root]);
+    await screen.findByTestId('editor-stub');
+    const push = vi.spyOn(window.history, 'pushState');
+    await act(async () => host.props!.onInlineThreadClick!(root.id));
+    await act(async () => {});
+    expect(document.getElementById('page-discussion')).toBeTruthy();
+    expect(window.location.search).toBe(`?thread=${root.id}`);
+    // The panel's focus on the arrived thread pushes no second entry.
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId(`page-thread-${root.id}`).dataset['threadArrived']).toBe('true');
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Discussion/ })));
+    expect(window.location.search).toBe('');
+    expect(host.props!.focusedInlineThreadId).toBeNull();
+  });
+
+  it('a thread focused in the panel emphasises and reveals its passage and pushes one entry', async () => {
+    const a = comment(BO, { anchor: PASSAGE });
+    const b = comment(ME, { anchor: { bytes: 'AQIK', quote: 'the budget' } });
+    client.listPageComments.mockResolvedValue(
+      list([
+        { ...a, replies: [] },
+        { ...b, replies: [] },
+      ]),
+    );
+    mountView([a, b]);
+    await screen.findByTestId('editor-stub');
+    await act(async () =>
+      host.props!.onInlineAnchorsResolved!({
+        [a.id]: { from: 1, to: 3 },
+        [b.id]: { from: 5, to: 9 },
+      }),
+    );
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Discussion/ })));
+    const push = vi.spyOn(window.history, 'pushState');
+    const resolve = within(screen.getByTestId(`page-thread-${b.id}`)).getByRole('button', {
+      name: 'Resolve',
+    });
+    await act(async () => fireEvent.focus(resolve));
+    await act(async () => fireEvent.focus(resolve));
+    await frame();
+    expect(host.props!.focusedInlineThreadId).toBe(b.id);
+    expect(scrolled).toEqual([wash(b.id)]);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe(`?thread=${b.id}`);
+  });
+
+  it('Show in page closes the sheet and focuses the passage', async () => {
+    const root = comment(BO, { anchor: PASSAGE });
+    client.listPageComments.mockResolvedValue(list([{ ...root, replies: [] }]));
+    mountView([root]);
+    await screen.findByTestId('editor-stub');
+    await act(async () => host.props!.onInlineAnchorsResolved!({ [root.id]: { from: 1, to: 3 } }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Discussion/ })));
+    await act(async () =>
+      fireEvent.click(
+        within(screen.getByTestId(`page-thread-${root.id}`)).getByRole('button', {
+          name: 'Show in page',
+        }),
+      ),
+    );
+    await frame();
+    expect(document.getElementById('page-discussion')).toBeNull();
+    expect(document.activeElement).toBe(wash(root.id));
+    expect(scrolled).toEqual([wash(root.id)]);
+  });
+
+  it('arrives again when the address changes under an open page, and not for its own push', async () => {
+    const a = comment(BO, { anchor: PASSAGE });
+    const b = thread(ME);
+    client.listPageComments.mockResolvedValue(list([{ ...a, replies: [] }, b]));
+    client.readPageThread.mockResolvedValue(ok({ ...b, workItemRefs: {} }));
+    const view = mountView([a]);
+    await screen.findByTestId('editor-stub');
+    nav.params = new URLSearchParams({ thread: b.id });
+    view.rerender(
+      <Suspense fallback={<p>frame</p>}>
+        <PageView
+          page={{ id: 'page-1', title: 'Plan', bodyState: 'AAA=', canEdit: false }}
+          viewerId={ME.id}
+          viewerName={ME.name}
+          mentionCandidates={CANDIDATES}
+          openThreadCount={1}
+          inlineThreads={[a]}
+          titleMaxLength={255}
+        />
+      </Suspense>,
+    );
+    await act(async () => {});
+    expect(document.getElementById('page-discussion')).toBeTruthy();
+    expect(screen.getByTestId(`page-thread-${b.id}`).dataset['threadArrived']).toBe('true');
   });
 });

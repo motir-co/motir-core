@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { CircleCheck, RotateCcw, Unlink } from 'lucide-react';
+import { CircleCheck, RotateCcw, TextSearch, Unlink } from 'lucide-react';
+import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
 import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
@@ -27,6 +28,12 @@ import { PageCommentItem } from './PageCommentItem';
 // nothing (`gone`) and only on an unresolved thread — a resolved thread
 // highlights nothing, and "no answer yet" is not gone. `data-thread-anchor`
 // reads what the row shows: `page`, `inline` or `gone`.
+//
+// ⚠️ THE ARRIVAL RING (MOTIR-10902) is drawn on the thread an address or a wash
+// click landed on, and focus moves onto the thread (`tabindex="-1"`) each time
+// a new arrival names it. Focus moving into a thread by any route is reported
+// (`onFocusThread`), so the page can bring its passage into view. Below 1280px
+// an inline thread with a passage to show carries Show in page.
 //
 // ⚠️ A RESOLVED THREAD READS UNTIL IT IS REOPENED: no Reply, Edit or Delete in
 // it — Reopen is its one action.
@@ -53,6 +60,12 @@ export interface PageCommentThreadProps {
   onDelete: (commentId: string) => Promise<string | null>;
   onResolve: () => void;
   onReopen: () => void;
+  /** The arrival that landed on this thread, or `null`: the ring, and focus on each new one. */
+  arrivalSeq?: number | null;
+  /** Focus moved into this thread. */
+  onFocusThread?: (threadId: string) => void;
+  /** Show in page (below 1280px only); omitted → not drawn. */
+  onShowInPage?: () => void;
 }
 
 export function PageCommentThread({
@@ -69,6 +82,9 @@ export function PageCommentThread({
   onDelete,
   onResolve,
   onReopen,
+  arrivalSeq = null,
+  onFocusThread,
+  onShowInPage,
 }: PageCommentThreadProps) {
   const t = useTranslations('pages.discussion');
   const tc = useTranslations('comments');
@@ -85,13 +101,28 @@ export function PageCommentThread({
 
   const rail = thread.replies.length > 0 || (writable && replying);
   const showGone = thread.anchor !== null && gone && !resolved;
+  // A passage to show: an open inline thread whose passage is not gone.
+  const showInPage = onShowInPage !== undefined && thread.anchor !== null && !resolved && !showGone;
+  const articleRef = useRef<HTMLElement>(null);
+  const arrived = arrivalSeq !== null;
+  useEffect(() => {
+    if (arrivalSeq === null) return;
+    articleRef.current?.focus();
+  }, [arrivalSeq]);
 
   return (
     <article
+      ref={articleRef}
       aria-label={t('threadLabel', { name: thread.author.name })}
       data-testid={`page-thread-${thread.id}`}
       data-thread-anchor={thread.anchor === null ? 'page' : showGone ? 'gone' : 'inline'}
-      className="flex flex-col gap-3 border-b border-(--el-border-soft) py-4 last:border-b-0"
+      data-thread-arrived={arrived ? 'true' : undefined}
+      tabIndex={arrived ? -1 : undefined}
+      onFocus={() => onFocusThread?.(thread.id)}
+      className={cn(
+        'flex flex-col gap-3 border-b border-(--el-border-soft) py-4 last:border-b-0 focus:outline-none',
+        arrived && 'my-1 rounded-(--radius-card) px-2 ring-2 ring-(--focus-ring-color)',
+      )}
     >
       {resolved ? <ResolvedLine thread={thread} /> : null}
       {thread.anchor ? (
@@ -167,22 +198,35 @@ export function PageCommentThread({
           {error}
         </p>
       ) : null}
-      {canWrite ? (
-        <div className="flex">
-          <Button
-            size="sm"
-            variant="ghost"
-            leftIcon={
-              resolved ? (
-                <RotateCcw className="h-3.5 w-3.5" />
-              ) : (
-                <CircleCheck className="h-3.5 w-3.5" />
-              )
-            }
-            onClick={resolved ? onReopen : onResolve}
-          >
-            {resolved ? t('reopen') : t('resolve')}
-          </Button>
+      {canWrite || showInPage ? (
+        <div className="flex gap-1">
+          {canWrite ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              leftIcon={
+                resolved ? (
+                  <RotateCcw className="h-3.5 w-3.5" />
+                ) : (
+                  <CircleCheck className="h-3.5 w-3.5" />
+                )
+              }
+              onClick={resolved ? onReopen : onResolve}
+            >
+              {resolved ? t('reopen') : t('resolve')}
+            </Button>
+          ) : null}
+          {showInPage ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="xl:hidden"
+              leftIcon={<TextSearch className="h-3.5 w-3.5" />}
+              onClick={onShowInPage}
+            >
+              {t('inline.showInPage')}
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </article>

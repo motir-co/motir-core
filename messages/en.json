@@ -16848,7 +16848,9 @@
         "action": "Comment",
         "actionLabel": "Comment on the selected text",
         "editorLabel": "Comment on this passage",
-        "anchorRefused": "This passage can no longer be anchored. Select it again and comment."
+        "anchorRefused": "This passage can no longer be anchored. Select it again and comment.",
+        "notHere": "That comment is no longer on this page.",
+        "showInPage": "Show in page"
       }
     },
     "archive": {
