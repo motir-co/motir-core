@@ -5,10 +5,10 @@
  * if not, how long has the oldest undeployed commit been waiting?
  *
  * ⚠️ WHY IT EXISTS AT ALL — the cost was the SILENCE, not the wait. On
- * 2026-08-28 `6dafd2ee8` merged at 07:44:30Z, the last Fly release was 08:47:04Z
- * reusing an image built at 07:51, and at 11:00Z the running worker bundle still
- * contained 278 references to a job engine that no longer exists anywhere in the
- * repository. Production ran code `main` had deleted for over three hours, a
+ * 2026-08-28 `6dafd2ee8` merged at 07:44:30Z, the last release (then on Fly)
+ * was 08:47:04Z reusing an image built at 07:51, and at 11:00Z the running
+ * worker bundle still contained 278 references to a job engine that no longer
+ * exists anywhere in the repository. Production ran code `main` had deleted for over three hours, a
  * scheduled health check dead-lettered against it, and every dashboard was
  * green. A deploy's latency is defensible; a deploy's latency that nobody can
  * SEE is not.
@@ -26,9 +26,9 @@
  *     (`.github/workflows/deploy-freshness.yml`) that is red when the gap is too
  *     old.
  *
- * Same arrangement, and the same reason, as `scripts/machinePool.mjs`: the
- * runner reads a URL, shells out to `git`, prints and `process.exit`s, none of
- * which a test can call. Everything in THIS module is pure — it takes what was
+ * Same arrangement, and the same reason, as `scripts/mainCiRetry.mjs` and the
+ * other logic halves in this directory: the runner reads a URL, shells out to
+ * `git`, prints and `process.exit`s, none of which a test can call. Everything in THIS module is pure — it takes what was
  * read and returns a verdict — so every branch below has a deliberate negative
  * in `tests/scripts/assert-deploy-freshness.test.ts` rather than being trusted
  * because no red run has contradicted it.
@@ -58,7 +58,10 @@ export const EXIT_BLIND_READ = 3;
  * successful push-to-`main` runs, 2026-08-29/30 (33248423068, 33250609131,
  * 33270573757, 33271383815, 33272081857, 33282807240, 33285015926, 33285023182,
  * 33307649462): created→`Deploy to Fly` complete ran 21.2 · 22.1 · 23.0 · 27.1 ·
- * 34.0 · 34.1 · 34.4 · 42.4 · 45.2 minutes. The worst is 45.2.
+ * 34.0 · 34.1 · 34.4 · 42.4 · 45.2 minutes. The worst is 45.2. That was the
+ * deploy lane then; it was deleted by MOTIR-10935, and production ships through
+ * `.github/workflows/aws-deploy.yml` now — re-measure against that lane's
+ * merge→`Deploy to AWS` complete before moving the threshold.
  *
  * A merge BURST costs another cycle on top of that, by design rather than by
  * accident: GitHub holds one PENDING run per concurrency group, so a merge
@@ -110,9 +113,9 @@ export function parseReleaseBody(body) {
   if (release === null || release === undefined) {
     throw new Error(
       'the deployment does not know which commit it was built from — `MOTIR_RELEASE` is unset in ' +
-        'the running image. A self-hosted build answers this way legitimately; a Fly release must ' +
-        'not, and the deploy job passes `--build-arg MOTIR_RELEASE=$GITHUB_SHA` precisely so it ' +
-        'cannot.',
+        'the running image. A self-hosted build answers this way legitimately; a production ' +
+        'release must not, and `aws-deploy.yml` passes `MOTIR_RELEASE=${{ github.sha }}` as a ' +
+        'build argument precisely so it cannot.',
     );
   }
   if (typeof release !== 'string' || !SHA.test(release)) {

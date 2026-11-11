@@ -991,10 +991,13 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         expect(cacheWorkflow).toMatch(/^\s*workflow_dispatch:$/m);
       });
 
-      it('is not in `deploy`’s needs — a cold cache must never stop a release', () => {
+      it('is not a dependency of the release — a cold cache must never stop one', () => {
         // It verifies nothing (the queue entry already gated the merge), so
         // depending on it would convert a slow build into a blocked release.
-        expect(codeOf(ciJobs.get('deploy') ?? '')).not.toMatch(/image-cache/);
+        // The release left `ci.yml` with the Fly deploy job (MOTIR-10935) and is
+        // `aws-deploy.yml` now, so that is the lane read.
+        const awsDeploy = read('.github/workflows/aws-deploy.yml');
+        expect(codeOf(awsDeploy)).not.toMatch(/image-cache/);
       });
     });
   });
@@ -1342,11 +1345,11 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
 
     it('still gates the MERGE, so nothing reaches `main` without it', () => {
       // The legs left the PR lane, then left the push lane; they did not leave
-      // the gate. `deploy` cannot be the assertion any more — the job is skipped
-      // on a push, and a skipped `needs` entry would stop the release rather
-      // than gate it — so the property is read where it now lives: the required
-      // `CI complete` context, which a merge-queue entry must satisfy.
-      expect(codeOf(ciJobs.get('deploy') ?? '')).not.toMatch(/needs:.*\be2e-at-scale\b/);
+      // the gate. The property is read where it lives: the required `CI
+      // complete` context, which a merge-queue entry must satisfy. (The retired
+      // Fly `deploy` job was never the place — a skipped `needs` entry would
+      // have stopped that release rather than gate it — and MOTIR-10935
+      // deleted it.)
       expect(codeOf(ciJobs.get('ci-complete') ?? '')).toMatch(/\be2e-at-scale\b/);
     });
 

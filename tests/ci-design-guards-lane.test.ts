@@ -126,7 +126,7 @@ const READS_DESIGN_TREE = /(?<!Promise\.)(?:join|resolve)\(\s*[^)]*?['"]design(?
  * lane, each with the reason. Empty today, and that is the point: it exists so
  * that excluding one is a written decision rather than a silent omission.
  *
- * `tests/fly-runtime-config.test.ts` is NOT here because it does not match —
+ * `tests/runtime-image.test.ts` is NOT here because it does not match —
  * it names `design` as a directory the Dockerfile asserts is ABSENT from the
  * standalone output (it used to PRUNE it; MOTIR-3219 removed the sweep that
  * made a prune necessary), in a regex over the Dockerfile's own text, and never

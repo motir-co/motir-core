@@ -87,8 +87,8 @@ const e2eBody = ciJobs.get('e2e');
 
 /**
  * The workflow ABOVE `jobs:`, comments stripped — the triggers and the
- * workflow-level `concurrency` block. Same idiom as `ciHeader` in
- * `tests/ci-fly-deploy.test.ts`.
+ * workflow-level `concurrency` block. Same idiom as `header` in
+ * `tests/ci-merge-queue.test.ts`.
  */
 const acceptanceHeader = codeOf(acceptanceWorkflow.split(/^jobs:\s*$/m)[0] ?? '');
 
@@ -676,7 +676,7 @@ describe('THE NIGHTLY runs the lane against `main` (MOTIR-2760 · MOTIR-10277)',
   it('cancels superseded runs on a PR but NEVER a nightly, a dispatch or a queue entry', () => {
     // A cancelled nightly is a night with no verdict, and a cancelled dispatch
     // is a bisect step lost. Blanket `cancel-in-progress: true` would do both.
-    // Same expression, and the same assertion, as `tests/ci-fly-deploy.test.ts` —
+    // Same expression, and the same assertion, as `tests/ci-merge-queue.test.ts` —
     // deliberately one idiom, not two.
     expect(codeOf(acceptanceWorkflow)).toMatch(
       /cancel-in-progress:\s*\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}/,
