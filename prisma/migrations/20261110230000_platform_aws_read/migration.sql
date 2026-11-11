@@ -7,7 +7,7 @@
 -- ── ROW-LEVEL SECURITY ─────────────────────────────────────────────────────
 -- Platform staff only, both ways: the one reader and writer is
 -- `platformServicesService.read`, inside `withPlatformRead`, which binds
--- `app.platform_staff` and appends the `estate.read` audit row in the same
+-- `app.platform_staff` and appends the `services.read` audit row in the same
 -- transaction. ONE `FOR ALL` arm, so UPDATE/DELETE have a permissive policy.
 -- Grants: the add_workspace_rls migration's ALTER DEFAULT PRIVILEGES covers
 -- every new table.

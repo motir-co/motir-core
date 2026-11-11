@@ -316,8 +316,10 @@ describe('judgeShare', () => {
   it.each([
     [4, 16, { percent: 25, verdict: 'under', headroom: 7.2, over: 0 }],
     [11.2, 16, { percent: 70, verdict: 'over70', headroom: 4.8, over: 0 }],
+    [69.75, 100, { percent: 69, verdict: 'under', headroom: 0.25, over: 0 }],
+    [99.6, 100, { percent: 99, verdict: 'over70', headroom: 0.4, over: 0 }],
     [16, 16, { percent: 100, verdict: 'atQuota', headroom: 0, over: 0 }],
-    [18.5, 16, { percent: 116, verdict: 'atQuota', headroom: 0, over: 2.5 }],
+    [18.5, 16, { percent: 115, verdict: 'atQuota', headroom: 0, over: 2.5 }],
     [0, 0, { percent: 100, verdict: 'atQuota', headroom: 0, over: 0 }],
     [1, 0, { percent: 100, verdict: 'atQuota', headroom: 0, over: 1 }],
   ] as const)('%s vCPU of %s', (vcpu, quota, expected) => {
@@ -362,7 +364,7 @@ describe('platformServicesService.read', () => {
       account: ACCOUNT,
       readAt: NOW.toISOString(),
       quota: { status: 'ok', vcpu: 16, readAt: NOW.toISOString() },
-      share: { percent: 38, verdict: 'under' },
+      share: { percent: 37, verdict: 'under' },
     });
     expect(dto.read.status === 'ok' && dto.read.services.map((r) => r.name)).toEqual([
       'extra-one',

@@ -236,9 +236,9 @@ describe('the services card', () => {
     expect(html).toContain('1 rolling');
     expect(html).toContain('1 rollout failed');
     expect(html).toContain('1 service short of tasks');
-    // Total: 2 + (1 + 1) + 1 + 0.25 + 0 = 5.25 vCPU of 16 ⇒ 33%.
+    // Total: 2 + (1 + 1) + 1 + 0.25 + 0 = 5.25 vCPU of 16 ⇒ 32.8%, shown floored as 32%.
     expect(html).toContain('data-verdict="under"');
-    expect(html).toContain('33% of the Fargate quota');
+    expect(html).toContain('32% of the Fargate quota');
     expect(html).toContain('5.25 vCPU');
     expect(html).toContain('5.95 vCPU to go to 70%'); // 11.2 − 5.25
   });

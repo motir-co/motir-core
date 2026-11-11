@@ -182,12 +182,16 @@ export function judgeCluster(
   };
 }
 
-/** The total against the quota: under 70%, at or over 70%, at or past the quota. */
+/**
+ * The total against the quota: under 70%, at or over 70%, at or past the quota.
+ * The percent is FLOORED so the number never reads past the verdict beside it
+ * (69.75% shows 69%, under; 99.6% shows 99%, over 70%, not 100%).
+ */
 export function judgeShare(vcpu: number, quota: number): PlatformServicesShareDTO {
   const ratio = quota > 0 ? vcpu / quota : vcpu > 0 ? Infinity : 1;
   const verdict = ratio >= 1 ? 'atQuota' : ratio >= HEADROOM_ALERT_FRACTION ? 'over70' : 'under';
   return {
-    percent: quota > 0 ? Math.round(ratio * 100) : 100,
+    percent: quota > 0 ? Math.floor(ratio * 100) : 100,
     verdict,
     headroom:
       verdict === 'under'

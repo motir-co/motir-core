@@ -115,10 +115,14 @@ async function describeServices(
     const { services = [], failures = [] } = await client.send(
       new DescribeServicesCommand({ cluster, services: arns.slice(i, i + DESCRIBE_BATCH) }),
     );
-    // A listed service ECS then cannot describe is an unread service, and a
-    // cluster read missing one is not the cluster: fail the read.
-    if (failures.length > 0) {
-      throw new Error(`ECS could not describe ${failures.length} service(s) in ${cluster}`);
+    // A service deleted between ListServices and DescribeServices answers
+    // `MISSING`: it is no longer in the cluster, so the cluster without it is
+    // the truth. Any OTHER failure is a listed service ECS could not describe —
+    // an unread service — and a cluster read missing one is not the cluster:
+    // fail the read.
+    const unread = failures.filter((f) => f.reason !== 'MISSING');
+    if (unread.length > 0) {
+      throw new Error(`ECS could not describe ${unread.length} service(s) in ${cluster}`);
     }
     for (const service of services) {
       if (!service.serviceName || !service.serviceArn || !service.taskDefinition) {

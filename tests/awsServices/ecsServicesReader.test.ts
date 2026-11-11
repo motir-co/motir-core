@@ -177,15 +177,27 @@ describe('listServices', () => {
   it('fails the read when ECS cannot describe a listed service', async () => {
     ecsAnswering((command) =>
       command instanceof ListServicesCommand
+        ? { serviceArns: [arn('service', 'motir-core/odd')] }
+        : {
+            services: [],
+            failures: [{ arn: arn('service', 'motir-core/odd'), reason: 'INTERNAL_ERROR' }],
+          },
+    );
+    await expect(createEcsServicesReader().listServices('motir-core')).rejects.toThrow(
+      'could not describe 1 service(s)',
+    );
+  });
+
+  it('drops a service deleted between the list and the describe (MISSING), and reads the rest', async () => {
+    ecsAnswering((command) =>
+      command instanceof ListServicesCommand
         ? { serviceArns: [arn('service', 'motir-core/gone')] }
         : {
             services: [],
             failures: [{ arn: arn('service', 'motir-core/gone'), reason: 'MISSING' }],
           },
     );
-    await expect(createEcsServicesReader().listServices('motir-core')).rejects.toThrow(
-      'could not describe 1 service(s)',
-    );
+    await expect(createEcsServicesReader().listServices('motir-core')).resolves.toEqual([]);
   });
 
   it('fails the read on a described service with no name or task definition', async () => {
