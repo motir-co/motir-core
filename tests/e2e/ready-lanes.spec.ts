@@ -237,3 +237,122 @@ test('a container whose leaves straddle a page boundary stays ONE expanded row a
   await expect(mainList(page).getByTestId(`ready-container-${BIG.identifier}`)).toHaveCount(1);
   await expect(page.getByRole('button', { name: `Collapse ${BIG.identifier}` })).toBeVisible();
 });
+
+// ─── The pane fills the page down to the shell's bottom clearance (MOTIR-10974) ──
+//
+// The pane used to be `calc(100dvh - 16rem - clearance)` tall — a guess at
+// everything above it that over-reserved, leaving an empty band under the list.
+// It is now the flexible remainder of a viewport-height column, so its bottom
+// edge sits at the clearance whatever renders above it.
+
+/** The pane's bottom edge against the clearance line, plus the two scrollers. */
+async function paneFit(page: Page, laneList: ReturnType<typeof mainList>) {
+  const pane = laneList.locator('xpath=ancestor::*[@data-testid="ready-lane-pane"]');
+  return pane.evaluate((el) => {
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    // The shell wrapper sets it (1.5rem, or 6rem under the Plan-with-AI orb);
+    // it inherits down to the pane.
+    const raw = getComputedStyle(el).getPropertyValue('--shell-bottom-clearance').trim();
+    const clearance = raw.endsWith('rem') ? parseFloat(raw) * rem : parseFloat(raw);
+    const main = document.getElementById('main')!;
+    return {
+      bottom: el.getBoundingClientRect().bottom,
+      clearanceLine: window.innerHeight - clearance,
+      paneScrolls: el.scrollHeight > el.clientHeight,
+      documentFits: document.scrollingElement!.scrollHeight <= window.innerHeight,
+      mainFits: main.scrollHeight <= main.clientHeight,
+    };
+  });
+}
+
+async function expectPaneAtClearance(page: Page, laneList: ReturnType<typeof mainList>) {
+  await expect(laneList).toBeVisible();
+  const fit = await paneFit(page, laneList);
+  expect(Math.abs(fit.bottom - fit.clearanceLine), JSON.stringify(fit)).toBeLessThanOrEqual(4);
+  // The list is longer than the pane, so it is the PANE that scrolls — neither
+  // the document nor the shell's <main>.
+  expect(fit.paneScrolls).toBe(true);
+  expect(fit.documentFits).toBe(true);
+  expect(fit.mainFits).toBe(true);
+}
+
+test('the lane pane reaches the shell bottom clearance on both lanes, with or without the notices above it', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  const { owner, projectId } = await tenant('pane-fit');
+  // Longer than the pane at either viewport, in BOTH lanes.
+  for (let i = 1; i <= 30; i++) {
+    await mk(owner.ctx, projectId, { title: `Fill task ${i}`, kind: 'task' });
+    await mk(owner.ctx, projectId, { title: `Fill bug ${i}`, kind: 'bug' });
+  }
+
+  await signIn(page, owner.email, TEST_PASSWORD);
+  for (const size of [
+    { width: 1440, height: 900 },
+    { width: 1280, height: 720 },
+  ]) {
+    await page.setViewportSize(size);
+    await openReady(page);
+    await expectPaneAtClearance(page, mainList(page));
+
+    await page.getByRole('button', { name: /^Bugs/ }).click();
+    await expect(page).toHaveURL(/[?&]lane=bugs/);
+    await expectPaneAtClearance(page, bugsList(page));
+
+    // Back to Ready to run for the next size's sidebar click.
+    await page.getByRole('button', { name: /^Ready to run/ }).click();
+    await expect(page).not.toHaveURL(/[?&]lane=bugs/);
+  }
+
+  // With content above the lanes: the REAL expansion nudge (its read answered
+  // with a nominated stub), plus a block standing in for SurfaceTitlesNotice —
+  // whose no-credit state needs a spent translation budget — inserted where the
+  // notice renders, as the lanes' preceding sibling. The pane gets shorter by
+  // their height and still ends at the clearance.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route('**/api/ready/nudge', (route) =>
+    route.fulfill({
+      json: {
+        readyCount: 2,
+        nominatedKey: 'RLN-999',
+        nominatedTitle: 'Stub to expand',
+        threshold: 3,
+      },
+    }),
+  );
+  await openReady(page);
+  // The nudge has rendered (its dismiss control is unique to it) before measuring.
+  await expect(page.getByRole('button', { name: 'Dismiss expansion nudge' })).toBeVisible();
+  const before = await paneFit(page, mainList(page));
+  await mainList(page)
+    .locator('xpath=ancestor::*[@data-testid="ready-lane-pane"]/..')
+    .evaluate((lanes) => {
+      const notice = document.createElement('div');
+      notice.setAttribute('data-titles-notice', 'stand-in');
+      notice.style.height = '48px';
+      lanes.parentElement!.insertBefore(notice, lanes);
+    });
+  await expectPaneAtClearance(page, mainList(page));
+  const after = await paneFit(page, mainList(page));
+  expect(after.bottom).toBeCloseTo(before.bottom, 0);
+});
+
+test('at phone width the lane switch and a scrollable list stay reachable', async ({ page }) => {
+  const { owner, projectId } = await tenant('pane-phone');
+  for (let i = 1; i <= 20; i++) {
+    await mk(owner.ctx, projectId, { title: `Phone task ${i}`, kind: 'task' });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, owner.email, TEST_PASSWORD);
+  await page.goto('/ready');
+  await expect(page.getByRole('heading', { name: 'Ready to start', level: 1 })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Bugs/ })).toBeVisible();
+  const pane = mainList(page).locator('xpath=ancestor::*[@data-testid="ready-lane-pane"]');
+  const scrolled = await pane.evaluate((el) => {
+    el.scrollTo(0, el.scrollHeight);
+    return { canScroll: el.scrollHeight > el.clientHeight, top: el.scrollTop };
+  });
+  expect(scrolled.canScroll).toBe(true);
+  expect(scrolled.top).toBeGreaterThan(0);
+});

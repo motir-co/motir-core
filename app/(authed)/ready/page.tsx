@@ -61,7 +61,13 @@ export default async function ReadyPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    // The page is a column exactly as tall as the shell's content box: the
+    // viewport minus the top bar (`h-14` + its 1px border), the shell wrapper's
+    // `pt-6` and its `--shell-bottom-clearance` (`app/(authed)/layout.tsx`). The
+    // lanes take whatever height the header, the titles notice and the nudge
+    // leave (MOTIR-10974), so the pane ends at the clearance however much
+    // renders above it. Every term is the SHELL's, none the page content's.
+    <div className="flex h-[calc(100dvh_-_3.5rem_-_1px_-_1.5rem_-_var(--shell-bottom-clearance,1.5rem))] flex-col gap-6">
       {/* The lanes' reads stream in behind an in-page Suspense placed AFTER the
           gates above — never a `loading.tsx` (CLAUDE.md § A `loading.tsx` may NOT
           sit above a route that decides existence). The frame is design/ready

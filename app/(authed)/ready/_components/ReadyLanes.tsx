@@ -47,7 +47,11 @@ export function ReadyLanes({ leaves, bugs, counts }: ReadyLanesProps) {
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    // `flex-1` in the page's viewport-height column: the lanes fill the height
+    // the content above them leaves (MOTIR-10974). `min-h-0` is load-bearing: a
+    // flex item's automatic minimum is its content, so without it the pane's
+    // rows would stretch this block (and the pane) to the full list height.
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <Segmented<Lane>
         label={t('lanes.switchAria')}
         value={lane}
@@ -66,12 +70,12 @@ export function ReadyLanes({ leaves, bugs, counts }: ReadyLanesProps) {
           },
         ]}
       />
-      {/* The pane: the page height below the switch, its OWN scroll container —
-          `useRowWindow` windows against it as the nearest scrolling ancestor. */}
-      <div
-        data-testid="ready-lane-pane"
-        className="h-[calc(100dvh_-_16rem_-_var(--shell-bottom-clearance,1.5rem))] min-h-80 overflow-y-auto pr-1"
-      >
+      {/* The pane: the height left below the switch, sized by the layout rather
+          than a guessed offset (MOTIR-10974), and its OWN scroll container —
+          `useRowWindow` windows against it as the nearest scrolling ancestor.
+          `flex-1`'s zero basis keeps its rows from inflating it; `min-h-80` is the
+          floor on a short viewport, where the shell's `<main>` scrolls the rest. */}
+      <div data-testid="ready-lane-pane" className="min-h-80 flex-1 overflow-y-auto pr-1">
         <div hidden={lane !== 'main'} data-testid="ready-lane-main">
           <ReadyList
             initialItems={leaves.items}
