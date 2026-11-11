@@ -144,9 +144,10 @@ describe('the release payload is read loudly or not at all', () => {
   });
 
   it('THROWS on the route’s 503 body rather than returning null', () => {
-    // A deployment that cannot name its own build is a finding — the deploy job
-    // passes `--build-arg MOTIR_RELEASE=$GITHUB_SHA` and the Dockerfile's runner
-    // stage carries it forward precisely so a Fly release cannot answer this way.
+    // A deployment that cannot name its own build is a finding — `aws-deploy.yml`
+    // passes `MOTIR_RELEASE=${{ github.sha }}` as a build argument and the
+    // Dockerfile's runner stage carries it forward precisely so a production
+    // release cannot answer this way.
     // Returning `null` here would let the caller sort it into a state it already
     // has a use for, and the real cause would never be named.
     expect(() => parseReleaseBody(JSON.stringify({ release: null, state: 'unset' }))).toThrow(

@@ -1,7 +1,7 @@
 # Is PRODUCTION running the head of `main`? (MOTIR-3760)
 #
 # On 2026-08-28 `6dafd2ee8` — a story that retired an entire job engine — merged
-# at 07:44:30Z. The last Fly release was 08:47:04Z, reusing an image built at
+# at 07:44:30Z. The last release (then on Fly) was 08:47:04Z, reusing an image built at
 # 07:51. At 11:00Z the running `/app/worker/worker.mjs` still contained 278
 # references to that engine, none of which exist anywhere in `origin/main`, and
 # `system.daily-health-check` had dead-lettered against it at 09:04:46Z with a
@@ -41,9 +41,10 @@
 #
 # The logic lives in `scripts/deployFreshness.mjs` (unit-tested in
 # `tests/scripts/assert-deploy-freshness.test.ts`, which also asserts this file's
-# wiring) — same arrangement as `scripts/machinePool.mjs` and the deploy job's
-# pool guard: a zero-dependency script a human can run from any shell, and a
-# workflow that is a thin caller. Reproduce a red run locally with
+# wiring) — same arrangement as `scripts/mainCiRetry.mjs` and its lane: a
+# zero-dependency script a human can run from any shell, and a workflow that is
+# a thin caller. The deploy it reads is `aws-deploy.yml`'s, Motir's one deploy
+# lane since the Fly deploy job was deleted (MOTIR-10935). Reproduce a red run locally with
 #
 #   node scripts/assert-deploy-freshness.mjs
 #
@@ -66,7 +67,9 @@ on:
     # have traded a 3 h 36 m detection latency for roughly 30 h.
     #
     # ⚠️ `max_age_minutes: 90` IS NOW A MEASURED NUMBER RATHER THAN A GUESS.
-    # Merge → `Deploy to Fly` complete, 268 commits over 8.2 days, excluding the
+    # Merge → `Deploy to Fly` complete (the deploy lane then — `aws-deploy.yml`
+    # since MOTIR-10935; re-measure against it before moving the number),
+    # 268 commits over 8.2 days, excluding the
     # 2026-08-28 incident day: median 23 min, p90 47 min, P95 79 min, with 3.3 %
     # of merges over ninety minutes. The threshold sits just above the
     # pipeline's real 95th percentile, which is what a chosen threshold should.
@@ -120,7 +123,7 @@ jobs:
         with:
           node-version: 22
       # No install step: the script is dependency-free by design, for the same
-      # reason `scripts/assert-machine-pool.mjs` is — it has to be runnable from a
+      # reason `scripts/assert-nft-trace-scope.mjs` is — it has to be runnable from a
       # bare shell by whoever is trying to work out whether a merge has shipped.
       - name: Compare the deployed commit against main
         # The dispatch input arrives as an ENV var rather than being interpolated

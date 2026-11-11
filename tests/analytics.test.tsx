@@ -172,7 +172,7 @@ function buildTimeAnalyticsReferences(text: string): string[] {
 }
 
 describe('PLAUSIBLE_SCRIPT_SRC stays a RUNTIME variable (MOTIR-1163)', () => {
-  const buildInputs = ['Dockerfile', '.github/workflows/ci.yml', 'fly.toml'] as const;
+  const buildInputs = ['Dockerfile', '.github/workflows/aws-deploy.yml'] as const;
 
   it.each(buildInputs)('%s carries no build-time reference to it', (file) => {
     const text = readFileSync(join(ROOT, file), 'utf8');
