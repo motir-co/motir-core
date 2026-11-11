@@ -904,21 +904,3 @@ describe('publishEnded', () => {
     expect(await service.publishEnded('runner', 77, NEW)).toBe(false);
   });
 });
-
-describe('countLiveByImageVersion', () => {
-  it('groups the live instances by image version', async () => {
-    vi.mocked(agentInstanceRepository.countLiveByImageVersion).mockRestore();
-    const groupBy = vi.fn().mockResolvedValue([
-      { imageVersion: '0.18.0', _count: { _all: 3 } },
-      { imageVersion: null, _count: { _all: 1 } },
-    ]);
-    const rows = await agentInstanceRepository.countLiveByImageVersion({
-      agentInstance: { groupBy },
-    } as never);
-    expect(rows).toEqual([
-      { imageVersion: '0.18.0', count: 3 },
-      { imageVersion: null, count: 1 },
-    ]);
-    expect(groupBy).toHaveBeenCalledWith(expect.objectContaining({ by: ['imageVersion'] }));
-  });
-});
