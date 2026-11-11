@@ -11,6 +11,7 @@ import { recomputeWorkItemFixReason } from './fixReasonService';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
 import { resyncLinkedPullRequest } from './changeRequestStatusSync';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { projectRepoSetService } from './projectRepoSetService';
 import { toLinkedPullRequestDto, toPullRequestLinkCandidateDto } from '@/lib/mappers/githubMappers';
 import {
   GithubNotConnectedError,
@@ -275,6 +276,19 @@ export const githubPullRequestService = {
         },
         tx,
       );
+      // The project now ships from this repository, so its set records it
+      // (MOTIR-11040) — in this transaction, beside the delivery row, because it
+      // is a local insert rather than a host call: a link and its record commit
+      // together or not at all. It never refuses; its outcome is not this door's.
+      await projectRepoSetService.adoptConnectedRepo(
+        {
+          projectId: item.projectId,
+          workspaceId: ctx.workspaceId,
+          githubRepoId: pr.repoId,
+          name: pr.repo.name,
+        },
+        tx,
+      );
       // A NEW member changes the set an approve-and-merge gate asked about.
       if (!alreadyDelivered) await withdrawPullRequestApprovalGateOnSetChange(currentItemId, tx);
       // …and it changes the set the card's own CI verdict is folded over, so the
@@ -494,6 +508,17 @@ export const githubPullRequestService = {
           workItemId: input.workItemId,
           githubPullRequestId: prId,
           repoId: repo.id,
+        },
+        tx,
+      );
+      // The same record the sibling arm writes (MOTIR-11040), for the card's own
+      // project — the item's, read above, rather than the caller's claim of it.
+      await projectRepoSetService.adoptConnectedRepo(
+        {
+          projectId: item.projectId,
+          workspaceId: ctx.workspaceId,
+          githubRepoId: repo.id,
+          name: repo.name,
         },
         tx,
       );

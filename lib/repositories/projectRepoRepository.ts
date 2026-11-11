@@ -720,6 +720,26 @@ export const projectRepoRepository = {
     return tx.projectRepo.create({ data });
   },
 
+  /**
+   * Insert one row UNLESS it would violate either of the table's unique indexes
+   * (`(project_id, github_repo_id)` or `(project_id, name)`) — `INSERT … ON
+   * CONFLICT DO NOTHING`, through `createMany`'s `skipDuplicates`. Returns 1 when
+   * the row was written, 0 when a conflicting row already held its place.
+   *
+   * ⚠️ For a writer that runs INSIDE SOMEONE ELSE'S TRANSACTION (MOTIR-11040). A
+   * plain `create` that loses a race raises `P2002`, and on Postgres a failed
+   * statement aborts the whole transaction: catching the error leaves every later
+   * statement of the caller refused ("current transaction is aborted"). Asking the
+   * database not to raise is the only way a lost race can be a no-op there.
+   */
+  async createIfAbsent(
+    data: Prisma.ProjectRepoCreateManyInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.projectRepo.createMany({ data: [data], skipDuplicates: true });
+    return result.count;
+  },
+
   async update(
     id: string,
     data: Prisma.ProjectRepoUncheckedUpdateInput,

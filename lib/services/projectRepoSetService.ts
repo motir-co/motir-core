@@ -41,6 +41,7 @@ import {
   PROJECT_REPO_PLAN_EDITABLE_STATES,
   PROJECT_REPO_PROPOSAL_SIGNALS,
   SEED_MATCH_RESULTS,
+  SEED_SOURCE_ORGANIZATION,
   isOrganizationSeedSource,
   isProjectRepoProposalSignal,
   isSeedMatchResult,
@@ -67,6 +68,9 @@ import {
   RealizedRepoAlreadyClaimedError,
 } from '@/lib/projectRepos/errors';
 
+/** What {@link projectRepoSetService.adoptConnectedRepo} did (MOTIR-11040). */
+export type ProjectRepoAdoptionOutcome = 'adopted' | 'already_listed' | 'name_held';
+
 // The project's REPOSITORY SET — reads and writes (Story MOTIR-1775 · MOTIR-1780),
 // specified by `docs/decisions/project-repository-set.md`.
 //
@@ -83,6 +87,10 @@ import {
 //     method that would have to hold a row locked across a GitHub round-trip;
 //   * DERIVE the set's contents from a plan (which roles, which names) — that is
 //     MOTIR-1881, which writes `proposed` rows THROUGH `addRow`;
+//     (the ONE derived writer it does own is `adoptConnectedRepo`, MOTIR-11040:
+//     linking a pull request records the repository it lives in as a
+//     `connected` row, because that link is the moment Motir is TOLD the
+//     project ships from it);
 //   * render anything — that is MOTIR-1782;
 //   * re-point `resolveCodeContext` / `codeGraphIndexService` from workspace scope
 //     to project scope. This card makes the association EXIST; adopting it is
@@ -1010,6 +1018,71 @@ export const projectRepoSetService = {
       workspaceId: ctx.workspaceId,
     });
     return attached;
+  },
+
+  /**
+   * Record that a project ships from a repository the organisation has connected
+   * (Story MOTIR-10162 · MOTIR-11040) — the step a PULL REQUEST LINK takes, so a
+   * project's set stops omitting a repository its own cards are delivered from.
+   *
+   * A STEP OF THE CALLER'S TRANSACTION, never its own (the shape
+   * `projectPrMergeModeService.seedAtEstablishment` has): it is written beside the
+   * delivery row, so the link and the record commit or fail together. It asserts
+   * no permission — the link door has already asserted its own on the project —
+   * and it never refuses. Three dispositions:
+   *
+   *   * `already_listed` — the project already holds a row for this repository,
+   *     in any state. Nothing is written and that row is untouched.
+   *   * `name_held` — a row of this project already holds the repository's NAME
+   *     for something else (a `proposed` row not yet created, typically). Nothing
+   *     is written: taking the name would re-point an establish step in flight,
+   *     which is a person's decision, not a link's.
+   *   * `adopted` — one row is appended: `connected`, `seedSource` `organization`
+   *     (the repository is the organisation's and seeds from nothing, so the
+   *     Repositories room lists it under the organisation and hosting leaves it
+   *     alone), role `other` (nobody asserted a capability), no label, at the end
+   *     of the set. A settled row may be what ESTABLISHES the set, so the merge
+   *     mode default is seeded in the same transaction.
+   *
+   * A concurrent link racing this one cannot write a second row: the insert is
+   * `ON CONFLICT DO NOTHING` (`createIfAbsent`), and the loser re-reads to say
+   * which index held. A lost race therefore never aborts the caller's
+   * transaction, which a caught `P2002` would.
+   */
+  async adoptConnectedRepo(
+    input: { projectId: string; workspaceId: string; githubRepoId: string; name: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepoAdoptionOutcome> {
+    const { projectId, workspaceId, githubRepoId } = input;
+    const name = input.name.trim();
+    const listed = () =>
+      projectRepoRepository.findByProjectAndGithubRepoId(projectId, githubRepoId, tx);
+
+    if (await listed()) return 'already_listed';
+    if (
+      await projectRepoRepository.findByProjectAndNameInsensitive(projectId, name, workspaceId, tx)
+    )
+      return 'name_held';
+
+    const last = await projectRepoRepository.findLastPosition(projectId, workspaceId, tx);
+    const written = await projectRepoRepository.createIfAbsent(
+      {
+        workspaceId,
+        projectId,
+        role: 'other',
+        name,
+        label: null,
+        seedSource: SEED_SOURCE_ORGANIZATION,
+        state: 'connected',
+        githubRepoId,
+        position: keyForAppend(last),
+      },
+      tx,
+    );
+    if (written === 0) return (await listed()) ? 'already_listed' : 'name_held';
+
+    await projectPrMergeModeService.seedAtEstablishment(projectId, workspaceId, tx);
+    return 'adopted';
   },
 
   // ── Collaborator access (MOTIR-1900, per-member since MOTIR-1910) ─────────

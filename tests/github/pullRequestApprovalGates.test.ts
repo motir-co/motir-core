@@ -244,7 +244,10 @@ describe('RAISE — one awaiting gate per card, on the run target, when its whol
 
   it('the same card in an AUTO project reaches in_review and holds no gate', async () => {
     const s = await makeScenario('pa-auto@example.com');
-    await adminDb.project.update({ where: { id: s.project.id }, data: { prMergeMode: 'auto' } });
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { prMergeMode: 'auto', prMergeModeDecidedAt: new Date() },
+    });
     const item = await cardWithPrs(s, 'Auto', [11, 12]);
 
     await ci({ conclusion: 'success', headSha: 'sha-a', number: 11 });
