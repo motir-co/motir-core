@@ -1,3 +1,4 @@
+import { Window } from 'happy-dom';
 import { describe, expect, it } from 'vitest';
 import { EMAIL_TEMPLATE_CLASS, type EmailTemplate } from '@/lib/services/emailService';
 import { renderFixture } from '../helpers/emailTemplateFixtures';
@@ -29,26 +30,25 @@ const WITH_REASON_LINE = new Set<EmailTemplate>([
 
 const TEMPLATES = Object.keys(EMAIL_TEMPLATE_CLASS) as EmailTemplate[];
 
-function decodeEntities(text: string): string {
-  return text
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(Number(dec)))
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&');
-}
-
-/** The inline `color` of every paragraph whose text opens the reason line. */
+/**
+ * The inline `color` of every paragraph whose text opens the reason line. The
+ * HTML is parsed by happy-dom rather than matched with regular expressions, so
+ * entities and nested inline tags read exactly as a mail client would.
+ */
 function reasonLineColours(html: string): string[] {
-  const colours: string[] = [];
-  for (const [, style = '', inner = ''] of html.matchAll(
-    /<p\b[^>]*\bstyle="([^"]*)"[^>]*>([\s\S]*?)<\/p>/g,
-  )) {
-    const text = decodeEntities(inner.replace(/<[^>]+>/g, '')).trim();
-    if (!/^You[’']re receiving this because/.test(text)) continue;
-    const colour = /(?:^|;)\s*color\s*:\s*(#[0-9a-f]{6})\b/i.exec(style)?.[1];
-    colours.push((colour ?? 'none').toLowerCase());
+  const window = new Window();
+  try {
+    const doc = new window.DOMParser().parseFromString(html, 'text/html');
+    return Array.from(doc.querySelectorAll('p'))
+      .filter((p) => /^You[’']re receiving this because/.test((p.textContent ?? '').trim()))
+      .map((p) => {
+        const style = p.getAttribute('style') ?? '';
+        const colour = /(?:^|;)\s*color\s*:\s*(#[0-9a-f]{6})\b/i.exec(style)?.[1];
+        return (colour ?? 'none').toLowerCase();
+      });
+  } finally {
+    void window.happyDOM.close();
   }
-  return colours;
 }
 
 function relativeLuminance(hex: string): number {
