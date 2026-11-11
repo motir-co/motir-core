@@ -264,10 +264,16 @@ function ResolvedLine({ thread }: { thread: PageCommentThreadDto }) {
   );
 }
 
-/** True when focus reached `target` by the keyboard, as the browser judges it. */
+/**
+ * True when focus reached `target` by the keyboard, as the browser judges it. A
+ * text field or editor matches `:focus-visible` however it was reached (a
+ * click into a reply composer included), so a place to type never counts.
+ */
 function isKeyboardFocus(target: EventTarget): boolean {
   try {
-    return (target as Element).matches(':focus-visible');
+    const element = target as HTMLElement;
+    if (element.isContentEditable || element.matches('input, textarea, select')) return false;
+    return element.matches(':focus-visible');
   } catch {
     // An engine that cannot parse the selector has no keyboard route to draw.
     return false;

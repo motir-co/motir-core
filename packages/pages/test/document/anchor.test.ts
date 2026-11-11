@@ -322,6 +322,16 @@ describe('sameAsQuote', () => {
     expect(sameAsQuote(`${long} and a long tail of new words`, quote)).toBe(true);
     expect(sameAsQuote(long.replace(/word/g, 'term'), quote)).toBe(false);
   });
+
+  it('reads a cut that landed on a space, and so came out shorter than the maximum, as a cut', () => {
+    const long = `${'a'.repeat(PAGE_ANCHOR_QUOTE_MAX - 2)} ${'tail words '.repeat(200)}`;
+    const quote = `${Array.from(long)
+      .slice(0, PAGE_ANCHOR_QUOTE_MAX - 1)
+      .join('')
+      .trimEnd()}…`;
+    expect(Array.from(quote).length).toBeLessThan(PAGE_ANCHOR_QUOTE_MAX);
+    expect(sameAsQuote(long, quote)).toBe(true);
+  });
 });
 
 describe('resolution is headless, read-only and per page', () => {

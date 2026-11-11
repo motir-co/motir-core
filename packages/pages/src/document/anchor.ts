@@ -282,7 +282,10 @@ function commonRun(a: readonly string[], b: readonly string[]): number {
  * same length of `text`.
  */
 export function sameAsQuote(text: string, quote: string): boolean {
-  const cut = quote.endsWith('…') && Array.from(quote).length === PAGE_ANCHOR_QUOTE_MAX;
+  // `toQuote` trims before the ellipsis, so a cut quote can be shorter than the
+  // maximum: any trailing ellipsis is read as a cut. A passage that really ended
+  // in one compares its own text minus that character, which still matches.
+  const cut = quote.endsWith('…');
   const head = cut ? quote.slice(0, -1) : quote;
   const candidate = cut ? Array.from(text.trim()).slice(0, Array.from(head).length).join('') : text;
   const a = words(head);

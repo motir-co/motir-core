@@ -1424,14 +1424,21 @@ describe('PageDiscussionPanel — arrival (MOTIR-10902)', () => {
     await mountPanel({ onThreadFocus, onThreadBlur });
     const article = screen.getByTestId(`page-thread-${target.id}`);
     const [first, second] = within(article).getAllByRole('button');
+    const matches = Element.prototype.matches;
     const visible = vi.spyOn(Element.prototype, 'matches').mockImplementation(function (
       this: Element,
       selector: string,
     ) {
-      return selector === ':focus-visible';
+      return selector === ':focus-visible' || matches.call(this, selector);
     });
     act(() => first!.focus());
     expect(onThreadFocus).toHaveBeenLastCalledWith(target.id, true);
+    // A place to type matches :focus-visible however it was reached: never the keyboard route.
+    const field = document.createElement('textarea');
+    article.appendChild(field);
+    act(() => field.focus());
+    expect(onThreadFocus).toHaveBeenLastCalledWith(target.id, false);
+    field.remove();
     visible.mockRestore();
     act(() => second!.focus());
     expect(onThreadBlur).not.toHaveBeenCalled();
