@@ -7,6 +7,7 @@ import type { FleetOriginsVerdict } from '@/lib/ai/fleetOrigins';
 import { dailyHealthCheck, FleetOriginsError } from '@/lib/jobs/definitions/dailyHealthCheck';
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { runnerVersionSupportProbeService } from '@/lib/services/runnerVersionSupportProbeService';
+import { hostedAgentImageLagProbeService } from '@/lib/services/hostedAgentImageLagProbeService';
 
 // THE THREE FLEET ORIGINS RIDE THE DAILY HEALTH CHECK (Story MOTIR-9714 ·
 // MOTIR-10750). A definite failure of any origin fails the run, and the message
@@ -28,6 +29,12 @@ beforeEach(async () => {
     supersededBy: null,
     deadline: null,
     daysLeft: null,
+  });
+  // The hosted-agent pin lag (MOTIR-10882) reads GHCR; no test here is about it.
+  vi.spyOn(hostedAgentImageLagProbeService, 'check').mockResolvedValue({
+    verdict: 'not_applicable',
+    checkedAt: '2026-11-10T09:00:00.000Z',
+    detail: 'held by the test',
   });
 });
 

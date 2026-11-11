@@ -147,6 +147,8 @@ describe('the verdicts', () => {
             repository: 'motir-core',
             branch: 'subtask/PROD-1',
             reason: 'no open pull request was found for subtask/PROD-1',
+            // This git answers `ls-remote` for the work branch, so its work is on the remote.
+            pushed: true,
           },
         ],
         howToTest: 'none',

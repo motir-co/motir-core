@@ -20,6 +20,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { fleetOrgCiSettingService } from '@/lib/services/fleetOrgCiSettingService';
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { fleetReadinessService } from '@/lib/services/fleetReadinessService';
+import { hostedAgentImageLagProbeService } from '@/lib/services/hostedAgentImageLagProbeService';
 import { runnerImageFreshnessProbeService } from '@/lib/services/runnerImageFreshnessProbeService';
 import { runnerVersionSupportProbeService } from '@/lib/services/runnerVersionSupportProbeService';
 
@@ -55,6 +56,15 @@ beforeEach(async () => {
   vi.spyOn(fleetPreflightService, 'checkFleetOrigins').mockResolvedValue({
     verdict: 'ok',
     readings: [],
+  });
+  // The hosted-agent pin lag (MOTIR-10882) has its own suite,
+  // `tests/ciFleet/hostedAgentImageLagProbeService.test.ts`. Held `not_applicable`
+  // here, so a test that sets MOTIR_HOSTED_AGENT_IMAGE for the pullability probe
+  // does not also have to serve a `:main` build; its own block below unholds it.
+  vi.spyOn(hostedAgentImageLagProbeService, 'check').mockResolvedValue({
+    verdict: 'not_applicable',
+    checkedAt: '2026-11-10T09:00:00.000Z',
+    detail: 'held by the test',
   });
 });
 
@@ -1334,6 +1344,89 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
           ]),
         },
       });
+    });
+  });
+});
+
+// ── THE HOSTED-AGENT PIN'S LAG RIDES THE SAME SURFACE (MOTIR-10882) ──────────
+//
+// The probe's arms are pinned in its own suite; these assert the job surface:
+// the verdict on the row (a `pending` pin pull request included), a pin left
+// behind failing the run with the pull request to merge in its message, and an
+// unreadable registry staying green.
+
+describe("the hosted-agent pin's lag rides the same health check", () => {
+  const PINNED = `ghcr.io/motir-co/motir-hosted-agent@sha256:${'87'.repeat(32)}`;
+  const main = {
+    reference: 'ghcr.io/motir-co/motir-hosted-agent:main',
+    digest: `sha256:${'03'.repeat(32)}`,
+    createdAt: '2026-11-09T08:00:00.000Z',
+  };
+
+  it('PASSES and records a pending pin, with how far behind it is', async () => {
+    await seedHealthyJobSchedules();
+    const lag = { unpinnedHours: 5, behindHours: 30, pinnedCreatedAt: '2026-11-08T02:00:00.000Z' };
+    vi.spyOn(hostedAgentImageLagProbeService, 'check').mockResolvedValue({
+      verdict: 'pending',
+      checkedAt: '2026-11-09T13:00:00.000Z',
+      pinned: PINNED,
+      main,
+      lag,
+    });
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result, ctx } = await engine.execute();
+
+    expect(result).toMatchObject({ ok: true, hostedAgentImageLag: { verdict: 'pending', lag } });
+    const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+    expect(stepIds).toContain('hosted-agent-image-lag');
+  });
+
+  it('FAILS on a pin left behind main, naming the pull request to merge', async () => {
+    await seedHealthyJobSchedules();
+    vi.spyOn(hostedAgentImageLagProbeService, 'check').mockResolvedValue({
+      verdict: 'lagging',
+      checkedAt: '2026-11-10T09:00:00.000Z',
+      pinned: PINNED,
+      main,
+      lag: { unpinnedHours: 25, behindHours: 912, pinnedCreatedAt: '2026-10-02T08:00:00.000Z' },
+    });
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result, error, ctx } = await engine.execute();
+
+    expect(result).toBeUndefined();
+    expect(error?.name).toBe('HostedAgentImageLaggingError');
+    expect(error?.message).toContain(`${PINNED} is pinned`);
+    expect(error?.message).toContain('chore/hosted-agent-image-pin');
+    // Every probe still ran first.
+    const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+    expect(stepIds).toEqual(
+      expect.arrayContaining(['hosted-agent-image-lag', 'runner-version-support']),
+    );
+  });
+
+  it('PASSES and records indeterminate when the registry could not be read', async () => {
+    await seedHealthyJobSchedules();
+    vi.spyOn(hostedAgentImageLagProbeService, 'check').mockResolvedValue({
+      verdict: 'indeterminate',
+      checkedAt: '2026-11-10T09:00:00.000Z',
+      phase: 'registry',
+      reference: main.reference,
+      detail: 'unreachable: the registry could not be reached: ECONNRESET',
+    });
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result } = await engine.execute();
+
+    expect(result).toMatchObject({
+      ok: true,
+      hostedAgentImageLag: { verdict: 'indeterminate', phase: 'registry' },
+      indeterminateStreak: {
+        streaks: expect.arrayContaining([
+          expect.objectContaining({ probe: 'hostedAgentImageLag', step: 'hosted-agent-image-lag' }),
+        ]),
+      },
     });
   });
 });
