@@ -25,7 +25,12 @@ import {
 import { runIdFromDate, sessionBranchName, type CommandResult } from '../src/git.js';
 import { CliError, ContainerHasOpenChildrenError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
-import { parseAgentCommand } from '../src/agentProfiles.js';
+import {
+  AGENT_PROFILES,
+  parseAgentCommand,
+  type ParsedAgentCommand,
+} from '../src/agentProfiles.js';
+import { agentModeAgent, resumeFixAgent } from '../src/commands/dispatch.js';
 import { CLI_VERSION } from '../src/version.js';
 import type { DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
@@ -425,6 +430,10 @@ interface DriveOptions {
   ownerId?: string;
   /** Receives every event the loop reports (MOTIR-7504). */
   onEvent?: (event: Record<string, unknown>) => void;
+  /** The agent the run resolved, overriding `agentCommand` (MOTIR-10983). */
+  agent?: ParsedAgentCommand;
+  /** Receives every command a card spawned (MOTIR-10983). */
+  onSpawn?: (key: string, command: ParsedAgentCommand) => void;
 }
 
 async function drive(
@@ -439,21 +448,22 @@ async function drive(
     opts: drives.opts ?? {},
     kinds: undefined,
     max: drives.opts?.max ? parseMax(drives.opts.max) : null,
-    agent: {
-      parsed: parseAgentCommand(drives.agentCommand ?? 'fake-agent')!,
-      source: 'flag',
-    },
+    agent: drives.agent
+      ? { parsed: drives.agent, source: 'agent' }
+      : { parsed: parseAgentCommand(drives.agentCommand ?? 'fake-agent')!, source: 'flag' },
     runId: '20260729-010203',
     branch: BRANCH,
     run: git.runner,
     clock: () => (tick += 1000),
-    runAgentFn: async ({ prompt }) => {
+    runAgentFn: async ({ prompt, command }) => {
       const key = prompt.replace('PROMPT ', '');
       const index = dispatched.length;
       dispatched.push(key);
       drives.onDispatch?.(key, index);
+      drives.onSpawn?.(key, command);
       const result = drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
-      return { model: null, ...result };
+      // `runAgent` records the id the command was stamped with (`sessionIdOf`).
+      return { model: null, sessionId: command.stream?.sessionId ?? null, ...result };
     },
     ownerId: drives.ownerId ?? OWNER,
     ...(drives.onEvent
@@ -1985,5 +1995,79 @@ describe('the summary says what the run APPROVED (MOTIR-3023)', () => {
       summary([{ key: 'PROD-7', planId: 'plan_abc', proposalCount: 1 }]),
     );
     expect(text).toContain('1 proposal materialized');
+  });
+});
+
+// ── MOTIR-10983 — every card's agent is its OWN conversation ───────────────
+//
+// `motir auto` resolves its agent ONCE (`commands/auto.ts`). A profile with a
+// `sessionIdFlag` had the id baked into that one command, so the second card spawned
+// `claude … --session-id <the first card's id>` and Claude Code refused it.
+
+describe('motir auto — each card spawns its own agent session (MOTIR-10983)', () => {
+  const sessionIdOf = (command: ParsedAgentCommand): string | undefined => {
+    const at = command.args.indexOf('--session-id');
+    return at === -1 ? undefined : command.args[at + 1];
+  };
+
+  async function spawned(agent: ParsedAgentCommand) {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    const spawns: Array<{ key: string; command: ParsedAgentCommand }> = [];
+    const events: Record<string, unknown>[] = [];
+    const { summary } = await drive(server, new FakeGit(), {
+      agent,
+      onSpawn: (key, command) => spawns.push({ key, command }),
+      onEvent: (e) => events.push(e),
+    });
+    return { summary, spawns, events };
+  }
+
+  it('spawns every card with its own --session-id, records it, and resumes it', async () => {
+    const agent = agentModeAgent({ MOTIR_SANDBOX_AGENT: 'claude' });
+    const { summary, spawns, events } = await spawned(agent);
+
+    expect(spawns.map((s) => s.key)).toEqual(['PROD-1', 'PROD-2']);
+    const ids = spawns.map((s) => sessionIdOf(s.command));
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).not.toContain(agent.stream?.sessionId);
+    const profile = AGENT_PROFILES.find((p) => p.id === 'claude')!.agentStream!;
+    for (const { command } of spawns) {
+      expect(command.args).toEqual([...profile.args, '--session-id', sessionIdOf(command)]);
+      expect(command.stream).toEqual({ profile: 'claude', sessionId: sessionIdOf(command) });
+    }
+
+    // The id each card records — `agent_started`, then its dispatch record — is its own.
+    const started = events.filter((e) => e['kind'] === 'agent_started');
+    expect(
+      started.map((e) => [e['workItemKey'], (e['data'] as { sessionId?: string }).sessionId]),
+    ).toEqual([
+      ['PROD-1', ids[0]],
+      ['PROD-2', ids[1]],
+    ]);
+    expect(summary.records.map((r) => [r.key, r.sessionId])).toEqual([
+      ['PROD-1', ids[0]],
+      ['PROD-2', ids[1]],
+    ]);
+    // The CI watch builds each card's resume from its record (`watchRunCi`).
+    for (const record of summary.records) {
+      expect(resumeFixAgent(agent, record.sessionId, {})?.args).toEqual(
+        profile.resumeArgs(record.sessionId!),
+      );
+    }
+  });
+
+  it('spawns a typed agent command, and a profile that picks its own id, exactly as resolved', async () => {
+    for (const agent of [
+      parseAgentCommand('claude -p --session-id fixed')!,
+      agentModeAgent({ MOTIR_SANDBOX_AGENT: 'codex' }),
+    ]) {
+      const { spawns, events } = await spawned(agent);
+      expect(spawns.map((s) => s.command)).toEqual([agent, agent]);
+      // No id is invented for a command that carries none Motir chose.
+      for (const e of events.filter((x) => x['kind'] === 'agent_started')) {
+        expect(e['data']).toEqual({ agent: agent.binary });
+      }
+    }
   });
 });
