@@ -840,6 +840,42 @@ export function unattendedAgentCommand(
   );
 }
 
+/**
+ * The same launcher with a NEW Motir-chosen session id, for the next agent it spawns
+ * (MOTIR-10983).
+ *
+ * A run resolves its agent ONCE, and {@link unattendedAgentCommand} bakes the session id
+ * a profile lets Motir choose (`claude --session-id <uuid>`) into that one command. A
+ * session id names ONE conversation: the second spawn of the same command is refused by
+ * the agent itself (`Session ID … is already in use`). So every leg that spawns a fresh
+ * agent asks for its own id here, just before the spawn.
+ *
+ * ⚠️ IT CHANGES ONLY WHAT MOTIR ITSELF CHOSE. The command must carry its profile's
+ * `sessionIdFlag` followed by exactly the id its stamp names — which is the shape the
+ * launcher builds for a fresh run and nothing else is. Anything else comes back
+ * untouched, the same object: a command the person typed (no stamp), a profile whose
+ * agent picks its own id (no flag), the plain-text form (no stamp), and a RESUME, whose
+ * id is the point of the command and must not be replaced.
+ */
+export function withFreshSessionId(
+  command: ParsedAgentCommand,
+  newSessionId: () => string = randomUUID,
+): ParsedAgentCommand {
+  const stream = command.stream;
+  const flag = stream ? agentProfileById(stream.profile)?.agentStream?.sessionIdFlag : null;
+  if (!stream?.sessionId || !flag) return command;
+  const at = command.args.indexOf(flag);
+  if (at === -1 || command.args[at + 1] !== stream.sessionId) return command;
+  const sessionId = newSessionId();
+  const args = command.args.with(at + 1, sessionId);
+  return {
+    ...command,
+    command: [command.binary, ...args].join(' '),
+    args,
+    stream: { ...stream, sessionId },
+  };
+}
+
 /** Deliver the prompt the way the profile takes it: stdin as it stands, or argv only. */
 function withPrompt(
   command: ParsedAgentCommand,
