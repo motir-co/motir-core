@@ -6618,7 +6618,17 @@ model Watcher {
 ///
 /// Every FK is a two-sided Prisma `@relation` with explicit `onDelete` (the
 /// FK-as-@relation migration rule; the 2.3.7 attachment-FK drift lesson):
-/// recipient Cascade, actor SetNull, workItem Cascade, workspace Cascade.
+/// recipient Cascade, actor SetNull, workItem Cascade, page Cascade,
+/// workspace Cascade.
+///
+/// A PAGE SUBJECT (Story MOTIR-10868 · MOTIR-10922): a page mention or a page
+/// reply carries `pageId` and leaves `workItemId` null. It reuses the
+/// `mentioned` / `commented` types, so the person's existing preferences gate
+/// it; the data `kind` (`page_mentioned` / `page_replied`) is what tells it
+/// from a work-item row. `pageId` cascades, so a permanently deleted page takes
+/// its notifications with it. Its lookup index is a hand-written PARTIAL index
+/// (`WHERE page_id IS NOT NULL`) in the migration, deliberately absent here for
+/// the same reason as the unread index below.
 ///
 /// RLS: pure workspace gate (NON-NULL `workspace_id`), the same single
 /// PERMISSIVE FOR ALL policy as `comment` — see the migration. The PER-USER
@@ -6632,6 +6642,7 @@ model Notification {
   type            String
   category        NotificationCategory
   workItemId      String?              @map("work_item_id")
+  pageId          String?              @map("page_id")
   actorId         String?              @map("actor_id")
   data            Json
   dedupeKey       String               @map("dedupe_key")
@@ -6642,6 +6653,7 @@ model Notification {
   recipient User      @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
   actor     User?     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
   workItem  WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  page      Page?     @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   // Idempotency — one row per (source event × recipient); a replayed event's
   // createMany(skipDuplicates) no-ops against this.
@@ -6659,6 +6671,9 @@ model Notification {
   // WHERE-filtered index (the workflow_status_one_initial_per_project /
   // board_one_default_per_project precedent), so it lives in the migration and
   // is intentionally absent here. migrate dev does not drift on it.
+  // The same holds for the page cascade's lookup index (MOTIR-10922):
+  //   CREATE INDEX notification_page_id_idx ON notification(page_id)
+  //     WHERE page_id IS NOT NULL
   @@map("notification")
 }
 
@@ -14573,6 +14588,9 @@ model Page {
   // The page's discussion (Story MOTIR-10866 · MOTIR-10871). Cascade: a
   // permanent delete takes every comment, roots and replies, with the page.
   comments             PageComment[]
+  // Notifications whose subject is this page (Story MOTIR-10868 · MOTIR-10922):
+  // a page mention or a page reply. Cascade: a permanent delete takes them.
+  notifications        Notification[]
 
   @@index([projectId, parentPageId, position, id])
   @@index([projectId, folderId, position, id])
