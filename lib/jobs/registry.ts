@@ -13,6 +13,7 @@ import {
   notificationFanInOnWorkItemMentioned,
   notificationFanInOnTransitioned,
 } from './definitions/notificationFanIn';
+import { pageCommentNotificationFanIn } from './definitions/pageCommentNotificationFanIn';
 import { attachmentGc } from './definitions/attachmentGc';
 import { publicAddressCertificateRefresh } from './definitions/publicAddressCertificateRefresh';
 import { rateLimitSweep } from './definitions/rateLimitSweep';
@@ -143,6 +144,7 @@ export const jobDefinitions = [
   notificationFanInOnCommentCreated,
   notificationFanInOnWorkItemMentioned,
   notificationFanInOnTransitioned,
+  pageCommentNotificationFanIn,
   attachmentGc,
   publicAddressCertificateRefresh,
   rateLimitSweep,
