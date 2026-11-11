@@ -121,7 +121,8 @@ export function PageCommentThread({
       onFocus={() => onFocusThread?.(thread.id)}
       className={cn(
         'flex flex-col gap-3 border-b border-(--el-border-soft) py-4 last:border-b-0 focus:outline-none',
-        arrived && 'my-1 rounded-(--radius-card) px-2 ring-2 ring-(--focus-ring-color)',
+        arrived &&
+          'my-1 rounded-(--radius-card) px-(--spacing-card-padding-8) ring-2 ring-(--focus-ring-color)',
       )}
     >
       {resolved ? <ResolvedLine thread={thread} /> : null}
