@@ -8,19 +8,19 @@
       "evidence": ["host fly.io", "host api.machines.dev"]
     },
     {
-      "vendor": "Tigris",
+      "vendor": "Amazon Web Services",
       "basis": "repository-evidence",
-      "evidence": ["package @aws-sdk/client-s3", "package @aws-sdk/s3-request-presigner"]
-    },
-    {
-      "vendor": "Resend",
-      "basis": "repository-evidence",
-      "evidence": ["host api.resend.com"]
-    },
-    {
-      "vendor": "Amazon SES",
-      "basis": "repository-evidence",
-      "evidence": ["package @aws-sdk/client-sesv2"]
+      "evidence": [
+        "package @aws-sdk/client-cloudwatch-logs",
+        "package @aws-sdk/client-ecr",
+        "package @aws-sdk/client-ecs",
+        "package @aws-sdk/client-s3",
+        "package @aws-sdk/client-secrets-manager",
+        "package @aws-sdk/client-service-quotas",
+        "package @aws-sdk/client-sesv2",
+        "package @aws-sdk/client-ssm",
+        "package @aws-sdk/s3-request-presigner"
+      ]
     },
     {
       "vendor": "Sentry",
@@ -72,7 +72,7 @@
       "vendor": "Neon",
       "basis": "not-evidenced-here",
       "evidence": [],
-      "reason": "reached over the Postgres wire protocol via DATABASE_URL, not an HTTPS host or an SDK"
+      "reason": "serves only the applications Motir hosts: their databases are provisioned by the hosting database adapter in packages/orchestrator, outside the lib/ and app/ this guard reads. Production's own database is Amazon RDS, not Neon"
     },
     {
       "vendor": "OpenAI",
