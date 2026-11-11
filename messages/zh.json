@@ -950,6 +950,18 @@
       "fallback": "或将此链接复制到浏览器中打开：",
       "reason": "你收到此邮件是因为你正在关注{identifier}。"
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author}在{page}中提到了你",
+      "previewMention": "{author}在{page}中提到了你",
+      "subjectReply": "{author}回复了{page}上的一个讨论",
+      "previewReply": "{author}回复了{page}上的一个讨论",
+      "greeting": "你好，{name}：",
+      "ledeMention": "{author}在{page}的评论中提到了你。",
+      "ledeReply": "{author}回复了{page}上的一个讨论。",
+      "view": "打开讨论",
+      "fallback": "或将此链接复制到浏览器中打开：",
+      "reasonReply": "你收到此邮件是因为你在这个讨论中回复过。"
+    },
     "watcherTransitionNotification": {
       "subject": "{actor}将{identifier}移至{status}",
       "preview": "{actor}将{identifier}移至{status}",
@@ -3071,8 +3083,8 @@
             "desc": "有人在评论或描述中@提及你。"
           },
           "commented": {
-            "label": "你参与的工作项有新评论",
-            "desc": "你报告、被指派或评论过的工作项有了新评论。"
+            "label": "你的工作项或页面讨论有新评论",
+            "desc": "你报告、被指派或评论过的工作项有了新评论——或你发起或参与过的页面讨论中有了新回复。"
           },
           "assigned": {
             "label": "指派给你",
@@ -3102,7 +3114,7 @@
         "soon": "即将推出",
         "cellAria": "{event}的{channel}通知",
         "cellAriaSoon": "{event}的{channel}通知（即将推出）",
-        "defaultsNote": "直接相关的事件——提及、你的工作项的评论以及指派——默认在两个渠道均开启。未改动的行使用该默认值（在你关闭之前不会关闭）。",
+        "defaultsNote": "直接相关的事件——提及、你的工作项的评论、你的页面讨论中的回复以及指派——默认在两个渠道均开启。未改动的行使用该默认值（在你关闭之前不会关闭）。",
         "status": {
           "saving": "保存中…",
           "saved": "已保存",
@@ -6078,7 +6090,9 @@
       "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请",
       "reviewToRun": "<s>{key}</s> 的评审正在等你的智能体",
       "reviewSentBack": "智能体要求修改 <s>{key}</s>",
-      "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠"
+      "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠",
+      "pageMentioned": "<s>{actor}</s> 在 <s>{page}</s> 中提到了你",
+      "pageReplied": "<s>{actor}</s> 回复了 <s>{page}</s> 上的一个讨论"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "组织管理员在 {time} 停止了它。它的文件已保留；可在智能体中将其唤醒。"

@@ -34,6 +34,10 @@ import {
   type WatcherCommentNotificationEmailProps,
 } from '@/lib/emailTemplates/watcherCommentNotification';
 import {
+  pageCommentNotificationEmail,
+  type PageCommentNotificationEmailProps,
+} from '@/lib/emailTemplates/pageCommentNotification';
+import {
   watcherTransitionNotificationEmail,
   type WatcherTransitionNotificationEmailProps,
 } from '@/lib/emailTemplates/watcherTransitionNotification';
@@ -111,6 +115,11 @@ export type TransactionalEmail =
       to: string;
       template: 'watcher-comment-notification';
       data: WatcherCommentNotificationEmailProps;
+    }
+  | {
+      to: string;
+      template: 'page-comment-notification';
+      data: PageCommentNotificationEmailProps;
     }
   | {
       to: string;
@@ -211,6 +220,8 @@ export const EMAIL_TEMPLATE_CLASS: Record<EmailTemplate, EmailTemplateClass> = {
   'agents-deletion-scheduled': 'essential',
   'mention-notification': 'notification',
   'watcher-comment-notification': 'notification',
+  // A page comment's mention or reply (MOTIR-10925) — counted by the rolling budget.
+  'page-comment-notification': 'notification',
   'watcher-transition-notification': 'notification',
   'filter-subscription': 'notification',
   'automation-rule-failed': 'notification',
@@ -343,6 +354,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return mentionNotificationEmail(message.data);
     case 'watcher-comment-notification':
       return watcherCommentNotificationEmail(message.data);
+    case 'page-comment-notification':
+      return pageCommentNotificationEmail(message.data);
     case 'watcher-transition-notification':
       return watcherTransitionNotificationEmail(message.data);
     case 'filter-subscription':

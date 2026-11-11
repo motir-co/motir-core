@@ -205,7 +205,8 @@ describe('page comments through the adapter', () => {
     const same = await inTenant(t, t.ownerId, (s) =>
       editPageComment(s, clock, { ...scope(t, owner(t)), commentId: root.id, bodyMd: 'Draft' }),
     );
-    expect(same.editedAt).toBeNull();
+    expect(same.comment.editedAt).toBeNull();
+    expect(same.previousBodyMd).toBe('Draft');
 
     const edited = await inTenant(t, t.memberId, (s) =>
       editPageComment(s, clock, {
@@ -216,7 +217,8 @@ describe('page comments through the adapter', () => {
     );
     const row = await adminDb.pageComment.findUniqueOrThrow({ where: { id: root.id } });
     expect(row.bodyMd).toBe('Final');
-    expect(row.editedAt?.toISOString()).toBe(edited.editedAt);
+    expect(row.editedAt?.toISOString()).toBe(edited.comment.editedAt);
+    expect(edited.previousBodyMd).toBe('Draft');
   });
 
   it('deletes a reply alone, and a root with every reply', async () => {

@@ -38,6 +38,13 @@ export interface NotificationActorDTO {
  * `transitioned` arm is the documented Story 5.4 slot (no producer yet, no
  * forward dep). `issueKey` is the deep-link target the drawer routes to
  * (`/items/[key]`, per `design/notifications/drawer.mock.html`).
+ *
+ * `page_mentioned` and `page_replied` (Story MOTIR-10868 · MOTIR-10922) are the
+ * first arms whose subject is a PAGE. Their rows reuse the `mentioned` and
+ * `commented` TYPES, so a person's existing preferences gate them, which leaves
+ * the type unable to tell them from a work-item row: the KIND is the only field
+ * that can, and every reader branches on it. The row's `workItemId` is null and
+ * its `pageId` column carries the page.
  */
 export type NotificationData =
   | NotificationMentionedData
@@ -45,7 +52,9 @@ export type NotificationData =
   | NotificationCodeAccessRefusedData
   | NotificationAgentHibernatedByAdminData
   | NotificationReviewToRunData
-  | NotificationReviewSentBackData;
+  | NotificationReviewSentBackData
+  | NotificationPageMentionedData
+  | NotificationPageRepliedData;
 
 /** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
  * events. `source` selects the row copy (comment body vs item description);
@@ -143,6 +152,33 @@ export interface NotificationReviewToRunData {
   title: string;
   /** `motir review <KEY>` — the command the recipient runs in their own agent. */
   command: string;
+}
+
+/** Someone mentioned the recipient in a page comment or reply (Story MOTIR-10868).
+ * `threadRootId` is the thread's root comment — the destination is the page with
+ * the discussion panel at that thread. `pageTitle` is the page's own title,
+ * verbatim, possibly `''`: the untitled fallback is applied when a surface
+ * renders, in the reader's language, never stored. */
+export interface NotificationPageMentionedData {
+  kind: 'page_mentioned';
+  pageId: string;
+  pageTitle: string;
+  projectKey: string;
+  threadRootId: string;
+  /** A plain-text comment excerpt (mention tokens as @Name), or `null` when empty. */
+  excerpt: string | null;
+}
+
+/** Someone replied in a page thread the recipient started or replied in before
+ * (Story MOTIR-10868). The same five fields as {@link NotificationPageMentionedData}. */
+export interface NotificationPageRepliedData {
+  kind: 'page_replied';
+  pageId: string;
+  pageTitle: string;
+  projectKey: string;
+  threadRootId: string;
+  /** A plain-text reply excerpt (mention tokens as @Name), or `null` when empty. */
+  excerpt: string | null;
 }
 
 /**

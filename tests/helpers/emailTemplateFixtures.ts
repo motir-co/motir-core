@@ -16,6 +16,7 @@ import { twoFactorOtpEmail } from '@/lib/emailTemplates/twoFactorOtp';
 import type { RenderedEmail } from '@/lib/emailTemplates/types';
 import type { Locale } from '@/lib/i18n/locales';
 import { watcherCommentNotificationEmail } from '@/lib/emailTemplates/watcherCommentNotification';
+import { pageCommentNotificationEmail } from '@/lib/emailTemplates/pageCommentNotification';
 import { watcherTransitionNotificationEmail } from '@/lib/emailTemplates/watcherTransitionNotification';
 import { workspaceInviteEmail } from '@/lib/emailTemplates/workspaceInvite';
 import type { EmailTemplate, TransactionalEmail } from '@/lib/services/emailService';
@@ -73,6 +74,14 @@ export const EMAIL_TEMPLATE_FIXTURES: { [K in EmailTemplate]: TemplateData<K> } 
     workItemTitle: 'Fix the login',
     excerpt: 'Done on my side.',
     issueUrl: `${URL}/items/PROD-42`,
+  },
+  'page-comment-notification': {
+    recipientName: 'Sam',
+    authorName: 'Alex',
+    pageTitle: 'Release checklist',
+    variant: 'reply',
+    excerpt: 'Done on my side.',
+    threadUrl: `${URL}/pages/page-1?thread=comment-1`,
   },
   'watcher-transition-notification': {
     recipientName: 'Sam',
@@ -157,6 +166,7 @@ export const EMAIL_TEMPLATE_RENDERERS: {
   'follow-digest': followDigestEmail,
   'mention-notification': mentionNotificationEmail,
   'watcher-comment-notification': watcherCommentNotificationEmail,
+  'page-comment-notification': pageCommentNotificationEmail,
   'watcher-transition-notification': watcherTransitionNotificationEmail,
   'filter-subscription': filterSubscriptionEmail,
   'automation-rule-failed': automationRuleFailedEmail,

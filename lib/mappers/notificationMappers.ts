@@ -71,6 +71,19 @@ function toNotificationData(raw: Notification['data']): NotificationData {
       command: str(d.command),
     };
   }
+  // The page arms (MOTIR-10922) — matched BEFORE the mention fallback below,
+  // which would otherwise turn them into a work-item mention with an empty key
+  // and no destination.
+  if (d.kind === 'page_mentioned' || d.kind === 'page_replied') {
+    return {
+      kind: d.kind,
+      pageId: str(d.pageId),
+      pageTitle: str(d.pageTitle),
+      projectKey: str(d.projectKey),
+      threadRootId: str(d.threadRootId),
+      excerpt: typeof d.excerpt === 'string' ? d.excerpt : null,
+    };
+  }
   if (d.kind === 'transitioned') {
     return {
       kind: 'transitioned',

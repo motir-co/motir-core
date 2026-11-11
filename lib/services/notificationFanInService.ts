@@ -2,6 +2,9 @@ import { Prisma, type WorkItem } from '@/generated/prisma/client';
 import { readWorkItemForService } from '@/lib/workspaces/tenantRead';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
+import { pageStoreFor } from '@/lib/pages';
+import { pageRepository } from '@/lib/repositories/pageRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -9,6 +12,7 @@ import { notificationPreferencesService } from '@/lib/services/notificationPrefe
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { mentionExcerpt } from '@/lib/mentions/excerpt';
 import type {
+  PageCommentCreatedData,
   WorkItemCommentCreatedData,
   WorkItemMentionedData,
   WorkItemTransitionedData,
@@ -276,6 +280,28 @@ export interface NotificationFanInResult {
 
 const NO_OP: NotificationFanInResult = { writtenUserIds: [] };
 
+/**
+ * The dedupe prefix BOTH page arms share (MOTIR-10924): every row written for one
+ * page comment carries `PAGE_COMMENT_DEDUPE_PREFIX + commentId`, whichever arm —
+ * `page_mentioned` or `page_replied` — it came from.
+ *
+ * ⚠️ ONE PREFIX, NOT THE SHIPPED `type:sourceId` SHAPE. With two prefixes a thread
+ * participant would hold a `commented:` row from the reply and then, when a later
+ * edit mentions them, a second `mentioned:` row about the SAME comment. One prefix
+ * makes the `(dedupe_key, recipient_user_id)` unique enforce "one row per person
+ * per comment" in the database, whatever order the recipient sets are computed in.
+ */
+export const PAGE_COMMENT_DEDUPE_PREFIX = 'page-comment:';
+
+/** One page-comment recipient and the arm their row takes. */
+interface PageCommentCandidate {
+  userId: string;
+  arm: 'page_mentioned' | 'page_replied';
+}
+
+/** The row type each page arm carries — the existing preference rows that gate it. */
+const PAGE_ARM_TYPE = { page_mentioned: 'mentioned', page_replied: 'commented' } as const;
+
 /** Wrap a bounded candidate set as a one-page source — the mention path. An
  * empty set yields no page (the loop never runs → a clean no-op). */
 async function* singlePage(ids: string[]): AsyncGenerator<string[]> {
@@ -422,6 +448,177 @@ export const notificationFanInService = {
   },
 
   /**
+   * Fan one `page/comment.created` event into `Notification` rows (Story
+   * MOTIR-10868 · MOTIR-10924) — the in-app consumer of a page comment. A SIBLING
+   * of `fanIn` rather than a registry entry, because `fanIn` opens by resolving a
+   * WORK ITEM and every part of its plan assumes one; a page row has none.
+   *
+   * THE RECIPIENTS, and the order the exclusions run in:
+   *   1. the MENTION set — the event's (already validated) mention ids, minus the
+   *      author → `page_mentioned`, type `mentioned`;
+   *   2. on a reply only, the REPLY set — the thread root's author plus the author
+   *      of every reply ordered before this comment, minus the author, minus
+   *      everyone in the mention set → `page_replied`, type `commented`.
+   * So a participant the reply also mentions gets the mention row and no reply row.
+   *
+   * PER CANDIDATE, one bounded page at a time (`FAN_IN_PAGE_SIZE`): page access is
+   * re-checked as them at send time (`canViewPages`; a vanished project ends the
+   * walk), then the `in_app` channel of their row's own type, then the rows that
+   * already exist under the comment's key are read and those people dropped, and
+   * the rest are written in one `createMany`. Reading before writing is what makes
+   * `writtenUserIds` the people actually written: a replay, or an edit's re-fire
+   * under the same comment id, writes nobody it already wrote and reports nobody.
+   *
+   * WHY A BATCHED `createMany` and not `notifyProjectEvent` per recipient: that
+   * method writes one recipient per transaction and swallows its own failure, so
+   * a fan-out built on it could finish green with someone never notified. Here a
+   * failure throws, and the job's transient retry does its work.
+   *
+   * THE PAYLOAD is built once per comment: the page's stored title VERBATIM (`''`
+   * on an untitled page; the fallback is the reader's, applied when a surface
+   * renders), the project key, the thread root and `mentionExcerpt` over the
+   * comment's own body. Every row is category `direct`, actor the event's author,
+   * `pageId` set and `workItemId` null.
+   *
+   * Resolves (never throws) on a comment deleted before the fan-out, a comment or
+   * page outside the event's workspace, or zero survivors. An ARCHIVED page still
+   * notifies: the page read returns it, and its thread stays readable.
+   *
+   * @param opts.pageSize the recipient page width (tests shrink it to force two
+   *   writes); production omits it (`FAN_IN_PAGE_SIZE`).
+   */
+  async fanInPageComment(
+    event: PageCommentCreatedData,
+    opts: { pageSize?: number } = {},
+  ): Promise<NotificationFanInResult> {
+    // USERLESS: a job has no session, so every read binds the WORKSPACE tier from
+    // the trusted id the emitting service put on the event. A row in another
+    // workspace is invisible under that binding and resolves to nothing.
+    const subject = await withWorkspaceServiceContext(event.workspaceId, async (tx) => {
+      // Not `lockById`: a job that reads in order to notify must hold no row lock.
+      const comment = await pageStoreFor(tx).findPageComment(event.commentId);
+      if (!comment || comment.workspaceId !== event.workspaceId) return null;
+      // Archived pages come back too — an archived thread still notifies.
+      const page = await pageRepository.findById(comment.pageId, tx);
+      if (!page) return null;
+      const project = await projectRepository.findById(page.projectId, tx);
+      if (!project) return null;
+
+      const participants: string[] = [];
+      // An edit tells only the people it ADDED: the thread heard about this reply when
+      // it was posted, so its participants get nothing further (MOTIR-10925).
+      if (event.isReply && !event.isEdit) {
+        const root = await pageStoreFor(tx).findPageComment(event.threadRootCommentId);
+        if (root) participants.push(root.authorId);
+        // Oldest first; only the replies BEFORE this one are its thread's people,
+        // so an edit's re-fire recomputes a subset and never adds a participant.
+        const replies = await pageStoreFor(tx).findPageCommentReplies([event.threadRootCommentId]);
+        for (const reply of replies) {
+          if (reply.id === comment.id) break;
+          participants.push(reply.authorId);
+        }
+      }
+      return { comment, page, projectKey: project.identifier, participants };
+    });
+    if (!subject) return NO_OP;
+    const { comment, page, projectKey, participants } = subject;
+
+    const seen = new Set<string>([event.authorId]);
+    const candidates: PageCommentCandidate[] = [];
+    for (const userId of event.mentionedUserIds) {
+      if (seen.has(userId)) continue;
+      seen.add(userId);
+      candidates.push({ userId, arm: 'page_mentioned' });
+    }
+    for (const userId of participants) {
+      if (seen.has(userId)) continue;
+      seen.add(userId);
+      candidates.push({ userId, arm: 'page_replied' });
+    }
+    if (candidates.length === 0) return NO_OP;
+
+    const excerpt = mentionExcerpt(comment.bodyMd);
+    const dataFor = (arm: PageCommentCandidate['arm']): NotificationData => ({
+      kind: arm,
+      pageId: page.id,
+      pageTitle: page.title,
+      projectKey,
+      threadRootId: event.threadRootCommentId,
+      excerpt,
+    });
+    const dedupeKey = `${PAGE_COMMENT_DEDUPE_PREFIX}${comment.id}`;
+    const pageSize = opts.pageSize ?? FAN_IN_PAGE_SIZE;
+    const writtenUserIds: string[] = [];
+
+    for (let start = 0; start < candidates.length; start += pageSize) {
+      const batch = candidates.slice(start, start + pageSize);
+
+      let viewable: PageCommentCandidate[];
+      try {
+        const checks = await Promise.all(
+          batch.map(async (candidate) => {
+            const caps = await projectAccessService.getPageCapabilities(page.projectId, {
+              workspaceId: event.workspaceId,
+              userId: candidate.userId,
+            });
+            return caps.canViewPages ? candidate : null;
+          }),
+        );
+        viewable = checks.filter((c): c is PageCommentCandidate => c !== null);
+      } catch (err) {
+        if (err instanceof ProjectNotFoundError) break;
+        throw err;
+      }
+      if (viewable.length === 0) continue;
+
+      const gated = await Promise.all(
+        viewable.map(async (candidate) =>
+          (await notificationPreferencesService.isChannelEnabled(
+            candidate.userId,
+            PAGE_ARM_TYPE[candidate.arm],
+            'in_app',
+          ))
+            ? candidate
+            : null,
+        ),
+      );
+      const recipients = gated.filter((c): c is PageCommentCandidate => c !== null);
+      if (recipients.length === 0) continue;
+
+      const written = await withWorkspaceServiceContext(event.workspaceId, async (tx) => {
+        const present = new Set(
+          await notificationRepository.findRecipientIdsByDedupeKey(
+            dedupeKey,
+            recipients.map((r) => r.userId),
+            tx,
+          ),
+        );
+        const fresh = recipients.filter((r) => !present.has(r.userId));
+        // `skipDuplicates` still absorbs a CONCURRENT duplicate between the read
+        // and the insert; the read above is what decides who is reported.
+        await notificationRepository.createMany(
+          fresh.map((r) => ({
+            workspaceId: event.workspaceId,
+            recipientUserId: r.userId,
+            type: PAGE_ARM_TYPE[r.arm],
+            category: 'direct',
+            workItemId: null,
+            pageId: page.id,
+            actorId: event.authorId,
+            data: dataFor(r.arm) as unknown as Prisma.InputJsonValue,
+            dedupeKey,
+          })),
+          tx,
+        );
+        return fresh.map((r) => r.userId);
+      });
+      writtenUserIds.push(...written);
+    }
+
+    return { writtenUserIds };
+  },
+
+  /**
    * Notify ONE recipient about something whose subject is a PROJECT rather than a
    * work item (MOTIR-5016 · Story MOTIR-5010) — a REFUSED collaborator invitation —
    * or about a card with NO ACTOR (MOTIR-10340): a review waiting for the routed
@@ -461,6 +658,9 @@ export const notificationFanInService = {
     /** The card the row is about, for a SYSTEM event that has one (the review to run,
      *  MOTIR-10340) — the row then dies with the card. Null or absent for a project. */
     workItemId?: string | null;
+    /** The page the row is about (MOTIR-10922): a page mention or a page reply. The
+     *  row then dies with the page, and `workItemId` stays null. */
+    pageId?: string | null;
     /** Who acted, when someone did (MOTIR-10368); null for a system event. */
     actorId?: string | null;
   }): Promise<boolean> {
@@ -484,6 +684,8 @@ export const notificationFanInService = {
               // destination from the TYPE, not from an issue key. A system event about a
               // card (the review to run) names it.
               workItemId: args.workItemId ?? null,
+              // A page-subject row names its page, so a permanent page delete takes it.
+              pageId: args.pageId ?? null,
               actorId: args.actorId ?? null,
               data: args.data as unknown as Prisma.InputJsonValue,
               dedupeKey: args.dedupeKey,

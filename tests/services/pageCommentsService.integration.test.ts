@@ -1,14 +1,19 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceRole } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import * as jobDispatcher from '@/lib/jobs/engine/dispatcher';
+import type { PageCommentCreatedData } from '@/lib/jobs/types';
 import {
   PageArchivedError,
+  PageCommentBodyEmptyError,
   PageCommentForbiddenError,
   PageCommentNotFoundError,
+  PageCommentReplyDepthError,
   PageNotFoundError,
   type PageCommentThreadDto,
 } from '@/lib/pages';
 import { PermissionDeniedError, ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { pageCommentsService } from '@/lib/services/pageCommentsService';
 import { pagesService } from '@/lib/services/pagesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -17,6 +22,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { captureJobEvents } from '../helpers/jobs';
 
 // The PAGE-COMMENT SERVICE on real Postgres (Story MOTIR-10866 · MOTIR-10873):
 // the gate order — browse, then `page:view`, then `comment:add`, then the
@@ -453,5 +459,339 @@ describe('pageCommentsService — tenancy', () => {
       expect(await refused(write())).toBeInstanceOf(PageNotFoundError);
     }
     expect(await snapshot()).toEqual(before);
+  });
+});
+
+// ── The `page/comment.created` event (Story MOTIR-10868 · MOTIR-10923) ───────
+
+describe('pageCommentsService — the page/comment.created event', () => {
+  const EVENT = 'page/comment.created';
+  let captured: ReturnType<typeof captureJobEvents>;
+
+  beforeEach(() => {
+    captured = captureJobEvents();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** The payloads of the page event, in emit order. */
+  const payloads = () =>
+    captured.events.filter((e) => e.name === EVENT).map((e) => e.data as PageCommentCreatedData);
+
+  const token = (a: Actor, name = 'Person') => `[@${name}](mention:${a.userId})`;
+
+  /** A workspace member who cannot ENTER the project: limited scope, never added. */
+  async function outsider(f: Fixture): Promise<Actor> {
+    const user = await makeUser('outsider');
+    await adminDb.workspaceMembership.create({
+      data: {
+        userId: user.id,
+        workspaceId: f.workspaceId,
+        workspaceRole: 'member',
+        accessScope: 'limited',
+      },
+    });
+    return { userId: user.id, workspaceId: f.workspaceId };
+  }
+
+  it('starting a thread emits once, after the commit, with the mentions in body order', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const ben = await actorAs(f, 'ben', 'member');
+    // At the moment of the emit, the row the payload names must already be readable.
+    const readable: boolean[] = [];
+    vi.spyOn(jobDispatcher, 'dispatchEventToEngine').mockImplementation(async (name, data) => {
+      captured.events.push({ name, data });
+      if (name === EVENT) {
+        const id = (data as PageCommentCreatedData).commentId;
+        readable.push((await adminDb.pageComment.findUnique({ where: { id } })) !== null);
+      }
+      return { dispatched: 0 } as never;
+    });
+
+    const root = await pageCommentsService.postPageComment(f.owner, {
+      ...on(f),
+      bodyMd: `Over to ${token(ben)} and ${token(ana)}, and ${token(ben)} again.`,
+    });
+
+    expect(payloads()).toEqual([
+      {
+        workspaceId: f.workspaceId,
+        projectId: f.projectId,
+        pageId: f.pageId,
+        commentId: root.id,
+        threadRootCommentId: root.id,
+        authorId: f.owner.userId,
+        mentionedUserIds: [ben.userId, ana.userId],
+        isReply: false,
+        isEdit: false,
+      },
+    ]);
+    expect(readable).toEqual([true]);
+  });
+
+  it('a comment that mentions nobody still emits, with an empty list and no member read', async () => {
+    const f = await makeFixture();
+    const members = vi.spyOn(assignableMembersService, 'list');
+    const root = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: 'Hi' });
+    await pageCommentsService.postPageReply(f.owner, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: 'Still here',
+    });
+    await pageCommentsService.editPageCommentBody(f.owner, {
+      ...on(f),
+      commentId: root.id,
+      bodyMd: 'Hello',
+    });
+    expect(members).not.toHaveBeenCalled();
+    expect(payloads().map((p) => [p.commentId, p.mentionedUserIds])).toEqual([
+      [root.id, []],
+      [expect.any(String), []],
+    ]);
+  });
+
+  it('reads the mentionable set once, before the write, scoped by the project access mode', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const rowsAtRead: number[] = [];
+    const real = assignableMembersService.list.bind(assignableMembersService);
+    const members = vi.spyOn(assignableMembersService, 'list').mockImplementation(async (input) => {
+      rowsAtRead.push(await adminDb.pageComment.count());
+      return real(input);
+    });
+    await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: token(ana) });
+    expect(members).toHaveBeenCalledTimes(1);
+    expect(members.mock.calls[0]![0]).toMatchObject({
+      projectId: f.projectId,
+      accessMode: 'workspace',
+    });
+    expect(rowsAtRead).toEqual([0]);
+  });
+
+  it('a reply emits once, rooted at its parent, even when it mentions nobody', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const root = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: 'Root' });
+    const silent = await pageCommentsService.postPageReply(ana, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: 'Agreed.',
+    });
+    const loud = await pageCommentsService.postPageReply(ana, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: `Thanks ${token(f.owner)}`,
+    });
+    expect(payloads().slice(1)).toEqual([
+      expect.objectContaining({
+        commentId: silent.id,
+        threadRootCommentId: root.id,
+        authorId: ana.userId,
+        mentionedUserIds: [],
+        isReply: true,
+        isEdit: false,
+      }),
+      expect.objectContaining({
+        commentId: loud.id,
+        threadRootCommentId: root.id,
+        mentionedUserIds: [f.owner.userId],
+        isReply: true,
+      }),
+    ]);
+  });
+
+  it('never names a person who cannot enter the project, and keeps their token in the body', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const out = await outsider(f);
+    const body = `${token(out, 'Out')} and ${token(ana)}`;
+
+    const root = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: body });
+    const reply = await pageCommentsService.postPageReply(f.owner, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: body,
+    });
+    const plain = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: 'x' });
+    await pageCommentsService.editPageCommentBody(f.owner, {
+      ...on(f),
+      commentId: plain.id,
+      bodyMd: body,
+    });
+
+    expect(payloads().map((p) => p.mentionedUserIds)).toEqual([
+      [ana.userId],
+      [ana.userId],
+      [],
+      [ana.userId],
+    ]);
+    for (const id of [root.id, reply.id, plain.id]) {
+      const row = await adminDb.pageComment.findUniqueOrThrow({ where: { id } });
+      expect(row.bodyMd).toBe(body);
+    }
+  });
+
+  it('an edit names only the people it added; a rewording and a removal are silent', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const ben = await actorAs(f, 'ben', 'member');
+    const root = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: 'Root' });
+    const reply = await pageCommentsService.postPageReply(f.owner, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: `Ask ${token(ana)}`,
+    });
+    const before = payloads().length;
+    const target = { ...on(f), commentId: reply.id };
+
+    await pageCommentsService.editPageCommentBody(f.owner, {
+      ...target,
+      bodyMd: `Ask ${token(ana)} and ${token(ben)}`,
+    });
+    await pageCommentsService.editPageCommentBody(f.owner, {
+      ...target,
+      bodyMd: `Please ask ${token(ana)} and ${token(ben)}`,
+    });
+    await pageCommentsService.editPageCommentBody(f.owner, {
+      ...target,
+      bodyMd: `Please ask ${token(ana)}`,
+    });
+
+    expect(payloads().slice(before)).toEqual([
+      {
+        workspaceId: f.workspaceId,
+        projectId: f.projectId,
+        pageId: f.pageId,
+        commentId: reply.id,
+        threadRootCommentId: root.id,
+        authorId: f.owner.userId,
+        mentionedUserIds: [ben.userId],
+        isReply: true,
+        isEdit: true,
+      },
+    ]);
+  });
+
+  it('a moderator’s edit of a root is authored by the moderator and rooted at the root itself', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const root = await pageCommentsService.postPageComment(ana, { ...on(f), bodyMd: 'Root' });
+    await pageCommentsService.editPageCommentBody(f.owner, {
+      ...on(f),
+      commentId: root.id,
+      bodyMd: `Root, cc ${token(ana)}`,
+    });
+    expect(payloads().at(-1)).toMatchObject({
+      commentId: root.id,
+      threadRootCommentId: root.id,
+      authorId: f.owner.userId,
+      mentionedUserIds: [ana.userId],
+      isReply: false,
+      isEdit: true,
+    });
+  });
+
+  it('a token moved out of code counts as added; a token kept in code counts on neither side', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const ben = await actorAs(f, 'ben', 'member');
+    const root = await pageCommentsService.postPageComment(f.owner, {
+      ...on(f),
+      bodyMd: `\`${token(ana)}\` and \`${token(ben)}\``,
+    });
+    expect(payloads().at(-1)!.mentionedUserIds).toEqual([]);
+    await pageCommentsService.editPageCommentBody(f.owner, {
+      ...on(f),
+      commentId: root.id,
+      bodyMd: `${token(ana)} and \`${token(ben)}\``,
+    });
+    expect(payloads().at(-1)).toMatchObject({ mentionedUserIds: [ana.userId] });
+  });
+
+  it('a byte-identical edit writes nothing and emits nothing', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const body = `Ask ${token(ana)}`;
+    const root = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: body });
+    const before = captured.events.length;
+    await pageCommentsService.editPageCommentBody(f.owner, {
+      ...on(f),
+      commentId: root.id,
+      bodyMd: body,
+    });
+    expect(captured.events.length).toBe(before);
+    const row = await adminDb.pageComment.findUniqueOrThrow({ where: { id: root.id } });
+    expect(row.editedAt).toBeNull();
+  });
+
+  it('delete, resolve and reopen emit no event of any name', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const root = await pageCommentsService.postPageComment(f.owner, {
+      ...on(f),
+      bodyMd: `Root ${token(ana)}`,
+    });
+    const reply = await pageCommentsService.postPageReply(f.owner, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: `Reply ${token(ana)}`,
+    });
+    const before = captured.events.length;
+    const target = { ...on(f), commentId: root.id };
+    await pageCommentsService.resolvePageThread(f.owner, target);
+    await pageCommentsService.reopenPageThread(f.owner, target);
+    await pageCommentsService.removePageComment(f.owner, { ...on(f), commentId: reply.id });
+    await pageCommentsService.removePageComment(f.owner, target);
+    expect(captured.events.slice(before)).toEqual([]);
+  });
+
+  it('a refused write emits nothing', async () => {
+    const f = await makeFixture();
+    const ana = await actorAs(f, 'ana', 'member');
+    const root = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: 'Root' });
+    const reply = await pageCommentsService.postPageReply(f.owner, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: 'Reply',
+    });
+    const elsewhere = await makeFixture('PCX');
+    const foreign = await pageCommentsService.postPageComment(elsewhere.owner, {
+      ...on(elsewhere),
+      bodyMd: 'Theirs',
+    });
+    const before = captured.events.length;
+
+    expect(
+      await refused(pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: '   ' })),
+    ).toBeInstanceOf(PageCommentBodyEmptyError);
+    expect(
+      await refused(
+        pageCommentsService.postPageReply(f.owner, {
+          ...on(f),
+          parentCommentId: reply.id,
+          bodyMd: `Deep ${token(ana)}`,
+        }),
+      ),
+    ).toBeInstanceOf(PageCommentReplyDepthError);
+    expect(
+      await refused(
+        pageCommentsService.editPageCommentBody(f.owner, {
+          ...on(f),
+          commentId: foreign.id,
+          bodyMd: `Mine ${token(ana)}`,
+        }),
+      ),
+    ).toBeInstanceOf(PageCommentNotFoundError);
+    await pagesService.archivePage(f.owner, on(f));
+    expect(
+      await refused(
+        pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: `Late ${token(ana)}` }),
+      ),
+    ).toBeInstanceOf(PageArchivedError);
+
+    expect(captured.events.slice(before).filter((e) => e.name === EVENT)).toEqual([]);
   });
 });
