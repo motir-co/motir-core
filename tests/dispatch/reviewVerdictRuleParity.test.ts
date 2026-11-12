@@ -197,6 +197,34 @@ const RUN_TARGET: ReviewPromptInput = {
 
 const hostedPassage = hostedVerdictPassage(assembleReviewPrompt(RUN_TARGET).prompt);
 
+/**
+ * THE RULE BOTH TEXTS STATE (MOTIR-11094). A minor finding sends the card back — scoped to
+ * one the pull requests INTRODUCED, which {@link minorSendBackSentence} checks, because the
+ * parse reduces a sentence to its terms and cannot see the scope. Nits and `cannot tell`
+ * rows never do.
+ */
+const EXPECTED_RULE: VerdictRule = {
+  sendsBack: ['blocker', 'major', 'minor', 'not_met'],
+  neverSendsBack: ['cannot_tell', 'nit'],
+  passesOtherwise: true,
+};
+
+/** The send-back sentence that names `minor` — the one that must scope it to the findings
+ *  the pull requests introduced. */
+function minorSendBackSentence(passage: string): string {
+  const text = passage.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
+  const sentence = text
+    .split(/(?<=[.;])\s+/)
+    .find(
+      (s) =>
+        /\bminor\b/i.test(s) &&
+        /`(changes_requested|pass|approved)`/.test(s) &&
+        /\bany\b|\bonly when\b/i.test(s),
+    );
+  if (!sentence) throw new Error(`no send-back sentence names a minor finding:\n${passage}`);
+  return sentence;
+}
+
 describe('the hosted reviewer and the motir-review skill state ONE verdict rule', () => {
   let skillPassage: string;
 
@@ -214,6 +242,16 @@ describe('the hosted reviewer and the motir-review skill state ONE verdict rule'
         'together, so the hosted reviewer and a person’s own review agent answer the same ' +
         'question.',
     ).toEqual(hosted);
+  });
+
+  it('both texts state the expected rule: an introduced minor finding sends the card back, a nit never does', () => {
+    expect(parseVerdictRule(hostedPassage)).toEqual(EXPECTED_RULE);
+    expect(parseVerdictRule(skillPassage)).toEqual(EXPECTED_RULE);
+    for (const passage of [hostedPassage, skillPassage]) {
+      expect(minorSendBackSentence(passage)).toMatch(
+        /minor finding[^.]*the pull requests introduced/,
+      );
+    }
   });
 
   it('each text states a whole rule: something sends the card back, and the card passes otherwise', () => {
@@ -250,10 +288,11 @@ describe('the hosted reviewer and the motir-review skill state ONE verdict rule'
       '`cannot_tell` rows alone never send',
       '`cannot_tell` rows send',
     ],
+    ['nits drop out of the never clause', 'and nits never do', 'and they are listed'],
     [
-      'nits drop out of the never clause',
-      'minor findings and nits never do',
-      'minor findings never do',
+      'introduced minor findings stop sending the card back',
+      ', and it found no minor finding the pull requests introduced',
+      '',
     ],
     ['the passing verdict loses its "only when"', '`approved` only when', '`approved` when'],
   ])('a skill-only change is caught: %s', (_name, from, to) => {
@@ -273,7 +312,12 @@ describe('parseVerdictRule — a hosted-only change is caught', () => {
       'A `cannot tell` row alone does not send the card back',
       'A `cannot tell` row sends the card back',
     ],
-    ['nits drop out of the never clause', 'Minor findings and nits never', 'Minor findings never'],
+    ['nits drop out of the never clause', 'Nits never send the card back.', 'Nits are listed.'],
+    [
+      'introduced minor findings stop sending the card back',
+      ', or any minor finding is one the pull requests introduced (in code they deliver)',
+      '',
+    ],
     ['the pass default is dropped', '`pass` — otherwise.', 'Then stop.'],
   ])('%s', (_name, from, to) => {
     expect(flat).toContain(from);
@@ -282,6 +326,16 @@ describe('parseVerdictRule — a hosted-only change is caught', () => {
 
   it('a passage with no send-back clause is refused, never read as an empty rule', () => {
     expect(() => parseVerdictRule('Submit one verdict.')).toThrow(/no send-back clause/);
+  });
+
+  it('a text whose minor finding is not scoped to the ones the pull requests introduced is refused', () => {
+    expect(() => minorSendBackSentence('`changes_requested` — any finding is a blocker.')).toThrow(
+      /no send-back sentence names a minor finding/,
+    );
+    expect(minorSendBackSentence(flat)).toContain('the pull requests introduced');
+    expect(
+      minorSendBackSentence(flat.replace('one the pull requests introduced', 'present')),
+    ).not.toMatch(/minor finding[^.]*the pull requests introduced/);
   });
 
   it('a text that lost its verdict passage is refused by name', () => {

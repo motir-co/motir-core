@@ -127,6 +127,8 @@ function setup(opts: {
   agentExit?: number;
   /** The agent's self-reported model (MOTIR-7504); null by default. */
   agentModel?: string | null;
+  /** What the agent wrote into `$MOTIR_AGENT_REPORT` beyond its model (MOTIR-11094). */
+  agentReport?: { discrepancy?: unknown; decisions?: unknown };
 }) {
   const calls: Harness['calls'] = [];
   const claims = [...opts.claims];
@@ -158,6 +160,9 @@ function setup(opts: {
     transitionStatus: async (args: unknown) => {
       calls.push({ tool: 'transition_status', args });
     },
+    recordDispatchRunDiscrepancy: async (args: unknown) => {
+      calls.push({ tool: 'record_discrepancy', args });
+    },
   };
   sessionRef.current = {
     client,
@@ -188,6 +193,7 @@ function setup(opts: {
         exitCode: opts.agentExit ?? 0,
         signal: null,
         model: opts.agentModel ?? null,
+        ...opts.agentReport,
       } as never;
     },
     wait: async () => {},
@@ -560,6 +566,14 @@ describe('motir fix — a card a REVIEW sent back (MOTIR-6822)', () => {
     for (const line of FINDINGS.split('\n')) expect(prompt).toContain(`> ${line}`);
     expect(prompt).toContain('Address EVERY finding');
     expect(prompt).toContain('branch `subtask/PROD-70-export`');
+    // A fix past the card's text is BUILT and recorded, never refused as out of scope
+    // (MOTIR-11094).
+    expect(prompt).toContain('is yours to fix even when the fix goes beyond the card’s text');
+    expect(prompt).toContain('a discrepancy: ONE `record_run_discrepancy` call on PROD-70');
+    expect(prompt).toContain('as `"discrepancy"` beside');
+    expect(prompt).toContain('never a reason to call it out of scope.');
+    // Nothing self-reported, so nothing is recorded by the run.
+    expect(tools()).not.toContain('record_discrepancy');
 
     expect(events().map((e) => e.kind)).toEqual([
       'run_opened',
@@ -576,6 +590,52 @@ describe('motir fix — a card a REVIEW sent back (MOTIR-6822)', () => {
     expect(tools()).not.toContain('transition_status');
     expect(tools()).not.toContain('open_run');
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it('records the build-through points and decisions the review-fix agent self-reported (MOTIR-11094)', async () => {
+    const points = [
+      {
+        planAsked: 'The card named only the populated export.',
+        built: 'The empty export keeps its header row.',
+        why: 'The review found the header missing on an empty list.',
+      },
+    ];
+    const decisions = [
+      { planSaid: 'nothing', chose: 'An empty CSV with headers.', why: 'RFC 4180 practice.' },
+    ];
+    const deps = setup({
+      claims: [reviewClaim()],
+      verdicts: [[delivery('passing')]],
+      agentReport: { discrepancy: points, decisions },
+    });
+
+    await fixCommand('PROD-70', {}, deps);
+
+    const recorded = h.calls.filter((c) => c.tool === 'record_discrepancy');
+    expect(recorded).toEqual([
+      {
+        tool: 'record_discrepancy',
+        args: { runId: 'run_fix_1', key: 'PROD-70', points, decisions },
+      },
+    ]);
+    // Recorded before the run closes.
+    expect(tools().indexOf('record_discrepancy')).toBeLessThan(tools().indexOf('close_run'));
+  });
+
+  it('records a self-report even when the review-fix agent then fails', async () => {
+    const points = [{ planAsked: 'a', built: 'b', why: 'c' }];
+    const deps = setup({
+      claims: [reviewClaim()],
+      agentExit: 3,
+      agentReport: { discrepancy: points },
+    });
+
+    await fixCommand('PROD-70', {}, deps);
+
+    expect(h.calls.filter((c) => c.tool === 'record_discrepancy').map((c) => c.args)).toEqual([
+      { runId: 'run_fix_1', key: 'PROD-70', points },
+    ]);
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'halted' }]);
   });
 
   it('names a PERSON who sent it back on the approve-and-merge gate', async () => {

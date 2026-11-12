@@ -56,6 +56,9 @@ export const CI_FIX_ATTEMPTS = 5;
  * standalone package that cannot reach into the Next app.
  */
 export const HOW_TO_TEST_TOOL_NAME = 'publish_test_instructions';
+/** The MCP tool a review-fix agent records a fix that went past the card's text with
+ *  (MOTIR-11094) — the same build-through record a run makes. */
+export const DISCREPANCY_TOOL_NAME = 'record_run_discrepancy';
 
 /**
  * `1 attempt` / `2 attempts`, in the one place both report lines read it from.
@@ -802,9 +805,29 @@ export function renderReviewFixPrompt(input: ReviewFixInput): string {
   lines.push('## The scope');
   lines.push('');
   lines.push('A fix to the delivered work on these branches: what the review named, measured');
-  lines.push('against the card. **A finding that asks for a change to what the card is FOR** —');
-  lines.push('work another card owns, a new surface, a different design — is not yours to');
-  lines.push('build: leave it, and say so in one paragraph naming the finding.');
+  lines.push('against the card. **A defect the review found in the code these pull requests');
+  lines.push(
+    'deliver is yours to fix even when the fix goes beyond the card\u2019s text** \u2014 a gap',
+  );
+  lines.push('in what the card specified, a case it never named. Build the fix, and record it as');
+  lines.push(
+    `a discrepancy: ONE \`${DISCREPANCY_TOOL_NAME}\` call on ${input.key}, after you build and`,
+  );
+  lines.push('before you push, with one point per such fix as `{ planAsked, built, why }`. If you');
+  lines.push('have no Motir tools and the environment variable MOTIR_AGENT_REPORT is set, put the');
+  lines.push('same points into the JSON file at that path instead, as `"discrepancy"` beside');
+  lines.push(
+    '`"model"`. \u201cThe card did not ask for it\u201d is never a reason to leave such a finding',
+  );
+  lines.push('unfixed, and never a reason to call it out of scope.');
+  lines.push('');
+  lines.push(
+    '**A finding that asks for a change to what the card is FOR** \u2014 work another card',
+  );
+  lines.push(
+    'owns, a new surface, a different design \u2014 is not yours to build: leave it, and say',
+  );
+  lines.push('so in one paragraph naming the finding.');
   lines.push('');
   lines.push('## What to do');
   lines.push('');
