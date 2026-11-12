@@ -827,15 +827,39 @@
   }
 }
 
-/* Modal panel — a touch more opaque + a stronger blur (body-text AA + lift). */
+/* Modal panel — a touch more opaque + a stronger blur (body-text AA + lift).
+   MOTIR-11105: the frosting lives on a `::before` layer, NOT on the panel. A
+   `backdrop-filter` makes its element the containing block of every
+   `position: fixed` descendant, so on the panel itself it trapped a Combobox
+   menu inside the panel's `overflow-hidden` box (MOTIR-11096's symptom, in this
+   style only). The panel keeps only what paints OUTSIDE its padding box — the
+   rim border and the drop shadow — and `isolation: isolate` makes it a stacking
+   context, so the `z-index: -1` layer paints over the panel's (cleared) own
+   background and under its content, wherever the panel sits (the fixed dialog,
+   the command palette, the /tokens vignette's in-flow tile). The layer paints
+   in the panel's own order: blur the backdrop, then the tint, the sheen and the
+   inset rim on top of it. */
 @scope ([data-style='glassmorphism']) to ([data-style]) {
   [data-surface='modal'] {
+    isolation: isolate;
+    background-color: transparent;
+    background-image: none;
+    border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+    box-shadow: 0 28px 70px -16px rgba(15, 15, 15, 0.34);
+  }
+}
+
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='modal']::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
     background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-modal-alpha), transparent);
     background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
-    border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
-    box-shadow:
-      inset 0 1px 0 0 var(--glass-rim),
-      0 28px 70px -16px rgba(15, 15, 15, 0.34);
+    box-shadow: inset 0 1px 0 0 var(--glass-rim);
     -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
     backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
   }

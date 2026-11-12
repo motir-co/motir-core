@@ -108,6 +108,15 @@ async function readFingerprint(page: Page, id: string): Promise<string[]> {
       }
       const after = el ? getComputedStyle(el, '::after').getPropertyValue('content') : '<missing>';
       parts.push(`${surface}::after:${after}`);
+      // Glassmorphism frosts the modal on a `::before` layer, so the panel is
+      // never the containing block of a fixed Combobox menu (MOTIR-11105). Read
+      // that layer too, or the glass modal's material leaves the fingerprint.
+      if (surface === 'modal') {
+        for (const prop of props) {
+          const value = el ? getComputedStyle(el, '::before').getPropertyValue(prop) : '<missing>';
+          parts.push(`${surface}::before.${prop}:${value}`);
+        }
+      }
     }
     const canvas = tile.querySelector<HTMLElement>('.sv-canvas');
     parts.push(
