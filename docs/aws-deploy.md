@@ -11,7 +11,7 @@ failure leaves the previous tasks serving.
 
 ## The one release lane, and its guards
 
-This workflow is Motir's only release lane: the Fly `deploy` job of `ci.yml`
+This workflow is Motir's only release lane: the old `deploy` job of `ci.yml`
 was retired by MOTIR-10935. It shares no job with `ci.yml`, waits on nothing in
 it and is not triggered by it.
 

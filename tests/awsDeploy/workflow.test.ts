@@ -89,7 +89,7 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     });
   });
 
-  // MOTIR-11059: the guards the retired Fly job carried. The secret checks refuse
+  // MOTIR-11059: the guards the retired deploy job carried. The secret checks refuse
   // before any AWS session or image build; the Sentry release check reads the
   // build's result after the roll, so a Sentry outage cannot hold a release back.
   it('refuses on a missing monitoring secret or salt before it assumes a role or builds', () => {

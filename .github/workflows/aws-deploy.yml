@@ -5,7 +5,7 @@ name: AWS deploy
 # and hands its DIGEST to `pnpm deploy:aws`, which migrates, rolls web, worker
 # and relay, and records the digest only when every service completed.
 #
-# This is Motir's one release lane: the Fly deploy job of the CI workflow was
+# This is Motir's one release lane: the CI workflow's old deploy job was
 # retired by MOTIR-10935. This file shares no job with the CI workflow, waits on
 # nothing in it and is not triggered by it.
 #
@@ -13,7 +13,7 @@ name: AWS deploy
 # queue, whose required checks already include the CI workflow's `build` job and
 # its schema-drift guard.
 #
-# The release guards the retired Fly job carried live here (MOTIR-11059): the
+# The release guards the retired deploy job carried live here (MOTIR-11059): the
 # job refuses to build without its monitoring secrets or its Server Action salt,
 # the image build uploads source maps for the release, and the run goes red if
 # Sentry has no release named after this commit.
@@ -227,7 +227,7 @@ jobs:
       # expired token) that would otherwise surface as unreadable stack traces
       # during an incident.
       #
-      # It runs after the roll, as the Fly job's did, so an outage of Sentry's
+      # It runs after the roll, as the retired deploy job's did, so an outage of Sentry's
       # API turns the run red without holding a release back. It runs whether or
       # not the roll was gated, and on a re-run that reused the pushed image,
       # because the release belongs to the image this run deploys.
