@@ -2,6 +2,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render, enMessages } from '../helpers/renderWithIntl';
+import { clearToastTimersAfterEach } from '../helpers/toastTimers';
 import zhMessages from '@/messages/zh.json';
 import { ToastProvider } from '@/components/ui/Toast';
 
@@ -109,6 +110,8 @@ function Shell() {
 
 const modalHeading = () => screen.queryByRole('heading', { name: 'Create work item' });
 
+clearToastTimersAfterEach();
+
 beforeEach(() => {
   // Default: the Linked-issues section's mount fetch resolves to no candidates.
   // Individual link tests override this with a candidate set.
@@ -118,6 +121,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe('CreateIssueModal — entry points', () => {
