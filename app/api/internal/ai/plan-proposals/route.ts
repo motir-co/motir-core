@@ -70,7 +70,9 @@ import type { ProposalInput } from '@/lib/dto/plans';
 // plan from scratch: re-planning, not revising.
 //
 // Service-to-service only, resolved by `sourceJobId` like every seam beside it,
-// so a job token cannot read another job's plan. Read-only.
+// so a job token cannot read another job's plan. Read-only. Beside `items` it
+// answers the plan's `raisedGaps` (MOTIR-10176) and `authorRegistrations`
+// (MOTIR-11085), which a resumed walk hands to its levels' amends.
 // The longest plan title the append seam stores (MOTIR-8164). A longer one is
 // CUT, not refused: a title is a label, and refusing the append over its length
 // would throw away the proposals it carries.

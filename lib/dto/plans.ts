@@ -949,6 +949,42 @@ export interface PlanGapsRecordedDto {
   amended: string[];
 }
 
+/**
+ * One HAND-OFF or RENAME a plan's author session registered for its level's amend
+ * (MOTIR-11085), and whether that amend has been handed it. `kind` says which of the
+ * kind fields are set: `receiver` / `what` / `reason` for a `hand_off`, `from` / `to` /
+ * `codeFact` for a `rename`; the others are null.
+ */
+export interface PlanAuthorRegistrationDto {
+  /** The planner's own id for the registration — what its `relay` entry names. */
+  id: string;
+  seq: number;
+  sessionKey: string;
+  kind: 'hand_off' | 'rename';
+  /** The card whose author session registered it. */
+  session: string;
+  level: string | null;
+  receiver: string | null;
+  what: string | null;
+  reason: string | null;
+  from: string | null;
+  to: string | null;
+  codeFact: string | null;
+  relayed: boolean;
+  relayedAt: string | null;
+  /** How the amend settled it; null until it was handed one. */
+  outcome: { kind: string; reason: string | null } | null;
+  registeredAt: string;
+}
+
+/** What a `registrations` call recorded (MOTIR-11085): the ids it registered and stamped. */
+export interface PlanRegistrationsRecordedDto {
+  registered: string[];
+  /** Registrations of an id the plan already held — a repeated report, kept as it was. */
+  alreadyRegistered: string[];
+  relayed: string[];
+}
+
 export interface PlanCodeReadPageDto {
   planId: string;
   reads: PlanCodeReadDto[];
