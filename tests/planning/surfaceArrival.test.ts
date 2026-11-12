@@ -80,6 +80,47 @@ describe('surfaceArrivalTrail', () => {
     ).toEqual([]);
   });
 
+  // The Plan button on a FILED, childless root story (MOTIR-10861) opened the
+  // canvas on the project root, where only the folder's door is drawn. The
+  // trail now walks through the anchor's placement folders first, as
+  // `/roadmap?item=`'s `resolveArrivalTrail` does.
+  it('a childless ROOT anchor FILED in a folder opens on that folder, where it sits', () => {
+    const trail = surfaceArrivalTrail({
+      anchor: anchorOf('story'),
+      ancestors: [],
+      hasChildren: false,
+      folders: [
+        { id: 'f_1', name: 'Later' },
+        { id: 'f_2', name: 'To do' },
+      ],
+    });
+    expect(trail).toEqual([
+      { id: 'folder:f_1', label: 'Later' },
+      { id: 'folder:f_2', label: 'To do' },
+    ]);
+  });
+
+  it('the folder crumbs come BEFORE the work-item ancestors and the anchor', () => {
+    const trail = surfaceArrivalTrail({
+      anchor: anchorOf('story'),
+      ancestors: [EPIC],
+      hasChildren: true,
+      folders: [{ id: 'f_2', name: 'To do' }],
+    });
+    expect(trail.map((c) => c.id)).toEqual(['folder:f_2', 'wi_1', 'wi_7']);
+  });
+
+  it('a NULL anchor drops the folder crumbs too', () => {
+    expect(
+      surfaceArrivalTrail({
+        anchor: null,
+        ancestors: [],
+        hasChildren: false,
+        folders: [{ id: 'f_2', name: 'To do' }],
+      }),
+    ).toEqual([]);
+  });
+
   it('a NULL anchor opens the root — the no-existence-leak degradation', () => {
     // `fetchPlanningAnchor` answers `null` for a stale, deleted, foreign or
     // forbidden key alike, and all four must be indistinguishable from "no target

@@ -151,6 +151,8 @@ describe('a triage bug resolves where a conversation anchors', () => {
       ancestors: [],
       // And childless, so the surface opens on its own level (MOTIR-7621).
       hasChildren: false,
+      // And unfiled — a triage item sits in no folder, so no folder crumbs.
+      folders: [],
     });
   });
 

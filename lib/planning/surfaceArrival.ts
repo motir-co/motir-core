@@ -1,5 +1,13 @@
-import type { PlanningAnchor, PlanningAnchorAncestor } from '@/lib/planning/planningAnchorClient';
-import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import type {
+  PlanningAnchor,
+  PlanningAnchorAncestor,
+  PlanningAnchorFolder,
+} from '@/lib/planning/planningAnchorClient';
+import {
+  folderNodeId,
+  workItemCrumbLabel,
+  type CanvasCrumb,
+} from '@/lib/planning/projectCanvasModel';
 
 // THE ARRIVAL RULE for the universal planning surface's canvas (MOTIR-6160,
 // Story MOTIR-6154) — where the canvas OPENS, for every entrance.
@@ -38,17 +46,16 @@ import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanv
 // name." That sentence is what this card retires — the two surfaces now want
 // the same thing.
 //
-// ⚠️ ONE LIMB OF THE ROADMAP'S VERSION IS NOT HERE, AND IT IS A PROPERTY OF THE
-// READ RATHER THAN OF THE RULE. `resolveArrivalTrail` runs on the SERVER and
-// prepends the item's placement-FOLDER chain, because a filed item sits behind
-// its folder's door and a trail without those crumbs is a level a reader could
-// not have reached by hand. This function runs on the CLIENT, from
-// `GET /api/work-items/planning-anchor`, whose payload carries the anchor and
-// its work-item ancestors and NO placement — so no folder crumb can be built
-// here, whatever the rule says. The shipped ancestors-only trail had exactly
-// the same gap, so nothing regresses; closing it means teaching the anchor read
-// to carry placement, which is not this card's scope. Recorded in the design's
-// own arrival section so the next reader meets it there too.
+// ── The FOLDER limb ─────────────────────────────────────────────────────────
+// `resolveArrivalTrail` prepends the item's placement-FOLDER chain, because a
+// filed item sits behind its folder's door and a trail without those crumbs is
+// a level a reader could not have reached by hand. This rule did not, because
+// `GET /api/work-items/planning-anchor` carried no placement — and that gap was
+// a real bug, not a cosmetic one: a FILED, CHILDLESS, ROOT story (the To plan
+// card a roadmap Plan button opens) got an EMPTY trail, so the canvas opened on
+// the project root, where the story is not drawn at all — only its folder's
+// door. The anchor read now carries the folder chain (`folders`), and every
+// trail below starts with it.
 
 /** What the arrival rule needs: the resolved anchor, or `null` when the read
  *  answered `404` — the no-existence-leak answer for a stale, deleted, foreign
@@ -58,6 +65,9 @@ export interface SurfaceArrivalInput {
   anchor: Pick<PlanningAnchor['anchor'], 'id' | 'identifier' | 'title' | 'kind'> | null;
   ancestors: readonly PlanningAnchorAncestor[];
   hasChildren: boolean;
+  /** The anchor's placement folder chain, root first — `[]` (the default) when
+   *  it is unfiled. */
+  folders?: readonly PlanningAnchorFolder[];
 }
 
 // ── INSIDE ⇔ THE ANCHOR HAS CHILDREN (MOTIR-7621) ──────────────────────────
@@ -78,10 +88,14 @@ export interface SurfaceArrivalInput {
  * so changing what this returns changes the arrival without touching the canvas
  * engine at all.
  *
- * - an anchor WITH children → `ancestors ++ [anchor]`, so the canvas opens on
- *   the anchor's CHILDREN and the breadcrumb ends at the anchor;
- * - a CHILDLESS anchor (any kind) → `ancestors`, the own-level arrival, where
- *   the target is marked by the shipped node ring rather than by a crumb;
+ * Every trail starts with the anchor's placement FOLDER crumbs, so a filed
+ * anchor's level is the one a reader drilling by hand would reach. Then:
+ *
+ * - an anchor WITH children → `folders ++ ancestors ++ [anchor]`, so the canvas
+ *   opens on the anchor's CHILDREN and the breadcrumb ends at the anchor;
+ * - a CHILDLESS anchor (any kind) → `folders ++ ancestors`, the own-level
+ *   arrival, where the target is marked by the shipped node ring rather than by
+ *   a crumb;
  * - no anchor (`null`) → `[]`, the project root, silently. This is the
  *   degradation the overlay already applies for an unresolvable `?planItem=`,
  *   and it is deliberately indistinguishable from "no target was named".
@@ -90,14 +104,18 @@ export function surfaceArrivalTrail({
   anchor,
   ancestors,
   hasChildren,
+  folders = [],
 }: SurfaceArrivalInput): CanvasCrumb[] {
-  const trail: CanvasCrumb[] = ancestors.map((a) => ({
-    id: a.id,
-    crumbKey: a.identifier,
-    label: workItemCrumbLabel(a.identifier, a.title),
-  }));
-
   if (anchor === null) return [];
+
+  const trail: CanvasCrumb[] = [
+    ...folders.map((f) => ({ id: folderNodeId(f.id), label: f.name })),
+    ...ancestors.map((a) => ({
+      id: a.id,
+      crumbKey: a.identifier,
+      label: workItemCrumbLabel(a.identifier, a.title),
+    })),
+  ];
   if (!arrivesInsideAnchor({ anchor, hasChildren })) return trail;
 
   trail.push({

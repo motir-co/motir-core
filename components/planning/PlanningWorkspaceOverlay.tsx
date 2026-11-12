@@ -678,6 +678,7 @@ export function PlanningWorkspaceOverlay({
             anchor: found?.anchor ?? null,
             ancestors: found?.ancestors ?? [],
             hasChildren: found?.hasChildren ?? false,
+            folders: found?.folders ?? [],
           }),
         });
       } catch {
