@@ -63,7 +63,11 @@ function installGitHub(): void {
         };
         return json(202, { run_id: 1 });
       }
-      if (u.pathname === `/repos/${ORG}/motir-ai`) return json(200, { private: isPrivate });
+      // GitHub's paths are case-insensitive; the boot passes the owner as the
+      // job's repository spells it.
+      if (u.pathname.toLowerCase() === `/repos/${ORG}/motir-ai`) {
+        return json(200, { private: isPrivate });
+      }
       return json(500, { message: `unexpected ${method} ${u.pathname}` });
     }),
   );
