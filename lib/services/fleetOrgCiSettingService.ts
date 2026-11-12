@@ -19,6 +19,7 @@ import {
 import {
   CodeScanningDefaultSetupApiError,
   codeScanningDefaultSetupClient,
+  isNoRunnerWithLabelRefusal,
   runnerRequests,
   type DefaultSetup,
   type DefaultSetupRunner,
@@ -104,6 +105,15 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
  * compensation) and written inside it after the variable, under the same rule: a
  * failed read or write refuses the flip, nothing is stored, and whatever was
  * already moved on GitHub is put back.
+ *
+ * ⚠️ ONE REFUSAL IS NOT A FAILURE: NO RUNNER WITH THE LABEL. GitHub moves a
+ * default setup onto a label only while a registered runner carries it, and the
+ * fleet registers a single-use runner only while a job runs, so an idle fleet
+ * refuses every ON move (`isNoRunnerWithLabelRefusal`). ON then succeeds with
+ * that repository DEFERRED (audited as `codeScanningDeferred`, shown as
+ * `pending_fleet`), and the boot that next registers a runner for it makes the
+ * move (`fleetCodeScanningCatchUpService`). Nothing is stored for it: pending is
+ * read as "the pair is ON and the repository is still on another runner".
  *
  * ⚠️ BOOT IS NOT GATED HERE. A job that requests `motir-runner` still boots
  * whatever the switch says (`lib/ciFleet/config.ts`, "AND NOT BY TENANT FLAG");
@@ -374,11 +384,14 @@ export function plannedDefaultSetupMoves(
 }
 
 /** Make each move, recording it in `moved` as it lands so a later failure can
- *  put it back. A GitHub refusal throws `FleetOrgCiCodeScanningError` (`write`). */
+ *  put it back. An ON move GitHub refuses because no runner carries the label
+ *  yet goes in `deferred` (the next boot makes it); any other GitHub refusal
+ *  throws `FleetOrgCiCodeScanningError` (`write`). */
 async function applyDefaultSetupMoves(
   target: FleetOrgCiTargetDTO,
   moves: DefaultSetupMove[],
   moved: DefaultSetupMove[],
+  deferred: DefaultSetupMove[],
   enabled: boolean,
 ): Promise<void> {
   for (const move of moves) {
@@ -391,6 +404,16 @@ async function applyDefaultSetupMoves(
       );
     } catch (err) {
       if (!isGithubFailure(err)) throw err;
+      if (enabled && isNoRunnerWithLabelRefusal(err)) {
+        deferred.push(move);
+        continue;
+      }
+      console.warn(`${LOG} GitHub refused a CodeQL default-setup move`, {
+        org: target.org.toLowerCase(),
+        repo: move.repo.name,
+        status: statusOf(err),
+        detail: err instanceof CodeScanningDefaultSetupApiError ? err.detail : '',
+      });
       throw new FleetOrgCiCodeScanningError(
         target.org.toLowerCase(),
         move.repo.name,
@@ -425,10 +448,13 @@ async function restoreDefaultSetups(
   return failed;
 }
 
-/** One repository's default setup for the page; a failed read is `unknown`. */
+/** One repository's default setup for the page; a failed read is `unknown`.
+ *  `enabled` is the pair's stored state: ON with the repository still off the
+ *  fleet is a deferred move (`pending_fleet`). */
 async function codeScanningStateOf(
   target: FleetOrgCiTargetDTO,
   repo: PairRepo,
+  enabled: boolean,
 ): Promise<FleetOrgCiCodeScanningDTO> {
   try {
     const setup = await codeScanningDefaultSetupClient.get(
@@ -438,10 +464,9 @@ async function codeScanningStateOf(
     );
     if (setup.state === 'unavailable') return { repo: repo.name, state: 'unavailable' };
     if (setup.state === 'not-configured') return { repo: repo.name, state: 'not_configured' };
-    return {
-      repo: repo.name,
-      state: runnerRequests(setup.runner, MOTIR_RUNNER_LABEL) ? 'fleet' : 'github_hosted',
-    };
+    if (runnerRequests(setup.runner, MOTIR_RUNNER_LABEL))
+      return { repo: repo.name, state: 'fleet' };
+    return { repo: repo.name, state: enabled ? 'pending_fleet' : 'github_hosted' };
   } catch (err) {
     if (!isGithubFailure(err)) throw err;
     return { repo: repo.name, state: 'unknown', status: statusOf(err) };
@@ -506,7 +531,9 @@ export const fleetOrgCiSettingService = {
       variable = { state: 'unknown', status: statusOf(err) };
     }
     const repos = await privateReposOf(target);
-    const codeScanning = await Promise.all(repos.map((repo) => codeScanningStateOf(target, repo)));
+    const codeScanning = await Promise.all(
+      repos.map((repo) => codeScanningStateOf(target, repo, stored.enabled)),
+    );
     return { ...stored, readiness, variable, codeScanning };
   },
 
@@ -592,6 +619,7 @@ export const fleetOrgCiSettingService = {
       enabled,
     );
     const moved: DefaultSetupMove[] = [];
+    const deferred: DefaultSetupMove[] = [];
 
     const operation = enabled ? 'set' : 'delete';
     let applied = false;
@@ -620,7 +648,8 @@ export const fleetOrgCiSettingService = {
             throw new FleetOrgCiGithubWriteError(org, statusOf(err), operation);
           }
           applied = true;
-          await applyDefaultSetupMoves(target, moves, moved, enabled);
+          deferred.length = 0;
+          await applyDefaultSetupMoves(target, moves, moved, deferred, enabled);
 
           await platformFleetOrgCiRepository.upsert(
             {
@@ -642,6 +671,7 @@ export const fleetOrgCiSettingService = {
               to: enabled,
               variableOutcome,
               codeScanningMoved: moved.map((m) => m.repo.name),
+              codeScanningDeferred: deferred.map((m) => m.repo.name),
             },
           };
           await record(entry);

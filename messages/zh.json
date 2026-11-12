@@ -13368,6 +13368,7 @@
       "codeScanning": {
         "fleet": "在集群上运行（{label}）",
         "githubHosted": "在 GitHub 托管的运行器上运行",
+        "pendingFleet": "在下一个集群作业之前在 GitHub 托管的运行器上运行——该作业的运行器出现后即可移到集群上（{label}）",
         "unknownStatus": "无法读取 —— GitHub 返回 HTTP {status}",
         "unknownUnreachable": "无法读取 —— 无法连接到 GitHub",
         "none": "{org} 上没有任何私有仓库配置了 CodeQL 默认设置。"

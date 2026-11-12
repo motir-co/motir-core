@@ -603,11 +603,13 @@ function CodeScanningList({
           <span className="font-mono text-xs text-(--el-text-strong)">{entry.repo}</span> —{' '}
           {entry.state === 'fleet'
             ? t('codeScanning.fleet', { label })
-            : entry.state === 'github_hosted'
-              ? t('codeScanning.githubHosted')
-              : entry.state === 'unknown' && entry.status !== null
-                ? t('codeScanning.unknownStatus', { status: entry.status })
-                : t('codeScanning.unknownUnreachable')}
+            : entry.state === 'pending_fleet'
+              ? t('codeScanning.pendingFleet', { label })
+              : entry.state === 'github_hosted'
+                ? t('codeScanning.githubHosted')
+                : entry.state === 'unknown' && entry.status !== null
+                  ? t('codeScanning.unknownStatus', { status: entry.status })
+                  : t('codeScanning.unknownUnreachable')}
         </li>
       ))}
     </ul>

@@ -841,6 +841,63 @@ describe('CodeQL default setup travels with the flip (MOTIR-10289)', () => {
     ]);
   });
 
+  const NO_RUNNER_WITH_LABEL =
+    'Code scanning default setup can only be enabled if a runner with the specified label is assigned to this repository.';
+
+  it('ON defers a repository GitHub refuses for want of a runner with the label, and turns on', async () => {
+    world.setups = { api: { ...STANDARD }, gateway: { ...STANDARD } };
+    world.failSetup = {
+      repo: 'gateway',
+      method: 'PATCH',
+      status: 422,
+      message: NO_RUNNER_WITH_LABEL,
+    };
+
+    const result = await service.setEnabled(superadmin, pair(), true, 'onto the fleet');
+
+    expect(result.outcome).toBe('changed');
+    expect((await storedRow())?.enabled).toBe(true);
+    expect(world.variable).toMatchObject({ value: MOTIR_RUNNER_LABEL });
+    expect(world.setups['api']).toMatchObject({ runner_label: MOTIR_RUNNER_LABEL });
+    expect(world.setups['gateway']).toEqual(STANDARD);
+    expect((await auditRows()).at(-1)!.metadata).toMatchObject({
+      codeScanningMoved: ['api'],
+      codeScanningDeferred: ['gateway'],
+    });
+    const { codeScanning } = await service.getState(superadmin, pair());
+    expect(codeScanning.find((c) => c.repo === 'gateway')).toEqual({
+      repo: 'gateway',
+      state: 'pending_fleet',
+    });
+  });
+
+  it('a 422 that is not about the runner label still refuses the flip', async () => {
+    world.setups = { api: { ...STANDARD } };
+    world.failSetup = { repo: 'api', method: 'PATCH', status: 422, message: 'Validation Failed' };
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toMatchObject({
+      repo: 'api',
+      status: 422,
+      operation: 'write',
+    });
+    expect(await storedRow()).toBeNull();
+    expect(world.variable).toBeNull();
+  });
+
+  it('OFF never defers: the same refusal moving back to standard refuses the flip', async () => {
+    await adminDb.platformFleetOrgCi.create({
+      data: { projectId: fx.projectId, org: ORG, enabled: true, lastReason: 'seeded' },
+    });
+    world.variable = { value: MOTIR_RUNNER_LABEL, visibility: ORG_VARIABLE_VISIBILITY };
+    world.setups = { api: { ...LABELED } };
+    world.failSetup = { repo: 'api', method: 'PATCH', status: 422, message: NO_RUNNER_WITH_LABEL };
+    await expect(service.setEnabled(superadmin, pair(), false, 'x')).rejects.toMatchObject({
+      repo: 'api',
+      status: 422,
+      to: 'github_hosted',
+    });
+    expect((await storedRow())?.enabled).toBe(true);
+  });
+
   it.each([
     ['a 403', 403],
     ['a transport failure', null],

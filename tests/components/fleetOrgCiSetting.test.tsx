@@ -679,6 +679,15 @@ describe('FleetOrgCiSetting — CodeQL default setup per repository (MOTIR-10289
     expect(screen.getByText('CodeQL default setup')).toBeTruthy();
   });
 
+  it('says a deferred repository moves onto the fleet with the next fleet job', () => {
+    render(state({ codeScanning: [{ repo: 'motir-ai', state: 'pending_fleet' }] }));
+    const item = screen.getByTestId('fleet-org-ci-code-scanning-motir-ai');
+    expect(item.getAttribute('data-state')).toBe('pending_fleet');
+    expect(item.textContent).toBe(
+      "motir-ai — on GitHub-hosted runners until the next fleet job — that job's runner lets it move onto the fleet (motir-runner)",
+    );
+  });
+
   it('says so when no private repository has default setup configured', () => {
     render(state({ codeScanning: [{ repo: 'docs', state: 'not_configured' }] }));
     expect(screen.getByTestId('fleet-org-ci-code-scanning').textContent).toBe(

@@ -10456,6 +10456,7 @@
   "platformAdmin.fleetSettings.repositories.count": "{count, plural, one {# private repository} other {# private repositories}}, read at runtime from project {project}'s private repositories on {org}",
   "platformAdmin.fleetSettings.codeScanning.fleet": "on the fleet ({label})",
   "platformAdmin.fleetSettings.codeScanning.githubHosted": "on GitHub-hosted runners",
+  "platformAdmin.fleetSettings.codeScanning.pendingFleet": "on GitHub-hosted runners until the next fleet job — that job's runner lets it move onto the fleet ({label})",
   "platformAdmin.fleetSettings.codeScanning.unknownStatus": "couldn't read — GitHub answered HTTP {status}",
   "platformAdmin.fleetSettings.codeScanning.unknownUnreachable": "couldn't read — GitHub could not be reached",
   "platformAdmin.fleetSettings.codeScanning.none": "No private repository on {org} has CodeQL default setup configured.",

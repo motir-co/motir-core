@@ -33,7 +33,8 @@ export class CodeScanningDefaultSetupApiError extends Error {
   readonly code = 'CODE_SCANNING_DEFAULT_SETUP_API_FAILED' as const;
   constructor(
     readonly status: number | null,
-    detail: string,
+    /** GitHub's own `message`, cut to 200 characters; '' when it sent none. */
+    readonly detail: string,
   ) {
     super(
       status === null
@@ -42,6 +43,21 @@ export class CodeScanningDefaultSetupApiError extends Error {
     );
     this.name = 'CodeScanningDefaultSetupApiError';
   }
+}
+
+/**
+ * GitHub's 422 for a `labeled` runner no registered runner carries: "Code
+ * scanning default setup can only be enabled if a runner with the specified
+ * label is assigned to this repository." The fleet registers a single-use
+ * runner only while a job runs, so an idle fleet answers this to every move
+ * onto it — a state of the fleet, not a refusal of the setting.
+ */
+export function isNoRunnerWithLabelRefusal(err: unknown): boolean {
+  return (
+    err instanceof CodeScanningDefaultSetupApiError &&
+    err.status === 422 &&
+    /runner with the specified label/i.test(err.detail)
+  );
 }
 
 /** Which runner a default setup's jobs request. */
