@@ -108,7 +108,14 @@ transparent)` + `backdrop-filter: blur(var(--glass-blur)) saturate(150%)` + a
   light `color-mix(… var(--el-border) …)` border.
 - **Modals** (`[data-surface='modal']`): more opaque (`--glass-modal-alpha`) and
   a stronger blur (`--glass-blur-strong`) so body text stays AA-legible and the
-  dialog separates cleanly from the page behind it.
+  dialog separates cleanly from the page behind it. The frosting — blur, fill,
+  sheen and inset rim — is painted on a `[data-surface='modal']::before` layer
+  (`z-index: -1` inside the panel, which `isolation: isolate` makes a stacking
+  context); the panel itself keeps only its border and drop shadow. A
+  `backdrop-filter` on the panel would make it the containing block of every
+  `position: fixed` descendant, which cut a `Combobox` menu inside a dialog to
+  the panel's height (MOTIR-11105). `tests/theme/modalFixedContainingBlock.test.ts`
+  keeps every style's panel rule free of those properties.
 - **Sidebar** (`[data-surface='sidebar']`): frosted chrome derived from
   `var(--el-sidebar-bg)`.
 - **Inputs** (`[data-surface='input']`): a translucent fill from

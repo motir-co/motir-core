@@ -52,6 +52,12 @@ import {
 } from '@/lib/plans/planLessonCall';
 import { planRaisedGapRepository } from '@/lib/repositories/planRaisedGapRepository';
 import { PlanGapRefusal, parsePlanGapEntries } from '@/lib/plans/planRaisedGap';
+import { planAuthorRegistrationRepository } from '@/lib/repositories/planAuthorRegistrationRepository';
+import {
+  PlanRegistrationRefusal,
+  parsePlanRegistrationEntries,
+  type PlanRegistrationRegister,
+} from '@/lib/plans/planAuthorRegistration';
 import {
   PLAN_CODE_READ_PAGE_MAX,
   PlanCodeReadRefusal,
@@ -274,6 +280,8 @@ import type {
   PlanLessonLogPageDto,
   PlanGapsRecordedDto,
   PlanRaisedGapDto,
+  PlanAuthorRegistrationDto,
+  PlanRegistrationsRecordedDto,
   PlanStepDto,
   PlanStepKindDto,
   PlanStepProviderWaitDto,
@@ -291,6 +299,7 @@ import {
   toPlanCodeReadDto,
   toPlanLessonCallDto,
   toPlanRaisedGapDto,
+  toPlanAuthorRegistrationDto,
   toPlanNarrationSessionDto,
   toPlanStepDto,
   toPlanWithItemsDto,
@@ -5934,6 +5943,7 @@ export type ReportPlanStepResult =
   | { kind: 'codeReads'; codeReads: PlanCodeReadDto[] }
   | { kind: 'lessonCalls'; lessonCalls: PlanLessonCallDto[] }
   | { kind: 'gaps'; gaps: PlanGapsRecordedDto }
+  | { kind: 'registrations'; registrations: PlanRegistrationsRecordedDto }
   | { kind: 'providerRetry'; providerWait: PlanStepProviderWaitDto | null };
 
 /** The most retries one provider wait may name (MOTIR-9619) — `attempt` and
@@ -8581,6 +8591,132 @@ export const plansService = {
   },
 
   /**
+   * Record the HAND-OFFS AND RENAMES a planner's author sessions registered, and stamp
+   * the ones their level's amend was handed (MOTIR-11085) — `recordPlanGaps`' shape, for
+   * the registrations a level's amend applies before it answers its gaps. A `register`
+   * entry declares a registration ON THE PLAN the moment it is made, so a walk that dies
+   * and is resumed can hand its level's amend what the dead attempt registered; a `relay`
+   * entry stamps one the amend was handed, with how it settled it.
+   *
+   * The whole call is refused, nothing written, when the batch is empty or over the cap,
+   * any entry is malformed (`parsePlanRegistrationEntries` names the field), a `relay`
+   * names an id the plan does not hold, or the plan is not `generating`. A `register` of
+   * an id the plan already holds is a repeated report: kept as it was, and named in
+   * `alreadyRegistered`. New registrations take the next consecutive per-plan `seq`
+   * values under the plan row lock, in the call's order.
+   *
+   * ⚠️ NO STEP IS REQUIRED, as for gaps: a registration is the walk's working record,
+   * not a signal on the overlay, and it must land even when the step was refused.
+   */
+  async recordPlanRegistrations(
+    planId: string,
+    input: { sessionKey: string; registrations: unknown },
+    ctx: ServiceContext,
+  ): Promise<PlanRegistrationsRecordedDto> {
+    const sessionKey = assertSessionKey(input.sessionKey);
+    let entries;
+    try {
+      entries = parsePlanRegistrationEntries(input.registrations);
+    } catch (err) {
+      if (err instanceof PlanRegistrationRefusal) throw new InvalidPlanStepError(err.message);
+      throw err;
+    }
+    return withGeneratingPlanStep(planId, ctx, async (_plan, tx, now) => {
+      const ids = [...new Set(entries.map((e) => e.id))];
+      const held = new Map(
+        (await planAuthorRegistrationRepository.findByRegistrationIds(planId, ids, tx)).map((r) => [
+          r.registrationId,
+          r,
+        ]),
+      );
+      const registers = entries.filter((e): e is PlanRegistrationRegister => e.op === 'register');
+      const registered: string[] = [];
+      const alreadyRegistered: string[] = [];
+      const fresh: PlanRegistrationRegister[] = [];
+      for (const e of registers) {
+        if (held.has(e.id) || fresh.some((f) => f.id === e.id)) alreadyRegistered.push(e.id);
+        else {
+          fresh.push(e);
+          registered.push(e.id);
+        }
+      }
+      const relays = entries.filter((e) => e.op === 'relay');
+      const unknown = relays
+        .filter((e) => !held.has(e.id) && !registered.includes(e.id))
+        .map((e) => e.id);
+      if (unknown.length > 0) {
+        throw new InvalidPlanStepError(
+          `A \`relay\` names ${unknown.length === 1 ? 'a registration' : 'registrations'} this ` +
+            `plan does not hold (${[...new Set(unknown)].join(', ')}) — register it before its ` +
+            'relay; nothing was recorded.',
+        );
+      }
+      const base = await planAuthorRegistrationRepository.maxSeq(planId, tx);
+      await planAuthorRegistrationRepository.createMany(
+        fresh.map((e, i) => ({
+          planId,
+          registrationId: e.id,
+          sessionKey,
+          seq: base + i + 1,
+          kind: e.kind,
+          registeredBy: e.session,
+          level: e.level,
+          receiver: e.receiver,
+          what: e.what,
+          handOffReason: e.reason,
+          renameFrom: e.from,
+          renameTo: e.to,
+          codeFact: e.codeFact,
+          relayedAt: e.relayed ? now : null,
+          createdAt: now,
+        })),
+        tx,
+      );
+      const relayed: string[] = [];
+      if (relays.length > 0) {
+        const byId = new Map(
+          (
+            await planAuthorRegistrationRepository.findByRegistrationIds(
+              planId,
+              relays.map((e) => e.id),
+              tx,
+            )
+          ).map((r) => [r.registrationId, r]),
+        );
+        for (const e of relays) {
+          await planAuthorRegistrationRepository.markRelayed(
+            byId.get(e.id)!.id,
+            { relayedAt: now, outcome: e.outcome, outcomeReason: e.reason },
+            tx,
+          );
+          if (!relayed.includes(e.id)) relayed.push(e.id);
+        }
+      }
+      return { registered, alreadyRegistered, relayed };
+    });
+  },
+
+  /**
+   * Every HAND-OFF and RENAME a plan's author sessions registered (MOTIR-11085), in
+   * registration order, each with whether its level's amend has been handed it.
+   * Reader-gated exactly as `get_plan` (`admitPlanReader`: an unknown or unreadable plan
+   * is not-found), and readable on a plan in ANY status. A resumed walk hands its amend
+   * the ones whose `relayed` is false.
+   */
+  async listPlanAuthorRegistrations(
+    planId: string,
+    ctx: ServiceContext,
+  ): Promise<PlanAuthorRegistrationDto[]> {
+    await plansService.admitPlanReader(planId, ctx);
+    // A READ: the service binding, not the write transaction (planTrailCompleteness).
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) =>
+      (await planAuthorRegistrationRepository.listByPlan(planId, tx)).map(
+        toPlanAuthorRegistrationDto,
+      ),
+    );
+  },
+
+  /**
    * One page of a plan's CODE READS (MOTIR-10122), ascending `seq`, after
    * `afterSeq` — optionally one session's — with the step words of every session
    * on the page. Reader-gated exactly as `get_plan` (`admitPlanReader`: an unknown
@@ -8833,11 +8969,14 @@ export const plansService = {
       gaps?: unknown[];
       /** The session's lesson calls (MOTIR-10191) — the sixth exclusive form. */
       lessonCalls?: unknown[];
+      /** The hand-offs and renames registered and relayed (MOTIR-11085) — the seventh. */
+      registrations?: unknown[];
     },
     ctx: ServiceContext,
   ): Promise<ReportPlanStepResult> {
     // EXACTLY ONE of `step` / `narration` / `providerRetry` / `codeReads` / `gaps` /
-    // `lessonCalls` (MOTIR-8062 · MOTIR-9619 · MOTIR-10122 · MOTIR-10176 · MOTIR-10191):
+    // `lessonCalls` / `registrations` (MOTIR-8062 · MOTIR-9619 · MOTIR-10122 ·
+    // MOTIR-10176 · MOTIR-10191 · MOTIR-11085):
     // a step report re-stamps `startedAt`, so keeping them apart is what lets the
     // others never touch the step.
     const forms = [
@@ -8847,12 +8986,26 @@ export const plansService = {
       input.codeReads,
       input.gaps,
       input.lessonCalls,
+      input.registrations,
     ].filter((form) => form !== undefined).length;
     if (forms !== 1) {
       throw new InvalidPlanStepError(
-        'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads`, `gaps` or ' +
-          '`lessonCalls` — nothing was recorded.',
+        'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads`, `gaps`, ' +
+          '`lessonCalls` or `registrations` — nothing was recorded.',
       );
+    }
+    if (input.registrations !== undefined) {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError(
+          'A `registrations` call names no target — send it with none; nothing was recorded.',
+        );
+      }
+      const registrations = await plansService.recordPlanRegistrations(
+        planId,
+        { sessionKey: input.sessionKey, registrations: input.registrations },
+        ctx,
+      );
+      return { kind: 'registrations', registrations };
     }
     if (input.lessonCalls !== undefined) {
       if (input.targetRef !== null) {
@@ -10674,7 +10827,9 @@ async function afterApproveCommit(
   // settle hooks (`attachRealizedRepo`, `linkExistingRepo`) and the link that adopts
   // a repository. Those fire when a row settles; a repository a person created and
   // added BEFORE approving settled long before its waiters existed, and this phase
-  // is where they come into existence.
+  // is where they come into existence. The same holds for a LATER plan's card made
+  // to wait on an init card an earlier plan laid and that has already settled (Bug
+  // MOTIR-11093), so the step runs for either shape.
   //
   // This is approve's POST-COMMIT phase, not a transaction, and it is its LAST
   // step: the repository set was already proposed in `prepareApprove`, before the

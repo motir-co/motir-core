@@ -147,7 +147,10 @@ const HOOK_SELECTORS: Record<Hook, string[]> = {
   canvas: ['body', '[data-app-shell]'],
   card: ["[data-surface='card']"],
   popover: ["[data-surface='popover']"],
-  modal: ["[data-surface='modal']"],
+  // Glassmorphism paints the modal's fill on a `::before` layer (MOTIR-11105),
+  // so the panel carries no backdrop-filter; the layer's later rule wins the
+  // merge, which is the fill the dialog's text actually sits on.
+  modal: ["[data-surface='modal']", "[data-surface='modal']::before"],
   input: ["[data-surface='input']"],
   sidebar: ["[data-surface='sidebar']"],
   // A style's selected-row tint: a row, tab or nav item that paints no fill of

@@ -7799,6 +7799,9 @@ model Plan {
   /// on the plan rather than in the walk's memory, so a resumed walk hands its
   /// level's amend the gaps the dead attempt raised.
   raisedGaps        PlanRaisedGap[]
+  /// The hand-offs and renames its author sessions registered (MOTIR-11085), kept
+  /// on the plan for the same reason, so a resumed walk's amend applies them.
+  authorRegistrations PlanAuthorRegistration[]
   /// The targets this plan has PARKED at `planning` while it is open
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
@@ -8264,6 +8267,59 @@ model PlanRaisedGap {
   @@unique([planId, gapId])
   @@unique([planId, seq])
   @@map("plan_raised_gap")
+}
+
+/// One HAND-OFF or RENAME a planner's author session registered for its level's amend
+/// (MOTIR-11085): work its card hands to a card waiting on it, or a name the level's
+/// boundaries settled that the code forces it to change. Written through the step
+/// doors' `registrations` arm the moment it is registered, so it is on the plan
+/// before the next session opens; a walk that dies and resumes reads the unrelayed
+/// ones back and hands them to the level's amend, as `PlanRaisedGap` does for gaps.
+/// The planner names each registration (`registrationId`), because the register and
+/// the relay are two calls that may come from two jobs. Refs are stored in the
+/// planner's own spelling and are not resolved here.
+model PlanAuthorRegistration {
+  id             String    @id @default(cuid())
+  planId         String    @map("plan_id")
+  /// The planner's id for the registration, unique on the plan — what its `relay` names.
+  registrationId String    @map("registration_id")
+  /// The registering job's opaque key, the value `plan_step` and narration carry.
+  sessionKey     String    @map("session_key")
+  /// Per-plan registration order, gapless from 1, taken under the plan row lock.
+  seq            Int
+  /// `hand_off` or `rename` — which of the kind fields below are set.
+  kind           String
+  /// The card whose author session registered it.
+  registeredBy   String    @map("registered_by")
+  /// The level it was registered on — the card's parent ref; NULL at the top level.
+  level          String?
+  /// `hand_off`: the card that takes the work.
+  receiver       String?
+  /// `hand_off`: what is handed on, in the author's words.
+  what           String?
+  /// `hand_off`: why it is handed on, in the planner's vocabulary.
+  handOffReason  String?   @map("hand_off_reason")
+  /// `rename`: the name as the level's boundaries settled it.
+  renameFrom     String?   @map("rename_from")
+  /// `rename`: the name the code forces.
+  renameTo       String?   @map("rename_to")
+  /// `rename`: the code fact that forces it.
+  codeFact       String?   @map("code_fact")
+  /// When the level's amend was handed this registration (or, registered after the
+  /// amend, when it was registered). NULL while no amend has seen it — the ones a
+  /// resume hands on.
+  relayedAt      DateTime? @map("relayed_at")
+  /// How the amend settled it: `applied`, `raised_as_gap` or `unsettled`.
+  outcome        String?
+  /// The amend's one-line reason, or why it raised the hand-off as a gap.
+  outcomeReason  String?   @map("outcome_reason")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, registrationId])
+  @@unique([planId, seq])
+  @@map("plan_author_registration")
 }
 
 /// One planner session's STEP WORDS on a plan (MOTIR-8062): the step kind, its

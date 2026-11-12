@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   approvedPlanCreatedInitCard,
+  committedBlockerIds,
   projectRepoInitApproveRoutingService,
 } from '@/lib/services/projectRepoInitApproveRoutingService';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
@@ -47,6 +48,42 @@ describe('approvedPlanCreatedInitCard', () => {
 
   it('answers false for an empty plan', () => {
     expect(approvedPlanCreatedInitCard([])).toBe(false);
+  });
+});
+
+// Bug MOTIR-11093 — the gate's second arm: the committed cards a plan made something
+// wait on, by either carrier. Whether one IS an init card is the read's, not this.
+describe('committedBlockerIds', () => {
+  it("collects an add's real blocker ids and a modify's blockedByAdd, deduped and sorted", () => {
+    expect(
+      committedBlockerIds([
+        { op: 'add', proposedFields: {}, blockedByRefs: ['w3', 'w1'] },
+        { op: 'modify', proposedFields: null, patch: { blockedByAdd: ['w2', 'w1'] } },
+      ]),
+    ).toEqual(['w1', 'w2', 'w3']);
+  });
+
+  it('skips a temp-ref: it names an add in the same plan, which the first arm answers', () => {
+    expect(
+      committedBlockerIds([
+        { op: 'add', proposedFields: {}, blockedByRefs: ['planItem:abc', 'w1'] },
+        { op: 'modify', proposedFields: null, patch: { blockedByAdd: ['planItem:def'] } },
+      ]),
+    ).toEqual(['w1']);
+  });
+
+  it('reads no blocker from a remove, a modify without blockedByAdd, or a malformed patch', () => {
+    expect(
+      committedBlockerIds([
+        { op: 'remove', proposedFields: null, blockedByRefs: ['w1'] },
+        { op: 'modify', proposedFields: null, patch: { blockedByRemove: ['w2'] } },
+        { op: 'modify', proposedFields: null, patch: { blockedByAdd: 'w3' } },
+        { op: 'modify', proposedFields: null, patch: { blockedByAdd: [42, null] } },
+        { op: 'modify', proposedFields: null, patch: null },
+        { op: 'modify', proposedFields: null },
+        { op: 'add', proposedFields: {} },
+      ]),
+    ).toEqual([]);
   });
 });
 

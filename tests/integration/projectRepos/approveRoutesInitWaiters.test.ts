@@ -5,6 +5,7 @@ import { plansService } from '@/lib/services/plansService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRepoInitRoutingService } from '@/lib/services/projectRepoInitRoutingService';
 import { projectRepoInitApproveRoutingService } from '@/lib/services/projectRepoInitApproveRoutingService';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepoProposalService } from '@/lib/services/projectRepoProposalService';
 import type { ProposalInput } from '@/lib/dto/plans';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
@@ -235,7 +236,7 @@ describe('an approve that created an init card', () => {
   });
 });
 
-describe('an approve that created no init card', () => {
+describe('an approve that created no init card and drew no edge onto one', () => {
   it("routes nothing, leaving another plan's waiter unpinned, and approves as it always did", async () => {
     const fx = await makeWorkItemFixture();
     await settledRow(fx, 'acme-infra');
@@ -249,6 +250,106 @@ describe('an approve that created no init card', () => {
     expect((await snapshot(waiter.id)).refs).toEqual([]);
     expect(answer.status).toBe('approved');
     expect((await itemTitled(planId, 'Polish the docs')).projectId).toBe(fx.projectId);
+  });
+});
+
+// Bug MOTIR-11093 — a LATER plan's card waiting on an init card that an EARLIER plan
+// laid and that has already settled. Its settle hooks fired before this card existed,
+// and the plan creates no init card of its own, so the approve is the only moment left
+// that can route it.
+
+/** A planned plan whose single proposal is `proposal`. */
+async function plannedWith(fx: WorkItemFixture, proposal: ProposalInput): Promise<string> {
+  const plan = await plansService.createPlan(fx.projectId, { title: 'Later work' }, fx.ctx);
+  await plansService.addProposals(plan.id, [proposal], fx.ctx);
+  await plansService.markPlanned(plan.id, fx.ctx);
+  return plan.id;
+}
+
+/** An earlier plan's init card for `name`, approved and settled against its row. */
+async function settledInitCard(fx: WorkItemFixture, name: string) {
+  const rowId = await settledRow(fx, name);
+  const earlier = await plannedPlan(fx, [name]);
+  await plansService.approvePlan(earlier, fx.ctx);
+  return { rowId, init: await itemTitled(earlier, `Create ${name}`) };
+}
+
+describe("a later plan's waiter on an already-settled init card", () => {
+  it('an add blocked_by the committed init card is routed to its row on approve', async () => {
+    const fx = await makeWorkItemFixture();
+    const { rowId, init } = await settledInitCard(fx, 'acme-infra');
+    const later = await plannedWith(fx, {
+      op: 'add',
+      proposedFields: { title: 'Deploy acme-infra', kind: 'task' },
+      blockedByRefs: [init.id],
+    });
+
+    await plansService.approvePlan(later, fx.ctx);
+
+    const waiter = await snapshot((await itemTitled(later, 'Deploy acme-infra')).id);
+    expect(waiter.refs.map((r) => [r.projectRepoId, r.position])).toEqual([[rowId, 0]]);
+    expect(waiter.targetRepo).toBe('acme-infra');
+    expect(waiter.edges).toEqual([
+      expect.objectContaining({ toId: init.id, kind: 'is_blocked_by' }),
+    ]);
+  });
+
+  it('a modify that makes an existing unpinned card wait on the init card routes it too', async () => {
+    const fx = await makeWorkItemFixture();
+    const { rowId, init } = await settledInitCard(fx, 'acme-infra');
+    const existing = await createTestWorkItem(fx, { kind: 'task', title: 'Wire the pipeline' });
+    const later = await plannedWith(fx, {
+      op: 'modify',
+      workItemId: existing.id,
+      patch: { blockedByAdd: [init.id] },
+    });
+
+    await plansService.approvePlan(later, fx.ctx);
+
+    const card = await snapshot(existing.id);
+    expect(card.refs.map((r) => r.projectRepoId)).toEqual([rowId]);
+    expect(card.edges).toEqual([expect.objectContaining({ toId: init.id, kind: 'is_blocked_by' })]);
+  });
+
+  it('a later plan whose blockers are not init cards does not run the pass', async () => {
+    const fx = await makeWorkItemFixture();
+    await settledInitCard(fx, 'acme-infra');
+    const { waiter: stray } = await strayWaiter(fx, 'acme-infra');
+    const plain = await createTestWorkItem(fx, { kind: 'task', title: 'Plain blocker' });
+    const later = await plannedWith(fx, {
+      op: 'add',
+      proposedFields: { title: 'After the plain one', kind: 'task' },
+      blockedByRefs: [plain.id],
+    });
+    const route = vi.spyOn(projectRepoInitRoutingService, 'routeInitCardDependents');
+
+    const answer = await plansService.approvePlan(later, fx.ctx);
+
+    expect(answer.status).toBe('approved');
+    expect(route).not.toHaveBeenCalled();
+    expect((await snapshot(stray.id)).refs).toEqual([]);
+  });
+});
+
+describe("hasInitCardAmong — the second arm's read", () => {
+  it('answers yes only for a live init card of the project, and no for none at all', async () => {
+    const fx = await makeWorkItemFixture();
+    const other = await makeWorkItemFixture();
+    const { init, waiter } = await strayWaiter(fx, 'acme-infra');
+    const { init: foreign } = await strayWaiter(other, 'acme-infra');
+    const archived = await createTestWorkItem(fx, { kind: 'task', title: 'Create acme-old' });
+    await adminDb.workItem.update({
+      where: { id: archived.id },
+      data: { subject: 'init', initRepositoryName: 'acme-old', archivedAt: new Date() },
+    });
+    const ask = (ids: string[]) =>
+      adminDb.$transaction((tx) => workItemRepository.hasInitCardAmong(fx.projectId, ids, tx));
+
+    expect(await ask([waiter.id, init.id])).toBe(true);
+    expect(await ask([waiter.id])).toBe(false);
+    expect(await ask([archived.id])).toBe(false);
+    expect(await ask([foreign.id])).toBe(false);
+    expect(await ask([])).toBe(false);
   });
 });
 
