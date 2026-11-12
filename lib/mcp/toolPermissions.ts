@@ -69,6 +69,14 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `pagesService.searchPages` asserts `assertCanViewPages` through
   // `authorizePageSearch` (MOTIR-9553), the key the REST search route checks.
   search_pages: 'page:view',
+  // `pageCommentsService.listPageThreads` (and `pagesService.getPage`, for the
+  // anchored verdict) assert `assertCanViewPages` (`page:view`, MOTIR-10978), the
+  // key the page's discussion panel checks.
+  get_page_comments: 'page:view',
+  // `pageCommentsService.postPageComment` / `postPageReply` refuse without
+  // `comment:add` (after `page:view`) — the key the discussion panel's composer checks
+  // (MOTIR-10979). Already in `CLI_TOKEN_GRANT`, so this confirms the grant, not widens it.
+  add_page_comment: 'comment:add',
   // ── page:edit — the page writes (MOTIR-7411) ──────────────────────────────
   // `pagesService.createPageFromMarkdown` / `savePageMarkdown` assert
   // `assertCanEditPages` (`page:edit`), the key the editor's save route checks.

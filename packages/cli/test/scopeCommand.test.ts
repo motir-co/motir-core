@@ -211,6 +211,11 @@ function setup(
       calls.push({ tool: 'mark_integrated', args });
       return {};
     },
+    // MOTIR-10985 — the story's link, from the first landed card.
+    linkPullRequest: async (args: unknown) => {
+      calls.push({ tool: 'link_pull_request', args });
+      return {};
+    },
     submitPlanSession: async (args: unknown) => {
       calls.push({ tool: 'submit_plan', args });
       if (opts.planError) throw opts.planError;
@@ -789,6 +794,28 @@ describe('motir run <container> — the close-out RE-READS the child set (MOTIR-
     expect(created).toHaveLength(1);
     expect(harness.stderr).toMatch(/motir\/auto-\d{8}-\d{6}/);
     expect(process.exitCode).toBe(0);
+  });
+
+  it('opens the story’s DRAFT titled for the story and links the STORY from its first card (MOTIR-10985)', async () => {
+    setup({ detail: (_i, key) => detail({}, key === 'PROD-1' ? ['PROD-2@implemented'] : []) });
+    const git = recordingGit();
+    const creates: string[][] = [];
+    const run: CommandRunner = (bin, args, cwd) => {
+      if (bin === 'gh' && args[1] === 'create') creates.push(args);
+      return git.run(bin, args, cwd);
+    };
+
+    await runCommand('PROD-1', SCOPE_OPTS, { ...SCOPE_DEPS, run });
+
+    // ONE create, a draft, titled for the story the scope was launched against —
+    // although only one card landed, which the carried set alone reads as `one-card`.
+    expect(creates).toHaveLength(1);
+    expect(creates[0]).toContain('--draft');
+    expect(creates[0]![creates[0]!.indexOf('--title') + 1]).toBe('PROD-1 The story');
+    const links = callsTo('link_pull_request').map((c) => (c.args as { key: string }).key);
+    expect(links.length).toBeGreaterThan(0);
+    // The story, and the one landed card its agent could not link (no PR existed yet).
+    expect(new Set(links)).toEqual(new Set(['PROD-1', 'PROD-2']));
   });
 
   it('the CONTROL still holds: every child implemented opens ONE pull request and MARKS IT READY', async () => {

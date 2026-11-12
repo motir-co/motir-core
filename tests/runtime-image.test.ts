@@ -11,26 +11,28 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MONITOR_REFRESH_LEASE_MS } from '@/lib/services/monitorCredentialService';
 
 /**
- * Guards for MOTIR-2387 — the Fly runtime: `output: 'standalone'`, the
- * multi-stage `Dockerfile`, `fly.toml`, and the release lane that applies
- * migrations.
+ * Guards for the RUNTIME IMAGE (MOTIR-2387, split out of the old
+ * `tests/fly-runtime-config.test.ts` by MOTIR-10935): `output: 'standalone'`,
+ * the multi-stage `Dockerfile`, and the migration lane the image carries.
+ *
+ * `aws-deploy.yml` builds this Dockerfile and pushes it to ECR, so every
+ * assertion here guards the image production runs. The `fly.toml` describes that
+ * used to live beside these went with the Fly app manifest itself: Motir's own
+ * services no longer deploy to Fly, and the task definitions that replace the
+ * manifest are motir-infra's.
  *
  * These assertions exist because NOTHING else would catch a regression in them.
- * A Dockerfile and a `fly.toml` are not type-checked, not linted, and not
- * executed by any suite; the first thing that reads them is a production deploy,
- * and every failure mode below is one that presents there as something else:
+ * A Dockerfile is not type-checked, not linted, and not executed by any suite;
+ * the first thing that reads it is a production deploy, and every failure mode
+ * below is one that presents there as something else:
  *
  *   * A missing `HOSTNAME=0.0.0.0` produces a server that logs "✓ Ready" and
  *     answers nothing — on a first deploy it looks like a networking problem.
  *   * A release command that cannot resolve the Prisma CLI, or a
  *     `prisma.config.ts` separated from the `node_modules` that satisfies its
- *     imports, dies in the release step and rolls the whole deploy back.
- *   * `fly.toml` asserting a machine COUNT is the exact belief MOTIR-2102
- *     disproved: the file cannot create a machine, and stating otherwise cost
- *     this project three days on its other service.
+ *     imports, dies in the migrate step and the release never rolls.
  *
  * Same mould as `tests/ci-acceptance-lane.test.ts` — read the file, assert the
  * load-bearing lines, and say in a comment why each one is load-bearing.
@@ -38,7 +40,6 @@ import { MONITOR_REFRESH_LEASE_MS } from '@/lib/services/monitorCredentialServic
 
 const root = process.cwd();
 const dockerfile = readFileSync(join(root, 'Dockerfile'), 'utf8');
-const flyToml = readFileSync(join(root, 'fly.toml'), 'utf8');
 const nextConfig = readFileSync(join(root, 'next.config.ts'), 'utf8');
 
 /** The runner stage — everything after the last `FROM … AS runner`. */
@@ -382,163 +383,6 @@ describe('Dockerfile — the standalone SCOPE ASSERTION, RUN rather than read (M
       expect(res.status, res.stderr).toBe(0);
       expect(res.stdout).toMatch(/standalone: \d+ MB/);
     });
-  });
-});
-
-describe('fly.toml — the deployment configuration', () => {
-  it('pins the region and the VM the ADR decided', () => {
-    expect(flyToml).toMatch(/^primary_region\s*=\s*"iad"/m);
-    expect(flyToml).toMatch(/size\s*=\s*"performance-1x"/);
-  });
-
-  it('runs EVERY process group on a dedicated CPU, never a quota-throttled shared one (MOTIR-10119)', () => {
-    // A shared CPU is throttled once its burst balance drains, and Fly reports the
-    // throttle as `steal`. It froze the app on 2026-10-15 and the worker in every CI
-    // burst of 2026-10-29/30 (P2028 on `system.ci-runner-boot`). Read per group,
-    // because the old test only asked whether `performance-1x` appeared ANYWHERE,
-    // and it passed while the worker stayed shared.
-    const vms = [...flyToml.matchAll(/^\s*\[\[vm\]\]\s*$([\s\S]*?)(?=^\s*\[|(?![\s\S]))/gm)].map(
-      (m) => m[1] ?? '',
-    );
-    const sizeOf = (group: string) =>
-      vms
-        .filter((body) =>
-          new RegExp(`^\\s*processes\\s*=\\s*\\[\\s*"${group}"\\s*\\]`, 'm').test(body),
-        )
-        .map((body) => /^\s*size\s*=\s*"([^"]*)"/m.exec(body)?.[1]);
-    expect(sizeOf('app')).toEqual(['performance-1x']);
-    expect(sizeOf('worker')).toEqual(['performance-1x']);
-    for (const body of vms) {
-      expect(/^\s*size\s*=\s*"shared-cpu-/m.test(body), body).toBe(false);
-    }
-  });
-
-  it('deploys bluegreen, so one running machine is not an outage on every deploy', () => {
-    // The default `rolling` strategy replaces a machine in place; with a single
-    // running `app` machine that is a gap. Unverified against the worker group and
-    // the suspended spare — see the comment above `strategy` in fly.toml.
-    expect(flyToml).toMatch(/^\s*strategy\s*=\s*"bluegreen"$/m);
-  });
-
-  it('runs migrations from the release command, through the staged lane', () => {
-    // Not `pnpm prisma migrate deploy`: the standalone image has no pnpm and no
-    // CLI on PATH. The entrypoint is what makes the staged directory runnable.
-    expect(flyToml).toMatch(/release_command\s*=\s*"node \/app\/migrate\/release-migrate\.mjs"/);
-    expect(flyToml).not.toMatch(/release_command[^\n]*pnpm/);
-  });
-
-  it('declares the machine POLICY — one running, the spare suspended and woken on load', () => {
-    // ⚠️ `min_machines_running` WAS 1, AND 2 IS A DECISION (MOTIR-2785,
-    // executing `docs/decisions/application-hosting.md` Amendment 7 §14). This
-    // assertion went red on that change, which is the guard working.
-    //
-    // The distinction the old value blurred: the POOL is a ceiling an operator
-    // creates, and this is a FLOOR on how many of it the proxy will not stop.
-    // A pool of two with a floor of one is a single point of failure — the spare
-    // wakes on load, never on its sibling dying — and `min_machines_running` is
-    // not a failover guarantee even at 2, because a dead machine is RESTARTED by
-    // flyd rather than replaced. Two machines RUNNING is the only configuration
-    // that survives losing one without a user-visible gap, and this app serves
-    // interactive page loads.
-    //
-    // Measured 2026-08-20 rather than argued: the spare DID start on a deploy at
-    // 12:29:18Z and the PROXY stopped it 5m40s later, so this app served its
-    // whole load from one machine from 12:35Z onward.
-    expect(flyToml).toMatch(/^\s*min_machines_running\s*=\s*1$/m);
-    expect(flyToml).toMatch(/^\s*auto_stop_machines\s*=\s*"suspend"$/m);
-    expect(flyToml).toMatch(/^\s*auto_start_machines\s*=\s*true$/m);
-  });
-
-  it('still separates the FLOOR from the POOL in prose, now that they differ from 1', () => {
-    // The floor and the pool are both 2 today, which is exactly when a reader
-    // starts believing this file sets the count. It does not, and MOTIR-2102 is
-    // what that belief cost. The paragraph that says so is asserted below in
-    // 'records the intended count as an INTENT'; this pins the distinction being
-    // drawn explicitly rather than left to be inferred from two equal numbers.
-    expect(flyToml).toMatch(/AVAILABILITY DECISION/);
-    expect(flyToml).toMatch(/floor on how many of an existing pool/);
-  });
-
-  it('records the intended count as an INTENT, and never asserts one', () => {
-    // ADR Q6. The file states that two machines are intended, that `flyctl
-    // deploy` adds none, and that `fly scale count 2` on MOTIR-2386 is what
-    // creates them. What it must NOT do is carry a key that reads as a count —
-    // that is MOTIR-2102's mistake, where a config comment asserting a platform
-    // behaviour stood in for a command nobody ran.
-    expect(flyToml).toMatch(/fly scale count 2/);
-    expect(flyToml).toMatch(/MOTIR-2386/);
-    expect(flyToml).toMatch(/MOTIR-2102/);
-    expect(flyToml).toMatch(/flyctl deploy/);
-    expect(flyToml).toMatch(/without adding any/);
-    // No key assigns a machine count. `min_machines_running` is a floor on an
-    // existing pool and is asserted above; anything else is a claim.
-    const assignments = flyToml
-      .split('\n')
-      .filter((line) => !line.trimStart().startsWith('#'))
-      .filter((line) => /^\s*(machine_count|count|machines)\s*=/.test(line));
-    expect(assignments).toEqual([]);
-  });
-
-  it('gives a stopping machine long enough to store a credential refresh in flight', () => {
-    // MOTIR-8184. Fly SIGKILLs a machine `kill_timeout` after SIGTERM (5 s by
-    // default). The worker's drain waits for an in-flight monitor token refresh
-    // to commit the pair the provider has already rotated — up to the refresh
-    // LEASE. A kill_timeout shorter than that lease lets a deploy land between
-    // Sentry's answer and our write, which is the connection-killing window this
-    // card closed. Fly caps the value at 300 s.
-    const line = flyToml.split('\n').find((l) => /^kill_timeout\s*=/.test(l));
-    expect(line, 'fly.toml must set a top-level kill_timeout').toBeDefined();
-    const match = /"(\d+)s"/.exec(line ?? '');
-    expect(match).not.toBeNull();
-    const seconds = Number(match![1]);
-    expect(seconds * 1000).toBeGreaterThan(MONITOR_REFRESH_LEASE_MS);
-    expect(seconds).toBeLessThanOrEqual(300);
-  });
-
-  it('holds traffic off a new app machine until its readiness check passes', () => {
-    // MOTIR-8231. With no check, Fly's proxy sent a freshly deployed machine
-    // requests the moment its port opened — before any route module had loaded
-    // or any pool connection existed — and its first webhook failed with a P2028
-    // `maxWait` at uptime 15 s. A service check is what the proxy routes on.
-    const block = /^\s*\[\[http_service\.checks\]\]\s*$([\s\S]*?)(?=^\s*\[|(?![\s\S]))/m.exec(
-      flyToml,
-    );
-    expect(block, 'fly.toml must declare an [[http_service.checks]] entry').not.toBeNull();
-    const keys = new Map(
-      (block?.[1] ?? '')
-        .split('\n')
-        .map((l) => /^\s*([a-z_]+)\s*=\s*"([^"]*)"/.exec(l))
-        .filter((m): m is RegExpExecArray => m !== null)
-        .map((m) => [m[1], m[2]] as const),
-    );
-    expect(keys.get('path')).toBe('/api/health/ready');
-    expect(keys.get('method')?.toLowerCase()).toBe('get');
-    for (const key of ['grace_period', 'interval', 'timeout']) {
-      expect(keys.get(key), `${key} is set`).toMatch(/^\d+s$/);
-    }
-    // The check must answer inside its own interval, or two overlap.
-    expect(Number.parseInt(keys.get('timeout')!, 10)).toBeLessThan(
-      Number.parseInt(keys.get('interval')!, 10),
-    );
-    // And the route it names must exist — a check against a 404 keeps every
-    // machine out of rotation for ever.
-    expect(existsSync(join(root, 'app/api/health/ready/route.ts'))).toBe(true);
-  });
-
-  it('declares a private metrics scrape for the app group, off the public port (MOTIR-8553)', () => {
-    const block = /^\s*\[\[metrics\]\]\s*$([\s\S]*?)(?=^\s*\[|(?![\s\S]))/m.exec(flyToml);
-    expect(block, 'fly.toml must declare a [[metrics]] entry').not.toBeNull();
-    const body = block?.[1] ?? '';
-    const port = /^\s*port\s*=\s*(\d+)/m.exec(body)?.[1];
-    expect(port).toBeDefined();
-    expect(/^\s*path\s*=\s*"([^"]*)"/m.exec(body)?.[1]).toBe('/metrics');
-    expect(/^\s*processes\s*=\s*\[\s*"app"\s*\]/m.test(body)).toBe(true);
-
-    const internalPort = /^\s*internal_port\s*=\s*(\d+)/m.exec(flyToml)?.[1];
-    expect(internalPort).toBeDefined();
-    expect(port).not.toBe(internalPort);
-    // The app opens the port only when told which one — the same number.
-    expect(flyToml).toMatch(new RegExp(`^\\s*MONITORING_METRICS_PORT\\s*=\\s*"${port}"`, 'm'));
   });
 });
 

@@ -22,15 +22,17 @@ import { join } from 'node:path';
 //      gated off `push` and is not reachable on `merge_group` either, it has
 //      quietly stopped being a gate anywhere, and every check still reports
 //      green.
-//   3. A JOB `deploy` NEEDS IS SKIPPED ON A PUSH. A skipped `needs` entry makes
-//      its dependents skip, so this does not gate the release — it stops it, and
-//      `main` simply never ships again. `deploy-freshness.yml` is what would
-//      eventually say so, an hour and a half later.
+//   3. THE PUSH LANE STOPS BEING A TRIPWIRE. Ruleset 17227448 has a bypass
+//      actor, so a merge can reach `main` without passing any queue, and the
+//      push run's `lint` / `typecheck` / `build` are all that verify it. This
+//      used to be phrased through the Fly `deploy` job that needed them; that
+//      job is gone (MOTIR-10935) and the release ships through `aws-deploy.yml`,
+//      so the property is now asserted on the tripwire jobs themselves — and on
+//      this workflow releasing nothing.
 //
 // Read as text, not by running it: workflow YAML is neither type-checked nor
-// linted by any suite (the premise `tests/ci-complete-gate.test.ts` and
-// `tests/ci-fly-deploy.test.ts` share, and the same no-YAML-dependency
-// constraint — the repo has no YAML parser).
+// linted by any suite (the premise `tests/ci-complete-gate.test.ts` shares,
+// and the same no-YAML-dependency constraint — the repo has no YAML parser).
 //
 // ⚠️ The `if:` expressions are RESOLVED against a fabricated `github` context
 // rather than matched as strings, for the reason MOTIR-4095 recorded in the
@@ -322,10 +324,10 @@ const PUSH_LANE = [
   'build',
 ];
 /**
- * …and the subset `deploy` waits for. Narrower than the lane on purpose, and
- * with the reasoning the deploy job's own comment already carried: the package
- * and design lanes are not part of this service's artifact. `build` is here for
- * the schema-drift and NFT assertions it makes, not for the bundle it produces.
+ * …and the subset that verifies a BYPASSED merge — the three jobs the retired
+ * Fly `deploy` job waited for (MOTIR-10935 deleted it). The package and design
+ * lanes are not part of this service's artifact. `build` is here for the
+ * schema-drift and NFT assertions it makes, not for the bundle it produces.
  */
 const TRIPWIRE = ['lint', 'typecheck', 'build'];
 
@@ -341,7 +343,7 @@ describe('the merge queue reports the required check (MOTIR-4050)', () => {
     // A parser regression would otherwise make every assertion below vacuous.
     expect(ciJobs.size).toBeGreaterThan(5);
     expect(ciJobs.has('ci-complete')).toBe(true);
-    expect(ciJobs.has('deploy')).toBe(true);
+    expect(ciJobs.has('lint')).toBe(true);
   });
 
   it('triggers on `merge_group`, alongside the pull request and the push', () => {
@@ -381,7 +383,7 @@ describe('the queue runs the whole gate, and the push lane no longer does', () =
     // set out to remove — and the deploy-starvation window MOTIR-3106 fixed is
     // this lane's length, so it growing back is a regression in two directions.
     const onPush = [...ciJobs.keys()].filter(
-      (id) => id !== 'deploy' && id !== 'ci-complete' && id !== 'changes' && runsOn(id, 'push'),
+      (id) => id !== 'ci-complete' && id !== 'changes' && runsOn(id, 'push'),
     );
     expect(onPush.sort()).toEqual([...PUSH_LANE].sort());
   });
@@ -438,27 +440,65 @@ describe('a shard matrix fails fast in the QUEUE and fans out on a PR (MOTIR-440
   });
 });
 
-describe('the release is still gated, and can still be reached', () => {
-  it('waits only for jobs that actually run on a push', () => {
-    // Failure mode 3, and the reason this file exists rather than a review
-    // comment. A skipped `needs` entry makes its dependents skip: leaving a
-    // queue-only job in this list does not gate the release, it ends it.
-    for (const need of declaredNeeds('deploy')) {
-      expect(runsOn(need, 'push'), `deploy needs ${need}, which must run on a push`).toBe(true);
+describe('this workflow releases nothing, and its push run is still the tripwire (MOTIR-10935)', () => {
+  it('carries no deploy job and no Fly release', () => {
+    // The `Deploy to Fly` job, its `fly-deploy` group and its two cutover
+    // switches were deleted with the Fly app manifests. Motir's own services
+    // ship through ONE lane, `aws-deploy.yml`, which needs nothing in this
+    // file; a deploy job reappearing here would be a second release path.
+    expect(ciJobs.has('deploy')).toBe(false);
+    const code = codeOf(ci);
+    expect(code).not.toMatch(/flyctl\s+deploy/);
+    expect(code).not.toMatch(/MOTIR_FLY_DEPLOY_ENABLED|MOTIR_RELAY_ENABLED|fly-deploy/);
+  });
+
+  it('runs the tripwire on a push, so a BYPASSED merge still meets a gate', () => {
+    // Ruleset 17227448 has a bypass actor, so a merge can reach `main` without
+    // passing through any queue. These three are the only thing that verifies it.
+    for (const gate of TRIPWIRE) {
+      expect(ciJobs.has(gate), `${gate} exists`).toBe(true);
+      expect(runsOn(gate, 'push'), `${gate} runs on a push`).toBe(true);
     }
   });
 
-  it('waits for the tripwire, so a BYPASSED merge still meets a gate', () => {
-    // Ruleset 17227448 has a bypass actor, so a merge can reach `main` without
-    // passing through any queue. This is the only thing that verifies it.
-    for (const gate of TRIPWIRE) expect(declaredNeeds('deploy')).toContain(gate);
+  it('lets `CI complete` wait only on jobs that exist', () => {
+    // Dropping a job and leaving its name in the aggregation would make the
+    // workflow invalid; the job-key totality itself is `ci-complete-gate`'s.
+    const needs = declaredNeeds('ci-complete');
+    expect(needs.length).toBeGreaterThan(10);
+    expect(needs).not.toContain('deploy');
+    for (const need of needs) {
+      expect(ciJobs.has(need), `ci-complete needs ${need}, which must exist`).toBe(true);
+    }
+  });
+});
+
+describe('a run on main is allowed to finish (MOTIR-3106, carried over by MOTIR-10935)', () => {
+  // These lived in the deleted `tests/ci-fly-deploy.test.ts`, phrased through the
+  // release they protected. The release has left this workflow; the push run it
+  // protects is now the bypassed merge's only verification, which a newer merge
+  // must not cancel either.
+  it('finds the workflow-level concurrency block it is meant to guard', () => {
+    // The negative control: a restructure that moved or dropped the header
+    // block would otherwise make both assertions below pass vacuously.
+    expect(header).toMatch(/^concurrency:\s*$/m);
+    expect(header).toMatch(
+      /^\s*group:\s*\$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\s*$/m,
+    );
+    expect(header).not.toContain('jobs:');
   });
 
-  it('does not deploy from a queue entry', () => {
-    // A queue entry's branch is thrown away if the entry is ejected. Shipping
-    // from one would release a commit that never became `main`.
-    expect(runsOn('deploy', 'merge_group')).toBe(false);
-    expect(runsOn('deploy', 'push')).toBe(true);
+  it('cancels superseded runs on a PR but NEVER on a push to main', () => {
+    // `cancel-in-progress: true` is the exact line that shipped MOTIR-3106's
+    // defect. Asserting merely that SOME expression is present is not enough; it
+    // must be one that distinguishes the triggers. Same expression, and the same
+    // assertion, as `tests/ci-acceptance-lane.test.ts` — one idiom, not two.
+    const setting = /^\s*cancel-in-progress:\s*(.+)$/m.exec(header)?.[1]?.trim();
+    expect(setting).toBeDefined();
+    expect(setting).not.toBe('true');
+    expect(header).toMatch(
+      /cancel-in-progress:\s*\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}/,
+    );
   });
 });
 

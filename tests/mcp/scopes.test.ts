@@ -304,6 +304,8 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // bucket; the forward map is NOT widened, so a stale `read` row cannot start
       // reading a project's pages.
       get_page: true,
+      // MOTIR-10978 — the page-discussion read, `page:view` like `get_page`, the same loss.
+      get_page_comments: true,
       // MOTIR-7411 — the page writes, the same kind of loss: `page:edit` postdates
       // the six strings, so a stale `write` row cannot start rewriting pages.
       create_page: true,

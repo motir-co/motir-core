@@ -617,6 +617,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // MOTIR-7410 — `page:view`-gated, so a `project:browse`-only token is
         // refused at the gate before the (unknown) page id is looked at.
         get_page: { projectKey: 'PROD', pageId: 'page_scoped' },
+        // MOTIR-10978 — the page-discussion read, `page:view`-gated like `get_page`.
+        get_page_comments: { projectKey: 'PROD', pageId: 'page_scoped' },
+        // MOTIR-10979 — the page-discussion write, `comment:add`-gated (after `page:view`).
+        add_page_comment: { projectKey: 'PROD', pageId: 'page_scoped', body: 'scoped comment' },
         create_page: { projectKey: 'PROD', markdown: 'scoped page' },
         update_page: { projectKey: 'PROD', pageId: 'page_scoped', markdown: 'x', revision: 1 },
         rename_page: { projectKey: 'PROD', pageId: 'page_scoped', title: 'x' },

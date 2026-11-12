@@ -25,6 +25,16 @@ on:
 # minutes) — on a PR branch, where `github.ref` is `refs/pull/<n>/merge`, so a
 # force-push cancels only its own predecessor.
 #
+# ⚠️ THE DEPLOY THIS BLOCK WAS WRITTEN TO PROTECT HAS LEFT THIS WORKFLOW
+# (MOTIR-10935, 2026-11-11). The `Deploy to Fly` job, its `fly-deploy` group and
+# the two Fly app manifests it released are deleted: Motir's own services ship
+# through ONE deploy lane, `aws-deploy.yml`, which runs on its own push trigger
+# under its own non-cancelling `aws-deploy` group and needs nothing here. The
+# paragraphs below are the record of why the expression has its shape, and every
+# `deploy` they name is that retired job. The expression itself STAYS: the push
+# run is still the tripwire a BYPASSED merge meets (below), and cancelling it
+# would leave that commit verified by nothing.
+#
 # ⚠️ NOT on `main`, and that exception is the whole point (MOTIR-3106). Every
 # merge pushes the SAME ref, so an unconditional `cancel-in-progress: true` put
 # all of them in one group where the newest always wins.
@@ -166,8 +176,9 @@ on:
 # tripwire — `lint`, `typecheck`, `build` (which carries the schema-drift and
 # NFT assertions a release actually depends on) — because ruleset 17227448 has a
 # bypass actor, and a bypassed merge reaches `main` without passing a queue at
-# all. `deploy` needs those three and has no `always()`, so the tripwire still
-# gates the release.
+# all. The retired Fly `deploy` job needed those three and had no `always()`, so
+# the tripwire gated that release; since MOTIR-10935 it gates nothing downstream
+# in this workflow and is the bypassed merge's only verification.
 #
 # ⚠️ AND THIS IS WHY THE BLOCK ABOVE MATTERS LESS THAN IT DID, NOT MORE. The
 # starvation MOTIR-3106 fixed needed ~35 minutes of clear air to reach `deploy`;
@@ -2060,323 +2071,6 @@ jobs:
     with:
       publish: false
 
-  # ── Ship it — the deploy runs AFTER the gates, never beside them (MOTIR-2390)
-  #
-  # The pipeline order is `docs/decisions/application-hosting.md` §6 (Q5): the
-  # suite that exists is the gate, it is untouched by this job, and the deploy
-  # follows it. Two conditions do that, and both are load-bearing:
-  #
-  #   • `needs:` — the three jobs that still RUN on a push. A skipped or failed
-  #     need makes this job skip (there is deliberately no `always()` here), so a
-  #     red tripwire means nothing ships.
-  #
-  #     ⚠️ THE LIST SHRANK, AND THE GATE DID NOT (MOTIR-4050). It used to read
-  #     `[lint, typecheck, build, test, coverage, e2e, e2e-at-scale]`, because
-  #     the push lane ran the whole matrix. The matrix now runs in the MERGE
-  #     QUEUE, against the exact commit that becomes `main` — a stronger claim
-  #     than this job ever made, since it is checked BEFORE the merge rather than
-  #     after — and those four jobs are skipped on a push. A skipped `needs`
-  #     entry makes its dependents skip, so leaving them listed here would not
-  #     have been a conservative choice: it would have stopped the deploy
-  #     entirely. `tests/ci-merge-queue.test.ts` asserts that every job that left
-  #     this list runs on `merge_group`, which is the property that makes the
-  #     shrink safe.
-  #
-  #     `build` STAYS, and not for the artifact: it carries the schema-drift
-  #     assertion (`prisma migrate diff`) and the NFT trace guard, and a release
-  #     whose `release_command` is `prisma migrate deploy` is exactly the thing
-  #     that must not run against a datamodel the migrations disagree with.
-  #
-  #     The package lanes (`design-system`, `cli`) and the image lanes
-  #     (`sandbox`, `runner-image`) are NOT in the list: each is released by its
-  #     own tag and none of them is part of this service's artifact — the same
-  #     reasoning motir-ai's deploy uses to exclude `indexer-image`.
-  #     `design-guards` is out for that same reason and not by oversight:
-  #     `design/` is not in the standalone bundle, so a stale mockup cannot reach
-  #     the running service. (It used to be PRUNED there; since MOTIR-3219 it is
-  #     never traced in, and the Dockerfile step asserts that rather than
-  #     deleting it. Same guarantee, earlier.) They still gate the MERGE —
-  #     `ci-complete` needs them like everything else.
-  #   • `if:` — the default branch, on a real push. A pull request's `github.ref`
-  #     is `refs/pull/<n>/merge`, so a PR cannot deploy even by targeting main.
-  #
-  #     It also carries the cutover's Fly off switch (MOTIR-10074): the job runs
-  #     unless the repository variable `MOTIR_FLY_DEPLOY_ENABLED` is `'false'`.
-  #     Unset means deploy, so the clause changes nothing until someone sets it.
-  #     The AWS cutover window sets it with
-  #     `gh variable set MOTIR_FLY_DEPLOY_ENABLED --body false -R motir-co/motir-core`,
-  #     and from then on a merge to `main` neither restarts the Fly web or relay
-  #     machines nor runs the `release_command` migration against Neon — the
-  #     whole job skips, relay step included. The way back before go sets it to
-  #     `true` (or deletes it) and the next push deploys to Fly again. A skipped
-  #     deploy is a `skipped` need, which `ci-complete` accepts. While it is off
-  #     and `main` moves, `deploy-freshness.yml` reads red against the Fly
-  #     production — a true reading, and why the runbook freezes merges in the
-  #     window. `aws-deploy.yml` shares no job with this one and ignores it.
-  #
-  # `flyctl deploy` runs fly.toml's `release_command` (`prisma migrate deploy`
-  # via /app/migrate) as part of the release, in a temporary machine built from
-  # the same image, BEFORE any new machine takes traffic — so a migration cannot
-  # race a half-rolled-out release, and a non-zero release command rolls the
-  # deploy back.
-  #
-  # ⚠️ Merging a change here (or any change to `main`) DEPLOYS. That is the
-  # point, and it is also why the first merge after this job lands is a real
-  # production release: MOTIR-2392 is the card that watches it.
-
-  deploy:
-    name: Deploy to Fly
-    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
-    needs: [lint, typecheck, build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.MOTIR_FLY_DEPLOY_ENABLED != 'false'
-    # A release must NOT be cancelled mid-flight by a newer push — the
-    # workflow-level `cancel-in-progress` is right for a test run and wrong for
-    # a deploy, so this group overrides it.
-    concurrency:
-      group: fly-deploy
-      cancel-in-progress: false
-    permissions:
-      contents: read
-    # A backstop, not an expectation: the image build plus the release takes
-    # single-digit minutes.
-    timeout-minutes: 30
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      # The Fly app name, which is also its Fly-owned hostname
-      # (`<app>.fly.dev`). Every check below reads THAT rather than the custom
-      # domain, so this job proves the release itself and not a DNS record.
-      FLY_APP: motir-core
-    steps:
-      - uses: actions/checkout@v6
-      # For the pool guard below, which is a Node script so its derivation can be
-      # unit-tested rather than trusted. Same version as every other job here.
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      # `--local-only` builds on the runner's own Docker daemon and pushes to
-      # registry.fly.io, instead of Fly's remote/Depot builder — which flaked
-      # with repeated 503s for motir-ai even while Fly itself was operational.
-      # The trade is that the Dockerfile's `node:22-slim` bases come from Docker
-      # Hub anonymously; if that becomes the flake, the mirror composite
-      # (`.github/actions/buildx`, MOTIR-2018) is where the fix belongs.
-      # ⚠️ FAIL HERE RATHER THAN SHIP A BLIND RELEASE (Subtask 8.5.6 /
-      # MOTIR-1162). Every value below is a GitHub Actions secret set by
-      # MOTIR-1161, and each one that is missing degrades monitoring SILENTLY:
-      # an empty `NEXT_PUBLIC_SENTRY_DSN` builds a browser bundle that reports
-      # nothing, an empty `SENTRY_AUTH_TOKEN` ships stack traces nobody can
-      # read. Nothing errors, no check goes red, and the gap is only visible
-      # months later on a surface this pipeline never opens. So the release
-      # stops instead.
-      - name: Assert the monitoring build-time secrets are present
-        env:
-          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-        run: |
-          set -euo pipefail
-          missing=""
-          for name in NEXT_PUBLIC_SENTRY_DSN SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT; do
-            eval "value=\${$name:-}"
-            [ -n "$value" ] || missing="$missing $name"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Missing monitoring secret(s):$missing — see MOTIR-1161's provisioning record for the value and its home. Refusing to deploy an unmonitored release."
-            exit 1
-          fi
-          echo "all four monitoring build-time secrets are present"
-
-      # ⚠️ SAME SHAPE, DIFFERENT DAMAGE (MOTIR-3948). An unset
-      # NEXT_SERVER_ACTIONS_ENCRYPTION_KEY does not degrade a report nobody
-      # reads — it re-salts every Server Action id on every release, so every
-      # browser tab older than this deploy gets a 404 on every write it
-      # attempts, silently, until someone reloads it. Nothing turns red for
-      # that either: the build succeeds, the release is healthy, and the only
-      # trace is a `Failed to find Server Action` line in the app log.
-      # So this release stops too, for the same reason and by the same rule.
-      - name: Assert the Server Action salt is pinned
-        env:
-          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}" ]; then
-            echo "::error::Missing NEXT_SERVER_ACTIONS_ENCRYPTION_KEY — without it Next re-salts every Server Action id per build (MOTIR-3948), and every tab open across this release loses every write. Generate one with 'openssl rand -base64 32' and set it as a repository secret; it must never change afterwards."
-            exit 1
-          fi
-          echo "the Server Action salt is pinned"
-
-      # ⚠️ THE BUILD ARGUMENTS ARE NOT OPTIONAL EXTRAS — they are the ONLY way
-      # the browser half of monitoring gets configured, because `next build`
-      # inlines a `NEXT_PUBLIC_*` value into the client bundle and a Fly runtime
-      # secret cannot reach it (MOTIR-1161's warning table; the `Dockerfile`'s
-      # `ARG` block is the receiving end). `MOTIR_RELEASE` is the same story for
-      # the release name: source maps are uploaded DURING this build and must
-      # carry the string the running code reports, `.git` is in `.dockerignore`
-      # so the SDK's own `git rev-parse` fallback finds nothing, and Fly's
-      # runtime `FLY_*` variables identify the machine rather than the build.
-      #
-      # The AUTH TOKEN goes through `--build-secret`, not `--build-arg`: a build
-      # argument is recorded in the build's metadata and a credential must not
-      # be. The Dockerfile mounts it for the single `next build` command.
-      #
-      # `--image-label "$GITHUB_SHA"` names the pushed image
-      # `registry.fly.io/motir-core:<sha>` instead of a timestamp, so the relay
-      # step below can deploy EXACTLY this image to `motir-relay` (MOTIR-6940).
-      - name: Build the image and release it
-        env:
-          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
-        run: |
-          set -euo pipefail
-          flyctl deploy --local-only --app "$FLY_APP" \
-            --image-label "$GITHUB_SHA" \
-            --build-arg "NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN" \
-            --build-arg "MOTIR_RELEASE=$GITHUB_SHA" \
-            --build-arg "SENTRY_ORG=$SENTRY_ORG" \
-            --build-arg "SENTRY_PROJECT=$SENTRY_PROJECT" \
-            --build-secret "SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN" \
-            --build-secret "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY" \
-            2>&1 | tee /tmp/fly-deploy.log
-
-      # ⚠️ "CONFIGURED" IS NOT "RAN", AND THIS REPO HAS THE SCAR TO PROVE IT.
-      # `next.config.ts` already carries one key — `outputFileTracingExcludes` —
-      # that Turbopack never reads: it pruned nothing for months while reading as
-      # solved (MOTIR-2403). Source-map upload is the same shape of risk, so this
-      # card's acceptance asks for the upload to be DEMONSTRATED rather than
-      # configured, and asking once at authoring time would only cover today.
-      #
-      # The hard gate is the RELEASE existing in Sentry. `@sentry/nextjs`'s
-      # Turbopack path creates it inside the same `runAfterProductionCompile`
-      # hook that then uploads the maps, so a release named after this commit is
-      # positive evidence the hook ran with a working token — and its absence is
-      # exactly the regression (a hook that silently stopped being invoked, a
-      # token that expired) that would otherwise surface as unreadable stack
-      # traces during an incident.
-      #
-      # The upload line is reported but NOT gated on: it is the bundler plugin's
-      # own wording and travels through flyctl's build-output rendering, so
-      # making a production release depend on that string would trade a real
-      # check for a brittle one.
-      - name: Assert Sentry received this release
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-        run: |
-          set -euo pipefail
-          if grep -qF 'Successfully uploaded source maps to Sentry' /tmp/fly-deploy.log; then
-            echo "build log: source maps uploaded"
-          else
-            echo "build log: no upload line seen (flyctl may not surface it) — the release check below is the gate"
-          fi
-          code=$(curl -sS -o /tmp/sentry-release.json -w '%{http_code}' \
-            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
-            "https://sentry.io/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/releases/$GITHUB_SHA/")
-          echo "GET releases/$GITHUB_SHA → HTTP $code"
-          if [ "$code" != "200" ]; then
-            echo "::error::Sentry has no release named $GITHUB_SHA. The source-map upload did not run — stack traces from this deploy will not be symbolicated. See next.config.ts's monitoring block for how the Turbopack upload path is wired."
-            exit 1
-          fi
-          head -c 400 /tmp/sentry-release.json; echo
-
-      # ── Post-deploy verification: three things only a real release can show ──
-      #
-      # Deliberately NOT a second E2E suite. The deployed app's only database is
-      # production, and the specs truncate what they connect to (ADR §6's
-      # rejected alternatives). What is left is still every configuration
-      # failure worth catching: is the process up, can it be reached by the one
-      # caller that talks to it, and does the platform have the machines this
-      # repository believes it does.
-      - name: Assert the release answers
-        run: |
-          set -euo pipefail
-          url="https://${FLY_APP}.fly.dev/sign-in"
-          for attempt in 1 2 3 4 5; do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$url" || echo 000)
-            echo "attempt $attempt → GET $url → HTTP $code"
-            if [ "$code" = "200" ]; then
-              exit 0
-            fi
-            sleep $((attempt * 10))
-          done
-          echo "::error::$url did not answer 200 after 5 attempts — the release is not serving."
-          exit 1
-
-      # ── The terminal relay: the SAME image, a second app (MOTIR-6940) ──────
-      # `docs/decisions/agent-terminal.md` Q1: `motir-relay` runs motir-core's
-      # image (`node relay/relay.mjs`, `fly.relay.toml`), deployed right after the
-      # web release it must match, with NO release command — the web release
-      # above already migrated the database it reads.
-      #
-      # ⚠️ GUARDED UNTIL THE APP EXISTS. The app, its `relay.motir.co`
-      # certificate and its secrets are a MANUAL card (the decision's "Owed on
-      # acceptance"). Until an operator has done it and set the repository
-      # variable `MOTIR_RELAY_ENABLED` to `true`, this step is SKIPPED — a deploy
-      # to an app that does not exist would fail every main release for a
-      # feature nobody can reach yet. Once enabled it is NOT continue-on-error: a
-      # relay that did not roll is a red deploy, like the web tier.
-      #
-      # The token: `FLY_RELAY_API_TOKEN` when set (a deploy token scoped to
-      # `motir-relay`, which must also be able to pull `registry.fly.io/motir-core`),
-      # else the job's `FLY_API_TOKEN` (an org-scoped token reaches both apps).
-      - name: Deploy the terminal relay from the same image
-        if: vars.MOTIR_RELAY_ENABLED == 'true'
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_RELAY_API_TOKEN || secrets.FLY_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          flyctl deploy --app motir-relay --config fly.relay.toml \
-            --image "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
-
-      # ⚠️ A FUNCTION-REGISTRATION STEP STOOD HERE (MOTIR-3418 removed it). The
-      # vendor's control plane held its own registry of this app's functions, and
-      # it went stale silently — five production jobs stayed dead for a month
-      # (MOTIR-1970) — so the deploy PUT the serve route and failed red if the sync
-      # did. The engine has no second registry to keep in step: the worker reads
-      # `lib/jobs/registry.ts` out of the image it is running, so a job is
-      # registered by being deployed and cannot be registered any other way.
-      #
-      # The repository variable that held the serve URL is now unread; it can be
-      # deleted from the repo's variables at leisure.
-
-      # ⚠️ Read the OBSERVATION from the PLATFORM, never from `fly.toml`. A config
-      # file is a claim about the deployment, not a reading of it: motir-ai's
-      # fly.toml promised load spilling onto fresh machines while production ran
-      # ONE machine for weeks, because `auto_start_machines` never CREATES one and
-      # no card had run `fly scale count` (MOTIR-2102 — three days of an incident
-      # filed against the wrong service, closed by one authenticated GET). Every
-      # number this step compares still comes from
-      # `GET /v1/apps/<app>/machines`; what `fly.toml` supplies is the EXPECTATION.
-      #
-      # ⚠️ AND THE EXPECTATION IS DERIVED, NOT STORED (MOTIR-3570). This step used
-      # to assert Fly's total `machine_count` against the repo variable
-      # `FLY_EXPECTED_MACHINE_COUNT`, which MOTIR-2408 set to 2 when the pool WAS
-      # two app machines. MOTIR-3425 added the `worker` process group, the pool
-      # became four, and nothing updated the variable — so every deploy ended RED
-      # on a deploy that had SUCCEEDED: the image released, the release answered,
-      # the functions synced, three migrations applied. `CI complete` went red and the
-      # trunk's red stopped saying anything about whether the trunk is deployed,
-      # which is the most expensive direction for a check to fail in.
-      #
-      # Re-arming the variable would only buy the interval until the next group.
-      # A SUM is the wrong assertion for a pool that is now a sum over process
-      # groups scaled independently: it cannot tell `app=2, worker=2` from
-      # `app=1, worker=3`, which halves the web tier at an unchanged total. So
-      # `scripts/assert-machine-pool.mjs` derives the SHAPE from `fly.toml` —
-      # `[processes]` names the groups that must exist, `http_service.processes`
-      # + `min_machines_running` name the running floor for the tier that serves
-      # traffic — and adding or scaling a group updates the expectation by
-      # construction. There is no repo variable left to go stale, and
-      # `tests/scripts/assert-machine-pool.test.ts` proves the derivation still
-      # goes red on real drift with deliberate negatives rather than with the
-      # absence of a failure.
-      - name: Assert the machine pool against fly.toml, read from Fly's API
-        run: node scripts/assert-machine-pool.mjs --app "$FLY_APP"
-
   # ── The one required status check on `main` (MOTIR-2008) ──────────────────
   # `protect-main` (ruleset 17227448) requires exactly ONE context: `CI complete`.
   # Everything above is gated THROUGH this job rather than by name, because
@@ -3883,7 +3577,6 @@ jobs:
         e2e-at-scale,
         sandbox,
         runner-image,
-        deploy,
       ]
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed <0.1 min → 10 (the short-job floor). It reads the `needs`

@@ -45,8 +45,8 @@ import {
   landedWork,
   planReviewUrl,
   renderAutoSummary,
+  deliveredContainerKey,
   renderSessionPrBody,
-  sessionPrScope,
   sessionPrTitle,
   type ApprovalRecord,
   type AutoSummary,
@@ -55,6 +55,7 @@ import {
   type PrReport,
   type RepoSession,
   type ReplanLaneRecord,
+  type SessionPrContainer,
   type ReplanRefresh,
   type SkipRecord,
   type StopReason,
@@ -77,7 +78,7 @@ import {
   sessionBranchName,
   type CommandRunner,
 } from '../git.js';
-import { deriveAgentHarness } from '../agentProfiles.js';
+import { deriveAgentHarness, withFreshSessionId } from '../agentProfiles.js';
 import { runCiWatchPhase } from '../ciWatch.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
@@ -1339,11 +1340,19 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   });
   reporter.event({ kind: 'prompt_issued', workItemKey: item.key });
 
+  // THIS card's own conversation (MOTIR-10983). The run resolved its agent ONCE, so a
+  // Motir-chosen session id is the same on every card's command, and the agent refuses
+  // the second spawn on an id already in use. Each card gets its own, and records it.
+  const legAgent = withFreshSessionId(agent.parsed);
   const started = clock();
   reporter.event({
     kind: 'agent_started',
     workItemKey: item.key,
-    data: { agent: agent.parsed.binary },
+    data: {
+      agent: legAgent.binary,
+      // Known before the spawn, as `dispatchLeg` records it (MOTIR-8980).
+      ...(legAgent.stream?.sessionId ? { sessionId: legAgent.stream.sessionId } : {}),
+    },
   });
   // The producer for the `log` event kind (MOTIR-3961). `null` unless the
   // operator passed `--report-log`, and then the spawn is unchanged.
@@ -1359,7 +1368,7 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
     ...(input.checkpointIntervalMs ? { intervalMs: input.checkpointIntervalMs } : {}),
   });
   const result = await runAgentFn({
-    command: agent.parsed,
+    command: legAgent,
     prompt: dispatch.prompt,
     cwd: target.cwd,
     ...(logTee ? { onOutput: logTee.write } : {}),
@@ -1604,8 +1613,19 @@ export async function ensureRepoPullRequest(
    * requests and the completion gate holds it until every one of them has
    * merged. Passing one repository's slice here would leave the container linked
    * in whichever repository happened to carry two cards.
+   *
+   * ⚠️ AND A SCOPED RUN'S `container` (MOTIR-10985). The scoped lane knows the
+   * story it delivers before the first card starts, so the draft is titled for
+   * that story and linked to it at the FIRST landed card. Reading it off the
+   * carried set instead left a one-card set titled for the card and linked to
+   * nothing until a second card landed. `motir auto` passes none and keeps the
+   * partition's arms.
    */
-  link: { client: MotirClient; carried: readonly DispatchRecord[] },
+  link: {
+    client: MotirClient;
+    carried: readonly DispatchRecord[];
+    container?: SessionPrContainer;
+  },
 ): Promise<void> {
   try {
     if (!sessionBranchHasCommits(session.cwd, session.branch, run)) return;
@@ -1613,7 +1633,7 @@ export async function ensureRepoPullRequest(
       session.cwd,
       {
         branch: session.branch,
-        title: sessionPrTitle(runId, []),
+        title: sessionPrTitle(runId, [], link.container),
         // Deliberately thin: what has landed at THIS moment, and a sentence
         // saying the close-out completes it. Rewritten in full at the end.
         // ⚠️ IT NAMES THE RUN, NOT THE COMMAND (MOTIR-4999). Both `motir auto`
@@ -1645,6 +1665,16 @@ export async function ensureRepoPullRequest(
     // exactly as the open above holds no "have I opened it?" state — which is
     // what keeps a resumed or re-invoked run safe.
     if (result.url) await linkSessionPrToContainer(link, session.branch, result.url);
+    // ⚠️ AND, IN A SCOPED RUN, EVERY CARD THAT HAS LANDED HERE (MOTIR-10985). Its
+    // agent links its own card only if the pull request already existed, which
+    // is never true of the run's first card in a repository, so the run links the
+    // cards it carried. An upsert per `(work item, pull request)`, so repeating
+    // it on every landed card is a no-op for the cards already linked.
+    if (result.url && link.container) {
+      for (const key of session.keys) {
+        await linkSessionPrTo(link.client, key, session.branch, result.url);
+      }
+    }
   } catch (err) {
     info(
       `Could not open ${session.branch}'s pull request yet: ` +
@@ -1678,26 +1708,36 @@ const SESSION_PR_BASE = 'main';
  * `Motir / work item link` check.
  */
 async function linkSessionPrToContainer(
-  link: { client: MotirClient; carried: readonly DispatchRecord[] },
+  link: {
+    client: MotirClient;
+    carried: readonly DispatchRecord[];
+    container?: SessionPrContainer;
+  },
   branch: string,
   url: string,
 ): Promise<void> {
-  const scope = sessionPrScope(link.carried.filter(landedWork));
-  // ⚠️ ONLY `shared-parent`. A `one-card` run's pull request is the card's own
-  // and the agent has already linked it; a `many-parents` run has no container,
-  // and a run carrying two parents must not invent a story to name.
-  if (scope.arm !== 'shared-parent') return;
+  // ⚠️ A SCOPED RUN'S OWN WORK ITEM, or ONLY `shared-parent` (MOTIR-10985). A
+  // scoped run links the story it was launched against from its first card. An
+  // unscoped `one-card` run's pull request is the card's own and the agent has
+  // already linked it; a `many-parents` run has no container, and a run
+  // carrying two parents must not invent a story to name.
+  const key = deliveredContainerKey(link.carried.filter(landedWork), link.container);
+  if (key === null) return;
+  await linkSessionPrTo(link.client, key, branch, url);
+}
+
+/** Declare that a session pull request delivers `key` — reported and swallowed. */
+async function linkSessionPrTo(
+  client: MotirClient,
+  key: string,
+  branch: string,
+  url: string,
+): Promise<void> {
   try {
-    await link.client.linkPullRequest({
-      key: scope.key,
-      url,
-      headRef: branch,
-      baseRef: SESSION_PR_BASE,
-    });
+    await client.linkPullRequest({ key, url, headRef: branch, baseRef: SESSION_PR_BASE });
   } catch (err) {
     info(
-      `Could not link ${url} to ${scope.key}: ` +
-        `${err instanceof Error ? err.message : String(err)}`,
+      `Could not link ${url} to ${key}: ` + `${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -1725,15 +1765,20 @@ async function linkSessionPrToContainer(
  */
 export async function closeOutContainer(client: MotirClient, summary: AutoSummary): Promise<void> {
   const carried = summary.records.filter(landedWork);
-  const scope = sessionPrScope(carried);
-  if (scope.arm !== 'shared-parent') return;
+  const containerKey = deliveredContainerKey(carried, summary.container);
+  if (containerKey === null) return;
+  const { container } = summary;
 
   // Every repository's pull request delivers the container. `ensureRepoPullRequest`
   // has normally said so already; this covers the pull request that did not exist
   // until the close-out opened it, and costs one idempotent call otherwise.
   for (const pr of summary.prs) {
     if (!pr.url) continue;
-    await linkSessionPrToContainer({ client, carried }, pr.branch, pr.url);
+    await linkSessionPrToContainer(
+      { client, carried, ...(container ? { container } : {}) },
+      pr.branch,
+      pr.url,
+    );
   }
 
   // ⚠️ NOT WHILE A CHILD IS OUTSTANDING — the same gate, and the same re-read,
@@ -1743,7 +1788,7 @@ export async function closeOutContainer(client: MotirClient, summary: AutoSummar
   // to ask rather than relying on the refusal.
   if (summary.outstanding && summary.outstanding.keys.length > 0) {
     info(
-      `${scope.key} stays as it is: ${summary.outstanding.keys.length} of its children ` +
+      `${containerKey} stays as it is: ${summary.outstanding.keys.length} of its children ` +
         `have not landed (${summary.outstanding.keys.join(', ')}).`,
     );
     return;
@@ -1760,7 +1805,7 @@ export async function closeOutContainer(client: MotirClient, summary: AutoSummar
   const stillDraft = live.filter((pr) => pr.draft);
   if (stillDraft.length > 0) {
     info(
-      `${scope.key} stays as it is: ${stillDraft
+      `${containerKey} stays as it is: ${stillDraft
         .map((pr) => pr.branch)
         .join(', ')} ${stillDraft.length === 1 ? 'is' : 'are'} still a draft.`,
     );
@@ -1780,9 +1825,9 @@ export async function closeOutContainer(client: MotirClient, summary: AutoSummar
   // deliberately BOTH written — the run writes it eagerly, the webhook writes it
   // authoritatively — and neither is a fallback for the other.
   try {
-    const refusal = await transitionToImplemented(client, scope.key);
-    if (refusal) info(`${scope.key}: ${refusal}`);
-    else info(`${scope.key}: Implemented — every card this run carried has landed.`);
+    const refusal = await transitionToImplemented(client, containerKey);
+    if (refusal) info(`${containerKey}: ${refusal}`);
+    else info(`${containerKey}: Implemented — every card this run carried has landed.`);
   } catch (err) {
     // Reported and swallowed, exactly as `openSessionPr` / `updateSessionPr` /
     // `markSessionPrReady` are. The commonest arrival here is not a fault at all:
@@ -1792,7 +1837,7 @@ export async function closeOutContainer(client: MotirClient, summary: AutoSummar
     // work is reviewable either way, and a run that aborted its summary over this
     // would hide it.
     info(
-      `Could not move ${scope.key} to Implemented: ` +
+      `Could not move ${containerKey} to Implemented: ` +
         `${err instanceof Error ? err.message : String(err)}`,
     );
   }
@@ -1934,7 +1979,7 @@ function closeOutRepo(
       repo.cwd,
       {
         branch: repo.branch,
-        title: sessionPrTitle(summary.runId, carried),
+        title: sessionPrTitle(summary.runId, carried, summary.container),
         // The agents' own commit messages, read from THIS repo's checkout
         // against THIS repo's branch — a multi-repo run must not put another
         // repo's commits in this body (MOTIR-2411).
@@ -1961,7 +2006,7 @@ function closeOutRepo(
         {
           // BOTH, because the title counts cards: one written at the first
           // implemented card names one card for ever.
-          title: sessionPrTitle(summary.runId, carried),
+          title: sessionPrTitle(summary.runId, carried, summary.container),
           body: renderSessionPrBody(
             summary.runId,
             repo.branch,

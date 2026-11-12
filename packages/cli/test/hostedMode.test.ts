@@ -667,6 +667,24 @@ describe('motir run <parent> in hosted mode', () => {
     expect(offTable(harness.methods)).toEqual({ unknown: [], denied: [] });
   });
 
+  it('opens the story’s draft TITLED for the story, and links the story (MOTIR-10985)', async () => {
+    scopeFixture();
+    const creates: string[][] = [];
+    const run: CommandRunner = (bin, args, cwd) => {
+      if (bin === 'gh' && args[1] === 'create') creates.push(args);
+      return PUSHED(bin, args, cwd);
+    };
+
+    await runCommand('PROD-1', { agent: 'fake-agent', runId: RUN }, { run });
+
+    // A hosted scope has no claim to read the title off: it comes from the shape read.
+    expect(creates.length).toBeGreaterThan(0);
+    expect(creates[0]![creates[0]!.indexOf('--title') + 1]).toBe('PROD-1 Item PROD-1');
+    expect(
+      callsTo('link_pull_request').some((c) => (c.args as { key?: string }).key === 'PROD-1'),
+    ).toBe(true);
+  });
+
   it('refuses a leg somebody else holds, as a local run does, and keeps going', async () => {
     scopeFixture({ 'PROD-3': 'user_other' });
 

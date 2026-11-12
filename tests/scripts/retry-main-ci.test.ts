@@ -340,7 +340,7 @@ describe('the runner re-attempts once and cannot re-trigger itself', () => {
   });
 });
 
-describe('the lane is wired to the script, bounded, and leaves deploy untouched', () => {
+describe('the lane is wired to the script, and bounded', () => {
   const lane = readFileSync(join(ROOT, '.github/workflows/main-ci-retry.yml'), 'utf8');
   const ci = readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8');
 
@@ -375,15 +375,5 @@ describe('the lane is wired to the script, bounded, and leaves deploy untouched'
     expect(lane).toContain('group: main-ci-retry-${{ github.event.workflow_run.id }}');
     expect(lane).toMatch(/cancel-in-progress: false/);
     expect(lane).toMatch(/timeout-minutes: 90/);
-  });
-
-  it("leaves deploy's own gating exactly as it was", () => {
-    const deploy = ci.slice(
-      ci.indexOf('\n  deploy:\n'),
-      ci.indexOf('\n    timeout-minutes: 30', ci.indexOf('\n  deploy:\n')),
-    );
-    expect(deploy).toContain('needs: [lint, typecheck, build]');
-    expect(deploy).toContain("if: github.ref == 'refs/heads/main' && github.event_name == 'push'");
-    expect(deploy).toMatch(/concurrency:\n\s+group: fly-deploy\n\s+cancel-in-progress: false/);
   });
 });

@@ -146,6 +146,36 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  add_page_comment: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      body: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The comment body (Markdown), stored exactly as sent. Mention a member with [@Name](mention:<userId>); the mentioned member is notified.',
+      },
+      rootCommentId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The `id` of a thread’s ROOT comment on the same page to REPLY to — a thread is one level deep, so a reply’s id is refused. Omit it to start a new page-level thread.',
+      },
+    },
+    required: ['projectKey', 'pageId', 'body'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   add_plan_items: {
     type: 'object',
     properties: {
@@ -1725,6 +1755,41 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         exclusiveMinimum: 0,
         description:
           'A version NUMBER (from the page’s history). Returns that version’s markdown, number, author, `savedAt`, and whether it is `sealed` (published for a decision) or `frozen` (approved). Omit to read the current body.',
+      },
+    },
+    required: ['projectKey', 'pageId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  get_page_comments: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      limit: {
+        type: 'integer',
+        exclusiveMinimum: 0,
+        description: 'Threads per list (default 20, at most 50; a larger number is clamped).',
+      },
+      openCursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The `open.nextCursor` a previous call returned — pages the OPEN list only. A cursor issued for the other list is refused `PAGE_COMMENT_CURSOR_INVALID`.',
+      },
+      resolvedCursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The `resolved.nextCursor` a previous call returned — pages the RESOLVED list only. A cursor issued for the other list is refused `PAGE_COMMENT_CURSOR_INVALID`.',
       },
     },
     required: ['projectKey', 'pageId'],
@@ -5102,6 +5167,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
 export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   add_comment: 'Add comment',
   add_lesson: 'Add lesson',
+  add_page_comment: 'Add page comment',
   add_plan_items: 'Append proposals to a plan',
   add_work_item_todo: 'Add a to-do step',
   append_plan_turn: 'Add a planning turn',
@@ -5144,6 +5210,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_coding_convention: 'Get coding convention',
   get_design: 'Get design',
   get_page: 'Get page',
+  get_page_comments: 'Get page comments',
   get_plan: 'Read plan proposals',
   get_plan_authoring_state: 'Read which proposals are authored',
   get_plan_code_reads: 'Read what each planning session read',
@@ -5236,6 +5303,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: true,
+    openWorldHint: false,
+  },
+  add_page_comment: {
+    title: 'Add page comment',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
     openWorldHint: false,
   },
   add_plan_items: {
@@ -5464,6 +5538,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   get_design: { title: 'Get design', readOnlyHint: true, openWorldHint: false },
   get_page: { title: 'Get page', readOnlyHint: true, openWorldHint: false },
+  get_page_comments: { title: 'Get page comments', readOnlyHint: true, openWorldHint: false },
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
   get_plan_authoring_state: {
     title: 'Read which proposals are authored',

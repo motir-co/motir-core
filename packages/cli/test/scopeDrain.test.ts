@@ -12,7 +12,12 @@ import {
 import { closeOutContainer, closeOutRepos } from '../src/commands/auto.js';
 import { orderClaimedSet, unsatisfiedBlockers, type ScopeEdges } from '../src/scopedRun.js';
 import { autoExitCode, renderAutoSummary, type AutoSummary } from '../src/autoLoop.js';
-import { parseAgentCommand } from '../src/agentProfiles.js';
+import {
+  AGENT_PROFILES,
+  parseAgentCommand,
+  type ParsedAgentCommand,
+} from '../src/agentProfiles.js';
+import { agentModeAgent, resumeFixAgent } from '../src/commands/dispatch.js';
 import { resolveFakeClaim } from './helpers/fakeClaim.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
 import type { AgentRunResult } from '../src/agentRun.js';
@@ -249,6 +254,12 @@ async function drive(
     client?: (c: MotirClient) => MotirClient;
     /** Collects the run's events, for the assertions on what the record says. */
     events?: DispatchRunEventInput[];
+    /** The work item the scope was launched against (MOTIR-10985). */
+    container?: ScopeDrainInput['container'];
+    /** The agent the run resolved — a typed command unless a test names one. */
+    agent?: ParsedAgentCommand;
+    /** Collects every command a leg spawned, with its key (MOTIR-10983). */
+    spawns?: Array<{ key: string; command: ParsedAgentCommand }>;
   } = {},
 ): Promise<AutoSummary> {
   const s = session();
@@ -258,7 +269,9 @@ async function drive(
     members,
     edges,
     max: over.max ?? null,
-    agent: { parsed: parseAgentCommand('fake-agent')!, source: 'flag' },
+    agent: over.agent
+      ? { parsed: over.agent, source: 'agent' }
+      : { parsed: parseAgentCommand('fake-agent')!, source: 'flag' },
     runId: 'x',
     ...(over.events
       ? {
@@ -270,11 +283,14 @@ async function drive(
       : {}),
     branch: 'motir/auto-x',
     run: over.run ?? GIT,
+    ...(over.container ? { container: over.container } : {}),
     clock: () => 0,
-    runAgentFn: async ({ prompt }) => {
+    runAgentFn: async ({ prompt, command }) => {
       const key = prompt.replace('PROMPT ', '');
+      over.spawns?.push({ key, command });
       const result = over.agentResults?.(key) ?? { exitCode: 0, signal: null };
-      return { model: null, ...result };
+      // `runAgent` records the id the command was stamped with (`sessionIdOf`).
+      return { model: null, sessionId: command.stream?.sessionId ?? null, ...result };
     },
   });
 }
@@ -465,6 +481,86 @@ describe('drainScope', () => {
     // ⚠️ NOT In Review. The checks decide that, server-side, minutes later —
     // this loop does not wait for CI, poll it, or retry on it.
     expect(renderAutoSummary(summary)).not.toContain('CI is green');
+  });
+});
+
+// ── MOTIR-10983 — every card's agent is its OWN conversation ───────────────
+//
+// The run resolves its agent ONCE, and a profile with a `sessionIdFlag` gets the session
+// id baked into that one command. Reused for every card, the second spawn carried the
+// first card's `--session-id`, and Claude Code refused it as "already in use".
+
+const sessionIdOf = (command: ParsedAgentCommand): string | undefined => {
+  const at = command.args.indexOf('--session-id');
+  return at === -1 ? undefined : command.args[at + 1];
+};
+
+describe('drainScope — each card spawns its own agent session (MOTIR-10983)', () => {
+  it('spawns every card with its own --session-id, records it, and resumes it', async () => {
+    const agent = agentModeAgent({ MOTIR_SANDBOX_AGENT: 'claude' });
+    const resolvedId = agent.stream?.sessionId;
+    const spawns: Array<{ key: string; command: ParsedAgentCommand }> = [];
+    const events: DispatchRunEventInput[] = [];
+    const summary = await drive(
+      [member('PROD-2'), member('PROD-3')],
+      {},
+      {
+        agent,
+        spawns,
+        events,
+      },
+    );
+
+    expect(spawns.map((s) => s.key)).toEqual(['PROD-2', 'PROD-3']);
+    const ids = spawns.map((s) => sessionIdOf(s.command));
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(2);
+    // The id the RUN minted was never spawned twice — it is spawned not at all.
+    expect(ids).not.toContain(resolvedId);
+    // Nothing else about the command moved: only the id after the flag.
+    const profile = AGENT_PROFILES.find((p) => p.id === 'claude')!.agentStream!;
+    for (const { command } of spawns) {
+      expect(command.args).toEqual([...profile.args, '--session-id', sessionIdOf(command)]);
+      expect(command.stream).toEqual({ profile: 'claude', sessionId: sessionIdOf(command) });
+      expect(command.promptAddendum?.()).toBe(agent.promptAddendum?.());
+      expect(command.env).toBe(agent.env);
+    }
+
+    // What each card RECORDS is the id it was spawned with: its `agent_started`…
+    const started = events.filter((e) => e.kind === 'agent_started');
+    expect(
+      started.map((e) => [e.workItemKey, (e.data as { sessionId?: string }).sessionId]),
+    ).toEqual([
+      ['PROD-2', ids[0]],
+      ['PROD-3', ids[1]],
+    ]);
+    // …and its dispatch record, which the CI watch resumes from.
+    expect(summary.records.map((r) => [r.key, r.sessionId])).toEqual([
+      ['PROD-2', ids[0]],
+      ['PROD-3', ids[1]],
+    ]);
+    for (const record of summary.records) {
+      const resumed = resumeFixAgent(agent, record.sessionId, {});
+      expect(resumed?.stream?.sessionId).toBe(record.sessionId);
+      expect(resumed?.args).toEqual(profile.resumeArgs(record.sessionId!));
+    }
+  });
+
+  it('spawns a typed agent command with exactly the argv it resolved to', async () => {
+    const typed = parseAgentCommand('claude -p --session-id fixed --verbose')!;
+    const spawns: Array<{ key: string; command: ParsedAgentCommand }> = [];
+    await drive([member('PROD-2'), member('PROD-3')], {}, { agent: typed, spawns });
+
+    expect(spawns.map((s) => s.command)).toEqual([typed, typed]);
+  });
+
+  it('spawns a profile that picks its own session id with exactly the argv it resolved to', async () => {
+    const codex = agentModeAgent({ MOTIR_SANDBOX_AGENT: 'codex' });
+    expect(codex.stream?.sessionId).toBeNull();
+    const spawns: Array<{ key: string; command: ParsedAgentCommand }> = [];
+    await drive([member('PROD-2'), member('PROD-3')], {}, { agent: codex, spawns });
+
+    expect(spawns.map((s) => s.command)).toEqual([codex, codex]);
   });
 });
 
@@ -810,6 +906,133 @@ describe('the scoped drain declares what its session pull request delivers', () 
     await closeOutContainer(session().client, summary);
 
     expect(fake.transitions).toEqual(['PROD-1:implemented']);
+  });
+});
+
+// ── a STORY scope's draft is the story's from its first card (MOTIR-10985) ──
+//
+// A story run's first card used to land in a set of ONE — `one-card`, which
+// titles the pull request for that card and links no story — so the story was
+// linked only from the second card. A scope knows its work item before the
+// first card starts, and hands it to the drain as `container`.
+
+describe('a story scope opens the story’s DRAFT at its first landed card (MOTIR-10985)', () => {
+  const STORY = { key: 'PROD-1', title: 'Agents read and add a page’s discussion' };
+  const PR = 'https://github.test/pull/9001';
+
+  it('ONE landed card: a DRAFT, titled for the story, linked to the story', async () => {
+    const { run, log } = recordingGit();
+
+    await drive([member('PROD-2')], { 'PROD-2': [] }, { run, container: STORY });
+
+    expect(created(log)).toHaveLength(1);
+    const argv = created(log)[0]!;
+    expect(argv).toContain('--draft');
+    expect(argv).toContain(`--title ${STORY.key} ${STORY.title}`);
+    expect(argv).not.toContain('--title PROD-2');
+    // The story, and the landed card — whose agent found no PR to link to yet.
+    expect(fake.links).toEqual([`PROD-1@${PR}`, `PROD-2@${PR}`]);
+  });
+
+  it('later cards find the SAME pull request, and the close-out readies it once every child landed', async () => {
+    const { run, log } = recordingGit();
+
+    const summary = await drive(
+      [member('PROD-2'), member('PROD-3'), member('PROD-4')],
+      { 'PROD-3': ['PROD-2'], 'PROD-4': ['PROD-3'] },
+      { run, container: STORY },
+    );
+
+    expect(created(log)).toHaveLength(1);
+    // Re-declared on every landed card — an idempotent upsert — the story and its cards.
+    expect(new Set(fake.links)).toEqual(
+      new Set(['PROD-1', 'PROD-2', 'PROD-3', 'PROD-4'].map((k) => `${k}@${PR}`)),
+    );
+    expect(summary.container).toEqual(STORY);
+
+    closeOutRepos(summary, run);
+
+    const edit = log.findIndex((line) => line.startsWith('gh pr edit'));
+    const ready = log.findIndex((line) => line.startsWith('gh pr ready'));
+    expect(log[edit]).toContain(`--title ${STORY.key} ${STORY.title}`);
+    expect(ready).toBeGreaterThan(edit);
+    expect(summary.prs[0]).toMatchObject({ url: PR, outcome: 'existing' });
+    expect(summary.prs[0]?.draft).toBeUndefined();
+    expect(created(log)).toHaveLength(1);
+
+    statusOf.set('PROD-1', 'in_progress');
+    await closeOutContainer(session().client, summary);
+    expect(fake.transitions).toEqual(['PROD-1:implemented']);
+  });
+
+  it('a story with ONE child is told it is built by the close-out, as a bigger one is', async () => {
+    const { run } = recordingGit();
+    const summary = await drive([member('PROD-2')], { 'PROD-2': [] }, { run, container: STORY });
+
+    closeOutRepos(summary, run);
+    statusOf.set('PROD-1', 'in_progress');
+    await closeOutContainer(session().client, summary);
+
+    expect(fake.transitions).toEqual(['PROD-1:implemented']);
+  });
+
+  it('a FAILED child leaves it a DRAFT, and the story is not told it is built', async () => {
+    const { run, log } = recordingGit();
+
+    const summary = await drive(
+      [member('PROD-2'), member('PROD-3')],
+      {},
+      {
+        run,
+        container: STORY,
+        opts: { keepGoing: true },
+        agentResults: (key) => ({ exitCode: key === 'PROD-3' ? 1 : 0, signal: null }),
+      },
+    );
+    expect(summary.records.map((r) => r.outcome)).toEqual(['integrated', 'failed']);
+    // The failed card did not land, so it is not linked.
+    expect(fake.links).toEqual([`PROD-1@${PR}`, `PROD-2@${PR}`]);
+
+    // The close-out's re-read names the child that did not land.
+    closeOutRepos(summary, run, { containerKey: 'PROD-1', openChildren: ['PROD-3'] });
+
+    expect(log.some((line) => line.startsWith('gh pr ready'))).toBe(false);
+    expect(summary.prs[0]).toMatchObject({ draft: true });
+    await closeOutContainer(session().client, summary);
+    expect(fake.transitions).toEqual([]);
+  });
+
+  it('a SKIPPED child (waiting on a gate) leaves it a DRAFT too', async () => {
+    const { run, log } = recordingGit();
+    typeOf.set('PROD-2', 'design');
+
+    const summary = await drive(
+      [member('PROD-2', { type: 'design' }), member('PROD-3')],
+      { 'PROD-3': ['PROD-2'] },
+      { run, container: STORY },
+    );
+    expect(summary.skipped.map((s) => s.key)).toEqual(['PROD-3']);
+
+    closeOutRepos(summary, run, { containerKey: 'PROD-1', openChildren: ['PROD-3'] });
+
+    expect(created(log)[0]).toContain(`--title ${STORY.key} ${STORY.title}`);
+    expect(log.some((line) => line.startsWith('gh pr ready'))).toBe(false);
+    expect(summary.prs[0]).toMatchObject({ draft: true });
+  });
+
+  it('a scope with NO work item (a sprint) keeps today’s titles and links nothing for one card', async () => {
+    const { run, log } = recordingGit();
+
+    const summary = await drive([member('PROD-2')], { 'PROD-2': [] }, { run });
+
+    // The eager open's title is the run's, and the close-out's names the one card.
+    expect(created(log)[0]).toContain('--title Motir auto run x — 0 work items');
+    closeOutRepos(summary, run);
+    expect(log.find((line) => line.startsWith('gh pr edit'))).toContain(
+      '--title PROD-2 Item PROD-2',
+    );
+    expect(fake.links).toEqual([]);
+    expect(summary.container).toBeUndefined();
   });
 });
 

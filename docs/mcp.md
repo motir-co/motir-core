@@ -337,7 +337,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **120 tools**.
+`initialize` handshake and registers **122 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3322,29 +3322,33 @@ minted before that grant changed gains them at its next `motir login`. Every
 refusal is the page service's own, returned as a typed tool error carrying its
 code:
 
-| Code                         | Meaning                                                                                                                                                     |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PAGE_NOT_FOUND`             | No such page in that project — the same answer for an unknown id and another project's page.                                                                |
-| `PAGE_VERSION_NOT_FOUND`     | `get_page`'s `version` names a number the page has no version for. The message names the number.                                                            |
-| `PAGE_REVISION_CONFLICT`     | `update_page` sent a `revision` the page has moved past. Nothing was written; the message names both revisions. Call `get_page`, redo the edit, send again. |
-| `PAGE_BODY_TOO_LARGE`        | The markdown is over 1 MiB, or the body it makes is over 2 MiB. The message names the size and the limit. Nothing was written.                              |
-| `PAGE_TITLE_TOO_LONG`        | `create_page`'s or `rename_page`'s `title` is over 255 characters.                                                                                          |
-| `PAGE_PARENT_NOT_ALLOWED`    | A `parent.kind` other than `root`, `folder` or `page` — a page cannot be filed under a work item.                                                           |
-| `PAGE_PARENT_ID_REQUIRED`    | A `folder` or `page` parent with no `id`.                                                                                                                   |
-| `FOLDER_NOT_FOUND`           | The parent folder is not in this project.                                                                                                                   |
-| `CROSS_PROJECT_PAGE_PARENT`  | The parent page or folder belongs to another project.                                                                                                       |
-| `PAGE_CYCLE`                 | A page placed under itself or one of its own sub-pages.                                                                                                     |
-| `PAGE_DEPTH_EXCEEDED`        | The sub-page would sit deeper than 10 levels.                                                                                                               |
-| `PAGE_ARCHIVED`              | `move_page` or `archive_page` named a page that is already archived. Restore it first.                                                                      |
-| `PAGE_NOT_ARCHIVED`          | `archive_page`'s `restore` named a live page.                                                                                                               |
-| `PAGE_ARCHIVE_ROOT_REQUIRED` | `archive_page`'s `restore` named a sub-page that was archived with its parent. Restore the archive root instead.                                            |
-| `PAGE_LINK_NOT_FOUND`        | `link_page`'s `unlink` named a pair with no hand link (a mention or embed is not one).                                                                      |
-| `CROSS_PROJECT_LINK`         | `link_page` named a work item, or a page you can see, in another project than `projectKey`.                                                                 |
-| `PAGE_PARENT_ARCHIVED`       | `move_page`'s destination page is archived.                                                                                                                 |
-| `PAGE_NEIGHBOUR_INVALID`     | `move_page`'s `beforeId` / `afterId` is not a sibling at the destination.                                                                                   |
-| `PAGE_SEARCH_QUERY_EMPTY`    | `search_pages`' `q` is empty or only whitespace. A search never lists every page.                                                                           |
-| `PAGE_SEARCH_QUERY_TOO_LONG` | `search_pages`' `q` is over 200 characters.                                                                                                                 |
-| `PAGE_CURSOR_INVALID`        | `search_pages`' `cursor` is not one a previous call returned.                                                                                               |
+| Code                                | Meaning                                                                                                                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PAGE_NOT_FOUND`                    | No such page in that project — the same answer for an unknown id and another project's page.                                                                 |
+| `PAGE_VERSION_NOT_FOUND`            | `get_page`'s `version` names a number the page has no version for. The message names the number.                                                             |
+| `PAGE_REVISION_CONFLICT`            | `update_page` sent a `revision` the page has moved past. Nothing was written; the message names both revisions. Call `get_page`, redo the edit, send again.  |
+| `PAGE_BODY_TOO_LARGE`               | The markdown is over 1 MiB, or the body it makes is over 2 MiB. The message names the size and the limit. Nothing was written.                               |
+| `PAGE_TITLE_TOO_LONG`               | `create_page`'s or `rename_page`'s `title` is over 255 characters.                                                                                           |
+| `PAGE_PARENT_NOT_ALLOWED`           | A `parent.kind` other than `root`, `folder` or `page` — a page cannot be filed under a work item.                                                            |
+| `PAGE_PARENT_ID_REQUIRED`           | A `folder` or `page` parent with no `id`.                                                                                                                    |
+| `FOLDER_NOT_FOUND`                  | The parent folder is not in this project.                                                                                                                    |
+| `CROSS_PROJECT_PAGE_PARENT`         | The parent page or folder belongs to another project.                                                                                                        |
+| `PAGE_CYCLE`                        | A page placed under itself or one of its own sub-pages.                                                                                                      |
+| `PAGE_DEPTH_EXCEEDED`               | The sub-page would sit deeper than 10 levels.                                                                                                                |
+| `PAGE_ARCHIVED`                     | `move_page` or `archive_page` named a page that is already archived. Restore it first. `add_page_comment` on an archived page — its discussion is read-only. |
+| `PAGE_NOT_ARCHIVED`                 | `archive_page`'s `restore` named a live page.                                                                                                                |
+| `PAGE_ARCHIVE_ROOT_REQUIRED`        | `archive_page`'s `restore` named a sub-page that was archived with its parent. Restore the archive root instead.                                             |
+| `PAGE_LINK_NOT_FOUND`               | `link_page`'s `unlink` named a pair with no hand link (a mention or embed is not one).                                                                       |
+| `CROSS_PROJECT_LINK`                | `link_page` named a work item, or a page you can see, in another project than `projectKey`.                                                                  |
+| `PAGE_PARENT_ARCHIVED`              | `move_page`'s destination page is archived.                                                                                                                  |
+| `PAGE_NEIGHBOUR_INVALID`            | `move_page`'s `beforeId` / `afterId` is not a sibling at the destination.                                                                                    |
+| `PAGE_SEARCH_QUERY_EMPTY`           | `search_pages`' `q` is empty or only whitespace. A search never lists every page.                                                                            |
+| `PAGE_SEARCH_QUERY_TOO_LONG`        | `search_pages`' `q` is over 200 characters.                                                                                                                  |
+| `PAGE_CURSOR_INVALID`               | `search_pages`' `cursor` is not one a previous call returned.                                                                                                |
+| `PAGE_COMMENT_CURSOR_INVALID`       | `get_page_comments`' `openCursor` / `resolvedCursor` is not one that list's `nextCursor` returned — hand-edited, or issued for the other list.               |
+| `PAGE_COMMENT_NOT_FOUND`            | `add_page_comment`'s `rootCommentId` names no comment on that page — an unknown id, or a comment on another page.                                            |
+| `PAGE_COMMENT_REPLY_DEPTH_EXCEEDED` | `add_page_comment`'s `rootCommentId` names a reply. A thread is one level deep: reply to its root.                                                           |
+| `PAGE_COMMENT_BODY_EMPTY`           | `add_page_comment`'s `body` is blank once trimmed.                                                                                                           |
 
 #### `get_page`
 
@@ -3375,6 +3379,104 @@ at version 3" can see both what was approved and how far the page has moved
 since. A number the page does not have is refused `PAGE_VERSION_NOT_FOUND`,
 naming the page and the number — never the current body as a fallback. Without
 `version`, the output is exactly the current-body read above.
+
+#### `get_page_comments`
+
+Read the discussion on one page — BOTH of its lists, `open` and `resolved`, in
+one call (MOTIR-10978). Addressed exactly as [`get_page`](#get_page) is, and gated
+on `page:view`, the key the page's discussion panel checks. Every read goes
+through the same comments service the panel uses, so an agent sees exactly the
+panel's discussion; an archived page still lists. Read-only: it writes nothing,
+the anchored verdict included.
+
+| Input            | Type    | Required | Notes                                                                     |
+| ---------------- | ------- | -------- | ------------------------------------------------------------------------- |
+| `projectKey`     | string  | yes      | Project key, e.g. `"ACME"`.                                               |
+| `pageId`         | string  | yes      | The page id — the `<id>` in `/pages/<id>`.                                |
+| `limit`          | integer | no       | Threads per list. Default 20; a number over 50 is clamped to 50.          |
+| `openCursor`     | string  | no       | `open.nextCursor` from a previous call. Pages the open list only.         |
+| `resolvedCursor` | string  | no       | `resolved.nextCursor` from a previous call. Pages the resolved list only. |
+
+**Output** — `structuredContent`: `{ pageId, counts: { open, resolved }, open:
+{ threads, nextCursor }, resolved: { threads, nextCursor } }`. `counts` is the
+total in each list, not the page shown. A thread is its root and its `replies`,
+one level deep, oldest first. Every comment — root or reply — is `{ id,
+parentCommentId, author: { id, name, image }, bodyMd, createdAt, editedAt,
+resolvedAt, resolvedBy, quote, anchored }`: `bodyMd` is the markdown exactly as
+written, mention tokens included; `editedAt` is `null` until the comment is
+edited; `resolvedAt` / `resolvedBy` are set on a resolved root and `null` on an
+open one and on every reply. A page with no discussion answers empty `threads`,
+zero counts and a `null` cursor in both lists.
+
+**The anchored verdict** — a root started on a passage carries the text it
+quoted as `quote`, and `anchored`, computed at read time against the page's
+current saved body (`docs/decisions/pages.md` §8.3): `true` while the passage is
+still in the page, `false` once it has been deleted — the quote is kept, and the
+thread reads as page-level, as it does in the panel. A comment that never had a
+passage carries `quote: null` and `anchored: null`, so "never inline" and "was
+inline, now gone" stay distinguishable. The page body is read only when a thread
+on the answered pages carries a passage.
+
+**Paging** — each list pages on its own cursor: follow `open.nextCursor` with
+`openCursor` and `resolved.nextCursor` with `resolvedCursor`; each walk returns
+every thread of its list once. A cursor names the list it was issued for, so one
+passed to the other list is refused.
+
+**Text summary** — a heading with both counts, then each list split into the
+threads still **On a passage** and the **Page-level** ones (an anchor that is gone
+is listed here, with its quote). Every comment's line starts `[comment <id>]` —
+the id a reply names — then the author, the times, `resolved … by …` on a
+resolved root, the quote, and the body. A list with more threads ends with the
+cursor argument to pass.
+
+**Refusals** — `PAGE_NOT_FOUND` (an unknown page id, or one in another
+project — the same answer), `PAGE_COMMENT_CURSOR_INVALID` (a cursor for the other
+list, or a hand-edited one), and a caller without `page:view` is refused naming
+the missing key. Nothing is written on any of them.
+
+#### `add_page_comment`
+
+Post a markdown comment on one page — a new page-level thread, or a reply under
+an existing thread (MOTIR-10979). Addressed exactly as [`get_page`](#get_page)
+is, and written through the same comments service the page's discussion panel
+uses, so the service's gate (`page:view`, then `comment:add`), its archived-page
+rule, its one-level reply rule and its mention notifications all hold exactly as
+for a member — an agent's comment is stored and shown as a member's is. The
+tool's permission key is `comment:add`, which `motir login`'s token already
+carries.
+
+| Input           | Type   | Required | Notes                                                                                               |
+| --------------- | ------ | -------- | --------------------------------------------------------------------------------------------------- |
+| `projectKey`    | string | yes      | Project key, e.g. `"ACME"`.                                                                         |
+| `pageId`        | string | yes      | The page id — the `<id>` in `/pages/<id>`.                                                          |
+| `body`          | string | yes      | Markdown, stored exactly as sent. `[@Name](mention:<userId>)` mentions — and notifies — a member.   |
+| `rootCommentId` | string | no       | A thread's ROOT comment id (as `get_page_comments` lists it) to reply under. Omit for a new thread. |
+
+**Output** — `structuredContent`: the written comment, in the shape
+[`get_page_comments`](#get_page_comments) returns a comment in — `{ id,
+parentCommentId, author: { id, name, image }, bodyMd, createdAt, editedAt,
+resolvedAt, resolvedBy, quote, anchored }`. `author` is the token's owner,
+`bodyMd` is byte-identical to `body` (a mention token is not parsed, rewritten or
+escaped), `parentCommentId` is the thread's root on a reply and `null` on a new
+thread, and `editedAt`, `resolvedAt`, `resolvedBy`, `quote` and `anchored` are
+`null` — this tool takes no passage, so what it posts is always page-level or a
+reply.
+
+**Not idempotent** — a repeat posts a second comment, as a member's second
+submit does; the returned `id` is how a caller checks whether an earlier call
+landed.
+
+**Text summary** — `Commented on page <pageId> · comment id: <id>` (or `Replied
+on page <pageId> in thread <rootId> · comment id: <id>`), then the comment as
+`get_page_comments` renders one: `[comment <id>]`, the author, the time and the
+body.
+
+**Refusals**, each writing nothing — `PAGE_NOT_FOUND` (an unknown page id, or one
+in another project), `PAGE_ARCHIVED`, `PAGE_COMMENT_NOT_FOUND` (an unknown thread,
+or one on another page), `PAGE_COMMENT_REPLY_DEPTH_EXCEEDED` (a reply's id as
+`rootCommentId`), `PAGE_COMMENT_BODY_EMPTY` (a blank body), and
+`PERMISSION_DENIED` naming `comment:add` for a caller who may read the page but
+not comment on it.
 
 #### `create_page`
 
@@ -3561,14 +3663,14 @@ card keeps its one link, and a republish adds none.
 `versionNumber`, `sealedAt`, `publishedAt`, the publisher, `gateId` (the awaiting
 `decision_approval`, or `null` on a human card or a replay) and `replayed`.
 
-| Code                      | Meaning                                                                      |
-| ------------------------- | ---------------------------------------------------------------------------- |
-| `NOT_A_DECISION_CARD`     | The card's type is not `decision`.                                           |
-| `PAGE_NOT_FOUND`          | No such page, or one the caller cannot read — one answer, no existence leak. |
-| `PAGE_IN_ANOTHER_PROJECT` | The page is readable but filed in another project than the card's.           |
-| `PAGE_IS_EMPTY`           | The page's newest version has no text.                                       |
-| `PAGE_ARCHIVED`           | The page is archived.                                                        |
-| `CARD_IS_FINISHED`        | The card is already in a done-category status.                               |
+| Code                      | Meaning                                                                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NOT_A_DECISION_CARD`     | The card's type is not `decision`.                                                                                                                           |
+| `PAGE_NOT_FOUND`          | No such page, or one the caller cannot read — one answer, no existence leak.                                                                                 |
+| `PAGE_IN_ANOTHER_PROJECT` | The page is readable but filed in another project than the card's.                                                                                           |
+| `PAGE_IS_EMPTY`           | The page's newest version has no text.                                                                                                                       |
+| `PAGE_ARCHIVED`           | `move_page` or `archive_page` named a page that is already archived. Restore it first. `add_page_comment` on an archived page — its discussion is read-only. |
+| `CARD_IS_FINISHED`        | The card is already in a done-category status.                                                                                                               |
 
 The confirm port's _Choose page_ reaches the same service through
 `POST /api/work-items/{key}/decision-page` with `{ "pageId" }` (201 for a new

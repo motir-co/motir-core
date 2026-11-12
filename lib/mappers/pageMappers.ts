@@ -246,6 +246,14 @@ export function toBase64(state: Uint8Array): string {
 }
 
 /**
+ * The mirror of `toBase64`: a base64 `bodyState` (or a comment's anchor bytes,
+ * which travel in the same standard padded form) read back as bytes.
+ */
+export function fromBase64(encoded: string): Uint8Array {
+  return new Uint8Array(Buffer.from(encoded, 'base64'));
+}
+
+/**
  * One history row (MOTIR-7385). `isCurrent` is the caller's: whether this is the
  * page's newest number. `restoredFromKept` reads the FK, which the cap's prune
  * sets to NULL while `restoredFromNumber` stays.
