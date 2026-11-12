@@ -178,7 +178,7 @@ test('acceptance: the type picker offers fifteen, and a new one can be chosen en
   await chapter(
     'The list scrolls — the new members are below the fold, and reachable',
     async () => {
-      // The design measured this: the menu is capped at 256px in both hosts, so at
+      // The design measured this: the menu is capped (now 320px) in both hosts, so at
       // fourteen roughly half the list starts hidden. Scrolling to a NEWLY ADMITTED
       // member is the part a viewer needs to see actually work.
       const legal = page.getByRole('option', { name: 'Legal', exact: true });

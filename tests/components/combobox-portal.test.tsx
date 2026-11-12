@@ -247,6 +247,51 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     expect(maxH).toBeLessThanOrEqual(158);
   });
 
+  // MOTIR-11096: the real Modal panel is centred WITHOUT a transform, so it is
+  // not the containing block of the lifted menu. The panel's overflow clip then
+  // no longer bounds the menu: it may reach past the panel's bottom edge, down
+  // to the viewport, and its offsets are measured from the viewport.
+  function UntransformedPanelHost() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+      <div role="dialog" data-surface="modal" data-testid="panel" style={{ overflowY: 'hidden' }}>
+        <div data-testid="body" style={{ overflowY: 'auto' }}>
+          <Combobox
+            label="Model"
+            options={TALL_OPTIONS}
+            value={value}
+            onChange={setValue}
+            searchable
+          />
+        </div>
+      </div>
+    );
+  }
+
+  it('lets the lifted menu reach past an untransformed panel, bounded by the viewport', () => {
+    render(<UntransformedPanelHost />);
+    // Panel 100–420 (a short dialog); body 150–360; trigger 170–202.
+    screen.getByTestId('panel').getBoundingClientRect = () => rect(100, 420);
+    screen.getByTestId('body').getBoundingClientRect = () => rect(150, 360);
+    const trigger = screen.getByRole('combobox', { name: 'Model' });
+    trigger.getBoundingClientRect = () => rect(170, 202);
+    fireEvent.click(trigger);
+    fireEvent.resize(window);
+    const listbox = screen.getByRole('listbox', { name: 'Model' });
+    const menu = listbox.parentElement as HTMLElement;
+
+    expect(screen.getByTestId('panel').contains(listbox)).toBe(true);
+    expect(menu.style.position).toBe('fixed');
+    // No containing block: the offset is the viewport's, trigger bottom 202 + 4.
+    expect(menu.style.top).toBe('206px');
+    // The panel's room below the trigger is 420 − 202 − 4 − 8 = 206px; the
+    // viewport's is far more, so the list grows past the panel to its cap.
+    const maxH = parseInt(listbox.style.maxHeight, 10);
+    expect(window.innerHeight - 202).toBeGreaterThan(400);
+    expect(maxH).toBeGreaterThan(206);
+    expect(maxH).toBe(320);
+  });
+
   // MOTIR-1346: the Advanced-filter builder is a NON-modal anchored Popover
   // (role="dialog" but NO data-surface="modal") whose overflow-hidden panel +
   // inner overflow-y-auto scroll body CLIP an inline menu — the field/operator
