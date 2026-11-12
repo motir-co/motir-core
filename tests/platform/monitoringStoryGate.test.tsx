@@ -6,7 +6,7 @@ import type { PlatformSignalDTO, PlatformSignalId } from '@/lib/dto/platformHeal
 import { NotPlatformStaffError } from '@/lib/platform/errors';
 import { platformHealthService } from '@/lib/services/platformHealthService';
 import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
-import { flyDeploymentStatusProvider } from '@/lib/deployment/adapters/fly/flyMachinesStatus';
+import { ecsDeploymentStatusProvider } from '@/lib/deployment/adapters/ecs/ecsServicesStatus';
 import { deploymentStatusProvider, usingFakeDeploymentStatus } from '@/lib/deployment/providers';
 import { httpGatewayStatusReader } from '@/lib/gateway/statusClient';
 import { GatewayStatusMalformedError } from '@/lib/gateway/statusErrors';
@@ -69,10 +69,29 @@ const ALL_IDS: readonly PlatformSignalId[] = [
 const PROVIDERS = {
   errors: () => vi.spyOn(httpErrorCountReader, 'read').mockRejectedValue(new Error('Sentry 502')),
   hosting: () =>
-    vi.spyOn(flyDeploymentStatusProvider, 'read').mockRejectedValue(new Error('Fly 401')),
+    vi
+      .spyOn(ecsDeploymentStatusProvider, 'read')
+      .mockRejectedValue(new Error('AccessDeniedException')),
   gateway: () =>
     vi.spyOn(httpGatewayStatusReader, 'read').mockRejectedValue(new Error('gateway timeout')),
 } as const;
+
+const WEB = {
+  name: 'motir-core-web',
+  started: 2,
+  total: 2,
+  expected: 2,
+  release: 'motir-core-web:41',
+  rolling: false,
+};
+const WORKER = {
+  name: 'motir-core-worker',
+  started: 1,
+  total: 1,
+  expected: 1,
+  release: 'motir-core-worker:17',
+  rolling: false,
+};
 
 /** Wire all three as configured, each answering healthily. */
 function configureAll() {
@@ -83,10 +102,10 @@ function configureAll() {
   vi.stubEnv('SENTRY_READ_TOKEN', 'sntrys_read');
   vi.stubEnv('SENTRY_ORG', 'moooon');
   vi.stubEnv('SENTRY_PROJECT', 'motir-core');
-  vi.stubEnv('FLY_APP_NAME', 'motir-core');
-  vi.stubEnv('FLY_REGION', 'iad');
-  vi.stubEnv('FLY_MACHINE_ID', 'web1');
-  vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', 'fo1_read');
+  vi.stubEnv('AWS_EXECUTION_ENV', 'AWS_ECS_FARGATE');
+  vi.stubEnv('AWS_REGION', 'us-east-1');
+  vi.stubEnv('MOTIR_ECS_CLUSTER', 'motir-core');
+  vi.stubEnv('MOTIR_DEPLOYMENT_ECS_SERVICES', 'motir-core-web,motir-core-worker');
   vi.stubEnv('MOTIR_GATEWAY_URL', 'https://gateway.example.test');
 
   vi.spyOn(httpErrorCountReader, 'read').mockResolvedValue({
@@ -94,12 +113,8 @@ function configureAll() {
     projectId: '42',
     org: 'moooon',
   });
-  vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue({
-    groups: [
-      { name: 'app', started: 2, total: 2, expected: 2 },
-      { name: 'worker', started: 1, total: 1, expected: 1 },
-    ],
-    releases: ['deployment-01K6'],
+  vi.spyOn(ecsDeploymentStatusProvider, 'read').mockResolvedValue({
+    groups: [WEB, WORKER],
   });
   vi.spyOn(httpGatewayStatusReader, 'read').mockResolvedValue({
     latencyMs: 87,
@@ -126,12 +141,17 @@ function byId(signals: PlatformSignalDTO[]) {
   >;
 }
 
-/** The never-a-zero rule over the WHOLE board: no unreachable card carries a number. */
+/**
+ * The never-a-zero rule over the WHOLE board: no unreachable card carries a
+ * number — in its values, or in a per-service list (MOTIR-10952), which an
+ * unreachable card must not carry at all.
+ */
 function expectNoNumberOnUnreachable(signals: PlatformSignalDTO[]) {
   for (const s of signals) {
     if (s.state !== 'unreachable') continue;
     const numeric = Object.entries(s.values).filter(([, v]) => typeof v === 'number');
     expect(numeric, `${s.id} (${String(s.values['reason'])}) carries a number`).toEqual([]);
+    expect(s.services, `${s.id} (${String(s.values['reason'])}) carries services`).toBeUndefined();
   }
 }
 
@@ -210,7 +230,7 @@ describe('⚠️ never a zero, over every unreachable reason', () => {
     const scenarios: Array<() => void> = [
       // Nothing configured: notManaged / notConfigured everywhere.
       () => {
-        vi.stubEnv('FLY_APP_NAME', '');
+        vi.stubEnv('AWS_EXECUTION_ENV', '');
         vi.stubEnv('SENTRY_DSN', '');
         vi.stubEnv('MOTIR_GATEWAY_URL', '');
       },
@@ -218,7 +238,7 @@ describe('⚠️ never a zero, over every unreachable reason', () => {
       () => {
         configureAll();
         vi.stubEnv('SENTRY_READ_TOKEN', '');
-        vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', '');
+        vi.stubEnv('MOTIR_DEPLOYMENT_ECS_SERVICES', '');
       },
       // Configured and failing: readFailed / noAnswer.
       () => {
@@ -285,8 +305,13 @@ describe('the service-to-page seam', () => {
     configureAll();
     const text = await renderPage();
     expect(text).toContain('12 errors · 24h');
-    expect(text).toContain('app 2/2 · worker 1/1');
-    expect(text).toContain('all on release deployment-01K6');
+    expect(text).toContain('All 2 services steady');
+    expect(text).toContain('motir-core-web 2/2 · motir-core-web:41');
+    expect(text).toContain('motir-core-worker 1/1 · motir-core-worker:17');
+    expect(text).toContain('ECS cluster motir-core · us-east-1');
+    // The Hosting card's own copy names no Fly (the Pools section further down
+    // still does, about the fleet's switches, which is not this card's).
+    expect(text.slice(text.indexOf(' Hosting '), text.indexOf(' Gateway '))).not.toMatch(/\bFly\b/);
     expect(text).toContain('Reachable · 87 ms');
     expect(text).toContain('motir-gateway v0.18.3');
     expect(text).toContain('System health loaded. All 7 signals are healthy.');
@@ -299,12 +324,8 @@ describe('the service-to-page seam', () => {
       projectId: '42',
       org: 'moooon',
     });
-    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue({
-      groups: [
-        { name: 'app', started: 1, total: 2, expected: 2 },
-        { name: 'worker', started: 1, total: 1, expected: 1 },
-      ],
-      releases: ['deployment-01K6'],
+    vi.spyOn(ecsDeploymentStatusProvider, 'read').mockResolvedValue({
+      groups: [{ ...WEB, started: 1 }, WORKER],
     });
     vi.spyOn(httpGatewayStatusReader, 'read').mockResolvedValue({
       latencyMs: 2400,
@@ -315,7 +336,7 @@ describe('the service-to-page seam', () => {
     const text = await renderPage();
     expect(text).toContain('140 errors · 24h');
     expect(text).toContain('Over the 100-error threshold');
-    expect(text).toContain('app is short: 1 of 2 machines started');
+    expect(text).toContain('motir-core-web is short: 1 of 2 tasks running');
     expect(text).toContain('Slow · 2400 ms');
     expect(text).toContain("3 of 7 signals are degraded or can't be reached.");
   });
@@ -326,10 +347,10 @@ describe('the service-to-page seam', () => {
 
     const text = await renderPage();
     expect(text).toContain('No response from Sentry');
-    expect(text).toContain('No answer from Fly');
+    expect(text).toContain('No answer from ECS');
     expect(text).toContain('No answer from the gateway');
     expect(text).not.toContain('errors · 24h');
-    expect(text).not.toMatch(/app \d+\/\d+/);
+    expect(text).not.toMatch(/motir-core-\w+ \d+\/\d+/);
     expect(text).not.toContain('Reachable · 87 ms');
   });
 });
@@ -405,7 +426,7 @@ describe('staff-only, audited, and offline', () => {
     configureAll();
     expect(gatewayStatusReader()).toBe(httpGatewayStatusReader);
     expect(errorCountReader()).toBe(httpErrorCountReader);
-    expect(await deploymentStatusProvider()).toBe(flyDeploymentStatusProvider);
+    expect(await deploymentStatusProvider()).toBe(ecsDeploymentStatusProvider);
 
     await readBoard();
     expect(fetchGuard).not.toHaveBeenCalled();

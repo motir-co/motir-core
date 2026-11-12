@@ -166,7 +166,6 @@ export const SWITCH_TABLE: readonly SwitchRow[] = [
       'FLY_INVENTORY_API_TOKEN',
       'FLY_CERTS_TOKEN',
       'FLY_CERTS_APP',
-      'FLY_DEPLOYMENT_READ_TOKEN',
     ),
     seams: [
       { file: 'lib/orchestrator/index.ts', symbol: 'getOrchestrator' },
@@ -179,15 +178,11 @@ export const SWITCH_TABLE: readonly SwitchRow[] = [
         file: 'lib/publicAddresses/adapters/fly/flyCertificates.ts',
         symbol: 'CertificateProviderNotConfiguredError',
       },
-      {
-        file: 'lib/deployment/adapters/fly/flyMachinesStatus.ts',
-        symbol: 'FLY_DEPLOYMENT_READ_TOKEN (returns null)',
-      },
     ],
     why:
       'With no Fly token the orchestrator throws `OrchestratorNotConfiguredError`, so no agent or ' +
-      'index machine is booted and no container usage is charged; the certificate and ' +
-      'deployment-status tokens are the other ways the app acts on Fly.',
+      'index machine is booted and no container usage is charged; the certificate token is the ' +
+      'other way the app acts on Fly.',
   },
   {
     id: 'billing',

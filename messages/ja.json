@@ -11044,23 +11044,28 @@
         },
         "hosting": {
           "title": "ホスティング",
-          "value": "<appGroup>アプリ {appStarted}/{appExpected}</appGroup> · <workerGroup>ワーカー {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "すべてのマシンが起動し、すべてリリース {release} です。Fly アプリ {app} · {region}。",
-          "degradedDetail": {
-            "shortGroup": "{group} が不足しています: {expected} 台中 {started} 台のマシンが起動。リリース {release}。",
-            "mixedReleases": "マシンが {count} 種類の異なるリリースで稼働しています。デプロイが途中で止まった可能性があります。最新は {release}。"
+          "value": "{serviceCount, plural, other {# 個のサービスすべてが安定}}",
+          "degradedValue": {
+            "shortGroup": "{group} が不足 · {started}/{expected}",
+            "mixedReleases": "{group} はデプロイ中"
           },
+          "detail": "すべてのサービスが希望する数のタスクを実行し、それぞれのリリースで安定しています。ECS クラスター {app} · {region}。",
+          "degradedDetail": {
+            "shortGroup": "{group} が不足しています: {expected} 個中 {started} 個のタスクが実行中です。ECS クラスター {app} · {region}。",
+            "mixedReleases": "{group} は {release} へのデプロイ中です。複数のデプロイが進行しているか、ロールアウトが完了していません。ECS クラスター {app} · {region}。"
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "マネージドホストではありません",
             "noReadCredential": "{region} から応答中",
-            "readFailed": "Fly から応答なし"
+            "readFailed": "ECS から応答がありません"
           },
           "unreachableDetail": {
-            "notManaged": "このビルドは Fly で稼働していないため、参照するホスティングダッシュボードはありません。ローカルまたはセルフホストのインスタンスでは想定どおりです。",
-            "noReadCredential": "Fly アプリ {app} · マシン {machineId}。このコンソールにはまだ Fly の読み取りトークンがないため、マシンやリリースを数えられません。これは件数がゼロという意味ではありません。",
-            "readFailed": "現在マシンの一覧を読み取れませんでした。これは件数がゼロという意味ではありません。"
+            "notManaged": "このビルドは AWS Fargate 上で実行されていないため、参照できるホスティングコンソールはありません。ローカルまたはセルフホストのインスタンスでは想定どおりです。",
+            "noReadCredential": "ECS クラスター {app} · {region}。このデプロイにはどの ECS サービスが自分のものか設定されていないため、このコンソールはタスクやリリースを数えられません。これは件数がゼロという意味ではありません。",
+            "readFailed": "ECS サービスを今は取得できませんでした。これは件数がゼロという意味ではありません。"
           },
-          "linkOut": "Fly ダッシュボード"
+          "linkOut": "ECS コンソール"
         },
         "gateway": {
           "title": "ゲートウェイ",

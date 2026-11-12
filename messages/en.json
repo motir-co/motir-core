@@ -11044,23 +11044,28 @@
         },
         "hosting": {
           "title": "Hosting",
-          "value": "<appGroup>app {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "Every machine started, all on release {release}. Fly app {app} · {region}.",
-          "degradedDetail": {
-            "shortGroup": "{group} is short: {started} of {expected} machines started. Release {release}.",
-            "mixedReleases": "Machines are running {count} different releases — a deploy may have stopped part-way. Newest {release}."
+          "value": "{serviceCount, plural, one {# service steady} other {All # services steady}}",
+          "degradedValue": {
+            "shortGroup": "{group} short · {started}/{expected}",
+            "mixedReleases": "{group} mid-deploy"
           },
+          "detail": "Every service is running its desired tasks, each steady on its release. ECS cluster {app} · {region}.",
+          "degradedDetail": {
+            "shortGroup": "{group} is short: {started} of {expected} tasks running. ECS cluster {app} · {region}.",
+            "mixedReleases": "{group} is mid-deploy on {release}: more than one deployment is in play, or its rollout did not complete. ECS cluster {app} · {region}."
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "Not a managed host",
             "noReadCredential": "Answering from {region}",
-            "readFailed": "No answer from Fly"
+            "readFailed": "No answer from ECS"
           },
           "unreachableDetail": {
-            "notManaged": "This build is not running on Fly, so there is no hosting dashboard to point at. Expected on a local or self-hosted instance.",
-            "noReadCredential": "Fly app {app} · machine {machineId}. This console holds no Fly read token yet, so it can't count machines or releases. This is not a count of zero.",
-            "readFailed": "The machine list could not be read just now. This is not a count of zero."
+            "notManaged": "This build is not running on AWS Fargate, so there is no hosting console to point at. Expected on a local or self-hosted instance.",
+            "noReadCredential": "ECS cluster {app} · {region}. This deployment has not been told which ECS services are its own, so this console can't count tasks or releases. This is not a count of zero.",
+            "readFailed": "The ECS services could not be described just now. This is not a count of zero."
           },
-          "linkOut": "Fly dashboard"
+          "linkOut": "ECS console"
         },
         "gateway": {
           "title": "Gateway",

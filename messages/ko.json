@@ -11041,23 +11041,28 @@
         },
         "hosting": {
           "title": "호스팅",
-          "value": "<appGroup>앱 {appStarted}/{appExpected}</appGroup> · <workerGroup>워커 {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "모든 머신이 시작되었으며 모두 릴리스 {release}입니다. Fly 앱 {app} · {region}.",
-          "degradedDetail": {
-            "shortGroup": "{group}이(가) 부족합니다: 머신 {expected}대 중 {started}대 시작됨. 릴리스 {release}.",
-            "mixedReleases": "머신이 서로 다른 릴리스 {count}개를 실행 중입니다 — 배포가 도중에 멈췄을 수 있습니다. 최신 릴리스 {release}."
+          "value": "{serviceCount, plural, other {서비스 #개 모두 안정}}",
+          "degradedValue": {
+            "shortGroup": "{group} 부족 · {started}/{expected}",
+            "mixedReleases": "{group} 배포 중"
           },
+          "detail": "모든 서비스가 원하는 수의 작업을 실행하고 있으며 각각 자신의 릴리스에서 안정적입니다. ECS 클러스터 {app} · {region}.",
+          "degradedDetail": {
+            "shortGroup": "{group}이(가) 부족합니다: 작업 {expected}개 중 {started}개가 실행 중입니다. ECS 클러스터 {app} · {region}.",
+            "mixedReleases": "{group}이(가) {release}(으)로 배포 중입니다: 배포가 둘 이상 진행 중이거나 롤아웃이 완료되지 않았습니다. ECS 클러스터 {app} · {region}."
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "관리형 호스트 아님",
             "noReadCredential": "{region}에서 응답 중",
-            "readFailed": "Fly에서 응답 없음"
+            "readFailed": "ECS 응답 없음"
           },
           "unreachableDetail": {
-            "notManaged": "이 빌드는 Fly에서 실행되지 않으므로 연결할 호스팅 대시보드가 없습니다. 로컬 또는 자체 호스팅 인스턴스에서는 정상입니다.",
-            "noReadCredential": "Fly 앱 {app} · 머신 {machineId}. 이 콘솔에는 아직 Fly 읽기 토큰이 없어 머신이나 릴리스 수를 셀 수 없습니다. 0개라는 뜻이 아닙니다.",
-            "readFailed": "지금은 머신 목록을 읽을 수 없습니다. 0개라는 뜻이 아닙니다."
+            "notManaged": "이 빌드는 AWS Fargate에서 실행되고 있지 않으므로 연결할 호스팅 콘솔이 없습니다. 로컬 또는 자체 호스팅 인스턴스에서는 예상된 상태입니다.",
+            "noReadCredential": "ECS 클러스터 {app} · {region}. 이 배포에는 어떤 ECS 서비스가 자신의 것인지 지정되지 않아 이 콘솔이 작업이나 릴리스 수를 셀 수 없습니다. 0개라는 뜻이 아닙니다.",
+            "readFailed": "지금은 ECS 서비스를 조회할 수 없었습니다. 0개라는 뜻이 아닙니다."
           },
-          "linkOut": "Fly 대시보드"
+          "linkOut": "ECS 콘솔"
         },
         "gateway": {
           "title": "게이트웨이",

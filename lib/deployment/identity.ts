@@ -1,7 +1,6 @@
 /**
  * WHERE IS THIS PROCESS RUNNING? — the one place motir-core asks that question
- * (MOTIR-1167), and the one place in `lib/` outside the orchestrator adapter
- * that is allowed to know the answer is Fly's.
+ * (MOTIR-1167), answered since MOTIR-10952 from AWS Fargate's own injection.
  *
  * ---------------------------------------------------------------------------
  * ⚠️ WHY THIS FILE EXISTS AT ALL, AND WHY IT IS ONE FILE
@@ -13,50 +12,48 @@
  * API host, an env var, a status string) are not imports and a module-graph
  * check would miss them.
  *
- * The operator console's health glance needs the app's own hosting identity: the
- * card's acceptance criterion is that its link-out points at the Fly app
- * `motir-core`, and a link nobody can construct is not a link. So the knowledge
- * has to live SOMEWHERE, and the choice is between one named file and three raw
- * `process.env['FLY_*']` reads scattered through a service. This is that file:
- * it is registered as the guard's second `ALLOWED` entry, scoped to one path and
- * to the four variable names below, so a fifth `FLY_*` read here still fails
- * the guard rather than riding in on the exception. (The fourth,
- * `FLY_PROCESS_GROUP`, joined for the monitoring tags of MOTIR-8549: which
- * process group answered is the same question as which machine did.)
+ * The operator console's health glance needs the app's own hosting identity:
+ * which deployment answered, where, and a link out to the platform's console.
+ * So the knowledge has to live SOMEWHERE, and the choice is between one named
+ * file and raw `process.env` reads scattered through a service. This is that
+ * file. It is still registered as the guard's `ALLOWED` entry for the three
+ * host-tag accessors at the bottom (`hostInstanceId`, `hostRegion`,
+ * `hostProcessGroup`), which read Fly's variables for the terminal relay and
+ * Sentry's instance tags. Those are not this card's to move: giving them an AWS
+ * source is a separate gap, and `deploymentIdentity()` itself reads no `FLY_*`
+ * variable any more.
  *
  * ---------------------------------------------------------------------------
- * ⚠️ IT IS A DIFFERENT KIND OF EXCEPTION FROM THE FIRST, AND SAYING SO MATTERS
+ * ⚠️ IT IS NOT PART OF THE FLEET'S PORT, AND SAYING SO MATTERS
  * ---------------------------------------------------------------------------
- * The rule's SUBJECT is the CI-runner orchestrator PORT — that a second
+ * The guard's SUBJECT is the CI-runner orchestrator PORT — that a second
  * container provider is "a new file under `adapters/` plus one branch in the
  * selector". This file is not part of that port: it boots no container, tears
  * none down, meters nothing, and imports nothing from `lib/orchestrator/`. It
- * asks where the WEB PROCESS is, which the fleet has no opinion about.
- *
- * The rule's REACH is nevertheless all of `lib/`, deliberately and correctly — a
- * boundary guard narrowed to the directory it protects is a guard you evade by
- * moving a file. So this exception is registered rather than argued around, and
- * the shape it takes is the one the guard's own note prescribes for the first
- * exception: when a second deployment target lands, the fix is one more branch
- * HERE, which is a small change precisely because this is the only place.
+ * asks where the WEB PROCESS is, which the fleet has no opinion about. When a
+ * further deployment target lands, the fix is one more branch HERE, which is a
+ * small change precisely because this is the only place.
  *
  * ---------------------------------------------------------------------------
- * ⚠️ WHAT IT DELIBERATELY DOES NOT ANSWER: HOW MANY MACHINES
+ * ⚠️ WHAT IT DELIBERATELY DOES NOT ANSWER: HOW MANY TASKS
  * ---------------------------------------------------------------------------
- * `machine_count` is a reading of Fly's Machines API, and no runtime credential
- * in this deployment can take it — `FLY_FLEET_API_TOKEN` is scoped to the CI
- * fleet's OWN organization, which `production-service-stack.md` §7.5 requires to
- * be separate from motir-core's. The one place the count IS asserted is
- * `ci.yml`'s deploy step, with a token that exists only there.
+ * Counting this deployment's siblings needs a credential and an API call, which
+ * is the deployment-status port's job (`deploymentStatus.ts`, its ECS adapter
+ * under `adapters/ecs/`). This file makes no call — not even to the task
+ * metadata endpoint, which would answer richer questions but would put a network
+ * seam inside an accessor that has never had one. Everything below is read from
+ * what the PLATFORM injects into the running process, which is a reading taken
+ * from inside, and from the one variable the infrastructure sets beside it:
  *
- * Reading `fly.toml` and reporting what it PROMISES is the alternative, and it
- * is a mistake this codebase has already paid for: motir-ai's `fly.toml`
- * promised load spilling onto fresh machines while production ran ONE machine
- * for weeks, because *"Fly Proxy autostop/autostart never creates or destroys
- * Machines for you"*. A config file is a claim about a deployment, not a reading
- * of it. Everything below is read from what the PLATFORM injects into the
- * running process — which is a reading, taken from inside.
+ * - `AWS_EXECUTION_ENV` = `AWS_ECS_FARGATE` — AWS's own injection, which says
+ *   this process is a Fargate task;
+ * - `AWS_REGION` — set by ECS on a Fargate task's containers;
+ * - `MOTIR_ECS_CLUSTER` — the ECS cluster core's services run in, put on the web
+ *   container by the infrastructure (MOTIR-10890).
  */
+
+/** The value AWS injects into `AWS_EXECUTION_ENV` on a Fargate task. */
+const FARGATE_EXECUTION_ENV = 'AWS_ECS_FARGATE';
 
 /** Which host is serving this process, in provider-neutral terms. */
 export interface DeploymentIdentity {
@@ -66,17 +63,23 @@ export interface DeploymentIdentity {
    * ordinary answer and not a failure: motir-core is GPL-3.0 and anyone may run
    * it somewhere this file has never heard of.
    */
-  provider: 'fly' | null;
-  /** The application's name on that platform. */
+  provider: 'fargate' | null;
+  /**
+   * The deployment's name on that platform: on Fargate, the ECS cluster core's
+   * services run in — the grouping that holds web, worker and relay.
+   */
   app: string | null;
   /** The region this particular instance is in. */
   region: string | null;
-  /** This instance's own id — the machine ANSWERING, not the fleet's size. */
+  /**
+   * This instance's own id — the task ANSWERING, not the fleet's size. Null on
+   * Fargate, which puts no per-task id in the container's environment.
+   */
   instanceId: string | null;
   /**
    * Where an operator goes to see the deployment itself, or `null` when there is
-   * no such place. Constructed from the app name rather than configured, so it
-   * cannot drift from the app actually running.
+   * no such place. Constructed from what the process reads rather than
+   * configured, so it cannot drift from the deployment actually running.
    */
   dashboardUrl: string | null;
 }
@@ -93,22 +96,36 @@ const UNMANAGED: DeploymentIdentity = {
 /**
  * Resolve the running deployment's identity.
  *
- * Keyed on the APP NAME, because that is the value Fly injects into every
- * machine and the one the dashboard URL needs; region and instance id are
- * reported when present and left null when not, rather than defaulted to a
- * placeholder that would read as a measurement.
+ * Keyed on `AWS_EXECUTION_ENV`, because that is AWS's own statement that this
+ * process is a Fargate task. Cluster and region are reported when present and
+ * left null when not, rather than defaulted to a placeholder that would read as
+ * a measurement.
  */
 export function deploymentIdentity(): DeploymentIdentity {
-  const app = nonEmpty(process.env['FLY_APP_NAME']);
-  if (!app) return UNMANAGED;
+  if (nonEmpty(process.env['AWS_EXECUTION_ENV']) !== FARGATE_EXECUTION_ENV) return UNMANAGED;
 
+  const region = nonEmpty(process.env['AWS_REGION']) ?? null;
   return {
-    provider: 'fly',
-    app,
-    region: hostRegion() ?? null,
-    instanceId: hostInstanceId() ?? null,
-    dashboardUrl: `https://fly.io/apps/${app}`,
+    provider: 'fargate',
+    app: nonEmpty(process.env['MOTIR_ECS_CLUSTER']) ?? null,
+    region,
+    instanceId: null,
+    dashboardUrl: region ? ecsClustersConsoleUrl(region) : null,
   };
+}
+
+/**
+ * The ECS console's clusters page for a region.
+ *
+ * A list, not a deep link to the cluster or a service: an operator opening the
+ * card mid-incident needs to land somewhere that exists, and the clusters page
+ * for the region always resolves (the same judgement `platformHealthService`
+ * records for the database console). The region is in the HOST, as AWS's own
+ * regional console URLs carry it.
+ */
+function ecsClustersConsoleUrl(region: string): string {
+  const r = encodeURIComponent(region);
+  return `https://${r}.console.aws.amazon.com/ecs/v2/clusters?region=${r}`;
 }
 
 /**

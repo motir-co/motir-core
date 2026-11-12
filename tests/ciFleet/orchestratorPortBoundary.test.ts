@@ -42,11 +42,13 @@ const ADAPTER_DIRS = [
   join('packages', 'orchestrator', 'src', 'adapters', 'fly'),
   join('lib', 'publicAddresses', 'adapters', 'fly'),
   // ⚠️ A THIRD PORT, NOT A WIDENING OF EITHER (MOTIR-7332). The DEPLOYMENT-STATUS
-  // port's adapter reads motir-core's OWN machines for the operator console's
-  // Hosting card, with its own read-only token (`FLY_DEPLOYMENT_READ_TOKEN`), and
-  // that token is read only there. It boots nothing and imports nothing from
+  // port's adapter reads motir-core's OWN services for the operator console's
+  // Hosting card. Since MOTIR-10952 that adapter is ECS's — it describes core's
+  // services over the web task's role and names no Fly at all — and it keeps its
+  // place here so the port's adapter directory stays the one the selector below
+  // is excused to name. It boots nothing and imports nothing from
   // `lib/orchestrator/`; its callers see `DeploymentStatus` only.
-  join('lib', 'deployment', 'adapters', 'fly'),
+  join('lib', 'deployment', 'adapters', 'ecs'),
 ];
 
 /**
@@ -150,10 +152,12 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
  *    The rule's REACH is nevertheless all of `lib/`, deliberately and correctly
  *    — a boundary guard narrowed to the directory it protects is one you evade
  *    by moving a file. So the answer is a REGISTERED exception in the shape the
- *    first one takes: one file, one narrow tell naming the four variables it
- *    was argued for (the fourth, `FLY_PROCESS_GROUP`, for the monitoring
- *    `instance.*` tags of MOTIR-8549, which read the host through this file), and the provider knowledge concentrated where a second
- *    deployment target is one more branch.
+ *    first one takes: one file, one narrow tell naming the three host-tag
+ *    variables it still reads (`FLY_MACHINE_ID`, `FLY_REGION` and
+ *    `FLY_PROCESS_GROUP`, for the terminal relay and the monitoring `instance.*`
+ *    tags of MOTIR-8549, which read the host through this file). Since
+ *    MOTIR-10952 `deploymentIdentity()` answers from Fargate and reads no
+ *    `FLY_APP_NAME`, so that name left the tell with the read.
  *
  *    The tell deliberately does NOT match `FLY_*` in general. A future
  *    `FLY_API_TOKEN` read in that file — the thing that would turn a passive
@@ -175,7 +179,7 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
 const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
   {
     file: join('lib', 'deployment', 'identity.ts'),
-    tell: /\bFLY_(APP_NAME|REGION|MACHINE_ID|PROCESS_GROUP)\b/,
+    tell: /\bFLY_(REGION|MACHINE_ID|PROCESS_GROUP)\b/,
     why: "answers where the WEB PROCESS runs, for the console's hosting card — not the fleet's port",
   },
   {
@@ -184,20 +188,21 @@ const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
     why: "the CERTIFICATE port's composition root — it selects that adapter, not the fleet's",
   },
   {
-    // The daily health check's credential registry (MOTIR-1933) DECLARES the
-    // read token by name so its expiry is watched (MOTIR-7332). It reads the
-    // variable's presence through the probe, never its value, and calls no API.
-    // MOTIR-9408 registers every other dated Fly token the same way: the
+    // The daily health check's credential registry (MOTIR-1933) DECLARES each
+    // dated Fly token by name so its expiry is watched (MOTIR-9408): the
     // certificates token and its app, the hosting org token and the index
-    // runners' deploy token. Each is a declared NAME and date, never a client.
+    // runners' deploy token. It reads a variable's presence through the probe,
+    // never its value, and calls no API. Each is a declared NAME and date, never
+    // a client. (The Hosting card's read token left the registry, and this tell,
+    // with its adapter in MOTIR-10952.)
     file: join('lib', 'health', 'credentialRegistry.ts'),
-    tell: /\b(FLY_DEPLOYMENT_READ_TOKEN|FLY_CERTS_TOKEN|FLY_CERTS_APP|FLY_FLEET_DEPLOY_TOKEN|MOTIR_HOSTING_FLY_API_TOKEN)\b/,
-    why: 'declares the expiry of each dated Fly token for the daily health check — names, not a client (MOTIR-7332, MOTIR-9408)',
+    tell: /\b(FLY_CERTS_TOKEN|FLY_CERTS_APP|FLY_FLEET_DEPLOY_TOKEN|MOTIR_HOSTING_FLY_API_TOKEN)\b/,
+    why: 'declares the expiry of each dated Fly token for the daily health check — names, not a client (MOTIR-9408)',
   },
   {
     file: join('lib', 'deployment', 'providers.ts'),
-    tell: /deployment\/adapters\/fly/,
-    why: "the DEPLOYMENT-STATUS port's composition root — it selects that adapter, not the fleet's (MOTIR-7332)",
+    tell: /deployment\/adapters\/ecs/,
+    why: "the DEPLOYMENT-STATUS port's composition root — it selects that adapter, not the fleet's (MOTIR-7332, MOTIR-10952)",
   },
   {
     // The AWS agent VM's boot script (MOTIR-10817) writes the EC2 instance id

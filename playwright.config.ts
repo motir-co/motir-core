@@ -196,15 +196,17 @@ const APP_SERVER_ENV = {
   E2E_PROD_HARNESS: '1',
   // Story 10.2 (MOTIR-7333): the system-health board's three providers,
   // bound to their in-memory fakes so the walk films populated cards without
-  // calling Sentry, Fly or the gateway. Read server-side at call time, so they
+  // calling Sentry, ECS or the gateway. Read server-side at call time, so they
   // must reach THIS process; each is refused in a production build unless
-  // E2E_PROD_HARNESS is also set. FLY_APP_NAME / FLY_REGION give the Hosting
-  // card the deployment identity it reports beside the fake fleet.
+  // E2E_PROD_HARNESS is also set. AWS_EXECUTION_ENV / MOTIR_ECS_CLUSTER give the
+  // Hosting card the Fargate identity it reports beside the fake services
+  // (MOTIR-10952). AWS_REGION is deliberately left unset, so no AWS SDK client
+  // in the server gains a region it would not have outside this lane.
   MOTIR_E2E_FAKE_ERROR_COUNT: '1',
   MOTIR_E2E_FAKE_DEPLOYMENT_STATUS: '1',
   MOTIR_E2E_FAKE_GATEWAY_STATUS: '1',
-  FLY_APP_NAME: 'motir-core-e2e',
-  FLY_REGION: 'iad',
+  AWS_EXECUTION_ENV: 'AWS_ECS_FARGATE',
+  MOTIR_ECS_CLUSTER: 'motir-core',
   // MOTIR-2816: the SERVER's own connection, and nothing else in the run.
   ...(APP_ROLE_SERVER && OWNER_DATABASE_URL
     ? { DATABASE_URL: appRoleDatabaseUrl(OWNER_DATABASE_URL) }

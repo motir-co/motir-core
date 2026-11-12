@@ -11047,23 +11047,28 @@
         },
         "hosting": {
           "title": "Hosting",
-          "value": "<appGroup>aplikacja {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "Wszystkie maszyny uruchomione, wszystkie w wydaniu {release}. Aplikacja Fly {app} · {region}.",
-          "degradedDetail": {
-            "shortGroup": "W grupie {group} brakuje maszyn: uruchomiono {started} z {expected}. Wydanie {release}.",
-            "mixedReleases": "Maszyny działają w różnych wydaniach ({count}) — wdrożenie mogło zatrzymać się w połowie. Najnowsze: {release}."
+          "value": "{serviceCount, plural, one {# usługa stabilna} few {Wszystkie # usługi stabilne} many {Wszystkie # usług stabilnych} other {Wszystkie # usługi stabilne}}",
+          "degradedValue": {
+            "shortGroup": "{group}: niedobór · {started}/{expected}",
+            "mixedReleases": "{group}: wdrożenie w toku"
           },
+          "detail": "Każda usługa uruchamia żądaną liczbę zadań i każda jest stabilna w swoim wydaniu. Klaster ECS {app} · {region}.",
+          "degradedDetail": {
+            "shortGroup": "{group} ma niedobór: działa {started} z {expected} zadań. Klaster ECS {app} · {region}.",
+            "mixedReleases": "{group} jest w trakcie wdrożenia {release}: aktywne jest więcej niż jedno wdrożenie albo jego rollout się nie zakończył. Klaster ECS {app} · {region}."
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "To nie jest zarządzany host",
             "noReadCredential": "Odpowiedź z {region}",
-            "readFailed": "Brak odpowiedzi z Fly"
+            "readFailed": "Brak odpowiedzi z ECS"
           },
           "unreachableDetail": {
-            "notManaged": "Ta kompilacja nie działa na Fly, więc nie ma pulpitu hostingu, do którego można by odesłać. Oczekiwane w instancji lokalnej lub hostowanej samodzielnie.",
-            "noReadCredential": "Aplikacja Fly {app} · maszyna {machineId}. Ta konsola nie ma jeszcze tokenu odczytu Fly, więc nie może policzyć maszyn ani wydań. To nie jest liczba zerowa.",
-            "readFailed": "Nie udało się teraz odczytać listy maszyn. To nie jest liczba zerowa."
+            "notManaged": "Ta kompilacja nie działa na AWS Fargate, więc nie ma konsoli hostingu, do której można odesłać. To oczekiwane w instancji lokalnej lub samodzielnie hostowanej.",
+            "noReadCredential": "Klaster ECS {app} · {region}. To wdrożenie nie wie, które usługi ECS są jego własne, więc ta konsola nie może policzyć zadań ani wydań. To nie jest liczba zerowa.",
+            "readFailed": "Nie udało się teraz opisać usług ECS. To nie jest liczba zerowa."
           },
-          "linkOut": "Pulpit Fly"
+          "linkOut": "Konsola ECS"
         },
         "gateway": {
           "title": "Brama",

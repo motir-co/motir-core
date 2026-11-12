@@ -27,15 +27,19 @@ export type PlatformSignalState = 'healthy' | 'degraded' | 'unreachable';
 export type PlatformSignalId =
   | 'database'
   /**
-   * The web deployment (MOTIR-1167, MOTIR-7332). `values` always carry the
-   * process's own identity — `app`, `region`, `machineId` — once on a managed
-   * host. On a read they add `<group>Started` / `<group>Expected` per process
-   * group (`appStarted`, `appExpected`, `workerStarted`, `workerExpected`) and
-   * `release` (the newest release a running machine carries). Degraded adds
-   * `reason`: `shortGroup` with `group`, `started` and `expected` for the first
-   * group short of its expectation, or `mixedReleases` with `count` (distinct
-   * releases running). Unreachable: `reason` — `notManaged` (no values),
-   * `noReadCredential` (identity only, no counts) or `readFailed` (no values).
+   * The web deployment (MOTIR-1167, MOTIR-7332, MOTIR-10952). `values` always
+   * carry the process's own identity once on a managed host — `app` (the ECS
+   * cluster core's services run in), `region` and `machineId` (`—` on Fargate,
+   * which injects no per-task id). On a read the signal adds `services` (below)
+   * and `serviceCount`; there is no fleet-wide release, because each service
+   * runs its own and they cannot be compared. Degraded adds `reason`:
+   * `shortGroup` with `group`, `started` and `expected` for the first service
+   * running fewer tasks than it desires, or `mixedReleases` with `group` and
+   * `release` for the first service mid-deploy (more than one deployment in
+   * play, or a rollout that did not complete). Unreachable: `reason` —
+   * `notManaged` (no values), `noReadCredential` (identity only, no counts: the
+   * deployment has not been told which services are its own) or `readFailed`
+   * (no values) — and never `services`.
    */
   | 'hosting'
   /**
@@ -82,11 +86,34 @@ export interface PlatformSignalDTO {
    * when this deployment has no such destination configured.
    *
    * ⚠️ Nullable ON PURPOSE. Motir is self-hostable, and a self-hosted instance
-   * has no Fly app and no Neon project; a hard-coded URL there would send an
+   * has no ECS cluster and no Neon project; a hard-coded URL there would send an
    * operator to somebody else's console. The label is the UI's; the target is
    * the deployment's.
    */
   linkOut: string | null;
+  /**
+   * One reading per service, for a signal that is about a SET of services (the
+   * Hosting card, MOTIR-10952), in the order the deployment names them. Absent on
+   * every other signal, and absent on an unreachable one: no reading was taken.
+   *
+   * A list rather than per-service `values` keys because the names are the
+   * deployment's, which a message catalogue cannot know at build time.
+   */
+  services?: PlatformSignalServiceDTO[];
+}
+
+/** One service's reading on a signal about a set of services. */
+export interface PlatformSignalServiceDTO {
+  /** The service's name on the platform — data, rendered inside the localized line. */
+  name: string;
+  /** Tasks running now. */
+  started: number;
+  /** Tasks the platform wants running. */
+  expected: number;
+  /** The release this service runs (`family:revision` on ECS), or `null` when none is named. */
+  release: string | null;
+  /** Mid-deploy: more than one deployment in play, or a rollout that did not complete. */
+  rolling: boolean;
 }
 
 /** One overdue cron, as the glance's single list renders it. */

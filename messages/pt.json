@@ -11047,23 +11047,28 @@
         },
         "hosting": {
           "title": "Hospedagem",
-          "value": "<appGroup>app {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "Todas as máquinas iniciadas, todas na release {release}. App do Fly {app} · {region}.",
-          "degradedDetail": {
-            "shortGroup": "{group} está incompleto: {started} de {expected} máquinas iniciadas. Release {release}.",
-            "mixedReleases": "As máquinas estão executando {count} releases diferentes — uma implantação pode ter parado no meio. Mais recente: {release}."
+          "value": "{serviceCount, plural, one {# serviço estável} other {Todos os # serviços estáveis}}",
+          "degradedValue": {
+            "shortGroup": "{group} incompleto · {started}/{expected}",
+            "mixedReleases": "{group} em implantação"
           },
+          "detail": "Cada serviço está executando as tarefas desejadas, cada um estável na sua release. Cluster do ECS {app} · {region}.",
+          "degradedDetail": {
+            "shortGroup": "{group} está incompleto: {started} de {expected} tarefas em execução. Cluster do ECS {app} · {region}.",
+            "mixedReleases": "{group} está em implantação na {release}: há mais de uma implantação em andamento, ou o rollout não foi concluído. Cluster do ECS {app} · {region}."
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "Não é um host gerenciado",
             "noReadCredential": "Respondendo de {region}",
-            "readFailed": "Sem resposta do Fly"
+            "readFailed": "Sem resposta do ECS"
           },
           "unreachableDetail": {
-            "notManaged": "Esta build não está rodando no Fly, então não há painel de hospedagem para indicar. Esperado em uma instância local ou auto-hospedada.",
-            "noReadCredential": "App do Fly {app} · máquina {machineId}. Este console ainda não tem um token de leitura do Fly, então não consegue contar máquinas nem releases. Isso não é uma contagem zero.",
-            "readFailed": "Não foi possível ler a lista de máquinas agora. Isso não é uma contagem zero."
+            "notManaged": "Este build não está rodando no AWS Fargate, então não há console de hospedagem para onde apontar. Esperado em uma instância local ou auto-hospedada.",
+            "noReadCredential": "Cluster do ECS {app} · {region}. Esta implantação não foi informada de quais serviços do ECS são seus, então este console não consegue contar tarefas nem releases. Isso não é uma contagem zero.",
+            "readFailed": "Não foi possível descrever os serviços do ECS agora. Isso não é uma contagem zero."
           },
-          "linkOut": "Painel do Fly"
+          "linkOut": "Console do ECS"
         },
         "gateway": {
           "title": "Gateway",

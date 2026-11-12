@@ -8,8 +8,9 @@ import enMessages from '@/messages/en.json';
  *
  * The board's three new readings come from the story's three E2E fakes, armed in
  * this lane's `webServer.env` (`playwright.acceptance.config.ts`): Errors reads a
- * fixed 24-hour count, Hosting a healthy two-group fleet on one release, Gateway a
- * reachable gateway. CI never calls Sentry, Fly or the gateway, and the failure
+ * fixed 24-hour count, Hosting two steady ECS services, each on its own release
+ * (MOTIR-10952), Gateway a reachable gateway. CI never calls Sentry, ECS or the
+ * gateway, and the failure
  * arms are proved against the real datastore by the story's integration gate
  * (`tests/platform/monitoringStoryGate.test.tsx`). Without the flags these cards
  * read `notConfigured` / `notManaged`, and every populated assertion below fails,
@@ -76,11 +77,15 @@ test('platform staff read the system-health board with its Errors, Hosting and G
     },
   );
 
-  await chapter('Hosting: every machine started in each group, all on one release', async () => {
-    await expect(board.getByText('app 2/2 · worker 1/1', { exact: true })).toBeVisible();
-    await expect(board.getByText(/all on release deployment-e2e/)).toBeVisible();
-    await beat();
-  });
+  await chapter(
+    'Hosting: every core service at its desired tasks, each on its own release',
+    async () => {
+      await expect(board.getByText('All 2 services steady', { exact: true })).toBeVisible();
+      await expect(board.getByText('web 2/2 · web:e2e', { exact: true })).toBeVisible();
+      await expect(board.getByText('worker 1/1 · worker:e2e', { exact: true })).toBeVisible();
+      await beat();
+    },
+  );
 
   await chapter('Gateway: reachable, with its latency and version', async () => {
     // Scoped to the Gateway card, never the whole board: the Database card renders

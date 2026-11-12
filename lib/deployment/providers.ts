@@ -9,7 +9,7 @@ import type { DeploymentStatusProvider } from '@/lib/deployment/deploymentStatus
 // adapter, an in-memory fake for the E2E lane, and nothing at all.
 //
 // ⚠️ THE FAKE CANNOT ARM IN A REAL PRODUCTION BUILD. A fake reporting a healthy
-// fleet in production would paint the Hosting card green while a machine is
+// fleet in production would paint the Hosting card green while a service is
 // down, which is the blindness this card exists to end. So the flag is read at
 // call time and refused when `NODE_ENV === 'production'` unless the E2E harness
 // is ALSO set (`lib/e2eProdHarness.ts`, set by a Playwright config and nothing
@@ -24,7 +24,7 @@ export function usingFakeDeploymentStatus(): boolean {
 }
 
 /**
- * The fake: a healthy two-group fleet on one release.
+ * The fake: two healthy services, each steady on its own release.
  *
  * Happy path only, deliberately. The short-group, mixed-release and failed-read
  * arms are proved at the service tier with a stubbed provider; the lane's job is
@@ -34,10 +34,16 @@ const fakeDeploymentStatusProvider: DeploymentStatusProvider = {
   configured: () => true,
   read: async () => ({
     groups: [
-      { name: 'app', started: 2, total: 2, expected: 2 },
-      { name: 'worker', started: 1, total: 1, expected: 1 },
+      { name: 'web', started: 2, total: 2, expected: 2, release: 'web:e2e', rolling: false },
+      {
+        name: 'worker',
+        started: 1,
+        total: 1,
+        expected: 1,
+        release: 'worker:e2e',
+        rolling: false,
+      },
     ],
-    releases: ['deployment-e2e'],
   }),
 };
 
@@ -48,10 +54,10 @@ const fakeDeploymentStatusProvider: DeploymentStatusProvider = {
  */
 export async function deploymentStatusProvider(): Promise<DeploymentStatusProvider | null> {
   if (usingFakeDeploymentStatus()) return fakeDeploymentStatusProvider;
-  if (deploymentIdentity().provider !== 'fly') return null;
+  if (deploymentIdentity().provider !== 'fargate') return null;
   // Lazily imported, so a deployment off the platform, and every unit test that
-  // does not ask, never loads the adapter.
-  const { flyDeploymentStatusProvider } =
-    await import('@/lib/deployment/adapters/fly/flyMachinesStatus');
-  return flyDeploymentStatusProvider;
+  // does not ask, never loads the adapter (or the AWS SDK under it).
+  const { ecsDeploymentStatusProvider } =
+    await import('@/lib/deployment/adapters/ecs/ecsServicesStatus');
+  return ecsDeploymentStatusProvider;
 }
