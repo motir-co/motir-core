@@ -21,7 +21,7 @@ vi.mock('@/lib/navigation/shallowUrl', async (importOriginal) => ({
   shallowPush,
 }));
 
-const { WorkItemNode, WorkItemCardShell, cardNextAction, isToPlanStory } =
+const { WorkItemNode, WorkItemCardShell, cardNextAction, isToPlanItem } =
   await import('@/components/planning/WorkItemNode');
 const { ToastProvider } = await import('@/components/ui/Toast');
 const { ProjectRoadmapCanvas } = await import('@/components/planning/ProjectRoadmapCanvas');
@@ -196,6 +196,9 @@ describe('cardNextAction — the state → action table (MOTIR-10508)', () => {
   it('an epic keeps its To plan, fix and In Review rows', () => {
     const epic = { ...base, kind: 'epic' } as const;
     expect(cardNextAction({ ...epic, toPlan: true, ready: true })).toEqual({ kind: 'plan' });
+    // MOTIR-10861: a To plan epic offers Plan only to a reader who may plan.
+    expect(cardNextAction({ ...epic, toPlan: true, options: { plan: false } })).toBeNull();
+    expect(cardNextAction({ ...epic, toPlan: true, ready: true, options: null })).toBeNull();
     expect(cardNextAction({ ...epic, ready: true, fixReason: 'ci_failed' })).toEqual({
       kind: 'copy',
       verb: 'fix',
@@ -214,33 +217,110 @@ describe('cardNextAction — the state → action table (MOTIR-10508)', () => {
   });
 });
 
-describe('isToPlanStory', () => {
+describe('isToPlanItem', () => {
+  const epic: WorkItemNodeData = {
+    ...story,
+    id: 'E1',
+    identifier: 'MOTIR-10861',
+    title: 'Shared calendars',
+    kind: 'epic',
+  };
+
   it('is a story KNOWN to have no children, in a todo-category status', () => {
-    expect(isToPlanStory(story)).toBe(true);
+    expect(isToPlanItem(story)).toBe(true);
     // A custom todo-category status counts — the rule is the category.
-    expect(isToPlanStory({ ...story, status: 'blocked', statusCategory: 'todo' })).toBe(true);
+    expect(isToPlanItem({ ...story, status: 'blocked', statusCategory: 'todo' })).toBe(true);
   });
 
-  it('is not a story with children, nor one whose children are unknown', () => {
-    expect(isToPlanStory({ ...story, hasChildren: true })).toBe(false);
-    expect(isToPlanStory({ ...story, hasChildren: undefined })).toBe(false);
+  // MOTIR-10861: an epic with no children still needs planning, like a story.
+  it('is an epic KNOWN to have no children, in a todo-category status', () => {
+    expect(isToPlanItem(epic)).toBe(true);
+    expect(isToPlanItem({ ...epic, status: 'blocked', statusCategory: 'todo' })).toBe(true);
   });
 
-  it('is not an In Progress or Done childless story', () => {
-    expect(isToPlanStory({ ...story, status: 'in_progress', statusCategory: 'in_progress' })).toBe(
+  it.each([
+    ['story', story],
+    ['epic', epic],
+  ] as const)('is not a %s with children, nor one whose children are unknown', (_kind, item) => {
+    expect(isToPlanItem({ ...item, hasChildren: true })).toBe(false);
+    expect(isToPlanItem({ ...item, hasChildren: undefined })).toBe(false);
+  });
+
+  it.each([
+    ['story', story],
+    ['epic', epic],
+  ] as const)('is not an In Progress or Done childless %s', (_kind, item) => {
+    expect(isToPlanItem({ ...item, status: 'in_progress', statusCategory: 'in_progress' })).toBe(
       false,
     );
-    expect(isToPlanStory({ ...story, status: 'done', statusCategory: 'done' })).toBe(false);
+    expect(isToPlanItem({ ...item, status: 'done', statusCategory: 'done' })).toBe(false);
   });
 
-  it('is never a task, a bug or an epic', () => {
-    expect(isToPlanStory({ ...story, kind: 'task' })).toBe(false);
-    expect(isToPlanStory({ ...story, kind: 'epic' })).toBe(false);
+  it.each(['task', 'bug', 'subtask'] as const)('is never a %s (a leaf)', (kind) => {
+    expect(isToPlanItem({ ...story, kind })).toBe(false);
   });
 
   it('falls back to the default todo key when the category did not travel', () => {
-    expect(isToPlanStory({ ...story, statusCategory: null })).toBe(true);
-    expect(isToPlanStory({ ...story, status: 'custom', statusCategory: null })).toBe(false);
+    expect(isToPlanItem({ ...story, statusCategory: null })).toBe(true);
+    expect(isToPlanItem({ ...story, status: 'custom', statusCategory: null })).toBe(false);
+    expect(isToPlanItem({ ...epic, statusCategory: null })).toBe(true);
+  });
+});
+
+describe('the To plan EPIC (MOTIR-10861; design MOTIR-11106)', () => {
+  const epic: WorkItemNodeData = {
+    ...story,
+    id: 'E1',
+    identifier: 'MOTIR-10861',
+    title: 'Shared calendars: invite a teammate and see their availability',
+    kind: 'epic',
+  };
+
+  it('a childless todo epic wears the To plan pill and the yellow wash, ready or not', () => {
+    for (const ready of [false, true]) {
+      const { container } = render(<WorkItemNode item={epic} ready={ready} />);
+      const card = frame(container);
+      expect(card.getAttribute('data-node-state')).toBe('to-plan');
+      expect(card.className).toContain('bg-(--el-tint-yellow)');
+      expect(screen.getByTestId('to-plan-pill').textContent).toBe('To plan');
+      expect(screen.queryByTestId('ready-pill')).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('offers the Plan button when the reader may plan, and none when they may not', () => {
+    render(<WorkItemNode item={epic} ready nextActions={ON} />);
+    expect(nextAction()?.getAttribute('data-action')).toBe('plan');
+    cleanup();
+    render(<WorkItemNode item={epic} ready nextActions={{ plan: false }} />);
+    expect(screen.getByTestId('to-plan-pill')).toBeTruthy();
+    expect(nextAction()).toBeNull();
+    cleanup();
+    render(<WorkItemNode item={epic} ready />);
+    expect(nextAction()).toBeNull();
+  });
+
+  it('a ready epic with children keeps the Ready pill and draws no button (MOTIR-10741)', () => {
+    const { container } = render(
+      <WorkItemNode item={{ ...epic, hasChildren: true }} ready drillable nextActions={ON} />,
+    );
+    expect(frame(container).getAttribute('data-node-state')).toBe('ready');
+    expect(screen.getByTestId('ready-pill')).toBeTruthy();
+    expect(screen.queryByTestId('to-plan-pill')).toBeNull();
+    expect(nextAction()).toBeNull();
+  });
+
+  it('an epic whose children are unknown, or in progress, or done, is not To plan', () => {
+    for (const item of [
+      { ...epic, hasChildren: undefined },
+      { ...epic, status: 'in_progress', statusCategory: 'in_progress' as const },
+      { ...epic, status: 'done', statusCategory: 'done' as const },
+    ]) {
+      render(<WorkItemNode item={item} nextActions={ON} />);
+      expect(screen.queryByTestId('to-plan-pill')).toBeNull();
+      expect(nextAction()).toBeNull();
+      cleanup();
+    }
   });
 });
 

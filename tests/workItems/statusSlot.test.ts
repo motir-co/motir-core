@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isReadyToStart, isToPlanStory, statusSlotOf } from '@/lib/workItems/statusSlot';
+import { isReadyToStart, isToPlanItem, statusSlotOf } from '@/lib/workItems/statusSlot';
 
 // The status slot's precedence (MOTIR-10534; design MOTIR-10508): Done › To plan ›
 // Ready › the status chip — the one rule the canvas, the board, the quick view and
@@ -25,16 +25,31 @@ describe('statusSlotOf', () => {
     expect(statusSlotOf(story, { ready: true, blocked: false })).toBe('to-plan');
   });
 
+  // MOTIR-10861: a childless todo-category epic is To plan too, ready or not.
+  it('a childless To Do epic is To plan, ready or not', () => {
+    const epic = {
+      kind: 'epic',
+      status: 'todo',
+      statusCategory: 'todo' as const,
+      hasChildren: false,
+    };
+    expect(statusSlotOf(epic, { ready: true, blocked: false })).toBe('to-plan');
+    expect(statusSlotOf(epic, { ready: false, blocked: false })).toBe('to-plan');
+    expect(statusSlotOf({ ...epic, hasChildren: true }, { ready: true, blocked: false })).toBe(
+      'ready',
+    );
+  });
+
   it('Ready, then the status chip', () => {
     expect(statusSlotOf(task, { ready: true, blocked: false })).toBe('ready');
     expect(statusSlotOf(task, { ready: false, blocked: false })).toBe('status');
   });
 });
 
-describe('isToPlanStory', () => {
+describe('isToPlanItem', () => {
   it('is a childless story in the todo category', () => {
     expect(
-      isToPlanStory({
+      isToPlanItem({
         kind: 'story',
         status: 'backlog',
         statusCategory: 'todo',
@@ -42,7 +57,7 @@ describe('isToPlanStory', () => {
       }),
     ).toBe(true);
     expect(
-      isToPlanStory({
+      isToPlanItem({
         kind: 'story',
         status: 'todo',
         statusCategory: 'in_progress',
@@ -51,19 +66,42 @@ describe('isToPlanStory', () => {
     ).toBe(false);
   });
 
-  it('needs hasChildren KNOWN false, and a story', () => {
-    expect(isToPlanStory({ kind: 'story', status: 'todo', statusCategory: 'todo' })).toBe(false);
+  it('is a childless epic in the todo category, Blocked included (MOTIR-10861)', () => {
+    const epic = {
+      kind: 'epic',
+      status: 'todo',
+      statusCategory: 'todo' as const,
+      hasChildren: false,
+    };
+    expect(isToPlanItem(epic)).toBe(true);
+    expect(isToPlanItem({ ...epic, status: 'blocked' })).toBe(true);
+    expect(isToPlanItem({ ...epic, hasChildren: true })).toBe(false);
+    expect(isToPlanItem({ kind: 'epic', status: 'todo', statusCategory: 'todo' })).toBe(false);
     expect(
-      isToPlanStory({ kind: 'story', status: 'todo', statusCategory: 'todo', hasChildren: true }),
+      isToPlanItem({ ...epic, status: 'in_progress', statusCategory: 'in_progress' as const }),
+    ).toBe(false);
+    expect(isToPlanItem({ ...epic, status: 'done', statusCategory: 'done' as const })).toBe(false);
+  });
+
+  it.each(['task', 'bug', 'subtask'])('is never a %s, a leaf', (kind) => {
+    expect(isToPlanItem({ kind, status: 'todo', statusCategory: 'todo', hasChildren: false })).toBe(
+      false,
+    );
+  });
+
+  it('needs hasChildren KNOWN false, and a story or an epic', () => {
+    expect(isToPlanItem({ kind: 'story', status: 'todo', statusCategory: 'todo' })).toBe(false);
+    expect(
+      isToPlanItem({ kind: 'story', status: 'todo', statusCategory: 'todo', hasChildren: true }),
     ).toBe(false);
     expect(
-      isToPlanStory({ kind: 'task', status: 'todo', statusCategory: 'todo', hasChildren: false }),
+      isToPlanItem({ kind: 'task', status: 'todo', statusCategory: 'todo', hasChildren: false }),
     ).toBe(false);
   });
 
   it('falls back to the default todo key when the category is missing, never a custom key', () => {
-    expect(isToPlanStory({ kind: 'story', status: 'todo', hasChildren: false })).toBe(true);
-    expect(isToPlanStory({ kind: 'story', status: 'backlog', hasChildren: false })).toBe(false);
+    expect(isToPlanItem({ kind: 'story', status: 'todo', hasChildren: false })).toBe(true);
+    expect(isToPlanItem({ kind: 'story', status: 'backlog', hasChildren: false })).toBe(false);
   });
 });
 

@@ -45,7 +45,7 @@ import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import { FolderPathLabel } from '@/components/planning/FolderPlacement';
 import { BlockedTag, WorkItemStateTags } from '@/components/workItems/WorkItemStateTags';
-import { isToPlanStory, statusSlotOf } from '@/lib/workItems/statusSlot';
+import { isToPlanItem, statusSlotOf } from '@/lib/workItems/statusSlot';
 
 // The CONTENT of a WORK-ITEM node on the project roadmap (Subtask 7.20.2 /
 // MOTIR-1194) — the card the reusable `ProjectRoadmapCanvas` renders for an epic /
@@ -147,7 +147,7 @@ export const KIND_TINT: Record<IssueType, string> = {
 // /boards card, the quick view and the item page draw an item's state the way this
 // card does. They are re-exported here for the callers that already import them.
 export { WorkItemStatusPill } from '@/components/workItems/WorkItemStateTags';
-export { isToPlanStory } from '@/lib/workItems/statusSlot';
+export { isToPlanItem } from '@/lib/workItems/statusSlot';
 
 /** One work item's disposition in a dispatch RUN, already resolved to a tone and
  *  a localized label by the consumer (MOTIR-3895). */
@@ -317,12 +317,13 @@ export function WorkItemNode({
   // plan / Ready like every other card's, and "here" rides its own tab.
   const slot = statusSlotOf(item, { ready, blocked: crossBlocked });
   const showDone = slot === 'done';
-  // TO PLAN (MOTIR-10508): a childless `todo` story. Precedence — blocked elsewhere
+  // TO PLAN (MOTIR-10508; epics since MOTIR-10861): a childless `todo` story or
+  // epic. Precedence — blocked elsewhere
   // > You are here > Done > To plan > Ready > not in sprint > normal. Blocked and
   // Here win the FRAME; the status slot keeps its own pill under both (under
-  // blocked as its glyph, by the give-way rule below). A `todo` story is never
+  // blocked as its glyph, by the give-way rule below). A `todo` story or epic is never
   // Done, so the Done arm cannot meet it; it is listed for the order's sake.
-  const toPlan = isToPlanStory(item);
+  const toPlan = isToPlanItem(item);
   const showToPlanPill = slot === 'to-plan';
   const showToPlanWash = showToPlanPill && !crossBlocked;
   const showReadyPill = slot === 'ready';

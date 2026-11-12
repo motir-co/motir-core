@@ -329,9 +329,17 @@ export async function seedDoneReadyRoadmap(email: string): Promise<DoneReadyRoad
   );
   await moveToDone(done.id, ctx);
 
-  // A to-do, fully-unblocked epic → READY.
+  // A to-do, fully-unblocked epic WITH a child → READY. It needs the child: a
+  // childless To Do epic is To plan, not Ready (MOTIR-10861).
   const readyTitle = 'Up next';
-  await workItemsService.createWorkItem({ projectId, kind: 'epic', title: readyTitle }, ctx);
+  const ready = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: readyTitle },
+    ctx,
+  );
+  await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: 'First slice', parentId: ready.id },
+    ctx,
+  );
 
   await db.project.update({ where: { id: projectId }, data: { onboardingRanAt: new Date() } });
 
