@@ -65,6 +65,11 @@ const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
     tell: /publicAddresses\/adapters\/fly|flyCertificateProvider/,
     why: 'the composition root — it selects between the Fly adapter and the E2E fake',
   },
+  {
+    file: join('lib', 'health', 'credentialRegistry.ts'),
+    tell: /\b(FLY_CERTS_TOKEN|FLY_CERTS_APP)\b/,
+    why: "declares the certificate token's expiry for the daily health check — a name, not a client (MOTIR-7332, MOTIR-9408)",
+  },
 ];
 
 /** The composition root may also DECLARE an implementation: the fake it selects. */
