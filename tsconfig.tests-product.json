@@ -59,8 +59,6 @@
     "tests/boards/**/*.tsx",
     "tests/i18n/**/*.ts",
     "tests/i18n/**/*.tsx",
-    "tests/loadtest/**/*.ts",
-    "tests/loadtest/**/*.tsx",
     "tests/monitoring/**/*.ts",
     "tests/monitoring/**/*.tsx",
     "tests/monitors/**/*.ts",

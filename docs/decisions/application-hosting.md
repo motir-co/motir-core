@@ -2840,7 +2840,11 @@ motir-core's `main` at `d5b2aed30`, 2026-11-12:
 | The Fly fleet (kept capacity)          | `packages/orchestrator/src/adapters/fly/flyMachines.ts`, `persistent.ts`, `inventory.ts`, `indexImage.ts`, `index.ts` in the same directory | Fly, org `motir-fleet`   |
 | Customer-domain certificates           | `lib/publicAddresses/adapters/fly/flyCertificates.ts` (`public-tenant-addresses.md` §6)                                                     | Fly's certificates API   |
 | The Hosting signal, until it reads ECS | `lib/deployment/adapters/fly/flyMachinesStatus.ts`, which [MOTIR-10952](motir:cmwc644qw00b201adjwb8080a) replaces                           | Fly, read-only           |
-| The staging load test                  | `loadtest/run/fly.ts`, `loadtest/run/neon.ts`, `loadtest/capture/neon.ts`, which [MOTIR-10962](motir:cmwc6459100c601ad5ivurvew) clears      | Fly and Neon             |
+
+2026-11-12: the staging load test no longer reaches Fly or Neon. Its harness
+(`loadtest/`) was retired by [MOTIR-11141](motir:cmwdyjj8w058101ad97p0ne3e)'s
+merge, which removed its row from this table; the dated reports under
+`loadtest/reports/` stay as history.
 
 **The old copies are this story's to destroy, and this amendment does not
 restate their readings.** The final exports are recorded on

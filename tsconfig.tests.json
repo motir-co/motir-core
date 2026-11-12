@@ -111,7 +111,6 @@
     "tests/billing/**",
     "tests/boards/**",
     "tests/i18n/**",
-    "tests/loadtest/**",
     "tests/monitoring/**",
     "tests/monitors/**",
     "tests/organizations/**",

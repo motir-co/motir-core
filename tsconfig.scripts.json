@@ -26,13 +26,8 @@
     "scripts/**/*.mts",
     "scripts/**/*.mjs",
     "scripts/**/*.js",
-    "loadtest/**/*.ts",
-    "loadtest/**/*.mjs",
-    "loadtest/**/*.js",
     "prisma.config.ts"
   ],
-  // `loadtest/**` (Story MOTIR-8538) is the staging load test: its scripts run under
-  // tsx like `scripts/`, and `tests/loadtest/` imports them by path.
   // `scripts/ci/typecheck-baseline/` is the BASELINE PROBE (MOTIR-4422) — its own
   // project, off the solution, reached only by
   // `assert-typecheck-headroom.mjs --baseline`. Excluded here because a file
