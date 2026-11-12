@@ -144,7 +144,10 @@ const inTx = <T>(
 const itemRow = (id: string) => adminDb.workItem.findUniqueOrThrow({ where: { id } });
 const gateRow = (id: string) => adminDb.approvalGate.findUniqueOrThrow({ where: { id } });
 const setMode = (mode: 'auto' | 'manual') =>
-  adminDb.project.update({ where: { id: fx.projectId }, data: { prMergeMode: mode } });
+  adminDb.project.update({
+    where: { id: fx.projectId },
+    data: { prMergeMode: mode, prMergeModeDecidedAt: new Date() },
+  });
 
 describe('the MEMBER VERSION rule, when there is no head', () => {
   // The spelling outlived the handler it was written in: MOTIR-5616 retired the

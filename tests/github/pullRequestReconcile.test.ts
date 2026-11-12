@@ -257,6 +257,11 @@ async function linkedCard(
   if ((await statusOf(item.id)) !== 'implemented') {
     await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
   }
+  // The SETUP's host reads are not what this suite measures. Since MOTIR-11040 a
+  // link records its pull request's repository in the project's set, and the link
+  // check then reads each head it can now judge — so the calls are cleared here,
+  // leaving every count below to the reconcile pass alone.
+  fetchMock.mockClear();
   return item;
 }
 

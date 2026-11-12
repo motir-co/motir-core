@@ -3,7 +3,6 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ParsedAgentCommand } from './agentProfiles.js';
-import type { components } from './api/index.js';
 import { createAgentStreamFormatter, lookupSessionId } from './agentStreamLog.js';
 import { CliError } from './errors.js';
 import { DESIGN_SUBDIR, MOTIR_DESIGN_DIR_ENV } from './designFiles.js';
@@ -125,25 +124,16 @@ export interface AgentRunResult {
   repository?: AgentRepositoryRequest | null;
 }
 
-/** A project repository's role — the closed list the server's body schema accepts. */
-export type AgentRepositoryRole =
-  components['schemas']['DispatchRunRepository']['repository']['role'];
-
 /**
- * The roles, at runtime. Checked against the GENERATED type both ways below, so a role the
- * server adds (or drops) fails the CLI's type-check here rather than parsing to null.
+ * The roles, at runtime — the closed list the server's body schema accepts. Held against
+ * the GENERATED wire type both ways in `adapters/dispatchRunRepository.ts` (the only side
+ * of the boundary allowed to see it, ADR cli-v1-client.md Q4), so a role the server adds
+ * (or drops) fails the CLI's type-check there rather than parsing to null.
  */
-export const AGENT_REPOSITORY_ROLES = [
-  'web',
-  'api',
-  'mobile',
-  'shared',
-  'infra',
-  'other',
-] as const satisfies readonly AgentRepositoryRole[];
-type MissingRole = Exclude<AgentRepositoryRole, (typeof AGENT_REPOSITORY_ROLES)[number]>;
-const _everyRoleListed: [MissingRole] extends [never] ? true : MissingRole = true;
-void _everyRoleListed;
+export const AGENT_REPOSITORY_ROLES = ['web', 'api', 'mobile', 'shared', 'infra', 'other'] as const;
+
+/** A project repository's role. */
+export type AgentRepositoryRole = (typeof AGENT_REPOSITORY_ROLES)[number];
 
 /** The repository an init card's agent asks for: a bare name, a role, and an optional base. */
 export interface AgentRepositoryRequest {

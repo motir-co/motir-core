@@ -77,7 +77,10 @@ export async function seedFixingMoving(slug: string): Promise<FixingMovingSeed> 
     workspaceId: workspace.id,
     actorUserId: person.id,
   });
-  await adminDb.project.update({ where: { id: project.id }, data: { prMergeMode: 'manual' } });
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { prMergeMode: 'manual', prMergeModeDecidedAt: new Date() },
+  });
   await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: person.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },

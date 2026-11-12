@@ -71,7 +71,10 @@ export async function seedDecisionGate(slug: string): Promise<DecisionGateSeed> 
     actorUserId: owner.id,
   });
   // A person approves before anything merges — the mode where one press answers both.
-  await adminDb.project.update({ where: { id: project.id }, data: { prMergeMode: 'manual' } });
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { prMergeMode: 'manual', prMergeModeDecidedAt: new Date() },
+  });
   await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },

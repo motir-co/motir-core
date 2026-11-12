@@ -106,7 +106,7 @@ async function card(opts: {
 }) {
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { prMergeMode: opts.mode ?? 'manual' },
+    data: { prMergeMode: opts.mode ?? 'manual', prMergeModeDecidedAt: new Date() },
   });
   const item = await workItemsService.createWorkItem(
     {

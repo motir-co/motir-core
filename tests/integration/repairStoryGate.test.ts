@@ -364,12 +364,20 @@ describe('guard — the refusal matrix', () => {
           await workItemsService.updateStatus(child.id, 'in_progress', s.ctx);
           await workItemsService.updateStatus(child.id, 'implemented', s.ctx);
           const repo = await adminDb.githubRepo.findFirstOrThrow({ where: { name: 'acme' } });
-          await linkProjectRepo({
-            workspaceId: s.workspace.id,
-            projectId: s.project.id,
-            githubRepoId: repo.id,
-            name: 'acme',
+          // An earlier row's pull-request link may already have recorded `acme` in the
+          // project's set (MOTIR-11040 adopts a linked pull request's repository), so
+          // the row is linked only where it is not listed yet.
+          const listed = await adminDb.projectRepo.findFirst({
+            where: { projectId: s.project.id, name: 'acme' },
           });
+          if (!listed) {
+            await linkProjectRepo({
+              workspaceId: s.workspace.id,
+              projectId: s.project.id,
+              githubRepoId: repo.id,
+              name: 'acme',
+            });
+          }
           await testInstructionsService.publish(
             {
               workItemId: story.id,

@@ -95,7 +95,10 @@ export async function seedApproveAndMerge(slug: string): Promise<ApproveAndMerge
     actorUserId: owner.id,
   });
   // A person approves a green pull request before it merges — the mode this story is for.
-  await adminDb.project.update({ where: { id: project.id }, data: { prMergeMode: 'manual' } });
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { prMergeMode: 'manual', prMergeModeDecidedAt: new Date() },
+  });
 
   const bystander = await createTestPerson({
     email: bystanderEmail,

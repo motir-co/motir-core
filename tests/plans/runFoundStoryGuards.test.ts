@@ -61,6 +61,8 @@ const NEVER_A_REVISION_KEY: Record<string, string> = {
   implementationHarness: 'provenance of the run that built it',
   implementationModel: 'provenance of the run that built it',
   subject: 'a plan-session anchor, not the card’s shape',
+  initRepositoryName:
+    'the repository an init card creates, written once from its plan proposal, never a revision (MOTIR-11051)',
   triagedAt: 'intake bookkeeping',
   snoozedUntil: 'intake bookkeeping',
   submittedByUserId: 'intake provenance',

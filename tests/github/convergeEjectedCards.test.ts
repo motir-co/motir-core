@@ -100,7 +100,10 @@ async function strandedCard(fx: WorkItemFixture, title: string, exitHead = HEAD)
 }
 
 async function setMode(fx: WorkItemFixture, mode: 'manual' | 'auto') {
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { prMergeMode: mode } });
+  await adminDb.project.update({
+    where: { id: fx.projectId },
+    data: { prMergeMode: mode, prMergeModeDecidedAt: new Date() },
+  });
 }
 
 const statusOf = async (id: string) =>

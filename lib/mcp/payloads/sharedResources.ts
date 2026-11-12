@@ -159,6 +159,13 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
   // ⚠️ `ProjectRepository` LEFT this list with MOTIR-11038: the entry said it closes the
   // day an agent surface needs a project's repository row, and `create_project_repository`
   // is that surface — its payload PROBES the resource (`payloads/projectRepositories.ts`).
+  DispatchRunRepository:
+    'The run\u2019s REPOSITORY door (Story MOTIR-10162 \u00b7 MOTIR-11055) answers a run\u2019s own ' +
+    'credential, and a run token never reaches `/api/mcp` (`lib/mcp/auth.ts`), so it shares ' +
+    '`DispatchRun`\u2019s reason. The agent-facing door for the same write is ' +
+    '`create_project_repository`, whose payload PROBES `ProjectRepository` \u2014 the row this ' +
+    'answer wraps \u2014 so the shape a session reads IS checked; this envelope is the run ' +
+    'ingest\u2019s, never an MCP payload.',
   TransitionList:
     'The list of legal transition targets is published by `GET …/transitions`. On MCP it is ' +
     'not a payload at all: `transition_status` names the allowed targets inside an ERROR ' +

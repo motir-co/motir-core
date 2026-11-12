@@ -438,7 +438,7 @@ async function openProposalPeek(list: Locator, title: string): Promise<Locator> 
   await reviewRow(list, title)
     .getByRole('button', { name: new RegExp(`· ${escape(title)}$`) })
     .click();
-  const peek = page.getByTestId('proposal-peek');
+  const peek = page.getByRole('dialog').getByTestId('proposal-peek');
   await expect(peek).toBeVisible();
   await expect(railValue(peek, peekCopy.repositories)).toBeVisible();
   return peek;
@@ -529,7 +529,7 @@ test('a plan needing a new repository lays one init card ahead of the work, and 
 
   await chapter(CHAPTERS[1], async () => {
     // The hosted arm: the init card's peek draws no repository.
-    const hostedList = page.getByTestId('plan-proposal-list');
+    const hostedList = page.getByRole('main').getByTestId('plan-proposal-list');
     const hostedPeek = await openProposalPeek(hostedList, TITLE.ledgerInit);
     expect(await railRepositories(hostedPeek)).toEqual([]);
     await expect(railValue(hostedPeek, peekCopy.repositories)).not.toContainText(LEDGER_REPO);
@@ -575,7 +575,7 @@ test('a plan needing a new repository lays one init card ahead of the work, and 
 
     // The decided record: its adds read as Created.
     expect((await page.goto(`/plans/${ledger.planId}`))?.status()).toBe(200);
-    const views = page.getByTestId('plan-proposal-views');
+    const views = page.getByRole('main').getByTestId('plan-proposal-views');
     await expect(views).toBeVisible({ timeout: 30_000 });
     await views
       .getByRole('group', { name: reviewCopy.viewSwitchAria })

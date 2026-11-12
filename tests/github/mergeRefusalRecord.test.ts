@@ -55,7 +55,10 @@ async function scenario(email: string, mode: 'manual' | 'auto' = 'manual') {
     name: 'Acme',
     identifier: 'ACME',
   });
-  await adminDb.project.update({ where: { id: project.id }, data: { prMergeMode: mode } });
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { prMergeMode: mode, prMergeModeDecidedAt: new Date() },
+  });
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: {
