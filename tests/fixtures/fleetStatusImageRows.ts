@@ -2,11 +2,13 @@ import type {
   FleetImagePublishDTO,
   FleetPublishRecordDTO,
   HostedImageReadDTO,
+  IndexerImageReadDTO,
   RunnerImageReadDTO,
   SandboxImageReadDTO,
 } from '@/lib/dto/fleetStatusImages';
 
-// Read rows of the Fleet status page's three image cards (MOTIR-10886), shaped as
+// Read rows of the Fleet status page's four image cards (MOTIR-10886; the indexer
+// MOTIR-10986), shaped as
 // the service answers them, for the verdict, card and page suites. Each builder
 // takes a shallow override.
 
@@ -95,6 +97,55 @@ export function runnerRow(over: Partial<RunnerImageReadDTO> = {}): RunnerImageRe
         inputs: { pin_digest: NEWEST_DIGEST, pin_version: '0.2.6' },
         from: `runner-v0.2.4 (${PINNED_DIGEST})`,
         to: `runner-v0.2.6 (${NEWEST_DIGEST})`,
+        target: NEWEST_DIGEST,
+      },
+    }),
+    ...over,
+  };
+}
+
+export const INDEXER_REPO = '944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/indexer';
+export const INDEXER_PINNED_COMMIT = '6593d89d76a7da34b76588c1b54ba3007bea4186';
+export const INDEXER_NEWEST_COMMIT = 'b984f606eca59691f1771ff32c163f2b48ce4132';
+
+/** The indexer row behind by one release, as production stood on 2026-11-11. */
+export function indexerRow(over: Partial<IndexerImageReadDTO> = {}): IndexerImageReadDTO {
+  return {
+    status: 'read',
+    pinned: {
+      state: 'read',
+      value: {
+        digest: PINNED_DIGEST,
+        commit: INDEXER_PINNED_COMMIT,
+        createdAt: '2026-10-30T10:00:00Z',
+        version: '0.5.0',
+      },
+    },
+    newest: {
+      state: 'read',
+      value: {
+        digest: NEWEST_DIGEST,
+        commit: INDEXER_NEWEST_COMMIT,
+        createdAt: '2026-11-11T10:00:00Z',
+        version: '0.5.1',
+      },
+    },
+    behind: true,
+    releasesBetween: ['indexer-v0.5.1'],
+    daysBehind: 12,
+    indexerCommits: 2,
+    compareUrl: 'https://github.com/motir-co/motir-ai/compare/indexer-v0.5.0...indexer-v0.5.1',
+    history: { state: 'read' },
+    unreleased: [],
+    nextTag: 'indexer-v0.5.2',
+    publish: publishIdle({
+      blocked: null,
+      target: {
+        workflow: 'indexer-image-pin.yml',
+        ref: 'main',
+        inputs: { pin_reference: `${INDEXER_REPO}@${NEWEST_DIGEST}`, pin_version: '0.5.1' },
+        from: `indexer-v0.5.0 (${PINNED_DIGEST})`,
+        to: `indexer-v0.5.1 (${NEWEST_DIGEST})`,
         target: NEWEST_DIGEST,
       },
     }),

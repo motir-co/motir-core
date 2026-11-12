@@ -11,12 +11,15 @@ import {
   EXIT_OK,
   SIGNAL_LABEL,
   decideRetry,
+  issueBody,
   issueTitle,
   judgeRetry,
 } from '../../scripts/mainCiRetry.mjs';
 
-// MOTIR-4607 — a red or cancelled push-to-`main` CI run deploys nothing, and
-// until this lane nothing re-attempted it.
+// MOTIR-4607, re-purposed by MOTIR-11060 — the push-to-`main` CI run releases
+// nothing any more (`aws-deploy.yml` ships the services); it is the tripwire a
+// merge that bypassed the queue meets, and its red is nobody's. So a red or
+// cancelled push run is re-attempted once, and only a second red is raised.
 //
 // Three properties matter, and each is DEMONSTRATED here rather than asserted:
 //
@@ -24,7 +27,8 @@ import {
 //      is re-run exactly once, and the attempt-2 `workflow_run` event that a
 //      re-run delivers is fed straight back in and produces ZERO writes.
 //   2. It never re-runs a run whose commit is no longer `main`'s head — that
-//      would deploy an older commit over a newer one.
+//      would re-check a tree `main` no longer is, and the newer push run
+//      already checks these commits.
 //   3. A run that fails twice raises a signal that is not a red check: an issue,
 //      assigned to whoever merged, deduplicated per commit.
 
@@ -74,13 +78,14 @@ describe('decideRetry — whether a finished CI run is re-attempted', () => {
     expect(decision.reason).toContain('already re-attempted');
   });
 
-  it('skips a run whose commit is no longer the head of main — re-running it would deploy OLDER code', () => {
+  it('skips a run whose commit is no longer the head of main — the newer push run checks it', () => {
     const decision = decideRetry({ ...base, headSha: OLDER });
     expect(decision.action).toBe('skip');
     expect(decision.reason).toContain('superseded');
+    expect(decision.reason).toContain('the newer push run checks these commits');
   });
 
-  it('leaves pull-request and merge-queue runs alone — only the push run deploys', () => {
+  it('leaves pull-request and merge-queue runs alone — only the push run is the unowned tripwire', () => {
     expect(decideRetry({ ...base, event: 'pull_request' }).action).toBe('skip');
     expect(decideRetry({ ...base, event: 'merge_group' }).action).toBe('skip');
     expect(decideRetry({ ...base, headBranch: 'feature' }).action).toBe('skip');
@@ -115,6 +120,35 @@ describe('judgeRetry — what the re-attempt means', () => {
 
   it('is SUPERSEDED, not failed twice, when main moved on while attempt 2 ran', () => {
     expect(judgeRetry({ ...after, mainHeadSha: OLDER }).outcome).toBe('superseded');
+  });
+});
+
+// MOTIR-11060 — ci.yml's push run deploys nothing since MOTIR-10935, so no text
+// the lane writes may tell a person that a red run left commits undeployed.
+describe('the signal says what a red push run means now — main is red, not undeployed', () => {
+  const body = issueBody({
+    runUrl: 'https://github.com/acme/app/actions/runs/1',
+    headSha: HEAD,
+    firstConclusion: 'failure',
+    secondConclusion: 'failure',
+    actor: 'merger',
+  });
+
+  it('titles the issue by commit and names the tripwire in its body', () => {
+    expect(issueTitle(HEAD)).toBe(`CI on main failed twice at ${HEAD.slice(0, 8)}`);
+    expect(body).toContain('`main` is red at this commit');
+    expect(body).toContain('tripwire');
+    expect(body).toContain('- merged by: @merger');
+  });
+
+  it('claims no deploy anywhere — not in the title, the body or a verdict reason', () => {
+    const reasons = [
+      decideRetry({ ...base, headSha: OLDER }).reason,
+      judgeRetry({ conclusion: 'failure', runAttempt: 2, headSha: HEAD, mainHeadSha: HEAD }).reason,
+    ];
+    for (const text of [issueTitle(HEAD), body, ...reasons]) {
+      expect(text).not.toMatch(/deploy/i);
+    }
   });
 });
 
@@ -343,6 +377,13 @@ describe('the runner re-attempts once and cannot re-trigger itself', () => {
 describe('the lane is wired to the script, and bounded', () => {
   const lane = readFileSync(join(ROOT, '.github/workflows/main-ci-retry.yml'), 'utf8');
   const ci = readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+
+  it('states its purpose as the tripwire, not as reaching a deploy in ci.yml (MOTIR-11060)', () => {
+    expect(lane).toContain('TRIPWIRE');
+    expect(lane).toContain('it gates no');
+    expect(lane).not.toMatch(/`deploy` lives only in the push-to-`main` run/);
+    expect(lane).not.toMatch(/would deploy/i);
+  });
 
   it('triggers on CI completing on main — and on nothing else, so it can never trigger itself', () => {
     expect(lane).toMatch(

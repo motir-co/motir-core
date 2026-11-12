@@ -299,6 +299,8 @@ export default defineConfig({
         'app/**/admin/fleet-status/_components/PoolDisclosure.tsx',
         'lib/awsServices/ec2VcpuQuotaReader.ts',
         'lib/services/fleetStatusPoolsService.ts',
+        // MOTIR-10986 — the Indexer image card's ECR read. Pinned at 90 in `thresholds`.
+        'lib/awsServices/ecrImagesReader.ts',
         'lib/ideas/consoleActor.ts',
         'lib/services/ideasAdminService.ts',
         'lib/services/ideasPublicService.ts',
@@ -6730,6 +6732,12 @@ export default defineConfig({
           lines: 90,
         },
         'lib/awsServices/ec2VcpuQuotaReader.ts': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/awsServices/ecrImagesReader.ts': {
           statements: 90,
           branches: 90,
           functions: 90,

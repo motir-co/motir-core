@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { amiBuiltAt, imageVerdict, shortCommit, shortDigest } from '@/lib/fleetStatus/imageVerdict';
 import {
   hostedRow,
+  indexerRow,
   NEWEST_DIGEST,
   publishIdle,
   runnerRow,
@@ -67,6 +68,38 @@ describe('imageVerdict', () => {
       kind: 'release_needed',
     });
     expect(imageVerdict(runnerRow({ behind: false }))).toEqual({ kind: 'up_to_date' });
+  });
+
+  // MOTIR-10986 — the indexer reads as the runner, except that a pin or a
+  // newest release nobody answered for is Not read, ahead of any publish state.
+  it('indexer: releases behind, release needed, up to date, and Not read for an unread part', () => {
+    expect(imageVerdict(indexerRow())).toEqual({ kind: 'releases_behind', count: 1 });
+    const change = {
+      commit: 'abc',
+      committedAt: '2026-11-12T00:00:00Z',
+      subject: 'fix',
+      paths: ['src/indexer'],
+      relation: 'ahead' as const,
+    };
+    expect(imageVerdict(indexerRow({ behind: false, unreleased: [change] }))).toEqual({
+      kind: 'release_needed',
+    });
+    expect(imageVerdict(indexerRow({ behind: false }))).toEqual({ kind: 'up_to_date' });
+    const unread = { state: 'not_read' as const, source: 'aws' as const, detail: 'x' };
+    expect(imageVerdict(indexerRow({ pinned: unread }))).toEqual({ kind: 'not_read' });
+    expect(
+      imageVerdict(
+        indexerRow({
+          newest: unread,
+          publish: publishIdle({ progress: { state: 'failed', endedAt: 'x', error: null } }),
+        }),
+      ),
+    ).toEqual({ kind: 'not_read' });
+    // The history alone not answering leaves the compare standing.
+    expect(imageVerdict(indexerRow({ history: { ...unread, source: 'github' } }))).toEqual({
+      kind: 'releases_behind',
+      count: 1,
+    });
   });
 
   it('sandbox: tags missing, or up to date', () => {

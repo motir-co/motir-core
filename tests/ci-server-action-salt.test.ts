@@ -1,6 +1,8 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 
 // The Server Action SALT is pinned across builds (MOTIR-3948).
 //
@@ -99,5 +101,48 @@ describe('the release build supplies it', () => {
     expect(releaseBuild()).toMatch(
       new RegExp(`^\\s*${KEY}=\\$\\{\\{ secrets\\.${KEY} \\}\\}$`, 'm'),
     );
+  });
+});
+
+describe('the release lane refuses to release without it (MOTIR-11059)', () => {
+  const guard = (
+    parse(awsDeploy) as {
+      jobs: {
+        'aws-deploy': { steps: { name?: string; run?: string; env?: Record<string, string> }[] };
+      };
+    }
+  ).jobs['aws-deploy'].steps.find((s) => s.name === 'Assert the Server Action salt is pinned');
+
+  function run(value: string | undefined) {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'test', PATH: process.env['PATH'] ?? '' };
+    if (value !== undefined) env[KEY] = value;
+    const result = spawnSync('bash', ['-e', '-c', guard!.run!], { env, encoding: 'utf8' });
+    return { status: result.status, out: `${result.stdout}${result.stderr}` };
+  }
+
+  it('reads the value from the repository secret, never from a literal', () => {
+    expect(guard, 'aws-deploy.yml has the salt guard').toBeDefined();
+    expect(guard!.env?.[KEY]).toBe(`\${{ secrets.${KEY} }}`);
+  });
+
+  it.each([
+    ['empty', ''],
+    ['unset', undefined],
+  ])(
+    'stops the release when the secret is %s, rather than shipping a re-salted build',
+    (_, value) => {
+      // An empty value is not a degraded release — it is MOTIR-3948, shipped
+      // again, silently: the build succeeds, the tasks are healthy, and every open
+      // tab loses its writes.
+      const { status, out } = run(value);
+      expect(status).toBe(1);
+      expect(out).toContain(`::error::Missing ${KEY}`);
+    },
+  );
+
+  it('lets the release through when the salt is pinned', () => {
+    const { status, out } = run('c2FsdA==');
+    expect(status).toBe(0);
+    expect(out).toContain('the Server Action salt is pinned');
   });
 });

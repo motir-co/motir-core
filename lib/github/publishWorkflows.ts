@@ -3,8 +3,9 @@
 // say why a run failed, and the small history reads the page's gap lines need.
 //
 // A LEAF PRIMITIVE in the `lib/github/appAuth.ts` sense: services import it,
-// routes never do. Every call names its repository; today that is only
-// motir-core, where all three publish workflows live. The token is the caller's
+// routes never do. Every call names its repository; today that is
+// motir-core, where every publish workflow lives, and motir-ai, whose indexer
+// history the indexer row reads (MOTIR-10986). The token is the caller's
 // (`sourceRepoToken`): the reads also work anonymously on the public repository,
 // the dispatch does not.
 //
@@ -171,6 +172,86 @@ async function listRuns(
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** A commit that touched one or more of the paths asked about. */
+export interface PathCommit {
+  sha: string;
+  /** ISO-8601 committer date. */
+  committedAt: string;
+  /** The first line of the commit message. */
+  subject: string;
+  paths: string[];
+}
+
+/** The commits `base...head` lists, read up to its page bound. `exact` is
+ *  whether every one of them was read; `since` is the merge base's date. */
+async function compareCommits(
+  repo: RepoRef,
+  base: string,
+  head: string,
+  token: string | null,
+): Promise<{ between: Set<string>; total: number; exact: boolean; since: string }> {
+  const between = new Set<string>();
+  let total = 0;
+  let since: string | null = null;
+  for (let page = 1; page <= MAX_COMPARE_PAGES; page += 1) {
+    const { status, body } = await call(
+      'GET',
+      `${repoPath(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}?per_page=100&page=${page}`,
+      token,
+    );
+    const compare = asRecord(body);
+    const commits = compare?.['commits'];
+    if (!Array.isArray(commits)) throw new PublishWorkflowError(status, 'compare had no commits');
+    const totalCommits = compare?.['total_commits'];
+    total = typeof totalCommits === 'number' ? totalCommits : commits.length;
+    if (since === null) {
+      const date = asRecord(
+        asRecord(asRecord(compare?.['merge_base_commit'])?.['commit'])?.['committer'],
+      )?.['date'];
+      since = typeof date === 'string' ? date : '';
+    }
+    for (const c of commits) {
+      const sha = asRecord(c)?.['sha'];
+      if (typeof sha === 'string') between.add(sha);
+    }
+    if (commits.length < 100 || between.size >= total) break;
+  }
+  return { between, total, exact: between.size >= total, since: since ?? '' };
+}
+
+/** `path`'s history from `head`, bounded by `since` when there is one. */
+async function pathHistory(
+  repo: RepoRef,
+  head: string,
+  path: string,
+  since: string,
+  token: string | null,
+): Promise<Omit<PathCommit, 'paths'>[]> {
+  const out: Omit<PathCommit, 'paths'>[] = [];
+  for (let page = 1; page <= MAX_PATH_PAGES; page += 1) {
+    const query =
+      `sha=${encodeURIComponent(head)}&path=${encodeURIComponent(path)}&per_page=100&page=${page}` +
+      (since ? `&since=${encodeURIComponent(since)}` : '');
+    const { status, body } = await call('GET', `${repoPath(repo)}/commits?${query}`, token);
+    if (!Array.isArray(body)) throw new PublishWorkflowError(status, 'commit list was not a list');
+    for (const c of body) {
+      const row = asRecord(c);
+      const sha = row?.['sha'];
+      if (typeof sha !== 'string') continue;
+      const commit = asRecord(row?.['commit']);
+      const date = asRecord(commit?.['committer'])?.['date'];
+      const message = commit?.['message'];
+      out.push({
+        sha,
+        committedAt: typeof date === 'string' ? date : '',
+        subject: typeof message === 'string' ? (message.split('\n')[0] ?? '').slice(0, 200) : '',
+      });
+    }
+    if (body.length < 100) break;
+  }
+  return out;
+}
+
 export const publishWorkflowsClient = {
   /**
    * Start `workflow` on `ref` with `inputs` and answer the run it started.
@@ -311,50 +392,66 @@ export const publishWorkflowsClient = {
     path: string,
     token: string | null,
   ): Promise<number> {
-    const between = new Set<string>();
-    let total = 0;
-    let since: string | null = null;
-    for (let page = 1; page <= MAX_COMPARE_PAGES; page += 1) {
-      const { status, body } = await call(
-        'GET',
-        `${repoPath(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}?per_page=100&page=${page}`,
-        token,
-      );
-      const compare = asRecord(body);
-      const commits = compare?.['commits'];
-      if (!Array.isArray(commits)) throw new PublishWorkflowError(status, 'compare had no commits');
-      const totalCommits = compare?.['total_commits'];
-      total = typeof totalCommits === 'number' ? totalCommits : commits.length;
-      if (since === null) {
-        const date = asRecord(
-          asRecord(asRecord(compare?.['merge_base_commit'])?.['commit'])?.['committer'],
-        )?.['date'];
-        since = typeof date === 'string' ? date : '';
-      }
-      for (const c of commits) {
-        const sha = asRecord(c)?.['sha'];
-        if (typeof sha === 'string') between.add(sha);
-      }
-      if (commits.length < 100 || between.size >= total) break;
-    }
-    if (total === 0) return 0;
-    const exact = between.size >= total;
+    const compare = await compareCommits(repo, base, head, token);
+    if (compare.total === 0) return 0;
     let count = 0;
-    for (let page = 1; page <= MAX_PATH_PAGES; page += 1) {
-      const query =
-        `sha=${encodeURIComponent(head)}&path=${encodeURIComponent(path)}&per_page=100&page=${page}` +
-        (since ? `&since=${encodeURIComponent(since)}` : '');
-      const { status, body } = await call('GET', `${repoPath(repo)}/commits?${query}`, token);
-      if (!Array.isArray(body))
-        throw new PublishWorkflowError(status, 'commit list was not a list');
-      for (const c of body) {
-        const sha = asRecord(c)?.['sha'];
-        if (typeof sha !== 'string' || sha === base) continue;
-        if (!exact || between.has(sha)) count += 1;
-      }
-      if (body.length < 100) break;
+    for (const sha of await pathHistory(repo, head, path, compare.since, token)) {
+      if (sha.sha === base) continue;
+      if (!compare.exact || compare.between.has(sha.sha)) count += 1;
     }
     return count;
+  },
+
+  /**
+   * The commits between `base` and `head` that touched ANY of `paths`, newest
+   * first, each once with every listed path it touched (MOTIR-10986, the
+   * indexer's inputs). The same bound as `countPathCommits`: the compare's
+   * commits when it is fully read, else every path commit since the merge base.
+   */
+  async pathCommitsBetween(
+    repo: RepoRef,
+    base: string,
+    head: string,
+    paths: readonly string[],
+    token: string | null,
+  ): Promise<PathCommit[]> {
+    const compare = await compareCommits(repo, base, head, token);
+    if (compare.total === 0) return [];
+    const bySha = new Map<string, PathCommit>();
+    for (const path of paths) {
+      for (const commit of await pathHistory(repo, head, path, compare.since, token)) {
+        if (commit.sha === base) continue;
+        if (compare.exact && !compare.between.has(commit.sha)) continue;
+        const seen = bySha.get(commit.sha);
+        if (seen) seen.paths.push(path);
+        else bySha.set(commit.sha, { ...commit, paths: [path] });
+      }
+    }
+    return [...bySha.values()].sort((a, b) => b.committedAt.localeCompare(a.committedAt));
+  },
+
+  /**
+   * When the newest MERGED pull request from `branch` merged (ISO 8601), or
+   * null when none has. The indexer pin's band reads it to tell "queued" from
+   * "rolling" (MOTIR-10986).
+   */
+  async mergedFromBranchAt(
+    repo: RepoRef,
+    branch: string,
+    token: string | null,
+  ): Promise<string | null> {
+    const { status, body } = await call(
+      'GET',
+      `${repoPath(repo)}/pulls?state=closed&head=${encodeURIComponent(`${repo.owner}:${branch}`)}&sort=updated&direction=desc&per_page=10`,
+      token,
+    );
+    if (!Array.isArray(body)) throw new PublishWorkflowError(status, 'pull list was not a list');
+    let newest: string | null = null;
+    for (const pull of body) {
+      const merged = asRecord(pull)?.['merged_at'];
+      if (typeof merged === 'string' && (newest === null || merged > newest)) newest = merged;
+    }
+    return newest;
   },
 
   /** Every tag whose name starts with `prefix`, peeled to its commit. */

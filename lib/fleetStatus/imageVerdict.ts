@@ -1,5 +1,6 @@
 import type {
   HostedImageRowDTO,
+  IndexerImageRowDTO,
   RunnerImageRowDTO,
   SandboxImageRowDTO,
 } from '@/lib/dto/fleetStatusImages';
@@ -8,7 +9,8 @@ import type {
 // § Elements, "Verdict pill"). A pure function of the row, so the page and its
 // tests read one rule: a publish in flight or failed outranks the gap, an
 // unread row is never up to date, and a row is behind only when a newer image
-// exists.
+// exists. The indexer row (MOTIR-10986) reads as the runner's, except that a
+// pin or a newest release nobody answered for makes the whole pill Not read.
 
 export type FleetImageVerdict =
   | { kind: 'not_read' }
@@ -21,11 +23,14 @@ export type FleetImageVerdict =
   | { kind: 'releases_behind'; count: number }
   | { kind: 'tags_missing'; missing: number; total: number };
 
-type Row = HostedImageRowDTO | RunnerImageRowDTO | SandboxImageRowDTO;
+type Row = HostedImageRowDTO | RunnerImageRowDTO | IndexerImageRowDTO | SandboxImageRowDTO;
 
 export function imageVerdict(row: Row): FleetImageVerdict {
   if (row.status === 'not_read') return { kind: 'not_read' };
   if (row.status === 'unset') return { kind: 'unset' };
+  if ('history' in row && (row.pinned.state !== 'read' || row.newest.state !== 'read')) {
+    return { kind: 'not_read' };
+  }
   const { progress } = row.publish;
   if (progress.state === 'running') return { kind: 'publishing' };
   if (progress.state === 'failed') return { kind: 'publish_failed' };

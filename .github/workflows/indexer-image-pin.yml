@@ -1,0 +1,153 @@
+# The INDEXER IMAGE PIN (MOTIR-10986): move production's MOTIR_INDEXER_IMAGE to
+# an indexer release motir-ai has ALREADY published.
+#
+# The indexer is released in motir-ai: an `indexer-v<x.y.z>` tag runs that
+# repository's `release-indexer-image.yml`, which publishes the image and whose
+# `mirror-ecr` job copies the same digest into this account's ECR as
+# `<prefix>/indexer:indexer-<x.y.z>`. Nothing in motir-core runs on that tag, so
+# this workflow is dispatched instead — by Publish latest on the console's
+# Fleet status page (the Indexer image card), or by a person:
+#
+#   gh workflow run indexer-image-pin.yml \
+#     -f pin_reference=<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/indexer@sha256:<64 hex> \
+#     -f pin_version=<x.y.z>
+#
+# It opens (or updates) ONE pull request on `chore/indexer-image-pin` that
+# writes the reference into `infra/image-pins/motir-indexer-image`, and queues
+# it to merge: the press is the deliberate pin. The AWS deploy of the merge
+# writes `/<prefix>/core/indexer-image` before it rolls web and worker
+# (`infra/image-pins/README.md`). Reverting the pull request rolls it back.
+#
+# It needs NO AWS credential: the reference is checked by shape here, and the
+# deploy checks it against its own account before it writes anything.
+
+name: Indexer image pin
+
+on:
+  workflow_dispatch:
+    inputs:
+      pin_reference:
+        description: 'The indexer release to pin, by digest: <account>.dkr.ecr.<region>.amazonaws.com/<prefix>/indexer@sha256:<64 hex>'
+        type: string
+        required: true
+      pin_version:
+        description: 'Its indexer-v* release version (x.y.z), for the pull request title; optional'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  pin:
+    name: Open the pin pull request
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # NO run on record — the workflow is new. A reference check, a checkout of
+    # `main`, one file write and two pull-request calls: the 10-minute short-job
+    # floor the runner lane's `pin` job takes, stated as a floor.
+    timeout-minutes: 10
+    # Two presses close together must not push the branch at once.
+    concurrency:
+      group: indexer-image-pin
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      PIN_FILE: infra/image-pins/motir-indexer-image
+      PIN_BRANCH: chore/indexer-image-pin
+    steps:
+      # First, before any token is minted: a refused reference changes nothing.
+      - name: Check the reference
+        id: check
+        env:
+          REFERENCE: ${{ inputs.pin_reference }}
+          VERSION: ${{ inputs.pin_version }}
+        run: |
+          set -euo pipefail
+          # The deploy's INDEXER_IMAGE_REF_PATTERN (scripts/aws-deploy/imagePins.ts).
+          if ! [[ "$REFERENCE" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com(\.cn)?/([a-z0-9]+([._-][a-z0-9]+)*/)*indexer@sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::pin_reference must be an indexer image in ECR by digest, <account>.dkr.ecr.<region>.amazonaws.com/<prefix>/indexer@sha256:<64 hex>, not '${REFERENCE}'."
+            exit 1
+          fi
+          if [ -n "$VERSION" ] && ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::pin_version '${VERSION}' is not an indexer-v* release version (x.y.z)."
+            exit 1
+          fi
+          if [ -n "$VERSION" ]; then
+            echo "label=indexer-v${VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=${REFERENCE##*@}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Write the reference into the pin
+        id: write
+        env:
+          REFERENCE: ${{ inputs.pin_reference }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$REFERENCE" > "$PIN_FILE"
+          if git diff --quiet -- "$PIN_FILE"; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo "::notice::${PIN_FILE} already holds ${REFERENCE}; no pull request to open."
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open or update the pin pull request
+        if: ${{ steps.write.outputs.changed == 'true' }}
+        env:
+          REFERENCE: ${{ inputs.pin_reference }}
+          LABEL: ${{ steps.check.outputs.label }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          # Authored as Yue with NO co-author trailer: `license/cla` has that one
+          # signatory, the same authorship every other commit here carries.
+          git config user.name 'Zhu Yue'
+          git config user.email 'zhuyue11@gmail.com'
+          title="chore(indexer): pin MOTIR_INDEXER_IMAGE to ${LABEL}"
+          git commit --author='Zhu Yue <zhuyue11@gmail.com>' -m "$title" \
+            -m "Written by the indexer image pin workflow (MOTIR-10986): ${REFERENCE}" \
+            -- "$PIN_FILE"
+          # Force is confined to this branch, which holds only the pin and was
+          # just rebuilt from a fresh checkout of main.
+          git push --force origin "HEAD:${PIN_BRANCH}"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body="$(printf '%s\n' \
+            "Opened by the indexer image pin workflow for \`${LABEL}\` ([run](${run_url}))." \
+            '' \
+            "It sets \`${PIN_FILE}\` to \`${REFERENCE}\`, the ECR mirror of that motir-ai indexer release." \
+            '' \
+            "**Merging it is the pin.** The AWS deploy of the merge writes the reference into \`/motir/core/indexer-image\` before it rolls web and worker (\`infra/image-pins/README.md\`); index runs started after the roll boot it. Reverting it rolls the pin back.")"
+          existing="$(gh pr list --head "$PIN_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body "$body"
+            echo "::notice::Updated pull request #${existing} to pin ${LABEL}."
+            exit 0
+          fi
+          gh pr create --base main --head "$PIN_BRANCH" --title "$title" --body "$body"
+          echo "::notice::Opened the pull request that pins ${LABEL}."
+      # The dispatch is the deliberate pin (Publish latest's confirm names the
+      # from → to and the roll), so the pull request is queued to merge as soon
+      # as its checks pass. A refused queue fails the run, so the page reports
+      # the error instead of a pin that never lands.
+      - name: Queue the pin pull request to merge
+        if: ${{ steps.write.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          number="$(gh pr list --head "$PIN_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$number" ]; then
+            echo "::error::no open pin pull request on ${PIN_BRANCH} to queue"
+            exit 1
+          fi
+          gh pr merge "$number" --auto
+          echo "::notice::Queued pin pull request #${number} to merge."

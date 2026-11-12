@@ -311,6 +311,7 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       guideBugsFiled: 0,
       autoResumeCount: 0,
       lastAutoResumedAt: null,
+      providerResumedAt: null,
       // The waiting state (MOTIR-7908): an unmarked session carries none of it.
       failedAt: null,
       failedJobId: null,

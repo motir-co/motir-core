@@ -436,7 +436,7 @@ fallback (`missing: ["unverified"]`) was not needed.
 | `hosted-agent-image.yml`     | `hosted-agent-image`      | `ubuntu-latest`     | runnable    | —           | `.github/workflows/hosted-agent-image.yml:72`     |
 | `image-cache-main.yml`       | `sandbox`                 | `["ubuntu-latest"]` | needs-image | binfmt-misc | `.github/workflows/image-cache-main.yml:184`      |
 | `image-cache-main.yml`       | `runner-image`            | `["ubuntu-latest"]` | runnable    | —           | `.github/workflows/image-cache-main.yml:192`      |
-| `main-ci-retry.yml`          | `retry`                   | `ubuntu-latest`     | runnable    | —           | `.github/workflows/main-ci-retry.yml:79`          |
+| `main-ci-retry.yml`          | `retry`                   | `ubuntu-latest`     | runnable    | —           | `.github/workflows/main-ci-retry.yml:90`          |
 | `release-brand.yml`          | `release`                 | `ubuntu-latest`     | runnable    | —           | `.github/workflows/release-brand.yml:63`          |
 | `release-cli.yml`            | `release`                 | `ubuntu-latest`     | runnable    | —           | `.github/workflows/release-cli.yml:73`            |
 | `release-design-system.yml`  | `release`                 | `ubuntu-latest`     | runnable    | —           | `.github/workflows/release-design-system.yml:52`  |

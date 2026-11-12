@@ -32,7 +32,12 @@ import {
   ResourceNotFoundException,
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
-import { GetParameterCommand, PutParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
+import {
+  GetParameterCommand,
+  ParameterNotFound,
+  PutParameterCommand,
+  SSMClient,
+} from '@aws-sdk/client-ssm';
 
 /**
  * Every action the deploy role grants the script (motir-infra's
@@ -68,10 +73,20 @@ export type RegisterTaskDefinitionInput = RegisterTaskDefinitionCommandInput;
  */
 export type SecretRead = { state: 'granted'; value: string | undefined } | { state: 'not_granted' };
 
+/**
+ * An SSM parameter's current value, or that the role may not read it. `value`
+ * is undefined for a parameter that does not exist. The image pin the deploy
+ * writes as a parameter reads it this way (MOTIR-10986); `getParameter` stays
+ * the strict read the deploy target and the digest need.
+ */
+export type ParameterRead = SecretRead;
+
 /** One method per AWS call the script makes, plus the clock it waits on. */
 export interface DeployAws {
   getParameter(name: string): Promise<string | undefined>;
   putParameter(name: string, value: string): Promise<void>;
+  /** A parameter's current string; `not_granted` when the role is refused it. */
+  readParameter(name: string): Promise<ParameterRead>;
   /** Whether the repository holds an image with this digest. */
   imageExists(repositoryName: string, digest: string): Promise<boolean>;
   describeTaskDefinition(familyOrArn: string): Promise<TaskDefinition>;
@@ -98,6 +113,7 @@ export interface DeployAws {
 export const ACTION_OF: Record<Exclude<keyof DeployAws, 'sleep' | 'now'>, GrantedAction> = {
   getParameter: 'ssm:GetParameter',
   putParameter: 'ssm:PutParameter',
+  readParameter: 'ssm:GetParameter',
   imageExists: 'ecr:DescribeImages',
   describeTaskDefinition: 'ecs:DescribeTaskDefinition',
   registerTaskDefinition: 'ecs:RegisterTaskDefinition',
@@ -128,7 +144,21 @@ export function awsSdkPorts(region: string): DeployAws {
       return out.Parameter?.Value;
     },
     async putParameter(name, value) {
+      // No `Type`: the parameter exists (motir-infra creates it as a `String`),
+      // and an overwrite keeps its type, tier and allowed pattern.
       await ssm.send(new PutParameterCommand({ Name: name, Value: value, Overwrite: true }));
+    },
+    async readParameter(name) {
+      try {
+        const out = await ssm.send(new GetParameterCommand({ Name: name }));
+        return { state: 'granted', value: out.Parameter?.Value };
+      } catch (err) {
+        if (err instanceof ParameterNotFound) return { state: 'granted', value: undefined };
+        if (err instanceof Error && err.name === 'AccessDeniedException') {
+          return { state: 'not_granted' };
+        }
+        throw err;
+      }
     },
     async imageExists(repositoryName, digest) {
       try {

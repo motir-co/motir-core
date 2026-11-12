@@ -17,15 +17,15 @@ ships in the core image as `/app/data/data-script.mjs` (MOTIR-10465).
 
 ## Where production is, and so where the script runs
 
-| production database                    | route                                                                                                                                                                                                |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Neon** (before the AWS cutover's go) | the `workflow_dispatch` workflows that read `SEED_DATABASE_URL` — **retired** (MOTIR-10573): the secret was deleted at the go on 2026-11-07, and the five workflows were removed from the repository |
-| **RDS** (after go)                     | **inside a core worker task, over ECS Exec** — this page                                                                                                                                             |
+| production database                           | route                                                    |
+| --------------------------------------------- | -------------------------------------------------------- |
+| **RDS** (`motir_core` on the `core` instance) | **inside a core worker task, over ECS Exec** — this page |
 
-After go, RDS admits only core's service security group, so no GitHub runner
-reaches it. `SEED_DATABASE_URL` was deleted at the go (motir-infra
-`docs/core-cutover.md`, step 9; read back as gone on 2026-11-07), and the
-workflows that read it were removed (MOTIR-10573). This page is the only route.
+RDS admits only core's service security group, so no GitHub runner reaches it.
+The repository secret `SEED_DATABASE_URL`, which once carried a production database
+URL to `workflow_dispatch` data workflows, was deleted at the AWS cutover's go
+(motir-infra `docs/core-cutover.md`, step 9; read back as gone on 2026-11-07),
+and those workflows were removed (MOTIR-10573). This page is the only route.
 **Never recreate that secret or point anything in GitHub at RDS.**
 
 ## How it runs inside AWS

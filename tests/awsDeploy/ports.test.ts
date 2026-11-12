@@ -2,7 +2,7 @@ import { CloudWatchLogsClient } from '@aws-sdk/client-cloudwatch-logs';
 import { ECRClient, ImageNotFoundException } from '@aws-sdk/client-ecr';
 import { ECSClient } from '@aws-sdk/client-ecs';
 import { ResourceNotFoundException, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { SSMClient } from '@aws-sdk/client-ssm';
+import { ParameterNotFound, SSMClient } from '@aws-sdk/client-ssm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { awsSdkPorts } from '@/scripts/aws-deploy/ports';
 
@@ -90,6 +90,41 @@ describe('awsSdkPorts', () => {
       { command: 'GetParameterCommand', input: { Name: '/p' } },
       { command: 'PutParameterCommand', input: { Name: '/p', Value: 'w', Overwrite: true } },
     ]);
+  });
+
+  // MOTIR-10986 — the indexer pin is a parameter, read the way a pinned secret is.
+  it('reads a pinned parameter, and a missing one as granted and empty', async () => {
+    let missing = false;
+    const sent = stubClients(() => {
+      if (missing) throw new ParameterNotFound({ message: 'no', $metadata: {} });
+      return { Parameter: { Value: 'ref' } };
+    });
+    const ports = awsSdkPorts('us-east-1');
+    expect(await ports.readParameter('/motir/core/indexer-image')).toEqual({
+      state: 'granted',
+      value: 'ref',
+    });
+    expect(sent).toEqual([
+      { command: 'GetParameterCommand', input: { Name: '/motir/core/indexer-image' } },
+    ]);
+    missing = true;
+    expect(await ports.readParameter('/motir/core/indexer-image')).toEqual({
+      state: 'granted',
+      value: undefined,
+    });
+  });
+
+  it('reads an AccessDenied parameter as not granted, and rethrows any other error', async () => {
+    let name = 'AccessDeniedException';
+    stubClients(() => {
+      const err = new Error('refused');
+      err.name = name;
+      throw err;
+    });
+    const ports = awsSdkPorts('us-east-1');
+    expect(await ports.readParameter('/p')).toEqual({ state: 'not_granted' });
+    name = 'ThrottlingException';
+    await expect(ports.readParameter('/p')).rejects.toThrow('refused');
   });
 
   it('returns undefined for a parameter with no value', async () => {

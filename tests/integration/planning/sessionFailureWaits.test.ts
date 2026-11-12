@@ -316,8 +316,10 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
   } as const;
   const deps = (state: Parameters<typeof asState>[0]) => ({
     resolveJobState: async () => asState(state),
+    // A reason that WAITS: `model_unavailable` is resumed once by itself since MOTIR-10968
+    // (`providerAutoResume.test.ts`), and this describe is about the record.
     getFailedJobFacts: async () => ({
-      walkStop: { ...WALK_STOP, reasonCode: 'model_unavailable' },
+      walkStop: { ...WALK_STOP, reasonCode: 'out_of_credits' },
       lostMachine: false,
     }),
   });
@@ -349,7 +351,7 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
     const s = await sessionRow(sessionId);
     expect(s.endedAt).toBeNull();
     expect(s.failedJobId).toBe('job-9');
-    expect(s.failureReason).toBe('model_unavailable');
+    expect(s.failureReason).toBe('out_of_credits');
     expect(s.failureStopRef).toBe('planItem:abc');
     expect((await planRow(plan.id)).status).toBe('generating');
     expect(await adminDb.planItem.count({ where: { planId: plan.id } })).toBe(2);
