@@ -6,7 +6,7 @@ import type {
   DispatchStopReason,
   MotirClient,
 } from './client.js';
-import type { AgentDecisionPoint, AgentStopReport } from './agentRun.js';
+import type { AgentDecisionPoint, AgentRepositoryRequest, AgentStopReport } from './agentRun.js';
 import {
   ApiRefusalError,
   NetworkError,
@@ -242,6 +242,12 @@ export interface DispatchRunReporter {
    */
   reportStop?(key: string, stop: AgentStopReport): Promise<void>;
   /**
+   * Ask Motir to create the repository `key`'s INIT card declares (MOTIR-11055) — the
+   * `repository` member its agent wrote into the self-report — with the run's own
+   * credential. Awaited, never throws, a no-op when no run is held. OPTIONAL, as above.
+   */
+  reportRepository?(key: string, request: AgentRepositoryRequest): Promise<void>;
+  /**
    * Publish the run target `key`'s HOW TO TEST (MOTIR-10877) — the body an agent with no
    * Motir tools wrote into its self-report, with each repository's pushed head — with the
    * run's own credential. Resolves `true` when the record is published, `false` when it could
@@ -282,6 +288,7 @@ export interface DispatchRunReporterDeps {
         | 'reportDispatchRunUnbuildable'
         | 'recordDispatchRunDiscrepancy'
         | 'reportDispatchRunStop'
+        | 'createDispatchRunRepository'
         | 'publishDispatchRunHowToTest'
       >
     >;
@@ -712,6 +719,31 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
           `motir: could not comment on ${key}` +
             (stop.toPlanning ? ' or move it to Planning' : '') +
             ' in Motir. The run continues.',
+        );
+      }
+    },
+
+    // The init card's repository (MOTIR-11055), on the same terms as the writes above: not
+    // telemetry, so neither through `attempt` nor gated on `offline`. A refusal — and a
+    // failed attempt, which the server answers rather than throws — is ONE warning naming
+    // the repository, and the run keeps reporting.
+    async reportRepository(key, request) {
+      const id = runId;
+      const client = deps.client;
+      if (id === null || closed || client.createDispatchRunRepository === undefined) return;
+      try {
+        const created = await client.createDispatchRunRepository({ runId: id, key, ...request });
+        if (created.outcome === 'failed') {
+          warn(
+            `motir: Motir could not create the repository ${request.name} for ${key}` +
+              (created.failureReason ? ` (${created.failureReason})` : '') +
+              '. The run continues.',
+          );
+        }
+      } catch (err) {
+        warn(
+          `motir: could not ask Motir to create the repository ${request.name} for ${key}` +
+            `${err instanceof Error ? ` (${err.message})` : ''}. The run continues.`,
         );
       }
     },

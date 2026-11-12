@@ -48,6 +48,10 @@ import {
   unbuildableReportBodySchema,
 } from '@/lib/api/v1/workLoop/unbuildableReport';
 import {
+  dispatchRunRepositoryBodySchema,
+  dispatchRunRepositorySchema,
+} from '@/lib/api/v1/workLoop/dispatchRunRepository';
+import {
   agentReviewBodySchema,
   agentReviewResultSchema,
   reviewPromptSchema,
@@ -1171,6 +1175,52 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
   }),
   defineOperation({
     method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/repository',
+    operationId: 'createDispatchRunRepository',
+    summary: 'Create the repository a run\u2019s init card declares',
+    description:
+      'The RUN creates ONE repository in its project\u2019s repository set and establishes it, ' +
+      'for `key`, an INIT card the run holds — the same creation sequence as the ' +
+      '`create_project_repository` MCP tool, sent by the CLI with the run\u2019s own credential ' +
+      'after the agent exits, from the `repository` member the agent wrote into its ' +
+      'self-report. It appends a row for `name` only when the project has none (matched ' +
+      'case-insensitively) and establishes exactly that row; `starterKey` names the base, and ' +
+      'omitting it means an EMPTY base. REPLAY-SAFE: the identical request writes nothing and ' +
+      'answers `already_settled`. Refused `RUN_CARD_NOT_INIT_CARD` when the card is not an init ' +
+      'card, `RUN_REPOSITORY_NAME_MISMATCH` when it declares another name, and ' +
+      '`UNKNOWN_DISPATCH_RUN_CARD` when it is not an open leg of the run. A failed attempt is ' +
+      'an answer, not a refusal: `outcome` is `failed` and `establish` carries the row\u2019s own ' +
+      'failure code and reason. Only the operator who opened the run may call it, and the ' +
+      'caller needs `repository:manage` on the project.',
+    permission: 'repository:manage',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run\u2019s id, as `openDispatchRun` returned it.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: dispatchRunRepositoryBodySchema,
+      description: 'The init card the run holds, and the repository\u2019s name, role and base.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: dispatchRunRepositorySchema },
+      description:
+        'What the call did to the row, the row as it stands, and the establish pass\u2019s own ' +
+        'per-row result.',
+    },
+    // 402/503 the paid-plan gate; 403 a run token naming another run, or a caller without
+    // `repository:manage`; 404 an unknown, cross-workspace or another operator's run, or an
+    // unknown card; 409 a closed run or the creation sequence's conflicts; 422 a malformed
+    // body, a card that is not an open leg or not an init card, or a name mismatch.
+    errorStatuses: [402, 403, 404, 409, 422, 503],
+  }),
+  defineOperation({
+    method: 'POST',
     path: '/api/v1/dispatch-runs/{id}/stop',
     operationId: 'reportDispatchRunStop',
     summary: 'Record that a run stopped on a card',
@@ -1492,6 +1542,7 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   UnbuildableReportAcknowledgement: unbuildableReportAcknowledgementSchema,
   RunDiscrepancyAcknowledgement: runDiscrepancyAcknowledgementSchema,
   RunStopReportAcknowledgement: runStopReportAcknowledgementSchema,
+  DispatchRunRepository: dispatchRunRepositorySchema,
   RunHowToTestAcknowledgement: runHowToTestAcknowledgementSchema,
   ActivityEntry: activityEntrySchema,
   DispatchRun: dispatchRunSchema,

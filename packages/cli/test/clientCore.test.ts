@@ -635,6 +635,61 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(server.v1Calls[2]?.body).toEqual({ key: 'PROD-1', comment: 'x', toPlanning: false });
   });
 
+  // ── The run's repository (MOTIR-11055) ────────────────────────────────────
+  it('asks for an init card’s repository on the run’s own path, the starter only when given', async () => {
+    const repository = {
+      id: 'repo_1',
+      role: 'infra',
+      label: null,
+      name: 'acme-infra',
+      repoRef: 'motir-projects/acme-infra',
+      cloneUrl: 'https://github.com/motir-projects/acme-infra.git',
+      defaultBranch: 'main',
+      archived: false,
+      state: 'created',
+      established: true,
+      seedSource: 'initialised',
+    };
+    server.scriptV1({
+      'POST /api/v1/dispatch-runs/{id}/repository': {
+        body: {
+          outcome: 'created',
+          repository,
+          establish: { outcome: 'created', failureCode: null, failureReason: null },
+        },
+      },
+    });
+    await expect(
+      connected().createDispatchRunRepository({
+        runId: 'run_1',
+        key: 'PROD-1',
+        name: 'acme-infra',
+        role: 'infra',
+      }),
+    ).resolves.toEqual({
+      outcome: 'created',
+      repositoryId: 'repo_1',
+      failureCode: null,
+      failureReason: null,
+    });
+    expect(server.v1Calls[0]?.path).toBe('/api/v1/dispatch-runs/run_1/repository');
+    expect(server.v1Calls[0]?.body).toEqual({ key: 'PROD-1', name: 'acme-infra', role: 'infra' });
+
+    await connected().createDispatchRunRepository({
+      runId: 'run_1',
+      key: 'PROD-1',
+      name: 'acme-infra',
+      role: 'infra',
+      starterKey: 'platform-starter',
+    });
+    expect(server.v1Calls[1]?.body).toEqual({
+      key: 'PROD-1',
+      name: 'acme-infra',
+      role: 'infra',
+      starterKey: 'platform-starter',
+    });
+  });
+
   // ── The run's How to test (MOTIR-10877) ───────────────────────────────────
   it('publishes a run’s How to test on the run’s own path, leaving out what is empty', async () => {
     server.scriptV1({

@@ -2602,6 +2602,41 @@ export class MotirClient {
   }
 
   /**
+   * The run's REPOSITORY (MOTIR-11055) — the agent of `key`, an INIT card this run holds,
+   * asked for the repository its card declares. The server creates ONE row for `name` and
+   * establishes it — or finds it already settled, writing nothing. `starterKey` omitted is
+   * an EMPTY base. A failed attempt is an answer (`outcome: 'failed'`), not a throw.
+   */
+  async createDispatchRunRepository(args: {
+    runId: string;
+    key: string;
+    name: string;
+    role: 'web' | 'api' | 'mobile' | 'shared' | 'infra' | 'other';
+    starterKey?: string;
+  }): Promise<{
+    outcome: 'created' | 'adopted' | 'already_settled' | 'failed';
+    repositoryId: string;
+    failureCode: string | null;
+    failureReason: string | null;
+  }> {
+    const body = await this.v1.request('createDispatchRunRepository', {
+      path: { id: args.runId },
+      body: {
+        key: args.key,
+        name: args.name,
+        role: args.role,
+        ...(args.starterKey !== undefined ? { starterKey: args.starterKey } : {}),
+      },
+    });
+    return {
+      outcome: body.outcome,
+      repositoryId: body.repository.id,
+      failureCode: body.establish.failureCode,
+      failureReason: body.establish.failureReason,
+    };
+  }
+
+  /**
    * The run's STOP report (MOTIR-8722) — the agent stopped on `key`. One comment with its
    * finding and, with `toPlanning`, the card to Planning with the re-plan brief kept on it.
    * The re-plan is NOT submitted: the run's credential cannot plan.

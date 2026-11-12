@@ -509,8 +509,10 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // (`work_item:edit`) — a person's own review agent's verdict. 85 with MOTIR-10334's
     // `dismissWorkItemReview` (`work_item:edit`) — the routed person's Dismiss. 86 with
     // MOTIR-10877's `…/dispatch-runs/{id}/how-to-test` (`publishDispatchRunHowToTest`,
-    // `work_item:edit`) — the How to test a tool-less agent wrote, published by its run.
-    expect(V1_OPERATIONS.length).toBe(86);
+    // `work_item:edit`) — the How to test a tool-less agent wrote, published by its run. 87
+    // with MOTIR-11055's `…/dispatch-runs/{id}/repository` (`createDispatchRunRepository`,
+    // `repository:manage`) — the repository an init card's tokenless agent asked its run for.
+    expect(V1_OPERATIONS.length).toBe(87);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

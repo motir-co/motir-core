@@ -870,6 +870,11 @@ describe('the grant (`hosted-agent-run.md` §3’s pointer)', () => {
       expect(HOSTED_RUN_TOKEN_GRANT).toContain(op!.permission);
       expect(RUN_TOKEN_ROUTES.some((r) => r.operationId === operationId)).toBe(true);
     }
-    expect([...HOSTED_RUN_TOKEN_GRANT]).toEqual(['project:browse', 'work_item:edit']);
+    // Widened since only by the run's repository door (MOTIR-11055), which no review calls.
+    expect([...HOSTED_RUN_TOKEN_GRANT]).toEqual([
+      'project:browse',
+      'work_item:edit',
+      'repository:manage',
+    ]);
   });
 });

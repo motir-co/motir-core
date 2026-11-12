@@ -463,6 +463,149 @@ describe('the run-found report (MOTIR-8698)', () => {
   });
 });
 
+describe('the init card’s repository (MOTIR-11055)', () => {
+  const REQUEST = { name: 'acme-infra', role: 'infra' as const };
+  const CREATED = {
+    outcome: 'created' as const,
+    repositoryId: 'repo_1',
+    failureCode: null,
+    failureReason: null,
+  };
+
+  it('posts the request on the run it holds, the starter key only when given', async () => {
+    const calls: unknown[] = [];
+    const { client } = fakeClient({
+      async createDispatchRunRepository(args) {
+        calls.push(args);
+        return CREATED;
+      },
+    });
+    const reporter = createDispatchRunReporter({ client });
+    await reporter.open(OPEN);
+
+    await reporter.reportRepository!('PROD-1', REQUEST);
+    await reporter.reportRepository!('PROD-1', { ...REQUEST, starterKey: 'platform-starter' });
+
+    expect(calls).toEqual([
+      { runId: 'run_1', key: 'PROD-1', name: 'acme-infra', role: 'infra' },
+      {
+        runId: 'run_1',
+        key: 'PROD-1',
+        name: 'acme-infra',
+        role: 'infra',
+        starterKey: 'platform-starter',
+      },
+    ]);
+  });
+
+  it('a refusal warns ONCE naming the repository, stays online, and the next report still lands', async () => {
+    const warnings: string[] = [];
+    const stops: unknown[] = [];
+    const { client } = fakeClient({
+      async createDispatchRunRepository() {
+        throw new ApiRefusalError(
+          'PROD-1 declares the repository "acme-infra".',
+          422,
+          'RUN_REPOSITORY_NAME_MISMATCH',
+        );
+      },
+      async reportDispatchRunStop(args) {
+        stops.push(args);
+        return { commentId: 'c1', movedToPlanning: false };
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+
+    await expect(reporter.reportRepository!('PROD-1', REQUEST)).resolves.toBeUndefined();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain(
+      'could not ask Motir to create the repository acme-infra for PROD-1',
+    );
+    expect(reporter.offline).toBe(false);
+
+    await reporter.reportStop!('PROD-1', { comment: 'x', toPlanning: false, requirement: null });
+    expect(stops).toHaveLength(1);
+  });
+
+  it('a failed attempt the server ANSWERS warns once with its reason', async () => {
+    const warnings: string[] = [];
+    const { client } = fakeClient({
+      async createDispatchRunRepository() {
+        return {
+          ...CREATED,
+          outcome: 'failed',
+          failureCode: 'REPO_NAME_TAKEN_ON_HOST',
+          failureReason: 'The name is taken on the host.',
+        };
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    await reporter.reportRepository!('PROD-1', REQUEST);
+    expect(warnings).toEqual([
+      'motir: Motir could not create the repository acme-infra for PROD-1 (The name is taken on the host.). The run continues.',
+    ]);
+  });
+
+  it('a failed attempt with no reason, and a non-Error refusal, still warn once naming it', async () => {
+    const warnings: string[] = [];
+    let call = 0;
+    const { client } = fakeClient({
+      async createDispatchRunRepository() {
+        call += 1;
+        if (call === 1) return { ...CREATED, outcome: 'failed' };
+        throw 'offline';
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    await reporter.reportRepository!('PROD-1', REQUEST);
+    await reporter.reportRepository!('PROD-1', REQUEST);
+    expect(warnings).toEqual([
+      'motir: Motir could not create the repository acme-infra for PROD-1. The run continues.',
+      'motir: could not ask Motir to create the repository acme-infra for PROD-1. The run continues.',
+    ]);
+  });
+
+  it('is sent even after event reporting went OFFLINE', async () => {
+    let sent = 0;
+    const { client } = fakeClient({
+      async appendDispatchRunEvents() {
+        throw new Error('500');
+      },
+      async createDispatchRunRepository() {
+        sent += 1;
+        return CREATED;
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: () => {} });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'card_claimed', workItemKey: 'PROD-1' });
+    await reporter.flush();
+    expect(reporter.offline).toBe(true);
+    await reporter.reportRepository!('PROD-1', REQUEST);
+    expect(sent).toBe(1);
+  });
+
+  it('sends nothing when no run is held, or the run is closed', async () => {
+    let sent = 0;
+    const { client } = fakeClient({
+      async createDispatchRunRepository() {
+        sent += 1;
+        return CREATED;
+      },
+    });
+    const idle = createDispatchRunReporter({ client });
+    await idle.reportRepository!('PROD-1', REQUEST);
+    const closed = createDispatchRunReporter({ client });
+    await closed.open(OPEN);
+    await closed.close('completed');
+    await closed.reportRepository!('PROD-1', REQUEST);
+    expect(sent).toBe(0);
+  });
+});
+
 // ── MOTIR-10705 — a refused or failed append no longer silences the run ─────
 //
 // A hosted run is ended as a STALL when its newest event is fifteen minutes old, so a

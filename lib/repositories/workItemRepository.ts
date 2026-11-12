@@ -1139,6 +1139,20 @@ export const workItemRepository = {
   },
 
   /**
+   * ONE card's declared `initRepositoryName` (Story MOTIR-10162 · MOTIR-11055), or
+   * null when it declares none — the run's repository door matches a request
+   * against it. A named read for the same reason as its two siblings: the column
+   * is in no shared projection. `null` too for an id this transaction cannot see.
+   */
+  async findInitRepositoryName(id: string, tx: Prisma.TransactionClient): Promise<string | null> {
+    const row = await tx.workItem.findUnique({
+      where: { id },
+      select: { initRepositoryName: true },
+    });
+    return row?.initRepositoryName ?? null;
+  },
+
+  /**
    * The project's NON-ARCHIVED init cards whose declared `initRepositoryName`
    * matches any of `names` case-insensitively (Story MOTIR-10162 · MOTIR-11042) —
    * the routing pass's "who declared this repository". A named read because the

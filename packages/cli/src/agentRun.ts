@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ParsedAgentCommand } from './agentProfiles.js';
+import type { components } from './api/index.js';
 import { createAgentStreamFormatter, lookupSessionId } from './agentStreamLog.js';
 import { CliError } from './errors.js';
 import { DESIGN_SUBDIR, MOTIR_DESIGN_DIR_ENV } from './designFiles.js';
@@ -116,6 +117,41 @@ export interface AgentRunResult {
    * the CLI publishes it with each repository's pushed head. Null (or absent) when it wrote none.
    */
   howToTest?: AgentHowToTest | null;
+  /**
+   * The repository an INIT card's agent asks the run to create, written into its
+   * self-report as `repository` (MOTIR-11055) — the agent holds no Motir token, so the CLI
+   * posts it with the run's own credential. Null (or absent) when it wrote none.
+   */
+  repository?: AgentRepositoryRequest | null;
+}
+
+/** A project repository's role — the closed list the server's body schema accepts. */
+export type AgentRepositoryRole =
+  components['schemas']['DispatchRunRepository']['repository']['role'];
+
+/**
+ * The roles, at runtime. Checked against the GENERATED type both ways below, so a role the
+ * server adds (or drops) fails the CLI's type-check here rather than parsing to null.
+ */
+export const AGENT_REPOSITORY_ROLES = [
+  'web',
+  'api',
+  'mobile',
+  'shared',
+  'infra',
+  'other',
+] as const satisfies readonly AgentRepositoryRole[];
+type MissingRole = Exclude<AgentRepositoryRole, (typeof AGENT_REPOSITORY_ROLES)[number]>;
+const _everyRoleListed: [MissingRole] extends [never] ? true : MissingRole = true;
+void _everyRoleListed;
+
+/** The repository an init card's agent asks for: a bare name, a role, and an optional base. */
+export interface AgentRepositoryRequest {
+  /** The bare name, trimmed, its casing KEPT — the server decides what a name means. */
+  name: string;
+  role: AgentRepositoryRole;
+  /** A starter (seed-registry) key; absent means an EMPTY base. */
+  starterKey?: string;
 }
 
 /** The How to test an agent with no Motir tools wrote: the Markdown, and a preview path. */
@@ -207,6 +243,7 @@ export interface AgentReport {
   stop: AgentStopReport | null;
   pullRequests: string[] | null;
   howToTest: AgentHowToTest | null;
+  repository: AgentRepositoryRequest | null;
 }
 
 const EMPTY_REPORT: AgentReport = {
@@ -217,6 +254,7 @@ const EMPTY_REPORT: AgentReport = {
   stop: null,
   pullRequests: null,
   howToTest: null,
+  repository: null,
 };
 
 /**
@@ -239,15 +277,17 @@ export function readAgentReport(path: string): AgentReport {
     return EMPTY_REPORT;
   }
   if (typeof parsed !== 'object' || parsed === null) return EMPTY_REPORT;
-  const { model, unbuildable, discrepancy, decisions, stop, pullRequests, howToTest } = parsed as {
-    model?: unknown;
-    unbuildable?: unknown;
-    discrepancy?: unknown;
-    decisions?: unknown;
-    stop?: unknown;
-    pullRequests?: unknown;
-    howToTest?: unknown;
-  };
+  const { model, unbuildable, discrepancy, decisions, stop, pullRequests, howToTest, repository } =
+    parsed as {
+      model?: unknown;
+      unbuildable?: unknown;
+      discrepancy?: unknown;
+      decisions?: unknown;
+      stop?: unknown;
+      pullRequests?: unknown;
+      howToTest?: unknown;
+      repository?: unknown;
+    };
   const unbuildableReason = reasonOf(unbuildable);
   return {
     model: modelOf(model),
@@ -257,7 +297,29 @@ export function readAgentReport(path: string): AgentReport {
     stop: stopOf(stop, unbuildableReason),
     pullRequests: pullRequestsOf(pullRequests),
     howToTest: howToTestOf(howToTest),
+    repository: repositoryOf(repository),
   };
+}
+
+/**
+ * The repository request (MOTIR-11055), TOTAL like its neighbours: anything that is not an
+ * object, a blank or non-string name, or a role outside the closed list is null — never a
+ * guess. A well-shaped one keeps its casing. `starterKey` absent is an EMPTY base; present,
+ * it must be a non-blank string, or the whole request is null.
+ */
+function repositoryOf(value: unknown): AgentRepositoryRequest | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.name !== 'string' || typeof raw.role !== 'string') return null;
+  const name = raw.name.trim();
+  if (name === '') return null;
+  const role = AGENT_REPOSITORY_ROLES.find((r) => r === raw.role);
+  if (role === undefined) return null;
+  if (raw.starterKey === undefined) return { name, role };
+  // A starter key that is there but not a non-blank string is MALFORMED, not omitted:
+  // reading it as an empty base would be the guess this parser never makes.
+  if (typeof raw.starterKey !== 'string' || raw.starterKey.trim() === '') return null;
+  return { name, role, starterKey: raw.starterKey.trim() };
 }
 
 /**

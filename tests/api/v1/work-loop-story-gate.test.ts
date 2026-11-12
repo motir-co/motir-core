@@ -131,6 +131,10 @@ const WORK_LOOP_MIRRORS = {
   // caller is a person's own agent, which speaks MCP; `reviewVerdictService.submit` is the
   // one method the route and the tool both call, under the same `work_item:edit`.
   submitWorkItemReviewVerdict: 'submit_review_verdict',
+  // MOTIR-11055 — the run's REPOSITORY door, the second transport onto the one creation
+  // sequence (`projectRepoCreationService`) `create_project_repository` calls, under the same
+  // `repository:manage`. The route adds only what a door holding a RUN can judge.
+  createDispatchRunRepository: 'create_project_repository',
 } as const;
 
 /**
@@ -321,8 +325,9 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 14 since MOTIR-6807 paired the repair claim, the heartbeat and the close
     // with the agent-facing repair tools. 15 since MOTIR-7262 paired the
     // continue claim with `claim_work_item_continue`. 16 since MOTIR-10333 paired the
-    // user-token verdict door with `submit_review_verdict`.
-    expect(Object.keys(MIRRORS)).toHaveLength(16);
+    // user-token verdict door with `submit_review_verdict`. 17 since MOTIR-11055 paired the
+    // run's repository door with `create_project_repository`.
+    expect(Object.keys(MIRRORS)).toHaveLength(17);
     // 18 since MOTIR-4085 added the plan READ beside the approval — the SEVENTH
     // operation with no MCP counterpart, and the first whose reason is that an
     // agent has no USE for it rather than that it must be kept away from one.
@@ -338,7 +343,8 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 31 since MOTIR-10333: the user-token verdict door.
     // 32 since MOTIR-10334: Dismiss the review, the person's overrule of a send-back.
     // 33 since MOTIR-10877: the run's How to test, the CLI publishing what a tool-less agent wrote.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(33);
+    // 34 since MOTIR-11055: the run's repository door, for an init card's tokenless agent.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(34);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

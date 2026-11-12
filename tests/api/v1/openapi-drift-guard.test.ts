@@ -40,6 +40,13 @@ import { workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
 import { plansService } from '@/lib/services/plansService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { repoProvisioningClient, type ProvisionedRepo } from '@/lib/github/repoProvisioning';
+import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
+import { fleetGithubOrgAssignmentService } from '@/lib/services/fleetGithubOrgAssignmentService';
+import { fleetRunnerVariableService } from '@/lib/services/fleetRunnerVariableService';
+import { previewEnablementService } from '@/lib/services/previewEnablementService';
+import { productionEnablementService } from '@/lib/services/productionEnablementService';
+import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { adminDb } from '../../helpers/adminDb';
 import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
@@ -310,6 +317,8 @@ describe('every operation’s REAL response validates against its declared schem
         // The page resource (MOTIR-9493) — no legacy scope expands to a page key.
         'page:view',
         'page:edit',
+        // The run's repository door (MOTIR-11055) — no legacy scope expands to it either.
+        'repository:manage',
       ],
     });
     const pk = caller.projectKey;
@@ -790,6 +799,52 @@ describe('every operation’s REAL response validates against its declared schem
       }),
       { id: runId },
     );
+
+    // The run's REPOSITORY door (MOTIR-11055), on the same open leg once the card is an
+    // INIT card. Real route, real creation sequence and real establish pass; only the
+    // boundaries that leave the process are stubbed — the paid-plan read, the hosted org,
+    // the quiet fleet passes and the git host's create call — and restored right after.
+    await adminDb.workItem.updateMany({
+      where: { title: 'An item a dispatch run owns' },
+      data: { subject: 'init', initRepositoryName: 'drift-infra' },
+    });
+    const seams = [
+      vi.spyOn(aiPlanGateService, 'hasPaidAiPlan').mockResolvedValue(true),
+      vi.spyOn(fleetGithubOrgAssignmentService, 'ensureHostedGithubOrg').mockResolvedValue({
+        outcome: 'unconfigured',
+      } as never),
+      vi.spyOn(fleetGithubOrgAssignmentService, 'readHostedGithubOrg').mockResolvedValue(null),
+      vi.spyOn(projectRunnerGroupService, 'syncQuietly').mockResolvedValue(undefined as never),
+      vi.spyOn(fleetRunnerVariableService, 'ensureQuietly').mockResolvedValue(undefined as never),
+      vi.spyOn(previewEnablementService, 'enableQuietly').mockResolvedValue(undefined as never),
+      vi.spyOn(productionEnablementService, 'enableQuietly').mockResolvedValue(undefined as never),
+      vi.spyOn(repoProvisioningClient, 'provisionRepository').mockImplementation(
+        async (input: { name: string }): Promise<ProvisionedRepo> =>
+          ({
+            installationId: '551100',
+            providerRepoId: '700999',
+            owner: 'motir-projects',
+            name: input.name,
+            defaultBranch: 'main',
+            adopted: false,
+            seedHeadSha: 'seed-head',
+          }) as ProvisionedRepo,
+      ),
+    ];
+    try {
+      await drive(
+        'createDispatchRunRepository',
+        () => import('@/app/api/v1/dispatch-runs/[id]/repository/route'),
+        send(`/api/v1/dispatch-runs/${runId}/repository`, 'POST', {
+          key: runCard,
+          name: 'drift-infra',
+          role: 'infra',
+        }),
+        { id: runId },
+      );
+    } finally {
+      for (const seam of seams) seam.mockRestore();
+    }
 
     // The HEARTBEAT (MOTIR-6528) — before the close, while the run is open: 204.
     await drive(

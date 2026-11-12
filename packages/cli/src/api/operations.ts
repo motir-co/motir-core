@@ -149,6 +149,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: "WorkItemCount",
   },
+  "createDispatchRunRepository": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs/{id}/repository",
+    permission: "repository:manage",
+    successStatus: 200,
+    responseComponent: "DispatchRunRepository",
+  },
   "createFolder": {
     method: "POST",
     path: "/api/v1/projects/{projectKey}/folders",

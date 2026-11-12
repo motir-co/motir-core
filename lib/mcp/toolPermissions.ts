@@ -751,8 +751,10 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
   // MOTIR-3051 above).
   //
   // The blast radius, measured rather than assumed: on the MCP surface this tool
-  // is the ONLY row asserting the key; no `/api/v1` operation declares it (the v1
-  // project-repositories route reads on `project:browse`); and the token still
+  // is the ONLY row asserting the key; on `/api/v1` the ONLY operation declaring it
+  // is the run's repository door, `createDispatchRunRepository` (MOTIR-11055), which
+  // the CLI calls for its own run (the v1 project-repositories route reads on
+  // `project:browse`); and the token still
   // reaches it only where its OWNER's role holds `repository:manage` on the
   // project. So what a device-minted credential gains is this one door: create a
   // repository and settle its row. It cannot remove, move, re-point or take over
@@ -763,11 +765,11 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
 
 /**
  * The GRANT a HOSTED RUN's own Motir credential carries (MOTIR-688,
- * `docs/decisions/hosted-agent-run.md` §3; MOTIR-6557) — the two keys the routes
+ * `docs/decisions/hosted-agent-run.md` §3; MOTIR-6557) — the three keys the routes
  * a run token may reach assert (`lib/hostedRuns/runTokenRoutes.ts`, what the
  * CLI's `motir run` calls): `work_item:edit` for its run's ingest, claims,
  * transitions, integrations and pull-request links, `project:browse` for the
- * reads.
+ * reads, and `repository:manage` for the run's repository door alone (MOTIR-11055).
  *
  * ⚠️ THE KEYS ARE AS COARSE AS THE CLI'S, AND THAT IS NOT WHAT NARROWS IT. A key
  * narrows only the KIND of call, never what the call reaches — a bare
@@ -791,4 +793,23 @@ export const HOSTED_RUN_TOKEN_GRANT: readonly PermissionKey[] = [
   // Catalog order, as the note on CLI_TOKEN_GRANT requires of a hand-ordered list.
   'project:browse',
   'work_item:edit',
+  // ⚠️ `repository:manage` — WIDENED DELIBERATELY for the run's repository door,
+  // `POST /api/v1/dispatch-runs/{id}/repository` (Story MOTIR-10162 · MOTIR-11055).
+  //
+  // The argument: a hosted INIT card's agent holds no token, and the CLI creates the
+  // repository its card declares with THIS credential. `withV1Route` asserts the
+  // route's declared key at auth time and the repository set asserts it on every
+  // write, so without it the door would register, pass every suite against a PAT
+  // holding the key, and refuse the one caller it exists for — the failure
+  // MOTIR-3058 and MOTIR-3051 record on the CLI grant.
+  //
+  // The blast radius: a run token never reaches `/api/mcp`, so the key's MCP row
+  // (`create_project_repository`) grants it nothing; of the routes a run token may
+  // call (`lib/hostedRuns/runTokenRoutes.ts`) exactly ONE declares this key, bound
+  // `own_run` and refused for any card that is not an init card leg of that run; and
+  // the write still passes the project access gate, so the run's OPERATOR must hold
+  // `repository:manage` on the project. The subset invariant holds: `CLI_TOKEN_GRANT`
+  // already carries the key (MOTIR-11038), so a locally-run init card reaches the
+  // same door on its device token.
+  'repository:manage',
 ];

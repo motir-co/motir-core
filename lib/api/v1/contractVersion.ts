@@ -1232,5 +1232,23 @@
  *   for new conditions (§8's allowed list).
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.84.0` after `1.83.0` above.
+ *
+ * - `1.85.0` — MOTIR-11055 adds `createDispatchRunRepository`
+ *   (`POST /api/v1/dispatch-runs/{id}/repository`, `repository:manage`, body
+ *   `{ key, name, role, starterKey? }`, `200` with `DispatchRunRepository` —
+ *   `{ outcome, repository, establish }`): the CLI creates the repository an INIT card
+ *   declares with the run's own credential, from the `repository` member its agent wrote into
+ *   `$MOTIR_AGENT_REPORT` — the same creation sequence as `create_project_repository`. A run
+ *   token may call it for its own run (`runTokenRoutes.ts`, `own_run`), and
+ *   `HOSTED_RUN_TOKEN_GRANT` gains `repository:manage` for it. New codes
+ *   `RUN_CARD_NOT_INIT_CARD` and `RUN_REPOSITORY_NAME_MISMATCH` (422); the creation
+ *   sequence's own refusals (`REPO_EXISTS_WITH_OTHER_SPEC`, `REPO_ESTABLISH_BUSY`,
+ *   `PROJECT_REPO_NAME_TAKEN` 409; `PROJECT_REPO_INVALID_FIELD`, `PROJECT_REPO_SEED_REFUSED`
+ *   422; `ai_plan_required` 402; `plan_unknown` 503) are now mapped codes.
+ *
+ *   Additive: one new operation, one new component and codes for new conditions (§8's
+ *   allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.85.0` after `1.84.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.84.0';
+export const V1_CONTRACT_VERSION = '1.85.0';

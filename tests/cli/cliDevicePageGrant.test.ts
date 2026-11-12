@@ -101,10 +101,28 @@ describe('CLI_TOKEN_GRANT — the page keys', () => {
     expect([...CLI_TOKEN_GRANT]).toEqual(sortByCatalogOrder(CLI_TOKEN_GRANT));
   });
 
-  it('leaves HOSTED_RUN_TOKEN_GRANT unchanged, and still a strict subset', () => {
-    expect([...HOSTED_RUN_TOKEN_GRANT]).toEqual(['project:browse', 'work_item:edit']);
+  it('leaves HOSTED_RUN_TOKEN_GRANT without the page keys, and still a strict subset', () => {
+    // The run's repository door widened it by `repository:manage` (MOTIR-11055); never a page key.
+    expect([...HOSTED_RUN_TOKEN_GRANT]).toEqual([
+      'project:browse',
+      'work_item:edit',
+      'repository:manage',
+    ]);
     expect(HOSTED_RUN_TOKEN_GRANT.every((key) => CLI_TOKEN_GRANT.includes(key))).toBe(true);
     expect(HOSTED_RUN_TOKEN_GRANT.length).toBeLessThan(CLI_TOKEN_GRANT.length);
+  });
+});
+
+describe('the device-flow arm CARRIES the whole grant (MOTIR-11055)', () => {
+  // A key in the constant is not a key on the token unless the mint path passes it through
+  // unfiltered: `repository:manage` — the run's repository door's key — must survive it.
+  it('a device-minted token verifies with CLI_TOKEN_GRANT verbatim, repository:manage included', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const token = await deviceLogin(owner, workspace.id);
+    const verified = await apiTokensService.verify(token);
+    expect([...verified.grant].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
+    expect(verified.grant).toContain('repository:manage');
   });
 });
 

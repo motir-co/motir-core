@@ -8,10 +8,11 @@
 // `tests/hostedRuns/runTokenRouteTable.test.ts` holds both directions, and holds
 // the list against the operations the CLI client actually calls on those paths.
 //
-// ⚠️ THE GRANT DOES NOT NARROW IT; THE BINDING DOES. Every route below asserts
-// `project:browse` or `work_item:edit` — the two keys `HOSTED_RUN_TOKEN_GRANT`
-// already holds — and a bare `work_item:edit` would reach every card in the
-// project. What stops it is the `binding` column, enforced in the services:
+// ⚠️ THE GRANT DOES NOT NARROW IT; THE BINDING DOES. Every route below asserts a
+// key `HOSTED_RUN_TOKEN_GRANT` holds — `project:browse` or `work_item:edit`, and
+// `repository:manage` for the run's repository door alone (MOTIR-11055) — and a
+// bare `work_item:edit` would reach every card in the project. What stops it is the
+// `binding` column, enforced in the services:
 //
 //   own_run          — the path's `{id}` is the token's own run
 //                      (`dispatchRunService`'s `assertRunTokenScope`).
@@ -236,6 +237,16 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     operationId: 'recordDispatchRunDiscrepancy',
     method: 'POST',
     path: '/api/v1/dispatch-runs/{id}/discrepancy',
+    binding: 'own_run',
+    calledBy: 'cli',
+  },
+  {
+    // The run creates the repository its INIT card declares (MOTIR-11055) — the agent has
+    // no Motir token here, so the CLI posts the `repository` member of its self-report.
+    // The ONE route in this table that asserts `repository:manage`.
+    operationId: 'createDispatchRunRepository',
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/repository',
     binding: 'own_run',
     calledBy: 'cli',
   },
