@@ -775,7 +775,9 @@ test('the recording declares its story, is paced, and is owned by this spec', as
   expect(source).toContain("from './_helpers/acceptance-video'");
   expect(source).not.toMatch(/import \{[^}]*\b(test|expect)\b[^}]*\} from '@playwright\/test'/);
   const lines = source.split('\n').filter((l) => !l.includes('SELF-AUDIT'));
-  for (const stub of ['vi.mock', 'page.route(', 'context.route(']) {
+  // The audit's own list names the stubs, so its line carries the exemption marker.
+  const stubs = ['vi.mock', 'page.route(', 'context.route(']; // SELF-AUDIT
+  for (const stub of stubs) {
     expect(
       lines.filter((l) => l.includes(stub)),
       `no ${stub}`,
