@@ -659,7 +659,7 @@ export function buildWorkItemLevel(
             statusCategory: item.statusCategory ?? null,
             type: item.type ?? null,
             executor: item.executor ?? null,
-            // The To plan state (a childless story) and the `motir fix` action read
+            // The To plan state (a childless story or epic) and the `motir fix` action read
             // these two (MOTIR-10509).
             hasChildren: item.hasChildren,
             fixReason: item.fixReason ?? null,

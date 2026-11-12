@@ -26,16 +26,21 @@ export interface StatusSlotItem {
  *  slot pill — MOTIR-10630.) */
 export type StatusSlotKind = 'done' | 'to-plan' | 'ready' | 'status';
 
+/** The kinds that can be TO PLAN: the containers a plan breaks down into work.
+ *  A task, bug or subtask is a leaf and is never To plan (MOTIR-10861). */
+const TO_PLAN_KINDS: ReadonlySet<string> = new Set(['story', 'epic']);
+
 /**
- * A TO PLAN story (design MOTIR-10508 § "The To plan story"): a story with no
- * children whose status category is `todo`. A childless story already In Progress
- * is not To plan (someone holds it), and a childless Done story is Done.
+ * A TO PLAN item (design MOTIR-10508 § "The To plan story", amended for epics by
+ * MOTIR-11106): a STORY or an EPIC with no children whose status category is
+ * `todo`. A childless story or epic already In Progress is not To plan (someone
+ * holds it), and a childless Done one is Done.
  *
  * `hasChildren` must be KNOWN to be false: a node built without it (an onboarding
- * preview, a run's canvas fed an older read) never claims the story is unplanned.
+ * preview, a run's canvas fed an older read) never claims the item is unplanned.
  */
-export function isToPlanStory(item: StatusSlotItem): boolean {
-  if (item.kind !== 'story' || item.hasChildren !== false) return false;
+export function isToPlanItem(item: StatusSlotItem): boolean {
+  if (!TO_PLAN_KINDS.has(item.kind) || item.hasChildren !== false) return false;
   // The category is the rule; an item built without it falls back to the default
   // workflow's own `todo` key rather than guessing from a custom one.
   const category = item.statusCategory ?? (item.status === 'todo' ? 'todo' : null);
@@ -49,7 +54,7 @@ export function isToPlanStory(item: StatusSlotItem): boolean {
  *
  * - Done is the `done` KEY, and a BLOCKED item does not wear the Done stamp: its
  *   blocked flag is the louder signal, and the slot keeps the status chip.
- * - To plan never meets Done (a `todo` story is never done); it is checked after
+ * - To plan never meets Done (a `todo` story or epic is never done); it is checked after
  *   Done for the order's sake.
  * - Ready is "startable and fully unblocked" — the caller's `ready`, the rule the
  *   roadmap read writes into `RoadmapNodeDto.ready`.
@@ -59,7 +64,7 @@ export function statusSlotOf(
   state: { ready: boolean; blocked: boolean },
 ): StatusSlotKind {
   if (item.status === 'done' && !state.blocked) return 'done';
-  if (isToPlanStory(item)) return 'to-plan';
+  if (isToPlanItem(item)) return 'to-plan';
   if (state.ready) return 'ready';
   return 'status';
 }
