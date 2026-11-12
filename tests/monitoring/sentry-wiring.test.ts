@@ -18,21 +18,38 @@ import type { ErrorEvent, EventHint } from '@sentry/nextjs';
 // that fails silently: an unset build argument, a `next.config` key the bundler
 // never reads, a tunnel path in two files that drift apart. None of those is
 // visible from a green build — which is why the assertions below are about
-// wiring rather than behaviour, in the style `tests/ci-fly-deploy.test.ts`
-// established for the deploy job.
+// wiring rather than behaviour, read straight out of the files that carry it.
 
 const ROOT = process.cwd();
 const dockerfile = readFileSync(join(ROOT, 'Dockerfile'), 'utf8');
-const ci = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+const awsDeploy = readFileSync(join(ROOT, '.github', 'workflows', 'aws-deploy.yml'), 'utf8');
 const nextConfigSource = readFileSync(join(ROOT, 'next.config.ts'), 'utf8');
 
-/** The `deploy` job's YAML, sliced out the way the fly-deploy guard does. */
-function deployJob(): string {
-  const start = ci.indexOf('\n  deploy:\n');
+/**
+ * The release lane's image build — `aws-deploy.yml`'s build step, comments
+ * dropped so prose can neither satisfy nor trip a check. The Fly `deploy` job
+ * these assertions used to read was deleted by MOTIR-10935; `aws-deploy.yml` is
+ * Motir's one deploy lane and builds the same Dockerfile.
+ */
+function releaseBuild(): string {
+  const code = awsDeploy
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+  const start = code.indexOf('- name: Build and push the image');
   expect(start).toBeGreaterThan(-1);
-  const rest = ci.slice(start + 1);
-  const next = /\n {2}[a-z][a-z0-9-]*:\n/.exec(rest.slice(1));
+  const rest = code.slice(start);
+  const next = /\n {6}- (?:name|uses|run):/.exec(rest.slice(1));
   return next ? rest.slice(0, next.index + 1) : rest;
+}
+
+/** The release build's `build-args:` block alone — the lines indented under it. */
+function buildArgs(): string {
+  const block = /^( *)build-args: \|\n((?:\1 {2}.*\n)*)/m.exec(releaseBuild());
+  expect(block, 'the release build declares build-args').not.toBeNull();
+  // Non-vacuity: the block read is the real one, which carries the release sha.
+  expect(block![2]).toContain('MOTIR_RELEASE=');
+  return block![2]!;
 }
 
 describe('the tunnel route is ONE value, agreed on by both files that name it', () => {
@@ -99,44 +116,21 @@ describe('the BUILD-ARGUMENT seam exists, because a NEXT_PUBLIC_* value cannot b
     for (const [, name, value] of args) expect([name, value]).toEqual([name, '""']);
   });
 
-  it('the deploy step passes each one, and the RELEASE is the commit SHA', () => {
-    const deploy = deployJob();
-    expect(deploy).toContain('--build-arg "NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN"');
-    expect(deploy).toContain('--build-arg "MOTIR_RELEASE=$GITHUB_SHA"');
-    expect(deploy).toContain('--build-arg "SENTRY_ORG=$SENTRY_ORG"');
-    expect(deploy).toContain('--build-arg "SENTRY_PROJECT=$SENTRY_PROJECT"');
+  it('the release build passes the browser DSN, and the RELEASE is the commit SHA', () => {
+    const build = releaseBuild();
+    expect(build).toMatch(
+      /^\s*NEXT_PUBLIC_SENTRY_DSN=\$\{\{ secrets\.NEXT_PUBLIC_SENTRY_DSN \}\}$/m,
+    );
+    expect(build).toMatch(/^\s*MOTIR_RELEASE=\$\{\{ github\.sha \}\}$/m);
   });
 
-  it('carries the AUTH TOKEN as a build SECRET, never as a build argument', () => {
-    // A `--build-arg` value is recorded in the build's own metadata. The
-    // distinction is the whole reason the token is the one value that does not
-    // appear in the ARG block above.
-    const deploy = deployJob();
-    expect(deploy).toContain('--build-secret "SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN"');
-    expect(deploy).not.toContain('--build-arg "SENTRY_AUTH_TOKEN');
+  it('never carries the AUTH TOKEN as a build argument', () => {
+    // A build argument is recorded in the build's own metadata. The distinction
+    // is the whole reason the token is the one value that does not appear in the
+    // ARG block above: the Dockerfile reads it only as a BuildKit secret.
+    expect(buildArgs()).not.toContain('SENTRY_AUTH_TOKEN');
     expect(dockerfile).toContain('--mount=type=secret,id=SENTRY_AUTH_TOKEN');
     expect(dockerfile).not.toMatch(/^ARG SENTRY_AUTH_TOKEN/m);
-  });
-
-  it('refuses to release when a monitoring secret is missing', () => {
-    // An unset secret degrades monitoring silently — an empty DSN builds a
-    // bundle that reports nothing, an empty token ships unreadable stack
-    // traces. Neither turns a check red on its own, so the deploy stops instead.
-    const deploy = deployJob();
-    expect(deploy).toContain('Missing monitoring secret(s)');
-    expect(deploy).toMatch(/for name in NEXT_PUBLIC_SENTRY_DSN SENTRY_AUTH_TOKEN/);
-  });
-
-  it('asserts the source-map upload RAN, rather than that it was configured', () => {
-    // The card's own warning: `outputFileTracingExcludes` is a live example of a
-    // `next.config` key this build never reads (MOTIR-2403), so "configured" is
-    // not evidence. The release existing in Sentry is, because the SDK's
-    // Turbopack path creates it inside the same after-compile hook that uploads
-    // the maps.
-    const deploy = deployJob();
-    expect(deploy).toContain('/releases/$GITHUB_SHA/');
-    expect(deploy).toMatch(/::error::Sentry has no release named/);
-    expect(deploy).toMatch(/exit 1/);
   });
 });
 

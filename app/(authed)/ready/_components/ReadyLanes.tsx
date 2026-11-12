@@ -74,8 +74,14 @@ export function ReadyLanes({ leaves, bugs, counts }: ReadyLanesProps) {
           than a guessed offset (MOTIR-10974), and its OWN scroll container —
           `useRowWindow` windows against it as the nearest scrolling ancestor.
           `flex-1`'s zero basis keeps its rows from inflating it; `min-h-80` is the
-          floor on a short viewport, where the shell's `<main>` scrolls the rest. */}
-      <div data-testid="ready-lane-pane" className="min-h-80 flex-1 overflow-y-auto pr-1">
+          floor on a short viewport, where the shell's `<main>` scrolls the rest.
+          The pane runs to the viewport's bottom edge with the Plan-with-AI orb
+          over it, so its bottom padding is the shell's clearance: scrolled to the
+          end, the last row sits above the orb. */}
+      <div
+        data-testid="ready-lane-pane"
+        className="min-h-80 flex-1 overflow-y-auto pr-1 pb-(--shell-bottom-clearance)"
+      >
         <div hidden={lane !== 'main'} data-testid="ready-lane-main">
           <ReadyList
             initialItems={leaves.items}

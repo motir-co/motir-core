@@ -29,8 +29,8 @@ import { join, relative, resolve, sep } from 'node:path';
 //
 // ── Read as TEXT, not by running it ─────────────────────────────────────────
 // Workflow YAML is neither type-checked nor linted by any suite, and the repo
-// has no YAML parser — the same premise `tests/ci-merge-queue.test.ts`,
-// `tests/ci-complete-gate.test.ts` and `tests/ci-fly-deploy.test.ts` share.
+// has no YAML parser — the same premise `tests/ci-merge-queue.test.ts` and
+// `tests/ci-complete-gate.test.ts` share.
 // This file is in their mould and stays in the sharded lane with them: it reads
 // a BOUNDED directory (`.github/`) with no whole-tree scanner import, so it is
 // not a candidate for the structural-guard lane

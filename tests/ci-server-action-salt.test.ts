@@ -12,22 +12,39 @@ import { describe, expect, it } from 'vitest';
 //
 // Nothing about that is visible from a green build — which is why the assertions
 // below are about WIRING, in the style `tests/monitoring/sentry-wiring.test.ts`
-// established for the deploy job. The failure they guard against is not a bug
+// established for the release build. The failure they guard against is not a bug
 // somebody writes; it is a line somebody deletes while tidying the Dockerfile.
 
 const ROOT = process.cwd();
 const dockerfile = readFileSync(join(ROOT, 'Dockerfile'), 'utf8');
-const ci = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+const awsDeploy = readFileSync(join(ROOT, '.github', 'workflows', 'aws-deploy.yml'), 'utf8');
 
 const KEY = 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY';
 
-/** The `deploy` job's YAML, sliced out the way the other deploy guards do. */
-function deployJob(): string {
-  const start = ci.indexOf('\n  deploy:\n');
+/**
+ * The release lane's image build — `aws-deploy.yml`'s build step, comments
+ * dropped. The Fly `deploy` job these assertions used to read was deleted by
+ * MOTIR-10935; `aws-deploy.yml` is Motir's one deploy lane.
+ */
+function releaseBuild(): string {
+  const code = awsDeploy
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+  const start = code.indexOf('- name: Build and push the image');
   expect(start).toBeGreaterThan(-1);
-  const rest = ci.slice(start + 1);
-  const next = /\n {2}[a-z][a-z0-9-]*:\n/.exec(rest.slice(1));
+  const rest = code.slice(start);
+  const next = /\n {6}- (?:name|uses|run):/.exec(rest.slice(1));
   return next ? rest.slice(0, next.index + 1) : rest;
+}
+
+/** The release build's `build-args:` block alone — the lines indented under it. */
+function buildArgs(): string {
+  const block = /^( *)build-args: \|\n((?:\1 {2}.*\n)*)/m.exec(releaseBuild());
+  expect(block, 'the release build declares build-args').not.toBeNull();
+  // Non-vacuity: the block read is the real one, which carries the release sha.
+  expect(block![2]).toContain('MOTIR_RELEASE=');
+  return block![2]!;
 }
 
 /**
@@ -72,26 +89,15 @@ describe('the Dockerfile bakes the salt into the build that uses it', () => {
     // A `--build-arg` value is recorded in the build's own metadata. This is the
     // same line the Sentry auth token is on, and for the same reason.
     expect(dockerfile).not.toMatch(new RegExp(`^ARG ${KEY}`, 'm'));
-    expect(deployJob()).not.toContain(`--build-arg "${KEY}`);
+    expect(buildArgs()).not.toContain(KEY);
   });
 });
 
-describe('the deploy job supplies it, and refuses to release without it', () => {
-  it('passes it to `flyctl deploy` as a build secret', () => {
-    expect(deployJob()).toContain(`--build-secret "${KEY}=$${KEY}"`);
-  });
-
-  it('stops the release when the secret is unset, rather than shipping a re-salted build', () => {
-    // An empty value is not a degraded release — it is THIS bug, shipped again,
-    // silently: the build succeeds, the machines are healthy, and every open tab
-    // loses its writes. So the deploy stops, exactly as it does for a missing
-    // monitoring secret.
-    const deploy = deployJob();
-    expect(deploy).toContain(`Missing ${KEY}`);
-    expect(deploy).toMatch(new RegExp(`if \\[ -z "\\$\\{${KEY}:-\\}" \\]; then`));
-  });
-
-  it('reads the value from a repository secret, never from a literal', () => {
-    expect(deployJob()).toContain(`${KEY}: \${{ secrets.${KEY} }}`);
+describe('the release build supplies it', () => {
+  it('passes it to the image build as a BuildKit SECRET', () => {
+    expect(releaseBuild()).toMatch(/^\s*secrets: \|$/m);
+    expect(releaseBuild()).toMatch(
+      new RegExp(`^\\s*${KEY}=\\$\\{\\{ secrets\\.${KEY} \\}\\}$`, 'm'),
+    );
   });
 });

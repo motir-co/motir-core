@@ -95,6 +95,15 @@ vi.mock('@/lib/test-cimd-mock', () => cimd);
 vi.mock('@/lib/test-planner-model-mock', () => plannerModel);
 vi.mock('@/lib/test-platform-lessons-mock', () => platformLessons);
 vi.mock('@/lib/test-planner-findings-mock', () => plannerFindings);
+// `register()` also starts the watchdog metrics publisher, which this guard does
+// not test. Loading the real module here, unconfigured, gives v8 a second copy
+// of its coverage in which `startWatchdogMetricsPublisher` returns at the
+// namespace check, and when a shard pairs this file with
+// `tests/monitoring/watchdogMetrics.test.ts` the merge keeps that copy's
+// unhit blocks: the file's per-file gate then reads 78.72% lines (MOTIR-10978).
+vi.mock('@/lib/monitoring/watchdogMetrics', () => ({
+  startWatchdogMetricsPublisher: () => null,
+}));
 
 /** Which installers each flag owns — the assertion that the RIGHT seam ran. */
 const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {

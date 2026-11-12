@@ -124,7 +124,6 @@ describe('the vendor job runtime is gone, not merely unused', () => {
       'lib',
       'app',
       'components',
-      'fly.toml',
       'Dockerfile',
       '.github',
       'scripts',
