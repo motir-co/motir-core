@@ -5,12 +5,18 @@ name: AWS deploy
 # and hands its DIGEST to `pnpm deploy:aws`, which migrates, rolls web, worker
 # and relay, and records the digest only when every service completed.
 #
+# This is Motir's one release lane: the CI workflow's old deploy job was
+# retired by MOTIR-10935. This file shares no job with the CI workflow, waits on
+# nothing in it and is not triggered by it.
+#
 # No second migration gate: every push to `main` arrives through the merge
 # queue, whose required checks already include the CI workflow's `build` job and
 # its schema-drift guard.
 #
-# This is the repository's only deploy of a `main` commit. The image gets no
-# Sentry auth token, so no source maps are uploaded for the release.
+# The release guards the retired deploy job carried live here (MOTIR-11059): the
+# job refuses to build without its monitoring secrets or its Server Action salt,
+# the image build uploads source maps for the release, and the run goes red if
+# Sentry has no release named after this commit.
 #
 # No AWS key anywhere: both sessions are GitHub OIDC role assumptions, and the
 # role ARNs, region and name prefix are repository VARIABLES (none is a
@@ -47,6 +53,46 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_DEPLOY_NAME_PREFIX: ${{ vars.AWS_DEPLOY_NAME_PREFIX }}
     steps:
+      # ⚠️ FAIL HERE RATHER THAN SHIP A BLIND RELEASE (MOTIR-1162, MOTIR-11059).
+      # Each value is a repository secret set by MOTIR-1161, and each one that is
+      # missing degrades monitoring SILENTLY: an empty `NEXT_PUBLIC_SENTRY_DSN`
+      # builds a browser bundle that reports nothing, an empty `SENTRY_AUTH_TOKEN`
+      # ships stack traces nobody can read. Nothing errors and no check goes red,
+      # so the release stops instead. It runs first, before any AWS session.
+      - name: Assert the monitoring build-time secrets are present
+        env:
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for name in NEXT_PUBLIC_SENTRY_DSN SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT; do
+            [ -n "${!name:-}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing monitoring secret(s):$missing — see MOTIR-1161's provisioning record for the value and its home. Refusing to deploy an unmonitored release."
+            exit 1
+          fi
+          echo "all four monitoring build-time secrets are present"
+
+      # ⚠️ SAME SHAPE, DIFFERENT DAMAGE (MOTIR-3948). An unset
+      # NEXT_SERVER_ACTIONS_ENCRYPTION_KEY re-salts every Server Action id, so
+      # every browser tab older than this deploy gets a 404 on every write it
+      # attempts, silently, until someone reloads it. The build succeeds and the
+      # release is healthy, so this release stops too.
+      - name: Assert the Server Action salt is pinned
+        env:
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}" ]; then
+            echo "::error::Missing NEXT_SERVER_ACTIONS_ENCRYPTION_KEY — without it Next re-salts every Server Action id per build (MOTIR-3948), and every tab open across this release loses every write. Generate one with 'openssl rand -base64 32' and set it as a repository secret; it must never change afterwards."
+            exit 1
+          fi
+          echo "the Server Action salt is pinned"
+
       - uses: actions/checkout@v6
       - uses: ./.github/actions/buildx
 
@@ -75,10 +121,18 @@ jobs:
           [ "$digest" = "None" ] && digest=""
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
-      # The repository's Dockerfile, with the browser-facing build arguments.
-      # The Server Action salt goes in as a build SECRET, so every build of the
-      # deploy gives every action the same id and an open tab keeps working
-      # across a release (the Dockerfile's build step explains why).
+      # ⚠️ THE BUILD ARGUMENTS ARE THE ONLY WAY the browser half of monitoring is
+      # configured: `next build` inlines a `NEXT_PUBLIC_*` value into the client
+      # bundle, and a runtime secret cannot reach it (the Dockerfile's `ARG`
+      # block is the receiving end). `MOTIR_RELEASE` names the release the maps
+      # are uploaded against, and `.git` is in `.dockerignore`, so the SDK's own
+      # `git rev-parse` fallback finds nothing.
+      #
+      # `SENTRY_ORG` and `SENTRY_PROJECT` with the auth token are what turn the
+      # source-map upload on (`next.config.ts`'s monitoring block). The TOKEN and
+      # the Server Action salt go in as BuildKit SECRETS, never as build
+      # arguments: a build argument is recorded in the image's metadata, and the
+      # Dockerfile mounts each secret for the single `next build` command.
       - name: Build and push the image
         id: build
         if: steps.existing.outputs.digest == ''
@@ -90,7 +144,10 @@ jobs:
           build-args: |
             NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
             MOTIR_RELEASE=${{ github.sha }}
+            SENTRY_ORG=${{ secrets.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ secrets.SENTRY_PROJECT }}
           secrets: |
+            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
             NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
 
       # The deploy is handed the digest from the push result (or the existing
@@ -160,3 +217,34 @@ jobs:
             tail -n 1 /tmp/aws-deploy.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # ⚠️ "CONFIGURED" IS NOT "RAN" (MOTIR-2403: `outputFileTracingExcludes` is a
+      # `next.config` key Turbopack never read, and it read as solved for months).
+      # `@sentry/nextjs`'s Turbopack path creates the release inside the same
+      # `runAfterProductionCompile` hook that uploads the maps, so a release named
+      # after this commit is positive evidence the upload ran with a working
+      # token, and its absence is the regression (a hook that stopped running, an
+      # expired token) that would otherwise surface as unreadable stack traces
+      # during an incident.
+      #
+      # It runs after the roll, as the retired deploy job's did, so an outage of Sentry's
+      # API turns the run red without holding a release back. It runs whether or
+      # not the roll was gated, and on a re-run that reused the pushed image,
+      # because the release belongs to the image this run deploys.
+      - name: Assert Sentry received this release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 --max-time 30 -o /tmp/sentry-release.json -w '%{http_code}' \
+            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+            "https://sentry.io/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/releases/$GITHUB_SHA/" || true)
+          echo "GET releases/$GITHUB_SHA → HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Sentry has no release named $GITHUB_SHA. The source-map upload did not run — stack traces from this deploy will not be symbolicated. See next.config.ts's monitoring block for how the Turbopack upload path is wired."
+            exit 1
+          fi
+          head -c 400 /tmp/sentry-release.json; echo
+          echo "Sentry release: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"

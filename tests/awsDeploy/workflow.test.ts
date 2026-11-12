@@ -89,8 +89,37 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     });
   });
 
-  it('builds without the Sentry auth token, so only the Fly build uploads source maps', () => {
-    expect(code).not.toContain('SENTRY_AUTH_TOKEN');
+  // MOTIR-11059: the guards the retired deploy job carried. The secret checks refuse
+  // before any AWS session or image build; the Sentry release check reads the
+  // build's result after the roll, so a Sentry outage cannot hold a release back.
+  it('refuses on a missing monitoring secret or salt before it assumes a role or builds', () => {
+    const monitoring = stepIndex(
+      (s) => s.name === 'Assert the monitoring build-time secrets are present',
+    );
+    const salt = stepIndex((s) => s.name === 'Assert the Server Action salt is pinned');
+    const firstRole = stepIndex(
+      (s) => !!s.uses?.startsWith('aws-actions/configure-aws-credentials'),
+    );
+    const build = stepIndex((s) => s.id === 'build');
+    expect([monitoring, salt]).toEqual([0, 1]);
+    expect(salt).toBeLessThan(firstRole);
+    expect(salt).toBeLessThan(build);
+    expect(steps[monitoring]!.if).toBeUndefined();
+    expect(steps[salt]!.if).toBeUndefined();
+  });
+
+  it('checks the Sentry release last, after the roll, on every run that reaches it', () => {
+    const check = stepIndex((s) => s.name === 'Assert Sentry received this release');
+    const deploy = stepIndex((s) => !!s.run?.includes('deploy:aws'));
+    expect(check).toBe(steps.length - 1);
+    expect(check).toBeGreaterThan(deploy);
+    expect(steps[check]!.if).toBeUndefined();
+  });
+
+  it('hands the Sentry auth token to the build only as a BuildKit secret', () => {
+    const build = steps[stepIndex((s) => s.id === 'build')]!;
+    expect(build.with?.['secrets']).toContain('SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}');
+    expect(build.with?.['build-args']).not.toContain('SENTRY_AUTH_TOKEN');
   });
 
   it('assumes the push role, then pushes, then assumes the deploy role in a separate step', () => {
