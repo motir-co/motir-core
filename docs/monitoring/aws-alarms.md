@@ -1,24 +1,22 @@
 # AWS alarms — memory, CPU, event-loop block and steal per service
 
-On Fly, the on-call engineer reads Fly's Grafana and Sentry. On AWS, each core
-service (`web`, `worker`, `relay`) has CloudWatch alarms that notify one SNS
-topic. This page maps each Fly signal to the alarm that replaces it, names the
-series each alarm reads, and gives the one-off breach task that proves each
-alarm fires.
+The on-call engineer reads a breach from CloudWatch alarms and the SNS topic
+they notify, and reads errors from Sentry, which stays the issue channel. Each
+core service (`web`, `worker`, `relay`) has its own alarms. This page lists
+them, names the series each alarm reads, and gives the one-off breach task that
+proves each alarm fires.
 
 The alarms are built by motir-infra (`lib/constructs/service-alarms.ts`), from
 the `monitoring` block of its parameter file
 (`lib/config/environments/production.ts`). This page copies the production
 values as merged. When the parameter file changes, it wins.
 
-## Fly alert → AWS alarm
+## The alarms
 
-No Fly or Sentry rule watched memory, CPU steal or event-loop blocks before
-this story. The Fly-rules check
-([MOTIR-9879](https://app.motir.co/items/MOTIR-9879)) read Fly's Grafana and
-Prometheus, the Fly dashboard and Sentry on 2026-10-29 and found none. The one
-destination in use was Sentry's email to an issue's owners. So each AWS alarm
-below is set from the target the story stated, not copied from a Fly rule.
+No memory, CPU-steal or event-loop-block alert rule existed before these
+alarms: the check that read the previous host's dashboards and Sentry on
+2026-10-29 found none (MOTIR-9879; the previous host was Fly). So each
+threshold below is a target the story stated, not a copy of an earlier rule.
 
 Every alarm is named `<namePrefix>-<service>-<kind>`, so in production it is
 `motir-web-memory`, `motir-worker-cpu`, `motir-relay-event-loop-block` and so on.
@@ -26,12 +24,12 @@ Each one notifies the SNS topic `motir-alarms` when it goes to ALARM and again
 when it returns to OK. The topic is encrypted with the secrets-and-logs key, and
 its subscribers are listed in the parameter file.
 
-| Fly signal today                                 | AWS alarm (per service)            | signal read                                      | threshold | period | datapoints to alarm |
-| ------------------------------------------------ | ---------------------------------- | ------------------------------------------------ | --------- | ------ | ------------------- |
-| memory: no rule existed                          | `motir-<service>-memory`           | `100 * MemoryUtilized / MemoryReserved`, Maximum | ≥ 85 %    | 60 s   | 2 of 3              |
-| CPU steal: no rule existed                       | `motir-<service>-cpu`              | `100 * CpuUtilized / CpuReserved`, Maximum       | ≥ 90 %    | 60 s   | 5 of 5              |
-|                                                  | `motir-<service>-steal`            | `CpuStealMs`, Maximum                            | ≥ 6000 ms | 60 s   | 3 of 5              |
-| event-loop block: no rule existed (Sentry mails) | `motir-<service>-event-loop-block` | `EventLoopDelayMaxMs`, Maximum                   | ≥ 2000 ms | 60 s   | 1 of 3              |
+| alarm (per service)                | signal read                                      | threshold | period | datapoints to alarm |
+| ---------------------------------- | ------------------------------------------------ | --------- | ------ | ------------------- |
+| `motir-<service>-memory`           | `100 * MemoryUtilized / MemoryReserved`, Maximum | ≥ 85 %    | 60 s   | 2 of 3              |
+| `motir-<service>-cpu`              | `100 * CpuUtilized / CpuReserved`, Maximum       | ≥ 90 %    | 60 s   | 5 of 5              |
+| `motir-<service>-steal`            | `CpuStealMs`, Maximum                            | ≥ 6000 ms | 60 s   | 3 of 5              |
+| `motir-<service>-event-loop-block` | `EventLoopDelayMaxMs`, Maximum                   | ≥ 2000 ms | 60 s   | 1 of 3              |
 
 The targets these numbers implement:
 
@@ -40,8 +38,7 @@ The targets these numbers implement:
 - **CPU** alarms at sustained saturation of the task's reservation: five minutes
   at 90 % or more.
 - **Event-loop block** alarms on one block of 2 s or more, well under the 5 s
-  interactive-transaction timeout that a P2028 marks. On Fly today, Sentry's
-  `new-issue` alert emails only when such a block opens a _new_ issue.
+  interactive-transaction timeout that a P2028 marks.
 - **Steal** alarms on CPU taken by the host. On 2026-10-15, that starvation
   showed up as a 17 s event-loop freeze and P2028s.
 
@@ -99,14 +96,15 @@ All three are **unset by default**. With the namespace unset or blank, a local
 or self-hosted build starts no timer and no watchdog thread, opens no port,
 writes nothing and sends nothing (`tests/monitoring/monitoringUnsetGuarantee.test.ts`).
 On AWS, motir-infra sets them on each watched service's task definition. The
-`9091` metrics server that Fly scrapes is a separate setting
-(`MONITORING_METRICS_PORT`) and keeps serving Fly unchanged
-([request database timing](./request-db-timing.md)).
+metrics server is a separate setting: `MONITORING_METRICS_PORT` opens it, and
+motir-infra sets it on the web task only, so the request-timing collector beside
+that task can scrape `/metrics` over the task's loopback
+([request database timing](./request-db-timing.md)). Nothing else sets it.
 
 ## Proving an alarm
 
-Each alarm is proved by a real, bounded breach on a **rehearsal** service, never
-by setting the alarm's state by hand. The core image carries the breach command
+Each alarm is proved by a real, bounded breach, never by setting the alarm's
+state by hand. The core image carries the breach command
 at `/app/breach/breach.mjs`:
 
 ```sh
@@ -124,19 +122,30 @@ node breach/breach.mjs <memory --percent N [--limit-mb N] | cpu | loop --block-m
 - **The output.** It writes one JSON start line and one end line to stdout,
   which land in the task's log group.
 
-Run it as a one-off ECS task of the rehearsal service's own task definition,
-with a container override. The override sets the command, the guard and the
-publication settings (namespace and the `Service` the alarm reads).
+**The venue is a property, not a service.** The run needs one watched service
+whose only task, for the length of the run, is the breaching task. The memory
+and CPU alarms read the dimensions `ClusterName` and `ServiceName` and nothing
+else, and compare used against reserved across every task the service has. A
+task still serving traffic beside the breaching one dilutes that ratio, so the
+alarm may never fire. So:
+
+1. Take one watched service to zero tasks with `aws ecs update-service`
+   (`--desired-count 0`), after reading its present count. That stops what the
+   service serves for the run, so choose the service and the time accordingly.
+2. Run the breach as a one-off ECS task of that service's own task definition,
+   with a container override (below).
+3. Read the alarm's history (the last section).
+4. Bring the service back to the count you read.
+
+The override sets the command, the guard and the publication settings
+(namespace and the `Service` the alarm reads).
 `--group service:<ecs service name>` files the task under that service in
-Container Insights, which is where the memory and CPU alarms read. Scale the
-rehearsal service to zero tasks first. Those two alarms read the service's
-used-over-reserved across all its tasks, so an idle sibling task would dilute
-the breach.
+Container Insights, which is where the memory and CPU alarms read.
 
 ```sh
 aws ecs run-task \
   --cluster <cluster> \
-  --task-definition <rehearsal task definition> \
+  --task-definition <the service's task definition> \
   --launch-type FARGATE \
   --group service:<ecs service name> \
   --network-configuration 'awsvpcConfiguration={subnets=[<private subnet>],securityGroups=[<service security group>],assignPublicIp=DISABLED}' \
