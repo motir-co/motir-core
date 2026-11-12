@@ -1553,6 +1553,31 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  dismiss_review: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      reason: {
+        type: 'string',
+        description:
+          'Why the review is dismissed — required, 1–2000 characters once trimmed. Stored on the dismissal and shown on the card’s History.',
+      },
+      subjectVersion: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The delivery-set version whose send-back you are dismissing — every pull request as `owner/name#number@headSha`, sorted, comma-joined. Omit it to dismiss at the card’s CURRENT version. Name the version you read when you want a push since then to refuse with `REVIEW_DISMISSAL_STALE` rather than dismiss a send-back you have not seen.',
+      },
+    },
+    required: ['key', 'reason'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   dispatch_prompt: {
     type: 'object',
     properties: {
@@ -5237,6 +5262,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   delete_sprint: 'Delete sprint',
   delete_work_item: 'Delete work item',
   delete_work_item_todo: 'Delete a to-do step',
+  dismiss_review: 'Dismiss the review',
   dispatch_prompt: 'Dispatch prompt',
   edit_comment: 'Edit comment',
   expand_item: 'Expand work item',
@@ -5546,6 +5572,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
+    openWorldHint: false,
+  },
+  dismiss_review: {
+    title: 'Dismiss the review',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
     openWorldHint: false,
   },
   dispatch_prompt: { title: 'Dispatch prompt', readOnlyHint: true, openWorldHint: false },

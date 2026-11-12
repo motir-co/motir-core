@@ -115,6 +115,11 @@ type Args = {
   model: string;
 };
 
+/** Appended to `REVIEW_VERDICT_SECOND` at this door: the one way past a standing send-back. */
+export const SECOND_VERDICT_HINT =
+  'To overrule a standing send-back at this version, its routed person (the assignee, or the ' +
+  'reporter when unassigned) calls `dismiss_review` with a reason; a person still approves the merge.';
+
 /** The prose an agent reads, carrying the same facts as the payload. */
 function summarize(dto: ReviewVerdictResultDto): string {
   const what =
@@ -165,9 +170,13 @@ export async function runSubmitReviewVerdict(
     // The door's own refusals — each a code and a message the agent acts on in one hop:
     // review the current version, stop (already reviewed), review the named run target,
     // or fix the named field.
+    // A second verdict names the way past a send-back the person disagrees with (MOTIR-11092):
+    // the routed person dismisses it, which a re-review at the same version cannot do.
+    if (err instanceof ReviewVerdictSecondError) {
+      return toolError(err.code, `${err.message} ${SECOND_VERDICT_HINT}`);
+    }
     if (
       err instanceof ReviewVerdictLateError ||
-      err instanceof ReviewVerdictSecondError ||
       err instanceof ReviewTargetNotRunTargetError ||
       err instanceof ReviewNothingToReviewError ||
       err instanceof ReviewVerdictInvalidError
@@ -198,7 +207,9 @@ export function registerSubmitReviewVerdict(
         'still does. A `changes_requested` puts the card in To fix and withdraws its ' +
         'approve-and-merge question; no status moves. REFUSALS: `REVIEW_VERDICT_LATE` (the ' +
         'card has a newer version — review that) and `REVIEW_VERDICT_SECOND` (already ' +
-        'reviewed — stop) are each RECORDED and decide nothing; `REVIEW_TARGET_NOT_RUN_TARGET` ' +
+        'reviewed — stop; to overrule a standing send-back at that version, its routed person ' +
+        'calls `dismiss_review`) are each RECORDED and decide nothing; ' +
+        '`REVIEW_TARGET_NOT_RUN_TARGET` ' +
         'names the card to review instead; `REVIEW_NOTHING_TO_REVIEW` — it delivers no pull ' +
         'request.',
       inputSchema,

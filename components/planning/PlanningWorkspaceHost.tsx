@@ -932,6 +932,7 @@ function PlanWorkspaceHost({
               anchor: found.anchor,
               ancestors: found.ancestors,
               hasChildren: found.hasChildren,
+              folders: found.folders,
             })
           : [];
         setFetchedTarget({ key: fetchTargetKey, trail });

@@ -119,6 +119,8 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   get_approval_gate: true,
   // MOTIR-10333 — the user-token verdict door
   submit_review_verdict: true,
+  // MOTIR-11092 — its counterpart, the dismissal door
+  dismiss_review: true,
   // 11.6.3 — the work-item family (MOTIR-2229)
   search_work_items: true,
   list_ready: true,

@@ -339,11 +339,16 @@ describe('the port boundary', () => {
         // directory by `tests/ciFleet/awsSdkBoundary.test.ts`. Core's own
         // deploy script (MOTIR-9927) is a CI tool, not hosting: it speaks to
         // ECR and CloudWatch Logs through its own ports file, tested beside it.
+        // The console's reads of core's OWN account (Services, Fleet status —
+        // MOTIR-10890, MOTIR-10887, MOTIR-10986's ECR image read) live in
+        // `lib/awsServices/`, held to that folder by the same test.
         allowed: [
           SERVERLESS,
           `${ORCHESTRATOR}/adapters/aws/`,
           'scripts/aws-deploy/',
           'tests/awsDeploy/',
+          'lib/awsServices/',
+          'tests/awsServices/',
         ],
         modules: serverlessModules(),
         identifiers: new Set(),

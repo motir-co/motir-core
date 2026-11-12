@@ -40,6 +40,7 @@ import {
   planPayload,
   planSessionPayload,
   planSubmitPayload,
+  reviewDismissalPayload,
   reviewVerdictPayload,
   sessionCloseOutPayload,
 } from './workLoop';
@@ -86,6 +87,9 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // MOTIR-10333 — the user-token verdict door: v1's `ReviewVerdictResult` whole, through
   // the REST door's own presenter, and it PROBES it.
   submit_review_verdict: reviewVerdictPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-11092 — its counterpart, the dismissal: v1's `ReviewDismissalResult` whole, through
+  // the REST door's own presenter, and it PROBES it.
+  dismiss_review: reviewDismissalPayload as unknown as PayloadDefinition<never>,
   // 11.6.3 — the work-item family
   search_work_items: searchWorkItemsPayload as unknown as PayloadDefinition<never>,
   list_ready: listReadyPayload as unknown as PayloadDefinition<never>,

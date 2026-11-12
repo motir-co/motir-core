@@ -545,6 +545,12 @@ export const es: McpSummaryTranslations = {
     source:
       'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
   },
+  dismiss_review: {
+    summary:
+      'Descarta la devolución vigente del agente de revisión sobre un elemento, como la persona a la que se dirige y con un motivo, para que se vuelva a pedir aprobar y hacer merge. Nunca aprueba el merge.',
+    source:
+      'Dismiss the review agent’s standing send-back on a card, as its routed person and with a reason, so approve-and-merge is asked again. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       'Deshace UN `link_pull_request`: elimina la entrega registrada entre un elemento de trabajo y una pull request. Una entrega es una fila, así que volver a vincular el elemento de trabajo correcto AÑADE en lugar de corregir; esto elimina exactamente el par que nombras y deja intacta cualquier otra entrega.',

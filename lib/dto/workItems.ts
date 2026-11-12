@@ -553,6 +553,14 @@ export interface WorkItemLineageDto {
  */
 export interface PlanningAnchorLineageDto extends WorkItemLineageDto {
   hasChildren: boolean;
+  /**
+   * The anchor's EFFECTIVE placement folder chain, ROOT FIRST — its own folder,
+   * else its root ancestor's — or `[]` when it is unfiled. A filed item sits
+   * behind its folder's door on the canvas, so an arrival trail without these
+   * crumbs lands on the root, where the anchor is not drawn (the Plan button on
+   * a filed, childless story opened the canvas on the root).
+   */
+  folders: Array<{ id: string; name: string }>;
 }
 
 /**

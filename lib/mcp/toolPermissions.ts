@@ -390,6 +390,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // holding the edit key on the card may submit their review agent's verdict; the service
   // asserts it on the card's project. `CLI_TOKEN_GRANT` already carries it.
   submit_review_verdict: 'work_item:edit',
+  // `dismiss_review` (MOTIR-11092; `approval-gates.md` §12.15) — the routed person's own
+  // agent dismisses the review agent's standing send-back. The service asserts the edit key,
+  // then that the caller is the routed person; the REST twin asserts the same key.
+  dismiss_review: 'work_item:edit',
 
   // ── sprint:manage — the sprint lifecycle + membership ────────────────────
   // `sprintsService.assertCanManageSprints` and `backlogService.assertCanGroom`

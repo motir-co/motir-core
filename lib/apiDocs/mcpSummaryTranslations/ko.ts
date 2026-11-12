@@ -535,6 +535,12 @@ export const ko: McpSummaryTranslations = {
     source:
       'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
   },
+  dismiss_review: {
+    summary:
+      '작업 항목에 대해 유효한 리뷰 에이전트의 반려를, 그 반려가 전달된 담당자로서 사유와 함께 기각해 승인 및 병합을 다시 요청합니다. 병합을 승인하지는 않습니다.',
+    source:
+      'Dismiss the review agent’s standing send-back on a card, as its routed person and with a reason, so approve-and-merge is asked again. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       '`link_pull_request` 하나를 되돌립니다 — 작업 항목과 풀 리퀘스트 사이에 기록된 전달을 제거합니다. 전달은 하나의 행이므로 올바른 작업 항목을 다시 연결하면 수정되는 것이 아니라 추가됩니다. 이 호출은 지정한 정확히 그 한 쌍만 제거하고 다른 전달은 그대로 둡니다.',

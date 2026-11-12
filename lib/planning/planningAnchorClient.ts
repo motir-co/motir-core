@@ -34,6 +34,15 @@ export interface PlanningAnchor {
   /** Does the anchor have live children (MOTIR-7621)? The arrival rule opens
    *  INSIDE the anchor only when it does; a leaf arrives on its own level. */
   hasChildren: boolean;
+  /** The anchor's effective placement folder chain, ROOT FIRST (`[]` when
+   *  unfiled) — the folder crumbs the arrival trail walks through first. */
+  folders: PlanningAnchorFolder[];
+}
+
+/** One folder of the anchor's placement chain. */
+export interface PlanningAnchorFolder {
+  id: string;
+  name: string;
 }
 
 /**
@@ -64,5 +73,7 @@ export async function fetchPlanningAnchor(
     // Absent reads as a leaf: arriving BESIDE an item always shows it, while
     // arriving inside a childless one shows an empty level.
     hasChildren: body.hasChildren === true,
+    // Absent reads as unfiled — the trail the read carried before folders did.
+    folders: body.folders ?? [],
   };
 }

@@ -183,12 +183,6 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'only caller is that run’s own token, which never reaches MCP, and a tool would put a gate ' +
     'decision in reach of an agent credential that is not the review run’s — so there is no ' +
     'MCP payload to compare (`submitWorkItemAgentReview`’s entry in the work-loop story gate).',
-  ReviewDismissalResult:
-    'The DISMISSAL result (Story MOTIR-10327 · MOTIR-10334) answers a person overruling a ' +
-    'review agent’s send-back, over `/api/v1` and the session route behind the card’s Dismiss ' +
-    'button. A dismissal is a PERSON’s decision with a written reason, so no MCP tool makes ' +
-    'one: an agent that could dismiss its own reviewer would empty the review of meaning. With ' +
-    'no tool, there is no MCP payload to compare.',
   UnbuildableReportAcknowledgement:
     'The run’s UNBUILDABLE report (MOTIR-8698) is posted over `/api/v1` by the `motir` CLI ' +
     'around the agent, on the run’s own credential, which `verifyMcpToken` refuses. Its MCP ' +

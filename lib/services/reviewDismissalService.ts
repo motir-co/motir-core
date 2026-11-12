@@ -64,6 +64,33 @@ function reasonOf(input: DismissReviewInput): string {
   return reason;
 }
 
+/** The card's delivery set and its version — null when it delivers no pull request. */
+async function readDeliverySet(workItemId: string, tx: Prisma.TransactionClient) {
+  const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+  return {
+    deliveries,
+    version: deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d))),
+  };
+}
+
+/**
+ * The card's CURRENT delivery-set version, read exactly as {@link reviewDismissalService.dismiss}
+ * computes the version it checks — every pull request as `owner/name#number@headSha`, sorted,
+ * comma-joined — or null when it delivers no pull request. MOTIR-11092: the `dismiss_review`
+ * MCP tool dismisses at this version when its caller names none. A read only: the dismissal
+ * re-reads the version under its locks, so a push in between still answers
+ * `REVIEW_DISMISSAL_STALE`.
+ */
+export async function currentDeliverySetVersion(
+  workItemId: string,
+  ctx: ServiceContext,
+): Promise<string | null> {
+  return withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    async (tx) => (await readDeliverySet(workItemId, tx)).version,
+  );
+}
+
 async function lockGatesThenCard(workItemId: string, tx: Prisma.TransactionClient): Promise<void> {
   const review = await approvalGateRepository.findLatestByWorkItem(workItemId, 'agent_review', tx);
   if (review) await approvalGateRepository.lockById(review.id, tx);
@@ -104,8 +131,7 @@ export const reviewDismissalService = {
           throw new ReviewDismissalForbiddenError(item.identifier);
         }
 
-        const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
-        const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
+        const { deliveries, version: current } = await readDeliverySet(item.id, tx);
         if (current === null || current !== subjectVersion) {
           throw new ReviewDismissalStaleError(subjectVersion, current);
         }

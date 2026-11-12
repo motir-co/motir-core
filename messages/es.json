@@ -10769,6 +10769,7 @@
       "navServices": "Servicios",
       "navCapacity": "Capacidad de proveedores",
       "navJobs": "Trabajos",
+      "navCredentials": "Credenciales",
       "navStarters": "Plantillas",
       "navFleetStatus": "Estado de la flota"
     },
@@ -13891,6 +13892,76 @@
         "title": "No hay nada pendiente",
         "body": "Ningún trabajo ha agotado sus intentos. Los mensajes fallidos aparecen aquí cuando ocurre."
       }
+    },
+    "credentials": {
+      "breadcrumb": "Plataforma · Credenciales",
+      "title": "Credenciales",
+      "subtitle": "Las credenciales de la plataforma cuya caducidad pasaría inadvertida y el día en que caduca cada una, evaluadas al abrir esta página igual que las evalúa la comprobación diaria de estado. Solo nombres: nunca se muestra un valor.",
+      "checkedAt": "Comprobado a las {time} UTC · {date}",
+      "checkFailedAt": "La comprobación falló a las {time} UTC · {date}",
+      "card": {
+        "title": "Caducidades declaradas de las credenciales",
+        "subtitle": "Cada credencial del registro, evaluada como la evalúa la comprobación diaria de estado"
+      },
+      "overall": {
+        "expired": "Caducada · la comprobación diaria falla",
+        "expiring": "Por caducar · la comprobación diaria falla",
+        "ok": "Ninguna dentro de su plazo de aviso",
+        "noneSet": "Nada comprobado",
+        "empty": "Nada registrado",
+        "notChecked": "No comprobado",
+        "notCheckedLabel": "Credenciales no comprobadas: no se pudo leer el registro"
+      },
+      "count": {
+        "expired": "Caducadas",
+        "expiring": "Por caducar",
+        "expiringSub": "dentro del plazo de aviso",
+        "notSet": "Sin definir",
+        "notSetSub": "no se comprueban aquí",
+        "healthy": "Correctas"
+      },
+      "rule": "Cada fecha la declara quien creó el token, no se lee del emisor, así que una fecha solo es tan fiable como su fuente.",
+      "table": {
+        "caption": "Credenciales registradas: primero las caducadas, luego las que están por caducar, sin definir y correctas; la caducidad más próxima primero"
+      },
+      "col": {
+        "credential": "Credencial",
+        "expires": "Caduca",
+        "daysLeft": "Días restantes",
+        "verdict": "Veredicto",
+        "renewal": "Renovación y fuente"
+      },
+      "phone": {
+        "renewal": "Renovación",
+        "source": "Fuente",
+        "listLabel": "Credenciales registradas"
+      },
+      "source": "Fuente",
+      "verdict": {
+        "healthy": "Correcta",
+        "expiring": "Por caducar",
+        "expired": "Caducada",
+        "notSet": "Sin definir"
+      },
+      "days": {
+        "healthy": "{days, plural, one {# día} other {# días}}",
+        "warnsFrom": "avisa desde el {date}",
+        "expiring": "{days, plural, =0 {Queda menos de un día} one {Queda # día} other {Quedan # días}}",
+        "insideLead": "dentro del plazo de aviso de {lead} días",
+        "expired": "{days, plural, =0 {Caducó hoy} one {Caducó hace # día} other {Caducó hace # días}}",
+        "stillSet": "sigue definida, así que sigue en uso",
+        "notChecked": "No comprobada",
+        "notSetHere": "variable no definida aquí"
+      },
+      "empty": {
+        "title": "No hay ninguna credencial registrada",
+        "body": "La comprobación diaria de estado no vigila la caducidad de ninguna credencial. Eso no significa que todo esté bien: una credencial que caduca solo se vigila cuando el elemento de trabajo que la introduce la añade a <mono>lib/health/credentialRegistry.ts</mono>."
+      },
+      "error": {
+        "title": "No se pudo comprobar el registro",
+        "body": "<mono>{message}</mono>. No se lista ninguna credencial, porque una lista a la que le falta una entrada parecería completa. Corrige el <mono>expiresAt</mono> de esa entrada en <mono>lib/health/credentialRegistry.ts</mono> y despliega; la comprobación diaria de estado se detiene en la misma entrada."
+      },
+      "footer": "Solo lectura. Las credenciales que nunca caducan no se registran, así que no aparecen aquí: el <link>inventario de credenciales</link> lista todas las credenciales que tiene Motir. Cada renovación es su propio elemento de trabajo manual."
     },
     "starters": {
       "breadcrumb": "Operaciones · Plantillas",

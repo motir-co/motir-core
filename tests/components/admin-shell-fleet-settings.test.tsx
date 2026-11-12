@@ -27,6 +27,7 @@ const LABELS = {
   navUsers: 'Users',
   navMonitoring: 'Monitoring',
   navJobs: en.platformAdmin.shell.navJobs,
+  navCredentials: en.platformAdmin.shell.navCredentials,
   navFleetSettings: en.platformAdmin.shell.navFleetSettings,
   navFleetStatus: en.platformAdmin.shell.navFleetStatus,
   navServices: en.platformAdmin.shell.navServices,
@@ -62,7 +63,7 @@ describe('the Fleet settings row', () => {
     expect(LABELS.navFleetSettings).toBe('Fleet settings');
   });
 
-  it('is on the rail for a superadmin, directly after Monitoring and Jobs', () => {
+  it('is on the rail for a superadmin, after Monitoring, Jobs and Credentials', () => {
     const rail = renderShell('superadmin', '/admin');
     const row = within(rail).getByRole('link', { name: LABELS.navFleetSettings });
     expect(row.getAttribute('href')).toBe('/admin/fleet-settings');
@@ -71,7 +72,9 @@ describe('the Fleet settings row', () => {
       .getAllByRole('link')
       .map((link) => link.textContent?.trim());
     expect(names[names.indexOf(LABELS.navMonitoring) + 1]).toBe(LABELS.navJobs);
-    expect(names[names.indexOf(LABELS.navJobs) + 1]).toBe(LABELS.navFleetSettings);
+    // Credentials (MOTIR-9408) sits between Jobs and the superadmin rows.
+    expect(names[names.indexOf(LABELS.navJobs) + 1]).toBe(LABELS.navCredentials);
+    expect(names[names.indexOf(LABELS.navCredentials) + 1]).toBe(LABELS.navFleetSettings);
     expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navFleetStatus);
     // Services (MOTIR-10890) follows it, then Provider capacity.
     expect(names[names.indexOf(LABELS.navFleetStatus) + 1]).toBe(LABELS.navServices);

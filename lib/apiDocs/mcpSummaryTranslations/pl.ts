@@ -540,6 +540,12 @@ export const pl: McpSummaryTranslations = {
     source:
       'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
   },
+  dismiss_review: {
+    summary:
+      'Odrzuć obowiązujące odesłanie przez agenta przeglądającego dla elementu, jako osoba, do której jest skierowane, i z podaniem powodu, aby ponownie poprosić o zatwierdzenie i scalenie. Nigdy nie zatwierdza scalenia.',
+    source:
+      'Dismiss the review agent’s standing send-back on a card, as its routed person and with a reason, so approve-and-merge is asked again. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       'Cofnij JEDNO `link_pull_request` — usuń dostawę zapisaną między elementem roboczym a pull requestem. Dostawa to wiersz, więc ponowne powiązanie właściwego elementu roboczego DODAJE, a nie poprawia; to usuwa dokładnie tę jedną wskazaną parę i nie rusza żadnej innej dostawy.',

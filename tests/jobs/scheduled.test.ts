@@ -14,6 +14,7 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { seedHealthyJobSchedules } from '../helpers/jobs';
 import { Prisma } from '@/generated/prisma/client';
 import { usersService } from '@/lib/services/usersService';
+import { CREDENTIAL_REGISTRY } from '@/lib/health/credentialRegistry';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { classifyRunner, MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
 import { generateKeyPairSync } from 'node:crypto';
@@ -799,10 +800,12 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
       vi.setSystemTime(new Date(now));
       await seedHealthyJobSchedules();
       greenExceptMonitorConfig();
+      // Every other registered credential is held unset, and the cloud flag off so
+      // the ones held outside core (MOTIR-9408's `heldIn`) are skipped too: each
+      // case judges the billing token alone.
+      for (const { envVar } of CREDENTIAL_REGISTRY) vi.stubEnv(envVar, '');
+      vi.stubEnv('MOTIR_CLOUD', '');
       vi.stubEnv('GITHUB_BILLING_TOKEN', billingToken);
-      // The Fly read token (MOTIR-7331) is registered too; held unset so each case
-      // judges the billing token alone.
-      vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', '');
     }
 
     it('PASSES months ahead of the declared expiry, and records the entry', async () => {
@@ -831,7 +834,7 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
       expect(error?.message).toContain('GITHUB_BILLING_TOKEN');
       expect(error?.message).toContain('2027-07-31');
       expect(error?.message).toContain('in 25 day(s)');
-      expect(error?.message).toContain('fly secrets set GITHUB_BILLING_TOKEN');
+      expect(error?.message).toContain('`GITHUB_BILLING_TOKEN` key of `motir/core/grouped-later`');
       expect(error?.message).toContain('credentialRegistry.ts');
       expect(error?.message).not.toContain('ghp_billing');
     });
@@ -858,7 +861,7 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
         credentialExpiry: {
           verdict: 'ok',
           entries: [],
-          skipped: ['GITHUB_BILLING_TOKEN', 'FLY_DEPLOYMENT_READ_TOKEN'],
+          skipped: CREDENTIAL_REGISTRY.map((c) => c.envVar),
         },
       });
     });

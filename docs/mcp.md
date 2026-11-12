@@ -337,7 +337,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **123 tools**.
+`initialize` handshake and registers **124 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -2607,6 +2607,53 @@ Requires `repository:manage` on the project — the key the repository-set servi
 asserts on every write. The CLI's fixed grant carries it (widened for this tool,
 `docs/decisions/token-permissions.md` AMENDMENT), and a token still reaches it
 only where its owner's role holds the key.
+
+#### `dismiss_review`
+
+**The routed person overrules the review agent's standing send-back, from their
+own agent** (MOTIR-11092; `docs/decisions/approval-gates.md` §12.15). It is the
+counterpart of `submit_review_verdict`: a review agent's `changes_requested` puts
+the card in **To fix** and withdraws its approve-and-merge question, and a second
+verdict at the same version is refused `REVIEW_VERDICT_SECOND` — one verdict per
+version, by design. Until this tool the only way past a send-back the person
+disagreed with was the card's **Dismiss the review** button. This is the same act,
+through the same service (`reviewDismissalService.dismiss`) as that button and its
+REST twin `POST /api/v1/work-items/{key}/review-dismissal`.
+
+- **Only the routed person may make it** — the card's assignee, its reporter when
+  it has no assignee, or someone who may decide any approval. Anyone else holding
+  `work_item:edit` is refused `REVIEW_DISMISSAL_FORBIDDEN`. A run token never
+  reaches the tool at all (`verifyMcpToken` refuses it), so no review or coding
+  run can dismiss the review of its own work.
+- **The reason is required** and is stored on the dismissal and as a
+  `review_dismissed` entry on the card's History, beside the send-back.
+- **It never approves or merges.** It clears the send-back so the card leaves To
+  fix and approve-and-merge is asked again **at the same version**; a person
+  still approves the merge. The send-back itself stays on record, and no status
+  moves.
+
+| Input            | Type   | Required | Notes                                                                                                                                                                                                 |
+| ---------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`            | string | yes      | Work item identifier.                                                                                                                                                                                 |
+| `reason`         | string | yes      | Why the review is dismissed: 1–2000 characters once trimmed (the service owns the rule, so an empty or over-long reason is `REASON_REQUIRED`, not a schema error).                                    |
+| `subjectVersion` | string | no       | The delivery-set version you are dismissing (`owner/name#number@headSha`, sorted, comma-joined). Omitted, the card's CURRENT version is read and dismissed. Name it to be refused if a push moved it. |
+
+**Output** — `structuredContent` is v1's `ReviewDismissalResult`, through the REST
+door's own presenter: `key`, `dismissalId`, `subjectVersion`, `dismissed`
+(`{ kind: "record" | "gate", id }` — the send-back dismissed), `reason`,
+`dismissedBy` (`{ id, name }`), `dismissedAt`, and `approvalGateId` — the
+approve-and-merge gate asked again, or `null` when none was raised.
+
+| Refusal                             | Means — nothing was written                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `REVIEW_DISMISSAL_FORBIDDEN`        | You are not the person the card's approvals are routed to.                                                    |
+| `REASON_REQUIRED`                   | The reason is empty once trimmed, or longer than 2000 characters.                                             |
+| `REVIEW_DISMISSAL_STALE`            | The version you named is not the card's current one — a push moved it. The message names the current version. |
+| `NO_STANDING_REVIEW_SENDBACK`       | No review agent send-back stands at the card's current version (it was approved, or nothing was reviewed).    |
+| `REVIEW_SENDBACK_ALREADY_DISMISSED` | The send-back at this version was already dismissed.                                                          |
+
+Requires the work-item edit permission (`work_item:edit`), the key its REST twin
+asserts, and the `work_items:write` scope.
 
 #### `attach_file`
 
