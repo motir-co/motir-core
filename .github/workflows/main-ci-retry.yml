@@ -1,17 +1,27 @@
 # Re-attempt a red or cancelled push-to-`main` CI run — at most once, visibly
-# (MOTIR-4607).
+# (MOTIR-4607; re-purposed by MOTIR-11060).
 #
-# `deploy` lives only in the push-to-`main` run of `ci.yml`, so a push run that
-# goes red or is cancelled deploys nothing — and until this lane nothing
-# re-attempted it. The pipeline recovered only because somebody else merged
-# afterwards, which is a property of merge traffic, not of the pipeline, and is
-# exactly the property a launch train or a quiet Friday removes.
+# ⚠️ WHAT THE PUSH RUN IS NOW. Since MOTIR-10935 the push-to-`main` run of
+# `ci.yml` releases nothing: Motir's own services ship through `aws-deploy.yml`,
+# on its own push trigger, needing nothing in `ci.yml`. What the push run still
+# is — `ci.yml`'s header — is the TRIPWIRE: `lint`, `typecheck` and `build` over
+# the commit that is now `main`, the only verification a merge that BYPASSED the
+# queue ever gets (ruleset 17227448 has a bypass actor).
 #
-# ⚠️ WHAT THIS LANE IS NOT. It does not touch the merge queue, and it does not
-# replace `deploy-freshness.yml`: that lane covers a deploy that went GREEN while
-# production is still behind, which a retry cannot see. This lane covers the
-# opposite half — a run that visibly ended without deploying and that nothing
-# followed up.
+# ⚠️ WHY A RED TRIPWIRE STILL NEEDS THIS LANE. A red check on `main` is nobody's
+# by construction: no pull request is open to carry it, and nothing notifies the
+# person who merged. And two causes give the same red — the merged tree really
+# is broken, or the runner, the network or a registry flaked. Without a
+# re-attempt the only cure for the second is the next merge, which is a property
+# of merge traffic, not of the pipeline; and an alarm raised on the first red
+# would page somebody for every flake. So this lane re-runs the red tripwire
+# ONCE, and only a second red at `main`'s head becomes a person's problem: an
+# issue assigned to whoever merged.
+#
+# ⚠️ WHAT THIS LANE IS NOT. It does not touch the merge queue, it gates no
+# deploy, and it does not replace `deploy-freshness.yml`, which compares the
+# DEPLOYED commit against `main` from outside the deployment. A red `aws-deploy`
+# run is that lane's to see, not this one's: this lane reads `CI` only.
 #
 # ⚠️ WHY IT CANNOT LOOP. GitHub's `workflow_run` documentation says "The
 # `requested` activity type does not occur when a workflow is re-run", which
@@ -23,17 +33,18 @@
 # runner. And this lane triggers on `CI` only, never on itself.
 #
 # ⚠️ WHY IT NEVER RE-RUNS AN OLD RUN. A re-run keeps "the same `GITHUB_SHA` …
-# of the original event", and `deploy` builds `GITHUB_SHA` with no freshness
-# check. Re-running a red run after a newer merge has deployed would release the
-# OLDER commit over the newer one. So a run whose commit is no longer `main`'s
-# head is skipped as superseded — the newer push run already carries it.
+# of the original event", so it re-checks the OLD tree. Once a newer commit is
+# `main`'s head, that tree is no longer anything `main` is: the newer push run's
+# tripwire already covers these commits, and if it goes red this lane runs for
+# it. A run whose commit is no longer the head is therefore skipped as
+# superseded, and it never opens an issue against code `main` has moved past.
 #
-# ⚠️ AND THE FAILED-TWICE SIGNAL IS AN ISSUE, NOT A RED CHECK. A red check on
-# `main` is nobody's by construction — that is the whole defect. When the
-# re-attempt fails too, the script opens (or comments on) an issue labelled
-# `main-ci-failed-twice`, titled by commit and ASSIGNED to whoever merged it, so
-# the notification lands on a person with a reason to open it. This lane's own
-# run also goes red, as a second, weaker channel.
+# ⚠️ AND THE FAILED-TWICE SIGNAL IS AN ISSUE, NOT A RED CHECK — a red check is
+# the very thing nobody is looking at. When the re-attempt fails too, the script
+# opens (or comments on) an issue labelled `main-ci-failed-twice`, titled by
+# commit and ASSIGNED to whoever merged it, so the notification lands on a person
+# with a reason to open it. This lane's own run also goes red, as a second,
+# weaker channel.
 #
 # The logic lives in `scripts/mainCiRetry.mjs` (unit-tested, and the runner is
 # driven against a fake GitHub API, in `tests/scripts/retry-main-ci.test.ts`,
@@ -77,13 +88,13 @@ jobs:
       github.event.workflow_run.conclusion != 'skipped' &&
       github.event.workflow_run.conclusion != 'neutral'
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
-    # NO run on record — this lane cannot run before it is on `main`. Its cost is
-    # a checkout, one dependency-free node script, and a poll of the re-run. The
-    # poll's own deadline is 75 minutes (`DEADLINE_MINUTES`): a push run's gate
-    # plus release measured a median ~34 and worst 45.2 minutes (`ci.yml`'s
-    # header), and a re-run can wait behind one pending run in its concurrency
-    # group. The ceiling sits above that deadline so the script, not the runner,
-    # reports a re-run that never finished.
+    # Its cost is a checkout, one dependency-free node script, and a poll of the
+    # re-run. The poll's own deadline is 75 minutes (`DEADLINE_MINUTES`): the push
+    # runs of 2026-11-11 took about 9 to 18 minutes green and 45 red (created →
+    # last update, runs 43087522010 to 43123016158), and a re-run can wait behind
+    # one pending run in `ci.yml`'s concurrency group. The ceiling sits above
+    # that deadline so the script, not the runner, reports a re-run that never
+    # finished.
     timeout-minutes: 90
     permissions:
       # Read the run and `main`; re-run the run.
