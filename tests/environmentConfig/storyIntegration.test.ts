@@ -141,12 +141,20 @@ async function channelText(res: Response): Promise<string> {
   return res.status === 204 ? '' : await res.clone().text();
 }
 
+/**
+ * Any `v1.<iv>.<tag>.<ct>` envelope standing on its own. A bare `v1.` is not
+ * enough: a random cuid can end in `v1`, and a refusal that names the record
+ * ("… repository cm…v1.") would read as a leak.
+ */
+const CIPHERTEXT_ENVELOPE =
+  /(?<![A-Za-z0-9_-])v1\.[A-Za-z0-9+/=_-]+\.[A-Za-z0-9+/=_-]+\.[A-Za-z0-9+/=_-]+/;
+
 /** Fail if the secret, or its stored ciphertext, appears in any channel. */
 function assertNoLeak(secret: string, ciphertext: string, ...channels: string[]) {
   for (const text of channels) {
     expect(text).not.toContain(secret);
     expect(text).not.toContain(ciphertext);
-    expect(text).not.toContain('v1.');
+    expect(text).not.toMatch(CIPHERTEXT_ENVELOPE);
   }
 }
 

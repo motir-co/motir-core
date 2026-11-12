@@ -14035,7 +14035,7 @@
       "subtitle": "生产环境是否在运行 Motir 启动的每个镜像的最新版本,以及每个集群池的占用情况。页面加载时读取。“发布最新”是这里唯一的操作,每次点击都会写入审计日志。",
       "images": {
         "title": "镜像",
-        "subtitle": "生产环境启动的三个镜像。每个都与已发布的最新镜像比较;生产环境落后时,“发布最新”通过该镜像自己的发布工作流将其更新。"
+        "subtitle": "生产环境启动的四个镜像。每个都与已发布的最新镜像比较;当生产环境落后时,“发布最新”会通过该镜像自己的发布工作流将其更新。"
       },
       "image": {
         "hosted": {
@@ -14046,6 +14046,10 @@
           "title": "CI 运行器镜像",
           "subtitle": "集群每个 CI 作业的运行环境。由 MOTIR_RUNNER_IMAGE 固定;最新的是最新的 runner-v* 版本。"
         },
+        "indexer": {
+          "title": "索引器镜像",
+          "subtitle": "每次代码图索引运行启动的镜像。由 MOTIR_INDEXER_IMAGE 固定;最新的是最新的 indexer-v* 版本。"
+        },
         "sandbox": {
           "title": "智能体实例镜像",
           "subtitle": "智能体运行所在的沙箱,在 ghcr.io/motir-co/motir-sandbox 上每个配置一个标签。每个配置都有最新 cli-v* 版本的标签时即为完整。"
@@ -14054,6 +14058,7 @@
       "imageName": {
         "hosted": "托管智能体镜像",
         "runner": "CI 运行器镜像",
+        "indexer": "索引器镜像",
         "sandbox": "智能体实例镜像"
       },
       "source": {
@@ -14084,13 +14089,17 @@
         "hosted": "已固定构建与最新构建之间有 {count, plural, other {# 个}}对 packages/cli 的提交。",
         "runner": "({tags}) · {days, plural, other {# 天}} · {commits, plural, other {# 个}}对 infra/ci-runner 的提交。",
         "runnerNoTags": "{days, plural, other {# 天}} · {commits, plural, other {# 个}}对 infra/ci-runner 的提交。",
+        "indexer": "({tags}) · {days, plural, other {# 天}} · {commits, plural, other {# 个}}对索引器的提交。",
+        "indexerNoTags": "{days, plural, other {# 天}} · {commits, plural, other {# 个}}对索引器的提交。",
         "link": "查看提交"
       },
       "unreleased": {
         "title": "自 {release} 起合并,未进入任何版本",
-        "count": "{count, plural, other {# 项}}对 infra/ci-runner 的更改"
+        "count": "{count, plural, other {# 项}}对 infra/ci-runner 的更改",
+        "indexerCount": "{count, plural, other {之后又有 # 项对索引器的已合并更改}}"
       },
       "releaseNeeded": "<strong>需要发布新版本。</strong>这些更改只有在新的运行器版本中才会到达集群,而本页面不会创建版本。推送标签 <mono>{tag}</mono>;发布流水线随后会发布它,该行会提供“发布最新”。",
+      "releaseNeededIndexer": "<strong>需要发布新版本。</strong>这些更改只有在新的索引器版本中才会到达索引运行,而本页面不会创建版本。在 motir-ai 中推送标签 <mono>{tag}</mono>;它的发布流水线随后会发布它,该行会提供“发布最新”。",
       "ami": {
         "title": "运行器 AMI · 只读",
         "current": "已是最新",
@@ -14123,10 +14132,14 @@
         "note": {
           "hosted": "通过托管智能体固定工作流固定最新 main 构建。Web 和 worker 会切换到它。",
           "runner": "通过运行器固定工作流固定 {release}。Web 和 worker 会切换到它。",
+          "indexer": "通过索引器固定拉取请求固定 {release}。Web 和 worker 会切换到它。",
           "sandbox": "重新发布 {release}。只推送缺失的 {count} 个标签;生产环境不会切换。",
           "hostedCurrent": "没有更新的内容可发布。生产环境已固定最新 main 构建。",
           "runnerCurrent": "没有更新的内容可发布。生产环境已固定最新的运行器版本。",
           "runnerReleaseNeeded": "没有更新的内容可发布:生产环境已固定最新版本。上面已合并的更改需要先发布版本。",
+          "indexerCurrent": "没有更新的内容可发布。生产环境已固定最新的索引器版本。",
+          "indexerReleaseNeeded": "没有更新的内容可发布:生产环境已固定最新的索引器版本。上面已合并的更改需要先发布版本。",
+          "indexerNotRead": "在固定和最新版本都读取到之前,“发布最新”保持关闭。",
           "sandboxCurrent": "没有更新的内容可发布。每个配置都有最新版本的标签。",
           "sandboxOld": "{release} 创建于重新运行只推送缺失标签之前,因此重新运行会再次推送每个标签。请改为创建新的 cli-v* 版本。",
           "running": "该镜像的发布工作流已有一次运行在进行中。结束前“发布最新”不可用。",
@@ -14144,12 +14157,21 @@
         "sandboxFrom": "{version} 的 {total} 个标签中有 {published} 个",
         "hostedBody": "这将启动托管智能体固定工作流。它会把 MOTIR_HOSTED_AGENT_IMAGE 移到最新构建并部署:<strong>web 和 worker 会切换</strong>到新的固定,切换后启动的托管运行会使用新镜像。",
         "runnerBody": "这将启动运行器固定工作流。它会把 MOTIR_RUNNER_IMAGE 移到 {release} 并部署:<strong>web 和 worker 会切换</strong>到新的固定。运行器 AMI 不会改变。",
+        "indexerBody": "这将打开索引器固定拉取请求,它把 MOTIR_INDEXER_IMAGE 移到 {release} 并排队等待合并。随后它的部署会<strong>切换 web 和 worker</strong>,切换之后开始的索引运行会启动新镜像。已在进行的索引运行会以它们启动时的镜像结束。",
         "sandboxBody": "这将重新运行 {release} 的沙箱发布,只推送缺失的标签:{missing}。{published} 已发布,不会再次推送。<strong>生产环境不会切换。</strong>",
         "sandboxBodyNonePublished": "这将重新运行 {release} 的沙箱发布,只推送缺失的标签:{missing}。<strong>生产环境不会切换。</strong>"
       },
       "progress": {
         "title": "正在发布。",
         "body": "发布工作流正在运行;结束后此行会更新。",
+        "indexerQueued": {
+          "title": "固定拉取请求已排队。",
+          "body": "它会通过合并队列合并,然后它的部署会切换 web 和 worker;此行会随进度更新。"
+        },
+        "indexerRolling": {
+          "title": "正在切换 web 和 worker。",
+          "body": "固定拉取请求已合并,它的部署正在把 web 和 worker 切换到 {release}。切换结束后,新的索引运行会启动它。"
+        },
         "started": "· 由 {email} 于{age}启动",
         "startedNoActor": "· 于{age}启动",
         "button": "正在发布…"
@@ -14168,6 +14190,7 @@
       "workflow": {
         "hosted": "托管智能体固定",
         "runner": "运行器固定",
+        "indexer": "索引器固定",
         "sandbox": "沙箱发布 {tag}",
         "run": "{workflow} · 运行 #{number}",
         "runNoNumber": "{workflow} · 运行"
@@ -14184,7 +14207,26 @@
       },
       "unset": {
         "title": "此处未配置",
-        "body": "此部署未设置 {variable},因此没有可比较的固定。"
+        "body": "此部署未设置 {variable},因此没有可比较的固定。",
+        "indexerBody": "此部署未设置 MOTIR_INDEXER_IMAGE,因此本安装不做索引:不会启动代码图索引运行,也没有可比较的固定。"
+      },
+      "notRead": {
+        "pin": {
+          "title": "无法读取固定。",
+          "body": "ECR 没有就 MOTIR_INDEXER_IMAGE 指定的摘要作出响应,因此不做比较,这里的任何内容都不表示已是最新。"
+        },
+        "newest": {
+          "title": "无法读取版本。",
+          "body": "GitHub 没有就 motir-ai 的 indexer-v* 版本作出响应,因此固定不与任何内容比较。"
+        },
+        "newestEcr": {
+          "title": "无法读取版本。",
+          "body": "ECR 没有就索引器仓库的 indexer-* 版本标签作出响应,因此固定不与任何内容比较。"
+        },
+        "history": {
+          "title": "无法读取已合并的更改",
+          "body": "GitHub 没有就 motir-ai 的提交历史作出响应,因此不列出不在任何版本中的更改。上面的固定和最新版本仍会比较。"
+        }
       },
       "loading": "正在加载{image}",
       "publishError": {

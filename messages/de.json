@@ -14044,7 +14044,7 @@
       "subtitle": "Ob die Produktion das neueste jedes Images ausführt, das Motir startet, und wie voll jeder Flotten-Pool ist. Beim Laden der Seite gelesen. Neuestes veröffentlichen ist die einzige Aktion hier, und jeder Klick wird ins Audit-Log geschrieben.",
       "images": {
         "title": "Images",
-        "subtitle": "Die drei Images, die die Produktion startet. Jedes wird mit dem neuesten veröffentlichten verglichen; liegt die Produktion zurück, bringt Neuestes veröffentlichen sie über den eigenen Veröffentlichungs-Workflow dieses Images nach vorn."
+        "subtitle": "Die vier Images, die die Produktion startet. Jedes wird mit dem neuesten veröffentlichten verglichen; liegt die Produktion zurück, bringt Neuestes veröffentlichen sie über den eigenen Veröffentlichungs-Workflow dieses Images nach vorn."
       },
       "image": {
         "hosted": {
@@ -14055,6 +14055,10 @@
           "title": "CI-Runner-Image",
           "subtitle": "Worin jeder CI-Job der Flotte läuft. Gepinnt durch MOTIR_RUNNER_IMAGE; das neueste ist das letzte runner-v*-Release."
         },
+        "indexer": {
+          "title": "Indexer-Image",
+          "subtitle": "Was jeder Code-Graph-Indexlauf startet. Gepinnt durch MOTIR_INDEXER_IMAGE; das neueste ist das letzte indexer-v*-Release."
+        },
         "sandbox": {
           "title": "Agent-Instanz-Images",
           "subtitle": "Die Sandbox, in der Agenten laufen, ein Tag pro Profil unter ghcr.io/motir-co/motir-sandbox. Vollständig, wenn jedes Profil sein Tag beim neuesten cli-v*-Release hat."
@@ -14063,6 +14067,7 @@
       "imageName": {
         "hosted": "Hosted-Agent-Image",
         "runner": "CI-Runner-Image",
+        "indexer": "Indexer-Image",
         "sandbox": "Agent-Instanz-Images"
       },
       "source": {
@@ -14093,13 +14098,17 @@
         "hosted": "{count, plural, one {# Commit} other {# Commits}} an packages/cli zwischen dem gepinnten und dem neuesten Build.",
         "runner": "({tags}) · {days, plural, one {# Tag} other {# Tage}} · {commits, plural, one {# Commit} other {# Commits}} an infra/ci-runner.",
         "runnerNoTags": "{days, plural, one {# Tag} other {# Tage}} · {commits, plural, one {# Commit} other {# Commits}} an infra/ci-runner.",
+        "indexer": "({tags}) · {days, plural, one {# Tag} other {# Tage}} · {commits, plural, one {# Commit} other {# Commits}} am Indexer.",
+        "indexerNoTags": "{days, plural, one {# Tag} other {# Tage}} · {commits, plural, one {# Commit} other {# Commits}} am Indexer.",
         "link": "Commits ansehen"
       },
       "unreleased": {
         "title": "Seit {release} gemergt, in keinem Release",
-        "count": "{count, plural, one {# Änderung} other {# Änderungen}} an infra/ci-runner"
+        "count": "{count, plural, one {# Änderung} other {# Änderungen}} an infra/ci-runner",
+        "indexerCount": "{count, plural, one {# gemergte Änderung am Indexer kam danach} other {# gemergte Änderungen am Indexer kamen danach}}"
       },
       "releaseNeeded": "<strong>Ein Release ist nötig.</strong> Diese Änderungen erreichen die Flotte nur in einem neuen Runner-Release, und diese Seite erstellt keins. Pushe das Tag <mono>{tag}</mono>; die Release-Pipeline veröffentlicht es dann, und die Zeile bietet Neuestes veröffentlichen an.",
+      "releaseNeededIndexer": "<strong>Ein Release ist nötig.</strong> Diese Änderungen erreichen Indexläufe nur in einem neuen Indexer-Release, und diese Seite erstellt keins. Pushen Sie das Tag <mono>{tag}</mono> in motir-ai; dessen Release-Pipeline veröffentlicht es dann, und die Zeile bietet Neuestes veröffentlichen an.",
       "ami": {
         "title": "Runner-AMI · nur lesend",
         "current": "Aktuell",
@@ -14132,10 +14141,14 @@
         "note": {
           "hosted": "Pinnt den neuesten main-Build über den Hosted-Agent-Pin-Workflow. Web und Worker rollen darauf um.",
           "runner": "Pinnt {release} über den Runner-Pin-Workflow. Web und Worker rollen darauf um.",
+          "indexer": "Pinnt {release} über den Pull Request für den Indexer-Pin. Web und Worker rollen darauf um.",
           "sandbox": "Veröffentlicht {release} erneut. Nur die {count} fehlenden Tags werden gepusht; in der Produktion rollt nichts um.",
           "hostedCurrent": "Nichts Neueres zu veröffentlichen. Die Produktion pinnt den neuesten main-Build.",
           "runnerCurrent": "Nichts Neueres zu veröffentlichen. Die Produktion pinnt das neueste Runner-Release.",
           "runnerReleaseNeeded": "Nichts Neueres zu veröffentlichen: Die Produktion pinnt das neueste Release. Die gemergten Änderungen oben brauchen zuerst ein Release.",
+          "indexerCurrent": "Nichts Neueres zu veröffentlichen. Die Produktion pinnt das neueste Indexer-Release.",
+          "indexerReleaseNeeded": "Nichts Neueres zu veröffentlichen: Die Produktion pinnt das neueste Indexer-Release. Die gemergten Änderungen oben brauchen zuerst ein Release.",
+          "indexerNotRead": "Neuestes veröffentlichen bleibt aus, bis der Pin und das neueste Release beide gelesen sind.",
           "sandboxCurrent": "Nichts Neueres zu veröffentlichen. Jedes Profil hat sein Tag beim neuesten Release.",
           "sandboxOld": "{release} wurde erstellt, bevor ein erneuter Lauf nur die fehlenden Tags pushen konnte, daher würde ein erneuter Lauf jedes Tag erneut pushen. Erstelle stattdessen ein neues cli-v*-Release.",
           "running": "Ein Lauf des Veröffentlichungs-Workflows dieses Images ist bereits im Gang. Neuestes veröffentlichen ist aus, bis er endet.",
@@ -14153,12 +14166,21 @@
         "sandboxFrom": "{published} von {total} Tags bei {version}",
         "hostedBody": "Dies startet den Hosted-Agent-Pin-Workflow. Er setzt MOTIR_HOSTED_AGENT_IMAGE auf den neuesten Build und deployt: <strong>Web und Worker rollen</strong> auf den neuen Pin um, und gehostete Läufe, die nach dem Umrollen starten, booten das neue Image.",
         "runnerBody": "Dies startet den Runner-Pin-Workflow. Er setzt MOTIR_RUNNER_IMAGE auf {release} und deployt: <strong>Web und Worker rollen</strong> auf den neuen Pin um. Das Runner-AMI wird nicht geändert.",
+        "indexerBody": "Dies öffnet den Pull Request für den Indexer-Pin, der MOTIR_INDEXER_IMAGE auf {release} setzt und zum Mergen eingereiht wird. Sein Deployment <strong>rollt dann Web und Worker um</strong>, und Indexläufe, die nach dem Umrollen starten, starten das neue Image. Bereits laufende Indexläufe enden auf dem Image, mit dem sie gestartet sind.",
         "sandboxBody": "Dies führt das Sandbox-Release für {release} erneut aus und pusht nur die fehlenden Tags: {missing}. {published} sind bereits veröffentlicht und werden nicht erneut gepusht. <strong>In der Produktion rollt nichts um.</strong>",
         "sandboxBodyNonePublished": "Dies führt das Sandbox-Release für {release} erneut aus und pusht nur die fehlenden Tags: {missing}. <strong>In der Produktion rollt nichts um.</strong>"
       },
       "progress": {
         "title": "Wird veröffentlicht.",
         "body": "Der Veröffentlichungs-Workflow läuft; diese Zeile aktualisiert sich, wenn er endet.",
+        "indexerQueued": {
+          "title": "Pin-Pull-Request eingereiht.",
+          "body": "Er wird über die Merge-Queue gemergt, dann rollt sein Deployment Web und Worker um; diese Zeile aktualisiert sich dabei."
+        },
+        "indexerRolling": {
+          "title": "Web und Worker werden umgerollt.",
+          "body": "Der Pin-Pull-Request wurde gemergt, und sein Deployment stellt Web und Worker auf {release} um. Neue Indexläufe starten es, sobald das Umrollen endet."
+        },
         "started": "· gestartet {age} von {email}",
         "startedNoActor": "· gestartet {age}",
         "button": "Wird veröffentlicht…"
@@ -14177,6 +14199,7 @@
       "workflow": {
         "hosted": "Hosted-Agent-Pin",
         "runner": "Runner-Pin",
+        "indexer": "Indexer-Pin",
         "sandbox": "Sandbox-Release {tag}",
         "run": "{workflow} · Lauf #{number}",
         "runNoNumber": "{workflow} · Lauf"
@@ -14193,7 +14216,26 @@
       },
       "unset": {
         "title": "Hier nicht konfiguriert",
-        "body": "{variable} ist auf diesem Deployment nicht gesetzt, daher gibt es keinen Pin zum Vergleichen."
+        "body": "{variable} ist auf diesem Deployment nicht gesetzt, daher gibt es keinen Pin zum Vergleichen.",
+        "indexerBody": "MOTIR_INDEXER_IMAGE ist auf diesem Deployment nicht gesetzt, daher indexiert diese Installation nicht: Kein Code-Graph-Indexlauf startet, und es gibt keinen Pin zum Vergleichen."
+      },
+      "notRead": {
+        "pin": {
+          "title": "Der Pin konnte nicht gelesen werden.",
+          "body": "ECR hat für den Digest, den MOTIR_INDEXER_IMAGE nennt, nicht geantwortet, daher wird er nicht verglichen, und nichts hier bedeutet aktuell."
+        },
+        "newest": {
+          "title": "Die Releases konnten nicht gelesen werden.",
+          "body": "GitHub hat für die indexer-v*-Releases von motir-ai nicht geantwortet, daher wird der Pin mit nichts verglichen."
+        },
+        "newestEcr": {
+          "title": "Die Releases konnten nicht gelesen werden.",
+          "body": "ECR hat für die indexer-*-Release-Tags des Indexer-Repositorys nicht geantwortet, daher wird der Pin mit nichts verglichen."
+        },
+        "history": {
+          "title": "Die gemergten Änderungen konnten nicht gelesen werden",
+          "body": "GitHub hat für die Commit-Historie von motir-ai nicht geantwortet, daher werden Änderungen, die in keinem Release sind, nicht aufgeführt. Der Pin und das neueste Release oben werden trotzdem verglichen."
+        }
       },
       "loading": "{image} wird geladen",
       "publishError": {

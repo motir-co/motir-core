@@ -14044,7 +14044,7 @@
       "subtitle": "Of productie de nieuwste versie draait van elk image dat Motir start, en hoe vol elke vlootpool is. Gelezen bij het laden van de pagina. Nieuwste publiceren is de enige actie hier, en elke klik wordt in het auditlogboek geschreven.",
       "images": {
         "title": "Images",
-        "subtitle": "De drie images die productie start. Elk wordt vergeleken met het nieuwste gepubliceerde; loopt productie achter, dan brengt Nieuwste publiceren het bij via de eigen publicatieworkflow van dat image."
+        "subtitle": "De vier images die productie opstart. Elk wordt vergeleken met het nieuwste dat is gepubliceerd; loopt productie achter, dan brengt Nieuwste publiceren haar bij via de eigen publicatieworkflow van dat image."
       },
       "image": {
         "hosted": {
@@ -14055,6 +14055,10 @@
           "title": "CI-runner-image",
           "subtitle": "Waarin elke CI-job van de vloot draait. Vastgezet door MOTIR_RUNNER_IMAGE; het nieuwste is de laatste runner-v*-release."
         },
+        "indexer": {
+          "title": "Indexer-image",
+          "subtitle": "Wat elke indexrun van de codegraaf opstart. Vastgezet door MOTIR_INDEXER_IMAGE; het nieuwste is de laatste indexer-v*-release."
+        },
         "sandbox": {
           "title": "Agent-instantie-images",
           "subtitle": "De sandbox waarin agents draaien, één tag per profiel op ghcr.io/motir-co/motir-sandbox. Compleet wanneer elk profiel zijn tag heeft bij de nieuwste cli-v*-release."
@@ -14063,6 +14067,7 @@
       "imageName": {
         "hosted": "hosted-agent-image",
         "runner": "CI-runner-image",
+        "indexer": "indexer-image",
         "sandbox": "agent-instantie-images"
       },
       "source": {
@@ -14093,13 +14098,17 @@
         "hosted": "{count, plural, one {# commit} other {# commits}} aan packages/cli tussen de vastgezette en de nieuwste build.",
         "runner": "({tags}) · {days, plural, one {# dag} other {# dagen}} · {commits, plural, one {# commit} other {# commits}} aan infra/ci-runner.",
         "runnerNoTags": "{days, plural, one {# dag} other {# dagen}} · {commits, plural, one {# commit} other {# commits}} aan infra/ci-runner.",
+        "indexer": "({tags}) · {days, plural, one {# dag} other {# dagen}} · {commits, plural, one {# commit} other {# commits}} aan de indexer.",
+        "indexerNoTags": "{days, plural, one {# dag} other {# dagen}} · {commits, plural, one {# commit} other {# commits}} aan de indexer.",
         "link": "Bekijk de commits"
       },
       "unreleased": {
         "title": "Gemerged sinds {release}, in geen release",
-        "count": "{count, plural, one {# wijziging} other {# wijzigingen}} aan infra/ci-runner"
+        "count": "{count, plural, one {# wijziging} other {# wijzigingen}} aan infra/ci-runner",
+        "indexerCount": "{count, plural, one {# gemergde wijziging aan de indexer kwam erna} other {# gemergde wijzigingen aan de indexer kwamen erna}}"
       },
       "releaseNeeded": "<strong>Er is een release nodig.</strong> Deze wijzigingen bereiken de vloot alleen in een nieuwe runner-release, en deze pagina maakt er geen. Push de tag <mono>{tag}</mono>; de release-pipeline publiceert hem dan en de rij biedt Nieuwste publiceren aan.",
+      "releaseNeededIndexer": "<strong>Er is een release nodig.</strong> Deze wijzigingen bereiken indexruns alleen in een nieuwe indexer-release, en deze pagina maakt er geen. Push de tag <mono>{tag}</mono> in motir-ai; de release-pipeline daarvan publiceert hem dan en de rij biedt Nieuwste publiceren aan.",
       "ami": {
         "title": "Runner-AMI · alleen lezen",
         "current": "Actueel",
@@ -14132,10 +14141,14 @@
         "note": {
           "hosted": "Zet de nieuwste main-build vast via de pinworkflow van de hosted agent. Web en worker rollen erop over.",
           "runner": "Zet {release} vast via de pinworkflow van de runner. Web en worker rollen erop over.",
+          "indexer": "Zet {release} vast via de pull request voor de indexer-pin. Web en worker rollen erop over.",
           "sandbox": "Publiceert {release} opnieuw. Alleen de {count} ontbrekende tags worden gepusht; in productie rolt niets over.",
           "hostedCurrent": "Niets nieuwers om te publiceren. Productie zet de nieuwste main-build vast.",
           "runnerCurrent": "Niets nieuwers om te publiceren. Productie zet de nieuwste runner-release vast.",
           "runnerReleaseNeeded": "Niets nieuwers om te publiceren: productie zet de nieuwste release vast. De gemergde wijzigingen hierboven hebben eerst een release nodig.",
+          "indexerCurrent": "Niets nieuwers om te publiceren. Productie zet de nieuwste indexer-release vast.",
+          "indexerReleaseNeeded": "Niets nieuwers om te publiceren: productie zet de nieuwste indexer-release vast. De gemergde wijzigingen hierboven hebben eerst een release nodig.",
+          "indexerNotRead": "Nieuwste publiceren blijft uit totdat de pin en de nieuwste release allebei zijn gelezen.",
           "sandboxCurrent": "Niets nieuwers om te publiceren. Elk profiel heeft zijn tag bij de nieuwste release.",
           "sandboxOld": "{release} is gemaakt voordat een nieuwe run alleen de ontbrekende tags kon pushen, dus opnieuw uitvoeren zou elke tag opnieuw pushen. Maak in plaats daarvan een nieuwe cli-v*-release.",
           "running": "Er loopt al een run van de publicatieworkflow van dit image. Nieuwste publiceren staat uit tot die klaar is.",
@@ -14153,12 +14166,21 @@
         "sandboxFrom": "{published} van {total} tags bij {version}",
         "hostedBody": "Dit start de pinworkflow van de hosted agent. Die zet MOTIR_HOSTED_AGENT_IMAGE op de nieuwste build en deployt: <strong>web en worker rollen</strong> over op de nieuwe pin, en gehoste runs die na het overrollen starten, booten het nieuwe image.",
         "runnerBody": "Dit start de pinworkflow van de runner. Die zet MOTIR_RUNNER_IMAGE op {release} en deployt: <strong>web en worker rollen</strong> over op de nieuwe pin. De runner-AMI verandert niet.",
+        "indexerBody": "Dit opent de pull request voor de indexer-pin, die MOTIR_INDEXER_IMAGE op {release} zet en in de wachtrij wordt gezet om te mergen. De deploy daarvan <strong>rolt daarna web en worker over</strong>, en indexruns die na het overrollen starten, starten het nieuwe image. Indexruns die al bezig zijn, eindigen op het image waarmee ze startten.",
         "sandboxBody": "Dit voert de sandbox-release voor {release} opnieuw uit en pusht alleen de ontbrekende tags: {missing}. {published} zijn al gepubliceerd en worden niet opnieuw gepusht. <strong>In productie rolt niets over.</strong>",
         "sandboxBodyNonePublished": "Dit voert de sandbox-release voor {release} opnieuw uit en pusht alleen de ontbrekende tags: {missing}. <strong>In productie rolt niets over.</strong>"
       },
       "progress": {
         "title": "Wordt gepubliceerd.",
         "body": "De publicatieworkflow draait; deze rij wordt bijgewerkt als hij klaar is.",
+        "indexerQueued": {
+          "title": "Pull request voor de pin staat in de wachtrij.",
+          "body": "Hij wordt gemerged via de merge-wachtrij, daarna rolt de deploy web en worker over; deze rij wordt onderweg bijgewerkt."
+        },
+        "indexerRolling": {
+          "title": "Web en worker worden overgerold.",
+          "body": "De pull request voor de pin is gemerged en de deploy zet web en worker over op {release}. Nieuwe indexruns starten die versie zodra het overrollen klaar is."
+        },
         "started": "· gestart {age} door {email}",
         "startedNoActor": "· gestart {age}",
         "button": "Wordt gepubliceerd…"
@@ -14177,6 +14199,7 @@
       "workflow": {
         "hosted": "Hosted-agent-pin",
         "runner": "Runner-pin",
+        "indexer": "Indexer-pin",
         "sandbox": "Sandbox-release {tag}",
         "run": "{workflow} · run #{number}",
         "runNoNumber": "{workflow} · run"
@@ -14193,7 +14216,26 @@
       },
       "unset": {
         "title": "Hier niet geconfigureerd",
-        "body": "{variable} is op deze deployment niet ingesteld, dus er is geen pin om te vergelijken."
+        "body": "{variable} is op deze deployment niet ingesteld, dus er is geen pin om te vergelijken.",
+        "indexerBody": "MOTIR_INDEXER_IMAGE is op deze deployment niet ingesteld, dus deze installatie indexeert niet: er start geen indexrun van de codegraaf en er is geen pin om te vergelijken."
+      },
+      "notRead": {
+        "pin": {
+          "title": "Kon de pin niet lezen.",
+          "body": "ECR antwoordde niet voor de digest die MOTIR_INDEXER_IMAGE noemt, dus die wordt niet vergeleken en niets hier betekent bijgewerkt."
+        },
+        "newest": {
+          "title": "Kon de releases niet lezen.",
+          "body": "GitHub antwoordde niet voor de indexer-v*-releases van motir-ai, dus de pin wordt met niets vergeleken."
+        },
+        "newestEcr": {
+          "title": "Kon de releases niet lezen.",
+          "body": "ECR antwoordde niet voor de indexer-*-releasetags van de indexer-repository, dus de pin wordt met niets vergeleken."
+        },
+        "history": {
+          "title": "Kon de gemergde wijzigingen niet lezen",
+          "body": "GitHub antwoordde niet voor de commitgeschiedenis van motir-ai, dus wijzigingen die in geen enkele release zitten, worden niet getoond. De pin en de nieuwste release hierboven worden nog steeds vergeleken."
+        }
       },
       "loading": "Laden: {image}",
       "publishError": {

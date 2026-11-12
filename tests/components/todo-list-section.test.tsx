@@ -180,12 +180,23 @@ describe('ticking', () => {
 describe('a command row', () => {
   it('copies the EXACT command and confirms in the button — no toast', async () => {
     const command = 'fly secrets set STRIPE_KEY=rk_live_x --app motir-core';
-    mount([todo({ text: 'Set the secret', commandText: command })]);
+    // Fake timers: the confirmation arms a real 2 s reset timer, which would
+    // otherwise fire after the file's happy-dom window is torn down and fail
+    // the shard with "window is not defined".
+    vi.useFakeTimers();
+    try {
+      mount([todo({ text: 'Set the secret', commandText: command })]);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy command' }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(command));
-    // The confirmation is the button's own state (design-notes § the copy grammar).
-    await waitFor(() => expect(screen.getByText('Command copied')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Copy command' }));
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(command));
+      // The confirmation is the button's own state (design-notes § the copy grammar).
+      await vi.waitFor(() => expect(screen.getByText('Command copied')).toBeTruthy());
+      await act(async () => {
+        vi.runOnlyPendingTimers();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a row with NO command draws no copy affordance at all', () => {

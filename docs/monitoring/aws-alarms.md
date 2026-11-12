@@ -1,25 +1,23 @@
 # AWS alarms — memory, CPU, event-loop block and steal per service
 
-On Fly, the on-call engineer reads Fly's Grafana and Sentry. On AWS, each
-watched service has CloudWatch alarms that notify one SNS topic. The watched
-services are core's three (`web`, `worker`, `relay`) and the AI side's five
-(`ai-conversation`, `ai-planning`, `gateway`, `gateway-run`, `codegraph`). This
-page maps each Fly signal to the alarm that replaces it, names the series each
-alarm reads, and gives the breach that proves each core alarm fires.
+The on-call engineer reads a breach from CloudWatch alarms and the SNS topic
+they notify, and reads errors from Sentry, which stays the issue channel. Each
+watched service has its own alarms: core's three (`web`, `worker`, `relay`) and
+the AI side's five (`ai-conversation`, `ai-planning`, `gateway`, `gateway-run`,
+`codegraph`). This page lists them, names the series each alarm reads, and gives
+the breach that proves each core alarm fires.
 
 The alarms are built by motir-infra (`lib/constructs/service-alarms.ts`), from
 the `monitoring` block of its parameter file
 (`lib/config/environments/production.ts`). This page copies the production
 values as merged. When the parameter file changes, it wins.
 
-## Fly alert → AWS alarm
+## The alarms
 
-No Fly or Sentry rule watched memory, CPU steal or event-loop blocks before
-this story. The Fly-rules check
-([MOTIR-9879](https://app.motir.co/items/MOTIR-9879)) read Fly's Grafana and
-Prometheus, the Fly dashboard and Sentry on 2026-10-29 and found none. The one
-destination in use was Sentry's email to an issue's owners. So each AWS alarm
-below is set from the target the story stated, not copied from a Fly rule.
+No memory, CPU-steal or event-loop-block alert rule existed before these
+alarms: the check that read the previous host's dashboards and Sentry on
+2026-10-29 found none (MOTIR-9879; the previous host was Fly). So each
+threshold below is a target the story stated, not a copy of an earlier rule.
 
 Every alarm is named `<namePrefix>-<service>-<kind>`, so in production it is
 `motir-web-memory`, `motir-worker-cpu`, `motir-relay-event-loop-block` and so on.
@@ -29,17 +27,17 @@ its subscribers are listed in the parameter file.
 
 Core's three services carry four alarms each:
 
-| Fly signal today                                 | AWS alarm (per service)            | signal read                                 | threshold | period | datapoints to alarm |
-| ------------------------------------------------ | ---------------------------------- | ------------------------------------------- | --------- | ------ | ------------------- |
-| memory: no rule existed                          | `motir-<service>-memory`           | `AWS/ECS` `MemoryUtilization`, Maximum      | ≥ 85 %    | 60 s   | 2 of 3              |
-| CPU steal: no rule existed                       | `motir-<service>-cpu`              | `AWS/ECS` `CPUUtilization`, Maximum         | ≥ 90 %    | 60 s   | 5 of 5              |
-|                                                  | `motir-<service>-steal`            | `Motir/Core` `CpuStealMs`, Maximum          | ≥ 6000 ms | 60 s   | 5 of 5              |
-| event-loop block: no rule existed (Sentry mails) | `motir-<service>-event-loop-block` | `Motir/Core` `EventLoopDelayMaxMs`, Maximum | ≥ 2000 ms | 60 s   | 1 of 3              |
+| alarm (per service)                | signal read                                 | threshold | period | datapoints to alarm |
+| ---------------------------------- | ------------------------------------------- | --------- | ------ | ------------------- |
+| `motir-<service>-memory`           | `AWS/ECS` `MemoryUtilization`, Maximum      | ≥ 85 %    | 60 s   | 2 of 3              |
+| `motir-<service>-cpu`              | `AWS/ECS` `CPUUtilization`, Maximum         | ≥ 90 %    | 60 s   | 5 of 5              |
+| `motir-<service>-steal`            | `Motir/Core` `CpuStealMs`, Maximum          | ≥ 6000 ms | 60 s   | 5 of 5              |
+| `motir-<service>-event-loop-block` | `Motir/Core` `EventLoopDelayMaxMs`, Maximum | ≥ 2000 ms | 60 s   | 1 of 3              |
 
 The AI side's five services carry memory and CPU alarms only, because their
 images run none of core's publishers; `codegraph` also carries the graph
-service's two alarms (MOTIR-10273). No Fly rule existed for any of them, so
-each threshold is a target:
+service's two alarms (MOTIR-10273). No rule existed for any of them before
+either, so each threshold is a target:
 
 | AWS alarm                            | services                                                   | signal read                                      | threshold | period | datapoints to alarm |
 | ------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------ | --------- | ------ | ------------------- |
@@ -56,8 +54,7 @@ The targets these numbers implement:
 - **CPU** alarms at sustained saturation of the task's reservation: five minutes
   at 90 % or more on core's services, and eight minutes of ten on the AI side's.
 - **Event-loop block** alarms on one block of 2 s or more, well under the 5 s
-  interactive-transaction timeout that a P2028 marks. On Fly today, Sentry's
-  `new-issue` alert emails only when such a block opens a _new_ issue.
+  interactive-transaction timeout that a P2028 marks.
 - **Steal** alarms on CPU taken by the host. On 2026-10-15, that starvation
   showed up as a 17 s event-loop freeze and P2028s. Only five straight minutes
   alarm: Fargate steal is spiky, and 3 of 5 fired on harmless spikes
@@ -134,14 +131,15 @@ All three are **unset by default**. With the namespace unset or blank, a local
 or self-hosted build starts no timer and no watchdog thread, opens no port,
 writes nothing and sends nothing (`tests/monitoring/monitoringUnsetGuarantee.test.ts`).
 On AWS, motir-infra sets them on each watched service's task definition. The
-`9091` metrics server that Fly scrapes is a separate setting
-(`MONITORING_METRICS_PORT`) and keeps serving Fly unchanged
-([request database timing](./request-db-timing.md)).
+metrics server is a separate setting: `MONITORING_METRICS_PORT` opens it, and
+motir-infra sets it on the web task only, so the request-timing collector beside
+that task can scrape `/metrics` over the task's loopback
+([request database timing](./request-db-timing.md)). Nothing else sets it.
 
 ## Proving an alarm
 
-Each alarm is proved by a real, bounded breach on a watched service, never by
-setting the alarm's state by hand. The core image carries the breach command
+Each alarm is proved by a real, bounded breach, never by setting the alarm's
+state by hand. The core image carries the breach command
 at `/app/breach/breach.mjs`:
 
 ```sh

@@ -14044,7 +14044,7 @@
       "subtitle": "Se a produção roda a mais recente de cada imagem que o Motir inicia, e quão cheio está cada pool da frota. Lido ao carregar a página. Publicar a mais recente é a única ação aqui, e cada clique é gravado no log de auditoria.",
       "images": {
         "title": "Imagens",
-        "subtitle": "As três imagens que a produção inicia. Cada uma é comparada com a mais recente publicada; quando a produção está atrás, Publicar a mais recente a avança pelo workflow de publicação da própria imagem."
+        "subtitle": "As quatro imagens que a produção inicia. Cada uma é comparada com a mais recente publicada; quando a produção está atrás, Publicar a mais recente a atualiza pelo workflow de publicação da própria imagem."
       },
       "image": {
         "hosted": {
@@ -14055,6 +14055,10 @@
           "title": "Imagem do runner de CI",
           "subtitle": "Onde cada job de CI da frota roda. Fixada por MOTIR_RUNNER_IMAGE; a mais recente é a última release runner-v*."
         },
+        "indexer": {
+          "title": "Imagem do indexador",
+          "subtitle": "O que cada execução de indexação do grafo de código inicia. Fixada por MOTIR_INDEXER_IMAGE; a mais recente é a última release indexer-v*."
+        },
         "sandbox": {
           "title": "Imagens das instâncias de agente",
           "subtitle": "O sandbox em que os agentes rodam, uma tag por perfil em ghcr.io/motir-co/motir-sandbox. Completa quando cada perfil tem sua tag na última release cli-v*."
@@ -14063,6 +14067,7 @@
       "imageName": {
         "hosted": "imagem do agente hospedado",
         "runner": "imagem do runner de CI",
+        "indexer": "imagem do indexador",
         "sandbox": "imagens das instâncias de agente"
       },
       "source": {
@@ -14093,13 +14098,17 @@
         "hosted": "{count, plural, one {# commit} other {# commits}} em packages/cli entre o build fixado e o mais recente.",
         "runner": "({tags}) · {days, plural, one {# dia} other {# dias}} · {commits, plural, one {# commit} other {# commits}} em infra/ci-runner.",
         "runnerNoTags": "{days, plural, one {# dia} other {# dias}} · {commits, plural, one {# commit} other {# commits}} em infra/ci-runner.",
+        "indexer": "({tags}) · {days, plural, one {# dia} other {# dias}} · {commits, plural, one {# commit} other {# commits}} no indexador.",
+        "indexerNoTags": "{days, plural, one {# dia} other {# dias}} · {commits, plural, one {# commit} other {# commits}} no indexador.",
         "link": "Ver os commits"
       },
       "unreleased": {
         "title": "Mesclados desde {release}, em nenhuma release",
-        "count": "{count, plural, one {# mudança} other {# mudanças}} em infra/ci-runner"
+        "count": "{count, plural, one {# mudança} other {# mudanças}} em infra/ci-runner",
+        "indexerCount": "{count, plural, one {# mudança mesclada no indexador veio depois} other {# mudanças mescladas no indexador vieram depois}}"
       },
       "releaseNeeded": "<strong>É necessária uma release.</strong> Estas mudanças só chegam à frota numa nova release do runner, e esta página não cria nenhuma. Envie a tag <mono>{tag}</mono>; o pipeline de release então a publica e a linha oferece Publicar a mais recente.",
+      "releaseNeededIndexer": "<strong>É necessária uma release.</strong> Estas mudanças só chegam às execuções de indexação numa nova release do indexador, e esta página não cria nenhuma. Envie a tag <mono>{tag}</mono> no motir-ai; o pipeline de release dele então a publica e a linha oferece Publicar a mais recente.",
       "ami": {
         "title": "AMI do runner · somente leitura",
         "current": "Atualizada",
@@ -14132,10 +14141,14 @@
         "note": {
           "hosted": "Fixa o último build de main pelo workflow de fixação do agente hospedado. Web e worker passam a usá-lo.",
           "runner": "Fixa {release} pelo workflow de fixação do runner. Web e worker passam a usá-la.",
+          "indexer": "Fixa {release} pelo pull request de fixação do indexador. Web e worker passam a usá-la.",
           "sandbox": "Publica {release} de novo. Só as {count} tags que faltam são enviadas; nada muda em produção.",
           "hostedCurrent": "Nada mais recente para publicar. A produção fixa o último build de main.",
           "runnerCurrent": "Nada mais recente para publicar. A produção fixa a última release do runner.",
           "runnerReleaseNeeded": "Nada mais recente para publicar: a produção fixa a última release. As mudanças mescladas acima precisam primeiro de uma release.",
+          "indexerCurrent": "Nada mais recente para publicar. A produção fixa a última release do indexador.",
+          "indexerReleaseNeeded": "Nada mais recente para publicar: a produção fixa a última release do indexador. As mudanças mescladas acima precisam primeiro de uma release.",
+          "indexerNotRead": "Publicar a mais recente fica desativado até que a fixação e a release mais recente sejam lidas.",
           "sandboxCurrent": "Nada mais recente para publicar. Cada perfil tem sua tag na última release.",
           "sandboxOld": "{release} foi criada antes de uma nova execução conseguir enviar só as tags que faltam, então executá-la de novo enviaria todas as tags outra vez. Crie uma nova release cli-v* em vez disso.",
           "running": "Uma execução do workflow de publicação desta imagem já está em andamento. Publicar a mais recente fica desativado até ela terminar.",
@@ -14153,12 +14166,21 @@
         "sandboxFrom": "{published} de {total} tags em {version}",
         "hostedBody": "Isto inicia o workflow de fixação do agente hospedado. Ele move MOTIR_HOSTED_AGENT_IMAGE para o build mais recente e implanta: <strong>web e worker são renovados</strong> com a nova fixação, e as execuções hospedadas iniciadas após a renovação iniciam a nova imagem.",
         "runnerBody": "Isto inicia o workflow de fixação do runner. Ele move MOTIR_RUNNER_IMAGE para {release} e implanta: <strong>web e worker são renovados</strong> com a nova fixação. A AMI do runner não muda.",
+        "indexerBody": "Isto abre o pull request de fixação do indexador, que move MOTIR_INDEXER_IMAGE para {release} e entra na fila para ser mesclado. A implantação dele então <strong>renova web e worker</strong>, e as execuções de indexação iniciadas depois da renovação iniciam a nova imagem. As que já estão em andamento terminam na imagem com que começaram.",
         "sandboxBody": "Isto executa de novo a release do sandbox para {release} e envia só as tags que faltam: {missing}. {published} já estão publicadas e não são enviadas de novo. <strong>Nada muda em produção.</strong>",
         "sandboxBodyNonePublished": "Isto executa de novo a release do sandbox para {release} e envia só as tags que faltam: {missing}. <strong>Nada muda em produção.</strong>"
       },
       "progress": {
         "title": "Publicando.",
         "body": "O workflow de publicação está rodando; esta linha é atualizada quando ele terminar.",
+        "indexerQueued": {
+          "title": "Pull request de fixação na fila.",
+          "body": "Ele é mesclado pela fila de merge, depois a implantação renova web e worker; esta linha é atualizada conforme avança."
+        },
+        "indexerRolling": {
+          "title": "Renovando web e worker.",
+          "body": "O pull request de fixação foi mesclado e a implantação está passando web e worker para {release}. Novas execuções de indexação a iniciam quando a renovação terminar."
+        },
         "started": "· iniciado {age} por {email}",
         "startedNoActor": "· iniciado {age}",
         "button": "Publicando…"
@@ -14177,6 +14199,7 @@
       "workflow": {
         "hosted": "Fixação do agente hospedado",
         "runner": "Fixação do runner",
+        "indexer": "Fixação do indexador",
         "sandbox": "Release do sandbox {tag}",
         "run": "{workflow} · execução nº {number}",
         "runNoNumber": "{workflow} · execução"
@@ -14193,7 +14216,26 @@
       },
       "unset": {
         "title": "Não configurado aqui",
-        "body": "{variable} não está definida nesta implantação, então não há fixação para comparar."
+        "body": "{variable} não está definida nesta implantação, então não há fixação para comparar.",
+        "indexerBody": "MOTIR_INDEXER_IMAGE não está definida nesta implantação, então esta instalação não indexa: nenhuma execução de indexação do grafo de código começa, e não há fixação para comparar."
+      },
+      "notRead": {
+        "pin": {
+          "title": "Não foi possível ler a fixação.",
+          "body": "O ECR não respondeu pelo digest que MOTIR_INDEXER_IMAGE indica, então ele não é comparado e nada aqui significa atualizado."
+        },
+        "newest": {
+          "title": "Não foi possível ler as releases.",
+          "body": "O GitHub não respondeu pelas releases indexer-v* do motir-ai, então a fixação não é comparada com nada."
+        },
+        "newestEcr": {
+          "title": "Não foi possível ler as releases.",
+          "body": "O ECR não respondeu pelas tags de release indexer-* do repositório do indexador, então a fixação não é comparada com nada."
+        },
+        "history": {
+          "title": "Não foi possível ler as mudanças mescladas",
+          "body": "O GitHub não respondeu pelo histórico de commits do motir-ai, então as mudanças que não estão em nenhuma release não são listadas. A fixação e a release mais recente acima continuam sendo comparadas."
+        }
       },
       "loading": "Carregando: {image}",
       "publishError": {
