@@ -17,7 +17,7 @@ import {
   assertTraceShape,
   connect,
   envelopes,
-  FLY,
+  FARGATE,
   histogramCount,
   initSentry,
   request,
@@ -78,7 +78,7 @@ afterAll(async () => {
 
 describe('with no SENTRY_DSN, on the assembled path', () => {
   it('no init, no transport, nothing captured — the call is unchanged and the histograms still record', async () => {
-    stubMonitoringEnv({ SENTRY_TRACES_SAMPLE_RATE: '1', ...FLY });
+    stubMonitoringEnv({ SENTRY_TRACES_SAMPLE_RATE: '1', ...FARGATE });
 
     // The three init entry points, the way `sentry-init-gate.test.ts` drives them:
     // the server and Edge configs by import, and the worker's gate, which is

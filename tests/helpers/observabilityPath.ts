@@ -21,10 +21,13 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 // load-bearing: a second `Sentry.init` in one process keeps the FIRST init's
 // sampler, so a rate can be chosen once per file and never changed.
 
-export const FLY = {
-  FLY_MACHINE_ID: 'm-8556',
-  FLY_PROCESS_GROUP: 'app',
-  FLY_REGION: 'iad',
+/** The Fargate task the assembled path says it runs on (MOTIR-10962). */
+export const FARGATE_TASK_ID = '85568556855685568556855685568556';
+export const FARGATE = {
+  AWS_EXECUTION_ENV: 'AWS_ECS_FARGATE',
+  AWS_REGION: 'us-east-1',
+  ECS_CONTAINER_METADATA_URI_V4: `http://169.254.170.2/v4/${FARGATE_TASK_ID}-1234567890`,
+  MONITORING_CLOUDWATCH_SERVICE: 'web',
 } as const;
 export const DSN = 'https://key@o1.ingest.us.sentry.io/2';
 
@@ -148,7 +151,7 @@ export function stubMonitoringEnv(overrides: Record<string, string>): void {
     'SENTRY_ENVIRONMENT',
     'SENTRY_TRACES_SAMPLE_RATE',
     'MONITORING_METRICS_PORT',
-    ...Object.keys(FLY),
+    ...Object.keys(FARGATE),
   ]) {
     vi.stubEnv(name, overrides[name] ?? '');
   }
@@ -157,7 +160,7 @@ export function stubMonitoringEnv(overrides: Record<string, string>): void {
 /** Initialise the REAL SDK the way the web server does, at `rate`. */
 export async function initSentry(rate: string): Promise<void> {
   await Sentry.flush(2000);
-  stubMonitoringEnv({ SENTRY_DSN: DSN, SENTRY_TRACES_SAMPLE_RATE: rate, ...FLY });
+  stubMonitoringEnv({ SENTRY_DSN: DSN, SENTRY_TRACES_SAMPLE_RATE: rate, ...FARGATE });
   const options = serverSentryInitOptions({ traces: true });
   if (!options) throw new Error('serverSentryInitOptions returned null with a DSN set');
   Sentry.init({ ...options, transport: captureTransport });
@@ -173,9 +176,9 @@ export interface TraceReading {
 export function assertTraceShape(event: CapturedTransaction, tool: string): TraceReading {
   expect(event.transaction).toBe(`MCP tools/call ${tool}`);
   expect(event.tags?.[MCP_TOOL_TAG]).toBe(tool);
-  expect(event.tags?.['instance.machine']).toBe(FLY.FLY_MACHINE_ID);
-  expect(event.tags?.['instance.process_group']).toBe(FLY.FLY_PROCESS_GROUP);
-  expect(event.tags?.['instance.region']).toBe(FLY.FLY_REGION);
+  expect(event.tags?.['instance.machine']).toBe(FARGATE_TASK_ID);
+  expect(event.tags?.['instance.process_group']).toBe(FARGATE.MONITORING_CLOUDWATCH_SERVICE);
+  expect(event.tags?.['instance.region']).toBe(FARGATE.AWS_REGION);
 
   const spans = event.spans ?? [];
   const toolSpan = spans.find((s) => s.description === `tools/call ${tool}`);

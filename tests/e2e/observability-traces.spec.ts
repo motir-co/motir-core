@@ -23,7 +23,8 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { resetDatabase } from './_helpers/db-reset';
 import {
   OBSERVABILITY_CAPTURE_FILE,
-  OBSERVABILITY_FLY_ENV,
+  OBSERVABILITY_FARGATE_ENV,
+  OBSERVABILITY_TASK_ID,
   OBSERVABILITY_METRICS_PORT,
 } from './_helpers/observability-const';
 import { readCaptured, readCapturedText } from './_helpers/sentry-capture';
@@ -148,9 +149,11 @@ function assertPlaceholderStatements(statements: Span[], what: string): void {
 }
 
 function assertInstanceTags(event: TransactionEvent): void {
-  expect(event.tags?.['instance.machine']).toBe(OBSERVABILITY_FLY_ENV.FLY_MACHINE_ID);
-  expect(event.tags?.['instance.process_group']).toBe(OBSERVABILITY_FLY_ENV.FLY_PROCESS_GROUP);
-  expect(event.tags?.['instance.region']).toBe(OBSERVABILITY_FLY_ENV.FLY_REGION);
+  expect(event.tags?.['instance.machine']).toBe(OBSERVABILITY_TASK_ID);
+  expect(event.tags?.['instance.process_group']).toBe(
+    OBSERVABILITY_FARGATE_ENV.MONITORING_CLOUDWATCH_SERVICE,
+  );
+  expect(event.tags?.['instance.region']).toBe(OBSERVABILITY_FARGATE_ENV.AWS_REGION);
 }
 
 // ── /metrics ────────────────────────────────────────────────────────────────

@@ -308,7 +308,10 @@ export const REQUIRED_SET: readonly { key: string; why: string }[] = [
     key: 'GOOGLE_CLIENT_SECRET',
     why: 'required at module load (`lib/auth/index.ts`); a placeholder',
   },
-  { key: 'MOTIR_BASE_URL', why: "the app's own origin, `http://motir-core-staging.flycast`" },
+  {
+    key: 'MOTIR_BASE_URL',
+    why: "the app's own origin — the staging deployment's private address, never production's",
+  },
   {
     key: 'MOTIR_API_V1_RATE_LIMIT',
     why: 'the per-token `/api/v1` budget the run-lifecycle scenario needs (6000)',

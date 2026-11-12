@@ -3,7 +3,7 @@ import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import {
   OBSERVABILITY_CAPTURE_PORT,
-  OBSERVABILITY_FLY_ENV,
+  OBSERVABILITY_FARGATE_ENV,
   OBSERVABILITY_METRICS_PORT,
 } from './tests/e2e/_helpers/observability-const';
 import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
@@ -17,7 +17,7 @@ import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-ali
 // envelopes the real SDK sent, and `/metrics`.
 //
 // WHY ITS OWN LANE. Every other lane's server has ONE `webServer.env`, and
-// putting a DSN, rate 1 and `FLY_*` in it would switch Sentry and full tracing
+// putting a DSN, rate 1 and a Fargate identity in it would switch Sentry and full tracing
 // on for every spec in that lane — a posture change made inside a test refactor,
 // the thing `playwright.cloud.config.ts`'s header rejects. This lane reuses the
 // `next-build` artifact (`E2E_REUSE_BUILD=1`), so it costs one `next start` and
@@ -90,7 +90,7 @@ export default defineConfig({
         SENTRY_DSN: `http://e2e@127.0.0.1:${OBSERVABILITY_CAPTURE_PORT}/1`,
         SENTRY_ENVIRONMENT: 'e2e',
         SENTRY_TRACES_SAMPLE_RATE: '1',
-        ...OBSERVABILITY_FLY_ENV,
+        ...OBSERVABILITY_FARGATE_ENV,
         MONITORING_METRICS_PORT: String(OBSERVABILITY_METRICS_PORT),
         // ── The main lane's prod-build harness (see playwright.config.ts) ──
         E2E_PROD_HARNESS: '1',

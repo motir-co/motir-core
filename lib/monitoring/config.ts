@@ -198,14 +198,15 @@ export function serverTracesSampleRate(): number {
 export const BROWSER_TRACES_SAMPLE_RATE = 0;
 
 /**
- * Which INSTANCE an event came from — the Fly machine, its process group and its
- * region — as Sentry tags under `instance.*` (MOTIR-8549). Set on the init's
+ * Which INSTANCE an event came from — the Fargate task, its process (`web`,
+ * `worker`, `relay`) and its region — as Sentry tags under `instance.*`
+ * (MOTIR-8549; read from Fargate since MOTIR-10962). Set on the init's
  * `initialScope`, so they reach transaction events as well as errors (a
  * transaction never passes through `beforeSend`).
  *
- * Fly injects all three at runtime. A variable that is unset or empty is
- * OMITTED rather than tagged `""`, so locally and on a self-hosted build the
- * answer is `{}`. The `instance.*` prefix keeps them apart from the `tx.*` keys
+ * `lib/deployment/identity.ts` reads all three, and only on a Fargate task. A
+ * value that is absent is OMITTED rather than tagged `""`, so locally and on a
+ * self-hosted build the answer is `{}`. The `instance.*` prefix keeps them apart from the `tx.*` keys
  * `tagTransactionStall` writes.
  */
 export function monitoringInstanceTags(): Record<string, string> {

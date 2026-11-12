@@ -152,17 +152,20 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
  *    The rule's REACH is nevertheless all of `lib/`, deliberately and correctly
  *    — a boundary guard narrowed to the directory it protects is one you evade
  *    by moving a file. So the answer is a REGISTERED exception in the shape the
- *    first one takes: one file, one narrow tell naming the three host-tag
- *    variables it still reads (`FLY_MACHINE_ID`, `FLY_REGION` and
- *    `FLY_PROCESS_GROUP`, for the terminal relay and the monitoring `instance.*`
- *    tags of MOTIR-8549, which read the host through this file). Since
- *    MOTIR-10952 `deploymentIdentity()` answers from Fargate and reads no
- *    `FLY_APP_NAME`, so that name left the tell with the read.
+ *    first one takes: one file, one narrow tell naming the host variables it
+ *    reads. Since MOTIR-10952 `deploymentIdentity()` answers from Fargate, and
+ *    since MOTIR-10962 so do the three host-tag accessors the terminal relay and
+ *    the monitoring `instance.*` tags of MOTIR-8549 read through this file — so
+ *    the tell is Fargate's variables (`AWS_EXECUTION_ENV`, `AWS_REGION`,
+ *    `ECS_CONTAINER_METADATA_URI_V4`, `MOTIR_ECS_CLUSTER`,
+ *    `MONITORING_CLOUDWATCH_SERVICE`) and no `FLY_*` name is left in it.
  *
- *    The tell deliberately does NOT match `FLY_*` in general. A future
- *    `FLY_API_TOKEN` read in that file — the thing that would turn a passive
- *    identity accessor into a Fly API client — fails this guard, which is the
- *    whole point of scoping an exemption to a pattern instead of to a path.
+ *    ⚠️ AND IT EXCUSES NO LINE THAT ALSO NAMES `FLY_*`. An exemption only
+ *    applies where a Fly tell fired, so a tell of AWS names alone would excuse
+ *    `env['FLY_API_TOKEN'] ?? env['AWS_REGION']`. The negative lookahead keeps
+ *    the entry live — the "still points at a live tell" case below reads it —
+ *    while any Fly read that comes back into that file fails this guard, which
+ *    is the whole point of scoping an exemption to a pattern instead of to a path.
  *
  * 3. `lib/publicAddresses/providers.ts` is the CERTIFICATE port's composition
  *    root (MOTIR-4216) — the selector between `adapters/fly/` and the E2E fake,
@@ -179,8 +182,8 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
 const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
   {
     file: join('lib', 'deployment', 'identity.ts'),
-    tell: /\bFLY_(REGION|MACHINE_ID|PROCESS_GROUP)\b/,
-    why: "answers where the WEB PROCESS runs, for the console's hosting card — not the fleet's port",
+    tell: /^(?!.*\bFLY_)(?=.*\b(AWS_EXECUTION_ENV|AWS_REGION|ECS_CONTAINER_METADATA_URI_V4|MOTIR_ECS_CLUSTER|MONITORING_CLOUDWATCH_SERVICE)\b)/m,
+    why: "answers where THIS PROCESS runs on Fargate, for the console's hosting card, the relay and Sentry's instance tags — not the fleet's port (MOTIR-10962)",
   },
   {
     file: join('lib', 'publicAddresses', 'providers.ts'),
@@ -344,6 +347,37 @@ describe('§4 rule 1 — no `fly` escapes the adapter directory', () => {
       expect(allowed.tell.test(source), `${allowed.file} no longer contains ${allowed.tell}`).toBe(
         true,
       );
+    }
+  });
+});
+
+describe('the identity exception reads Fargate, and excuses no Fly read (MOTIR-10962)', () => {
+  const identity = ALLOWED.find((a) => a.file === join('lib', 'deployment', 'identity.ts'))!;
+
+  it('names each variable the file reads', () => {
+    for (const name of [
+      'AWS_EXECUTION_ENV',
+      'AWS_REGION',
+      'ECS_CONTAINER_METADATA_URI_V4',
+      'MOTIR_ECS_CLUSTER',
+      'MONITORING_CLOUDWATCH_SERVICE',
+    ]) {
+      expect(identity.tell.test(`return env['${name}'];`), name).toBe(true);
+    }
+  });
+
+  it('the file reads none of the Fly host variables any more', () => {
+    const source = stripComments(readFileSync(join(root, identity.file), 'utf8'));
+    expect(source).not.toMatch(/\bFLY_(MACHINE_ID|REGION|PROCESS_GROUP)\b/);
+  });
+
+  it('would still fail on a Fly read in that file, even beside a Fargate one (mutation check)', () => {
+    for (const leak of [
+      "return nonEmpty(env['FLY_MACHINE_ID']);",
+      "return env['FLY_REGION'] ?? env['AWS_REGION'];",
+      "const t = env['FLY_API_TOKEN'] ?? env['MONITORING_CLOUDWATCH_SERVICE'];",
+    ]) {
+      expect(identity.tell.test(leak), leak).toBe(false);
     }
   });
 });

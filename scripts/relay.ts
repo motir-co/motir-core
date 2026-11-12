@@ -20,9 +20,10 @@
  * standalone output and `lib/` is not in it.
  *
  * Environment: DATABASE_URL, MOTIR_TERMINAL_MASTER_KEY, MOTIR_BASE_URL (the one
- * Origin a browser may connect from), SENTRY_DSN, PORT (default 8080), and Fly's own
- * FLY_MACHINE_ID (which relay holds a row; hostname+pid off Fly). It holds
- * NO Fly token: it never starts, stops or execs a machine.
+ * Origin a browser may connect from), SENTRY_DSN, PORT (default 8080), and, on
+ * Fargate, the task id ECS puts in ECS_CONTAINER_METADATA_URI_V4 (which relay
+ * holds a row, read by `hostInstanceId`; hostname+pid off Fargate — MOTIR-10962).
+ * It holds NO Fly token: it never starts, stops or execs a machine.
  */
 import * as Sentry from '@sentry/nextjs';
 import { db } from '@/lib/db';
