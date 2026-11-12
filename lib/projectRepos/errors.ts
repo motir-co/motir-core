@@ -377,3 +377,45 @@ export class ProjectRepoHostingTargetFixedError extends Error {
     this.name = 'ProjectRepoHostingTargetFixedError';
   }
 }
+
+/**
+ * `create_project_repository` (MOTIR-11038) found a row of this NAME already in
+ * the project, asked for with a different base (`seedSource`) or a different
+ * ROLE than this call. The row is not this call's to change: re-pointing it is
+ * the set service's own edit path and a decision for whoever made the row, so
+ * the door refuses and touches nothing. The message names the disagreeing field
+ * and both values. → 409
+ */
+export class RepoExistsWithOtherSpecError extends Error {
+  readonly code = 'REPO_EXISTS_WITH_OTHER_SPEC' as const;
+  constructor(
+    readonly repoName: string,
+    readonly field: 'seedSource' | 'role',
+    readonly existing: string,
+    readonly requested: string,
+  ) {
+    super(
+      `The project already has a repository row "${repoName}" whose ${field} is "${existing}", ` +
+        `but this call asked for ${field} "${requested}". The row is left unchanged — ask for ` +
+        `the row as it stands, or change it from the project's Repositories room.`,
+    );
+    this.name = 'RepoExistsWithOtherSpecError';
+  }
+}
+
+/**
+ * `create_project_repository` (MOTIR-11038) asked for a row another run is
+ * establishing right now — it is `creating`, or this call lost the claim race
+ * (`establishSet` answered `not_attempted` for it). Nothing was written; the
+ * other run settles the row, and a later call reads the settled answer. → 409
+ */
+export class RepoEstablishBusyError extends Error {
+  readonly code = 'REPO_ESTABLISH_BUSY' as const;
+  constructor(readonly repoName: string) {
+    super(
+      `Another run is creating the repository "${repoName}" right now, so this call wrote ` +
+        `nothing. Call again once that run has settled the row to read its outcome.`,
+    );
+    this.name = 'RepoEstablishBusyError';
+  }
+}

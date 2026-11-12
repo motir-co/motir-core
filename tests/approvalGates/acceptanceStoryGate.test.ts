@@ -557,7 +557,10 @@ describe('the lifecycles', () => {
   });
 
   it('an `auto` story run: a push withdraws the acceptance question even with NO merge gate beside it (MOTIR-5903)', async () => {
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { prMergeMode: 'auto' } });
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { prMergeMode: 'auto', prMergeModeDecidedAt: new Date() },
+    });
     const { story, e2e, pr } = await storyRun('success');
     await publishVia(e2e.identifier, 'c0ffee1');
     expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'awaiting']]);

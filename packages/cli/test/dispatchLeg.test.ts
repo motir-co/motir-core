@@ -6,6 +6,7 @@ import type { AgentRunResult } from '../src/agentRun.js';
 import type { DispatchPrompt } from '../src/client.js';
 import type { ParsedAgentCommand } from '../src/agentProfiles.js';
 import { agentModeAgent } from '../src/commands/dispatch.js';
+import { createDispatchRunReporter } from '../src/dispatchRunReporter.js';
 
 // THE DISPATCH LEG (Story MOTIR-3655 · MOTIR-3695) — the ONE implementation of
 // materialize, spawn, and decide what happened, now shared by `motir run` and
@@ -526,5 +527,104 @@ describe('the agent’s build-through and STOP ride the leg, before the verdict 
     expect((await legWith({ discrepancy: POINTS, decisions: DECISIONS })).calls).toEqual([
       ['discrepancy', 'PROD-1', POINTS, DECISIONS],
     ]);
+  });
+});
+
+describe('the init card’s repository rides the leg, before the verdict (MOTIR-11055)', () => {
+  const REQUEST = { name: 'acme-infra', role: 'infra' as const };
+
+  function leg(report: { repository?: typeof REQUEST | null }, reporter: unknown) {
+    const primary = target();
+    return runDispatchLeg({
+      client: {
+        getWorkItem: async () => ({ item: { status: 'in_progress' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
+      rootDir: ROOT,
+      key: 'PROD-1',
+      dispatch: PROMPT,
+      agent: { command: 'fake-agent', binary: 'fake-agent', args: [] },
+      targets: [primary],
+      primary,
+      sessionBranch: null,
+      onMaterialization: () => undefined,
+      beforeSpawn: () => undefined,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: 'm', ...report }),
+      run: git(true),
+      reporter: reporter as never,
+    });
+  }
+
+  function fakeReporter() {
+    const order: string[] = [];
+    const calls: unknown[] = [];
+    return {
+      order,
+      calls,
+      reporter: {
+        event: (e: { kind: string }) => order.push(e.kind),
+        reportRepository: async (key: string, request: unknown) => {
+          order.push('repository');
+          calls.push([key, request]);
+        },
+      },
+    };
+  }
+
+  it('posts the request after agent_exited and before leg_verdict', async () => {
+    const fake = fakeReporter();
+    await leg({ repository: REQUEST }, fake.reporter);
+    expect(fake.calls).toEqual([['PROD-1', REQUEST]]);
+    expect(fake.order.indexOf('agent_exited')).toBeLessThan(fake.order.indexOf('repository'));
+    expect(fake.order.indexOf('repository')).toBeLessThan(fake.order.indexOf('leg_verdict'));
+  });
+
+  it('posts nothing at all when the agent wrote no repository member', async () => {
+    for (const report of [{}, { repository: null }]) {
+      const fake = fakeReporter();
+      await leg(report, fake.reporter);
+      expect(fake.calls).toHaveLength(0);
+    }
+  });
+
+  it('against a REAL reporter whose client refuses: one warning, and the leg still settles and reports', async () => {
+    const warnings: string[] = [];
+    const appended: string[] = [];
+    let asked = 0;
+    const reporter = createDispatchRunReporter({
+      warn: (m) => warnings.push(m),
+      client: {
+        async openDispatchRun() {
+          return { runId: 'run_1', created: true, status: 'running', seq: 0, cards: [] } as never;
+        },
+        async appendDispatchRunEvents(args: { events: { kind: string }[] }) {
+          appended.push(...args.events.map((e) => e.kind));
+          return { runId: 'run_1', appended: args.events.length, seq: 1, cards: [] } as never;
+        },
+        async closeDispatchRun() {
+          return {} as never;
+        },
+        async createDispatchRunRepository() {
+          asked += 1;
+          throw new Error('RUN_CARD_NOT_INIT_CARD');
+        },
+      },
+    });
+    await reporter.open({
+      projectKey: 'PROD',
+      command: 'run',
+      runId: '20261112-000000',
+      cards: [{ key: 'PROD-1', disposition: 'queued' }],
+    });
+
+    const verdict = await leg({ repository: REQUEST }, reporter);
+    await reporter.flush();
+
+    expect(asked).toBe(1);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('acme-infra');
+    expect(reporter.offline).toBe(false);
+    expect(verdict.kind).toBeDefined();
+    expect(appended).toContain('leg_verdict');
   });
 });

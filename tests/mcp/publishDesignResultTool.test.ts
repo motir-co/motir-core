@@ -202,6 +202,9 @@ describe('the tool is reachable by the caller it was built for', () => {
       // the argument is at the constant. `page:delete` stays out.
       'page:view',
       'page:edit',
+      // MOTIR-11038 — `repository:manage`, for `create_project_repository`; the
+      // argument is at the constant (a stated widening, not an unrelated one).
+      'repository:manage',
       'ai:plan',
     ]);
   });

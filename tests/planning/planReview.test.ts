@@ -181,6 +181,7 @@ describe('planDecisionErrorCode', () => {
     ['INVALID_PROPOSAL', 422, 'proposalRejected'],
     ['PLAN_ITEM_UNKNOWN_TARGET_REPO', 422, 'proposalRejected'],
     ['PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE', 422, 'proposalRejected'],
+    ['PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE', 422, 'proposalRejected'],
     ['PLAN_GRAMMAR_VIOLATION', 400, 'proposalRejected'],
     ['INVALID_PLAN_REF_GRAPH', 400, 'proposalRejected'],
     ['UNRESOLVED_PLAN_REF', 422, 'proposalRejected'],
@@ -247,6 +248,13 @@ describe('planDecisionRefusal', () => {
     });
     expect(planDecisionRefusal(repo, review)?.fieldKind).toBe('repository');
     expect(planDecisionRefusal(role, review)?.fieldKind).toBe('repositoryRole');
+    // A role the project's set resolves to no single row (MOTIR-11039) is the
+    // same field: the fix is to re-pin the role, so the same field kind.
+    const unresolvable = new PlanRequestError(422, 'PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE', {
+      planItemId: 'pi_1',
+      message: 'no row',
+    });
+    expect(planDecisionRefusal(unresolvable, review)?.fieldKind).toBe('repositoryRole');
   });
 
   it('names no proposal when the response carries none, or one the review does not hold', () => {

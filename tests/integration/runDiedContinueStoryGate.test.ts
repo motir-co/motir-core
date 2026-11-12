@@ -62,7 +62,11 @@ async function tokenFor(fx: WorkItemFixture, userId: string): Promise<string> {
     projectId: fx.projectId,
     // The CLI's grant, less the lesson store's (not grantable where lessons are
     // off, and nothing in this chain reads a lesson).
-    permissions: CLI_TOKEN_GRANT.filter((p) => !p.startsWith('lesson:')),
+    // …and less `repository:manage` (MOTIR-11038): a member's role cannot confer it,
+    // and nothing in this chain creates a repository.
+    permissions: CLI_TOKEN_GRANT.filter(
+      (p) => !p.startsWith('lesson:') && p !== 'repository:manage',
+    ),
   });
   return token;
 }

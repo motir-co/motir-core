@@ -41,7 +41,7 @@ export async function seedReviewAgent(slug: string): Promise<ContinueHostedSeed>
   // The mode the review agent needs; its switch stays OFF (the default) for the spec.
   await adminDb.project.update({
     where: { id: s.hosted.projectId },
-    data: { prMergeMode: 'manual', reviewAgentEnabled: false },
+    data: { prMergeMode: 'manual', prMergeModeDecidedAt: new Date(), reviewAgentEnabled: false },
   });
   // The same installation `seedHostedRun` bound, now also mirroring the review repository.
   await seedGithubInstallation(s.hosted.workspaceId, [REVIEW_REPO]);

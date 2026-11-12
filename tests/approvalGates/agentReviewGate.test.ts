@@ -467,7 +467,10 @@ describe('§12.5 — withdrawal', () => {
 
   it('a legacy row with the switch on in an AUTO project reads as the review agent off', async () => {
     const s = await makeScenario('legacy-auto');
-    await adminDb.project.update({ where: { id: s.project.id }, data: { prMergeMode: 'auto' } });
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { prMergeMode: 'auto', prMergeModeDecidedAt: new Date() },
+    });
     const item = await cardWithPr(s, 72);
     await ci('success', 'sha-a', 72);
     expect(await gatesOf(item.id, REVIEW)).toHaveLength(0);

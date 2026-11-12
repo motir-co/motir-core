@@ -86,7 +86,7 @@ function headFiles(blob: string, head = HEAD): PullRequestFiles {
 async function decisionCard(opts: { mode?: 'manual' | 'auto'; blob?: string } = {}) {
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { prMergeMode: opts.mode ?? 'manual' },
+    data: { prMergeMode: opts.mode ?? 'manual', prMergeModeDecidedAt: new Date() },
   });
   const item = await workItemsService.createWorkItem(
     {
@@ -397,7 +397,10 @@ describe('entering review asks again — once', () => {
 
 describe('a card that is not an agent’s decision is untouched', () => {
   it('a CODE card whose pull request adds an ADR raises no decision gate, and its auto merge is not held', async () => {
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { prMergeMode: 'auto' } });
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { prMergeMode: 'auto', prMergeModeDecidedAt: new Date() },
+    });
     const item = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title: 'Build it', type: 'code' },
       fx.ctx,

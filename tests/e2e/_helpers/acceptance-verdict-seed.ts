@@ -87,7 +87,7 @@ export async function seedAcceptanceVerdict(slug: string): Promise<AcceptanceVer
   // acceptance video — both SET, never left to a default (`acceptance-gate-seed.ts`).
   await adminDb.project.update({
     where: { id: project.id },
-    data: { prMergeMode: 'manual', acceptanceVideoEnabled: true },
+    data: { prMergeMode: 'manual', prMergeModeDecidedAt: new Date(), acceptanceVideoEnabled: true },
   });
   await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },

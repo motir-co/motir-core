@@ -109,6 +109,10 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     archive_page: { projectKey: t.projectKey, pageId: t.pageId },
     // MOTIR-9558 — the page hand link.
     link_page: { projectKey: t.projectKey, pageId: t.pageId, workItemKey: t.item1 },
+    // MOTIR-11038 — resource-targeting on the project key; the name carries a `/`, which the
+    // set service refuses before any host call, so a caller that passes the gate never
+    // reaches GitHub from a table that is not about creating repositories.
+    create_project_repository: { projectKey: t.projectKey, name: 'scoped/refused', role: 'infra' },
     publish_decision_page: { key: t.item1, pageId: t.pageId },
     get_work_item: { key: t.item1 },
     get_design: { key: t.item1 },

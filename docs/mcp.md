@@ -337,7 +337,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **123 tools**.
+`initialize` handshake and registers **124 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -2553,6 +2553,61 @@ link was made against, and a correction door a token cannot reach while it can
 reach the door that creates the mistake would be worse than no door at all. It is
 already in the CLI's fixed grant.
 
+#### `create_project_repository`
+
+**Create ONE repository in a project's repository set and establish it** — the
+call an init card's run makes for the repository its card declares
+(`initRepositoryName`). It appends a `proposed` row for `name`, then runs the
+establish pass over exactly that row: create the repository, seed it, mirror it
+and settle the row. (Story MOTIR-10162 · MOTIR-11038.)
+
+| Input        | Type   | Required | Notes                                                                                                             |
+| ------------ | ------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `projectKey` | string | yes      | The project key, e.g. `ACME`.                                                                                     |
+| `name`       | string | yes      | The BARE repository name — no owner, no `/`. Matched against the project's rows case-insensitively.               |
+| `role`       | string | yes      | One of `web` · `api` · `mobile` · `shared` · `infra` · `other`.                                                   |
+| `starterKey` | string | no       | A starter (seed-registry) key. **Omitted means an EMPTY base** (`initialised`), never the role's default starter. |
+
+**Output** — `structuredContent`: `outcome`, `row` (the project-repository row as
+it stands after the call) and `establish` — the establish pass's own per-row
+`outcome`, `failureCode` and `failureReason`, verbatim.
+
+- `outcome: "created"` — this call appended the row, and it is settled.
+- `outcome: "adopted"` — the row was already in the project with the same base
+  and role (`proposed` or `failed`), and this call established it. Not the same
+  fact as the pass's own `establish.outcome: "adopted"`, which means the
+  repository already existed on the host.
+- `outcome: "already_settled"` — the row was already `created`, `connected` or
+  `skipped`; nothing was written.
+
+⚠️ **Replay-safe.** Repeating the identical call finds the row it made and writes
+nothing — the same row id, no second repository — so a retried init is never a
+second repository.
+
+**Refusals** — each a tool error carrying its own code:
+
+- `REPO_EXISTS_WITH_OTHER_SPEC` — the project already holds a row with this name
+  asked for with a different base or a different role. The message names the
+  field and both values; the row is left exactly as it was.
+- `REPO_ESTABLISH_BUSY` — another run holds the row `creating`, or this call lost
+  the claim race. Nothing was written.
+- A failed attempt answers the row's OWN `failureCode` verbatim with its
+  `failureReason` — for example `REPO_NAME_TAKEN_ON_HOST` when the name is taken
+  on the git host. The row stays `failed` and resumable: a repeat call
+  re-attempts it rather than appending another.
+- The set's own refusals answer their codes: `PROJECT_REPO_NAME_TAKEN`,
+  `PROJECT_REPO_INVALID_FIELD`, `PROJECT_REPO_LINK_CONFLICT`,
+  `PROJECT_REPO_ILLEGAL_TRANSITION`, `PROJECT_REPO_SEED_REFUSED`,
+  `REALIZED_REPO_ALREADY_CLAIMED`; and the establish pass's paid-AI-plan
+  precondition answers `ai_plan_required` / `plan_unknown`.
+- An unknown project key, or another workspace's, is `PROJECT_NOT_FOUND`, and no
+  row is written.
+
+Requires `repository:manage` on the project — the key the repository-set service
+asserts on every write. The CLI's fixed grant carries it (widened for this tool,
+`docs/decisions/token-permissions.md` AMENDMENT), and a token still reaches it
+only where its owner's role holds the key.
+
 #### `dismiss_review`
 
 **The routed person overrules the review agent's standing send-back, from their
@@ -4382,6 +4437,16 @@ one an amend left open.
   deleted after the plan was written — approve refuses such a plan. The text block
   groups folder-placed proposals under a `Folder: Parked ▸ 2025:` heading beside
   the committed-parent groups, and marks a deleted one.
+- **`blockerSubjects`** (MOTIR-11053) — what each committed card a proposal waits
+  on IS: a map keyed by every blocked-by ref the item draws (on `blockedByRefs`, or a
+  `modify`'s `patch.blockedByAdd`) that names a card of the plan's own project, each
+  mapped to that card's stored `subject` — `"init"` for an approved init card, say.
+  **`null` means the card was read and carries no subject.** A `planItem:` temp-ref,
+  a folder ref, an id naming no card and a card outside the project have no key (a
+  temp ref is resolved against `items[]` instead), and an item drawing no real ref
+  carries `{}`. ⚠️ When the read could not resolve them the key is **absent from
+  every item** — read that as _unread_, never as _no subject_. The write doors
+  (`add_plan_items` and the corrections) never carry it.
 
 A plan still `generating` returns the proposals that have arrived **so far**
 rather than erroring — proposals stream in, so a caller polling the content sees
@@ -4657,6 +4722,15 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
   `update_work_item` — a field the approver never saw, written into a card they
   had already approved. `update_plan_item` (the deepen turn) still refuses all
   three, deliberately: a deepen may not change where a card SHIPS.
+- **`proposedFields.initRepositoryName`** (`add` only, MOTIR-11051) — the BARE
+  name of the repository an **init** card will create (`subject: "init"`): the
+  card's own declaration, **not a repository pin**. The repository need not
+  exist yet, and nothing resolves the name against the project's set. Refused
+  (`INVALID_PROPOSAL`) without the `init` subject, beside any pin (`targetRepo`,
+  `targetRepos`, `targetRepositories`, `targetRepositoryRef`, `targetRepoRole`),
+  and for a name carrying an owner (`/`) or whitespace. Settled at the append —
+  no `patch` key or correction re-declares it — and approve writes it onto the
+  created card, whose repository columns stay empty.
 - **`proposedFields.todos`** (`add` only, leaf kinds only) — the card's **ORDERED
   STEPS**, written as its to-do list. **Array order is list order**, and
   approving the plan writes one real to-do row per element, none ticked. A
@@ -5098,7 +5172,11 @@ Errors: `PLAN_NOT_FOUND` / `PLAN_ITEM_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an
 `approved` or `declined` plan; `UNRESOLVED_PLAN_REF` for a ref naming no proposal;
 `INVALID_PROPOSAL` for a `patch` on an `add`, a body field on a `modify`, or a
 correction that changes nothing; `PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE` for a
-`targetRepoRole` outside the vocabulary.
+`targetRepoRole` outside the vocabulary; `PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE`
+for a role no single repository of the project's set carries (none does, or
+several do — the message says which and names them; pin the row with
+`targetRepositoryRef` instead). A project that records no repositories is exempt.
+`add_plan_items` and approve refuse the same role the same way.
 
 ##### `withdraw_plan_proposal` — take ONE proposal off a plan
 
@@ -5979,6 +6057,11 @@ Four questions, one call:
 - **Is that code INDEXED?** Per-repo `indexed` / `pending`, from the succeeded
   `system.code-graph-index` ledger, plus the set-level `hasRunning`.
 - **What is the project's repository SET, and where did onboarding stop?**
+- **Which starters could a new repository be created from?** The active entries
+  of the seed registry, each whole (key, label, role, stack, template source,
+  use cases, sizes, hosting targets). Platform-wide, read at call time, and the
+  same resolver the hosted planner's envelope uses (MOTIR-11041), so the two
+  planners judge coverage against one library.
 
 **Input**
 
@@ -5988,13 +6071,14 @@ Four questions, one call:
 
 **Output** — `structuredContent`: a `ProjectStateDto`:
 
-| Field          | Type                           | Notes                                                                                                               |
-| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `project`      | object                         | `{ key, id, name, onboardingRanAt }` — the marker is carried beside the verdict it produced.                        |
-| `planningGate` | `"workspace" \| "onboarding"`  | `resolvePlanningHostGate`'s verdict: `workspace` = established, `onboarding` = never onboarded.                     |
-| `code`         | object                         | `{ installed: boolean, index: MigrateIndexStatusDto }` — see below.                                                 |
-| `repoSet`      | `ProjectRepoDto[]`             | The PROJECT's repository set (distinct from the workspace's connected set); `[]` when the establish step never ran. |
-| `onboarding`   | `MigrateOnboardingDto \| null` | The migrate-onboarding run (`step` / `status` / `codeGraphReady` / `conventionApprovedAt`), or `null`.              |
+| Field            | Type                           | Notes                                                                                                                                                                                  |
+| ---------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project`        | object                         | `{ key, id, name, onboardingRanAt }` — the marker is carried beside the verdict it produced.                                                                                           |
+| `planningGate`   | `"workspace" \| "onboarding"`  | `resolvePlanningHostGate`'s verdict: `workspace` = established, `onboarding` = never onboarded.                                                                                        |
+| `code`           | object                         | `{ installed: boolean, index: MigrateIndexStatusDto }` — see below.                                                                                                                    |
+| `repoSet`        | `ProjectRepoDto[]`             | The PROJECT's repository set (distinct from the workspace's connected set); `[]` when the establish step never ran.                                                                    |
+| `onboarding`     | `MigrateOnboardingDto \| null` | The migrate-onboarding run (`step` / `status` / `codeGraphReady` / `conventionApprovedAt`), or `null`.                                                                                 |
+| `starterLibrary` | `SeedRegistryEntryDto[]`       | Every ACTIVE seed registry entry, whole — the same list a hosted planning submit carries as `context.starterLibrary`. Present with no repositories; `[]` only when no entry is active. |
 
 `code.index` is the **shipped `MigrateIndexStatusDto`** — the exact shape the
 migrate wizard's Index step polls — reused rather than re-invented:
@@ -6608,16 +6692,16 @@ thing on the other.
 
 **Output** — `structuredContent`:
 
-| Field              | Type             | Notes                                                                                        |
-| ------------------ | ---------------- | -------------------------------------------------------------------------------------------- |
-| `project`          | object           | `{ projectId, projectKey }`.                                                                 |
-| `items`            | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision, folderId, obsolescence }` — see below. |
-| `total`            | integer          | Live work items in the project, **before** the bound is applied.                             |
-| `returned`         | integer          | Rows in `items`.                                                                             |
-| `truncated`        | boolean          | Whether the bound bit.                                                                       |
-| `limit`            | integer          | The bound actually applied.                                                                  |
-| `folders`          | folder\[\]       | `{ id, parentFolderId, name, path }` — every folder of the project, see below.               |
-| `foldersTruncated` | boolean          | Whether the project holds more folders than `folders` lists.                                 |
+| Field              | Type             | Notes                                                                                                 |
+| ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `project`          | object           | `{ projectId, projectKey }`.                                                                          |
+| `items`            | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision, folderId, obsolescence, subject }` — see below. |
+| `total`            | integer          | Live work items in the project, **before** the bound is applied.                                      |
+| `returned`         | integer          | Rows in `items`.                                                                                      |
+| `truncated`        | boolean          | Whether the bound bit.                                                                                |
+| `limit`            | integer          | The bound actually applied.                                                                           |
+| `folders`          | folder\[\]       | `{ id, parentFolderId, name, path }` — every folder of the project, see below.                        |
+| `foldersTruncated` | boolean          | Whether the project holds more folders than `folders` lists.                                          |
 
 `parentKey` is the parent's `<KEY>-<n>` identifier (null at a root), which is what
 makes the response a TREE rather than a list — the hierarchy is rebuildable from
@@ -6628,6 +6712,8 @@ so orienting and proposing do not cost a `get_work_item` per target.
 `obsolescence` is the [obsolescence mark](#the-obsolescence-mark) — `outdated` /
 `deprecated`, `null` while the card is still current. The mark only: its note is
 a body, read with `get_work_item`. A marked row is never dropped or re-ordered.
+`subject` is the card's stored subject — its selector coordinate (`init` on an init
+card), an open string carried verbatim, `null` when the card carries none.
 
 **Folders.** `folderId` is the folder an item is **filed** in — its OWN placement,
 null for everything else. Only a root can be filed (an item has a parent OR a

@@ -27,12 +27,13 @@ function summary(over: Partial<WorkItemSummaryDto>): WorkItemSummaryDto {
     archivedAt: null,
     obsolescence: null,
     obsolescenceNoteMd: null,
+    subject: null,
     ...over,
   };
 }
 
 describe('toPlanTreeSkeleton', () => {
-  it('projects to {key, id, kind, title, status, parentKey, revision, folderId, decision, obsolescence} and resolves parentKey + revision', () => {
+  it('projects to {key, id, kind, title, status, parentKey, revision, folderId, decision, obsolescence, subject} and resolves parentKey + revision', () => {
     const epic = summary({ id: 'id_e', identifier: 'MOTIR-1', kind: 'epic', parentId: null });
     const story = summary({
       id: 'id_s',
@@ -62,6 +63,7 @@ describe('toPlanTreeSkeleton', () => {
         folderId: null,
         decision: null,
         obsolescence: null,
+        subject: null,
       },
       {
         key: 'MOTIR-2',
@@ -74,6 +76,7 @@ describe('toPlanTreeSkeleton', () => {
         folderId: null,
         decision: null,
         obsolescence: null,
+        subject: null,
       },
     ]);
   });
@@ -122,6 +125,7 @@ describe('toSkeletonRows', () => {
           title: 'A',
           status: 'todo',
           obsolescence: null,
+          subject: null,
         },
       ],
       new Map(),
@@ -151,6 +155,7 @@ describe('toSkeletonRows', () => {
           title: 'D',
           status: 'done',
           obsolescence: null,
+          subject: null,
         },
         {
           id: 'id_x',
@@ -160,6 +165,7 @@ describe('toSkeletonRows', () => {
           title: 'X',
           status: 'todo',
           obsolescence: null,
+          subject: null,
         },
       ],
       new Map(),
@@ -191,6 +197,66 @@ describe('the obsolescence mark on skeleton rows', () => {
       ['MOTIR-6', null],
     ]);
     expect(Object.keys(out[0]!)).not.toContain('obsolescenceNoteMd');
+  });
+});
+
+// MOTIR-11053 — the card's stored SUBJECT rides every skeleton row verbatim, so a
+// planner can recognise a COMMITTED card (an approved init card) without a second
+// read; a card carrying none reads null, and nothing else on the row moves.
+describe('the subject on skeleton rows', () => {
+  it('projects a stored subject verbatim and null for a card carrying none, leaving the rest of the row unchanged', () => {
+    const init = summary({ id: 'id_i', identifier: 'MOTIR-10', subject: 'init' });
+    const plain = summary({ id: 'id_p', identifier: 'MOTIR-11' });
+    const out = toPlanTreeSkeleton([init, plain], new Map(), new Map(), new Map());
+    expect(out).toEqual([
+      {
+        key: 'MOTIR-10',
+        id: 'id_i',
+        kind: 'story',
+        title: 'T',
+        status: 'todo',
+        parentKey: null,
+        revision: null,
+        folderId: null,
+        decision: null,
+        obsolescence: null,
+        subject: 'init',
+      },
+      {
+        key: 'MOTIR-11',
+        id: 'id_p',
+        kind: 'story',
+        title: 'T',
+        status: 'todo',
+        parentKey: null,
+        revision: null,
+        folderId: null,
+        decision: null,
+        obsolescence: null,
+        subject: null,
+      },
+    ]);
+  });
+
+  it('carries a member this build has never heard of as its own text', () => {
+    const rows = toSkeletonRows(
+      [
+        {
+          id: 'id_u',
+          parentId: null,
+          kind: 'task',
+          identifier: 'MOTIR-12',
+          title: 'U',
+          status: 'todo',
+          obsolescence: null,
+          subject: 'some-future-member',
+        },
+      ],
+      new Map(),
+      new Map(),
+      new Map(),
+    );
+    expect(rows[0]!.subject).toBe('some-future-member');
   });
 });
 

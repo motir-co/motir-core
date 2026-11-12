@@ -143,7 +143,14 @@ describe('get_plan — the transport contract', () => {
       raisedGaps?: unknown[];
       cost?: unknown;
     };
-    expected.items = expected.items.map((item) => ({ ...item, folderId: null, folderPath: null }));
+    // AND ONE MORE (MOTIR-11053): every proposal carries `blockerSubjects`, the
+    // subject each blocked-by ref it draws resolves to — empty on this unblocked one.
+    expected.items = expected.items.map((item) => ({
+      ...item,
+      folderId: null,
+      folderPath: null,
+      blockerSubjects: {},
+    }));
     expected.plannerRecord = null;
     expected.raisedGaps = [];
     expected.cost = {

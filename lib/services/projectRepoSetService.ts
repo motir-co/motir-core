@@ -41,6 +41,7 @@ import {
   PROJECT_REPO_PLAN_EDITABLE_STATES,
   PROJECT_REPO_PROPOSAL_SIGNALS,
   SEED_MATCH_RESULTS,
+  SEED_SOURCE_ORGANIZATION,
   isOrganizationSeedSource,
   isProjectRepoProposalSignal,
   isSeedMatchResult,
@@ -67,6 +68,9 @@ import {
   RealizedRepoAlreadyClaimedError,
 } from '@/lib/projectRepos/errors';
 
+/** What {@link projectRepoSetService.adoptConnectedRepo} did (MOTIR-11040). */
+export type ProjectRepoAdoptionOutcome = 'adopted' | 'already_listed' | 'name_held';
+
 // The project's REPOSITORY SET — reads and writes (Story MOTIR-1775 · MOTIR-1780),
 // specified by `docs/decisions/project-repository-set.md`.
 //
@@ -83,6 +87,10 @@ import {
 //     method that would have to hold a row locked across a GitHub round-trip;
 //   * DERIVE the set's contents from a plan (which roles, which names) — that is
 //     MOTIR-1881, which writes `proposed` rows THROUGH `addRow`;
+//     (the ONE derived writer it does own is `adoptConnectedRepo`, MOTIR-11040:
+//     linking a pull request records the repository it lives in as a
+//     `connected` row, because that link is the moment Motir is TOLD the
+//     project ships from it);
 //   * render anything — that is MOTIR-1782;
 //   * re-point `resolveCodeContext` / `codeGraphIndexService` from workspace scope
 //     to project scope. This card makes the association EXIST; adopting it is
@@ -935,16 +943,22 @@ export const projectRepoSetService = {
    * Called by the creation primitive (MOTIR-1781) AFTER its GitHub work completes —
    * never with a transaction held open across that round-trip.
    *
-   * POST-COMMIT, this fires the role → repo-name RESOLUTION (MOTIR-1913): a row
-   * reaching an established state is exactly the moment items pinned to its role
-   * can finally be told which repository they ship in. It is wired HERE rather than
-   * in each caller because this method is the ONE seam every establish path goes
-   * through — the creation primitive's `created` hop and the establish UI's
-   * connect-existing `connected` hop alike — so neither has to remember it and
-   * neither can drift. Best-effort by design: the repository EXISTS and the row IS
-   * established by the time this runs, and failing the attach over a derived pin
-   * would report a settled row as failed. The pass is idempotent, so the next
-   * establish (or an explicit re-run) completes what a dropped one missed.
+   * POST-COMMIT, three best-effort passes run here, in this order: the actor's
+   * collaborator-access grant (MOTIR-1900), the init-card ROUTING pass that gives
+   * the cards waiting on an init card a reference to this row (MOTIR-11042), and
+   * the project runner-group re-sync (MOTIR-1972). They are wired HERE because
+   * this method is the seam the creation primitive's `created` hop and the state
+   * route's connect `connected` hop both go through, so no caller has to remember
+   * them. (The Repositories room's connect-existing picker writes its row itself,
+   * in `organizationRepoService.linkExistingRepo`, which carries its own routing
+   * hook.) Best-effort by design: the repository EXISTS and the row IS established
+   * by the time they run, and failing the attach over one would report a settled
+   * row as failed.
+   *
+   * MOTIR-1913's role → repo-name RESOLUTION no longer runs here: it is RETIRED
+   * (see the comment in the body), because a card points at the row and its name
+   * is derived on read. The routing pass is not that pass revived — it writes a
+   * REFERENCE for a card that had none, which no read can derive.
    */
   async attachRealizedRepo(
     rowId: string,
@@ -966,7 +980,9 @@ export const projectRepoSetService = {
     // left for a pass to write.
     //
     // Nothing replaces it. If you are here looking for where the pin gets filled,
-    // the answer is that it no longer needs filling.
+    // the answer is that it no longer needs filling — for a card that POINTS AT the
+    // row. A card laid before the row existed points at nothing; the init-card
+    // routing pass below writes ITS reference, which is a different fact.
 
     // POST-COMMIT, BEST-EFFORT — grant the actor ACCESS to the repository that
     // now exists (MOTIR-1900). Wired at this same seam, and for the same reason
@@ -993,6 +1009,27 @@ export const projectRepoSetService = {
       );
     }
 
+    // POST-COMMIT, BEST-EFFORT — route the cards waiting on an init card that
+    // declared this repository (Story MOTIR-10162 · MOTIR-11042): they were laid
+    // unpinned because the row did not exist, so they hold no reference to derive
+    // a name from. Placed BEFORE the runner-group re-sync so a failure there cannot
+    // suppress it. No automatic retry: the log names the row and project, and the
+    // pass is idempotent and safe to re-run. A dropped run leaves the waiters
+    // blocked and visibly unpinned.
+    //
+    // LAZILY IMPORTED for the reason the access grant above gives: the routing
+    // service reaches `workItemsService`, whose graph reaches back into this one.
+    try {
+      const { projectRepoInitRoutingService } =
+        await import('@/lib/services/projectRepoInitRoutingService');
+      await projectRepoInitRoutingService.routeInitCardDependents(rowId, ctx);
+    } catch (err) {
+      console.error(
+        `[projectRepoSetService] could not route init-card dependents after establishing row ${rowId} in project ${attached.projectId}:`,
+        err,
+      );
+    }
+
     // POST-COMMIT, BEST-EFFORT — add the repository this row just realized to the
     // project's OWN runner group (MOTIR-1972 · `ci-runner-fleet.md` §7.3). Wired
     // at this same seam and for the same reason the two passes above are: this is
@@ -1010,6 +1047,71 @@ export const projectRepoSetService = {
       workspaceId: ctx.workspaceId,
     });
     return attached;
+  },
+
+  /**
+   * Record that a project ships from a repository the organisation has connected
+   * (Story MOTIR-10162 · MOTIR-11040) — the step a PULL REQUEST LINK takes, so a
+   * project's set stops omitting a repository its own cards are delivered from.
+   *
+   * A STEP OF THE CALLER'S TRANSACTION, never its own (the shape
+   * `projectPrMergeModeService.seedAtEstablishment` has): it is written beside the
+   * delivery row, so the link and the record commit or fail together. It asserts
+   * no permission — the link door has already asserted its own on the project —
+   * and it never refuses. Three dispositions:
+   *
+   *   * `already_listed` — the project already holds a row for this repository,
+   *     in any state. Nothing is written and that row is untouched.
+   *   * `name_held` — a row of this project already holds the repository's NAME
+   *     for something else (a `proposed` row not yet created, typically). Nothing
+   *     is written: taking the name would re-point an establish step in flight,
+   *     which is a person's decision, not a link's.
+   *   * `adopted` — one row is appended: `connected`, `seedSource` `organization`
+   *     (the repository is the organisation's and seeds from nothing, so the
+   *     Repositories room lists it under the organisation and hosting leaves it
+   *     alone), role `other` (nobody asserted a capability), no label, at the end
+   *     of the set. A settled row may be what ESTABLISHES the set, so the merge
+   *     mode default is seeded in the same transaction.
+   *
+   * A concurrent link racing this one cannot write a second row: the insert is
+   * `ON CONFLICT DO NOTHING` (`createIfAbsent`), and the loser re-reads to say
+   * which index held. A lost race therefore never aborts the caller's
+   * transaction, which a caught `P2002` would.
+   */
+  async adoptConnectedRepo(
+    input: { projectId: string; workspaceId: string; githubRepoId: string; name: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepoAdoptionOutcome> {
+    const { projectId, workspaceId, githubRepoId } = input;
+    const name = input.name.trim();
+    const listed = () =>
+      projectRepoRepository.findByProjectAndGithubRepoId(projectId, githubRepoId, tx);
+
+    if (await listed()) return 'already_listed';
+    if (
+      await projectRepoRepository.findByProjectAndNameInsensitive(projectId, name, workspaceId, tx)
+    )
+      return 'name_held';
+
+    const last = await projectRepoRepository.findLastPosition(projectId, workspaceId, tx);
+    const written = await projectRepoRepository.createIfAbsent(
+      {
+        workspaceId,
+        projectId,
+        role: 'other',
+        name,
+        label: null,
+        seedSource: SEED_SOURCE_ORGANIZATION,
+        state: 'connected',
+        githubRepoId,
+        position: keyForAppend(last),
+      },
+      tx,
+    );
+    if (written === 0) return (await listed()) ? 'already_listed' : 'name_held';
+
+    await projectPrMergeModeService.seedAtEstablishment(projectId, workspaceId, tx);
+    return 'adopted';
   },
 
   // ── Collaborator access (MOTIR-1900, per-member since MOTIR-1910) ─────────

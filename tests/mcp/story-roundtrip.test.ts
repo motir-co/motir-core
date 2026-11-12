@@ -628,6 +628,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         move_page: { projectKey: 'PROD', pageId: 'page_scoped', parent: { kind: 'root' } },
         archive_page: { projectKey: 'PROD', pageId: 'page_scoped' },
         link_page: { projectKey: 'PROD', pageId: 'page_scoped', workItemKey: 'PROD-1' },
+        // MOTIR-11038 — `repository:manage`-gated. The `/` in the name is refused by the
+        // set service before any GitHub call, so a granted token gets a typed refusal
+        // here rather than a real repository.
+        create_project_repository: { projectKey: 'PROD', name: 'scoped/refused', role: 'infra' },
         publish_decision_page: { key: item1, pageId: 'page_scoped' },
         get_work_item: { key: item1 },
         get_design: { key: item1 },

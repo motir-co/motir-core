@@ -1,5 +1,6 @@
 import type { MigrateIndexStatusDto, MigrateOnboardingDto } from '@/lib/dto/migrateOnboarding';
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
+import type { SeedRegistryEntryDto } from '@/lib/dto/seedRegistry';
 import type { Locale } from '@/lib/i18n/locales';
 
 // The project's PLANNING PRECONDITIONS as one read (MOTIR-1968) — the
@@ -124,6 +125,17 @@ export interface ProjectStateDto {
    * seeded outside the wizard.
    */
   onboarding: MigrateOnboardingDto | null;
+  /**
+   * The STARTER LIBRARY (Story MOTIR-10162 · MOTIR-11041) — every ACTIVE seed
+   * registry entry, whole, from `resolveStarterLibraryContext`: the same list the
+   * hosted planner is handed on a planning submit, so the runbook planner reading
+   * this report judges a repository-to-be against the same library. Its coverage
+   * is each entry's own fields (role, stack, use cases, sizes, hosting targets).
+   * Platform-wide, not the project's: every project answers the same list. Present
+   * on a project with no repositories — the case a repository has to be created —
+   * and `[]` only when the registry holds no active entry.
+   */
+  starterLibrary: SeedRegistryEntryDto[];
   /**
    * The ORGANISATION's content language (Story MOTIR-7734 · MOTIR-8746) — one of
    * the eleven locale codes, and the language work content is written in. It is

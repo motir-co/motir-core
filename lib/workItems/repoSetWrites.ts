@@ -62,6 +62,11 @@ export async function writeRepoRefs(
  * Names are RESOLVED through the same rule every reader uses (`toWorkItemRepositoryDtos`
  * — the realized repository's own name, else the row's authored intent), so the
  * projection cannot say something different from what the panel shows.
+ *
+ * A LEAF's set is derived too when the init-card routing pass supplies it
+ * (`projectRepoInitRoutingService`, MOTIR-11042): nobody authored it — the init
+ * card's declaration and the settled row produced it — so that pass writes through
+ * THIS writer, not `writeRepoRefs`, and the stored projection is never left behind.
  */
 export async function writeDerivedRepoSet(
   containerId: string,

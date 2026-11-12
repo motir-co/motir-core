@@ -332,6 +332,13 @@ export interface PlanItemProposedFields {
    * still pins by role before any row exists — but the work item has nowhere to
    * hold one, which is why the review diff for this key has no old side to read
    * (`planReviewService.buildChanges`, MOTIR-3868).
+   *
+   * ⚠️ Validated against the role VOCABULARY and, since MOTIR-11039, against the
+   * project's repository SET too: at the append, a correction and approve, a role
+   * that no single row carries — none does, or several do — is refused
+   * `PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE` rather than landing the card with no
+   * repository. A project whose set is EMPTY is exempt: there the role is what
+   * drives the set approve proposes.
    */
   targetRepoRole?: ProjectRepoRoleDto | null;
   /**
@@ -416,6 +423,20 @@ export interface PlanItemProposedFields {
    * additive.
    */
   subject?: string | null;
+  /**
+   * THE REPOSITORY AN INIT CARD WILL CREATE (MOTIR-11051, Story MOTIR-10162) —
+   * the BARE name, legal only beside `subject: 'init'`
+   * (`lib/plans/validateProposedInitRepository.ts`). Settled at the APPEND like
+   * {@link subject}: NOT a key of `PlanItemPatch`, carried by no correction door,
+   * and written onto the work item's own `initRepositoryName` column at approve.
+   *
+   * ⚠️ DELIBERATELY NOT A SIXTH SPELLING OF THE REPOSITORY AXIS. A pin is resolved
+   * against the project's set at approve; this value is resolved against nothing,
+   * because the repository it names does not exist yet — and it is REFUSED beside
+   * any pin (`targetRepo`, `targetRepos`, `targetRepositories`,
+   * `targetRepositoryRef`, `targetRepoRole`).
+   */
+  initRepositoryName?: string | null;
   /**
    * Whether an AUTHOR SESSION finished writing this card (MOTIR-10490) — planner
    * state about the card, never a field of it. `true` is written; absent or
@@ -579,6 +600,9 @@ export interface PlanItemPatch {
    * the shipped `targetRepo` patch: absent (`undefined`) leaves the pin untouched;
    * an explicit `null` UNPINS. Validated against the role vocabulary the same way
    * the `add` path's is, so the two paths cannot disagree about what a role means.
+   * And, like it, against the project's repository SET (MOTIR-11039): a role no
+   * single row carries is `PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE`, unless the set
+   * is empty.
    */
   targetRepoRole?: ProjectRepoRoleDto | null;
   /**

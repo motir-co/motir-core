@@ -147,6 +147,8 @@ const PROPOSAL_REFUSALS = new Set([
   'INVALID_PROPOSAL',
   'PLAN_ITEM_UNKNOWN_TARGET_REPO',
   'PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE',
+  // MOTIR-11039 — a role the project's repository set resolves to no single row.
+  'PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE',
   'PLAN_GRAMMAR_VIOLATION',
   'INVALID_PLAN_REF_GRAPH',
   'UNRESOLVED_PLAN_REF',
@@ -213,6 +215,7 @@ export function planDecisionRefusal(
 function refusalFieldKind(code: string | null, field: string | null): PlanRefusalFieldKind {
   if (code === 'PLAN_ITEM_UNKNOWN_TARGET_REPO') return 'repository';
   if (code === 'PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE') return 'repositoryRole';
+  if (code === 'PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE') return 'repositoryRole';
   return field ? 'named' : 'other';
 }
 

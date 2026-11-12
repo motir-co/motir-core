@@ -715,6 +715,34 @@ reads land. The carry follows §5's rule for a stored value, not a migration:
   migrated: `20260925170000_room_view_keys_for_custom_roles` appends both keys to
   every `project_role_definition` row holding `project:browse`, idempotently.
 
+## AMENDMENT 3 — the CLI's fixed grant carries `repository:manage` (MOTIR-11038, 2026-11-11)
+
+§7 holds `CLI_TOKEN_GRANT` fixed unless a card argues for widening it. Story
+MOTIR-10162 is that card's occasion: an init card's run creates the repository its
+card declares, through the new MCP tool `create_project_repository`, and the agent
+making that call drives the CLI. `projectRepoSetService` asserts
+`repository:manage` on every write to a project's set, so the tool's row names
+that key — and the dispatch seam refuses before any handler runs, so without the
+widening the tool would register, pass every suite against a wider token, and
+refuse the one caller it exists for (the MOTIR-3058 / MOTIR-3051 failure).
+
+**The blast radius, measured:**
+
+- On the MCP surface `create_project_repository` is the ONLY `TOOL_PERMISSIONS`
+  row that asserts `repository:manage`, so the key became grantable by derivation
+  with this tool and enters `DEFAULT_TOKEN_GRANT` the same way.
+- No `/api/v1` operation declares it — the v1 project-repositories route reads on
+  `project:browse` — and no route changes in this card.
+- A minted token still holds it only where its OWNER already holds it on the
+  project (`grantableFor(held)`), and the dispatch gate composes the grant with the
+  owner's role.
+
+So what a device-minted credential gains is this one door: append a row and
+establish it. It cannot remove, move, re-point, skip or take over a row, because
+none of those writes has a token-reachable door. No legacy scope confers the key,
+so a stored legacy row never gains it. A device token minted before today gains it
+at its next `motir login`; nothing rewrites a live credential's row (§5).
+
 ## Consequences
 
 - The picker offers six switches today and grows when an operation's permission

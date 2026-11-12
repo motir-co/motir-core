@@ -149,6 +149,8 @@ describe('/device — state 2: confirm (design Panels 3 + 4)', () => {
     // their shipped `permissions.page_*` labels.
     expect(screen.getByText('Read pages')).toBeTruthy();
     expect(screen.getByText('Edit pages')).toBeTruthy();
+    // MOTIR-11038 — `repository:manage` joined the grant for `create_project_repository`.
+    expect(screen.getByText('Manage repositories')).toBeTruthy();
     expect(screen.getByText('Not: archive or delete work items, members, billing.')).toBeTruthy();
     expect(screen.getByText('In 90 days')).toBeTruthy();
   });

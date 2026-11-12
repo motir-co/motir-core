@@ -91,6 +91,7 @@ describe('toRowSummary (created issue → row summary)', () => {
       storyPoints: 3,
       sprintId: null,
       backlogRank: 'm0',
+      subject: 'init',
       archivedAt: null,
       createdAt: '2026-06-09T00:00:00.000Z',
       updatedAt: '2026-06-09T00:00:00.000Z',
@@ -109,6 +110,8 @@ describe('toRowSummary (created issue → row summary)', () => {
       position: 'a5',
       estimateMinutes: null,
       storyPoints: 3,
+      // Carried from the source DTO (MOTIR-11053), never defaulted.
+      subject: 'init',
       archivedAt: null,
     });
   });

@@ -52,8 +52,13 @@ beforeEach(async () => {
 });
 
 describe('HOSTED_RUN_TOKEN_GRANT', () => {
-  it('is exactly the two keys the run’s routes assert — no plan key, nothing past the CLI’s', () => {
-    expect([...HOSTED_RUN_TOKEN_GRANT]).toEqual(['project:browse', 'work_item:edit']);
+  it('is exactly the three keys the run’s routes assert — no plan key, nothing past the CLI’s', () => {
+    // `repository:manage` for the run's repository door (MOTIR-11055), in catalog order.
+    expect([...HOSTED_RUN_TOKEN_GRANT]).toEqual([
+      'project:browse',
+      'work_item:edit',
+      'repository:manage',
+    ]);
     expect(HOSTED_RUN_TOKEN_GRANT.every((key) => CLI_TOKEN_GRANT.includes(key))).toBe(true);
     expect(HOSTED_RUN_TOKEN_GRANT.length).toBeLessThan(CLI_TOKEN_GRANT.length);
     expect(HOSTED_RUN_TOKEN_GRANT.some((key) => key.startsWith('ai:'))).toBe(false);

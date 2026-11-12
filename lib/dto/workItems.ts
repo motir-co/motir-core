@@ -328,6 +328,13 @@ export interface WorkItemSummaryDto {
    */
   obsolescence: WorkItemObsolescenceDto | null;
   obsolescenceNoteMd: string | null;
+  /**
+   * The card's stored SUBJECT (MOTIR-11053) — carried on the summary although no
+   * row renders it, because this same row is what a planner is grounded with
+   * (`toPlanTreeSkeleton`), and a renderer that ignores a field is cheaper than a
+   * second projection that forgets it. `null` when the card carries none.
+   */
+  subject: string | null;
   archivedAt: string | null;
 }
 
@@ -729,6 +736,9 @@ export interface WorkItemSubtreeDto {
   /** The OBSOLESCENCE mark (MOTIR-6582) — carried so the AI `get-subtree` read's
    *  rows say whether each node is still current. `null` when unmarked. */
   obsolescence: WorkItemObsolescenceDto | null;
+  /** The card's stored SUBJECT (MOTIR-11053), so the AI `get-subtree` read says
+   *  what each node is. `null` when the card carries none. */
+  subject: string | null;
   depth: number;
 }
 

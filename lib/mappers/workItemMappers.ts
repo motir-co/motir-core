@@ -182,6 +182,7 @@ export function toWorkItemSummaryDto(row: WorkItem): WorkItemSummaryDto {
     // A marked child reads as marked from its parent (MOTIR-6579).
     obsolescence: row.obsolescence,
     obsolescenceNoteMd: row.obsolescenceNoteMd,
+    subject: row.subject,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
   };
 }
@@ -262,6 +263,7 @@ export function toWorkItemSubtreeDto(row: WorkItemSubtreeRow): WorkItemSubtreeDt
     status: row.status,
     position: row.position,
     obsolescence: row.obsolescence,
+    subject: row.subject,
     depth: row.depth,
   };
 }

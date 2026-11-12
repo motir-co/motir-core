@@ -527,6 +527,17 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: true,
     openWorldHint: true,
   },
+  // `create_project_repository` (MOTIR-11038): DESTRUCTIVE because it moves a row
+  // proposed → creating → created, and a status move counts destructive here;
+  // IDEMPOTENT because a replay finds the settled row and writes nothing
+  // (`already_settled`); OPEN-WORLD because it creates and seeds a GitHub repository.
+  // W: createProjectRepository.ts → projectRepoCreationService.createProjectRepositoryFromStarter → projectRepoSetService.addRow + projectRepoProvisioningService.establishSet (creates + seeds the GitHub repository)
+  create_project_repository: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
   // R: findWorkItemsForPullRequest.ts → githubPullRequestService.findWorkItemsForPullRequest (delivery rows read in one workspace-bound transaction)
   find_work_items_for_pull_request: { readOnlyHint: true, openWorldHint: false },
   // W: submitReviewVerdict.ts → reviewVerdictService.submit — appends a review verdict record, decides the awaiting agent_review gate, withdraws an approve-and-merge gate and cancels a hosted run on a send-back; a repeat is recorded as second

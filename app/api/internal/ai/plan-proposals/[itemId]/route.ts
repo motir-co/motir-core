@@ -9,6 +9,7 @@ import {
   PlanItemNotFoundError,
   PlanItemUnknownTargetRepoError,
   PlanItemUnknownTargetRepoRoleError,
+  PlanItemUnresolvableTargetRepoRoleError,
   PlanNotEditableError,
   PlanNotFoundError,
   PlanNotGeneratingError,
@@ -274,6 +275,8 @@ export async function PATCH(
       // it carried no role. A correction that pins an unknown role must answer
       // the same typed 422 the append does, not a 500.
       err instanceof PlanItemUnknownTargetRepoRoleError ||
+      // A correction re-pinning to a role the set cannot resolve (MOTIR-11039).
+      err instanceof PlanItemUnresolvableTargetRepoRoleError ||
       // More than one of `targetRepo` / `targetRepos` / `targetRepositories` on
       // one correction (MOTIR-6153) — the service refuses rather than picking a
       // winner, and the refusal names the fields. The MCP door has always
@@ -284,7 +287,11 @@ export async function PATCH(
       // edits carries its id (MOTIR-10656 — an out-of-enum `priority`; MOTIR-10678
       // — an out-of-enum `executor`), so the
       // 422 names the proposal by id as well as by the title in `error`.
-      const planItemId = err instanceof InvalidProposalError ? err.planItemId : null;
+      const planItemId =
+        err instanceof InvalidProposalError ||
+        err instanceof PlanItemUnresolvableTargetRepoRoleError
+          ? err.planItemId
+          : null;
       return NextResponse.json(
         { code: err.code, error: err.message, ...(planItemId ? { planItemId } : {}) },
         { status: 422 },

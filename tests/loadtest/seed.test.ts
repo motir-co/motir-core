@@ -322,10 +322,11 @@ describe('agents', () => {
         expect(missing).toEqual([]);
         ownerChecked = true;
       } else {
-        // A workspace MEMBER does not hold the lesson keys (the built-in `member`
-        // role names its keys and gains neither, lib/permissions/builtinRoles.ts),
-        // so it cannot confer them, and its run token lacks exactly those two.
-        expect(missing.sort()).toEqual(['lesson:reinforce', 'lesson:view']);
+        // A workspace MEMBER does not hold the lesson keys or `repository:manage`
+        // (the built-in `member` role names its keys and gains none of them,
+        // lib/permissions/builtinRoles.ts), so it cannot confer them, and its run
+        // token lacks exactly those three.
+        expect(missing.sort()).toEqual(['lesson:reinforce', 'lesson:view', 'repository:manage']);
         memberChecked = true;
       }
     }

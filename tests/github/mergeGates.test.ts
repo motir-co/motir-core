@@ -332,7 +332,10 @@ describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on 
 
   it('the same card in an AUTO project reaches in_review and holds NO gate at all', async () => {
     const s = await makeScenario('mg-auto@example.com');
-    await adminDb.project.update({ where: { id: s.project.id }, data: { prMergeMode: 'auto' } });
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { prMergeMode: 'auto', prMergeModeDecidedAt: new Date() },
+    });
     const item = await cardWithPrs(s, 'Auto', [11, 12]);
 
     await ci({ conclusion: 'success', headSha: 'sha-a', number: 11 });
@@ -357,11 +360,17 @@ describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on 
     const s = await makeScenario('mg-gitlab@example.com');
     // Promote with no gate first, so the provider is the only thing that differs
     // between the two re-raises below.
-    await adminDb.project.update({ where: { id: s.project.id }, data: { prMergeMode: 'auto' } });
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { prMergeMode: 'auto', prMergeModeDecidedAt: new Date() },
+    });
     const item = await cardWithPrs(s, 'GitLab', [11]);
     await ci({ conclusion: 'success', headSha: 'sha-a', number: 11 });
     expect(await statusOf(item.id)).toBe('in_review');
-    await adminDb.project.update({ where: { id: s.project.id }, data: { prMergeMode: 'manual' } });
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { prMergeMode: 'manual', prMergeModeDecidedAt: new Date() },
+    });
 
     const repo = await adminDb.githubRepo.findFirstOrThrow({ where: { name: 'acme' } });
     const promote = async () =>

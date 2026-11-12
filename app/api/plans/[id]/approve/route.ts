@@ -13,6 +13,7 @@ import {
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
   PlanItemUnknownTargetRepoRoleError,
+  PlanItemUnresolvableTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotInExpectedStatusError,
   PlanProposalRepoPinMovedError,
@@ -151,6 +152,20 @@ export async function POST(
     if (err instanceof PlanItemUnknownTargetRepoRoleError) {
       return NextResponse.json(
         { code: err.code, planItemId: err.planItemId, role: err.role, error: err.message },
+        { status: 422 },
+      );
+    }
+    // A vocabulary role the project's set resolves to no single row (MOTIR-11039),
+    // refused before the transaction opens — nothing was written.
+    if (err instanceof PlanItemUnresolvableTargetRepoRoleError) {
+      return NextResponse.json(
+        {
+          code: err.code,
+          planItemId: err.planItemId,
+          role: err.role,
+          reason: err.reason,
+          error: err.message,
+        },
         { status: 422 },
       );
     }

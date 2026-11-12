@@ -536,6 +536,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '0dd646f57b25',
   },
+  create_project_repository: {
+    // MOTIR-11038 (Story MOTIR-10162).
+    summary:
+      'Create one repository in a project’s repository set and establish it — the call an init ' +
+      'card makes. Replay-safe: repeating the call finds the row it made and writes nothing.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: 'e7024f995f0d',
+  },
   get_work_item: {
     // Re-pinned for MOTIR-3096, summary UNCHANGED and deliberately so: the tool
     // gained an optional `planId` that answers the SAME question over the live
@@ -637,8 +645,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   get_project_state: {
     summary:
-      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
-    descriptionFingerprint: '3bd7d4978a1d',
+      "A project's planning preconditions — established, code connected, indexed, repo set, the active starter library — and its organisation's content language, before you plan.",
+    descriptionFingerprint: 'e950be2adcc8',
   },
   get_code_health: {
     summary:
@@ -1057,11 +1065,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // ticked. A reader deciding whether this tool shows what a re-plan costs a
     // person's progress needs to know it does.
     summary:
-      'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note), its supersedes edges named by key, and the steps a change replaces with how many were ticked.',
+      'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note), its supersedes edges named by key, the steps a change replaces with how many were ticked, and the subject of each committed card a proposal waits on.',
     // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` parses
     // each `add`'s body into sections on request; the summary describes what is bundled.
     // Re-pinned for MOTIR-10176, summary UNCHANGED: the description names `raisedGaps`.
-    descriptionFingerprint: '8651b90a8d88',
+    // MOTIR-11053 EXTENDED the summary: each item now says what its committed
+    // blockers ARE (`blockerSubjects`) — what a planner picks this read for when it
+    // must recognise an approved init card a waiter depends on.
+    descriptionFingerprint: 'e7da736147e2',
   },
   get_approved_shape_verdict: {
     // The line has to carry the one thing a reader choosing between this and

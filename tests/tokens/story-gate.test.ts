@@ -185,6 +185,9 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
       // MOTIR-10183 — `ai:configure`, which no legacy string confers: a stale row
       // must not start rewriting a repository's coding convention.
       update_coding_convention: true,
+      // MOTIR-11038 — `repository:manage`, which no legacy string confers: a stale
+      // row must not start creating repositories.
+      create_project_repository: true,
     };
     for (const name of MCP_TOOL_NAMES) {
       const reachable = verified.grant.includes(TOOL_PERMISSIONS[name]);

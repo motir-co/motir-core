@@ -74,6 +74,7 @@ import {
 } from '@/lib/repositories/workItemRevisionRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
+import { assertProposedInitRepository } from '@/lib/plans/validateProposedInitRepository';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
@@ -82,6 +83,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { projectRepoInitApproveRoutingService } from '@/lib/services/projectRepoInitApproveRoutingService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -184,6 +186,7 @@ import {
   PlanProposalReferencedError,
   PlanProposalRepoPinMovedError,
   PlanItemUnknownTargetRepoRoleError,
+  PlanItemUnresolvableTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   NoPlanForWorkItemError,
@@ -232,7 +235,7 @@ import { assertSingleTargetRepoInput, primaryTargetRepo } from '@/lib/workItems/
 import { writeDerivedRepoSet } from '@/lib/workItems/repoSetWrites';
 import { PROJECT_REPO_ROLES, isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
 
-import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
+import type { ProjectRepoDto, ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type {
   CreatePlanInput,
   PlanAuthorSourceDto,
@@ -933,6 +936,14 @@ function validateProposal(p: ProposalInput): void {
       p.proposedFields.targetRepos,
       p.proposedFields.targetRepositories,
       p.proposedFields.targetRepositoryRef,
+    );
+    // An INIT card's declared repository (MOTIR-11051) — legal only with the
+    // `init` subject, never beside a pin, and a bare name. Pure, so it runs here
+    // where a refused batch writes no proposal row; the value is reachable by no
+    // correction door, so the close and approve never need to re-check it.
+    assertProposedInitRepository(
+      p.proposedFields,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
   } else if (p.op === 'modify') {
     if (!p.workItemId) throw new InvalidProposalError('A `modify` proposal requires workItemId.');
@@ -2260,6 +2271,39 @@ interface ProposalRepoRefs {
   // validation `proposalRepoRef` owes a `targetRepositoryRef` ("the row belongs to
   // this project"), read off the same fresh row set `byName`/`byRole` read.
   byId: ReadonlySet<string>;
+  // How many rows carry each role, and their resolved names (MOTIR-11039) — the
+  // count `byRole` is built from, kept so a refusal can say WHICH failure a role
+  // that is absent from `byRole` is (no row, or several) and name the several.
+  roleCounts: ReadonlyMap<string, number>;
+  roleNames: ReadonlyMap<string, readonly string[]>;
+}
+
+/** The ONE definition of "a role resolves" (lifted, behaviour unchanged, by
+ *  MOTIR-11039): both the approve read and the plan doors' role check build
+ *  their map here, so the roles the check refuses and the roles that would land
+ *  unpinned are the same set. */
+function buildProposalRepoRefs(
+  rows: readonly Pick<ProjectRepoDto, 'id' | 'role' | 'name' | 'realizedRepo'>[],
+): ProposalRepoRefs {
+  const byName = new Map<string, string>();
+  const roleCounts = new Map<string, number>();
+  const roleNames = new Map<string, string[]>();
+  const byId = new Set<string>();
+  for (const row of rows) {
+    // The RESOLVED name, same rule as everywhere else (§A4): the realized
+    // repository's own once it is realized, else the row's authored intent.
+    const resolved = (row.realizedRepo?.name ?? row.name).trim();
+    const name = resolved.toLowerCase();
+    if (name.length > 0 && !byName.has(name)) byName.set(name, row.id);
+    roleCounts.set(row.role, (roleCounts.get(row.role) ?? 0) + 1);
+    roleNames.set(row.role, [...(roleNames.get(row.role) ?? []), resolved]);
+    byId.add(row.id);
+  }
+  const byRole = new Map<string, string>();
+  for (const row of rows) {
+    if (roleCounts.get(row.role) === 1) byRole.set(row.role, row.id);
+  }
+  return { byName, byRole, byId, roleCounts, roleNames };
 }
 
 async function resolveProposalRepoRefs(
@@ -2268,22 +2312,79 @@ async function resolveProposalRepoRefs(
 ): Promise<ProposalRepoRefs> {
   const { projectRepoSetService } = await import('@/lib/services/projectRepoSetService');
   const rows = await projectRepoSetService.listByProject(projectId, ctx);
-  const byName = new Map<string, string>();
-  const roleCounts = new Map<string, number>();
-  const byId = new Set<string>();
-  for (const row of rows) {
-    // The RESOLVED name, same rule as everywhere else (§A4): the realized
-    // repository's own once it is realized, else the row's authored intent.
-    const name = (row.realizedRepo?.name ?? row.name).trim().toLowerCase();
-    if (name.length > 0 && !byName.has(name)) byName.set(name, row.id);
-    roleCounts.set(row.role, (roleCounts.get(row.role) ?? 0) + 1);
-    byId.add(row.id);
+  return buildProposalRepoRefs(rows);
+}
+
+/**
+ * The project's repository set as the plan doors' ROLE check reads it
+ * (MOTIR-11039). The same rows `resolveProposalRepoRefs` reads, but through the
+ * repository under the workspace context rather than the browse-gated set
+ * service: the append and the correction are `ai:view_plan` doors, and a browse
+ * requirement added there would turn a refusal about a repository into a 404
+ * about the project. Each door's own permission assertion is the gate.
+ */
+async function readProposalRepoRefsForRoleCheck(
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<ProposalRepoRefs> {
+  const [{ projectRepoRepository }, { toProjectRepoDto }] = await Promise.all([
+    import('@/lib/repositories/projectRepoRepository'),
+    import('@/lib/mappers/projectRepoMappers'),
+  ]);
+  const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    projectRepoRepository.listByProject(projectId, ctx.workspaceId, tx),
+  );
+  return buildProposalRepoRefs(rows.map(toProjectRepoDto));
+}
+
+/** One role pin the doors' check reads: the role, and the proposal it rides on. */
+interface ProposedRolePin {
+  role: unknown;
+  planItemId: string | null;
+  label: string;
+}
+
+/**
+ * Refuse a VOCABULARY role the project's set resolves to no single row
+ * (MOTIR-11039). PURE over a map already read, so a door runs it before its
+ * transaction opens and a refusal writes nothing.
+ *
+ * EXEMPT when the set is EMPTY: on a project that records no repositories a role
+ * pin is what drives the set approve proposes (`proposeRepositorySet`), so it is
+ * the signal, not a mistake. A role absent from `byRole` is exactly a role
+ * `proposalRepoRef` would resolve to `null`, so this refuses what would land
+ * unpinned and nothing else. A non-role value is `assertKnownRepoRole`'s, not
+ * this check's, and is skipped here.
+ */
+function assertProposedRepoRolesResolvable(
+  pins: readonly ProposedRolePin[],
+  refs: ProposalRepoRefs,
+): void {
+  if (refs.byId.size === 0) return;
+  for (const pin of pins) {
+    if (!isProjectRepoRole(pin.role)) continue;
+    if (refs.byRole.has(pin.role)) continue;
+    const count = refs.roleCounts.get(pin.role) ?? 0;
+    throw new PlanItemUnresolvableTargetRepoRoleError(
+      pin.planItemId,
+      pin.label,
+      pin.role,
+      count === 0 ? 'no-match' : 'ambiguous',
+      count,
+      refs.roleNames.get(pin.role) ?? [],
+    );
   }
-  const byRole = new Map<string, string>();
-  for (const row of rows) {
-    if (roleCounts.get(row.role) === 1) byRole.set(row.role, row.id);
-  }
-  return { byName, byRole, byId };
+}
+
+/** Read the set and run {@link assertProposedRepoRolesResolvable} — only when a
+ *  pin actually carries a role, so a plan that pins none pays no read. */
+async function assertRolePinsResolvableInProject(
+  pins: readonly ProposedRolePin[],
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<void> {
+  if (!pins.some((pin) => isProjectRepoRole(pin.role))) return;
+  assertProposedRepoRolesResolvable(pins, await readProposalRepoRefsForRoleCheck(projectId, ctx));
 }
 
 /** The reference a single proposal resolves to, or `null` when it names nothing
@@ -3224,6 +3325,11 @@ async function materialize(
       // Absent = the proposal carried none, which stores `null` exactly as it
       // did before the field existed — the axis is purely additive.
       subject: pf.subject ?? null,
+      // The repository an INIT card will create (MOTIR-11051) — a fact about the
+      // CARD, not only about a proposal that stops existing here. Never a pin:
+      // the repository columns below stay exactly what the pin axis says, which
+      // for an init card is nothing (the append refuses the pair).
+      initRepositoryName: pf.initRepositoryName ?? null,
       type: (pf.type as WorkItemCreateInput['type']) ?? null,
       executor: (pf.executor as WorkItemCreateInput['executor']) ?? null,
       // Leaf sizing (MOTIR-1433): flow the validated point + minute estimates
@@ -6050,6 +6156,21 @@ export const plansService = {
     proposals.forEach((p) =>
       assertEdgeReasonsKeyed(p, proposalLabel({ op: p.op, workItemId: p.workItemId })),
     );
+    // A role the project's set resolves to no single row (MOTIR-11039), refused
+    // before the transaction opens so a refused batch stores no proposal row.
+    await assertRolePinsResolvableInProject(
+      proposals.map((p) => ({
+        role: p.op === 'add' ? p.proposedFields?.targetRepoRole : p.patch?.targetRepoRole,
+        planItemId: null,
+        label: proposalLabel({
+          op: p.op,
+          workItemId: p.workItemId,
+          title: p.op === 'add' ? p.proposedFields?.title : undefined,
+        }),
+      })),
+      plan.projectId,
+      ctx,
+    );
 
     // ⚠️ THE CLOSE'S OWN GATE, FOR THE ONE APPEND THAT HAS NO CLOSE LEFT
     // (MOTIR-4153). Read the append's own gate comment below: it deliberately
@@ -7465,6 +7586,23 @@ export const plansService = {
         throw err;
       }
     }
+
+    // A RE-PIN to a role the project's set resolves to no single row (MOTIR-11039)
+    // — an `add`'s `targetRepoRole` or a `modify`'s replacement patch — refused
+    // here, beside the name resolution above and before the transaction, so the
+    // stored proposal keeps the pin it had.
+    await assertRolePinsResolvableInProject(
+      [
+        {
+          role:
+            input.targetRepoRole !== undefined ? input.targetRepoRole : input.patch?.targetRepoRole,
+          planItemId,
+          label: `\`${planItemId}\``,
+        },
+      ],
+      plan.projectId,
+      ctx,
+    );
 
     // The project's TERMINAL statuses, for the post-correction gate below.
     // Resolved OUT HERE because `getTerminalStatusKeys` opens its own workspace
@@ -10157,6 +10295,24 @@ async function prepareApprove(planId: string, ctx: ServiceContext) {
     // The list is ALSO §0.1.1's derivation signal, handed to `proposeRepositorySet`
     // after the commit below.
     const repoRoles = resolveProposedRepoRoles(preItems);
+    // A role the project's set resolves to no single row (MOTIR-11039), refused
+    // HERE — on the set as it stands BEFORE `proposeRepositorySet` below. That
+    // propose is what creates the rows a first onboarding plan's roles resolve to,
+    // so the check is taken first: taken after it, the empty-set exemption would be
+    // unreachable and every first onboarding approval refused. Nothing is written.
+    await assertRolePinsResolvableInProject(
+      preItems.map((item) => ({
+        role: authoredTargetRepoRole(item),
+        planItemId: item.id,
+        label: proposalLabel({
+          op: item.op,
+          workItemId: item.workItemId,
+          title: ((item.proposedFields ?? null) as PlanItemProposedFields | null)?.title,
+        }),
+      })),
+      plan.projectId,
+      ctx,
+    );
 
     // PROPOSE the project's repository set BEFORE the tree is materialized (Story
     // MOTIR-2732 · MOTIR-3033, ADR `work-item-repository-set.md` "Amendment
@@ -10513,27 +10669,29 @@ async function afterApproveCommit(
   // the level the lock was held at is finished (MOTIR-2787).
   await releasePlanTargetLocks(plan, ctx, { approved: true });
 
-  // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
-  // approved plan is what the set's cardinality is derived from, so this is the
-  // moment it can be proposed at all. Writes `proposed` rows the establish step
-  // then shows as editable (ADR §0.2: Motir proposes, the user decides); it
-  // creates nothing on GitHub.
+  // ROUTE THE WAITERS WHOSE DECLARED REPOSITORY ALREADY EXISTS (Story MOTIR-10162 ·
+  // MOTIR-11058) — the THIRD moment an init card's waiters are routed, after the two
+  // settle hooks (`attachRealizedRepo`, `linkExistingRepo`) and the link that adopts
+  // a repository. Those fire when a row settles; a repository a person created and
+  // added BEFORE approving settled long before its waiters existed, and this phase
+  // is where they come into existence.
   //
-  // Fired on EVERY approve, not only the first onboarding: the proposer's own
-  // guard is "a project whose set has any row is left completely alone", so a
-  // re-plan approve of an established project is one cheap read, while a project
-  // whose first attempt lost to a motir-ai hiccup gets another chance instead of
-  // being permanently setless.
+  // This is approve's POST-COMMIT phase, not a transaction, and it is its LAST
+  // step: the repository set was already proposed in `prepareApprove`, before the
+  // approve transaction (MOTIR-1881's propose no longer runs here), so the rows the
+  // step reads include this approve's own `proposed` ones, which the pass declines.
   //
-  // BEST-EFFORT and AFTER the tx commits, for both of the reasons the convention
-  // trigger above is: the pre-plan read is a `server-only` client call that
-  // cannot run inside the DB transaction, and establishing repos — important as
-  // it is — is not worth failing a plan approval over (ADR §4.3 is the same
-  // judgement one level down). A failure leaves the user an empty-but-editable
-  // set, which MOTIR-1782 can complete later (ADR §4.4: approval is not the last
-  // chance to establish a repo). Imported LAZILY for the same reason: the E2E
-  // plan seeds import plansService in the Playwright Node process, where
-  // `server-only` does not resolve.
+  // The plain approve awaits this phase with no catch around it, so the step is
+  // caught here as a whole: a routing failure must never tell a person a committed
+  // approval failed. The step catches each row itself as well.
+  await projectRepoInitApproveRoutingService
+    .routeAfterApprove({ projectId: plan.projectId, ctx, approvedProposals: done.items })
+    .catch((err: unknown) => {
+      console.warn(
+        `[plansService.approvePlan] init-card routing failed after approving plan ${plan.id} in project ${plan.projectId}; the waiters stay unpinned`,
+        err,
+      );
+    });
 }
 
 /** The error an approve's failure becomes after its rollback: the lazy `stale` backstop

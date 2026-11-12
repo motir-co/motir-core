@@ -56,6 +56,7 @@ function issue(over: Partial<WorkItemSummaryDto> = {}): WorkItemSummaryDto {
     archivedAt: null,
     obsolescence: null,
     obsolescenceNoteMd: null,
+    subject: null,
     ...over,
   };
 }

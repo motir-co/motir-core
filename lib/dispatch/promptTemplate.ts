@@ -1,5 +1,6 @@
 import type { DispatchWorkflowMode } from '@/lib/dto/dispatch';
 import { isAgentDecisionItem, isManualReadyItem } from '@/lib/dto/ready';
+import { isInitCard } from '@/lib/workItems/initCard';
 import {
   isBlockerCountAdvisory,
   isOrderingAdvisory,
@@ -57,7 +58,7 @@ import type { Locale } from '@/lib/i18n/locales';
 //
 // The four sections (CONTEXT / WHAT TO DO / ACCEPTANCE CRITERIA / GIT WORKFLOW)
 // productize the grammar `motir-meta/prompts/run.md` § *Prompt structure* has
-// been applying by hand. Three shapes vary, and all three are decided HERE, from
+// been applying by hand. Four shapes vary, and all four are decided HERE, from
 // server state, never by the caller:
 //
 //   1. WHAT TO DO varies by the item's `type` (code / design / test / decision /
@@ -68,6 +69,10 @@ import type { Locale } from '@/lib/i18n/locales';
 //      human-INSTRUCTION form and NO `GIT WORKFLOW` section at all: there is no
 //      branch, no PR, and telling a person to open one is noise.
 //   3. GIT WORKFLOW varies by session lineage — see {@link DispatchWorkflowMode}.
+//   4. An agent's INIT card (subject `init`, MOTIR-11054) creates a repository the
+//      project does not have yet: it works at the workspace root with nothing to
+//      check out, gets NO `GIT WORKFLOW` section and an outcome protocol whose
+//      FINISHED is that repository being established — never a pull request.
 //
 // EXTENSION POINT — `injections` (see {@link DispatchPromptInjections}). The two
 // enrichment cards that were left waiting on the cancelled assembly point
@@ -406,6 +411,12 @@ function continueRepoSet(cf: ContinueFromForPrompt): ContinueFromBranch[] | null
 export interface DispatchPromptSource {
   /** The `PROD-<n>` identifier. */
   key: string;
+  /**
+   * The card's SUBJECT (MOTIR-11054) — read for one thing only: whether this is an
+   * INIT card (`isInitCard`), which renders the init steps and outcome and no git
+   * workflow. Omitted or null renders byte-identically to before the field existed.
+   */
+  subject?: string | null;
   title: string;
   kind: WorkItemKindDto;
   type: WorkItemTypeDto | null;
@@ -1106,6 +1117,25 @@ export function recordsAcceptanceReceipt(src: {
  * never be reached. Lettered, not numbered, so it does not collide with the
  * type's own step 1.
  */
+/**
+ * The INIT card's steps (MOTIR-11054), PREPENDED to whatever its type yields — the
+ * shape {@link BUG_REPRODUCTION_STEPS} takes for a bug. They say what the run is
+ * FOR and where it may not go, and point at the card's own description for HOW:
+ * the creation instructions are written there by the init subject pack, and
+ * restating them here would be a second home for that contract.
+ */
+const INIT_CARD_WHAT_TO_DO = [
+  'THIS IS AN INIT CARD — it creates a repository this project does not have yet.',
+  '  - There is nothing to check out and no branch to cut: the repository does not',
+  '    exist. Work at the workspace root.',
+  '  - The repository this card creates is named on the card, and the steps that',
+  "    create it are the card's own description above. Follow them.",
+  '  - Nothing in this run may create a branch, commit, push, or open, edit or link',
+  '    a pull request: there is no repository to hold one until this card has made',
+  '    it, and the cards waiting on this one ship there afterwards.',
+  '',
+];
+
 const BUG_REPRODUCTION_STEPS = [
   'THIS IS A BUG CARD. Before step 1, REPRODUCE THE DEFECT — and do it before you',
   'decide the card is wrong. A report that will not reproduce is not yet a false',
@@ -2469,6 +2499,50 @@ function decisionOutcomeProtocol(src: DispatchPromptSource): string[] {
   ];
 }
 
+/**
+ * THE OUTCOME PROTOCOL OF AN AGENT'S INIT CARD (Story MOTIR-10162 · MOTIR-11054).
+ * The same two outcomes as {@link outcomeProtocol}, with the FINISHED an init card
+ * has: the declared repository established in the project's set. The establish
+ * pass moves the card when that row settles, so the agent writes no status — an
+ * agent asserting a done status would assert a repository beyond the call it just
+ * made. There is nothing to commit, push, link or test.
+ */
+function initCardOutcomeProtocol(src: DispatchPromptSource): string[] {
+  const policy = src.findingsPolicy ?? FULL_FINDINGS_POLICY;
+  return [
+    'Two outcomes end this work, and the loop can only tell them apart if you SAY',
+    'which one happened. A process that exits 0 proves the process ended, nothing',
+    'more.',
+    '',
+    ...modelSelfReport(),
+    '',
+    "FINISHED — the declared repository appears in the project's repository list in",
+    'an established state (created or connected):',
+    '',
+    "    1. the repository was created by the steps in the card's description",
+    "    2. the project's repository list shows it, established — not proposed,",
+    '       creating, failed or skipped',
+    '    3. say in your report which repository was created',
+    '',
+    `  Do NOT move ${src.key} with transition_status. The repository being established`,
+    '  completes this card; any status you write asserts a repository nobody has',
+    '  checked. Do NOT open a pull request and do NOT publish How to test: there is',
+    '  no change to review and nothing to run.',
+    '',
+    ...cardIsWrongHeader(),
+    ...whatTest(src),
+    ...buildThroughSteps(src, { lane: 'init' }),
+    '',
+    'STOP — the WHAT itself breaks. In order:',
+    '',
+    '  1. CREATE NOTHING MORE, and never improvise a pull request in its place. A',
+    '     repository that could not be created stays uncreated: its waiting cards',
+    '     stay blocked behind this one, which is the correct state.',
+    ...cardIsWrongSteps(src, policy),
+    ...foundADefect(src, policy),
+  ];
+}
+
 function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null): string[] {
   const policy = src.findingsPolicy ?? FULL_FINDINGS_POLICY;
   // MOTIR-10877: the delivery file route, for an agent with no Motir tools.
@@ -2707,10 +2781,15 @@ function openPullRequestStep(): string[] {
  * Rendered for every agent lane — code and decision page — and never for a MANUAL item, which
  * a person does and which has no run to record on.
  */
-function decideWhatIsOpen(src: DispatchPromptSource, lane: 'code' | 'decision'): string[] {
-  const beforeDelivery = lane === 'decision' ? 'publish_decision_page' : 'you commit';
-  const where =
+function decideWhatIsOpen(src: DispatchPromptSource, lane: 'code' | 'decision' | 'init'): string[] {
+  const beforeDelivery =
     lane === 'decision'
+      ? 'publish_decision_page'
+      : lane === 'init'
+        ? 'you create the repository'
+        : 'you commit';
+  const where =
+    lane !== 'code'
       ? ['  List the same decisions in your FINISHED report.']
       : src.sessionBranch
         ? [
@@ -2846,23 +2925,35 @@ function whatTest(src: DispatchPromptSource): string[] {
  */
 function buildThroughSteps(
   src: DispatchPromptSource,
-  where: { lane: 'decision' } | { lane: 'code'; sessionBranch: string | null },
+  where: { lane: 'decision' } | { lane: 'init' } | { lane: 'code'; sessionBranch: string | null },
 ): string[] {
-  const decision = where.lane === 'decision';
-  const beforeDelivery = decision ? 'publish_decision_page' : 'you commit';
-  const finish = decision
+  const init = where.lane === 'init';
+  // A decision page and an init card share every line of this branch but two:
+  // neither commits, and both report their deviations in the FINISHED report.
+  const decision = where.lane === 'decision' || init;
+  const beforeDelivery = init
+    ? 'you create the repository'
+    : decision
+      ? 'publish_decision_page'
+      : 'you commit';
+  const finish = init
     ? [
-        '  3. Finish through the FINISHED order above, exactly as written: publish the',
-        '     page, and do NOT transition the card.',
+        '  3. Finish through the FINISHED order above, exactly as written: create the',
+        '     repository, and do NOT transition the card.',
       ]
-    : [
-        '  3. Finish through the FINISHED order above, exactly as written: push, open',
-        '     or join the pull request, link it, publish How to test, and move the',
-        '     card to Implemented.',
-      ];
+    : decision
+      ? [
+          '  3. Finish through the FINISHED order above, exactly as written: publish the',
+          '     page, and do NOT transition the card.',
+        ]
+      : [
+          '  3. Finish through the FINISHED order above, exactly as written: push, open',
+          '     or join the pull request, link it, publish How to test, and move the',
+          '     card to Implemented.',
+        ];
   const stated = decision
     ? [
-        '  4. State the deviations where the page is reviewed: list the same points in',
+        `  4. State the deviations where the ${init ? 'card' : 'page'} is reviewed: list the same points in`,
         '     your FINISHED report.',
       ]
     : where.sessionBranch
@@ -3813,7 +3904,11 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   // HERE, not by the CLI, because a lineage can be inherited from a blocker as
   // well as seeded, and every lane that dispatches reads this answer.
   const agentDecision = !manual && isAgentDecisionItem(src);
-  const sessionBranch = manual || agentDecision ? null : src.sessionBranch;
+  // An agent's INIT card (MOTIR-11054) — the third branchless shape. A MANUAL init
+  // card keeps the manual exemption (`!manual`): a person creating a repository on
+  // their own account has no run to instruct.
+  const initCard = !manual && isInitCard({ subject: src.subject });
+  const sessionBranch = manual || agentDecision || initCard ? null : src.sessionBranch;
   const workflowMode: DispatchWorkflowMode =
     sessionBranch !== null ? 'session_lineage' : 'per_item_pr';
 
@@ -3853,12 +3948,22 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   if (!manual && src.kind === 'bug') {
     whatToDo = [...BUG_REPRODUCTION_STEPS, ...whatToDo];
   }
+  // The init preamble (MOTIR-11054) — prepended LAST, so it opens WHAT TO DO.
+  if (initCard) whatToDo = [...INIT_CARD_WHAT_TO_DO, ...whatToDo];
 
   // A MANUAL item gets neither the git workflow nor the outcome protocol: it is
   // human work with no branch, no commit and no MCP session, and `motir auto`
   // skips it entirely. Its closing note already says how to report completion.
   let closing = MANUAL_CLOSING;
-  if (agentDecision) {
+  if (initCard) {
+    // An agent's INIT card (MOTIR-11054) creates a repository: no branch, no commit
+    // and no pull request, so no GIT WORKFLOW and no step-reporting section, and an
+    // outcome protocol whose FINISHED is the repository being established.
+    closing = section(
+      'REPORTING THE OUTCOME — say which one happened',
+      initCardOutcomeProtocol(src),
+    );
+  } else if (agentDecision) {
     // An agent's DECISION card (MOTIR-7437) writes a page and publishes it: no
     // branch, no commit and no pull request, so no GIT WORKFLOW — a block that would
     // contradict WHAT TO DO step 5 — and an outcome protocol whose FINISHED is the
@@ -3910,14 +4015,14 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
       : [
           ...section(
             'DECIDE WHAT THE CARD LEAVES OPEN — never ask',
-            decideWhatIsOpen(src, agentDecision ? 'decision' : 'code'),
+            decideWhatIsOpen(src, initCard ? 'init' : agentDecision ? 'decision' : 'code'),
           ),
           '',
         ]),
     ...closing,
   ];
 
-  const branchless = manual || agentDecision;
+  const branchless = manual || agentDecision || initCard;
   const branch = branchless ? null : (src.continueFrom?.branch ?? sessionBranch ?? cardBranch(src));
   return {
     prompt: lines.join('\n') + '\n',

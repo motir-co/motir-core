@@ -137,6 +137,9 @@ export interface WorkItemSubtreeRow {
   position: string;
   /** The OBSOLESCENCE mark (MOTIR-6582), cast to text like `kind`. */
   obsolescence: WorkItemObsolescence | null;
+  /** The stored SUBJECT (MOTIR-11053). ⚠️ Both `$queryRaw` projections returning
+   *  this row must select it by hand — the compiler cannot check the SQL. */
+  subject: string | null;
   depth: number;
 }
 
@@ -1114,6 +1117,63 @@ export const workItemRepository = {
       SELECT "id" FROM "work_item" WHERE "id" = ${id} FOR UPDATE
     `;
     return rows[0] ?? null;
+  },
+
+  /**
+   * The project's NON-ARCHIVED init cards — every card whose declared
+   * `initRepositoryName` is set (Story MOTIR-10162 · MOTIR-11054) — with the id,
+   * the status and that column, selected explicitly because the column is in no
+   * shared projection. Read by the establish pass's completion, which matches each
+   * declaration against the rows it just settled.
+   */
+  async listOpenInitCardsByProject(
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; status: string; initRepositoryName: string }>> {
+    const rows = await tx.workItem.findMany({
+      where: { projectId, archivedAt: null, initRepositoryName: { not: null } },
+      select: { id: true, status: true, initRepositoryName: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => ({ ...r, initRepositoryName: r.initRepositoryName! }));
+  },
+
+  /**
+   * ONE card's declared `initRepositoryName` (Story MOTIR-10162 · MOTIR-11055), or
+   * null when it declares none — the run's repository door matches a request
+   * against it. A named read for the same reason as its two siblings: the column
+   * is in no shared projection. `null` too for an id this transaction cannot see.
+   */
+  async findInitRepositoryName(id: string, tx: Prisma.TransactionClient): Promise<string | null> {
+    const row = await tx.workItem.findUnique({
+      where: { id },
+      select: { initRepositoryName: true },
+    });
+    return row?.initRepositoryName ?? null;
+  },
+
+  /**
+   * The project's NON-ARCHIVED init cards whose declared `initRepositoryName`
+   * matches any of `names` case-insensitively (Story MOTIR-10162 · MOTIR-11042) —
+   * the routing pass's "who declared this repository". A named read because the
+   * column is deliberately absent from every shared projection. Empty `names`
+   * short-circuits to `[]`.
+   */
+  async listByInitRepositoryName(
+    projectId: string,
+    names: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    if (names.length === 0) return [];
+    return tx.workItem.findMany({
+      where: {
+        projectId,
+        archivedAt: null,
+        OR: names.map((name) => ({ initRepositoryName: { equals: name, mode: 'insensitive' } })),
+      },
+      select: { id: true, workspaceId: true },
+      orderBy: { id: 'asc' },
+    });
   },
 
   /**
@@ -3274,12 +3334,12 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", w."obsolescence", 1 AS depth
+               w."title", w."status", w."position", w."obsolescence", w."subject", 1 AS depth
           FROM "work_item" w
           WHERE w."id" = ${rootId}
         UNION ALL
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", w."obsolescence", s.depth + 1
+               w."title", w."status", w."position", w."obsolescence", w."subject", s.depth + 1
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
       )
@@ -3292,6 +3352,7 @@ export const workItemRepository = {
              "status",
              "position",
              "obsolescence"::text AS "obsolescence",
+             "subject",
              depth::int AS "depth"
         FROM subtree
         ORDER BY depth ASC, "position" ASC`;
@@ -3369,7 +3430,7 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", w."obsolescence", 1 AS depth
+               w."title", w."status", w."position", w."obsolescence", w."subject", 1 AS depth
           FROM "work_item" w
           WHERE w."id" = ${rootId}
             AND w."workspaceId" = ${workspaceId}
@@ -3377,7 +3438,7 @@ export const workItemRepository = {
             AND w."triagedAt" IS NULL
         UNION ALL
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", w."obsolescence", s.depth + 1
+               w."title", w."status", w."position", w."obsolescence", w."subject", s.depth + 1
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
           WHERE s.depth <= ${maxDepth}
@@ -3394,6 +3455,7 @@ export const workItemRepository = {
              "status",
              "position",
              "obsolescence"::text AS "obsolescence",
+             "subject",
              depth::int AS "depth"
         FROM subtree
         ORDER BY depth ASC, "position" ASC`;

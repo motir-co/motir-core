@@ -296,6 +296,12 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
   }
   if (result.stop) await reporter.reportStop?.(key, result.stop);
 
+  // THE INIT CARD'S REPOSITORY (MOTIR-11055) — the agent of an init card asked for the
+  // repository its card declares, in its self-report, because it holds no Motir token. Made
+  // with the run's credential after the exit event and BEFORE any verdict settles the leg,
+  // so the creation lands on a leg the server still holds open. Nothing when it asked none.
+  if (result.repository) await reporter.reportRepository?.(key, result.repository);
+
   if (result.exitCode !== 0) {
     return settle({
       kind: 'agent_failed',

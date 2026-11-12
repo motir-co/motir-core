@@ -141,6 +141,18 @@ import {
 } from '@/lib/github/errors';
 import { EntitlementExceededError } from '@/lib/billing/errors';
 import {
+  AiPlanRequiredError,
+  AiPlanUnknownError,
+  ProjectRepoInvalidFieldError,
+  ProjectRepoLinkConflictError,
+  ProjectRepoNameTakenError,
+  ProjectRepoSeedRefusedError,
+  ProjectRepoStateTransitionError,
+  RealizedRepoAlreadyClaimedError,
+  RepoEstablishBusyError,
+  RepoExistsWithOtherSpecError,
+} from '@/lib/projectRepos/errors';
+import {
   CrossProjectFolderError,
   FolderCycleError,
   FolderNameTakenError,
@@ -782,6 +794,30 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof CrossProjectFolderError ||
     err instanceof SubtaskNeedsPlacementError ||
     err instanceof PlacementConflictError
+  ) {
+    return toolError(err.code, err.message);
+  }
+  // The REPOSITORY-SET family (MOTIR-11038), reached through
+  // `create_project_repository` — the first MCP tool onto
+  // `projectRepoSetService` / `projectRepoProvisioningService`. Each answers its
+  // own class's `code` verbatim, the same code the REST doors' `mapProjectRepoError`
+  // answers, so one refusal never acquires two spellings. The paid-AI-plan pair is
+  // the establish pass's precondition on the organisation: an agent reads
+  // `ai_plan_required` / `plan_unknown` and stops, rather than an opaque internal
+  // error. Mapped HERE, the converter every tool funnels through, so the next
+  // repository tool does not map the same classes a second time.
+  if (
+    err instanceof ProjectRepoNameTakenError ||
+    err instanceof ProjectRepoInvalidFieldError ||
+    err instanceof ProjectRepoLinkConflictError ||
+    err instanceof ProjectRepoStateTransitionError ||
+    err instanceof ProjectRepoSeedRefusedError ||
+    err instanceof RealizedRepoAlreadyClaimedError ||
+    err instanceof AiPlanRequiredError ||
+    err instanceof AiPlanUnknownError ||
+    // The creation door's own two dispositions (MOTIR-11038).
+    err instanceof RepoExistsWithOtherSpecError ||
+    err instanceof RepoEstablishBusyError
   ) {
     return toolError(err.code, err.message);
   }

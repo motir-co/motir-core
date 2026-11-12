@@ -423,10 +423,13 @@ describe('the planning-job ENVELOPE', () => {
         ],
         starterByTarget: await seedRegistryService.starterByHostingTarget(),
       },
+      // The starter library (MOTIR-11041) — a SIBLING of `repositories`, never
+      // inside it, sent on every planning submit.
+      starterLibrary: await seedRegistryService.listActiveEntries(),
     });
   });
 
-  it('OMITS context.repositories entirely for a project with no set — byte-identical to today', async () => {
+  it('OMITS context.repositories entirely for a project with no set — and still sends the starter library', async () => {
     const seed = await seedWorkspace();
     const ctx = await seedProject(seed, 'ZETA');
 
@@ -442,6 +445,9 @@ describe('the planning-job ENVELOPE', () => {
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
+      // The starter library (MOTIR-11041) is NOT omitted with the repository unit:
+      // a project with no set is the case a repository has to be created.
+      starterLibrary: await seedRegistryService.listActiveEntries(),
     });
     expect(Object.keys(context as object)).not.toContain('repositories');
   });

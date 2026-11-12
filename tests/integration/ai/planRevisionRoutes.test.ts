@@ -18,6 +18,7 @@ import {
 } from '@/lib/dto/plans';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { plansService } from '@/lib/services/plansService';
+import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import {
   GET as proposalsGET,
   POST as proposalsPOST,
@@ -1060,6 +1061,49 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     expect(await res.json()).toMatchObject({ code: 'PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE' });
     // …and NOTHING was written: the role is validated before the update, so a
     // refused correction leaves the proposal exactly as it was.
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: secondId } })).proposedFields,
+    ).not.toHaveProperty('targetRepoRole');
+  });
+});
+
+describe("a role the project's SET cannot resolve (MOTIR-11039)", () => {
+  it('the append answers a typed 422 and stores nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    await projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'acme-web' }, fx.ctx);
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Unresolvable', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: 'job-unres' } });
+
+    const res = await append(fx, {
+      jobId: 'job-unres',
+      proposals: [
+        { op: 'add', proposedFields: { title: 'Infra', kind: 'task', targetRepoRole: 'infra' } },
+      ],
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ code: 'PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE' });
+    expect(await adminDb.planItem.count({ where: { planId: plan.id } })).toBe(0);
+  });
+
+  it('a correction answers a typed 422 and leaves the proposal as it was', async () => {
+    const fx = await makeWorkItemFixture();
+    const { secondId } = await plannedPlan(fx, 'job-unres-c');
+    await projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'acme-web' }, fx.ctx);
+
+    const res = await patch(fx, secondId, {
+      jobId: 'job-unres-c',
+      mode: 'correct',
+      targetRepoRole: 'infra',
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({
+      code: 'PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE',
+      planItemId: secondId,
+    });
     expect(
       (await adminDb.planItem.findUniqueOrThrow({ where: { id: secondId } })).proposedFields,
     ).not.toHaveProperty('targetRepoRole');

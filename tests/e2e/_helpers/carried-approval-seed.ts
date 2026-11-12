@@ -87,7 +87,10 @@ export async function seedCarriedApproval(slug: string): Promise<CarriedApproval
     workspaceId: workspace.id,
     actorUserId: owner.id,
   });
-  await adminDb.project.update({ where: { id: project.id }, data: { prMergeMode: 'manual' } });
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { prMergeMode: 'manual', prMergeModeDecidedAt: new Date() },
+  });
   await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },

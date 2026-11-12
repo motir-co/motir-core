@@ -192,6 +192,20 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   RUN_STOP_REPORT_INVALID: 422,
   // 409 — the leg already carries a discrepancy record (the agent made the call itself).
   DISCREPANCY_ALREADY_RECORDED: 409,
+  // ── MOTIR-11055, the run's REPOSITORY door (`POST …/dispatch-runs/{id}/repository`) ──
+  // 422 — the run's card is not an init card, or it declares another repository name.
+  RUN_CARD_NOT_INIT_CARD: 422,
+  RUN_REPOSITORY_NAME_MISMATCH: 422,
+  // The creation sequence's own refusals (MOTIR-11038), at the statuses the repository-set
+  // routes already answer them with (`lib/projectRepos/errorResponse.ts`) — so one refusal
+  // has one status whichever door it came through.
+  REPO_EXISTS_WITH_OTHER_SPEC: 409,
+  REPO_ESTABLISH_BUSY: 409,
+  PROJECT_REPO_NAME_TAKEN: 409,
+  PROJECT_REPO_INVALID_FIELD: 422,
+  PROJECT_REPO_SEED_REFUSED: 422,
+  ai_plan_required: 402,
+  plan_unknown: 503,
   // MOTIR-10877 — the run's How to test (`POST …/dispatch-runs/{id}/how-to-test`) answers the
   // record's own refusals, each one a request the CLI can fix.
   TEST_INSTRUCTIONS_WORK_ITEM_NOT_FOUND: 404,
@@ -558,6 +572,8 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   INVALID_PROPOSAL: 422,
   PLAN_ITEM_UNKNOWN_TARGET_REPO: 422,
   PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE: 422,
+  // MOTIR-11039 — a vocabulary role the project's set resolves to no single row.
+  PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE: 422,
   UNRESOLVED_PLAN_REF: 422,
   PLAN_ITEM_TARGET_MISSING: 422,
   // 422, and it means exactly ONE thing here: the target is a LEAF, which

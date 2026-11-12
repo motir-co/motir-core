@@ -156,17 +156,16 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     '`WorkItemClaim` whole — so the shape family IS checked here, on the tool that has an ' +
     'agent-facing reason to exist. ⚠️ If an agent surface is ever added for a scoped run, ' +
     'this entry closes and `claim_scope` probes this resource; it is not a permanent divergence.',
-  ProjectRepository:
-    'MOTIR-3586 publishes the project\u2019s repository SET on `/api/v1` ONLY, and the absence is ' +
-    'argued rather than incidental: its caller is `motir link` in `packages/cli`, which retired ' +
-    'its MCP transport in 11.5.6, so a mirrored tool would be a second implementation with no ' +
-    'caller \u2014 the same argument `ScopeClaim` above makes. The nearest MCP shape is the ' +
-    '`targetRepos` block on `dispatch_prompt`, and it is deliberately NOT this resource: that is ' +
-    'a per-ITEM projection carrying `name` / `cloneUrl` / `defaultBranch` / `delivery` for the ' +
-    'repositories ONE card ships in, while this is the per-PROJECT row with its `role`, its ' +
-    'establish `state` and the derived `established` discriminator. \u26a0\ufe0f If an agent surface ' +
-    'ever needs to ask which repositories a project has, this entry closes and that tool probes ' +
-    'this resource; it is not a permanent divergence.',
+  // ⚠️ `ProjectRepository` LEFT this list with MOTIR-11038: the entry said it closes the
+  // day an agent surface needs a project's repository row, and `create_project_repository`
+  // is that surface — its payload PROBES the resource (`payloads/projectRepositories.ts`).
+  DispatchRunRepository:
+    'The run\u2019s REPOSITORY door (Story MOTIR-10162 \u00b7 MOTIR-11055) answers a run\u2019s own ' +
+    'credential, and a run token never reaches `/api/mcp` (`lib/mcp/auth.ts`), so it shares ' +
+    '`DispatchRun`\u2019s reason. The agent-facing door for the same write is ' +
+    '`create_project_repository`, whose payload PROBES `ProjectRepository` \u2014 the row this ' +
+    'answer wraps \u2014 so the shape a session reads IS checked; this envelope is the run ' +
+    'ingest\u2019s, never an MCP payload.',
   TransitionList:
     'The list of legal transition targets is published by `GET …/transitions`. On MCP it is ' +
     'not a payload at all: `transition_status` names the allowed targets inside an ERROR ' +

@@ -146,6 +146,12 @@ describe('gate — the work-item route surface exists and is clean', () => {
       // gated no view and held AUTHOR and DECIDE together. The route followed
       // its service, which is the rule this whole map applies.
       if (/\/plan-approval\//.test(file)) return 'ai:decide_plan';
+      // The run's repository door (MOTIR-11055): an init card's run creates the
+      // repository its card declares, so it asserts the key the repository set
+      // asserts on every write — read off the MCP tool that calls the same door.
+      if (/\/dispatch-runs\/\[id\]\/repository\//.test(file)) {
+        return TOOL_PERMISSIONS.create_project_repository;
+      }
       return 'work_item:edit';
     };
 
@@ -593,6 +599,7 @@ describe('gate — coverage top-up: the schema module', () => {
       key: 3,
       identifier: 'PROD-3',
       title: 'Orphan',
+      subject: null,
       status: 'todo',
       priority: 'medium',
       assigneeId: null,

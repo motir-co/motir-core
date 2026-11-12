@@ -40,6 +40,7 @@ export declare const operation_closeDispatchRun: ValidateFunction;
 export declare const operation_completeSession: ValidateFunction;
 export declare const operation_completeSprint: ValidateFunction;
 export declare const operation_countProjectWorkItems: ValidateFunction;
+export declare const operation_createDispatchRunRepository: ValidateFunction;
 export declare const operation_createFolder: ValidateFunction;
 export declare const operation_createPage: ValidateFunction;
 export declare const operation_createSprint: ValidateFunction;

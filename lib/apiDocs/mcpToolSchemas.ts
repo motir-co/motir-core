@@ -318,6 +318,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   description:
                     'WHICH SUBJECT MATTER to compose this leaf’s rule packs from — the FOURTH selector coordinate, `pack(phase, kind, type, subject)`. DERIVE IT AT `lay`, beside `type`, so the coordinate is written BEFORE an authoring pass composes its prompt: a value written afterwards is a default rather than a selector. OMIT IT when no member clearly fits — a wrong member composes rules whose situation cannot occur for this card while looking deliberate, and omission is the right answer far more often than the vocabulary suggests. A leaf has ONE subject: wanting two is a SPLIT signal, exactly as wanting two repositories is. MEMBERSHIP IS NOT VALIDATED HERE — the vocabulary is the rule-pack file set, so a well-formed unrecognised member is accepted and refused one hop later by the rule-pack resolver. Shape only: a lowercase slug of at most 32 characters. Legal on EVERY kind — a container carries one too.',
                 },
+                initRepositoryName: {
+                  type: 'string',
+                  description:
+                    'The BARE name of the repository an INIT card will create (e.g. `motir-infra`) — the card’s own declaration, NOT a repository pin. The repository need not exist yet, and nothing resolves this name against the project’s repository set. Refused unless `subject` is `init`, refused beside any pin (`targetRepo`, `targetRepos`, `targetRepositories`, `targetRepositoryRef`, `targetRepoRole`), and refused for a name with an owner (`/`) or whitespace. Settled at the append: no correction door re-declares it, and approve writes it onto the created card.',
+                },
               },
               required: ['title'],
               additionalProperties: false,
@@ -1256,6 +1261,38 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  create_project_repository: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key, e.g. "ACME" — the project whose repository set gains the row.',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The BARE repository name to create, e.g. "acme-infra" — no owner, no "/". The name an init card declares as its `initRepositoryName`. Matched against the project\'s rows case-insensitively, as the git host matches names.',
+      },
+      role: {
+        type: 'string',
+        enum: ['web', 'api', 'mobile', 'shared', 'infra', 'other'],
+        description:
+          "The repository's role in the project — one of web · api · mobile · shared · infra · other.",
+      },
+      starterKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'A starter (seed-registry) key the repository starts from. OMIT it for an EMPTY base — omission never means the role\'s default starter, so "no starter covers this base" is expressible.',
+      },
+    },
+    required: ['projectKey', 'name', 'role'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -5217,6 +5254,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   create_folder: 'Create folder',
   create_page: 'Create page',
   create_plan: 'Open a plan to propose into',
+  create_project_repository: 'Create project repository',
   create_sprint: 'Create sprint',
   create_work_item: 'Create work item',
   delete_comment: 'Delete comment',
@@ -5479,6 +5517,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     destructiveHint: false,
     idempotentHint: false,
     openWorldHint: false,
+  },
+  create_project_repository: {
+    title: 'Create project repository',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
   },
   create_sprint: {
     title: 'Create sprint',

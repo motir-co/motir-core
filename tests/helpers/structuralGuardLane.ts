@@ -505,6 +505,12 @@ export const DATABASE_BOUND_GUARDS: Readonly<Record<string, string>> = {
     'run row, a completed import, a seeded repo) to prove the onboarding marker ' +
     'and the de-duplicate prompt ride the SAME submit. Same hybrid shape as its ' +
     'consent sibling above, and inseparable for the same reason.',
+  'tests/integration/ai/planningSubmitCarriesStarterLibrary.test.ts':
+    'imports @/lib/db, ../../helpers/adminDb and ../../fixtures — it seeds the ' +
+    'seed registry and drives every planning entrance against real Postgres to ' +
+    'prove `context.starterLibrary` rides each submit, then walks lib/ through ' +
+    'the shared submitJobSites walker so no planning submit drops it (MOTIR-11041). ' +
+    'Same hybrid shape as its onboarding-flag sibling above.',
 };
 
 /**

@@ -13,6 +13,10 @@ import {
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { routeOnboardingContextFor } from '@/lib/ai/routeOnboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
+import {
+  resolveStarterLibraryContext,
+  STARTER_LIBRARY_CONTEXT_FIELD,
+} from '@/lib/ai/starterLibraryContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import type { JobStreamEvent } from '@/lib/ai/types';
@@ -176,6 +180,9 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The starter library (MOTIR-11041) — ALWAYS sent, beside `code` and the
+    // repository unit and never inside it, so a project with no repositories gets it.
+    const starterLibrary = await resolveStarterLibraryContext();
     // ⚠️ SENT UNCONDITIONALLY, like every other planning submit (MOTIR-4343).
     // The routing run plans nothing, which is exactly why it would be easy to
     // think it owes no consent flag — but it is a planning job on the planner
@@ -211,6 +218,7 @@ export const aiGenerationService = {
         ...routeOnboardingContextFor(ctx.project),
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),
+        [STARTER_LIBRARY_CONTEXT_FIELD]: starterLibrary,
       },
       { userId: ctx.userId },
     );
@@ -263,6 +271,9 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The starter library (MOTIR-11041) — ALWAYS sent, beside `code` and the
+    // repository unit and never inside it, so a project with no repositories gets it.
+    const starterLibrary = await resolveStarterLibraryContext();
     // May this project's planner record what it got wrong (MOTIR-3350 producer ·
     // MOTIR-4343 the gap)? Resolved HERE rather than inherited, because THIS
     // submit is one of the two that call `submitJob` directly instead of going
@@ -326,6 +337,7 @@ export const aiGenerationService = {
         [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),
+        [STARTER_LIBRARY_CONTEXT_FIELD]: starterLibrary,
       },
       { userId: ctx.userId },
     );

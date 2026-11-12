@@ -25,6 +25,13 @@ vi.mock('@/lib/ai/codeContext', () => ({
 // nothing about the envelope they are here for. The real read is covered against
 // Postgres in `tests/ai/projectRepoContext.test.ts`.
 vi.mock('@/lib/ai/projectRepoContext', () => ({ resolveProjectRepoContext: vi.fn() }));
+// The starter library (MOTIR-11041), mocked so these SYNTHETIC-context cases state
+// the list and assert it reaches the envelope; the real registry read is covered
+// against Postgres in `tests/ai/starterLibraryContext.test.ts`.
+vi.mock('@/lib/ai/starterLibraryContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/starterLibraryContext')>()),
+  resolveStarterLibraryContext: vi.fn(async () => [{ key: 'a-starter' }]),
+}));
 // The record-planning-mistakes resolver (MOTIR-3350), mocked for the same reason
 // as the two above — it reads the project's settings row, and these cases drive a
 // SYNTHETIC ProjectContext with nothing behind it. The real read is covered
@@ -785,7 +792,8 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
     // changed no field "in passing". A field added later, deliberately, by a card
     // that says so is not what this guard forbids; a field that vanishes from a
     // refactor still is. `recordPlanningMistakes` was the first such amendment
-    // (MOTIR-4343) and `onboarding` is the second (MOTIR-4736). Amending the pin
+    // (MOTIR-4343), `onboarding` the second (MOTIR-4736) and `starterLibrary` the
+    // third (MOTIR-11041). Amending the pin
     // and silently loosening it to `toMatchObject` look similar and are opposite
     // in kind: the exact equality is the whole instrument, and it stays.
     expect(context).toEqual({
@@ -796,6 +804,7 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
       onboarding: true,
       code: { repos: ['owner/repo'] },
       repositories: { repositories: [] },
+      starterLibrary: [{ key: 'a-starter' }],
     });
   });
 
@@ -821,6 +830,9 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
       generateExplanations: false,
       recordPlanningMistakes: true,
       onboarding: true,
+      // Not conditional either (MOTIR-11041): `[]` is an answer, and a project with
+      // no repositories is the case it is for.
+      starterLibrary: [{ key: 'a-starter' }],
     });
   });
 });

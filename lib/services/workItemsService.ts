@@ -423,8 +423,13 @@ function toRepoSet(pin: string | null): string[] {
  *
  * The walk is naturally short — the tree is depth-capped at 4 — so this is a
  * fixed-length parent walk, not an unbounded recursion.
+ *
+ * EXPORTED for a second caller, the init-card routing pass
+ * (`projectRepoInitRoutingService`, MOTIR-11042): a leaf it routes moves its
+ * ancestors' derived sets exactly the way an authored set does, so it owes the
+ * same rollup rather than a copy of it.
  */
-async function recomputeAncestorRepoSets(
+export async function recomputeAncestorRepoSets(
   itemId: string,
   workspaceId: string,
   tx: Prisma.TransactionClient,

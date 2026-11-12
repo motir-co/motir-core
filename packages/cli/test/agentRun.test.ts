@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
-import { runAgent } from '../src/agentRun.js';
+import { AGENT_REPOSITORY_ROLES, readAgentReport, runAgent } from '../src/agentRun.js';
 import { parseAgentCommand } from '../src/agentProfiles.js';
 import { CliError } from '../src/errors.js';
 
@@ -432,6 +432,76 @@ describe('the model self-report', () => {
 // has to distinguish: the first is a setup problem `motir doctor` fixes, the
 // second is a failed run the loop records.
 
+describe('the init card’s `repository` member (MOTIR-11055)', () => {
+  function report(value: unknown) {
+    const path = join(work, 'agent-report.json');
+    writeFileSync(path, typeof value === 'string' ? value : JSON.stringify(value));
+    return readAgentReport(path);
+  }
+
+  it('answers a well-shaped { name, role }, keeping its casing and trimming it', () => {
+    expect(report({ repository: { name: '  Acme-Infra ', role: 'infra' } }).repository).toEqual({
+      name: 'Acme-Infra',
+      role: 'infra',
+    });
+  });
+
+  it('answers one carrying a starterKey too', () => {
+    expect(
+      report({ repository: { name: 'acme-web', role: 'web', starterKey: ' platform-starter ' } })
+        .repository,
+    ).toEqual({ name: 'acme-web', role: 'web', starterKey: 'platform-starter' });
+  });
+
+  it('accepts every role of the closed list', () => {
+    for (const role of AGENT_REPOSITORY_ROLES) {
+      expect(report({ repository: { name: 'r', role } }).repository?.role).toBe(role);
+    }
+  });
+
+  it.each([
+    ['not an object', { repository: 'acme-infra' }],
+    ['an array', { repository: [{ name: 'acme-infra', role: 'infra' }] }],
+    ['null', { repository: null }],
+    ['a blank name', { repository: { name: '   ', role: 'infra' } }],
+    ['a name that is not a string', { repository: { name: 7, role: 'infra' } }],
+    ['a role outside the closed list', { repository: { name: 'acme', role: 'database' } }],
+    ['a role that is not a string', { repository: { name: 'acme', role: 1 } }],
+    ['a blank starterKey', { repository: { name: 'acme', role: 'infra', starterKey: '  ' } }],
+    [
+      'a starterKey that is not a string',
+      { repository: { name: 'acme', role: 'infra', starterKey: 3 } },
+    ],
+    ['no member at all', { model: 'm-1' }],
+  ])('answers null for %s', (_label, value) => {
+    expect(report(value).repository).toBeNull();
+  });
+
+  it('leaves every other member parsing exactly as before', () => {
+    const parsed = report({
+      model: 'm-1',
+      unbuildable: 'no such table',
+      repository: { name: 'acme', role: 'nope' },
+    });
+    expect(parsed.model).toBe('m-1');
+    expect(parsed.unbuildableReason).toBe('no such table');
+    expect(parsed.repository).toBeNull();
+  });
+
+  it('reaches the run result through runAgent', async () => {
+    const result = await runAgent({
+      command: fakeAgent(
+        `require('node:fs').writeFileSync(process.env.MOTIR_AGENT_REPORT, ${JSON.stringify(
+          JSON.stringify({ repository: { name: 'acme-infra', role: 'infra' } }),
+        )})`,
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.repository).toEqual({ name: 'acme-infra', role: 'infra' });
+  });
+});
+
 describe('launch + death edges', () => {
   it('a MISSING agent binary is a setup error pointing at `motir doctor`', async () => {
     await expect(
@@ -521,6 +591,7 @@ describe('the injected spawn seam covers what a real child cannot show', () => {
       stop: null,
       pullRequests: null,
       howToTest: null,
+      repository: null,
     });
   });
 });

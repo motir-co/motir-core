@@ -86,7 +86,11 @@ async function tokenFor(fx: WorkItemFixture, userId: string): Promise<string> {
   const { token } = await apiTokensService.create(userId, fx.workspaceId, {
     label: `cli-lane-${randomToken()}`,
     projectId: fx.projectId,
-    permissions: CLI_TOKEN_GRANT.filter((p) => !p.startsWith('lesson:')),
+    // …and less `repository:manage` (MOTIR-11038): a member's role cannot confer it,
+    // and nothing in this chain creates a repository.
+    permissions: CLI_TOKEN_GRANT.filter(
+      (p) => !p.startsWith('lesson:') && p !== 'repository:manage',
+    ),
   });
   return token;
 }

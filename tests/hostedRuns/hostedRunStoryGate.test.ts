@@ -1417,7 +1417,11 @@ describe('continue hosted — the browser racing a terminal on one card', () => 
     const { token } = await apiTokensService.create(user.id, fx.workspaceId, {
       label: `race-${randomToken()}`,
       projectId: fx.projectId,
-      permissions: CLI_TOKEN_GRANT.filter((p) => !p.startsWith('lesson:')),
+      // …and less `repository:manage` (MOTIR-11038): a member's role cannot confer it,
+      // and nothing in this chain creates a repository.
+      permissions: CLI_TOKEN_GRANT.filter(
+        (p) => !p.startsWith('lesson:') && p !== 'repository:manage',
+      ),
     });
     const { POST: postContinue } = await import('@/app/api/v1/work-items/[key]/continue/route');
 

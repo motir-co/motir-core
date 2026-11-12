@@ -712,6 +712,21 @@ function markRefIdsOf(plan: PlanWithItemsDto): Set<string> {
 }
 
 /**
+ * Every real work-item id a plan's BLOCKED-BY carriers name (MOTIR-11053): an
+ * item's `blockedByRefs` and a `modify`'s `patch.blockedByAdd` — one relation at
+ * approval, so one collection. Temp and folder refs are not ids and are dropped.
+ */
+function blockerRefIdsOf(plan: PlanWithItemsDto): Set<string> {
+  const ids = new Set<string>();
+  for (const item of plan.items) {
+    for (const ref of [...item.blockedByRefs, ...(item.patch?.blockedByAdd ?? [])]) {
+      if (!isTempRef(ref) && !isFolderRef(ref)) ids.add(ref);
+    }
+  }
+  return ids;
+}
+
+/**
  * The Visitor's gate for ONE plan (Story MOTIR-6170 · MOTIR-6645): the plan must
  * be in the Visitor's project and must not be withheld — a proposal naming a
  * hidden id, or a withheld session. Every refusal is {@link PlanNotFoundError},
@@ -896,6 +911,40 @@ export const planReviewService = {
       markById: new Map(own.map((row) => [row.id, row.obsolescence ?? null])),
       todoCountById: counts,
     };
+  },
+
+  /**
+   * What each blocked-by ref a plan draws IS (Story MOTIR-10162 · MOTIR-11053):
+   * every distinct real ref on an item's `blockedByRefs` or on a `modify`'s
+   * `patch.blockedByAdd`, mapped to that card's stored `subject` — `null` when the
+   * card carries none. It is what lets a planner recognise a waiter's COMMITTED
+   * blocker (an approved init card, say) the way it already recognises a proposed
+   * one, without a second read.
+   *
+   * Clause for clause {@link resolveProposalMarkRefs}: `planItem:` and `folder:`
+   * refs are dropped (a proposal is not an id; a folder names no card), ONE
+   * workspace-scoped read covers the whole plan and none is made when no ref is
+   * real, and a row outside the plan's own project is left out — a plan reader
+   * was admitted to this project and no other.
+   *
+   * ⚠️ A REF WITH NO KEY IS UNREAD, NEVER "NO SUBJECT". A temp ref, a folder ref,
+   * an id naming no row and a card of another project all contribute no key;
+   * `null` is reserved for a card that was read and carries none.
+   */
+  async resolveProposalBlockerSubjects(
+    plan: PlanWithItemsDto,
+    ctx: ServiceContext,
+  ): Promise<Map<string, string | null>> {
+    const ids = blockerRefIdsOf(plan);
+    if (ids.size === 0) return new Map();
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace([...ids], ctx.workspaceId, tx),
+    );
+    return new Map(
+      rows
+        .filter((row) => row.projectId === plan.projectId)
+        .map((row) => [row.id, row.subject ?? null]),
+    );
   },
 
   /**
@@ -1897,6 +1946,10 @@ export const planReviewService = {
         // coordinate an earlier one derived, which is the `explanationSource`
         // mistake one field up. The op-axis guard is where that is written down.
         subject: item.op === 'add' ? (proposed?.subject ?? null) : null,
+        // The repository an INIT card will create (MOTIR-11051) — add-only on
+        // `subject`'s terms: `PlanItemPatch` has no twin, so a `modify` declares
+        // none. Carried for parity; no review component draws it.
+        initRepositoryName: item.op === 'add' ? (proposed?.initRepositoryName ?? null) : null,
         // Same rule, same source, same read (MOTIR-3160): a materialized `add`
         // has a live status because it is a live work item. Populating the
         // identifier off `target` and leaving the status null would split one

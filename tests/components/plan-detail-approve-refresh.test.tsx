@@ -166,6 +166,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         executor: null,
         planningProvenance: null,
         subject: null,
+        initRepositoryName: null,
         status: null,
         statusLabel: null,
         statusCategory: null,

@@ -361,7 +361,17 @@ export function presentMcpPlan(
   plan: PlanWithItemsAndWarningsDto,
   folders?: ReadonlyMap<string, { folderId: string; folderPath: string[] | null }>,
   cost?: PlanJobCostDto,
+  // What each blocked-by ref a proposal draws IS (MOTIR-11053): the blocker's
+  // stored `subject` by ref, `null` where it carries none. `get_plan` only.
+  blockerSubjects?: ReadonlyMap<string, string | null>,
 ): McpPlan {
+  const withFolders = folders
+    ? plan.items.map((item) => ({
+        ...item,
+        folderId: folders.get(item.id)?.folderId ?? null,
+        folderPath: folders.get(item.id)?.folderPath ?? null,
+      }))
+    : plan.items;
   return {
     id: plan.id,
     status: plan.status,
@@ -389,13 +399,17 @@ export function presentMcpPlan(
     // (MOTIR-5415) — `/api/v1`'s `folderId` / `folderPath`, on the same item the
     // `parentRef` rides. Only when the caller resolved them; the fields are then
     // present on every item, `null` where the proposal names no folder.
-    items: folders
-      ? plan.items.map((item) => ({
+    //
+    // …and `blockerSubjects` (MOTIR-11053) on the same terms: present on EVERY
+    // item when the caller resolved the map — the refs THAT item draws, an empty
+    // object when it draws none — and ABSENT from every item when it did not, so a
+    // consumer can tell UNREAD from NO SUBJECT. The write doors pass no map.
+    items: blockerSubjects
+      ? withFolders.map((item) => ({
           ...item,
-          folderId: folders.get(item.id)?.folderId ?? null,
-          folderPath: folders.get(item.id)?.folderPath ?? null,
+          blockerSubjects: blockerSubjectsOf(item, blockerSubjects),
         }))
-      : plan.items,
+      : withFolders,
     ...(plan.warnings && plan.warnings.length > 0 ? { warnings: plan.warnings } : {}),
     ...(plan.rescopeWarnings && plan.rescopeWarnings.length > 0
       ? { rescopeWarnings: plan.rescopeWarnings }
@@ -404,6 +418,19 @@ export function presentMcpPlan(
     // pass none, so their answers carry no `cost` key.
     ...(cost ? { cost: presentPlanJobCost(cost) } : {}),
   };
+}
+
+/** One item's slice of the resolved blocker subjects: each ref it draws, on
+ *  `blockedByRefs` or a `modify`'s `patch.blockedByAdd`, that the map holds. */
+function blockerSubjectsOf(
+  item: PlanWithItemsAndWarningsDto['items'][number],
+  resolved: ReadonlyMap<string, string | null>,
+): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const ref of [...item.blockedByRefs, ...(item.patch?.blockedByAdd ?? [])]) {
+    if (resolved.has(ref)) out[ref] = resolved.get(ref) ?? null;
+  }
+  return out;
 }
 
 /** The `get_plan` payload. No probe — see the narrowing note above. */

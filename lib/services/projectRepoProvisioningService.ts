@@ -1,5 +1,14 @@
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workflowsService } from '@/lib/services/workflowsService';
+import { walkToDone } from '@/lib/workflows/walkToDone';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { isEstablishedState } from '@/lib/projectRepos/vocabulary';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import {
@@ -262,9 +271,93 @@ export const projectRepoProvisioningService = {
       results.push(await establishRow(row, projectName, hosting, design, ctx));
     }
 
+    // POST-COMMIT, BEST-EFFORT — an INIT card completes on its repository being
+    // established (Story MOTIR-10162 · MOTIR-11054). Self-contained and never
+    // throws, so a created repository can never be reported as a failed establish.
+    await completeInitCardsQuietly(projectId, results, ctx);
+
     return { projectId, rows: results };
   },
 };
+
+/**
+ * Move the project's open INIT cards whose declared repository a row of `results`
+ * now ESTABLISHES to the project's done-category status (MOTIR-11054).
+ *
+ * ⚠️ KEYED ON THE ROW STATE, NOT ON THE OUTCOME. `already_settled` is reported for
+ * a row this run did not attempt — `skipped` included, which is settled
+ * deliberately WITHOUT a repository — so an outcome-keyed pass would credit a card
+ * for a repository that does not exist. `isEstablishedState` is the vocabulary's
+ * own rule, total over the six states, and the one every pinned read applies.
+ * `not_attempted` decides nothing: it is another run's live claim, or a row this
+ * run was not asked about.
+ *
+ * The match is the row's stored name against the declaration, case-insensitively,
+ * inside the row's own project. The write is a STATUS only — through the shipped
+ * status authority, attributed to the context the establish run was called with —
+ * and a card already in the project's done category (done OR cancelled) is
+ * skipped, so a retried establish rewrites nothing and a cancelled init card
+ * stays cancelled. Every failure is caught and logged with the row id.
+ */
+async function completeInitCardsQuietly(
+  projectId: string,
+  results: readonly EstablishRowResult[],
+  ctx: ServiceContext,
+): Promise<void> {
+  const established = results.filter(
+    (r): r is EstablishRowResult & { row: ProjectRepoDto } =>
+      r.outcome !== 'not_attempted' && r.row !== null && isEstablishedState(r.row.state),
+  );
+  if (established.length === 0) return;
+  try {
+    const { cards, doneKeys } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+      cards: await workItemRepository.listOpenInitCardsByProject(projectId, tx),
+      // The project's OWN done category, never a list of keys: a card someone
+      // cancelled is finished work, and the workflow's `cancelled → todo` edge
+      // would otherwise walk it back to Done once its repository appears.
+      doneKeys: new Set(
+        (
+          await workflowsService.getStatusKeysByCategoryByProjects([projectId], ctx.workspaceId, tx)
+        ).get(projectId)?.done ?? [],
+      ),
+    }));
+    const initCards = cards.filter((c) => !doneKeys.has(c.status));
+    if (initCards.length === 0) return;
+    // The card walks Done's road along the workflow's declared edges — a jump
+    // straight from `todo` to `done` is an illegal transition under the default
+    // workflow, and the status authority refuses it (MOTIR-10162).
+    const wf = await workflowsService.getWorkflow(projectId, ctx.workspaceId);
+    for (const result of established) {
+      const name = result.row.name.toLowerCase();
+      for (const card of initCards) {
+        if (card.initRepositoryName.toLowerCase() !== name) continue;
+        const path = walkToDone(wf, card.status);
+        if (path === null) {
+          console.error(
+            `[projectRepoProvisioningService] no path to done from "${card.status}" for init card ${card.id} (row ${result.rowId}); left open`,
+          );
+          continue;
+        }
+        try {
+          for (const step of path) {
+            await workItemsService.updateStatus(card.id, step, ctx);
+            card.status = step;
+          }
+        } catch (err) {
+          console.error(
+            `[projectRepoProvisioningService] could not complete init card ${card.id} for established row ${result.rowId}:`,
+            err,
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.error(
+      `[projectRepoProvisioningService] could not complete init cards for project ${projectId} (rows ${established.map((r) => r.rowId).join(', ')}):`,
+      err,
+    );
+  }
+}
 
 /** The workspace's organisation id, once its paid AI plan is confirmed. */
 async function assertPaidAiPlan(ctx: ServiceContext): Promise<string> {

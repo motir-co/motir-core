@@ -125,7 +125,7 @@ export async function seedAcceptanceGate(slug: string): Promise<AcceptanceGateSe
   // wrong reason (`acceptance-seed.ts` § `setProjectAcceptanceVideo`).
   await adminDb.project.update({
     where: { id: project.id },
-    data: { prMergeMode: 'manual', acceptanceVideoEnabled: true },
+    data: { prMergeMode: 'manual', prMergeModeDecidedAt: new Date(), acceptanceVideoEnabled: true },
   });
 
   const bystander = await createTestPerson({

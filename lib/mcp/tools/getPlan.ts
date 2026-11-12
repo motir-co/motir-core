@@ -527,6 +527,24 @@ async function resolveMarks(
   }
 }
 
+/**
+ * What each blocked-by ref a proposal draws IS (MOTIR-11053) — the committed
+ * blocker's stored `subject` by ref. BEST-EFFORT for the reason
+ * {@link resolveMarks} is: a failed read degrades to NO map, and with no map the
+ * payload carries no `blockerSubjects` key at all — so a consumer reads UNREAD,
+ * never "no subject", rather than failing a read that already worked.
+ */
+async function resolveBlockerSubjects(
+  plan: PlanWithItemsDto,
+  ctx: ServiceContext,
+): Promise<Map<string, string | null> | undefined> {
+  try {
+    return await planReviewService.resolveProposalBlockerSubjects(plan, ctx);
+  } catch {
+    return undefined;
+  }
+}
+
 /** The adapter: read the plan through the service, summarize, return. */
 export async function runGetPlan(
   args: { planId: string; includeSections?: boolean },
@@ -540,6 +558,7 @@ export async function runGetPlan(
   // the same reading `/api/v1` presents beside `parentRef`.
   const folders = await planReviewService.resolveProposalFolders(plan, ctx);
   const marks = await resolveMarks(plan, ctx);
+  const blockerSubjects = await resolveBlockerSubjects(plan, ctx);
   // The authoring agent's own record (MOTIR-9978) — on THIS payload, never on the plan DTO.
   const plannerRecord = await plansService.getPlannerRecord(args.planId, ctx);
   // The gaps its author sessions raised (MOTIR-10176) — a resumed walk's amend input.
@@ -570,7 +589,7 @@ export async function runGetPlan(
   return toolOk(
     summarizePlan(plan, placements, marks, sections, cost),
     derived(planPayload, {
-      ...presentMcpPlan(plan, folders, cost),
+      ...presentMcpPlan(plan, folders, cost, blockerSubjects),
       plannerRecord,
       raisedGaps,
       ...(sections ? { parsedSections: Object.fromEntries(sections) } : {}),
@@ -601,6 +620,12 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'keys and `supersedesRefs` in full. A `modify` whose patch REPLACES the target’s steps ' +
         'prints `todos: N steps (replaces M, K ticked)` — approve deletes the old rows, ticked ' +
         'ones included. ' +
+        'Each item’s `blockerSubjects` maps every blocked-by ref it draws that names a ' +
+        'committed card of this project (on `blockedByRefs`, or a `modify`’s ' +
+        '`patch.blockedByAdd`) to that card’s `subject` — `null` when it carries none — so ' +
+        'you can tell what a blocker IS (an init card, say) without a second read. A ' +
+        '`planItem:` ref has no key there; the whole key is absent when the read could not ' +
+        'resolve them, which means unread, never "no subject". ' +
         `Reach for \`${GET_PLAN_STATUS_TOOL_NAME}\` ` +
         'instead when you only need the status of a submitted job (and whether that job died); ' +
         'reach for this one to SHOW or judge the content. A plan still generating returns the ' +

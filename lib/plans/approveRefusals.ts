@@ -138,6 +138,12 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       'The work item a `modify`/`remove` names was deleted or archived between the close and the button. Not knowable at the close by construction.',
   },
+  // MOTIR-11039 — a role in the vocabulary that the project's set cannot resolve.
+  PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE: {
+    cause: 'tree-caused',
+    justification:
+      "The project's repository SET decides it, and the set can move between the close and the button — a second row of the role added, or the first row of a set appended — so the append and the correction refuse it when they can, and approve refuses it again, naming the card and the rows, before anything is written.",
+  },
   PLAN_PROPOSAL_REPO_PIN_MOVED: {
     cause: 'tree-caused',
     justification:

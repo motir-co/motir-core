@@ -122,6 +122,8 @@ describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
         // `update_page`; the argument is on the constant.
         'page:view',
         'page:edit',
+        // MOTIR-11038 — `create_project_repository`; the argument is on the constant.
+        'repository:manage',
       ].sort(),
     );
   });
@@ -219,6 +221,9 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // MOTIR-10183 — made grantable by `update_coding_convention`, the first tool
       // to assert it. No legacy string ever conferred it; no stale row may acquire it.
       'ai:configure',
+      // MOTIR-11038 — made grantable by `create_project_repository`, the first tool
+      // to assert it. No legacy string ever conferred it; no stale row may acquire it.
+      'repository:manage',
     ];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
@@ -269,6 +274,10 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // project's lesson corpus. The loss is correct, and naming it is what
       // keeps this check exhaustive rather than what excuses it.
       reinforce_lesson: true,
+      // MOTIR-11038 — `create_project_repository`, the same kind of loss: filed under
+      // `work_items:write` as the nearest bucket, gated by `repository:manage`, which
+      // none of the six strings conferred, so a stale row cannot start creating repos.
+      create_project_repository: true,
       // MOTIR-7793 — `get_code_health`, the SAME kind of loss as
       // `open_plan_session`: a read filed under `read` whose service asserts
       // `ai:plan`. Widening `read` to cover it would hand every legacy read-only
