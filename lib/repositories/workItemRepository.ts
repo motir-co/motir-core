@@ -1153,6 +1153,31 @@ export const workItemRepository = {
   },
 
   /**
+   * Is any of `ids` a NON-ARCHIVED init card of `projectId` — a card whose
+   * `initRepositoryName` is set (Bug MOTIR-11093)? The approve step's gate for a
+   * plan that creates no init card but draws an edge onto one an earlier plan laid.
+   * Archived init cards answer no, as the routing pass ignores them. Empty `ids`
+   * short-circuits to `false`.
+   */
+  async hasInitCardAmong(
+    projectId: string,
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    if (ids.length === 0) return false;
+    const hit = await tx.workItem.findFirst({
+      where: {
+        id: { in: [...ids] },
+        projectId,
+        archivedAt: null,
+        initRepositoryName: { not: null },
+      },
+      select: { id: true },
+    });
+    return hit !== null;
+  },
+
+  /**
    * The project's NON-ARCHIVED init cards whose declared `initRepositoryName`
    * matches any of `names` case-insensitively (Story MOTIR-10162 · MOTIR-11042) —
    * the routing pass's "who declared this repository". A named read because the
