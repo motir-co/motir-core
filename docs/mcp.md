@@ -5908,6 +5908,11 @@ Four questions, one call:
 - **Is that code INDEXED?** Per-repo `indexed` / `pending`, from the succeeded
   `system.code-graph-index` ledger, plus the set-level `hasRunning`.
 - **What is the project's repository SET, and where did onboarding stop?**
+- **Which starters could a new repository be created from?** The active entries
+  of the seed registry, each whole (key, label, role, stack, template source,
+  use cases, sizes, hosting targets). Platform-wide, read at call time, and the
+  same resolver the hosted planner's envelope uses (MOTIR-11041), so the two
+  planners judge coverage against one library.
 
 **Input**
 
@@ -5917,13 +5922,14 @@ Four questions, one call:
 
 **Output** — `structuredContent`: a `ProjectStateDto`:
 
-| Field          | Type                           | Notes                                                                                                               |
-| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `project`      | object                         | `{ key, id, name, onboardingRanAt }` — the marker is carried beside the verdict it produced.                        |
-| `planningGate` | `"workspace" \| "onboarding"`  | `resolvePlanningHostGate`'s verdict: `workspace` = established, `onboarding` = never onboarded.                     |
-| `code`         | object                         | `{ installed: boolean, index: MigrateIndexStatusDto }` — see below.                                                 |
-| `repoSet`      | `ProjectRepoDto[]`             | The PROJECT's repository set (distinct from the workspace's connected set); `[]` when the establish step never ran. |
-| `onboarding`   | `MigrateOnboardingDto \| null` | The migrate-onboarding run (`step` / `status` / `codeGraphReady` / `conventionApprovedAt`), or `null`.              |
+| Field            | Type                           | Notes                                                                                                                                                                                  |
+| ---------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project`        | object                         | `{ key, id, name, onboardingRanAt }` — the marker is carried beside the verdict it produced.                                                                                           |
+| `planningGate`   | `"workspace" \| "onboarding"`  | `resolvePlanningHostGate`'s verdict: `workspace` = established, `onboarding` = never onboarded.                                                                                        |
+| `code`           | object                         | `{ installed: boolean, index: MigrateIndexStatusDto }` — see below.                                                                                                                    |
+| `repoSet`        | `ProjectRepoDto[]`             | The PROJECT's repository set (distinct from the workspace's connected set); `[]` when the establish step never ran.                                                                    |
+| `onboarding`     | `MigrateOnboardingDto \| null` | The migrate-onboarding run (`step` / `status` / `codeGraphReady` / `conventionApprovedAt`), or `null`.                                                                                 |
+| `starterLibrary` | `SeedRegistryEntryDto[]`       | Every ACTIVE seed registry entry, whole — the same list a hosted planning submit carries as `context.starterLibrary`. Present with no repositories; `[]` only when no entry is active. |
 
 `code.index` is the **shipped `MigrateIndexStatusDto`** — the exact shape the
 migrate wizard's Index step polls — reused rather than re-invented:

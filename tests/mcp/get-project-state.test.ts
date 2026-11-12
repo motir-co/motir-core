@@ -11,6 +11,9 @@ import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { organizationContentLanguageService } from '@/lib/services/organizationContentLanguageService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
+import { SEED_SOURCE_FLY_STARTER } from '@/lib/projectRepos/vocabulary';
+import { resetSeedRegistry } from '../helpers/seedRegistryShipped';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -588,5 +591,81 @@ describe('get_project_state — the organisation’s content language (MOTIR-874
     await client.close();
     const tool = tools.find((t) => t.name === GET_PROJECT_STATE_TOOL_NAME);
     expect(tool!.description).toContain('CONTENT LANGUAGE');
+  });
+});
+
+describe('get_project_state — the starter library (Story MOTIR-10162 · MOTIR-11041)', () => {
+  afterEach(async () => {
+    // The registry is shared platform data no truncate reaches.
+    await resetSeedRegistry();
+  });
+
+  it('a project with NO repositories reports every active entry, whole, with its coverage fields', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await callTool(fx.ctx, fx.projectIdentifier);
+    const state = stateOf(res);
+
+    expect(state.repoSet).toEqual([]);
+    const active = await seedRegistryService.listActiveEntries();
+    expect(active.length).toBeGreaterThan(0);
+    expect(state.starterLibrary).toEqual(JSON.parse(JSON.stringify(active)));
+    for (const entry of state.starterLibrary) {
+      for (const field of [
+        'key',
+        'label',
+        'role',
+        'stack',
+        'useCases',
+        'sizes',
+        'hostingTargets',
+      ]) {
+        expect(entry, `${entry.key} lacks ${field}`).toHaveProperty(field);
+      }
+    }
+    expect(JSON.stringify(res.content)).toContain(
+      `Starter library: ${active.length} active entries`,
+    );
+  });
+
+  it('an entry retired between two reads is gone from the second', async () => {
+    const fx = await makeWorkItemFixture();
+    const keys = async () =>
+      stateOf(await callTool(fx.ctx, fx.projectIdentifier)).starterLibrary.map((e) => e.key);
+    expect(await keys()).toContain(SEED_SOURCE_FLY_STARTER);
+    await adminDb.seedRegistryEntry.update({
+      where: { key: SEED_SOURCE_FLY_STARTER },
+      data: { status: 'retired' },
+    });
+    expect(await keys()).not.toContain(SEED_SOURCE_FLY_STARTER);
+  });
+
+  it('reports `[]` and says so in words when no entry is active', async () => {
+    const fx = await makeWorkItemFixture();
+    await adminDb.seedRegistryEntry.updateMany({ data: { status: 'retired' } });
+    const res = await callTool(fx.ctx, fx.projectIdentifier);
+    expect(stateOf(res).starterLibrary).toEqual([]);
+    expect(JSON.stringify(res.content)).toContain('Starter library: no active entry');
+  });
+
+  it('names a single active entry in the singular', async () => {
+    const fx = await makeWorkItemFixture();
+    await adminDb.seedRegistryEntry.updateMany({
+      where: { key: { not: SEED_SOURCE_FLY_STARTER } },
+      data: { status: 'retired' },
+    });
+    const res = await callTool(fx.ctx, fx.projectIdentifier);
+    expect(JSON.stringify(res.content)).toContain(
+      `Starter library: 1 active entry (${SEED_SOURCE_FLY_STARTER})`,
+    );
+  });
+
+  it('the tool description names the starter library', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const { tools } = await client.listTools();
+    await client.close();
+    expect(tools.find((t) => t.name === GET_PROJECT_STATE_TOOL_NAME)!.description).toContain(
+      'STARTER LIBRARY',
+    );
   });
 });

@@ -8,6 +8,10 @@ import {
 } from '@/lib/ai/lessonCapture';
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
+import {
+  resolveStarterLibraryContext,
+  STARTER_LIBRARY_CONTEXT_FIELD,
+} from '@/lib/ai/starterLibraryContext';
 import { MotirAiError } from '@/lib/ai/errors';
 import type {
   JobContextBag,
@@ -207,6 +211,8 @@ async function assertCanPlan(ctx: ProjectContext): Promise<void> {
  *     predates the field", i.e. as ON;
  *   * `code` and `repositories` are spread conditionally, because for them absence means
  *     "this workspace has none".
+ *   * `starterLibrary` (MOTIR-11041) is ALWAYS present, `[]` an answer: the platform's
+ *     active starters, which a project with no repositories needs most.
  *
  * The caller adds what is SPECIFIC to its submit (an anchor set, a `planId`, a prompt).
  */
@@ -237,6 +243,9 @@ async function buildPlanningJobContext(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  // The starter library (MOTIR-11041) — ALWAYS sent, `[]` an answer, and never
+  // inside the repository unit (absent for a project with no repositories).
+  const starterLibrary = await resolveStarterLibraryContext();
   // May this project's planner record what it got wrong (MOTIR-3350)?
   const recordPlanningMistakes = await resolveRecordPlanningMistakesForJob(ctx.projectId, {
     userId: ctx.userId,
@@ -258,6 +267,7 @@ async function buildPlanningJobContext(
       [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
       ...(code ? { code } : {}),
       ...(repositories ? { repositories } : {}),
+      [STARTER_LIBRARY_CONTEXT_FIELD]: starterLibrary,
     },
   };
 }

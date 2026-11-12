@@ -43,7 +43,8 @@ const inputSchema = {
 
 /** Compact human summary — the four questions, one line each. */
 export function summarizeProjectState(state: ProjectStateDto): string {
-  const { project, planningGate, code, repoSet, onboarding, contentLanguage } = state;
+  const { project, planningGate, code, repoSet, onboarding, starterLibrary, contentLanguage } =
+    state;
   const established =
     planningGate === 'workspace'
       ? `established (onboarding ran ${project.onboardingRanAt})`
@@ -74,6 +75,9 @@ export function summarizeProjectState(state: ProjectStateDto): string {
     ...repoLines,
     setLine,
     onboardingLine,
+    starterLibrary.length === 0
+      ? 'Starter library: no active entry'
+      : `Starter library: ${starterLibrary.length} active ${starterLibrary.length === 1 ? 'entry' : 'entries'} (${starterLibrary.map((entry) => entry.key).join(', ')})`,
     `Content language: ${contentLanguage}`,
   ].join('\n');
 }
@@ -114,7 +118,11 @@ export function registerGetProjectState(
         'code-INDEXED or still pending; what is the project’s own repository SET; and where ' +
         'its onboarding run stopped (or null if it never had one). It also returns the ' +
         'organisation’s CONTENT LANGUAGE (`contentLanguage`), the language work content is ' +
-        'written in. Read-only — it reports ' +
+        'written in, and the STARTER LIBRARY (`starterLibrary`): every active seed registry ' +
+        'entry, whole — role, stack, use cases, sizes, hosting targets — the same list the ' +
+        'hosted planner is handed, to judge which starter covers a repository the plan has ' +
+        'to create. It is present for a project with no repositories, and `[]` only when no ' +
+        'entry is active. Read-only — it reports ' +
         'state, it never changes it. A project with nothing configured returns a well-formed ' +
         '"nothing configured" answer, never an error, so "there is no code" is ' +
         'distinguishable from "I could not look". Honors the same access checks as the UI; ' +

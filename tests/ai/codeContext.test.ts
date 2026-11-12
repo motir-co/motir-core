@@ -527,6 +527,8 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
+      // The starter library (MOTIR-11041) — sent on every planning submit.
+      starterLibrary: await seedRegistryService.listActiveEntries(),
       // ⚠️ AMENDED BY MOTIR-4604, RE-POINTED BY MOTIR-4807 — `context.code`'s repo
       // entries carry each repo's INDEX STATE beside its coordinates, plus the
       // reason it is behind and an explicit in-flight flag. The state comes from
@@ -641,6 +643,8 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
+      // The starter library (MOTIR-11041) — sent on every planning submit.
+      starterLibrary: await seedRegistryService.listActiveEntries(),
     });
     expect(Object.keys(context as object)).not.toContain('code');
   });
@@ -672,6 +676,8 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       generateExplanations: false,
       recordPlanningMistakes: true,
       onboarding: true,
+      // The starter library (MOTIR-11041) — sent on every planning submit.
+      starterLibrary: await seedRegistryService.listActiveEntries(),
     });
     expect(Object.keys(context as object)).not.toContain('code');
   });

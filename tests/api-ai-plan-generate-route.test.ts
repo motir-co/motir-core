@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import { makeWorkItemFixture } from './fixtures/workItemFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
@@ -190,6 +191,8 @@ describe('POST /api/ai/plan/generate', () => {
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
+      // The starter library (MOTIR-11041) — sent on every planning submit.
+      starterLibrary: await seedRegistryService.listActiveEntries(),
     });
     expect(actor).toEqual({ userId: fx.ownerId });
 
@@ -232,6 +235,8 @@ describe('POST /api/ai/plan/generate', () => {
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
+      // The starter library (MOTIR-11041) — sent on every planning submit.
+      starterLibrary: await seedRegistryService.listActiveEntries(),
     });
   });
 

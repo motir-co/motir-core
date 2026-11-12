@@ -1,4 +1,5 @@
 import type { MigrateIndexRepoDto, MigrateIndexStatusDto } from '@/lib/dto/migrateOnboarding';
+import { resolveStarterLibraryContext } from '@/lib/ai/starterLibraryContext';
 import type { ProjectPlanningGateDto, ProjectStateDto } from '@/lib/dto/projectState';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
@@ -208,6 +209,9 @@ export const projectStateService = {
 
     const code = await resolveCodeState(ctx);
     const repoSet = await projectRepoSetService.listByProject(project.id, ctx);
+    // The starter library (MOTIR-11041) — the SAME resolver the planning envelope
+    // calls, so this report and the hosted planner never read two libraries.
+    const starterLibrary = await resolveStarterLibraryContext();
     const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       migrateOnboardingRepository.findByProjectId(project.id, ctx.workspaceId, tx),
     );
@@ -231,6 +235,7 @@ export const projectStateService = {
       code,
       repoSet,
       onboarding: run ? toMigrateOnboardingDto(run) : null,
+      starterLibrary,
       contentLanguage,
     };
   },

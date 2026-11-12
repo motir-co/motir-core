@@ -109,6 +109,14 @@ export const seedRegistryService = {
     return (await seedRegistryEntryRepository.listAll()).map(toSeedRegistryEntryDto);
   },
 
+  /** Every ACTIVE entry, whole — the starter library a planner is handed
+   *  (Story MOTIR-10162 · MOTIR-11041). A retired entry is left out because
+   *  `resolveForEstablish` refuses one: a plan naming it could not be established.
+   *  ONE registry read; {@link starterByHostingTarget} is answered over it. */
+  async listActiveEntries(): Promise<SeedRegistryEntryDto[]> {
+    return (await seedRegistryEntryRepository.listActive()).map(toSeedRegistryEntryDto);
+  },
+
   /** One entry by its current or a legacy key. */
   async getByKey(key: string): Promise<SeedRegistryEntryDto> {
     const row = await seedRegistryEntryRepository.findByKeyOrLegacyKey(key);
@@ -178,7 +186,7 @@ export const seedRegistryService = {
 
   /** {@link seedSourceForHostingTarget} for EVERY target, over one registry read. */
   async starterByHostingTarget(): Promise<Record<HostingTarget, string>> {
-    const active = (await seedRegistryEntryRepository.listActive()).map(toSeedRegistryEntryDto);
+    const active = await seedRegistryService.listActiveEntries();
     return Object.fromEntries(
       HOSTING_TARGETS.map((target) => [
         target,

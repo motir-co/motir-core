@@ -486,6 +486,17 @@ export interface JobContextBag {
   // its own types against the shared contract. Optional in BOTH directions, so the
   // two repositories' halves merge in either order.
   repositories?: unknown;
+  // The STARTER LIBRARY (Story MOTIR-10162 · MOTIR-11041): every ACTIVE seed
+  // registry entry, as the whole `SeedRegistryEntryDto` — key, label, role,
+  // stack, template source, use cases, sizes, hosting targets — so the planner can
+  // judge which starter covers the base of a repository that does not exist yet.
+  // ⚠️ A SIBLING of `code` and `repositories`, deliberately NOT inside the
+  // repository unit: that unit is absent for a project that records no
+  // repositories, the very case a repository has to be created. ALWAYS SENT on a
+  // planning submit; `[]` is an answer (the registry holds no active entry),
+  // never "nobody asked". Built by `resolveStarterLibraryContext`. Loosely typed,
+  // like `repositories`: each side declares its own types against the contract.
+  starterLibrary?: unknown;
   // The bug-analysis unit an `analyze_bug` job carries — the user bug + its
   // plan-tree neighborhood the OUTWARD classifier reasons over, assembled by the
   // trigger (MOTIR-1481) and sent inline (see BugAnalysisContext above).
