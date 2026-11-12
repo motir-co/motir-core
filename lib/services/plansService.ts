@@ -10827,7 +10827,9 @@ async function afterApproveCommit(
   // settle hooks (`attachRealizedRepo`, `linkExistingRepo`) and the link that adopts
   // a repository. Those fire when a row settles; a repository a person created and
   // added BEFORE approving settled long before its waiters existed, and this phase
-  // is where they come into existence.
+  // is where they come into existence. The same holds for a LATER plan's card made
+  // to wait on an init card an earlier plan laid and that has already settled (Bug
+  // MOTIR-11093), so the step runs for either shape.
   //
   // This is approve's POST-COMMIT phase, not a transaction, and it is its LAST
   // step: the repository set was already proposed in `prepareApprove`, before the
