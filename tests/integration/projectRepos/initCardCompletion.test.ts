@@ -207,6 +207,18 @@ describe('establishSet completes the init card whose repository it establishes',
     expect(await stored(card.id)).toEqual(after);
     expect(write).not.toHaveBeenCalled();
   });
+  it('a cancelled init card stays cancelled when its repository is established later', async () => {
+    const card = await initCard('acme-infra', fx, 'cancelled');
+    await addRow('acme-infra');
+    const before = await stored(card.id);
+    const write = vi.spyOn(workItemsService, 'updateStatus');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(await stored(card.id)).toEqual(before);
+    expect(before.status).toBe('cancelled');
+    expect(write).not.toHaveBeenCalled();
+  });
 });
 
 describe('a row that is not established completes nothing — one state at a time', () => {

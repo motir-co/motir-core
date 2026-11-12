@@ -295,8 +295,9 @@ export const projectRepoProvisioningService = {
  * The match is the row's stored name against the declaration, case-insensitively,
  * inside the row's own project. The write is a STATUS only — through the shipped
  * status authority, attributed to the context the establish run was called with —
- * and a card already at the done status is skipped, so a retried establish
- * rewrites nothing. Every failure is caught and logged with the row id.
+ * and a card already in the project's done category (done OR cancelled) is
+ * skipped, so a retried establish rewrites nothing and a cancelled init card
+ * stays cancelled. Every failure is caught and logged with the row id.
  */
 async function completeInitCardsQuietly(
   projectId: string,
@@ -309,9 +310,18 @@ async function completeInitCardsQuietly(
   );
   if (established.length === 0) return;
   try {
-    const initCards = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.listOpenInitCardsByProject(projectId, tx),
-    );
+    const { cards, doneKeys } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+      cards: await workItemRepository.listOpenInitCardsByProject(projectId, tx),
+      // The project's OWN done category, never a list of keys: a card someone
+      // cancelled is finished work, and the workflow's `cancelled → todo` edge
+      // would otherwise walk it back to Done once its repository appears.
+      doneKeys: new Set(
+        (
+          await workflowsService.getStatusKeysByCategoryByProjects([projectId], ctx.workspaceId, tx)
+        ).get(projectId)?.done ?? [],
+      ),
+    }));
+    const initCards = cards.filter((c) => !doneKeys.has(c.status));
     if (initCards.length === 0) return;
     // The card walks Done's road along the workflow's declared edges — a jump
     // straight from `todo` to `done` is an illegal transition under the default
