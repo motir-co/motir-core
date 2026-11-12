@@ -32,6 +32,14 @@
   international platform (`api.moonshot.ai`, Kimi)**, transcribed from the legal
   card MOTIR-7356. The 2026-08-26 Moonshot rows (the `.cn` channel row and the
   _not established_ vendor row) are struck in place. No decision in §3 changes.
+- **AMENDED 2026-11-12 (MOTIR-11119, Story MOTIR-11116):** Qwen moves to a
+  **Global-scope US (Virginia)** Model Studio workspace, and its row becomes a
+  **Chapter V transfer under the SCCs** of the EEA DPA (§6, with the clauses §2
+  defines), with a dated transfer-impact note — see _Amended 2026-11-12
+  (MOTIR-11119): Alibaba Cloud Model Studio, US (Virginia), Global scope (Qwen)_
+  in §2. The 2026-10-02 Frankfurt row, the counter-example's _"the inference
+  never leaves the Union"_ and the _"EU-resident inference"_ sentence are struck
+  in place. No decision in §3 changes.
 
 > Convention per `work-item-type-taxonomy.md`: **Status → Context → Decision →
 > Consequences**, load-bearing facts pinned in explicit tables.
@@ -119,10 +127,21 @@ correcting them would leave the same inference for the next reader.
    users**. **None restricts a European company from calling the API.**
 
 **The counter-example:** **Alibaba Cloud** serves Qwen from Model Studio's
-**Frankfurt** region, under an EEA DPA that incorporates the SCCs. It is a Chinese
-company with a stronger transfer position than any US provider on the list,
-because the inference never leaves the Union. Any reasoning that concludes
-_"Chinese vendor ⇒ retire"_ fails on that row.
+~~**Frankfurt** region~~ **US (Virginia) region, Global scope** (2026-11-12),
+under an EEA DPA that incorporates the SCCs. ~~It is a Chinese company with a
+stronger transfer position than any US provider on the list, because the
+inference never leaves the Union.~~ Any reasoning that concludes _"Chinese
+vendor ⇒ retire"_ fails on that row.
+
+> **Corrected 2026-11-12 (MOTIR-11119):** Qwen is now served from a
+> **Global-scope US (Virginia)** workspace, whose inference may run on _"any
+> available node, including Chinese mainland and overseas"_, so the struck claim
+> that the inference never leaves the Union is no longer true. **The
+> counter-example's argument still holds:** Art. 46 SCCs reach ANY third country,
+> and Alibaba's EEA DPA commits it to them for transfers out of the EEA (§6), so a
+> Chinese vendor with a processing agreement and the SCCs carries a basis that a
+> vendor with neither does not. See _Amended 2026-11-12 (MOTIR-11119): Alibaba
+> Cloud Model Studio, US (Virginia), Global scope (Qwen)_ in §2.
 
 ### Who reaches DeepSeek
 
@@ -323,10 +342,10 @@ exporter). A **basis** is two recorded facts, an Art. 28 agreement AND an Art.
 46/45 mechanism (`motir-gateway` `motir/residency/residency.go`), and the verdict
 column is that card's verdict, unparaphrased.
 
-| Upstream                                                   | Vendor and jurisdiction                                                                                                                                              | Endpoint                                                     | Art. 28 instrument                                                                                                                                                                                                                                  | Chapter V mechanism                                                                                                                                                                                                                             | Filed at                                                                  | Verdict                                                       | Read on    |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------- |
-| **Z.ai (GLM)**                                             | JINGSHENG HENGXING TECHNOLOGY PTE.LTD (Z.ai), **Singapore**                                                                                                          | `https://api.z.ai`                                           | _"Data Processing Addendum for API Services"_, inside the Z.ai Privacy Policy (last updated 2025-09-29), incorporated into the Additional Terms for API Services §2(a); accepted by use on 2026-10-02 by Zhu Yue (Google sign-in, no click-through) | **NONE.** DPA §3(b) says only _"legally recognized transfer mechanisms"_; no SCCs are named, and Singapore has no adequacy decision                                                                                                             | `https://docs.z.ai/legal-agreement/privacy-policy`                        | **no basis — served in default only, outside transfer-basis** | 2026-10-02 |
-| **Alibaba Cloud Model Studio, Germany (Frankfurt) (Qwen)** | Intelligent Cloud Computing (Singapore) Private Limited (Alibaba Cloud international edition, `alibabacloud.com`; entity as shown in the account console), Singapore | `https://ws-tpooed538vl85iw2.eu-central-1.maas.aliyuncs.com` | _"EEA Data Processing Addendum"_ (last updated 2023-08-02), which _"forms part of Your Membership Agreement"_ (§1); accepted on 2026-10-02 by Zhu Yue at account registration                                                                       | **No transfer — EU-resident.** Workspace `235341` in `eu-central-1` with deployment scope **EU** (_"Service deployment scope: Determines the inference execution location"_); the DPA's §2 references the 2021/914 SCCs for any onward transfer | the Alibaba Cloud account; `alibabacloud.com/help/en/legal/latest/ae8upq` | **basis recorded**                                            | 2026-10-02 |
+| Upstream                                                       | Vendor and jurisdiction                                                                                                                                                  | Endpoint                                                         | Art. 28 instrument                                                                                                                                                                                                                                  | Chapter V mechanism                                                                                                                                                                                                                                 | Filed at                                                                      | Verdict                                                       | Read on                                                                                                                                                                                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Z.ai (GLM)**                                                 | JINGSHENG HENGXING TECHNOLOGY PTE.LTD (Z.ai), **Singapore**                                                                                                              | `https://api.z.ai`                                               | _"Data Processing Addendum for API Services"_, inside the Z.ai Privacy Policy (last updated 2025-09-29), incorporated into the Additional Terms for API Services §2(a); accepted by use on 2026-10-02 by Zhu Yue (Google sign-in, no click-through) | **NONE.** DPA §3(b) says only _"legally recognized transfer mechanisms"_; no SCCs are named, and Singapore has no adequacy decision                                                                                                                 | `https://docs.z.ai/legal-agreement/privacy-policy`                            | **no basis — served in default only, outside transfer-basis** | 2026-10-02                                                                                                                                                                                                              |
+| ~~**Alibaba Cloud Model Studio, Germany (Frankfurt) (Qwen)**~~ | ~~Intelligent Cloud Computing (Singapore) Private Limited (Alibaba Cloud international edition, `alibabacloud.com`; entity as shown in the account console), Singapore~~ | ~~`https://ws-tpooed538vl85iw2.eu-central-1.maas.aliyuncs.com`~~ | ~~_"EEA Data Processing Addendum"_ (last updated 2023-08-02), which _"forms part of Your Membership Agreement"_ (§1); accepted on 2026-10-02 by Zhu Yue at account registration~~                                                                   | ~~**No transfer — EU-resident.** Workspace `235341` in `eu-central-1` with deployment scope **EU** (_"Service deployment scope: Determines the inference execution location"_); the DPA's §2 references the 2021/914 SCCs for any onward transfer~~ | ~~the Alibaba Cloud account; `alibabacloud.com/help/en/legal/latest/ae8upq`~~ | ~~**basis recorded**~~                                        | ~~2026-10-02~~ **Struck 2026-11-12 (MOTIR-11119):** Qwen moves to a Global-scope US (Virginia) workspace — see _Amended 2026-11-12 (MOTIR-11119): Alibaba Cloud Model Studio, US (Virginia), Global scope (Qwen)_ below |
 
 **Corrected 2026-10-02 (MOTIR-7198):** the Qwen endpoint was first recorded
 as `https://235341.eu-central-1.maas.aliyuncs.com`, built from the console's
@@ -353,11 +372,19 @@ Training and retention, as each vendor's international documents state them
   Motir can use. `api.z.ai` is the international platform moooon B.V. holds an
   account on, and the platform this row reads.
 - **Alibaba:** the account is on `alibabacloud.com` (international), not
-  `aliyun.com`, and the endpoint is the Frankfurt workspace URL in the form
+  `aliyun.com`, and the endpoint is ~~the Frankfurt workspace URL in the form
   Alibaba's _Regions and endpoints_ page gives
   (`https://<WorkspaceId>.eu-central-1.maas.aliyuncs.com`,
   `alibabacloud.com/help/en/model-studio/regions`). That is the EU-resident
-  inference the public subprocessor page already promises.
+  inference the public subprocessor page already promises.~~
+  **Corrected 2026-11-12 (MOTIR-11119):** the US (Virginia) workspace URL in the
+  form Alibaba's _US (Virginia) — Global_ page gives
+  (`https://<WorkspaceId>.us-east-1.maas.aliyuncs.com`,
+  `alibabacloud.com/help/en/model-studio/usa-virginia-global`), a `us-east-1`
+  host and no longer `eu-central-1`, and still never `aliyun.com` or
+  `dashscope.aliyuncs.com`. Its deployment scope is **Global**, so the inference
+  is no longer EU-resident: it is a Chapter V transfer, recorded in _Amended
+  2026-11-12 (MOTIR-11119)_ below.
 
 **What each verdict means for routing.** **Z.ai's _no basis_ does not switch
 GLM off.** The channel is **served**: enabled in the gateway's `default` group
@@ -415,6 +442,115 @@ excludes it per request.
 **Who reaches it.** **The hosted planner**, when a caller asks for a Kimi model,
 and **hosted agent runs**, when a person picks a Kimi model for a run or a
 project's per-level default names one (`hosted-agent-run.md` §7).
+
+### Amended 2026-11-12 (MOTIR-11119): Alibaba Cloud Model Studio, US (Virginia), Global scope (Qwen)
+
+Qwen leaves the EU-scope Frankfurt workspace for a **new** Model Studio workspace
+in **US (Virginia)**, created with deployment scope **Global** (Story
+MOTIR-11116). Alibaba fixes a workspace's scope when it is created, so the
+Frankfurt row above could not be amended into this one: it is struck, and this
+row replaces it. The workspace facts are transcribed from the precondition card
+**MOTIR-11117** (read 2026-11-12); the Art. 28 instrument and its acceptance are
+**MOTIR-7192**'s reading; the transfer clause was re-read on 2026-11-12. The
+exporter is moooon B.V., controller for the hosted service.
+
+| Upstream                                                           | Vendor and jurisdiction                                                                                                                                                                                                                                                                                                                              | Endpoint                                                  | Art. 28 instrument                                                                                                                                                            | Chapter V mechanism                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Filed at                                                                                                                               | Verdict            | Read on                                                                                   |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------- |
+| **Alibaba Cloud Model Studio, US (Virginia), Global scope (Qwen)** | Alibaba Cloud international edition (`alibabacloud.com`), a Chinese group. Counterparty as shown in the account console: Intelligent Cloud Computing (Singapore) Private Limited, Singapore (MOTIR-7192). Data stored in the **United States** (Virginia, `us-east-1`); inference on _"any available node, including Chinese mainland and overseas"_ | `https://ws-a6i8uqg4jvoubhf3.us-east-1.maas.aliyuncs.com` | _"EEA Data Processing Addendum"_ (last updated 2023-08-02), which _"forms part of Your Membership Agreement"_ (§1); accepted on 2026-10-02 by Zhu Yue at account registration | **The Standard Contractual Clauses.** DPA §6 _International transfers_: _"If the processing of Data involves transfers out of the EEA, Alibaba Cloud will take such measures as are necessary to ensure the transfer is in compliance with applicable Data Protection Legislation"_, including a transfer _"to a recipient that has executed Standard Contractual Clauses together with any supplementary measures that may be necessary"_. DPA §2 defines those clauses as _"the standard contractual clauses annexed to the European Commission's Implementing Decision 2021/914/EU of 4 June 2021"_. Workspace `ws-a6i8uqg4jvoubhf3`, deployment scope **Global** (console read-back, verbatim: `Global`) | the Alibaba Cloud account; `alibabacloud.com/help/en/legal/latest/ae8upq`; `alibabacloud.com/help/en/model-studio/usa-virginia-global` | **basis recorded** | 2026-11-12 (the _US (Virginia) — Global_ page, last updated 2026-10-13; the DPA, re-read) |
+
+**Why §6 and not §2.** §2 only DEFINES the Standard Contractual Clauses; it
+commits Alibaba to nothing. §6 is the operative clause, and it offers three
+routes: an adequacy decision, binding corporate rules, or the SCCs. The People's
+Republic of China has no adequacy decision, so the route this row names is the
+SCC route of §6, with §2 cited for what those clauses are. The 2026-10-02 row's
+_"the DPA's §2 references the 2021/914 SCCs"_ described the same document; this
+row states which clause binds.
+
+**What has not changed.** The account, the DPA and its acceptance, and the
+training and retention statements above (_"never uses your data for model
+training"_; retention of API calls not stated) are the vendor's and stand as
+read. The verdict stays **basis recorded** — an Art. 28 agreement AND an Art. 46
+mechanism — so Qwen's channel stays in both `default` and `transfer-basis`
+(`motir-gateway` `motir/catalog/channel-groups.sh`, `QWEN_GROUPS="default,transfer-basis"`,
+read on `main` at `b3c4c00`).
+
+#### Transfer-impact note — dated 2026-11-12
+
+Recorded by moooon B.V. as exporter before any customer request is routed to the
+Global-scope workspace. Every fact below is taken from the source named beside
+it, on the date given; where a document is silent, this note says so instead of
+filling the gap.
+
+1. **Where the data goes.** Alibaba's _US (Virginia) — Global_ page (last updated
+   2026-10-13, read 2026-11-12): _"The application sends a request to the
+   selected region through the endpoint, and the request data is stored in that
+   region. The access region forwards the request to an inference node within
+   the service deployment scope for computation. Transmission is encrypted
+   end-to-end. The inference result returns to the access region for storage and
+   is then returned to the application. User static data is always stored in the
+   selected region."_ For US (Virginia) the Global scope is _"Global (any
+   available node, including Chinese mainland and overseas)"_. So request and
+   static user data are **stored in the United States (Virginia)**, and
+   **inference may run in mainland China or another country outside the EEA**.
+   Both are third countries.
+2. **Adequacy.** The People's Republic of China has **no EU adequacy decision**.
+   The United States' adequacy decision (the EU-U.S. Data Privacy Framework)
+   covers **only organisations certified under it**. Read 2026-11-12 from the
+   DPF List (`dataprivacyframework.gov/list`, the participant record behind it):
+   **Alibaba Cloud US LLC** (Dover, Delaware; covered entity _Alibaba Cloud LLC_)
+   holds an **Active EU-U.S. certification for non-HR data**, first certified
+   2018-03-12, with a record end date of 2027-02-02. **That certification is not
+   relied on here**, for a reason the documents themselves give:
+   - the **EEA DPA names no Alibaba entity** — it says only _"Alibaba Cloud"_,
+     with terms defined by the Membership Agreement;
+   - the **Membership Agreement** (last updated 2026-09-10, read 2026-11-12)
+     chooses the contracting entity by the customer's **billing address**, not by
+     region: _"your billing address is an address within European Economic Area,
+     you are contracting with Alibaba (Netherlands) B.V."_, and
+     _"Alibaba Cloud US LLC"_ only for a billing address in the United States;
+   - the **account console** names Intelligent Cloud Computing (Singapore)
+     Private Limited as moooon B.V.'s counterparty (MOTIR-7192, 2026-10-02) —
+     which differs from the agreement's EEA mapping, and is recorded as read
+     rather than reconciled here (counsel review is MOTIR-3621's);
+   - **no document read says which Alibaba entity operates or stores data in
+     US (Virginia)**.
+
+   So it is not established that the recipient in the United States is the
+   DPF-certified entity, and **the US storage rests on the SCCs as well**, the
+   same as the inference outside the EEA.
+
+3. **Supplementary measures that actually exist**, each with its source:
+   - **Encryption in transit.** The gateway calls the workspace over `https://`
+     (TLS) — the endpoint in the row above. Between Alibaba's access region and
+     the inference node, Alibaba's page states _"Transmission is encrypted
+     end-to-end"_ (read 2026-11-12); it does not name the protocol.
+   - **No training.** _"never uses your data for model training"_ (Model Studio
+     FAQ, read 2026-10-02 by MOTIR-7192); re-read 2026-11-12 on the Model Studio
+     _Security certifications and privacy_ page (last updated 2026-10-11) as
+     _"will never use your data for model training"_.
+   - **Retention is not stated.** The same page says Model Studio
+     _"stores data generated from model and application calls"_ and gives **no
+     period** (read 2026-11-12). Silence is not a commitment, and this note does
+     not read one into it.
+   - **A per-request exclusion.** Under this record's data policy (the amendment
+     at the top), a caller may exclude Qwen on any request. Read from
+     `motir-gateway` `motir/datapolicy/datapolicy.go` on `main` at `b3c4c00`:
+     the Qwen channel is declared `TrainingNo` and `RetentionUnknown`, so
+     **`X-Motir-Data-Policy: zero-retention` excludes it** (unknown retention
+     fails closed) and `must-not-train` does not. A caller who will not accept a
+     transfer outside the EEA does not pick a Qwen model.
+4. **Conclusion of the controller.** The transfer proceeds under the **SCCs**
+   that Alibaba's EEA DPA §6 commits it to, with the measures in point 3. This
+   note asserts no fact about mainland-Chinese public-authority access, Alibaba's
+   internal sub-processors, or the US entity's role beyond what is quoted above:
+   none of the documents read states them. Counsel review of this note is
+   **MOTIR-3621**'s, as for the rest of this record.
+
+**Who reaches it.** Unchanged from the 2026-10-02 row: **the hosted planner**,
+when a caller asks for a Qwen model, and **hosted agent runs**, when a person
+picks one for a run or a project's per-level default names one
+(`hosted-agent-run.md` §7). Customer requests reach this workspace only after
+the live cut-over (MOTIR-11121), which waits on this story.
 
 ---
 
