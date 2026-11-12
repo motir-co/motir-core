@@ -1,7 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 import { MONITORING_TUNNEL_ROUTE } from '@/lib/monitoring/config';
 import {
   dropExpectedDomainErrors,
@@ -42,6 +45,58 @@ function releaseBuild(): string {
   const next = /\n {6}- (?:name|uses|run):/.exec(rest.slice(1));
   return next ? rest.slice(0, next.index + 1) : rest;
 }
+
+/** The release build's `secrets:` block alone — the lines indented under it. */
+function buildSecrets(): string {
+  const block = /^( *)secrets: \|\n((?:\1 {2}.*\n)*)/m.exec(releaseBuild());
+  expect(block, 'the release build declares secrets').not.toBeNull();
+  return block![2]!;
+}
+
+interface Step {
+  name?: string;
+  run?: string;
+  if?: string;
+  env?: Record<string, string>;
+}
+const deploySteps = (parse(awsDeploy) as { jobs: { 'aws-deploy': { steps: Step[] } } }).jobs[
+  'aws-deploy'
+].steps;
+
+/** One step of the release job, by name. */
+function awsStep(name: string): Step {
+  const step = deploySteps.find((s) => s.name === name);
+  expect(step, `aws-deploy.yml has a step named "${name}"`).toBeDefined();
+  return step!;
+}
+
+/**
+ * Runs a step's script the way the runner does (`bash -e`), with only the
+ * environment given — the secrets the step maps in, set or empty — and an
+ * optional directory put first on PATH for stubbed commands.
+ */
+function runStep(step: Step, env: Record<string, string>, binDir?: string) {
+  const summary = join(mkdtempSync(join(tmpdir(), 'aws-deploy-step-')), 'summary.md');
+  const result = spawnSync('bash', ['-e', '-c', step.run!], {
+    env: {
+      NODE_ENV: 'test',
+      PATH: binDir ? `${binDir}:${process.env['PATH']}` : process.env['PATH'],
+      GITHUB_SHA: 'a'.repeat(40),
+      GITHUB_STEP_SUMMARY: summary,
+      ...env,
+    },
+    encoding: 'utf8',
+  });
+  return { status: result.status, out: `${result.stdout}${result.stderr}`, summary };
+}
+
+const MONITORING_SECRETS = [
+  'NEXT_PUBLIC_SENTRY_DSN',
+  'SENTRY_AUTH_TOKEN',
+  'SENTRY_ORG',
+  'SENTRY_PROJECT',
+] as const;
+const ALL_SET = Object.fromEntries(MONITORING_SECRETS.map((n) => [n, `value-of-${n}`]));
 
 /** The release build's `build-args:` block alone — the lines indented under it. */
 function buildArgs(): string {
@@ -124,6 +179,19 @@ describe('the BUILD-ARGUMENT seam exists, because a NEXT_PUBLIC_* value cannot b
     expect(build).toMatch(/^\s*MOTIR_RELEASE=\$\{\{ github\.sha \}\}$/m);
   });
 
+  it('passes the Sentry org and project, which turn the source-map upload on', () => {
+    // `next.config.ts` hands `withSentryConfig` these and the token; with any of
+    // them missing the upload is a no-op that errors nowhere (MOTIR-11059).
+    expect(buildArgs()).toMatch(/^\s*SENTRY_ORG=\$\{\{ secrets\.SENTRY_ORG \}\}$/m);
+    expect(buildArgs()).toMatch(/^\s*SENTRY_PROJECT=\$\{\{ secrets\.SENTRY_PROJECT \}\}$/m);
+  });
+
+  it('carries the AUTH TOKEN as a BuildKit SECRET, the id the Dockerfile mounts', () => {
+    expect(buildSecrets()).toMatch(
+      /^\s*SENTRY_AUTH_TOKEN=\$\{\{ secrets\.SENTRY_AUTH_TOKEN \}\}$/m,
+    );
+  });
+
   it('never carries the AUTH TOKEN as a build argument', () => {
     // A build argument is recorded in the build's own metadata. The distinction
     // is the whole reason the token is the one value that does not appear in the
@@ -131,6 +199,93 @@ describe('the BUILD-ARGUMENT seam exists, because a NEXT_PUBLIC_* value cannot b
     expect(buildArgs()).not.toContain('SENTRY_AUTH_TOKEN');
     expect(dockerfile).toContain('--mount=type=secret,id=SENTRY_AUTH_TOKEN');
     expect(dockerfile).not.toMatch(/^ARG SENTRY_AUTH_TOKEN/m);
+  });
+});
+
+describe('the release lane refuses to ship an unmonitored release (MOTIR-11059)', () => {
+  const guard = () => awsStep('Assert the monitoring build-time secrets are present');
+
+  it('maps every monitoring secret into the guard from the repository secrets', () => {
+    for (const name of MONITORING_SECRETS) {
+      expect(guard().env?.[name]).toBe(`\${{ secrets.${name} }}`);
+    }
+  });
+
+  it('passes when all four are set', () => {
+    const { status, out } = runStep(guard(), ALL_SET);
+    expect(out).toContain('all four monitoring build-time secrets are present');
+    expect(status).toBe(0);
+  });
+
+  it.each(MONITORING_SECRETS)('refuses, naming it, when %s is empty', (name) => {
+    // An unset secret degrades monitoring silently — an empty DSN builds a
+    // bundle that reports nothing, an empty token ships unreadable stack traces.
+    const { status, out } = runStep(guard(), { ...ALL_SET, [name]: '' });
+    expect(status).toBe(1);
+    expect(out).toContain(`::error::Missing monitoring secret(s): ${name} `);
+  });
+
+  it('names every missing secret at once', () => {
+    const { status, out } = runStep(guard(), {});
+    expect(status).toBe(1);
+    expect(out).toContain(`Missing monitoring secret(s): ${MONITORING_SECRETS.join(' ')} `);
+  });
+});
+
+describe('the release lane proves the source-map upload RAN (MOTIR-11059)', () => {
+  // The card's own warning: `outputFileTracingExcludes` is a live example of a
+  // `next.config` key this build never reads (MOTIR-2403), so "configured" is
+  // not evidence. The release existing in Sentry is, because the SDK's
+  // Turbopack path creates it inside the same after-compile hook that uploads
+  // the maps.
+  const check = () => awsStep('Assert Sentry received this release');
+
+  /** A `curl` stand-in that records its arguments and answers `code`. */
+  function fakeCurl(code: string, exit = 0): { bin: string; argsFile: string } {
+    const bin = mkdtempSync(join(tmpdir(), 'fake-curl-'));
+    const argsFile = join(bin, 'args');
+    writeFileSync(
+      join(bin, 'curl'),
+      `#!/usr/bin/env bash\nprintf '%s\\n' "$@" > ${JSON.stringify(argsFile)}\n` +
+        `out=""; while [ $# -gt 0 ]; do [ "$1" = -o ] && out="$2"; shift; done\n` +
+        `[ -n "$out" ] && echo '{"version":"sha"}' > "$out"\nprintf '%s' ${code}\nexit ${exit}\n`,
+    );
+    chmodSync(join(bin, 'curl'), 0o755);
+    return { bin, argsFile };
+  }
+
+  it('reads the token, org and project from the repository secrets', () => {
+    for (const name of ['SENTRY_AUTH_TOKEN', 'SENTRY_ORG', 'SENTRY_PROJECT']) {
+      expect(check().env?.[name]).toBe(`\${{ secrets.${name} }}`);
+    }
+  });
+
+  it('asks Sentry for the release named after this commit, with the token, and passes on 200', () => {
+    const { bin, argsFile } = fakeCurl('200');
+    const { status, out, summary } = runStep(check(), ALL_SET, bin);
+    expect(status).toBe(0);
+    const args = readFileSync(argsFile, 'utf8');
+    expect(args).toContain(
+      `https://sentry.io/api/0/projects/value-of-SENTRY_ORG/value-of-SENTRY_PROJECT/releases/${'a'.repeat(40)}/`,
+    );
+    expect(args).toContain('Authorization: Bearer value-of-SENTRY_AUTH_TOKEN');
+    expect(out).toContain('→ HTTP 200');
+    expect(readFileSync(summary, 'utf8')).toContain(`Sentry release: \`${'a'.repeat(40)}\``);
+  });
+
+  it.each(['404', '401'])('turns the run red when Sentry answers %s', (code) => {
+    const { bin } = fakeCurl(code);
+    const { status, out } = runStep(check(), ALL_SET, bin);
+    expect(status).toBe(1);
+    expect(out).toContain(`::error::Sentry has no release named ${'a'.repeat(40)}`);
+  });
+
+  it('turns the run red, rather than erroring out unexplained, when Sentry cannot be reached', () => {
+    const { bin } = fakeCurl('000', 7);
+    const { status, out } = runStep(check(), ALL_SET, bin);
+    expect(status).toBe(1);
+    expect(out).toContain('→ HTTP 000');
+    expect(out).toContain('::error::Sentry has no release named');
   });
 });
 

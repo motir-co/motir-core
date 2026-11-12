@@ -9,14 +9,41 @@ migrate task, rolls web, worker and relay, and records the digest in
 `/<prefix>/core/image-digest` only when every service has completed. Any
 failure leaves the previous tasks serving.
 
-## Independent of the Fly deploy
+## The one release lane, and its guards
 
-The workflow is independent of the Fly deploy, which is the `deploy` job of
-`ci.yml`. It is a separate workflow with no `needs`, `workflow_run` or shared
-job, so an AWS failure turns only its own run red and never blocks or rolls
-back Fly, and a Fly failure never blocks AWS. Both deploy the same `main`
-commit. The AWS image is a second build of that commit; only the Fly build
-uploads source maps to Sentry.
+This workflow is Motir's only release lane: the Fly `deploy` job of `ci.yml`
+was retired by MOTIR-10935. It shares no job with `ci.yml`, waits on nothing in
+it and is not triggered by it.
+
+It carries the release guards that job carried (MOTIR-11059):
+
+- **It refuses to build without its monitoring secrets.** The first step fails
+  the run with `Missing monitoring secret(s)` when `NEXT_PUBLIC_SENTRY_DSN`,
+  `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` or `SENTRY_PROJECT` is empty, before any AWS
+  session: an empty DSN builds a browser bundle that reports nothing, and an
+  empty token ships stack traces nobody can read.
+- **It refuses to build without the Server Action salt.** The next step fails
+  with `Missing NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` when that secret is empty,
+  because a build without it re-salts every Server Action id and every tab open
+  across the release loses its writes (MOTIR-3948).
+- **The image build uploads source maps.** `SENTRY_ORG`, `SENTRY_PROJECT`, the
+  browser DSN and `MOTIR_RELEASE` (the commit SHA) go in as build arguments;
+  `SENTRY_AUTH_TOKEN` and the salt go in as BuildKit secrets, which the
+  `Dockerfile` mounts for `next build` alone.
+- **It proves the upload ran.** The last step reads
+  `GET /api/0/projects/<org>/<project>/releases/<sha>/` from Sentry and turns
+  the run red when it is not `200`. It runs after the roll, so an outage of
+  Sentry's API never holds a release back.
+
+## Repository secrets
+
+| Secret                               | Used for                                                       |
+| ------------------------------------ | -------------------------------------------------------------- |
+| `NEXT_PUBLIC_SENTRY_DSN`             | The browser DSN, inlined into the client bundle at build time. |
+| `SENTRY_AUTH_TOKEN`                  | The source-map upload, and the release check.                  |
+| `SENTRY_ORG`                         | The Sentry organisation slug the maps are uploaded to.         |
+| `SENTRY_PROJECT`                     | The Sentry project slug the maps are uploaded to.              |
+| `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | The Server Action salt. It must never change once set.         |
 
 ## Repository variables
 

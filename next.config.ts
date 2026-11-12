@@ -338,12 +338,12 @@ const canUploadSourceMaps = Boolean(process.env['SENTRY_AUTH_TOKEN']?.trim());
  *
  * So the inert-key trap does not apply, and the evidence is a log line rather
  * than a reading: a build with a token prints
- * `Successfully uploaded source maps to Sentry` at info level. `ci.yml`'s deploy
- * step greps the deploy output for exactly that and FAILS the release if a
- * token was supplied and the line is absent — the same "fail loudly rather than
- * quietly stop mattering" shape the Dockerfile's standalone assertion uses,
- * and the reason this card's "demonstrated to have RUN" criterion keeps holding
- * after today.
+ * `Successfully uploaded source maps to Sentry` at info level, and the same hook
+ * creates the Sentry release named after the commit. `aws-deploy.yml`'s last
+ * step asks Sentry for that release and turns the deploy red when it is absent
+ * (MOTIR-11059) — the same "fail loudly rather than quietly stop mattering"
+ * shape the Dockerfile's standalone assertion uses, and the reason this card's
+ * "demonstrated to have RUN" criterion keeps holding after today.
  */
 export default withSentryConfig(withNextIntl(nextConfig), {
   // Read from the Actions secrets at image-build time; unset locally and in a
