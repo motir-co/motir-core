@@ -10769,6 +10769,7 @@
       "navServices": "Services",
       "navCapacity": "Providercapaciteit",
       "navJobs": "Taken",
+      "navCredentials": "Inloggegevens",
       "navStarters": "Starters",
       "navFleetStatus": "Vlootstatus"
     },
@@ -13891,6 +13892,76 @@
         "title": "Niets wachtend",
         "body": "Geen enkele taak heeft zijn pogingen opgebruikt. Dead letters verschijnen hier zodra dat gebeurt."
       }
+    },
+    "credentials": {
+      "breadcrumb": "Platform · Inloggegevens",
+      "title": "Inloggegevens",
+      "subtitle": "De platforminloggegevens waarvan het verlopen onopgemerkt zou blijven, en de dag waarop elk verloopt, beoordeeld bij het openen van deze pagina zoals de dagelijkse statuscontrole ze beoordeelt. Alleen namen: een waarde wordt nooit getoond.",
+      "checkedAt": "Gecontroleerd om {time} UTC · {date}",
+      "checkFailedAt": "Controle mislukt om {time} UTC · {date}",
+      "card": {
+        "title": "Opgegeven vervaldatums van inloggegevens",
+        "subtitle": "Alle inloggegevens in het register, beoordeeld zoals de dagelijkse statuscontrole dat doet"
+      },
+      "overall": {
+        "expired": "Verlopen · de dagelijkse controle faalt",
+        "expiring": "Verloopt binnenkort · de dagelijkse controle faalt",
+        "ok": "Geen binnen de waarschuwingstermijn",
+        "noneSet": "Niets gecontroleerd",
+        "empty": "Niets geregistreerd",
+        "notChecked": "Niet gecontroleerd",
+        "notCheckedLabel": "Inloggegevens niet gecontroleerd: het register kon niet worden gelezen"
+      },
+      "count": {
+        "expired": "Verlopen",
+        "expiring": "Verlopen binnenkort",
+        "expiringSub": "binnen de waarschuwingstermijn",
+        "notSet": "Niet ingesteld",
+        "notSetSub": "hier niet gecontroleerd",
+        "healthy": "In orde"
+      },
+      "rule": "Elke datum is opgegeven door wie het token heeft aangemaakt en niet bij de uitgever gelezen, dus een datum is zo goed als zijn bron.",
+      "table": {
+        "caption": "Geregistreerde inloggegevens: eerst verlopen, dan binnenkort verlopend, niet ingesteld en in orde; de eerste vervaldatum eerst"
+      },
+      "col": {
+        "credential": "Inloggegevens",
+        "expires": "Verloopt",
+        "daysLeft": "Resterende dagen",
+        "verdict": "Oordeel",
+        "renewal": "Verlenging en bron"
+      },
+      "phone": {
+        "renewal": "Verlenging",
+        "source": "Bron",
+        "listLabel": "Geregistreerde inloggegevens"
+      },
+      "source": "Bron",
+      "verdict": {
+        "healthy": "In orde",
+        "expiring": "Verloopt binnenkort",
+        "expired": "Verlopen",
+        "notSet": "Niet ingesteld"
+      },
+      "days": {
+        "healthy": "{days, plural, one {# dag} other {# dagen}}",
+        "warnsFrom": "waarschuwt vanaf {date}",
+        "expiring": "{days, plural, =0 {Minder dan een dag over} one {Nog # dag} other {Nog # dagen}}",
+        "insideLead": "binnen de waarschuwingstermijn van {lead} dagen",
+        "expired": "{days, plural, =0 {Vandaag verlopen} one {# dag geleden verlopen} other {# dagen geleden verlopen}}",
+        "stillSet": "nog ingesteld, dus nog in gebruik",
+        "notChecked": "Niet gecontroleerd",
+        "notSetHere": "variabele hier niet ingesteld"
+      },
+      "empty": {
+        "title": "Er zijn geen inloggegevens geregistreerd",
+        "body": "De dagelijkse statuscontrole bewaakt het verlopen van geen enkel inloggegeven. Dat betekent niet dat alles in orde is: verlopende inloggegevens worden pas bewaakt zodra het werkitem dat ze introduceert ze toevoegt aan <mono>lib/health/credentialRegistry.ts</mono>."
+      },
+      "error": {
+        "title": "Het register kon niet worden gecontroleerd",
+        "body": "<mono>{message}</mono>. Er worden geen inloggegevens getoond, omdat een lijst waarin een item ontbreekt compleet zou lijken. Corrigeer <mono>expiresAt</mono> van dat item in <mono>lib/health/credentialRegistry.ts</mono> en implementeer; de dagelijkse statuscontrole stopt bij hetzelfde item."
+      },
+      "footer": "Alleen-lezen. Inloggegevens die nooit verlopen worden niet geregistreerd en staan hier dus niet: de <link>inventaris van inloggegevens</link> vermeldt alle inloggegevens die Motir beheert. Elke verlenging is een eigen handmatig werkitem."
     },
     "starters": {
       "breadcrumb": "Beheer · Starters",

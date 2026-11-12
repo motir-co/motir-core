@@ -10766,6 +10766,7 @@
       "navServices": "サービス",
       "navCapacity": "プロバイダーの容量",
       "navJobs": "ジョブ",
+      "navCredentials": "認証情報",
       "navStarters": "スターター",
       "navFleetStatus": "フリート状況"
     },
@@ -13888,6 +13889,76 @@
         "title": "待機中のものはありません",
         "body": "試行回数を使い切ったジョブはありません。使い切るとここにデッドレターが表示されます。"
       }
+    },
+    "credentials": {
+      "breadcrumb": "プラットフォーム · 認証情報",
+      "title": "認証情報",
+      "subtitle": "期限切れになっても気づかれないプラットフォームの認証情報と、それぞれの有効期限です。このページを開いたときに、毎日のヘルスチェックと同じ基準で判定します。名前のみを表示し、値は表示しません。",
+      "checkedAt": "{date} {time} UTC に確認",
+      "checkFailedAt": "{date} {time} UTC に確認に失敗",
+      "card": {
+        "title": "宣言された認証情報の有効期限",
+        "subtitle": "レジストリ内のすべての認証情報を、毎日のヘルスチェックと同じ基準で判定"
+      },
+      "overall": {
+        "expired": "期限切れ · 毎日のチェックが失敗します",
+        "expiring": "期限間近 · 毎日のチェックが失敗します",
+        "ok": "警告期間内のものはありません",
+        "noneSet": "確認対象なし",
+        "empty": "登録なし",
+        "notChecked": "未確認",
+        "notCheckedLabel": "認証情報は未確認です。レジストリを読み取れませんでした"
+      },
+      "count": {
+        "expired": "期限切れ",
+        "expiring": "期限間近",
+        "expiringSub": "警告期間内",
+        "notSet": "未設定",
+        "notSetSub": "この環境では未確認",
+        "healthy": "正常"
+      },
+      "rule": "各日付はトークンを発行した人が宣言したもので、発行元から読み取ったものではありません。そのため日付の正確さは出典次第です。",
+      "table": {
+        "caption": "登録済みの認証情報。期限切れ、期限間近、未設定、正常の順で、各グループ内は有効期限が近い順"
+      },
+      "col": {
+        "credential": "認証情報",
+        "expires": "有効期限",
+        "daysLeft": "残り日数",
+        "verdict": "判定",
+        "renewal": "更新方法と出典"
+      },
+      "phone": {
+        "renewal": "更新方法",
+        "source": "出典",
+        "listLabel": "登録済みの認証情報"
+      },
+      "source": "出典",
+      "verdict": {
+        "healthy": "正常",
+        "expiring": "期限間近",
+        "expired": "期限切れ",
+        "notSet": "未設定"
+      },
+      "days": {
+        "healthy": "{days, plural, other {# 日}}",
+        "warnsFrom": "{date} から警告",
+        "expiring": "{days, plural, =0 {残り 1 日未満} other {残り # 日}}",
+        "insideLead": "{lead} 日間の警告期間内",
+        "expired": "{days, plural, =0 {本日期限切れ} other {# 日前に期限切れ}}",
+        "stillSet": "まだ設定されているため使用中です",
+        "notChecked": "未確認",
+        "notSetHere": "この環境では変数が未設定"
+      },
+      "empty": {
+        "title": "登録された認証情報はありません",
+        "body": "毎日のヘルスチェックは、どの認証情報の有効期限も監視していません。これは問題がないという意味ではありません。期限のある認証情報は、それを導入する作業項目が <mono>lib/health/credentialRegistry.ts</mono> に追加して初めて監視されます。"
+      },
+      "error": {
+        "title": "レジストリを確認できませんでした",
+        "body": "<mono>{message}</mono>。項目が欠けた一覧は完全なものに見えてしまうため、認証情報は一覧表示しません。<mono>lib/health/credentialRegistry.ts</mono> でその項目の <mono>expiresAt</mono> を修正してデプロイしてください。毎日のヘルスチェックも同じ項目で停止します。"
+      },
+      "footer": "読み取り専用です。期限のない認証情報は登録されないため、ここには表示されません。Motir が保持するすべての認証情報は<link>認証情報の一覧</link>にあります。更新はそれぞれ個別の手動の作業項目です。"
     },
     "starters": {
       "breadcrumb": "運用 · スターター",

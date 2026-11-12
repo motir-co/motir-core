@@ -26,6 +26,7 @@ const LABELS = {
   navUsers: 'Users',
   navMonitoring: 'Monitoring',
   navJobs: 'Jobs',
+  navCredentials: 'Credentials',
   navFleetSettings: 'Fleet settings',
   navFleetStatus: 'Fleet status',
   navServices: 'Services',

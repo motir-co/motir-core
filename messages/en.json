@@ -10766,6 +10766,7 @@
       "navServices": "Services",
       "navCapacity": "Provider capacity",
       "navJobs": "Jobs",
+      "navCredentials": "Credentials",
       "navStarters": "Starters",
       "navFleetStatus": "Fleet status"
     },
@@ -13888,6 +13889,76 @@
         "title": "Nothing waiting",
         "body": "No job has run out of attempts. Dead letters appear here when one does."
       }
+    },
+    "credentials": {
+      "breadcrumb": "Platform · Credentials",
+      "title": "Credentials",
+      "subtitle": "The platform credentials whose lapse would go silent, and the day each one expires, judged when this page opens the same way the daily health check judges them. Names only: a value is never shown.",
+      "checkedAt": "Checked at {time} UTC · {date}",
+      "checkFailedAt": "Check failed at {time} UTC · {date}",
+      "card": {
+        "title": "Declared credential expiries",
+        "subtitle": "Every credential in the registry, judged the way the daily health check judges it"
+      },
+      "overall": {
+        "expired": "Expired · the daily check fails",
+        "expiring": "Expiring · the daily check fails",
+        "ok": "None inside its lead time",
+        "noneSet": "Nothing checked",
+        "empty": "Nothing registered",
+        "notChecked": "Not checked",
+        "notCheckedLabel": "Credentials not checked: the registry could not be read"
+      },
+      "count": {
+        "expired": "Expired",
+        "expiring": "Expiring",
+        "expiringSub": "inside the lead time",
+        "notSet": "Not set",
+        "notSetSub": "not checked here",
+        "healthy": "Healthy"
+      },
+      "rule": "Each date is declared by whoever minted the token, not read from the issuer, so a date is only as good as its source.",
+      "table": {
+        "caption": "Registered credentials, expired first, then expiring, not set and healthy; soonest expiry first"
+      },
+      "col": {
+        "credential": "Credential",
+        "expires": "Expires",
+        "daysLeft": "Days left",
+        "verdict": "Verdict",
+        "renewal": "Renewal and source"
+      },
+      "phone": {
+        "renewal": "Renewal",
+        "source": "Source",
+        "listLabel": "Registered credentials"
+      },
+      "source": "Source",
+      "verdict": {
+        "healthy": "Healthy",
+        "expiring": "Expiring",
+        "expired": "Expired",
+        "notSet": "Not set"
+      },
+      "days": {
+        "healthy": "{days, plural, one {# day} other {# days}}",
+        "warnsFrom": "warns from {date}",
+        "expiring": "{days, plural, =0 {Less than a day left} one {# day left} other {# days left}}",
+        "insideLead": "inside the {lead}-day lead time",
+        "expired": "{days, plural, =0 {Expired today} one {Expired # day ago} other {Expired # days ago}}",
+        "stillSet": "still set, so still in use",
+        "notChecked": "Not checked",
+        "notSetHere": "variable not set here"
+      },
+      "empty": {
+        "title": "No credential is registered",
+        "body": "The daily health check is watching no credential’s expiry. That is not an all-clear: an expiring credential is watched only once the work item that introduces it adds it to <mono>lib/health/credentialRegistry.ts</mono>."
+      },
+      "error": {
+        "title": "The registry could not be checked",
+        "body": "<mono>{message}</mono>. No credential is listed, because a list missing an entry would read as complete. Correct that entry’s <mono>expiresAt</mono> in <mono>lib/health/credentialRegistry.ts</mono> and deploy; the daily health check stops on the same entry."
+      },
+      "footer": "Read-only. Credentials that never expire are not registered, so they are not listed here: the <link>credential inventory</link> lists every credential Motir holds. Each renewal is its own manual work item."
     },
     "starters": {
       "breadcrumb": "Operations · Starters",

@@ -10769,6 +10769,7 @@
       "navServices": "Dienste",
       "navCapacity": "Anbieterkapazität",
       "navJobs": "Aufträge",
+      "navCredentials": "Zugangsdaten",
       "navStarters": "Starter",
       "navFleetStatus": "Flottenstatus"
     },
@@ -13891,6 +13892,76 @@
         "title": "Nichts wartet",
         "body": "Kein Auftrag hat seine Versuche aufgebraucht. Dead Letter erscheinen hier, sobald das passiert."
       }
+    },
+    "credentials": {
+      "breadcrumb": "Plattform · Zugangsdaten",
+      "title": "Zugangsdaten",
+      "subtitle": "Die Plattform-Zugangsdaten, deren Ablauf unbemerkt bliebe, und der Tag, an dem jede abläuft – beim Öffnen dieser Seite so beurteilt wie von der täglichen Zustandsprüfung. Nur Namen: Ein Wert wird nie angezeigt.",
+      "checkedAt": "Geprüft um {time} UTC · {date}",
+      "checkFailedAt": "Prüfung fehlgeschlagen um {time} UTC · {date}",
+      "card": {
+        "title": "Angegebene Ablaufdaten der Zugangsdaten",
+        "subtitle": "Alle Zugangsdaten im Register, so beurteilt wie von der täglichen Zustandsprüfung"
+      },
+      "overall": {
+        "expired": "Abgelaufen · die tägliche Prüfung schlägt fehl",
+        "expiring": "Läuft bald ab · die tägliche Prüfung schlägt fehl",
+        "ok": "Keine innerhalb der Vorlaufzeit",
+        "noneSet": "Nichts geprüft",
+        "empty": "Nichts registriert",
+        "notChecked": "Nicht geprüft",
+        "notCheckedLabel": "Zugangsdaten nicht geprüft: Das Register konnte nicht gelesen werden"
+      },
+      "count": {
+        "expired": "Abgelaufen",
+        "expiring": "Laufen bald ab",
+        "expiringSub": "innerhalb der Vorlaufzeit",
+        "notSet": "Nicht gesetzt",
+        "notSetSub": "hier nicht geprüft",
+        "healthy": "In Ordnung"
+      },
+      "rule": "Jedes Datum wird von der Person angegeben, die das Token erstellt hat, und nicht beim Aussteller gelesen. Ein Datum ist also nur so gut wie seine Quelle.",
+      "table": {
+        "caption": "Registrierte Zugangsdaten: zuerst abgelaufene, dann bald ablaufende, nicht gesetzte und gültige; jeweils das früheste Ablaufdatum zuerst"
+      },
+      "col": {
+        "credential": "Zugangsdaten",
+        "expires": "Läuft ab",
+        "daysLeft": "Verbleibende Tage",
+        "verdict": "Bewertung",
+        "renewal": "Erneuerung und Quelle"
+      },
+      "phone": {
+        "renewal": "Erneuerung",
+        "source": "Quelle",
+        "listLabel": "Registrierte Zugangsdaten"
+      },
+      "source": "Quelle",
+      "verdict": {
+        "healthy": "In Ordnung",
+        "expiring": "Läuft bald ab",
+        "expired": "Abgelaufen",
+        "notSet": "Nicht gesetzt"
+      },
+      "days": {
+        "healthy": "{days, plural, one {# Tag} other {# Tage}}",
+        "warnsFrom": "warnt ab {date}",
+        "expiring": "{days, plural, =0 {Weniger als ein Tag übrig} one {Noch # Tag} other {Noch # Tage}}",
+        "insideLead": "innerhalb der Vorlaufzeit von {lead} Tagen",
+        "expired": "{days, plural, =0 {Heute abgelaufen} one {Vor # Tag abgelaufen} other {Vor # Tagen abgelaufen}}",
+        "stillSet": "noch gesetzt, also noch in Gebrauch",
+        "notChecked": "Nicht geprüft",
+        "notSetHere": "Variable hier nicht gesetzt"
+      },
+      "empty": {
+        "title": "Keine Zugangsdaten registriert",
+        "body": "Die tägliche Zustandsprüfung überwacht den Ablauf keiner Zugangsdaten. Das ist keine Entwarnung: Ablaufende Zugangsdaten werden erst überwacht, wenn das Arbeitselement, das sie einführt, sie zu <mono>lib/health/credentialRegistry.ts</mono> hinzufügt."
+      },
+      "error": {
+        "title": "Das Register konnte nicht geprüft werden",
+        "body": "<mono>{message}</mono>. Es werden keine Zugangsdaten aufgeführt, weil eine Liste mit fehlendem Eintrag vollständig wirken würde. Korrigieren Sie <mono>expiresAt</mono> dieses Eintrags in <mono>lib/health/credentialRegistry.ts</mono> und stellen Sie bereit; die tägliche Zustandsprüfung bricht am selben Eintrag ab."
+      },
+      "footer": "Nur lesend. Zugangsdaten, die nie ablaufen, werden nicht registriert und sind daher hier nicht aufgeführt: Das <link>Verzeichnis der Zugangsdaten</link> listet alle Zugangsdaten, die Motir hält. Jede Erneuerung ist ein eigenes manuelles Arbeitselement."
     },
     "starters": {
       "breadcrumb": "Betrieb · Starter",

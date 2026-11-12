@@ -10769,6 +10769,7 @@
       "navServices": "Services",
       "navCapacity": "Capacité des fournisseurs",
       "navJobs": "Tâches",
+      "navCredentials": "Identifiants",
       "navStarters": "Starters",
       "navFleetStatus": "État de la flotte"
     },
@@ -13891,6 +13892,76 @@
         "title": "Rien en attente",
         "body": "Aucune tâche n’a épuisé ses tentatives. Les lettres mortes apparaissent ici lorsque cela arrive."
       }
+    },
+    "credentials": {
+      "breadcrumb": "Plateforme · Identifiants",
+      "title": "Identifiants",
+      "subtitle": "Les identifiants de la plateforme dont l’expiration passerait inaperçue, et le jour où chacun expire, évalués à l’ouverture de cette page comme les évalue la vérification quotidienne de l’état. Noms uniquement : aucune valeur n’est jamais affichée.",
+      "checkedAt": "Vérifié à {time} UTC · {date}",
+      "checkFailedAt": "Échec de la vérification à {time} UTC · {date}",
+      "card": {
+        "title": "Expirations déclarées des identifiants",
+        "subtitle": "Chaque identifiant du registre, évalué comme le fait la vérification quotidienne de l’état"
+      },
+      "overall": {
+        "expired": "Expiré · la vérification quotidienne échoue",
+        "expiring": "Expire bientôt · la vérification quotidienne échoue",
+        "ok": "Aucun dans son délai d’alerte",
+        "noneSet": "Rien de vérifié",
+        "empty": "Rien d’enregistré",
+        "notChecked": "Non vérifié",
+        "notCheckedLabel": "Identifiants non vérifiés : le registre n’a pas pu être lu"
+      },
+      "count": {
+        "expired": "Expirés",
+        "expiring": "Expirent bientôt",
+        "expiringSub": "dans le délai d’alerte",
+        "notSet": "Non définis",
+        "notSetSub": "non vérifiés ici",
+        "healthy": "Valides"
+      },
+      "rule": "Chaque date est déclarée par la personne qui a créé le jeton, et non lue auprès de l’émetteur : une date ne vaut donc que ce que vaut sa source.",
+      "table": {
+        "caption": "Identifiants enregistrés : expirés d’abord, puis ceux qui expirent bientôt, non définis et valides ; l’expiration la plus proche d’abord"
+      },
+      "col": {
+        "credential": "Identifiant",
+        "expires": "Expire",
+        "daysLeft": "Jours restants",
+        "verdict": "Résultat",
+        "renewal": "Renouvellement et source"
+      },
+      "phone": {
+        "renewal": "Renouvellement",
+        "source": "Origine",
+        "listLabel": "Identifiants enregistrés"
+      },
+      "source": "Origine",
+      "verdict": {
+        "healthy": "Valide",
+        "expiring": "Expire bientôt",
+        "expired": "Expiré",
+        "notSet": "Non défini"
+      },
+      "days": {
+        "healthy": "{days, plural, one {# jour} other {# jours}}",
+        "warnsFrom": "alerte à partir du {date}",
+        "expiring": "{days, plural, =0 {Moins d’un jour restant} one {# jour restant} other {# jours restants}}",
+        "insideLead": "dans le délai d’alerte de {lead} jours",
+        "expired": "{days, plural, =0 {Expiré aujourd’hui} one {Expiré il y a # jour} other {Expiré il y a # jours}}",
+        "stillSet": "toujours défini, donc toujours utilisé",
+        "notChecked": "Non vérifié",
+        "notSetHere": "variable non définie ici"
+      },
+      "empty": {
+        "title": "Aucun identifiant n’est enregistré",
+        "body": "La vérification quotidienne de l’état ne surveille l’expiration d’aucun identifiant. Ce n’est pas un feu vert : un identifiant qui expire n’est surveillé qu’une fois que l’élément de travail qui l’introduit l’ajoute à <mono>lib/health/credentialRegistry.ts</mono>."
+      },
+      "error": {
+        "title": "Le registre n’a pas pu être vérifié",
+        "body": "<mono>{message}</mono>. Aucun identifiant n’est listé, car une liste à laquelle il manque une entrée semblerait complète. Corrigez le <mono>expiresAt</mono> de cette entrée dans <mono>lib/health/credentialRegistry.ts</mono> et déployez ; la vérification quotidienne de l’état s’arrête sur la même entrée."
+      },
+      "footer": "Lecture seule. Les identifiants qui n’expirent jamais ne sont pas enregistrés et ne figurent donc pas ici : l’<link>inventaire des identifiants</link> liste tous les identifiants que détient Motir. Chaque renouvellement est un élément de travail manuel distinct."
     },
     "starters": {
       "breadcrumb": "Opérations · Starters",

@@ -10760,6 +10760,7 @@
       "navServices": "服务",
       "navCapacity": "服务商容量",
       "navJobs": "任务",
+      "navCredentials": "凭据",
       "navStarters": "启动模板",
       "navFleetStatus": "集群状态"
     },
@@ -13882,6 +13883,76 @@
         "title": "没有等待中的死信",
         "body": "没有任务用尽重试次数。出现时，死信会显示在这里。"
       }
+    },
+    "credentials": {
+      "breadcrumb": "平台 · 凭据",
+      "title": "凭据",
+      "subtitle": "一旦过期就会悄无声息失效的平台凭据，以及每个凭据的过期日期。打开本页时按每日健康检查的同一规则判定。只显示名称，从不显示凭据的值。",
+      "checkedAt": "检查于 {date} {time} UTC",
+      "checkFailedAt": "检查失败于 {date} {time} UTC",
+      "card": {
+        "title": "已声明的凭据过期日期",
+        "subtitle": "注册表中的每个凭据，按每日健康检查的规则判定"
+      },
+      "overall": {
+        "expired": "已过期 · 每日检查失败",
+        "expiring": "即将过期 · 每日检查失败",
+        "ok": "均未进入提前预警期",
+        "noneSet": "未检查任何凭据",
+        "empty": "未注册任何凭据",
+        "notChecked": "未检查",
+        "notCheckedLabel": "未检查凭据：无法读取注册表"
+      },
+      "count": {
+        "expired": "已过期",
+        "expiring": "即将过期",
+        "expiringSub": "已进入提前预警期",
+        "notSet": "未设置",
+        "notSetSub": "本部署未检查",
+        "healthy": "正常"
+      },
+      "rule": "每个日期都由创建该令牌的人声明，而非从签发方读取，因此日期的可靠程度取决于其来源。",
+      "table": {
+        "caption": "已注册的凭据：依次为已过期、即将过期、未设置、正常；同组内最早过期的在前"
+      },
+      "col": {
+        "credential": "凭据",
+        "expires": "过期日期",
+        "daysLeft": "剩余天数",
+        "verdict": "判定",
+        "renewal": "续期方式与来源"
+      },
+      "phone": {
+        "renewal": "续期方式",
+        "source": "来源",
+        "listLabel": "已注册的凭据"
+      },
+      "source": "来源",
+      "verdict": {
+        "healthy": "正常",
+        "expiring": "即将过期",
+        "expired": "已过期",
+        "notSet": "未设置"
+      },
+      "days": {
+        "healthy": "{days, plural, other {# 天}}",
+        "warnsFrom": "自 {date} 起预警",
+        "expiring": "{days, plural, =0 {剩余不到一天} other {剩余 # 天}}",
+        "insideLead": "已进入 {lead} 天提前预警期",
+        "expired": "{days, plural, =0 {今天已过期} other {已过期 # 天}}",
+        "stillSet": "仍已设置，因此仍在使用",
+        "notChecked": "未检查",
+        "notSetHere": "本部署未设置该变量"
+      },
+      "empty": {
+        "title": "未注册任何凭据",
+        "body": "每日健康检查目前没有监测任何凭据的过期时间。这并不代表一切正常：只有当引入某个会过期凭据的工作项将其加入 <mono>lib/health/credentialRegistry.ts</mono> 后，它才会被监测。"
+      },
+      "error": {
+        "title": "无法检查注册表",
+        "body": "<mono>{message}</mono>。不列出任何凭据，因为缺少条目的列表会被误认为是完整的。请在 <mono>lib/health/credentialRegistry.ts</mono> 中更正该条目的 <mono>expiresAt</mono> 并部署；每日健康检查也会在同一条目上停止。"
+      },
+      "footer": "只读。永不过期的凭据不会注册，因此不在此列出：<link>凭据清单</link>列出了 Motir 持有的每个凭据。每次续期都是一个独立的手动工作项。"
     },
     "starters": {
       "breadcrumb": "运营 · 启动模板",

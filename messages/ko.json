@@ -10763,6 +10763,7 @@
       "navServices": "서비스",
       "navCapacity": "공급자 용량",
       "navJobs": "작업",
+      "navCredentials": "자격 증명",
       "navStarters": "스타터",
       "navFleetStatus": "플릿 상태"
     },
@@ -13885,6 +13886,76 @@
         "title": "대기 중인 항목이 없습니다",
         "body": "시도 횟수를 모두 소진한 작업이 없습니다. 소진되면 여기에 데드 레터가 표시됩니다."
       }
+    },
+    "credentials": {
+      "breadcrumb": "플랫폼 · 자격 증명",
+      "title": "자격 증명",
+      "subtitle": "만료되어도 아무도 알아차리지 못할 플랫폼 자격 증명과 각각의 만료일입니다. 이 페이지를 열 때 일일 상태 점검과 같은 방식으로 판정합니다. 이름만 표시하며 값은 절대 표시하지 않습니다.",
+      "checkedAt": "{date} {time} UTC에 확인함",
+      "checkFailedAt": "{date} {time} UTC에 확인 실패",
+      "card": {
+        "title": "선언된 자격 증명 만료일",
+        "subtitle": "레지스트리의 모든 자격 증명을 일일 상태 점검과 같은 방식으로 판정"
+      },
+      "overall": {
+        "expired": "만료됨 · 일일 점검 실패",
+        "expiring": "만료 임박 · 일일 점검 실패",
+        "ok": "경고 기간에 든 항목 없음",
+        "noneSet": "확인한 항목 없음",
+        "empty": "등록된 항목 없음",
+        "notChecked": "확인 안 됨",
+        "notCheckedLabel": "자격 증명을 확인하지 못했습니다. 레지스트리를 읽을 수 없습니다"
+      },
+      "count": {
+        "expired": "만료됨",
+        "expiring": "만료 임박",
+        "expiringSub": "경고 기간 내",
+        "notSet": "설정 안 됨",
+        "notSetSub": "여기서는 확인 안 함",
+        "healthy": "정상"
+      },
+      "rule": "각 날짜는 토큰을 발급한 사람이 선언한 것이며 발급처에서 읽은 것이 아닙니다. 따라서 날짜의 정확성은 출처에 달려 있습니다.",
+      "table": {
+        "caption": "등록된 자격 증명: 만료됨, 만료 임박, 설정 안 됨, 정상 순이며 각 그룹 안에서는 만료일이 가까운 순"
+      },
+      "col": {
+        "credential": "자격 증명",
+        "expires": "만료일",
+        "daysLeft": "남은 일수",
+        "verdict": "판정",
+        "renewal": "갱신 방법 및 출처"
+      },
+      "phone": {
+        "renewal": "갱신 방법",
+        "source": "출처",
+        "listLabel": "등록된 자격 증명"
+      },
+      "source": "출처",
+      "verdict": {
+        "healthy": "정상",
+        "expiring": "만료 임박",
+        "expired": "만료됨",
+        "notSet": "설정 안 됨"
+      },
+      "days": {
+        "healthy": "{days, plural, other {#일}}",
+        "warnsFrom": "{date}부터 경고",
+        "expiring": "{days, plural, =0 {하루 미만 남음} other {#일 남음}}",
+        "insideLead": "{lead}일 경고 기간 내",
+        "expired": "{days, plural, =0 {오늘 만료됨} other {#일 전에 만료됨}}",
+        "stillSet": "아직 설정되어 있어 계속 사용 중",
+        "notChecked": "확인 안 됨",
+        "notSetHere": "여기서는 변수가 설정되지 않음"
+      },
+      "empty": {
+        "title": "등록된 자격 증명이 없습니다",
+        "body": "일일 상태 점검이 어떤 자격 증명의 만료도 감시하지 않습니다. 이는 문제가 없다는 뜻이 아닙니다. 만료되는 자격 증명은 그것을 도입하는 작업 항목이 <mono>lib/health/credentialRegistry.ts</mono>에 추가해야만 감시됩니다."
+      },
+      "error": {
+        "title": "레지스트리를 확인할 수 없습니다",
+        "body": "<mono>{message}</mono>. 항목이 빠진 목록은 완전한 것처럼 보이므로 자격 증명을 나열하지 않습니다. <mono>lib/health/credentialRegistry.ts</mono>에서 해당 항목의 <mono>expiresAt</mono>을 수정하고 배포하십시오. 일일 상태 점검도 같은 항목에서 멈춥니다."
+      },
+      "footer": "읽기 전용입니다. 만료되지 않는 자격 증명은 등록되지 않으므로 여기에 표시되지 않습니다. Motir가 보유한 모든 자격 증명은 <link>자격 증명 목록</link>에 있습니다. 각 갱신은 별도의 수동 작업 항목입니다."
     },
     "starters": {
       "breadcrumb": "운영 · 스타터",

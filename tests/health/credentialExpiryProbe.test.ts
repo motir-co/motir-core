@@ -136,6 +136,58 @@ describe('probeCredentialExpiry', () => {
   });
 });
 
+describe('a credential held outside core (heldIn, MOTIR-9408)', () => {
+  const HELD: DeclaredCredential = {
+    envVar: 'MOTIR_AI_READ_TOKEN',
+    name: 'motir-ai read token',
+    expiresAt: '2027-09-15',
+    renewal: 'mint a replacement',
+    source: 'MOTIR-5208',
+    heldIn: 'the motir-meta repository Actions secrets',
+  };
+
+  it("is judged on Motir's cloud although core never holds its variable", () => {
+    const verdict = probeCredentialExpiry(
+      [HELD],
+      { MOTIR_CLOUD: 'true' },
+      new Date('2027-09-01T09:00:00Z'),
+    );
+
+    expect(verdict.verdict).toBe('expiring');
+    expect(verdict.entries).toEqual([
+      expect.objectContaining({
+        envVar: 'MOTIR_AI_READ_TOKEN',
+        state: 'expiring',
+        daysRemaining: 13,
+      }),
+    ]);
+    expect(verdict.skipped).toEqual([]);
+  });
+
+  it('is skipped off the cloud, even when a variable of that name happens to be set', () => {
+    for (const cloud of [undefined, '', 'false', '1']) {
+      const verdict = probeCredentialExpiry(
+        [HELD],
+        { MOTIR_CLOUD: cloud, MOTIR_AI_READ_TOKEN: 'github_pat_x' },
+        new Date('2027-09-20T09:00:00Z'),
+      );
+      expect(verdict.verdict).toBe('ok');
+      expect(verdict.entries).toEqual([]);
+      expect(verdict.skipped).toEqual(['MOTIR_AI_READ_TOKEN']);
+    }
+  });
+
+  it('leaves an entry core holds judged by its own variable on the cloud', () => {
+    const verdict = probeCredentialExpiry(
+      [BILLING, HELD],
+      { MOTIR_CLOUD: 'true' },
+      new Date('2026-10-02T09:00:00Z'),
+    );
+    expect(verdict.skipped).toEqual(['GITHUB_BILLING_TOKEN']);
+    expect(verdict.entries.map((e) => e.envVar)).toEqual(['MOTIR_AI_READ_TOKEN']);
+  });
+});
+
 describe('CREDENTIAL_REGISTRY', () => {
   it('declares the billing token with a parseable date and a source', () => {
     const billing = CREDENTIAL_REGISTRY.find((c) => c.envVar === 'GITHUB_BILLING_TOKEN');
@@ -145,9 +197,37 @@ describe('CREDENTIAL_REGISTRY', () => {
     const flyRead = CREDENTIAL_REGISTRY.find((c) => c.envVar === 'FLY_DEPLOYMENT_READ_TOKEN');
     expect(flyRead).toMatchObject({ expiresAt: '2046-09-27' });
     for (const entry of CREDENTIAL_REGISTRY) {
+      expect(entry.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(Number.isNaN(Date.parse(`${entry.expiresAt}T00:00:00.000Z`))).toBe(false);
       expect(entry.source.length).toBeGreaterThan(0);
       expect(entry.renewal.length).toBeGreaterThan(0);
+    }
+  });
+
+  // MOTIR-9408's inventory: every credential it marks as expiring on a known
+  // date is registered, at the date its source recorded.
+  it.each([
+    ['GITHUB_BILLING_TOKEN', '2027-07-31', undefined],
+    ['GITHUB_ENTERPRISE_ADMIN_TOKEN', '2027-10-23', undefined],
+    ['MOTIR_HOSTING_FLY_API_TOKEN', '2027-10-28', undefined],
+    ['FLY_CERTS_TOKEN', '2046-08-29', undefined],
+    ['FLY_DEPLOYMENT_READ_TOKEN', '2046-09-27', undefined],
+    ['MOTIR_AI_READ_TOKEN', '2027-09-15', 'motir-meta'],
+    ['MARKETING_DISPATCH_TOKEN', '2027-11-09', 'motir-ai'],
+    ['FLY_FLEET_DEPLOY_TOKEN', '2046-07-29', 'motir-ai'],
+  ])('registers %s, expiring %s', (envVar, expiresAt, heldIn) => {
+    const entry = CREDENTIAL_REGISTRY.find((c) => c.envVar === envVar);
+    expect(entry).toMatchObject({ expiresAt });
+    if (heldIn === undefined) expect(entry?.heldIn).toBeUndefined();
+    else expect(entry?.heldIn).toContain(heldIn);
+  });
+
+  it('names each env var once, and no renewal still points at Fly secrets', () => {
+    const names = CREDENTIAL_REGISTRY.map((c) => c.envVar);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).toHaveLength(8);
+    for (const entry of CREDENTIAL_REGISTRY) {
+      expect(entry.renewal).not.toContain('fly secrets set');
     }
   });
 });

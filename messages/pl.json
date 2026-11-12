@@ -10769,6 +10769,7 @@
       "navServices": "Usługi",
       "navCapacity": "Pojemność dostawców",
       "navJobs": "Zadania",
+      "navCredentials": "Poświadczenia",
       "navStarters": "Szablony",
       "navFleetStatus": "Stan floty"
     },
@@ -13891,6 +13892,76 @@
         "title": "Nic nie czeka",
         "body": "Żadne zadanie nie wyczerpało prób. Wpisy niedostarczone pojawią się tutaj, gdy to nastąpi."
       }
+    },
+    "credentials": {
+      "breadcrumb": "Platforma · Poświadczenia",
+      "title": "Poświadczenia",
+      "subtitle": "Poświadczenia platformy, których wygaśnięcie przeszłoby niezauważone, i dzień wygaśnięcia każdego z nich, oceniane przy otwarciu tej strony tak samo jak w codziennej kontroli stanu. Tylko nazwy: wartość nigdy nie jest wyświetlana.",
+      "checkedAt": "Sprawdzono o {time} UTC · {date}",
+      "checkFailedAt": "Sprawdzenie nie powiodło się o {time} UTC · {date}",
+      "card": {
+        "title": "Zadeklarowane daty wygaśnięcia poświadczeń",
+        "subtitle": "Każde poświadczenie w rejestrze, ocenione tak jak w codziennej kontroli stanu"
+      },
+      "overall": {
+        "expired": "Wygasło · codzienna kontrola kończy się błędem",
+        "expiring": "Wkrótce wygasa · codzienna kontrola kończy się błędem",
+        "ok": "Żadne nie jest w okresie ostrzegania",
+        "noneSet": "Nic nie sprawdzono",
+        "empty": "Nic nie zarejestrowano",
+        "notChecked": "Nie sprawdzono",
+        "notCheckedLabel": "Nie sprawdzono poświadczeń: nie udało się odczytać rejestru"
+      },
+      "count": {
+        "expired": "Wygasłe",
+        "expiring": "Wkrótce wygasają",
+        "expiringSub": "w okresie ostrzegania",
+        "notSet": "Nieustawione",
+        "notSetSub": "tutaj nie sprawdzane",
+        "healthy": "Prawidłowe"
+      },
+      "rule": "Każdą datę deklaruje osoba, która utworzyła token, a nie jest ona odczytywana od wystawcy, więc data jest tak wiarygodna jak jej źródło.",
+      "table": {
+        "caption": "Zarejestrowane poświadczenia: najpierw wygasłe, potem wkrótce wygasające, nieustawione i prawidłowe; najbliższa data wygaśnięcia najpierw"
+      },
+      "col": {
+        "credential": "Poświadczenie",
+        "expires": "Wygasa",
+        "daysLeft": "Pozostałe dni",
+        "verdict": "Ocena",
+        "renewal": "Odnowienie i źródło"
+      },
+      "phone": {
+        "renewal": "Odnowienie",
+        "source": "Źródło",
+        "listLabel": "Zarejestrowane poświadczenia"
+      },
+      "source": "Źródło",
+      "verdict": {
+        "healthy": "Prawidłowe",
+        "expiring": "Wkrótce wygasa",
+        "expired": "Wygasło",
+        "notSet": "Nieustawione"
+      },
+      "days": {
+        "healthy": "{days, plural, one {# dzień} other {# dni}}",
+        "warnsFrom": "ostrzega od {date}",
+        "expiring": "{days, plural, =0 {Zostało mniej niż jeden dzień} one {Został # dzień} few {Zostały # dni} other {Zostało # dni}}",
+        "insideLead": "w {lead}-dniowym okresie ostrzegania",
+        "expired": "{days, plural, =0 {Wygasło dzisiaj} one {Wygasło # dzień temu} other {Wygasło # dni temu}}",
+        "stillSet": "nadal ustawione, więc nadal używane",
+        "notChecked": "Nie sprawdzono",
+        "notSetHere": "zmienna nie jest tu ustawiona"
+      },
+      "empty": {
+        "title": "Nie zarejestrowano żadnego poświadczenia",
+        "body": "Codzienna kontrola stanu nie monitoruje wygaśnięcia żadnego poświadczenia. To nie oznacza, że wszystko jest w porządku: wygasające poświadczenie jest monitorowane dopiero wtedy, gdy element roboczy, który je wprowadza, doda je do <mono>lib/health/credentialRegistry.ts</mono>."
+      },
+      "error": {
+        "title": "Nie udało się sprawdzić rejestru",
+        "body": "<mono>{message}</mono>. Nie wyświetlono żadnego poświadczenia, ponieważ lista bez jednego wpisu wyglądałaby na kompletną. Popraw <mono>expiresAt</mono> tego wpisu w <mono>lib/health/credentialRegistry.ts</mono> i wdróż; codzienna kontrola stanu zatrzymuje się na tym samym wpisie."
+      },
+      "footer": "Tylko do odczytu. Poświadczenia, które nigdy nie wygasają, nie są rejestrowane, więc nie ma ich tutaj: <link>spis poświadczeń</link> wymienia wszystkie poświadczenia, które posiada Motir. Każde odnowienie to osobny ręczny element roboczy."
     },
     "starters": {
       "breadcrumb": "Operacje · Szablony",
