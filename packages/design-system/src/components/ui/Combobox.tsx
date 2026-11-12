@@ -213,6 +213,13 @@ function nearestClipBox(el: HTMLElement): { box: HTMLElement; scrolls: boolean }
   return null;
 }
 
+// The tallest the listbox grows when it has the room (20rem — `max-h-80`, the
+// static fallback). Every branch also clamps it to the measured space, so this
+// only decides how much of a long list shows before it scrolls. Raised from
+// 16rem by MOTIR-11096: once an in-modal menu could reach past the dialog panel,
+// 16rem still showed only ~5 options of a long picker.
+const LIST_MAX_HEIGHT = 320;
+
 // The element a `position: fixed` descendant of `el` is laid out against, or
 // null when that is the viewport. A transform (the centered Modal panel's
 // `-translate-x/y-1/2`, which Tailwind v4 emits as the `translate` property), a
@@ -320,7 +327,7 @@ export function Combobox<T extends string>({
   // Viewport-anchored position for the portaled menu + the listbox's available
   // height, recomputed from the trigger rect on open / scroll / resize.
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
-  const [listMaxHeight, setListMaxHeight] = useState(256);
+  const [listMaxHeight, setListMaxHeight] = useState(LIST_MAX_HEIGHT);
   // Inline (in-dialog) branch only: whether the menu is flipped ABOVE the
   // trigger because there's more room there than below within the dialog's
   // overflow-hidden clip box (bug-combobox-menu-clipped-inside-modal).
@@ -377,7 +384,7 @@ export function Combobox<T extends string>({
     const placeBelow = spaceBelow >= spaceAbove;
     const avail = Math.max(120, placeBelow ? spaceBelow : spaceAbove);
     // Reserve room for the optional search input + container padding.
-    setListMaxHeight(Math.max(80, Math.min(256, avail - (searchable ? 52 : 12))));
+    setListMaxHeight(Math.max(80, Math.min(LIST_MAX_HEIGHT, avail - (searchable ? 52 : 12))));
     const style: CSSProperties = {
       position: 'fixed',
       minWidth: Math.round(rect.width),
@@ -413,7 +420,7 @@ export function Combobox<T extends string>({
     if (!clip) {
       setInlineFixed(null);
       setInlineAbove(false);
-      setListMaxHeight(256); // == the max-h-64 fallback (original behaviour)
+      setListMaxHeight(LIST_MAX_HEIGHT); // == the max-h-80 fallback
       return;
     }
     if (clip.scrolls) {
@@ -455,7 +462,7 @@ export function Combobox<T extends string>({
       const list = listRef.current;
       const measured = menu && list ? menu.offsetHeight - list.offsetHeight : 0;
       const chrome = measured > 0 ? measured : searchable ? 52 : 12;
-      setListMaxHeight(Math.max(80, Math.min(256, avail - chrome)));
+      setListMaxHeight(Math.max(80, Math.min(LIST_MAX_HEIGHT, avail - chrome)));
       // Fixed offsets are measured from the containing block's padding box
       // (the viewport when there is none).
       const origin = cb
@@ -485,7 +492,7 @@ export function Combobox<T extends string>({
     const avail = Math.max(80, placeAbove ? spaceAbove : spaceBelow);
     // Reserve room for the optional search input + container padding (same
     // budget as the portaled branch).
-    setListMaxHeight(Math.max(80, Math.min(256, avail - (searchable ? 52 : 12))));
+    setListMaxHeight(Math.max(80, Math.min(LIST_MAX_HEIGHT, avail - (searchable ? 52 : 12))));
   }, [searchable, align]);
 
   // On open: focus the right control (the only side effect — query/active reset
@@ -678,11 +685,11 @@ export function Combobox<T extends string>({
         aria-activedescendant={hasOptions && !searchable ? activeId : undefined}
         onKeyDown={hasOptions && !searchable ? onListKeyDown : undefined}
         // Both branches cap height to their measured available space (inline
-        // style wins over the max-h-64 fallback): the portaled menu against the
+        // style wins over the max-h-80 fallback): the portaled menu against the
         // viewport, the inline (in-dialog) menu against the dialog's clip box —
         // so an over-tall list scrolls internally instead of being clipped.
         style={{ maxHeight: listMaxHeight }}
-        className="max-h-64 overflow-y-auto focus:outline-none"
+        className="max-h-80 overflow-y-auto focus:outline-none"
       >
         {loading ? (
           <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{loadingText}</p>

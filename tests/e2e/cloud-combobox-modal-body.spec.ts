@@ -14,7 +14,13 @@ import enMessages from '@/messages/en.json';
  * absolute menu used to extend the body's scroll area and be cut at its visible
  * edge: on the short *Add a model planning may use* dialog only the first few
  * candidates showed, beside a second scrollbar. The menu now lifts out of the
- * scroll box with fixed positioning, inside the panel.
+ * scroll box with fixed positioning.
+ *
+ * MOTIR-11096: the lifted menu was then still cut to the PANEL's height,
+ * because the panel's centring transform made it the menu's containing block
+ * and its overflow clip bounded it. The panel is now centred without a
+ * transform, so the menu reaches past the panel's bottom edge, bounded only by
+ * the viewport.
  *
  * ⚠️ IN THE CLOUD LANE because the dialog reads motir-ai's planning candidates,
  * which only this lane's `E2E_TEST_PLANNER_MODEL` seam answers (see
@@ -22,7 +28,7 @@ import enMessages from '@/messages/en.json';
  */
 
 test.describe.configure({ timeout: 120_000 });
-test.use({ viewport: { width: 1280, height: 700 } });
+test.use({ viewport: { width: 1280, height: 800 } });
 
 const planning = enMessages.platformAdmin.planningList;
 const lists = enMessages.platformAdmin.modelLists;
@@ -83,20 +89,22 @@ async function openAddModel(page: Page) {
   return { dialog, listbox };
 }
 
-test('the Add-a-model picker shows its whole menu inside the dialog and scrolls only its own list', async ({
+test('the Add-a-model picker reaches past the dialog panel, stays on screen and scrolls only its own list', async ({
   page,
 }) => {
   const { dialog, listbox } = await openAddModel(page);
   await expect(listbox.getByRole('option')).toHaveCount(CANDIDATES.length);
 
-  // The listbox is on screen and its box lies entirely inside the dialog panel.
+  // The listbox is wholly on screen, opens below the trigger inside the panel,
+  // and — the dialog being short — runs past the panel's bottom edge instead of
+  // being cut to it (MOTIR-11096).
   await expect(listbox).toBeInViewport({ ratio: 1 });
   const d = await box(dialog);
   const l = await box(listbox);
   expect(l.y).toBeGreaterThanOrEqual(d.y);
   expect(l.x).toBeGreaterThanOrEqual(d.x);
-  expect(l.y + l.height).toBeLessThanOrEqual(d.y + d.height);
-  expect(l.x + l.width).toBeLessThanOrEqual(d.x + d.width);
+  expect(l.y + l.height).toBeGreaterThan(d.y + d.height);
+  expect(l.y + l.height).toBeLessThanOrEqual(page.viewportSize()!.height);
 
   // The open menu no longer grows the dialog body a scroll area of its own.
   const bodyOverflow = await listbox.evaluate((el) => {

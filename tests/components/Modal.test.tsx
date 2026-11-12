@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
+import { renderWithIntl } from '../helpers/renderWithIntl';
 import { Modal } from '@/components/ui/Modal';
 
 afterEach(cleanup);
@@ -62,5 +63,26 @@ describe('Modal.Body', () => {
       </Modal.Body>,
     );
     expect(screen.getByRole('group', { name: 'fields' })).toBeTruthy();
+  });
+});
+
+// MOTIR-11096: the panel is centred by `inset-0 m-auto h-fit`, never a
+// translate. A transform would make it the containing block of every fixed
+// descendant, and its `overflow-hidden` would clip a Combobox menu lifted out of
+// `Modal.Body` to the panel's own height.
+describe('Modal panel', () => {
+  it('is centred without a transform', () => {
+    renderWithIntl(
+      <Modal open onOpenChange={() => {}} title="Pick one">
+        <Modal.Body>x</Modal.Body>
+      </Modal>,
+    );
+    const panel = screen.getByRole('dialog');
+    expect(panel.className).toContain('inset-0');
+    expect(panel.className).toContain('m-auto');
+    expect(panel.className).toContain('h-fit');
+    expect(panel.className).toContain('max-h-[90vh]');
+    expect(panel.className).not.toMatch(/translate/);
+    expect(panel.className).not.toMatch(/(^|\s)(left|top)-1\/2/);
   });
 });

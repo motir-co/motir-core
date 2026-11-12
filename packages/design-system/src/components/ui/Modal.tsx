@@ -33,7 +33,12 @@ import { usePortalContainer } from '../../utils/fullscreen';
  */
 const contentVariants = cva(
   cn(
-    'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
+    // Centred by `inset-0 m-auto h-fit`, NOT a translate (MOTIR-11096): a
+    // transform makes the panel the containing block of every `position:
+    // fixed` descendant, so its `overflow-hidden` clipped a Combobox menu
+    // lifted out of `Modal.Body` to the panel's own height. Without one, a
+    // fixed menu is bounded by the viewport alone.
+    'fixed inset-0 z-50 m-auto h-fit',
     'w-[90vw] rounded-(--radius-modal) bg-(--el-page-bg)',
     'shadow-(--shadow-modal) border border-(--el-border)',
     'p-(--spacing-card-padding)',
