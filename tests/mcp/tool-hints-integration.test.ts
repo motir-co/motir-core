@@ -396,7 +396,10 @@ describe('a read-only tool writes nothing — measured, not asserted', () => {
     // The guard measured the tools' real work, not an argument refusal: every
     // read-only tool ran to a SUCCESS over the seeded project.
     expect(runs.filter((run) => run.isError).map((run) => run.name)).toEqual([]);
-  });
+    // Every read-only tool runs once and then waits out the settle window, so
+    // this test's cost grows with the catalogue. The shared 15 s `testTimeout`
+    // is sized for one query; it went over at ~15.7 s once the catalogue grew.
+  }, 60_000);
 
   it('POSITIVE CONTROL — the same recorder sees an additive write and a destructive one', async () => {
     const { fx, item1 } = await seed();
