@@ -9,14 +9,12 @@ migrate task, rolls web, worker and relay, and records the digest in
 `/<prefix>/core/image-digest` only when every service has completed. Any
 failure leaves the previous tasks serving.
 
-## Independent of the Fly deploy
-
-The workflow is independent of the Fly deploy, which is the `deploy` job of
-`ci.yml`. It is a separate workflow with no `needs`, `workflow_run` or shared
-job, so an AWS failure turns only its own run red and never blocks or rolls
-back Fly, and a Fly failure never blocks AWS. Both deploy the same `main`
-commit. The AWS image is a second build of that commit; only the Fly build
-uploads source maps to Sentry.
+This is the repository's only deploy of a `main` commit. The image is built
+from the repository's `Dockerfile` with `NEXT_PUBLIC_SENTRY_DSN` and
+`MOTIR_RELEASE` as build arguments and `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` as
+its only build secret. It carries no `SENTRY_AUTH_TOKEN`, so no source maps are
+uploaded (`next.config.ts` disables the upload without the token), and a Sentry
+event from this build resolves to the built file rather than to source.
 
 ## Repository variables
 

@@ -5,18 +5,12 @@ name: AWS deploy
 # and hands its DIGEST to `pnpm deploy:aws`, which migrates, rolls web, worker
 # and relay, and records the digest only when every service completed.
 #
-# ⚠️ INDEPENDENT OF THE FLY DEPLOY BY CONSTRUCTION. The Fly deploy is the
-# `deploy` job of the CI workflow. This file shares no job with it, waits on
-# nothing in it and is not triggered by it, so an AWS failure turns only this
-# run red and a Fly failure never stops this one. Both deploy the same commit.
-#
 # No second migration gate: every push to `main` arrives through the merge
 # queue, whose required checks already include the CI workflow's `build` job and
 # its schema-drift guard.
 #
-# The image is a SECOND build of the commit (Fly builds its own with
-# `flyctl deploy --local-only`). It gets no Sentry auth token, so only the Fly
-# build uploads source maps for the release.
+# This is the repository's only deploy of a `main` commit. The image gets no
+# Sentry auth token, so no source maps are uploaded for the release.
 #
 # No AWS key anywhere: both sessions are GitHub OIDC role assumptions, and the
 # role ARNs, region and name prefix are repository VARIABLES (none is a
@@ -81,9 +75,10 @@ jobs:
           [ "$digest" = "None" ] && digest=""
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
-      # Same Dockerfile and the same browser-facing build arguments as the Fly
-      # build. The Server Action salt goes in as a build SECRET, as there, so
-      # both builds give every action the same id.
+      # The repository's Dockerfile, with the browser-facing build arguments.
+      # The Server Action salt goes in as a build SECRET, so every build of the
+      # deploy gives every action the same id and an open tab keeps working
+      # across a release (the Dockerfile's build step explains why).
       - name: Build and push the image
         id: build
         if: steps.existing.outputs.digest == ''
