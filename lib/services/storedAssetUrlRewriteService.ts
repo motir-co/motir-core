@@ -4,14 +4,15 @@
 // WHY. Since MOTIR-2404 `User.image` and `Project.image` store an object KEY, and
 // `storedAssetUrl` resolves a key against `MOTIR_S3_PUBLIC_BASE_URL` while passing
 // an ABSOLUTE value through unchanged. So a key follows the public base when the
-// window moves it from Tigris to S3 — and a row written between MOTIR-2389 and
-// MOTIR-2404, still holding an absolute URL on the Tigris public base, would keep
-// pointing at Tigris and break when Tigris is decommissioned. This sweep rewrites
-// exactly those rows to their keys.
+// window moves the store to Amazon S3 — and a row written between MOTIR-2389 and
+// MOTIR-2404, still holding an absolute URL on the previous store's public base,
+// would keep pointing at that store and break once it is decommissioned. This
+// sweep rewrites exactly those rows to their keys, so every public asset resolves
+// against S3's public base.
 //
 // ⚠️ THE BASE IS AN ARGUMENT, NEVER `MOTIR_S3_PUBLIC_BASE_URL`. The rows were written
-// on Tigris's base, and the environment running this may name another (S3's, once
-// flipped); a base read from it would match nothing and report a false 0. The
+// on the previous store's base, and the environment running this names S3's once
+// flipped; a base read from it would match nothing and report a false 0. The
 // window runs it against Neon's core database after the freeze and before the dump
 // (motir-infra `docs/core-cutover.md` step 5).
 //
@@ -70,7 +71,7 @@ export function parseFromBase(raw: string | undefined): string {
   if (!raw) {
     throw new StoredAssetRewriteError(
       'STORED_ASSET_BAD_BASE',
-      '--from-base is required: the Tigris public base the absolute rows were written on.',
+      '--from-base is required: the previous public base the absolute rows were written on.',
     );
   }
   let parsed: URL;

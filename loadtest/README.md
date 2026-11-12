@@ -4,6 +4,18 @@ This page takes an engineer who has never run the load test from a clean checkou
 to a PASS/FAIL answer, and from a report to a correct reading of it. It is the
 runbook for Story MOTIR-8538; the code it drives lives next to it in `loadtest/`.
 
+> ⛔ **THIS PIPELINE STILL TARGETS FLY, AND CANNOT RUN TODAY.** Motir's own
+> services moved to AWS (Story MOTIR-9716), and the Fly staging app, its Flycast
+> origin and the `motir-loadgen` generator are gone with that move —
+> `loadtest/staging/fly.staging.toml` was deleted by MOTIR-10962, which left
+> `loadtest/staging/` host-neutral. Everything else under `loadtest/` — the run
+> (`loadtest/run/`), the generator (`loadtest/generator/`), the preflight, the
+> report's Fly Prometheus reads (`loadtest/report/`), the log capture, the
+> profiles and the steps on this page that call `fly`, `flyctl` or a Flycast
+> address — still assumes a Fly staging app and will not run until
+> **MOTIR-11141** ports it to AWS or retires it. Read the rest of this page as
+> the record of how the harness ran on Fly, not as steps to follow.
+
 **The rule of this page.** Every step is **one command in a fenced block**,
 followed by **what it prints** and the **line to check** before going on. Every
 output block says where it came from:

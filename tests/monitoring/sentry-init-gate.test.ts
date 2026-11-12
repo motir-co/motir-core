@@ -28,6 +28,16 @@ vi.mock('@sentry/nextjs', () => ({
   withScope,
 }));
 
+const TASK_ID = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+
+/** A core web task on Fargate: what ECS injects, plus the process name infra sets. */
+function stubFargateTask(): void {
+  vi.stubEnv('AWS_EXECUTION_ENV', 'AWS_ECS_FARGATE');
+  vi.stubEnv('AWS_REGION', 'eu-west-1');
+  vi.stubEnv('ECS_CONTAINER_METADATA_URI_V4', `http://169.254.170.2/v4/${TASK_ID}-2531612879`);
+  vi.stubEnv('MONITORING_CLOUDWATCH_SERVICE', 'web');
+}
+
 /** Every monitoring variable cleared — the self-hoster's environment. */
 function clearMonitoringEnv(): void {
   for (const name of [
@@ -36,9 +46,10 @@ function clearMonitoringEnv(): void {
     'NEXT_PUBLIC_SENTRY_DSN',
     'NEXT_PUBLIC_SENTRY_ENVIRONMENT',
     'SENTRY_TRACES_SAMPLE_RATE',
-    'FLY_MACHINE_ID',
-    'FLY_PROCESS_GROUP',
-    'FLY_REGION',
+    'AWS_EXECUTION_ENV',
+    'AWS_REGION',
+    'ECS_CONTAINER_METADATA_URI_V4',
+    'MONITORING_CLOUDWATCH_SERVICE',
   ]) {
     vi.stubEnv(name, '');
   }
@@ -152,24 +163,22 @@ describe('the SERVER and EDGE trace at the deployment rate (MOTIR-8549)', () => 
   });
 
   it.each(['@/sentry.server.config', '@/sentry.edge.config'])(
-    '%s tags every event with its Fly instance',
+    '%s tags every event with its Fargate task, process and region (MOTIR-10962)',
     async (modulePath) => {
       vi.stubEnv('SENTRY_DSN', DSN);
-      vi.stubEnv('FLY_MACHINE_ID', '148e21ea7e5389');
-      vi.stubEnv('FLY_PROCESS_GROUP', 'app');
-      vi.stubEnv('FLY_REGION', 'ams');
+      stubFargateTask();
       await import(modulePath);
       const options = init.mock.calls[0]![0] as { initialScope?: { tags?: unknown } };
       expect(options.initialScope?.tags).toEqual({
-        'instance.machine': '148e21ea7e5389',
-        'instance.process_group': 'app',
-        'instance.region': 'ams',
+        'instance.machine': TASK_ID,
+        'instance.process_group': 'web',
+        'instance.region': 'eu-west-1',
       });
     },
   );
 
   it.each(['@/sentry.server.config', '@/sentry.edge.config'])(
-    '%s carries NO instance tag when Fly set none — never an empty string',
+    '%s carries NO instance tag off Fargate — never an empty string',
     async (modulePath) => {
       vi.stubEnv('SENTRY_DSN', DSN);
       await import(modulePath);
@@ -179,12 +188,10 @@ describe('the SERVER and EDGE trace at the deployment rate (MOTIR-8549)', () => 
   );
 
   it.each(['@/sentry.server.config', '@/sentry.edge.config', '@/instrumentation-client'])(
-    '%s still never calls init without a DSN, whatever the rate and the Fly tags say',
+    '%s still never calls init without a DSN, whatever the rate and the instance tags say',
     async (modulePath) => {
       vi.stubEnv('SENTRY_TRACES_SAMPLE_RATE', '1');
-      vi.stubEnv('FLY_MACHINE_ID', '148e21ea7e5389');
-      vi.stubEnv('FLY_PROCESS_GROUP', 'app');
-      vi.stubEnv('FLY_REGION', 'ams');
+      stubFargateTask();
       await import(modulePath);
       expect(init).not.toHaveBeenCalled();
     },

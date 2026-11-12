@@ -2,12 +2,11 @@
 // provider's SDK is configured, so `lib/blob/uploader.ts` stays a set of
 // object operations and this file owns endpoint/credential/bucket policy.
 //
-// Provider: Tigris (Fly's S3-compatible store), per
-// `docs/decisions/application-hosting.md` Q2, with a static key; or Amazon S3
-// on AWS, with no key and no endpoint, signing as the task role (MOTIR-9925).
-// Nothing here is Tigris-specific beyond the endpoint value — the API is S3,
-// which is also what a self-hoster is most likely to have
-// (`attachment-access-control.md` Amendment 2).
+// Provider: Amazon S3 on AWS, with no key and no endpoint, signing as the task
+// role (MOTIR-9925). Any other S3-compatible store (a self-hosted MinIO, say)
+// works through an endpoint and a static key. Nothing here is specific to one
+// store beyond those values — the API is S3, which is also what a self-hoster is
+// most likely to have (`attachment-access-control.md` Amendment 2).
 //
 // TWO BUCKETS, not one bucket with per-object ACLs: a PUBLIC bucket for
 // avatars/public assets (directly fetchable, CDN-cacheable) and a PRIVATE one
@@ -21,7 +20,7 @@
 
 import { S3Client, type S3ClientConfig } from '@aws-sdk/client-s3';
 
-/** Env var names, in one place — `MOTIR-2386` sets exactly these as Fly secrets. */
+/** Env var names, in one place — the deployment sets these under exactly these names. */
 export const S3_ENV = {
   endpoint: 'MOTIR_S3_ENDPOINT',
   region: 'MOTIR_S3_REGION',
@@ -90,7 +89,7 @@ export function installObjectStoreTransport(handler: unknown): void {
  * the env gets a client for the NEW configuration rather than a stale one).
  *
  * TWO credential modes:
- *   - **Keys** (Tigris, a self-hosted MinIO): `MOTIR_S3_ACCESS_KEY_ID` and
+ *   - **Keys** (an S3-compatible store such as a self-hosted MinIO): `MOTIR_S3_ACCESS_KEY_ID` and
  *     `MOTIR_S3_SECRET_ACCESS_KEY` both set — signed with that static pair.
  *   - **Chain** (AWS): both unset — no `credentials` option at all, so the SDK's
  *     default chain resolves them (on Fargate, the ECS task role; locally,
@@ -102,7 +101,7 @@ export function installObjectStoreTransport(handler: unknown): void {
  * `MOTIR_S3_ENDPOINT` is optional. Set, it is used with `forcePathStyle`: every
  * request on ONE host with the bucket in the PATH, which is what lets the E2E
  * transport (and a self-hosted MinIO) work without per-bucket wiring; the region
- * defaults to `auto`, Tigris being region-less. Unset, the SDK addresses the
+ * defaults to `auto`, which region-less S3-compatible stores accept. Unset, the SDK addresses the
  * regional AWS endpoint, and the region is `MOTIR_S3_REGION` or the chain's
  * (`AWS_REGION`) — never `auto`, which is no AWS region.
  */

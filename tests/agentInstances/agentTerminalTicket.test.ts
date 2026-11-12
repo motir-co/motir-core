@@ -681,9 +681,19 @@ describe('a relay that dies leaves no row open for ever (MOTIR-6959)', () => {
     expect(await relayService.closeOwnLeftovers('relay-a')).toEqual({ closed: 0 });
   });
 
-  it('names the relay by FLY_MACHINE_ID, else by host and process', () => {
-    expect(relayMachineId({ FLY_MACHINE_ID: ' 148e21 ' }, () => 'h', 7)).toBe('148e21');
+  it('names the relay by its Fargate task id, else by host and process (MOTIR-10962)', () => {
+    const task = '3b3b1c2a9d3d4f8fa8b0c1d2e3f4a5b6';
+    const fargate = {
+      AWS_EXECUTION_ENV: 'AWS_ECS_FARGATE',
+      ECS_CONTAINER_METADATA_URI_V4: `http://169.254.170.2/v4/${task}-2531612879`,
+    };
+    expect(relayMachineId(fargate, () => 'h', 7)).toBe(task);
     expect(relayMachineId({}, () => 'host', 42)).toBe('host-42');
-    expect(relayMachineId({ FLY_MACHINE_ID: '' }, () => 'host', 42)).toBe('host-42');
+    expect(relayMachineId({ ...fargate, AWS_EXECUTION_ENV: '' }, () => 'host', 42)).toBe('host-42');
+    expect(relayMachineId({ ...fargate, ECS_CONTAINER_METADATA_URI_V4: '' }, () => 'h', 9)).toBe(
+      'h-9',
+    );
+    // A former Fly machine's variable no longer names the relay.
+    expect(relayMachineId({ FLY_MACHINE_ID: '148e21' }, () => 'host', 42)).toBe('host-42');
   });
 });

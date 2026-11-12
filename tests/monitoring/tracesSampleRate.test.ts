@@ -7,8 +7,8 @@ import { relaySentryInitOptions } from '@/lib/agentTerminal/relay/monitoring';
 
 // THE TRACE RATE IS OPT-IN PER PROCESS (MOTIR-8549).
 //
-// `SENTRY_TRACES_SAMPLE_RATE` is a Fly secret, and a Fly secret reaches EVERY
-// process group of the app — the job worker and the terminal relay included.
+// `SENTRY_TRACES_SAMPLE_RATE` is a deployment secret, and it reaches EVERY
+// process of the deployment — the job worker and the terminal relay included.
 // So the shared options builder must answer an explicit 0 unless its caller
 // asks for tracing, and only the web server asks. An omitted rate would not be
 // "off": the Node SDK reads the same variable itself.
@@ -19,9 +19,10 @@ beforeEach(() => {
   for (const name of [
     'SENTRY_DSN',
     'SENTRY_TRACES_SAMPLE_RATE',
-    'FLY_MACHINE_ID',
-    'FLY_PROCESS_GROUP',
-    'FLY_REGION',
+    'AWS_EXECUTION_ENV',
+    'AWS_REGION',
+    'ECS_CONTAINER_METADATA_URI_V4',
+    'MONITORING_CLOUDWATCH_SERVICE',
   ]) {
     vi.stubEnv(name, '');
   }
@@ -70,10 +71,17 @@ describe('monitoringInstanceTags', () => {
     expect(monitoringInstanceTags()).toEqual({});
   });
 
-  it('omits each variable that is unset, rather than tagging an empty string', () => {
-    vi.stubEnv('FLY_PROCESS_GROUP', 'worker');
-    vi.stubEnv('FLY_REGION', '  ');
+  it('omits each value that is unset, rather than tagging an empty string', () => {
+    vi.stubEnv('AWS_EXECUTION_ENV', 'AWS_ECS_FARGATE');
+    vi.stubEnv('MONITORING_CLOUDWATCH_SERVICE', 'worker');
+    vi.stubEnv('AWS_REGION', '  ');
     expect(monitoringInstanceTags()).toEqual({ 'instance.process_group': 'worker' });
+  });
+
+  it('is empty off Fargate, even with the process and region set (MOTIR-10962)', () => {
+    vi.stubEnv('MONITORING_CLOUDWATCH_SERVICE', 'worker');
+    vi.stubEnv('AWS_REGION', 'us-east-1');
+    expect(monitoringInstanceTags()).toEqual({});
   });
 });
 
@@ -96,7 +104,8 @@ describe('the worker and relay guarantee — no tracing unless asked for', () =>
   it('the relay is 0 even when the rate is 1, and still carries instance tags', () => {
     vi.stubEnv('SENTRY_DSN', DSN);
     vi.stubEnv('SENTRY_TRACES_SAMPLE_RATE', '1');
-    vi.stubEnv('FLY_PROCESS_GROUP', 'relay');
+    vi.stubEnv('AWS_EXECUTION_ENV', 'AWS_ECS_FARGATE');
+    vi.stubEnv('MONITORING_CLOUDWATCH_SERVICE', 'relay');
     const options = relaySentryInitOptions();
     expect(options?.tracesSampleRate).toBe(0);
     expect(options?.initialScope.tags).toEqual({ 'instance.process_group': 'relay' });
