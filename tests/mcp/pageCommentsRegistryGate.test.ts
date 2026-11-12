@@ -102,8 +102,10 @@ describe('annotation rows, by value', () => {
   });
 
   it('add_page_comment writes but destroys nothing', () => {
-    expect(TOOL_ANNOTATIONS.add_page_comment.readOnlyHint).toBe(false);
-    expect(TOOL_ANNOTATIONS.add_page_comment.destructiveHint).toBe(false);
+    expect(TOOL_ANNOTATIONS.add_page_comment).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+    });
   });
 });
 
