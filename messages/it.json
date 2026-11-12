@@ -10769,6 +10769,7 @@
       "navServices": "Servizi",
       "navCapacity": "Capacità dei fornitori",
       "navJobs": "Job",
+      "navCredentials": "Credenziali",
       "navStarters": "Starter",
       "navFleetStatus": "Stato della flotta"
     },
@@ -13891,6 +13892,76 @@
         "title": "Niente in attesa",
         "body": "Nessun job ha esaurito i tentativi. Le dead-letter compaiono qui quando succede."
       }
+    },
+    "credentials": {
+      "breadcrumb": "Piattaforma · Credenziali",
+      "title": "Credenziali",
+      "subtitle": "Le credenziali della piattaforma la cui scadenza passerebbe inosservata e il giorno in cui scade ciascuna, valutate all’apertura di questa pagina come le valuta il controllo giornaliero dello stato. Solo nomi: un valore non viene mai mostrato.",
+      "checkedAt": "Controllato alle {time} UTC · {date}",
+      "checkFailedAt": "Controllo non riuscito alle {time} UTC · {date}",
+      "card": {
+        "title": "Scadenze dichiarate delle credenziali",
+        "subtitle": "Ogni credenziale del registro, valutata come la valuta il controllo giornaliero dello stato"
+      },
+      "overall": {
+        "expired": "Scaduta · il controllo giornaliero non riesce",
+        "expiring": "In scadenza · il controllo giornaliero non riesce",
+        "ok": "Nessuna entro il preavviso",
+        "noneSet": "Niente controllato",
+        "empty": "Niente registrato",
+        "notChecked": "Non controllato",
+        "notCheckedLabel": "Credenziali non controllate: impossibile leggere il registro"
+      },
+      "count": {
+        "expired": "Scadute",
+        "expiring": "In scadenza",
+        "expiringSub": "entro il preavviso",
+        "notSet": "Non impostate",
+        "notSetSub": "non controllate qui",
+        "healthy": "Valide"
+      },
+      "rule": "Ogni data è dichiarata da chi ha creato il token, non letta dall’emittente, quindi una data è affidabile quanto la sua fonte.",
+      "table": {
+        "caption": "Credenziali registrate: prima le scadute, poi quelle in scadenza, non impostate e valide; la scadenza più vicina per prima"
+      },
+      "col": {
+        "credential": "Credenziale",
+        "expires": "Scade",
+        "daysLeft": "Giorni rimasti",
+        "verdict": "Esito",
+        "renewal": "Rinnovo e fonte"
+      },
+      "phone": {
+        "renewal": "Rinnovo",
+        "source": "Fonte",
+        "listLabel": "Credenziali registrate"
+      },
+      "source": "Fonte",
+      "verdict": {
+        "healthy": "Valida",
+        "expiring": "In scadenza",
+        "expired": "Scaduta",
+        "notSet": "Non impostata"
+      },
+      "days": {
+        "healthy": "{days, plural, one {# giorno} other {# giorni}}",
+        "warnsFrom": "avvisa dal {date}",
+        "expiring": "{days, plural, =0 {Meno di un giorno rimasto} one {# giorno rimasto} other {# giorni rimasti}}",
+        "insideLead": "entro il preavviso di {lead} giorni",
+        "expired": "{days, plural, =0 {Scaduta oggi} one {Scaduta # giorno fa} other {Scaduta # giorni fa}}",
+        "stillSet": "ancora impostata, quindi ancora in uso",
+        "notChecked": "Non controllata",
+        "notSetHere": "variabile non impostata qui"
+      },
+      "empty": {
+        "title": "Nessuna credenziale registrata",
+        "body": "Il controllo giornaliero dello stato non sorveglia la scadenza di alcuna credenziale. Non significa che vada tutto bene: una credenziale in scadenza è sorvegliata solo quando l’elemento di lavoro che la introduce la aggiunge a <mono>lib/health/credentialRegistry.ts</mono>."
+      },
+      "error": {
+        "title": "Impossibile controllare il registro",
+        "body": "<mono>{message}</mono>. Nessuna credenziale è elencata, perché un elenco privo di una voce sembrerebbe completo. Correggi <mono>expiresAt</mono> di quella voce in <mono>lib/health/credentialRegistry.ts</mono> e distribuisci; il controllo giornaliero dello stato si ferma sulla stessa voce."
+      },
+      "footer": "Sola lettura. Le credenziali che non scadono mai non sono registrate, quindi non compaiono qui: l’<link>inventario delle credenziali</link> elenca ogni credenziale che Motir detiene. Ogni rinnovo è un elemento di lavoro manuale a sé."
     },
     "starters": {
       "breadcrumb": "Operazioni · Starter",

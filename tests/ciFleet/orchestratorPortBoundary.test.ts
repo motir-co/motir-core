@@ -187,9 +187,12 @@ const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
     // The daily health check's credential registry (MOTIR-1933) DECLARES the
     // read token by name so its expiry is watched (MOTIR-7332). It reads the
     // variable's presence through the probe, never its value, and calls no API.
+    // MOTIR-9408 registers every other dated Fly token the same way: the
+    // certificates token and its app, the hosting org token and the index
+    // runners' deploy token. Each is a declared NAME and date, never a client.
     file: join('lib', 'health', 'credentialRegistry.ts'),
-    tell: /\bFLY_DEPLOYMENT_READ_TOKEN\b/,
-    why: "declares the deployment read token's expiry for the daily health check — a name, not a client",
+    tell: /\b(FLY_DEPLOYMENT_READ_TOKEN|FLY_CERTS_TOKEN|FLY_CERTS_APP|FLY_FLEET_DEPLOY_TOKEN|MOTIR_HOSTING_FLY_API_TOKEN)\b/,
+    why: 'declares the expiry of each dated Fly token for the daily health check — names, not a client (MOTIR-7332, MOTIR-9408)',
   },
   {
     file: join('lib', 'deployment', 'providers.ts'),

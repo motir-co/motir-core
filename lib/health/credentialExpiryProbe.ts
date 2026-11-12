@@ -7,7 +7,10 @@ import { LEAD_TIME_DAYS, type DeclaredCredential } from './credentialRegistry';
 // It knows no credential by name: every entry is judged by the same three
 // arms, so registering a second credential changes no line here.
 //
-//   • the variable is UNSET → SKIPPED, never failed. An unset credential is its
+//   • the variable is UNSET → SKIPPED, never failed. For an entry with `heldIn`
+//     — a credential another store holds, which core cannot see — "set" means
+//     this is Motir's own cloud (`MOTIR_CLOUD=true`), the one deployment that
+//     holds it. An unset credential is its
 //     feature's own `notConfigured` state (a self-hosted build has no billing
 //     token at all), and failing on it would dead-letter the check every morning
 //     on every deployment that never wanted the feature.
@@ -65,6 +68,16 @@ function isSet(value: string | undefined): boolean {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+/** Whether this deployment holds the credential, so its date is judged. */
+function isHeld(
+  credential: DeclaredCredential,
+  env: Readonly<Record<string, string | undefined>>,
+): boolean {
+  return credential.heldIn === undefined
+    ? isSet(env[credential.envVar])
+    : env['MOTIR_CLOUD'] === 'true';
+}
+
 function expiryInstant(isoDate: string): number {
   const at = Date.parse(`${isoDate}T00:00:00.000Z`);
   if (Number.isNaN(at)) {
@@ -85,7 +98,7 @@ export function probeCredentialExpiry(
   const skipped: string[] = [];
 
   for (const credential of registry) {
-    if (!isSet(env[credential.envVar])) {
+    if (!isHeld(credential, env)) {
       skipped.push(credential.envVar);
       continue;
     }

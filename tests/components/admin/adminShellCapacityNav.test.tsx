@@ -28,6 +28,7 @@ const LABELS = {
   navUsers: en.platformAdmin.nav.users,
   navMonitoring: en.platformAdmin.nav.monitoring,
   navJobs: en.platformAdmin.shell.navJobs,
+  navCredentials: en.platformAdmin.shell.navCredentials,
   navFleetSettings: shell.navFleetSettings,
   navFleetStatus: shell.navFleetStatus,
   navServices: shell.navServices,
@@ -65,8 +66,9 @@ describe('the Provider capacity row', () => {
   });
 
   it.each([
-    ['support', LABELS.navJobs],
-    ['operator', LABELS.navJobs],
+    // Credentials (MOTIR-9408) follows Jobs for every staff role.
+    ['support', LABELS.navCredentials],
+    ['operator', LABELS.navCredentials],
     // Fleet status (MOTIR-10886), then Services (MOTIR-10890), sit between
     // Fleet settings and Provider capacity.
     ['superadmin', LABELS.navServices],

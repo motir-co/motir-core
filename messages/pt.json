@@ -10769,6 +10769,7 @@
       "navServices": "Serviços",
       "navCapacity": "Capacidade dos provedores",
       "navJobs": "Jobs",
+      "navCredentials": "Credenciais",
       "navStarters": "Starters",
       "navFleetStatus": "Status da frota"
     },
@@ -13891,6 +13892,76 @@
         "title": "Nada aguardando",
         "body": "Nenhum job esgotou suas tentativas. As dead-letters aparecem aqui quando isso acontece."
       }
+    },
+    "credentials": {
+      "breadcrumb": "Plataforma · Credenciais",
+      "title": "Credenciais",
+      "subtitle": "As credenciais da plataforma cuja expiração passaria despercebida e o dia em que cada uma expira, avaliadas ao abrir esta página da mesma forma que a verificação diária de saúde as avalia. Apenas nomes: um valor nunca é exibido.",
+      "checkedAt": "Verificado às {time} UTC · {date}",
+      "checkFailedAt": "A verificação falhou às {time} UTC · {date}",
+      "card": {
+        "title": "Expirações declaradas das credenciais",
+        "subtitle": "Cada credencial do registro, avaliada como a verificação diária de saúde a avalia"
+      },
+      "overall": {
+        "expired": "Expirada · a verificação diária falha",
+        "expiring": "Expirando · a verificação diária falha",
+        "ok": "Nenhuma dentro do prazo de aviso",
+        "noneSet": "Nada verificado",
+        "empty": "Nada registrado",
+        "notChecked": "Não verificado",
+        "notCheckedLabel": "Credenciais não verificadas: não foi possível ler o registro"
+      },
+      "count": {
+        "expired": "Expiradas",
+        "expiring": "Expirando",
+        "expiringSub": "dentro do prazo de aviso",
+        "notSet": "Não definidas",
+        "notSetSub": "não verificadas aqui",
+        "healthy": "Saudáveis"
+      },
+      "rule": "Cada data é declarada por quem criou o token, não lida do emissor, então uma data é tão confiável quanto sua fonte.",
+      "table": {
+        "caption": "Credenciais registradas: primeiro as expiradas, depois as que estão expirando, não definidas e saudáveis; a expiração mais próxima primeiro"
+      },
+      "col": {
+        "credential": "Credencial",
+        "expires": "Expira",
+        "daysLeft": "Dias restantes",
+        "verdict": "Veredito",
+        "renewal": "Renovação e fonte"
+      },
+      "phone": {
+        "renewal": "Renovação",
+        "source": "Fonte",
+        "listLabel": "Credenciais registradas"
+      },
+      "source": "Fonte",
+      "verdict": {
+        "healthy": "Saudável",
+        "expiring": "Expirando",
+        "expired": "Expirada",
+        "notSet": "Não definida"
+      },
+      "days": {
+        "healthy": "{days, plural, one {# dia} other {# dias}}",
+        "warnsFrom": "avisa a partir de {date}",
+        "expiring": "{days, plural, =0 {Falta menos de um dia} one {Falta # dia} other {Faltam # dias}}",
+        "insideLead": "dentro do prazo de aviso de {lead} dias",
+        "expired": "{days, plural, =0 {Expirou hoje} one {Expirou há # dia} other {Expirou há # dias}}",
+        "stillSet": "ainda definida, portanto ainda em uso",
+        "notChecked": "Não verificada",
+        "notSetHere": "variável não definida aqui"
+      },
+      "empty": {
+        "title": "Nenhuma credencial registrada",
+        "body": "A verificação diária de saúde não monitora a expiração de nenhuma credencial. Isso não significa que está tudo bem: uma credencial que expira só é monitorada depois que o item de trabalho que a introduz a adiciona a <mono>lib/health/credentialRegistry.ts</mono>."
+      },
+      "error": {
+        "title": "Não foi possível verificar o registro",
+        "body": "<mono>{message}</mono>. Nenhuma credencial é listada, porque uma lista sem uma entrada pareceria completa. Corrija o <mono>expiresAt</mono> dessa entrada em <mono>lib/health/credentialRegistry.ts</mono> e implante; a verificação diária de saúde para na mesma entrada."
+      },
+      "footer": "Somente leitura. Credenciais que nunca expiram não são registradas, por isso não aparecem aqui: o <link>inventário de credenciais</link> lista todas as credenciais que a Motir mantém. Cada renovação é um item de trabalho manual próprio."
     },
     "starters": {
       "breadcrumb": "Operações · Starters",

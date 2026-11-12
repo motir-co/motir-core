@@ -27,6 +27,7 @@ const LABELS = {
   navUsers: 'Users',
   navMonitoring: 'Monitoring',
   navJobs: en.platformAdmin.shell.navJobs,
+  navCredentials: en.platformAdmin.shell.navCredentials,
   navFleetSettings: en.platformAdmin.shell.navFleetSettings,
   navFleetStatus: en.platformAdmin.shell.navFleetStatus,
   navServices: en.platformAdmin.shell.navServices,

@@ -11,6 +11,7 @@ import {
   Building2,
   Coins,
   Container,
+  KeyRound,
   Gauge,
   Layers,
   Lightbulb,
@@ -63,6 +64,8 @@ export interface AdminShellLabels {
   navMonitoring: string;
   /** Operations → Jobs (MOTIR-9987), visible to every staff role. */
   navJobs: string;
+  /** Operations → Credentials (MOTIR-9408), visible to every staff role. */
+  navCredentials: string;
   /** Operations → Fleet settings (MOTIR-8715), superadmin only. */
   navFleetSettings: string;
   navFleetStatus: string;
@@ -180,6 +183,15 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           label: labels.navJobs,
           href: '/admin/jobs',
           active: pathname === '/admin/jobs' || pathname.startsWith('/admin/jobs/'),
+        },
+        // Every declared platform credential's expiry (MOTIR-9408, design
+        // MOTIR-11084): directly after Jobs, for every staff role, so it sits
+        // above the superadmin-only rows. The page has no sub-routes.
+        {
+          icon: <KeyRound />,
+          label: labels.navCredentials,
+          href: '/admin/credentials',
+          active: pathname === '/admin/credentials',
         },
         // The fleet's one WRITE beside its read surface (MOTIR-8715, design
         // `platform-admin` AMENDMENT 2026-10 § Fleet settings): directly after
