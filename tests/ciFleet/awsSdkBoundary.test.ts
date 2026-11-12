@@ -66,11 +66,17 @@ const EMAIL_TRANSPORT = {
  * `lib/awsServices/ecsServicesReader.ts` and nothing else, the `lib/ses` shape:
  * the service judging what it read sees plain objects and is tested offline. The
  * Fleet status page's EC2 vCPU quota read (MOTIR-10887) is the same kind of read
- * and lives beside it, in `lib/awsServices/ec2VcpuQuotaReader.ts`.
+ * and lives beside it, in `lib/awsServices/ec2VcpuQuotaReader.ts`, as does its
+ * indexer image read of core's own ECR repository (MOTIR-10986),
+ * `lib/awsServices/ecrImagesReader.ts`.
  */
 const SERVICES_READ = {
   dir: join('lib', 'awsServices'),
-  modules: new Set(['@aws-sdk/client-ecs', '@aws-sdk/client-service-quotas']),
+  modules: new Set([
+    '@aws-sdk/client-ecs',
+    '@aws-sdk/client-service-quotas',
+    '@aws-sdk/client-ecr',
+  ]),
 };
 
 const EXCEPTIONS = [BLOB_STORE, SERVERLESS_HOSTING, EMAIL_TRANSPORT, SERVICES_READ];

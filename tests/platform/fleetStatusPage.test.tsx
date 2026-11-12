@@ -8,6 +8,8 @@ import { fleetStatusImagesService } from '@/lib/services/fleetStatusImagesServic
 import { fleetStatusPoolsService } from '@/lib/services/fleetStatusPoolsService';
 import {
   hostedRow,
+  indexerRow,
+  INDEXER_NEWEST_COMMIT,
   publishIdle,
   publishRecord,
   runnerRow,
@@ -50,7 +52,7 @@ vi.mock('next-intl/server', () => ({
 }));
 
 const { default: Page } = await import('@/app/(admin)/admin/fleet-status/page');
-const { HostedImageCard, RunnerImageCard, SandboxImageCard } =
+const { HostedImageCard, IndexerImageCard, RunnerImageCard, SandboxImageCard } =
   await import('@/app/(admin)/admin/fleet-status/_components/ImageCards');
 
 const ACTOR = 'ops+fleet-status@example.test';
@@ -72,6 +74,8 @@ const hosted = async (row: Parameters<typeof HostedImageCard>[0]['row']) =>
   decode(await renderToHtml(await HostedImageCard({ row, actorEmail: ACTOR })));
 const runner = async (row: Parameters<typeof RunnerImageCard>[0]['row']) =>
   decode(await renderToHtml(await RunnerImageCard({ row, actorEmail: ACTOR })));
+const indexer = async (row: Parameters<typeof IndexerImageCard>[0]['row']) =>
+  decode(await renderToHtml(await IndexerImageCard({ row, actorEmail: ACTOR })));
 const sandbox = async (row: Parameters<typeof SandboxImageCard>[0]['row']) =>
   decode(await renderToHtml(await SandboxImageCard({ row, actorEmail: ACTOR })));
 
@@ -110,23 +114,31 @@ describe('the fleet status page', () => {
     },
   );
 
-  it('a superadmin gets the frame and the three image cards, in order', async () => {
+  it('a superadmin gets the frame and the four image cards, the indexer after the runner', async () => {
     await signInAs('superadmin');
     const records = vi.spyOn(fleetStatusImagesService, 'publishRecords').mockResolvedValue({
       hosted: publishRecord(),
       runner: null,
+      indexer: null,
       sandbox: null,
     });
     const readHosted = vi
       .spyOn(fleetStatusImagesService, 'readHosted')
       .mockResolvedValue(hostedRow());
     vi.spyOn(fleetStatusImagesService, 'readRunner').mockResolvedValue(runnerRow());
+    const readIndexer = vi
+      .spyOn(fleetStatusImagesService, 'readIndexer')
+      .mockResolvedValue(indexerRow());
     vi.spyOn(fleetStatusImagesService, 'readSandbox').mockResolvedValue(sandboxRow());
     const html = decode(await renderToHtml(await Page()));
     expect(html).toContain('Operations · Fleet status');
+    expect(html).toContain('The four images production boots.');
+    expect(readIndexer).toHaveBeenCalledWith(null);
     expect(html).toContain('<h1');
     expect(html).toContain('id="images-heading"');
-    const order = ['hosted', 'runner', 'sandbox'].map((i) => html.indexOf(`data-image="${i}"`));
+    const order = ['hosted', 'runner', 'indexer', 'sandbox'].map((i) =>
+      html.indexOf(`data-image="${i}"`),
+    );
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(readHosted).toHaveBeenCalledWith(publishRecord());
@@ -146,13 +158,21 @@ describe('the fleet status page', () => {
     );
   });
 
-  it('one image that cannot be read leaves the other two cards whole', async () => {
+  it('one image that cannot be read leaves the other cards whole', async () => {
     await signInAs('superadmin');
     vi.spyOn(fleetStatusImagesService, 'publishRecords').mockResolvedValue({
       hosted: null,
       runner: null,
+      indexer: null,
       sandbox: null,
     });
+    vi.spyOn(fleetStatusImagesService, 'readIndexer').mockResolvedValue(
+      indexerRow({
+        newest: { state: 'not_read', source: 'github', detail: 'the indexer private detail' },
+        behind: false,
+        publish: publishIdle({ blocked: 'not_read' }),
+      }),
+    );
     vi.spyOn(fleetStatusImagesService, 'readHosted').mockResolvedValue(hostedRow());
     vi.spyOn(fleetStatusImagesService, 'readRunner').mockResolvedValue({
       status: 'not_read',
@@ -165,7 +185,9 @@ describe('the fleet status page', () => {
     expect(html).toContain("Couldn't read the CI runner image");
     expect(html).toContain('data-image="hosted" data-state="days_behind"');
     expect(html).toContain('data-image="sandbox" data-state="up_to_date"');
+    expect(html).toContain('data-image="indexer" data-state="not_read"');
     expect(html).not.toContain('the private detail');
+    expect(html).not.toContain('the indexer private detail');
   });
 });
 
@@ -475,5 +497,231 @@ describe('the agent-instance card', () => {
       "GHCR didn't answer",
     );
     expect(await sandbox({ status: 'unset', variable: 'X' })).toContain('X is not set');
+  });
+});
+
+// MOTIR-10986 — the Indexer image card, in every state design MOTIR-10987 draws.
+describe('the indexer card', () => {
+  const unreleased = [
+    {
+      commit: '4ef049fa1b2c3d4e5f60718293a4b5c6d7e8f901',
+      committedAt: '2026-11-12T00:00:00Z',
+      subject: 'fix(indexer): cap the graph size',
+      paths: ['src/indexer'],
+      relation: 'ahead' as const,
+    },
+  ];
+
+  it('behind: the release tiles with motir-ai commit links, the gap and an enabled publish', async () => {
+    const html = await indexer(indexerRow());
+    expect(html).toContain('data-image="indexer"');
+    expect(html).toContain('Indexer image');
+    expect(html).toContain('lucide-network');
+    expect(html).toContain('data-verdict="releases_behind"');
+    expect(html).toContain('1 release behind');
+    expect(html).toContain('(indexer-v0.5.1) · 12 days · 2 commits to the indexer.');
+    expect(html).toContain(
+      'href="https://github.com/motir-co/motir-ai/compare/indexer-v0.5.0...indexer-v0.5.1"',
+    );
+    expect(html).toContain(
+      `href="https://github.com/motir-co/motir-ai/commit/${INDEXER_NEWEST_COMMIT}"`,
+    );
+    expect(html).not.toContain('github.com/motir-co/motir-core/commit');
+    expect(html).toContain('indexer-v0.5.0');
+    expect(html).toContain('sha256:9f9f9f9f9f9f');
+    expect(html).toContain('data-publish="enabled"');
+    expect(html).toContain('Pins indexer-v0.5.1 through the indexer pin pull request');
+    // No AMI box: the indexer boots no machine image of its own.
+    expect(html).not.toContain('data-element="ami"');
+  });
+
+  it('up to date: same as pinned, the newest-release note and Publish latest off', async () => {
+    const row = indexerRow();
+    const html = await indexer(
+      indexerRow({
+        newest:
+          row.pinned.state === 'read'
+            ? { ...row.pinned, value: { ...row.pinned.value, version: '0.5.0' } }
+            : row.newest,
+        behind: false,
+        releasesBetween: [],
+        daysBehind: null,
+        indexerCommits: null,
+        compareUrl: null,
+        publish: publishIdle(),
+      }),
+    );
+    expect(html).toContain('data-verdict="up_to_date"');
+    expect(html).toContain('Same as pinned');
+    expect(html).toContain('Production pins the newest indexer release.');
+    expect(html).toContain('data-publish="disabled"');
+    expect(html).not.toContain('data-element="gap"');
+  });
+
+  it('release needed: the merged changes as motir-ai links, the tag to push in motir-ai, no button', async () => {
+    const html = await indexer(
+      indexerRow({
+        behind: false,
+        releasesBetween: [],
+        unreleased,
+        publish: publishIdle({ blocked: 'release_needed' }),
+      }),
+    );
+    expect(html).toContain('data-verdict="release_needed"');
+    expect(html).toContain('Merged since indexer-v0.5.1, in no release');
+    expect(html).toContain('1 merged change to the indexer came after it');
+    expect(html).toContain('href="https://github.com/motir-co/motir-ai/commit/4ef049fa1b2c');
+    expect(html).toContain('fix(indexer): cap the graph size');
+    expect(html).toContain(
+      'Push the tag <span class="font-mono">indexer-v0.5.2</span> in motir-ai',
+    );
+    expect(html).toContain('git tag indexer-v0.5.2 origin/main && git push origin indexer-v0.5.2');
+    expect(html).toContain('The merged changes above need a release first.');
+    expect(html).toContain('data-publish="disabled"');
+  });
+
+  it('behind and with unreleased changes: the gap, the list and Publish latest on', async () => {
+    const html = await indexer(indexerRow({ unreleased }));
+    expect(html).toContain('data-verdict="releases_behind"');
+    expect(html).toContain('data-element="gap"');
+    expect(html).toContain('data-element="unreleased"');
+    expect(html).toContain('data-publish="enabled"');
+  });
+
+  it('pinned bytes no release names, with no commit count: the unknown-release tile and the day gap', async () => {
+    const html = await indexer(
+      indexerRow({
+        pinned: {
+          state: 'read',
+          value: { digest: 'sha256:aa', commit: null, createdAt: null, version: null },
+        },
+        releasesBetween: null,
+        indexerCommits: null,
+      }),
+    );
+    expect(html).toContain('No release tag names these bytes');
+    expect(html).toContain('12 days behind');
+    expect(html).not.toContain('commits to the indexer');
+    const counted = await indexer(indexerRow({ releasesBetween: null, daysBehind: null }));
+    expect(counted).toContain('0 days · 2 commits to the indexer.');
+  });
+
+  it('publishing: the queued stage, then the rolling stage naming the release', async () => {
+    const running = (stage: 'queued' | 'rolling') =>
+      indexerRow({
+        publish: publishIdle({
+          ...indexerRow().publish,
+          record: publishRecord({ runNumber: 41 }),
+          progress: { state: 'running', startedAt: new Date().toISOString(), stage },
+          blocked: 'running',
+        }),
+      });
+    const queued = await indexer(running('queued'));
+    expect(queued).toContain('data-verdict="publishing"');
+    expect(queued).toContain('data-stage="queued"');
+    expect(queued).toContain('Pin pull request queued.');
+    expect(queued).toContain('Indexer pin · run #41');
+    expect(queued).toContain('Publishing…');
+    const rolling = await indexer(running('rolling'));
+    expect(rolling).toContain('Rolling web and worker.');
+    expect(rolling).toContain('moving web and worker onto indexer-v0.5.1');
+  });
+
+  it('published: the done band naming the release now pinned', async () => {
+    const html = await indexer(
+      indexerRow({
+        behind: false,
+        publish: publishIdle({ progress: { state: 'done', endedAt: new Date().toISOString() } }),
+      }),
+    );
+    expect(html).toContain('Published.');
+    expect(html).toContain('Production now pins indexer-v0.5.0 (sha256:464646464646).');
+  });
+
+  it('failed: the run’s words and Retry', async () => {
+    const html = await indexer(
+      indexerRow({
+        publish: {
+          ...indexerRow().publish,
+          record: publishRecord(),
+          progress: {
+            state: 'failed',
+            endedAt: new Date().toISOString(),
+            error: 'the merge queue dropped the pin pull request',
+          },
+        },
+      }),
+    );
+    expect(html).toContain('data-verdict="publish_failed"');
+    expect(html).toContain('the merge queue dropped the pin pull request');
+    expect(html).toContain('Retry');
+  });
+
+  it('unset: this install does not index, and no button', async () => {
+    const html = await indexer({ status: 'unset', variable: 'MOTIR_INDEXER_IMAGE' });
+    expect(html).toContain('data-verdict="unset"');
+    expect(html).toContain('so this install does not index');
+    expect(html).not.toContain('data-publish');
+  });
+
+  it('the pin not read: its own tile says so, the newest still shows, Publish latest off', async () => {
+    const html = await indexer(
+      indexerRow({
+        pinned: { state: 'not_read', source: 'aws', detail: 'the pin private detail' },
+        behind: false,
+        releasesBetween: [],
+        publish: publishIdle({ blocked: 'not_read' }),
+      }),
+    );
+    expect(html).toContain('data-verdict="not_read"');
+    expect(html).toContain('data-element="not-read"');
+    expect(html).toContain("Couldn't read the pin.");
+    expect(html).toContain("ECR didn't answer for the digest MOTIR_INDEXER_IMAGE names");
+    expect(html).toContain('indexer-v0.5.1');
+    expect(html).not.toContain('Same as pinned');
+    expect(html).toContain(
+      'Publish latest stays off until the pin and the newest release are both read.',
+    );
+    expect(html).not.toContain('the pin private detail');
+    expect(console.error).toHaveBeenCalledWith(
+      '[admin] fleet status indexer part could not be read',
+      { part: 'pin', source: 'aws', detail: 'the pin private detail' },
+    );
+  });
+
+  it('the newest release not read, from GitHub or from ECR, each in its own words', async () => {
+    const notRead = (source: 'github' | 'aws') =>
+      indexerRow({
+        newest: { state: 'not_read', source, detail: 'x' },
+        behind: false,
+        nextTag: null,
+        publish: publishIdle({ blocked: 'not_read' }),
+      });
+    const github = await indexer(notRead('github'));
+    expect(github).toContain("Couldn't read the releases.");
+    expect(github).toContain("GitHub didn't answer for motir-ai's indexer-v* releases");
+    expect(github).toContain('indexer-v0.5.0');
+    const ecr = await indexer(notRead('aws'));
+    expect(ecr).toContain("ECR didn't answer for the indexer repository's indexer-* release tags");
+  });
+
+  it('the history not read: its error under the tiles, and the compare still stands', async () => {
+    const html = await indexer(
+      indexerRow({
+        history: { state: 'not_read', source: 'github', detail: 'x' },
+        indexerCommits: null,
+      }),
+    );
+    expect(html).toContain('data-element="history-not-read"');
+    expect(html).toContain("Couldn't read the merged changes");
+    expect(html).toContain('The pin and the newest release above still compare.');
+    expect(html).toContain('data-verdict="releases_behind"');
+    expect(html).toContain('data-publish="enabled"');
+  });
+
+  it('a whole row not read is the shared error card', async () => {
+    expect(await indexer({ status: 'not_read', source: 'github', detail: 'x' })).toContain(
+      "Couldn't read the indexer image",
+    );
   });
 });

@@ -733,7 +733,7 @@ describe('the agent-instance row', () => {
 describe('the publish records', () => {
   it('one audited read answers the newest press of each image', async () => {
     const before = await service.publishRecords(currentPrincipal);
-    expect(before).toEqual({ hosted: null, runner: null, sandbox: null });
+    expect(before).toEqual({ hosted: null, runner: null, indexer: null, sandbox: null });
     const reads = await adminDb.platformAuditLog.findMany({
       where: { action: 'fleet.status.read' },
     });

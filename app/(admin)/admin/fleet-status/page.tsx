@@ -2,7 +2,7 @@ import { cache, Suspense } from 'react';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Card } from '@/components/ui/Card';
-import type { FleetImageKey } from '@/lib/dto/fleetStatusImages';
+import { FLEET_IMAGE_KEYS, type FleetImageKey } from '@/lib/dto/fleetStatusImages';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import {
@@ -10,7 +10,12 @@ import {
   type FleetPublishRecords,
 } from '@/lib/services/fleetStatusImagesService';
 import { fleetStatusPoolsService } from '@/lib/services/fleetStatusPoolsService';
-import { HostedImageCard, RunnerImageCard, SandboxImageCard } from './_components/ImageCards';
+import {
+  HostedImageCard,
+  IndexerImageCard,
+  RunnerImageCard,
+  SandboxImageCard,
+} from './_components/ImageCards';
 import { InstallFleetCard, ShardPoolsCard } from './_components/PoolCards';
 
 /**
@@ -24,7 +29,8 @@ import { InstallFleetCard, ShardPoolsCard } from './_components/PoolCards';
  *
  * ⚠️ EACH CARD IS READ AND SETTLED ON ITS OWN, behind its own `<Suspense>`, so a
  * registry, GitHub or AWS that does not answer leaves only its own card saying
- * so (Panel 9). The publish records are one audited read, shared by the three.
+ * so (Panel 9). The publish records are one audited read, shared by the four
+ * image cards (the Indexer image card is MOTIR-10986).
  *
  * ⚠️ NO `loading.tsx`. The gate decides existence, so the reads stream behind
  * the in-page `<Suspense>` placed AFTER it.
@@ -35,7 +41,7 @@ export const metadata: Metadata = { title: 'Fleet status' };
 /** Never cached — a publish a minute ago must show on the next load. */
 export const dynamic = 'force-dynamic';
 
-/** One audited read of the three images' publish records per request. */
+/** One audited read of the four images' publish records per request. */
 const publishRecords = cache(
   (principal: PlatformPrincipal): Promise<FleetPublishRecords> =>
     fleetStatusImagesService.publishRecords(principal),
@@ -63,7 +69,7 @@ export default async function AdminFleetStatusPage() {
             {t('images.subtitle')}
           </p>
         </div>
-        {(['hosted', 'runner', 'sandbox'] as const).map((image) => (
+        {FLEET_IMAGE_KEYS.map((image) => (
           <Suspense
             key={image}
             fallback={<CardSkeleton label={t('loading', { image: t(`imageName.${image}`) })} />}
@@ -128,6 +134,14 @@ async function ImageRow({
     return (
       <RunnerImageCard
         row={await fleetStatusImagesService.readRunner(record)}
+        actorEmail={principal.email}
+      />
+    );
+  }
+  if (image === 'indexer') {
+    return (
+      <IndexerImageCard
+        row={await fleetStatusImagesService.readIndexer(record)}
         actorEmail={principal.email}
       />
     );

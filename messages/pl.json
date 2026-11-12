@@ -14044,7 +14044,7 @@
       "subtitle": "Czy produkcja uruchamia najnowszą wersję każdego obrazu, który startuje Motir, i jak zapełniona jest każda pula floty. Odczytywane przy ładowaniu strony. Opublikuj najnowszy to jedyna akcja tutaj, a każde kliknięcie trafia do dziennika audytu.",
       "images": {
         "title": "Obrazy",
-        "subtitle": "Trzy obrazy, które uruchamia produkcja. Każdy jest porównywany z najnowszym opublikowanym; gdy produkcja jest w tyle, Opublikuj najnowszy przesuwa ją przez własny workflow publikacji tego obrazu."
+        "subtitle": "Cztery obrazy, które uruchamia produkcja. Każdy jest porównywany z najnowszym opublikowanym; gdy produkcja jest w tyle, Opublikuj najnowszy przesuwa ją przez własny workflow publikacji tego obrazu."
       },
       "image": {
         "hosted": {
@@ -14055,6 +14055,10 @@
           "title": "Obraz runnera CI",
           "subtitle": "W czym działa każde zadanie CI floty. Przypięty przez MOTIR_RUNNER_IMAGE; najnowszy to ostatnie wydanie runner-v*."
         },
+        "indexer": {
+          "title": "Obraz indeksera",
+          "subtitle": "To, co uruchamia każde uruchomienie indeksowania grafu kodu. Przypięty przez MOTIR_INDEXER_IMAGE; najnowszy to ostatnie wydanie indexer-v*."
+        },
         "sandbox": {
           "title": "Obrazy instancji agentów",
           "subtitle": "Piaskownica, w której działają agenty, jeden tag na profil w ghcr.io/motir-co/motir-sandbox. Kompletne, gdy każdy profil ma swój tag w najnowszym wydaniu cli-v*."
@@ -14063,6 +14067,7 @@
       "imageName": {
         "hosted": "obraz hostowanego agenta",
         "runner": "obraz runnera CI",
+        "indexer": "obraz indeksera",
         "sandbox": "obrazy instancji agentów"
       },
       "source": {
@@ -14093,13 +14098,17 @@
         "hosted": "{count, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w packages/cli między przypiętym a najnowszym buildem.",
         "runner": "({tags}) · {days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w infra/ci-runner.",
         "runnerNoTags": "{days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w infra/ci-runner.",
+        "indexer": "({tags}) · {days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w indekserze.",
+        "indexerNoTags": "{days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w indekserze.",
         "link": "Zobacz commity"
       },
       "unreleased": {
         "title": "Scalone od {release}, w żadnym wydaniu",
-        "count": "{count, plural, one {# zmiana} few {# zmiany} many {# zmian} other {# zmiany}} w infra/ci-runner"
+        "count": "{count, plural, one {# zmiana} few {# zmiany} many {# zmian} other {# zmiany}} w infra/ci-runner",
+        "indexerCount": "{count, plural, one {# scalona zmiana w indekserze pojawiła się później} few {# scalone zmiany w indekserze pojawiły się później} many {# scalonych zmian w indekserze pojawiło się później} other {# scalonej zmiany w indekserze pojawiło się później}}"
       },
       "releaseNeeded": "<strong>Potrzebne jest wydanie.</strong> Te zmiany trafiają do floty tylko w nowym wydaniu runnera, a ta strona go nie tworzy. Wypchnij tag <mono>{tag}</mono>; potok wydań go opublikuje, a wiersz zaproponuje Opublikuj najnowszy.",
+      "releaseNeededIndexer": "<strong>Potrzebne jest wydanie.</strong> Te zmiany trafiają do uruchomień indeksowania tylko w nowym wydaniu indeksera, a ta strona go nie tworzy. Wypchnij tag <mono>{tag}</mono> w motir-ai; jego potok wydań go opublikuje, a wiersz zaproponuje Opublikuj najnowszy.",
       "ami": {
         "title": "AMI runnera · tylko odczyt",
         "current": "Aktualne",
@@ -14132,10 +14141,14 @@
         "note": {
           "hosted": "Przypina najnowszy build main przez workflow przypinania hostowanego agenta. Web i worker przechodzą na niego.",
           "runner": "Przypina {release} przez workflow przypinania runnera. Web i worker przechodzą na nie.",
+          "indexer": "Przypina {release} przez pull request przypięcia indeksera. Web i worker przechodzą na nie.",
           "sandbox": "Publikuje ponownie {release}. Wypychane są tylko brakujące tagi ({count}); w produkcji nic się nie zmienia.",
           "hostedCurrent": "Nie ma nic nowszego do opublikowania. Produkcja przypina najnowszy build main.",
           "runnerCurrent": "Nie ma nic nowszego do opublikowania. Produkcja przypina najnowsze wydanie runnera.",
           "runnerReleaseNeeded": "Nie ma nic nowszego do opublikowania: produkcja przypina najnowsze wydanie. Scalone zmiany powyżej najpierw potrzebują wydania.",
+          "indexerCurrent": "Nie ma nic nowszego do opublikowania. Produkcja przypina najnowsze wydanie indeksera.",
+          "indexerReleaseNeeded": "Nie ma nic nowszego do opublikowania: produkcja przypina najnowsze wydanie indeksera. Scalone zmiany powyżej najpierw potrzebują wydania.",
+          "indexerNotRead": "Opublikuj najnowszy pozostaje wyłączone, dopóki nie zostaną odczytane zarówno przypięcie, jak i najnowsze wydanie.",
           "sandboxCurrent": "Nie ma nic nowszego do opublikowania. Każdy profil ma swój tag w najnowszym wydaniu.",
           "sandboxOld": "{release} utworzono, zanim ponowne uruchomienie mogło wypchnąć tylko brakujące tagi, więc ponowne uruchomienie wypchnęłoby każdy tag od nowa. Zamiast tego utwórz nowe wydanie cli-v*.",
           "running": "Uruchomienie workflow publikacji tego obrazu już trwa. Opublikuj najnowszy jest wyłączone do jego zakończenia.",
@@ -14153,12 +14166,21 @@
         "sandboxFrom": "{published} z {total} tagów w {version}",
         "hostedBody": "To uruchamia workflow przypinania hostowanego agenta. Przestawia MOTIR_HOSTED_AGENT_IMAGE na najnowszy build i wdraża: <strong>web i worker przechodzą</strong> na nowe przypięcie, a hostowane uruchomienia rozpoczęte po przejściu startują nowy obraz.",
         "runnerBody": "To uruchamia workflow przypinania runnera. Przestawia MOTIR_RUNNER_IMAGE na {release} i wdraża: <strong>web i worker przechodzą</strong> na nowe przypięcie. AMI runnera się nie zmienia.",
+        "indexerBody": "To otwiera pull request przypięcia indeksera, który przestawia MOTIR_INDEXER_IMAGE na {release} i trafia do kolejki scalania. Jego wdrożenie <strong>przełącza następnie web i worker</strong>, a uruchomienia indeksowania rozpoczęte po przełączeniu uruchamiają nowy obraz. Uruchomienia już trwające kończą się na obrazie, z którym wystartowały.",
         "sandboxBody": "To ponownie uruchamia wydanie piaskownicy dla {release} i wypycha tylko brakujące tagi: {missing}. {published} są już opublikowane i nie są wypychane ponownie. <strong>W produkcji nic się nie zmienia.</strong>",
         "sandboxBodyNonePublished": "To ponownie uruchamia wydanie piaskownicy dla {release} i wypycha tylko brakujące tagi: {missing}. <strong>W produkcji nic się nie zmienia.</strong>"
       },
       "progress": {
         "title": "Publikowanie.",
         "body": "Workflow publikacji działa; ten wiersz zaktualizuje się, gdy się zakończy.",
+        "indexerQueued": {
+          "title": "Pull request przypięcia w kolejce.",
+          "body": "Zostaje scalony przez kolejkę scalania, potem jego wdrożenie przełącza web i worker; ten wiersz aktualizuje się na bieżąco."
+        },
+        "indexerRolling": {
+          "title": "Przełączanie web i worker.",
+          "body": "Pull request przypięcia został scalony, a jego wdrożenie przenosi web i worker na {release}. Nowe uruchomienia indeksowania uruchomią go po zakończeniu przełączania."
+        },
         "started": "· uruchomione {age} przez {email}",
         "startedNoActor": "· uruchomione {age}",
         "button": "Publikowanie…"
@@ -14177,6 +14199,7 @@
       "workflow": {
         "hosted": "Przypięcie hostowanego agenta",
         "runner": "Przypięcie runnera",
+        "indexer": "Przypięcie indeksera",
         "sandbox": "Wydanie piaskownicy {tag}",
         "run": "{workflow} · uruchomienie #{number}",
         "runNoNumber": "{workflow} · uruchomienie"
@@ -14193,7 +14216,26 @@
       },
       "unset": {
         "title": "Nieskonfigurowane tutaj",
-        "body": "{variable} nie jest ustawione w tym wdrożeniu, więc nie ma przypięcia do porównania."
+        "body": "{variable} nie jest ustawione w tym wdrożeniu, więc nie ma przypięcia do porównania.",
+        "indexerBody": "MOTIR_INDEXER_IMAGE nie jest ustawione w tym wdrożeniu, więc ta instalacja nie indeksuje: żadne uruchomienie indeksowania grafu kodu się nie zaczyna i nie ma przypięcia do porównania."
+      },
+      "notRead": {
+        "pin": {
+          "title": "Nie udało się odczytać przypięcia.",
+          "body": "ECR nie odpowiedział dla skrótu wskazanego przez MOTIR_INDEXER_IMAGE, więc nie jest on porównywany i nic tutaj nie oznacza aktualności."
+        },
+        "newest": {
+          "title": "Nie udało się odczytać wydań.",
+          "body": "GitHub nie odpowiedział dla wydań indexer-v* motir-ai, więc przypięcie nie jest z niczym porównywane."
+        },
+        "newestEcr": {
+          "title": "Nie udało się odczytać wydań.",
+          "body": "ECR nie odpowiedział dla tagów wydań indexer-* repozytorium indeksera, więc przypięcie nie jest z niczym porównywane."
+        },
+        "history": {
+          "title": "Nie udało się odczytać scalonych zmian",
+          "body": "GitHub nie odpowiedział dla historii commitów motir-ai, więc zmiany, których nie ma w żadnym wydaniu, nie są wymienione. Przypięcie i najnowsze wydanie powyżej nadal są porównywane."
+        }
       },
       "loading": "Ładowanie: {image}",
       "publishError": {
