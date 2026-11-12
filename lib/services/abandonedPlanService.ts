@@ -21,6 +21,7 @@ import { cancelJob, getJob } from '@/lib/ai/motirAiClient';
 import { failureRecordFrom, type JobWalkStop } from '@/lib/planChange/failureRecord';
 import {
   FAILURE_DETAIL_MAX,
+  autoResumeCauseOf,
   sessionWaitingState,
   type PlanSessionFailureRecord,
   type SessionWaitingRow,
@@ -675,15 +676,21 @@ export const abandonedPlanService = {
           recorded === 'recorded' && giveUpJobId
             ? await cancelAbandonedJob(deps, giveUpJobId, plan)
             : null;
-        // A LOST MACHINE is resumed by core itself (MOTIR-8307); every other recording waits.
-        const autoResume =
-          recorded === 'recorded' && facts.lostMachine && !unresumable
-            ? await resumeAutomaticallySafely({
-                sessionId: session.id,
-                workspaceId: plan.workspaceId,
-                projectId: plan.projectId,
-              })
+        // A LOST MACHINE is resumed by core itself (MOTIR-8307), and so, once per session, is
+        // an UNAVAILABLE PROVIDER (MOTIR-10968); every other recording waits. A plan judged by
+        // silence is recorded `stalled`, so only a job that ended tells the provider cause.
+        const cause =
+          recorded === 'recorded'
+            ? autoResumeCauseOf({ lostMachine: facts.lostMachine, ...record })
             : null;
+        const autoResume = cause
+          ? await resumeAutomaticallySafely({
+              sessionId: session.id,
+              workspaceId: plan.workspaceId,
+              projectId: plan.projectId,
+              cause,
+            })
+          : null;
         if (autoResume?.started) {
           console.warn(
             `[abandoned-plan-sweep] plan ${plan.id} resumed automatically on session ${session.id} — job ${autoResume.jobId} (${autoResume.count})`,

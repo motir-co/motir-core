@@ -125,6 +125,31 @@ export const NOT_WAITING_WHERE = {
  */
 export const AUTO_RESUMES_PER_SESSION = 2;
 
+/**
+ * WHY a recorded failure is resumed by Motir itself (MOTIR-10968). `lost_machine`: motir-ai
+ * reaped the job (MOTIR-8307). `model_unavailable`: the AI provider was unavailable — a blip
+ * one resume absorbs. Each draws on {@link AUTO_RESUMES_PER_SESSION}; `model_unavailable`
+ * is also allowed only ONCE per session, so a provider that is really down costs one
+ * extra attempt before the failure waits for the person.
+ */
+export type AutoResumeCause = 'lost_machine' | 'model_unavailable';
+
+/**
+ * The cause a just-recorded failure is resumed automatically for, or `null` when it waits
+ * in To resume. A lost machine wins over the recorded reason: that resume was always made
+ * whatever the walk last said. Every other reason — and a failure motir-ai said cannot be
+ * resumed — waits for the person.
+ */
+export function autoResumeCauseOf(failure: {
+  lostMachine: boolean;
+  failureReason: PlanSessionFailureReason;
+  failureResumable?: boolean | null;
+}): AutoResumeCause | null {
+  if (failure.failureResumable === false) return null;
+  if (failure.lostMachine) return 'lost_machine';
+  return failure.failureReason === 'model_unavailable' ? 'model_unavailable' : null;
+}
+
 /** The caps on what a failure may carry — it must be storable whatever motir-ai says. */
 export const FAILURE_DETAIL_MAX = 300;
 export const FAILURE_STOP_REF_MAX = 200;

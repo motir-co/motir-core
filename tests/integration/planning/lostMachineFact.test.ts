@@ -121,12 +121,14 @@ describe('settleFailedJob hands the lost-machine fact back (the relay path)', ()
       { readJob: async () => ({ error: REAPED_ERROR, walkStop: null }) },
     );
 
+    // Not lost — but the outage error records `model_unavailable`, which is resumed ONCE by
+    // itself since MOTIR-10968, so the resume is attempted (and refused here, as above).
     expect(out).toEqual({
       settled: 'recorded',
       sessionId,
       arm: 'session',
       lostMachine: false,
-      autoResume: null,
+      autoResume: { started: false, reason: 'submit_refused' },
     });
   });
 

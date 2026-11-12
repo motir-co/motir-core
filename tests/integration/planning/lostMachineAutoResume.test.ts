@@ -692,35 +692,44 @@ describe('D · the guards the chain passes through', () => {
     expect(submitJobMock).not.toHaveBeenCalled();
   });
 
-  it('a sweep whose second read of the job fails records the failure as not lost', T, async () => {
-    const { sessionId, planId } = await seed();
-    jobs.set('job-old', abandoned('job-old'));
-    let reads = 0;
-    fetchMock.mockImplementation(async () => {
-      reads += 1;
-      return reads === 1
-        ? Response.json({
-            jobId: 'job-old',
-            status: 'failed',
-            result: null,
-            error: abandoned('job-old').error,
-          })
-        : new Response('upstream down', { status: 502 });
-    });
+  it(
+    'a sweep whose second read of the job fails records it as not lost, resumed once as an unavailable provider',
+    T,
+    async () => {
+      const { sessionId, planId } = await seed();
+      jobs.set('job-old', abandoned('job-old'));
+      let reads = 0;
+      fetchMock.mockImplementation(async () => {
+        reads += 1;
+        return reads === 1
+          ? Response.json({
+              jobId: 'job-old',
+              status: 'failed',
+              result: null,
+              error: abandoned('job-old').error,
+            })
+          : new Response('upstream down', { status: 502 });
+      });
 
-    const out = await sweep();
+      const out = await sweep();
 
-    expect(out.outcomes).toEqual([
-      expect.objectContaining({
-        planId,
-        outcome: 'awaiting_resume',
-        lostMachine: false,
-        autoResume: null,
-      }),
-    ]);
-    expect(submitJobMock).not.toHaveBeenCalled();
-    expect((await sessionRow(sessionId)).failedJobId).toBe('job-old');
-  });
+      // Unknown is not lost — but the reap's outage problem records `model_unavailable`, which is
+      // resumed ONCE by itself since MOTIR-10968, so the same plan is resumed on that cause.
+      expect(out.outcomes).toEqual([
+        expect.objectContaining({
+          planId,
+          outcome: 'awaiting_resume',
+          lostMachine: false,
+          autoResume: { started: true, jobId: 'job-new-1', count: 1 },
+        }),
+      ]);
+      expect(submitJobMock).toHaveBeenCalledTimes(1);
+      const s = await sessionRow(sessionId);
+      expect(s.failedJobId).toBeNull();
+      expect(s.providerResumedAt).toEqual(s.lastAutoResumedAt);
+      expect((await planRow(planId)).sourceJobId).toBe('job-new-1');
+    },
+  );
 
   it('both progress doors read no resume for a plan with no session', T, async () => {
     const plan = await plansService.createPlan(fx.projectId, { title: 'No session' }, fx.ctx);

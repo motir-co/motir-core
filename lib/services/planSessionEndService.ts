@@ -2,6 +2,8 @@ import type { Prisma, PlanChangeSession, PlanSessionEndReason } from '@/generate
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
+  type AutoResumeCause,
+  autoResumeCauseOf,
   CLEARED_AWAITING_COLUMNS,
   CLEARED_FAILURE_COLUMNS,
   sessionWaitingState,
@@ -579,8 +581,9 @@ export interface SettleFailedJobResult {
   lostMachine: boolean;
   /**
    * The automatic resume this settle started or skipped (MOTIR-8307) — attempted only for a
-   * walk's session whose failure was RECORDED because its machine was lost; `null` whenever
-   * no attempt was made.
+   * walk's session whose failure was RECORDED because its machine was lost, or because the
+   * AI provider was unavailable (`model_unavailable`, MOTIR-10968); `null` whenever no
+   * attempt was made.
    */
   autoResume: AutoResumeOutcome | null;
 }
@@ -675,12 +678,15 @@ export async function settleFailedJob(
       };
     }
     // AWAITED before returning, so by the time the relay sends its terminal frame the session
-    // is already re-bound and no longer failed.
-    const autoResume = lostMachine
+    // is already re-bound and no longer failed. A lost machine, or an unavailable provider
+    // once (MOTIR-10968); every other recorded reason waits in To resume.
+    const cause = autoResumeCauseOf({ lostMachine, ...record });
+    const autoResume = cause
       ? await resumeAutomaticallySafely({
           sessionId: session.id,
           workspaceId: ctx.workspaceId,
           projectId: ctx.projectId,
+          cause,
         })
       : null;
     return { settled: 'recorded', sessionId: session.id, arm: 'session', lostMachine, autoResume };
@@ -809,6 +815,7 @@ export async function resumeAutomaticallySafely(input: {
   sessionId: string;
   workspaceId: string;
   projectId: string;
+  cause: AutoResumeCause;
 }): Promise<AutoResumeOutcome> {
   try {
     const { planSessionResumeService } = await import('@/lib/services/planSessionResumeService');
