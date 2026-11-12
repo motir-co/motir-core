@@ -593,6 +593,7 @@ describe('gate — coverage top-up: the schema module', () => {
       key: 3,
       identifier: 'PROD-3',
       title: 'Orphan',
+      subject: null,
       status: 'todo',
       priority: 'medium',
       assigneeId: null,
