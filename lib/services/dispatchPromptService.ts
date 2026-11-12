@@ -543,6 +543,8 @@ export const dispatchPromptService = {
       kind: item.kind,
       type: item.type,
       executor: item.executor,
+      // The init-card discriminator's prompt half (MOTIR-11054).
+      subject: item.subject,
       difficulty: item.difficulty,
       priority: item.priority,
       storyPoints: item.storyPoints,

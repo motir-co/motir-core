@@ -1120,6 +1120,25 @@ export const workItemRepository = {
   },
 
   /**
+   * The project's NON-ARCHIVED init cards — every card whose declared
+   * `initRepositoryName` is set (Story MOTIR-10162 · MOTIR-11054) — with the id,
+   * the status and that column, selected explicitly because the column is in no
+   * shared projection. Read by the establish pass's completion, which matches each
+   * declaration against the rows it just settled.
+   */
+  async listOpenInitCardsByProject(
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; status: string; initRepositoryName: string }>> {
+    const rows = await tx.workItem.findMany({
+      where: { projectId, archivedAt: null, initRepositoryName: { not: null } },
+      select: { id: true, status: true, initRepositoryName: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => ({ ...r, initRepositoryName: r.initRepositoryName! }));
+  },
+
+  /**
    * The project's NON-ARCHIVED init cards whose declared `initRepositoryName`
    * matches any of `names` case-insensitively (Story MOTIR-10162 · MOTIR-11042) —
    * the routing pass's "who declared this repository". A named read because the
