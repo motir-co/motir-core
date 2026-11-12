@@ -675,10 +675,15 @@ test('a plan needing a new repository lays one init card ahead of the work, and 
 
   await chapter(CHAPTERS[5], async () => {
     await activate(seed, billing.projectId);
+    // An asked plan is approved with the stamp its reader was shown; a press without
+    // one is refused 400.
+    const asked = await readReview(page, billing.planId);
+    expect(asked.gate?.stamp, 'the billing plan is awaiting its approval').toBeTruthy();
     const approved = await call(
       page,
       'POST',
       `/api/plans/${encodeURIComponent(billing.planId)}/approve`,
+      { stamp: asked.gate!.stamp },
     );
     expect(approved.status(), 'the billing plan was approved').toBe(200);
     const review = await readReview(page, billing.planId);
