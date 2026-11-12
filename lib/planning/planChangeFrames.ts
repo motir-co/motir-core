@@ -149,6 +149,7 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'provenance',
   'read',
   'reauthor_target',
+  'registration',
   'resume_seeded',
   'retrieval',
   'retrieval_ready',
@@ -366,6 +367,14 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
    *  each level's lay judges its cards against it. */
   clause_list: {
     quiet: 'the clause list taken before the first level — the briefing’s section 1 shows it',
+  },
+  /** generationPass `register_hand_off` (MOTIR-11073): an author kept a hand-off or a
+   *  rename it was forced to make, for its level's amend to apply as a patch. The
+   *  amend's edits carry it to the plan, each with its reason, and the walk report
+   *  lists every registration (`authoring.registrations`), so it is not an act line. Accepted here
+   *  BEFORE motir-ai emits it on `main`. */
+  registration: {
+    quiet: 'a hand-off or rename kept for the level’s amend — the amend’s edits carry it',
   },
 };
 
