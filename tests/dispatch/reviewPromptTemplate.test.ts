@@ -235,8 +235,9 @@ describe('assembleReviewPrompt — the criteria checklist over the tree', () => 
     );
     expect(prompt).toContain('ONE verdict, for ACME-7 — the run target — only.');
     expect(prompt).toContain('never verdict targets');
-    expect(prompt).toContain('any checklist row is `not met`, or any finding is a blocker');
-    expect(prompt).toContain('Minor findings and nits never send the card back.');
+    expect(prompt).toContain('any checklist row is `not met`, any finding is a blocker or');
+    expect(prompt).toContain('Nits never send the card back.');
+    expect(prompt).not.toContain('Minor findings and nits never send the card back.');
     expect(prompt).toContain('A `cannot tell` row alone does not send the card back');
     expect(prompt).toContain('Put the checklist at the TOP of `findingsMd`');
   });
@@ -256,6 +257,65 @@ describe('assembleReviewPrompt — the criteria checklist over the tree', () => 
     expect(assembleReviewPrompt(STORY).prompt).toBe(
       assembleReviewPrompt(structuredClone(STORY)).prompt,
     );
+  });
+
+  describe('A MINOR FINDING IS CLASSED BY WHO INTRODUCED IT (MOTIR-11094)', () => {
+    const flat = (text: string) => text.replace(/\s+/g, ' ');
+    const verdict = (prompt: string) => flat(prompt.slice(prompt.indexOf('YOUR VERDICT')));
+
+    it('an introduced minor finding means `changes_requested`, even past the card’s text', () => {
+      const text = verdict(assembleReviewPrompt(TWO_REPOSITORY_CARD).prompt);
+      expect(text).toContain(
+        '`changes_requested` — any checklist row is `not met`, any finding is a blocker or ' +
+          'major, or any minor finding is one the pull requests introduced (in code they deliver).',
+      );
+      expect(text).toContain(
+        'That holds even when the fix goes beyond the card’s text: the repair builds it and ' +
+          'records the discrepancy.',
+      );
+    });
+
+    it('a nit never sends the card back, and `pass` keeps only the checklist and nits', () => {
+      const text = verdict(assembleReviewPrompt(TWO_REPOSITORY_CARD).prompt);
+      expect(text).toContain('Nits never send the card back.');
+      expect(text).toContain(
+        '`pass` — otherwise. `findingsMd` then holds the checklist and nits only.',
+      );
+      expect(text).not.toContain('minor notes');
+    });
+
+    it('a minor finding the PR did not introduce must be in `bugs` or named as an already-filed bug', () => {
+      const prompt = assembleReviewPrompt(TWO_REPOSITORY_CARD).prompt;
+      expect(verdict(prompt)).toContain(
+        'A minor finding the pull requests did not introduce is logged in `bugs`, or named in ' +
+          '`summaryMd` as the already-filed bug that covers it. One that is neither is not ' +
+          'allowed beside a `pass`.',
+      );
+      // The bug section says the same, where the reviewer learns how to log one.
+      const bugs = flat(
+        prompt.slice(
+          prompt.indexOf('A DEFECT THE VERDICT CANNOT CARRY'),
+          prompt.indexOf('YOU ARE READ-ONLY'),
+        ),
+      );
+      expect(bugs).toContain(
+        'That includes a MINOR finding the pull requests did not introduce: log it, or name ' +
+          'the bug below that already covers it.',
+      );
+    });
+
+    it('HOW TO REVIEW classes every minor finding as introduced or not, and refuses the card-text excuse', () => {
+      const prompt = assembleReviewPrompt(TWO_REPOSITORY_CARD).prompt;
+      const how = flat(
+        prompt.slice(prompt.indexOf('HOW TO REVIEW'), prompt.indexOf('A DEFECT THE VERDICT')),
+      );
+      expect(how).toContain('Class every MINOR finding by who introduced it:');
+      expect(how).toContain('INTRODUCED — it is in code the pull requests deliver');
+      expect(how).toContain('NOT INTRODUCED — it is in code the pull requests did not touch');
+      expect(how).toContain(
+        '"The code does what the card said" is not an excuse for a defect the pull requests introduced.',
+      );
+    });
   });
 
   describe('A DEFECT THE VERDICT CANNOT CARRY (MOTIR-10513, §8.7)', () => {
