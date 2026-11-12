@@ -157,7 +157,9 @@ function specifierNamesDeletedScript(specifier: string): boolean {
   return (DELETED_DEPLOY_SCRIPTS as readonly string[]).includes(base);
 }
 
-const NAMES = DELETED_DEPLOY_SCRIPTS.map((name) => name.replace(/[-]/g, '\\-')).join('|');
+/** Escape every regular-expression metacharacter, the backslash included. */
+const escapeRegExp = (text: string): string => text.replace(/[\\^$.*+?()[\]{}|-]/g, '\\$&');
+const NAMES = DELETED_DEPLOY_SCRIPTS.map(escapeRegExp).join('|');
 /** A path to a deleted script as a COMMAND or a path argument: `node scripts/x.mjs`, `'./x.mjs'`. */
 const INVOCATION = new RegExp(`(?:^|[^\\w.-])(?:\\.{1,2}/)?(?:[\\w.-]+/)*(?:${NAMES})\\.mjs\\b`);
 /** Every way JS/TS names a module: static, side-effect, re-export, dynamic and require. */
