@@ -8,8 +8,9 @@
  *      anything changes when none does or one runs a breach revision
  *      (MOTIR-10093) — the roll clones each service's live revision;
  *   3. run the migrate task from it once; only exit 0 continues;
- *   4. with `--pins <dir>`, write each image pin into its secret (MOTIR-10883,
- *      `imagePins.ts`), so the tasks the roll starts read the new value;
+ *   4. with `--pins <dir>`, write each image pin into its secret or parameter
+ *      (MOTIR-10883, MOTIR-10986, `imagePins.ts`), so the tasks the roll starts
+ *      read the new value — the pins are checked against this account in step 1;
  *   5. roll the services onto it and wait for every PRIMARY deployment to complete;
  *   6. on a failure or a timeout, put each back on the revision it ran before,
  *      except a service another deployer moved meanwhile (MOTIR-10117), which
@@ -37,7 +38,14 @@ import {
   type RolledService,
 } from './rollingDeploy';
 import { ecrRepositoryName, imageRepository } from './taskDefinitions';
-import { applyPins, readImagePins, restorePins, type AppliedPin, type ImagePin } from './imagePins';
+import {
+  applyPins,
+  checkPinTargets,
+  readImagePins,
+  restorePins,
+  type AppliedPin,
+  type ImagePin,
+} from './imagePins';
 
 export const EXIT_OK = 0;
 export const EXIT_ERROR = 1;
@@ -194,6 +202,8 @@ async function deploy(
   const target = await readTarget(aws, options.namePrefix);
   const repository = await verifyImage(aws, target, options.digest);
   const image = `${repository}@${options.digest}`;
+  // A pin naming another account's indexer is refused before anything changes.
+  if (!options.noRoll) checkPinTargets(options.namePrefix, repository, options.pins);
   // Read before anything changes: a refusal here leaves the database unmigrated.
   const services = options.noRoll ? [] : await findCoreServices(aws, target.cluster, repository);
   if (!options.noRoll && services.length === 0) {

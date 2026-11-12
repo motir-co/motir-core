@@ -87,6 +87,16 @@ describe('publishFleetImageAction', () => {
     expect(await publishFleetImageAction('hosted')).toEqual({ outcome: 'not_permitted' });
   });
 
+  // MOTIR-10986 — the fourth image is one the action knows.
+  it('the indexer is pressed like the other images', async () => {
+    service.publish.mockResolvedValueOnce({ outcome: 'refused', reason: 'not_read' });
+    expect(await publishFleetImageAction('indexer')).toEqual({
+      outcome: 'refused',
+      reason: 'not_read',
+    });
+    expect(service.publish).toHaveBeenCalledWith(superadmin, 'indexer');
+  });
+
   it('an image the page does not have is refused without a call', async () => {
     expect(await publishFleetImageAction('gpu' as never)).toEqual({
       outcome: 'refused',

@@ -14041,7 +14041,7 @@
       "subtitle": "Motir が起動する各イメージについて本番環境が最新版を実行しているか、そして各フリートプールの埋まり具合。ページを読み込んだときに読み取ります。ここでの操作は「最新を公開」だけで、押すたびに監査ログに記録されます。",
       "images": {
         "title": "イメージ",
-        "subtitle": "本番環境が起動する 3 つのイメージ。それぞれを公開済みの最新版と比較し、本番環境が遅れている場合は「最新を公開」がそのイメージ自身の公開ワークフローで更新します。"
+        "subtitle": "本番環境が起動する 4 つのイメージ。それぞれ公開済みの最新のものと比較されます。本番環境が遅れている場合、「最新を公開」がそのイメージ自身の公開ワークフローで更新します。"
       },
       "image": {
         "hosted": {
@@ -14052,6 +14052,10 @@
           "title": "CI ランナーイメージ",
           "subtitle": "フリートのすべての CI ジョブが動く環境。MOTIR_RUNNER_IMAGE で固定。最新は最新の runner-v* リリースです。"
         },
+        "indexer": {
+          "title": "インデクサーイメージ",
+          "subtitle": "コードグラフのすべてのインデックス実行が起動するもの。MOTIR_INDEXER_IMAGE で固定。最新は最新の indexer-v* リリースです。"
+        },
         "sandbox": {
           "title": "エージェントインスタンスイメージ",
           "subtitle": "エージェントが動くサンドボックス。ghcr.io/motir-co/motir-sandbox にプロファイルごとに 1 つのタグ。最新の cli-v* リリースですべてのプロファイルにタグがあれば完了です。"
@@ -14060,6 +14064,7 @@
       "imageName": {
         "hosted": "ホスト型エージェントイメージ",
         "runner": "CI ランナーイメージ",
+        "indexer": "インデクサーイメージ",
         "sandbox": "エージェントインスタンスイメージ"
       },
       "source": {
@@ -14090,13 +14095,17 @@
         "hosted": "固定中のビルドと最新ビルドの間に packages/cli へのコミットが {count, plural, other {# 件}}。",
         "runner": "({tags}) · {days, plural, other {# 日}} · infra/ci-runner へのコミット {commits, plural, other {# 件}}。",
         "runnerNoTags": "{days, plural, other {# 日}} · infra/ci-runner へのコミット {commits, plural, other {# 件}}。",
+        "indexer": "({tags}) · {days, plural, other {# 日}} · インデクサーへのコミット {commits, plural, other {# 件}}。",
+        "indexerNoTags": "{days, plural, other {# 日}} · インデクサーへのコミット {commits, plural, other {# 件}}。",
         "link": "コミットを見る"
       },
       "unreleased": {
         "title": "{release} 以降にマージ、どのリリースにも未収録",
-        "count": "infra/ci-runner への変更 {count, plural, other {# 件}}"
+        "count": "infra/ci-runner への変更 {count, plural, other {# 件}}",
+        "indexerCount": "{count, plural, other {インデクサーへのマージ済み変更 # 件がその後に入りました}}"
       },
       "releaseNeeded": "<strong>リリースが必要です。</strong>これらの変更は新しいランナーリリースでしかフリートに届かず、このページはリリースを作成しません。タグ <mono>{tag}</mono> をプッシュしてください。リリースレーンが公開し、この行に「最新を公開」が表示されます。",
+      "releaseNeededIndexer": "<strong>リリースが必要です。</strong>これらの変更は新しいインデクサーリリースでしかインデックス実行に届かず、このページはリリースを作成しません。motir-ai でタグ <mono>{tag}</mono> をプッシュしてください。そのリリースレーンが公開し、この行に「最新を公開」が表示されます。",
       "ami": {
         "title": "ランナー AMI · 読み取り専用",
         "current": "最新",
@@ -14129,10 +14138,14 @@
         "note": {
           "hosted": "ホスト型エージェントの固定ワークフローで最新の main ビルドを固定します。Web とワーカーがそれに切り替わります。",
           "runner": "ランナーの固定ワークフローで {release} を固定します。Web とワーカーがそれに切り替わります。",
+          "indexer": "インデクサー固定のプルリクエストで {release} を固定します。Web とワーカーがそれに切り替わります。",
           "sandbox": "{release} を再公開します。欠落している {count} 個のタグだけをプッシュし、本番環境では何も切り替わりません。",
           "hostedCurrent": "公開する新しいものはありません。本番環境は最新の main ビルドを固定しています。",
           "runnerCurrent": "公開する新しいものはありません。本番環境は最新のランナーリリースを固定しています。",
           "runnerReleaseNeeded": "公開する新しいものはありません。本番環境は最新リリースを固定しています。上のマージ済み変更には先にリリースが必要です。",
+          "indexerCurrent": "公開する新しいものはありません。本番環境は最新のインデクサーリリースを固定しています。",
+          "indexerReleaseNeeded": "公開する新しいものはありません。本番環境は最新のインデクサーリリースを固定しています。上のマージ済み変更には先にリリースが必要です。",
+          "indexerNotRead": "固定と最新リリースの両方が読み取れるまで、「最新を公開」はオフのままです。",
           "sandboxCurrent": "公開する新しいものはありません。すべてのプロファイルに最新リリースのタグがあります。",
           "sandboxOld": "{release} は欠落タグだけを再プッシュできるようになる前に作成されたため、再実行するとすべてのタグを再プッシュしてしまいます。代わりに新しい cli-v* リリースを作成してください。",
           "running": "このイメージの公開ワークフローがすでに実行中です。終了するまで「最新を公開」は無効です。",
@@ -14150,12 +14163,21 @@
         "sandboxFrom": "{version} のタグ {total} 個中 {published} 個",
         "hostedBody": "ホスト型エージェントの固定ワークフローを開始します。MOTIR_HOSTED_AGENT_IMAGE を最新ビルドに移してデプロイします。<strong>Web とワーカーが新しい固定に切り替わり</strong>、切り替え後に開始したホスト型実行は新しいイメージで起動します。",
         "runnerBody": "ランナーの固定ワークフローを開始します。MOTIR_RUNNER_IMAGE を {release} に移してデプロイします。<strong>Web とワーカーが新しい固定に切り替わります</strong>。ランナー AMI は変更しません。",
+        "indexerBody": "インデクサー固定のプルリクエストを開きます。これは MOTIR_INDEXER_IMAGE を {release} に移し、マージ待ちのキューに入ります。そのデプロイが<strong>Web とワーカーを切り替え</strong>、切り替え後に始まるインデックス実行は新しいイメージを起動します。すでに実行中のものは起動したイメージのまま終了します。",
         "sandboxBody": "{release} のサンドボックスリリースを再実行し、欠落しているタグ {missing} だけをプッシュします。{published} はすでに公開済みのため再プッシュしません。<strong>本番環境では何も切り替わりません。</strong>",
         "sandboxBodyNonePublished": "{release} のサンドボックスリリースを再実行し、欠落しているタグ {missing} だけをプッシュします。<strong>本番環境では何も切り替わりません。</strong>"
       },
       "progress": {
         "title": "公開中です。",
         "body": "公開ワークフローが実行中です。終了するとこの行が更新されます。",
+        "indexerQueued": {
+          "title": "固定のプルリクエストをキューに入れました。",
+          "body": "マージキューでマージされ、そのデプロイが Web とワーカーを切り替えます。進行に合わせてこの行が更新されます。"
+        },
+        "indexerRolling": {
+          "title": "Web とワーカーを切り替え中です。",
+          "body": "固定のプルリクエストがマージされ、そのデプロイが Web とワーカーを {release} に移しています。切り替えが終わると、新しいインデックス実行がそれを起動します。"
+        },
         "started": "· {age}に {email} が開始",
         "startedNoActor": "· {age}に開始",
         "button": "公開中…"
@@ -14174,6 +14196,7 @@
       "workflow": {
         "hosted": "ホスト型エージェントの固定",
         "runner": "ランナーの固定",
+        "indexer": "インデクサーの固定",
         "sandbox": "サンドボックスリリース {tag}",
         "run": "{workflow} · 実行 #{number}",
         "runNoNumber": "{workflow} · 実行"
@@ -14190,7 +14213,26 @@
       },
       "unset": {
         "title": "ここでは未設定",
-        "body": "このデプロイでは {variable} が設定されていないため、比較する固定がありません。"
+        "body": "このデプロイでは {variable} が設定されていないため、比較する固定がありません。",
+        "indexerBody": "このデプロイでは MOTIR_INDEXER_IMAGE が設定されていないため、このインストールはインデックスを作成しません。コードグラフのインデックス実行は始まらず、比較する固定もありません。"
+      },
+      "notRead": {
+        "pin": {
+          "title": "固定を読み取れませんでした。",
+          "body": "MOTIR_INDEXER_IMAGE が示すダイジェストについて ECR が応答しなかったため、比較されず、ここにあるものは最新を意味しません。"
+        },
+        "newest": {
+          "title": "リリースを読み取れませんでした。",
+          "body": "motir-ai の indexer-v* リリースについて GitHub が応答しなかったため、固定は何とも比較されません。"
+        },
+        "newestEcr": {
+          "title": "リリースを読み取れませんでした。",
+          "body": "インデクサーリポジトリの indexer-* リリースタグについて ECR が応答しなかったため、固定は何とも比較されません。"
+        },
+        "history": {
+          "title": "マージ済みの変更を読み取れませんでした",
+          "body": "motir-ai のコミット履歴について GitHub が応答しなかったため、どのリリースにも含まれない変更は一覧表示されません。上の固定と最新リリースは引き続き比較されます。"
+        }
       },
       "loading": "{image}を読み込み中",
       "publishError": {

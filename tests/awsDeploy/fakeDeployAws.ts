@@ -1,6 +1,7 @@
 import type { ContainerDefinition, Service, Task, TaskDefinition } from '@aws-sdk/client-ecs';
 import type {
   DeployAws,
+  ParameterRead,
   RegisterTaskDefinitionInput,
   SecretRead,
 } from '@/scripts/aws-deploy/ports';
@@ -115,6 +116,10 @@ export class FakeDeployAws implements DeployAws {
   secretsGranted = true;
   /** A secret whose write is refused. */
   failPutSecretOf: string | null = null;
+  /** The role holds no grant on the pinned parameter, as before MOTIR-10988. */
+  pinParameterGranted = true;
+  /** A parameter whose write is refused. */
+  failPutParameterOf: string | null = null;
 
   constructor() {
     this.params.set(`/${PREFIX}/core/deploy-target`, JSON.stringify(TARGET));
@@ -183,8 +188,17 @@ export class FakeDeployAws implements DeployAws {
 
   putParameter(name: string, value: string) {
     this.record('putParameter', name, value);
+    if (this.failPutParameterOf === name) {
+      return Promise.reject(new Error(`put ${name} refused`));
+    }
     this.params.set(name, value);
     return Promise.resolve();
+  }
+
+  readParameter(name: string): Promise<ParameterRead> {
+    this.record('readParameter', name);
+    if (!this.pinParameterGranted) return Promise.resolve({ state: 'not_granted' });
+    return Promise.resolve({ state: 'granted', value: this.params.get(name) });
   }
 
   imageExists(repositoryName: string, digest: string) {

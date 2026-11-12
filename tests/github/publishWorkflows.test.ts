@@ -401,6 +401,128 @@ describe('countPathCommits', () => {
   });
 });
 
+// MOTIR-10986 — the indexer row's history: the commits touching ANY of its
+// inputs, each once, and when the pin pull request last merged.
+describe('pathCommitsBetween', () => {
+  const commit = (sha: string, date: string, message: string) => ({
+    sha,
+    commit: { committer: { date }, message },
+  });
+
+  it('lists each commit once, with every path it touched, newest first, inside the compare', async () => {
+    routes.push([
+      /\/compare\/base\.\.\.main\?per_page=100&page=1$/,
+      {
+        status: 200,
+        body: {
+          total_commits: 3,
+          merge_base_commit: { commit: { committer: { date: '2026-11-01T00:00:00Z' } } },
+          commits: [{ sha: 'a' }, { sha: 'b' }, { sha: 'c' }],
+        },
+      },
+    ]);
+    routes.push([
+      /path=src%2Findexer&/,
+      {
+        status: 200,
+        body: [
+          commit('a', '2026-11-02T00:00:00Z', 'fix(indexer): size\n\nbody'),
+          commit('z', '2026-11-03T00:00:00Z', 'outside the compare'),
+          commit('base', '2026-11-01T00:00:00Z', 'the base'),
+          { commit: {} },
+        ],
+      },
+    ]);
+    routes.push([
+      /path=package\.json&/,
+      { status: 200, body: [commit('a', '2026-11-02T00:00:00Z', 'x'), { sha: 'c', commit: {} }] },
+    ]);
+    routes.push([
+      /path=infra%2Findexer&/,
+      { status: 200, body: [commit('b', '2026-11-04T00:00:00Z', 'feat(indexer): image')] },
+    ]);
+    expect(
+      await publishWorkflowsClient.pathCommitsBetween(
+        { owner: 'motir-co', name: 'motir-ai' },
+        'base',
+        'main',
+        ['src/indexer', 'infra/indexer', 'package.json'],
+        'tok',
+      ),
+    ).toEqual([
+      {
+        sha: 'b',
+        committedAt: '2026-11-04T00:00:00Z',
+        subject: 'feat(indexer): image',
+        paths: ['infra/indexer'],
+      },
+      {
+        sha: 'a',
+        committedAt: '2026-11-02T00:00:00Z',
+        subject: 'fix(indexer): size',
+        paths: ['src/indexer', 'package.json'],
+      },
+      { sha: 'c', committedAt: '', subject: '', paths: ['package.json'] },
+    ]);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('/repos/motir-co/motir-ai/compare/');
+  });
+
+  it('empty when the compare is, without a path read; a compare past its pages keeps every path commit', async () => {
+    routes.push([/\/compare\//, { status: 200, body: { commits: [] } }]);
+    expect(await publishWorkflowsClient.pathCommitsBetween(REPO, 'a', 'b', ['p'], null)).toEqual(
+      [],
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    routes = [
+      [
+        /\/compare\//,
+        {
+          status: 200,
+          body: {
+            total_commits: 1000,
+            commits: Array.from({ length: 100 }, (_, i) => ({ sha: `s${i}` })),
+          },
+        },
+      ],
+      [/\/commits\?/, { status: 200, body: [commit('far', '2026-10-01T00:00:00Z', 'm')] }],
+    ];
+    expect(
+      (await publishWorkflowsClient.pathCommitsBetween(REPO, 'a', 'b', ['p'], null)).map(
+        (c) => c.sha,
+      ),
+    ).toEqual(['far']);
+  });
+});
+
+describe('mergedFromBranchAt', () => {
+  it('reads the newest merge among the branch’s closed pull requests', async () => {
+    routes.push([
+      /\/pulls\?state=closed&head=motir-co%3Achore%2Findexer-image-pin&sort=updated&direction=desc&per_page=10$/,
+      {
+        status: 200,
+        body: [
+          { merged_at: null },
+          { merged_at: '2026-11-10T10:00:00Z' },
+          { merged_at: '2026-11-11T10:00:00Z' },
+          {},
+        ],
+      },
+    ]);
+    expect(
+      await publishWorkflowsClient.mergedFromBranchAt(REPO, 'chore/indexer-image-pin', 'tok'),
+    ).toBe('2026-11-11T10:00:00Z');
+  });
+
+  it('null when none merged; a list that is not a list is refused', async () => {
+    routes.push([/\/pulls\?/, { status: 200, body: [{ merged_at: null }] }]);
+    expect(await publishWorkflowsClient.mergedFromBranchAt(REPO, 'b', null)).toBeNull();
+    routes = [[/\/pulls\?/, { status: 200, body: {} }]];
+    await expect(publishWorkflowsClient.mergedFromBranchAt(REPO, 'b', null)).rejects.toMatchObject({
+      detail: 'pull list was not a list',
+    });
+  });
+});
+
 describe('tags, peel, commitDate and pathExists', () => {
   it('tagsWithPrefix names each tag, marking an annotated one for peel', async () => {
     routes.push([
