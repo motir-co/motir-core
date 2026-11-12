@@ -483,9 +483,12 @@ test('a plan needing a new repository lays one init card ahead of the work, and 
 
   // The executors each arm's peek renders, compared across arms in chapter 2.
   let hostedExecutor = '';
+  // The ledger plan's overlay the first chapter opens; the second reads its list again.
+  let hostedOverlay: Locator | undefined;
 
   await chapter(CHAPTERS[0], async () => {
     const overlay = await openUndecidedPlan(page, ledger.planId, { view: 'list' });
+    hostedOverlay = overlay;
     const list = overlay.getByTestId('plan-proposal-list');
     await expect(list).toBeVisible();
 
@@ -529,7 +532,8 @@ test('a plan needing a new repository lays one init card ahead of the work, and 
 
   await chapter(CHAPTERS[1], async () => {
     // The hosted arm: the init card's peek draws no repository.
-    const hostedList = page.getByRole('main').getByTestId('plan-proposal-list');
+    // The list lives in the plan overlay the first chapter opened, not in the page's main.
+    const hostedList = hostedOverlay!.getByTestId('plan-proposal-list');
     const hostedPeek = await openProposalPeek(hostedList, TITLE.ledgerInit);
     expect(await railRepositories(hostedPeek)).toEqual([]);
     await expect(railValue(hostedPeek, peekCopy.repositories)).not.toContainText(LEDGER_REPO);
