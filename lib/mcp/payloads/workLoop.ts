@@ -1,3 +1,4 @@
+import { reviewDismissalResultSchema } from '@/lib/api/v1/workLoop/reviewDismissal';
 import { reviewVerdictResultSchema } from '@/lib/api/v1/workLoop/reviewVerdict';
 import { z } from 'zod/v4';
 import {
@@ -546,4 +547,15 @@ export const reviewVerdictPayload = definePayload({
     z.infer<typeof reviewVerdictResultSchema>
   >,
   probes: [{ resource: 'ReviewVerdictResult', select: (p) => [p] }],
+});
+
+/**
+ * `dismiss_review` (MOTIR-11092) — v1's `ReviewDismissalResult` whole: the REST door and the
+ * tool answer through one presenter (`presentReviewDismissalResult`), so it PROBES it.
+ */
+export const reviewDismissalPayload = definePayload({
+  schema: reviewDismissalResultSchema as unknown as z.ZodType<
+    z.infer<typeof reviewDismissalResultSchema>
+  >,
+  probes: [{ resource: 'ReviewDismissalResult', select: (p) => [p] }],
 });

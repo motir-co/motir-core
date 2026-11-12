@@ -844,6 +844,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           harness: 'Claude Code',
           model: 'test-model',
         },
+        // MOTIR-11092 — a write-scoped tool: refused at the read-only token's scope gate,
+        // passed by the default token's (the card has no send-back, so the service refuses).
+        dismiss_review: { key: item1, reason: 'Out of scope for this card.' },
         link_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         unlink_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         move_to_parent: { key: item1, parentKey: item2 },

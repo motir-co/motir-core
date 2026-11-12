@@ -515,7 +515,17 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
     // Pinned from the LIVE handshake, never hand-computed.
-    descriptionFingerprint: 'caf7cbde9fa9',
+    // Re-pinned for MOTIR-11092, summary UNCHANGED: the description now names
+    // `dismiss_review` as the way past a send-back at the same version, which says
+    // nothing new about what this tool does.
+    descriptionFingerprint: 'e9d23121eb05',
+  },
+  dismiss_review: {
+    // MOTIR-11092 (`approval-gates.md` §12.15) — the counterpart of `submit_review_verdict`.
+    summary:
+      'Dismiss the review agent’s standing send-back on a card, as its routed person and with a reason, so approve-and-merge is asked again. It never approves the merge.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '74064168248a',
   },
   unlink_pull_request: {
     summary:

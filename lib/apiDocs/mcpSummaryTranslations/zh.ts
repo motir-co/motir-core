@@ -499,6 +499,12 @@ export const zh: McpSummaryTranslations = {
     source:
       'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
   },
+  dismiss_review: {
+    summary:
+      '以被分派的负责人身份并附上理由，驳回审查智能体对一个工作项仍然有效的退回，从而重新请求批准并合并。它从不批准合并。',
+    source:
+      'Dismiss the review agent’s standing send-back on a card, as its routed person and with a reason, so approve-and-merge is asked again. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       '撤销一次 `link_pull_request`：移除工作项与拉取请求之间记录的交付关系。交付关系是一行记录，所以重新关联正确的工作项是添加（ADDS）而不是纠正；此操作只移除你指明的那一对，其他所有交付关系保持不变。',

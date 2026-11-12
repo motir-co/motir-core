@@ -396,6 +396,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // `submit_review_verdict` (MOTIR-10333) — a WRITE: it decides a review gate or stores a
   // review record, gated on `work_item:edit`, so it sits with the item writes.
   submit_review_verdict: 'work_items:write',
+  // `dismiss_review` (MOTIR-11092) — a WRITE: it records a dismissal and raises the
+  // approve-and-merge gate again, gated on `work_item:edit`, beside its verdict twin.
+  dismiss_review: 'work_items:write',
   expand_item: 'work_items:write',
   append_plan_turn: 'work_items:write',
   submit_plan_session: 'work_items:write',

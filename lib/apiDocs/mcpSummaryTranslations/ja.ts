@@ -537,6 +537,12 @@ export const ja: McpSummaryTranslations = {
     source:
       'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
   },
+  dismiss_review: {
+    summary:
+      '作業項目に対するレビューエージェントの有効な差し戻しを、その宛先の担当者として理由を添えて却下し、承認とマージを再び求めます。マージを承認することはありません。',
+    source:
+      'Dismiss the review agent’s standing send-back on a card, as its routed person and with a reason, so approve-and-merge is asked again. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       '`link_pull_request` を1件だけ取り消します。作業項目とプルリクエストの間に記録された納品を削除します。納品は1行のレコードなので、正しい作業項目を再リンクしても訂正にはならず追加になります。これは指定した1組だけを削除し、ほかの納品には手を付けません。',

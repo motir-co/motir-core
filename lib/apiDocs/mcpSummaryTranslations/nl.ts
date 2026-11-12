@@ -541,6 +541,12 @@ export const nl: McpSummaryTranslations = {
     source:
       'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
   },
+  dismiss_review: {
+    summary:
+      'Wijs de geldende terugsturing van de reviewagent op een item af, als de persoon naar wie die is doorgestuurd en met een reden, zodat opnieuw om goedkeuren en mergen wordt gevraagd. Het keurt de merge nooit goed.',
+    source:
+      'Dismiss the review agent’s standing send-back on a card, as its routed person and with a reason, so approve-and-merge is asked again. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       'Maak ÉÉN `link_pull_request` ongedaan — verwijder de levering die is vastgelegd tussen een werkitem en een pull request. Een levering is een rij, dus het opnieuw koppelen van het juiste werkitem VOEGT TOE in plaats van te corrigeren; dit verwijdert precies het ene paar dat je noemt en laat elke andere levering met rust.',

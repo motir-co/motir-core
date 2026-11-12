@@ -38,6 +38,12 @@ vi.mock('@/lib/auth/requireCompliantSession', async (importOriginal) => ({
 }));
 
 import { fakeOrchestrator } from '@motir/orchestrator';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { reviewDismissalResultSchema } from '@/lib/api/v1/workLoop/reviewDismissal';
+import { checkPayloadDrift } from '@/lib/mcp/payloads/driftGuard';
+import { TOOL_PAYLOADS } from '@/lib/mcp/payloads/registry';
+import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 import type { ApprovalGateKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
@@ -1085,6 +1091,209 @@ describe('POST /api/work-items/{key}/review-dismissal — the session door', () 
     expect(((await res.json()) as Record<string, unknown>)['code']).toBe(
       'NO_STANDING_REVIEW_SENDBACK',
     );
+  });
+});
+
+// ── The MCP tool ──────────────────────────────────────────────────────────────
+
+// `dismiss_review` (MOTIR-11092) through the REAL `/api/mcp` route — `withMcpAuth`,
+// `verifyMcpToken`, the scope and permission gates, the registry — with the official SDK
+// client over a person's own PAT, the way `tests/mcp/story-roundtrip.test.ts` drives
+// `submit_review_verdict`.
+describe('dismiss_review — the MCP tool', () => {
+  type ToolResult = {
+    isError?: boolean;
+    content?: Array<{ type: string; text?: string }>;
+    structuredContent?: Record<string, unknown>;
+  };
+
+  async function callAs(token: string, args: Record<string, unknown>): Promise<ToolResult> {
+    const client = new Client({ name: 'dismiss-review', version: '0.0.0' });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL('http://localhost/api/mcp'), {
+        fetch: mcpRouteFetch(token),
+      }),
+    );
+    try {
+      return (await client.callTool({ name: 'dismiss_review', arguments: args })) as ToolResult;
+    } finally {
+      await client.close();
+    }
+  }
+
+  const textOf = (res: ToolResult) => res.content?.map((c) => c.text ?? '').join('\n') ?? '';
+
+  /** The refusal's code, read off the `CODE: message` text every tool error carries. */
+  const refusalOf = (res: ToolResult) => {
+    expect(res.isError, textOf(res)).toBe(true);
+    return textOf(res).split(':')[0];
+  };
+
+  /** A PAT for `who` on the scenario's project, as the REST tests mint one. */
+  const tokenFor = async (
+    s: Awaited<ReturnType<typeof makeScenario>>,
+    who: { userId: string } = { userId: s.user.id },
+  ) =>
+    (
+      await withTokenFor({ id: who.userId } as never, s.workspace as never, {
+        projectId: s.project.id,
+        scopes: ['read', 'work_items:write'],
+        label: `mcp ${who.userId}`,
+      })
+    ).token;
+
+  it('no subjectVersion: dismisses at the current version and answers v1’s presented result', async () => {
+    const { s, item, approval, recordId } = await sentBackGateOff('mcp-ok', 111);
+    const res = await callAs(await tokenFor(s), {
+      key: item.identifier.toLowerCase(),
+      reason: '  The criterion is out of this card’s scope.  ',
+    });
+    expect(res.isError, textOf(res)).toBeFalsy();
+
+    // Exactly one dismissal, at the card's current version, and one History entry.
+    const rows = await dismissalsOf(item.id);
+    expect(rows).toHaveLength(1);
+    const row = rows[0]!;
+    expect(row).toMatchObject({
+      subjectVersion: versionOf(111),
+      reviewVerdictRecordId: recordId,
+      dismissedById: s.user.id,
+      reasonMd: 'The criterion is out of this card’s scope.',
+    });
+    expect(await dismissedRevisionsOf(item.id)).toHaveLength(1);
+    // The card leaves To fix, and approve-and-merge is asked again at that version.
+    expect((await itemRow(item.id)).fixReason).toBeNull();
+    const fresh = await awaitingOf(item.id, PR_APPROVAL);
+    expect(fresh.map((g) => g.subjectVersion)).toEqual([versionOf(111)]);
+    expect(fresh[0]!.id).not.toBe(approval.id);
+    expect(dismissedEvents()).toHaveLength(1);
+
+    // The payload is v1's `ReviewDismissalResult`, exactly what the REST door presents
+    // for this dismissal.
+    const payload = res.structuredContent!;
+    expect(reviewDismissalResultSchema.parse(payload)).toEqual(payload);
+    expect(checkPayloadDrift(TOOL_PAYLOADS.dismiss_review!, payload)).toEqual([]);
+    expect(payload).toEqual({
+      key: item.identifier,
+      dismissalId: row.id,
+      subjectVersion: versionOf(111),
+      dismissed: { kind: 'record', id: recordId },
+      reason: 'The criterion is out of this card’s scope.',
+      dismissedBy: { id: s.user.id, name: 'Owner' },
+      dismissedAt: row.createdAt.toISOString(),
+      approvalGateId: fresh[0]!.id,
+    });
+    // The prose names the version and the gate, and says a person still merges.
+    expect(textOf(res)).toContain(
+      `${item.identifier}: the agent’s send-back at ${versionOf(111)} is dismissed; ` +
+        `approve-and-merge is asked again (${fresh[0]!.id}).`,
+    );
+    expect(textOf(res)).toContain('A person still approves the merge');
+  });
+
+  it('gate on: an explicit current subjectVersion dismisses the decided review gate', async () => {
+    const { s, item, review } = await sentBackGateOn('own', 'mcp-on', 112);
+    const res = await callAs(await tokenFor(s), {
+      key: item.identifier,
+      reason: 'Out of scope.',
+      subjectVersion: versionOf(112),
+    });
+    expect(res.isError, textOf(res)).toBeFalsy();
+    expect(res.structuredContent?.['dismissed']).toEqual({ kind: 'gate', id: review.id });
+    expect((await itemRow(item.id)).fixReason).toBeNull();
+  });
+
+  it('an explicit subjectVersion a push has moved past is STALE, naming the current version', async () => {
+    const { s, item } = await sentBackGateOff('mcp-stale', 113);
+    await pushTo(item.identifier, 113, 'sha-b');
+    const res = await callAs(await tokenFor(s), {
+      key: item.identifier,
+      reason: 'Out of scope.',
+      subjectVersion: versionOf(113),
+    });
+    expect(refusalOf(res)).toBe('REVIEW_DISMISSAL_STALE');
+    expect(textOf(res)).toContain(`current version is ${versionOf(113, 'sha-b')}`);
+    expect(await dismissalsOf(item.id)).toEqual([]);
+    expect(await dismissedRevisionsOf(item.id)).toEqual([]);
+  });
+
+  it('a card that delivers no pull request is STALE with nothing to dismiss', async () => {
+    const s = await makeScenario('mcp-bare');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Bare' },
+      s.ctx,
+    );
+    const res = await callAs(await tokenFor(s), { key: item.identifier, reason: 'r' });
+    expect(refusalOf(res)).toBe('REVIEW_DISMISSAL_STALE');
+    expect(textOf(res)).toContain('delivers no pull request');
+  });
+
+  it('a teammate who may edit the card but is not the routed person is FORBIDDEN', async () => {
+    const { s, item } = await sentBackGateOff('mcp-forbidden', 114);
+    const mate = await teammate(s, 'mate', 'member');
+    const res = await callAs(await tokenFor(s, mate), { key: item.identifier, reason: 'r' });
+    expect(refusalOf(res)).toBe('REVIEW_DISMISSAL_FORBIDDEN');
+    expect(await dismissalsOf(item.id)).toEqual([]);
+    expect((await itemRow(item.id)).fixReason).toBe('changes_requested');
+  });
+
+  it.each([
+    ['an empty reason', '   '],
+    ['an over-long reason', 'x'.repeat(2001)],
+  ])('%s is REASON_REQUIRED', async (_label, reason) => {
+    const { s, item } = await sentBackGateOff(`mcp-reason-${reason.length}`, 115);
+    const res = await callAs(await tokenFor(s), { key: item.identifier, reason });
+    expect(refusalOf(res)).toBe('REASON_REQUIRED');
+    expect(await dismissalsOf(item.id)).toEqual([]);
+  });
+
+  it('a card with no standing send-back is NO_STANDING_REVIEW_SENDBACK', async () => {
+    const { s, item } = await deliveredGateOff('mcp-none', 116);
+    const res = await callAs(await tokenFor(s), { key: item.identifier, reason: 'r' });
+    expect(refusalOf(res)).toBe('NO_STANDING_REVIEW_SENDBACK');
+    expect(await dismissalsOf(item.id)).toEqual([]);
+  });
+
+  it('a second dismissal at the same version is REVIEW_SENDBACK_ALREADY_DISMISSED', async () => {
+    const { s, item } = await sentBackGateOff('mcp-twice', 117);
+    const token = await tokenFor(s);
+    expect((await callAs(token, { key: item.identifier, reason: 'r' })).isError).toBeFalsy();
+    sent.length = 0;
+    const res = await callAs(token, { key: item.identifier, reason: 'r' });
+    expect(refusalOf(res)).toBe('REVIEW_SENDBACK_ALREADY_DISMISSED');
+    expect(await dismissalsOf(item.id)).toHaveLength(1);
+    expect(await dismissedRevisionsOf(item.id)).toHaveLength(1);
+    expect(dismissedEvents()).toEqual([]);
+  });
+
+  it('an unknown card is not found, and nothing is read or written', async () => {
+    const { s, item } = await sentBackGateOff('mcp-unknown', 118);
+    const res = await callAs(await tokenFor(s), { key: 'ACME-99999', reason: 'r' });
+    expect(refusalOf(res)).toBe('WORK_ITEM_NOT_FOUND');
+    expect(await dismissalsOf(item.id)).toEqual([]);
+  });
+
+  it('submit_review_verdict’s second verdict at the same version points at dismiss_review', async () => {
+    const { s, item } = await sentBackGateOff('mcp-second', 119);
+    const client = new Client({ name: 'second-verdict', version: '0.0.0' });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL('http://localhost/api/mcp'), {
+        fetch: mcpRouteFetch(await tokenFor(s)),
+      }),
+    );
+    const res = (await client.callTool({
+      name: 'submit_review_verdict',
+      arguments: {
+        key: item.identifier,
+        verdict: 'approved',
+        subjectVersion: versionOf(119),
+        harness: 'Claude Code',
+        model: MODEL,
+      },
+    })) as ToolResult;
+    await client.close();
+    expect(refusalOf(res)).toBe('REVIEW_VERDICT_SECOND');
+    expect(textOf(res)).toContain('calls `dismiss_review` with a reason');
   });
 });
 
