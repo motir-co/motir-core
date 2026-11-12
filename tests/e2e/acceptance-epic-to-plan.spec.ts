@@ -61,9 +61,12 @@ const CHILD_TITLE = 'Offline sync';
 const main = (page: Page) => page.getByRole('main');
 const roadmapNav = (page: Page) =>
   page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Roadmap' });
-/** The canvas card carrying a title — `data-node-state` is its authoritative state. */
-const canvasCard = (page: Page, title: string): Locator =>
-  page.locator('[data-node-state]').filter({ hasText: title });
+/** The canvas NODE carrying a title — the wrapper that holds both the card frame and
+ *  its next-action button, which hangs beside the frame rather than inside it. */
+const canvasNode = (page: Page, title: string): Locator =>
+  page.locator('[data-node-id]').filter({ hasText: title });
+/** The node's card frame — its `data-node-state` is the card's authoritative state. */
+const frameOf = (node: Locator): Locator => node.locator('[data-node-state]');
 const planButton = (scope: Locator) => scope.locator('[data-action="plan"]');
 const toPlanPill = (scope: Locator) => scope.getByTestId('to-plan-pill');
 const boardCard = (page: Page, identifier: string) =>
@@ -149,12 +152,12 @@ test('a childless To do epic is To plan on every surface, and its roadmap card p
   acceptanceStory,
 }) => {
   acceptanceStory('MOTIR-10861');
-  const card = canvasCard(page, EPIC_TITLE);
+  const card = canvasNode(page, EPIC_TITLE);
 
   // ── 1. The roadmap card wears To plan ─────────────────────────────────────
   await chapter('A childless To do epic shows To plan on the roadmap', async () => {
     await openRoadmap(page);
-    await expect(card).toHaveAttribute('data-node-state', 'to-plan');
+    await expect(frameOf(card)).toHaveAttribute('data-node-state', 'to-plan');
     await expect(toPlanPill(card)).toBeVisible();
     // The epic's status chip gives way to the pill: the slot holds one of them.
     await expect(card.getByTestId('ready-pill')).toHaveCount(0);
@@ -229,7 +232,7 @@ test('a childless To do epic is To plan on every surface, and its roadmap card p
     );
     await openRoadmap(page);
     await expect(card).toBeVisible();
-    await expect(card).not.toHaveAttribute('data-node-state', 'to-plan');
+    await expect(frameOf(card)).not.toHaveAttribute('data-node-state', 'to-plan');
     await expect(toPlanPill(card)).toHaveCount(0);
     await card.hover();
     await expect(planButton(card)).toHaveCount(0);
