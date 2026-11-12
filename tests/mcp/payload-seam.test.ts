@@ -376,6 +376,7 @@ describe('get_work_item derives its CHILD rows from v1’s schema', () => {
     archivedAt: null,
     obsolescence: null,
     obsolescenceNoteMd: null,
+    subject: null,
   };
 
   it('the child row SATISFIES v1’s WorkItemRef — the comparison that was missing', () => {

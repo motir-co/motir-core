@@ -4288,6 +4288,16 @@ one an amend left open.
   deleted after the plan was written — approve refuses such a plan. The text block
   groups folder-placed proposals under a `Folder: Parked ▸ 2025:` heading beside
   the committed-parent groups, and marks a deleted one.
+- **`blockerSubjects`** (MOTIR-11053) — what each committed card a proposal waits
+  on IS: a map keyed by every blocked-by ref the item draws (on `blockedByRefs`, or a
+  `modify`'s `patch.blockedByAdd`) that names a card of the plan's own project, each
+  mapped to that card's stored `subject` — `"init"` for an approved init card, say.
+  **`null` means the card was read and carries no subject.** A `planItem:` temp-ref,
+  a folder ref, an id naming no card and a card outside the project have no key (a
+  temp ref is resolved against `items[]` instead), and an item drawing no real ref
+  carries `{}`. ⚠️ When the read could not resolve them the key is **absent from
+  every item** — read that as _unread_, never as _no subject_. The write doors
+  (`add_plan_items` and the corrections) never carry it.
 
 A plan still `generating` returns the proposals that have arrived **so far**
 rather than erroring — proposals stream in, so a caller polling the content sees
@@ -6527,16 +6537,16 @@ thing on the other.
 
 **Output** — `structuredContent`:
 
-| Field              | Type             | Notes                                                                                        |
-| ------------------ | ---------------- | -------------------------------------------------------------------------------------------- |
-| `project`          | object           | `{ projectId, projectKey }`.                                                                 |
-| `items`            | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision, folderId, obsolescence }` — see below. |
-| `total`            | integer          | Live work items in the project, **before** the bound is applied.                             |
-| `returned`         | integer          | Rows in `items`.                                                                             |
-| `truncated`        | boolean          | Whether the bound bit.                                                                       |
-| `limit`            | integer          | The bound actually applied.                                                                  |
-| `folders`          | folder\[\]       | `{ id, parentFolderId, name, path }` — every folder of the project, see below.               |
-| `foldersTruncated` | boolean          | Whether the project holds more folders than `folders` lists.                                 |
+| Field              | Type             | Notes                                                                                                 |
+| ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `project`          | object           | `{ projectId, projectKey }`.                                                                          |
+| `items`            | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision, folderId, obsolescence, subject }` — see below. |
+| `total`            | integer          | Live work items in the project, **before** the bound is applied.                                      |
+| `returned`         | integer          | Rows in `items`.                                                                                      |
+| `truncated`        | boolean          | Whether the bound bit.                                                                                |
+| `limit`            | integer          | The bound actually applied.                                                                           |
+| `folders`          | folder\[\]       | `{ id, parentFolderId, name, path }` — every folder of the project, see below.                        |
+| `foldersTruncated` | boolean          | Whether the project holds more folders than `folders` lists.                                          |
 
 `parentKey` is the parent's `<KEY>-<n>` identifier (null at a root), which is what
 makes the response a TREE rather than a list — the hierarchy is rebuildable from
@@ -6547,6 +6557,8 @@ so orienting and proposing do not cost a `get_work_item` per target.
 `obsolescence` is the [obsolescence mark](#the-obsolescence-mark) — `outdated` /
 `deprecated`, `null` while the card is still current. The mark only: its note is
 a body, read with `get_work_item`. A marked row is never dropped or re-ordered.
+`subject` is the card's stored subject — its selector coordinate (`init` on an init
+card), an open string carried verbatim, `null` when the card carries none.
 
 **Folders.** `folderId` is the folder an item is **filed** in — its OWN placement,
 null for everything else. Only a root can be filed (an item has a parent OR a

@@ -89,6 +89,7 @@ function item(over: Partial<WorkItemSummaryDto> & { id: string; key: number }): 
     archivedAt: null,
     obsolescence: null,
     obsolescenceNoteMd: null,
+    subject: null,
     ...over,
   };
 }

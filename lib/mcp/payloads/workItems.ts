@@ -914,6 +914,11 @@ export const mcpSkeletonRowSchema = workItemRefSchema
     // The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6582) — the mark only; the
     // note is a body, and bodies stay off the breadth read (`get_work_item` has it).
     obsolescence: obsolescenceSchema.nullable(),
+    // The card's stored SUBJECT (MOTIR-11053) — an open string, never a closed
+    // enum, so a member this build has never heard of reaches the agent verbatim.
+    // ⚠️ This row is a HAND-WRITTEN fourth projection of the skeleton: the
+    // compiler forces the three internal reads, not it.
+    subject: z.string().nullable(),
   });
 export type McpSkeletonRow = z.infer<typeof mcpSkeletonRowSchema>;
 
@@ -929,6 +934,7 @@ export function presentMcpSkeletonRow(item: PlanTreeSkeletonItem): McpSkeletonRo
     revision: item.revision,
     folderId: item.folderId,
     obsolescence: item.obsolescence,
+    subject: item.subject,
   };
 }
 

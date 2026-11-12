@@ -64,6 +64,7 @@ function summary(overrides: Partial<WorkItemSummaryDto> = {}): WorkItemSummaryDt
     archivedAt: null,
     obsolescence: null,
     obsolescenceNoteMd: null,
+    subject: null,
     ...overrides,
   };
 }

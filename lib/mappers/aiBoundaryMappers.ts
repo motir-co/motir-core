@@ -39,6 +39,11 @@ export interface SkeletonSourceRow {
   // whose projection forgot the column fails to compile rather than reporting
   // every marked card as current (the subtree CTE is a raw SELECT).
   obsolescence: WorkItemObsolescenceDto | null;
+  // The card's stored SUBJECT (MOTIR-11053) — REQUIRED for the same reason: an
+  // optional member would compile on a read that skipped the column and report
+  // every subject-carrying card as carrying none. ⚠️ The compiler cannot see the
+  // two `$queryRaw` subtree projections, so their SQL must select it by hand.
+  subject: string | null;
 }
 
 // Map a set of work-item rows to the plan-tree skeleton (contract §6).
@@ -72,6 +77,7 @@ export function toSkeletonRows(
     folderId: folderIdByItemId.get(r.id) ?? null,
     decision: decisionByItemId.get(r.id) ?? null,
     obsolescence: r.obsolescence,
+    subject: r.subject,
   }));
 }
 

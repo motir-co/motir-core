@@ -73,6 +73,15 @@ export interface PlanTreeSkeletonItem {
   // the note is a body, and bodies stay off the breadth read (`get-item` carries
   // it). Informational — no read in this family drops or re-sorts a marked row.
   obsolescence: WorkItemObsolescenceDto | null;
+  // The card's SUBJECT — its selector coordinate as stored (Story MOTIR-10162 ·
+  // MOTIR-11053), so a planner meeting a COMMITTED card can tell what it is (an
+  // approved init card, say) without a second read. A BARE string, never a closed
+  // union: the member vocabulary is a rule-pack file set this build cannot
+  // enumerate, so a value it has never heard of is legal and reaches the planner
+  // as its own text. Null is the common case and is READABLE — a row's null means
+  // the card carries none, never that the read skipped the column (the member is
+  // required on every source, `SkeletonSourceRow`).
+  subject: string | null;
 }
 
 // One folder of the project, as the tree read carries it (MOTIR-5410). `path` is

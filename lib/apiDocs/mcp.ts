@@ -1045,11 +1045,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // ticked. A reader deciding whether this tool shows what a re-plan costs a
     // person's progress needs to know it does.
     summary:
-      'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note), its supersedes edges named by key, and the steps a change replaces with how many were ticked.',
+      'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note), its supersedes edges named by key, the steps a change replaces with how many were ticked, and the subject of each committed card a proposal waits on.',
     // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` parses
     // each `add`'s body into sections on request; the summary describes what is bundled.
     // Re-pinned for MOTIR-10176, summary UNCHANGED: the description names `raisedGaps`.
-    descriptionFingerprint: '8651b90a8d88',
+    // MOTIR-11053 EXTENDED the summary: each item now says what its committed
+    // blockers ARE (`blockerSubjects`) — what a planner picks this read for when it
+    // must recognise an approved init card a waiter depends on.
+    descriptionFingerprint: 'e7da736147e2',
   },
   get_approved_shape_verdict: {
     // The line has to carry the one thing a reader choosing between this and
