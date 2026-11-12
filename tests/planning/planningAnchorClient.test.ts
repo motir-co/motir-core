@@ -21,6 +21,7 @@ const ANCHOR = {
   anchor: { id: 'w1', identifier: 'MOTIR-4725', title: 'The overlay', kind: 'story' },
   ancestors: [{ id: 'e1', identifier: 'MOTIR-653', title: 'Epic 8: Launch readiness' }],
   hasChildren: true,
+  folders: [{ id: 'f1', name: 'To do' }],
 };
 
 afterEach(() => {
@@ -55,6 +56,7 @@ describe('fetchPlanningAnchor', () => {
       anchor: ANCHOR.anchor,
       ancestors: [],
       hasChildren: false,
+      folders: [],
     });
   });
 

@@ -1127,6 +1127,25 @@ function effectivePlacementSource(
   return root?.folderId ? { folderId: root.folderId, via: root } : null;
 }
 
+/**
+ * The planning anchor's effective placement folder chain, ROOT FIRST, as the
+ * `{ id, name }` crumbs the canvas drills through — `[]` when it is unfiled.
+ * Only a root can be filed, so the folder is the ROOT row's: the anchor's own
+ * when it has no ancestors, else its top ancestor's. A folder in another project
+ * is never named.
+ */
+async function readAnchorFolderTrail(
+  lineage: WorkItemLineageDto,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<Array<{ id: string; name: string }>> {
+  const rootId = lineage.ancestors[0]?.id ?? lineage.item.id;
+  const root = await workItemRepository.findById(rootId, tx);
+  if (!root?.folderId) return [];
+  const [row] = await folderRepository.findTrailsByIds([root.folderId], workspaceId, tx);
+  return row && row.projectId === lineage.item.projectId ? row.trail : [];
+}
+
 /** The effective folder's name path, root first — no read at all when no folder applies. */
 async function readPlacementPath(
   itemFolderId: string | null,
@@ -6778,16 +6797,20 @@ export const workItemsService = {
     ctx: ServiceContext,
   ): Promise<PlanningAnchorLineageDto> {
     const lineage = await this.getWorkItemWithAncestors(projectId, identifier, ctx);
-    const childCount = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.countProjectTreeLevel(
-        lineage.item.projectId,
-        ctx.workspaceId,
-        lineage.item.id,
-        null,
-        tx,
-      ),
+    const { childCount, folders } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => ({
+        childCount: await workItemRepository.countProjectTreeLevel(
+          lineage.item.projectId,
+          ctx.workspaceId,
+          lineage.item.id,
+          null,
+          tx,
+        ),
+        folders: await readAnchorFolderTrail(lineage, ctx.workspaceId, tx),
+      }),
     );
-    return { ...lineage, hasChildren: childCount > 0 };
+    return { ...lineage, hasChildren: childCount > 0, folders };
   },
 
   /**

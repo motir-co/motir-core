@@ -73,7 +73,7 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   try {
-    const { item, ancestors, hasChildren } = await workItemsService.getPlanningAnchor(
+    const { item, ancestors, hasChildren, folders } = await workItemsService.getPlanningAnchor(
       ctx.projectId,
       key,
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
@@ -96,6 +96,10 @@ export async function GET(req: Request): Promise<Response> {
           title: a.title,
         })),
         hasChildren,
+        // The anchor's placement folder chain, root first (`[]` unfiled): a filed
+        // item is drawn behind its folder's door, so the arrival trail walks
+        // through these crumbs first, as `/roadmap?item=` does.
+        folders,
       },
       {
         // The anchor's title and its ancestors' titles are live item state;

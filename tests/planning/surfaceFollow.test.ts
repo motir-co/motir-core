@@ -15,6 +15,7 @@ describe('followFromTarget — the person ADDED a target', () => {
       anchor: { id: 'wi_3', identifier: 'MOTIR-3', title: 'The story', kind: 'story' },
       ancestors: [EPIC],
       hasChildren: true,
+      folders: [],
     });
 
     // The SAME rule the surface arrived by — not a second answer to "where does
@@ -39,6 +40,7 @@ describe('followFromTarget — the person ADDED a target', () => {
         anchor: { id: 'wi_9', identifier: 'MOTIR-9', title: 'A subtask', kind: 'subtask' },
         ancestors: [],
         hasChildren: false,
+        folders: [],
       }),
     ).toBeNull();
   });
@@ -50,8 +52,22 @@ describe('followFromTarget — the person ADDED a target', () => {
       anchor: { id: 'wi_3', identifier: 'MOTIR-3', title: 'The story', kind: 'story' },
       ancestors: [EPIC],
       hasChildren: false,
+      folders: [],
     });
     expect(req?.trail.map((c) => c.id)).toEqual(['wi_1']);
+  });
+
+  it('a CHILDLESS root target FILED in a folder moves into that folder', () => {
+    // The root level shows only the folder's door, not the filed card, so the
+    // target is on screen only once the canvas stands inside its folder chain.
+    const req = followFromTarget({
+      anchor: { id: 'wi_8', identifier: 'MOTIR-8', title: 'A bug', kind: 'bug' },
+      ancestors: [],
+      hasChildren: false,
+      folders: [{ id: 'f_1', name: 'To do' }],
+    });
+    expect(req?.trail.map((c) => c.id)).toEqual(['folder:f_1']);
+    expect(req?.key).toBe('target:wi_8');
   });
 
   it('a CHILDLESS root target asks for nothing, so the PLAN can move the canvas later', () => {
@@ -62,6 +78,7 @@ describe('followFromTarget — the person ADDED a target', () => {
       anchor: { id: 'wi_8', identifier: 'MOTIR-8', title: 'A bug', kind: 'bug' },
       ancestors: [],
       hasChildren: false,
+      folders: [],
     });
     expect(fromTarget).toBeNull();
 

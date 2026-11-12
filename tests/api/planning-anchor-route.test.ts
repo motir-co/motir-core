@@ -7,6 +7,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { TWO_FACTOR_REQUIRED_PATH } from '@/lib/auth/twoFactorGate';
@@ -148,6 +149,39 @@ describe('GET /api/work-items/planning-anchor · the happy path', () => {
     expect((await (await anchorViaRoute(epic.identifier)).json()).hasChildren).toBe(true);
     expect((await (await anchorViaRoute(bare.identifier)).json()).hasChildren).toBe(false);
     expect((await (await anchorViaRoute(leaf.identifier)).json()).hasChildren).toBe(false);
+  });
+
+  it("carries the anchor's placement FOLDER chain, root first (MOTIR-10861)", async () => {
+    // A filed card sits behind its folder's door on the canvas, so the arrival
+    // trail must walk through these folders or it lands on the root, where the
+    // anchor is not drawn. Only a root is filed; a child inherits its root's.
+    const s = await makeScenario('folders');
+    signIn(s);
+    const { epic, story } = await makeTree(s);
+    const later = await foldersService.createFolder(
+      { projectId: s.project.id, parentFolderId: null, name: 'Later' },
+      s.ctx,
+    );
+    const todo = await foldersService.createFolder(
+      { projectId: s.project.id, parentFolderId: later.id, name: 'To do' },
+      s.ctx,
+    );
+    const loose = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'story', title: 'Filed, no children' },
+      s.ctx,
+    );
+    await foldersService.fileWorkItem(loose.id, { folderId: todo.id }, s.ctx);
+
+    const chain = [
+      { id: later.id, name: 'Later' },
+      { id: todo.id, name: 'To do' },
+    ];
+    expect((await (await anchorViaRoute(loose.identifier)).json()).folders).toEqual(chain);
+    // Unfiled: an empty chain, not a missing one.
+    expect((await (await anchorViaRoute(story.identifier)).json()).folders).toEqual([]);
+
+    await foldersService.fileWorkItem(epic.id, { folderId: todo.id }, s.ctx);
+    expect((await (await anchorViaRoute(story.identifier)).json()).folders).toEqual(chain);
   });
 
   it('an ARCHIVED child does not count — the level it would open on is empty', async () => {
