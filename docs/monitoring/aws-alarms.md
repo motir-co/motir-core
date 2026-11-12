@@ -2,9 +2,10 @@
 
 The on-call engineer reads a breach from CloudWatch alarms and the SNS topic
 they notify, and reads errors from Sentry, which stays the issue channel. Each
-core service (`web`, `worker`, `relay`) has its own alarms. This page lists
-them, names the series each alarm reads, and gives the one-off breach task that
-proves each alarm fires.
+watched service has its own alarms: core's three (`web`, `worker`, `relay`) and
+the AI side's five (`ai-conversation`, `ai-planning`, `gateway`, `gateway-run`,
+`codegraph`). This page lists them, names the series each alarm reads, and gives
+the breach that proves each core alarm fires.
 
 The alarms are built by motir-infra (`lib/constructs/service-alarms.ts`), from
 the `monitoring` block of its parameter file
@@ -24,31 +25,57 @@ Each one notifies the SNS topic `motir-alarms` when it goes to ALARM and again
 when it returns to OK. The topic is encrypted with the secrets-and-logs key, and
 its subscribers are listed in the parameter file.
 
-| alarm (per service)                | signal read                                      | threshold | period | datapoints to alarm |
-| ---------------------------------- | ------------------------------------------------ | --------- | ------ | ------------------- |
-| `motir-<service>-memory`           | `100 * MemoryUtilized / MemoryReserved`, Maximum | ≥ 85 %    | 60 s   | 2 of 3              |
-| `motir-<service>-cpu`              | `100 * CpuUtilized / CpuReserved`, Maximum       | ≥ 90 %    | 60 s   | 5 of 5              |
-| `motir-<service>-steal`            | `CpuStealMs`, Maximum                            | ≥ 6000 ms | 60 s   | 3 of 5              |
-| `motir-<service>-event-loop-block` | `EventLoopDelayMaxMs`, Maximum                   | ≥ 2000 ms | 60 s   | 1 of 3              |
+Core's three services carry four alarms each:
+
+| alarm (per service)                | signal read                                 | threshold | period | datapoints to alarm |
+| ---------------------------------- | ------------------------------------------- | --------- | ------ | ------------------- |
+| `motir-<service>-memory`           | `AWS/ECS` `MemoryUtilization`, Maximum      | ≥ 85 %    | 60 s   | 2 of 3              |
+| `motir-<service>-cpu`              | `AWS/ECS` `CPUUtilization`, Maximum         | ≥ 90 %    | 60 s   | 5 of 5              |
+| `motir-<service>-steal`            | `Motir/Core` `CpuStealMs`, Maximum          | ≥ 6000 ms | 60 s   | 5 of 5              |
+| `motir-<service>-event-loop-block` | `Motir/Core` `EventLoopDelayMaxMs`, Maximum | ≥ 2000 ms | 60 s   | 1 of 3              |
+
+The AI side's five services carry memory and CPU alarms only, because their
+images run none of core's publishers; `codegraph` also carries the graph
+service's two alarms (MOTIR-10273). No rule existed for any of them before
+either, so each threshold is a target:
+
+| AWS alarm                            | services                                                   | signal read                                      | threshold | period | datapoints to alarm |
+| ------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------ | --------- | ------ | ------------------- |
+| `motir-<service>-memory`             | `ai-conversation`, `ai-planning`, `gateway`, `gateway-run` | `AWS/ECS` `MemoryUtilization`, Maximum           | ≥ 85 %    | 60 s   | 3 of 5              |
+| `motir-codegraph-memory`             | `codegraph`                                                | `AWS/ECS` `MemoryUtilization`, Maximum           | ≥ 90 %    | 60 s   | 3 of 5              |
+| `motir-<service>-cpu`                | all five                                                   | `AWS/ECS` `CPUUtilization`, Maximum              | ≥ 90 %    | 60 s   | 8 of 10             |
+| `motir-codegraph-graph-read-latency` | `codegraph`                                                | `Motir/Core` `GraphReadP95Ms`, Maximum           | > 300 ms  | 600 s  | 1 of 1              |
+| `motir-codegraph-graph-memory`       | `codegraph`                                                | `Motir/Core` `GraphMemoryLowestPercent`, Maximum | > 80 %    | 600 s  | 1 of 1              |
 
 The targets these numbers implement:
 
 - **Memory** alarms below the out-of-memory kill, so there is time to act before
   ECS kills the task.
 - **CPU** alarms at sustained saturation of the task's reservation: five minutes
-  at 90 % or more.
+  at 90 % or more on core's services, and eight minutes of ten on the AI side's.
 - **Event-loop block** alarms on one block of 2 s or more, well under the 5 s
   interactive-transaction timeout that a P2028 marks.
 - **Steal** alarms on CPU taken by the host. On 2026-10-15, that starvation
-  showed up as a 17 s event-loop freeze and P2028s.
+  showed up as a 17 s event-loop freeze and P2028s. Only five straight minutes
+  alarm: Fargate steal is spiky, and 3 of 5 fired on harmless spikes
+  (MOTIR-10732).
 
 ## The series each alarm reads
 
-- **Memory and CPU** come from ECS Container Insights, namespace
-  `ECS/ContainerInsights`, dimensions `ClusterName` (`motir-core`) and
-  `ServiceName` (`motir-core-<service>`). Each is a percentage of the task's
-  reservation. motir-infra turns Container Insights on for the core cluster
-  whenever monitoring is on.
+- **Memory and CPU** are ECS's own service metrics, `MemoryUtilization` and
+  `CPUUtilization` in the namespace `AWS/ECS`, with the dimensions
+  `ClusterName` (`motir-core`) and `ServiceName`: `motir-core-<service>` for
+  core's three, and `motir-ai-conversation`, `motir-ai-planning`,
+  `motir-gateway`, `motir-gateway-run` and `motir-codegraph` for the AI side.
+  ECS publishes them for every service at no charge, each already a percentage
+  of what the task definition reserves. They count only the tasks the service
+  owns, the ones its scheduler started. The alarms read the **Maximum**, which
+  is the one task with the highest utilization, so a busy task alarms whatever
+  its siblings do
+  ([ECS service utilization](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service_utilization.html)).
+  Container Insights is off in production, MOTIR-10892 (the parameter
+  `containerInsights` is `false`): nothing reads its paid per-task series, so
+  `ECS/ContainerInsights` holds nothing for these services.
 - **Event-loop delay, loop blocks and steal** are published by core itself as
   CloudWatch embedded-metric-format lines on stdout, in the namespace
   `Motir/Core`, with one dimension, `Service` (`web`, `worker` or `relay`):
@@ -69,6 +96,12 @@ The targets these numbers implement:
     1 s or more ended (`lib/monitoring/watchdogMetrics.ts`).
   - `CpuStealMs`, the CPU time stolen from the task in each 60 s, only where
     `MONITORING_CLOUDWATCH_STEAL` is on.
+- **The graph series** are published by motir-ai's graph service
+  (`src/capacityAlerts/graphCloudWatchMetrics.ts`) in the same way, in
+  `Motir/Core` with `Service` `codegraph`, once per 10-minute window it judges:
+  `GraphReadP95Ms`, the service-wide read p95, and `GraphMemoryLowestPercent`,
+  each machine's lowest memory ratio over the window. They alarm above the
+  levels motir-ai's own alerts use.
 
 **CPU steal is readable on Fargate: `reported`.** The `/proc/stat` check
 ([MOTIR-9880](https://app.motir.co/items/MOTIR-9880)) read a live, non-zero
@@ -76,6 +109,8 @@ steal counter on a Fargate task (platform 1.4.0, kernel 6.1.188). So production
 publishes `CpuStealMs` and alarms on it with `motir-<service>-steal`. Its 6000 ms
 threshold is a starting point. That check found steal at 0.1–1.5 % of CPU on a
 quiet host, which proves the signal exists but does not calibrate the threshold.
+The window was calibrated later: the worker's one-minute p99.9 was 10190 ms over
+2026-11-01 to 2026-11-08, so the alarm needs 5 of 5 datapoints (MOTIR-10732).
 
 **Missing data is not a breach.** Every alarm treats missing data as not
 breaching. The publishers write nothing for an interval with nothing to report:
@@ -119,46 +154,73 @@ node breach/breach.mjs <memory --percent N [--limit-mb N] | cpu | loop --block-m
   **900**; a larger value is refused, not clamped), then ends by itself with exit
   code 0, so the alarm returns to OK. A deadline 5 s past that bound ends the
   process whatever it holds.
-- **The output.** It writes one JSON start line and one end line to stdout,
-  which land in the task's log group.
+- **The output.** It writes one JSON start line and one end line to stdout:
+  into the task's log group when it is a one-off task's command, into the
+  session when it runs over ECS Exec.
 
-**The venue is a property, not a service.** The run needs one watched service
-whose only task, for the length of the run, is the breaching task. The memory
-and CPU alarms read the dimensions `ClusterName` and `ServiceName` and nothing
-else, and compare used against reserved across every task the service has. A
-task still serving traffic beside the breaching one dilutes that ratio, so the
-alarm may never fire. So:
+### Where a breach is counted
 
-1. Take one watched service to zero tasks with `aws ecs update-service`
-   (`--desired-count 0`), after reading its present count. That stops what the
-   service serves for the run, so choose the service and the time accordingly.
-2. Run the breach as a one-off ECS task of that service's own task definition,
-   with a container override (below).
-3. Read the alarm's history (the last section).
-4. Bring the service back to the count you read.
+The alarms read two kinds of series, and a breach is counted in each by a
+different rule, so the venue depends on the alarm:
 
-The override sets the command, the guard and the publication settings
-(namespace and the `Service` the alarm reads).
-`--group service:<ecs service name>` files the task under that service in
-Container Insights, which is where the memory and CPU alarms read.
+- **Event-loop block** reads `Motir/Core`, where a task publishes under the
+  `Service` its environment names. A one-off ECS task publishes under the
+  `Service` its container override sets, so `aws ecs run-task` proves it
+  (below).
+- **Memory and CPU** read `AWS/ECS`, which counts only the tasks a service owns.
+  AWS defines the service's `CPUUtilization` and `MemoryUtilization` over "the
+  tasks that belong to the service", reported for "each running task owned by
+  the service"
+  ([ECS CloudWatch metrics](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/available-metrics.html),
+  [ECS service utilization](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service_utilization.html)).
+  A service owns the tasks its scheduler starts, whose `startedBy` is the
+  service's deployment ID. `run-task` starts a standalone task, and its
+  `--group` is a free label (by default `family:<task definition family>`)
+  that does not make the service own it
+  ([`RunTask`](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_RunTask.html)).
+  So a breach in a one-off task, `--group service:<name>` or not, is counted
+  in no service's `AWS/ECS` series and cannot fire these alarms. The group
+  mattered only to Container Insights, which production no longer runs. The
+  memory and CPU breach therefore runs inside a running task of the service,
+  over ECS Exec (below).
+
+ECS Exec is on for core's three services and off for the AI side's, whose
+images carry no breach command either. So this page proves core's alarms; the
+AI side's memory and CPU alarms have no breach procedure.
+
+### Memory and CPU — inside a task the service owns
+
+Pick one running task of the service, and run the breach in its main container
+with the guard set on that command only:
 
 ```sh
-aws ecs run-task \
-  --cluster <cluster> \
-  --task-definition <the service's task definition> \
-  --launch-type FARGATE \
-  --group service:<ecs service name> \
-  --network-configuration 'awsvpcConfiguration={subnets=[<private subnet>],securityGroups=[<service security group>],assignPublicIp=DISABLED}' \
-  --overrides '{"containerOverrides":[{"name":"<container>","command":["node","breach/breach.mjs",<mode and flags>],"environment":[{"name":"MOTIR_BREACH_ENABLED","value":"true"},{"name":"MONITORING_CLOUDWATCH_NAMESPACE","value":"Motir/Core"},{"name":"MONITORING_CLOUDWATCH_SERVICE","value":"<service>"}]}]}'
+aws ecs list-tasks --cluster motir-core --service-name motir-core-<service> --desired-status RUNNING
 ```
 
-`<container>` is the service's main container (`web`, `worker` or `relay`), and
-`<service>` is the same name. Before reading the alarm, confirm in Container
-Insights that the task appears under `ServiceName` `motir-core-<service>`.
+```sh
+aws ecs execute-command \
+  --cluster motir-core \
+  --task <task id> \
+  --container <service> \
+  --interactive \
+  --command "env MOTIR_BREACH_ENABLED=true node /app/breach/breach.mjs <mode and flags>"
+```
 
-**Never point the service at a breach revision.** The override is the whole
-method: the service's own revision is never edited, so a core deploy that runs
-during the breach rolls the real service and leaves the one-off task alone. A
+`<service>` is `web`, `worker` or `relay`, which is also the container's name.
+Keep the session open until the end line prints: the breach is a child of the
+session. Its start and end lines print there, not in the task's log group.
+
+The breach shares the task with live traffic for its whole run, so choose the
+service and the time accordingly. Prefer `worker` or `relay`: a `web` task that
+stops answering its load-balancer health check is replaced, which ends the run
+early. Because the alarms read the Maximum, the busiest task decides, and the
+service's other tasks need not be stopped.
+
+**Never point the service at a breach revision.** The guard is set only on the
+breach's own command, by a container override or an exec command, and the
+service's own revision is never edited. So a core deploy that runs during the
+breach rolls the service, ending a breach in one of its tasks, and leaves a
+one-off task alone. A
 hand-registered revision that sets `MOTIR_BREACH_ENABLED`, with the service
 pointed at it, is what a deploy would copy into the service's next release. The
 deploy refuses such a service rather than copy it (MOTIR-10093,
@@ -167,28 +229,49 @@ deploy until the service is pointed back.
 
 ### Memory — `motir-<service>-memory`
 
-```json
-"command": ["node", "breach/breach.mjs", "memory", "--percent", "90", "--seconds", "300"]
+```sh
+--command "env MOTIR_BREACH_ENABLED=true node /app/breach/breach.mjs memory --percent <N> --seconds 300"
 ```
 
 This grows the resident set in 16 MB steps to `--percent` of the task's memory
 limit, then holds it. `--percent` is 1–95: the command never targets more than
 95 %, because an out-of-memory kill would end the run without the clean OK.
 The limit is the cgroup's. `--limit-mb` gives one where the cgroup sets none,
-and when both exist the lower one wins. Use a percentage above the 85 %
-threshold.
+and when both exist the lower one wins. `--percent` counts only the breach's own
+memory, and the service's process beside it already holds some. So read the
+service's `MemoryUtilization` Maximum first (`m`, in percent) and choose `N`
+above `85 − m` and at most `95 − m`: the task crosses the 85 % threshold and
+stays clear of its limit.
 
 ### CPU — `motir-<service>-cpu`
 
-```json
-"command": ["node", "breach/breach.mjs", "cpu", "--seconds", "420"]
+```sh
+--command "env MOTIR_BREACH_ENABLED=true node /app/breach/breach.mjs cpu --seconds 420"
 ```
 
 This holds every CPU the task's quota allows, one busy thread per CPU, for the
-whole run. The alarm needs 5 of 5 one-minute datapoints, so run for more than
+whole run, so the task's utilization reaches the reservation whatever the
+service's process is doing. The alarm needs 5 of 5 one-minute datapoints, so run for more than
 five minutes; 420 s leaves room for the first datapoint.
 
 ### Event-loop block — `motir-<service>-event-loop-block`
+
+This one runs as a one-off ECS task of the service's own task definition, with
+a container override. The override sets the command, the guard and the
+publication settings: the namespace, and the `Service` the alarm reads. The task
+is counted under that `Service` in `Motir/Core` whichever group it is in, so no
+`--group` is needed, and the service's own tasks keep serving.
+
+```sh
+aws ecs run-task \
+  --cluster motir-core \
+  --task-definition <the service's task definition> \
+  --launch-type FARGATE \
+  --network-configuration 'awsvpcConfiguration={subnets=[<private subnet>],securityGroups=[<service security group>],assignPublicIp=DISABLED}' \
+  --overrides '{"containerOverrides":[{"name":"<service>","command":["node","breach/breach.mjs",<mode and flags>],"environment":[{"name":"MOTIR_BREACH_ENABLED","value":"true"},{"name":"MONITORING_CLOUDWATCH_NAMESPACE","value":"Motir/Core"},{"name":"MONITORING_CLOUDWATCH_SERVICE","value":"<service>"}]}]}'
+```
+
+The mode and flags:
 
 ```json
 "command": ["node", "breach/breach.mjs", "loop", "--block-ms", "3000", "--seconds", "300"]
@@ -217,5 +300,6 @@ aws cloudwatch describe-alarm-history \
   --query 'AlarmHistoryItems[].[Timestamp,HistorySummary]' --output table
 ```
 
-The breach's own start and end lines are in the task's log group
-(`/motir/core/<service>`).
+The event-loop breach's own start and end lines are in the task's log group
+(`/motir/core/<service>`); the memory and CPU breaches print theirs in the exec
+session.
