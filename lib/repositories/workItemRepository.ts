@@ -1120,6 +1120,30 @@ export const workItemRepository = {
   },
 
   /**
+   * The project's NON-ARCHIVED init cards whose declared `initRepositoryName`
+   * matches any of `names` case-insensitively (Story MOTIR-10162 · MOTIR-11042) —
+   * the routing pass's "who declared this repository". A named read because the
+   * column is deliberately absent from every shared projection. Empty `names`
+   * short-circuits to `[]`.
+   */
+  async listByInitRepositoryName(
+    projectId: string,
+    names: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    if (names.length === 0) return [];
+    return tx.workItem.findMany({
+      where: {
+        projectId,
+        archivedAt: null,
+        OR: names.map((name) => ({ initRepositoryName: { equals: name, mode: 'insensitive' } })),
+      },
+      select: { id: true, workspaceId: true },
+      orderBy: { id: 'asc' },
+    });
+  },
+
+  /**
    * Write one repo NAME onto many items — the pin half of MOTIR-1913's resolution,
    * applied to ids the caller has already locked and validated.
    *

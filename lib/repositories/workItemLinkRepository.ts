@@ -314,6 +314,48 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The DEPENDENTS of an init card, each with what the routing pass decides on
+   * (Story MOTIR-10162 · MOTIR-11042) — the dependents-side mirror of
+   * {@link findBlockersWithLiveChildCounts}: every NON-ARCHIVED item carrying an
+   * `is_blocked_by` edge TO `initWorkItemId`, read from the `fromItem` side, with
+   * its id, project, status, its own `initRepositoryName` (a dependent that is
+   * itself an init card is never routed) and the same filtered count of LIVE
+   * children. ONE query. {@link findDependentStates} carries no child count and
+   * no declaration, which is why this is its own read rather than a widened one.
+   */
+  async findDependentsWithLiveChildCounts(
+    initWorkItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      projectId: string;
+      status: string;
+      initRepositoryName: string | null;
+      liveChildCount: number;
+    }>
+  > {
+    const rows = await tx.workItemLink.findMany({
+      where: { toId: initWorkItemId, kind: 'is_blocked_by', fromItem: { archivedAt: null } },
+      select: {
+        fromItem: {
+          select: {
+            id: true,
+            projectId: true,
+            status: true,
+            initRepositoryName: true,
+            _count: { select: { children: { where: { archivedAt: null } } } },
+          },
+        },
+      },
+    });
+    return rows.map(({ fromItem: { _count, ...item } }) => ({
+      ...item,
+      liveChildCount: _count.children,
+    }));
+  },
+
+  /**
    * The DEPENDENTS of a work item with their KEYS — {@link findDependentStates}
    * plus the `identifier`, ordered by the dependent's key number, for a surface
    * that NAMES the work waiting on an item (the design Re-plan seed's first turn,

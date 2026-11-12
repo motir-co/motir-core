@@ -943,16 +943,22 @@ export const projectRepoSetService = {
    * Called by the creation primitive (MOTIR-1781) AFTER its GitHub work completes —
    * never with a transaction held open across that round-trip.
    *
-   * POST-COMMIT, this fires the role → repo-name RESOLUTION (MOTIR-1913): a row
-   * reaching an established state is exactly the moment items pinned to its role
-   * can finally be told which repository they ship in. It is wired HERE rather than
-   * in each caller because this method is the ONE seam every establish path goes
-   * through — the creation primitive's `created` hop and the establish UI's
-   * connect-existing `connected` hop alike — so neither has to remember it and
-   * neither can drift. Best-effort by design: the repository EXISTS and the row IS
-   * established by the time this runs, and failing the attach over a derived pin
-   * would report a settled row as failed. The pass is idempotent, so the next
-   * establish (or an explicit re-run) completes what a dropped one missed.
+   * POST-COMMIT, three best-effort passes run here, in this order: the actor's
+   * collaborator-access grant (MOTIR-1900), the init-card ROUTING pass that gives
+   * the cards waiting on an init card a reference to this row (MOTIR-11042), and
+   * the project runner-group re-sync (MOTIR-1972). They are wired HERE because
+   * this method is the seam the creation primitive's `created` hop and the state
+   * route's connect `connected` hop both go through, so no caller has to remember
+   * them. (The Repositories room's connect-existing picker writes its row itself,
+   * in `organizationRepoService.linkExistingRepo`, which carries its own routing
+   * hook.) Best-effort by design: the repository EXISTS and the row IS established
+   * by the time they run, and failing the attach over one would report a settled
+   * row as failed.
+   *
+   * MOTIR-1913's role → repo-name RESOLUTION no longer runs here: it is RETIRED
+   * (see the comment in the body), because a card points at the row and its name
+   * is derived on read. The routing pass is not that pass revived — it writes a
+   * REFERENCE for a card that had none, which no read can derive.
    */
   async attachRealizedRepo(
     rowId: string,
@@ -974,7 +980,9 @@ export const projectRepoSetService = {
     // left for a pass to write.
     //
     // Nothing replaces it. If you are here looking for where the pin gets filled,
-    // the answer is that it no longer needs filling.
+    // the answer is that it no longer needs filling — for a card that POINTS AT the
+    // row. A card laid before the row existed points at nothing; the init-card
+    // routing pass below writes ITS reference, which is a different fact.
 
     // POST-COMMIT, BEST-EFFORT — grant the actor ACCESS to the repository that
     // now exists (MOTIR-1900). Wired at this same seam, and for the same reason
@@ -997,6 +1005,27 @@ export const projectRepoSetService = {
     } catch (err) {
       console.error(
         `[projectRepoSetService] could not grant collaborator access after establishing row ${rowId}:`,
+        err,
+      );
+    }
+
+    // POST-COMMIT, BEST-EFFORT — route the cards waiting on an init card that
+    // declared this repository (Story MOTIR-10162 · MOTIR-11042): they were laid
+    // unpinned because the row did not exist, so they hold no reference to derive
+    // a name from. Placed BEFORE the runner-group re-sync so a failure there cannot
+    // suppress it. No automatic retry: the log names the row and project, and the
+    // pass is idempotent and safe to re-run. A dropped run leaves the waiters
+    // blocked and visibly unpinned.
+    //
+    // LAZILY IMPORTED for the reason the access grant above gives: the routing
+    // service reaches `workItemsService`, whose graph reaches back into this one.
+    try {
+      const { projectRepoInitRoutingService } =
+        await import('@/lib/services/projectRepoInitRoutingService');
+      await projectRepoInitRoutingService.routeInitCardDependents(rowId, ctx);
+    } catch (err) {
+      console.error(
+        `[projectRepoSetService] could not route init-card dependents after establishing row ${rowId} in project ${attached.projectId}:`,
         err,
       );
     }

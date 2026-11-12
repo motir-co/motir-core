@@ -601,7 +601,7 @@ export const organizationRepoService = {
     input: LinkExistingRepoInput,
     ctx: ServiceContext,
   ): Promise<ProjectRepoDto> {
-    return resolveUnclassifiedLinkConflict(projectId, ctx, () =>
+    const linked = await resolveUnclassifiedLinkConflict(projectId, ctx, () =>
       inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
         // The org-admin gate, in the SERVICE and inside the transaction. The room's
         // own `repository:manage` is a PROJECT permission — without this a project
@@ -669,6 +669,25 @@ export const organizationRepoService = {
         return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
       }),
     );
+    // POST-COMMIT, BEST-EFFORT — route the cards waiting on an init card that
+    // declared this repository (Story MOTIR-10162 · MOTIR-11042). This arm writes
+    // its row `connected` in one create and never settles through
+    // `projectRepoSetService.attachRealizedRepo`, so it carries its own hook; a
+    // single hook there would leave a person-added repository routing nothing. A
+    // failure is logged with the row and never fails the link: the row is returned
+    // unchanged either way. Lazily imported, as the set service does, because the
+    // routing service reaches `workItemsService`.
+    try {
+      const { projectRepoInitRoutingService } =
+        await import('@/lib/services/projectRepoInitRoutingService');
+      await projectRepoInitRoutingService.routeInitCardDependents(linked.id, ctx);
+    } catch (err) {
+      console.error(
+        `[organizationRepoService] could not route init-card dependents after linking row ${linked.id} in project ${projectId}:`,
+        err,
+      );
+    }
+    return linked;
   },
 
   /**
