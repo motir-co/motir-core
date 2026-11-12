@@ -710,6 +710,11 @@ async function repair(input: {
         prompt: renderReviewFixPrompt(review),
         cwd: prepared.checkouts[0]!.path,
       });
+      // A FIX THAT WENT PAST THE CARD'S TEXT IS RECORDED (MOTIR-11094) — the review-fix
+      // prompt tells an agent with no Motir tools to write it into `$MOTIR_AGENT_REPORT`,
+      // and the run's credential posts it, as a dispatched leg's does. Whatever the exit
+      // code: an agent that built past the card and then failed still built it.
+      await recordReviewFixDiscrepancy(reporter, key, ran.result);
       if (!ran.ok) {
         info(
           `${key}: the review-fix agent failed — ${ran.detail}. Nothing was pushed by this step.`,
@@ -852,7 +857,9 @@ async function runAgentStep(
     prompt: string;
     cwd: string;
   },
-): Promise<{ ok: true } | { ok: false; detail: string }> {
+): Promise<
+  { ok: true; result: AgentRunResult } | { ok: false; detail: string; result: AgentRunResult }
+> {
   input.reporter.event({
     kind: 'agent_started',
     workItemKey: input.key,
@@ -860,11 +867,26 @@ async function runAgentStep(
   });
   const result = await runAgentFn({ command: input.command, prompt: input.prompt, cwd: input.cwd });
   reportAgentExited(input.reporter, input.key, input.step, result);
-  if (result.exitCode === 0) return { ok: true };
+  if (result.exitCode === 0) return { ok: true, result };
   return {
     ok: false,
     detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
+    result,
   };
+}
+
+/** Post the build-through points and decisions the review-fix agent wrote into its
+ *  self-report, when it wrote any (MOTIR-11094). An agent with Motir tools records them
+ *  itself and writes none, so nothing is posted twice. */
+async function recordReviewFixDiscrepancy(
+  reporter: ReturnType<typeof createDispatchRunReporter>,
+  key: string,
+  result: AgentRunResult,
+): Promise<void> {
+  const points = result.discrepancy ?? [];
+  const decisions = result.decisions ?? [];
+  if (points.length === 0 && decisions.length === 0) return;
+  await reporter.reportDiscrepancy?.(key, points, decisions);
 }
 
 /** The `agent_exited` every repair turn reports — the review, re-run and record

@@ -21,6 +21,13 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 //     FINDING; a defect the verdict cannot carry (code the change did not touch, another
 //     card's defect) rides the SAME verdict body as a `bugs` entry, and Motir files it.
 //     The not-done bugs already filed against the card are listed, so it is not filed twice.
+//   · A MINOR FINDING IS CLASSED BY WHO INTRODUCED IT (MOTIR-11094). One in code the pull
+//     requests deliver sends the card back like a major one, even when its fix goes past the
+//     card's text — "the code does what the card said" never excuses a defect the change
+//     ships. One the pull requests did not introduce is logged as a bug, or names the open
+//     bug that covers it, before a `pass`. Nits alone never send the card back. The same rule
+//     is stated in the `motir-review` skill; `tests/dispatch/reviewVerdictRuleParity.test.ts`
+//     holds the two texts to one rule.
 //
 //   · THE CONVENTIONS (MOTIR-6904, §8.5) — per delivery-set repository, Motir's derived
 //     coding convention when there is one, capped; else one line saying that repository is
@@ -271,6 +278,9 @@ function bugSectionLines(openBugs: readonly ReviewOpenBugForPrompt[]): string[] 
     '    card back, and its repair fixes it.',
     '  - A defect the verdict cannot carry is LOGGED AS A BUG instead: one in code the pull',
     '    requests did not touch, or one that belongs to another card. Do not drop it.',
+    '  - That includes a MINOR finding the pull requests did not introduce: log it, or name',
+    '    the bug below that already covers it. One that is neither logged nor named is not',
+    '    allowed beside a `pass`.',
     '  - Log it the way `motir log bug` files one:',
     '      · ROOT-CAUSE IT FIRST. Read the code; reproduce it where you can (run only the one',
     '        test file it touches). Write what is wrong, where (file and line), how to make',
@@ -347,6 +357,16 @@ export function assembleReviewPrompt(input: ReviewPromptInput): AssembledReviewP
       '    A `met` without evidence is not allowed: write that row as `cannot tell`.',
       '  - A card that names no criteria is a checklist row of its own, and a finding.',
       '  - Rank every finding blocker, major, minor or nit.',
+      '  - Class every MINOR finding by who introduced it:',
+      '      · INTRODUCED — it is in code the pull requests deliver: lines they add or change,',
+      '        or behaviour they ship. It sends the card back (YOUR VERDICT), the same as a',
+      '        major one, even when fixing it goes beyond the card’s text — a gap in what the',
+      '        card specified is still a defect the change ships, and its repair builds the',
+      '        fix and records it as a discrepancy. "The code does what the card said" is not',
+      '        an excuse for a defect the pull requests introduced.',
+      '      · NOT INTRODUCED — it is in code the pull requests did not touch, or it belongs to',
+      '        another card. Log it as a bug (A DEFECT THE VERDICT CANNOT CARRY, below), or',
+      '        name the already-filed bug that covers it.',
       '  - Look for defects the change introduces: wrong behaviour, a missed case the card',
       '    names, broken error handling, a security hole, a regression in code it touches.',
       '  - Report what must change for the card to be right. Style preferences that no',
@@ -374,12 +394,18 @@ export function assembleReviewPrompt(input: ReviewPromptInput): AssembledReviewP
       '  - `subjectVersion` is EXACTLY the string above: the version you reviewed.',
       `  - ONE verdict, for ${input.key} — the run target — only. Cards under it are sources`,
       '    of criteria, never verdict targets: never submit a verdict for one of them.',
-      '  - `changes_requested` — any checklist row is `not met`, or any finding is a blocker',
-      '    or major. `findingsMd` is REQUIRED then: one finding per item, each naming the',
-      '    FILE and LINE, the criterion (or quoted rule) it breaks, and WHAT TO CHANGE.',
-      '    Minor findings and nits never send the card back.',
+      '  - `changes_requested` — any checklist row is `not met`, any finding is a blocker or',
+      '    major, or any minor finding is one the pull requests introduced (in code they',
+      '    deliver). That holds even when the fix goes beyond the card’s text: the repair',
+      '    builds it and records the discrepancy. `findingsMd` is REQUIRED then: one finding',
+      '    per item, each naming the FILE and LINE, the criterion (or quoted rule) it breaks,',
+      '    and WHAT TO CHANGE.',
+      '    Nits never send the card back.',
       '  - A `cannot tell` row alone does not send the card back: name it in `summaryMd`.',
-      '  - `pass` — otherwise. `findingsMd` then holds the checklist and minor notes only.',
+      '  - A minor finding the pull requests did not introduce is logged in `bugs`, or named in',
+      '    `summaryMd` as the already-filed bug that covers it. One that is neither is not',
+      '    allowed beside a `pass`.',
+      '  - `pass` — otherwise. `findingsMd` then holds the checklist and nits only.',
       '  - Put the checklist at the TOP of `findingsMd`, on either verdict, as a Markdown',
       '    table — | criterion | status | evidence | — ahead of the findings.',
       '  - `bugs` is optional: leave it out, or `[]`, when the review found nothing to log.',
