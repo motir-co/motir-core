@@ -48,6 +48,7 @@ import {
   type AiAugmentReplanSeed,
 } from './_helpers/ai-augment-replan-seed';
 import { grantPaidAiPlanIfBilled } from './_helpers/billing';
+import { getFullBoard } from './_helpers/board';
 import { workItemsService } from '@/lib/services/workItemsService';
 import en from '@/messages/en.json';
 
@@ -100,6 +101,35 @@ const peekRead = (page: Page) =>
   page.waitForResponse(
     (r) => /\/api\/work-items\/peek\?/.test(r.url()) && r.request().method() === 'GET',
   );
+
+/**
+ * The epic's board card, scrolled into its column's window. A board column
+ * VIRTUALIZES its stack (`useRowWindow`), so a card low in To Do mounts only once
+ * the column scrolls, the way a person reaches it. Each column's scroller is
+ * stepped down until the card mounts (the `acceptance-review-path` helper).
+ */
+async function revealBoardCard(page: Page, identifier: string): Promise<Locator> {
+  const target = boardCard(page, identifier);
+  await expect
+    .poll(
+      async () => {
+        if ((await target.count()) > 0) return true;
+        await main(page)
+          .locator('[data-testid^="board-column-"] div.overflow-y-auto')
+          .evaluateAll((els) => {
+            for (const el of els) {
+              el.scrollTop += el.clientHeight / 2;
+              el.dispatchEvent(new Event('scroll'));
+            }
+          });
+        return false;
+      },
+      { timeout: FIRST_PAINT_MS },
+    )
+    .toBe(true);
+  await target.scrollIntoViewIfNeeded();
+  return target;
+}
 
 /** Open /roadmap from the primary nav and wait for its root level to land. */
 async function openRoadmap(page: Page): Promise<void> {
@@ -198,9 +228,19 @@ test('a childless To do epic is To plan on every surface, and its roadmap card p
 
   // ── 4. The same slot on /boards, the quick view and the item page ─────────
   await chapter('The board card, quick view and item page show To plan too', async () => {
+    // The board's own read first: the epic is on it, in a lane, before the page is
+    // asked to draw it.
+    const board = await getFullBoard(page.request);
+    expect(
+      board.columns.flatMap((c) => c.cards.map((card) => card.identifier)),
+      'the epic is on the default board',
+    ).toContain(epicKey);
     await page.goto('/boards');
-    const onBoard = boardCard(page, epicKey);
-    await expect(onBoard).toBeVisible({ timeout: FIRST_PAINT_MS });
+    await expect(main(page).locator('[data-testid^="board-column-"]').first()).toBeVisible({
+      timeout: FIRST_PAINT_MS,
+    });
+    const onBoard = await revealBoardCard(page, epicKey);
+    await expect(onBoard).toBeVisible();
     await expect(toPlanPill(onBoard)).toBeVisible();
     await expect(planButton(onBoard)).toHaveCount(0);
     await beat();
