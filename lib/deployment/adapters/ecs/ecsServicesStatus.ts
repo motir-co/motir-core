@@ -54,6 +54,8 @@ export interface EcsDeploymentRow {
 /** The fields of one described ECS service this adapter reads. */
 export interface EcsServiceRow {
   readonly serviceName?: string;
+  /** `ACTIVE`, or `DRAINING` / `INACTIVE` for a deleted service ECS still describes. */
+  readonly status?: string;
   readonly runningCount?: number;
   readonly pendingCount?: number;
   readonly desiredCount?: number;
@@ -140,6 +142,12 @@ function groupOf(name: string, row: EcsServiceRow): DeploymentGroupStatus {
  * to run, and the port's contract is that an implementation throws rather than
  * reporting an empty fleet. A service that genuinely reports zero desired and
  * zero running is still returned: that is a reading, and the operator's answer.
+ *
+ * ⚠️ SO DOES ONE WHOSE OWN STATUS IS NOT `ACTIVE`. A deleted service stays in
+ * DescribeServices' `services` (not `failures`) as `DRAINING`, then `INACTIVE`,
+ * with its desired count set to zero, until ECS purges it. Folded, it would read
+ * as a steady 0/0 — the same silent zero as a missing service, with a status
+ * field attached. Only an `ACTIVE` service is a reading.
  */
 export function foldServices(
   rows: readonly EcsServiceRow[],
@@ -157,6 +165,11 @@ export function foldServices(
   const groups = requested.map((name) => {
     const row = byName.get(name);
     if (!row) throw new Error(`deployment status: ECS returned no service named ${name}`);
+    if (row.status !== 'ACTIVE') {
+      throw new Error(
+        `deployment status: ECS service ${name} is ${row.status ?? 'of unknown status'}`,
+      );
+    }
     return groupOf(name, row);
   });
   return { groups };

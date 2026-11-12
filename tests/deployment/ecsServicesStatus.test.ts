@@ -25,6 +25,7 @@ function service(
   const revision = over.revision ?? 7;
   return {
     serviceName: name,
+    status: 'ACTIVE',
     runningCount: 2,
     pendingCount: 0,
     desiredCount: 2,
@@ -286,7 +287,7 @@ describe('foldServices', () => {
 
   it('answers a null release when no deployment carries a task definition, and defaults missing counts to zero', () => {
     const [group] = foldServices(
-      [{ serviceName: 'svc', deployments: [{ status: 'PRIMARY' }] }],
+      [{ serviceName: 'svc', status: 'ACTIVE', deployments: [{ status: 'PRIMARY' }] }],
       ['svc'],
     ).groups;
     expect(group).toEqual({
@@ -297,7 +298,9 @@ describe('foldServices', () => {
       release: null,
       rolling: false,
     });
-    expect(foldServices([{ serviceName: 'bare' }], ['bare']).groups[0]).toMatchObject({
+    expect(
+      foldServices([{ serviceName: 'bare', status: 'ACTIVE' }], ['bare']).groups[0],
+    ).toMatchObject({
       release: null,
       rolling: false,
     });
@@ -314,6 +317,26 @@ describe('foldServices', () => {
       ['svc'],
     );
     expect(status.groups[0]?.release).toBe('svc:3');
+  });
+
+  it.each(['DRAINING', 'INACTIVE'])(
+    'throws, naming the service and its status, when a requested service is %s — a deleted service is not a steady 0/0',
+    (state) => {
+      const deleted = service('motir-core-worker', {
+        status: state,
+        runningCount: 0,
+        desiredCount: 0,
+      });
+      expect(() =>
+        foldServices([service('motir-core-web'), deleted], ['motir-core-web', 'motir-core-worker']),
+      ).toThrow(`deployment status: ECS service motir-core-worker is ${state}`);
+    },
+  );
+
+  it('throws when a requested service carries no status at all, rather than assuming it is ACTIVE', () => {
+    expect(() => foldServices([{ serviceName: 'svc' }], ['svc'])).toThrow(
+      'deployment status: ECS service svc is of unknown status',
+    );
   });
 
   it('names an unnamed failure and a failure with no reason rather than dropping them', () => {
