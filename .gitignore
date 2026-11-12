@@ -78,5 +78,3 @@ next-env.d.ts
 # MOTIR-7745 — translation batch files written by `pnpm i18n:extract`
 /.i18n-work/
 
-# MOTIR-8673 — the load-test seed manifest holds tokens and session cookies
-loadtest/.out/

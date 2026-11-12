@@ -326,13 +326,6 @@ function assertsRefusalAgainstSharedStore(file: string): boolean {
  */
 const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
   [
-    'tests/loadtest/storyGate.refusals.test.ts',
-    'Its refusals are BUILT, not counted (MOTIR-8681): `mcpRateLimitedResponse`, ' +
-      '`rateLimitedToolError` and `classifyApiV1Error(new RateLimitExceededError(…))` are ' +
-      'called directly to produce the response shapes the load-test classifiers and report ' +
-      'must read as `limited`. No request reaches a limiter and no increment runs.',
-  ],
-  [
     'tests/rateLimit/storeGuard.test.ts',
     'Its refusals are the BOOT GUARD’s (`assertRateLimitStoreAllowed`, ' +
       '`lib/rateLimit/storeGuard.ts`, MOTIR-8614): a pure function of the env it is handed, ' +
