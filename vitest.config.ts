@@ -701,7 +701,7 @@ export default defineConfig({
         // `tests/deployment`, `tests/gateway`, `tests/monitoring` and `tests/platform`:
         // every file 100 lines / 100 functions, branches 91.4–100. Pinned at the
         // project's 90, as `platformHealthService.ts` above is.
-        'lib/deployment/adapters/fly/flyMachinesStatus.ts',
+        'lib/deployment/adapters/ecs/ecsServicesStatus.ts',
         'lib/deployment/providers.ts',
         'lib/gateway/statusClient.ts',
         'lib/gateway/statusProvider.ts',
@@ -6007,7 +6007,7 @@ export default defineConfig({
         // MOTIR-3766 — measured at 100 / 95.45 / 100 / 100; see the `include` note.
         'lib/services/platformHealthService.ts': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-744 — the story 10.2 readers; see the `include` note.
-        'lib/deployment/adapters/fly/flyMachinesStatus.ts': {
+        'lib/deployment/adapters/ecs/ecsServicesStatus.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

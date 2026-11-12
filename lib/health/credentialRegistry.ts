@@ -19,8 +19,8 @@
 //
 // ADDING A CREDENTIAL is one entry here and nothing else: the probe
 // (`credentialExpiryProbe.ts`) iterates the registry and knows no names. Each
-// later credential is registered by the card that introduces it, as 10.2.4b
-// (MOTIR-7332) did for `FLY_DEPLOYMENT_READ_TOKEN`. A credential that does
+// later credential is registered by the card that introduces it, as MOTIR-9408
+// did for the certificates token (`FLY_CERTS_TOKEN`). A credential that does
 // not expire (`SENTRY_READ_TOKEN`, MOTIR-739) is not registered at all.
 //
 // THE FULL LIST lives in the credential inventory (MOTIR-9408), a Motir page
@@ -163,18 +163,5 @@ export const CREDENTIAL_REGISTRY: readonly DeclaredCredential[] = [
     source:
       "MOTIR-2024, the manual card that minted it on 2026-08-03 (expiry is flyctl's 20-year default from that day)",
     heldIn: 'the motir-ai repository Actions secrets',
-  },
-  {
-    envVar: 'FLY_DEPLOYMENT_READ_TOKEN',
-    name: "Fly read-only org token (the operator console's Hosting card)",
-    // Fly's default lifetime: it was minted without `--expiry`, by the owner's
-    // decision. Far off, and declared anyway, so a re-mint with a shorter life is
-    // one edit here rather than a credential nobody watches. Since the AWS cutover
-    // it is not injected into core (MOTIR-10957 revokes it), so it is skipped.
-    expiresAt: '2046-09-27',
-    renewal:
-      'mint a replacement with `fly tokens create readonly moooon` the way MOTIR-7331 did, then ' +
-      "set `FLY_DEPLOYMENT_READ_TOKEN` where core reads it and move this entry's expiresAt",
-    source: 'MOTIR-7331, the manual card that minted it (expiry read from `fly tokens list`)',
   },
 ];

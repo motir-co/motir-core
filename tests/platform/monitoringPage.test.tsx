@@ -62,8 +62,18 @@ const UNCHANGED: [
   },
 ];
 
-const HOSTING_IDENTITY = { app: 'motir-core', region: 'iad', machineId: 'web1' };
-const HOSTING_COUNTS = { appStarted: 2, appExpected: 2, workerStarted: 1, workerExpected: 1 };
+const HOSTING_IDENTITY = { app: 'motir-core', region: 'us-east-1', machineId: '—' };
+const ECS_CONSOLE = 'https://us-east-1.console.aws.amazon.com/ecs/v2/clusters?region=us-east-1';
+const HOSTING_SERVICES = [
+  { name: 'motir-core-web', started: 2, expected: 2, release: 'motir-core-web:41', rolling: false },
+  {
+    name: 'motir-core-worker',
+    started: 1,
+    expected: 1,
+    release: 'motir-core-worker:17',
+    rolling: false,
+  },
+];
 
 function board(hosting: PlatformSignalDTO, errors: PlatformSignalDTO): PlatformHealthDTO {
   return {
@@ -86,8 +96,9 @@ function board(hosting: PlatformSignalDTO, errors: PlatformSignalDTO): PlatformH
 const HEALTHY_HOSTING: PlatformSignalDTO = {
   id: 'hosting',
   state: 'healthy',
-  values: { ...HOSTING_IDENTITY, ...HOSTING_COUNTS, release: 'deployment-01K6' },
-  linkOut: 'https://fly.io/apps/motir-core',
+  values: { ...HOSTING_IDENTITY, serviceCount: 2 },
+  services: HOSTING_SERVICES,
+  linkOut: ECS_CONSOLE,
 };
 const HEALTHY_ERRORS: PlatformSignalDTO = {
   id: 'errors',
@@ -163,63 +174,85 @@ describe('the Errors card', () => {
 });
 
 describe('the Hosting card', () => {
-  it('shows both groups and the release when healthy', async () => {
-    const hosting = card(await render(), 'Hosting');
-    expect(hosting).toMatch(/app 2\/2\|* · \|*worker 1\/1/);
-    expect(hosting).toContain('all on release deployment-01K6');
-    expect(hosting).toContain('Fly app motir-core · iad');
+  it('shows one line per service, with running against desired and its own release', async () => {
+    const html = await render();
+    const hosting = card(html, 'Hosting');
+    expect(hosting).toContain('All 2 services steady');
+    expect(hosting).toMatch(/\|motir-core-web\| 2\/2 · motir-core-web:41\|/);
+    expect(hosting).toMatch(/\|motir-core-worker\| 1\/1 · motir-core-worker:17\|/);
+    expect(hosting).toContain('each steady on its release. ECS cluster motir-core · us-east-1.');
+    expect(hosting).toContain('ECS console');
+    expect(html).toContain(`href="${ECS_CONSOLE}"`);
+    // Nothing is set in weight on a healthy card.
+    expect(html).not.toMatch(/<span class="font-semibold">motir-core/);
   });
 
-  it('a short group is named in the detail and set in weight in the headline', async () => {
+  it('a short service is named in words and set in weight on its line', async () => {
     const html = await render({
       ...HEALTHY_HOSTING,
       state: 'degraded',
       values: {
         ...HEALTHY_HOSTING.values,
-        appStarted: 1,
         reason: 'shortGroup',
-        group: 'app',
-        started: 1,
-        expected: 2,
+        group: 'motir-core-worker',
+        started: 0,
+        expected: 1,
       },
+      services: [HOSTING_SERVICES[0]!, { ...HOSTING_SERVICES[1]!, started: 0 }],
     });
-    expect(card(html, 'Hosting')).toContain(
-      'app is short: 1 of 2 machines started. Release deployment-01K6.',
-    );
-    expect(html).toMatch(/<span class="font-semibold">app 1\/2<\/span>/);
-    expect(html).not.toMatch(/<span class="font-semibold">worker/);
+    const hosting = card(html, 'Hosting');
+    expect(hosting).toContain('motir-core-worker short · 0/1');
+    expect(hosting).toContain('motir-core-worker is short: 0 of 1 tasks running.');
+    expect(html).toMatch(/<span class="font-semibold">motir-core-worker<\/span> 0\/1/);
+    expect(html).not.toMatch(/<span class="font-semibold">motir-core-web</);
   });
 
-  it('mixed releases show the release count', async () => {
+  it('a service mid-deploy is named in words with the release it is rolling to', async () => {
+    const html = await render({
+      ...HEALTHY_HOSTING,
+      state: 'degraded',
+      values: {
+        ...HEALTHY_HOSTING.values,
+        reason: 'mixedReleases',
+        group: 'motir-core-web',
+        release: 'motir-core-web:42',
+      },
+      services: [
+        { ...HOSTING_SERVICES[0]!, release: 'motir-core-web:42', rolling: true },
+        HOSTING_SERVICES[1]!,
+      ],
+    });
+    const hosting = card(html, 'Hosting');
+    expect(hosting).toContain('motir-core-web mid-deploy');
+    expect(hosting).toContain('motir-core-web is mid-deploy on motir-core-web:42');
+    expect(html).toMatch(/<span class="font-semibold">motir-core-web<\/span>/);
+  });
+
+  it('a service with no named release renders an em-dash for it', async () => {
     const hosting = card(
       await render({
         ...HEALTHY_HOSTING,
-        state: 'degraded',
-        values: {
-          ...HEALTHY_HOSTING.values,
-          release: 'deployment-new',
-          reason: 'mixedReleases',
-          count: 2,
-        },
+        values: { ...HOSTING_IDENTITY, serviceCount: 1 },
+        services: [{ ...HOSTING_SERVICES[0]!, release: null }],
       }),
       'Hosting',
     );
-    expect(hosting).toContain('running 2 different releases');
-    expect(hosting).toContain('Newest deployment-new');
+    expect(hosting).toContain('1 service steady');
+    expect(hosting).toMatch(/\|motir-core-web\| 2\/2 · —\|/);
   });
 
-  it('noReadCredential still shows app and region, with no machine counts', async () => {
+  it('noReadCredential still shows the cluster and region, with no task counts', async () => {
     const hosting = card(
       await render({
         id: 'hosting',
         state: 'unreachable',
         values: { reason: 'noReadCredential', ...HOSTING_IDENTITY },
-        linkOut: 'https://fly.io/apps/motir-core',
+        linkOut: ECS_CONSOLE,
       }),
       'Hosting',
     );
-    expect(hosting).toContain('Answering from iad');
-    expect(hosting).toContain('Fly app motir-core · machine web1');
+    expect(hosting).toContain('Answering from us-east-1');
+    expect(hosting).toContain('ECS cluster motir-core · us-east-1.');
     // Everything up to the card's own "…not a count of zero" — no N/M count.
     const body = hosting.slice(0, hosting.indexOf('count of zero') + 13);
     expect(body).toContain('This is not a count of zero');
@@ -237,8 +270,12 @@ describe('the Hosting card', () => {
       'Hosting',
     );
     const body = hosting.slice(0, hosting.indexOf('count of zero') + 13);
-    expect(body).toContain('No answer from Fly');
+    expect(body).toContain('No answer from ECS');
     expect(body).not.toMatch(/\d/);
+  });
+
+  it('no line on the card names Fly', async () => {
+    expect(card(await render(), 'Hosting')).not.toMatch(/\bFly\b/);
   });
 });
 

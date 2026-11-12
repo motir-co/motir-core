@@ -193,9 +193,9 @@ describe('CREDENTIAL_REGISTRY', () => {
     const billing = CREDENTIAL_REGISTRY.find((c) => c.envVar === 'GITHUB_BILLING_TOKEN');
 
     expect(billing).toMatchObject({ expiresAt: '2027-07-31' });
-    // MOTIR-7332 registers the Fly read token, at the date MOTIR-7331 recorded.
-    const flyRead = CREDENTIAL_REGISTRY.find((c) => c.envVar === 'FLY_DEPLOYMENT_READ_TOKEN');
-    expect(flyRead).toMatchObject({ expiresAt: '2046-09-27' });
+    // The Hosting card's Fly read token left with its adapter (MOTIR-10952):
+    // nothing at main reads it, so its expiry is no longer watched.
+    expect(CREDENTIAL_REGISTRY.map((c) => c.envVar)).not.toContain('FLY_DEPLOYMENT_READ_TOKEN');
     for (const entry of CREDENTIAL_REGISTRY) {
       expect(entry.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(Number.isNaN(Date.parse(`${entry.expiresAt}T00:00:00.000Z`))).toBe(false);
@@ -211,7 +211,6 @@ describe('CREDENTIAL_REGISTRY', () => {
     ['GITHUB_ENTERPRISE_ADMIN_TOKEN', '2027-10-23', undefined],
     ['MOTIR_HOSTING_FLY_API_TOKEN', '2027-10-28', undefined],
     ['FLY_CERTS_TOKEN', '2046-08-29', undefined],
-    ['FLY_DEPLOYMENT_READ_TOKEN', '2046-09-27', undefined],
     ['MOTIR_AI_READ_TOKEN', '2027-09-15', 'motir-meta'],
     ['MARKETING_DISPATCH_TOKEN', '2027-11-09', 'motir-ai'],
     ['FLY_FLEET_DEPLOY_TOKEN', '2046-07-29', 'motir-ai'],
@@ -225,7 +224,7 @@ describe('CREDENTIAL_REGISTRY', () => {
   it('names each env var once, and no renewal still points at Fly secrets', () => {
     const names = CREDENTIAL_REGISTRY.map((c) => c.envVar);
     expect(new Set(names).size).toBe(names.length);
-    expect(names).toHaveLength(8);
+    expect(names).toHaveLength(7);
     for (const entry of CREDENTIAL_REGISTRY) {
       expect(entry.renewal).not.toContain('fly secrets set');
     }

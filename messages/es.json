@@ -11047,23 +11047,28 @@
         },
         "hosting": {
           "title": "Alojamiento",
-          "value": "<appGroup>app {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "Todas las máquinas iniciadas, todas en la versión {release}. App de Fly {app} · {region}.",
-          "degradedDetail": {
-            "shortGroup": "A {group} le faltan máquinas: {started} de {expected} iniciadas. Versión {release}.",
-            "mixedReleases": "Las máquinas ejecutan {count} versiones distintas: puede que un despliegue se haya detenido a medias. La más reciente es {release}."
+          "value": "{serviceCount, plural, one {# servicio estable} other {Los # servicios estables}}",
+          "degradedValue": {
+            "shortGroup": "{group} incompleto · {started}/{expected}",
+            "mixedReleases": "{group} en pleno despliegue"
           },
+          "detail": "Cada servicio ejecuta las tareas que debe, y cada uno está estable en su versión. Clúster de ECS {app} · {region}.",
+          "degradedDetail": {
+            "shortGroup": "{group} está incompleto: {started} de {expected} tareas en ejecución. Clúster de ECS {app} · {region}.",
+            "mixedReleases": "{group} está en pleno despliegue en {release}: hay más de un despliegue en curso, o su implantación no terminó. Clúster de ECS {app} · {region}."
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "No es un host gestionado",
             "noReadCredential": "Respondiendo desde {region}",
-            "readFailed": "Sin respuesta de Fly"
+            "readFailed": "Sin respuesta de ECS"
           },
           "unreachableDetail": {
-            "notManaged": "Esta compilación no se ejecuta en Fly, así que no hay ningún panel de alojamiento al que apuntar. Es lo esperado en una instancia local o autoalojada.",
-            "noReadCredential": "App de Fly {app} · máquina {machineId}. Esta consola aún no tiene un token de lectura de Fly, así que no puede contar máquinas ni versiones. No es un recuento de cero.",
-            "readFailed": "No se pudo leer la lista de máquinas en este momento. No es un recuento de cero."
+            "notManaged": "Esta compilación no se ejecuta en AWS Fargate, así que no hay una consola de alojamiento a la que enlazar. Es lo esperado en una instancia local o autoalojada.",
+            "noReadCredential": "Clúster de ECS {app} · {region}. A este despliegue no se le ha indicado qué servicios de ECS son suyos, así que esta consola no puede contar tareas ni versiones. No es un recuento de cero.",
+            "readFailed": "No se pudieron describir los servicios de ECS en este momento. No es un recuento de cero."
           },
-          "linkOut": "Panel de Fly"
+          "linkOut": "Consola de ECS"
         },
         "gateway": {
           "title": "Gateway",

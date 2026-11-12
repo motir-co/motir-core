@@ -7,7 +7,7 @@ import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthServic
 import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
-import { flyDeploymentStatusProvider } from '@/lib/deployment/adapters/fly/flyMachinesStatus';
+import { ecsDeploymentStatusProvider } from '@/lib/deployment/adapters/ecs/ecsServicesStatus';
 import type { DeploymentStatus } from '@/lib/deployment/deploymentStatus';
 import { httpGatewayStatusReader } from '@/lib/gateway/statusClient';
 import { httpErrorCountReader } from '@/lib/monitoring/sentryErrorCount';
@@ -388,25 +388,45 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
   });
 
   it('a deployment the platform does not manage reports notManaged, not a blank card', async () => {
-    vi.stubEnv('FLY_APP_NAME', '');
+    vi.stubEnv('AWS_EXECUTION_ENV', '');
+    vi.stubEnv('MOTIR_ECS_CLUSTER', 'motir-core');
+    vi.stubEnv('AWS_REGION', 'us-east-1');
 
     const hosting = signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
     expect(hosting).toMatchObject({ state: 'unreachable', values: { reason: 'notManaged' } });
     expect(hosting.linkOut).toBeNull(); // a self-hosted instance has no console to link to
   });
 
-  it('a managed deployment missing its region or machine renders an em-dash, never an empty string', async () => {
-    vi.stubEnv('FLY_APP_NAME', 'motir-core-test');
-    vi.stubEnv('FLY_REGION', '');
-    vi.stubEnv('FLY_MACHINE_ID', '');
-    vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', '');
+  it('a managed deployment missing its region or task renders an em-dash, never an empty string', async () => {
+    // Fargate injects no per-task id, and a task with no AWS_REGION has no
+    // console page to link to: the link-out is null, which the card renders as
+    // text without an affordance.
+    vi.stubEnv('AWS_EXECUTION_ENV', 'AWS_ECS_FARGATE');
+    vi.stubEnv('MOTIR_ECS_CLUSTER', 'motir-core-test');
+    vi.stubEnv('AWS_REGION', '');
+    vi.stubEnv('MOTIR_DEPLOYMENT_ECS_SERVICES', '');
     vi.stubEnv('MOTIR_E2E_FAKE_DEPLOYMENT_STATUS', '');
 
     const hosting = signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
     expect(hosting).toMatchObject({
       values: { app: 'motir-core-test', region: '—', machineId: '—' },
-      linkOut: 'https://fly.io/apps/motir-core-test',
+      linkOut: null,
     });
+  });
+
+  it('a Fargate task with no cluster named still reports the cluster as an em-dash', async () => {
+    vi.stubEnv('AWS_EXECUTION_ENV', 'AWS_ECS_FARGATE');
+    vi.stubEnv('MOTIR_ECS_CLUSTER', '');
+    vi.stubEnv('AWS_REGION', 'us-east-1');
+    vi.stubEnv('MOTIR_DEPLOYMENT_ECS_SERVICES', 'motir-core-web');
+    vi.stubEnv('MOTIR_E2E_FAKE_DEPLOYMENT_STATUS', '');
+
+    const hosting = signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
+    expect(hosting).toMatchObject({
+      state: 'unreachable',
+      values: { reason: 'noReadCredential', app: '—', region: 'us-east-1', machineId: '—' },
+    });
+    expect(hosting.services).toBeUndefined();
   });
 
   it('a build with NO Sentry DSN says notConfigured — a different sentence from noReadCredential', async () => {
@@ -651,18 +671,31 @@ describe('the gateway signal (MOTIR-742)', () => {
   });
 });
 
-describe('the hosting signal reads the fleet (MOTIR-7332)', () => {
-  const WORKER = { name: 'worker', started: 1, total: 1, expected: 1 };
-  const STATUS: DeploymentStatus = {
-    groups: [{ name: 'app', started: 2, total: 2, expected: 2 }, WORKER],
-    releases: ['deployment-01K6HXQ8'],
+describe("the hosting signal reads core's ECS services (MOTIR-7332, MOTIR-10952)", () => {
+  const CONSOLE = 'https://us-east-1.console.aws.amazon.com/ecs/v2/clusters?region=us-east-1';
+  const WEB = {
+    name: 'motir-core-web',
+    started: 2,
+    total: 2,
+    expected: 2,
+    release: 'motir-core-web:41',
+    rolling: false,
   };
+  const WORKER = {
+    name: 'motir-core-worker',
+    started: 1,
+    total: 1,
+    expected: 1,
+    release: 'motir-core-worker:17',
+    rolling: false,
+  };
+  const STATUS: DeploymentStatus = { groups: [WEB, WORKER] };
 
-  function onFly(token = 'fo1_read') {
-    vi.stubEnv('FLY_APP_NAME', 'motir-core');
-    vi.stubEnv('FLY_REGION', 'iad');
-    vi.stubEnv('FLY_MACHINE_ID', 'web1');
-    vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', token);
+  function onFargate(services = 'motir-core-web,motir-core-worker') {
+    vi.stubEnv('AWS_EXECUTION_ENV', 'AWS_ECS_FARGATE');
+    vi.stubEnv('MOTIR_ECS_CLUSTER', 'motir-core');
+    vi.stubEnv('AWS_REGION', 'us-east-1');
+    vi.stubEnv('MOTIR_DEPLOYMENT_ECS_SERVICES', services);
     vi.stubEnv('MOTIR_E2E_FAKE_DEPLOYMENT_STATUS', '');
   }
 
@@ -670,79 +703,111 @@ describe('the hosting signal reads the fleet (MOTIR-7332)', () => {
     return signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
   }
 
-  it('is healthy with every group at its expectation on one release', async () => {
-    onFly();
-    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue(STATUS);
+  it('is healthy with every service at its desired count, each on its own release', async () => {
+    onFargate();
+    vi.spyOn(ecsDeploymentStatusProvider, 'read').mockResolvedValue(STATUS);
 
     expect(await hosting()).toEqual({
       id: 'hosting',
       state: 'healthy',
-      values: {
-        app: 'motir-core',
-        region: 'iad',
-        machineId: 'web1',
-        appStarted: 2,
-        appExpected: 2,
-        workerStarted: 1,
-        workerExpected: 1,
-        release: 'deployment-01K6HXQ8',
-      },
-      linkOut: 'https://fly.io/apps/motir-core',
+      values: { app: 'motir-core', region: 'us-east-1', machineId: '—', serviceCount: 2 },
+      services: [
+        {
+          name: 'motir-core-web',
+          started: 2,
+          expected: 2,
+          release: 'motir-core-web:41',
+          rolling: false,
+        },
+        {
+          name: 'motir-core-worker',
+          started: 1,
+          expected: 1,
+          release: 'motir-core-worker:17',
+          rolling: false,
+        },
+      ],
+      linkOut: CONSOLE,
     });
   });
 
-  it('is degraded with shortGroup naming the group that is short', async () => {
-    onFly();
-    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue({
-      ...STATUS,
-      groups: [{ name: 'app', started: 1, total: 2, expected: 2 }, WORKER],
+  it('is degraded with shortGroup naming the service that is short', async () => {
+    onFargate();
+    vi.spyOn(ecsDeploymentStatusProvider, 'read').mockResolvedValue({
+      groups: [WEB, { ...WORKER, started: 0, total: 1 }],
     });
 
     const card = await hosting();
     expect(card.state).toBe('degraded');
     expect(card.values).toMatchObject({
       reason: 'shortGroup',
-      group: 'app',
-      started: 1,
-      expected: 2,
-      appStarted: 1,
-      release: 'deployment-01K6HXQ8',
+      group: 'motir-core-worker',
+      started: 0,
+      expected: 1,
     });
+    // The per-service counts travel on `services`, never as per-group value keys.
+    expect(Object.keys(card.values).some((k) => /Started$|Expected$/.test(k))).toBe(false);
+    expect(card.services?.[1]).toMatchObject({ name: 'motir-core-worker', started: 0 });
   });
 
-  it('is degraded with mixedReleases when running machines carry two releases', async () => {
-    onFly();
-    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue({
-      ...STATUS,
-      releases: ['deployment-new', 'deployment-old'],
+  it('is degraded with mixedReleases naming the service mid-deploy', async () => {
+    onFargate();
+    vi.spyOn(ecsDeploymentStatusProvider, 'read').mockResolvedValue({
+      groups: [{ ...WEB, release: 'motir-core-web:42', rolling: true }, WORKER],
     });
 
     const card = await hosting();
     expect(card.state).toBe('degraded');
     expect(card.values).toMatchObject({
       reason: 'mixedReleases',
-      count: 2,
-      release: 'deployment-new',
+      group: 'motir-core-web',
+      release: 'motir-core-web:42',
     });
+    expect(card.values).not.toHaveProperty('count');
   });
 
-  it('with no read token says noReadCredential, keeps the identity and counts nothing', async () => {
-    onFly('');
-    const read = vi.spyOn(flyDeploymentStatusProvider, 'read');
+  it('a service mid-deploy with no named release says so with an em-dash', async () => {
+    onFargate();
+    vi.spyOn(ecsDeploymentStatusProvider, 'read').mockResolvedValue({
+      groups: [{ ...WEB, release: null, rolling: true }],
+    });
+
+    const card = await hosting();
+    expect(card.values).toMatchObject({ reason: 'mixedReleases', release: '—' });
+  });
+
+  it('two services on different releases, each steady, is healthy — releases are not compared', async () => {
+    onFargate();
+    vi.spyOn(ecsDeploymentStatusProvider, 'read').mockResolvedValue(STATUS);
+
+    expect((await hosting()).state).toBe('healthy');
+  });
+
+  it('with no services named says noReadCredential, keeps the identity and counts nothing', async () => {
+    onFargate('');
+    const read = vi.spyOn(ecsDeploymentStatusProvider, 'read');
 
     const card = await hosting();
     expect(card).toMatchObject({
       state: 'unreachable',
-      values: { reason: 'noReadCredential', app: 'motir-core', region: 'iad', machineId: 'web1' },
-      linkOut: 'https://fly.io/apps/motir-core',
+      values: {
+        reason: 'noReadCredential',
+        app: 'motir-core',
+        region: 'us-east-1',
+        machineId: '—',
+      },
+      linkOut: CONSOLE,
     });
     expect(Object.values(card.values).some((v) => typeof v === 'number')).toBe(false);
+    expect(card.services).toBeUndefined();
     expect(read).not.toHaveBeenCalled();
   });
 
   it('a failed read is unreachable with no number, and the rest of the board still returns', async () => {
-    onFly();
-    vi.spyOn(flyDeploymentStatusProvider, 'read').mockRejectedValue(new Error('Fly answered 401'));
+    onFargate();
+    vi.spyOn(ecsDeploymentStatusProvider, 'read').mockRejectedValue(
+      new Error('ECS returned no service named motir-core-worker'),
+    );
 
     const health = await platformHealthService.read(currentPrincipal);
     const card = signal(health.signals, 'hosting');
@@ -750,8 +815,9 @@ describe('the hosting signal reads the fleet (MOTIR-7332)', () => {
       id: 'hosting',
       state: 'unreachable',
       values: { reason: 'readFailed' },
-      linkOut: 'https://fly.io/apps/motir-core',
+      linkOut: CONSOLE,
     });
+    expect(card.services).toBeUndefined();
     expect(health.signals).toHaveLength(7);
     expect(signal(health.signals, 'database').state).toBe('healthy');
   });

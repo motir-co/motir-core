@@ -79,7 +79,25 @@ const SERVICES_READ = {
   ]),
 };
 
-const EXCEPTIONS = [BLOB_STORE, SERVERLESS_HOSTING, EMAIL_TRANSPORT, SERVICES_READ];
+/**
+ * The Hosting card's deployment-status adapter (MOTIR-10952) describes core's
+ * OWN ECS services over the web task's role — the port's adapter directory,
+ * behind `lib/deployment/providers.ts`, the shape the Fly adapter it replaced
+ * had. It sends DescribeServices and nothing else, and the service judging the
+ * reading sees only the port's neutral `DeploymentStatus`.
+ */
+const DEPLOYMENT_STATUS = {
+  dir: join('lib', 'deployment', 'adapters', 'ecs'),
+  modules: new Set(['@aws-sdk/client-ecs']),
+};
+
+const EXCEPTIONS = [
+  BLOB_STORE,
+  SERVERLESS_HOSTING,
+  EMAIL_TRANSPORT,
+  SERVICES_READ,
+  DEPLOYMENT_STATUS,
+];
 
 const SDK_IMPORT =
   /(?:from\s+|import\s*\(\s*|require\s*\(\s*|^\s*import\s+)['"](@aws-sdk\/[^'"]+)['"]/gm;

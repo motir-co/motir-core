@@ -11047,23 +11047,28 @@
         },
         "hosting": {
           "title": "Hosting",
-          "value": "<appGroup>App {appStarted}/{appExpected}</appGroup> · <workerGroup>Worker {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "Alle Maschinen gestartet, alle auf Release {release}. Fly-App {app} · {region}.",
-          "degradedDetail": {
-            "shortGroup": "{group} ist unterbesetzt: {started} von {expected} Maschinen gestartet. Release {release}.",
-            "mixedReleases": "Die Maschinen laufen mit {count} verschiedenen Releases – ein Deployment wurde möglicherweise mittendrin angehalten. Neuestes: {release}."
+          "value": "{serviceCount, plural, one {# Dienst stabil} other {Alle # Dienste stabil}}",
+          "degradedValue": {
+            "shortGroup": "{group} unterbesetzt · {started}/{expected}",
+            "mixedReleases": "{group} mitten im Deployment"
           },
+          "detail": "Jeder Dienst führt seine gewünschten Aufgaben aus, jeder stabil auf seinem Release. ECS-Cluster {app} · {region}.",
+          "degradedDetail": {
+            "shortGroup": "{group} ist unterbesetzt: {started} von {expected} Aufgaben laufen. ECS-Cluster {app} · {region}.",
+            "mixedReleases": "{group} ist mitten im Deployment auf {release}: Mehr als ein Deployment ist aktiv, oder sein Rollout wurde nicht abgeschlossen. ECS-Cluster {app} · {region}."
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "Kein verwalteter Host",
             "noReadCredential": "Antwortet aus {region}",
-            "readFailed": "Keine Antwort von Fly"
+            "readFailed": "Keine Antwort von ECS"
           },
           "unreachableDetail": {
-            "notManaged": "Dieser Build läuft nicht auf Fly, daher gibt es kein Hosting-Dashboard, auf das verwiesen werden kann. Bei einer lokalen oder selbst gehosteten Instanz zu erwarten.",
-            "noReadCredential": "Fly-App {app} · Maschine {machineId}. Diese Konsole hat noch kein Fly-Lesetoken und kann daher Maschinen und Releases nicht zählen. Das ist keine Anzahl von null.",
-            "readFailed": "Die Maschinenliste konnte gerade nicht gelesen werden. Das ist keine Anzahl von null."
+            "notManaged": "Dieser Build läuft nicht auf AWS Fargate, daher gibt es keine Hosting-Konsole, auf die verwiesen werden kann. Bei einer lokalen oder selbst gehosteten Instanz zu erwarten.",
+            "noReadCredential": "ECS-Cluster {app} · {region}. Diesem Deployment wurde nicht mitgeteilt, welche ECS-Dienste seine eigenen sind, daher kann diese Konsole Aufgaben und Releases nicht zählen. Das ist keine Anzahl von null.",
+            "readFailed": "Die ECS-Dienste konnten gerade nicht beschrieben werden. Das ist keine Anzahl von null."
           },
-          "linkOut": "Fly-Dashboard"
+          "linkOut": "ECS-Konsole"
         },
         "gateway": {
           "title": "Gateway",

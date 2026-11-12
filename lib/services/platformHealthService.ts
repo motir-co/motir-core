@@ -7,6 +7,7 @@ import type {
   PlatformOverdueScheduleDTO,
   PlatformQueueHealthDTO,
   PlatformSignalDTO,
+  PlatformSignalServiceDTO,
 } from '@/lib/dto/platformHealth';
 import { GATEWAY_STATUS_TIMEOUT_MS } from '@/lib/gateway/statusClient';
 import { GatewayStatusMalformedError } from '@/lib/gateway/statusErrors';
@@ -314,7 +315,8 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
 }
 
 /**
- * Where the app is running, and whether all of it is (MOTIR-1167, MOTIR-7332).
+ * Where the app is running, and whether all of it is (MOTIR-1167, MOTIR-7332,
+ * MOTIR-10952).
  *
  * ⚠️ THE PROVIDER KNOWLEDGE IS NOT HERE, AND MUST NOT COME BACK.
  * `docs/decisions/ci-runner-fleet.md` §4 rule 1 keeps `lib/` provider-agnostic,
@@ -322,7 +324,7 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
  * SOURCE — so this service reads a neutral `DeploymentIdentity` (where THIS
  * process is) and a neutral `DeploymentStatus` (how many of its siblings run,
  * through the port in `lib/deployment/deploymentStatus.ts`), and names no
- * platform, no environment variable and no dashboard host.
+ * platform, no environment variable and no console host.
  *
  * (This service failed that guard on its first push, with three raw `FLY_*`
  * reads inline. The guard was right and the fix is the accessor, not an
@@ -330,20 +332,29 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
  *
  * The verdict, in order:
  * - not on a managed host → `unreachable` / `notManaged`, unchanged;
- * - no read credential → `unreachable` / `noReadCredential`, still carrying the
- *   process's own identity (app, region, machine), which is a reading taken from
- *   inside and counts nothing;
+ * - no read configured → `unreachable` / `noReadCredential`, still carrying the
+ *   process's own identity (cluster, region, task), which is a reading taken
+ *   from inside and counts nothing;
  * - the read throws → `unreachable` / `readFailed`, never an empty fleet;
- * - a group short of its expectation → `degraded` / `shortGroup`;
- * - running machines on more than one release → `degraded` / `mixedReleases`;
+ * - a service running fewer tasks than it desires → `degraded` / `shortGroup`;
+ * - a service mid-deploy (`rolling`) → `degraded` / `mixedReleases`;
  * - otherwise `healthy`.
+ *
+ * ⚠️ "MIXED" IS PER SERVICE. Each service runs its own release, and two
+ * services' releases cannot be compared (they are different task-definition
+ * families), so there is no fleet-wide one-release verdict. What the old rule
+ * caught — a deploy that stopped part-way — is a service whose own rollout has
+ * not completed, and that is what fires it now.
+ *
+ * Only the arms that read something carry `services`; an unreachable signal
+ * carries none, so nothing on the card can render a count nobody took.
  */
 async function hostingSignal(): Promise<PlatformSignalDTO> {
   const deployment = deploymentIdentity();
-  if (!deployment.app) return unreachable('hosting', 'notManaged', null);
+  if (!deployment.provider) return unreachable('hosting', 'notManaged', null);
 
   const identity = {
-    app: deployment.app,
+    app: deployment.app ?? '—',
     region: deployment.region ?? '—',
     machineId: deployment.instanceId ?? '—',
   };
@@ -360,18 +371,20 @@ async function hostingSignal(): Promise<PlatformSignalDTO> {
   const status = await probe(() => provider.read());
   if (!status) return unreachable('hosting', 'readFailed', deployment.dashboardUrl);
 
-  const counts: Record<string, number> = {};
-  for (const group of status.groups) {
-    counts[`${group.name}Started`] = group.started;
-    counts[`${group.name}Expected`] = group.expected;
-  }
-  const release = status.releases[0] ?? '—';
-  const values: Record<string, string | number> = { ...identity, ...counts, release };
+  const services: PlatformSignalServiceDTO[] = status.groups.map((group) => ({
+    name: group.name,
+    started: group.started,
+    expected: group.expected,
+    release: group.release,
+    rolling: group.rolling,
+  }));
+  const values: Record<string, string | number> = { ...identity, serviceCount: services.length };
+  const read = { id: 'hosting' as const, services, linkOut: deployment.dashboardUrl };
 
-  const short = status.groups.find((group) => group.started < group.expected);
+  const short = services.find((service) => service.started < service.expected);
   if (short) {
     return {
-      id: 'hosting',
+      ...read,
       state: 'degraded',
       values: {
         ...values,
@@ -380,18 +393,22 @@ async function hostingSignal(): Promise<PlatformSignalDTO> {
         started: short.started,
         expected: short.expected,
       },
-      linkOut: deployment.dashboardUrl,
     };
   }
-  if (status.releases.length > 1) {
+  const rolling = services.find((service) => service.rolling);
+  if (rolling) {
     return {
-      id: 'hosting',
+      ...read,
       state: 'degraded',
-      values: { ...values, reason: 'mixedReleases', count: status.releases.length },
-      linkOut: deployment.dashboardUrl,
+      values: {
+        ...values,
+        reason: 'mixedReleases',
+        group: rolling.name,
+        release: rolling.release ?? '—',
+      },
     };
   }
-  return { id: 'hosting', state: 'healthy', values, linkOut: deployment.dashboardUrl };
+  return { ...read, state: 'healthy', values };
 }
 
 /**

@@ -32,8 +32,8 @@ import { PoolsSection, poolEventsParam, poolRequestsParam } from './_components/
  * (card MOTIR-1167) and its Story 10.2 delta (MOTIR-737). It occupies the
  * left-nav **Operations → Monitoring** row, and Story 10.2 extends it IN PLACE
  * rather than replacing it: the Errors card reads Motir's own Sentry count
- * (MOTIR-740), the Hosting card counts motir-core's machines and releases
- * (MOTIR-7332), and a seventh card probes motir-gateway (MOTIR-742).
+ * (MOTIR-740), the Hosting card counts motir-core's ECS services' tasks and
+ * releases (MOTIR-7332, MOTIR-10952), and a seventh card probes motir-gateway (MOTIR-742).
  *
  * ⚠️ READ AND LINK, NEVER REMEDIATE. Seven cards, each a state and a link-out to
  * the provider's own dashboard. There is no replay button, no redeploy, no
@@ -369,20 +369,36 @@ async function SignalBody({ signal }: { signal: PlatformSignalDTO }) {
   const key = signal.state === 'unreachable' ? `${base}.unreachable.${reason}` : degraded('value');
   const detailKey =
     signal.state === 'unreachable' ? `${base}.unreachableDetail.${reason}` : degraded('detail');
-  // The Hosting headline names its process groups, and a SHORT group is set in
-  // weight, not in a hue (design § colour roles): the chip already carries the
-  // warning tone, and a second colour on one word would read as a second signal.
-  const short = reason === 'shortGroup' ? String(signal.values['group']) : null;
-  const group = (name: string) =>
-    function GroupChunk(chunks: React.ReactNode) {
-      return <span className={short === name ? 'font-semibold' : undefined}>{chunks}</span>;
-    };
+  // A signal about a SET of services (Hosting, MOTIR-10952) renders one line
+  // per service from `signal.services`, through one localized line — the names
+  // are the deployment's, which no message can be written for. The service the
+  // degraded verdict names (short, or mid-deploy) is set in WEIGHT, not in a hue
+  // (design § colour roles): the chip already carries the warning tone, and a
+  // second colour on one line would read as a second signal.
+  const flagged = signal.state === 'degraded' ? String(signal.values['group']) : null;
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="font-sans text-lg text-(--el-text)">
-        {t.rich(key, { ...values, appGroup: group('app'), workerGroup: group('worker') })}
-      </p>
+      <p className="font-sans text-lg text-(--el-text)">{t(key, values)}</p>
+      {signal.services && signal.services.length > 0 ? (
+        <ul className="flex flex-col gap-0.5 font-sans text-sm text-(--el-text)">
+          {signal.services.map((service) => (
+            <li key={service.name} data-service={service.name}>
+              {t.rich(`${base}.service`, {
+                name: service.name,
+                started: service.started,
+                expected: service.expected,
+                release: service.release ?? '—',
+                emph: (chunks) => (
+                  <span className={flagged === service.name ? 'font-semibold' : undefined}>
+                    {chunks}
+                  </span>
+                ),
+              })}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <p className="font-sans text-xs text-(--el-text-secondary)">{t(detailKey, values)}</p>
       {signal.linkOut ? (
         <a

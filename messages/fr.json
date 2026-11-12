@@ -11047,23 +11047,28 @@
         },
         "hosting": {
           "title": "Hébergement",
-          "value": "<appGroup>app {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "Toutes les machines ont démarré, toutes sur la release {release}. Application Fly {app} · {region}.",
-          "degradedDetail": {
-            "shortGroup": "Il manque des machines pour {group} : {started} sur {expected} ont démarré. Release {release}.",
-            "mixedReleases": "Les machines exécutent {count} releases différentes — un déploiement s'est peut-être arrêté en cours de route. La plus récente : {release}."
+          "value": "{serviceCount, plural, one {# service stable} other {Les # services stables}}",
+          "degradedValue": {
+            "shortGroup": "{group} incomplet · {started}/{expected}",
+            "mixedReleases": "{group} en cours de déploiement"
           },
+          "detail": "Chaque service exécute les tâches voulues, chacun stable sur sa release. Cluster ECS {app} · {region}.",
+          "degradedDetail": {
+            "shortGroup": "{group} est incomplet : {started} tâches sur {expected} en cours d'exécution. Cluster ECS {app} · {region}.",
+            "mixedReleases": "{group} est en cours de déploiement sur {release} : plus d'un déploiement est en jeu, ou son déploiement progressif ne s'est pas terminé. Cluster ECS {app} · {region}."
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "Pas un hébergement géré",
             "noReadCredential": "Réponse depuis {region}",
-            "readFailed": "Aucune réponse de Fly"
+            "readFailed": "Aucune réponse d'ECS"
           },
           "unreachableDetail": {
-            "notManaged": "Cette build ne s'exécute pas sur Fly ; il n'y a donc aucun tableau de bord d'hébergement à afficher. Normal sur une instance locale ou auto-hébergée.",
-            "noReadCredential": "Application Fly {app} · machine {machineId}. Cette console ne dispose pas encore de jeton de lecture Fly ; elle ne peut donc pas compter les machines ni les releases. Il ne s'agit pas d'un décompte nul.",
-            "readFailed": "La liste des machines n'a pas pu être lue pour le moment. Il ne s'agit pas d'un décompte nul."
+            "notManaged": "Ce build ne s'exécute pas sur AWS Fargate ; il n'y a donc pas de console d'hébergement vers laquelle pointer. C'est attendu sur une instance locale ou auto-hébergée.",
+            "noReadCredential": "Cluster ECS {app} · {region}. Ce déploiement ne sait pas quels services ECS sont les siens ; cette console ne peut donc pas compter les tâches ni les releases. Il ne s'agit pas d'un décompte nul.",
+            "readFailed": "Les services ECS n'ont pas pu être décrits pour l'instant. Il ne s'agit pas d'un décompte nul."
           },
-          "linkOut": "Tableau de bord Fly"
+          "linkOut": "Console ECS"
         },
         "gateway": {
           "title": "Passerelle",

@@ -11047,23 +11047,28 @@
         },
         "hosting": {
           "title": "Hosting",
-          "value": "<appGroup>app {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "Elke machine gestart, allemaal op release {release}. Fly-app {app} · {region}.",
-          "degradedDetail": {
-            "shortGroup": "{group} komt tekort: {started} van {expected} machines gestart. Release {release}.",
-            "mixedReleases": "Machines draaien {count} verschillende releases — een deploy is mogelijk halverwege gestopt. Nieuwste: {release}."
+          "value": "{serviceCount, plural, one {# service stabiel} other {Alle # services stabiel}}",
+          "degradedValue": {
+            "shortGroup": "{group} onderbezet · {started}/{expected}",
+            "mixedReleases": "{group} midden in een deploy"
           },
+          "detail": "Elke service draait de gewenste taken, elk stabiel op zijn release. ECS-cluster {app} · {region}.",
+          "degradedDetail": {
+            "shortGroup": "{group} is onderbezet: {started} van {expected} taken draaien. ECS-cluster {app} · {region}.",
+            "mixedReleases": "{group} zit midden in een deploy op {release}: er is meer dan één deployment actief, of de uitrol is niet afgerond. ECS-cluster {app} · {region}."
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "Geen beheerde host",
             "noReadCredential": "Antwoordt vanuit {region}",
-            "readFailed": "Geen antwoord van Fly"
+            "readFailed": "Geen antwoord van ECS"
           },
           "unreachableDetail": {
-            "notManaged": "Deze build draait niet op Fly, dus er is geen hostingdashboard om naar te verwijzen. Verwacht bij een lokale of zelf gehoste installatie.",
-            "noReadCredential": "Fly-app {app} · machine {machineId}. Deze console heeft nog geen Fly-leestoken, dus hij kan geen machines of releases tellen. Dit is geen telling van nul.",
-            "readFailed": "De lijst met machines kon zojuist niet worden gelezen. Dit is geen telling van nul."
+            "notManaged": "Deze build draait niet op AWS Fargate, dus er is geen hostingconsole om naar te verwijzen. Verwacht op een lokale of zelf gehoste instantie.",
+            "noReadCredential": "ECS-cluster {app} · {region}. Deze deployment weet niet welke ECS-services van hemzelf zijn, dus deze console kan geen taken of releases tellen. Dit is geen telling van nul.",
+            "readFailed": "De ECS-services konden zojuist niet worden opgevraagd. Dit is geen telling van nul."
           },
-          "linkOut": "Fly-dashboard"
+          "linkOut": "ECS-console"
         },
         "gateway": {
           "title": "Gateway",

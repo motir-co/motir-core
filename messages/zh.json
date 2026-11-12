@@ -11038,23 +11038,28 @@
         },
         "hosting": {
           "title": "托管",
-          "value": "<appGroup>app {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
-          "detail": "所有机器均已启动，全部运行版本 {release}。Fly 应用 {app} · {region}。",
-          "degradedDetail": {
-            "shortGroup": "{group} 不足：{expected} 台机器中只有 {started} 台已启动。版本 {release}。",
-            "mixedReleases": "机器正在运行 {count} 个不同的版本——某次部署可能中途停止了。最新版本 {release}。"
+          "value": "{serviceCount, plural, other {全部 # 个服务均稳定}}",
+          "degradedValue": {
+            "shortGroup": "{group} 不足 · {started}/{expected}",
+            "mixedReleases": "{group} 正在部署"
           },
+          "detail": "每个服务都在运行期望数量的任务，且各自稳定在其版本上。ECS 集群 {app} · {region}。",
+          "degradedDetail": {
+            "shortGroup": "{group} 不足：{expected} 个任务中只有 {started} 个在运行。ECS 集群 {app} · {region}。",
+            "mixedReleases": "{group} 正在部署到 {release}：有不止一个部署在进行，或其发布未完成。ECS 集群 {app} · {region}。"
+          },
+          "service": "<emph>{name}</emph> {started}/{expected} · {release}",
           "unreachable": {
             "notManaged": "非托管环境",
             "noReadCredential": "由 {region} 响应",
-            "readFailed": "Fly 没有响应"
+            "readFailed": "ECS 没有响应"
           },
           "unreachableDetail": {
-            "notManaged": "此构建没有运行在 Fly 上，因此没有可跳转的托管控制台。本地或自托管实例出现这种情况是正常的。",
-            "noReadCredential": "Fly 应用 {app} · 机器 {machineId}。本控制台还没有 Fly 读取令牌，因此无法统计机器或版本。这不是数量为零。",
-            "readFailed": "刚才没能读到机器列表。这不是数量为零。"
+            "notManaged": "此构建没有运行在 AWS Fargate 上，因此没有可跳转的托管控制台。本地或自托管实例出现这种情况是正常的。",
+            "noReadCredential": "ECS 集群 {app} · {region}。此部署尚未被告知哪些 ECS 服务属于它，因此本控制台无法统计任务或版本。这不是数量为零。",
+            "readFailed": "刚才没能描述 ECS 服务。这不是数量为零。"
           },
-          "linkOut": "Fly 控制台"
+          "linkOut": "ECS 控制台"
         },
         "gateway": {
           "title": "网关",
