@@ -320,7 +320,11 @@ describe('startCheckpoints — the agent’s commits reach origin as it makes th
   });
 });
 
-describe('both run pipelines checkpoint and name their branches', () => {
+// Each case builds real bare remotes and worktrees and shells out to git dozens
+// of times; under `--coverage` on a shared CI runner the dispatch leg ran 5.18s
+// against Vitest's 5s default and failed with no assertion wrong (seen on
+// MOTIR-11094's pull request). The budget fits their I/O, not a slower product.
+describe('both run pipelines checkpoint and name their branches', { timeout: 30_000 }, () => {
   const PROMPT = {
     key: KEY,
     prompt: 'DO THE WORK',
