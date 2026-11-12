@@ -83,6 +83,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { projectRepoInitApproveRoutingService } from '@/lib/services/projectRepoInitApproveRoutingService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -10668,27 +10669,29 @@ async function afterApproveCommit(
   // the level the lock was held at is finished (MOTIR-2787).
   await releasePlanTargetLocks(plan, ctx, { approved: true });
 
-  // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
-  // approved plan is what the set's cardinality is derived from, so this is the
-  // moment it can be proposed at all. Writes `proposed` rows the establish step
-  // then shows as editable (ADR §0.2: Motir proposes, the user decides); it
-  // creates nothing on GitHub.
+  // ROUTE THE WAITERS WHOSE DECLARED REPOSITORY ALREADY EXISTS (Story MOTIR-10162 ·
+  // MOTIR-11058) — the THIRD moment an init card's waiters are routed, after the two
+  // settle hooks (`attachRealizedRepo`, `linkExistingRepo`) and the link that adopts
+  // a repository. Those fire when a row settles; a repository a person created and
+  // added BEFORE approving settled long before its waiters existed, and this phase
+  // is where they come into existence.
   //
-  // Fired on EVERY approve, not only the first onboarding: the proposer's own
-  // guard is "a project whose set has any row is left completely alone", so a
-  // re-plan approve of an established project is one cheap read, while a project
-  // whose first attempt lost to a motir-ai hiccup gets another chance instead of
-  // being permanently setless.
+  // This is approve's POST-COMMIT phase, not a transaction, and it is its LAST
+  // step: the repository set was already proposed in `prepareApprove`, before the
+  // approve transaction (MOTIR-1881's propose no longer runs here), so the rows the
+  // step reads include this approve's own `proposed` ones, which the pass declines.
   //
-  // BEST-EFFORT and AFTER the tx commits, for both of the reasons the convention
-  // trigger above is: the pre-plan read is a `server-only` client call that
-  // cannot run inside the DB transaction, and establishing repos — important as
-  // it is — is not worth failing a plan approval over (ADR §4.3 is the same
-  // judgement one level down). A failure leaves the user an empty-but-editable
-  // set, which MOTIR-1782 can complete later (ADR §4.4: approval is not the last
-  // chance to establish a repo). Imported LAZILY for the same reason: the E2E
-  // plan seeds import plansService in the Playwright Node process, where
-  // `server-only` does not resolve.
+  // The plain approve awaits this phase with no catch around it, so the step is
+  // caught here as a whole: a routing failure must never tell a person a committed
+  // approval failed. The step catches each row itself as well.
+  await projectRepoInitApproveRoutingService
+    .routeAfterApprove({ projectId: plan.projectId, ctx, approvedProposals: done.items })
+    .catch((err: unknown) => {
+      console.warn(
+        `[plansService.approvePlan] init-card routing failed after approving plan ${plan.id} in project ${plan.projectId}; the waiters stay unpinned`,
+        err,
+      );
+    });
 }
 
 /** The error an approve's failure becomes after its rollback: the lazy `stale` backstop
