@@ -76,6 +76,11 @@ per-pull-request preview environments, and to the order of the pipeline.
 
 ## §2 — Q1: where motir-core runs
 
+> ⚠️ SUPERSEDED by **Amendment 11** (2026-11-12, [MOTIR-10953](motir:cmwc644s900b401adk4tolb65)): motir-core runs on
+> AWS as ECS Fargate services (web, worker and relay) in one VPC in `us-east-1`,
+> defined by the `motir-infra` CDK app, not on Fly.io. The standalone one-process
+> build below is still the image those services run.
+
 ### The decision
 
 **motir-core runs on Fly.io as a single long-running Node process**, built by a
@@ -186,6 +191,10 @@ document.**
 ---
 
 ## §3 — Q2: the blob store
+
+> ⚠️ SUPERSEDED by **Amendment 11** (2026-11-12, [MOTIR-10953](motir:cmwc644s900b401adk4tolb65)): the blob store is S3
+> in the AWS services account, not Tigris. The two-bucket public/private split
+> and the S3 presigned URLs below stay; only the store changed.
 
 ### The decision
 
@@ -2348,6 +2357,11 @@ specific mistake it exists to prevent.
 > (§26) — and motir-ai has public callers it cannot shed. The other three rows
 > stand.
 
+> ⚠️ SUPERSEDED for the **ai → gateway** row by **Amendment 11** (2026-11-12, [MOTIR-10953](motir:cmwc644s900b401adk4tolb65)): motir-ai reaches the gateway at the gateway's internal
+> load balancer inside the VPC, not over Flycast. The **core → ai** row is
+> covered through Amendment 9's own pointer, which now points at Amendment 11.
+> The ai → core callback and browser → core rows stand.
+
 **Why Flycast rather than `.internal`, when both are private.** The argument for
 `.internal` was never _"we want machine-to-machine"_ — it was _"we do not want
 this endpoint on the internet"_. Flycast satisfies that sentence completely: a
@@ -2520,6 +2534,11 @@ and browser → core rows of Q20 are untouched.
 **`MOTIR_AI_URL` is `https://motir-ai.fly.dev` in production — the public
 origin, through the Fly proxy, over TLS, authenticated by
 `MOTIR_AI_SERVICE_TOKEN`.** It is the decided seam, not drift and not an interim.
+
+> ⚠️ SUPERSEDED by **Amendment 11** (2026-11-12, [MOTIR-10953](motir:cmwc644s900b401adk4tolb65)): production
+> runs on AWS, and core reaches motir-ai at the conversation pool's internal
+> load balancer inside the VPC, not at `https://motir-ai.fly.dev`. motir-ai's
+> Fly app config was removed by motir-ai `ed919d6` ([MOTIR-10936](motir:cmwc643j1007201ad4avexa3a)).
 
 The value in force, and the runbook line for it:
 
@@ -2730,3 +2749,140 @@ production. Marking them early would make the record wrong the other way.
 | The CDK becomes the single source of size, as `fly.toml` is today                                 | The same page, §3 _Compute (services)_                                                                                                                                                                                                         |
 | `MOTIR_AI_URL` is the public origin and `MOTIR_AI_CONTAINER_URL` a public caller                  | Amendment 9 (Q21) above, on `origin/main` 2026-10-27                                                                                                                                                                                           |
 | The stories that retire each part                                                                 | Epic [MOTIR-9699](motir:cmvprl3vo01blhmu1of10bhko): [MOTIR-9712](motir:cmvprl4qg01c2hmu1kyfvucjx), [MOTIR-9713](motir:cmvprl4ts01c3hmu1vpyeflw3), [MOTIR-9716](motir:cmvprl54901clhmu143y6z3l2), [MOTIR-9707](motir:cmvprl4cl01bxhmu1s2n07ia3) |
+
+## Amendment 11 (2026-11-12) — Q1, Q2, Amendment 8's Q20 and Amendment 9's Q21 are superseded: production runs on AWS, and the merges that made each part false and removed its code
+
+> **Written by Subtask [MOTIR-10953](motir:cmwc644s900b401adk4tolb65)**, under
+> Story [MOTIR-9716](motir:cmvprl54901clhmu143y6z3l2) (the decommission) of Epic
+> [MOTIR-9699](motir:cmvprl3vo01blhmu1of10bhko).
+> **Decided by the owner**, at the window's go on
+> [MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn) (2026-11-07 14:10 UTC), and by
+> Mo's approval in the go record on
+> [MOTIR-10933](motir:cmwc643c2006q01ad3mxysoy7) (2026-11-11). Written
+> 2026-11-12.
+>
+> **Numbered 11.** Amendment 10 was the highest heading on `origin/main`
+> (`d5b2aed30`) when this was written, and none of the remote branches carrying
+> this file has an eleventh.
+
+**Amends:** §2 (Q1, where motir-core runs), §3 (Q2, the blob store), Amendment
+8 §23 (Q20, the transport for each service seam) and Amendment 9 (Q21, the
+core→ai leg on the public origin). Amendment 10 named all four as superseded by
+the move and left the pointers to the stories that retired them. This amendment
+records that they are superseded and adds a **SUPERSEDED** pointer at each,
+in Amendment 9's shape. No earlier sentence is rewritten.
+
+### The four parts, and the merges behind each
+
+Each row carries two coordinates. **Made false** is the merge that moved
+production off the old value. **Code removed** lists every merge that deleted
+the last code serving it, and says which came last. For Q1 and Q2 these are
+different merges. For Amendments 8 and 9 the deletion came a story later than
+the move. Every SHA below was read from the pull request it landed as, and
+matched against that repository's default branch on 2026-11-12.
+
+| Part                       | What it decided                                                                                | Retired by                                                                                                                                                                                                       | Stopped being true                                                                                                                                            | Made false                                                                                                                                                  | Code removed                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Q1** (§2)                | motir-core runs on Fly.io as one process, org `moooon`, region `iad`                           | [MOTIR-9712](motir:cmvprl4qg01c2hmu1kyfvucjx) and its window [MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn); code by [MOTIR-10935](motir:cmwc643h6007001adl0ssdsgq)                                              | In the window [MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn), which closed on go at **2026-11-07 14:10 UTC**: `app.motir.co` and the relay serve from Fargate | `motir-infra` **`93b43b8`** (#62, [MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn)'s flip of `services.cutover` to `production`, merged 2026-11-07 01:38 UTC) | `motir-core` **`bbbbff5a0`** (#4163, [MOTIR-10935](motir:cmwc643h6007001adl0ssdsgq), 2026-11-11 23:51 UTC): `fly.toml`, `fly.relay.toml`, the Fly deploy job in `ci.yml`, and its scripts and tests. The only removal merge, so also the last                                                                                                                                                     |
+| **Q2** (§3)                | The blob store is Tigris, two buckets (public assets, private content), with S3 presigned URLs | [MOTIR-9712](motir:cmvprl4qg01c2hmu1kyfvucjx) and its window [MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn); code by [MOTIR-10943](motir:cmwc64427008301adm3eiy3vh)                                              | In the same window: core's blob store points at the S3 buckets. **The two-bucket public/private split and the presigned URLs stay**; only the store changed   | `motir-infra` **`93b43b8`** (#62, the same flip: it moves every service's hosts, secrets and buckets together)                                              | `motir-infra` **`249acd5`** (#104, [MOTIR-10943](motir:cmwc64427008301adm3eiy3vh), 2026-11-12 01:58 UTC): the Tigris copy tool (`lib/tigris-copy/`, `docs/copy-tigris-to-s3.md`), the rehearsal buckets and the cutover operator. The only removal merge, so also the last                                                                                                                        |
+| **Amendment 8** (§23, Q20) | The transport per leg: Flycast for core → ai and for ai → gateway                              | [MOTIR-9712](motir:cmvprl4qg01c2hmu1kyfvucjx)'s window [MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn); code by [MOTIR-10937](motir:cmwc643mh007401ad8crtsf7s) and [MOTIR-10936](motir:cmwc643j1007201ad4avexa3a) | In the same window: motir-ai reaches the gateway at the gateway's internal load balancer in the VPC                                                           | `motir-infra` **`93b43b8`** (#62)                                                                                                                           | `motir-gateway` **`417d67d`** (#146, [MOTIR-10937](motir:cmwc643mh007401ad8crtsf7s), 2026-11-11 23:28 UTC): `fly.toml`, the `edge-transition/` app and the Fly deploy workflow. Then `motir-ai` **`ed919d6`** (#1030, [MOTIR-10936](motir:cmwc643j1007201ad4avexa3a), 2026-11-11 23:33 UTC): its Fly configs, deploy script, sweep workflow and the Fly-only pool code. **`ed919d6` is the last** |
+| **Amendment 9** (Q21)      | core → ai goes over motir-ai's public origin, `MOTIR_AI_URL = https://motir-ai.fly.dev`        | [MOTIR-9712](motir:cmvprl4qg01c2hmu1kyfvucjx)'s window [MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn); code by [MOTIR-10938](motir:cmwc643p2007601adr7n5x2lp) and [MOTIR-10936](motir:cmwc643j1007201ad4avexa3a) | In the same window: core reaches motir-ai at the conversation pool's internal load balancer in the VPC                                                        | `motir-infra` **`93b43b8`** (#62)                                                                                                                           | `motir-marketing` **`ec84ac9`** (#145, [MOTIR-10938](motir:cmwc643p2007601adr7n5x2lp), 2026-11-11 22:37 UTC): the old `motir-ai.fly.dev` origin and the leftover Fly reads. Then `motir-ai` **`ed919d6`** (#1030, [MOTIR-10936](motir:cmwc643j1007201ad4avexa3a), 2026-11-11 23:33 UTC): `fly.toml`, the app config behind `motir-ai.fly.dev`. **`ed919d6` is the last**                          |
+
+**Which story landed it.** Amendment 10's table assigned Amendments 8 and 9 to
+[MOTIR-9713](motir:cmvprl4ts01c3hmu1vpyeflw3), the ai, codegraph and gateway
+cutover. That story did not land as its own cutover: the single window
+[MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn) moved motir-ai and the gateway
+together with core, so the merges recorded above are that window's.
+[MOTIR-9713](motir:cmvprl4ts01c3hmu1vpyeflw3)'s own row is not reconciled here.
+
+### What Motir production runs on now
+
+Read from `motir-co/motir-infra` at `main` (`249acd5`) on 2026-11-12, unless the
+row says otherwise.
+
+| Part                  | What runs                                                                                                                                                                                                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Region and network    | **AWS `us-east-1`, one VPC** in the services account (`lib/config/environments/production.ts` `region`, `network`; `lib/stacks/network-stack.ts`), the region the requirements-Q1 decision [MOTIR-9701](motir:cmvprl40b01brhmu1545xvikl) approved                                                           |
+| motir-core            | **ECS Fargate services for web, worker and relay** (`lib/stacks/services-stack.ts`, `lib/constructs/fargate-service.ts`; sizes under `services` in `production.ts`)                                                                                                                                         |
+| The AI side           | **ECS Fargate services** for motir-ai's conversation and planning pools (`lib/stacks/ai-conversation-stack.ts`, `lib/stacks/ai-stack.ts`), motir-codegraph (`lib/constructs/codegraph-service.ts`) and motir-gateway with its run-lane edge (`lib/stacks/gateway-stack.ts`, `lib/stacks/run-edge-stack.ts`) |
+| Service seams         | core → ai and core → gateway at their internal load balancers (`corePrivateUrls` in `lib/stacks/services-stack.ts`); ai → gateway at the gateway's internal load balancer (`aiGatewayOrigin` in `lib/stacks/ai-stack.ts`)                                                                                   |
+| Databases             | **Amazon RDS for PostgreSQL** for the core, ai and gateway databases, one instance each: `data.engine: 'rds-postgres'`, `engineVersion: '18.6'` in `production.ts`                                                                                                                                          |
+| Object store          | **S3**, with the two-bucket public/private split unchanged (`data.buckets.corePublic` / `corePrivate` in `production.ts`, `lib/constructs/data-buckets.ts`), and the code-graph snapshot bucket beside them                                                                                                 |
+| Logs, metrics, alarms | **CloudWatch**: each service's log group (`lib/constructs/fargate-service.ts`), the alarms (`lib/constructs/service-alarms.ts`) and the monitoring stack (`lib/stacks/monitoring-stack.ts`, `monitoring` in `production.ts`)                                                                                |
+
+**The engine is read from production's own value, and it differs from the
+engine decision in one respect.** The data stack accepts both engines
+(`DATABASE_ENGINES = ['rds-postgres', 'aurora-postgres']` in
+`lib/config/data-params.ts`), so the engine above is the value
+`production.ts` selects, not an inference from the stack. It is the engine the
+requirements-Q3 decision [MOTIR-9702](motir:cmvprl41l01bshmu1szum55xp) approved
+(RDS for PostgreSQL, not Aurora). That decision also said **Multi-AZ**;
+production reads `multiAz: false` on all three instances, set by
+[MOTIR-10892](motir:cmwb841n806zs01adz23i4ujs)'s pre-launch sizing (`590bb2d`,
+2026-11-10: _"Single-AZ pre-launch: no standby until users depend on it"_).
+This record reports the difference and does not decide it.
+
+### What still reaches Fly and Neon
+
+**Fly.io and Neon remain Motir vendors, for the applications Motir hosts.** And
+**the Fly fleet in `motir-fleet` stays as capacity for the fleet kinds until AWS
+capacity replaces it**, by the go record on
+[MOTIR-10933](motir:cmwc643c2006q01ad3mxysoy7): its approval keeps that org
+live, and the motir-core retirement
+([MOTIR-10935](motir:cmwc643h6007001adl0ssdsgq)) removed only Fly's deploy
+surface. It is kept, not superseded. Each path below was confirmed on
+motir-core's `main` at `d5b2aed30`, 2026-11-12:
+
+| What                                   | Path in motir-core                                                                                                                          | Reaches                  |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Hosted applications on Fly             | `packages/orchestrator/src/adapters/fly/hosting.ts`                                                                                         | Fly, org `motir-hosting` |
+| Hosted applications' databases         | `packages/orchestrator/src/adapters/neon/database.ts`, `packages/orchestrator/src/adapters/neon/config.ts`                                  | Neon                     |
+| The Fly fleet (kept capacity)          | `packages/orchestrator/src/adapters/fly/flyMachines.ts`, `persistent.ts`, `inventory.ts`, `indexImage.ts`, `index.ts` in the same directory | Fly, org `motir-fleet`   |
+| Customer-domain certificates           | `lib/publicAddresses/adapters/fly/flyCertificates.ts` (`public-tenant-addresses.md` §6)                                                     | Fly's certificates API   |
+| The Hosting signal, until it reads ECS | `lib/deployment/adapters/fly/flyMachinesStatus.ts`, which [MOTIR-10952](motir:cmwc644qw00b201adjwb8080a) replaces                           | Fly, read-only           |
+| The staging load test                  | `loadtest/run/fly.ts`, `loadtest/run/neon.ts`, `loadtest/capture/neon.ts`, which [MOTIR-10962](motir:cmwc6459100c601ad5ivurvew) clears      | Fly and Neon             |
+
+**The old copies are this story's to destroy, and this amendment does not
+restate their readings.** The final exports are recorded on
+[MOTIR-10942](motir:cmwc643y6007n01adiciaacai); the two old agent instances on
+[MOTIR-10944](motir:cmwc6444h008801ad0ng6zvwy); the stopped `moooon` apps on
+[MOTIR-10945](motir:cmwc64480008o01adyd6ckfr8); production's Neon databases on
+[MOTIR-10946](motir:cmwc644bn009d01adua51gno2); and the Tigris buckets and
+account on [MOTIR-10947](motir:cmwc644dx009q01adoz4nrsm8). What those cards
+record stays on those cards. On 2026-11-11 22:12 UTC, the go record read all of
+them as Blocked and nothing as destroyed yet.
+
+### What this amendment does NOT decide
+
+- **The fleet → motir-ai path.** Requirements Q8, decided in
+  [MOTIR-9705](motir:cmvprl47x01bvhmu1ibq4gxw4).
+- **The gateway's providers and prices.** The gateway's own records own them.
+- **How a self-host install reuses the same CDK.** Requirements §4, not decided
+  here.
+- **Single-AZ against the engine decision's Multi-AZ.** Reported above, decided
+  elsewhere.
+- **Any earlier decision text.** §2, §3, Amendment 8 §23 and Amendment 9 are
+  pointed at, not rewritten, so the record keeps why Fly, Tigris, Flycast and
+  the public origin were once right. §1's table is untouched, by the note above
+  it.
+- **[MOTIR-9713](motir:cmvprl4ts01c3hmu1vpyeflw3)'s row.** The retiring story Amendment 10 named for Amendments
+  8–9 did not land as its own cutover (above); its own row is another card's to
+  correct.
+
+### Sources — additions
+
+| Claim                                                                         | Source                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The window's go was 2026-11-07 14:10 UTC                                      | [MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn) step 32, as quoted by the go record on [MOTIR-10933](motir:cmwc643c2006q01ad3mxysoy7) (comment of 2026-11-11 22:20 UTC)                              |
+| The flip that moved every service to production values                        | `motir-infra` PR #62, merge `93b43b8`; commit `7ff65ae` changes `services.cutover` from `'rehearsal'` to `'production'` in `lib/config/environments/production.ts`                                  |
+| Q1's code removed                                                             | `motir-core` PR #4163, merge `bbbbff5a0` on `main`, from [MOTIR-10935](motir:cmwc643h6007001adl0ssdsgq)                                                                                             |
+| Q2's code removed                                                             | `motir-infra` PR #104, merge `249acd5` on `main`, from [MOTIR-10943](motir:cmwc64427008301adm3eiy3vh)                                                                                               |
+| Amendment 8's code removed                                                    | `motir-gateway` PR #146, merge `417d67d`, from [MOTIR-10937](motir:cmwc643mh007401ad8crtsf7s); `motir-ai` PR #1030, merge `ed919d6`, from [MOTIR-10936](motir:cmwc643j1007201ad4avexa3a)            |
+| Amendment 9's code removed                                                    | `motir-marketing` PR #145, merge `ec84ac9`, from [MOTIR-10938](motir:cmwc643p2007601adr7n5x2lp); `motir-ai` PR #1030, merge `ed919d6`                                                               |
+| Region, VPC, services, seams, buckets, logs and alarms                        | `motir-infra` `main` at `249acd5`, by the paths in the table above                                                                                                                                  |
+| The engine and `multiAz: false`                                               | `motir-infra` `lib/config/environments/production.ts` `data` at `249acd5`; `lib/config/data-params.ts` `DATABASE_ENGINES`; `590bb2d` ([MOTIR-10892](motir:cmwb841n806zs01adz23i4ujs))               |
+| The engine decision                                                           | [MOTIR-9702](motir:cmvprl41l01bshmu1szum55xp), page _Decision: Motir production runs its databases on Amazon RDS for PostgreSQL, Multi-AZ, not Aurora_, version 1                                   |
+| The region decision                                                           | [MOTIR-9701](motir:cmvprl40b01brhmu1545xvikl), version 1, approved 2026-10-27                                                                                                                       |
+| The Fly fleet and `motir-fleet` stay as capacity                              | The go record on [MOTIR-10933](motir:cmwc643c2006q01ad3mxysoy7), approval table                                                                                                                     |
+| The paths that still reach Fly and Neon                                       | motir-core `main` at `d5b2aed30`, 2026-11-12                                                                                                                                                        |
+| [MOTIR-9713](motir:cmvprl4ts01c3hmu1vpyeflw3) did not land as its own cutover | [MOTIR-9712](motir:cmvprl4qg01c2hmu1kyfvucjx)'s title (_"put app, relay, gateway-run and a Motir-owned motir-ai name on AWS"_) and the single window [MOTIR-10081](motir:cmvu3kbn800c2gkpnq9cxjgjn) |
