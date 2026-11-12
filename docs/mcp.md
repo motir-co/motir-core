@@ -1530,6 +1530,16 @@ same write. The v1 API takes the same `sections` object on `POST …/work-items`
 `PATCH …/work-items/{key}`; the refusal body carries a `sections` field with the
 `missing`, `unknown` and `invalid` names.
 
+**A person's card keeps its steps in `todos`, never in a `steps` section** (MOTIR-11161).
+On a card a person performs — `executor: human`, or `type: manual` — a write that SENDS
+`steps` is refused by name (`INVALID_SECTIONS`, `invalid`: `steps`, the message pointing
+at `todos`), whatever the type's set says of it: the to-do list is what the person ticks,
+and a second copy of the procedure in the body drifts from it. The plan doors
+(`add_plan_items`, `update_plan_item`, `update_plan_proposal`) refuse the same write
+through the same check, as their `INVALID_PROPOSAL`. An agent-run card keeps `steps`
+where its set defines it, `steps: null` clears the section, and a `## Steps` a stored
+body already carries never blocks an edit that does not resend it.
+
 **`targetRepo` — pinning the repo an item ships in** (MOTIR-1804). This is what
 makes _one subtask = one repo = one PR_ enforceable in the product rather than
 only in the planner's rules, and it is what routes the CLI: `motir link add

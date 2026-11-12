@@ -1233,6 +1233,9 @@ function mergeProposedFields(
       currentBody: current.descriptionMd,
       kind: next.kind ?? DEFAULT_PROPOSED_KIND,
       type: next.type,
+      // The executor the card will be created with (`materialize` writes it
+      // as stored): a person's card refuses a sent `steps` (MOTIR-11161).
+      executor: next.executor,
       label: proposalLabel({ op: 'add', title: next.title }),
     });
   }
@@ -1301,6 +1304,7 @@ function resolveProposalSections(p: ProposalInput): ProposalInput {
     currentBody: undefined,
     kind: rest.kind ?? DEFAULT_PROPOSED_KIND,
     type: rest.type,
+    executor: rest.executor,
     label: proposalLabel({ op: 'add', title: rest.title }),
   });
   return { ...p, proposedFields: { ...rest, descriptionMd } };

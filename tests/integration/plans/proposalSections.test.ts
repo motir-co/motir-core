@@ -573,3 +573,128 @@ describe('a `sections` edit linking a planItem the plan does not hold (MOTIR-983
     await refusal(plansService.deepenProposal(planId, itemId, { sections: deadRefs }, fx.ctx));
   });
 });
+
+// Bug MOTIR-11161 — a person's card keeps its steps in `todos`. The plan doors
+// refuse a SENT `steps` on one by name, through the same `applySectionsInput` the
+// work-item doors read; an agent's deploy keeps it, and a stored `## Steps` on a
+// proposal never blocks a later edit that does not resend it.
+describe("a `steps` section on a person's card (MOTIR-11161)", () => {
+  const STEPS = '- Run the suite.\n- Record the result.';
+
+  it('the append refuses a human deploy sending `steps`, naming it and todos, and appends nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await newPlan(fx);
+    const message = await refusal(
+      appendOne(fx, plan.id, {
+        title: 'Ship it',
+        type: 'deploy',
+        executor: 'human',
+        sections: { ...sections, steps: STEPS },
+      }),
+    );
+    expect(message).toContain('steps');
+    expect(message).toContain('`todos`');
+    expect(await adminDb.planItem.count({ where: { planId: plan.id } })).toBe(0);
+  });
+
+  it('the append keeps `steps` on an agent-run deploy', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await newPlan(fx);
+    const itemId = await appendOne(fx, plan.id, {
+      title: 'Ship it',
+      type: 'deploy',
+      executor: 'coding_agent',
+      sections: { ...sections, steps: STEPS },
+    });
+    expect((await storedFields(itemId))['descriptionMd'] as string).toContain('## Steps');
+  });
+
+  it('a deepen refuses `steps` on a proposal the same edit makes a person’s, and keeps the body', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await newPlan(fx);
+    const itemId = await appendOne(fx, plan.id, { title: 'Ship it', type: 'deploy', sections });
+    const before = await storedFields(itemId);
+    const message = await refusal(
+      plansService.deepenProposal(
+        plan.id,
+        itemId,
+        { executor: 'human', sections: { steps: STEPS } },
+        fx.ctx,
+      ),
+    );
+    expect(message).toContain('`todos`');
+    expect(await storedFields(itemId)).toEqual(before);
+  });
+
+  it('a deepen of a human deploy whose stored body holds `## Steps` lands when it does not resend it', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await newPlan(fx);
+    const itemId = await appendOne(fx, plan.id, {
+      title: 'Ship it',
+      type: 'deploy',
+      sections: { ...sections, steps: STEPS },
+    });
+    await plansService.deepenProposal(plan.id, itemId, { executor: 'human' }, fx.ctx);
+    await plansService.deepenProposal(
+      plan.id,
+      itemId,
+      { sections: { scopeBoundary: 'Only production.' } },
+      fx.ctx,
+    );
+    const body = (await storedFields(itemId))['descriptionMd'] as string;
+    expect(body).toContain('Only production.');
+    expect(body).toContain('## Steps');
+  });
+
+  it('add_plan_items and update_plan_item refuse it through the MCP tools', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const opened = await call(client, CREATE_PLAN_TOOL_NAME, {
+      projectKey: fx.projectIdentifier,
+      title: 'Person steps',
+      plannedWithHarness: 'Claude Code',
+      plannedWithModel: 'claude-opus-5',
+    });
+    const planId = struct(opened).id;
+
+    const refusedAdd = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Do it',
+            kind: 'task',
+            type: 'manual',
+            sections: { ...sections, steps: STEPS },
+          },
+        },
+      ],
+    });
+    expect(refusedAdd.isError).toBe(true);
+    expect(text(refusedAdd)).toContain('steps');
+    expect(text(refusedAdd)).toContain('todos');
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'Do it', kind: 'task', type: 'manual', sections },
+        },
+      ],
+    });
+    expect(appended.isError).toBeFalsy();
+    const itemId = (appended.structuredContent as unknown as { planItemIds: string[] })
+      .planItemIds[0]!;
+    const refusedDeepen = await call(client, UPDATE_PLAN_ITEM_TOOL_NAME, {
+      planId,
+      planItemId: itemId,
+      sections: { steps: STEPS },
+    });
+    expect(refusedDeepen.isError).toBe(true);
+    expect(text(refusedDeepen)).toContain('todos');
+    await client.close();
+  });
+});
