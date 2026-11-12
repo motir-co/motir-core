@@ -146,6 +146,36 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  add_page_comment: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      body: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The comment body (Markdown), stored exactly as sent. Mention a member with [@Name](mention:<userId>); the mentioned member is notified.',
+      },
+      rootCommentId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The `id` of a thread’s ROOT comment on the same page to REPLY to — a thread is one level deep, so a reply’s id is refused. Omit it to start a new page-level thread.',
+      },
+    },
+    required: ['projectKey', 'pageId', 'body'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   add_plan_items: {
     type: 'object',
     properties: {
@@ -5137,6 +5167,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
 export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   add_comment: 'Add comment',
   add_lesson: 'Add lesson',
+  add_page_comment: 'Add page comment',
   add_plan_items: 'Append proposals to a plan',
   add_work_item_todo: 'Add a to-do step',
   append_plan_turn: 'Add a planning turn',
@@ -5272,6 +5303,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: true,
+    openWorldHint: false,
+  },
+  add_page_comment: {
+    title: 'Add page comment',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
     openWorldHint: false,
   },
   add_plan_items: {

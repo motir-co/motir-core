@@ -223,6 +223,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // MOTIR-10978 — the page-discussion read, filed under `read` for totality only;
   // its real gate is `page:view`, like `get_page`'s.
   get_page_comments: 'read',
+  // MOTIR-10979 — the page-discussion write, filed under `work_items:write` for
+  // totality only; its real gate is `comment:add`, which that row already confers.
+  add_page_comment: 'work_items:write',
   // MOTIR-7411 — the page writes. Filed under `work_items:write` for totality
   // only; their real gate is `page:edit`.
   create_page: 'work_items:write',
