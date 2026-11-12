@@ -30,7 +30,9 @@ import type {
   PullRequestNotLinkedReason,
 } from '@/lib/dto/github';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
 import { captureDecisionDocument } from './decisionDocumentCaptureService';
 
 // Explicit item→PR link (Story 7.10 · MOTIR-1596, design/github Panel 5) — once
@@ -77,6 +79,74 @@ export const PULL_REQUEST_LINK_PERMISSION = 'work_item:edit' satisfies Permissio
 // Both of its call sites go with it. Nothing replaces them: a link changes the
 // DELIVERY set, which `withdrawPullRequestApprovalGateOnSetChange` already
 // handles, and the design question is untouched by it.
+
+/**
+ * Route the cards waiting on an init card to a repository a LINK just adopted
+ * (Story MOTIR-10162 · MOTIR-11057) — registered inside the link's transaction, run
+ * after it COMMITS and never when it rolls back.
+ *
+ * ⚠️ WHY IT CANNOT RUN WHERE THE ADOPTION RUNS. `adoptConnectedRepo` writes its row
+ * inside the link's transaction on purpose (a link and its record commit together),
+ * and `routeInitCardDependents` opens its OWN workspace-bound transaction, which
+ * cannot see a row this one has not committed: called in place it would read
+ * nothing and route nothing while looking exactly like the fix. So the work is
+ * deferred to the commit through `deferUntilCommit`, and only the two ids — plain
+ * strings — outlive the closure. Deferred rather than chained onto the arm's
+ * promise because threading the disposition and the ids out would change both
+ * arms' return shapes, which are response payloads.
+ *
+ * The row is read again after commit because the adoption answers a disposition
+ * and the pass takes a row id. The read is bound to the LINK's workspace through
+ * `withWorkspaceServiceContext`, so a project of another workspace is never read,
+ * and it asserts no permission of its own: the link already asserted the actor's.
+ *
+ * BEST-EFFORT, like the two settle hooks the pass already has
+ * (`projectRepoSetService.attachRealizedRepo`, `organizationRepoService.linkExistingRepo`):
+ * the link is the durable fact and the routing is derived from it, so a failure is
+ * one warning naming the project and the repository and never an error for the
+ * caller. There is no automatic retry — the pass is exported and safe to re-run —
+ * and a dropped run leaves the waiters BLOCKED and visibly unpinned.
+ *
+ * `deferUntilCommit` answers false, and registers nothing, when no after-commit
+ * scope is open. Both arms run inside `withWorkspaceContext`, so that does not
+ * happen today; it is still named, so a future arm on a bare transaction cannot
+ * skip the routing in silence.
+ *
+ * Exported for its suite (`tests/github/prLinkRoutesInitRepoWaiters.test.ts`), which
+ * drives the refused-registration arm directly; no product caller outside this
+ * module uses it.
+ */
+export function deferAdoptedRepoRouting(
+  projectId: string,
+  githubRepoId: string,
+  ctx: ServiceContext,
+): void {
+  const registered = deferUntilCommit(async () => {
+    try {
+      const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        projectRepoRepository.findByProjectAndGithubRepoId(projectId, githubRepoId, tx),
+      );
+      if (!row) return;
+      // LAZILY IMPORTED, as the two settle hooks import it: the pass reaches the
+      // work-item reference and rollup layer the link path otherwise never loads,
+      // and it is needed only on the rare link that adopts. Inside the catch, so a
+      // module that fails to load is handled exactly as a pass that throws.
+      const { projectRepoInitRoutingService } =
+        await import('@/lib/services/projectRepoInitRoutingService');
+      await projectRepoInitRoutingService.routeInitCardDependents(row.id, ctx);
+    } catch (err) {
+      console.warn(
+        `[githubPullRequestService] could not route init-card dependents after a link adopted repository ${githubRepoId} into project ${projectId}:`,
+        err,
+      );
+    }
+  });
+  if (!registered) {
+    console.warn(
+      `[githubPullRequestService] no after-commit scope was open, so the init-card routing for repository ${githubRepoId} in project ${projectId} was not registered`,
+    );
+  }
+}
 
 export const githubPullRequestService = {
   /**
@@ -280,7 +350,7 @@ export const githubPullRequestService = {
       // (MOTIR-11040) — in this transaction, beside the delivery row, because it
       // is a local insert rather than a host call: a link and its record commit
       // together or not at all. It never refuses; its outcome is not this door's.
-      await projectRepoSetService.adoptConnectedRepo(
+      const adoption = await projectRepoSetService.adoptConnectedRepo(
         {
           projectId: item.projectId,
           workspaceId: ctx.workspaceId,
@@ -289,6 +359,9 @@ export const githubPullRequestService = {
         },
         tx,
       );
+      // A repository that ENTERED the set through this link routes the cards
+      // waiting on the init card that declared it — after commit (MOTIR-11057).
+      if (adoption === 'adopted') deferAdoptedRepoRouting(item.projectId, pr.repoId, ctx);
       // A NEW member changes the set an approve-and-merge gate asked about.
       if (!alreadyDelivered) await withdrawPullRequestApprovalGateOnSetChange(currentItemId, tx);
       // …and it changes the set the card's own CI verdict is folded over, so the
@@ -513,7 +586,7 @@ export const githubPullRequestService = {
       );
       // The same record the sibling arm writes (MOTIR-11040), for the card's own
       // project — the item's, read above, rather than the caller's claim of it.
-      await projectRepoSetService.adoptConnectedRepo(
+      const adoption = await projectRepoSetService.adoptConnectedRepo(
         {
           projectId: item.projectId,
           workspaceId: ctx.workspaceId,
@@ -522,6 +595,9 @@ export const githubPullRequestService = {
         },
         tx,
       );
+      // The same post-commit routing the sibling arm registers (MOTIR-11057), for
+      // the project the row was written into.
+      if (adoption === 'adopted') deferAdoptedRepoRouting(item.projectId, repo.id, ctx);
       if (!alreadyDelivered) {
         await withdrawPullRequestApprovalGateOnSetChange(input.workItemId, tx);
         // The AGENT's link door owes the recompute exactly as the picker's does
