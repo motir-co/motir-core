@@ -264,6 +264,12 @@ function shellWords(segment: string): string[] {
  *  stays computed. */
 const RUNNER_DIR_PATH = /^\$\{?(RUNNER_TEMP|GITHUB_ACTION_PATH|GITHUB_WORKSPACE)\}?\//;
 
+/** An absolute path whose DIRECTORY alone is computed and whose file name is
+ *  literal (`/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump`): a path, like
+ *  `/usr/bin/x`, not a computed command. A path that starts at a variable
+ *  (`$HOME/bin/y`) stays computed. */
+const ABSOLUTE_COMPUTED_DIR_PATH = /^\/.*\/[^/$]+$/;
+
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/;
 
 /**
@@ -389,7 +395,7 @@ export function scriptCommands(script: string): ScriptCommands {
       }
       const bare = unquote(word);
       if (bare === '' || SHELL_WORDS.has(bare)) break;
-      if (RUNNER_DIR_PATH.test(bare)) break;
+      if (RUNNER_DIR_PATH.test(bare) || ABSOLUTE_COMPUTED_DIR_PATH.test(bare)) break;
       if (bare.includes('$')) {
         dynamic.add(bare);
         break;

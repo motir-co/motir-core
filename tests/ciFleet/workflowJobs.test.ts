@@ -111,10 +111,14 @@ describe('scriptCommands', () => {
       '$GITHUB_WORKSPACE/bin/x',
       '"$HOME/bin/y"',
       '"$RUNNER_TEMP"',
+      '"/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump" --version',
+      '/opt/$V/bin/$TOOL',
     ].join('\n');
+    // An absolute path computed only in its directory is a path, like
+    // `/usr/bin/x`; one whose file name is computed stays computed.
     expect(scriptCommands(script)).toMatchObject({
       commands: [],
-      dynamic: ['$HOME/bin/y', '$RUNNER_TEMP'],
+      dynamic: ['$HOME/bin/y', '$RUNNER_TEMP', '/opt/$V/bin/$TOOL'],
     });
   });
 
