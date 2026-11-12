@@ -280,12 +280,26 @@ describe('no plan mutation escapes the trail', () => {
       );
     }
 
+    // ⚠️ NOR IS A HAND-OFF OR RENAME AN AUTHOR SESSION REGISTERED (MOTIR-11085).
+    // `recordPlanRegistrations` takes the same lock and writes `plan_author_registration` — the
+    // walk's own working record of what its level's amend must apply, kept so a resumed walk can
+    // hand the amend what the dead attempt registered. What the amend then EDITS reaches the
+    // trail through its own proposal writes, exactly as a raised gap's answer does.
+    const NOT_A_PLAN_CHANGE_REGISTRATIONS = new Set(['recordPlanRegistrations']);
+    for (const name of NOT_A_PLAN_CHANGE_REGISTRATIONS) {
+      expect(mutations, `${name} is no longer a derived mutation`).toContain(name);
+      expect(reaches(name, bodies).has('maxSeq'), `${name} no longer records registrations`).toBe(
+        true,
+      );
+    }
+
     const untracked = mutations.filter(
       (name) =>
         !NOT_A_PLAN_CHANGE.has(name) &&
         !NOT_A_PLAN_CHANGE_CODE_READS.has(name) &&
         !NOT_A_PLAN_CHANGE_LESSON_CALLS.has(name) &&
         !NOT_A_PLAN_CHANGE_GAPS.has(name) &&
+        !NOT_A_PLAN_CHANGE_REGISTRATIONS.has(name) &&
         !NOT_A_PLAN_CHANGE_NARRATION.has(name) &&
         !NOT_A_PLAN_CHANGE_WAIT.has(name) &&
         !reaches(name, bodies).has('recordRevision') &&

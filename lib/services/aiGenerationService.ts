@@ -35,6 +35,8 @@ import type {
   PlanLessonCallDto,
   PlanGapsRecordedDto,
   PlanRaisedGapDto,
+  PlanAuthorRegistrationDto,
+  PlanRegistrationsRecordedDto,
   PlanStepDto,
   PlanStepProviderWaitDto,
   PlanStepKindDto,
@@ -516,6 +518,8 @@ export const aiGenerationService = {
       gaps?: unknown[];
       /** The session's lesson calls (MOTIR-10191) — sent INSTEAD of `step`. */
       lessonCalls?: unknown[];
+      /** The hand-offs and renames registered and relayed (MOTIR-11085) — INSTEAD of `step`. */
+      registrations?: unknown[];
     },
     auth: { ctx: ServiceContext; projectId: string },
   ): Promise<
@@ -523,6 +527,7 @@ export const aiGenerationService = {
     | { planId: string; narration: PlanNarrationDto[] }
     | { planId: string; codeReads: PlanCodeReadDto[] }
     | { planId: string; gaps: PlanGapsRecordedDto }
+    | { planId: string; registrations: PlanRegistrationsRecordedDto }
     | { planId: string; lessonCalls: PlanLessonCallDto[] }
     | { planId: string; providerWait: PlanStepProviderWaitDto | null }
   > {
@@ -544,12 +549,16 @@ export const aiGenerationService = {
         ...(input.codeReads !== undefined ? { codeReads: input.codeReads } : {}),
         ...(input.gaps !== undefined ? { gaps: input.gaps } : {}),
         ...(input.lessonCalls !== undefined ? { lessonCalls: input.lessonCalls } : {}),
+        ...(input.registrations !== undefined ? { registrations: input.registrations } : {}),
       },
       ctx,
     );
     if (result.kind === 'narration') return { planId: plan.id, narration: result.narration };
     if (result.kind === 'codeReads') return { planId: plan.id, codeReads: result.codeReads };
     if (result.kind === 'gaps') return { planId: plan.id, gaps: result.gaps };
+    if (result.kind === 'registrations') {
+      return { planId: plan.id, registrations: result.registrations };
+    }
     if (result.kind === 'lessonCalls') {
       return { planId: plan.id, lessonCalls: result.lessonCalls };
     }
@@ -754,17 +763,25 @@ export const aiGenerationService = {
   // ⚠️ AND THE GAPS ITS AUTHOR SESSIONS RAISED (MOTIR-10176). A resumed walk reads
   // the plan from here, and a gap the dead attempt raised is on the plan, not in any
   // memory that survived — so the amend of its level is handed it from this read.
+  // ⚠️ AND THE HAND-OFFS AND RENAMES THEY REGISTERED (MOTIR-11085), for the same reason:
+  // the level's amend applies them, and a resumed walk has nowhere else to read them.
   async readPlanProposals(
     jobId: string,
     ctx: ServiceContext,
-  ): Promise<PlanWithItemsDto & { raisedGaps: PlanRaisedGapDto[] }> {
+  ): Promise<
+    PlanWithItemsDto & {
+      raisedGaps: PlanRaisedGapDto[];
+      authorRegistrations: PlanAuthorRegistrationDto[];
+    }
+  > {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
     if (!plan) throw new NoPlanForJobError(jobId);
     const withItems = await plansService.getPlan(plan.id, ctx);
     const raisedGaps = await plansService.listPlanRaisedGaps(plan.id, ctx);
-    return { ...withItems, raisedGaps };
+    const authorRegistrations = await plansService.listPlanAuthorRegistrations(plan.id, ctx);
+    return { ...withItems, raisedGaps, authorRegistrations };
   },
 
   // The INTERNAL CORRECTION seam (Story MOTIR-3595 · Subtask MOTIR-3598) — the

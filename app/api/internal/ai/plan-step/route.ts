@@ -63,6 +63,18 @@ import {
 // Answers `{ planId, gaps: { raised, alreadyRaised, amended } }`. A resumed walk reads
 // them back on `GET /api/internal/ai/plan-proposals` as `raisedGaps`.
 //
+// REGISTRATIONS (MOTIR-11085): the body may carry `registrations` INSTEAD — an array of
+// `{ op: 'register', id, kind: 'hand_off' | 'rename', session, level?, receiver?, what?,
+// reason?, from?, to?, codeFact?, relayed? }` (a hand-off or a forced rename an author
+// session registered for its level's amend — a `hand_off` carries `receiver`, `what` and
+// `reason`, a `rename` carries `from`, `to` and `codeFact`) or `{ op: 'relay', id,
+// outcome: 'applied' | 'raised_as_gap' | 'unsettled', reason? }` (one the level's amend
+// was handed, with how it settled it). Shape and caps are the store's
+// (`plansService.recordPlanRegistrations`, `lib/plans/planAuthorRegistration.ts`),
+// refused 422; it names no `target` and needs no step. Answers `{ planId, registrations:
+// { registered, alreadyRegistered, relayed } }`. A resumed walk reads them back on
+// `GET /api/internal/ai/plan-proposals` as `authorRegistrations`.
+//
 // LESSON CALLS (MOTIR-10191): the body may carry `lessonCalls` INSTEAD — an array
 // (possibly EMPTY, which marks the session recorded with no call) of the session's
 // lesson calls, each `{ kind: 'search' | 'reinforce' | 'add' | 'injected', query?,
@@ -148,17 +160,29 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof sessionKey !== 'string') {
     return fail(INVALID, '`sessionKey` is required and must be a string.', 400);
   }
-  const { narration, providerRetry, codeReads, gaps, lessonCalls } = b;
-  const forms = [step, narration, providerRetry, codeReads, gaps, lessonCalls].filter(
-    (form) => form !== undefined,
-  ).length;
+  const { narration, providerRetry, codeReads, gaps, lessonCalls, registrations } = b;
+  const forms = [
+    step,
+    narration,
+    providerRetry,
+    codeReads,
+    gaps,
+    lessonCalls,
+    registrations,
+  ].filter((form) => form !== undefined).length;
   if (forms !== 1) {
     return fail(
       INVALID,
-      'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads`, `gaps` or ' +
-        '`lessonCalls`.',
+      'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads`, `gaps`, ' +
+        '`lessonCalls` or `registrations`.',
       400,
     );
+  }
+  if (registrations !== undefined) {
+    if (!Array.isArray(registrations)) {
+      return fail(INVALID, '`registrations` must be an array.', 400);
+    }
+    if (target != null) return fail(INVALID, 'A `registrations` call names no `target`.', 400);
   }
   if (gaps !== undefined) {
     if (!Array.isArray(gaps)) return fail(INVALID, '`gaps` must be an array.', 400);
@@ -210,6 +234,7 @@ export async function POST(req: Request): Promise<Response> {
         ...(codeReads !== undefined ? { codeReads: codeReads as unknown[] } : {}),
         ...(gaps !== undefined ? { gaps: gaps as unknown[] } : {}),
         ...(lessonCalls !== undefined ? { lessonCalls: lessonCalls as unknown[] } : {}),
+        ...(registrations !== undefined ? { registrations: registrations as unknown[] } : {}),
       },
       auth,
     );

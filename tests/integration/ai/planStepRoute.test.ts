@@ -478,6 +478,78 @@ describe('the gaps arm (MOTIR-10176)', () => {
   });
 });
 
+describe('the registrations arm (MOTIR-11085)', () => {
+  const handOff = {
+    op: 'register',
+    id: 'reg-1',
+    kind: 'hand_off',
+    session: 'planItem:adapter',
+    level: 'planItem:story',
+    receiver: 'planItem:role',
+    what: 'Create the Lambda execution role.',
+    reason: 'owned_elsewhere',
+  };
+
+  it('records a registration and its relay with no step needed, answering what it stored', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_registrations_happy';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    const res = await report(fx, jobId, { sessionKey: 'ai:job:1', registrations: [handOff] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      planId,
+      registrations: { registered: ['reg-1'], alreadyRegistered: [], relayed: [] },
+    });
+    const relay = await report(fx, jobId, {
+      sessionKey: 'ai:job:2',
+      registrations: [{ op: 'relay', id: 'reg-1', outcome: 'applied', reason: 'moved it' }],
+    });
+    expect(relay.status).toBe(200);
+    const row = await adminDb.planAuthorRegistration.findFirstOrThrow({ where: { planId } });
+    expect([row.registrationId, row.relayedAt !== null, row.outcome, row.outcomeReason]).toEqual([
+      'reg-1',
+      true,
+      'applied',
+      'moved it',
+    ]);
+  });
+
+  it('400 on a malformed body, 422 on an entry the store refuses, writing nothing', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_registrations_refused';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    for (const extra of [
+      { registrations: 'not an array' },
+      { registrations: [handOff], gaps: [] },
+      { registrations: [handOff], target: 'planItem:x' },
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+    }
+    for (const registrations of [
+      [],
+      [{ ...handOff, receiver: '' }],
+      [{ op: 'relay', id: 'unknown', outcome: 'applied' }],
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', registrations });
+      expect(res.status, JSON.stringify(registrations)).toBe(422);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    }
+    expect(await adminDb.planAuthorRegistration.count({ where: { planId } })).toBe(0);
+  });
+
+  it('409 once the plan is not generating', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_registrations_409';
+    const { planId } = await generatingPlan(fx, jobId);
+    await plansService.markPlanned(planId, fx.ctx);
+    const res = await report(fx, jobId, { sessionKey: 's', registrations: [handOff] });
+    expect(res.status).toBe(409);
+  });
+});
+
 describe('the lessonCalls arm (MOTIR-10191)', () => {
   const search = {
     kind: 'search',

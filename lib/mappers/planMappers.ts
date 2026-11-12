@@ -9,6 +9,7 @@ import type {
   PlanCodeRead,
   PlanLessonCall,
   PlanRaisedGap,
+  PlanAuthorRegistration,
   PlanNarrationSession,
   PlanStep,
 } from '@/generated/prisma/client';
@@ -22,6 +23,7 @@ import type {
   PlanCodeReadDto,
   PlanLessonCallDto,
   PlanRaisedGapDto,
+  PlanAuthorRegistrationDto,
   PlanNarrationSessionDto,
   PlanStepDto,
   PlanWithItemsDto,
@@ -176,6 +178,33 @@ export function toPlanRaisedGapDto(row: PlanRaisedGap): PlanRaisedGapDto {
     amendedAt: row.amendedAt?.toISOString() ?? null,
     answer: row.amendedAt !== null ? { refs: [...row.answerRefs], open: row.answerOpen } : null,
     raisedAt: row.createdAt.toISOString(),
+  };
+}
+
+/** One stored author registration as it crosses the boundary (MOTIR-11085). */
+export function toPlanAuthorRegistrationDto(
+  row: PlanAuthorRegistration,
+): PlanAuthorRegistrationDto {
+  return {
+    id: row.registrationId,
+    seq: row.seq,
+    sessionKey: row.sessionKey,
+    kind: row.kind === 'rename' ? 'rename' : 'hand_off',
+    session: row.registeredBy,
+    level: row.level,
+    receiver: row.receiver,
+    what: row.what,
+    reason: row.handOffReason,
+    from: row.renameFrom,
+    to: row.renameTo,
+    codeFact: row.codeFact,
+    relayed: row.relayedAt !== null,
+    relayedAt: row.relayedAt?.toISOString() ?? null,
+    outcome:
+      row.relayedAt !== null && row.outcome !== null
+        ? { kind: row.outcome, reason: row.outcomeReason }
+        : null,
+    registeredAt: row.createdAt.toISOString(),
   };
 }
 
