@@ -5,14 +5,15 @@
  * should it be re-attempted, and once it has been, is the result something a
  * person has to be told about?
  *
- * ⚠️ WHY IT EXISTS AT ALL. `deploy` lives only in the push-to-`main` run of
- * `ci.yml`, so a push run that goes red or is cancelled deploys nothing, and
- * until this lane NOTHING re-attempted it. The pipeline recovered only because
- * somebody else merged afterwards — a property of merge traffic, not of the
- * pipeline. Observed 2026-09-05: the run for `144ffb34` was cancelled at
- * 01:01:27Z and was covered four minutes later by `d2a0c964`, by accident of
- * timing. A red run at the end of a working day sits until the next merge, with a
- * red check nobody is looking at.
+ * ⚠️ WHY IT EXISTS AT ALL. Since MOTIR-10935 the push-to-`main` run of `ci.yml`
+ * releases nothing (`aws-deploy.yml` ships the services on its own trigger). It
+ * is the TRIPWIRE a merge that bypassed the queue meets — `lint`, `typecheck`,
+ * `build` over the commit that is now `main` — and its red is nobody's: no pull
+ * request carries it, and nothing notifies the person who merged. A red there is
+ * either a broken tree or a flake, and they look the same. So the run is
+ * re-attempted ONCE, and only a second red at `main`'s head is raised to a person
+ * (MOTIR-11060 re-purposed the lane; MOTIR-4607 built it to reach the retired Fly
+ * deploy, whose red push runs sat until somebody else happened to merge).
  *
  * ⚠️ THE BOUND IS `run_attempt`, AND IT IS STRUCTURAL, NOT A COUNTER. GitHub's
  * `workflow_run` documentation says of its activity types that "The `requested`
@@ -27,11 +28,10 @@
  * ⚠️ AND IT NEVER RE-RUNS A RUN WHOSE COMMIT IS NO LONGER THE HEAD OF `main`.
  * GitHub's re-run documentation: "The workflow will also use the same
  * `GITHUB_SHA` (commit SHA) and `GITHUB_REF` (git ref) of the original event".
- * `deploy` builds `GITHUB_SHA` and carries no freshness check of its own, so
- * re-running an OLD red run after a newer merge has deployed would release the
- * older commit OVER the newer one — a rollback nobody asked for. A newer push run
- * already contains the older commits, so "superseded" is the correct no-op, and
- * it is also exactly the recovery 2026-09-05 got by accident.
+ * A re-run of an old run re-checks a tree `main` no longer is: the newer push
+ * run's tripwire already covers these commits, and this lane runs for it if it
+ * goes red. So "superseded" is the correct no-op, and it never opens an issue
+ * against code `main` has moved past.
  *
  * Same arrangement as `scripts/deployFreshness.mjs`: the runner reads the GitHub
  * API, POSTs, polls and `process.exit`s, none of which a test can call.
@@ -82,8 +82,9 @@ export function decideRetry(run) {
     return { action: 'skip', reason: `not the CI workflow (${run.workflowName})` };
   }
   if (run.event !== 'push' || run.headBranch !== 'main') {
-    // Only the push run deploys. A red pull-request or merge-queue run is its
-    // author's to read, and re-running it here would hide a real red.
+    // Only the push run is the tripwire nobody owns. A red pull-request or
+    // merge-queue run is its author's to read, and re-running it here would hide
+    // a real red.
     return {
       action: 'skip',
       reason: `not a push to main (${run.event} on ${run.headBranch})`,
@@ -108,7 +109,7 @@ export function decideRetry(run) {
       action: 'skip',
       reason:
         `superseded — main is at ${short(run.mainHeadSha)}, this run built ${short(run.headSha)}; ` +
-        'the newer push run carries these commits, and re-running this one would deploy an older commit',
+        'the newer push run checks these commits, and re-running this one would check a tree main no longer is',
     };
   }
   return {
@@ -141,13 +142,13 @@ export function judgeRetry(run) {
   }
   return {
     outcome: 'failed-twice',
-    reason: `attempt ${run.runAttempt} finished ${run.conclusion} at the head of main — the commits are NOT deployed`,
+    reason: `attempt ${run.runAttempt} finished ${run.conclusion} at the head of main — main is red`,
   };
 }
 
 /** The issue title is keyed on the commit, so a repeat for the same head comments rather than duplicating. */
 export function issueTitle(headSha) {
-  return `CI on main failed twice at ${short(headSha)} — not deployed`;
+  return `CI on main failed twice at ${short(headSha)}`;
 }
 
 export function issueBody({ runUrl, headSha, firstConclusion, secondConclusion, actor }) {
@@ -159,9 +160,11 @@ export function issueBody({ runUrl, headSha, firstConclusion, secondConclusion, 
     `- attempt 2: \`${secondConclusion}\``,
     `- merged by: @${actor}`,
     '',
-    '**Nothing on `main` since the last green run has been deployed**, and nothing will retry it again: ' +
-      'the retry lane (`.github/workflows/main-ci-retry.yml`) re-attempts a run at most once. ' +
-      'Read the failing job, fix `main` or re-run it by hand, then close this issue.',
+    '**`main` is red at this commit**: the push run is the lint, type-check and build tripwire, ' +
+      'the only check a merge that bypassed the queue gets, and it failed twice. ' +
+      'Nothing will retry it again: the retry lane (`.github/workflows/main-ci-retry.yml`) ' +
+      're-attempts a run at most once. Read the failing job, fix `main` or re-run it by hand, ' +
+      'then close this issue.',
     '',
     '_Opened by `scripts/retry-main-ci.mjs` (MOTIR-4607)._',
   ].join('\n');

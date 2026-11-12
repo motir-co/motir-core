@@ -238,14 +238,17 @@ test('a container whose leaves straddle a page boundary stays ONE expanded row a
   await expect(page.getByRole('button', { name: `Collapse ${BIG.identifier}` })).toBeVisible();
 });
 
-// ─── The pane fills the page down to the shell's bottom clearance (MOTIR-10974) ──
+// ─── The pane fills the page down to the viewport's bottom edge (MOTIR-10974) ──
 //
 // The pane used to be `calc(100dvh - 16rem - clearance)` tall — a guess at
 // everything above it that over-reserved, leaving an empty band under the list.
-// It is now the flexible remainder of a viewport-height column, so its bottom
-// edge sits at the clearance whatever renders above it.
+// It is now the flexible remainder of a viewport-height column that runs to the
+// bottom of the screen, whatever renders above it. The Plan-with-AI orb floats
+// over the list; the pane's bottom padding (the shell clearance) lets the last
+// row scroll clear of it.
 
-/** The pane's bottom edge against the clearance line, plus the two scrollers. */
+/** The pane's bottom edge against the viewport and the clearance line, plus the
+ *  two scrollers, and where the last row lands with the pane scrolled to the end. */
 async function paneFit(page: Page, laneList: ReturnType<typeof mainList>) {
   const pane = laneList.locator('xpath=ancestor::*[@data-testid="ready-lane-pane"]');
   return pane.evaluate((el) => {
@@ -255,9 +258,18 @@ async function paneFit(page: Page, laneList: ReturnType<typeof mainList>) {
     const raw = getComputedStyle(el).getPropertyValue('--shell-bottom-clearance').trim();
     const clearance = raw.endsWith('rem') ? parseFloat(raw) * rem : parseFloat(raw);
     const main = document.getElementById('main')!;
+    const scrollTop = el.scrollTop;
+    el.scrollTo(0, el.scrollHeight);
+    // The shown lane's list: its bottom is the last row's (a windowed list
+    // keeps its full height), so this is where the list ends at full scroll.
+    const list = el.querySelector(':scope > div:not([hidden])')!;
+    const lastRowBottom = list.getBoundingClientRect().bottom;
+    el.scrollTo(0, scrollTop);
     return {
       bottom: el.getBoundingClientRect().bottom,
+      viewportBottom: window.innerHeight,
       clearanceLine: window.innerHeight - clearance,
+      lastRowBottom,
       paneScrolls: el.scrollHeight > el.clientHeight,
       documentFits: document.scrollingElement!.scrollHeight <= window.innerHeight,
       mainFits: main.scrollHeight <= main.clientHeight,
@@ -265,10 +277,13 @@ async function paneFit(page: Page, laneList: ReturnType<typeof mainList>) {
   });
 }
 
-async function expectPaneAtClearance(page: Page, laneList: ReturnType<typeof mainList>) {
+async function expectPaneAtBottom(page: Page, laneList: ReturnType<typeof mainList>) {
   await expect(laneList).toBeVisible();
   const fit = await paneFit(page, laneList);
-  expect(Math.abs(fit.bottom - fit.clearanceLine), JSON.stringify(fit)).toBeLessThanOrEqual(4);
+  // The pane runs to the bottom of the screen — no empty band under it.
+  expect(Math.abs(fit.bottom - fit.viewportBottom), JSON.stringify(fit)).toBeLessThanOrEqual(4);
+  // Scrolled to the end, the last row clears the orb's reservation.
+  expect(fit.lastRowBottom, JSON.stringify(fit)).toBeLessThanOrEqual(fit.clearanceLine + 4);
   // The list is longer than the pane, so it is the PANE that scrolls — neither
   // the document nor the shell's <main>.
   expect(fit.paneScrolls).toBe(true);
@@ -276,7 +291,7 @@ async function expectPaneAtClearance(page: Page, laneList: ReturnType<typeof mai
   expect(fit.mainFits).toBe(true);
 }
 
-test('the lane pane reaches the shell bottom clearance on both lanes, with or without the notices above it', async ({
+test('the lane pane reaches the viewport bottom on both lanes, with or without the notices above it', async ({
   page,
 }) => {
   test.setTimeout(300_000);
@@ -294,11 +309,11 @@ test('the lane pane reaches the shell bottom clearance on both lanes, with or wi
   ]) {
     await page.setViewportSize(size);
     await openReady(page);
-    await expectPaneAtClearance(page, mainList(page));
+    await expectPaneAtBottom(page, mainList(page));
 
     await page.getByRole('button', { name: /^Bugs/ }).click();
     await expect(page).toHaveURL(/[?&]lane=bugs/);
-    await expectPaneAtClearance(page, bugsList(page));
+    await expectPaneAtBottom(page, bugsList(page));
 
     // Back to Ready to run for the next size's sidebar click.
     await page.getByRole('button', { name: /^Ready to run/ }).click();
@@ -333,7 +348,7 @@ test('the lane pane reaches the shell bottom clearance on both lanes, with or wi
       notice.style.height = '48px';
       lanes.parentElement!.insertBefore(notice, lanes);
     });
-  await expectPaneAtClearance(page, mainList(page));
+  await expectPaneAtBottom(page, mainList(page));
   const after = await paneFit(page, mainList(page));
   expect(after.bottom).toBeCloseTo(before.bottom, 0);
 });
