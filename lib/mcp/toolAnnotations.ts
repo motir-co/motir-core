@@ -536,6 +536,13 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // W: dismissReview.ts → reviewDismissalService.dismiss — appends a review dismissal row and a review_dismissed revision, raises a fresh approve-and-merge gate (reconcileGatesFor), recomputes To fix and enqueues review/dismissed; a repeat is refused
+  dismiss_review: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // R: searchWorkItems.ts → workItemsService.getProjectIssuesList, commentsService.getCommentCountsForItems
   search_work_items: { readOnlyHint: true, openWorldHint: false },
   // W: searchWorkItemsSemantic.ts → enforceAiRateLimit (rateLimitCounterRepository.increment), then aiBoundaryService.searchSimilarWorkItemsByText

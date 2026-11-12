@@ -15,6 +15,7 @@ import {
   SUBMIT_REVIEW_VERDICT_TOOL_NAME,
   registerSubmitReviewVerdict,
 } from './tools/submitReviewVerdict';
+import { DISMISS_REVIEW_TOOL_NAME, registerDismissReview } from './tools/dismissReview';
 import { LIST_DESIGNS_TOOL_NAME, registerListDesigns } from './tools/listDesigns';
 import { GET_APPROVAL_GATE_TOOL_NAME, registerGetApprovalGate } from './tools/getApprovalGate';
 import {
@@ -301,6 +302,7 @@ export const MCP_TOOL_NAMES = [
   UNLINK_PULL_REQUEST_TOOL_NAME,
   FIND_WORK_ITEMS_FOR_PULL_REQUEST_TOOL_NAME,
   SUBMIT_REVIEW_VERDICT_TOOL_NAME,
+  DISMISS_REVIEW_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   WHOAMI_TOOL_NAME,
@@ -553,6 +555,9 @@ export function registerMcpTools(
   // The user-token VERDICT DOOR (MOTIR-10333; `approval-gates.md` §12.11) — a person's own
   // review agent's one verdict; `find_work_items_for_pull_request` above finds its cards.
   registerSubmitReviewVerdict(target, resolveContext);
+  // Its counterpart (MOTIR-11092; §12.15) — the routed person's own agent dismisses the
+  // review agent's standing send-back, the act the card's Dismiss button makes.
+  registerDismissReview(target, resolveContext);
   // Query tool (7.8.6).
   registerSearchWorkItems(target, resolveContext);
   // The SEMANTIC query (MOTIR-3101) — a second tool BESIDE the substring search,

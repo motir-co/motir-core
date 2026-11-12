@@ -340,6 +340,9 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
       harness: 'Claude Code',
       model: 'test-model',
     },
+    // MOTIR-11092 — the dismissal door, aimed at A's card: the KEY must read as not-found
+    // before any version is read or anything is stored.
+    dismiss_review: { key: t.item1, reason: 'Out of scope for this card.' },
     link_work_items: { fromKey: t.item1, toKey: t.item2, relationship: 'relates_to' },
     unlink_work_items: { fromKey: t.item1, toKey: t.item2, relationship: 'relates_to' },
     move_to_parent: { key: t.item1, parentKey: t.item2 },

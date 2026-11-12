@@ -547,6 +547,12 @@ export const de: McpSummaryTranslations = {
     source:
       'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
   },
+  dismiss_review: {
+    summary:
+      'Den bestehenden Rückweis des Prüf-Agenten zu einem Arbeitselement verwerfen, als die Person, an die es geleitet wird, und mit einer Begründung, sodass erneut um Genehmigen und Mergen gebeten wird. Es genehmigt nie den Merge.',
+    source:
+      'Dismiss the review agent’s standing send-back on a card, as its routed person and with a reason, so approve-and-merge is asked again. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       'EINEN `link_pull_request` rückgängig machen – die zwischen einem Arbeitselement und einem Pull Request erfasste Lieferung entfernen. Eine Lieferung ist eine Zeile, erneutes Verknüpfen des richtigen Arbeitselements ERGÄNZT also, statt zu korrigieren; dies entfernt genau das eine Paar, das Sie nennen, und lässt jede andere Lieferung unberührt.',
