@@ -6,6 +6,7 @@ import {
 } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { walkToDone } from '@/lib/workflows/walkToDone';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { isEstablishedState } from '@/lib/projectRepos/vocabulary';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -312,23 +313,26 @@ async function completeInitCardsQuietly(
       workItemRepository.listOpenInitCardsByProject(projectId, tx),
     );
     if (initCards.length === 0) return;
-    const doneKey = await workflowsService.resolveStatusKey(projectId, ctx.workspaceId, {
-      key: 'done',
-      category: 'done',
-    });
-    if (doneKey === null) {
-      console.error(
-        `[projectRepoProvisioningService] project ${projectId} has no done-category status; init cards left open`,
-      );
-      return;
-    }
+    // The card walks Done's road along the workflow's declared edges — a jump
+    // straight from `todo` to `done` is an illegal transition under the default
+    // workflow, and the status authority refuses it (MOTIR-10162).
+    const wf = await workflowsService.getWorkflow(projectId, ctx.workspaceId);
     for (const result of established) {
       const name = result.row.name.toLowerCase();
       for (const card of initCards) {
-        if (card.initRepositoryName.toLowerCase() !== name || card.status === doneKey) continue;
+        if (card.initRepositoryName.toLowerCase() !== name) continue;
+        const path = walkToDone(wf, card.status);
+        if (path === null) {
+          console.error(
+            `[projectRepoProvisioningService] no path to done from "${card.status}" for init card ${card.id} (row ${result.rowId}); left open`,
+          );
+          continue;
+        }
         try {
-          await workItemsService.updateStatus(card.id, doneKey, ctx);
-          card.status = doneKey;
+          for (const step of path) {
+            await workItemsService.updateStatus(card.id, step, ctx);
+            card.status = step;
+          }
         } catch (err) {
           console.error(
             `[projectRepoProvisioningService] could not complete init card ${card.id} for established row ${result.rowId}:`,

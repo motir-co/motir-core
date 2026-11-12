@@ -83,13 +83,18 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-async function initCard(name: string | null, projectFx: WorkItemFixture = fx): Promise<WorkItem> {
+async function initCard(
+  name: string | null,
+  projectFx: WorkItemFixture = fx,
+  status = 'in_progress',
+): Promise<WorkItem> {
   const item = await createTestWorkItem(projectFx, { kind: 'task', title: `Create ${name}` });
-  // `in_progress`: the run that creates the repository has claimed its card. (A
-  // bare fixture row carries the column default, which no workflow edge leaves.)
+  // `in_progress` by default: the run that creates the repository has claimed its
+  // card. (A bare fixture row carries the column default, which no workflow edge
+  // leaves.) `todo` is the card a plan's own establish run finds.
   return adminDb.workItem.update({
     where: { id: item.id },
-    data: { subject: 'init', initRepositoryName: name, status: 'in_progress' },
+    data: { subject: 'init', initRepositoryName: name, status },
   });
 }
 
@@ -148,7 +153,7 @@ describe('establishSet completes the init card whose repository it establishes',
   it('a row settled `created` completes the card declaring its name in another case, by category, as the caller', async () => {
     const card = await initCard('ACME-Infra');
     await addRow('acme-infra');
-    const resolve = vi.spyOn(workflowsService, 'resolveStatusKey');
+    const read = vi.spyOn(workflowsService, 'getWorkflow');
     const write = vi.spyOn(workItemsService, 'updateStatus');
 
     const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
@@ -156,12 +161,25 @@ describe('establishSet completes the init card whose repository it establishes',
     expect(result.rows[0]).toMatchObject({ outcome: 'created' });
     const done = await doneKey(fx.projectId);
     expect((await stored(card.id)).status).toBe(done);
-    expect(resolve).toHaveBeenCalledWith(
-      fx.projectId,
-      fx.workspaceId,
-      expect.objectContaining({ category: 'done' }),
-    );
-    expect(write).toHaveBeenCalledWith(card.id, done, fx.ctx);
+    expect(read).toHaveBeenCalledWith(fx.projectId, fx.workspaceId);
+    expect(write).toHaveBeenLastCalledWith(card.id, done, fx.ctx);
+  });
+
+  it('a card still at `todo` walks the workflow’s edges to done — never the illegal jump (MOTIR-10162)', async () => {
+    const card = await initCard('acme-infra', fx, 'todo');
+    await addRow('acme-infra');
+    const write = vi.spyOn(workItemsService, 'updateStatus');
+    const errors = vi.spyOn(console, 'error');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    const done = await doneKey(fx.projectId);
+    expect((await stored(card.id)).status).toBe(done);
+    const steps = write.mock.calls.map(([, key]) => key);
+    expect(steps.length).toBeGreaterThan(1);
+    expect(steps.at(-1)).toBe(done);
+    expect(steps).not.toContain('todo');
+    expect(errors.mock.calls.some(([msg]) => String(msg).includes('init card'))).toBe(false);
   });
 
   it('a `created` row reported `already_settled` on a retry still completes a card left open', async () => {
@@ -302,18 +320,20 @@ describe('the completion can never fail the establish run', () => {
     expect(errors.mock.calls.some(([msg]) => String(msg).includes(row.id))).toBe(true);
   });
 
-  it('a project with no done-category status leaves its init cards open and says so', async () => {
+  it('a workflow with no road to a done-category status leaves its init cards open and says so', async () => {
     const card = await initCard('acme-infra');
     await addRow('acme-infra');
-    vi.spyOn(workflowsService, 'resolveStatusKey').mockResolvedValue(null);
+    const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
+    vi.spyOn(workflowsService, 'getWorkflow').mockResolvedValue({
+      ...wf,
+      statuses: wf.statuses.filter((st) => st.category !== 'done'),
+    });
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const before = await stored(card.id);
 
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
 
     expect(await stored(card.id)).toEqual(before);
-    expect(errors.mock.calls.some(([msg]) => String(msg).includes('no done-category status'))).toBe(
-      true,
-    );
+    expect(errors.mock.calls.some(([msg]) => String(msg).includes('no path to done'))).toBe(true);
   });
 });

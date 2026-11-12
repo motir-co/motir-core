@@ -30,6 +30,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { walkToDone as walkStatusesToDone } from '@/lib/workflows/walkToDone';
 import {
   GuideBugCapExceededError,
   GuideBugDuplicateError,
@@ -165,42 +166,10 @@ async function hasLinkedPullRequest(item: WorkItemDto, ctx: ProjectContext): Pro
   return deliveries.some((d) => deliveryMemberState(d.pullRequest) !== 'closed');
 }
 
-/**
- * The shortest walk from the card's status to Done along the workflow's
- * declared edges (A2.6 — `prompts/mark.md`'s walk). The target is the `done`
- * status when the project has one in the done category, else the first
- * done-category status that is not `cancelled`. An `open` policy moves straight
- * there. `null` when no path exists.
- */
+/** The walk from the card's status to Done (A2.6), over the project's workflow. */
 async function walkToDone(item: WorkItemDto, ctx: ProjectContext): Promise<string[] | null> {
   const wf = await workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId);
-  const done = wf.statuses.filter((s) => s.category === 'done');
-  const target =
-    done.find((s) => s.key === 'done') ?? done.find((s) => s.key !== 'cancelled') ?? null;
-  if (!target) return null;
-  if (item.status === target.key) return [];
-  if (wf.policyMode === 'open') return [target.key];
-  const byId = new Map(wf.statuses.map((s) => [s.id, s]));
-  const from = wf.statuses.find((s) => s.key === item.status);
-  if (!from) return null;
-  const prev = new Map<string, string>([[from.id, '']]);
-  const queue = [from.id];
-  while (queue.length > 0) {
-    const at = queue.shift()!;
-    if (at === target.id) break;
-    for (const t of wf.transitions) {
-      if (t.fromStatusId !== at || prev.has(t.toStatusId)) continue;
-      const to = byId.get(t.toStatusId);
-      // Never walk THROUGH another terminal status (a cancel is not a road to Done).
-      if (!to || (to.category === 'done' && to.id !== target.id)) continue;
-      prev.set(t.toStatusId, at);
-      queue.push(t.toStatusId);
-    }
-  }
-  if (!prev.has(target.id)) return null;
-  const path: string[] = [];
-  for (let id = target.id; id !== from.id; id = prev.get(id)!) path.unshift(byId.get(id)!.key);
-  return path;
+  return walkStatusesToDone(wf, item.status);
 }
 
 /** The destination index `moveTodo` takes — the list WITHOUT the moving row. */
