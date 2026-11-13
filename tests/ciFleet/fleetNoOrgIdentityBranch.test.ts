@@ -59,12 +59,13 @@ import { describe, expect, it } from 'vitest';
 // MOTIR-10794): `lib/ciFleet/installFleet.ts` reads `isMeta` in
 // `isInstallOrganization`, the predicate that selects THE INSTALL FLEET — the
 // install's own org (the one meta org on cloud) runs its INDEX, AGENT HOST and
-// AGENT RUN in core's own account instead of a pool account. It never touches
-// the CI-runner path: `ci_runner` is not a kind the install fleet can take
-// (`installFleetTakesKind` answers false before the org is read), so Motir's CI
-// still goes through the pool exactly as a tenant's does, which is what this
-// guard protects. Named in `SANCTIONED_READERS`, asserted to hold exactly that one
-// file and to still match; every other fleet file stays free of `isMeta`.
+// AGENT RUN in core's own account instead of a pool account — and, since
+// MOTIR-11232, its CI RUNNER too, when `MOTIR_INSTALL_FLEET_KINDS` lists it. The
+// read answers WHERE a container boots and nothing else: the mint, the labels,
+// the meter and the settle are the tenant pipeline's, unchanged, because no other
+// fleet file can ask. So the exception stays one predicate in one file. Named in
+// `SANCTIONED_READERS`, asserted to hold exactly that one file, one function and
+// to still match; every other fleet file stays free of `isMeta`.
 
 const root = process.cwd();
 
@@ -274,9 +275,14 @@ describe('C2 — the exception is singular and named', () => {
     expect(hits.length).toBeGreaterThan(0);
     // No internalBilling and no org literal ride in on the exception.
     expect(hits.every((hit) => hit.startsWith('reads `isMeta`'))).toBe(true);
-    // And the CI runner is not a kind it can take.
+    // The read lives in the one predicate, `isInstallOrganization`, which
+    // answers only where a container boots (MOTIR-11232 lets the CI runner ask it).
     const source = stripComments(read(SANCTIONED_READERS[0]));
-    expect(source).not.toMatch(/'ci_runner'/);
+    const readers = [...source.matchAll(/export function (\w+)\([^)]*\bisMeta\b/g)].map(
+      (match) => match[1],
+    );
+    expect(readers).toEqual(['isInstallOrganization']);
+    expect(source.match(/\bisMeta\b/g)).toHaveLength(2);
   });
 });
 

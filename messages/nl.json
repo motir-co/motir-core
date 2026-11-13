@@ -14341,16 +14341,16 @@
       },
       "install": {
         "title": "Motirs eigen account · installatievloot",
-        "subtitle": "De machines waarop Motirs eigen organisatie haar index-, agenthost- en agentrun-jobs draait. De drie pools delen het ene EC2-vCPU-quotum van het account; geen ervan heeft een eigen grootte.",
+        "subtitle": "De machines waarop Motirs eigen organisatie haar CI-, index-, agenthost- en agentrun-jobs draait. De pools delen het ene EC2-vCPU-quotum van het account; geen ervan heeft een eigen grootte.",
         "nearQuota": "Dicht bij het vCPU-quotum",
         "quota": {
-          "label": "EC2-vCPU-quotum · gedeeld door de drie pools",
+          "label": "EC2-vCPU-quotum · gedeeld door alle pools",
           "read": "Draaiende On-Demand Standard-instances · gelezen {age}",
           "notRead": "AWS antwoordde niet · {when}"
         },
-        "used": "In gebruik door de drie pools",
+        "used": "In gebruik door alle pools",
         "percent": "Van het quotum in gebruik",
-        "nearBody": "Op {percent}% van het quotum, voorbij de 70%-buffergrens. Er blijven {left} vCPU over voor alle drie de pools.",
+        "nearBody": "Op {percent}% van het quotum, voorbij de 70%-buffergrens. Er blijven {left} vCPU over voor alle pools.",
         "table": {
           "col": {
             "pool": "Pool",
@@ -14366,7 +14366,7 @@
         "machines": "{count, plural, one {# machine} other {# machines}}",
         "awake": "{count} actief",
         "hibernated": "{count} in slaapstand, niet geteld",
-        "readOnly": "Alleen-lezen. Welke pools hier draaien bepaalt MOTIR_INSTALL_FLEET_KINDS; een CI-runner nooit.",
+        "readOnly": "Alleen-lezen. Welke pools hier draaien bepaalt MOTIR_INSTALL_FLEET_KINDS.",
         "error": {
           "title": "Motirs eigen account kon niet worden gelezen",
           "body": "AWS antwoordde niet, dus hier is niets geladen: geen enkel getal is nul en er wordt geen provider beweerd. De add-shard-pools en de images zijn niet getroffen. Herlaad om het opnieuw te proberen."

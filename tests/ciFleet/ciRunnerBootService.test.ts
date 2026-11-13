@@ -29,6 +29,7 @@ import {
 } from '@/lib/github/runnerJitConfig';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { INSTALL_FLEET_SHARD_ID } from '@/lib/ciFleet/installFleet';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
@@ -1919,6 +1920,228 @@ describe('the fleet account a container boots in (MOTIR-8964)', () => {
       FAST,
     );
     expect(verdict.done).toBe(true);
+  });
+});
+
+describe('the install’s own org runs its CI on the install fleet (MOTIR-11232)', () => {
+  beforeEach(() => {
+    vi.stubEnv('MOTIR_CLOUD', 'true');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'ci_runner,code_graph_index');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SUBNET_IDS', 'subnet-a,subnet-b');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SECURITY_GROUP_ID', 'sg-install');
+    vi.stubEnv(
+      'MOTIR_INSTALL_FLEET_INSTANCE_PROFILE_ARN',
+      'arn:aws:iam::111122223333:instance-profile/motir-install-fleet',
+    );
+    vi.stubEnv('MOTIR_INSTALL_FLEET_REGION', 'us-east-1');
+  });
+
+  afterEach(async () => {
+    await adminDb.ciRunnerProvisioningIntent.deleteMany({});
+    await adminDb.fleetShard.deleteMany({});
+    orchestrator.resetShardFakes();
+    fleetShardOrchestratorService.resetCache();
+    wireFleetKindSwitch('ci_runner', null);
+  });
+
+  async function seedMetaTenant() {
+    const fx = await seedTenant();
+    await adminDb.organization.update({ where: { id: fx.organizationId }, data: { isMeta: true } });
+    return fx;
+  }
+
+  /** A pool account with room, which a meta org's CI must never land on. */
+  async function poolAccount() {
+    wireFleetKindSwitch('ci_runner', () => true);
+    const account = await fleetShardService.createShard({
+      name: `ci-runner-${randomToken(4)}`,
+      fleetKind: 'ci_runner',
+      provider: 'fly',
+      state: 'active',
+      githubOrg: MOTIR_ORG,
+      githubInstallationId: '556677',
+      flyOrg: 'motir',
+      flyApp: `motir-ci-${randomToken(4)}`,
+      flyRegion: 'ams',
+      credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+      limits: { machineLimit: 50 },
+    });
+    return { account, fake: orchestrator.fakeOrchestratorForShard(account.id) };
+  }
+
+  it('boots on the install fleet in its region, records no account, and supervises and settles there', async () => {
+    const fx = await seedMetaTenant();
+    const { fake: pool } = await poolAccount();
+    const install = orchestrator.fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+    const intent = await seedIntent(fx);
+
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error(`unreachable: ${booted.phase}`);
+
+    expect(install.provisioned).toHaveLength(1);
+    expect(install.specs[0]!.region).toBe('us-east-1');
+    expect(pool.provisioned).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(booted.session.handle.shardId).toBe(INSTALL_FLEET_SHARD_ID);
+    const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(row).toMatchObject({ status: 'running', fleetShardId: null, installFleet: true });
+    // Every later step resolves the same place from the row alone.
+    expect(await fleetShardOrchestratorService.forIntent(row)).toBe(install);
+
+    install.completeJob(booted.session.handle.id);
+    const verdict = await ciRunnerBootService.pollOnce(booted.session, undefined, FAST);
+    expect(verdict.done).toBe(true);
+    if (!verdict.done) throw new Error('unreachable');
+    const outcome = await ciRunnerBootService.settleSupervision(booted.session, verdict, FAST);
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
+    expect(install.liveContainerIds()).toEqual([]);
+    expect(fakeOrchestrator.teardowns).toEqual([]);
+  });
+
+  it.each(['quota_exceeded', 'out_of_stock', 'throttled'] as const)(
+    'a capacity refusal (%s) defers shard_capacity, deregisters the runner and never spills to a pool',
+    async (reason) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const fx = await seedMetaTenant();
+      const { fake: pool } = await poolAccount();
+      const install = orchestrator.fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+      install.failNextProvisionForCapacity(reason);
+      const intent = await seedIntent(fx);
+
+      const result = await ciRunnerBootService.bootIntent(intent.id, FAST);
+
+      expect(result).toMatchObject({
+        phase: 'terminal',
+        outcome: { outcome: 'gate_deferred', reason: 'shard_capacity' },
+      });
+      expect(pool.provisioned).toEqual([]);
+      expect(fakeOrchestrator.provisioned).toEqual([]);
+      expect(mintCalls()).toHaveLength(1);
+      expect(deleteRunnerCalls()).toHaveLength(1);
+      const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(row).toMatchObject({
+        status: 'pending',
+        fleetShardId: null,
+        installFleet: false,
+        teardownReason: null,
+      });
+      expect(row.shardCapacityDeferredAt).not.toBeNull();
+    },
+  );
+
+  it('a provider outage on the install fleet defers too', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fx = await seedMetaTenant();
+    const install = orchestrator.fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+    vi.spyOn(install, 'provision').mockRejectedValueOnce(
+      new OrchestratorApiError('aws', 503, 'down'),
+    );
+    const intent = await seedIntent(fx);
+
+    const result = await ciRunnerBootService.bootIntent(intent.id, FAST);
+
+    expect(result).toMatchObject({
+      phase: 'terminal',
+      outcome: { outcome: 'gate_deferred', reason: 'shard_capacity' },
+    });
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+
+  it('a job fault on the install fleet takes today’s failed-boot path — no defer, no spill', async () => {
+    const fx = await seedMetaTenant();
+    const install = orchestrator.fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+    vi.spyOn(install, 'provision').mockRejectedValueOnce(
+      new OrchestratorApiError('aws', 400, 'bad spec'),
+    );
+    const intent = await seedIntent(fx);
+
+    const result = await ciRunnerBootService.bootIntent(intent.id, FAST);
+
+    expect(result.phase).toBe('terminal');
+    expect(result).not.toMatchObject({ outcome: { reason: 'shard_capacity' } });
+    expect(deleteRunnerCalls()).toHaveLength(1);
+    const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    // The failed boot releases the claim for another attempt, off the install fleet.
+    expect(row).toMatchObject({
+      status: 'pending',
+      installFleet: false,
+      bootAttempts: 1,
+      shardCapacityDeferredAt: null,
+    });
+  });
+
+  it('the reaper settles an install-fleet runner through the install fleet when it is listed with no account', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fx = await seedMetaTenant();
+    const install = orchestrator.fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+    const intent = await seedIntent(fx);
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+    // The handle as the reaper's listing finds it: the provider's, no memo.
+    const handle = install.provisioned[0]!;
+
+    // No `shardId` passed: the account comes from the intent's own row.
+    expect(await ciRunnerBootService.reapContainer(handle)).toBe(true);
+
+    expect(install.liveContainerIds()).toEqual([]);
+    expect(fakeOrchestrator.teardowns).toEqual([]);
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(settled).toMatchObject({ status: 'failed', teardownReason: 'reaped' });
+    // The machine time is recorded like any CI runner's, keyed on no account.
+    expect(await adminDb.ciContainerUsage.count({ where: { handleId: handle.id } })).toBe(1);
+  });
+
+  it('the vanished sweep asks the install fleet, not the process-wide fleet', async () => {
+    const fx = await seedMetaTenant();
+    const install = orchestrator.fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+    const seeded = await seedIntent(fx);
+    const intent = await adminDb.ciRunnerProvisioningIntent.update({
+      where: { id: seeded.id },
+      data: {
+        status: 'running',
+        installFleet: true,
+        containerProvider: 'fake',
+        containerId: `gone-${seeded.id}`,
+        containerRegion: 'us-east-1',
+        githubRunnerId: 9102,
+        runnerName: 'motir-install-orphan',
+        bootedAt: new Date(Date.now() - 3 * 60 * 60_000),
+      },
+    });
+    const installDescribe = vi.spyOn(install, 'describe');
+    const processDescribe = vi.spyOn(fakeOrchestrator, 'describe');
+
+    expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(1);
+
+    expect(installDescribe).toHaveBeenCalledTimes(1);
+    expect(processDescribe).not.toHaveBeenCalled();
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(settled.status).toBe('failed');
+  });
+
+  it('an install fleet with no network set fails the boot loudly instead of spilling', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.stubEnv('MOTIR_INSTALL_FLEET_REGION', '');
+    const fx = await seedMetaTenant();
+    const { fake: pool } = await poolAccount();
+    const intent = await seedIntent(fx);
+
+    const result = await ciRunnerBootService.bootIntent(intent.id, FAST);
+
+    expect(result.phase).toBe('terminal');
+    expect(pool.provisioned).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
   });
 });
 

@@ -43,7 +43,10 @@ import {
 //      kind's switch is Fly, else the kind's shared account with the most
 //      headroom. Every account full defers `shard_capacity`. Chosen and written
 //      at the claim, in the same locked transaction, so the per-account count
-//      is exact.
+//      is exact. A job of the install's own org goes to the INSTALL FLEET in
+//      core's own account (MOTIR-11232) when `MOTIR_INSTALL_FLEET_KINDS` lists
+//      `ci_runner`: no account row, so the claim writes a null account and the
+//      intent's `install_fleet` flag, and no pool account counts it.
 //   3. ADMISSION BY COVERAGE (§3, MOTIR-6911) — the org's remaining included
 //      minutes plus its balance must pay for every charged container it runs
 //      AND this one, for one debit period (`resolveAdmissionCoverage`). The
@@ -115,12 +118,14 @@ export type AdmissionVerdict =
    *  it. `ciInFlight` is the org's CI runner count at the decision and
    *  `ciBurstCap` the figure it was judged against (`null`: none held it), for
    *  the caller's log. `fleetShardId` is the account its machine boots on; null
-   *  = the process-wide fleet. */
+   *  = the process-wide fleet, or the install fleet when `installFleet` is true
+   *  (MOTIR-11232) — it has no account row. */
   | {
       outcome: 'admitted';
       ciInFlight: number;
       ciBurstCap: number | null;
       fleetShardId: string | null;
+      installFleet: boolean;
     }
   /** Another provisioner claimed it first. Not an error; the compare-and-set
    *  worked. */
@@ -254,8 +259,10 @@ export const ciRunnerAdmissionService = {
 
         // TAKE THE SLOT. The compare-and-set on `pending` is what makes the
         // count above true of the world the moment this transaction commits.
+        const installFleet = 'installFleet' in placement;
         const took = await intents.claimPending(intent.id, tx, {
           fleetShardId: placement.shardId,
+          installFleet,
         });
         if (!took) return { outcome: 'already_claimed' as const };
 
@@ -266,6 +273,7 @@ export const ciRunnerAdmissionService = {
           ciInFlight,
           ciBurstCap: cap.kind === 'capped' ? cap.figure : null,
           fleetShardId: placement.shardId,
+          installFleet,
         };
       });
     } catch (err) {

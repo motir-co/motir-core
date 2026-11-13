@@ -158,7 +158,11 @@ async function account(
   return shard;
 }
 
-async function ciJob(fx: WorkItemFixture, shardId: string) {
+async function ciJob(
+  fx: WorkItemFixture,
+  shardId: string | null,
+  options: { installFleet?: boolean; status?: string } = {},
+) {
   seq += 1;
   await adminDb.ciRunnerProvisioningIntent.create({
     data: {
@@ -172,8 +176,9 @@ async function ciJob(fx: WorkItemFixture, shardId: string) {
       repoName: 'web',
       requestedLabels: [MOTIR_RUNNER_LABEL],
       queuedAt: earlier(10 * MIN),
-      status: 'running',
+      status: options.status ?? 'running',
       fleetShardId: shardId,
+      installFleet: options.installFleet ?? false,
       bootedAt: earlier(2 * MIN),
       startedAt: earlier(2 * MIN),
     },
@@ -250,9 +255,20 @@ afterAll(async () => {
 });
 
 describe('fleetStatusPoolsService.readInstallFleet', () => {
-  it('reads 1 running with its machine’s vCPU for a meta-org index, an awake instance and a hosted run', async () => {
+  it('reads 1 running with its machine’s vCPU for a meta-org index, an awake instance and a hosted run, and the CI runners on the install fleet', async () => {
+    process.env.MOTIR_INSTALL_FLEET_KINDS =
+      'ci_runner,code_graph_index,agent_instance,hosted_agent';
     const meta = await tenant(true);
     const other = await tenant(false);
+    // Two meta-org CI runners on the install fleet (MOTIR-11232) — a provisioning
+    // one counts as in flight too. Not counted: a meta-org runner on a pool
+    // account, a settled one, and another org's.
+    const ciPool = await account('ci-iad-1', { fleetKind: 'ci_runner' });
+    await ciJob(meta, null, { installFleet: true });
+    await ciJob(meta, null, { installFleet: true, status: 'provisioning' });
+    await ciJob(meta, ciPool.id);
+    await ciJob(meta, null, { installFleet: true, status: 'completed' });
+    await ciJob(other, null, { installFleet: true });
     await slot(meta, 'code_graph_index');
     await slot(meta, 'agent_instance');
     await slot(meta, 'hosted_agent');
@@ -273,6 +289,15 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
     );
 
     expect(block.pools).toEqual([
+      {
+        fleetKind: 'ci_runner',
+        enabled: true,
+        running: 2,
+        hibernated: null,
+        machineVcpu: 2,
+        vcpu: 4,
+        sharePercent: 1,
+      },
       {
         fleetKind: 'hosted_agent',
         enabled: true,
@@ -302,7 +327,7 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
       },
     ]);
     expect(block.quota).toEqual({ status: 'ok', vcpu: 384, readAt: NOW.toISOString() });
-    expect(block).toMatchObject({ usedVcpu: 6, percent: 2, nearQuota: false, leftVcpu: 378 });
+    expect(block).toMatchObject({ usedVcpu: 10, percent: 3, nearQuota: false, leftVcpu: 374 });
 
     // One audit row, and the mark records WHEN only.
     const [audit, ...rest] = await audits();
@@ -328,16 +353,18 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
     await slot(b, 'code_graph_index');
     await slot(a, 'hosted_agent');
     await instance(a, 'hibernated');
+    await ciJob(b, null, { installFleet: true });
 
     const block = okInstall(
       await service.readInstallFleet(currentPrincipal, { now: NOW, reader: quota(10) }),
     );
     expect(block.pools).toEqual([
+      expect.objectContaining({ fleetKind: 'ci_runner', running: 1, vcpu: 2 }),
       { fleetKind: 'hosted_agent', enabled: false },
       expect.objectContaining({ fleetKind: 'code_graph_index', running: 2, vcpu: 4 }),
       { fleetKind: 'agent_instance', enabled: false },
     ]);
-    expect(block).toMatchObject({ usedVcpu: 4, percent: 40, nearQuota: false, leftVcpu: 6 });
+    expect(block).toMatchObject({ usedVcpu: 6, percent: 60, nearQuota: false, leftVcpu: 4 });
   });
 
   it('counts nothing on cloud with no meta org, and nothing is enabled with the variable unset', async () => {

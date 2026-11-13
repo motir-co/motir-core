@@ -13,6 +13,7 @@ import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
+import { ciRunnerIntentShardId } from '@/lib/ciFleet/installFleet';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import {
   githubRunnerCallLedgerService as runnerCallLedger,
@@ -120,7 +121,7 @@ export const fleetStopService = {
     const orchestratorFor = async (
       intent: CiRunnerProvisioningIntent,
     ): Promise<ContainerOrchestrator | null> => {
-      if (intent.fleetShardId === null && !isOrchestratorConfigured()) return null;
+      if (ciRunnerIntentShardId(intent) === null && !isOrchestratorConfigured()) return null;
       try {
         return await fleetShardOrchestratorService.forIntent(intent);
       } catch (err) {

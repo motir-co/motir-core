@@ -14341,16 +14341,16 @@
       },
       "install": {
         "title": "Compte propre à Motir · flotte d’installation",
-        "subtitle": "Les machines sur lesquelles l’organisation propre à Motir exécute ses jobs d’index, d’hébergement d’agents et d’exécution d’agents. Les trois pools partagent l’unique quota de vCPU EC2 du compte ; aucun n’a de taille propre.",
+        "subtitle": "Les machines sur lesquelles l’organisation propre à Motir exécute ses jobs de CI, d’index, d’hébergement d’agents et d’exécution d’agents. Les pools partagent l’unique quota de vCPU EC2 du compte ; aucun n’a de taille propre.",
         "nearQuota": "Proche du quota de vCPU",
         "quota": {
-          "label": "Quota de vCPU EC2 · partagé par les trois pools",
+          "label": "Quota de vCPU EC2 · partagé par tous les pools",
           "read": "Instances On-Demand Standard en cours · lu {age}",
           "notRead": "AWS n’a pas répondu · {when}"
         },
-        "used": "Utilisé par les trois pools",
+        "used": "Utilisé par tous les pools",
         "percent": "Part du quota utilisée",
-        "nearBody": "À {percent} % du quota, au-delà du seuil de marge de 70 %. Il reste {left} vCPU pour les trois pools.",
+        "nearBody": "À {percent} % du quota, au-delà du seuil de marge de 70 %. Il reste {left} vCPU pour tous les pools.",
         "table": {
           "col": {
             "pool": "Pool",
@@ -14366,7 +14366,7 @@
         "machines": "{count, plural, one {# machine} other {# machines}}",
         "awake": "{count} actives",
         "hibernated": "{count} en veille, non comptées",
-        "readOnly": "Lecture seule. Les pools qui tournent ici sont fixés par MOTIR_INSTALL_FLEET_KINDS ; un runner CI jamais.",
+        "readOnly": "Lecture seule. Les pools qui tournent ici sont fixés par MOTIR_INSTALL_FLEET_KINDS.",
         "error": {
           "title": "Impossible de lire le compte propre à Motir",
           "body": "AWS n’a pas répondu, donc rien n’est chargé ici : aucun chiffre n’est zéro et aucun fournisseur n’est affirmé. Les pools add-shard et les images ne sont pas affectés. Rechargez pour réessayer."

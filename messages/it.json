@@ -14341,16 +14341,16 @@
       },
       "install": {
         "title": "Account di Motir · flotta di installazione",
-        "subtitle": "Le macchine su cui l’organizzazione di Motir esegue i suoi job di indice, host degli agenti ed esecuzione degli agenti. I tre pool condividono l’unica quota di vCPU EC2 dell’account; nessuno ha una dimensione propria.",
+        "subtitle": "Le macchine su cui l’organizzazione di Motir esegue i suoi job di CI, indice, host degli agenti ed esecuzione degli agenti. I pool condividono l’unica quota di vCPU EC2 dell’account; nessuno ha una dimensione propria.",
         "nearQuota": "Vicino alla quota di vCPU",
         "quota": {
-          "label": "Quota di vCPU EC2 · condivisa dai tre pool",
+          "label": "Quota di vCPU EC2 · condivisa da tutti i pool",
           "read": "Istanze On-Demand Standard in esecuzione · letta {age}",
           "notRead": "AWS non ha risposto · {when}"
         },
-        "used": "In uso dai tre pool",
+        "used": "In uso da tutti i pool",
         "percent": "Della quota in uso",
-        "nearBody": "Al {percent}% della quota, oltre la soglia di margine del 70%. Restano {left} vCPU per tutti e tre i pool.",
+        "nearBody": "Al {percent}% della quota, oltre la soglia di margine del 70%. Restano {left} vCPU per tutti i pool.",
         "table": {
           "col": {
             "pool": "Pool",
@@ -14366,7 +14366,7 @@
         "machines": "{count, plural, one {# macchina} other {# macchine}}",
         "awake": "{count} attive",
         "hibernated": "{count} in ibernazione, non contate",
-        "readOnly": "Sola lettura. Quali pool girano qui lo stabilisce MOTIR_INSTALL_FLEET_KINDS; un runner CI mai.",
+        "readOnly": "Sola lettura. Quali pool girano qui lo stabilisce MOTIR_INSTALL_FLEET_KINDS.",
         "error": {
           "title": "Impossibile leggere l’account di Motir",
           "body": "AWS non ha risposto, quindi qui non è caricato nulla: nessuna cifra è zero e nessun provider è dichiarato. I pool add-shard e le immagini non sono interessati. Ricarica per riprovare."

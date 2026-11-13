@@ -14338,16 +14338,16 @@
       },
       "install": {
         "title": "Motir’s own account · install fleet",
-        "subtitle": "The machines Motir’s own organisation runs its index, agent host and agent run jobs on. The three pools share the account’s one EC2 vCPU quota; none has a size of its own.",
+        "subtitle": "The machines Motir’s own organisation runs its CI, index, agent host and agent run jobs on. The pools share the account’s one EC2 vCPU quota; none has a size of its own.",
         "nearQuota": "Near the vCPU quota",
         "quota": {
-          "label": "EC2 vCPU quota · shared by the three pools",
+          "label": "EC2 vCPU quota · shared by every pool",
           "read": "Running On-Demand Standard instances · read {age}",
           "notRead": "AWS didn’t answer · {when}"
         },
-        "used": "In use by the three pools",
+        "used": "In use by every pool",
         "percent": "Of the quota in use",
-        "nearBody": "At {percent}% of the quota, past the 70% headroom mark. {left} vCPU are left for all three pools.",
+        "nearBody": "At {percent}% of the quota, past the 70% headroom mark. {left} vCPU are left for every pool.",
         "table": {
           "col": {
             "pool": "Pool",
@@ -14363,7 +14363,7 @@
         "machines": "{count, plural, one {# machine} other {# machines}}",
         "awake": "{count} awake",
         "hibernated": "{count} hibernated, not counted",
-        "readOnly": "Read-only. Which pools run here is MOTIR_INSTALL_FLEET_KINDS; a CI runner never does.",
+        "readOnly": "Read-only. Which pools run here is MOTIR_INSTALL_FLEET_KINDS.",
         "error": {
           "title": "Couldn’t read Motir’s own account",
           "body": "AWS didn’t answer, so nothing here is loaded: no figure is zero and no provider is claimed. The add-shard pools and the images are unaffected. Reload to try again."

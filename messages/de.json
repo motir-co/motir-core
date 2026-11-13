@@ -14341,16 +14341,16 @@
       },
       "install": {
         "title": "Motirs eigenes Konto · Installationsflotte",
-        "subtitle": "Die Maschinen, auf denen Motirs eigene Organisation ihre Index-, Agent-Host- und Agent-Lauf-Jobs ausführt. Die drei Pools teilen sich das eine EC2-vCPU-Kontingent des Kontos; keiner hat eine eigene Größe.",
+        "subtitle": "Die Maschinen, auf denen Motirs eigene Organisation ihre CI-, Index-, Agent-Host- und Agent-Lauf-Jobs ausführt. Die Pools teilen sich das eine EC2-vCPU-Kontingent des Kontos; keiner hat eine eigene Größe.",
         "nearQuota": "Nahe am vCPU-Kontingent",
         "quota": {
-          "label": "EC2-vCPU-Kontingent · von den drei Pools geteilt",
+          "label": "EC2-vCPU-Kontingent · von allen Pools geteilt",
           "read": "On-Demand-Standard-Instanzen in Betrieb · gelesen {age}",
           "notRead": "AWS hat nicht geantwortet · {when}"
         },
-        "used": "Von den drei Pools genutzt",
+        "used": "Von allen Pools genutzt",
         "percent": "Genutzter Anteil des Kontingents",
-        "nearBody": "Bei {percent} % des Kontingents, über der 70-%-Reservemarke. Für alle drei Pools bleiben {left} vCPU.",
+        "nearBody": "Bei {percent} % des Kontingents, über der 70-%-Reservemarke. Für alle Pools bleiben {left} vCPU.",
         "table": {
           "col": {
             "pool": "Pool",
@@ -14366,7 +14366,7 @@
         "machines": "{count, plural, one {# Maschine} other {# Maschinen}}",
         "awake": "{count} aktiv",
         "hibernated": "{count} im Ruhezustand, nicht gezählt",
-        "readOnly": "Nur lesen. Welche Pools hier laufen, legt MOTIR_INSTALL_FLEET_KINDS fest; ein CI-Runner nie.",
+        "readOnly": "Nur lesen. Welche Pools hier laufen, legt MOTIR_INSTALL_FLEET_KINDS fest.",
         "error": {
           "title": "Motirs eigenes Konto konnte nicht gelesen werden",
           "body": "AWS hat nicht geantwortet, daher ist hier nichts geladen: Keine Zahl ist null, und kein Anbieter wird behauptet. Die Add-Shard-Pools und die Images sind nicht betroffen. Laden Sie die Seite neu, um es erneut zu versuchen."

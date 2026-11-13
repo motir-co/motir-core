@@ -233,7 +233,7 @@ describe('the install fleet card', () => {
     );
     expect(text(root.querySelector('[data-flag="near-quota"]'))).toBe(f.install.nearQuota);
     expect(text(root.querySelector('[data-element="near-quota"]'))).toBe(
-      'At 75% of the quota, past the 70% headroom mark. 96 vCPU are left for all three pools.',
+      'At 75% of the quota, past the 70% headroom mark. 96 vCPU are left for every pool.',
     );
     const off = poolRow(root, 'hosted_agent');
     expect(off.getAttribute('data-enabled')).toBe('false');

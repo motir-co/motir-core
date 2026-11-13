@@ -11,6 +11,7 @@ import type { AgentInstance, FleetShard } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import {
+  ciRunnerIntentShardId,
   fleetShardIdForColumn,
   INSTALL_FLEET_SHARD_ID,
   INSTALL_FLEET_TAG,
@@ -37,14 +38,19 @@ import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE INSTALL FLEET'S PLACEMENT (Story MOTIR-10792 · MOTIR-10794), against real
 // Postgres: a job of the install's own org — the meta org on cloud, any org with
-// cloud off — for the index, the agent host or the agent run is placed on the
-// install fleet before any pool choice and with no `fleet_shard` read; every
-// other org's job, and every CI job, is placed exactly as before; an unset or
-// unlisted kind changes nothing; and the database admits one meta org.
+// cloud off — for the CI runner (MOTIR-11232), the index, the agent host or the
+// agent run is placed on the install fleet before any pool choice and with no
+// `fleet_shard` read; every other org's job is placed exactly as before; an
+// unset or unlisted kind changes nothing; and the database admits one meta org.
 
 const NOW = new Date('2026-11-09T12:00:00.000Z');
-const INSTALL_KINDS: FleetWorkloadKind[] = ['code_graph_index', 'agent_instance', 'hosted_agent'];
-const ALL_KINDS: FleetWorkloadKind[] = [...INSTALL_KINDS, 'ci_runner'];
+const INSTALL_KINDS: FleetWorkloadKind[] = [
+  'ci_runner',
+  'code_graph_index',
+  'agent_instance',
+  'hosted_agent',
+];
+const ALL_KINDS: FleetWorkloadKind[] = INSTALL_KINDS;
 
 let seq = 0;
 
@@ -155,11 +161,13 @@ afterAll(async () => {
 });
 
 describe('the install fleet module', () => {
-  it('lists only the three kinds it can run, and none when unset', () => {
+  it('lists only the four kinds it can run, and none when unset', () => {
     expect([...installFleetKinds()].sort()).toEqual([...INSTALL_KINDS].sort());
     expect(isInstallFleetEnabled()).toBe(true);
-    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'ci_runner, nonsense');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'nonsense, ');
     expect(installFleetKinds().size).toBe(0);
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'ci_runner, nonsense');
+    expect([...installFleetKinds()]).toEqual(['ci_runner']);
     vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', '');
     expect(isInstallFleetEnabled()).toBe(false);
   });
@@ -209,6 +217,16 @@ describe('the install fleet module', () => {
     expect(fleetShardIdForColumn(null)).toBeNull();
     expect(fleetShardIdForColumn(undefined)).toBeNull();
   });
+
+  it('reaches a CI runner by its intent: the install fleet when flagged, else the account it recorded (MOTIR-11232)', () => {
+    expect(ciRunnerIntentShardId({ fleetShardId: null, installFleet: true })).toBe(
+      INSTALL_FLEET_SHARD_ID,
+    );
+    expect(ciRunnerIntentShardId({ fleetShardId: 'cmshard000', installFleet: false })).toBe(
+      'cmshard000',
+    );
+    expect(ciRunnerIntentShardId({ fleetShardId: null, installFleet: false })).toBeNull();
+  });
 });
 
 describe('a meta-org job on cloud', () => {
@@ -235,7 +253,9 @@ describe('a meta-org job on cloud', () => {
     },
   );
 
-  it('a meta-org CI job never consults the install-fleet predicate: no org read, answer false', async () => {
+  it('a meta-org CI job is not placed on the install fleet while ci_runner is not listed', async () => {
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'code_graph_index,agent_instance,hosted_agent');
+    onPool();
     const meta = await seedOrg({ isMeta: true });
     const orgRead = vi.spyOn(organizationRepository, 'findByIdInTx');
     expect(
@@ -246,12 +266,8 @@ describe('a meta-org job on cloud', () => {
         ),
       ),
     ).toBe(false);
+    // An unlisted kind never reads the org.
     expect(orgRead).not.toHaveBeenCalled();
-  });
-
-  it('a meta-org CI job goes to the pool as before, even with ci_runner listed', async () => {
-    onPool();
-    const meta = await seedOrg({ isMeta: true });
     const pool = await shared('ci_runner');
     expect(await choose('ci_runner', meta.organizationId)).toEqual({ shardId: pool.id });
   });
@@ -284,8 +300,9 @@ describe('with cloud off', () => {
     for (const read of reads) expect(read).not.toHaveBeenCalled();
   });
 
-  it('a CI job is still placed as before', async () => {
+  it('a CI job is placed as before when ci_runner is not listed', async () => {
     vi.stubEnv('MOTIR_CLOUD', '');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'code_graph_index');
     const org = await seedOrg();
     expect(await choose('ci_runner', org.organizationId)).toEqual({ shardId: null });
   });
@@ -550,6 +567,7 @@ describe('the install fleet’s machine size (MOTIR-10887)', () => {
     const { AWS_DEFAULT_INSTANCE_TYPE } = await import('@motir/orchestrator');
     const fleet = await import('@/lib/ciFleet/installFleet');
     expect(fleet.INSTALL_FLEET_ELIGIBLE_KINDS).toEqual([
+      'ci_runner',
       'hosted_agent',
       'code_graph_index',
       'agent_instance',

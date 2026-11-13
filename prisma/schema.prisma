@@ -11650,6 +11650,14 @@ model CiRunnerProvisioningIntent {
   /// lock (MOTIR-8968), so the per-account count is exact. RESTRICT: an account
   /// with a container recorded against it cannot vanish from under it.
   fleetShardId            String?               @map("fleet_shard_id")
+  /// The container runs on the INSTALL FLEET (MOTIR-11232): core's own account,
+  /// for a job of the install's own org. The install fleet has no `fleet_shard`
+  /// row, so `fleetShardId` stays NULL (the pseudo-account id is never stored,
+  /// MOTIR-10858) and this flag is what tells boot, poll, settle, stop and reap
+  /// to reach the install fleet rather than the process-wide one. Written at the
+  /// claim, under the admission lock, with `fleetShardId`; cleared with it when
+  /// the claim is released.
+  installFleet            Boolean               @default(false) @map("install_fleet")
   /// Why the job left the account admission first chose for it (MOTIR-8968).
   /// NULL when it booted on its first choice, or on Fly. The headroom reading
   /// (MOTIR-8969) counts moves from it.

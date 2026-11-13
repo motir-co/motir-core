@@ -254,16 +254,18 @@ export const ciRunnerProvisioningIntentRepository = {
   async claimPending(
     id: string,
     tx: Prisma.TransactionClient,
-    placement: { fleetShardId?: string | null } = {},
+    placement: { fleetShardId?: string | null; installFleet?: boolean } = {},
   ): Promise<boolean> {
     const result = await tx.ciRunnerProvisioningIntent.updateMany({
       where: { id, status: CI_RUNNER_INTENT_PENDING },
       // The ACCOUNT is written in the same compare-and-set (MOTIR-8968): the
       // per-account count is read-derived, so it is exact only if the account
-      // lands in the transaction that counted it.
+      // lands in the transaction that counted it. The install fleet (MOTIR-11232)
+      // has no account row: its intent keeps a null account and the flag.
       data: {
         status: CI_RUNNER_INTENT_PROVISIONING,
         fleetShardId: placement.fleetShardId ?? null,
+        installFleet: placement.installFleet ?? false,
         fleetShardMoveReason: null,
         // A booted job is not waiting (MOTIR-9666): cleared in the same
         // compare-and-set, so no reader ever sees a claimed intent with a reason.
@@ -281,6 +283,26 @@ export const ciRunnerProvisioningIntentRepository = {
       where: {
         fleetShardId: shardId,
         status: { in: [CI_RUNNER_INTENT_PROVISIONING, CI_RUNNER_INTENT_RUNNING] },
+      },
+    });
+  },
+
+  /**
+   * The CI containers in flight on the INSTALL FLEET (MOTIR-11232) —
+   * `provisioning` + `running` with the install-fleet flag, the set the Fleet
+   * status page's install card counts. `organizationIds` narrows it to the
+   * install's own orgs (the meta orgs on cloud); null counts every org (cloud
+   * off, where the install's one org is any org).
+   */
+  async countInFlightOnInstallFleetInTx(
+    organizationIds: readonly string[] | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.ciRunnerProvisioningIntent.count({
+      where: {
+        installFleet: true,
+        status: { in: [CI_RUNNER_INTENT_PROVISIONING, CI_RUNNER_INTENT_RUNNING] },
+        ...(organizationIds === null ? {} : { organizationId: { in: [...organizationIds] } }),
       },
     });
   },
@@ -370,6 +392,7 @@ export const ciRunnerProvisioningIntentRepository = {
         settledAt: null,
         teardownReason: null,
         fleetShardId: null,
+        installFleet: false,
         fleetShardMoveReason: null,
       },
     });
@@ -389,6 +412,7 @@ export const ciRunnerProvisioningIntentRepository = {
         settledAt: null,
         teardownReason: null,
         fleetShardId: null,
+        installFleet: false,
         fleetShardMoveReason: null,
         bootAttempts: { increment: 1 },
       },

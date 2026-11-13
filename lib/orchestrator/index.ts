@@ -48,9 +48,11 @@ import {
   INSTALL_FLEET_SHARD_ID,
   INSTALL_FLEET_TAG,
   installFleetConfig,
+  installFleetTakesKind,
   isInstallFleetEnabled,
   type InstallFleetConfig,
 } from '@/lib/ciFleet/installFleet';
+import { isCloud } from '@/lib/billing/availability';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import {
   appendShardFakeCall,
@@ -212,9 +214,15 @@ export function isOrchestratorConfigured(): boolean {
  *   lane's fake EC2, which needs neither. Which account boots, and whether one
  *   has room, is admission's call per job, not configuration.
  * - On Fly: the three Fly fleet variables, unchanged.
+ * - With cloud OFF and `ci_runner` on the install fleet (MOTIR-11232): the
+ *   install's one org is every org, so every CI job boots there — the install
+ *   fleet's four variables and `MOTIR_AWS_RUNNER_AMI_ID`, and no pool or Fly
+ *   value. On cloud the install fleet takes only the meta org's jobs, so the
+ *   switch's fleet is still what every other org's job needs.
  */
 export async function ciFleetMissingConfig(): Promise<string[]> {
   if (selectedOrchestratorProvider() === 'fake') return [];
+  if (!isCloud() && installFleetTakesKind('ci_runner')) return installFleetCiMissingConfig();
   if (await fleetKindOnPool('ci_runner')) {
     if (awsEc2Override()) return [];
     const missing = awsManagementRequiredEnv().filter((name) => !process.env[name]?.trim());
@@ -229,6 +237,24 @@ export async function ciFleetMissingConfig(): Promise<string[]> {
     // its rendered message (MOTIR-6571).
     return (err as OrchestratorNotConfiguredError).detail.replace(/^set /, '').split(', ');
   }
+}
+
+/** What the install fleet still needs before a CI runner boots there: its
+ *  network, profile and region (every missing one, as `installFleetConfig`
+ *  names them) and the runner AMI — or nothing under the lane's fake EC2. */
+function installFleetCiMissingConfig(): string[] {
+  const missing: string[] = [];
+  try {
+    installFleetConfig();
+  } catch (err) {
+    missing.push(
+      ...(err as OrchestratorNotConfiguredError).detail.replace(/^set /, '').split(', '),
+    );
+  }
+  if (!awsEc2Override() && !process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim()) {
+    missing.push(AWS_RUNNER_AMI_ENV_VAR);
+  }
+  return missing;
 }
 
 /** Can this deployment boot a CI runner on the fleet its switch names? Never
@@ -747,7 +773,7 @@ function installFleetOnPlainFake(): boolean {
   return selectedOrchestratorProvider() === 'fake' && awsEc2Override() === null;
 }
 
-/** The install fleet's orchestrator (an index or an agent run). */
+/** The install fleet's orchestrator (a CI runner, an index or an agent run). */
 export function installFleetOrchestrator(): ContainerOrchestrator {
   if (installFleetOnPlainFake()) return fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
   const { ec2, config } = installFleetEc2();

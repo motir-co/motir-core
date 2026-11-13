@@ -9,8 +9,10 @@ import { isCloud } from '@/lib/billing/availability';
 // OWN organisation runs on, in core's own AWS account, with no pool account, no
 // `fleet_shard` row and no shared or org cap. The install's own organisation is
 // the meta org on Motir cloud and, with cloud off, the install's one org (any
-// org). Three kinds may run there — the index, the agent host and the agent run
-// — and only those `MOTIR_INSTALL_FLEET_KINDS` lists; a CI runner never does.
+// org). Four kinds may run there — the CI runner (MOTIR-11232), the index, the
+// agent host and the agent run — and only those `MOTIR_INSTALL_FLEET_KINDS`
+// lists. A 1-account self-host has no pool account at all, so its own CI has to
+// run here; Motir's own production uses the same shape.
 //
 // motir-infra (MOTIR-10793) defines the subnets, the security group and the VM
 // instance profile and passes them to core's tasks under the names below. Core
@@ -21,7 +23,9 @@ import { isCloud } from '@/lib/billing/availability';
 // and a session memo carries it across steps. The install fleet's is
 // {@link INSTALL_FLEET_SHARD_ID}: it lives in memory and in memos only, and is
 // never written to a `fleet_shard_id` column — every row of an install-fleet
-// container carries null there, as the card requires.
+// container carries null there, as the card requires. A CI runner's intent says
+// it is on the install fleet with its own `install_fleet` flag
+// ({@link ciRunnerIntentShardId}).
 
 export const INSTALL_FLEET_KINDS_ENV = 'MOTIR_INSTALL_FLEET_KINDS';
 export const INSTALL_FLEET_SUBNET_IDS_ENV = 'MOTIR_INSTALL_FLEET_SUBNET_IDS';
@@ -40,14 +44,16 @@ export const INSTALL_FLEET_TAG = 'motir-install-fleet';
 
 /** The kinds the install fleet can run at all. */
 const ELIGIBLE: ReadonlySet<FleetWorkloadKind> = new Set<FleetWorkloadKind>([
+  'ci_runner',
   'code_graph_index',
   'agent_instance',
   'hosted_agent',
 ]);
 
 /** The kinds the install fleet can run at all, in the Fleet status page's order
- *  (Monitoring's, without the CI runner): agent runner, indexer, agent hoster. */
+ *  (Monitoring's): CI runner, agent runner, indexer, agent hoster. */
 export const INSTALL_FLEET_ELIGIBLE_KINDS: readonly FleetWorkloadKind[] = [
+  'ci_runner',
   'hosted_agent',
   'code_graph_index',
   'agent_instance',
@@ -64,8 +70,8 @@ export const EC2_INSTANCE_TYPE_VCPU: Readonly<Record<string, number>> = {
 
 /**
  * The instance type an install-fleet VM of this kind boots. Every kind boots the
- * AWS adapters' default: `installFleetOrchestrator` names no type for an index or
- * an agent run, and the persistent adapter maps the agent host's one size
+ * AWS adapters' default: `installFleetOrchestrator` names no type for a CI
+ * runner, an index or an agent run, and the persistent adapter maps the agent host's one size
  * (`FLEET_CONTAINER_SIZE`) to the same type.
  */
 export function installFleetInstanceType(_kind: FleetWorkloadKind): string {
@@ -85,6 +91,21 @@ export function installFleetMachineVcpu(kind: FleetWorkloadKind): number | null 
 /** Is this the install fleet's pseudo-account id? */
 export function isInstallFleetShardId(id: string | null | undefined): boolean {
   return id === INSTALL_FLEET_SHARD_ID;
+}
+
+/**
+ * The account id a CI runner's container is reached through (MOTIR-11232): the
+ * install fleet's pseudo-account id when its intent is on the install fleet,
+ * else the account the intent recorded (null = the process-wide fleet). The one
+ * read every CI path — supervision, settle, stop, reap, the vanished sweep —
+ * resolves an intent's orchestrator by, so none of them can mistake an
+ * install-fleet runner (no account row) for one on the process-wide fleet.
+ */
+export function ciRunnerIntentShardId(intent: {
+  fleetShardId: string | null;
+  installFleet: boolean;
+}): string | null {
+  return intent.installFleet ? INSTALL_FLEET_SHARD_ID : intent.fleetShardId;
 }
 
 /**
