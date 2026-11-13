@@ -2,19 +2,28 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { ECSClient } from '@aws-sdk/client-ecs';
 import { ServiceQuotasClient } from '@aws-sdk/client-service-quotas';
 import { db } from '@/lib/db';
+import { ECRClient } from '@aws-sdk/client-ecr';
 import type {
   EcsDeploymentRead,
   EcsServiceRead,
   EcsServicesReader,
 } from '@/lib/awsServices/ecsServicesReader';
+import type { CommitComparison, DefaultBranchHead, RepoRef } from '@/lib/github/repoCommitHistory';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
 import {
   accountOfArn,
+  createVersionReader,
+  IMAGE_SOURCE_REPOSITORIES,
+  judgeComparison,
   judgeCluster,
   judgeService,
   judgeShare,
   platformServicesService,
+  primaryImageOf,
   servicesCluster,
+  STALE_AFTER_MS,
+  type DeploymentVersionRead,
+  type ServiceVersionSources,
 } from '@/lib/services/platformServicesService';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -54,6 +63,8 @@ function service(
     current?: string;
     deployments?: EcsDeploymentRead[];
     sizes?: Record<string, { cpuUnits: number | null; memoryMib: number | null }>;
+    /** The image each task definition's first container names (MOTIR-11112). */
+    images?: Record<string, string>;
   } = {},
 ): EcsServiceRead {
   const current = opts.current ?? td(name, 4);
@@ -72,6 +83,7 @@ function service(
           family: family!,
           revision: Number(revision),
           ...(sizes[arn] ?? { cpuUnits: 1024, memoryMib: 2048 }),
+          image: opts.images?.[arn] ?? null,
         },
       ];
     }),
@@ -499,5 +511,441 @@ describe('platformServicesService.read', () => {
     expect(dto.read.status).toBe('failed');
     expect(dto.quota).toMatchObject({ status: 'ok', vcpu: 8 });
     expect(new Date(dto.readAt).getTime()).toBeGreaterThanOrEqual(before);
+  });
+});
+
+// ── The deployed commit (MOTIR-11112, design MOTIR-11242) ────────────────────
+// ECR and GitHub are fakes handed in as the version sources, so every state the
+// version pill draws is reached, and the calls each read makes are counted.
+
+const REGISTRY = '944842271421.dkr.ecr.us-east-1.amazonaws.com';
+const digest = (c: string) => `sha256:${c.repeat(64)}`;
+const image = (repository: string, c: string) => `${REGISTRY}/${repository}@${digest(c)}`;
+const sha = (c: string) => c.repeat(40);
+const HEADS: Record<string, DefaultBranchHead> = {
+  'motir-core': { branch: 'main', sha: sha('a') },
+  'motir-ai': { branch: 'main', sha: sha('b') },
+  'motir-gateway': { branch: 'main', sha: sha('c') },
+};
+
+interface FakeSources extends ServiceVersionSources {
+  calls: { tags: string[]; heads: string[]; compares: string[]; tokens: string[] };
+}
+
+function fakeSources(
+  opts: {
+    /** Tags by image digest; an Error is ECR refusing. */
+    tags?: Record<string, string[] | Error>;
+    /** Heads by repository name; an Error is GitHub refusing. */
+    heads?: Record<string, DefaultBranchHead | Error>;
+    /** Comparisons by `<repository>@<deployed sha>`; an Error is GitHub refusing. */
+    compares?: Record<string, CommitComparison | Error>;
+  } = {},
+): FakeSources {
+  const calls: FakeSources['calls'] = { tags: [], heads: [], compares: [], tokens: [] };
+  const answer = <T>(value: T | Error | undefined, what: string): T => {
+    if (value === undefined) throw new Error(`no fake for ${what}`);
+    if (value instanceof Error) throw value;
+    return value;
+  };
+  return {
+    calls,
+    ecr: {
+      async tagsOf(address) {
+        calls.tags.push(address.digest ?? address.tag!);
+        return answer(opts.tags?.[address.digest ?? address.tag!], 'tags');
+      },
+    },
+    github: {
+      async defaultBranchHead(repo: RepoRef, token) {
+        calls.heads.push(`${repo.name}:${token}`);
+        return answer((opts.heads ?? HEADS)[repo.name], 'head');
+      },
+      async compare(repo: RepoRef, base, head, token) {
+        calls.compares.push(`${repo.name}@${base}...${head}:${token}`);
+        return answer(opts.compares?.[`${repo.name}@${base}`], 'compare');
+      },
+    },
+    async token(owner) {
+      calls.tokens.push(owner);
+      return `token-${owner}`;
+    },
+  };
+}
+
+const minutesAgo = (n: number) => new Date(NOW.getTime() - n * 60_000).toISOString();
+
+describe('IMAGE_SOURCE_REPOSITORIES', () => {
+  it('maps every image repository the cluster runs to its source repository, edge to motir-gateway', () => {
+    expect(IMAGE_SOURCE_REPOSITORIES).toEqual({
+      'motir/motir-core': { owner: 'motir-co', name: 'motir-core' },
+      'motir/motir-ai': { owner: 'motir-co', name: 'motir-ai' },
+      'motir/motir-gateway': { owner: 'motir-co', name: 'motir-gateway' },
+      'motir/edge': { owner: 'motir-co', name: 'motir-gateway' },
+    });
+  });
+});
+
+describe('judgeComparison', () => {
+  const repo = { owner: 'motir-co', name: 'motir-ai' };
+  const head = { branch: 'main', sha: sha('b') };
+
+  it('identical is Latest; behind or diverged on GitHub’s side is Diverged', () => {
+    const base = { aheadBy: 0, oldestAheadAt: null };
+    expect(judgeComparison(repo, sha('e'), head, { ...base, relation: 'identical' }, NOW)).toEqual({
+      state: 'latest',
+    });
+    expect(judgeComparison(repo, sha('e'), head, { ...base, relation: 'behind' }, NOW)).toEqual({
+      state: 'diverged',
+    });
+    expect(
+      judgeComparison(
+        repo,
+        sha('e'),
+        head,
+        { relation: 'diverged', aheadBy: 3, oldestAheadAt: minutesAgo(1) },
+        NOW,
+      ),
+    ).toEqual({ state: 'diverged' });
+  });
+
+  it('ahead is N behind: fresh under 45 minutes, stale at 45 and after, with the compare link', () => {
+    const behind = (age: number) =>
+      judgeComparison(
+        repo,
+        sha('e'),
+        head,
+        { relation: 'ahead', aheadBy: 7, oldestAheadAt: minutesAgo(age) },
+        NOW,
+      );
+    expect(behind(44)).toEqual({
+      state: 'behind',
+      count: 7,
+      oldestUndeployedAt: minutesAgo(44),
+      severity: 'fresh',
+      compareUrl: `https://github.com/motir-co/motir-ai/compare/${sha('e')}...main`,
+    });
+    expect(STALE_AFTER_MS).toBe(45 * 60_000);
+    expect(behind(45)).toMatchObject({ severity: 'stale' });
+    expect(behind(180)).toMatchObject({ severity: 'stale' });
+  });
+
+  it('ahead with no oldest commit is not a judgement', () => {
+    expect(() =>
+      judgeComparison(
+        repo,
+        sha('e'),
+        head,
+        { relation: 'ahead', aheadBy: 1, oldestAheadAt: null },
+        NOW,
+      ),
+    ).toThrow('no oldest undeployed commit');
+  });
+});
+
+describe('createVersionReader', () => {
+  it('reads the commit from the image’s SHA tag and is Latest at the head, with no compare', async () => {
+    const fake = fakeSources({ tags: { [digest('1')]: ['main', sha('a')] } });
+    const read = await createVersionReader(fake, NOW)(image('motir/motir-core', '1'));
+    expect(read).toEqual({
+      commit: {
+        sha: sha('a'),
+        repository: 'motir-core',
+        url: `https://github.com/motir-co/motir-core/commit/${sha('a')}`,
+      },
+      judgement: { state: 'latest' },
+    });
+    expect(fake.calls).toEqual({
+      tags: [digest('1')],
+      heads: ['motir-core:token-motir-co'],
+      compares: [],
+      tokens: ['motir-co'],
+    });
+  });
+
+  it('uses a reference BY its SHA tag directly, without reading ECR', async () => {
+    const fake = fakeSources({
+      compares: {
+        [`motir-gateway@${sha('d')}`]: {
+          relation: 'diverged',
+          aheadBy: 2,
+          oldestAheadAt: minutesAgo(5),
+        },
+      },
+    });
+    const read = await createVersionReader(fake, NOW)(`${REGISTRY}/motir/edge:${sha('d')}`);
+    expect(read.commit).toMatchObject({ sha: sha('d'), repository: 'motir-gateway' });
+    expect(read.judgement).toEqual({ state: 'diverged' });
+    expect(fake.calls.tags).toEqual([]);
+    expect(fake.calls.compares).toEqual([`motir-gateway@${sha('d')}...${sha('c')}:token-motir-co`]);
+  });
+
+  it('shares reads across rows: the three motir-core services cost one ECR read, one head and one compare', async () => {
+    const fake = fakeSources({
+      tags: { [digest('1')]: [sha('e')] },
+      compares: {
+        [`motir-core@${sha('e')}`]: {
+          relation: 'ahead',
+          aheadBy: 3,
+          oldestAheadAt: minutesAgo(90),
+        },
+      },
+    });
+    const versionOf = createVersionReader(fake, NOW);
+    const reads = await Promise.all(
+      ['web', 'worker', 'relay'].map(() => versionOf(image('motir/motir-core', '1'))),
+    );
+    expect(reads.map((r) => r.judgement)).toEqual(
+      Array(3).fill({
+        state: 'behind',
+        count: 3,
+        oldestUndeployedAt: minutesAgo(90),
+        severity: 'stale',
+        compareUrl: `https://github.com/motir-co/motir-core/compare/${sha('e')}...main`,
+      }),
+    );
+    expect(fake.calls.tags).toHaveLength(1);
+    expect(fake.calls.heads).toHaveLength(1);
+    expect(fake.calls.compares).toHaveLength(1);
+    expect(fake.calls.tokens).toEqual(['motir-co']);
+  });
+
+  it('an image with no SHA tag, or no image at all, is Unknown · no_sha_tag with no commit', async () => {
+    const fake = fakeSources({ tags: { [digest('1')]: ['main', 'v1.2.3'] } });
+    const versionOf = createVersionReader(fake, NOW);
+    expect(await versionOf(image('motir/motir-core', '1'))).toEqual({
+      commit: null,
+      judgement: { state: 'unknown', reason: 'no_sha_tag' },
+    });
+    expect(await versionOf(null)).toEqual({
+      commit: null,
+      judgement: { state: 'unknown', reason: 'no_sha_tag' },
+    });
+  });
+
+  it('an ECR refusal is Unknown · ecr_not_read with no commit, logged by name only', async () => {
+    const fake = fakeSources({
+      tags: { [digest('1')]: new Error('AccessDeniedException: arn:x') },
+    });
+    expect(await createVersionReader(fake, NOW)(image('motir/motir-ai', '1'))).toEqual({
+      commit: null,
+      judgement: { state: 'unknown', reason: 'ecr_not_read' },
+    });
+    expect(vi.mocked(console.error)).toHaveBeenCalledWith('[admin] services version read failed', {
+      repository: 'motir/motir-ai',
+      reason: 'ecr_not_read',
+      error: 'Error',
+    });
+  });
+
+  it('an unmapped repository keeps its commit, unlinked; an image outside ECR has none', async () => {
+    const fake = fakeSources({ tags: { [digest('1')]: [sha('5')] } });
+    const versionOf = createVersionReader(fake, NOW);
+    expect(await versionOf(image('motir/edge-cache', '1'))).toEqual({
+      commit: { sha: sha('5'), repository: null, url: null },
+      judgement: { state: 'unknown', reason: 'source_not_mapped' },
+    });
+    expect(await versionOf(`ghcr.io/motir-co/sidecar:${sha('5')}`)).toEqual({
+      commit: null,
+      judgement: { state: 'unknown', reason: 'source_not_mapped' },
+    });
+    expect(fake.calls.heads).toEqual([]);
+  });
+
+  it('a GitHub refusal — of the head or of the compare — is Unknown · github_not_read, the commit still linked', async () => {
+    const headDown = fakeSources({
+      tags: { [digest('1')]: [sha('e')] },
+      heads: { 'motir-ai': new TypeError('fetch failed') },
+    });
+    const read = await createVersionReader(headDown, NOW)(image('motir/motir-ai', '1'));
+    expect(read.judgement).toEqual({ state: 'unknown', reason: 'github_not_read' });
+    expect(read.commit).toMatchObject({ sha: sha('e'), url: expect.stringContaining('/commit/') });
+
+    const compareDown = fakeSources({ tags: { [digest('1')]: [sha('e')] } });
+    compareDown.github.compare = () => Promise.reject('nope');
+    expect(
+      (await createVersionReader(compareDown, NOW)(image('motir/motir-ai', '1'))).judgement,
+    ).toEqual({
+      state: 'unknown',
+      reason: 'github_not_read',
+    });
+    expect(vi.mocked(console.error)).toHaveBeenCalledWith('[admin] services version read failed', {
+      repository: 'motir/motir-ai',
+      reason: 'github_not_read',
+      error: 'unknown',
+    });
+
+    const undated = fakeSources({
+      tags: { [digest('1')]: [sha('e')] },
+      compares: {
+        [`motir-ai@${sha('e')}`]: { relation: 'ahead', aheadBy: 1, oldestAheadAt: null },
+      },
+    });
+    expect(
+      (await createVersionReader(undated, NOW)(image('motir/motir-ai', '1'))).judgement,
+    ).toEqual({
+      state: 'unknown',
+      reason: 'github_not_read',
+    });
+  });
+
+  it('a failure that is not a read failure is not swallowed', async () => {
+    const fake = fakeSources();
+    fake.ecr.tagsOf = () => Promise.resolve(null as unknown as string[]);
+    await expect(createVersionReader(fake, NOW)(image('motir/motir-ai', '1'))).rejects.toThrow(
+      TypeError,
+    );
+  });
+});
+
+describe('the version on the row and the header counts', () => {
+  const latest: DeploymentVersionRead = {
+    commit: { sha: sha('a'), repository: 'motir-core', url: 'u' },
+    judgement: { state: 'latest' },
+  };
+  const behind = (severity: 'fresh' | 'stale'): DeploymentVersionRead => ({
+    commit: latest.commit,
+    judgement: {
+      state: 'behind',
+      count: 2,
+      oldestUndeployedAt: minutesAgo(severity === 'stale' ? 60 : 5),
+      severity,
+      compareUrl: 'c',
+    },
+  });
+  const unknown: DeploymentVersionRead = {
+    commit: null,
+    judgement: { state: 'unknown', reason: 'ecr_not_read' },
+  };
+  const rollingService = (name: string) =>
+    service(name, {
+      deployments: [dep({ taskDefinitionArn: td(name, 4), rolloutState: 'IN_PROGRESS' })],
+    });
+
+  it('a steady row carries its PRIMARY deployment’s commit and judgement; a rolling one says rolling', () => {
+    expect(judgeService(service('web'), latest)).toMatchObject({
+      commit: latest.commit,
+      version: { state: 'latest' },
+    });
+    expect(judgeService(rollingService('web'), behind('stale')).version).toEqual({
+      state: 'rolling',
+      primary: behind('stale').judgement,
+    });
+    // A version never read is Unknown, never Latest.
+    expect(judgeService(service('web')).version).toEqual({
+      state: 'unknown',
+      reason: 'ecr_not_read',
+    });
+  });
+
+  it('the image read is the PRIMARY deployment’s, not the draining one’s', () => {
+    const svc = service('web', {
+      deployments: [
+        dep({ taskDefinitionArn: td('web', 5), rolloutState: 'IN_PROGRESS' }),
+        dep({ status: 'ACTIVE', taskDefinitionArn: td('web', 4) }),
+      ],
+      current: td('web', 5),
+      images: {
+        [td('web', 5)]: image('motir/motir-core', '5'),
+        [td('web', 4)]: image('motir/motir-core', '4'),
+      },
+    });
+    expect(primaryImageOf(svc)).toBe(image('motir/motir-core', '5'));
+    expect(primaryImageOf({ ...svc, taskDefinitions: {} })).toBeNull();
+  });
+
+  it('counts stale-or-diverged rows, a rolling one by its primary, and never behind-fresh', () => {
+    const versions = new Map<string, DeploymentVersionRead>([
+      ['a', latest],
+      ['b', behind('fresh')],
+      ['c', behind('stale')],
+      ['d', { commit: null, judgement: { state: 'diverged' } }],
+      ['e', behind('stale')],
+      ['f', unknown],
+    ]);
+    const judged = judgeCluster(
+      [service('a'), service('b'), service('c'), service('d'), rollingService('e'), service('f')],
+      versions,
+    );
+    expect(judged).toMatchObject({ staleOrDiverged: 3, versionsNotRead: false, rolling: 1 });
+  });
+
+  it('versions are "not read" only when there are rows and not one was judged', () => {
+    expect(judgeCluster([service('a'), rollingService('b')])).toMatchObject({
+      staleOrDiverged: 0,
+      versionsNotRead: true,
+    });
+    expect(judgeCluster([])).toMatchObject({ staleOrDiverged: 0, versionsNotRead: false });
+    expect(judgeCluster([service('a'), service('b')], new Map([['a', latest]]))).toMatchObject({
+      versionsNotRead: false,
+    });
+  });
+});
+
+describe('platformServicesService.read — the deployed commits', () => {
+  it('reads each service’s PRIMARY image and judges it, sharing the motir-core compare', async () => {
+    await signInAs('superadmin');
+    const core = image('motir/motir-core', '1');
+    const services = ['motir-core-web', 'motir-core-worker', 'motir-core-relay'].map((name) =>
+      service(name, { images: { [td(name, 4)]: core } }),
+    );
+    services.push(
+      service('motir-ai-planning', {
+        images: { [td('motir-ai-planning', 4)]: image('motir/motir-ai', '2') },
+      }),
+    );
+    const fake = fakeSources({
+      tags: { [digest('1')]: [sha('e')], [digest('2')]: [sha('b')] },
+      compares: {
+        [`motir-core@${sha('e')}`]: {
+          relation: 'ahead',
+          aheadBy: 2,
+          oldestAheadAt: minutesAgo(10),
+        },
+      },
+    });
+    const dto = await platformServicesService.read({
+      reader: reader(services),
+      versionSources: fake,
+      now: NOW,
+    });
+    expect(dto.read.status).toBe('ok');
+    if (dto.read.status !== 'ok') return;
+    expect(Object.fromEntries(dto.read.services.map((r) => [r.name, r.version.state]))).toEqual({
+      'motir-ai-planning': 'latest',
+      'motir-core-relay': 'behind',
+      'motir-core-web': 'behind',
+      'motir-core-worker': 'behind',
+    });
+    expect(dto.read).toMatchObject({ staleOrDiverged: 0, versionsNotRead: false });
+    expect(fake.calls.compares).toHaveLength(1);
+    expect(fake.calls.tags).toHaveLength(2);
+  });
+
+  it('with no version sources handed in, reads ECR and GitHub through the defaults, and a failure is the row’s', async () => {
+    await signInAs('superadmin');
+    vi.spyOn(ECRClient.prototype, 'send').mockRejectedValue(
+      new Error('CredentialsProviderError') as never,
+    );
+    const fetch = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const dto = await platformServicesService.read({
+        reader: reader([
+          service('web', { images: { [td('web', 4)]: image('motir/motir-core', '1') } }),
+          service('edge', { images: { [td('edge', 4)]: `${REGISTRY}/motir/edge:${sha('c')}` } }),
+        ]),
+        now: NOW,
+      });
+      expect(dto.read.status === 'ok' && dto.read.services.map((r) => r.version)).toEqual([
+        { state: 'unknown', reason: 'github_not_read' },
+        { state: 'unknown', reason: 'ecr_not_read' },
+      ]);
+      expect(fetch).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

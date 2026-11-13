@@ -13598,7 +13598,10 @@
         "count": "{count, plural, one {# service} other {# services}}",
         "rolling": "{count} en déploiement",
         "rolloutFailed": "{count, plural, one {# déploiement échoué} other {# déploiements échoués}}",
-        "short": "{count, plural, one {# service à court de tâches} other {# services à court de tâches}}"
+        "short": "{count, plural, one {# service à court de tâches} other {# services à court de tâches}}",
+        "staleOrDiverged": "{count, plural, one {# service en retard ou divergent} other {# services en retard ou divergents}}",
+        "versionsNotRead": "Versions non lues",
+        "versionsNotReadLabel": "La version déployée d’aucun service n’a pu être lue"
       },
       "verdict": {
         "under": "{percent} % du quota Fargate",
@@ -13614,7 +13617,8 @@
         "vcpuPerTask": "vCPU par tâche",
         "memoryPerTask": "Mémoire par tâche",
         "vcpu": "vCPU",
-        "deployment": "Déploiement"
+        "deployment": "Déploiement",
+        "commit": "Commit"
       },
       "caption": "Services ECS du cluster {cluster}, avec le total face au quota de vCPU Fargate On-Demand",
       "taskDefinition": "définition de tâche {family}:{revision}",
@@ -13678,6 +13682,34 @@
       "phone": {
         "listLabel": "Services ECS du cluster {cluster}",
         "perTask": "Par tâche"
+      },
+      "commit": {
+        "notKnown": "Inconnu",
+        "linkLabel": "Commit {commit} de {repo} sur GitHub"
+      },
+      "version": {
+        "latest": "À jour",
+        "behind": "{count, plural, one {# commit de retard} other {# commits de retard}}",
+        "oldest": "le plus ancien non déployé {age}",
+        "compare": "Comparer sur GitHub",
+        "diverged": "Divergent",
+        "divergedDetail": "absent de la branche par défaut",
+        "rolling": "En déploiement",
+        "rollingDetail": "le commit du nouveau déploiement",
+        "unknown": "Inconnue",
+        "unknownLabel": "Version inconnue : {reason}",
+        "reason": {
+          "no_sha_tag": "L’image en cours d’exécution ne porte aucune étiquette de commit, son commit est donc inconnu.",
+          "ecr_not_read": "Les étiquettes de l’image n’ont pas pu être lues dans ECR, son commit est donc inconnu.",
+          "github_not_read": "La comparaison avec GitHub a échoué pour le moment, on ne sait donc pas si ce commit est le plus récent.",
+          "source_not_mapped": "Aucun dépôt source n’est associé à cette image, son commit n’est donc pas comparé."
+        },
+        "reasonShort": {
+          "no_sha_tag": "aucune étiquette de commit sur l’image",
+          "ecr_not_read": "étiquettes de l’image non lues",
+          "github_not_read": "GitHub non comparé",
+          "source_not_mapped": "aucun dépôt source associé"
+        }
       }
     },
     "capacity": {

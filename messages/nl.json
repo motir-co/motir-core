@@ -13598,7 +13598,10 @@
         "count": "{count, plural, one {# service} other {# services}}",
         "rolling": "{count} in uitrol",
         "rolloutFailed": "{count, plural, one {# uitrol mislukt} other {# uitrollen mislukt}}",
-        "short": "{count, plural, one {# service komt taken tekort} other {# services komen taken tekort}}"
+        "short": "{count, plural, one {# service komt taken tekort} other {# services komen taken tekort}}",
+        "staleOrDiverged": "{count, plural, one {# service verouderd of afgeweken} other {# services verouderd of afgeweken}}",
+        "versionsNotRead": "Versies niet gelezen",
+        "versionsNotReadLabel": "Van geen enkele service kon de uitgerolde versie worden gelezen"
       },
       "verdict": {
         "under": "{percent}% van het Fargate-quotum",
@@ -13614,7 +13617,8 @@
         "vcpuPerTask": "vCPU per taak",
         "memoryPerTask": "Geheugen per taak",
         "vcpu": "vCPU",
-        "deployment": "Uitrol"
+        "deployment": "Uitrol",
+        "commit": "Commit"
       },
       "caption": "ECS-services in cluster {cluster}, met het totaal afgezet tegen het Fargate On-Demand-vCPU-quotum",
       "taskDefinition": "taakdefinitie {family}:{revision}",
@@ -13678,6 +13682,34 @@
       "phone": {
         "listLabel": "ECS-services in cluster {cluster}",
         "perTask": "Per taak"
+      },
+      "commit": {
+        "notKnown": "Niet bekend",
+        "linkLabel": "Commit {commit} van {repo} op GitHub"
+      },
+      "version": {
+        "latest": "Actueel",
+        "behind": "{count, plural, one {# commit achter} other {# commits achter}}",
+        "oldest": "oudste niet uitgerold {age}",
+        "compare": "Vergelijken op GitHub",
+        "diverged": "Afgeweken",
+        "divergedDetail": "niet op de standaardbranch",
+        "rolling": "In uitrol",
+        "rollingDetail": "de commit van de nieuwe uitrol",
+        "unknown": "Onbekend",
+        "unknownLabel": "Versie onbekend: {reason}",
+        "reason": {
+          "no_sha_tag": "De draaiende image heeft geen commit-tag, dus de commit is niet bekend.",
+          "ecr_not_read": "De tags van de image konden niet uit ECR worden gelezen, dus de commit is niet bekend.",
+          "github_not_read": "GitHub kon nu niet worden vergeleken, dus of deze commit de nieuwste is, is niet bekend.",
+          "source_not_mapped": "Aan deze image is geen bronrepository gekoppeld, dus de commit wordt niet vergeleken."
+        },
+        "reasonShort": {
+          "no_sha_tag": "geen commit-tag op de image",
+          "ecr_not_read": "image-tags niet gelezen",
+          "github_not_read": "GitHub niet vergeleken",
+          "source_not_mapped": "geen bronrepository gekoppeld"
+        }
       }
     },
     "capacity": {

@@ -29,6 +29,55 @@ export type PlatformServiceDeploymentState =
   /** one deployment, but running < desired — never "Steady" beside a warning */
   | 'notRolling';
 
+/** Why a service's version could not be judged (MOTIR-11112). */
+export type PlatformServiceVersionUnknownReason =
+  /** The running image carries no tag that is a 40-hex commit SHA. */
+  | 'no_sha_tag'
+  /** ECR did not answer for the image's tags. */
+  | 'ecr_not_read'
+  /** GitHub did not answer the comparison. */
+  | 'github_not_read'
+  /** No source repository is mapped for the image repository. */
+  | 'source_not_mapped';
+
+/** Where `behind` stands against the merge → CI → deploy window: `fresh` while
+ *  the oldest undeployed commit is under 45 minutes old, `stale` from then on. */
+export type PlatformServiceBehindSeverity = 'fresh' | 'stale';
+
+/** One deployment's commit, judged against its repository's default branch head. */
+export type PlatformServiceVersionJudgementDTO =
+  /** The deployed commit IS the default branch head. */
+  | { state: 'latest' }
+  /** The head has `count` commits the deployed one lacks. */
+  | {
+      state: 'behind';
+      count: number;
+      /** The committer date of the oldest undeployed commit, ISO. */
+      oldestUndeployedAt: string;
+      severity: PlatformServiceBehindSeverity;
+      /** GitHub's compare of the deployed commit with the default branch. */
+      compareUrl: string;
+    }
+  /** The deployed commit is not on the default branch (a branch deploy). */
+  | { state: 'diverged' }
+  | { state: 'unknown'; reason: PlatformServiceVersionUnknownReason };
+
+/** A service's version: its PRIMARY deployment's judgement, wrapped in
+ *  `rolling` while a deployment is in progress (`deployment.state`). */
+export type PlatformServiceVersionDTO =
+  | PlatformServiceVersionJudgementDTO
+  | { state: 'rolling'; primary: PlatformServiceVersionJudgementDTO };
+
+/** The commit the PRIMARY deployment's image was built from. */
+export interface PlatformServiceCommitDTO {
+  /** The full 40-hex SHA. */
+  sha: string;
+  /** The source repository's name (`motir-core`), or null when none is mapped. */
+  repository: string | null;
+  /** The commit on GitHub, or null when no source repository is mapped. */
+  url: string | null;
+}
+
 export interface PlatformServiceRowDTO {
   name: string;
   /** The current (PRIMARY) task definition. */
@@ -61,6 +110,10 @@ export interface PlatformServiceRowDTO {
     /** When the PRIMARY deployment started, ISO. */
     startedAt: string | null;
   };
+  /** The PRIMARY deployment's commit, or null when none resolved (MOTIR-11112). */
+  commit: PlatformServiceCommitDTO | null;
+  /** Whether that commit is its repository's latest (MOTIR-11112). */
+  version: PlatformServiceVersionDTO;
 }
 
 export interface PlatformServicesTotalDTO {
@@ -79,6 +132,11 @@ export type PlatformServicesClusterDTO =
       rolling: number;
       failed: number;
       short: number;
+      /** Services whose (primary) version is behind-stale or diverged. */
+      staleOrDiverged: number;
+      /** True when there are services and NOT ONE row's version was judged —
+       *  the header then says the versions were not read, never a zero. */
+      versionsNotRead: boolean;
     }
   | {
       status: 'failed';

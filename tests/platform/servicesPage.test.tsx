@@ -8,6 +8,7 @@ import {
   judgeCluster,
   judgeShare,
   platformServicesService,
+  type DeploymentVersionRead,
 } from '@/lib/services/platformServicesService';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -94,6 +95,7 @@ function service(
             family: family!,
             revision: Number(revision),
             ...(opts.sizes?.[arn] ?? { cpuUnits: 1024, memoryMib: 2048 }),
+            image: null,
           },
         ];
       }),
@@ -152,8 +154,9 @@ function okDto(
   services: EcsServiceRead[],
   quota: PlatformServicesDTO['quota'] = { status: 'ok', vcpu: 16, readAt: READ_AT },
   account: string | null = ACCOUNT,
+  versions?: ReadonlyMap<string, DeploymentVersionRead>,
 ): PlatformServicesDTO {
-  const read = judgeCluster(services);
+  const read = judgeCluster(services, versions);
   return {
     cluster: 'motir-core',
     account,
@@ -406,6 +409,232 @@ describe('the services card', () => {
       ),
     );
     expect(html).toContain('revision 4 stopped · still on 4');
+  });
+});
+
+// ── The Commit column, the version pill and the stale count (MOTIR-11112,
+// design MOTIR-11242 Panels 1–6) ─────────────────────────────────────────────
+
+const SHA = {
+  core: 'db9aef8a3c51e7f02b6d4a9e1c8f37b25d06e4a1',
+  ai: 'e23526ba90c4d1f7a2e83b56c09d4f1e7a2b3c84',
+  gw: '8c03e1f45a7b2d96e0c3f18a4b7d25e90c6f3a17',
+  unmapped: '5be09a2d4c1e7f3a9b6d0e2c4a8f1b3d5e7c9a0f',
+};
+const linked = (sha: string, repo: string) => ({
+  sha,
+  repository: repo,
+  url: `https://github.com/motir-co/${repo}/commit/${sha}`,
+});
+const behindRead = (
+  sha: string,
+  repo: string,
+  count: number,
+  minutes: number,
+): DeploymentVersionRead => ({
+  commit: linked(sha, repo),
+  judgement: {
+    state: 'behind',
+    count,
+    oldestUndeployedAt: ago(minutes * 60_000).toISOString(),
+    severity: minutes >= 45 ? 'stale' : 'fresh',
+    compareUrl: `https://github.com/motir-co/${repo}/compare/${sha}...main`,
+  },
+});
+const unknownRead = (
+  reason: 'no_sha_tag' | 'ecr_not_read' | 'github_not_read' | 'source_not_mapped',
+  commit: DeploymentVersionRead['commit'] = null,
+): DeploymentVersionRead => ({ commit, judgement: { state: 'unknown', reason } });
+
+/** Panel 2: at scale, mixed. */
+const AT_SCALE: EcsServiceRead[] = [
+  service('motir-core-web', 2, 2),
+  service('motir-ai-planning', 1, 1),
+  service('motir-ai-conversation', 1, 1),
+  service('motir-codegraph', 1, 1, {
+    deployments: [
+      dep({
+        taskDefinitionArn: td('motir-codegraph', 4),
+        rolloutState: 'IN_PROGRESS',
+        runningCount: 1,
+        desiredCount: 1,
+      }),
+    ],
+  }),
+  service('motir-gateway', 1, 1),
+  service('motir-gateway-run', 1, 1),
+  service('motir-edge-cache', 1, 1),
+];
+const AT_SCALE_VERSIONS = new Map<string, DeploymentVersionRead>([
+  ['motir-core-web', { commit: linked(SHA.core, 'motir-core'), judgement: { state: 'latest' } }],
+  ['motir-ai-planning', behindRead(SHA.ai, 'motir-ai', 7, 180)],
+  ['motir-ai-conversation', behindRead(SHA.ai, 'motir-ai', 7, 180)],
+  ['motir-codegraph', behindRead(SHA.ai, 'motir-ai', 1, 3)],
+  ['motir-gateway', behindRead(SHA.gw, 'motir-gateway', 2, 12)],
+  [
+    'motir-gateway-run',
+    { commit: linked(SHA.gw, 'motir-gateway'), judgement: { state: 'diverged' } },
+  ],
+  [
+    'motir-edge-cache',
+    unknownRead('source_not_mapped', { sha: SHA.unmapped, repository: null, url: null }),
+  ],
+]);
+
+/** One row's markup, desktop (`<tr>`) or phone (`<li>`), by its service name. */
+function rowOf(html: string, name: string, tag: 'tr' | 'li'): string {
+  const start = html.indexOf(`<${tag} data-service="${name}"`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  return html.slice(start, html.indexOf(`</${tag}>`, start));
+}
+
+describe('the commit column and the version pill', () => {
+  it('every service on its latest: a linked short SHA, Latest, and no stale count', async () => {
+    const services = [service('motir-core-web', 2, 2), service('motir-ai-planning', 1, 1)];
+    const html = text(
+      await render(
+        okDto(
+          services,
+          undefined,
+          ACCOUNT,
+          new Map([
+            [
+              'motir-core-web',
+              { commit: linked(SHA.core, 'motir-core'), judgement: { state: 'latest' } },
+            ],
+            [
+              'motir-ai-planning',
+              { commit: linked(SHA.ai, 'motir-ai'), judgement: { state: 'latest' } },
+            ],
+          ]),
+        ),
+      ),
+    );
+    expect(html).toContain('min-w-[62rem]');
+    expect(html).toMatch(/<th[^>]*scope="col"[^>]*>Commit<\/th>/);
+    for (const tag of ['tr', 'li'] as const) {
+      const row = rowOf(html, 'motir-core-web', tag);
+      expect(row).toContain(`href="https://github.com/motir-co/motir-core/commit/${SHA.core}"`);
+      expect(row).toContain('aria-label="Commit db9aef8 of motir-core on GitHub"');
+      expect(row).toContain('>db9aef8</a>');
+      expect(row).toContain('data-version="latest"');
+      expect(row).toContain('Latest');
+    }
+    expect(rowOf(html, 'motir-core-web', 'li')).toContain('>Commit</dt>');
+    expect(html).not.toContain('data-element="stale-count"');
+  });
+
+  it('at scale: behind stale and fresh, rolling with its primary, diverged, unmapped, and the count', async () => {
+    const html = text(await render(okDto(AT_SCALE, undefined, ACCOUNT, AT_SCALE_VERSIONS)));
+    // header: 3 stale or diverged (two motir-ai stale + gateway-run diverged), not the fresh ones
+    expect(html).toContain('3 services stale or diverged');
+    expect(html.indexOf('1 rolling')).toBeLessThan(html.indexOf('3 services stale or diverged'));
+
+    const stale = rowOf(html, 'motir-ai-planning', 'tr');
+    expect(stale).toContain('data-version="behind-stale"');
+    expect(stale).toContain('7 commits behind');
+    expect(stale).toContain('oldest undeployed 3 h ago');
+    expect(stale).toContain(`href="https://github.com/motir-co/motir-ai/compare/${SHA.ai}...main"`);
+    expect(stale).toContain('Compare on GitHub');
+
+    const fresh = rowOf(html, 'motir-gateway', 'tr');
+    expect(fresh).toContain('data-version="behind-fresh"');
+    expect(fresh).toContain('2 commits behind');
+    expect(fresh).toContain('oldest undeployed 12 min ago');
+
+    const rolling = rowOf(html, 'motir-codegraph', 'tr');
+    expect(rolling).toContain('data-version="rolling"');
+    expect(rolling).toContain('>Rolling<');
+    expect(rolling).toContain('data-version="behind-fresh"');
+    expect(rolling).toContain('1 commit behind');
+    expect(rolling).toContain('the new deployment’s commit');
+
+    const diverged = rowOf(html, 'motir-gateway-run', 'li');
+    expect(diverged).toContain('data-version="diverged"');
+    expect(diverged).toContain('Diverged');
+    expect(diverged).toContain('not on the default branch');
+
+    const unmapped = rowOf(html, 'motir-edge-cache', 'tr');
+    expect(unmapped).toContain(
+      'class="font-mono text-xs text-(--el-text-identifier)">5be09a2</span>',
+    );
+    expect(unmapped).not.toContain('/commit/');
+    expect(unmapped).toContain(
+      'aria-label="Version unknown: No source repository is mapped for this image, so its commit is not compared."',
+    );
+    expect(unmapped).toContain('data-reason="source_not_mapped"');
+    expect(unmapped).toContain('tabindex="0"');
+    // desktop: the tooltip carries the reason; the phone writes it out
+    expect(unmapped).not.toContain('no source repository mapped');
+    expect(rowOf(html, 'motir-edge-cache', 'li')).toContain('no source repository mapped');
+  });
+
+  it.each([
+    [
+      'no_sha_tag',
+      'The running image carries no commit tag, so its commit is not known.',
+      'no commit tag on the image',
+      null,
+    ],
+    [
+      'ecr_not_read',
+      'The image’s tags could not be read from ECR, so its commit is not known.',
+      'image tags not read',
+      null,
+    ],
+    [
+      'github_not_read',
+      'GitHub could not be compared just now, so whether this commit is the latest is not known.',
+      'GitHub not compared',
+      linked(SHA.ai, 'motir-ai'),
+    ],
+  ] as const)(
+    'Unknown · %s: its own reason, and the commit cell the design draws',
+    async (reason, sentence, short, commit) => {
+      const html = text(
+        await render(
+          okDto(
+            [service('motir-ai-planning', 1, 1)],
+            undefined,
+            ACCOUNT,
+            new Map([['motir-ai-planning', unknownRead(reason, commit)]]),
+          ),
+        ),
+      );
+      const row = rowOf(html, 'motir-ai-planning', 'tr');
+      expect(row).toContain(`aria-label="Version unknown: ${sentence}"`);
+      expect(row).toContain('data-version="unknown"');
+      expect(rowOf(html, 'motir-ai-planning', 'li')).toContain(short);
+      if (commit) {
+        expect(row).toContain('aria-label="Commit e23526b of motir-ai on GitHub"');
+      } else {
+        expect(row).toContain('class="italic text-(--el-text-secondary)">Not known</span>');
+      }
+      // every row Unknown: the header says so, never a zero
+      expect(html).toContain('aria-label="No service’s deployed version could be read"');
+      expect(html).toContain('Versions not read');
+    },
+  );
+
+  it('one stale service: the singular count; the total and quota rows carry the hidden dash', async () => {
+    const html = text(
+      await render(
+        okDto(
+          [service('motir-gateway', 1, 1)],
+          undefined,
+          ACCOUNT,
+          new Map([['motir-gateway', behindRead(SHA.gw, 'motir-gateway', 1, 50)]]),
+        ),
+      ),
+    );
+    expect(html).toContain('1 service stale or diverged');
+    expect(html).toContain('1 commit behind');
+    expect(html).not.toContain('Versions not read');
+    const total = html.slice(
+      html.indexOf('<tr data-row="total"'),
+      html.indexOf('<tr data-row="quota"'),
+    );
+    expect(total).toContain('<span aria-hidden="true" class="text-(--el-text-secondary)">—</span>');
   });
 });
 

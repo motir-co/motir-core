@@ -15,6 +15,12 @@ import { DescribeImagesCommand, ECRClient } from '@aws-sdk/client-ecr';
 //
 // ⚠️ READS ONLY: DescribeImages. ECR returns no image labels there, so the build
 // commit is not read here — the service reads it from motir-ai's git tag.
+//
+// THE SERVICES PAGE'S DEPLOYED-COMMIT READ (MOTIR-11112) uses the same call for
+// ONE image at a time (`createEcrImageTagsReader`): the tags of the image a
+// service's task definition runs, one of which every deploy sets to the full
+// commit SHA. motir-infra grants `ecr:DescribeImages` on those repositories
+// (MOTIR-11111).
 
 /** A reference into ECR by digest: `<account>.dkr.ecr.<region>.amazonaws.com[.cn]/<repository>@sha256:<64 hex>`. */
 const ECR_REFERENCE =
@@ -72,10 +78,43 @@ export function parseEcrImageReference(reference: string): EcrImageReference | n
   };
 }
 
-/** The reader over the default credential chain, one client per region asked. */
-export function createEcrImagesReader(): EcrImagesReader {
+/** A reference into ECR by tag, by digest, or both:
+ *  `<account>.dkr.ecr.<region>.amazonaws.com[.cn]/<repository>[:<tag>][@sha256:<64 hex>]`. */
+const ECR_ANY_REFERENCE =
+  /^(\d{12})\.dkr\.ecr\.([a-z0-9-]+)\.amazonaws\.com(?:\.cn)?\/([a-z0-9]+(?:[._/-][a-z0-9]+)*)(?::([A-Za-z0-9_][A-Za-z0-9_.-]{0,127}))?(?:@(sha256:[a-f0-9]{64}))?$/;
+
+/** An image a task definition names in ECR — by tag, by digest, or both. */
+export interface EcrImageAddress extends EcrRepositoryRef {
+  tag: string | null;
+  digest: string | null;
+}
+
+/** The registry, region, repository, tag and digest of a reference into ECR,
+ *  or null when it is not one (a GHCR or Docker Hub image), or names neither a
+ *  tag nor a digest. Used by the Services page (MOTIR-11112). */
+export function parseEcrImageAddress(reference: string): EcrImageAddress | null {
+  const match = ECR_ANY_REFERENCE.exec(reference.trim());
+  if (!match) return null;
+  const [, registryId, region, repositoryName, tag, digest] = match;
+  if (!tag && !digest) return null;
+  return {
+    registryId: registryId!,
+    region: region!,
+    repositoryName: repositoryName!,
+    tag: tag ?? null,
+    digest: digest ?? null,
+  };
+}
+
+/** The tags of ONE image (MOTIR-11112). Throws when ECR does not answer, or
+ *  does not know the image. */
+export interface EcrImageTagsReader {
+  tagsOf(image: EcrImageAddress): Promise<string[]>;
+}
+
+function regionalClients(): (region: string) => ECRClient {
   const clients = new Map<string, ECRClient>();
-  const clientFor = (region: string) => {
+  return (region) => {
     let client = clients.get(region);
     if (!client) {
       client = new ECRClient({ region });
@@ -83,6 +122,28 @@ export function createEcrImagesReader(): EcrImagesReader {
     }
     return client;
   };
+}
+
+/** The tags reader over the default credential chain: one DescribeImages call
+ *  naming the one image, by digest where the reference carries one. */
+export function createEcrImageTagsReader(): EcrImageTagsReader {
+  const clientFor = regionalClients();
+  return {
+    async tagsOf({ registryId, region, repositoryName, tag, digest }) {
+      const imageId = digest ? { imageDigest: digest } : { imageTag: tag ?? undefined };
+      const answer = await clientFor(region).send(
+        new DescribeImagesCommand({ registryId, repositoryName, imageIds: [imageId] }),
+      );
+      const image = answer.imageDetails?.[0];
+      if (!image) throw new Error(`ECR described no image in ${repositoryName}`);
+      return image.imageTags ?? [];
+    },
+  };
+}
+
+/** The reader over the default credential chain, one client per region asked. */
+export function createEcrImagesReader(): EcrImagesReader {
+  const clientFor = regionalClients();
   return {
     async listImages({ registryId, region, repositoryName }) {
       const client = clientFor(region);
