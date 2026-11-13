@@ -158,20 +158,35 @@ export function storedKey(stored: {
   return JSON.stringify([stored.title, stored.descriptionMd, stored.explanationMd]);
 }
 
+const WRITTEN_CUE: LiveCue = { state: 'written', storedAtWriting: null };
+
 /**
  * The cue after a read. Writing ⇒ `writing`. Writing just stopped ⇒ `written` if
  * the stored card changed since writing was seen (the hand-over, announced), else
  * `idle` (the refused write: nothing is announced). Otherwise unchanged — the same
  * object, so a host can compare by reference.
+ *
+ * ⚠️ THE HAND-OVER DOES NOT WAIT FOR THE STEP TO END (§29.2 _stored hand-over_: "the
+ * read that carries no draft and a changed proposal"). The write clears the draft,
+ * but the session's `author` step may still target the card for a read or two
+ * before it ends. `drafted` says whether the read carries a partial at all: a read
+ * with none whose stored card changed since writing was seen IS the hand-over, and
+ * a later partial-free read keeps it `written` rather than calling the stored card
+ * _Being written_ again. Omitted, `drafted` follows `writing`.
  */
-export function nextLiveCue(prev: LiveCue, read: { writing: boolean; stored: string }): LiveCue {
+export function nextLiveCue(
+  prev: LiveCue,
+  read: { writing: boolean; drafted?: boolean; stored: string },
+): LiveCue {
+  if (read.writing && !(read.drafted ?? true)) {
+    if (prev.state === 'written') return prev;
+    if (prev.state === 'writing' && prev.storedAtWriting !== read.stored) return WRITTEN_CUE;
+  }
   if (read.writing) {
     return prev.state === 'writing' && prev.storedAtWriting === read.stored
       ? prev
       : { state: 'writing', storedAtWriting: read.stored };
   }
   if (prev.state !== 'writing') return prev;
-  return prev.storedAtWriting !== read.stored
-    ? { state: 'written', storedAtWriting: null }
-    : IDLE_CUE;
+  return prev.storedAtWriting !== read.stored ? WRITTEN_CUE : IDLE_CUE;
 }

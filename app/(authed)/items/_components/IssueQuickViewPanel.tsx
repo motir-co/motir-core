@@ -494,7 +494,12 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // of its last card is announced even as the overlay leaves `generating`.
   const cueNow =
     liveOn || cue.state === 'writing'
-      ? nextLiveCue(cue, { writing: liveDraft !== null, stored })
+      ? nextLiveCue(cue, {
+          writing: liveDraft !== null,
+          // A partial on screen; none, with the step still open, is the hand-over's read.
+          drafted: liveDraft !== null && Object.keys(liveDraft.fields).length > 0,
+          stored,
+        })
       : cue;
   if (cueNow !== cue) setCue(cueNow);
   // Which live field holds the caret: the one that grew on the latest read

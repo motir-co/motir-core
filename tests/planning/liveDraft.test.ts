@@ -145,6 +145,29 @@ describe('nextLiveCue', () => {
     expect(nextLiveCue(w, { writing: false, stored: A })).toBe(IDLE_CUE);
   });
 
+  it('hands over on a partial-free read while the author step still targets the card', () => {
+    const w = nextLiveCue(IDLE_CUE, { writing: true, drafted: true, stored: A });
+    const written = nextLiveCue(w, { writing: true, drafted: false, stored: B });
+    expect(written).toEqual({ state: 'written', storedAtWriting: null });
+    // A later read with the step still open keeps it written — the stored card is not re-announced.
+    expect(nextLiveCue(written, { writing: true, drafted: false, stored: B })).toBe(written);
+    // …and the step ending leaves it written.
+    expect(nextLiveCue(written, { writing: false, stored: B })).toBe(written);
+  });
+
+  it('stays writing on a partial-free read before anything was stored', () => {
+    // An author step that has sent no partial yet: the cue shows (P1), nothing was handed over.
+    const w = nextLiveCue(IDLE_CUE, { writing: true, drafted: false, stored: A });
+    expect(w).toEqual({ state: 'writing', storedAtWriting: A });
+    expect(nextLiveCue(w, { writing: true, drafted: false, stored: A })).toBe(w);
+    // A new partial after a hand-over (the session writes the card again) is writing again.
+    const written = { state: 'written' as const, storedAtWriting: null };
+    expect(nextLiveCue(written, { writing: true, drafted: true, stored: B })).toEqual({
+      state: 'writing',
+      storedAtWriting: B,
+    });
+  });
+
   it('is unchanged when not writing and not just stopped', () => {
     expect(nextLiveCue(IDLE_CUE, { writing: false, stored: A })).toBe(IDLE_CUE);
     const done = { state: 'written' as const, storedAtWriting: null };
