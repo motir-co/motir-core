@@ -238,6 +238,9 @@ export type GithubWebhookResult =
       event: 'workflow_job';
       outcome:
         | RecordQueuedJobOutcome['outcome']
+        // A runner took the job, or the job finished (MOTIR-11230): the stamps
+        // the boot service's supervision reads to retire a runner with no job.
+        | 'progress_recorded'
         | 'ignored_action'
         | 'unknown_installation'
         | 'failed';
@@ -1133,7 +1136,7 @@ export const githubWebhookService = {
       return { event: 'workflow_job', outcome: 'ignored_action' };
     }
     const job = provider.parseWorkflowJobEvent(body);
-    if (!job) return { event: 'workflow_job', outcome: 'ignored_action' };
+    if (!job) return this.handleWorkflowJobProgress(body);
 
     const installationId = readInstallationId(body);
     if (!installationId) return { event: 'workflow_job', outcome: 'unknown_installation' };
@@ -1161,6 +1164,36 @@ export const githubWebhookService = {
         jobId: job.jobId,
         repoOwner: job.repoOwner,
         repoName: job.repoName,
+        error: err instanceof Error ? err.message : 'unknown',
+      });
+      return { event: 'workflow_job', outcome: 'failed' };
+    }
+  },
+
+  /**
+   * The `in_progress` / `completed` half of `workflow_job` (MOTIR-11230): stamp
+   * the fleet intents the job's progress concerns, so supervision can retire a
+   * runner that has no job instead of letting it idle to the job timeout. Never
+   * dispatches anything and never fails the delivery — a missed stamp costs only
+   * the GitHub read supervision then makes at the idle timeout.
+   */
+  async handleWorkflowJobProgress(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    const provider = getGitProvider(PROVIDER);
+    const progress = provider.parseWorkflowJobProgressEvent?.(body) ?? null;
+    if (!progress) return { event: 'workflow_job', outcome: 'ignored_action' };
+    try {
+      const result = await ciRunnerProvisioningService.recordJobProgress(progress);
+      return {
+        event: 'workflow_job',
+        outcome: result.outcome === 'ignored' ? 'not_fleet_job' : 'progress_recorded',
+      };
+    } catch (err) {
+      console.error('[githubWebhookService] runner job-progress stamp failed; delivery acked', {
+        action: progress.action,
+        runId: progress.runId,
+        runAttempt: progress.runAttempt,
+        jobId: progress.jobId,
+        runnerId: progress.runnerId,
         error: err instanceof Error ? err.message : 'unknown',
       });
       return { event: 'workflow_job', outcome: 'failed' };

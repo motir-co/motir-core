@@ -225,6 +225,19 @@ export const ciRunnerProvisioningIntentRepository = {
     });
   },
 
+  /** The two job-progress stamps of one intent (MOTIR-11230) — the row read a
+   *  supervision poll makes to decide whether its runner is idle. Narrow on
+   *  purpose: it runs on every poll of a live container. */
+  async findJobProgress(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ jobPickedUpAt: Date | null; jobCompletedAt: Date | null } | null> {
+    return tx.ciRunnerProvisioningIntent.findUnique({
+      where: { id },
+      select: { jobPickedUpAt: true, jobCompletedAt: true },
+    });
+  },
+
   /** One intent by id, whatever its status. */
   async findById(
     id: string,
@@ -502,6 +515,55 @@ export const ciRunnerProvisioningIntentRepository = {
       where: { id },
       data: { startedAt, bootLatencyMs },
     });
+  },
+
+  /**
+   * Stamp that this intent's RUNNER has taken a job (MOTIR-11230). The first
+   * stamp wins — a later observation of the same fact moves nothing. Answers
+   * whether this call wrote it.
+   */
+  async markJobPickedUp(id: string, at: Date, tx: Prisma.TransactionClient): Promise<boolean> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, jobPickedUpAt: null },
+      data: { jobPickedUpAt: at },
+    });
+    return count === 1;
+  },
+
+  /**
+   * Stamp `jobPickedUpAt` on the intent whose RUNNER GitHub assigned a job to
+   * (MOTIR-11230). Keyed on the runner id ALONE, not on the job: a fleet runner
+   * takes whichever queued job carries its label, so the job it runs is often
+   * not the one its intent was booted for. GitHub's runner ids are unique, so
+   * this matches at most one row; `@@index([githubRunnerId])` serves it.
+   */
+  async markJobPickedUpByRunner(
+    githubRunnerId: number,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { githubRunnerId, jobPickedUpAt: null },
+      data: { jobPickedUpAt: at },
+    });
+    return count;
+  },
+
+  /**
+   * Stamp `jobCompletedAt` on every intent booted for ONE job (MOTIR-11230) —
+   * every reconcile generation, whatever its status, because the delivery can
+   * arrive before an intent's container has even booted.
+   */
+  async markJobCompleted(
+    job: { runId: string; runAttempt: number; jobId: string },
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { ...job, jobCompletedAt: null },
+      data: { jobCompletedAt: at },
+    });
+    return count;
   },
 
   /**

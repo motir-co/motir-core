@@ -11691,6 +11691,21 @@ model CiRunnerProvisioningIntent {
   /// infrastructure; this is what makes that a query rather than a stopwatch.
   bootLatencyMs Int? @map("boot_latency_ms")
 
+  /// When this intent's RUNNER was first known to have taken a job — any job,
+  /// not necessarily the one it was booted for, because a fleet runner takes
+  /// whichever queued job carries the label (MOTIR-11230). Written by the
+  /// `workflow_job` `in_progress` / `completed` deliveries that name this runner,
+  /// or by supervision when GitHub reports the runner busy. Once set, the runner
+  /// is never retired as idle: it is torn down when it exits or at the job
+  /// timeout, as before.
+  jobPickedUpAt  DateTime? @map("job_picked_up_at")
+  /// When GitHub reported the job this intent was BOOTED FOR as completed
+  /// (MOTIR-11230), whichever runner ran it. Set by the `workflow_job`
+  /// `completed` delivery — possibly before this intent's container even booted.
+  /// Supervision retires a runner whose own job is done and which has taken no
+  /// job, instead of letting it idle until the timeout.
+  jobCompletedAt DateTime? @map("job_completed_at")
+
   /// How the container ended — the port's `TeardownReason`. Kept next to the
   /// status because "failed" alone cannot distinguish a provider refusal from a
   /// runner that never registered from a job that ran over its timeout, and
@@ -11742,6 +11757,8 @@ model CiRunnerProvisioningIntent {
   /// ago must not be swept as an hour-old orphan.
   @@index([status, bootedAt])
   @@index([fleetShardId])
+  /// The `workflow_job` `in_progress` delivery finds its runner's intent by this (MOTIR-11230).
+  @@index([githubRunnerId])
   @@map("ci_runner_provisioning_intent")
 }
 

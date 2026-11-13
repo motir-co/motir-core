@@ -327,13 +327,58 @@ export const runnerJitConfigClient = {
    * expensive later.
    */
   async deleteRunner(runnerId: number, target?: GithubOrgTarget): Promise<void> {
+    await runnerJitConfigClient.removeRunner(runnerId, target);
+  },
+
+  /**
+   * {@link deleteRunner}, saying WHICH end state it reached: `removed` when this
+   * call de-registered the runner, `gone` when GitHub no longer knew it (404).
+   *
+   * The idle retirement (MOTIR-11230) needs the difference. It de-registers a
+   * runner BEFORE it destroys the runner's container, because a registered runner
+   * can be handed a job at any moment and a de-registered one cannot — and a
+   * runner that is already `gone` has de-registered ITSELF, which an ephemeral
+   * runner does only after its one job. Any other refusal throws, and the caller
+   * must leave the container alone: GitHub declined to remove a runner that may
+   * be running a job.
+   */
+  async removeRunner(runnerId: number, target?: GithubOrgTarget): Promise<'removed' | 'gone'> {
     const { org, token } = await resolveOrgAuth(target);
     const res = await request(
       `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runners/${runnerId}`,
       { method: 'DELETE', token, operation: 'de-registration' },
     );
-    if (res.ok || res.status === 404) return;
+    if (res.ok) return 'removed';
+    if (res.status === 404) return 'gone';
     throw new RunnerJitApiError(res.status, errorDetail(await readJson(res)));
+  },
+
+  /**
+   * What GitHub says about ONE registered runner right now — `null` when it no
+   * longer knows it (404), which for an ephemeral runner means it ran its one job
+   * and de-registered itself (MOTIR-11230).
+   *
+   * `busy` is GitHub's own answer to "is this runner running a job". It is the
+   * fact the idle retirement must never get wrong, so a body that does not carry
+   * it as a boolean throws rather than reading as idle.
+   */
+  async readRunner(
+    runnerId: number,
+    target?: GithubOrgTarget,
+  ): Promise<{ busy: boolean; online: boolean } | null> {
+    const { org, token } = await resolveOrgAuth(target);
+    const res = await request(
+      `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runners/${runnerId}`,
+      { method: 'GET', token, operation: 'runner read' },
+    );
+    if (res.status === 404) return null;
+    const body = await readJson(res);
+    if (!res.ok) throw new RunnerJitApiError(res.status, errorDetail(body));
+    const busy = body?.['busy'];
+    if (typeof busy !== 'boolean') {
+      throw new RunnerJitApiError(res.status, 'runner read returned no busy flag');
+    }
+    return { busy, online: body?.['status'] === 'online' };
   },
 
   /**

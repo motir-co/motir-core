@@ -525,6 +525,31 @@ export interface NormalizedWorkflowJobEvent {
   queuedAt: Date;
 }
 
+/** A workflow job's PROGRESS — the `in_progress` (a runner took it) and
+ *  `completed` actions of the `workflow_job` webhook (MOTIR-11230). The fleet's
+ *  supervision reads these to tell a runner that is working a job from one that
+ *  sits idle, and to retire a runner whose job another runner already finished.
+ *  `runnerId` is the host's id of the runner GitHub assigned the job to — the
+ *  ONLY tie between a job and a runner, because a JIT runner is single-use but
+ *  not bound to the job it was booted for. */
+export interface NormalizedWorkflowJobProgressEvent {
+  action: 'in_progress' | 'completed';
+  runId: string;
+  runAttempt: number;
+  jobId: string;
+  /** The runner the job was assigned to, or `null` when none was (a job
+   *  cancelled while still queued completes with no runner). */
+  runnerId: number | null;
+  repoOwner: string;
+  repoName: string;
+  /** The labels the job's `runs-on` requested — the fleet scope gate. */
+  requestedLabels: string[];
+  /** When the job completed (`completed_at`), or `null` — on `in_progress`,
+   *  and on a `completed` delivery that carries no instant. The reader stamps
+   *  its own receipt time then: this is a supervision signal, not a meter. */
+  completedAt: Date | null;
+}
+
 /** One job of a completed workflow run, normalized across providers. The meter
  *  bills PER JOB, rounded up (§5.8), so this is the unit it reads — not the run
  *  as a whole, whose wall clock would undercount parallel jobs. */

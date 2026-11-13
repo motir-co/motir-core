@@ -1,7 +1,10 @@
 import { Prisma } from '@/generated/prisma/client';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { bindOrganizationContext } from '@/lib/organizations/context';
-import type { NormalizedWorkflowJobEvent } from '@/lib/git/types';
+import type {
+  NormalizedWorkflowJobEvent,
+  NormalizedWorkflowJobProgressEvent,
+} from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
@@ -340,6 +343,51 @@ export const ciRunnerProvisioningService = {
       }
       throw err;
     }
+  },
+
+  /**
+   * Record a fleet job's PROGRESS on its intent (MOTIR-11230) — the two stamps
+   * the boot service's supervision reads to retire a runner that has no job.
+   *
+   *   - `jobPickedUpAt` is stamped on the intent whose runner GitHub assigned
+   *     the job to (`runner_id`), whichever job that intent was booted for. A
+   *     JIT runner is not bound to its intent's job — GitHub hands it the oldest
+   *     queued job with its label — so stamping by job key would miss a runner
+   *     working another intent's job, and keep an idle one alive.
+   *   - `jobCompletedAt` is stamped by job key on `completed`: the job this
+   *     intent was booted for is finished, so if its runner has taken nothing
+   *     it never will take that job.
+   *
+   * Both stamps are write-once. A job outside the fleet's labels is ignored
+   * before any read, exactly as {@link recordQueuedJob} gates it.
+   */
+  async recordJobProgress(
+    event: NormalizedWorkflowJobProgressEvent,
+    now: Date = new Date(),
+  ): Promise<
+    { outcome: 'ignored' } | { outcome: 'recorded'; pickedUp: number; completed: number }
+  > {
+    if (!isMotirFleetJob(event.requestedLabels)) return { outcome: 'ignored' };
+    const job = { runId: event.runId, runAttempt: event.runAttempt, jobId: event.jobId };
+    return withSystemContext(async (tx) => {
+      const pickedUp =
+        event.runnerId === null
+          ? 0
+          : await ciRunnerProvisioningIntentRepository.markJobPickedUpByRunner(
+              event.runnerId,
+              now,
+              tx,
+            );
+      const completed =
+        event.action === 'completed'
+          ? await ciRunnerProvisioningIntentRepository.markJobCompleted(
+              job,
+              event.completedAt ?? now,
+              tx,
+            )
+          : 0;
+      return { outcome: 'recorded' as const, pickedUp, completed };
+    });
   },
 
   /**
