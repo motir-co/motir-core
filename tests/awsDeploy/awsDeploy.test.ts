@@ -82,16 +82,22 @@ describe('a successful deploy', () => {
         {
           name: 'web',
           taskDefinition: expect.stringContaining('motir-prod-core-web:8'),
+          base: previous.web,
+          clonedFrom: previous.web,
           rolloutState: 'COMPLETED',
         },
         {
           name: 'worker',
           taskDefinition: expect.stringContaining('motir-prod-core-worker:8'),
+          base: previous.worker,
+          clonedFrom: previous.worker,
           rolloutState: 'COMPLETED',
         },
         {
           name: 'relay',
           taskDefinition: expect.stringContaining('motir-prod-core-relay:8'),
+          base: previous.relay,
+          clonedFrom: previous.relay,
           rolloutState: 'COMPLETED',
         },
       ],
@@ -309,7 +315,7 @@ describe('a failed roll', () => {
     expect(err.at(-1)).toBe(
       'error: the roll was superseded: another deployer moved web to a revision of its own ' +
         'while this deploy waited, and it was left there; every other service is back on its ' +
-        'previous revision. Re-run the deploy, which copies the revision each service runs now',
+        'previous revision. Re-run the deploy once the other deploy has finished',
     );
     expect((result?.services as { rolloutState: string }[])[0]?.rolloutState).toBe('SUPERSEDED');
     expect(result).toMatchObject({ recorded: false });
@@ -364,6 +370,70 @@ describe('a deploy during a breach run (MOTIR-10093)', () => {
     const { code } = await deploy(aws, ['--digest', DIGEST, '--no-roll']);
     expect(code).toBe(0);
     expect(aws.methods()).not.toContain('listServices');
+  });
+});
+
+// MOTIR-11235 — the reproduction: a motir-infra deploy lands while the migrate
+// runs (CloudFormation registers worker:8 with a new environment value and moves
+// worker onto it), and another begins right after it. The deploy waits for the
+// stack, then clones the revision each service runs at its roll, so the services
+// end on the infra environment with only the image changed.
+describe('a motir-infra update that overlaps the deploy (MOTIR-11235)', () => {
+  const GUARD = { name: 'MOTIR_HOSTING_GUARD_IMAGE', value: 'registry.fly.io/guard@sha256:e9' };
+
+  it('keeps the infra change made during the migrate, on every service it touched', async () => {
+    const { aws, previous } = coreFleet();
+    let cdk = '';
+    aws.migrate = (poll) => {
+      if (poll === 0) cdk = aws.addCdkRevision('worker', 8, [GUARD]);
+      return migrateExits(0)(poll);
+    };
+    const { code, result, err } = await deploy(aws);
+    expect(code).toBe(0);
+    const services = result?.services as { name: string; base: string; taskDefinition: string }[];
+    expect(services.map((s) => [s.name, s.base])).toEqual([
+      ['web', previous.web],
+      ['worker', cdk],
+      ['relay', previous.relay],
+    ]);
+    const worker = services.find((s) => s.name === 'worker');
+    const updates = aws.calls.filter(([m, , n]) => m === 'updateService' && n === 'worker');
+    expect(updates.map(([, , , td]) => td)).toEqual([worker?.taskDefinition]);
+    const running = await aws.describeTaskDefinition(worker?.taskDefinition ?? '');
+    expect(running.containerDefinitions?.[0]).toMatchObject({
+      image: `${CORE_REPO}@${DIGEST}`,
+      environment: [GUARD],
+    });
+    expect(err).toContain(
+      `roll: worker moved from ${previous.worker} to ${cdk} after the deploy read it; ` +
+        `${String(worker?.taskDefinition)} is cloned from ${cdk}`,
+    );
+  });
+
+  it('waits for a services stack update still running after the migrate, then rolls onto it', async () => {
+    const { aws, previous } = coreFleet();
+    let cdk = '';
+    aws.stack = (read) => {
+      // The update registers and rolls web:8 while the deploy waits on it.
+      if (read === 1) cdk = aws.addCdkRevision('web', 8, [GUARD]);
+      return { state: 'granted', value: read < 2 ? 'UPDATE_IN_PROGRESS' : 'UPDATE_COMPLETE' };
+    };
+    const { code, result, err } = await deploy(aws);
+    expect(code).toBe(0);
+    expect(aws.calls.filter(([m]) => m === 'stackStatus')).toEqual([
+      ['stackStatus', 'motir-prod-services'],
+      ['stackStatus', 'motir-prod-services'],
+      ['stackStatus', 'motir-prod-services'],
+    ]);
+    // Nothing is registered for a service, or updated, while the stack is busy.
+    const methods = aws.methods();
+    expect(methods.lastIndexOf('stackStatus')).toBeLessThan(methods.indexOf('updateService'));
+    const services = result?.services as { name: string; base: string }[];
+    expect(services.find((s) => s.name === 'web')?.base).toBe(cdk);
+    expect(services.find((s) => s.name === 'worker')?.base).toBe(previous.worker);
+    expect(err).toContain(
+      'stack: waiting for motir-prod-services (UPDATE_IN_PROGRESS) to finish before the roll',
+    );
   });
 });
 
@@ -444,6 +514,8 @@ describe('the grant and the credentials', () => {
         'secretsmanager:PutSecretValue',
         'ssm:GetParameter',
         'ssm:PutParameter',
+        // The stack wait after the migrate (MOTIR-11235): motir-infra's `ReadServicesStack`.
+        'cloudformation:DescribeStacks',
       ].sort(),
     );
   });

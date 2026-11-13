@@ -6,13 +6,18 @@
  *   1. verify the digest and that the image exists;
  *   2. find the cluster's services that run the core image, and refuse before
  *      anything changes when none does or one runs a breach revision
- *      (MOTIR-10093) — the roll clones each service's live revision;
+ *      (MOTIR-10093) — a breach run holds that service;
  *   3. run the migrate task from it once; only exit 0 continues;
- *   4. with `--pins <dir>`, write each image pin into its secret or parameter
+ *   4. wait for a motir-infra update of the services stack that began during the
+ *      migrate to finish (MOTIR-11235, `stackWait.ts`); then, with `--pins <dir>`,
+ *      write each image pin into its secret or parameter
  *      (MOTIR-10883, MOTIR-10986, `imagePins.ts`), so the tasks the roll starts
  *      read the new value — the pins are checked against this account in step 1;
- *   5. roll the services onto it and wait for every PRIMARY deployment to complete;
- *   6. on a failure or a timeout, put each back on the revision it ran before,
+ *   5. roll the services onto it and wait for every PRIMARY deployment to complete,
+ *      each cloned from the newest revision motir-infra's CloudFormation
+ *      registered (`infraBaseline.ts`), so an infra update the deploy overlapped
+ *      is kept and the image is the only field it changes (MOTIR-11235);
+ *   6. on a failure or a timeout, put each back on the revision it was cloned from,
  *      except a service another deployer moved meanwhile (MOTIR-10117), which
  *      stays where that deployer put it, and put each pin back as it was;
  *   7. only then record the digest in `/<prefix>/core/image-digest`, which the
@@ -35,8 +40,10 @@ import {
   rollBack,
   rollServices,
   type CoreService,
+  type RollRecord,
   type RolledService,
 } from './rollingDeploy';
+import { servicesStackName, waitForServicesStack } from './stackWait';
 import { ecrRepositoryName, imageRepository } from './taskDefinitions';
 import {
   applyPins,
@@ -158,9 +165,12 @@ async function roll(
   result: DeployResult,
   log: DeployLog,
 ): Promise<string | null> {
+  // A stack update that began during the migrate is let finish first (MOTIR-11235).
+  const stack = servicesStackName(options.namePrefix);
+  await waitForServicesStack(aws, stack, options.timeoutMs, log);
   const pinned = await applyPins(aws, options.namePrefix, options.pins, log);
   result.pins = pinned.applied;
-  const updated = new Map<string, string>();
+  const updated = new Map<string, RollRecord>();
   try {
     const rolled = await rollServices(
       aws,
@@ -186,7 +196,7 @@ async function roll(
     return (
       `the roll was superseded: another deployer moved ${names} to a revision of its own ` +
       'while this deploy waited, and it was left there; every other service is back on its ' +
-      'previous revision. Re-run the deploy, which copies the revision each service runs now'
+      'previous revision. Re-run the deploy once the other deploy has finished'
     );
   }
   return 'the roll did not complete; every service is back on its previous revision';

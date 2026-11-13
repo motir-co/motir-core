@@ -1,3 +1,4 @@
+import { CloudFormationClient } from '@aws-sdk/client-cloudformation';
 import { CloudWatchLogsClient } from '@aws-sdk/client-cloudwatch-logs';
 import { ECRClient, ImageNotFoundException } from '@aws-sdk/client-ecr';
 import { ECSClient } from '@aws-sdk/client-ecs';
@@ -15,6 +16,7 @@ type Responder = (command: string, input: Record<string, unknown>) => unknown;
 function stubClients(respond: Responder) {
   const sent: Sent[] = [];
   for (const client of [
+    CloudFormationClient,
     ECSClient,
     SSMClient,
     ECRClient,
@@ -267,6 +269,50 @@ describe('awsSdkPorts', () => {
   it('reads a stream with no events as empty', async () => {
     stubClients(() => ({}));
     expect(await awsSdkPorts('us-east-1').tailLog('g', 's', 50)).toEqual([]);
+  });
+
+  // MOTIR-11235 — the wait between the migrate and the roll.
+  it("reads a stack's status, and a stack with no answer as granted and empty", async () => {
+    let stacks: unknown = [{ StackStatus: 'UPDATE_IN_PROGRESS' }];
+    const sent = stubClients(() => ({ Stacks: stacks }));
+    const ports = awsSdkPorts('us-east-1');
+    expect(await ports.stackStatus('motir-prod-services')).toEqual({
+      state: 'granted',
+      value: 'UPDATE_IN_PROGRESS',
+    });
+    expect(sent).toEqual([
+      { command: 'DescribeStacksCommand', input: { StackName: 'motir-prod-services' } },
+    ]);
+    stacks = undefined;
+    expect(await ports.stackStatus('motir-prod-services')).toEqual({
+      state: 'granted',
+      value: undefined,
+    });
+  });
+
+  it('reads a missing stack as granted and empty, a refusal as not granted, and rethrows the rest', async () => {
+    let failure: { name: string; message: string } | string = {
+      name: 'ValidationError',
+      message: 'Stack with id motir-prod-services does not exist',
+    };
+    stubClients(() => {
+      if (typeof failure === 'string') throw failure as unknown as Error;
+      const err = new Error(failure.message);
+      err.name = failure.name;
+      throw err;
+    });
+    const ports = awsSdkPorts('us-east-1');
+    expect(await ports.stackStatus('s')).toEqual({ state: 'granted', value: undefined });
+    for (const name of ['AccessDenied', 'AccessDeniedException']) {
+      failure = { name, message: 'not authorized' };
+      expect(await ports.stackStatus('s')).toEqual({ state: 'not_granted' });
+    }
+    failure = { name: 'ValidationError', message: 'StackName is malformed' };
+    await expect(ports.stackStatus('s')).rejects.toThrow('StackName is malformed');
+    failure = { name: 'Throttling', message: 'Rate exceeded' };
+    await expect(ports.stackStatus('s')).rejects.toThrow('Rate exceeded');
+    failure = 'not an error';
+    await expect(ports.stackStatus('s')).rejects.toBe('not an error');
   });
 
   it('sleeps on a real timer', async () => {

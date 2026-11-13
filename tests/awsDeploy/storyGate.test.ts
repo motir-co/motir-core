@@ -57,9 +57,12 @@ const FIND = ['listServices', 'describeServices', 'describeTaskDefinition'];
 const ROLL = ['registerTaskDefinition', 'updateService', 'describeServices'];
 // The services are found BEFORE the migrate task (MOTIR-10093), so FIND's last
 // call and the migrate's first, both describeTaskDefinition, squash into one, and
-// the roll reads the service's definition again before it registers.
+// the roll reads the SERVICE again before it registers, then the revision it runs
+// now and its family's newest (MOTIR-11235) — the two reads squash into one.
 const FIND_THEN_MIGRATE = [...FIND, ...MIGRATE.slice(1)];
-const READ_AND_ROLL = ['describeTaskDefinition', ...ROLL];
+// The roll first asks after the services stack, in case an update of it began
+// during the migrate (MOTIR-11235).
+const READ_AND_ROLL = ['stackStatus', 'describeServices', 'describeTaskDefinition', ...ROLL];
 
 describe('the deploy, start to finish', () => {
   it('success: verify, find, migrate, roll, then the digest write last, exit 0', async () => {
@@ -127,6 +130,7 @@ describe('the deploy, start to finish', () => {
   it('issues only granted actions across every scenario above', () => {
     expect([...issued].sort()).toEqual(
       [
+        'cloudformation:DescribeStacks',
         'ecr:DescribeImages',
         'ecs:DescribeServices',
         'ecs:DescribeTaskDefinition',

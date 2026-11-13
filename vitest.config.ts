@@ -1806,6 +1806,13 @@ export default defineConfig({
         'scripts/aws-deploy/ports.ts',
         'scripts/aws-deploy/rollingDeploy.ts',
         'scripts/aws-deploy/taskDefinitions.ts',
+        // MOTIR-11235 — the clone source (the newest CloudFormation revision) and
+        // the stack wait between the migrate and the roll. MEASURED against
+        // `tests/awsDeploy/**`: infraBaseline and stackWait 100 on all four;
+        // rollingDeploy 100 / 98.3 / 100 / 100 (the branch left is a container
+        // missing from its own clone, as before). Pinned at the floor below.
+        'scripts/aws-deploy/infraBaseline.ts',
+        'scripts/aws-deploy/stackWait.ts',
         'scripts/fleet/fleetAdminCheckQuota.ts',
         // MOTIR-10264 — the fleet-admin bundle's entry and its Fargate database URL.
         // MEASURED against `tests/ciFleet/fleetAdminFargateEntry.test.ts`: both 100 on
@@ -3955,6 +3962,19 @@ export default defineConfig({
           statements: 90,
         },
         'scripts/aws-deploy/taskDefinitions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-11235 — measured above, pinned at the floor.
+        'scripts/aws-deploy/infraBaseline.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/stackWait.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
