@@ -56,8 +56,10 @@ function isUniqueViolation(err: unknown): boolean {
 // bare `now()` — matched NOTHING: a row due one minute ago read as seven hours in
 // the future, and every worker test failed with an empty claim.
 //
-// ⚠️ AND IT WOULD HAVE SHIPPED GREEN. Production Neon runs UTC, where the offset
-// is zero and the two forms agree exactly. So does CI. The defect is visible only
+// ⚠️ AND IT WOULD HAVE SHIPPED GREEN. Production's Amazon RDS instance runs UTC
+// (RDS's default `timezone`, which motir-infra's parameter group leaves alone), as
+// Neon did before it, where the offset is zero and the two forms agree exactly.
+// So does CI. The defect is visible only
 // under a non-UTC session, which is precisely why it belongs in code rather than
 // in an assumption about the deployment's timezone.
 //

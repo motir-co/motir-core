@@ -35,7 +35,7 @@
  * Needs `DATABASE_URL` for the target database. Unlike the base-ref backfill it
  * calls no provider API, so it needs no GitHub App credential:
  *
- *   DATABASE_URL='<neon non-pooling url>' pnpm db:reevaluate:repo-set --item=<id> --dry-run
+ *   DATABASE_URL='<core direct url>' pnpm db:reevaluate:repo-set --item=<id> --dry-run
  */
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads

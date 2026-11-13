@@ -38,7 +38,12 @@
  *   pnpm db:converge:unlanded-cards --dry-run    # rehearse: classify + print, write nothing
  *   pnpm db:converge:unlanded-cards              # apply
  *
- *   DATABASE_URL='<neon non-pooling url>' pnpm db:converge:unlanded-cards --dry-run
+ *   DATABASE_URL='<core direct url>' pnpm db:converge:unlanded-cards --dry-run
+ *
+ * Against production it runs inside AWS, never from a laptop: Amazon RDS admits
+ * only core's services, so it is
+ * `node /app/data/data-script.mjs converge-unlanded-cards` in a core worker task
+ * (`docs/runbooks/production-data-scripts.md`).
  *
  * Do the dry run first, read the counts, and only then apply. Running it on production
  * is its own task (MOTIR-5810), after the release that carries the re-ask is live.

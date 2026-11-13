@@ -8,6 +8,10 @@ import {
   hostOf,
   NEON_RESET_SENTENCE,
   parseArgs,
+  poolerOf,
+  POSTGRES_RESET_SENTENCE,
+  RDS_RESET_SENTENCE,
+  resetSentenceFor,
   PG_TOP_STATEMENTS_MARKER,
   PG_TOP_STATEMENTS_MARKER_COMMENT,
   PgTopStatementsUsageError,
@@ -125,6 +129,32 @@ describe('resolveDirectUrl', () => {
     expect(() => resolveDirectUrl({ DATABASE_URL_UNPOOLED: POOLER })).toThrow(/pooler/);
   });
 
+  // MOTIR-11181 — production's database is Amazon RDS: an RDS Proxy endpoint is
+  // the pooler a production URL can name, and the instance's own endpoint passes.
+  const RDS_INSTANCE =
+    'postgresql://u:secret@core.c1a2b3c4d5e6.us-east-1.rds.amazonaws.com:5432/motir_core';
+  const RDS_PROXY =
+    'postgresql://u:secret@motir-core.proxy-c1a2b3c4d5e6.us-east-1.rds.amazonaws.com:5432/motir_core';
+
+  it('refuses an RDS Proxy endpoint, naming it as one and naming DATABASE_URL_UNPOOLED', () => {
+    expect(() => resolveDirectUrl({ DATABASE_URL: RDS_PROXY })).toThrow(PgTopStatementsUsageError);
+    expect(() => resolveDirectUrl({ DATABASE_URL: RDS_PROXY })).toThrow(
+      /DATABASE_URL names an RDS Proxy endpoint \(motir-core\.proxy-c1a2b3c4d5e6\.us-east-1\.rds\.amazonaws\.com\); set DATABASE_URL_UNPOOLED/,
+    );
+    expect(() => resolveDirectUrl({ DATABASE_URL_UNPOOLED: RDS_PROXY })).not.toThrow(/secret/);
+  });
+
+  it('accepts an RDS instance endpoint, which has no pooler in front', () => {
+    expect(resolveDirectUrl({ DATABASE_URL: RDS_INSTANCE })).toEqual({
+      url: RDS_INSTANCE,
+      source: 'DATABASE_URL',
+    });
+  });
+
+  it('names a Neon pooler as one', () => {
+    expect(() => resolveDirectUrl({ DATABASE_URL: POOLER })).toThrow(/names a Neon pooler host/);
+  });
+
   it('refuses when neither variable is set, naming DATABASE_URL_UNPOOLED', () => {
     expect(() => resolveDirectUrl({})).toThrow(PgTopStatementsUsageError);
     expect(() => resolveDirectUrl({ DATABASE_URL_UNPOOLED: '  ' })).toThrow(
@@ -139,6 +169,55 @@ describe('resolveDirectUrl', () => {
   });
 });
 
+describe('poolerOf (MOTIR-11181)', () => {
+  it.each([
+    ['motir-core.proxy-c1a2b3c4d5e6.us-east-1.rds.amazonaws.com', 'rds_proxy'],
+    ['reader.endpoint.proxy-c1a2b3c4d5e6.us-east-1.rds.amazonaws.com', 'rds_proxy'],
+    ['MOTIR-CORE.PROXY-C1A2B3C4D5E6.US-EAST-1.RDS.AMAZONAWS.COM', 'rds_proxy'],
+    ['ep-cool-1234-pooler.us-east-1.aws.neon.tech', 'neon_pooler'],
+    ['core.c1a2b3c4d5e6.us-east-1.rds.amazonaws.com', null],
+    ['core.cluster-c1a2b3c4d5e6.us-east-1.rds.amazonaws.com', null],
+    ['ep-cool-1234.us-east-1.aws.neon.tech', null],
+    ['proxy-db.example.test', null],
+    ['localhost', null],
+  ] as const)('%s ⇒ %s', (host, expected) => {
+    expect(poolerOf(host)).toBe(expected);
+  });
+});
+
+describe('resetSentenceFor (MOTIR-11181)', () => {
+  it('names Amazon RDS for an RDS endpoint, with or without a port', () => {
+    expect(resetSentenceFor('core.c1a2b3c4d5e6.us-east-1.rds.amazonaws.com:5432')).toBe(
+      RDS_RESET_SENTENCE,
+    );
+    expect(resetSentenceFor('core.c1a2b3c4d5e6.us-east-1.rds.amazonaws.com')).toBe(
+      RDS_RESET_SENTENCE,
+    );
+  });
+
+  it('names Neon for a Neon endpoint', () => {
+    expect(resetSentenceFor('ep-cool-1234.us-east-1.aws.neon.tech')).toBe(NEON_RESET_SENTENCE);
+  });
+
+  it('names no vendor for any other host', () => {
+    expect(resetSentenceFor('localhost:5433')).toBe(POSTGRES_RESET_SENTENCE);
+    expect(resetSentenceFor('(unparseable)')).toBe(POSTGRES_RESET_SENTENCE);
+  });
+
+  it('is the sentence the coverage line prints, read from the host that answered', () => {
+    const rds = renderText(
+      readout({
+        answeredBy: {
+          ...readout().answeredBy,
+          host: 'core.c1a2b3c4d5e6.us-east-1.rds.amazonaws.com:5432',
+        },
+      }),
+    );
+    expect(rds).toContain(RDS_RESET_SENTENCE);
+    expect(rds).not.toContain('Neon');
+  });
+});
+
 describe('renderText', () => {
   it('prints the answered-by block, the coverage line and three ranked sections', () => {
     const out = renderText(readout());
@@ -148,7 +227,7 @@ describe('renderText', () => {
     expect(out).toContain('compute started: 2026-10-14T08:00:00.000Z');
     expect(out).toContain('latest migration: 20261013_add_x (finished 2026-10-13T10:00:00.000Z)');
     expect(out).toContain('since stats_reset 2026-10-14T08:00:05.000Z');
-    expect(out).toContain(NEON_RESET_SENTENCE);
+    expect(out).toContain(POSTGRES_RESET_SENTENCE);
 
     const total = out.indexOf('== by total time ==');
     const mean = out.indexOf('== by mean time ==');
@@ -185,7 +264,7 @@ describe('renderText', () => {
     );
     expect(out).toContain('since the compute started 2026-10-14T08:00:00.000Z');
     expect(out).toContain('pg_stat_statements_info is absent');
-    expect(out).toContain(NEON_RESET_SENTENCE);
+    expect(out).toContain(POSTGRES_RESET_SENTENCE);
     expect(out).not.toContain('sample');
   });
 
@@ -227,7 +306,7 @@ describe('renderJson', () => {
     expect(parsed.coverage).toEqual(fixture.coverage);
     expect(parsed.byMeanTime).toEqual(fixture.byMeanTime);
     expect(parsed.byCalls).toEqual(fixture.byCalls);
-    expect(parsed.coverageText[0]).toContain(NEON_RESET_SENTENCE);
+    expect(parsed.coverageText[0]).toContain(POSTGRES_RESET_SENTENCE);
   });
 });
 

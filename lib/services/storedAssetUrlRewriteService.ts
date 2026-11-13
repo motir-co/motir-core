@@ -13,8 +13,9 @@
 // ⚠️ THE BASE IS AN ARGUMENT, NEVER `MOTIR_S3_PUBLIC_BASE_URL`. The rows were written
 // on the previous store's base, and the environment running this names S3's once
 // flipped; a base read from it would match nothing and report a false 0. The
-// window runs it against Neon's core database after the freeze and before the dump
-// (motir-infra `docs/core-cutover.md` step 5).
+// window ran it against the SOURCE core database — the one production was leaving
+// — after the freeze and before the dump (motir-infra `docs/core-cutover.md`
+// step 5), so the Amazon RDS database restored from that dump holds keys.
 //
 // ⚠️ THE REDUCTION IS THE PRODUCT'S. Each URL becomes its key through
 // `publicUrlToKey`, the same function the avatar gate, the GC and the display

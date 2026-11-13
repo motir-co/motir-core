@@ -37,7 +37,7 @@
  *
  * It needs only `DATABASE_URL` (no host calls):
  *
- *   DATABASE_URL='<neon non-pooling url>' pnpm db:backfill:plan-gates --dry-run
+ *   DATABASE_URL='<core direct url>' pnpm db:backfill:plan-gates --dry-run
  *
  * Do the dry run first, read the per-workspace counts, and only then apply.
  * RUNNING THIS ON PRODUCTION is an operator step after the deploy, owed as its own

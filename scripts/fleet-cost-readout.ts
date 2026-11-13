@@ -37,7 +37,7 @@
  * service reads it under `withSystemContext` — which is what makes a cross-tenant
  * read return rows rather than silently returning none:
  *
- *   DATABASE_URL='<neon non-pooling url>' MOTIR_CLOUD=true pnpm ops:fleet-cost --period=2026-08
+ *   DATABASE_URL='<core direct url>' MOTIR_CLOUD=true pnpm ops:fleet-cost --period=2026-08
  */
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads

@@ -26,7 +26,11 @@
  *
  * Needs only `DATABASE_URL` — every input the rule reads is already recorded:
  *
- *   DATABASE_URL='<neon non-pooling url>' pnpm db:backfill:fix-reason --dry-run
+ *   DATABASE_URL='<core direct url>' pnpm db:backfill:fix-reason --dry-run
+ *
+ * Against production it runs inside AWS, never from a laptop: Amazon RDS admits
+ * only core's services, so it is `node /app/data/data-script.mjs backfill-fix-reason` in a core
+ * worker task (`docs/runbooks/production-data-scripts.md`).
  *
  * A progress line every `FIX_REASON_BACKFILL_PROGRESS_EVERY` cards; SIGINT / SIGTERM
  * stop between two cards and print the PARTIAL report, marked INTERRUPTED.
