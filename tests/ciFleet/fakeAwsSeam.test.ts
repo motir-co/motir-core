@@ -156,8 +156,6 @@ describe('with MOTIR_FAKE_AWS_STATE_PATH unset, nothing routes differently', () 
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     // The real aws case still demands the management credential (which assumes
     // the account's runner role) and the AMI.
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
-    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
     vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
     expect(() => orchestratorForShard(aws)).toThrow(/AWS_ORG_ADMIN_ROLE_ARN/);
     expect(() => inventoryForShard(aws)).toThrow(/AWS_ORG_ADMIN_ROLE_ARN/);

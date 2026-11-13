@@ -147,13 +147,9 @@ describe('the deploy, start to finish', () => {
 // ── No AWS key on the AWS path ───────────────────────────────────────────────
 
 const AWS_KEY_NAMES = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'];
-/** The Fly-era static keys: the deploy path must not reach for them either. */
-const STATIC_KEY_NAMES = [
-  'MOTIR_S3_ACCESS_KEY_ID',
-  'MOTIR_S3_SECRET_ACCESS_KEY',
-  'AWS_ORG_ADMIN_ACCESS_KEY_ID',
-  'AWS_ORG_ADMIN_SECRET_ACCESS_KEY',
-];
+/** The Fly-era static keys: the deploy path must not reach for them either. (The
+ *  management key's two names are gone from the code altogether, MOTIR-10302.) */
+const STATIC_KEY_NAMES = ['MOTIR_S3_ACCESS_KEY_ID', 'MOTIR_S3_SECRET_ACCESS_KEY'];
 
 const ROOT = process.cwd();
 const DEPLOY_DIR = join('scripts', 'aws-deploy');

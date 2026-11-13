@@ -51,17 +51,9 @@ const SESSION: AwsSessionCredentials = {
 };
 const ENV = {
   [AWS_MEMBER_EMAIL_TEMPLATE_ENV]: `root+{name}@${EMAIL_MARK}`,
-  [AWS_MANAGEMENT_ENV.accessKeyId]: 'AKIA_MANAGEMENT_never_printed',
-  [AWS_MANAGEMENT_ENV.secretAccessKey]: 'MANAGEMENT_SECRET_never_printed',
   [AWS_MANAGEMENT_ENV.roleArn]: 'arn:aws:iam::576360162297:role/motir-add-shard',
 };
-const FORBIDDEN = [
-  ...Object.values(SECRETS),
-  ENV[AWS_MANAGEMENT_ENV.accessKeyId]!,
-  ENV[AWS_MANAGEMENT_ENV.secretAccessKey]!,
-  EMAIL_MARK,
-  'root+',
-];
+const FORBIDDEN = [...Object.values(SECRETS), EMAIL_MARK, 'root+'];
 const MAX_PASSES = 8;
 
 let organization: FakeOrganization;

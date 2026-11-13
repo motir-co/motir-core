@@ -46,7 +46,7 @@ import {
   newGithubWorld,
   type GithubWorld,
 } from '../helpers/addShardFakes';
-import { TEST_MANAGEMENT_KEY, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
+import { stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // THE STORY'S INTEGRATION GATE (Story MOTIR-9362 · MOTIR-9464). Each sibling card
 // tests its own piece; this file tests the ASSEMBLED seam they form — the live
@@ -65,8 +65,6 @@ const PRIMARY_ACCOUNT = '111122223333';
 const SPARE_ACCOUNT = '444455556666';
 const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
-  managementKey: TEST_MANAGEMENT_KEY.accessKeyId,
-  managementSecret: TEST_MANAGEMENT_KEY.secretAccessKey,
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -759,9 +757,7 @@ describe('the edges the per-file gate measures', () => {
   it('the live read without its seams: no credential fails every account, by class name only', async () => {
     const { fleetManagementApi, awsReasonOf, fleetShardQuotaService } =
       await import('@/lib/services/fleetShardQuotaService');
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
-    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
-    // The role ARN alone is a credential on the default chain (MOTIR-9839).
+    // The role ARN is the whole management credential (MOTIR-10302).
     vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
     expect(() => fleetManagementApi()).toThrow();
     expect(awsReasonOf('not an error')).toBe('UnknownError');
@@ -825,7 +821,7 @@ describe('the edges the per-file gate measures', () => {
     );
 
     // Without its seams, no credential: every open request fails its read.
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
     const unread = await fleetQuotaRaiseService.refreshOpenRequests();
     expect(unread.every((r) => 'failure' in r)).toBe(true);
   });

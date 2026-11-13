@@ -149,8 +149,6 @@ describe('createConfiguredAwsHostingPort', () => {
     vi.stubEnv('MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN', 'arn:aws:iam::1:role/forwarder');
     vi.stubEnv('MOTIR_HOSTING_AWS_APP_DOMAIN', 'apps.motir.test');
     vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::1:role/motir-org-admin');
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
-    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
     return createConfiguredAwsHostingPort('origin-key');
   }

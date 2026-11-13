@@ -403,8 +403,6 @@ describe('inventoryForShard routes an indexer AWS account to its own listing (MO
 
   it('an indexer account with no management credential throws naming the variables, so the pass alerts and skips it', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
-    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
     vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
     expect(() => inventoryForShard(shard('code_graph_index'))).toThrow(
       OrchestratorNotConfiguredError,

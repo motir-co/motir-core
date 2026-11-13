@@ -40,8 +40,9 @@ import type { LambdaMetricSums } from './usage';
 // ⚠️ ONE ROLE, ONE ACCOUNT. Every client is made under the scoped role of
 // `MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN`, assumed here, so nothing this module
 // does can act anywhere the role cannot — and it calls no IAM API at all. Who
-// assumes it is the composition root's to say (`sourceCredentials`): Motir's
-// management key and role on the app, the default chain on an operator's laptop.
+// assumes it is the composition root's to say (`sourceCredentials`); Motir's app
+// passes none, so the SDK's default chain does — the task role on AWS, an
+// operator's own profile on a laptop (MOTIR-10302).
 //
 // ⚠️ A FAILURE CARRIES THE SERVICE'S ERROR CODE, NEVER ITS MESSAGE. An AWS message
 // can quote a request — an environment value, a secret string — so the only text

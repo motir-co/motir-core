@@ -180,8 +180,6 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', ADD_SHARD_ENTERPRISE_SLUG);
   vi.stubEnv('GITHUB_ENTERPRISE_ADMIN_TOKEN', 'ghp_admin');
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA_MANAGEMENT');
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'management-secret');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
   stubPoolDefinitionEnv();
   // The deployment's own selection, so the row resolves through its `aws` case.
@@ -286,15 +284,13 @@ describe('add-shard → account row → adapter', () => {
     const shard = (await fleetShardService.findShardByName(NAME))!;
     // The runner role is assumed from the management credential; without it,
     // nothing can reach the account — and no per-account key is offered instead.
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
-    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
     vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
 
     expect(() => orchestratorForShard(shard)).toThrow(
       new OrchestratorNotConfiguredError(
         `set AWS_ORG_ADMIN_ROLE_ARN, ${AWS_RUNNER_AMI_ENV_VAR} ` +
-          '(the management credential, AWS_ORG_ADMIN_ACCESS_KEY_ID, AWS_ORG_ADMIN_SECRET_ACCESS_KEY, ' +
-          'AWS_ORG_ADMIN_ROLE_ARN, assumes motir-fleet-runner)',
+          '(the management credential, AWS_ORG_ADMIN_ROLE_ARN on the default credential chain, ' +
+          'assumes motir-fleet-runner)',
       ),
     );
     expect(ec2().count('runInstances')).toBe(0);

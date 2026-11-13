@@ -119,7 +119,6 @@ const FAST = { bootDeadlineMs: 5_000, jobTimeoutMs: 60_000, pollIntervalMs: 1 } 
 
 /** Every secret the journey handles, as a marker that must surface nowhere. */
 const MARKERS = {
-  managementKey: 'MOTIR9281MGMTKEYSECRET',
   sessionToken: 'MOTIR9281SESSIONTOKEN',
   sessionSecret: 'MOTIR9281SESSIONSECRET',
   jit: 'MOTIR9281JITMARKER',
@@ -299,8 +298,6 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', ADD_SHARD_ENTERPRISE_SLUG);
   vi.stubEnv('GITHUB_ENTERPRISE_ADMIN_TOKEN', 'ghp_admin');
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA_E2E_MANAGEMENT');
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', MARKERS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
   stubPoolDefinitionEnv();
   // The deployment's own selection — Fly, configured — so the process-wide fleet

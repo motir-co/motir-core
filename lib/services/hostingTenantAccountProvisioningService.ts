@@ -81,7 +81,7 @@ export async function createOrFindTenantAccount(
   // Only the `account` step runs, so only the management credential is needed:
   // the provider's own `requiredEnv` adds the pool-account definition, which a
   // tenant account never applies (MOTIR-9845).
-  const missing = awsManagementRequiredEnv(env).filter((name) => !env[name]?.trim());
+  const missing = awsManagementRequiredEnv().filter((name) => !env[name]?.trim());
   if (missing.length > 0) problems.push(`set ${missing.join(', ')}`);
   if (problems.length > 0) throw new FleetShardProvisioningRefusedError(problems);
 

@@ -30,8 +30,6 @@ const VARS = [
   CI_RUNNER_PROVIDER_ENV_VAR,
   AWS_RUNNER_AMI_ENV_VAR,
   'AWS_ORG_ADMIN_ROLE_ARN',
-  'AWS_ORG_ADMIN_ACCESS_KEY_ID',
-  'AWS_ORG_ADMIN_SECRET_ACCESS_KEY',
 ];
 
 /** The AWS deployment's shape: CI on its pool, the AWS values set, no Fly fleet. */
@@ -88,12 +86,12 @@ describe('on the CI runner pool (MOTIR_FLEET_CI_RUNNER_PROVIDER=aws)', () => {
     expect(await ciFleetMissingConfig()).toEqual(['AWS_ORG_ADMIN_ROLE_ARN']);
   });
 
-  it('names both halves of a half-set management key, with the AMI, all at once', async () => {
+  it('names the role ARN and the AMI, all at once', async () => {
     configureAwsPool();
     vi.stubEnv(AWS_RUNNER_AMI_ENV_VAR, '');
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIAEXAMPLE');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
     expect(await ciFleetMissingConfig()).toEqual([
-      'AWS_ORG_ADMIN_SECRET_ACCESS_KEY',
+      'AWS_ORG_ADMIN_ROLE_ARN',
       AWS_RUNNER_AMI_ENV_VAR,
     ]);
   });

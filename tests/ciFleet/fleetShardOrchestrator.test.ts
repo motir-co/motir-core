@@ -48,8 +48,6 @@ import { TEST_MANAGEMENT_ROLE_ARN } from '../helpers/awsRunnerRoleFake';
 
 /** No management credential at all: the runner role cannot be assumed. */
 function stubNoManagementCredential(): void {
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
 }
 
@@ -220,8 +218,6 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
     it('assumes the runner role from the management credential (MOTIR-9460)', async () => {
       vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
       vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
-      vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIAMANAGEMENT');
-      vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'management-secret');
       vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', TEST_MANAGEMENT_ROLE_ARN);
       const account = await createAccount(AWS_ACCOUNT);
 
@@ -260,7 +256,7 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
       const account = await createAccount(AWS_ACCOUNT);
 
       expect(() => orchestratorForShard(account)).toThrow(
-        /set AWS_ORG_ADMIN_ROLE_ARN \(the management credential, .*, assumes motir-fleet-runner\)\.$/,
+        /set AWS_ORG_ADMIN_ROLE_ARN \(the management credential, AWS_ORG_ADMIN_ROLE_ARN on the default credential chain, assumes motir-fleet-runner\)\.$/,
       );
     });
 

@@ -22,8 +22,6 @@ import { truncateAuthTables } from '../helpers/db';
 
 const TEMPLATE = 'tenant-root+{name}@distinctive-template.example';
 const SECRETS = {
-  managementKey: 'AKIA_MANAGEMENT_never_printed',
-  managementSecret: 'MANAGEMENT_SECRET_never_printed',
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -36,8 +34,6 @@ const SESSION: AwsSessionCredentials = {
 };
 const ENV = {
   [AWS_MEMBER_EMAIL_TEMPLATE_ENV]: TEMPLATE,
-  [AWS_MANAGEMENT_ENV.accessKeyId]: SECRETS.managementKey,
-  [AWS_MANAGEMENT_ENV.secretAccessKey]: SECRETS.managementSecret,
   [AWS_MANAGEMENT_ENV.roleArn]: 'arn:aws:iam::576360162297:role/motir-add-shard',
 };
 /** Strings that must never leave the function. */
