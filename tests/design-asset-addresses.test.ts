@@ -1602,6 +1602,14 @@ const reconcilablePath = (finding: PathFinding): Reconcilable => ({
 // inherited: the run that finds a class is not the run that clears it.
 // MOTIR-2369 cleared all six, so the table holds no STALE row today.
 const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
+  // ── A RETIRED FILE THE NOTES RECORD RETIRING (Story MOTIR-11190 · MOTIR-11201) ──
+  //  Part XXIX's hand-off names the replay module MOTIR-11201 DELETES. The path is the
+  //  record of what was removed, not a file to mirror, so it is meant not to exist.
+  {
+    file: 'design/ai-planning/design-notes.md',
+    path: 'lib/planning/typeIn.ts',
+    why: 'the replay module Part XXIX records as retired by MOTIR-11201 — a deletion record, not a citation',
+  },
   // ── A DRAWN DOCUMENT'S PATH, not a citation (Story MOTIR-4907 · MOTIR-5673) ──
   //  The decision port draws an agent's decision document as a pull request carries
   //  it, and its meta line and the To-approve row NAME that file. The path is the
