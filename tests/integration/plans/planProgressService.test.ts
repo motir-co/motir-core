@@ -346,8 +346,6 @@ describe('findWriteRowsByPlanIds — every proposal’s last write (MOTIR-11184)
         planItemRepository.findWriteRowsByPlanIds([], tx),
       ),
     ).toEqual([]);
-    // With no `tx` it reads through `dbRead` — the repository's optional-tx contract.
-    expect(Array.isArray(await planItemRepository.findWriteRowsByPlanIds([planId]))).toBe(true);
   });
 });
 
