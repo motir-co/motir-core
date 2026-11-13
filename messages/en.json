@@ -8743,7 +8743,7 @@
       },
       "stop": "Stop",
       "stoppingAction": "Stopping…",
-      "stopping": "Stopping — finishing this work item first.",
+      "stopping": "Stopping — work items already written are kept.",
       "stopped": "You stopped this run.",
       "queuedLabel": "queued",
       "queuedRead": "read",

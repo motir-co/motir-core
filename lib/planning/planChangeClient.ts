@@ -438,10 +438,15 @@ export async function peekMailbox(
  * second request as the same act unless the client says so. Reuse the key across
  * a retry of the SAME click; mint a new one for a new one.
  *
- * ⚠️ IT RETURNS AS SOON AS THE FLAG IS STORED. The run ends when the walk reads
- * it at its next phase boundary, which can be a whole authoring session away — so
- * a resolved promise here means *the stop is recorded*, never *the run is over*,
- * and the surface has to keep saying "stopping" until the stream actually ends.
+ * ⚠️ IT RETURNS AS SOON AS THE FLAG IS STORED. The run ends when the walk READS it:
+ * motir-ai's mid-run inbox polls the mailbox on its own timer (the 5 s throttle) and,
+ * on reading the stop, aborts every author session in flight at once — the job ends
+ * within 15 s of the stop's row, not at the next phase boundary (MOTIR-11191). Work
+ * items already written are kept; one a session was cut off writing keeps its laid
+ * title and boundary and the briefing names it as not written. So a resolved promise
+ * here still means *the stop is recorded*, never *the run is over*, and the surface
+ * keeps saying "stopping" until the stream actually ends — now a few seconds, not a
+ * level of sessions. A START OVER is unchanged: it is still held for the boundary.
  */
 export async function stopPlanChangeRun(
   sessionId: string,

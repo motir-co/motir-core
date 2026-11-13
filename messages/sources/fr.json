@@ -6966,7 +6966,7 @@
   "planningWorkspace.conversation.debug.ungrounded": "Couldn't trace this to the code, so nothing was written.",
   "planningWorkspace.conversation.stop": "Stop",
   "planningWorkspace.conversation.stoppingAction": "Stopping…",
-  "planningWorkspace.conversation.stopping": "Stopping — finishing this work item first.",
+  "planningWorkspace.conversation.stopping": "Stopping — work items already written are kept.",
   "planningWorkspace.conversation.stopped": "You stopped this run.",
   "planningWorkspace.conversation.queuedLabel": "queued",
   "planningWorkspace.conversation.queuedRead": "read",

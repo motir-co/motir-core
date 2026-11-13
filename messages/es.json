@@ -8746,7 +8746,7 @@
       },
       "stop": "Detener",
       "stoppingAction": "Deteniendo…",
-      "stopping": "Deteniendo: primero se termina este elemento de trabajo.",
+      "stopping": "Deteniendo: los elementos de trabajo ya escritos se conservan.",
       "stopped": "Detuviste esta Ejecución.",
       "queuedLabel": "en cola",
       "queuedRead": "leído",
