@@ -200,6 +200,11 @@
       "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
       "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
     },
+    "Motir agent": {
+      "translation": "agente Motir",
+      "source": "Product term for Motir’s own fleet run (MOTIR-11176)",
+      "note": "The name of the agent Motir runs on its own fleet (\"Fix in Motir agent\"). Not a person’s own hosted agent instance, which keeps the plain agent term. Motir itself is never translated. Noun first, product name after: o agente Motir, no agente Motir, execução do agente Motir."
+    },
     "run": {
       "translation": "Execução",
       "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",

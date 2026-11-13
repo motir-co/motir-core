@@ -208,7 +208,7 @@ describe('To resume — a story re-shaped after the run stopped (§ 39)', () => 
       '/plans/pl_q2',
     );
     expect(next('ACME-12').textContent).toBe(
-      'Once it is approved, this run carries on by itself on the hosted agent. Resume will carry the re-shaped story.',
+      'Once it is approved, this run carries on by itself in Motir agent. Resume will carry the re-shaped story.',
     );
   });
 
@@ -273,7 +273,7 @@ describe('To resume — a story re-shaped after the run stopped (§ 39)', () => 
     expect(screen.queryByTestId('workbench-resume-reshaped-ACME-12')).toBeNull();
     expect(document.querySelector('[data-resume-change]')).toBeNull();
     expect(next('ACME-12').textContent).toBe(
-      'Once it is approved, this run carries on by itself on the hosted agent.',
+      'Once it is approved, this run carries on by itself in Motir agent.',
     );
   });
 

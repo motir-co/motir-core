@@ -314,7 +314,7 @@ test('a Standard org: its second agent run waits and boots by itself, its second
     await expect(row).toBeVisible();
     const cells = row.getByRole('cell');
     await expect(cells.nth(1)).toContainText('Standard');
-    // org · plan · CI · hosted runs · agent instances · …
+    // org · plan · CI · Motir agent runs · agent instances · …
     await expect(cells.nth(3)).toContainText('1 of 1');
     await expect(
       fleetOrgs.getByRole('columnheader', { name: fm.orgs.col.plan, exact: true }),

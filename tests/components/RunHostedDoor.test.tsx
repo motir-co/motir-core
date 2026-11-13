@@ -274,7 +274,7 @@ describe('refusals live on the door — none of them starts anything', () => {
 
   it('409 not writable: one line per repository, the reason verbatim, and a link to its row', async () => {
     const reason =
-      'hosted runs on acme/api need Motir Integration’s updated permissions — an owner of acme accepts them on GitHub';
+      'Motir agent runs on acme/api need Motir Integration’s updated permissions — an owner of acme accepts them on GitHub';
     routes[START] = () => ({
       status: 409,
       body: {

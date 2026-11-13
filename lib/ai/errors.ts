@@ -194,7 +194,7 @@ export class RunModelDefaultNotOfferedError extends MotirAiError {
     readonly model: string,
     detail?: string,
   ) {
-    super(`"${model}" is not offered for hosted runs${detail ? `: ${detail}` : ''}`);
+    super(`"${model}" is not offered for Motir agent runs${detail ? `: ${detail}` : ''}`);
     this.name = 'RunModelDefaultNotOfferedError';
   }
 }

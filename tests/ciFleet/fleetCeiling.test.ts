@@ -313,7 +313,7 @@ describe("each workload is held to its OWN figure, never the org's summed pool",
     expect(after.status).toBe('pending');
     const detail = (verdict as { detail: string }).detail;
     expect(detail).toContain('runs 2 CI jobs at once');
-    expect(detail).toContain('hosted agents 1');
+    expect(detail).toContain('Motir agent runs 1');
   });
 
   // MOTIR-9373: `reserve` no longer judges the summed pool. An index slot taken

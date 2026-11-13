@@ -31,7 +31,7 @@ const LIVE: WorkItemRefSummaryDto = {
   accessible: true,
   id: 'wi_live',
   identifier: 'MOTIR-673',
-  title: 'Hosted agent',
+  title: 'Motir agent',
   kind: 'epic',
   archived: false,
   status: { key: 'in_progress', label: 'In Progress', category: 'in_progress' },
@@ -69,7 +69,7 @@ function chipFor(root: HTMLElement, key: string): Element {
 function expectChips(root: HTMLElement) {
   const live = chipFor(root, 'MOTIR-673');
   expect(live.classList.contains('is-deleted')).toBe(false);
-  expect(live.textContent).toContain('Hosted agent');
+  expect(live.textContent).toContain('Motir agent');
   // A link to a card that is really gone still draws struck through.
   expect(chipFor(root, 'MOTIR-1').classList.contains('is-deleted')).toBe(true);
   // A card the reader cannot view is the no-access chip, with no title.

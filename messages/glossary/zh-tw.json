@@ -198,6 +198,11 @@
       "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
       "note": "Not 智能體 (a Mainland coinage). 程式 is the Taiwan word for a program. Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
     },
+    "Motir agent": {
+      "translation": "Motir 代理程式",
+      "source": "Product term for Motir’s own fleet run (MOTIR-11176)",
+      "note": "The name of the agent Motir runs on its own fleet (\"Fix in Motir agent\"). Not a person’s own hosted agent instance, which keeps the plain agent term. Motir itself is never translated. A space between Motir and the CJK noun; 代理程式 follows the glossary’s agent term."
+    },
     "run": {
       "translation": "執行",
       "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",

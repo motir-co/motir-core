@@ -191,12 +191,12 @@ describe('To resume — waiting on a gate (§ 35.5, Panels 1–2)', () => {
     expect(line('ACME-12').dataset.resumeState).toBe('waiting');
     expect(line('ACME-12').textContent).toContain('Stopped at a gate · waiting on 1 approval');
     expect(screen.getByTestId('workbench-resume-aside-ACME-12').textContent).toBe(
-      ' · Mara S. ran it on the hosted agent · branch story/ACME-12-quotas · 2 more work items in this run',
+      ' · Mara S. ran it in Motir agent · branch story/ACME-12-quotas · 2 more work items in this run',
     );
     // No repair: the claim refuses `gate_awaiting`.
     expect(within(line('ACME-12')).queryByText(/motir continue/)).toBeNull();
     expect(next('ACME-12').textContent).toBe(
-      'Once it is approved, this run carries on by itself on the hosted agent.',
+      'Once it is approved, this run carries on by itself in Motir agent.',
     );
     // The members, labelled as waiting rather than stuck.
     expect(screen.getByRole('list', { name: 'Work items waiting with ACME-12' })).toBeTruthy();
@@ -268,7 +268,7 @@ describe('To resume — waiting on a gate (§ 35.5, Panels 1–2)', () => {
     );
     expect(line('ACME-70').textContent).toContain('waiting on 2 approvals');
     expect(next('ACME-70').textContent).toBe(
-      'When any one is approved, this run carries on by itself on the hosted agent and stops again at the rest.',
+      'When any one is approved, this run carries on by itself in Motir agent and stops again at the rest.',
     );
   });
 
@@ -395,7 +395,7 @@ describe('To resume — resuming and could not resume (§ 35.5, Panels 4–5)', 
   it('Resuming: the sky pill, a link to the run, no command and no next-step line', () => {
     render(list([ready(attempt({ outcome: 'started', resumedRunId: 'run_9' }))]));
     expect(line('ACME-12').dataset.resumeState).toBe('resuming');
-    expect(line('ACME-12').textContent).toMatch(/Resuming on the hosted agent · started .+ago/);
+    expect(line('ACME-12').textContent).toMatch(/Resuming in Motir agent · started .+ago/);
     expect(screen.getByTestId('workbench-resume-state-ACME-12').dataset.tone).toBe('resuming');
     expect(screen.getByRole('link', { name: 'See the run' })).toBeTruthy();
     expect(within(line('ACME-12')).queryByText(/motir continue/)).toBeNull();
@@ -580,7 +580,7 @@ describe('To resume — the words when a name or a detail is missing', () => {
     );
     expect(gates('ACME-12').textContent).not.toContain('decides');
     expect(screen.getByTestId('workbench-resume-aside-ACME-12').textContent).toContain(
-      'Someone ran it on the hosted agent',
+      'Someone ran it in Motir agent',
     );
   });
 
@@ -683,13 +683,13 @@ describe('To resume — the empty tab and zh (§ 35.6, Panel 8)', () => {
     await act(async () => {});
     expect(line('ACME-12').textContent).toContain('停在审批处 · 等待 1 项审批');
     const aside = screen.getByTestId('workbench-resume-aside-ACME-12').textContent;
-    expect(aside).toContain('Mara S. 在托管智能体上运行');
+    expect(aside).toContain('Mara S. 在 Motir 智能体中运行了它');
     expect(aside).toContain('分支 story/ACME-12-quotas');
     const row = screen.getByTestId('workbench-resume-gate-ACME-13');
     expect(row.textContent).toContain('设计结果');
     expect(row.textContent).toContain('由你决定');
     expect(row.textContent).toContain('等你处理');
     expect(screen.getByRole('button', { name: '查看并决定' })).toBeTruthy();
-    expect(next('ACME-12').textContent).toBe('审批通过后，此运行会在托管智能体上自动继续。');
+    expect(next('ACME-12').textContent).toBe('审批通过后，此运行会在 Motir 智能体中自动继续。');
   });
 });

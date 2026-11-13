@@ -515,7 +515,7 @@ test.describe('the review path', () => {
         await page.goto('/settings/project/approvals');
         await setReviewAgent(page, projectKey, true);
         await main(page).locator('#review-agent').scrollIntoViewIfNeeded();
-        // Motir's hosted agent is the default, with its billing note.
+        // Motir agent is the default, with its billing note.
         await expect(sourceRadio(page, ra.source.hosted)).toHaveAttribute('aria-checked', 'true');
         await expect(main(page)).toContainText(ra.billingNote);
         await autoMergeBlocked(page);
@@ -893,7 +893,7 @@ test.describe('the review path', () => {
     });
     await beat();
 
-    // ── 10 · Motir's hosted agent ───────────────────────────────────────────
+    // ── 10 · Motir agent ───────────────────────────────────────────
     await chapter('Back on, with Motir’s hosted agent: Agent reviewing', async () => {
       await page.goto('/settings/project/approvals');
       await setReviewAgent(page, projectKey, true);

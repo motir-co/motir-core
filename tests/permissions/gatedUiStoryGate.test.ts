@@ -97,7 +97,7 @@ const SERVICE_OF: Record<string, string> = {
   // spelled literally in `getSettings` / `setDestination`.
   bugs: 'lib/services/bugDestinationService.ts',
   'ai-planning': 'lib/services/projectAiSettingsService.ts',
-  // MOTIR-6995 — the Hosted agent room's write (`update`) asserts `ai:configure`;
+  // MOTIR-6995 — the Motir agent room's write (`update`) asserts `ai:configure`;
   // its READ asserts the entry's distinct VIEW key, `work_item:edit`, which
   // `tests/settings/projectSettingsNav.test.ts`'s VIEW_KEY_EVIDENCE pins.
   'hosted-agent': 'lib/services/projectHostedAgentSettingsService.ts',

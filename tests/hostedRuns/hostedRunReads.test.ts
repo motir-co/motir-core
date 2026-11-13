@@ -76,7 +76,7 @@ describe('the run detail carries a hosted run’s END, read off the record', () 
         { kind: 'agent_exited', workItemKey: key, exitCode: 1 },
         {
           kind: 'log',
-          body: '[motir] hosted run ended (stalled): stalled: no agent output for 15 minutes\n',
+          body: '[motir] Motir agent run ended (stalled): stalled: no agent output for 15 minutes\n',
           data: { end: 'stall' },
         },
       ],
@@ -87,6 +87,29 @@ describe('the run detail carries a hosted run’s END, read off the record', () 
       outcome: 'stall',
       detail: 'stalled: no agent output for 15 minutes',
       exitCode: 1,
+    });
+  });
+
+  // MOTIR-11176 renamed the closing line; a run that ended before it keeps the
+  // old prefix on its record, and its detail still reads without it.
+  it('a closing line written before the rename (`[motir] hosted run ended`) still reads', async () => {
+    const { runId } = await openRun('hosted');
+    await dispatchRunService.appendEvents(
+      runId,
+      [
+        {
+          kind: 'log',
+          body: '[motir] hosted run ended (backstop): reached the 12-hour limit\n',
+          data: { end: 'backstop' },
+        },
+      ],
+      fixture.ctx,
+    );
+    const detail = await dispatchRunService.getRunDetail(runId, fixture.ctx);
+    expect(detail.hostedEnd).toEqual({
+      outcome: 'backstop',
+      detail: 'reached the 12-hour limit',
+      exitCode: null,
     });
   });
 

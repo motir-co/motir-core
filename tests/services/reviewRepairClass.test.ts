@@ -364,7 +364,7 @@ describe('the Development block’s fix part — the sent-back part (MOTIR-6930)
     const { card, repo, pr } = await cardWith(fx, 'in_review');
     await sentBack(fx, card.id, versionOf(repo.name, pr.number), 'agent_review');
 
-    // Where *Fix on the hosted agent* and `motir fix` sit — never `hidden` (§ 30 Panel 3).
+    // Where *Fix in Motir agent* and `motir fix` sit — never `hidden` (§ 30 Panel 3).
     expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
       state: 'offer',
       repairClass: 'review',

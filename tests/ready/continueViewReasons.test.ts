@@ -200,12 +200,12 @@ describe('endedHow (the CONTINUE prompt’s sentence)', () => {
     [
       { status: 'timed_out', stopReason: 'abandoned', origin: 'hosted' },
       'stalled',
-      /^the hosted run stalled — it produced no output/,
+      /^the Motir agent run stalled — it produced no output/,
     ],
     [
       { status: 'timed_out', stopReason: 'abandoned', origin: 'hosted' },
       'backstop',
-      /^the hosted run reached its 12-hour time limit/,
+      /^the Motir agent run reached its 12-hour time limit/,
     ],
     [
       { status: 'timed_out', stopReason: 'abandoned', origin: 'instance' },
@@ -227,7 +227,7 @@ describe('endedHow (the CONTINUE prompt’s sentence)', () => {
     [
       { status: 'timed_out', stopReason: null, origin: 'hosted' },
       null,
-      /hosted run stalled or reached its time limit/,
+      /Motir agent run stalled or reached its time limit/,
     ],
     [
       { status: 'timed_out', stopReason: null, origin: 'instance' },

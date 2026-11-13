@@ -1598,7 +1598,7 @@
     "provenanceSourceMcp": "MCP",
     "provenanceSourceManual": "Handmatig",
     "provenanceSourceApi": "API",
-    "provenanceSourceHosted": "Gehost",
+    "provenanceSourceHosted": "Motir-agent",
     "provenanceSourceByok": "BYOK",
     "changedElsewhereRefreshing": "Dit werkitem is elders gewijzigd — wordt vernieuwd.",
     "editIssue": "Werkitem bewerken",
@@ -1984,7 +1984,7 @@
       "fields": "Velden",
       "components": "Componenten",
       "aiPlanning": "AI-planning",
-      "hostedAgent": "Gehoste agent",
+      "hostedAgent": "Motir-agent",
       "translation": "Vertaling",
       "rules": "Regels",
       "repositories": "Repository's",
@@ -3791,8 +3791,8 @@
       }
     },
     "hostedAgent": {
-      "title": "Gehoste agent",
-      "pageDescription": "Welk model een gehoste run gebruikt. Gehost uitvoeren kiest het vooraf op basis van de moeilijkheid van het werkitem; wie de run start, kan nog een ander kiezen.",
+      "title": "Motir-agent",
+      "pageDescription": "Welk model een Motir-agentrun gebruikt. De knop Run kiest het vooraf op basis van de moeilijkheid van het werkitem; wie de run start, kan nog een ander kiezen.",
       "card": {
         "title": "Model per moeilijkheid",
         "subtitle": "Elke moeilijkheid draait op de platformstandaard, tenzij je die overschrijft. Een bovenliggend werkitem gebruikt het model van de hoogste moeilijkheid onder zijn onderste items."
@@ -3810,14 +3810,14 @@
       "optionDefault": "Platformstandaard voor {difficulty}",
       "reset": "Terugzetten naar standaard",
       "withdrawn": "Het opgeslagen model, <id>{model}</id>, wordt niet meer aangeboden, dus runs met {difficulty} gebruiken de platformstandaard. Zet terug om het te wissen.",
-      "noDifficulty": "Een werkitem zonder moeilijkheid draait op de platformstandaard, <id>{model}</id> — het model dat Gehost uitvoeren als <b>Standaard</b> markeert.",
-      "readOnlyBanner": "Alleen een projectbeheerder kan de instellingen van de gehoste agent wijzigen.",
-      "unavailableBody": "Motir AI is niet bereikbaar, dus de gehoste modellen kunnen nu niet worden getoond of gewijzigd. Gehoste runs staan uit totdat het antwoordt.",
-      "emptyBody": "Op dit moment kan geen enkel model een gehost werkitem uitvoeren, dus er valt niets te kiezen.",
-      "savedTitle": "Instellingen van gehoste agent opgeslagen",
-      "savedDesc": "Nieuwe gehoste runs gebruiken deze modellen.",
+      "noDifficulty": "Een werkitem zonder moeilijkheid draait op de platformstandaard, <id>{model}</id> — het model dat de Run-keuzelijst als <b>Standaard</b> markeert.",
+      "readOnlyBanner": "Alleen een projectbeheerder kan de Motir-agent-instellingen wijzigen.",
+      "unavailableBody": "Motir AI is niet bereikbaar, dus de Motir-agentmodellen kunnen nu niet worden getoond of gewijzigd. Motir-agentruns staan uit totdat het antwoordt.",
+      "emptyBody": "Op dit moment kan geen enkel model een werkitem in de Motir-agent uitvoeren, dus er valt niets te kiezen.",
+      "savedTitle": "Motir-agent-instellingen opgeslagen",
+      "savedDesc": "Nieuwe Motir-agentruns gebruiken deze modellen.",
       "errorTitle": "Kan niet opslaan",
-      "saveError": "Je instellingen voor de gehoste agent zijn niet opgeslagen. Probeer het opnieuw.",
+      "saveError": "Je Motir-agent-instellingen zijn niet opgeslagen. Probeer het opnieuw.",
       "autoFix": {
         "label": "Repareer een rode pull request in de eigen agent van het werkitem.",
         "help": "Als een pull request rood wordt en de laatste run van het werkitem in een ingelogde, actieve agent plaatsvond, start Motir de reparatie in die agent. Uit (de standaard) betekent dat er niets uit zichzelf start."
@@ -4112,7 +4112,7 @@
         "components": "Componenten worden beheerd door projectbeheerders. Vraag het een beheerder als er een moet worden toegevoegd of gewijzigd.",
         "bugs": "Waar de bugs van dit project worden opgeslagen, wordt beheerd door projectbeheerders. Vraag het een beheerder als de bestemming moet veranderen.",
         "ai-planning": "De AI-planning van dit project — het ritme — wordt geconfigureerd door projectbeheerders. Vraag het een beheerder als die moet veranderen.",
-        "hosted-agent": "Welk model een gehoste run gebruikt, wordt getoond aan personen die in dit project een gehoste run kunnen starten. Vraag het een projectbeheerder als je het wilt zien.",
+        "hosted-agent": "Welk model een Motir-agentrun gebruikt, wordt getoond aan personen die in dit project een Motir-agentrun kunnen starten. Vraag het een projectbeheerder als je het wilt zien.",
         "translation": "Of de werkinhoud van dit project voor elke lezer wordt vertaald, wordt getoond aan mensen die de werkitems van het project kunnen lezen. Vraag het een projectbeheerder als je dit wilt zien.",
         "automation": "Projectautomatisering wordt beheerd door projectbeheerders. Vraag het een beheerder als je een regel wilt laten wijzigen.",
         "monitoring": "De koppeling met de foutmonitor van dit project wordt beheerd door personen die integraties kunnen beheren. Vraag het een projectbeheerder als Sentry moet worden gekoppeld of opnieuw gekoppeld.",
@@ -4368,16 +4368,16 @@
           },
           "review": {
             "name": "Review-agent",
-            "desc": "Gehoste reviews. Of een project met een agent reviewt, blijft in de goedkeuringsinstellingen ervan."
+            "desc": "Motir-agentreviews. Of een project met een agent reviewt, blijft in de goedkeuringsinstellingen ervan."
           },
           "design": {
             "name": "Ontwerprun",
-            "desc": "Een gehoste run op een ontwerpwerkitem"
+            "desc": "Een Motir-agentrun op een ontwerpwerkitem"
           }
         },
         "agentRun": {
           "name": "Agentrun",
-          "desc": "Gehoste buildruns, op basis van de moeilijkheid van het werkitem. De eigen overschrijving van een project voor een moeilijkheid gaat nog steeds voor die van de organisatie."
+          "desc": "Motir-agent-buildruns, op basis van de moeilijkheid van het werkitem. De eigen overschrijving van een project voor een moeilijkheid gaat nog steeds voor die van de organisatie."
         },
         "modelFor": "Model voor {function}",
         "loadingTrigger": "Modellen laden…",
@@ -4404,7 +4404,7 @@
           "failed": "Niet opgeslagen: {function} kon niet worden opgeslagen. Het houdt zijn huidige model; probeer het opnieuw."
         },
         "precedence": {
-          "body": "<b>Welk model een taak gebruikt</b>, de eerste overeenkomst wint: de keuze van de persoon bij Gehost uitvoeren → de eigen overschrijving van het project (alleen agentrun) → de keuze van {org} → de platformstandaard.",
+          "body": "<b>Welk model een taak gebruikt</b>, de eerste overeenkomst wint: de keuze van de persoon bij Run → de eigen overschrijving van het project (alleen agentrun) → de keuze van {org} → de platformstandaard.",
           "cost": "Elk model wordt tegen een eigen tarief gefactureerd, dus een sterker model verbruikt meer tegoed van {org}."
         },
         "footer": {
@@ -6960,7 +6960,7 @@
     },
     "ai": {
       "name": "Motir AI",
-      "tagline": "Planning en gehoste agents — een maandelijkse tegoedpool op organisatieniveau.",
+      "tagline": "Planning en Motir-agent — een maandelijkse tegoedpool op organisatieniveau.",
       "creditsPerMo": "{n} credits per maand",
       "creditsOneTime": "{n} credits · eenmalig",
       "planFee": "Abonnementskosten",
@@ -7075,7 +7075,7 @@
     "plans": {
       "breadcrumb": "Organisatie · {org} · Motir AI",
       "title": "Motir AI — abonnementen",
-      "subtitle": "Beheer het AI-abonnement van je organisatie — planning en gehoste agents. Gefactureerd los van je Motir-plekken, dus dit scherm gaat alleen over AI.",
+      "subtitle": "Beheer het AI-abonnement van je organisatie — planning en Motir-agent. Gefactureerd los van je Motir-plekken, dus dit scherm gaat alleen over AI.",
       "back": "Terug naar facturering",
       "currentStrip": "{n} credits per maand · {left} over · verlengt op {date}",
       "currentStripOneTime": "{n} credits · eenmalig · {left} over",
@@ -7398,7 +7398,7 @@
         "ciJobsInFlight": "Lopende CI-jobs"
       },
       "explain": {
-        "agentRunsInParallel": "Jobs van gehoste agents die tegelijk draaien. Meer wacht in de wachtrij.",
+        "agentRunsInParallel": "Motir-agentruns die tegelijk draaien. Meer wacht in de wachtrij.",
         "agentsInOrg": "Actieve gehoste agents in de hele organisatie, draaiend of slapend. Daarboven wordt een nieuwe geweigerd, niet in de wachtrij gezet.",
         "agentsPerPerson": "Actieve gehoste agents die één persoon kan hebben. Daarboven wordt een nieuwe geweigerd, niet in de wachtrij gezet.",
         "ciJobsInFlight": "CI-jobs die tegelijk draaien op de runners van Motir. Meer wacht in de wachtrij."
@@ -7447,7 +7447,7 @@
       "notReadNotice": "Je plangrenzen en wat er draait, konden niet gelezen worden. Dit is niet nul, maar onbekend.",
       "tryAgain": "Opnieuw proberen",
       "noPlanLimitsNote": "Deze organisatie wordt door Motir beheerd en heeft geen plangrenzen. Wat er draait, wordt zonder grens getoond.",
-      "noFleet": "Je plan bevat geen runs van gehoste agents, CI-runners of agents. Kies hierboven onder Motir AI een plan om ze uit te voeren.",
+      "noFleet": "Je plan bevat geen Motir-agentruns, CI-runners of agents. Kies hierboven onder Motir AI een plan om ze uit te voeren.",
       "accounts": {
         "title": "Je eigen AWS-accounts",
         "notRead": "De status van je accounts kon nu niet gelezen worden.",
@@ -7458,7 +7458,7 @@
         },
         "role": {
           "ci_runner": "Voert je CI-jobs uit",
-          "hosted_agent": "Voert de jobs van je gehoste agents uit",
+          "hosted_agent": "Voert je Motir-agentruns uit",
           "indexer_and_hoster": "Indexeert je code en host je agents"
         },
         "state": {
@@ -8139,20 +8139,20 @@
         "personSentBackAnon": "Deze commits zijn teruggestuurd. Een agent repareert ze op {count, plural, one {dezelfde pull request} other {dezelfde pull requests}}, met de reden in de prompt.",
         "reviewedAgain": "De volgende groene versie wordt opnieuw beoordeeld.",
         "hosted": {
-          "lead": "Repareer het hier, met de gehoste agent — geen terminal nodig:",
-          "button": "Repareren met de gehoste agent",
+          "lead": "Repareer het hier, in de Motir-agent — geen terminal nodig:",
+          "button": "Repareren in de Motir-agent",
           "orTerminal": "Of geef de reparatie vanuit je terminal aan een agent:",
           "eitherWay": "Hoe dan ook werkt een agent op de eigen branch van elke pull request, pusht, en de checks draaien opnieuw.",
           "fixing": {
-            "byYou": "Wordt gerepareerd door <b>jou</b> met de gehoste agent · gestart <when></when> · <run>{label}</run>",
-            "by": "Wordt gerepareerd door <b>{name}</b> met de gehoste agent · gestart <when></when> · <run>{label}</run>",
+            "byYou": "Wordt gerepareerd door <b>jou</b> in de Motir-agent · gestart <when></when> · <run>{label}</run>",
+            "by": "Wordt gerepareerd door <b>{name}</b> in de Motir-agent · gestart <when></when> · <run>{label}</run>",
             "why": "Er draait maar één reparatie tegelijk. Wanneer die pusht, draaien de checks opnieuw en wordt de volgende groene versie opnieuw beoordeeld."
           },
           "refused": {
             "taken": "Niet gestart — er draait al een reparatie, gestart door <b>{name}</b> <when></when>.",
             "takenByYou": "Niet gestart — je hebt al een reparatie lopen, gestart <when></when>.",
             "outOfCredits": {
-              "body": "Er is niets opgestart en niets in rekening gebracht. Repareren met de gehoste agent werkt weer zodra de organisatie credits heeft — of repareer het vanuit je terminal."
+              "body": "Er is niets opgestart en niets in rekening gebracht. Repareren in de Motir-agent werkt weer zodra de organisatie credits heeft — of repareer het vanuit je terminal."
             }
           }
         },
@@ -8207,8 +8207,8 @@
           "interrupted": "De run is <when></when> vanuit de terminal gestopt.",
           "failed": "De agent is <when></when> met een fout gestopt.",
           "cancelled": "De run is <when></when> geannuleerd.",
-          "stalled": "De gehoste agent liep vast — 15 minuten geen uitvoer — <when></when>.",
-          "backstop": "De gehoste run bereikte <when></when> de limiet van 12 uur."
+          "stalled": "De Motir-agent liep vast — 15 minuten geen uitvoer — <when></when>.",
+          "backstop": "De Motir-agentrun bereikte <when></when> de limiet van 12 uur."
         },
         "ranBy": "Uitgevoerd door <b>{name}</b> met <mono>{command}</mono> · gestart <when></when>",
         "ranBySomeone": "Uitgevoerd met <mono>{command}</mono> · gestart <when></when>",
@@ -8241,7 +8241,7 @@
         "error": "Kon niet controleren of de run van dit werkitem nog actief is.",
         "retry": "Opnieuw proberen",
         "hosted": {
-          "lead": "Zet het hier voort, in een gehoste container — geen terminal nodig:",
+          "lead": "Zet het hier voort, in de Motir-agent — geen terminal nodig:",
           "button": "Voortzetten",
           "buttonParent": "{key} voortzetten",
           "orTerminal": "Of zet het voort vanuit je terminal:",
@@ -8251,8 +8251,8 @@
             "rowWithPr": "<b>{repository}</b> · <ref>{branch}</ref> · pull request <b>{pr}</b>"
           },
           "continuing": {
-            "byYou": "Wordt voortgezet door <b>jou</b> in een gehoste container · gestart <when></when>",
-            "by": "Wordt voortgezet door <b>{name}</b> in een gehoste container · gestart <when></when>",
+            "byYou": "Wordt voortgezet door <b>jou</b> in de Motir-agent · gestart <when></when>",
+            "by": "Wordt voortgezet door <b>{name}</b> in de Motir-agent · gestart <when></when>",
             "watch": "Bekijk het werk in Run hierboven."
           },
           "refused": {
@@ -10354,7 +10354,7 @@
       },
       "toResume": {
         "title": "Niets te hervatten",
-        "body": "Wanneer een run stopt bij een Goedkeuring die hij nodig heeft, wacht hij hier tot die Goedkeuring is gegeven — daarna gaat hij vanzelf verder met de gehoste agent, of met motir continue vanuit je terminal."
+        "body": "Wanneer een run stopt bij een Goedkeuring die hij nodig heeft, wacht hij hier tot die Goedkeuring is gegeven — daarna gaat hij vanzelf verder in de Motir-agent, of met motir continue vanuit je terminal."
       },
       "recentlyFinished": {
         "title": "Deze week niets afgerond",
@@ -10504,8 +10504,8 @@
         "title": "Gekopieerd",
         "body": "Plak {command} in je terminal."
       },
-      "fixingHosted": "Wordt gerepareerd met de gehoste agent door <b>{name}</b> · <run>{label}</run>",
-      "fixingHostedByYou": "Wordt gerepareerd met de gehoste agent door <b>jou</b> · <run>{label}</run>",
+      "fixingHosted": "Wordt gerepareerd in de Motir-agent door <b>{name}</b> · <run>{label}</run>",
+      "fixingHostedByYou": "Wordt gerepareerd in de Motir-agent door <b>jou</b> · <run>{label}</run>",
       "entry": {
         "carriesRun": "{count, plural, one {nog # werkitem in deze run} other {nog # werkitems in deze run}}",
         "carriesPullRequests": "{count, plural, one {nog # werkitem op dezelfde pull request} other {nog # werkitems op dezelfde pull request}}",
@@ -10523,10 +10523,10 @@
       "readyByYou": "Klaar om te hervatten · je hebt de {kind} op {key} goedgekeurd <when></when>",
       "readyBare": "Klaar om te hervatten",
       "readySome": "Klaar om te hervatten · {approved} van {total} Goedkeuringen gegeven",
-      "resuming": "Wordt hervat met de gehoste agent · gestart <when></when>",
+      "resuming": "Wordt hervat in de Motir-agent · gestart <when></when>",
       "couldNot": "Kon niet vanzelf hervatten · <reason></reason>",
       "ranBy": {
-        "hosted": "{name} heeft het met de gehoste agent uitgevoerd",
+        "hosted": "{name} heeft het in de Motir-agent uitgevoerd",
         "terminal": "{name} heeft het vanuit een terminal uitgevoerd",
         "runbook": "{name} heeft het met het runbook uitgevoerd",
         "instance": "{name} heeft het in {agent} uitgevoerd"
@@ -10560,8 +10560,8 @@
       },
       "seeRun": "De run bekijken",
       "next": {
-        "waitingHosted": "Zodra het is goedgekeurd, gaat deze run vanzelf verder met de gehoste agent.",
-        "waitingHostedMany": "Zodra er een is goedgekeurd, gaat deze run vanzelf verder met de gehoste agent en stopt hij opnieuw bij de rest.",
+        "waitingHosted": "Zodra het is goedgekeurd, gaat deze run vanzelf verder in de Motir-agent.",
+        "waitingHostedMany": "Zodra er een is goedgekeurd, gaat deze run vanzelf verder in de Motir-agent en stopt hij opnieuw bij de rest.",
         "waitingLocal": "Zodra je het goedkeurt, zet je de run voort vanuit je terminal — de opdracht verschijnt hier.",
         "ready": "Een agent pakt de run op zijn eigen branch op, bouwt wat de Goedkeuring heeft vrijgegeven en stopt opnieuw bij elke poort die nog wacht.",
         "readySome": "Nu voortzetten bouwt wat de goedgekeurde poort heeft vrijgegeven en stopt opnieuw bij de {count} die nog wachten.",
@@ -10764,7 +10764,7 @@
       "navPlanningLessons": "Planningslessen",
       "navPlannerFindings": "Plannerbevindingen",
       "navIdeas": "Ideeën",
-      "navRunModels": "Modellen voor gehoste runs",
+      "navRunModels": "Motir-agentmodellen",
       "navFleetSettings": "Vlootinstellingen",
       "navServices": "Services",
       "navCapacity": "Providercapaciteit",
@@ -10941,9 +10941,9 @@
               "remove": "Een model verwijderd uit de planningslijst"
             },
             "run_model_list": {
-              "seed": "De modellenlijst voor gehoste runs ingericht",
-              "add": "Een model toegevoegd aan de lijst voor gehoste runs",
-              "remove": "Een model verwijderd uit de lijst voor gehoste runs"
+              "seed": "De Motir-agentmodellenlijst ingericht",
+              "add": "Een model toegevoegd aan de Motir-agentmodellenlijst",
+              "remove": "Een model verwijderd uit de Motir-agentmodellenlijst"
             },
             "lesson": {
               "edit": "Een planningsles bewerkt",
@@ -11268,7 +11268,7 @@
           "stat": {
             "orgs": "organisaties met een draaiende container",
             "ciRunners": "CI-runners · elke organisatie begrensd op de CI-piek van haar abonnement",
-            "hostedAgents": "runs van gehoste agents · elke organisatie begrensd op de parallelle runs van haar abonnement",
+            "hostedAgents": "Motir-agentruns · elke organisatie begrensd op de parallelle runs van haar abonnement",
             "instances": "actieve agentinstanties · elke organisatie begrensd op de waarde van haar abonnement",
             "mismatched": "afwijkend · draaien en afschrijven komen niet overeen"
           },
@@ -11280,7 +11280,7 @@
             "org": "Organisatie",
             "plan": "Abonnement",
             "ciRunner": "CI-runners",
-            "hostedAgent": "Runs van gehoste agents",
+            "hostedAgent": "Motir-agentruns",
             "index": "Indexcontainers",
             "agentInstance": "Agentinstanties",
             "accrued": "CI-minuten · afgelopen {minutes} min",
@@ -11313,7 +11313,7 @@
           "foot": "{from}–{to} van {total} getoond · afwijkingen eerst, dan de meeste containers · alleen CI wordt beoordeeld — dat is de enige werklast die wordt afgeschreven terwijl hij draait",
           "empty": {
             "title": "Geen enkele organisatie draait een vlootcontainer",
-            "body": "Geen enkele organisatie heeft nu een CI-runner, een run van een gehoste agent, een agentinstantie of een indexcontainer, dus er valt niets met de afschrijving te vergelijken. Dit is een gezonde stand, geen fout."
+            "body": "Geen enkele organisatie heeft nu een CI-runner, een Motir-agentrun, een agentinstantie of een indexcontainer, dus er valt niets met de afschrijving te vergelijken. Dit is een gezonde stand, geen fout."
           },
           "error": {
             "title": "De vloot kon niet worden gelezen",
@@ -11622,8 +11622,8 @@
         "remaining": "resterend",
         "grantedConsumed": "toegekend {granted} · verbruikt {consumed}",
         "unknownFigure": "onbekend",
-        "creditNote": "Verbruikt door de planner en de gehoste agent. Tokenverbruik deze periode: {spend} credits.",
-        "creditNoteUnknownSpend": "Verbruikt door de planner en de gehoste agent. Tokenverbruik deze periode: onbekend.",
+        "creditNote": "Verbruikt door de planner en de Motir-agent. Tokenverbruik deze periode: {spend} credits.",
+        "creditNoteUnknownSpend": "Verbruikt door de planner en de Motir-agent. Tokenverbruik deze periode: onbekend.",
         "indexNote": "Alleen verbruikt door indexeren. Raakt het creditsaldo nooit aan — onder geen enkele voorwaarde.",
         "notGrantedYet": "Nog geen tegoed toegekend — er is in de huidige periode nog niets voor deze organisatie geïndexeerd.",
         "notConfigured": "Tegoed niet geconfigureerd — wordt door medewerkers op het abonnement ingesteld. Tot die tijd is er geen drempel om te overschrijden.",
@@ -12022,7 +12022,7 @@
         "sheetDone": "Klaar"
       },
       "source": {
-        "in_loop": "Gehoste review",
+        "in_loop": "Motir-agentreview",
         "check_plan": "Check plan"
       },
       "planner": {
@@ -12728,7 +12728,7 @@
           "whenOff": "Nieuwe planningstaken worden geweigerd met ‘planning is gepauzeerd voor je organisatie’. Taken die al draaien, worden afgerond."
         },
         "hosted_runs": {
-          "name": "Gehoste agentruns",
+          "name": "Motir-agentruns",
           "whenOff": "Nieuwe agentruns en agentinstanties worden geweigerd. Draaiende containers worden gestopt."
         },
         "web_search": {
@@ -12832,7 +12832,7 @@
         "subtitleEmpty": "Er draait niets op de vloot voor deze organisatie.",
         "workload": {
           "ciRunner": "CI-runners",
-          "hostedAgent": "Gehoste agentruns",
+          "hostedAgent": "Motir-agentruns",
           "agentInstance": "Agentinstanties",
           "index": "Indexcontainers"
         },
@@ -12847,8 +12847,8 @@
           "override": "afwijking"
         },
         "facts": {
-          "plan": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {agents} agents · {ci} CI-jobs tegelijk",
-          "planCiUnreadable": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {agents} agents · CI-limiet onleesbaar",
+          "plan": "Abonnement <strong>{plan}</strong> · {runs} Motir-agentruns tegelijk · {perUser} agents per persoon · {agents} agents · {ci} CI-jobs tegelijk",
+          "planCiUnreadable": "Abonnement <strong>{plan}</strong> · {runs} Motir-agentruns tegelijk · {perUser} agents per persoon · {agents} agents · CI-limiet onleesbaar",
           "planExempt": "Abonnement <strong>Geen abonnementslimiet</strong>",
           "planExemptOverride": "Abonnement <strong>Geen abonnementslimiet</strong> · {ci} CI-jobs tegelijk (afwijking)",
           "planUnknown": "Abonnement <strong>onbekend · {key}</strong> · nieuwe containers geweigerd",
@@ -12859,7 +12859,7 @@
         },
         "stop": {
           "button": "Containers stoppen",
-          "explainer": "Stoppen beëindigt nu het <strong>gefactureerde</strong> werk van deze organisatie: CI, gehoste agentruns en agentinstanties. Het schorst de organisatie niet.",
+          "explainer": "Stoppen beëindigt nu het <strong>gefactureerde</strong> werk van deze organisatie: CI, Motir-agentruns en agentinstanties. Het schorst de organisatie niet.",
           "notPermitted": "Alleen een <strong>superadmin</strong> kan de containers van een organisatie stoppen. Je bent ingelogd als <strong>{role}</strong>.",
           "nothing": "Niets te stoppen."
         },
@@ -12868,7 +12868,7 @@
           "lead": "Dit beëindigt wat {org} nu op de vloot van Motir draait:",
           "ci": "{runs, plural, one {CI-run geannuleerd} other {CI-runs geannuleerd}} en <strong>{containers}</strong> {containers, plural, one {CI-container vernietigd} other {CI-containers vernietigd}}",
           "ciUnknown": "CI-runs niet geteld — GitHub kon niet worden gelezen; het stoppen annuleert ze toch — en <strong>{containers}</strong> {containers, plural, one {CI-container vernietigd} other {CI-containers vernietigd}}",
-          "hosted": "{count, plural, one {gehoste agentrun beëindigd} other {gehoste agentruns beëindigd}}",
+          "hosted": "{count, plural, one {Motir-agentrun beëindigd} other {Motir-agentruns beëindigd}}",
           "instances": "{count, plural, one {agentinstantie in slaapstand gezet} other {agentinstanties in slaapstand gezet}}",
           "index": "{count, plural, one {indexcontainer mag afronden} other {indexcontainers mogen afronden}} — indexeren zijn kosten van Motir zelf en worden nooit aan de organisatie in rekening gebracht",
           "notSuspension": "<strong>Dit is geen schorsing.</strong> Er wordt niets geblokkeerd: de volgende CI-run, agentrun of agentstart van {org} doorloopt de normale toelating.",
@@ -12890,8 +12890,8 @@
           "partialTitle": "Gestopt, met fouten",
           "ci": "{runs, plural, one {# CI-run geannuleerd} other {# CI-runs geannuleerd}} · {stopped, plural, one {# CI-container vernietigd} other {# CI-containers vernietigd}}",
           "ciPartial": "CI: {runs} runs geannuleerd · {stopped} van {total} containers vernietigd",
-          "hosted": "{ended, plural, one {# gehoste agentrun beëindigd} other {# gehoste agentruns beëindigd}}",
-          "hostedPartial": "Gehoste agentruns: {ended} beëindigd",
+          "hosted": "{ended, plural, one {# Motir-agentrun beëindigd} other {# Motir-agentruns beëindigd}}",
+          "hostedPartial": "Motir-agentruns: {ended} beëindigd",
           "instances": "{hibernated, plural, one {# agentinstantie in slaapstand gezet} other {# agentinstanties in slaapstand gezet}}",
           "instancesPartial": "Agentinstanties: {hibernated} van {total} in slaapstand gezet",
           "failed": "{count} konden niet worden gestopt — de reconciler probeert het opnieuw."
@@ -12911,7 +12911,7 @@
           "when": "{time} · {actor}",
           "unknownActor": "een voormalige operator",
           "noReason": "Geen reden vastgelegd",
-          "counts": "{runs} CI-runs · {containers} CI-containers · {hosted} gehoste runs · {instances} agentinstanties"
+          "counts": "{runs} CI-runs · {containers} CI-containers · {hosted} Motir-agentruns · {instances} agentinstanties"
         },
         "orgAdminStop": {
           "title": "Laatst gestopt door een beheerder van de organisatie",
@@ -12994,17 +12994,17 @@
       }
     },
     "runModels": {
-      "breadcrumb": "Operaties · Modellen voor gehoste runs",
-      "title": "Modellen voor gehoste runs",
-      "subtitle": "Welke modellen een gehoste run mag gebruiken, voor elk project. Een project kiest uit de vermelde modellen die motir-ai nu aanbiedt.",
+      "breadcrumb": "Operaties · Motir-agentmodellen",
+      "title": "Motir-agentmodellen",
+      "subtitle": "Welke modellen een Motir-agentrun mag gebruiken, voor elk project. Een project kiest uit de vermelde modellen die motir-ai nu aanbiedt.",
       "lineLive": "Een vermeld model dat motir-ai niet meer aanbiedt, verdwijnt direct uit elke keuzelijst. Een niet-vermeld model verschijnt nooit.",
       "lineProjectsLead": "Projecten zien deze lijst nooit.",
-      "lineProjectsBody": "Ze zien het resultaat: de keuzelijst voor Gehost uitvoeren en hun instellingen voor gehoste agents bieden alleen deze modellen aan.",
+      "lineProjectsBody": "Ze zien het resultaat: de Run-keuzelijst en hun Motir-agent-instellingen bieden alleen deze modellen aan.",
       "card": {
-        "title": "Modellen die een gehoste run mag gebruiken",
-        "subtitle": "Ingesteld met elk model dat motir-ai voor gehoste runs aanbood toen de lijst voor het eerst werd gelezen, zodat geen enkel project het gekozen model kwijtraakte."
+        "title": "Modellen die een Motir-agentrun mag gebruiken",
+        "subtitle": "Ingesteld met elk model dat motir-ai voor Motir-agentruns aanbood toen de lijst voor het eerst werd gelezen, zodat geen enkel project het gekozen model kwijtraakte."
       },
-      "notOffered": "Nu niet in het aanbod van motir-ai voor gehoste runs: het is ingetrokken, heeft geen tarief, is geen chatmodel, of de provider is niet geconfigureerd voor gehoste runs.",
+      "notOffered": "Nu niet in het Motir-agentaanbod van motir-ai: het is ingetrokken, heeft geen tarief, is geen chatmodel, of de provider is niet geconfigureerd voor Motir-agentruns.",
       "level": {
         "trivial": "triviaal",
         "low": "laag",
@@ -13016,19 +13016,19 @@
         "projects": "{n, plural, one {# project} other {# projecten}}"
       },
       "add": {
-        "title": "Een model voor gehoste runs toevoegen",
-        "body": "Projecten kunnen het kiezen voor Gehost uitvoeren en hun instellingen per moeilijkheidsgraad zodra het is toegevoegd.",
+        "title": "Een model voor Motir-agentruns toevoegen",
+        "body": "Projecten kunnen het kiezen voor Run en hun instellingen per moeilijkheidsgraad zodra het is toegevoegd.",
         "modelLabel": "Model",
         "placeholder": "Kies een model",
-        "pickerFoot": "Modellen die motir-ai voor gehoste runs aanbiedt en die nog niet op de lijst staan.",
-        "nothing": "Elk model dat motir-ai voor gehoste runs aanbiedt, staat al op de lijst.",
+        "pickerFoot": "Modellen die motir-ai voor Motir-agentruns aanbiedt en die nog niet op de lijst staan.",
+        "nothing": "Elk model dat motir-ai voor Motir-agentruns aanbiedt, staat al op de lijst.",
         "confirm": "Model toevoegen",
-        "notOffered": "Niet toegevoegd: motir-ai biedt {model} niet meer aan voor gehoste runs.",
+        "notOffered": "Niet toegevoegd: motir-ai biedt {model} niet meer aan voor Motir-agentruns.",
         "alreadyListed": "Niet toegevoegd: {model} staat al op de lijst."
       },
       "remove": {
-        "title": "{model} verwijderen uit de modellen voor gehoste runs?",
-        "body": "Vanaf nu kan geen enkel project het kiezen voor een gehoste run. Geen enkel project en geen platformstandaard gebruikt het.",
+        "title": "{model} verwijderen uit de Motir-agentmodellen?",
+        "body": "Vanaf nu kan geen enkel project het kiezen voor een Motir-agentrun. Geen enkel project en geen platformstandaard gebruikt het.",
         "confirm": "Model verwijderen",
         "inUse": "Niet verwijderd: {model} is in gebruik. {platformDefaultClause}{projectsClause} Wijzig die eerst.",
         "inUseParts": {
@@ -13040,20 +13040,20 @@
         },
         "notListed": "Niet verwijderd: {model} staat niet meer in de lijst."
       },
-      "added": "{model} toegevoegd. Projecten kunnen het nu kiezen voor gehoste runs.",
-      "removed": "{model} verwijderd uit de modellen voor gehoste runs.",
+      "added": "{model} toegevoegd. Projecten kunnen het nu kiezen voor Motir-agentruns.",
+      "removed": "{model} verwijderd uit de Motir-agentmodellen.",
       "empty": {
         "title": "Er staat geen model in de lijst",
-        "body": "Er kan geen gehoste run starten totdat er een model is toegevoegd. Voeg er een toe uit het aanbod van motir-ai.",
-        "bodyReadOnly": "Er kan geen gehoste run starten totdat een superadmin een model toevoegt."
+        "body": "Er kan geen Motir-agentrun starten totdat er een model is toegevoegd. Voeg er een toe uit het aanbod van motir-ai.",
+        "bodyReadOnly": "Er kan geen Motir-agentrun starten totdat een superadmin een model toevoegt."
       },
       "unavailable": {
-        "title": "Kan de modellen voor gehoste runs niet laden",
+        "title": "Kan de Motir-agentmodellen niet laden",
         "body": "motir-ai reageerde niet, dus het is onbekend of elk model in de lijst wordt aangeboden en er wordt geen lijst getoond. Er is niets gewijzigd."
       },
       "defaults": {
         "title": "Standaarden aan de runkant",
-        "subtitle": "Het model waarmee een gehoste beoordeling, ontwerprun of agentrun start als noch de persoon, noch het project, noch de organisatie er een koos. Gekozen uit de lijst hierboven.",
+        "subtitle": "Het model waarmee een Motir-agentbeoordeling, ontwerprun of agentrun start als noch de persoon, noch het project, noch de organisatie er een koos. Gekozen uit de lijst hierboven.",
         "count": "6 instellingen",
         "col": {
           "function": "Functie"
@@ -13061,27 +13061,27 @@
         "row": {
           "review": {
             "name": "Beoordelingsagent",
-            "desc": "Gehoste beoordelingen"
+            "desc": "Motir-agentbeoordelingen"
           },
           "design": {
             "name": "Ontwerprun",
-            "desc": "Een gehoste run op een ontwerp-werkitem"
+            "desc": "Een Motir-agentrun op een ontwerp-werkitem"
           },
           "trivial": {
             "name": "Agentrun · Triviaal",
-            "desc": "Gehoste build-runs op een triviaal werkitem"
+            "desc": "Motir-agent-buildruns op een triviaal werkitem"
           },
           "low": {
             "name": "Agentrun · Laag",
-            "desc": "Gehoste build-runs op een werkitem met lage moeilijkheid"
+            "desc": "Motir-agent-buildruns op een werkitem met lage moeilijkheid"
           },
           "medium": {
             "name": "Agentrun · Gemiddeld",
-            "desc": "Gehoste build-runs op een werkitem met gemiddelde moeilijkheid"
+            "desc": "Motir-agent-buildruns op een werkitem met gemiddelde moeilijkheid"
           },
           "high": {
             "name": "Agentrun · Hoog",
-            "desc": "Gehoste build-runs op een werkitem met hoge moeilijkheid"
+            "desc": "Motir-agent-buildruns op een werkitem met hoge moeilijkheid"
           }
         },
         "inherits": {
@@ -13098,7 +13098,7 @@
         },
         "defaultGroup": "Standaard",
         "pickerAria": "Standaardmodel voor {name}",
-        "pickerFoot": "Alleen modellen uit de lijst hierboven die motir-ai aanbiedt voor gehoste runs.",
+        "pickerFoot": "Alleen modellen uit de lijst hierboven die motir-ai aanbiedt voor Motir-agentruns.",
         "changed": {
           "seededFromEnv": "Uit de omgeving overgenomen · nooit gewijzigd",
           "neverSet": "Nooit ingesteld"
@@ -13108,7 +13108,7 @@
           "body": "{name} valt terug op {what} totdat je een ander kiest.",
           "bodyReadOnly": "{name} valt terug op {what} totdat een superadmin een ander kiest."
         },
-        "refused": "{model} wordt niet meer aangeboden voor gehoste runs of staat niet op de lijst, dus het is niet opgeslagen. De pagina is vernieuwd — kies een ander model.",
+        "refused": "{model} wordt niet meer aangeboden voor Motir-agentruns of staat niet op de lijst, dus het is niet opgeslagen. De pagina is vernieuwd — kies een ander model.",
         "confirmTitle": "Het platformmodel voor {name} wijzigen?",
         "confirmBody": {
           "review": "{from} → {to}. Geldt vanaf de volgende beoordeling voor elke organisatie die niet zelf heeft gekozen. Beoordelingen die al lopen, eindigen op het model waarmee ze begonnen.",
@@ -14125,8 +14125,8 @@
       },
       "image": {
         "hosted": {
-          "title": "Hosted-agent-image",
-          "subtitle": "Wat elke gehoste run start. Vastgezet door MOTIR_HOSTED_AGENT_IMAGE; het nieuwste is de laatste main-build van ghcr.io/motir-co/motir-hosted-agent."
+          "title": "Motir-agent-image",
+          "subtitle": "Wat elke Motir-agentrun start. Vastgezet door MOTIR_HOSTED_AGENT_IMAGE; het nieuwste is de laatste main-build van ghcr.io/motir-co/motir-hosted-agent."
         },
         "runner": {
           "title": "CI-runner-image",
@@ -14142,7 +14142,7 @@
         }
       },
       "imageName": {
-        "hosted": "hosted-agent-image",
+        "hosted": "Motir-agent-image",
         "runner": "CI-runner-image",
         "indexer": "indexer-image",
         "sandbox": "agent-instantie-images"
@@ -14216,7 +14216,7 @@
         "button": "Nieuwste publiceren",
         "republish": "Opnieuw publiceren",
         "note": {
-          "hosted": "Zet de nieuwste main-build vast via de pinworkflow van de hosted agent. Web en worker rollen erop over.",
+          "hosted": "Zet de nieuwste main-build vast via de Motir-agent-pinworkflow. Web en worker rollen erop over.",
           "runner": "Zet {release} vast via de pinworkflow van de runner. Web en worker rollen erop over.",
           "indexer": "Zet {release} vast via de pull request voor de indexer-pin. Web en worker rollen erop over.",
           "sandbox": "Publiceert {release} opnieuw. Alleen de {count} ontbrekende tags worden gepusht; in productie rolt niets over.",
@@ -14233,7 +14233,7 @@
         }
       },
       "confirm": {
-        "hostedTitle": "Het nieuwste hosted-agent-image publiceren?",
+        "hostedTitle": "Het nieuwste Motir-agent-image publiceren?",
         "runnerTitle": "{release} publiceren?",
         "sandboxTitle": "{release} opnieuw publiceren?",
         "from": "Van",
@@ -14241,7 +14241,7 @@
         "cancel": "Annuleren",
         "audited": "Vastgelegd in het auditlogboek als jij, {email}.",
         "sandboxFrom": "{published} van {total} tags bij {version}",
-        "hostedBody": "Dit start de pinworkflow van de hosted agent. Die zet MOTIR_HOSTED_AGENT_IMAGE op de nieuwste build en deployt: <strong>web en worker rollen</strong> over op de nieuwe pin, en gehoste runs die na het overrollen starten, booten het nieuwe image.",
+        "hostedBody": "Dit start de Motir-agent-pinworkflow. Die zet MOTIR_HOSTED_AGENT_IMAGE op de nieuwste build en deployt: <strong>web en worker rollen</strong> over op de nieuwe pin, en Motir-agentruns die na het overrollen starten, booten het nieuwe image.",
         "runnerBody": "Dit start de pinworkflow van de runner. Die zet MOTIR_RUNNER_IMAGE op {release} en deployt: <strong>web en worker rollen</strong> over op de nieuwe pin. De runner-AMI verandert niet.",
         "indexerBody": "Dit opent de pull request voor de indexer-pin, die MOTIR_INDEXER_IMAGE op {release} zet en in de wachtrij wordt gezet om te mergen. De deploy daarvan <strong>rolt daarna web en worker over</strong>, en indexruns die na het overrollen starten, starten het nieuwe image. Indexruns die al bezig zijn, eindigen op het image waarmee ze startten.",
         "sandboxBody": "Dit voert de sandbox-release voor {release} opnieuw uit en pusht alleen de ontbrekende tags: {missing}. {published} zijn al gepubliceerd en worden niet opnieuw gepusht. <strong>In productie rolt niets over.</strong>",
@@ -14274,7 +14274,7 @@
         "retry": "Opnieuw proberen"
       },
       "workflow": {
-        "hosted": "Hosted-agent-pin",
+        "hosted": "Motir-agent-pin",
         "runner": "Runner-pin",
         "indexer": "Indexer-pin",
         "sandbox": "Sandbox-release {tag}",
@@ -15197,8 +15197,8 @@
       "pillReady": "Klaar om te hervatten",
       "gate": "de {kind} op {key}",
       "waitingMany": "{count} Goedkeuringen",
-      "waitingHosted": "Deze run stopte bij een poort — wacht op <b>{gate}</b>. Het werk is bewaard op <d>{branch}</d>, en hij <b>gaat vanzelf verder</b> op de gehoste agent zodra de poort is goedgekeurd.",
-      "waitingHostedNoBranch": "Deze run stopte bij een poort — wacht op <b>{gate}</b>. Het werk is bewaard, en hij <b>gaat vanzelf verder</b> op de gehoste agent zodra de poort is goedgekeurd.",
+      "waitingHosted": "Deze run stopte bij een poort — wacht op <b>{gate}</b>. Het werk is bewaard op <d>{branch}</d>, en hij <b>gaat vanzelf verder</b> in de Motir-agent zodra de poort is goedgekeurd.",
+      "waitingHostedNoBranch": "Deze run stopte bij een poort — wacht op <b>{gate}</b>. Het werk is bewaard, en hij <b>gaat vanzelf verder</b> in de Motir-agent zodra de poort is goedgekeurd.",
       "waitingLocal": "Deze run stopte bij een poort — wacht op <b>{gate}</b>. Het werk is bewaard op de branch; zet hem voort met <d>{command}</d> zodra de poort is goedgekeurd.",
       "ready": "Klaar om te hervatten — <b>{approved} van {total} Goedkeuringen gegeven</b>. Zet hem voort om te bouwen wat is goedgekeurd; hij stopt opnieuw bij elke poort die nog wacht:",
       "resuming": "Wordt hervat — <b>{name}</b> heeft {gate} goedgekeurd, dus een nieuwe run gaat verder op dezelfde branch. <link>Bekijk de nieuwe run</link>",
@@ -15403,12 +15403,12 @@
       "cancel": "Annuleren"
     },
     "hostedRuns": {
-      "ready": "Gehoste runs kunnen hier schrijven — de app van Motir pusht hun branches en opent hun pull requests.",
+      "ready": "Motir-agentruns kunnen hier schrijven — de app van Motir pusht hun branches en opent hun pull requests.",
       "needsPermissionsTitle": "Bijgewerkte rechten nodig.",
-      "needsPermissionsBody": "Motir Integration op {account} kan nog niet schrijven — een eigenaar van {account} moet de bijgewerkte rechten op GitHub accepteren. Tot die tijd wordt een gehoste run die deze repository raakt geweigerd voordat er iets start.",
+      "needsPermissionsBody": "Motir Integration op {account} kan nog niet schrijven — een eigenaar van {account} moet de bijgewerkte rechten op GitHub accepteren. Tot die tijd wordt een Motir-agentrun die deze repository raakt geweigerd voordat er iets start.",
       "reviewPermissions": "Rechten bekijken op GitHub",
       "unreachableTitle": "Motir Integration kan {repo} niet meer bereiken.",
-      "unreachableBody": "De installatie is verwijderd of opgeschort, of bevat deze repository niet meer. Koppel hem opnieuw op GitHub; tot die tijd wordt een gehoste run die hem raakt geweigerd.",
+      "unreachableBody": "De installatie is verwijderd of opgeschort, of bevat deze repository niet meer. Koppel hem opnieuw op GitHub; tot die tijd wordt een Motir-agentrun die hem raakt geweigerd.",
       "reconnect": "Opnieuw koppelen"
     }
   },
@@ -16301,11 +16301,11 @@
         "lead": "<b>Review kon niet draaien:</b> <reason></reason>",
         "reason": {
           "no_credits": "je organisatie heeft geen AI-credits meer.",
-          "no_model": "er is geen model beschikbaar voor gehoste runs.",
+          "no_model": "er is geen model beschikbaar voor Motir-agentruns.",
           "repository_unreadable": "de review kan een van de repository’s die hij beoordeelt niet lezen.",
           "no_verdict": "de reviewrun eindigde zonder oordeel — <run>{label}</run>.",
           "no_verdictNoRun": "de reviewrun eindigde zonder oordeel.",
-          "boot_failed": "de gehoste machine voor de review kon niet starten.",
+          "boot_failed": "de Motir-agentmachine voor de review kon niet starten.",
           "no_actor": "niemand kan hem draaien — het werkitem heeft geen verantwoordelijke of maker, en de werkruimte heeft geen vervangende beheerder.",
           "unknown": "de reviewrun kon niet starten.",
           "noCapacity": "het model voor de review heeft nu geen capaciteit voor agentruns. Probeer het zo opnieuw."
@@ -16331,7 +16331,7 @@
       }
     },
     "autoRerun": {
-      "started": "Wordt opnieuw gedraaid op de gehoste agent",
+      "started": "Wordt opnieuw gedraaid in de Motir-agent",
       "startedCount": "automatische herhaling {ordinal} van {cap}",
       "viewRun": "Run bekijken",
       "skipped": "Automatische herhaling overgeslagen",
@@ -16349,14 +16349,14 @@
         "no_capacity": "{detail}, het model waarop het laatst is gedraaid, heeft nu geen capaciteit voor agentruns."
       },
       "next": {
-        "cap_reached": "Draaien op de gehoste agent",
-        "dispatcher_gone": "Draaien op de gehoste agent",
-        "no_project_access": "Draaien op de gehoste agent",
+        "cap_reached": "Draaien in de Motir-agent",
+        "dispatcher_gone": "Draaien in de Motir-agent",
+        "no_project_access": "Draaien in de Motir-agent",
         "ci_credits_exhausted": "Facturering",
         "model_not_offered": "Model kiezen en draaien",
-        "models_unavailable": "Draaien op de gehoste agent",
+        "models_unavailable": "Draaien in de Motir-agent",
         "out_of_credits": "Credits kopen",
-        "credits_unavailable": "Draaien op de gehoste agent",
+        "credits_unavailable": "Draaien in de Motir-agent",
         "repository_not_writable": "Repository’s",
         "no_capacity": "Ander model kiezen en draaien"
       }
@@ -16396,7 +16396,7 @@
         "second": "Een tweede review van een versie waarover al besloten is. Het besliste niets.",
         "notified": "{name} is op de hoogte gebracht.",
         "findings": "Bevindingen",
-        "agentHosted": "De gehoste agent van Motir",
+        "agentHosted": "Motir-agent",
         "agentOwn": "Agent van {name} ({harness})",
         "dismissed": "<actor></actor> heeft de review van de agent bij {commits} afgewezen",
         "dismissedReason": "Reden: {reason}"
@@ -16431,7 +16431,7 @@
         "reviewed": "Beoordeeld",
         "reviewedName": "Beoordeeld door een agent bij de huidige commits",
         "card": {
-          "hosted": "Beoordeeld door de gehoste agent van Motir",
+          "hosted": "Beoordeeld door Motir-agent",
           "own": "Beoordeeld door de eigen agent van {name}",
           "harness": "{harness} · {model}",
           "commits": "Bij deze commits",
@@ -16441,7 +16441,7 @@
       "line": {
         "label": "Agent-review",
         "reviewed": "<b>Beoordeeld door een agent</b> · {who} · {when}",
-        "whoHosted": "De gehoste agent van Motir",
+        "whoHosted": "Motir-agent",
         "whoOwn": "Agent van {name} · {harness}",
         "findings": "Bevindingen en checklist",
         "skipped": "<b>Review overgeslagen door {name}</b> — ‘{reason}’",
@@ -16455,7 +16455,7 @@
         "subtitle": "{title} · {key}",
         "verdictPassed": "Geslaagd",
         "verdictSentBack": "Wijzigingen gevraagd",
-        "byHosted": "De gehoste agent van Motir",
+        "byHosted": "Motir-agent",
         "byOwn": "De eigen agent van {name}",
         "byOwnHarness": "De eigen agent van {name} · {harness} · {model}",
         "commits": "Bij deze commits",
@@ -16583,13 +16583,13 @@
       "offWhat": "Een werkitem wordt ter Goedkeuring aangeboden zodra de checks slagen.",
       "unavailable": "Niet beschikbaar",
       "unavailableWhat": "Dit project merget automatisch, dus er wacht niets op een review. Kies <strong>Vragen voor het mergen</strong> om de reviewagent aan te zetten.",
-      "billingNote": "Elke review is een gehoste agentrun, betaald uit de AI-credits van je organisatie.",
+      "billingNote": "Elke review is een Motir-agentrun, betaald uit de AI-credits van je organisatie.",
       "offNote": "Dit uitzetten annuleert lopende reviews — die werkitems gaan meteen door naar de gewone stroom.",
       "saved": "Opgeslagen",
       "saveError": "Kan niet opslaan — probeer het opnieuw.",
       "source": {
         "label": "Wie reviewt",
-        "hosted": "Motirs gehoste agent",
+        "hosted": "Motir-agent",
         "hostedWhat": "Motir start een reviewrun zodra de checks slagen. <strong>Gebruikt AI-credits.</strong>",
         "own": "Je eigen agent",
         "ownWhat": "Gratis. De review wacht tot iemand <cmd>motir review</cmd> vanuit de eigen agent uitvoert. Er start niets vanzelf."
@@ -16977,10 +16977,10 @@
       "openingDevelopment": "Ontwikkeling wordt geopend…",
       "sentBackByAgent": "Dit moet worden gerepareerd: de reviewagent heeft het teruggestuurd — ‘{note}’",
       "sentBackByAgentNoNote": "Dit moet worden gerepareerd: de reviewagent heeft het teruggestuurd.",
-      "hostedLead": "Repareer het op de gehoste agent — geen terminal nodig:",
+      "hostedLead": "Repareer het in de Motir-agent — geen terminal nodig:",
       "orTerminal": "Of repareer het vanuit je terminal:",
-      "fixingHosted": "Er loopt een gehoste reparatie — gestart door <b>{name}</b> <when></when> · <run>{label}</run>",
-      "fixingHostedByYou": "Er loopt een gehoste reparatie — gestart door <b>jou</b> <when></when> · <run>{label}</run>",
+      "fixingHosted": "Er loopt een Motir-agentreparatie — gestart door <b>{name}</b> <when></when> · <run>{label}</run>",
+      "fixingHostedByYou": "Er loopt een Motir-agentreparatie — gestart door <b>jou</b> <when></when> · <run>{label}</run>",
       "carries": "{count, plural, one {Nog # werkitem zit er samen mee vast} other {Nog # werkitems zitten er samen mee vast}}: <keys></keys>",
       "carriesMore": "en nog {count}",
       "repairedWithHead": "Repareer het met <b>{head}</b> — ze delen één pull request.",

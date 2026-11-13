@@ -297,9 +297,9 @@ describe('getDispatchPrompt with continueFrom — how the dead run ended', () =>
   it.each<[HostedRunEndOutcome, string]>([
     [
       'stall',
-      'It ended: the hosted run stalled — it produced no output for too long — and was stopped.',
+      'It ended: the Motir agent run stalled — it produced no output for too long — and was stopped.',
     ],
-    ['backstop', 'It ended: the hosted run reached its 12-hour time limit and was stopped.'],
+    ['backstop', 'It ended: the Motir agent run reached its 12-hour time limit and was stopped.'],
     ['lost_supervision', 'It ended: the run stopped reporting (no heartbeat reached Motir).'],
   ])('a hosted run ended %s', async (outcome, sentence) => {
     expect(await endedBy({ origin: 'hosted', outcome })).toContain(sentence);

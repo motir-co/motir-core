@@ -360,7 +360,7 @@ describe('hostedRunWriteAccess — the per-repository check (AC2)', () => {
         app: 'motir-integration',
         ok: false,
         reason:
-          "hosted runs on acme/web need Motir Integration's updated permissions — an owner of acme accepts them on GitHub",
+          "Motir agent runs on acme/web need Motir Integration's updated permissions — an owner of acme accepts them on GitHub",
         fix: 'accept_permissions',
         fixUrl: 'https://github.com/organizations/acme/settings/installations/42',
       },

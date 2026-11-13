@@ -272,7 +272,7 @@ describe('ReviewedBadge — reviewed', () => {
     );
     fireEvent.mouseEnter(screen.getByRole('note').parentElement!);
     const card = screen.getByTestId('reviewed-card');
-    expect(card.textContent).toContain("Reviewed by Motir's hosted agent");
+    expect(card.textContent).toContain('Reviewed by Motir agent');
     expect(card.textContent).not.toContain('·');
     expect(screen.getByRole('link').getAttribute('href')).toBe('/items/ACME-412#development');
     cleanup();

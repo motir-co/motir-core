@@ -166,6 +166,11 @@
       "translation": "智能体",
       "source": "messages/zh.json runs.colAgent"
     },
+    "Motir agent": {
+      "translation": "Motir 智能体",
+      "source": "messages/zh.json github.development.fix.hosted.button (MOTIR-11176)",
+      "note": "The name of the agent Motir runs on its own fleet (\"Fix in Motir agent\"). Not a person’s own hosted agent instance, which keeps the plain agent term. Motir itself is never translated. A space between Motir and the CJK noun; 智能体 follows the glossary’s agent term."
+    },
     "run": {
       "translation": "运行",
       "source": "messages/zh.json runs.title"

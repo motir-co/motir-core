@@ -248,7 +248,7 @@ const REFUSAL: Record<RunGitWriteFix, (repository: string, account: string) => s
   reconnect: (repository) =>
     `Motir Integration can no longer reach ${repository} — reconnect it in the Repositories room`,
   accept_permissions: (repository, account) =>
-    `hosted runs on ${repository} need Motir Integration's updated permissions — an owner of ${account} accepts them on GitHub`,
+    `Motir agent runs on ${repository} need Motir Integration's updated permissions — an owner of ${account} accepts them on GitHub`,
 };
 
 type RepoAccess =

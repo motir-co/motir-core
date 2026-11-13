@@ -1393,7 +1393,7 @@ export async function verifyHostedAgentImagePullable(): Promise<FleetBootableVer
   if (!reference) {
     return {
       verdict: 'not_applicable',
-      detail: `this deployment runs no hosted agent (${HOSTED_AGENT_IMAGE_ENV_VAR} is unset)`,
+      detail: `this deployment runs no Motir agent (${HOSTED_AGENT_IMAGE_ENV_VAR} is unset)`,
     };
   }
   let image: string;

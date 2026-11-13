@@ -524,11 +524,13 @@ async function readHostedRunCost(runId: string): Promise<DispatchRunCostDto | nu
 }
 
 /**
- * The end paths' closing-line prefix: the hosted run's `[motir] hosted run ended
- * (<label>): `, or a run in an agent's `[motir] run in agent ended (<label>): `
- * (`agentInstanceRunService.end`, MOTIR-7027) — both carry `data.end`.
+ * The end paths' closing-line prefix: the hosted run's `[motir] Motir agent run ended
+ * (<label>): ` (`[motir] hosted run ended (<label>): ` on lines written before
+ * MOTIR-11176 renamed it), or a run in an agent's `[motir] run in agent ended (<label>): `
+ * (`agentInstanceRunService.end`, MOTIR-7027) — all carry `data.end`.
  */
-const HOSTED_END_PREFIX = /^\[motir\] (?:hosted run|run in agent) ended \([^)]*\): /;
+const HOSTED_END_PREFIX =
+  /^\[motir\] (?:Motir agent run|hosted run|run in agent) ended \([^)]*\): /;
 
 /**
  * How a HOSTED run ended (MOTIR-691): the end path's closing `log` line

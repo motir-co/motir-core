@@ -369,7 +369,7 @@ describe('could not start (Panel 3d) — the Continue hosted door’s answers, r
     await mountControl();
     await pressFix();
     const text = screen.getByTestId('fix-hosted-refused-outOfCredits').textContent ?? '';
-    expect(text).toContain('Fix on the hosted agent works again');
+    expect(text).toContain('Fix in Motir agent works again');
     expect(text).not.toContain('Run works again');
   });
 
@@ -535,7 +535,7 @@ describe('the fix part — two repairs for a card a review sent back', () => {
     expect(p.textContent).toContain(fix.fixing.pill);
     const line = within(p).getByTestId('repair-hosted-fixing');
     expect(line.textContent).toMatch(
-      /^Being fixed by you on the hosted agent · started 3 min\. ago · motir fix · 2026-09-29 10:02 UTC$/,
+      /^Being fixed by you in Motir agent · started 3 min\. ago · motir fix · 2026-09-29 10:02 UTC$/,
     );
     const link = within(p).getByTestId('repair-hosted-run-link');
     expect(link.getAttribute('href')).toContain('run_fix_612');
@@ -556,7 +556,7 @@ describe('the fix part — two repairs for a card a review sent back', () => {
       run: { id: 'run_fix_612', label: 'motir fix · 2026-09-29 10:02 UTC', hosted: true },
     });
     expect(screen.getByTestId('repair-hosted-fixing').textContent).toMatch(
-      /^Being fixed by Mara S\. on the hosted agent/,
+      /^Being fixed by Mara S\. in Motir agent/,
     );
   });
 
@@ -643,7 +643,7 @@ describe('the To fix banner', () => {
     const b = screen.getByTestId('to-fix-banner');
     const line = within(b).getByTestId('to-fix-banner-hosted-fixing');
     expect(line.textContent).toMatch(
-      /^A hosted repair is running — started by Mara S\. 3 min\. ago · motir fix · 2026-09-29 10:02 UTC$/,
+      /^A Motir agent repair is running — started by Mara S\. 3 min\. ago · motir fix · 2026-09-29 10:02 UTC$/,
     );
     expect(within(b).getByTestId('repair-hosted-run-link').getAttribute('href')).toContain(
       'run_fix_612',
@@ -656,7 +656,7 @@ describe('the To fix banner', () => {
   it('…started by you, when the viewer pressed it', () => {
     renderBanner('changes_requested', PERSON, { repairRun: openRun({ byViewer: true }) });
     expect(screen.getByTestId('to-fix-banner-hosted-fixing').textContent).toMatch(
-      /^A hosted repair is running — started by you 3 min\. ago/,
+      /^A Motir agent repair is running — started by you 3 min\. ago/,
     );
   });
 
@@ -675,7 +675,7 @@ describe('the To fix banner', () => {
     cleanup();
     renderBanner('changes_requested', AGENT, { zh: true, repairRun: openRun() });
     const running = screen.getByTestId('to-fix-banner-hosted-fixing').textContent ?? '';
-    expect(running).toContain('托管修复正在运行');
+    expect(running).toContain('Motir 智能体修复正在运行');
     expect(running).not.toMatch(/repair is running|started by/);
   });
 
@@ -824,7 +824,7 @@ describe('the Workbench To fix row', () => {
     const line = fixLine('ACME-12');
     const sentence = within(line).getByTestId('workbench-fix-hosted-fixing-ACME-12');
     expect(sentence.textContent).toBe(
-      'Being fixed on the hosted agent by you · motir fix · 2026-09-29 10:02 UTC',
+      'Being fixed in Motir agent by you · motir fix · 2026-09-29 10:02 UTC',
     );
     expect(within(line).getByTestId('repair-hosted-run-link').getAttribute('href')).toContain(
       'run_fix_612',
@@ -860,7 +860,7 @@ describe('the Workbench To fix row', () => {
   it('zh — the running sentence renders with no English fallback', async () => {
     await renderRows([row('ACME-12', 'changes_requested', AGENT, { repairRun: openRun() })], true);
     const text = screen.getByTestId('workbench-fix-hosted-fixing-ACME-12').textContent ?? '';
-    expect(text).toContain('正在用托管智能体修复');
+    expect(text).toContain('正在 Motir 智能体中修复');
     expect(text).not.toMatch(/Being fixed|hosted agent/);
   });
 });

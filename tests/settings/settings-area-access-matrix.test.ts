@@ -268,7 +268,7 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
             // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
             // MOTIR-5394); MOTIR-5278's browse view is reverted.
             // MOTIR-5278 had read the entry's VIEW key here.
-            // MOTIR-6995 — Hosted agent declares a distinct VIEW key again
+            // MOTIR-6995 — Motir agent declares a distinct VIEW key again
             // (`work_item:edit`), so visibility is read through the entry's
             // effective view key, which IS `permission` for every other entry.
             expect(visibleIds.has(entry.id)).toBe(held.has(settingsEntryViewKey(entry)));
@@ -293,7 +293,7 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
           // MOTIR-5278 had added a third arm between these two: a non-admin browser
           // sees exactly Approvals.
           // MOTIR-6995 — a third arm between the two: a non-admin who may EDIT
-          // work (a member) sees exactly the Hosted agent room, read-only, because
+          // work (a member) sees exactly the Motir agent room, read-only, because
           // its view key is `work_item:edit` (design MOTIR-6991).
           // MOTIR-8830 — and a fourth: Translation's view key is `project:browse`, so
           // anyone who can browse sees it, read-only, in registry order.

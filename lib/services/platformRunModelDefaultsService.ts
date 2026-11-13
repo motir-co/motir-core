@@ -62,7 +62,7 @@ function isRunModelDefaultKey(value: string): value is RunModelDefaultKey {
 async function readOffer() {
   const offer = await hostedRunModelService.listOfferedModels();
   if (offer.state === 'unavailable') {
-    throw new MotirAiUnavailableError('motir-ai did not answer the hosted-run offer');
+    throw new MotirAiUnavailableError('motir-ai did not answer the Motir agent offer');
   }
   return offer;
 }

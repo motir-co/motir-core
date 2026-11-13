@@ -133,7 +133,7 @@ describe('C1 — died, continuable', () => {
   it('offers Continue hosted as the primary path, the command second, and hides Run', async () => {
     await mount(died());
     const text = screen.getByTestId('continue-part').textContent ?? '';
-    expect(text).toContain('Continue it here, in a hosted container — no terminal needed:');
+    expect(text).toContain('Continue it here, in Motir agent — no terminal needed:');
     expect(screen.getByTestId('continue-hosted').textContent).toBe('Continue');
     expect(text).toContain('Or carry it on from your terminal:');
     expect(text).toContain('motir continue ACME-12');
@@ -286,7 +286,7 @@ describe('continuing, hosted', () => {
       tookOverFrom: null,
     });
     const text = screen.getByTestId('continue-part').textContent ?? '';
-    expect(text).toContain('Being continued by you in a hosted container');
+    expect(text).toContain('Being continued by you in Motir agent');
     expect(text).toContain('Watch it work in Run above.');
   });
 });

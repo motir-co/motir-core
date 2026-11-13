@@ -9,7 +9,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // A HOSTED RUN PICKS ITS MODEL FROM THE LEAF'S DIFFICULTY (Story MOTIR-6989 ·
 // MOTIR-6998) — the story's acceptance receipt.
 //
-// The walk: the Hosted agent settings room shows the four levels on the platform
+// The walk: the Motir agent settings room shows the four levels on the platform
 // default; Low is overridden and saved; Run hosted on a Low subtask preselects
 // the override and says so; on a High subtask it preselects motir-ai's platform
 // High model; Low is reset. It STOPS AT THE PICKER — no container is started
@@ -137,31 +137,28 @@ test('a project overrides Low, Run hosted follows the difficulty, and Low is res
   const leaves = await seedLeaves(seed);
   await signIn(page, seed.email, seed.password);
 
-  await chapter(
-    'Project settings → Hosted agent: every level on the platform default',
-    async () => {
-      await page.goto('/settings/project');
-      const read = settingsRead(page, seed.projectKey, 'GET');
-      await page.getByRole('link', { name: 'Hosted agent', exact: true }).click();
-      await page.waitForURL(`**${ROOM}`);
-      const res = await read;
-      expect(res.status()).toBe(200);
-      const body = (await res.json()) as SettingsBody;
-      // The stub answered: these ids and per-level defaults exist only in the fixture.
-      expect(body.offeredModels).toEqual([SWIFT, BALANCED, DEEP, CAREFUL]);
-      expect(body.levels.find((l) => l.level === 'low')?.platformDefault).toBe(SWIFT);
-      expect(body.levels.find((l) => l.level === 'high')?.platformDefault).toBe(DEEP);
-      expect(body.levels.every((l) => l.override === null)).toBe(true);
+  await chapter('Project settings → Motir agent: every level on the platform default', async () => {
+    await page.goto('/settings/project');
+    const read = settingsRead(page, seed.projectKey, 'GET');
+    await page.getByRole('link', { name: 'Motir agent', exact: true }).click();
+    await page.waitForURL(`**${ROOM}`);
+    const res = await read;
+    expect(res.status()).toBe(200);
+    const body = (await res.json()) as SettingsBody;
+    // The stub answered: these ids and per-level defaults exist only in the fixture.
+    expect(body.offeredModels).toEqual([SWIFT, BALANCED, DEEP, CAREFUL]);
+    expect(body.levels.find((l) => l.level === 'low')?.platformDefault).toBe(SWIFT);
+    expect(body.levels.find((l) => l.level === 'high')?.platformDefault).toBe(DEEP);
+    expect(body.levels.every((l) => l.override === null)).toBe(true);
 
-      await expect(page.getByRole('heading', { name: 'Hosted agent', level: 1 })).toBeVisible();
-      for (const level of LEVELS) {
-        await expect(levelRow(page, level)).toContainText('Platform default');
-        await expect(levelRow(page, level)).not.toContainText('Override');
-      }
-      await expect(levelSelect(page, 'Low')).toContainText(SWIFT);
-      await expect(levelSelect(page, 'High')).toContainText(DEEP);
-    },
-  );
+    await expect(page.getByRole('heading', { name: 'Motir agent', level: 1 })).toBeVisible();
+    for (const level of LEVELS) {
+      await expect(levelRow(page, level)).toContainText('Platform default');
+      await expect(levelRow(page, level)).not.toContainText('Override');
+    }
+    await expect(levelSelect(page, 'Low')).toContainText(SWIFT);
+    await expect(levelSelect(page, 'High')).toContainText(DEEP);
+  });
 
   await chapter('Override Low, save, and see it persist across a reload', async () => {
     await levelSelect(page, 'Low').click();

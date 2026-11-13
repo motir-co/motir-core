@@ -252,7 +252,7 @@ describe('ReviewFindingsDialog — every state (§ 42.1, F1–F7)', () => {
       }),
     );
     render(<ReviewFindingsDialog target={target} onClose={vi.fn()} read={read} />);
-    await screen.findByText("Motir's hosted agent");
+    await screen.findByText('Motir agent');
     expect(screen.queryByRole('heading', { name: 'Checklist' })).toBeNull();
     expect(screen.getByTestId('review-findings-body').querySelector('table')).not.toBeNull();
   });

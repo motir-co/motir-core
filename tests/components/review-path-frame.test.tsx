@@ -92,7 +92,7 @@ describe('ReviewLine — the four values', () => {
     expect(el.getAttribute('role')).toBe('group');
     expect(el.getAttribute('aria-label')).toBe('Agent review');
     expect(el.textContent).toContain('Reviewed by agent');
-    expect(el.textContent).toContain("Motir's hosted agent");
+    expect(el.textContent).toContain('Motir agent');
     expect(el.textContent).toContain('1 hour ago');
     expect(el.className).toContain('text-xs');
     const link = screen.getByRole('link', { name: 'Findings and checklist' });
@@ -125,7 +125,7 @@ describe('ReviewLine — the four values', () => {
         recordRef={null}
       />,
     );
-    expect(lineEl().textContent).toContain("Motir's hosted agent");
+    expect(lineEl().textContent).toContain('Motir agent');
     cleanup();
     render(
       <ReviewLine
