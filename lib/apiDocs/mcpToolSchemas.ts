@@ -4915,7 +4915,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
             },
             sections: {
               type: 'object',
-              additionalProperties: { $ref: '#/properties/sections/additionalProperties' },
+              additionalProperties: {},
               description:
                 'OPTIONAL. The card’s sections as named values, instead of composing headings inside `descriptionMd`: the door checks them against the section set for the proposal’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_PROPOSAL, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` itself is never stored. Never send it together with `descriptionMd` (refused, naming both). The section sets, their shapes and which are required are served by `get_section_sets`. On an EDIT it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list. Omit it to keep sending a plain `descriptionMd` exactly as before.',
             },

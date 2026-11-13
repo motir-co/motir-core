@@ -1164,6 +1164,9 @@ const updatePlanProposalInputSchema = {
           .min(1)
           .describe('The proposal this correction is to — an id `add_plan_items` returned.'),
         ...correctionFieldsSchema,
+        // A FRESH record (MOTIR-7189): `tools/list` renders a `_def` it has already
+        // seen as a `$ref`, and the top-level `sections` shares this value schema.
+        sections: z.record(z.string(), z.unknown()).optional().describe(SECTIONS_INPUT_DESCRIPTION),
       }),
     )
     .min(1)
