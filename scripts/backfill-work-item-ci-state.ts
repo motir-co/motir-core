@@ -50,7 +50,11 @@
  * base-ref backfill it makes NO host calls, because every input it folds is
  * already recorded in the database:
  *
- *   DATABASE_URL='<neon non-pooling url>' pnpm db:backfill:ci-state --dry-run
+ *   DATABASE_URL='<core direct url>' pnpm db:backfill:ci-state --dry-run
+ *
+ * Against production it runs inside AWS, never from a laptop: Amazon RDS admits
+ * only core's services, so it is `node /app/data/data-script.mjs backfill-ci-state` in a core
+ * worker task (`docs/runbooks/production-data-scripts.md`).
  *
  * Do the dry run first, read the `from → to` counts, and only then apply.
  *

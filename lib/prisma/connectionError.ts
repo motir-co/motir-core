@@ -6,9 +6,11 @@ import { sqlStateOf } from './sqlstate';
  * ── What production saw ──────────────────────────────────────────────────────
  * `GET /api/public/ideas` answered an UNHANDLED 500, `Error: Connection terminated
  * unexpectedly`, thrown from `pg-pool/index.js:45` under `PgQueryable.performIO`.
- * The app connects through Neon's `-pooler` host, and an intermediary closing a
- * pooled socket is ordinary there: a compute restart, a pooler restart, an idle
- * cut.
+ * Production then connected through Neon's `-pooler` host, where an intermediary
+ * closing a pooled socket is ordinary: a compute restart, a pooler restart, an
+ * idle cut. Since the MOTIR-9699 cutover it connects straight to an Amazon RDS
+ * instance, which closes sockets the same way on a reboot, a failover or a
+ * network interruption — so the shape, and the remedy, still hold.
  *
  * ── What it looks like here — MEASURED, not assumed ──────────────────────────
  * A TCP proxy between the pool and a local Postgres, destroying both sockets

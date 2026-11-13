@@ -50,7 +50,7 @@
  * App variables are Sensitive in Vercel, so `vercel env pull` returns them as
  * `[SENSITIVE]` and they must be supplied from the operator's own copy:
  *
- *   DATABASE_URL='<neon non-pooling url>' GITHUB_APP_ID='…' \
+ *   DATABASE_URL='<core direct url>' GITHUB_APP_ID='…' \
  *     GITHUB_APP_PRIVATE_KEY="$(cat app.pem)" pnpm db:backfill:pr-base-ref --dry-run
  *
  * Do the dry run first, read the per-repo counts, and only then apply.

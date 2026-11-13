@@ -9,16 +9,19 @@
  * applied migration) and WHAT the numbers cover.
  *
  * Usage:
- *   DATABASE_URL_UNPOOLED='<neon direct url>' pnpm ops:pg-top-statements
+ *   DATABASE_URL_UNPOOLED='<core direct url>' pnpm ops:pg-top-statements
  *   pnpm ops:pg-top-statements --limit=50
  *   pnpm ops:pg-top-statements --json          # one object, full query text
  *
  * Needs `DATABASE_URL_UNPOOLED` — the direct, non-pooler endpoint — and falls back
- * to `DATABASE_URL` for a local Postgres with no pooler. A Neon `-pooler.` host is
- * refused.
+ * to `DATABASE_URL` for a database with no pooler in front (production's Amazon
+ * RDS instance, a local Postgres). A pooler host — an RDS Proxy endpoint or a Neon
+ * `-pooler` endpoint — is refused.
  *
- * ⚠️ Neon resets these statistics when a compute restarts, so a readout covers the
- * window since `stats_reset` (or the compute start), never all time.
+ * ⚠️ The server resets these statistics when it restarts (on Amazon RDS a reboot,
+ * a failover or a maintenance restart), so a readout covers the window since
+ * `stats_reset` (or the compute start), never all time, and says what resets it
+ * on the engine that answered.
  *
  * Read-only: it enables nothing and clears nothing. Exit codes:
  *   0  ok

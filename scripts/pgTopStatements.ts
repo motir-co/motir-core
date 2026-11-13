@@ -6,11 +6,14 @@
 // `pgTopStatementsQuery.ts`, the CLI in `pg-top-statements.ts`.
 //
 // ⚠️ THE NUMBERS COVER A WINDOW, NOT ALL TIME. `pg_stat_statements` keeps its
-// counters in shared memory, and Neon discards them whenever a compute restarts
-// (scale to zero included). So every readout says which window it covers —
-// `stats_reset` from `pg_stat_statements_info` (PostgreSQL ≥ 14), else the
-// compute's start — and says when the view evicted entries (`dealloc > 0`), which
-// makes the ranking a sample rather than a census.
+// counters in shared memory, so every restart of the server discards them — on
+// Amazon RDS (production since the MOTIR-9699 cutover) a reboot, a failover or a
+// maintenance restart; on Neon (preview databases) a compute restart, scale to
+// zero included. So every readout says which window it covers — `stats_reset`
+// from `pg_stat_statements_info` (PostgreSQL ≥ 14), else the compute's start —
+// names what resets it on the engine that answered (`resetSentenceFor`), and says
+// when the view evicted entries (`dealloc > 0`), which makes the ranking a sample
+// rather than a census.
 
 /** The marker every statement this command sends carries, and every ranking
  *  excludes — so the readout never ranks its own reads. */
@@ -22,8 +25,53 @@ export const MAX_LIMIT = 200;
 /** Text mode prints a query on one line, cut here; `--json` carries it whole. */
 export const TEXT_QUERY_MAX = 300;
 
+export const RDS_RESET_SENTENCE =
+  'Amazon RDS resets these statistics when the instance restarts (a reboot, a failover or a maintenance restart), so the figures cover only this window.';
 export const NEON_RESET_SENTENCE =
   'Neon resets these statistics when a compute restarts, so the figures cover only this window.';
+export const POSTGRES_RESET_SENTENCE =
+  'PostgreSQL resets these statistics when the server restarts, so the figures cover only this window.';
+
+/** A `host[:port]` label's hostname, lower-cased — `hostOf` puts the port on. */
+function bareHost(host: string): string {
+  return host.replace(/:\d+$/, '').toLowerCase();
+}
+
+/** An Amazon RDS endpoint — an instance, an Aurora cluster or an RDS Proxy. */
+function isRdsHost(hostname: string): boolean {
+  return bareHost(hostname).endsWith('.rds.amazonaws.com');
+}
+
+/** A Neon endpoint, pooled or direct. */
+function isNeonHost(hostname: string): boolean {
+  return bareHost(hostname).endsWith('.neon.tech');
+}
+
+/**
+ * The connection pooler a hostname names, or null for a direct endpoint.
+ *
+ * - **An RDS Proxy** endpoint reads `<proxy>.proxy-<id>.<region>.rds.amazonaws.com`
+ *   (a custom proxy endpoint `<endpoint>.endpoint.proxy-<id>.…`), where an instance
+ *   or a cluster reads `<name>.<id>.<region>.rds.amazonaws.com` — so the
+ *   `proxy-` label is the tell.
+ * - **A Neon pooler** carries `-pooler` on its endpoint label
+ *   (`ep-…-pooler.<region>.aws.neon.tech`). Neon still serves the preview databases.
+ */
+export function poolerOf(hostname: string): 'rds_proxy' | 'neon_pooler' | null {
+  const host = bareHost(hostname);
+  if (isRdsHost(host) && host.split('.').some((label) => label.startsWith('proxy-'))) {
+    return 'rds_proxy';
+  }
+  if (host.includes('-pooler.')) return 'neon_pooler';
+  return null;
+}
+
+/** What resets the counters, for the engine whose host answered the read. */
+export function resetSentenceFor(host: string): string {
+  if (isRdsHost(host)) return RDS_RESET_SENTENCE;
+  if (isNeonHost(host)) return NEON_RESET_SENTENCE;
+  return POSTGRES_RESET_SENTENCE;
+}
 
 export interface PgTopStatementsArgs {
   limit: number;
@@ -67,9 +115,11 @@ export interface DirectUrl {
 
 /**
  * The direct (unpooled) connection string — `DATABASE_URL_UNPOOLED`, else
- * `DATABASE_URL` for a local Postgres with no pooler (`prisma.config.ts`'s rule).
- * A Neon POOLER host is refused: the read is a session of its own, and through
- * PgBouncer it would also take a slot from the pool this epic measures.
+ * `DATABASE_URL` for a database with no pooler in front (production's RDS
+ * instance, a local Postgres; `prisma.config.ts`'s rule). A POOLER host — an RDS
+ * Proxy or a Neon `-pooler` endpoint (`poolerOf`) — is refused: the read is a
+ * session of its own, and through a pooler it would take a slot from the pool
+ * whose traffic the readout is measuring.
  */
 export function resolveDirectUrl(env: Readonly<Record<string, string | undefined>>): DirectUrl {
   const unpooled = env['DATABASE_URL_UNPOOLED']?.trim();
@@ -90,9 +140,11 @@ export function resolveDirectUrl(env: Readonly<Record<string, string | undefined
   } catch {
     throw new PgTopStatementsUsageError(`${picked.source} is not a parseable URL`);
   }
-  if (hostname.includes('-pooler.')) {
+  const pooler = poolerOf(hostname);
+  if (pooler) {
+    const what = pooler === 'rds_proxy' ? 'an RDS Proxy endpoint' : 'a Neon pooler host';
     throw new PgTopStatementsUsageError(
-      `${picked.source} names a Neon pooler host (${hostname}); set DATABASE_URL_UNPOOLED to the direct endpoint`,
+      `${picked.source} names ${what} (${hostname}); set DATABASE_URL_UNPOOLED to the database's direct endpoint`,
     );
   }
   return picked;
@@ -195,7 +247,7 @@ export function coverageLines(readout: TopStatementsReadout): string[] {
   const since = coverage.statsReset
     ? `since stats_reset ${coverage.statsReset}`
     : `since the compute started ${answeredBy.computeStartedAt ?? '(unknown)'} (pg_stat_statements_info is absent, so the compute start stands in for the last reset)`;
-  const lines = [`coverage: ${since} to ${readout.readAt}. ${NEON_RESET_SENTENCE}`];
+  const lines = [`coverage: ${since} to ${readout.readAt}. ${resetSentenceFor(answeredBy.host)}`];
   if (coverage.dealloc !== null && coverage.dealloc > 0) {
     lines.push(
       `⚠️ sample: the view evicted entries ${coverage.dealloc} time(s) (dealloc), so these rankings are a sample, not every statement.`,
