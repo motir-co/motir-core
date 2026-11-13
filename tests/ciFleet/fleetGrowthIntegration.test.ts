@@ -126,8 +126,10 @@ const shards = (fleetKind = 'ci_runner') =>
 const requestsFor = (shardId: string) => adminDb.fleetQuotaRequest.findMany({ where: { shardId } });
 const creates = () => organization.calls.filter((c) => c === 'createOrganizationAccount');
 
-/** A ready spare: active, 200 vCPU, its raise in `status`. */
+/** A ready spare: active, 200 vCPU — on its row and, live, in AWS, since the
+ *  pass reads a spare's live quota too (MOTIR-11233) — its raise in `status`. */
 async function spare(status: 'approved' | 'pending' = 'approved') {
+  organization.quotaByAccount.set(SPARE_ACCOUNT, 200);
   const row = await fleetShardService.createShard({
     name: 'ci-runner-motir-spare',
     fleetKind: 'ci_runner',

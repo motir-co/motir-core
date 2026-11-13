@@ -109,24 +109,32 @@ export function pickTrigger(
 }
 
 /**
- * Is this spare READY to join the shared pool? Its newest quota raise is
- * `approved` and the row already carries the granted value. A spare with a
- * pending or refused raise is never ready. A spare that never filed a raise —
- * the Motir spare a person made — is ready when it is active and already holds
- * the kind's target.
+ * Is this spare READY to join the shared pool? It is judged on the granted
+ * quota the pass reads live (MOTIR-11233), never on how its last raise was
+ * labelled: AWS can apply part of an increase and close the case `case_closed`
+ * or `not_approved`, and such a spare is as usable as an approved one.
+ *
+ * - A spare with a raise still OPEN is never ready — the raise may yet move it.
+ * - A spare whose newest raise is CLOSED is ready when it holds at least the
+ *   kind's target, whatever that raise's status — or, when AWS approved it, at
+ *   least the value it asked for.
+ * - A spare that never filed a raise — the Motir spare a person made — is ready
+ *   when it is active and already holds the kind's target.
  */
 export function spareReady(
   spare: Pick<FleetShard, 'state' | 'vcpuQuota' | 'fleetKind'>,
-  latestRequest: Pick<FleetQuotaRequest, 'status' | 'desiredValue'> | null,
+  latestRequest: Pick<FleetQuotaRequest, 'status' | 'desiredValue' | 'closedAt'> | null,
 ): boolean {
   if (spare.state === 'disabled' || spare.vcpuQuota === null) return false;
-  if (!latestRequest) {
-    return (
-      spare.state === 'active' &&
-      spare.vcpuQuota >= poolAccountRaiseTargetVcpu(spare.fleetKind as FleetWorkloadKind)
-    );
-  }
-  return latestRequest.status === 'approved' && spare.vcpuQuota >= latestRequest.desiredValue;
+  const atTarget =
+    spare.vcpuQuota >= poolAccountRaiseTargetVcpu(spare.fleetKind as FleetWorkloadKind);
+  if (!latestRequest) return spare.state === 'active' && atTarget;
+  // Open, by the same test the claim's in-flight rule reads.
+  if (latestRequest.closedAt === null) return false;
+  return (
+    atTarget ||
+    (latestRequest.status === 'approved' && spare.vcpuQuota >= latestRequest.desiredValue)
+  );
 }
 
 /** The kind's spares, each with its newest quota raise. */

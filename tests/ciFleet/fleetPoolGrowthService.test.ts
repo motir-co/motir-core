@@ -14,6 +14,7 @@ import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { fleetGrowthEventService } from '@/lib/services/fleetGrowthEventService';
 import {
   fleetPoolGrowthService,
+  spareReady,
   type FleetPoolGrowthDeps,
   type GrowthReading,
 } from '@/lib/services/fleetPoolGrowthService';
@@ -91,8 +92,13 @@ const audits = () =>
   });
 const shard = (id: string) => adminDb.fleetShard.findUniqueOrThrow({ where: { id } });
 
-/** A spare holding 200 vCPU, with a raise in `status` (none for `null`). */
-async function spareWithRaise(status: string | null, state: 'active' | 'provisioning' = 'active') {
+/** A spare holding `vcpu` (200, the CI target, by default), with a raise to 200
+ *  in `status` (none for `null`). */
+async function spareWithRaise(
+  status: string | null,
+  state: 'active' | 'provisioning' = 'active',
+  vcpu = 200,
+) {
   const spare = await fleetShardService.createShard({
     name: 'ci-runner-motir-spare',
     fleetKind: 'ci_runner',
@@ -104,7 +110,7 @@ async function spareWithRaise(status: string | null, state: 'active' | 'provisio
     awsAccountId: '444455556666',
     awsRegion: 'us-east-1',
     credentialRef: 'FLEET_SHARD_CI_RUNNER_SPARE',
-    limits: { vcpuQuota: 200 },
+    limits: { vcpuQuota: vcpu },
   });
   if (status) {
     const request = await fleetQuotaRequestService.createRequest({
@@ -322,10 +328,12 @@ describe('growKind — promote or create', () => {
     expect(result).toMatchObject({ outcome: 'spare_promoted', promotedSpareId: spare.id });
   });
 
-  it.each(['denied', 'not_approved'])(
-    'never promotes a spare whose raise is %s — the next account is created',
+  // MOTIR-11233: AWS can apply part of an increase and close the case without
+  // approving it. Readiness reads the quota the spare HOLDS, not the label.
+  it.each(['denied', 'not_approved', 'case_closed', 'invalid_request'])(
+    'never promotes a spare whose closed %s raise left it below the target — the next account is created',
     async (status) => {
-      const spare = await spareWithRaise(status, 'provisioning');
+      const spare = await spareWithRaise(status, 'provisioning', 32);
 
       const result = await fleetPoolGrowthService.growKind('ci_runner', reading(80), deps());
 
@@ -335,6 +343,24 @@ describe('growKind — promote or create', () => {
         promotedSpareId: null,
       });
       expect(await shard(spare.id)).toMatchObject({ role: 'spare', state: 'provisioning' });
+      expect(creates()).toHaveLength(1);
+    },
+  );
+
+  it.each(['denied', 'not_approved', 'case_closed'])(
+    'promotes a spare whose closed %s raise left it at the target — not a second new account',
+    async (status) => {
+      const spare = await spareWithRaise(status, 'provisioning', 300);
+
+      const result = await fleetPoolGrowthService.growKind('ci_runner', reading(80), deps());
+
+      expect(result).toMatchObject({
+        result: 'grown',
+        outcome: 'spare_promoted',
+        promotedSpareId: spare.id,
+      });
+      expect(await shard(spare.id)).toMatchObject({ role: 'primary', state: 'active' });
+      // The one create is the promoted spare's replacement.
       expect(creates()).toHaveLength(1);
     },
   );
@@ -388,6 +414,102 @@ describe('growKind — promote or create', () => {
     expect(settled).toMatchObject({ joined: [], readied: [replacement] });
     expect(await shard(replacement)).toMatchObject({ role: 'spare', state: 'active' });
     expect((await events())[0]).toMatchObject({ outcome: 'spare_promoted' });
+  });
+});
+
+describe('settleGrantedSpares — a raise AWS closed without approving (MOTIR-11233)', () => {
+  it('a provisioning spare at the target after a case_closed raise becomes the ready spare', async () => {
+    const spare = await spareWithRaise('case_closed', 'provisioning', 300);
+
+    const settled = await fleetPoolGrowthService.settleGrantedSpares('ci_runner', deps());
+
+    expect(settled).toMatchObject({ joined: [], readied: [spare.id] });
+    expect(await shard(spare.id)).toMatchObject({ role: 'spare', state: 'active' });
+  });
+
+  it('a spare below the target after a case_closed raise stays provisioning', async () => {
+    const spare = await spareWithRaise('case_closed', 'provisioning', 32);
+    expect(await fleetPoolGrowthService.settleGrantedSpares('ci_runner', deps())).toMatchObject({
+      joined: [],
+      readied: [],
+    });
+    expect(await shard(spare.id)).toMatchObject({ state: 'provisioning' });
+  });
+
+  it('a waiting growth’s new account joins the pool when AWS closes its raise with a partial grant', async () => {
+    const grown = await fleetPoolGrowthService.growKind('ci_runner', reading(80), deps());
+    const newShardId = grown.result === 'grown' ? grown.newShardId : '';
+    expect(grown).toMatchObject({ outcome: 'waiting_for_quota' });
+
+    // AWS applies the kind's target and closes the case CASE_CLOSED, not
+    // APPROVED — the shape ci-runner-pool-1 met in production.
+    const newShard = await shard(newShardId);
+    for (const [id, request] of organization.quotaRequests) {
+      if (request.accountId === newShard.awsAccountId) {
+        organization.settleQuotaRequest(id, 'CASE_CLOSED');
+        organization.quotaByAccount.set(request.accountId, 200);
+      }
+    }
+    await fleetQuotaRaiseService.refreshOpenRequests('ci_runner', {
+      management: () => organization,
+      now: () => NOW,
+    });
+    expect(await shard(newShardId)).toMatchObject({ vcpuQuota: 200 });
+
+    const settled = await fleetPoolGrowthService.settleGrantedSpares('ci_runner', deps());
+
+    expect(settled.joined).toEqual([
+      { shardId: newShardId, eventId: grown.result === 'grown' ? grown.eventId : '' },
+    ]);
+    expect(await shard(newShardId)).toMatchObject({ role: 'primary', state: 'active' });
+  });
+});
+
+describe('spareReady', () => {
+  const closed = new Date('2026-11-01T00:00:00Z');
+  const spareOf = (
+    vcpuQuota: number | null,
+    state: 'active' | 'provisioning' = 'provisioning',
+  ) => ({
+    state,
+    vcpuQuota,
+    fleetKind: 'ci_runner',
+  });
+
+  it('never while a raise is open, even at the target', () => {
+    for (const status of ['pending', 'case_opened'] as const) {
+      expect(spareReady(spareOf(300), { status, desiredValue: 200, closedAt: null })).toBe(false);
+    }
+  });
+
+  it('after any closed raise, when the spare holds the kind’s target', () => {
+    for (const status of [
+      'approved',
+      'denied',
+      'not_approved',
+      'case_closed',
+      'invalid_request',
+    ] as const) {
+      expect(spareReady(spareOf(200), { status, desiredValue: 2500, closedAt: closed })).toBe(true);
+    }
+  });
+
+  it('below the target only after an approved raise it already holds', () => {
+    expect(
+      spareReady(spareOf(64), { status: 'approved', desiredValue: 64, closedAt: closed }),
+    ).toBe(true);
+    expect(
+      spareReady(spareOf(64), { status: 'case_closed', desiredValue: 64, closedAt: closed }),
+    ).toBe(false);
+    expect(
+      spareReady(spareOf(32), { status: 'approved', desiredValue: 64, closedAt: closed }),
+    ).toBe(false);
+  });
+
+  it('never when disabled or with no quota recorded', () => {
+    const request = { status: 'case_closed' as const, desiredValue: 200, closedAt: closed };
+    expect(spareReady({ ...spareOf(300), state: 'disabled' }, request)).toBe(false);
+    expect(spareReady(spareOf(null), request)).toBe(false);
   });
 });
 
