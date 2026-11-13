@@ -11040,7 +11040,7 @@
           "unreachableDetail": {
             "unreachable": "The database did not answer a ping. This is not a latency of zero — nothing was measured."
           },
-          "linkOut": "Neon console"
+          "linkOut": "RDS console"
         },
         "hosting": {
           "title": "Hosting",

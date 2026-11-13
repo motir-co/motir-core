@@ -8775,7 +8775,7 @@
   "platformAdmin.monitoring.signal.database.detail": "Postgres · {region}, alongside the app.",
   "platformAdmin.monitoring.signal.database.unreachable.unreachable": "No response",
   "platformAdmin.monitoring.signal.database.unreachableDetail.unreachable": "The database did not answer a ping. This is not a latency of zero — nothing was measured.",
-  "platformAdmin.monitoring.signal.database.linkOut": "Neon console",
+  "platformAdmin.monitoring.signal.database.linkOut": "RDS console",
   "platformAdmin.monitoring.signal.hosting.title": "Hosting",
   "platformAdmin.monitoring.signal.hosting.value": "{serviceCount, plural, one {# service steady} other {All # services steady}}",
   "platformAdmin.monitoring.signal.hosting.degradedValue.shortGroup": "{group} short · {started}/{expected}",

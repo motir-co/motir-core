@@ -11034,7 +11034,7 @@
           "unreachableDetail": {
             "unreachable": "数据库没有响应 ping。这不是延迟为零——什么都没测到。"
           },
-          "linkOut": "Neon 控制台"
+          "linkOut": "RDS 控制台"
         },
         "hosting": {
           "title": "托管",

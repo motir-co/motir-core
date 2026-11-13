@@ -11043,7 +11043,7 @@
           "unreachableDetail": {
             "unreachable": "Die Datenbank hat auf einen Ping nicht geantwortet. Das ist keine Latenz von null – es wurde nichts gemessen."
           },
-          "linkOut": "Neon-Konsole"
+          "linkOut": "RDS-Konsole"
         },
         "hosting": {
           "title": "Hosting",

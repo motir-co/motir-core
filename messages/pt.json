@@ -11043,7 +11043,7 @@
           "unreachableDetail": {
             "unreachable": "O banco de dados não respondeu a um ping. Isso não é uma latência zero — nada foi medido."
           },
-          "linkOut": "Console do Neon"
+          "linkOut": "Console do RDS"
         },
         "hosting": {
           "title": "Hospedagem",

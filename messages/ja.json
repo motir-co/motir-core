@@ -11040,7 +11040,7 @@
           "unreachableDetail": {
             "unreachable": "データベースが ping に応答しませんでした。これはレイテンシがゼロという意味ではなく、何も測定されていません。"
           },
-          "linkOut": "Neon コンソール"
+          "linkOut": "RDS コンソール"
         },
         "hosting": {
           "title": "ホスティング",
