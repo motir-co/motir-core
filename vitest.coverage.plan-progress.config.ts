@@ -87,6 +87,9 @@ export default defineConfig({
     include: [
       // The story gate — both doors driven in-process, both reads compared.
       'tests/integration/plans/planProgressStoryGate.test.ts',
+      // MOTIR-11199 — the route's `itemDraft` form (Story MOTIR-11190): its 400 /
+      // 404 / 409 / 422 refusals and the applied / stale answers.
+      'tests/integration/ai/planStepDraft.test.ts',
       // MOTIR-7822 — the step store.
       'tests/integration/plans/planSteps.test.ts',
       // MOTIR-7824 — the two doors.
