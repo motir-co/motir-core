@@ -179,6 +179,206 @@ export function arrivalsSummary(
   };
 }
 
+// ── The CHANGED highlight (MOTIR-11185) ──────────────────────────────────────
+//
+// The planner often goes back to a card it already drew — rewords a body, adds a
+// criterion, moves an edge — and every such write records an `edited` trail row
+// naming the proposal. The live read carries the newest one per item
+// (`PlanReviewItemDto.lastEditedAt`), so a CHANGE is the same thing an arrival is:
+// a diff of two snapshots. A card whose edit time moved past the one last seen is
+// HIGHLIGHTED where it is drawn, and COUNTED in the arrivals slot when it sits on a
+// level the reader is not looking at, until they go there — where it highlights.
+//
+// ⚠️ NEWS, LIKE AN ARRIVAL — and so kept in its own log rather than the drafting
+// cues' present state: a change stays counted until its level is visited.
+
+/** One of the plan's cards as the change log sees it. */
+export interface LiveEdit {
+  /** The proposal's own id — stable while the plan is written. */
+  id: string;
+  /** The canvas node it is drawn as (a `modify`'s target, an `add`'s own id). */
+  nodeId: string;
+  /** The LEVEL it sits on: a canvas focus id, or `null` for the top level. */
+  levelId: string | null;
+  /** The breadcrumb down to that level — where *Go there* drills. */
+  trail: readonly CanvasCrumb[];
+  /** Its newest `edited` time, or `null` when it was never edited. */
+  editedAt: string | null;
+  /** A `remove` is never highlighted: it is going, not changing. */
+  highlightable: boolean;
+}
+
+/** The plan's cards, for the change log. `proposedWord` is `planReview.proposedCrumb`. */
+export function liveEdits(items: readonly PlanReviewItemDto[], proposedWord: string): LiveEdit[] {
+  const trails = new Map<string | null, readonly CanvasCrumb[]>();
+  return items.map((item) => {
+    const levelId = proposalLevelKey(item);
+    let trail = trails.get(levelId);
+    if (trail === undefined) {
+      trail = levelTrail(items, levelId, proposedWord);
+      trails.set(levelId, trail);
+    }
+    return {
+      id: item.planItemId,
+      nodeId: item.nodeId,
+      levelId,
+      trail,
+      editedAt: item.lastEditedAt ?? null,
+      highlightable: item.op !== 'remove',
+    };
+  });
+}
+
+/** A change the reader has not seen: on a level other than the one they stood on. */
+export interface PendingChange {
+  id: string;
+  nodeId: string;
+  levelId: string | null;
+  trail: readonly CanvasCrumb[];
+  /** Change order — the LATEST is what *Go there* goes to. */
+  seq: number;
+}
+
+export interface ChangesLog {
+  /** The snapshot last folded in — `null` until the first, which is the baseline. */
+  source: readonly LiveEdit[] | null;
+  /** Every card seen so far, and the newest edit time seen for it. */
+  known: ReadonlyMap<string, string | null>;
+  /** Changes on levels the reader is not on. */
+  pending: readonly PendingChange[];
+  /**
+   * The nodes highlighted RIGHT NOW, each with the `seq` of the change that lit
+   * it. A second change gives a node a new `seq`, which restarts its highlight
+   * rather than stacking a second one; {@link expireHighlight} takes it off.
+   */
+  highlights: ReadonlyMap<string, number>;
+  seq: number;
+  /** The level the reader stood on when this was last folded. */
+  viewing: string | null;
+}
+
+export const EMPTY_CHANGES: ChangesLog = {
+  source: null,
+  known: new Map(),
+  pending: [],
+  highlights: new Map(),
+  seq: 0,
+  viewing: null,
+};
+
+/**
+ * How long a changed card stays lit, in ms — long enough to be seen across a poll
+ * (the review read polls every few seconds), short enough to read as "just now".
+ * The canvas sets the ring's animation to it and clears the highlight after it.
+ */
+export const CHANGED_HIGHLIGHT_MS = 3000;
+
+/** Whether `next` is a strictly newer instant than `seen` (either may be null). */
+function isNewerEdit(seen: string | null, next: string | null): boolean {
+  if (next === null) return false;
+  if (seen === null) return true;
+  return Date.parse(next) > Date.parse(seen);
+}
+
+/**
+ * Fold one snapshot into the change log. The FIRST snapshot is the baseline and
+ * changes nothing: edits that already exist when the canvas mounts are history,
+ * not news. After that, a KNOWN card whose edit time moved forward CHANGED — it is
+ * highlighted when it sits on the level being viewed, else pending there. A card
+ * seen for the first time is an ARRIVAL (the arrivals log's), never a change,
+ * whatever edits it already carries. A pending change whose card left the plan is
+ * dropped; one whose card moved follows it to its new level.
+ */
+export function foldChanges(
+  log: ChangesLog,
+  next: readonly LiveEdit[],
+  viewing: string | null,
+): ChangesLog {
+  const known = new Map(next.map((e) => [e.id, e.editedAt] as const));
+  if (log.source === null) return { ...log, source: next, known, viewing };
+  let seq = log.seq;
+  const byId = new Map(next.map((e) => [e.id, e] as const));
+  const pending = new Map(log.pending.map((p) => [p.id, p]));
+  const highlights = new Map(log.highlights);
+  for (const e of next) {
+    if (!log.known.has(e.id)) continue;
+    if (!e.highlightable || !isNewerEdit(log.known.get(e.id) ?? null, e.editedAt)) continue;
+    seq += 1;
+    if (e.levelId === viewing) {
+      pending.delete(e.id);
+      highlights.set(e.nodeId, seq);
+    } else {
+      pending.set(e.id, { id: e.id, nodeId: e.nodeId, levelId: e.levelId, trail: e.trail, seq });
+    }
+  }
+  const kept: PendingChange[] = [];
+  for (const p of pending.values()) {
+    const now = byId.get(p.id);
+    if (!now || !now.highlightable) continue;
+    kept.push(
+      now.levelId === p.levelId && now.nodeId === p.nodeId
+        ? p
+        : { ...p, nodeId: now.nodeId, levelId: now.levelId, trail: now.trail },
+    );
+  }
+  // A highlight whose card has left the plan has nothing left to light.
+  const liveNodes = new Set(next.map((e) => e.nodeId));
+  for (const nodeId of [...highlights.keys()]) {
+    if (!liveNodes.has(nodeId)) highlights.delete(nodeId);
+  }
+  return { source: next, known, pending: kept, highlights, seq, viewing };
+}
+
+/**
+ * The reader stood on `levelId`: the changes pending there are no longer news
+ * elsewhere — they HIGHLIGHT here, so *Go there* lands on the card lit.
+ */
+export function visitChangesLevel(log: ChangesLog, levelId: string | null): ChangesLog {
+  const here = log.pending.filter((p) => p.levelId === levelId);
+  if (here.length === 0) return { ...log, viewing: levelId };
+  const highlights = new Map(log.highlights);
+  let seq = log.seq;
+  for (const p of [...here].sort((a, b) => a.seq - b.seq)) highlights.set(p.nodeId, (seq += 1));
+  return {
+    ...log,
+    viewing: levelId,
+    seq,
+    highlights,
+    pending: log.pending.filter((p) => p.levelId !== levelId),
+  };
+}
+
+/**
+ * A highlight ran its course: drop it — unless a later change re-lit the node
+ * (a different `seq`), in which case that newer highlight stands.
+ */
+export function expireHighlight(log: ChangesLog, nodeId: string, seq: number): ChangesLog {
+  if (log.highlights.get(nodeId) !== seq) return log;
+  const highlights = new Map(log.highlights);
+  highlights.delete(nodeId);
+  return { ...log, highlights };
+}
+
+/**
+ * What the slot says of the changes: how many, across how many levels, and the
+ * latest one. A card ALSO pending as an arrival (`arrived`) is counted there only
+ * — it is new to the reader, which outranks having changed since.
+ */
+export function changesSummary(
+  pending: readonly PendingChange[],
+  arrived: ReadonlySet<string> = new Set(),
+): { count: number; levels: number; latest: PendingChange } | null {
+  const counted = pending.filter((p) => !arrived.has(p.id));
+  if (counted.length === 0) return null;
+  let latest = counted[0]!;
+  for (const p of counted) if (p.seq > latest.seq) latest = p;
+  return {
+    count: counted.length,
+    levels: new Set(counted.map((p) => p.levelId)).size,
+    latest,
+  };
+}
+
 // ── The IN-FLIGHT cues (Story MOTIR-7820 · MOTIR-7830; Part XXVI §26.6–26.7) ──
 //
 // ⚠️ A PRESENT STATE, NOT AN EVENT — and so kept OUT of the arrivals log above.
@@ -289,6 +489,8 @@ export function offLevelInFlight(
  *  `planningWorkspace.arrival`, its counts, and the trail *Go there* drills. */
 export type LiveSlot =
   | { key: 'arrivedIn' | 'arrivedAcross'; count: number; trail: readonly CanvasCrumb[] }
+  | { key: 'changedIn' | 'changedAcross'; count: number; trail: readonly CanvasCrumb[] }
+  | { key: 'newAndChangedIn'; arrived: number; changed: number; trail: readonly CanvasCrumb[] }
   | { key: 'draftingIn' | 'draftingAcross'; count: number; trail: readonly CanvasCrumb[] }
   | { key: 'layingIn'; trail: readonly CanvasCrumb[] }
   | { key: 'newAndDraftingIn'; arrived: number; drafting: number; trail: readonly CanvasCrumb[] };
@@ -303,13 +505,33 @@ const levelOfTrail = (trail: readonly CanvasCrumb[]): string | null =>
  * arrivals: drafting on one level, drafting across several (named by the
  * earliest), then a lay. *Go there* goes to the latest arrival's level, else the
  * earliest in-flight step's. (The follow offer outranks all of it — the caller's.)
+ *
+ * CHANGES (MOTIR-11185) are news too, counted SEPARATELY from arrivals: arrivals
+ * and changes all on ONE level read as one sentence (*N new · M changed in X*);
+ * otherwise arrivals keep the slot, and with none the changes take it — on one
+ * level, or across several named by the latest — ahead of the in-flight state.
  */
 export function liveSlot(
   arrivals: { count: number; levels: number; latest: PendingArrival } | null,
   offLevel: readonly InFlightCue[],
+  changes: { count: number; levels: number; latest: PendingChange } | null = null,
 ): LiveSlot | null {
   const drafting = offLevel.filter((c) => c.kind === 'drafting');
   const draftLevels = new Set(drafting.map((c) => levelOfTrail(c.trail)));
+  if (
+    arrivals &&
+    changes &&
+    arrivals.levels === 1 &&
+    changes.levels === 1 &&
+    arrivals.latest.levelId === changes.latest.levelId
+  ) {
+    return {
+      key: 'newAndChangedIn',
+      arrived: arrivals.count,
+      changed: changes.count,
+      trail: arrivals.latest.trail,
+    };
+  }
   if (arrivals) {
     if (
       arrivals.levels === 1 &&
@@ -328,6 +550,13 @@ export function liveSlot(
       key: arrivals.levels > 1 ? 'arrivedAcross' : 'arrivedIn',
       count: arrivals.count,
       trail: arrivals.latest.trail,
+    };
+  }
+  if (changes) {
+    return {
+      key: changes.levels > 1 ? 'changedAcross' : 'changedIn',
+      count: changes.count,
+      trail: changes.latest.trail,
     };
   }
   const first = drafting[0];

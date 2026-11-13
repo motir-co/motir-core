@@ -37,7 +37,7 @@ import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planRevie
 // every existing importer and every `plan-review-canvas*` test keeps working
 // against this module, unchanged.
 import { arrivalLevel } from '@/lib/planning/planArrival';
-import { inFlightCues, liveArrivals, proposalChangeKey } from '@/lib/planning/livePane';
+import { inFlightCues, liveArrivals, liveEdits, proposalChangeKey } from '@/lib/planning/livePane';
 import type { NodeCue } from '@/components/planning/PlanningCanvas';
 import type { PlanProgressStep } from '@/lib/plans/planProgress';
 import { ListTree } from 'lucide-react';
@@ -584,6 +584,12 @@ export function PlanReviewCanvas({
     () => (live ? liveArrivals(items, proposedWord) : null),
     [live, items, proposedWord],
   );
+  // …and their EDIT times, for the changed highlight (MOTIR-11185) — likewise only
+  // while it is written, so a decided plan lights nothing.
+  const changes = useMemo(
+    () => (live ? liveEdits(items, proposedWord) : null),
+    [live, items, proposedWord],
+  );
 
   // ── THE CUES (MOTIR-7830; Part XXVI §26.6–26.7) ───────────────────────────
   // The live steps → a cue per node, and where each one is for the arrivals slot.
@@ -746,6 +752,7 @@ export function PlanReviewCanvas({
         // elsewhere are counted rather than jumped to. Off on the plan page.
         motion={live}
         arrivals={arrivals}
+        changes={changes}
         levelBand={levelBand}
         elsewhereOffer={offerPlanElsewhere && !live ? elsewhereOffer : undefined}
         // THE CUES (MOTIR-7830) — on the live steps, motion or not.

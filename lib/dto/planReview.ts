@@ -920,6 +920,18 @@ export interface PlanReviewItemDto {
    * revised, which is every plan written before this story.
    */
   revised: boolean;
+  /**
+   * WHEN THIS PROPOSAL WAS LAST CHANGED (MOTIR-11185) — the newest `plan_revision`
+   * row with `change_kind = 'edited'` naming it, as an ISO instant; `null` when it
+   * was never edited after it landed. Every write that changes a proposal already
+   * on the plan records one such row (a deepen, a correction, a merge), so the
+   * live canvas diffs this between two polls and highlights the card that moved.
+   *
+   * A RECENCY fact, like {@link revised}, and orthogonal to `op`. OPTIONAL on the
+   * type only so hand-built review fixtures stay valid; `getPlanReview` always
+   * sets it.
+   */
+  lastEditedAt?: string | null;
 
   stale: boolean;
   staleReasons: StaleReason[];

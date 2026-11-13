@@ -84,6 +84,8 @@ describe('no colour moves — resolved --el-* tokens against the pre-rename shee
   // MOTIR-10327), the same way: new tokens only.
   // And for the `--el-code-selection-*` pair (the agent terminal's text
   // selection, MOTIR-10856), the same way: new tokens only.
+  // And for `--el-changed` (the planning canvas's changed-card highlight,
+  // MOTIR-11185), the same way: new tokens only.
   const before = JSON.parse(
     readFileSync(join(process.cwd(), 'tests/fixtures/paletteRename6471.before.json'), 'utf8'),
   ) as Record<string, Record<string, string>>;

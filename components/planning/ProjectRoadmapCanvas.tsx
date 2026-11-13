@@ -28,16 +28,24 @@ import { Spinner } from '@/components/ui/Spinner';
 import { ARRIVAL_MIN_SCALE } from '@/lib/planning/canvasGeometry';
 import {
   arrivalsSummary,
+  CHANGED_HIGHLIGHT_MS,
+  changesSummary,
   EMPTY_ARRIVALS,
+  EMPTY_CHANGES,
+  expireHighlight,
   foldArrivals,
+  foldChanges,
   liveSlot,
   offLevelInFlight,
+  visitChangesLevel,
   visitLevel,
   type ArrivalsLog,
+  type ChangesLog,
   type InFlightCue,
   type LiveArrival,
+  type LiveEdit,
 } from '@/lib/planning/livePane';
-import type { NodeCue } from '@/components/planning/PlanningCanvas';
+import type { NodeCue, NodeHighlight } from '@/components/planning/PlanningCanvas';
 import {
   NODE_H,
   NODE_W,
@@ -538,6 +546,16 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   arrivals?: readonly LiveArrival[] | null;
   /**
+   * THE CHANGED HIGHLIGHT (MOTIR-11185) — the plan's cards with the time each was
+   * last EDITED, while the plan is written. Folded like `arrivals`: the first
+   * snapshot is the baseline, and after it a card whose edit time moves forward
+   * is HIGHLIGHTED when drawn on the level in view (a ring that fades after
+   * `CHANGED_HIGHLIGHT_MS`; a second change restarts it), else COUNTED in the
+   * arrivals slot as changed — separately from arrived — until its level is
+   * visited, where it highlights. Absent (the default) draws and counts nothing.
+   */
+  changes?: readonly LiveEdit[] | null;
+  /**
    * THE LEVEL CHANGE BAND (bug MOTIR-6223; design MOTIR-6241) — what a pending
    * plan does to the LEVEL in view, drawn as a SECOND ROW inside the breadcrumb
    * bar. Asked of the drilled level only (the root has no bar, and the project is
@@ -681,6 +699,7 @@ export function ProjectRoadmapCanvas({
   levelCaption,
   motion = false,
   arrivals = null,
+  changes = null,
   levelBand,
   nodeCues = null,
   followControl,
@@ -1001,6 +1020,59 @@ export function ProjectRoadmapCanvas({
     if (nextLog !== arrivalLog) setArrivalLog(nextLog);
   }
   const arrivalsPill = arrivalsSummary(arrivalLog.pending);
+
+  // ── THE CHANGED HIGHLIGHT (MOTIR-11185) ───────────────────────────────────
+  // The same fold-during-render shape as the arrivals count: each snapshot's edit
+  // times diffed against the last; standing on a level lights what was pending
+  // there. A highlight is taken off by a TIMER (a callback, not a synchronous
+  // effect setState) keyed on its `seq`, so a re-lit node keeps its newer one.
+  const [changeLog, setChangeLog] = useState<ChangesLog>(() => ({
+    ...EMPTY_CHANGES,
+    viewing: focusId,
+  }));
+  {
+    let nextLog = changeLog;
+    if (changes !== null && changes !== nextLog.source) {
+      nextLog = foldChanges(nextLog, changes, focusId);
+    }
+    if (nextLog.viewing !== focusId) nextLog = visitChangesLevel(nextLog, focusId);
+    if (nextLog !== changeLog) setChangeLog(nextLog);
+  }
+  const highlightTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = highlightTimersRef.current;
+    for (const [nodeId, seq] of changeLog.highlights) {
+      const key = `${nodeId}:${seq}`;
+      if (timers.has(key)) continue;
+      timers.set(
+        key,
+        setTimeout(() => {
+          timers.delete(key);
+          setChangeLog((log) => expireHighlight(log, nodeId, seq));
+        }, CHANGED_HIGHLIGHT_MS),
+      );
+    }
+  }, [changeLog.highlights]);
+  useEffect(() => {
+    const timers = highlightTimersRef.current;
+    return () => {
+      for (const id of timers.values()) clearTimeout(id);
+      timers.clear();
+    };
+  }, []);
+  const changedPill = changesSummary(
+    changeLog.pending,
+    new Set(arrivalLog.pending.map((a) => a.id)),
+  );
+  // Only while the plan is written: a canvas whose `changes` went absent (the
+  // plan was decided, or stopped being written) lights nothing.
+  const changedLabel = tTarget('changedName');
+  const nodeHighlights = useMemo(() => {
+    if (changes === null || changeLog.highlights.size === 0) return null;
+    const lit = new Map<string, NodeHighlight>();
+    for (const [nodeId, seq] of changeLog.highlights) lit.set(nodeId, { seq, label: changedLabel });
+    return lit;
+  }, [changes, changeLog.highlights, changedLabel]);
 
   // Release the fade once the followed level has painted, so it transitions IN
   // rather than appearing already faded. A frame, not a timer: the class does the
@@ -1728,6 +1800,7 @@ export function ProjectRoadmapCanvas({
   const liveSlotNow = liveSlot(
     arrivalsPill,
     inFlight ? offLevelInFlight(inFlight, drawnIds, focusId) : [],
+    changedPill,
   );
   // THE TRIP RULE (MOTIR-8594; §28.3): hidden while its trip IS the follow trip.
   const slot =
@@ -1760,12 +1833,18 @@ export function ProjectRoadmapCanvas({
             drafting: slot.drafting,
             identifier: slotIdentifier(slot.trail),
           })
-        : slot.key === 'layingIn'
-          ? tTarget(slot.key, { identifier: slotIdentifier(slot.trail) })
-          : tTarget(slot.key, {
-              count: slot.count,
+        : slot.key === 'newAndChangedIn'
+          ? tTarget(slot.key, {
+              arrived: slot.arrived,
+              changed: slot.changed,
               identifier: slotIdentifier(slot.trail),
-            });
+            })
+          : slot.key === 'layingIn'
+            ? tTarget(slot.key, { identifier: slotIdentifier(slot.trail) })
+            : tTarget(slot.key, {
+                count: slot.count,
+                identifier: slotIdentifier(slot.trail),
+              });
 
   // The bar's TRIPS — the offer, else the pill (one slot).
   const trips = (
@@ -2365,6 +2444,7 @@ export function ProjectRoadmapCanvas({
           motion={motion}
           animateInitial={animateInitial}
           nodeCues={shownCues}
+          nodeHighlights={nodeHighlights}
         />
       )}
     </div>

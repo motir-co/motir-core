@@ -9057,6 +9057,10 @@
       "layingIn": "Disposizione di {identifier} · Vai",
       "newAndDraftingIn": "{arrived} nuovi · {drafting} in stesura in {identifier} · Vai",
       "draftingAcross": "{count} in stesura altrove · il primo in {identifier} · Vai",
+      "changedIn": "{count} modificati in {identifier} · Vai",
+      "changedAcross": "{count} modificati altrove · il più recente in {identifier} · Vai",
+      "newAndChangedIn": "{arrived} nuovi · {changed} modificati in {identifier} · Vai",
+      "changedName": "Appena modificato",
       "levelChange": {
         "srPrefix": "Modifica in sospeso a questo livello:",
         "changed": "Questo livello",

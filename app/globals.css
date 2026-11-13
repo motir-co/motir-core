@@ -580,6 +580,50 @@ body {
     animation: canvas-cue-wash-out var(--transition-duration) var(--canvas-ease-exit) forwards;
   }
 }
+/* THE CHANGED HIGHLIGHT (MOTIR-11185) — a card the planner CHANGED after it was
+   drawn (a `plan_revision` `edited` row naming it). A layer on the canvas's NODE
+   BOX, like the cues, so no op treatment is touched. Its own hue (`--el-changed`,
+   the palette's re-planning hue) and its own shape keep it distinct from the
+   other three things a live card can do: an ARRIVAL moves the card itself, the
+   DRAFTING cue is a 7px ring with a chip and a wash that stays for the step, and
+   the DEEPEN is a 2px accent outline gone in under a second. This is a solid ring
+   at 4px — between the deepen outline and the drafting ring, so a card that is
+   all three shows all three — with ONE glow pulse as it lights, held, then faded.
+   The canvas sets the duration inline (`CHANGED_HIGHLIGHT_MS`) and drops the
+   layer on the same timer; a second change re-keys the ring, which restarts it.
+   STATIC under reduced motion: the ring is simply drawn, and cleared by that
+   timer, with no pulse and no fade. */
+.canvas-node--changed > .canvas-changed-ring {
+  pointer-events: none;
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--el-changed);
+  border-radius: calc(var(--radius-card) + 4px);
+}
+@keyframes canvas-changed-flash {
+  0% {
+    opacity: 0;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--el-changed) 0%, transparent);
+  }
+  10% {
+    opacity: 1;
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--el-changed) 35%, transparent);
+  }
+  30% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--el-changed) 0%, transparent);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .canvas-node--changed > .canvas-changed-ring {
+    animation: canvas-changed-flash 3000ms var(--canvas-ease-exit) both;
+  }
+}
 /* Under reduce nothing is retained (the canvas drops the cue at once); should a
    leaving frame ever paint, it shows no cue rather than a static one. */
 @media (prefers-reduced-motion: reduce) {

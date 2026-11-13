@@ -9057,6 +9057,10 @@
       "layingIn": "Organizando {identifier} · Ir para lá",
       "newAndDraftingIn": "{arrived} novos · {drafting} sendo redigidos em {identifier} · Ir para lá",
       "draftingAcross": "{count} sendo redigidos em outros lugares · o primeiro em {identifier} · Ir para lá",
+      "changedIn": "{count} alterados em {identifier} · Ir para lá",
+      "changedAcross": "{count} alterados em outros lugares · o mais recente em {identifier} · Ir para lá",
+      "newAndChangedIn": "{arrived} novos · {changed} alterados em {identifier} · Ir para lá",
+      "changedName": "Alterado agora mesmo",
       "levelChange": {
         "srPrefix": "Alteração pendente neste nível:",
         "changed": "Este nível",
