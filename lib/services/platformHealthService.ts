@@ -303,14 +303,14 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
     await withSystemContext((tx) => databaseHealthRepository.ping(tx));
     return true;
   });
-  if (!ok) return unreachable('database', 'unreachable', neonConsoleUrl());
+  if (!ok) return unreachable('database', 'unreachable', databaseConsoleUrl());
 
   const ms = Date.now() - startedAt;
   return {
     id: 'database',
     state: ms > DB_SLOW_MS ? 'degraded' : 'healthy',
     values: { ms, region: databaseRegion() },
-    linkOut: neonConsoleUrl(),
+    linkOut: databaseConsoleUrl(),
   };
 }
 
@@ -326,8 +326,8 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
  * through the port in `lib/deployment/deploymentStatus.ts`), and names no
  * platform, no environment variable and no console host.
  *
- * (This service failed that guard on its first push, with three raw `FLY_*`
- * reads inline. The guard was right and the fix is the accessor, not an
+ * (This service failed that guard on its first push, with three raw host
+ * environment reads inline. The guard was right and the fix is the accessor, not an
  * exemption for a service.)
  *
  * The verdict, in order:
@@ -605,37 +605,56 @@ async function lastHealthCheckSignal(now: Date): Promise<PlatformSignalDTO> {
 }
 
 /**
- * The Neon project the app talks to, named from `DATABASE_URL`'s HOST rather
- * than from a decision record.
+ * The Amazon RDS database the app talks to, named from `DATABASE_URL`'s HOST
+ * rather than from a decision record.
  *
  * The host is the one identifier that is true of the connection actually open —
- * an ADR records where the project was created, and a deployment pointed
- * somewhere else would still read `iad` out of it. Neon encodes the region in
- * the hostname (`…-<region>.aws.neon.tech`), so the substring is a reading and
- * not a lookup; anything else renders as the raw host, which is still the truth.
+ * an ADR records where the database was created, and a deployment pointed
+ * somewhere else would still read `us-east-1` out of it. RDS encodes the region
+ * in every endpoint it issues — an instance, an Aurora cluster or reader, an RDS
+ * Proxy (`<name>.<id>.<region>.rds.amazonaws.com`) — so the label is a reading
+ * and not a lookup. Null for any other host.
  */
-function databaseRegion(): string {
+function rdsRegion(): string | null {
+  const host = databaseHost();
+  if (!host) return null;
+  return /\.([a-z]{2}(?:-[a-z]+)+-\d)\.rds\.amazonaws\.com$/.exec(host)?.[1] ?? null;
+}
+
+/** `DATABASE_URL`'s hostname, or null when it is unset or does not parse. */
+function databaseHost(): string | null {
   const url = process.env['DATABASE_URL'];
-  if (!url) return '—';
+  if (!url) return null;
   try {
-    const host = new URL(url).hostname;
-    const match = /-([a-z]{2}-[a-z]+-\d)\.aws\.neon\.tech$/.exec(host);
-    return match?.[1] ?? host;
+    return new URL(url).hostname;
   } catch {
-    return '—';
+    return null;
   }
 }
 
 /**
- * The Neon console, or null when this deployment is not on Neon.
- *
- * There is no project id in the connection string, so the link is to the
- * console's project list rather than to this project — a deliberate under-claim.
- * A constructed deep link that 404s during an incident is worse than a list.
+ * The region the card shows: the RDS region when the host names one; anything
+ * else renders as the raw host, which is still the truth; `—` when there is no
+ * parseable URL.
  */
-function neonConsoleUrl(): string | null {
-  const url = process.env['DATABASE_URL'];
-  return url?.includes('neon.tech') ? 'https://console.neon.tech/app/projects' : null;
+function databaseRegion(): string {
+  return rdsRegion() ?? databaseHost() ?? '—';
+}
+
+/**
+ * The RDS console's database list for that region, or null when this deployment
+ * is not on RDS.
+ *
+ * There is no instance id the console can be deep-linked to from the endpoint
+ * alone, so the link is to the region's database list rather than to this
+ * database — a deliberate under-claim. A constructed deep link that 404s during
+ * an incident is worse than a list.
+ */
+function databaseConsoleUrl(): string | null {
+  const region = rdsRegion();
+  return region
+    ? `https://${region}.console.aws.amazon.com/rds/home?region=${region}#databases:`
+    : null;
 }
 
 /**

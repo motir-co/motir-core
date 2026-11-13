@@ -197,12 +197,14 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   // requests them.
   //
   // ⚠️ Each of these vendors IS real, and excusing the console host does NOT
-  // excuse the vendor — that is the distinction the whole file exists for. Neon
-  // and Sentry are disclosed on the page. What is excused here is the DASHBOARD
-  // hostname, which is not where any data of ours goes; their API paths are
-  // covered by their own entries. (`app.inngest.com` sat here until MOTIR-3418
-  // deleted the last link to it.)
-  'console.neon.tech': "operator link to Neon's console; never requested by the server",
+  // excuse the vendor — that is the distinction the whole file exists for. What
+  // is excused here is the DASHBOARD hostname, which is not where any data of
+  // ours goes; the vendors' API paths are covered by their own entries.
+  // (`app.inngest.com` sat here until MOTIR-3418 deleted the last link to it, and
+  // `console.neon.tech` until MOTIR-11158 pointed the Database card at the RDS
+  // console. That host is built per region (`<region>.console.aws.amazon.com`),
+  // so it is no literal this scan reads; its vendor is Amazon Web Services,
+  // disclosed by the signature above.)
 
   // The vendor LEFT, the arm stayed (MOTIR-10939). `lib/email.ts` keeps a Resend
   // arm for any deployment that selects it, so the endpoint is still in the tree;

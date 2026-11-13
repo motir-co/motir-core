@@ -1,13 +1,14 @@
 /**
- * `pnpm db:rewrite:stored-asset-urls --from-base=<tigris public base> [--apply]` —
+ * `pnpm db:rewrite:stored-asset-urls --from-base=<previous public base> [--apply]` —
  * step 5 of the AWS cutover window (Story MOTIR-9712 · MOTIR-10075).
  *
  * WHY. `User.image` and `Project.image` store an object KEY since MOTIR-2404, and
  * `storedAssetUrl` resolves a key against `MOTIR_S3_PUBLIC_BASE_URL` — so a key
- * follows the window's move from Tigris to S3. A row written between MOTIR-2389 and
- * MOTIR-2404 may still hold an ABSOLUTE URL on the Tigris public base, which
- * `storedAssetUrl` passes through unchanged: it would keep pointing at Tigris and
- * break at the decommission. This rewrites exactly those rows to their keys.
+ * follows the window's move of the store to Amazon S3. A row written between
+ * MOTIR-2389 and MOTIR-2404 may still hold an ABSOLUTE URL on the previous store's
+ * public base, which `storedAssetUrl` passes through unchanged: it would keep
+ * pointing at that store and break at its decommission. This rewrites exactly
+ * those rows to their keys.
  *
  * DRY RUN BY DEFAULT — the inverse of `db:backfill:fix-reason`. With no flag it
  * counts, per column, the rows whose value starts with `<from-base>/`, prints each
@@ -22,13 +23,13 @@
  * it would match nothing and report a false 0. A non-`https:` base is refused before
  * any query runs.
  *
- * Usage (against NEON's core database, after the freeze and before the dump —
+ * Usage (against the core database being moved, after the freeze and before the dump —
  * motir-infra `docs/core-cutover.md` step 5 says why; any core database works):
  *
  *   DATABASE_URL='<core url>' pnpm db:rewrite:stored-asset-urls \
- *     --from-base=https://motir-core-public.fly.storage.tigris.dev
+ *     --from-base=https://<previous store's public base>
  *   DATABASE_URL='<core url>' pnpm db:rewrite:stored-asset-urls \
- *     --from-base=https://motir-core-public.fly.storage.tigris.dev --apply
+ *     --from-base=https://<previous store's public base> --apply
  *
  * Exit 0 on a completed run, 1 on a refusal (bad base, a row that does not reduce,
  * a row that changed since it was counted, a non-zero re-count) or any error.

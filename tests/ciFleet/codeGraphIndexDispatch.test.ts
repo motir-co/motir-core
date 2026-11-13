@@ -83,7 +83,7 @@ const TARBALL_URL =
 const RUN_CREDENTIAL = 'mrc1.payload.signature';
 /** The third pre-signed URL (MOTIR-3252) — the PREVIOUS snapshot, when there is one. */
 const SNAPSHOT_URL =
-  'https://fly.storage.tigris.dev/bucket/codegraph/ai-proj/moooon-B-V_motir-core/abc.db.gz' +
+  'https://motir-codegraph.s3.us-east-1.amazonaws.com/codegraph/ai-proj/moooon-B-V_motir-core/abc.db.gz' +
   '?X-Amz-Signature=PRESIGNED&X-Amz-Expires=1800';
 const AI_URL = 'https://ai.example.test';
 /**

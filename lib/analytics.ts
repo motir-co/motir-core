@@ -11,7 +11,7 @@
 // A `NEXT_PUBLIC_*` value is inlined into the client bundle when `next build`
 // runs, which would manufacture the Docker build-argument dependency §5 picked
 // Plausible to avoid — and would then need a build arg wired through
-// `ci.yml`'s `flyctl deploy`, which is MOTIR-1162's seam and not this card's.
+// the deploy's image build, which is MOTIR-1162's seam and not this card's.
 // `tests/analytics.test.ts` asserts the name never acquires that prefix and
 // never appears as a build argument.
 //

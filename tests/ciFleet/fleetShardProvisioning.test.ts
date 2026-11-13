@@ -158,7 +158,7 @@ const fakeProvider: ShardProvisioningProvider = {
     return { confirmed: process.env[`${ctx.credentialRef}_ACCESS_KEY`] === SECRETS.runtimeKey };
   },
   manualCredentialStep: (ctx) =>
-    `create the account's access key, then run: flyctl secrets set -a motir-core ${ctx.credentialRef}_ACCESS_KEY=<key>`,
+    `create the account's access key, then store it in AWS Secrets Manager as ${ctx.credentialRef}_ACCESS_KEY`,
 };
 
 async function staff(role: PlatformRole | null): Promise<string> {
@@ -287,7 +287,7 @@ describe('add-shard, first run', () => {
 
     expect(result.out).toContain('Pending manual steps:');
     expect(result.out).toContain(`vCPU quota from ${BELOW_TARGET}`);
-    expect(result.out).toContain(`flyctl secrets set -a motir-core ${PREFIX}_ACCESS_KEY=<key>`);
+    expect(result.out).toContain(`store it in AWS Secrets Manager as ${PREFIX}_ACCESS_KEY`);
   });
 
   it('a re-run makes no create call and reports every completed step already', async () => {

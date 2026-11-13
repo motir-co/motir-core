@@ -244,10 +244,10 @@ describe('isOwnProjectImageRef — the project-mark gate, in both storage forms'
 });
 
 // MOTIR-10075: the reduction lifted out of `ownPublicAssetKey`, with the base as an
-// argument, so the cutover's stored-reference rewrite reduces Tigris URLs exactly
-// as the product does even after `MOTIR_S3_PUBLIC_BASE_URL` names S3.
+// argument, so the cutover's stored-reference rewrite reduces the previous store's
+// URLs exactly as the product does even after `MOTIR_S3_PUBLIC_BASE_URL` names S3.
 describe('publicUrlToKey — an absolute URL on a given base becomes its key', () => {
-  const VIRTUAL_HOST = 'https://motir-core-public.fly.storage.tigris.dev';
+  const VIRTUAL_HOST = 'https://motir-core-public.previous-store.test';
 
   it('reduces a URL on a virtual-host base to its path', () => {
     expect(publicUrlToKey(`${VIRTUAL_HOST}/avatars/u1/me.png`, VIRTUAL_HOST)).toBe(
@@ -296,8 +296,8 @@ describe('publicUrlToKey — an absolute URL on a given base becomes its key', (
   it('refuses a non-https URL, a malformed one, and a malformed base', () => {
     expect(
       publicUrlToKey(
-        'http://motir-core-public.fly.storage.tigris.dev/avatars/u1/me.png',
-        'http://motir-core-public.fly.storage.tigris.dev',
+        'http://motir-core-public.previous-store.test/avatars/u1/me.png',
+        'http://motir-core-public.previous-store.test',
       ),
     ).toBeNull();
     expect(publicUrlToKey('javascript:alert(1)//avatars/u1', 'javascript:alert(1)/')).toBeNull();

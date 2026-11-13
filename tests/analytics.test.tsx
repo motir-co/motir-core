@@ -195,7 +195,7 @@ describe('PLAUSIBLE_SCRIPT_SRC stays a RUNTIME variable (MOTIR-1163)', () => {
   it('the detector FIRES on a build-time reference — this guard is not vacuous', () => {
     expect(buildTimeAnalyticsReferences('ARG PLAUSIBLE_SCRIPT_SRC')).toHaveLength(1);
     expect(
-      buildTimeAnalyticsReferences('run: flyctl deploy --build-arg PLAUSIBLE_SCRIPT_SRC=$X'),
+      buildTimeAnalyticsReferences('run: docker build --build-arg PLAUSIBLE_SCRIPT_SRC=$X .'),
     ).toHaveLength(1);
     expect(
       buildTimeAnalyticsReferences('NEXT_PUBLIC_PLAUSIBLE_SCRIPT_SRC=https://example.test'),

@@ -21,7 +21,6 @@
     "generate:mcp-tool-schemas": "tsx --tsconfig tsconfig.node.json scripts/generate-mcp-tool-schemas.ts",
     "generate:plan-change-frame-kinds": "tsx --tsconfig tsconfig.node.json scripts/generate-plan-change-frame-kinds.ts",
     "deploy:aws": "tsx --tsconfig tsconfig.node.json scripts/aws-deploy/awsDeploy.ts",
-    "staging:two-machine-check": "tsx --tsconfig tsconfig.node.json scripts/staging/two-machine-check.ts",
     "db:seed": "tsx --tsconfig tsconfig.node.json scripts/plan-seed/seed.ts",
     "db:seed:large": "tsx --tsconfig tsconfig.node.json scripts/seed-large.ts",
     "db:seed:collab": "tsx --tsconfig tsconfig.node.json scripts/seed-collab.ts",

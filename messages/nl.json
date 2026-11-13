@@ -11043,7 +11043,7 @@
           "unreachableDetail": {
             "unreachable": "De database antwoordde niet op een ping. Dit is geen latentie van nul — er is niets gemeten."
           },
-          "linkOut": "Neon-console"
+          "linkOut": "Amazon RDS-console"
         },
         "hosting": {
           "title": "Hosting",

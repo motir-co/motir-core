@@ -4,14 +4,14 @@
 // each. Nothing is hand-written: when the engine answers differently the capture is
 // taken again, never edited. The routes take no credential.
 //
-//   node scripts/record-calculator-capture.mjs [origin]   (default https://motir-ai.fly.dev)
+//   node scripts/record-calculator-capture.mjs [origin]   (default https://ai.motir.co)
 //
 // Each estimate asks the two ranges (MOTIR-9224): the same range planned and run, so
 // a re-record stays comparable with the single-range capture it replaces.
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 
-const origin = process.argv[2] ?? 'https://motir-ai.fly.dev';
+const origin = process.argv[2] ?? 'https://ai.motir.co';
 const out = new URL('../tests/fixtures/calculatorEngineCapture.ts', import.meta.url);
 const range = { low: 2, high: 6 };
 const both = (r) => ({ plannedPerMonth: r, runPerMonth: r });

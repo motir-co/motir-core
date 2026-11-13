@@ -239,7 +239,7 @@ describe('add-shard --provider aws, first run', () => {
     );
     expect(organization.calls).toContain(`assumeRunnerRole:${account.accountId}`);
     expect(result.out).not.toContain('access key');
-    expect(result.out).not.toContain('flyctl secrets set');
+    expect(result.out).not.toContain('_ACCESS_KEY');
   });
 
   it('a re-run files no create and reports every completed step already', async () => {

@@ -439,34 +439,37 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     expect(errors).toMatchObject({ state: 'unreachable', values: { reason: 'notConfigured' } });
   });
 
-  it('a NEON url yields the region out of the HOST and the console link', async () => {
+  it.each([
+    ['an RDS instance', 'motir-core.c9akciq32.us-east-1.rds.amazonaws.com'],
+    ['an Aurora cluster', 'motir-core.cluster-c9akciq32.us-east-1.rds.amazonaws.com'],
+    ['an RDS Proxy', 'motir-core.proxy-c9akciq32.us-east-1.rds.amazonaws.com'],
+  ])('an RDS url (%s) yields the region out of the HOST and the console link', async (_, host) => {
     // The region is a READING of the connection actually open, not a lookup in a
-    // decision record — a deployment pointed elsewhere would still say `iad` if
-    // this came from an ADR.
-    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@ep-cool-1234-us-east-1.aws.neon.tech/db');
+    // decision record — a deployment pointed elsewhere would still say
+    // `us-east-1` if this came from an ADR.
+    vi.stubEnv('DATABASE_URL', `postgresql://u:p@${host}:5432/db`);
 
     const database = signal(
       (await platformHealthService.read(currentPrincipal)).signals,
       'database',
     );
     expect(database.values['region']).toBe('us-east-1');
-    expect(database.linkOut).toBe('https://console.neon.tech/app/projects');
+    expect(database.linkOut).toBe(
+      'https://us-east-1.console.aws.amazon.com/rds/home?region=us-east-1#databases:',
+    );
   });
 
-  it('a Neon host the region pattern does not match renders the RAW HOST, still the truth', async () => {
-    // ⚠️ ASSERTED AS THE BEHAVIOUR, NOT AS A WISH. `databaseRegion`'s pattern
-    // wants the region joined by a DASH (`…-us-east-1.aws.neon.tech`); a host
-    // that separates it with a DOT does not match, and the accessor falls back to
-    // the host — which its own comment calls "still the truth". Asserting a region
-    // here would be asserting a regex this file does not own.
-    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@ep-cool-1234-pooler.us-east-1.aws.neon.tech/db');
+  it('a multi-part RDS region (ap-southeast-2, us-gov-west-1) is read whole', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@db.c9akciq32.us-gov-west-1.rds.amazonaws.com/db');
 
     const database = signal(
       (await platformHealthService.read(currentPrincipal)).signals,
       'database',
     );
-    expect(database.values['region']).toBe('ep-cool-1234-pooler.us-east-1.aws.neon.tech');
-    expect(database.linkOut).toBe('https://console.neon.tech/app/projects');
+    expect(database.values['region']).toBe('us-gov-west-1');
+    expect(database.linkOut).toBe(
+      'https://us-gov-west-1.console.aws.amazon.com/rds/home?region=us-gov-west-1#databases:',
+    );
   });
 
   it('a MALFORMED or absent DATABASE_URL degrades to an em-dash rather than throwing', async () => {
@@ -499,7 +502,7 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     expect(Number(database.values['ms'])).toBeGreaterThan(500);
   });
 
-  it('a non-Neon (or absent) DATABASE_URL yields no region and no console link', async () => {
+  it('a non-RDS DATABASE_URL yields the raw host and no console link', async () => {
     vi.stubEnv('DATABASE_URL', 'postgresql://user:pw@db.example.com:5432/app');
 
     const database = signal(
