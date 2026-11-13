@@ -92,7 +92,7 @@ describe('StopContainersDialog', () => {
       '2CI runs cancelled and 3 CI containers destroyed',
     );
     expect(within(dialog).getByTestId('stop-effect-hosted').textContent).toBe(
-      '0hosted agent runs ended',
+      '0Motir agent runs ended',
     );
     expect(within(dialog).getByTestId('stop-effect-instances').textContent).toBe(
       '2agent instances hibernated',
@@ -147,7 +147,7 @@ describe('StopContainersDialog', () => {
       '2 CI runs cancelled · 3 CI containers destroyed',
     );
     expect(within(result).getByTestId('stop-result-hosted').textContent).toBe(
-      '1 hosted agent run ended',
+      '1 Motir agent run ended',
     );
     expect(within(result).getByTestId('stop-result-instances').textContent).toBe(
       '2 agent instances hibernated',
@@ -174,7 +174,7 @@ describe('StopContainersDialog', () => {
       'CI: 2 runs cancelled · 2 of 3 containers destroyed1 could not be stopped — the reconciler will retry.',
     );
     expect(within(result).getByTestId('stop-result-hosted').textContent).toBe(
-      'Hosted agent runs: 1 ended',
+      'Motir agent runs: 1 ended',
     );
     expect(within(result).getByTestId('stop-result-instances').textContent).toBe(
       'Agent instances: 1 of 2 hibernated1 could not be stopped — the reconciler will retry.',

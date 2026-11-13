@@ -235,7 +235,7 @@ describe('/admin/monitoring — the Fleet section', () => {
     expect(text).toContain('Reachable · 4 ms');
     expect(text).toContain(m.signal.database.linkOut);
     // The link opens the RDS console, and its label says so (MOTIR-11150).
-    expect(m.signal.database.linkOut).toBe('RDS console');
+    expect(m.signal.database.linkOut).toBe('Amazon RDS console');
     expect(text).not.toMatch(/neon/i);
     expect(text).toContain(m.state.degraded);
     expect(text).toContain(m.signal.errors.unreachable.notConfigured);

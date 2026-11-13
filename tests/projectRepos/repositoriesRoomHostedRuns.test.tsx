@@ -125,7 +125,7 @@ describe('the Repositories room says whether Motir’s app can write each reposi
     const row = within(rowOf('r-ready'));
     expect(
       row.getByText(
-        'Hosted runs can write here — Motir’s app pushes their branches and opens their pull requests.',
+        'Motir agent runs can write here — Motir’s app pushes their branches and opens their pull requests.',
       ),
     ).toBeTruthy();
     expect(row.queryByRole('status')).toBeNull();
@@ -137,7 +137,7 @@ describe('the Repositories room says whether Motir’s app can write each reposi
     const row = within(rowOf('r-perms'));
     const line = row.getByRole('status');
     expect(line.textContent).toBe(
-      'Needs updated permissions. Motir Integration on acme-labs can’t write yet — an owner of acme-labs accepts its updated permissions on GitHub. Until then a hosted run that touches this repository is refused before anything starts.Review permissions on GitHub',
+      'Needs updated permissions. Motir Integration on acme-labs can’t write yet — an owner of acme-labs accepts its updated permissions on GitHub. Until then a Motir agent run that touches this repository is refused before anything starts.Review permissions on GitHub',
     );
     const link = row.getByRole('link', { name: 'Review permissions on GitHub' });
     expect(link.getAttribute('href')).toBe(REVIEW);
@@ -148,7 +148,7 @@ describe('the Repositories room says whether Motir’s app can write each reposi
     room(ACCESS);
     const row = within(rowOf('r-gone'));
     expect(row.getByRole('status').textContent).toBe(
-      'Motir Integration can no longer reach acme-inc/design-tokens. Its installation was removed or suspended, or no longer includes this repository. Reconnect it on GitHub; until then a hosted run that touches it is refused.Reconnect',
+      'Motir Integration can no longer reach acme-inc/design-tokens. Its installation was removed or suspended, or no longer includes this repository. Reconnect it on GitHub; until then a Motir agent run that touches it is refused.Reconnect',
     );
     expect(row.getByRole('link', { name: 'Reconnect' }).getAttribute('href')).toBe(INSTALL);
   });
@@ -165,7 +165,7 @@ describe('no hosted-runs state where there is nothing to say (AC3)', () => {
     room({});
     for (const id of ['r-ready', 'r-perms', 'r-gone']) {
       expect(within(rowOf(id)).queryByRole('status')).toBeNull();
-      expect(within(rowOf(id)).queryByText(/Hosted runs can write here/)).toBeNull();
+      expect(within(rowOf(id)).queryByText(/Motir agent runs can write here/)).toBeNull();
     }
   });
 
@@ -211,6 +211,6 @@ describe('back from GitHub, the room re-reads itself (AC2 · the page-state cont
     );
     const row = within(rowOf('r-perms'));
     expect(row.queryByRole('status')).toBeNull();
-    expect(row.getByText(/Hosted runs can write here/)).toBeTruthy();
+    expect(row.getByText(/Motir agent runs can write here/)).toBeTruthy();
   });
 });

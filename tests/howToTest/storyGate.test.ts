@@ -347,10 +347,14 @@ const PROVISIONING_SHAPES: ReadonlyArray<{ name: string; pattern: RegExp }> = [
     name: 'deployments REST path',
     pattern: /['"`][^'"`\n]*\/(?:repos|projects)\/[^'"`\n]*\/deployments(?:\/[^'"`\n]*)?['"`]/,
   },
-  // A hosting CLI told to deploy.
+  // A CLI told to deploy, whichever host it names: a process spawn whose
+  // subcommand is `deploy`, as an argument list (`run('<cli>', ['deploy', …])`)
+  // or a command line (`execSync('<cli> deploy …')`). Naming no vendor keeps the
+  // guard true when a project's host changes.
   {
     name: 'hosting CLI deploy',
-    pattern: /\b(?:vercel|netlify|flyctl|fly)['"`]?\s*,?\s*\[?\s*['"`]?deploy\b/,
+    pattern:
+      /\b(?:run|spawn|spawnSync|exec|execSync|execFile|execFileSync|execa)\s*\(\s*['"`](?:[\w./-]+['"`]\s*,\s*\[\s*['"`]|[\w./-]+ )deploy\b/,
   },
 ];
 
@@ -419,6 +423,7 @@ describe('seam 6 — no provisioning: nothing under lib/ or packages/cli/ create
       'lib/fake/route.ts': "await octokit.request('POST /repos/{owner}/{repo}/deployments', body);",
       'lib/fake/gitlab.ts': 'await fetch(`${host}/api/v4/projects/${id}/deployments`, { method });',
       'packages/cli/src/fake.ts': "run('vercel', ['deploy', '--prebuilt'], cwd);",
+      'packages/cli/src/fakeShell.ts': "execSync('netlify deploy --prod', { cwd });",
       'lib/fake/status.ts': 'await octokit.rest.repos.createDeploymentStatus({ deployment_id });',
     };
     const hits = findProvisioningCalls(Object.keys(fixture), (f) => fixture[f]!);
@@ -437,6 +442,8 @@ describe('seam 6 — no provisioning: nothing under lib/ or packages/cli/ create
         "/* repos.createDeployment( is what we never call */ const event = 'deployment_status';",
         'provider.parseDeploymentStatusEvent?.(body);',
         "const url = 'https://acme.vercel.app/items'; // ingestion reads it",
+        "execa('pnpm', ['prisma', 'migrate', 'deploy']);",
+        "const label = 'The deploy role did not converge';",
       ].join('\n'),
     };
     expect(findProvisioningCalls(Object.keys(fixture), (f) => fixture[f]!)).toEqual([]);

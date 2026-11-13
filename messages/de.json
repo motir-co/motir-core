@@ -1598,7 +1598,7 @@
     "provenanceSourceMcp": "MCP",
     "provenanceSourceManual": "Manuell",
     "provenanceSourceApi": "API",
-    "provenanceSourceHosted": "Gehostet",
+    "provenanceSourceHosted": "Motir-Agent",
     "provenanceSourceByok": "BYOK",
     "changedElsewhereRefreshing": "Dieses Arbeitselement wurde an anderer Stelle geändert – wird aktualisiert.",
     "editIssue": "Arbeitselement bearbeiten",
@@ -1984,7 +1984,7 @@
       "fields": "Felder",
       "components": "Komponenten",
       "aiPlanning": "KI-Planung",
-      "hostedAgent": "Gehosteter Agent",
+      "hostedAgent": "Motir-Agent",
       "translation": "Übersetzung",
       "rules": "Regeln",
       "repositories": "Repositorys",
@@ -3791,8 +3791,8 @@
       }
     },
     "hostedAgent": {
-      "title": "Gehosteter Agent",
-      "pageDescription": "Welches Modell ein gehosteter Lauf verwendet. „Gehostet ausführen“ wählt es anhand der Schwierigkeit des Arbeitselements vor; wer den Lauf startet, kann trotzdem ein anderes wählen.",
+      "title": "Motir-Agent",
+      "pageDescription": "Welches Modell ein Motir-Agent-Lauf verwendet. „Ausführen“ wählt es anhand der Schwierigkeit des Arbeitselements vor; wer den Lauf startet, kann trotzdem ein anderes wählen.",
       "card": {
         "title": "Modell nach Schwierigkeit",
         "subtitle": "Jede Schwierigkeit läuft mit dem Plattformstandard, sofern Sie ihn nicht überschreiben. Ein übergeordnetes Arbeitselement verwendet das Modell der höchsten Schwierigkeit unter seinen Blattelementen."
@@ -3810,14 +3810,14 @@
       "optionDefault": "Plattformstandard für {difficulty}",
       "reset": "Auf Standard zurücksetzen",
       "withdrawn": "Das gespeicherte Modell <id>{model}</id> wird nicht mehr angeboten, daher verwenden Läufe mit {difficulty} den Plattformstandard. Setzen Sie es zurück, um es zu entfernen.",
-      "noDifficulty": "Ein Arbeitselement ohne Schwierigkeit läuft mit dem Plattformstandard <id>{model}</id> – dem Modell, das „Gehostet ausführen“ als <b>Standard</b> kennzeichnet.",
-      "readOnlyBanner": "Nur ein Projektadministrator kann die Einstellungen des gehosteten Agents ändern.",
-      "unavailableBody": "Motir AI war nicht erreichbar, daher können die gehosteten Modelle derzeit weder angezeigt noch geändert werden. Gehostete Läufe sind deaktiviert, bis der Dienst antwortet.",
-      "emptyBody": "Derzeit kann kein Modell ein gehostetes Arbeitselement ausführen, daher gibt es nichts zu wählen.",
-      "savedTitle": "Einstellungen des gehosteten Agents gespeichert",
-      "savedDesc": "Neue gehostete Läufe verwenden diese Modelle.",
+      "noDifficulty": "Ein Arbeitselement ohne Schwierigkeit läuft mit dem Plattformstandard <id>{model}</id> – dem Modell, das die Auswahl bei „Ausführen“ als <b>Standard</b> kennzeichnet.",
+      "readOnlyBanner": "Nur ein Projektadministrator kann die Einstellungen des Motir-Agenten ändern.",
+      "unavailableBody": "Motir AI war nicht erreichbar, daher können die Motir-Agent-Modelle derzeit weder angezeigt noch geändert werden. Motir-Agent-Läufe sind deaktiviert, bis der Dienst antwortet.",
+      "emptyBody": "Derzeit kann kein Modell ein Arbeitselement im Motir-Agenten ausführen, daher gibt es nichts zu wählen.",
+      "savedTitle": "Einstellungen des Motir-Agenten gespeichert",
+      "savedDesc": "Neue Motir-Agent-Läufe verwenden diese Modelle.",
       "errorTitle": "Speichern nicht möglich",
-      "saveError": "Die Einstellungen des gehosteten Agents wurden nicht gespeichert. Bitte versuchen Sie es erneut.",
+      "saveError": "Die Einstellungen des Motir-Agenten wurden nicht gespeichert. Bitte versuchen Sie es erneut.",
       "autoFix": {
         "label": "Einen roten Pull Request im eigenen Agenten des Arbeitselements reparieren.",
         "help": "Wird ein Pull Request rot und lief der letzte Lauf des Arbeitselements in einem angemeldeten, laufenden Agenten, startet Motir die Reparatur in diesem Agenten. Aus – die Standardeinstellung – startet nichts von selbst."
@@ -4112,7 +4112,7 @@
         "components": "Komponenten werden von Projektadministratoren verwaltet. Wenden Sie sich an einen Administrator, wenn eine hinzugefügt oder geändert werden muss.",
         "bugs": "Wo die Bugs dieses Projekts abgelegt werden, wird von Projektadministratoren verwaltet. Wenden Sie sich an einen Administrator, wenn das Ziel geändert werden muss.",
         "ai-planning": "Die KI-Planung dieses Projekts – ihr Rhythmus – wird von Projektadministratoren konfiguriert. Wenden Sie sich an einen Administrator, wenn sie geändert werden muss.",
-        "hosted-agent": "Welches Modell ein gehosteter Lauf verwendet, sehen Personen, die in diesem Projekt einen gehosteten Lauf starten können. Wenden Sie sich an einen Projektadministrator, wenn Sie es sehen müssen.",
+        "hosted-agent": "Welches Modell ein Motir-Agent-Lauf verwendet, sehen Personen, die in diesem Projekt einen Motir-Agent-Lauf starten können. Wenden Sie sich an einen Projektadministrator, wenn Sie es sehen müssen.",
         "translation": "Ob die Arbeitsinhalte dieses Projekts für jede lesende Person übersetzt werden, sehen Personen, die die Arbeitselemente des Projekts lesen können. Fragen Sie einen Projektadministrator, wenn Sie es sehen müssen.",
         "automation": "Die Projektautomatisierung wird von Projektadministratoren verwaltet. Wenden Sie sich an einen Administrator, wenn eine Regel geändert werden muss.",
         "monitoring": "Die Verbindung dieses Projekts zum Fehlermonitor wird von Personen verwaltet, die Integrationen verwalten dürfen. Wenden Sie sich an einen Projektadministrator, wenn Sentry verbunden oder neu verbunden werden muss.",
@@ -4368,16 +4368,16 @@
           },
           "review": {
             "name": "Review-Agent",
-            "desc": "Gehostete Reviews. Ob ein Projekt mit einem Agenten prüft, bleibt in seinen Genehmigungseinstellungen."
+            "desc": "Motir-Agent-Reviews. Ob ein Projekt mit einem Agenten prüft, bleibt in seinen Genehmigungseinstellungen."
           },
           "design": {
             "name": "Design-Lauf",
-            "desc": "Ein gehosteter Lauf auf einem Design-Arbeitselement"
+            "desc": "Ein Motir-Agent-Lauf auf einem Design-Arbeitselement"
           }
         },
         "agentRun": {
           "name": "Agentenlauf",
-          "desc": "Gehostete Build-Läufe nach der Schwierigkeit des Arbeitselements. Die eigene Überschreibung eines Projekts für eine Schwierigkeit hat weiterhin Vorrang vor der der Organisation."
+          "desc": "Motir-Agent-Build-Läufe nach der Schwierigkeit des Arbeitselements. Die eigene Überschreibung eines Projekts für eine Schwierigkeit hat weiterhin Vorrang vor der der Organisation."
         },
         "modelFor": "Modell für {function}",
         "loadingTrigger": "Modelle werden geladen…",
@@ -4404,7 +4404,7 @@
           "failed": "Nicht gespeichert: {function} konnte nicht gespeichert werden. Es behält sein aktuelles Modell; versuchen Sie es erneut."
         },
         "precedence": {
-          "body": "<b>Welches Modell ein Job verwendet</b>, der erste Treffer gilt: die Auswahl der Person bei „Gehostet ausführen“ → die eigene Überschreibung des Projekts (nur Agentenlauf) → die Wahl von {org} → der Plattformstandard.",
+          "body": "<b>Welches Modell ein Job verwendet</b>, der erste Treffer gilt: die Auswahl der Person bei „Ausführen“ → die eigene Überschreibung des Projekts (nur Agentenlauf) → die Wahl von {org} → der Plattformstandard.",
           "cost": "Jedes Modell wird zu seinem eigenen Satz abgerechnet, daher verbraucht ein stärkeres Modell mehr Guthaben von {org}."
         },
         "footer": {
@@ -6960,7 +6960,7 @@
     },
     "ai": {
       "name": "Motir AI",
-      "tagline": "Planung & gehostete Agenten – ein monatlicher Guthabenpool auf Organisationsebene.",
+      "tagline": "Planung & Motir-Agent – ein monatlicher Guthabenpool auf Organisationsebene.",
       "creditsPerMo": "{n} Credits / Monat",
       "creditsOneTime": "{n} Credits · einmalig",
       "planFee": "Plangebühr",
@@ -7075,7 +7075,7 @@
     "plans": {
       "breadcrumb": "Organisation · {org} · Motir AI",
       "title": "Motir AI – Pläne & Abonnement",
-      "subtitle": "Verwalten Sie den AI-Plan Ihrer Organisation – Planung & gehostete Agenten. Wird getrennt von Ihren Motir-Plätzen abgerechnet, daher betrifft diese Seite nur AI.",
+      "subtitle": "Verwalten Sie den AI-Plan Ihrer Organisation – Planung & Motir-Agent. Wird getrennt von Ihren Motir-Plätzen abgerechnet, daher betrifft diese Seite nur AI.",
       "back": "Zurück zur Abrechnung",
       "currentStrip": "{n} Credits / Monat · {left} übrig · verlängert sich am {date}",
       "currentStripOneTime": "{n} Credits · einmalig · {left} übrig",
@@ -7398,7 +7398,7 @@
         "ciJobsInFlight": "Laufende CI-Jobs"
       },
       "explain": {
-        "agentRunsInParallel": "Gehostete Agent-Jobs, die gleichzeitig laufen. Weitere warten in der Warteschlange.",
+        "agentRunsInParallel": "Motir-Agent-Jobs, die gleichzeitig laufen. Weitere warten in der Warteschlange.",
         "agentsInOrg": "Aktive gehostete Agents in der ganzen Organisation, laufend oder im Ruhezustand. Ein neuer darüber hinaus wird abgelehnt, nicht eingereiht.",
         "agentsPerPerson": "Aktive gehostete Agents, die eine Person haben kann. Darüber hinaus wird ein neuer abgelehnt, nicht eingereiht.",
         "ciJobsInFlight": "CI-Jobs, die gleichzeitig auf den Runnern von Motir laufen. Weitere warten in der Warteschlange."
@@ -7447,7 +7447,7 @@
       "notReadNotice": "Ihre Plangrenzen und was gerade läuft, konnten nicht gelesen werden. Das ist nicht null, sondern unbekannt.",
       "tryAgain": "Erneut versuchen",
       "noPlanLimitsNote": "Diese Organisation wird von Motir betrieben und hat keine Plangrenzen. Was gerade läuft, wird ohne Grenze angezeigt.",
-      "noFleet": "Ihr Plan enthält keine gehosteten Agent-Läufe, CI-Runner oder Agents. Wählen Sie oben unter Motir AI einen Plan, um sie auszuführen.",
+      "noFleet": "Ihr Plan enthält keine Motir-Agent-Läufe, CI-Runner oder Agents. Wählen Sie oben unter Motir AI einen Plan, um sie auszuführen.",
       "accounts": {
         "title": "Ihre eigenen AWS-Konten",
         "notRead": "Der Status Ihrer Konten konnte gerade nicht gelesen werden.",
@@ -7458,7 +7458,7 @@
         },
         "role": {
           "ci_runner": "Führt Ihre CI-Jobs aus",
-          "hosted_agent": "Führt Ihre gehosteten Agent-Jobs aus",
+          "hosted_agent": "Führt Ihre Motir-Agent-Jobs aus",
           "indexer_and_hoster": "Indexiert Ihren Code und hostet Ihre Agents"
         },
         "state": {
@@ -8139,20 +8139,20 @@
         "personSentBackAnon": "Diese Commits wurden zurückgewiesen. Ein Agent behebt sie {count, plural, one {im selben Pull Request} other {in denselben Pull Requests}}, mit der Begründung im Prompt.",
         "reviewedAgain": "Die nächste grüne Version wird erneut geprüft.",
         "hosted": {
-          "lead": "Reparieren Sie es hier mit dem gehosteten Agenten – kein Terminal nötig:",
-          "button": "Mit gehostetem Agenten reparieren",
+          "lead": "Reparieren Sie es hier im Motir-Agenten – kein Terminal nötig:",
+          "button": "Im Motir-Agenten reparieren",
           "orTerminal": "Oder übergeben Sie die Reparatur über Ihr Terminal an einen Agenten:",
           "eitherWay": "In beiden Fällen arbeitet ein Agent auf dem Branch jedes Pull Requests, pusht, und die Checks laufen erneut.",
           "fixing": {
-            "byYou": "Wird von <b>Ihnen</b> mit dem gehosteten Agenten repariert · gestartet <when></when> · <run>{label}</run>",
-            "by": "Wird von <b>{name}</b> mit dem gehosteten Agenten repariert · gestartet <when></when> · <run>{label}</run>",
+            "byYou": "Wird von <b>Ihnen</b> im Motir-Agenten repariert · gestartet <when></when> · <run>{label}</run>",
+            "by": "Wird von <b>{name}</b> im Motir-Agenten repariert · gestartet <when></when> · <run>{label}</run>",
             "why": "Es läuft immer nur eine Reparatur gleichzeitig. Wenn sie pusht, laufen die Checks erneut, und die nächste grüne Version wird erneut geprüft."
           },
           "refused": {
             "taken": "Nicht gestartet – es läuft bereits eine Reparatur, gestartet von <b>{name}</b> <when></when>.",
             "takenByYou": "Nicht gestartet – Sie haben bereits eine laufende Reparatur, gestartet <when></when>.",
             "outOfCredits": {
-              "body": "Es wurde nichts gestartet und nichts berechnet. Die Reparatur mit dem gehosteten Agenten funktioniert wieder, sobald die Organisation Credits hat – oder reparieren Sie es über Ihr Terminal."
+              "body": "Es wurde nichts gestartet und nichts berechnet. „Im Motir-Agenten reparieren“ funktioniert wieder, sobald die Organisation Credits hat – oder reparieren Sie es über Ihr Terminal."
             }
           }
         },
@@ -8207,8 +8207,8 @@
           "interrupted": "Der Lauf wurde <when></when> über sein Terminal gestoppt.",
           "failed": "Der Agent wurde <when></when> mit einem Fehler beendet.",
           "cancelled": "Der Lauf wurde <when></when> abgebrochen.",
-          "stalled": "Der gehostete Agent ist hängen geblieben – 15 Minuten ohne Ausgabe – <when></when>.",
-          "backstop": "Der gehostete Lauf hat <when></when> sein 12-Stunden-Limit erreicht."
+          "stalled": "Der Motir-Agent ist hängen geblieben – 15 Minuten ohne Ausgabe – <when></when>.",
+          "backstop": "Der Motir-Agent-Lauf hat <when></when> sein 12-Stunden-Limit erreicht."
         },
         "ranBy": "Ausgeführt von <b>{name}</b> mit <mono>{command}</mono> · gestartet <when></when>",
         "ranBySomeone": "Ausgeführt mit <mono>{command}</mono> · gestartet <when></when>",
@@ -8241,7 +8241,7 @@
         "error": "Es konnte nicht geprüft werden, ob der Lauf dieses Arbeitselements noch aktiv ist.",
         "retry": "Erneut versuchen",
         "hosted": {
-          "lead": "Setzen Sie es hier in einem gehosteten Container fort – kein Terminal nötig:",
+          "lead": "Setzen Sie es hier im Motir-Agenten fort – kein Terminal nötig:",
           "button": "Fortsetzen",
           "buttonParent": "{key} fortsetzen",
           "orTerminal": "Oder setzen Sie es über Ihr Terminal fort:",
@@ -8251,8 +8251,8 @@
             "rowWithPr": "<b>{repository}</b> · <ref>{branch}</ref> · Pull Request <b>{pr}</b>"
           },
           "continuing": {
-            "byYou": "Wird von <b>Ihnen</b> in einem gehosteten Container fortgesetzt · gestartet <when></when>",
-            "by": "Wird von <b>{name}</b> in einem gehosteten Container fortgesetzt · gestartet <when></when>",
+            "byYou": "Wird von <b>Ihnen</b> im Motir-Agenten fortgesetzt · gestartet <when></when>",
+            "by": "Wird von <b>{name}</b> im Motir-Agenten fortgesetzt · gestartet <when></when>",
             "watch": "Verfolgen Sie die Arbeit oben unter „Lauf“."
           },
           "refused": {
@@ -10354,7 +10354,7 @@
       },
       "toResume": {
         "title": "Nichts fortzusetzen",
-        "body": "Wenn ein Lauf an einer benötigten Genehmigung anhält, wartet er hier, bis die Genehmigung erteilt ist – dann läuft er von selbst auf dem gehosteten Agenten weiter oder mit motir continue über Ihr Terminal."
+        "body": "Wenn ein Lauf an einer benötigten Genehmigung anhält, wartet er hier, bis die Genehmigung erteilt ist – dann läuft er von selbst im Motir-Agenten weiter oder mit motir continue über Ihr Terminal."
       },
       "recentlyFinished": {
         "title": "Diese Woche nichts abgeschlossen",
@@ -10504,8 +10504,8 @@
         "title": "Kopiert",
         "body": "Fügen Sie {command} in Ihr Terminal ein."
       },
-      "fixingHosted": "Wird von <b>{name}</b> mit dem gehosteten Agenten repariert · <run>{label}</run>",
-      "fixingHostedByYou": "Wird von <b>Ihnen</b> mit dem gehosteten Agenten repariert · <run>{label}</run>",
+      "fixingHosted": "Wird von <b>{name}</b> im Motir-Agenten repariert · <run>{label}</run>",
+      "fixingHostedByYou": "Wird von <b>Ihnen</b> im Motir-Agenten repariert · <run>{label}</run>",
       "entry": {
         "carriesRun": "{count, plural, one {# weiteres Arbeitselement in diesem Lauf} other {# weitere Arbeitselemente in diesem Lauf}}",
         "carriesPullRequests": "{count, plural, one {# weiteres Arbeitselement im selben Pull Request} other {# weitere Arbeitselemente im selben Pull Request}}",
@@ -10523,10 +10523,10 @@
       "readyByYou": "Bereit zur Fortsetzung · Sie haben <when></when> genehmigt: {kind} bei {key}",
       "readyBare": "Bereit zur Fortsetzung",
       "readySome": "Bereit zur Fortsetzung · {approved} von {total} Genehmigungen erteilt",
-      "resuming": "Wird auf dem gehosteten Agenten fortgesetzt · gestartet <when></when>",
+      "resuming": "Wird im Motir-Agenten fortgesetzt · gestartet <when></when>",
       "couldNot": "Konnte nicht von selbst fortgesetzt werden · <reason></reason>",
       "ranBy": {
-        "hosted": "{name} hat ihn auf dem gehosteten Agenten ausgeführt",
+        "hosted": "{name} hat ihn im Motir-Agenten ausgeführt",
         "terminal": "{name} hat ihn über ein Terminal ausgeführt",
         "runbook": "{name} hat ihn mit dem Runbook ausgeführt",
         "instance": "{name} hat ihn in {agent} ausgeführt"
@@ -10560,8 +10560,8 @@
       },
       "seeRun": "Lauf ansehen",
       "next": {
-        "waitingHosted": "Sobald es genehmigt ist, läuft dieser Lauf von selbst auf dem gehosteten Agenten weiter.",
-        "waitingHostedMany": "Sobald eine davon genehmigt ist, läuft dieser Lauf von selbst auf dem gehosteten Agenten weiter und hält bei den übrigen erneut an.",
+        "waitingHosted": "Sobald es genehmigt ist, läuft dieser Lauf von selbst im Motir-Agenten weiter.",
+        "waitingHostedMany": "Sobald eine davon genehmigt ist, läuft dieser Lauf von selbst im Motir-Agenten weiter und hält bei den übrigen erneut an.",
         "waitingLocal": "Sobald Sie es genehmigen, setzen Sie den Lauf über Ihr Terminal fort – der Befehl erscheint hier.",
         "ready": "Ein Agent übernimmt den Lauf auf seinem eigenen Branch, baut, was die Genehmigung freigegeben hat, und hält an jeder noch wartenden Freigabe erneut an.",
         "readySome": "Eine Fortsetzung jetzt baut, was die genehmigte Freigabe freigegeben hat, und hält bei den {count} noch wartenden erneut an.",
@@ -10764,7 +10764,7 @@
       "navPlanningLessons": "Planungslektionen",
       "navPlannerFindings": "Planer-Befunde",
       "navIdeas": "Ideen",
-      "navRunModels": "Modelle für gehostete Läufe",
+      "navRunModels": "Motir-Agent-Modelle",
       "navFleetSettings": "Flotteneinstellungen",
       "navServices": "Dienste",
       "navCapacity": "Anbieterkapazität",
@@ -10941,9 +10941,9 @@
               "remove": "Modell aus der Planungsliste entfernt"
             },
             "run_model_list": {
-              "seed": "Modellliste für gehostete Läufe eingerichtet",
-              "add": "Modell zur Liste für gehostete Läufe hinzugefügt",
-              "remove": "Modell aus der Liste für gehostete Läufe entfernt"
+              "seed": "Motir-Agent-Modellliste eingerichtet",
+              "add": "Modell zur Motir-Agent-Modellliste hinzugefügt",
+              "remove": "Modell aus der Motir-Agent-Modellliste entfernt"
             },
             "lesson": {
               "edit": "Planungslektion bearbeitet",
@@ -11043,7 +11043,7 @@
           "unreachableDetail": {
             "unreachable": "Die Datenbank hat auf einen Ping nicht geantwortet. Das ist keine Latenz von null – es wurde nichts gemessen."
           },
-          "linkOut": "RDS-Konsole"
+          "linkOut": "Amazon-RDS-Konsole"
         },
         "hosting": {
           "title": "Hosting",
@@ -11268,7 +11268,7 @@
           "stat": {
             "orgs": "Organisationen mit einem laufenden Container",
             "ciRunners": "CI-Runner · jede Organisation an das Burst-Limit ihres Plans gebunden",
-            "hostedAgents": "gehostete Agentenläufe · jede Organisation an die parallelen Läufe ihres Plans gebunden",
+            "hostedAgents": "Motir-Agent-Läufe · jede Organisation an die parallelen Läufe ihres Plans gebunden",
             "instances": "laufende Agenteninstanzen · jede Organisation an den Wert ihres Plans gebunden",
             "mismatched": "abweichend · Laufzeit und Abbuchung stimmen nicht überein"
           },
@@ -11280,7 +11280,7 @@
             "org": "Organisation",
             "plan": "Plan",
             "ciRunner": "CI-Runner",
-            "hostedAgent": "Gehostete Agentenläufe",
+            "hostedAgent": "Motir-Agent-Läufe",
             "index": "Index-Container",
             "agentInstance": "Agenteninstanzen",
             "accrued": "CI-Minuten · letzte {minutes} Min.",
@@ -11313,7 +11313,7 @@
           "foot": "{from}–{to} von {total} angezeigt · Abweichungen zuerst, dann die meisten Container · nur CI wird beurteilt – es ist die einzige Last, die während der Laufzeit abgebucht wird",
           "empty": {
             "title": "Keine Organisation betreibt einen Flotten-Container",
-            "body": "Keine Organisation belegt gerade einen CI-Runner, gehosteten Agentenlauf, eine Agenteninstanz oder einen Index-Container, daher gibt es nichts mit der Abbuchung zu vergleichen. Das ist ein gesunder Zustand, kein Fehler."
+            "body": "Keine Organisation belegt gerade einen CI-Runner, Motir-Agent-Lauf, eine Agenteninstanz oder einen Index-Container, daher gibt es nichts mit der Abbuchung zu vergleichen. Das ist ein gesunder Zustand, kein Fehler."
           },
           "error": {
             "title": "Die Flotte konnte nicht gelesen werden",
@@ -11622,8 +11622,8 @@
         "remaining": "verbleibend",
         "grantedConsumed": "gewährt {granted} · verbraucht {consumed}",
         "unknownFigure": "unbekannt",
-        "creditNote": "Verbraucht durch den Planer und den gehosteten Agenten. Token-Ausgaben in diesem Zeitraum: {spend} Credits.",
-        "creditNoteUnknownSpend": "Verbraucht durch den Planer und den gehosteten Agenten. Token-Ausgaben in diesem Zeitraum: unbekannt.",
+        "creditNote": "Verbraucht durch den Planer und den Motir-Agenten. Token-Ausgaben in diesem Zeitraum: {spend} Credits.",
+        "creditNoteUnknownSpend": "Verbraucht durch den Planer und den Motir-Agenten. Token-Ausgaben in diesem Zeitraum: unbekannt.",
         "indexNote": "Nur durch Indexierung verbraucht. Berührt das Guthaben nie – unter keinen Umständen.",
         "notGrantedYet": "Noch kein Kontingent gewährt – für diese Organisation wurde im aktuellen Zeitraum noch nichts indexiert.",
         "notConfigured": "Kontingent nicht konfiguriert – wird von Mitarbeitenden im Plan festgelegt. Bis dahin gibt es keine Schranke zu überschreiten.",
@@ -12022,7 +12022,7 @@
         "sheetDone": "Fertig"
       },
       "source": {
-        "in_loop": "Gehostete Prüfung",
+        "in_loop": "Motir-Agent-Prüfung",
         "check_plan": "Check plan"
       },
       "planner": {
@@ -12728,7 +12728,7 @@
           "whenOff": "Neue Planungsjobs werden mit „Die Planung ist für Ihre Organisation pausiert“ abgelehnt. Bereits laufende Jobs werden beendet."
         },
         "hosted_runs": {
-          "name": "Gehostete Agentenläufe",
+          "name": "Motir-Agent-Läufe",
           "whenOff": "Neue Agentenläufe und Agenteninstanzen werden abgelehnt. Laufende Container werden gestoppt."
         },
         "web_search": {
@@ -12832,7 +12832,7 @@
         "subtitleEmpty": "Für diese Organisation läuft nichts auf der Flotte.",
         "workload": {
           "ciRunner": "CI-Runner",
-          "hostedAgent": "Gehostete Agent-Läufe",
+          "hostedAgent": "Motir-Agent-Läufe",
           "agentInstance": "Agent-Instanzen",
           "index": "Index-Container"
         },
@@ -12847,8 +12847,8 @@
           "override": "Überschreibung"
         },
         "facts": {
-          "plan": "Plan <strong>{plan}</strong> · {runs} gehostete Läufe gleichzeitig · {perUser} Agenten pro Person · {agents} Agenten · {ci} CI-Jobs gleichzeitig",
-          "planCiUnreadable": "Plan <strong>{plan}</strong> · {runs} gehostete Läufe gleichzeitig · {perUser} Agenten pro Person · {agents} Agenten · CI-Limit nicht lesbar",
+          "plan": "Plan <strong>{plan}</strong> · {runs} Motir-Agent-Läufe gleichzeitig · {perUser} Agenten pro Person · {agents} Agenten · {ci} CI-Jobs gleichzeitig",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · {runs} Motir-Agent-Läufe gleichzeitig · {perUser} Agenten pro Person · {agents} Agenten · CI-Limit nicht lesbar",
           "planExempt": "Plan <strong>Kein Planlimit</strong>",
           "planExemptOverride": "Plan <strong>Kein Planlimit</strong> · {ci} CI-Jobs gleichzeitig (Überschreibung)",
           "planUnknown": "Plan <strong>unbekannt · {key}</strong> · neue Container abgelehnt",
@@ -12859,7 +12859,7 @@
         },
         "stop": {
           "button": "Container stoppen",
-          "explainer": "Das Stoppen beendet die <strong>kostenpflichtige</strong> Arbeit dieser Organisation sofort: CI, gehostete Agent-Läufe und Agent-Instanzen. Die Organisation wird dadurch nicht gesperrt.",
+          "explainer": "Das Stoppen beendet die <strong>kostenpflichtige</strong> Arbeit dieser Organisation sofort: CI, Motir-Agent-Läufe und Agent-Instanzen. Die Organisation wird dadurch nicht gesperrt.",
           "notPermitted": "Nur ein <strong>Superadmin</strong> kann die Container einer Organisation stoppen. Sie sind als <strong>{role}</strong> angemeldet.",
           "nothing": "Nichts zu stoppen."
         },
@@ -12868,7 +12868,7 @@
           "lead": "Dies beendet, was {org} gerade auf der Flotte von Motir ausführt:",
           "ci": "{runs, plural, one {CI-Lauf abgebrochen} other {CI-Läufe abgebrochen}} und <strong>{containers}</strong> {containers, plural, one {CI-Container entfernt} other {CI-Container entfernt}}",
           "ciUnknown": "CI-Läufe nicht gezählt — GitHub konnte nicht gelesen werden; das Stoppen bricht sie trotzdem ab — und <strong>{containers}</strong> {containers, plural, one {CI-Container entfernt} other {CI-Container entfernt}}",
-          "hosted": "{count, plural, one {gehosteter Agent-Lauf beendet} other {gehostete Agent-Läufe beendet}}",
+          "hosted": "{count, plural, one {Motir-Agent-Lauf beendet} other {Motir-Agent-Läufe beendet}}",
           "instances": "{count, plural, one {Agent-Instanz in den Ruhezustand versetzt} other {Agent-Instanzen in den Ruhezustand versetzt}}",
           "index": "{count, plural, one {Index-Container läuft} other {Index-Container laufen}} zu Ende — die Indexierung sind Kosten von Motir selbst und werden der Organisation nie berechnet",
           "notSuspension": "<strong>Dies ist keine Sperrung.</strong> Nichts wird blockiert: Der nächste CI-Lauf, Agent-Lauf oder Agent-Start von {org} durchläuft die normale Zulassung.",
@@ -12890,8 +12890,8 @@
           "partialTitle": "Gestoppt, mit Fehlern",
           "ci": "{runs, plural, one {# CI-Lauf abgebrochen} other {# CI-Läufe abgebrochen}} · {stopped, plural, one {# CI-Container entfernt} other {# CI-Container entfernt}}",
           "ciPartial": "CI: {runs} Läufe abgebrochen · {stopped} von {total} Containern entfernt",
-          "hosted": "{ended, plural, one {# gehosteter Agent-Lauf beendet} other {# gehostete Agent-Läufe beendet}}",
-          "hostedPartial": "Gehostete Agent-Läufe: {ended} beendet",
+          "hosted": "{ended, plural, one {# Motir-Agent-Lauf beendet} other {# Motir-Agent-Läufe beendet}}",
+          "hostedPartial": "Motir-Agent-Läufe: {ended} beendet",
           "instances": "{hibernated, plural, one {# Agent-Instanz in den Ruhezustand versetzt} other {# Agent-Instanzen in den Ruhezustand versetzt}}",
           "instancesPartial": "Agent-Instanzen: {hibernated} von {total} in den Ruhezustand versetzt",
           "failed": "{count} konnten nicht gestoppt werden — der Abgleich versucht es erneut."
@@ -12911,7 +12911,7 @@
           "when": "{time} · {actor}",
           "unknownActor": "ein ehemaliger Operator",
           "noReason": "Kein Grund erfasst",
-          "counts": "{runs} CI-Läufe · {containers} CI-Container · {hosted} gehostete Läufe · {instances} Agent-Instanzen"
+          "counts": "{runs} CI-Läufe · {containers} CI-Container · {hosted} Motir-Agent-Läufe · {instances} Agent-Instanzen"
         },
         "orgAdminStop": {
           "title": "Zuletzt von einem Admin der Organisation gestoppt",
@@ -12994,17 +12994,17 @@
       }
     },
     "runModels": {
-      "breadcrumb": "Betrieb · Modelle für gehostete Läufe",
-      "title": "Modelle für gehostete Läufe",
-      "subtitle": "Welche Modelle ein gehosteter Lauf verwenden darf, für jedes Projekt. Ein Projekt wählt aus den aufgeführten Modellen, die motir-ai derzeit anbietet.",
+      "breadcrumb": "Betrieb · Motir-Agent-Modelle",
+      "title": "Motir-Agent-Modelle",
+      "subtitle": "Welche Modelle ein Motir-Agent-Lauf verwenden darf, für jedes Projekt. Ein Projekt wählt aus den aufgeführten Modellen, die motir-ai derzeit anbietet.",
       "lineLive": "Ein aufgeführtes Modell, das motir-ai nicht mehr anbietet, verschwindet sofort aus jeder Auswahl. Ein nicht aufgeführtes Modell erscheint nie.",
       "lineProjectsLead": "Projekte sehen diese Liste nie.",
-      "lineProjectsBody": "Sie sehen ihr Ergebnis: Die Auswahl „Gehostet ausführen“ und ihre Einstellungen für gehostete Agenten bieten nur diese Modelle an.",
+      "lineProjectsBody": "Sie sehen ihr Ergebnis: Die Auswahl bei „Ausführen“ und ihre Motir-Agent-Einstellungen bieten nur diese Modelle an.",
       "card": {
-        "title": "Modelle, die ein gehosteter Lauf verwenden darf",
-        "subtitle": "Angelegt mit jedem Modell, das motir-ai beim ersten Lesen der Liste für gehostete Läufe anbot, sodass kein Projekt sein gewähltes Modell verlor."
+        "title": "Modelle, die ein Motir-Agent-Lauf verwenden darf",
+        "subtitle": "Angelegt mit jedem Modell, das motir-ai beim ersten Lesen der Liste für Motir-Agent-Läufe anbot, sodass kein Projekt sein gewähltes Modell verlor."
       },
-      "notOffered": "Derzeit nicht im Angebot von motir-ai für gehostete Läufe: Es wurde zurückgezogen, hat keinen Tarif, ist kein Chat-Modell, oder sein Anbieter ist nicht für gehostete Läufe konfiguriert.",
+      "notOffered": "Derzeit nicht im Angebot von motir-ai für den Motir-Agenten: Es wurde zurückgezogen, hat keinen Tarif, ist kein Chat-Modell, oder sein Anbieter ist nicht für Motir-Agent-Läufe konfiguriert.",
       "level": {
         "trivial": "trivial",
         "low": "niedrig",
@@ -13016,19 +13016,19 @@
         "projects": "{n, plural, one {# Projekt} other {# Projekte}}"
       },
       "add": {
-        "title": "Modell für gehostete Läufe hinzufügen",
-        "body": "Projekte können es für „Gehostet ausführen“ und ihre Einstellungen je Schwierigkeitsgrad wählen, sobald es hinzugefügt ist.",
+        "title": "Modell für Motir-Agent-Läufe hinzufügen",
+        "body": "Projekte können es für „Ausführen“ und ihre Einstellungen je Schwierigkeitsgrad wählen, sobald es hinzugefügt ist.",
         "modelLabel": "Modell",
         "placeholder": "Modell auswählen",
-        "pickerFoot": "Modelle, die motir-ai für gehostete Läufe anbietet und die noch nicht auf der Liste stehen.",
-        "nothing": "Jedes Modell, das motir-ai für gehostete Läufe anbietet, ist bereits aufgeführt.",
+        "pickerFoot": "Modelle, die motir-ai für Motir-Agent-Läufe anbietet und die noch nicht auf der Liste stehen.",
+        "nothing": "Jedes Modell, das motir-ai für Motir-Agent-Läufe anbietet, ist bereits aufgeführt.",
         "confirm": "Modell hinzufügen",
-        "notOffered": "Nicht hinzugefügt: motir-ai bietet {model} nicht mehr für gehostete Läufe an.",
+        "notOffered": "Nicht hinzugefügt: motir-ai bietet {model} nicht mehr für Motir-Agent-Läufe an.",
         "alreadyListed": "Nicht hinzugefügt: {model} ist bereits aufgeführt."
       },
       "remove": {
-        "title": "{model} aus den Modellen für gehostete Läufe entfernen?",
-        "body": "Ab sofort kann kein Projekt es mehr für einen gehosteten Lauf wählen. Kein Projekt und kein Plattform-Standard verwendet es.",
+        "title": "{model} aus den Motir-Agent-Modellen entfernen?",
+        "body": "Ab sofort kann kein Projekt es mehr für einen Motir-Agent-Lauf wählen. Kein Projekt und kein Plattform-Standard verwendet es.",
         "confirm": "Modell entfernen",
         "inUse": "Nicht entfernt: {model} wird verwendet. {platformDefaultClause}{projectsClause} Ändern Sie diese zuerst.",
         "inUseParts": {
@@ -13040,20 +13040,20 @@
         },
         "notListed": "Nicht entfernt: {model} ist nicht mehr aufgeführt."
       },
-      "added": "{model} hinzugefügt. Projekte können es jetzt für gehostete Läufe wählen.",
-      "removed": "{model} aus den Modellen für gehostete Läufe entfernt.",
+      "added": "{model} hinzugefügt. Projekte können es jetzt für Motir-Agent-Läufe wählen.",
+      "removed": "{model} aus den Motir-Agent-Modellen entfernt.",
       "empty": {
         "title": "Kein Modell aufgeführt",
-        "body": "Kein gehosteter Lauf kann starten, bis ein Modell hinzugefügt wurde. Fügen Sie eines aus dem Angebot von motir-ai hinzu.",
-        "bodyReadOnly": "Kein gehosteter Lauf kann starten, bis ein Superadmin ein Modell hinzufügt."
+        "body": "Kein Motir-Agent-Lauf kann starten, bis ein Modell hinzugefügt wurde. Fügen Sie eines aus dem Angebot von motir-ai hinzu.",
+        "bodyReadOnly": "Kein Motir-Agent-Lauf kann starten, bis ein Superadmin ein Modell hinzufügt."
       },
       "unavailable": {
-        "title": "Modelle für gehostete Läufe konnten nicht geladen werden",
+        "title": "Motir-Agent-Modelle konnten nicht geladen werden",
         "body": "motir-ai hat nicht geantwortet, daher ist unbekannt, ob jedes aufgeführte Modell angeboten wird, und es wird keine Liste angezeigt. Es hat sich nichts geändert."
       },
       "defaults": {
         "title": "Ausführungsseitige Standards",
-        "subtitle": "Das Modell, mit dem eine gehostete Prüfung, ein Design-Lauf oder ein Agent-Lauf startet, wenn weder die Person noch das Projekt noch die Organisation eines gewählt hat. Gewählt aus der Liste oben.",
+        "subtitle": "Das Modell, mit dem eine Motir-Agent-Prüfung, ein Design-Lauf oder ein Agent-Lauf startet, wenn weder die Person noch das Projekt noch die Organisation eines gewählt hat. Gewählt aus der Liste oben.",
         "count": "6 Einstellungen",
         "col": {
           "function": "Funktion"
@@ -13061,27 +13061,27 @@
         "row": {
           "review": {
             "name": "Review-Agent",
-            "desc": "Gehostete Prüfungen"
+            "desc": "Motir-Agent-Prüfungen"
           },
           "design": {
             "name": "Design-Lauf",
-            "desc": "Ein gehosteter Lauf auf einem Design-Arbeitselement"
+            "desc": "Ein Motir-Agent-Lauf auf einem Design-Arbeitselement"
           },
           "trivial": {
             "name": "Agent-Lauf · Trivial",
-            "desc": "Gehostete Build-Läufe auf einem trivialen Arbeitselement"
+            "desc": "Motir-Agent-Build-Läufe auf einem trivialen Arbeitselement"
           },
           "low": {
             "name": "Agent-Lauf · Niedrig",
-            "desc": "Gehostete Build-Läufe auf einem Arbeitselement mit niedriger Schwierigkeit"
+            "desc": "Motir-Agent-Build-Läufe auf einem Arbeitselement mit niedriger Schwierigkeit"
           },
           "medium": {
             "name": "Agent-Lauf · Mittel",
-            "desc": "Gehostete Build-Läufe auf einem Arbeitselement mit mittlerer Schwierigkeit"
+            "desc": "Motir-Agent-Build-Läufe auf einem Arbeitselement mit mittlerer Schwierigkeit"
           },
           "high": {
             "name": "Agent-Lauf · Hoch",
-            "desc": "Gehostete Build-Läufe auf einem Arbeitselement mit hoher Schwierigkeit"
+            "desc": "Motir-Agent-Build-Läufe auf einem Arbeitselement mit hoher Schwierigkeit"
           }
         },
         "inherits": {
@@ -13098,7 +13098,7 @@
         },
         "defaultGroup": "Standard",
         "pickerAria": "Standardmodell für {name}",
-        "pickerFoot": "Nur Modelle aus der Liste oben, die motir-ai für gehostete Läufe anbietet.",
+        "pickerFoot": "Nur Modelle aus der Liste oben, die motir-ai für Motir-Agent-Läufe anbietet.",
         "changed": {
           "seededFromEnv": "Aus der Umgebung übernommen · nie geändert",
           "neverSet": "Nie festgelegt"
@@ -13108,7 +13108,7 @@
           "body": "{name} fällt auf {what} zurück, bis Sie ein anderes wählen.",
           "bodyReadOnly": "{name} fällt auf {what} zurück, bis ein Superadmin ein anderes wählt."
         },
-        "refused": "{model} wird für gehostete Läufe nicht mehr angeboten oder steht nicht auf der Liste und wurde daher nicht gespeichert. Die Seite wurde aktualisiert – wählen Sie ein anderes Modell.",
+        "refused": "{model} wird für Motir-Agent-Läufe nicht mehr angeboten oder steht nicht auf der Liste und wurde daher nicht gespeichert. Die Seite wurde aktualisiert – wählen Sie ein anderes Modell.",
         "confirmTitle": "Das Plattform-Modell für {name} ändern?",
         "confirmBody": {
           "review": "{from} → {to}. Gilt ab der nächsten Prüfung für jede Organisation, die keine eigene Wahl getroffen hat. Bereits laufende Prüfungen enden mit dem Modell, mit dem sie begonnen haben.",
@@ -13377,6 +13377,7 @@
       "codeScanning": {
         "fleet": "auf der Flotte ({label})",
         "githubHosted": "auf GitHub-gehosteten Runnern",
+        "pendingFleet": "auf GitHub-gehosteten Runnern bis zum nächsten Flotten-Job — dessen Runner lässt es auf die Flotte wechseln ({label})",
         "unknownStatus": "konnte nicht gelesen werden – GitHub antwortete mit HTTP {status}",
         "unknownUnreachable": "konnte nicht gelesen werden – GitHub war nicht erreichbar",
         "none": "Kein privates Repository auf {org} hat die CodeQL-Standardeinrichtung konfiguriert."
@@ -14124,8 +14125,8 @@
       },
       "image": {
         "hosted": {
-          "title": "Hosted-Agent-Image",
-          "subtitle": "Was jeder gehostete Lauf startet. Gepinnt durch MOTIR_HOSTED_AGENT_IMAGE; das neueste ist der letzte main-Build von ghcr.io/motir-co/motir-hosted-agent."
+          "title": "Motir-Agent-Image",
+          "subtitle": "Was jeder Motir-Agent-Lauf startet. Gepinnt durch MOTIR_HOSTED_AGENT_IMAGE; das neueste ist der letzte main-Build von ghcr.io/motir-co/motir-hosted-agent."
         },
         "runner": {
           "title": "CI-Runner-Image",
@@ -14141,7 +14142,7 @@
         }
       },
       "imageName": {
-        "hosted": "Hosted-Agent-Image",
+        "hosted": "Motir-Agent-Image",
         "runner": "CI-Runner-Image",
         "indexer": "Indexer-Image",
         "sandbox": "Agent-Instanz-Images"
@@ -14215,7 +14216,7 @@
         "button": "Neuestes veröffentlichen",
         "republish": "Erneut veröffentlichen",
         "note": {
-          "hosted": "Pinnt den neuesten main-Build über den Hosted-Agent-Pin-Workflow. Web und Worker rollen darauf um.",
+          "hosted": "Pinnt den neuesten main-Build über den Motir-Agent-Pin-Workflow. Web und Worker rollen darauf um.",
           "runner": "Pinnt {release} über den Runner-Pin-Workflow. Web und Worker rollen darauf um.",
           "indexer": "Pinnt {release} über den Pull Request für den Indexer-Pin. Web und Worker rollen darauf um.",
           "sandbox": "Veröffentlicht {release} erneut. Nur die {count} fehlenden Tags werden gepusht; in der Produktion rollt nichts um.",
@@ -14232,7 +14233,7 @@
         }
       },
       "confirm": {
-        "hostedTitle": "Das neueste Hosted-Agent-Image veröffentlichen?",
+        "hostedTitle": "Das neueste Motir-Agent-Image veröffentlichen?",
         "runnerTitle": "{release} veröffentlichen?",
         "sandboxTitle": "{release} erneut veröffentlichen?",
         "from": "Von",
@@ -14240,7 +14241,7 @@
         "cancel": "Abbrechen",
         "audited": "Im Audit-Log als du erfasst, {email}.",
         "sandboxFrom": "{published} von {total} Tags bei {version}",
-        "hostedBody": "Dies startet den Hosted-Agent-Pin-Workflow. Er setzt MOTIR_HOSTED_AGENT_IMAGE auf den neuesten Build und deployt: <strong>Web und Worker rollen</strong> auf den neuen Pin um, und gehostete Läufe, die nach dem Umrollen starten, booten das neue Image.",
+        "hostedBody": "Dies startet den Motir-Agent-Pin-Workflow. Er setzt MOTIR_HOSTED_AGENT_IMAGE auf den neuesten Build und deployt: <strong>Web und Worker rollen</strong> auf den neuen Pin um, und Motir-Agent-Läufe, die nach dem Umrollen starten, booten das neue Image.",
         "runnerBody": "Dies startet den Runner-Pin-Workflow. Er setzt MOTIR_RUNNER_IMAGE auf {release} und deployt: <strong>Web und Worker rollen</strong> auf den neuen Pin um. Das Runner-AMI wird nicht geändert.",
         "indexerBody": "Dies öffnet den Pull Request für den Indexer-Pin, der MOTIR_INDEXER_IMAGE auf {release} setzt und zum Mergen eingereiht wird. Sein Deployment <strong>rollt dann Web und Worker um</strong>, und Indexläufe, die nach dem Umrollen starten, starten das neue Image. Bereits laufende Indexläufe enden auf dem Image, mit dem sie gestartet sind.",
         "sandboxBody": "Dies führt das Sandbox-Release für {release} erneut aus und pusht nur die fehlenden Tags: {missing}. {published} sind bereits veröffentlicht und werden nicht erneut gepusht. <strong>In der Produktion rollt nichts um.</strong>",
@@ -14273,7 +14274,7 @@
         "retry": "Erneut versuchen"
       },
       "workflow": {
-        "hosted": "Hosted-Agent-Pin",
+        "hosted": "Motir-Agent-Pin",
         "runner": "Runner-Pin",
         "indexer": "Indexer-Pin",
         "sandbox": "Sandbox-Release {tag}",
@@ -15196,8 +15197,8 @@
       "pillReady": "Bereit zur Fortsetzung",
       "gate": "{kind} bei {key}",
       "waitingMany": "{count} Genehmigungen",
-      "waitingHosted": "Dieser Lauf wurde an einer Freigabe gestoppt — er wartet auf <b>{gate}</b>. Seine Arbeit bleibt in <d>{branch}</d> erhalten, und er <b>macht von selbst weiter</b> auf dem gehosteten Agenten, sobald die Freigabe genehmigt ist.",
-      "waitingHostedNoBranch": "Dieser Lauf wurde an einer Freigabe gestoppt — er wartet auf <b>{gate}</b>. Seine Arbeit bleibt erhalten, und er <b>macht von selbst weiter</b> auf dem gehosteten Agenten, sobald die Freigabe genehmigt ist.",
+      "waitingHosted": "Dieser Lauf wurde an einer Freigabe gestoppt — er wartet auf <b>{gate}</b>. Seine Arbeit bleibt in <d>{branch}</d> erhalten, und er <b>macht von selbst weiter</b> im Motir-Agenten, sobald die Freigabe genehmigt ist.",
+      "waitingHostedNoBranch": "Dieser Lauf wurde an einer Freigabe gestoppt — er wartet auf <b>{gate}</b>. Seine Arbeit bleibt erhalten, und er <b>macht von selbst weiter</b> im Motir-Agenten, sobald die Freigabe genehmigt ist.",
       "waitingLocal": "Dieser Lauf wurde an einer Freigabe gestoppt — er wartet auf <b>{gate}</b>. Seine Arbeit bleibt in seinem Branch erhalten; sobald die Freigabe genehmigt ist, setzen Sie ihn mit <d>{command}</d> fort.",
       "ready": "Bereit zur Fortsetzung — <b>{approved} von {total} Genehmigungen erteilt</b>. Setzen Sie ihn fort, um das Genehmigte zu bauen; er stoppt erneut an jeder Freigabe, die noch wartet:",
       "resuming": "Wird fortgesetzt — <b>{name}</b> hat {gate} genehmigt, daher macht ein neuer Lauf im selben Branch weiter. <link>Den neuen Lauf ansehen</link>",
@@ -15402,12 +15403,12 @@
       "cancel": "Abbrechen"
     },
     "hostedRuns": {
-      "ready": "Gehostete Läufe können hier schreiben — die App von Motir pusht ihre Branches und öffnet ihre Pull Requests.",
+      "ready": "Motir-Agent-Läufe können hier schreiben — die App von Motir pusht ihre Branches und öffnet ihre Pull Requests.",
       "needsPermissionsTitle": "Benötigt aktualisierte Berechtigungen.",
-      "needsPermissionsBody": "Motir Integration auf {account} kann noch nicht schreiben — ein Inhaber von {account} muss die aktualisierten Berechtigungen auf GitHub akzeptieren. Bis dahin wird ein gehosteter Lauf, der dieses Repository betrifft, abgelehnt, bevor etwas startet.",
+      "needsPermissionsBody": "Motir Integration auf {account} kann noch nicht schreiben — ein Inhaber von {account} muss die aktualisierten Berechtigungen auf GitHub akzeptieren. Bis dahin wird ein Motir-Agent-Lauf, der dieses Repository betrifft, abgelehnt, bevor etwas startet.",
       "reviewPermissions": "Berechtigungen auf GitHub prüfen",
       "unreachableTitle": "Motir Integration kann {repo} nicht mehr erreichen.",
-      "unreachableBody": "Ihre Installation wurde entfernt oder gesperrt oder umfasst dieses Repository nicht mehr. Verbinden Sie sie auf GitHub erneut; bis dahin wird ein gehosteter Lauf, der es betrifft, abgelehnt.",
+      "unreachableBody": "Ihre Installation wurde entfernt oder gesperrt oder umfasst dieses Repository nicht mehr. Verbinden Sie sie auf GitHub erneut; bis dahin wird ein Motir-Agent-Lauf, der es betrifft, abgelehnt.",
       "reconnect": "Erneut verbinden"
     }
   },
@@ -16300,11 +16301,11 @@
         "lead": "<b>Die Prüfung konnte nicht laufen:</b> <reason></reason>",
         "reason": {
           "no_credits": "Ihrer Organisation sind die AI-Credits ausgegangen.",
-          "no_model": "für gehostete Läufe ist kein Modell verfügbar.",
+          "no_model": "für Motir-Agent-Läufe ist kein Modell verfügbar.",
           "repository_unreadable": "die Prüfung kann eines der Repositorys, die sie prüft, nicht lesen.",
           "no_verdict": "der Prüflauf endete ohne Urteil — <run>{label}</run>.",
           "no_verdictNoRun": "der Prüflauf endete ohne Urteil.",
-          "boot_failed": "die gehostete Maschine für die Prüfung konnte nicht starten.",
+          "boot_failed": "die Motir-Agent-Maschine für die Prüfung konnte nicht starten.",
           "no_actor": "niemand kann sie ausführen — das Arbeitselement hat weder Verantwortlichen noch Ersteller, und der Arbeitsbereich hat keinen vertretenden Manager.",
           "unknown": "der Prüflauf konnte nicht starten.",
           "noCapacity": "das Modell für die Prüfung hat derzeit keine Kapazität für Agentenläufe. Versuchen Sie es in Kürze erneut."
@@ -16330,7 +16331,7 @@
       }
     },
     "autoRerun": {
-      "started": "Neuer Lauf auf dem gehosteten Agenten",
+      "started": "Wird im Motir-Agenten neu ausgeführt",
       "startedCount": "automatischer neuer Lauf {ordinal} von {cap}",
       "viewRun": "Lauf ansehen",
       "skipped": "Automatischer neuer Lauf übersprungen",
@@ -16348,14 +16349,14 @@
         "no_capacity": "{detail}, das Modell des letzten Laufs, hat derzeit keine Kapazität für Agentenläufe."
       },
       "next": {
-        "cap_reached": "Auf dem gehosteten Agenten ausführen",
-        "dispatcher_gone": "Auf dem gehosteten Agenten ausführen",
-        "no_project_access": "Auf dem gehosteten Agenten ausführen",
+        "cap_reached": "Im Motir-Agenten ausführen",
+        "dispatcher_gone": "Im Motir-Agenten ausführen",
+        "no_project_access": "Im Motir-Agenten ausführen",
         "ci_credits_exhausted": "Abrechnung",
         "model_not_offered": "Modell wählen und ausführen",
-        "models_unavailable": "Auf dem gehosteten Agenten ausführen",
+        "models_unavailable": "Im Motir-Agenten ausführen",
         "out_of_credits": "Credits kaufen",
-        "credits_unavailable": "Auf dem gehosteten Agenten ausführen",
+        "credits_unavailable": "Im Motir-Agenten ausführen",
         "repository_not_writable": "Repositorys",
         "no_capacity": "Anderes Modell wählen und ausführen"
       }
@@ -16395,7 +16396,7 @@
         "second": "Ein zweites Review einer bereits entschiedenen Version. Es hat nichts entschieden.",
         "notified": "{name} wurde benachrichtigt.",
         "findings": "Befunde",
-        "agentHosted": "Der gehostete Agent von Motir",
+        "agentHosted": "Motir-Agent",
         "agentOwn": "Agent von {name} ({harness})",
         "dismissed": "<actor></actor> hat das Review des Agenten bei {commits} verworfen",
         "dismissedReason": "Grund: {reason}"
@@ -16430,7 +16431,7 @@
         "reviewed": "Geprüft",
         "reviewedName": "Von einem Agenten bei den aktuellen Commits geprüft",
         "card": {
-          "hosted": "Geprüft vom gehosteten Agenten von Motir",
+          "hosted": "Geprüft vom Motir-Agenten",
           "own": "Geprüft vom eigenen Agenten von {name}",
           "harness": "{harness} · {model}",
           "commits": "Bei diesen Commits",
@@ -16440,7 +16441,7 @@
       "line": {
         "label": "Agenten-Review",
         "reviewed": "<b>Von einem Agenten geprüft</b> · {who} · {when}",
-        "whoHosted": "Der gehostete Agent von Motir",
+        "whoHosted": "Motir-Agent",
         "whoOwn": "Agent von {name} · {harness}",
         "findings": "Befunde und Checkliste",
         "skipped": "<b>Review übersprungen von {name}</b> — „{reason}“",
@@ -16454,7 +16455,7 @@
         "subtitle": "{title} · {key}",
         "verdictPassed": "Bestanden",
         "verdictSentBack": "Änderungen angefordert",
-        "byHosted": "Der gehostete Agent von Motir",
+        "byHosted": "Motir-Agent",
         "byOwn": "Der eigene Agent von {name}",
         "byOwnHarness": "Der eigene Agent von {name} · {harness} · {model}",
         "commits": "Bei diesen Commits",
@@ -16582,13 +16583,13 @@
       "offWhat": "Ein Arbeitselement wird zur Genehmigung angeboten, sobald seine Checks bestehen.",
       "unavailable": "Nicht verfügbar",
       "unavailableWhat": "Dieses Projekt mergt automatisch, daher wartet nichts auf eine Prüfung. Wählen Sie <strong>Vor dem Mergen fragen</strong>, um den Prüf-Agenten einzuschalten.",
-      "billingNote": "Jede Prüfung ist ein gehosteter Agent-Lauf, bezahlt aus den AI-Credits Ihrer Organisation.",
+      "billingNote": "Jede Prüfung ist ein Motir-Agent-Lauf, bezahlt aus den AI-Credits Ihrer Organisation.",
       "offNote": "Das Ausschalten bricht laufende Prüfungen ab — diese Arbeitselemente gehen direkt in den gewöhnlichen Ablauf.",
       "saved": "Gespeichert",
       "saveError": "Speichern fehlgeschlagen — versuchen Sie es erneut.",
       "source": {
         "label": "Wer prüft",
-        "hosted": "Motirs gehosteter Agent",
+        "hosted": "Motir-Agent",
         "hostedWhat": "Motir startet einen Prüf-Lauf, sobald die Checks bestanden sind. <strong>Verbraucht AI-Credits.</strong>",
         "own": "Ihr eigener Agent",
         "ownWhat": "Kostenlos. Die Prüfung wartet, bis jemand <cmd>motir review</cmd> mit dem eigenen Agent ausführt. Nichts startet von selbst."
@@ -16976,10 +16977,10 @@
       "openingDevelopment": "„Entwicklung“ wird geöffnet…",
       "sentBackByAgent": "Dies muss repariert werden: Der Prüf-Agent hat es zurückgewiesen — „{note}“",
       "sentBackByAgentNoNote": "Dies muss repariert werden: Der Prüf-Agent hat es zurückgewiesen.",
-      "hostedLead": "Reparieren Sie es auf dem gehosteten Agenten — kein Terminal nötig:",
+      "hostedLead": "Reparieren Sie es im Motir-Agenten — kein Terminal nötig:",
       "orTerminal": "Oder reparieren Sie es in Ihrem Terminal:",
-      "fixingHosted": "Eine gehostete Reparatur läuft — gestartet von <b>{name}</b> <when></when> · <run>{label}</run>",
-      "fixingHostedByYou": "Eine gehostete Reparatur läuft — gestartet von <b>Ihnen</b> <when></when> · <run>{label}</run>",
+      "fixingHosted": "Eine Motir-Agent-Reparatur läuft — gestartet von <b>{name}</b> <when></when> · <run>{label}</run>",
+      "fixingHostedByYou": "Eine Motir-Agent-Reparatur läuft — gestartet von <b>Ihnen</b> <when></when> · <run>{label}</run>",
       "carries": "{count, plural, one {# weiteres Arbeitselement hängt damit fest} other {# weitere Arbeitselemente hängen damit fest}}: <keys></keys>",
       "carriesMore": "und {count} weitere",
       "repairedWithHead": "Reparieren Sie es mit <b>{head}</b> — sie teilen sich einen Pull Request.",

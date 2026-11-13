@@ -326,8 +326,8 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
  * through the port in `lib/deployment/deploymentStatus.ts`), and names no
  * platform, no environment variable and no console host.
  *
- * (This service failed that guard on its first push, with three raw
- * platform-variable reads inline. The guard was right and the fix is the accessor, not an
+ * (This service failed that guard on its first push, with three raw host
+ * environment reads inline. The guard was right and the fix is the accessor, not an
  * exemption for a service.)
  *
  * The verdict, in order:
@@ -605,54 +605,56 @@ async function lastHealthCheckSignal(now: Date): Promise<PlatformSignalDTO> {
 }
 
 /**
- * The AWS region of the RDS database the app talks to, read from
- * `DATABASE_URL`'s HOST rather than from a decision record.
+ * The Amazon RDS database the app talks to, named from `DATABASE_URL`'s HOST
+ * rather than from a decision record.
  *
  * The host is the one identifier that is true of the connection actually open —
  * an ADR records where the database was created, and a deployment pointed
- * somewhere else would still read `us-east-1` out of it. An RDS endpoint (an
- * instance, a cluster or an RDS Proxy) carries the region as the label before
- * `.rds.amazonaws.com`, so the substring is a reading and not a lookup; anything
- * else renders as the raw host, which is still the truth.
+ * somewhere else would still read `us-east-1` out of it. RDS encodes the region
+ * in every endpoint it issues — an instance, an Aurora cluster or reader, an RDS
+ * Proxy (`<name>.<id>.<region>.rds.amazonaws.com`) — so the label is a reading
+ * and not a lookup. Null for any other host.
  */
-function databaseRegion(): string {
+function rdsRegion(): string | null {
   const host = databaseHost();
-  if (!host) return '—';
-  return rdsRegionOf(host) ?? host;
+  if (!host) return null;
+  return /\.([a-z]{2}(?:-[a-z]+)+-\d)\.rds\.amazonaws\.com$/.exec(host)?.[1] ?? null;
 }
 
-/**
- * The RDS console's databases page for the database's region, or null when
- * this deployment's database is not on RDS.
- *
- * There is no instance identifier the console can be deep-linked by that the
- * connection string reliably carries (a proxy or cluster endpoint names neither
- * the instance), so the link is to the region's database list — a deliberate
- * under-claim. A constructed deep link that 404s during an incident is worse
- * than a list; `lib/deployment/identity.ts` makes the same call for ECS.
- */
-function databaseConsoleUrl(): string | null {
-  const host = databaseHost();
-  const region = host ? rdsRegionOf(host) : null;
-  if (!region) return null;
-  const r = encodeURIComponent(region);
-  return `https://${r}.console.aws.amazon.com/rds/home?region=${r}#databases:`;
-}
-
-/** `DATABASE_URL`'s hostname, or null when it is unset or not a URL. */
+/** `DATABASE_URL`'s hostname, or null when it is unset or does not parse. */
 function databaseHost(): string | null {
   const url = process.env['DATABASE_URL'];
   if (!url) return null;
   try {
-    return new URL(url).hostname || null;
+    return new URL(url).hostname;
   } catch {
     return null;
   }
 }
 
-/** The region label of an RDS endpoint (`….<region>.rds.amazonaws.com`), else null. */
-function rdsRegionOf(host: string): string | null {
-  return /\.([a-z]{2}(?:-[a-z]+)+-\d)\.rds\.amazonaws\.com$/.exec(host)?.[1] ?? null;
+/**
+ * The region the card shows: the RDS region when the host names one; anything
+ * else renders as the raw host, which is still the truth; `—` when there is no
+ * parseable URL.
+ */
+function databaseRegion(): string {
+  return rdsRegion() ?? databaseHost() ?? '—';
+}
+
+/**
+ * The RDS console's database list for that region, or null when this deployment
+ * is not on RDS.
+ *
+ * There is no instance id the console can be deep-linked to from the endpoint
+ * alone, so the link is to the region's database list rather than to this
+ * database — a deliberate under-claim. A constructed deep link that 404s during
+ * an incident is worse than a list.
+ */
+function databaseConsoleUrl(): string | null {
+  const region = rdsRegion();
+  return region
+    ? `https://${region}.console.aws.amazon.com/rds/home?region=${region}#databases:`
+    : null;
 }
 
 /**

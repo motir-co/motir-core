@@ -27,7 +27,7 @@ import { deliveredPr, setStatus } from '../../helpers/repairFixtures';
 // provider.
 //
 // Every press that boots a container is driven here: Run hosted and Continue hosted
-// through the ROUTE HANDLER, Fix on the hosted agent through the same route with
+// through the ROUTE HANDLER, Fix in Motir agent through the same route with
 // `mode: 'fix'`, and the review run through `hostedRunService.startReview`, the one
 // call the review job's body makes (`agentReviewStartService.startRequested`). All
 // against the real Postgres, with the seams CLAUDE.md allows: the session gates, and
@@ -347,7 +347,7 @@ describe('the hosted start path over Anthropic, DeepSeek, GLM, Qwen and Kimi (MO
       expect(run.model).toBe(p.id);
     });
 
-    it(`Fix on the hosted agent on ${p.name}: the same bare/prefixed split`, async () => {
+    it(`Fix in Motir agent on ${p.name}: the same bare/prefixed split`, async () => {
       const card = await sentBackCard(`a ${p.name} card a review sent back`);
       const { run, env, mint } = await startAndRead(card.identifier, {
         model: p.id,

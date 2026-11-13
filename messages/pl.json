@@ -1598,7 +1598,7 @@
     "provenanceSourceMcp": "MCP",
     "provenanceSourceManual": "Ręczne",
     "provenanceSourceApi": "API",
-    "provenanceSourceHosted": "Hostowane",
+    "provenanceSourceHosted": "Agent Motir",
     "provenanceSourceByok": "BYOK",
     "changedElsewhereRefreshing": "Ten element roboczy zmienił się w innym miejscu — odświeżanie.",
     "editIssue": "Edytuj element roboczy",
@@ -1984,7 +1984,7 @@
       "fields": "Pola",
       "components": "Komponenty",
       "aiPlanning": "Planowanie AI",
-      "hostedAgent": "Hostowany agent",
+      "hostedAgent": "Agent Motir",
       "translation": "Tłumaczenie",
       "rules": "Reguły",
       "repositories": "Repozytoria",
@@ -3791,8 +3791,8 @@
       }
     },
     "hostedAgent": {
-      "title": "Hostowany agent",
-      "pageDescription": "Którego modelu używa hostowane uruchomienie. Opcja Uruchom hostowanie wstępnie wybiera go na podstawie trudności elementu roboczego; osoba uruchamiająca może wybrać inny.",
+      "title": "Agent Motir",
+      "pageDescription": "Którego modelu używa uruchomienie agenta Motir. Przycisk Uruchom wstępnie wybiera go na podstawie trudności elementu roboczego; osoba uruchamiająca może wybrać inny.",
       "card": {
         "title": "Model według trudności",
         "subtitle": "Każdy poziom trudności używa domyślnego modelu platformy, chyba że go zastąpisz. Element nadrzędny używa modelu najwyższej trudności spośród swoich elementów końcowych."
@@ -3810,14 +3810,14 @@
       "optionDefault": "Domyślny platformy dla trudności {difficulty}",
       "reset": "Przywróć domyślny",
       "withdrawn": "Zapisany model <id>{model}</id> nie jest już oferowany, więc uruchomienia o trudności {difficulty} używają modelu domyślnego platformy. Przywróć domyślny, aby to wyczyścić.",
-      "noDifficulty": "Element roboczy bez trudności używa domyślnego modelu platformy, <id>{model}</id> — modelu, który opcja Uruchom hostowanie oznacza jako <b>Domyślny</b>.",
-      "readOnlyBanner": "Tylko administrator projektu może zmieniać ustawienia hostowanego agenta.",
-      "unavailableBody": "Nie udało się połączyć z Motir AI, więc nie można teraz wyświetlić ani zmienić hostowanych modeli. Uruchomienia hostowane są wyłączone, dopóki usługa nie odpowie.",
-      "emptyBody": "Żaden model nie może obecnie uruchomić hostowanego elementu roboczego, więc nie ma czego wybierać.",
-      "savedTitle": "Zapisano ustawienia hostowanego agenta",
-      "savedDesc": "Nowe uruchomienia hostowane używają tych modeli.",
+      "noDifficulty": "Element roboczy bez trudności używa domyślnego modelu platformy, <id>{model}</id> — modelu, który selektor Uruchom oznacza jako <b>Domyślny</b>.",
+      "readOnlyBanner": "Tylko administrator projektu może zmieniać ustawienia agenta Motir.",
+      "unavailableBody": "Nie udało się połączyć z Motir AI, więc nie można teraz wyświetlić ani zmienić modeli agenta Motir. Uruchomienia agenta Motir są wyłączone, dopóki usługa nie odpowie.",
+      "emptyBody": "Żaden model nie może obecnie uruchomić elementu roboczego w agencie Motir, więc nie ma czego wybierać.",
+      "savedTitle": "Zapisano ustawienia agenta Motir",
+      "savedDesc": "Nowe uruchomienia agenta Motir używają tych modeli.",
       "errorTitle": "Nie udało się zapisać",
-      "saveError": "Ustawienia hostowanego agenta nie zostały zapisane. Spróbuj ponownie.",
+      "saveError": "Ustawienia agenta Motir nie zostały zapisane. Spróbuj ponownie.",
       "autoFix": {
         "label": "Napraw czerwony pull request w agencie przypisanym do elementu roboczego.",
         "help": "Gdy pull request staje się czerwony, a ostatnie uruchomienie elementu roboczego odbyło się w zalogowanym i działającym agencie, Motir rozpoczyna naprawę w tym agencie. Wyłączone (domyślnie) — nic nie startuje samo."
@@ -4112,7 +4112,7 @@
         "components": "Komponentami zarządzają administratorzy projektu. Poproś administratora, jeśli komponent trzeba dodać lub zmienić.",
         "bugs": "Tym, gdzie trafiają błędy tego projektu, zarządzają administratorzy projektu. Poproś administratora, jeśli miejsce docelowe wymaga zmiany.",
         "ai-planning": "Planowanie AI w tym projekcie — jego częstotliwość — konfigurują administratorzy projektu. Poproś administratora, jeśli wymaga zmiany.",
-        "hosted-agent": "Informacja o tym, którego modelu używa hostowane uruchomienie, jest widoczna dla osób, które mogą uruchamiać hostowane uruchomienia w tym projekcie. Poproś administratora projektu, jeśli musisz ją zobaczyć.",
+        "hosted-agent": "Informacja o tym, którego modelu używa uruchomienie agenta Motir, jest widoczna dla osób, które mogą uruchamiać uruchomienia agenta Motir w tym projekcie. Poproś administratora projektu, jeśli musisz ją zobaczyć.",
         "translation": "To, czy treść pracy w tym projekcie jest tłumaczona dla każdego czytelnika, widzą osoby, które mogą czytać elementy pracy projektu. Zapytaj administratora projektu, jeśli potrzebujesz to zobaczyć.",
         "automation": "Automatyzacją projektu zarządzają administratorzy projektu. Poproś administratora, jeśli reguła wymaga zmiany.",
         "monitoring": "Połączeniem z monitorem błędów tego projektu zarządzają osoby, które mogą zarządzać integracjami. Poproś administratora projektu, jeśli Sentry trzeba połączyć lub połączyć ponownie.",
@@ -4368,16 +4368,16 @@
           },
           "review": {
             "name": "Agent przeglądu",
-            "desc": "Hostowane przeglądy. To, czy projekt przegląda z agentem, pozostaje w jego ustawieniach zatwierdzeń."
+            "desc": "Przeglądy agenta Motir. To, czy projekt przegląda z agentem, pozostaje w jego ustawieniach zatwierdzeń."
           },
           "design": {
             "name": "Uruchomienie projektu",
-            "desc": "Hostowane uruchomienie na elemencie pracy typu projekt"
+            "desc": "Uruchomienie agenta Motir na elemencie pracy typu projekt"
           }
         },
         "agentRun": {
           "name": "Uruchomienie agenta",
-          "desc": "Hostowane uruchomienia kompilacji według trudności elementu pracy. Własne zastąpienie projektu dla danej trudności nadal ma pierwszeństwo przed wyborem organizacji."
+          "desc": "Uruchomienia kompilacji agenta Motir według trudności elementu pracy. Własne zastąpienie projektu dla danej trudności nadal ma pierwszeństwo przed wyborem organizacji."
         },
         "modelFor": "Model dla: {function}",
         "loadingTrigger": "Ładowanie modeli…",
@@ -4404,7 +4404,7 @@
           "failed": "Nie zapisano: nie udało się zapisać {function}. Zachowuje obecny model; spróbuj ponownie."
         },
         "precedence": {
-          "body": "<b>Jakiego modelu używa zadanie</b>, wygrywa pierwsze dopasowanie: wybór osoby w Uruchom hostowane → własne zastąpienie projektu (tylko uruchomienie agenta) → wybór {org} → domyślny model platformy.",
+          "body": "<b>Jakiego modelu używa zadanie</b>, wygrywa pierwsze dopasowanie: wybór osoby w Uruchom → własne zastąpienie projektu (tylko uruchomienie agenta) → wybór {org} → domyślny model platformy.",
           "cost": "Każdy model jest rozliczany według własnej stawki, więc mocniejszy model zużywa więcej kredytów {org}."
         },
         "footer": {
@@ -6960,7 +6960,7 @@
     },
     "ai": {
       "name": "Motir AI",
-      "tagline": "Planowanie i hostowani agenci — miesięczna pula kredytów na poziomie organizacji.",
+      "tagline": "Planowanie i agent Motir — miesięczna pula kredytów na poziomie organizacji.",
       "creditsPerMo": "{n} kredytów / mies.",
       "creditsOneTime": "{n} kredytów · jednorazowo",
       "planFee": "Opłata za plan",
@@ -7075,7 +7075,7 @@
     "plans": {
       "breadcrumb": "Organizacja · {org} · Motir AI",
       "title": "Motir AI — plany i subskrypcja",
-      "subtitle": "Zarządzaj planem AI organizacji — planowanie i hostowani agenci. Rozliczany osobno od stanowisk Motir, więc ten ekran dotyczy tylko AI.",
+      "subtitle": "Zarządzaj planem AI organizacji — planowanie i agent Motir. Rozliczany osobno od stanowisk Motir, więc ten ekran dotyczy tylko AI.",
       "back": "Wróć do rozliczeń",
       "currentStrip": "{n} kredytów / mies. · pozostało {left} · odnawia się {date}",
       "currentStripOneTime": "{n} kredytów · jednorazowo · pozostało {left}",
@@ -7398,7 +7398,7 @@
         "ciJobsInFlight": "Trwające zadania CI"
       },
       "explain": {
-        "agentRunsInParallel": "Zadania hostowanych agentów działające naraz. Kolejne czekają w kolejce.",
+        "agentRunsInParallel": "Uruchomienia agenta Motir działające naraz. Kolejne czekają w kolejce.",
         "agentsInOrg": "Aktywne hostowane agenty w całej organizacji, działające lub uśpione. Powyżej limitu nowy jest odrzucany, a nie kolejkowany.",
         "agentsPerPerson": "Aktywne hostowane agenty, które może mieć jedna osoba. Powyżej limitu nowy jest odrzucany, a nie kolejkowany.",
         "ciJobsInFlight": "Zadania CI działające naraz na runnerach Motir. Kolejne czekają w kolejce."
@@ -7447,7 +7447,7 @@
       "notReadNotice": "Nie udało się odczytać limitów planu ani tego, co działa. To nie jest zero, tylko wartość nieznana.",
       "tryAgain": "Spróbuj ponownie",
       "noPlanLimitsNote": "Tę organizację prowadzi Motir i nie ma ona limitów planu. To, co działa, jest pokazane bez limitu.",
-      "noFleet": "Plan nie obejmuje uruchomień hostowanych agentów, runnerów CI ani agentów. Wybierz plan w Motir AI powyżej, aby je uruchamiać.",
+      "noFleet": "Plan nie obejmuje uruchomień agenta Motir, runnerów CI ani agentów. Wybierz plan w Motir AI powyżej, aby je uruchamiać.",
       "accounts": {
         "title": "Własne konta AWS",
         "notRead": "Nie udało się teraz odczytać stanu kont.",
@@ -7458,7 +7458,7 @@
         },
         "role": {
           "ci_runner": "Uruchamia zadania CI",
-          "hosted_agent": "Uruchamia zadania hostowanych agentów",
+          "hosted_agent": "Wykonuje Twoje uruchomienia agenta Motir",
           "indexer_and_hoster": "Indeksuje kod i hostuje agenty"
         },
         "state": {
@@ -8139,20 +8139,20 @@
         "personSentBackAnon": "Te commity zostały odesłane. Agent naprawia je w ramach {count, plural, one {tego samego pull requesta} few {tych samych pull requestów} many {tych samych pull requestów} other {tych samych pull requestów}}, z powodem w prompcie.",
         "reviewedAgain": "Następna zielona wersja zostanie przejrzana ponownie.",
         "hosted": {
-          "lead": "Napraw to tutaj, na hostowanym agencie — bez terminala:",
-          "button": "Napraw na hostowanym agencie",
+          "lead": "Napraw to tutaj, w agencie Motir — bez terminala:",
+          "button": "Napraw w agencie Motir",
           "orTerminal": "Albo przekaż naprawę agentowi z terminala:",
           "eitherWay": "W obu przypadkach agent pracuje na własnej gałęzi każdego pull requesta, wypycha zmiany, a testy uruchamiają się ponownie.",
           "fixing": {
-            "byYou": "Naprawiane przez <b>Ciebie</b> na hostowanym agencie · rozpoczęto <when></when> · <run>{label}</run>",
-            "by": "Naprawiane przez <b>{name}</b> na hostowanym agencie · rozpoczęto <when></when> · <run>{label}</run>",
+            "byYou": "Naprawiane przez <b>Ciebie</b> w agencie Motir · rozpoczęto <when></when> · <run>{label}</run>",
+            "by": "Naprawiane przez <b>{name}</b> w agencie Motir · rozpoczęto <when></when> · <run>{label}</run>",
             "why": "Jednocześnie działa tylko jedna naprawa. Gdy wypchnie zmiany, testy uruchomią się ponownie, a następna zielona wersja zostanie przejrzana ponownie."
           },
           "refused": {
             "taken": "Nie rozpoczęto — naprawa już trwa, rozpoczęta przez <b>{name}</b> <when></when>.",
             "takenByYou": "Nie rozpoczęto — masz już trwającą naprawę, rozpoczętą <when></when>.",
             "outOfCredits": {
-              "body": "Nic nie zostało uruchomione i nic nie zostało naliczone. Naprawa na hostowanym agencie zadziała ponownie, gdy organizacja będzie mieć kredyty — albo napraw to z terminala."
+              "body": "Nic nie zostało uruchomione i nic nie zostało naliczone. „Napraw w agencie Motir” zadziała ponownie, gdy organizacja będzie mieć kredyty — albo napraw to z terminala."
             }
           }
         },
@@ -8207,8 +8207,8 @@
           "interrupted": "Uruchomienie zostało zatrzymane z terminala <when></when>.",
           "failed": "Agent zakończył działanie z błędem <when></when>.",
           "cancelled": "Uruchomienie zostało anulowane <when></when>.",
-          "stalled": "Hostowany agent utknął — brak wyjścia przez 15 minut — <when></when>.",
-          "backstop": "Hostowane uruchomienie osiągnęło 12-godzinny limit <when></when>."
+          "stalled": "Agent Motir utknął — brak wyjścia przez 15 minut — <when></when>.",
+          "backstop": "Uruchomienie agenta Motir osiągnęło 12-godzinny limit <when></when>."
         },
         "ranBy": "Uruchomione przez <b>{name}</b> poleceniem <mono>{command}</mono> · rozpoczęto <when></when>",
         "ranBySomeone": "Uruchomiono poleceniem <mono>{command}</mono> · rozpoczęto <when></when>",
@@ -8241,7 +8241,7 @@
         "error": "Nie udało się sprawdzić, czy uruchomienie tego elementu roboczego nadal działa.",
         "retry": "Spróbuj ponownie",
         "hosted": {
-          "lead": "Kontynuuj tutaj, w hostowanym kontenerze — bez terminala:",
+          "lead": "Kontynuuj tutaj, w agencie Motir — bez terminala:",
           "button": "Kontynuuj",
           "buttonParent": "Kontynuuj {key}",
           "orTerminal": "Albo kontynuuj z terminala:",
@@ -8251,8 +8251,8 @@
             "rowWithPr": "<b>{repository}</b> · <ref>{branch}</ref> · pull request <b>{pr}</b>"
           },
           "continuing": {
-            "byYou": "Kontynuowane przez <b>Ciebie</b> w hostowanym kontenerze · rozpoczęto <when></when>",
-            "by": "Kontynuowane przez <b>{name}</b> w hostowanym kontenerze · rozpoczęto <when></when>",
+            "byYou": "Kontynuowane przez <b>Ciebie</b> w agencie Motir · rozpoczęto <when></when>",
+            "by": "Kontynuowane przez <b>{name}</b> w agencie Motir · rozpoczęto <when></when>",
             "watch": "Obserwuj pracę w sekcji Uruchomienie powyżej."
           },
           "refused": {
@@ -10354,7 +10354,7 @@
       },
       "toResume": {
         "title": "Nic do wznowienia",
-        "body": "Gdy uruchomienie zatrzyma się na wymaganym zatwierdzeniu, czeka tutaj na jego udzielenie — potem kontynuuje samo na hostowanym agencie albo poleceniem motir continue z terminala."
+        "body": "Gdy uruchomienie zatrzyma się na wymaganym zatwierdzeniu, czeka tutaj na jego udzielenie — potem kontynuuje samo w agencie Motir albo poleceniem motir continue z terminala."
       },
       "recentlyFinished": {
         "title": "Nic nie ukończono w tym tygodniu",
@@ -10504,8 +10504,8 @@
         "title": "Skopiowano",
         "body": "Wklej {command} do terminala."
       },
-      "fixingHosted": "Naprawiane na hostowanym agencie przez <b>{name}</b> · <run>{label}</run>",
-      "fixingHostedByYou": "Naprawiane na hostowanym agencie przez <b>Ciebie</b> · <run>{label}</run>",
+      "fixingHosted": "Naprawiane w agencie Motir przez <b>{name}</b> · <run>{label}</run>",
+      "fixingHostedByYou": "Naprawiane w agencie Motir przez <b>Ciebie</b> · <run>{label}</run>",
       "entry": {
         "carriesRun": "{count, plural, one {# kolejny element roboczy w tym uruchomieniu} few {# kolejne elementy robocze w tym uruchomieniu} many {# kolejnych elementów roboczych w tym uruchomieniu} other {# kolejnego elementu roboczego w tym uruchomieniu}}",
         "carriesPullRequests": "{count, plural, one {# kolejny element roboczy w ramach tego samego pull requesta} few {# kolejne elementy robocze w ramach tego samego pull requesta} many {# kolejnych elementów roboczych w ramach tego samego pull requesta} other {# kolejnego elementu roboczego w ramach tego samego pull requesta}}",
@@ -10523,10 +10523,10 @@
       "readyByYou": "Gotowe do wznowienia · {kind} w {key} zatwierdzone przez Ciebie <when></when>",
       "readyBare": "Gotowe do wznowienia",
       "readySome": "Gotowe do wznowienia · udzielono {approved} z {total} zatwierdzeń",
-      "resuming": "Wznawianie na hostowanym agencie · rozpoczęto <when></when>",
+      "resuming": "Wznawianie w agencie Motir · rozpoczęto <when></when>",
       "couldNot": "Nie udało się wznowić automatycznie · <reason></reason>",
       "ranBy": {
-        "hosted": "Uruchomione przez {name} na hostowanym agencie",
+        "hosted": "Uruchomione przez {name} w agencie Motir",
         "terminal": "Uruchomione przez {name} z terminala",
         "runbook": "Uruchomione przez {name} według runbooka",
         "instance": "Uruchomione przez {name} w {agent}"
@@ -10560,8 +10560,8 @@
       },
       "seeRun": "Zobacz uruchomienie",
       "next": {
-        "waitingHosted": "Po zatwierdzeniu to uruchomienie będzie kontynuowane samo na hostowanym agencie.",
-        "waitingHostedMany": "Gdy którekolwiek zostanie zatwierdzone, to uruchomienie będzie kontynuowane samo na hostowanym agencie i ponownie zatrzyma się na pozostałych.",
+        "waitingHosted": "Po zatwierdzeniu to uruchomienie będzie kontynuowane samo w agencie Motir.",
+        "waitingHostedMany": "Gdy którekolwiek zostanie zatwierdzone, to uruchomienie będzie kontynuowane samo w agencie Motir i ponownie zatrzyma się na pozostałych.",
         "waitingLocal": "Po zatwierdzeniu kontynuuj uruchomienie z terminala — polecenie pojawi się tutaj.",
         "ready": "Agent podejmuje uruchomienie na jego własnej gałęzi, buduje to, co odblokowało zatwierdzenie, i ponownie zatrzymuje się na każdej bramce, która nadal czeka.",
         "readySome": "Kontynuacja teraz zbuduje to, co odblokowała zatwierdzona bramka, i ponownie zatrzyma się na bramkach, które nadal czekają ({count}).",
@@ -10764,7 +10764,7 @@
       "navPlanningLessons": "Lekcje planowania",
       "navPlannerFindings": "Ustalenia planisty",
       "navIdeas": "Pomysły",
-      "navRunModels": "Modele hostowanych uruchomień",
+      "navRunModels": "Modele agenta Motir",
       "navFleetSettings": "Ustawienia floty",
       "navServices": "Usługi",
       "navCapacity": "Pojemność dostawców",
@@ -10941,9 +10941,9 @@
               "remove": "Usunięto model z listy planowania"
             },
             "run_model_list": {
-              "seed": "Skonfigurowano listę modeli hostowanych uruchomień",
-              "add": "Dodano model do listy hostowanych uruchomień",
-              "remove": "Usunięto model z listy hostowanych uruchomień"
+              "seed": "Skonfigurowano listę modeli agenta Motir",
+              "add": "Dodano model do listy modeli agenta Motir",
+              "remove": "Usunięto model z listy modeli agenta Motir"
             },
             "lesson": {
               "edit": "Edytowano lekcję planowania",
@@ -11043,7 +11043,7 @@
           "unreachableDetail": {
             "unreachable": "Baza danych nie odpowiedziała na ping. To nie jest opóźnienie zerowe — nic nie zostało zmierzone."
           },
-          "linkOut": "Konsola RDS"
+          "linkOut": "Konsola Amazon RDS"
         },
         "hosting": {
           "title": "Hosting",
@@ -11268,7 +11268,7 @@
           "stat": {
             "orgs": "organizacje z uruchomionym kontenerem",
             "ciRunners": "runnery CI · każda organizacja ograniczona szczytowym limitem CI swojego planu",
-            "hostedAgents": "uruchomienia hostowanego agenta · każda organizacja ograniczona równoległymi uruchomieniami swojego planu",
+            "hostedAgents": "uruchomienia agenta Motir · każda organizacja ograniczona równoległymi uruchomieniami swojego planu",
             "instances": "działające instancje agentów · każda organizacja ograniczona wartością swojego planu",
             "mismatched": "niezgodne · działanie i obciążenie się nie zgadzają"
           },
@@ -11280,7 +11280,7 @@
             "org": "Organizacja",
             "plan": "Plan",
             "ciRunner": "Runnery CI",
-            "hostedAgent": "Uruchomienia hostowanego agenta",
+            "hostedAgent": "Uruchomienia agenta Motir",
             "index": "Kontenery indeksu",
             "agentInstance": "Instancje agentów",
             "accrued": "Minuty CI · ostatnie {minutes} min",
@@ -11313,7 +11313,7 @@
           "foot": "Wyświetlanie {from}–{to} z {total} · najpierw niezgodne, potem z największą liczbą kontenerów · oceniane jest tylko CI — to jedyne obciążenie naliczane w trakcie działania",
           "empty": {
             "title": "Żadna organizacja nie uruchamia kontenera floty",
-            "body": "Żadna organizacja nie ma teraz runnera CI, uruchomienia hostowanego agenta, instancji agenta ani kontenera indeksu, więc nie ma czego porównywać z obciążeniem. To prawidłowy odczyt, a nie błąd."
+            "body": "Żadna organizacja nie ma teraz runnera CI, uruchomienia agenta Motir, instancji agenta ani kontenera indeksu, więc nie ma czego porównywać z obciążeniem. To prawidłowy odczyt, a nie błąd."
           },
           "error": {
             "title": "Nie udało się odczytać floty",
@@ -11622,8 +11622,8 @@
         "remaining": "pozostało",
         "grantedConsumed": "przyznano {granted} · zużyto {consumed}",
         "unknownFigure": "nieznane",
-        "creditNote": "Pobierane przez planistę i hostowanego agenta. Wydatki na tokeny w tym okresie: {spend} kredytów.",
-        "creditNoteUnknownSpend": "Pobierane przez planistę i hostowanego agenta. Wydatki na tokeny w tym okresie: nieznane.",
+        "creditNote": "Pobierane przez planistę i agenta Motir. Wydatki na tokeny w tym okresie: {spend} kredytów.",
+        "creditNoteUnknownSpend": "Pobierane przez planistę i agenta Motir. Wydatki na tokeny w tym okresie: nieznane.",
         "indexNote": "Pobierane tylko przez indeksowanie. Nigdy nie dotyka salda kredytów — w żadnych warunkach.",
         "notGrantedYet": "Nie przyznano jeszcze limitu — w bieżącym okresie nic nie zostało zindeksowane dla tej organizacji.",
         "notConfigured": "Limit nie jest skonfigurowany — ustawia go personel w planie. Do tego czasu nie ma bramki do przekroczenia.",
@@ -12022,7 +12022,7 @@
         "sheetDone": "Gotowe"
       },
       "source": {
-        "in_loop": "Hostowany przegląd",
+        "in_loop": "Przegląd agenta Motir",
         "check_plan": "Check plan"
       },
       "planner": {
@@ -12728,7 +12728,7 @@
           "whenOff": "Nowe zadania planowania są odrzucane komunikatem „planowanie jest wstrzymane dla Twojej organizacji”. Zadania już działające kończą się."
         },
         "hosted_runs": {
-          "name": "Hostowane uruchomienia agentów",
+          "name": "Uruchomienia agenta Motir",
           "whenOff": "Nowe uruchomienia agentów i instancje agentów są odrzucane. Działające kontenery zostają zatrzymane."
         },
         "web_search": {
@@ -12832,7 +12832,7 @@
         "subtitleEmpty": "Na flocie nic nie działa dla tej organizacji.",
         "workload": {
           "ciRunner": "Runnery CI",
-          "hostedAgent": "Hostowane uruchomienia agentów",
+          "hostedAgent": "Uruchomienia agenta Motir",
           "agentInstance": "Instancje agentów",
           "index": "Kontenery indeksowania"
         },
@@ -12847,8 +12847,8 @@
           "override": "nadpisanie"
         },
         "facts": {
-          "plan": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · zadania CI naraz: {ci}",
-          "planCiUnreadable": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · limit CI nieczytelny",
+          "plan": "Plan <strong>{plan}</strong> · uruchomienia agenta Motir naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · zadania CI naraz: {ci}",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · uruchomienia agenta Motir naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · limit CI nieczytelny",
           "planExempt": "Plan <strong>Brak limitu planu</strong>",
           "planExemptOverride": "Plan <strong>Brak limitu planu</strong> · zadania CI naraz: {ci} (nadpisanie)",
           "planUnknown": "Plan <strong>nieznany · {key}</strong> · nowe kontenery odrzucane",
@@ -12859,7 +12859,7 @@
         },
         "stop": {
           "button": "Zatrzymaj kontenery",
-          "explainer": "Zatrzymanie natychmiast kończy <strong>płatną</strong> pracę tej organizacji: CI, hostowane uruchomienia agentów i instancje agentów. Nie zawiesza organizacji.",
+          "explainer": "Zatrzymanie natychmiast kończy <strong>płatną</strong> pracę tej organizacji: CI, uruchomienia agenta Motir i instancje agentów. Nie zawiesza organizacji.",
           "notPermitted": "Tylko <strong>superadministrator</strong> może zatrzymać kontenery organizacji. Jesteś zalogowany jako <strong>{role}</strong>.",
           "nothing": "Nie ma czego zatrzymać."
         },
@@ -12868,7 +12868,7 @@
           "lead": "To kończy wszystko, co organizacja {org} uruchamia teraz na flocie Motir:",
           "ci": "{runs, plural, one {anulowane uruchomienie CI} few {anulowane uruchomienia CI} many {anulowanych uruchomień CI} other {anulowanego uruchomienia CI}} oraz <strong>{containers}</strong> {containers, plural, one {usunięty kontener CI} few {usunięte kontenery CI} many {usuniętych kontenerów CI} other {usuniętego kontenera CI}}",
           "ciUnknown": "Uruchomienia CI nie zostały policzone — nie udało się odczytać GitHuba; zatrzymanie i tak je anuluje — oraz <strong>{containers}</strong> {containers, plural, one {usunięty kontener CI} few {usunięte kontenery CI} many {usuniętych kontenerów CI} other {usuniętego kontenera CI}}",
-          "hosted": "{count, plural, one {zakończone hostowane uruchomienie agenta} few {zakończone hostowane uruchomienia agentów} many {zakończonych hostowanych uruchomień agentów} other {zakończonego hostowanego uruchomienia agenta}}",
+          "hosted": "{count, plural, one {zakończone uruchomienie agenta Motir} few {zakończone uruchomienia agenta Motir} many {zakończonych uruchomień agenta Motir} other {zakończonego uruchomienia agenta Motir}}",
           "instances": "{count, plural, one {uśpiona instancja agenta} few {uśpione instancje agentów} many {uśpionych instancji agentów} other {uśpionej instancji agenta}}",
           "index": "{count, plural, one {kontener indeksowania} few {kontenery indeksowania} many {kontenerów indeksowania} other {kontenera indeksowania}} pozostawiono do dokończenia — indeksowanie to własny koszt Motir i nigdy nie jest naliczane organizacji",
           "notSuspension": "<strong>To nie jest zawieszenie.</strong> Nic nie jest blokowane: kolejne uruchomienie CI, uruchomienie agenta lub start agenta organizacji {org} przejdzie zwykłą procedurę dopuszczenia.",
@@ -12890,8 +12890,8 @@
           "partialTitle": "Zatrzymano, z błędami",
           "ci": "{runs, plural, one {# anulowane uruchomienie CI} few {# anulowane uruchomienia CI} many {# anulowanych uruchomień CI} other {# anulowanego uruchomienia CI}} · {stopped, plural, one {# usunięty kontener CI} few {# usunięte kontenery CI} many {# usuniętych kontenerów CI} other {# usuniętego kontenera CI}}",
           "ciPartial": "CI: anulowane uruchomienia: {runs} · usunięte kontenery: {stopped} z {total}",
-          "hosted": "{ended, plural, one {# zakończone hostowane uruchomienie agenta} few {# zakończone hostowane uruchomienia agentów} many {# zakończonych hostowanych uruchomień agentów} other {# zakończonego hostowanego uruchomienia agenta}}",
-          "hostedPartial": "Hostowane uruchomienia agentów: zakończone {ended}",
+          "hosted": "{ended, plural, one {# zakończone uruchomienie agenta Motir} few {# zakończone uruchomienia agenta Motir} many {# zakończonych uruchomień agenta Motir} other {# zakończonego uruchomienia agenta Motir}}",
+          "hostedPartial": "Uruchomienia agenta Motir: zakończone {ended}",
           "instances": "{hibernated, plural, one {# uśpiona instancja agenta} few {# uśpione instancje agentów} many {# uśpionych instancji agentów} other {# uśpionej instancji agenta}}",
           "instancesPartial": "Instancje agentów: uśpione {hibernated} z {total}",
           "failed": "Nie udało się zatrzymać: {count} — reconciler ponowi próbę."
@@ -12911,7 +12911,7 @@
           "when": "{time} · {actor}",
           "unknownActor": "były operator",
           "noReason": "Nie zapisano powodu",
-          "counts": "Uruchomienia CI: {runs} · Kontenery CI: {containers} · Uruchomienia hostowane: {hosted} · Instancje agentów: {instances}"
+          "counts": "Uruchomienia CI: {runs} · Kontenery CI: {containers} · Uruchomienia agenta Motir: {hosted} · Instancje agentów: {instances}"
         },
         "orgAdminStop": {
           "title": "Ostatnie zatrzymanie przez administratora organizacji",
@@ -12994,17 +12994,17 @@
       }
     },
     "runModels": {
-      "breadcrumb": "Operacje · Modele uruchomień hostowanych",
-      "title": "Modele uruchomień hostowanych",
-      "subtitle": "Których modeli może używać uruchomienie hostowane, we wszystkich projektach. Projekt wybiera spośród modeli z listy, które motir-ai obecnie oferuje.",
+      "breadcrumb": "Operacje · Modele agenta Motir",
+      "title": "Modele agenta Motir",
+      "subtitle": "Których modeli może używać uruchomienie agenta Motir, we wszystkich projektach. Projekt wybiera spośród modeli z listy, które motir-ai obecnie oferuje.",
       "lineLive": "Model z listy, którego motir-ai przestaje oferować, od razu znika ze wszystkich selektorów. Model spoza listy nigdy się nie pojawia.",
       "lineProjectsLead": "Projekty nigdy nie widzą tej listy.",
-      "lineProjectsBody": "Widzą jej efekt: selektor „Uruchom hostowane” i ustawienia hostowanego agenta oferują tylko te modele.",
+      "lineProjectsBody": "Widzą jej efekt: selektor „Uruchom” i ustawienia agenta Motir oferują tylko te modele.",
       "card": {
-        "title": "Modele dostępne dla uruchomień hostowanych",
-        "subtitle": "Zainicjowana wszystkimi modelami, które motir-ai oferował dla uruchomień hostowanych przy pierwszym odczycie listy, aby żaden projekt nie stracił wybranego modelu."
+        "title": "Modele dostępne dla uruchomień agenta Motir",
+        "subtitle": "Zainicjowana wszystkimi modelami, które motir-ai oferował dla uruchomień agenta Motir przy pierwszym odczycie listy, aby żaden projekt nie stracił wybranego modelu."
       },
-      "notOffered": "Obecnie poza ofertą motir-ai dla uruchomień hostowanych: wycofany, bez stawki, nie jest modelem czatu lub jego dostawca nie jest skonfigurowany dla uruchomień hostowanych.",
+      "notOffered": "Obecnie poza ofertą motir-ai dla agenta Motir: wycofany, bez stawki, nie jest modelem czatu lub jego dostawca nie jest skonfigurowany dla uruchomień agenta Motir.",
       "level": {
         "trivial": "trywialny",
         "low": "niski",
@@ -13016,19 +13016,19 @@
         "projects": "{n, plural, one {# projekt} few {# projekty} many {# projektów} other {# projektu}}"
       },
       "add": {
-        "title": "Dodaj model dla uruchomień hostowanych",
-        "body": "Projekty mogą go wybrać dla „Uruchom hostowane” i ustawień zależnych od trudności, gdy tylko zostanie dodany.",
+        "title": "Dodaj model dla uruchomień agenta Motir",
+        "body": "Projekty mogą go wybrać dla „Uruchom” i ustawień zależnych od trudności, gdy tylko zostanie dodany.",
         "modelLabel": "Model",
         "placeholder": "Wybierz model",
-        "pickerFoot": "Modele oferowane przez motir-ai dla uruchomień hostowanych, których nie ma jeszcze na liście.",
-        "nothing": "Każdy model oferowany przez motir-ai dla uruchomień hostowanych jest już na liście.",
+        "pickerFoot": "Modele oferowane przez motir-ai dla uruchomień agenta Motir, których nie ma jeszcze na liście.",
+        "nothing": "Każdy model oferowany przez motir-ai dla uruchomień agenta Motir jest już na liście.",
         "confirm": "Dodaj model",
-        "notOffered": "Nie dodano: motir-ai nie oferuje już modelu {model} dla uruchomień hostowanych.",
+        "notOffered": "Nie dodano: motir-ai nie oferuje już modelu {model} dla uruchomień agenta Motir.",
         "alreadyListed": "Nie dodano: {model} jest już na liście."
       },
       "remove": {
-        "title": "Usunąć {model} z modeli uruchomień hostowanych?",
-        "body": "Od teraz żaden projekt nie może go wybrać dla uruchomienia hostowanego. Nie używa go żaden projekt ani ustawienie domyślne platformy.",
+        "title": "Usunąć {model} z modeli agenta Motir?",
+        "body": "Od teraz żaden projekt nie może go wybrać dla uruchomienia agenta Motir. Nie używa go żaden projekt ani ustawienie domyślne platformy.",
         "confirm": "Usuń model",
         "inUse": "Nie usunięto: {model} jest w użyciu. {platformDefaultClause}{projectsClause} Najpierw to zmień.",
         "inUseParts": {
@@ -13040,20 +13040,20 @@
         },
         "notListed": "Nie usunięto: {model} nie jest już na liście."
       },
-      "added": "Dodano {model}. Projekty mogą go teraz wybrać dla uruchomień hostowanych.",
-      "removed": "Usunięto {model} z modeli uruchomień hostowanych.",
+      "added": "Dodano {model}. Projekty mogą go teraz wybrać dla uruchomień agenta Motir.",
+      "removed": "Usunięto {model} z modeli agenta Motir.",
       "empty": {
         "title": "Brak modeli na liście",
-        "body": "Żadne uruchomienie hostowane nie może się rozpocząć, dopóki nie zostanie dodany model. Dodaj go z oferty motir-ai.",
-        "bodyReadOnly": "Żadne uruchomienie hostowane nie może się rozpocząć, dopóki superadministrator nie doda modelu."
+        "body": "Żadne uruchomienie agenta Motir nie może się rozpocząć, dopóki nie zostanie dodany model. Dodaj go z oferty motir-ai.",
+        "bodyReadOnly": "Żadne uruchomienie agenta Motir nie może się rozpocząć, dopóki superadministrator nie doda modelu."
       },
       "unavailable": {
-        "title": "Nie udało się wczytać modeli uruchomień hostowanych",
+        "title": "Nie udało się wczytać modeli agenta Motir",
         "body": "motir-ai nie odpowiedział, więc nie wiadomo, czy modele z listy są oferowane, i lista nie jest wyświetlana. Nic się nie zmieniło."
       },
       "defaults": {
         "title": "Wartości domyślne po stronie uruchomień",
-        "subtitle": "Model, na którym startuje hostowany przegląd, uruchomienie projektowe lub uruchomienie agenta, gdy ani osoba, ani projekt, ani organizacja go nie wybrały. Wybierany z listy powyżej.",
+        "subtitle": "Model, na którym startuje przegląd agenta Motir, uruchomienie projektowe lub uruchomienie agenta, gdy ani osoba, ani projekt, ani organizacja go nie wybrały. Wybierany z listy powyżej.",
         "count": "6 ustawień",
         "col": {
           "function": "Funkcja"
@@ -13061,27 +13061,27 @@
         "row": {
           "review": {
             "name": "Agent przeglądu",
-            "desc": "Hostowane przeglądy"
+            "desc": "Przeglądy agenta Motir"
           },
           "design": {
             "name": "Uruchomienie projektowe",
-            "desc": "Hostowane uruchomienie na projektowym elemencie roboczym"
+            "desc": "Uruchomienie agenta Motir na projektowym elemencie roboczym"
           },
           "trivial": {
             "name": "Uruchomienie agenta · Banalna",
-            "desc": "Hostowane uruchomienia budowania na banalnym elemencie roboczym"
+            "desc": "Uruchomienia budowania agenta Motir na banalnym elemencie roboczym"
           },
           "low": {
             "name": "Uruchomienie agenta · Niska",
-            "desc": "Hostowane uruchomienia budowania na elemencie roboczym o niskiej trudności"
+            "desc": "Uruchomienia budowania agenta Motir na elemencie roboczym o niskiej trudności"
           },
           "medium": {
             "name": "Uruchomienie agenta · Średnia",
-            "desc": "Hostowane uruchomienia budowania na elemencie roboczym o średniej trudności"
+            "desc": "Uruchomienia budowania agenta Motir na elemencie roboczym o średniej trudności"
           },
           "high": {
             "name": "Uruchomienie agenta · Wysoka",
-            "desc": "Hostowane uruchomienia budowania na elemencie roboczym o wysokiej trudności"
+            "desc": "Uruchomienia budowania agenta Motir na elemencie roboczym o wysokiej trudności"
           }
         },
         "inherits": {
@@ -13098,7 +13098,7 @@
         },
         "defaultGroup": "Domyślne",
         "pickerAria": "Domyślny model dla {name}",
-        "pickerFoot": "Tylko modele z listy powyżej, które motir-ai oferuje dla hostowanych uruchomień.",
+        "pickerFoot": "Tylko modele z listy powyżej, które motir-ai oferuje dla uruchomień agenta Motir.",
         "changed": {
           "seededFromEnv": "Przejęte ze środowiska · nigdy niezmieniane",
           "neverSet": "Nigdy nie ustawiono"
@@ -13108,7 +13108,7 @@
           "body": "{name} wraca do {what}, dopóki nie wybierzesz innego.",
           "bodyReadOnly": "{name} wraca do {what}, dopóki superadministrator nie wybierze innego."
         },
-        "refused": "{model} nie jest już oferowany dla hostowanych uruchomień lub nie ma go na liście, więc nie został zapisany. Strona została odświeżona — wybierz inny model.",
+        "refused": "{model} nie jest już oferowany dla uruchomień agenta Motir lub nie ma go na liście, więc nie został zapisany. Strona została odświeżona — wybierz inny model.",
         "confirmTitle": "Zmienić model platformy dla {name}?",
         "confirmBody": {
           "review": "{from} → {to}. Obowiązuje od następnego przeglądu dla każdej organizacji, która nie wybrała własnego. Przeglądy, które już trwają, kończą się na modelu, na którym się zaczęły.",
@@ -13377,6 +13377,7 @@
       "codeScanning": {
         "fleet": "we flocie ({label})",
         "githubHosted": "na runnerach hostowanych przez GitHub",
+        "pendingFleet": "na runnerach hostowanych przez GitHub do następnego zadania we flocie — runner tego zadania pozwala przenieść je do floty ({label})",
         "unknownStatus": "nie udało się odczytać — GitHub odpowiedział HTTP {status}",
         "unknownUnreachable": "nie udało się odczytać — nie można połączyć się z GitHub",
         "none": "Żadne prywatne repozytorium w {org} nie ma skonfigurowanej domyślnej konfiguracji CodeQL."
@@ -14124,8 +14125,8 @@
       },
       "image": {
         "hosted": {
-          "title": "Obraz hostowanego agenta",
-          "subtitle": "To, co uruchamia każde hostowane uruchomienie. Przypięty przez MOTIR_HOSTED_AGENT_IMAGE; najnowszy to ostatni build main z ghcr.io/motir-co/motir-hosted-agent."
+          "title": "Obraz agenta Motir",
+          "subtitle": "To, co uruchamia każde uruchomienie agenta Motir. Przypięty przez MOTIR_HOSTED_AGENT_IMAGE; najnowszy to ostatni build main z ghcr.io/motir-co/motir-hosted-agent."
         },
         "runner": {
           "title": "Obraz runnera CI",
@@ -14141,7 +14142,7 @@
         }
       },
       "imageName": {
-        "hosted": "obraz hostowanego agenta",
+        "hosted": "obraz agenta Motir",
         "runner": "obraz runnera CI",
         "indexer": "obraz indeksera",
         "sandbox": "obrazy instancji agentów"
@@ -14215,7 +14216,7 @@
         "button": "Opublikuj najnowszy",
         "republish": "Opublikuj ponownie",
         "note": {
-          "hosted": "Przypina najnowszy build main przez workflow przypinania hostowanego agenta. Web i worker przechodzą na niego.",
+          "hosted": "Przypina najnowszy build main przez workflow przypinania agenta Motir. Web i worker przechodzą na niego.",
           "runner": "Przypina {release} przez workflow przypinania runnera. Web i worker przechodzą na nie.",
           "indexer": "Przypina {release} przez pull request przypięcia indeksera. Web i worker przechodzą na nie.",
           "sandbox": "Publikuje ponownie {release}. Wypychane są tylko brakujące tagi ({count}); w produkcji nic się nie zmienia.",
@@ -14232,7 +14233,7 @@
         }
       },
       "confirm": {
-        "hostedTitle": "Opublikować najnowszy obraz hostowanego agenta?",
+        "hostedTitle": "Opublikować najnowszy obraz agenta Motir?",
         "runnerTitle": "Opublikować {release}?",
         "sandboxTitle": "Opublikować ponownie {release}?",
         "from": "Z",
@@ -14240,7 +14241,7 @@
         "cancel": "Anuluj",
         "audited": "Zapisane w dzienniku audytu jako ty, {email}.",
         "sandboxFrom": "{published} z {total} tagów w {version}",
-        "hostedBody": "To uruchamia workflow przypinania hostowanego agenta. Przestawia MOTIR_HOSTED_AGENT_IMAGE na najnowszy build i wdraża: <strong>web i worker przechodzą</strong> na nowe przypięcie, a hostowane uruchomienia rozpoczęte po przejściu startują nowy obraz.",
+        "hostedBody": "To uruchamia workflow przypinania agenta Motir. Przestawia MOTIR_HOSTED_AGENT_IMAGE na najnowszy build i wdraża: <strong>web i worker przechodzą</strong> na nowe przypięcie, a uruchomienia agenta Motir rozpoczęte po przejściu startują nowy obraz.",
         "runnerBody": "To uruchamia workflow przypinania runnera. Przestawia MOTIR_RUNNER_IMAGE na {release} i wdraża: <strong>web i worker przechodzą</strong> na nowe przypięcie. AMI runnera się nie zmienia.",
         "indexerBody": "To otwiera pull request przypięcia indeksera, który przestawia MOTIR_INDEXER_IMAGE na {release} i trafia do kolejki scalania. Jego wdrożenie <strong>przełącza następnie web i worker</strong>, a uruchomienia indeksowania rozpoczęte po przełączeniu uruchamiają nowy obraz. Uruchomienia już trwające kończą się na obrazie, z którym wystartowały.",
         "sandboxBody": "To ponownie uruchamia wydanie piaskownicy dla {release} i wypycha tylko brakujące tagi: {missing}. {published} są już opublikowane i nie są wypychane ponownie. <strong>W produkcji nic się nie zmienia.</strong>",
@@ -14273,7 +14274,7 @@
         "retry": "Ponów"
       },
       "workflow": {
-        "hosted": "Przypięcie hostowanego agenta",
+        "hosted": "Przypięcie agenta Motir",
         "runner": "Przypięcie runnera",
         "indexer": "Przypięcie indeksera",
         "sandbox": "Wydanie piaskownicy {tag}",
@@ -15196,8 +15197,8 @@
       "pillReady": "Gotowe do wznowienia",
       "gate": "{kind} dla {key}",
       "waitingMany": "Zatwierdzenia: {count}",
-      "waitingHosted": "To uruchomienie zatrzymało się na bramce — czeka na <b>{gate}</b>. Jego praca jest zachowana na <d>{branch}</d> i <b>będzie kontynuowana automatycznie</b> przez hostowanego agenta po zatwierdzeniu bramki.",
-      "waitingHostedNoBranch": "To uruchomienie zatrzymało się na bramce — czeka na <b>{gate}</b>. Jego praca jest zachowana i <b>będzie kontynuowana automatycznie</b> przez hostowanego agenta po zatwierdzeniu bramki.",
+      "waitingHosted": "To uruchomienie zatrzymało się na bramce — czeka na <b>{gate}</b>. Jego praca jest zachowana na <d>{branch}</d> i <b>będzie kontynuowana automatycznie</b> w agencie Motir po zatwierdzeniu bramki.",
+      "waitingHostedNoBranch": "To uruchomienie zatrzymało się na bramce — czeka na <b>{gate}</b>. Jego praca jest zachowana i <b>będzie kontynuowana automatycznie</b> w agencie Motir po zatwierdzeniu bramki.",
       "waitingLocal": "To uruchomienie zatrzymało się na bramce — czeka na <b>{gate}</b>. Jego praca jest zachowana na gałęzi; po zatwierdzeniu bramki kontynuuj ją poleceniem <d>{command}</d>.",
       "ready": "Gotowe do wznowienia — <b>udzielono {approved} z {total} zatwierdzeń</b>. Kontynuuj, aby zbudować to, co zatwierdzono; zatrzyma się ponownie na każdej bramce, która nadal czeka:",
       "resuming": "Wznawianie — <b>{name}</b> zatwierdza {gate}, więc nowe uruchomienie kontynuuje na tej samej gałęzi. <link>Zobacz nowe uruchomienie</link>",
@@ -15402,12 +15403,12 @@
       "cancel": "Anuluj"
     },
     "hostedRuns": {
-      "ready": "Uruchomienia hostowane mogą tu zapisywać — aplikacja Motir wypycha ich gałęzie i otwiera ich pull requesty.",
+      "ready": "Uruchomienia agenta Motir mogą tu zapisywać — aplikacja Motir wypycha ich gałęzie i otwiera ich pull requesty.",
       "needsPermissionsTitle": "Wymaga zaktualizowanych uprawnień.",
-      "needsPermissionsBody": "Motir Integration na koncie {account} nie może jeszcze zapisywać — właściciel konta {account} musi zaakceptować jej zaktualizowane uprawnienia w GitHubie. Do tego czasu uruchomienie hostowane, które dotyczy tego repozytorium, jest odrzucane, zanim cokolwiek się rozpocznie.",
+      "needsPermissionsBody": "Motir Integration na koncie {account} nie może jeszcze zapisywać — właściciel konta {account} musi zaakceptować jej zaktualizowane uprawnienia w GitHubie. Do tego czasu uruchomienie agenta Motir, które dotyczy tego repozytorium, jest odrzucane, zanim cokolwiek się rozpocznie.",
       "reviewPermissions": "Przejrzyj uprawnienia w GitHubie",
       "unreachableTitle": "Motir Integration nie ma już dostępu do {repo}.",
-      "unreachableBody": "Jej instalacja została usunięta lub zawieszona albo nie obejmuje już tego repozytorium. Połącz ją ponownie w GitHubie; do tego czasu uruchomienie hostowane, które go dotyczy, jest odrzucane.",
+      "unreachableBody": "Jej instalacja została usunięta lub zawieszona albo nie obejmuje już tego repozytorium. Połącz ją ponownie w GitHubie; do tego czasu uruchomienie agenta Motir, które go dotyczy, jest odrzucane.",
       "reconnect": "Połącz ponownie"
     }
   },
@@ -16300,11 +16301,11 @@
         "lead": "<b>Nie można było uruchomić przeglądu:</b> <reason></reason>",
         "reason": {
           "no_credits": "Twojej organizacji skończyły się kredyty AI.",
-          "no_model": "żaden model nie jest dostępny dla uruchomień hostowanych.",
+          "no_model": "żaden model nie jest dostępny dla uruchomień agenta Motir.",
           "repository_unreadable": "przegląd nie może odczytać jednego z przeglądanych repozytoriów.",
           "no_verdict": "uruchomienie przeglądu zakończyło się bez werdyktu — <run>{label}</run>.",
           "no_verdictNoRun": "uruchomienie przeglądu zakończyło się bez werdyktu.",
-          "boot_failed": "nie udało się uruchomić hostowanej maszyny dla przeglądu.",
+          "boot_failed": "nie udało się uruchomić maszyny agenta Motir dla przeglądu.",
           "no_actor": "nikt nie może go uruchomić — element roboczy nie ma osoby odpowiedzialnej ani autora, a obszar roboczy nie ma zastępczego menedżera.",
           "unknown": "nie udało się rozpocząć uruchomienia przeglądu.",
           "noCapacity": "model przeglądu nie ma teraz przepustowości dla uruchomień agenta. Spróbuj ponownie za chwilę."
@@ -16330,7 +16331,7 @@
       }
     },
     "autoRerun": {
-      "started": "Ponowne uruchamianie na hostowanym agencie",
+      "started": "Ponowne uruchamianie w agencie Motir",
       "startedCount": "automatyczne ponowne uruchomienie {ordinal} z {cap}",
       "viewRun": "Wyświetl uruchomienie",
       "skipped": "Pominięto automatyczne ponowne uruchomienie",
@@ -16348,14 +16349,14 @@
         "no_capacity": "{detail}, model, na którym ostatnio działał, nie ma teraz przepustowości dla uruchomień agenta."
       },
       "next": {
-        "cap_reached": "Uruchom na hostowanym agencie",
-        "dispatcher_gone": "Uruchom na hostowanym agencie",
-        "no_project_access": "Uruchom na hostowanym agencie",
+        "cap_reached": "Uruchom w agencie Motir",
+        "dispatcher_gone": "Uruchom w agencie Motir",
+        "no_project_access": "Uruchom w agencie Motir",
         "ci_credits_exhausted": "Rozliczenia",
         "model_not_offered": "Wybierz model i uruchom",
-        "models_unavailable": "Uruchom na hostowanym agencie",
+        "models_unavailable": "Uruchom w agencie Motir",
         "out_of_credits": "Kup kredyty",
-        "credits_unavailable": "Uruchom na hostowanym agencie",
+        "credits_unavailable": "Uruchom w agencie Motir",
         "repository_not_writable": "Repozytoria",
         "no_capacity": "Wybierz inny model i uruchom"
       }
@@ -16395,7 +16396,7 @@
         "second": "Drugi przegląd wersji, która jest już rozstrzygnięta. Niczego nie rozstrzygnął.",
         "notified": "Powiadomiono: {name}.",
         "findings": "Uwagi",
-        "agentHosted": "Hostowany agent Motir",
+        "agentHosted": "Agent Motir",
         "agentOwn": "Agent użytkownika {name} ({harness})",
         "dismissed": "<actor></actor> odrzucił(a) przegląd agenta przy {commits}",
         "dismissedReason": "Powód: {reason}"
@@ -16430,7 +16431,7 @@
         "reviewed": "Przejrzane",
         "reviewedName": "Przejrzane przez agenta przy bieżących commitach",
         "card": {
-          "hosted": "Przejrzane przez hostowanego agenta Motir",
+          "hosted": "Przejrzane przez agenta Motir",
           "own": "Przejrzane przez własnego agenta użytkownika {name}",
           "harness": "{harness} · {model}",
           "commits": "Przy tych commitach",
@@ -16440,7 +16441,7 @@
       "line": {
         "label": "Przegląd agenta",
         "reviewed": "<b>Przejrzane przez agenta</b> · {who} · {when}",
-        "whoHosted": "Hostowany agent Motir",
+        "whoHosted": "Agent Motir",
         "whoOwn": "Agent użytkownika {name} · {harness}",
         "findings": "Uwagi i lista kontrolna",
         "skipped": "<b>Przegląd pominięty przez: {name}</b> — „{reason}”",
@@ -16454,7 +16455,7 @@
         "subtitle": "{title} · {key}",
         "verdictPassed": "Zaliczony",
         "verdictSentBack": "Poproszono o zmiany",
-        "byHosted": "Hostowany agent Motir",
+        "byHosted": "Agent Motir",
         "byOwn": "Własny agent użytkownika {name}",
         "byOwnHarness": "Własny agent użytkownika {name} · {harness} · {model}",
         "commits": "Przy tych commitach",
@@ -16582,13 +16583,13 @@
       "offWhat": "Element roboczy jest kierowany do zatwierdzenia, gdy tylko przejdą jego testy.",
       "unavailable": "Niedostępny",
       "unavailableWhat": "Ten projekt scala automatycznie, więc nic nie czeka na przegląd. Wybierz <strong>Pytaj przed scaleniem</strong>, aby włączyć agenta przeglądającego.",
-      "billingNote": "Każdy przegląd to hostowane uruchomienie agenta, opłacane z kredytów AI Twojej organizacji.",
+      "billingNote": "Każdy przegląd to uruchomienie agenta Motir, opłacane z kredytów AI Twojej organizacji.",
       "offNote": "Wyłączenie anuluje trwające przeglądy — te elementy robocze trafiają od razu do zwykłego przepływu.",
       "saved": "Zapisano",
       "saveError": "Nie udało się zapisać — spróbuj ponownie.",
       "source": {
         "label": "Kto przegląda",
-        "hosted": "Hostowany agent Motir",
+        "hosted": "Agent Motir",
         "hostedWhat": "Motir rozpoczyna uruchomienie przeglądu, gdy kontrole przejdą. <strong>Zużywa kredyty AI.</strong>",
         "own": "Twój własny agent",
         "ownWhat": "Bezpłatnie. Przegląd czeka, aż ktoś uruchomi <cmd>motir review</cmd> ze swojego agenta. Nic nie rusza samo."
@@ -16976,10 +16977,10 @@
       "openingDevelopment": "Otwieranie sekcji Rozwój…",
       "sentBackByAgent": "To wymaga naprawy: agent przeglądający odesłał to — „{note}”",
       "sentBackByAgentNoNote": "To wymaga naprawy: agent przeglądający odesłał to.",
-      "hostedLead": "Napraw to na hostowanym agencie — bez terminala:",
+      "hostedLead": "Napraw to w agencie Motir — bez terminala:",
       "orTerminal": "Lub napraw to w terminalu:",
-      "fixingHosted": "Trwa hostowana naprawa — rozpoczęta przez <b>{name}</b> <when></when> · <run>{label}</run>",
-      "fixingHostedByYou": "Trwa hostowana naprawa — rozpoczęta przez <b>Ciebie</b> <when></when> · <run>{label}</run>",
+      "fixingHosted": "Trwa naprawa w agencie Motir — rozpoczęta przez <b>{name}</b> <when></when> · <run>{label}</run>",
+      "fixingHostedByYou": "Trwa naprawa w agencie Motir — rozpoczęta przez <b>Ciebie</b> <when></when> · <run>{label}</run>",
       "carries": "{count, plural, one {Utknął z nim jeszcze # element roboczy} few {Utknęły z nim jeszcze # elementy robocze} many {Utknęło z nim jeszcze # elementów roboczych} other {Utknęło z nim jeszcze # elementu roboczego}}: <keys></keys>",
       "carriesMore": "i jeszcze {count}",
       "repairedWithHead": "Napraw to razem z <b>{head}</b> — dzielą jeden pull request.",

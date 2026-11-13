@@ -260,7 +260,7 @@ export function endedHow(
   // window and 12-hour backstop as a hosted one (`agent-instance-run.md` §6).
   const who =
     run.origin === 'hosted'
-      ? 'the hosted run'
+      ? 'the Motir agent run'
       : run.origin === 'instance'
         ? 'the run in the agent'
         : null;

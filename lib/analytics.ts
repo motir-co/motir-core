@@ -10,9 +10,8 @@
 // ⚠️ `PLAUSIBLE_SCRIPT_SRC` MUST NEVER BECOME A `NEXT_PUBLIC_*` VARIABLE.
 // A `NEXT_PUBLIC_*` value is inlined into the client bundle when `next build`
 // runs, which would manufacture the Docker build-argument dependency §5 picked
-// Plausible to avoid — and would then need a build arg wired through the AWS
-// deploy's image build (`aws-deploy.yml`), which is MOTIR-1162's seam and not
-// this card's.
+// Plausible to avoid — and would then need a build arg wired through
+// the deploy's image build, which is MOTIR-1162's seam and not this card's.
 // `tests/analytics.test.ts` asserts the name never acquires that prefix and
 // never appears as a build argument.
 //
@@ -20,7 +19,7 @@
 // modern Script embed carries no `data-domain` attribute at all: the site is
 // identified by a hashed per-site script URL
 // (`https://plausible.io/js/pa-<hash>.js`, provisioned by MOTIR-1161 and staged
-// as a runtime secret). §5's own text still describes the NPM route's
+// as a Fly runtime secret). §5's own text still describes the NPM route's
 // `data-domain`, which is why this card amends it.
 //
 // ⚠️ AND THE SEAM IS THE DELIVERABLE, NOT A CONSENT GATE. Loading a cookieless

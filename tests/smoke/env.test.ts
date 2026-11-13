@@ -62,8 +62,8 @@ describe('readSmokeEnv', () => {
 
 describe('isTigrisHost', () => {
   it.each([
-    ['motir-core-public.fly.storage.tigris.dev', true],
-    ['fly.storage.tigris.dev', true],
+    ['bucket.storage.tigris.dev', true],
+    ['storage.tigris.io', true],
     ['motir.t3.storage.dev', true],
     ['assets.motir.co', false],
     ['motir-core-private.s3.eu-central-1.amazonaws.com', false],

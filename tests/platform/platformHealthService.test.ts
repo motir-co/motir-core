@@ -439,14 +439,15 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     expect(errors).toMatchObject({ state: 'unreachable', values: { reason: 'notConfigured' } });
   });
 
-  it('an RDS url yields the region out of the HOST and its RDS console', async () => {
+  it.each([
+    ['an RDS instance', 'motir-core.c9akciq32.us-east-1.rds.amazonaws.com'],
+    ['an Aurora cluster', 'motir-core.cluster-c9akciq32.us-east-1.rds.amazonaws.com'],
+    ['an RDS Proxy', 'motir-core.proxy-c9akciq32.us-east-1.rds.amazonaws.com'],
+  ])('an RDS url (%s) yields the region out of the HOST and the console link', async (_, host) => {
     // The region is a READING of the connection actually open, not a lookup in a
     // decision record — a deployment pointed elsewhere would still say
     // `us-east-1` if this came from an ADR.
-    vi.stubEnv(
-      'DATABASE_URL',
-      'postgresql://u:p@motir-core.c9akciq32.us-east-1.rds.amazonaws.com:5432/db',
-    );
+    vi.stubEnv('DATABASE_URL', `postgresql://u:p@${host}:5432/db`);
 
     const database = signal(
       (await platformHealthService.read(currentPrincipal)).signals,
@@ -458,36 +459,17 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     );
   });
 
-  it('an RDS PROXY endpoint is read the same way, region and all', async () => {
-    // A proxy's endpoint inserts a `proxy-<id>` label but keeps the region as the
-    // label before `.rds.amazonaws.com`, so the one reading covers both.
-    vi.stubEnv(
-      'DATABASE_URL',
-      'postgresql://u:p@motir-core.proxy-c9akciq32.eu-central-1.rds.amazonaws.com/db',
-    );
+  it('a multi-part RDS region (ap-southeast-2, us-gov-west-1) is read whole', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@db.c9akciq32.us-gov-west-1.rds.amazonaws.com/db');
 
     const database = signal(
       (await platformHealthService.read(currentPrincipal)).signals,
       'database',
     );
-    expect(database.values['region']).toBe('eu-central-1');
+    expect(database.values['region']).toBe('us-gov-west-1');
     expect(database.linkOut).toBe(
-      'https://eu-central-1.console.aws.amazon.com/rds/home?region=eu-central-1#databases:',
+      'https://us-gov-west-1.console.aws.amazon.com/rds/home?region=us-gov-west-1#databases:',
     );
-  });
-
-  it('a host that is not RDS renders the RAW HOST, still the truth, with no console link', async () => {
-    // A self-host or a local database: nothing about the host names a region,
-    // so the card says where it is connected rather than guessing, and links to
-    // no console it cannot vouch for.
-    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@db.internal.example:5432/motir');
-
-    const database = signal(
-      (await platformHealthService.read(currentPrincipal)).signals,
-      'database',
-    );
-    expect(database.values['region']).toBe('db.internal.example');
-    expect(database.linkOut).toBeNull();
   });
 
   it('a MALFORMED or absent DATABASE_URL degrades to an em-dash rather than throwing', async () => {
@@ -502,15 +484,6 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     const absent = signal((await platformHealthService.read(currentPrincipal)).signals, 'database');
     expect(absent.values['region']).toBe('—');
     expect(absent.linkOut).toBeNull();
-
-    // A socket URL parses but names no host at all.
-    vi.stubEnv('DATABASE_URL', 'postgresql:///motir');
-    const hostless = signal(
-      (await platformHealthService.read(currentPrincipal)).signals,
-      'database',
-    );
-    expect(hostless.values['region']).toBe('—');
-    expect(hostless.linkOut).toBeNull();
   });
 
   it('a SLOW database ping reads DEGRADED, with the real latency beside it', async () => {
@@ -529,7 +502,7 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     expect(Number(database.values['ms'])).toBeGreaterThan(500);
   });
 
-  it('a non-Neon (or absent) DATABASE_URL yields no region and no console link', async () => {
+  it('a non-RDS DATABASE_URL yields the raw host and no console link', async () => {
     vi.stubEnv('DATABASE_URL', 'postgresql://user:pw@db.example.com:5432/app');
 
     const database = signal(

@@ -10,14 +10,14 @@ import {
 } from '@/lib/blob/s3';
 import { signedDownloadUrl } from '@/lib/blob/uploader';
 
-// MOTIR-9925 — the client's two credential modes. On an S3-compatible store
-// (a self-hosted MinIO) it signs with a static key against a custom endpoint; on AWS neither is
+// MOTIR-9925 — the client's two credential modes. On an S3-compatible store (a
+// self-hosted MinIO, say) it signs with a static key against a custom endpoint; on AWS neither is
 // set and the SDK's default credential chain resolves the ECS task role. No
 // network and no SDK mock: every assertion reads the constructed client's
 // resolved config, or a presigned URL the SDK builds locally.
 
 const KEYED = {
-  [S3_ENV.endpoint]: 'https://minio.example.test',
+  [S3_ENV.endpoint]: 'https://objects.storage.example.test',
   [S3_ENV.accessKeyId]: 'static-access-key',
   [S3_ENV.secretAccessKey]: 'static-secret-key',
 };
@@ -62,7 +62,7 @@ describe('s3Client with a static key and an endpoint (an S3-compatible store)', 
     });
     expect(credentials.sessionToken).toBeUndefined();
     const endpoint = await client.config.endpoint?.();
-    expect(endpoint?.hostname).toBe('minio.example.test');
+    expect(endpoint?.hostname).toBe('objects.storage.example.test');
   });
 
   it('keeps an explicit region over the auto default', async () => {

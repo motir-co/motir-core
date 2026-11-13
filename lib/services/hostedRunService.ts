@@ -1587,7 +1587,7 @@ export const hostedRunService = {
           'wait',
           {
             data: { end: outcome },
-            body: `[motir] hosted run ended (${END_LABEL[outcome]}): ${detail}${
+            body: `[motir] Motir agent run ended (${END_LABEL[outcome]}): ${detail}${
               failures.length > 0 ? ` — ${failures.join('; ')}` : ''
             }\n`,
           },

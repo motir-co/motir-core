@@ -404,7 +404,8 @@ describe('add-shard for aws, from nothing', () => {
     expect(output).toContain('Pending manual steps:');
     // The runner role is confirmed by assuming it; no key is asked for (MOTIR-9847).
     expect(stepLine(printed, 'runtime_credential')).toMatch(/ already — /);
-    expect(output).not.toContain('flyctl secrets set');
+    // …so no access-key secret is owed by a person either.
+    expect(output).not.toContain('_ACCESS_KEY');
   });
 
   it('interrupted at the network, a re-run completes with one account, one of each resource and one row', async () => {

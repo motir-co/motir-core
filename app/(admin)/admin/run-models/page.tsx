@@ -30,7 +30,7 @@ import { RunModelListUnavailable } from './_components/RunModelListUnavailable';
  * the error card with Retry and no rows (Panel 11).
  */
 
-export const metadata: Metadata = { title: 'Hosted-run models' };
+export const metadata: Metadata = { title: 'Motir agent models' };
 
 /** Never cached — a model delisted a minute ago must show on the next load. */
 export const dynamic = 'force-dynamic';

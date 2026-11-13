@@ -136,7 +136,7 @@ export const FLEET_WORKLOADS: Record<FleetWorkloadKind, FleetWorkload> = {
       ciRunnerProvisioningIntentRepository.countInFlightForOrganization(organizationId, tx),
   },
   code_graph_index: slotBackedWorkload('code_graph_index', 'code-graph index'),
-  hosted_agent: slotBackedWorkload('hosted_agent', 'hosted agents'),
+  hosted_agent: slotBackedWorkload('hosted_agent', 'Motir agent runs'),
   // MOTIR-6872 — a user agent instance holds a slot for exactly as long as its
   // machine runs (`docs/decisions/agent-instances.md` §6). Its OWN pool
   // (AMENDMENT 2): counted and slotted here, never summed into CI's ceiling.

@@ -129,7 +129,7 @@ describe('G1 · Stopped at a gate', () => {
     expect(screen.queryByText('Run died')).toBeNull();
     expect(screen.queryByTestId('run-died-line')).toBeNull();
     expect(line().textContent).toBe(
-      'This run stopped at a gate — waiting on the design result on ACME-13. Its work is kept on story/ACME-12-quotas, and it carries on by itself on the hosted agent once the gate is approved.',
+      'This run stopped at a gate — waiting on the design result on ACME-13. Its work is kept on story/ACME-12-quotas, and it carries on by itself in Motir agent once the gate is approved.',
     );
     // The gate rows are the To resume tab's: kind, key, decider, state, Open.
     const row = screen.getByTestId('workbench-resume-gate-ACME-13');
@@ -164,7 +164,7 @@ describe('G1 · Stopped at a gate', () => {
   it('several gates read as a count, and a hosted run with no branch still says it carries on', () => {
     mount(gated({ run: { ...gated().run, branch: null } }, [gate('ACME-13'), gate('ACME-14')]));
     expect(line().textContent).toBe(
-      'This run stopped at a gate — waiting on 2 approvals. Its work is kept, and it carries on by itself on the hosted agent once the gate is approved.',
+      'This run stopped at a gate — waiting on 2 approvals. Its work is kept, and it carries on by itself in Motir agent once the gate is approved.',
     );
   });
 });
@@ -327,7 +327,7 @@ describe('zh', () => {
     mount(gated(), [run()], { locale: 'zh', messages: zhMessages });
     expect(screen.getByTestId('run-gated-pill').textContent).toBe('停在审批处');
     expect(line().textContent).toBe(
-      '此运行停在审批处——正在等待ACME-13 的设计结果。其工作保留在分支 story/ACME-12-quotas 上，审批通过后会在托管智能体上自动继续。',
+      '此运行停在审批处——正在等待ACME-13 的设计结果。其工作保留在分支 story/ACME-12-quotas 上，审批通过后会在 Motir 智能体中自动继续。',
     );
   });
 });

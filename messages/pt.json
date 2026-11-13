@@ -1598,7 +1598,7 @@
     "provenanceSourceMcp": "MCP",
     "provenanceSourceManual": "Manual",
     "provenanceSourceApi": "API",
-    "provenanceSourceHosted": "Hospedado",
+    "provenanceSourceHosted": "Agente Motir",
     "provenanceSourceByok": "BYOK",
     "changedElsewhereRefreshing": "Este item de trabalho mudou em outro lugar — atualizando.",
     "editIssue": "Editar item de trabalho",
@@ -1984,7 +1984,7 @@
       "fields": "Campos",
       "components": "Componentes",
       "aiPlanning": "Planejamento com IA",
-      "hostedAgent": "Agente hospedado",
+      "hostedAgent": "Agente Motir",
       "translation": "Tradução",
       "rules": "Regras",
       "repositories": "Repositórios",
@@ -3791,8 +3791,8 @@
       }
     },
     "hostedAgent": {
-      "title": "Agente hospedado",
-      "pageDescription": "Qual modelo uma execução hospedada usa. Executar hospedado o pré-seleciona com base na dificuldade do item de trabalho; quem iniciar a execução ainda pode escolher outro.",
+      "title": "Agente Motir",
+      "pageDescription": "Qual modelo uma execução do agente Motir usa. O botão Executar o pré-seleciona com base na dificuldade do item de trabalho; quem iniciar a execução ainda pode escolher outro.",
       "card": {
         "title": "Modelo por dificuldade",
         "subtitle": "Cada dificuldade usa o padrão da plataforma, a menos que você o substitua. Um item de trabalho pai usa o modelo da maior dificuldade entre suas folhas."
@@ -3810,14 +3810,14 @@
       "optionDefault": "Padrão da plataforma para {difficulty}",
       "reset": "Redefinir para o padrão",
       "withdrawn": "O modelo salvo, <id>{model}</id>, não é mais oferecido, então as execuções de {difficulty} usam o padrão da plataforma. Redefina para limpá-lo.",
-      "noDifficulty": "Um item de trabalho sem dificuldade usa o padrão da plataforma, <id>{model}</id> — o modelo que Executar hospedado marca como <b>Padrão</b>.",
-      "readOnlyBanner": "Somente um administrador do projeto pode alterar as configurações do agente hospedado.",
-      "unavailableBody": "Não foi possível acessar o Motir AI, então os modelos hospedados não podem ser exibidos nem alterados agora. As execuções hospedadas ficam desativadas até ele responder.",
-      "emptyBody": "Nenhum modelo pode executar um item de trabalho hospedado agora, então não há nada para escolher.",
-      "savedTitle": "Configurações do agente hospedado salvas",
-      "savedDesc": "As novas execuções hospedadas usam estes modelos.",
+      "noDifficulty": "Um item de trabalho sem dificuldade usa o padrão da plataforma, <id>{model}</id> — o modelo que o seletor Executar marca como <b>Padrão</b>.",
+      "readOnlyBanner": "Somente um administrador do projeto pode alterar as configurações do agente Motir.",
+      "unavailableBody": "Não foi possível acessar o Motir AI, então os modelos do agente Motir não podem ser exibidos nem alterados agora. As execuções do agente Motir ficam desativadas até ele responder.",
+      "emptyBody": "Nenhum modelo pode executar um item de trabalho no agente Motir agora, então não há nada para escolher.",
+      "savedTitle": "Configurações do agente Motir salvas",
+      "savedDesc": "As novas execuções do agente Motir usam estes modelos.",
       "errorTitle": "Não foi possível salvar",
-      "saveError": "Suas configurações do agente hospedado não foram salvas. Tente novamente.",
+      "saveError": "Suas configurações do agente Motir não foram salvas. Tente novamente.",
       "autoFix": {
         "label": "Corrigir um pull request em vermelho no agente próprio do item de trabalho.",
         "help": "Quando um pull request fica vermelho e a última execução do item de trabalho foi em um agente conectado e ativo, o Motir inicia a correção nesse agente. Desativado (o padrão), nada começa sozinho."
@@ -4112,7 +4112,7 @@
         "components": "Os componentes são gerenciados pelos administradores do projeto. Peça a um administrador se um precisar ser adicionado ou alterado.",
         "bugs": "Onde os Bugs deste projeto são registrados é gerenciado pelos administradores do projeto. Peça a um administrador se o destino precisar mudar.",
         "ai-planning": "O planejamento com IA deste projeto — a frequência dele — é configurado pelos administradores do projeto. Peça a um administrador se precisar mudar.",
-        "hosted-agent": "O modelo que uma execução hospedada usa é exibido para quem pode iniciar uma execução hospedada neste projeto. Peça a um administrador do projeto se precisar vê-lo.",
+        "hosted-agent": "O modelo que uma execução do agente Motir usa é exibido para quem pode iniciar uma execução do agente Motir neste projeto. Peça a um administrador do projeto se precisar vê-lo.",
         "translation": "Se o conteúdo de trabalho deste projeto é traduzido para cada leitor aparece para quem pode ler os itens de trabalho do projeto. Peça a um administrador do projeto se precisar ver.",
         "automation": "A automação do projeto é gerenciada pelos administradores do projeto. Peça a um administrador se precisar alterar uma regra.",
         "monitoring": "A conexão deste projeto com o monitor de erros é gerenciada por quem pode gerenciar integrações. Peça a um administrador do projeto se o Sentry precisar ser conectado ou reconectado.",
@@ -4368,16 +4368,16 @@
           },
           "review": {
             "name": "Agente de revisão",
-            "desc": "Revisões hospedadas. Se um projeto revisa com um agente continua nas configurações de Aprovações dele."
+            "desc": "Revisões do agente Motir. Se um projeto revisa com um agente continua nas configurações de Aprovações dele."
           },
           "design": {
             "name": "Execução de design",
-            "desc": "Uma execução hospedada em um item de trabalho de design"
+            "desc": "Uma execução do agente Motir em um item de trabalho de design"
           }
         },
         "agentRun": {
           "name": "Execução de agente",
-          "desc": "Execuções de build hospedadas, pela dificuldade do item de trabalho. A substituição própria de um projeto para uma dificuldade ainda prevalece sobre a da organização."
+          "desc": "Execuções de build do agente Motir, pela dificuldade do item de trabalho. A substituição própria de um projeto para uma dificuldade ainda prevalece sobre a da organização."
         },
         "modelFor": "Modelo para {function}",
         "loadingTrigger": "Carregando modelos…",
@@ -4404,7 +4404,7 @@
           "failed": "Não salvo: não foi possível salvar {function}. Ele mantém o modelo atual; tente novamente."
         },
         "precedence": {
-          "body": "<b>Qual modelo um job usa</b>, vale a primeira correspondência: a escolha da pessoa em Executar hospedado → a substituição própria do projeto (só execução de agente) → a escolha de {org} → o padrão da plataforma.",
+          "body": "<b>Qual modelo um job usa</b>, vale a primeira correspondência: a escolha da pessoa em Executar → a substituição própria do projeto (só execução de agente) → a escolha de {org} → o padrão da plataforma.",
           "cost": "Cada modelo é cobrado pela própria tarifa, então um modelo mais forte usa mais créditos de {org}."
         },
         "footer": {
@@ -6960,7 +6960,7 @@
     },
     "ai": {
       "name": "Motir AI",
-      "tagline": "Planejamento e agentes hospedados — um conjunto mensal de créditos da organização.",
+      "tagline": "Planejamento e agente Motir — um conjunto mensal de créditos da organização.",
       "creditsPerMo": "{n} créditos / mês",
       "creditsOneTime": "{n} créditos · uma única vez",
       "planFee": "Valor do plano",
@@ -7075,7 +7075,7 @@
     "plans": {
       "breadcrumb": "Organização · {org} · Motir AI",
       "title": "Motir AI — planos e assinatura",
-      "subtitle": "Gerencie o plano de IA da sua organização — planejamento e agentes hospedados. Cobrado separadamente das suas licenças do Motir, então esta tela é só de IA.",
+      "subtitle": "Gerencie o plano de IA da sua organização — planejamento e agente Motir. Cobrado separadamente das suas licenças do Motir, então esta tela é só de IA.",
       "back": "Voltar ao faturamento",
       "currentStrip": "{n} créditos / mês · {left} restantes · renova em {date}",
       "currentStripOneTime": "{n} créditos · uma única vez · {left} restantes",
@@ -7398,7 +7398,7 @@
         "ciJobsInFlight": "Jobs de CI em andamento"
       },
       "explain": {
-        "agentRunsInParallel": "Jobs de agentes hospedados executados ao mesmo tempo. Os que passam do limite esperam na fila.",
+        "agentRunsInParallel": "Execuções do agente Motir ao mesmo tempo. As que passam do limite esperam na fila.",
         "agentsInOrg": "Agentes hospedados ativos em toda a organização, em execução ou hibernados. Acima do limite, um novo é recusado, não vai para a fila.",
         "agentsPerPerson": "Agentes hospedados ativos que uma pessoa pode ter. Acima do limite, um novo é recusado, não vai para a fila.",
         "ciJobsInFlight": "Jobs de CI executados ao mesmo tempo nos runners do Motir. Os que passam do limite esperam na fila."
@@ -7447,7 +7447,7 @@
       "notReadNotice": "Não foi possível ler os limites do seu plano nem o que está em execução. Não é zero, é desconhecido.",
       "tryAgain": "Tentar novamente",
       "noPlanLimitsNote": "Esta organização é operada pelo Motir e não tem limites de plano. O que está em execução aparece sem limite.",
-      "noFleet": "Seu plano não inclui execuções de agentes hospedados, runners de CI nem agentes. Escolha um plano em Motir AI, acima, para executá-los.",
+      "noFleet": "Seu plano não inclui execuções do agente Motir, runners de CI nem agentes. Escolha um plano em Motir AI, acima, para executá-los.",
       "accounts": {
         "title": "Suas próprias contas AWS",
         "notRead": "Não foi possível ler o estado das suas contas agora.",
@@ -7458,7 +7458,7 @@
         },
         "role": {
           "ci_runner": "Executa seus jobs de CI",
-          "hosted_agent": "Executa os jobs dos seus agentes hospedados",
+          "hosted_agent": "Executa as suas execuções do agente Motir",
           "indexer_and_hoster": "Indexa seu código e hospeda seus agentes"
         },
         "state": {
@@ -8139,20 +8139,20 @@
         "personSentBackAnon": "Estes commits foram devolvidos. Um agente os corrige {count, plural, one {no mesmo pull request} other {nos mesmos pull requests}}, com o motivo no prompt.",
         "reviewedAgain": "A próxima versão verde será revisada novamente.",
         "hosted": {
-          "lead": "Corrija aqui, no agente hospedado — sem precisar de terminal:",
-          "button": "Corrigir no agente hospedado",
+          "lead": "Corrija aqui, no agente Motir — sem precisar de terminal:",
+          "button": "Corrigir no agente Motir",
           "orTerminal": "Ou entregue o reparo a um agente pelo seu terminal:",
           "eitherWay": "De qualquer forma, um agente trabalha no próprio branch de cada pull request, envia as alterações, e as verificações são executadas novamente.",
           "fixing": {
-            "byYou": "Sendo corrigido por <b>você</b> no agente hospedado · iniciado <when></when> · <run>{label}</run>",
-            "by": "Sendo corrigido por <b>{name}</b> no agente hospedado · iniciado <when></when> · <run>{label}</run>",
+            "byYou": "Sendo corrigido por <b>você</b> no agente Motir · iniciado <when></when> · <run>{label}</run>",
+            "by": "Sendo corrigido por <b>{name}</b> no agente Motir · iniciado <when></when> · <run>{label}</run>",
             "why": "Apenas um reparo é executado por vez. Quando ele envia as alterações, as verificações são executadas novamente, e a próxima versão verde é revisada novamente."
           },
           "refused": {
             "taken": "Não iniciado — já há um reparo em execução, iniciado por <b>{name}</b> <when></when>.",
             "takenByYou": "Não iniciado — você já tem um reparo em execução, iniciado <when></when>.",
             "outOfCredits": {
-              "body": "Nada foi iniciado e nada foi cobrado. Corrigir no agente hospedado volta a funcionar assim que a organização tiver créditos — ou repare pelo seu terminal."
+              "body": "Nada foi iniciado e nada foi cobrado. Corrigir no agente Motir volta a funcionar assim que a organização tiver créditos — ou repare pelo seu terminal."
             }
           }
         },
@@ -8207,8 +8207,8 @@
           "interrupted": "A execução foi interrompida pelo terminal <when></when>.",
           "failed": "O agente encerrou com um erro <when></when>.",
           "cancelled": "A execução foi cancelada <when></when>.",
-          "stalled": "O agente hospedado travou — sem saída por 15 minutos — <when></when>.",
-          "backstop": "A execução hospedada atingiu o limite de 12 horas <when></when>."
+          "stalled": "O agente Motir travou — sem saída por 15 minutos — <when></when>.",
+          "backstop": "A execução do agente Motir atingiu o limite de 12 horas <when></when>."
         },
         "ranBy": "Executado por <b>{name}</b> com <mono>{command}</mono> · iniciado <when></when>",
         "ranBySomeone": "Executado com <mono>{command}</mono> · iniciado <when></when>",
@@ -8241,7 +8241,7 @@
         "error": "Não foi possível verificar se a execução deste item de trabalho ainda está ativa.",
         "retry": "Tentar novamente",
         "hosted": {
-          "lead": "Continue aqui, em um contêiner hospedado — sem precisar de terminal:",
+          "lead": "Continue aqui, no agente Motir — sem precisar de terminal:",
           "button": "Continuar",
           "buttonParent": "Continuar {key}",
           "orTerminal": "Ou continue pelo seu terminal:",
@@ -8251,8 +8251,8 @@
             "rowWithPr": "<b>{repository}</b> · <ref>{branch}</ref> · pull request <b>{pr}</b>"
           },
           "continuing": {
-            "byYou": "Sendo continuado por <b>você</b> em um contêiner hospedado · iniciado <when></when>",
-            "by": "Sendo continuado por <b>{name}</b> em um contêiner hospedado · iniciado <when></when>",
+            "byYou": "Sendo continuado por <b>você</b> no agente Motir · iniciado <when></when>",
+            "by": "Sendo continuado por <b>{name}</b> no agente Motir · iniciado <when></when>",
             "watch": "Acompanhe o trabalho em Execução, acima."
           },
           "refused": {
@@ -10354,7 +10354,7 @@
       },
       "toResume": {
         "title": "Nada para retomar",
-        "body": "Quando uma execução para em uma aprovação de que precisa, ela espera aqui até a aprovação ser dada — depois segue sozinha no agente hospedado, ou com motir continue pelo seu terminal."
+        "body": "Quando uma execução para em uma aprovação de que precisa, ela espera aqui até a aprovação ser dada — depois segue sozinha no agente Motir, ou com motir continue pelo seu terminal."
       },
       "recentlyFinished": {
         "title": "Nada concluído nesta semana",
@@ -10504,8 +10504,8 @@
         "title": "Copiado",
         "body": "Cole {command} no seu terminal."
       },
-      "fixingHosted": "Sendo corrigido no agente hospedado por <b>{name}</b> · <run>{label}</run>",
-      "fixingHostedByYou": "Sendo corrigido no agente hospedado por <b>você</b> · <run>{label}</run>",
+      "fixingHosted": "Sendo corrigido no agente Motir por <b>{name}</b> · <run>{label}</run>",
+      "fixingHostedByYou": "Sendo corrigido no agente Motir por <b>você</b> · <run>{label}</run>",
       "entry": {
         "carriesRun": "{count, plural, one {# item de trabalho a mais nesta execução} other {# itens de trabalho a mais nesta execução}}",
         "carriesPullRequests": "{count, plural, one {# item de trabalho a mais no mesmo pull request} other {# itens de trabalho a mais no mesmo pull request}}",
@@ -10523,10 +10523,10 @@
       "readyByYou": "Pronto para retomar · você aprovou {kind} em {key} <when></when>",
       "readyBare": "Pronto para retomar",
       "readySome": "Pronto para retomar · {approved} de {total} aprovações dadas",
-      "resuming": "Retomando no agente hospedado · iniciado <when></when>",
+      "resuming": "Retomando no agente Motir · iniciado <when></when>",
       "couldNot": "Não conseguiu retomar sozinho · <reason></reason>",
       "ranBy": {
-        "hosted": "{name} executou no agente hospedado",
+        "hosted": "{name} executou no agente Motir",
         "terminal": "{name} executou por um terminal",
         "runbook": "{name} executou com o runbook",
         "instance": "{name} executou em {agent}"
@@ -10560,8 +10560,8 @@
       },
       "seeRun": "Ver a execução",
       "next": {
-        "waitingHosted": "Assim que for aprovada, esta execução segue sozinha no agente hospedado.",
-        "waitingHostedMany": "Quando qualquer uma for aprovada, esta execução segue sozinha no agente hospedado e para de novo nas demais.",
+        "waitingHosted": "Assim que for aprovada, esta execução segue sozinha no agente Motir.",
+        "waitingHostedMany": "Quando qualquer uma for aprovada, esta execução segue sozinha no agente Motir e para de novo nas demais.",
         "waitingLocal": "Assim que você aprovar, continue a execução pelo seu terminal — o comando aparece aqui.",
         "ready": "Um agente retoma a execução no próprio branch dela, constrói o que a aprovação liberou e para de novo em qualquer etapa de aprovação que ainda esteja aguardando.",
         "readySome": "Continuar agora constrói o que a etapa aprovada liberou e para de novo nas {count} que ainda aguardam.",
@@ -10764,7 +10764,7 @@
       "navPlanningLessons": "Lições de planejamento",
       "navPlannerFindings": "Achados do planejador",
       "navIdeas": "Ideias",
-      "navRunModels": "Modelos de execução hospedada",
+      "navRunModels": "Modelos do agente Motir",
       "navFleetSettings": "Configurações da frota",
       "navServices": "Serviços",
       "navCapacity": "Capacidade dos provedores",
@@ -10941,9 +10941,9 @@
               "remove": "Removeu um modelo da lista de planejamento"
             },
             "run_model_list": {
-              "seed": "Configurou a lista de modelos de execução hospedada",
-              "add": "Adicionou um modelo à lista de execução hospedada",
-              "remove": "Removeu um modelo da lista de execução hospedada"
+              "seed": "Configurou a lista de modelos do agente Motir",
+              "add": "Adicionou um modelo à lista de modelos do agente Motir",
+              "remove": "Removeu um modelo da lista de modelos do agente Motir"
             },
             "lesson": {
               "edit": "Editou uma lição de planejamento",
@@ -11043,7 +11043,7 @@
           "unreachableDetail": {
             "unreachable": "O banco de dados não respondeu a um ping. Isso não é uma latência zero — nada foi medido."
           },
-          "linkOut": "Console do RDS"
+          "linkOut": "Console do Amazon RDS"
         },
         "hosting": {
           "title": "Hospedagem",
@@ -11268,7 +11268,7 @@
           "stat": {
             "orgs": "organizações executando um contêiner",
             "ciRunners": "runners de CI · cada organização limitada ao pico de CI do seu plano",
-            "hostedAgents": "execuções de agente hospedado · cada organização limitada às execuções paralelas do seu plano",
+            "hostedAgents": "execuções do agente Motir · cada organização limitada às execuções paralelas do seu plano",
             "instances": "instâncias de agente em execução · cada organização limitada ao número do seu plano",
             "mismatched": "divergentes · execução e débito não batem"
           },
@@ -11280,7 +11280,7 @@
             "org": "Organização",
             "plan": "Plano",
             "ciRunner": "Runners de CI",
-            "hostedAgent": "Execuções de agente hospedado",
+            "hostedAgent": "Execuções do agente Motir",
             "index": "Contêineres de indexação",
             "agentInstance": "Instâncias de agente",
             "accrued": "Minutos de CI · últimos {minutes} min",
@@ -11313,7 +11313,7 @@
           "foot": "Mostrando {from}–{to} de {total} · divergentes primeiro, depois as com mais contêineres · só o CI é avaliado — é a única carga debitada enquanto roda",
           "empty": {
             "title": "Nenhuma organização está executando um contêiner da frota",
-            "body": "Nenhuma organização tem agora um runner de CI, uma execução de agente hospedado, uma instância de agente ou um contêiner de indexação, então não há nada para comparar com o débito. É uma leitura saudável, não uma falha."
+            "body": "Nenhuma organização tem agora um runner de CI, uma execução do agente Motir, uma instância de agente ou um contêiner de indexação, então não há nada para comparar com o débito. É uma leitura saudável, não uma falha."
           },
           "error": {
             "title": "Não foi possível ler a frota",
@@ -11622,8 +11622,8 @@
         "remaining": "restante",
         "grantedConsumed": "concedido {granted} · consumido {consumed}",
         "unknownFigure": "desconhecido",
-        "creditNote": "Consumido pelo planejador e pelo agente hospedado. Gasto de tokens neste período: {spend} créditos.",
-        "creditNoteUnknownSpend": "Consumido pelo planejador e pelo agente hospedado. Gasto de tokens neste período: desconhecido.",
+        "creditNote": "Consumido pelo planejador e pelo agente Motir. Gasto de tokens neste período: {spend} créditos.",
+        "creditNoteUnknownSpend": "Consumido pelo planejador e pelo agente Motir. Gasto de tokens neste período: desconhecido.",
         "indexNote": "Consumida apenas pela indexação. Nunca afeta o saldo de créditos — em nenhuma condição.",
         "notGrantedYet": "Nenhuma cota concedida ainda — nada foi indexado para esta organização no período atual.",
         "notConfigured": "Cota não configurada — definida no plano pela equipe. Até lá, não há limite a ultrapassar.",
@@ -12022,7 +12022,7 @@
         "sheetDone": "Concluído"
       },
       "source": {
-        "in_loop": "Revisão hospedada",
+        "in_loop": "Revisão do agente Motir",
         "check_plan": "Check plan"
       },
       "planner": {
@@ -12728,7 +12728,7 @@
           "whenOff": "Novos jobs de planejamento são recusados com “o planejamento está pausado para sua organização”. Os jobs já em execução terminam."
         },
         "hosted_runs": {
-          "name": "Execuções de agente hospedado",
+          "name": "Execuções do agente Motir",
           "whenOff": "Novas execuções e instâncias de agente são recusadas. Os contêineres em execução são parados."
         },
         "web_search": {
@@ -12832,7 +12832,7 @@
         "subtitleEmpty": "Nada está em execução na frota para esta organização.",
         "workload": {
           "ciRunner": "Runners de CI",
-          "hostedAgent": "Execuções de agente hospedado",
+          "hostedAgent": "Execuções do agente Motir",
           "agentInstance": "Instâncias de agente",
           "index": "Contêineres de indexação"
         },
@@ -12847,8 +12847,8 @@
           "override": "substituição"
         },
         "facts": {
-          "plan": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {agents} agentes · {ci} jobs de CI ao mesmo tempo",
-          "planCiUnreadable": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {agents} agentes · limite de CI ilegível",
+          "plan": "Plano <strong>{plan}</strong> · {runs} execuções do agente Motir ao mesmo tempo · {perUser} agentes por pessoa · {agents} agentes · {ci} jobs de CI ao mesmo tempo",
+          "planCiUnreadable": "Plano <strong>{plan}</strong> · {runs} execuções do agente Motir ao mesmo tempo · {perUser} agentes por pessoa · {agents} agentes · limite de CI ilegível",
           "planExempt": "Plano <strong>Sem limite de plano</strong>",
           "planExemptOverride": "Plano <strong>Sem limite de plano</strong> · {ci} jobs de CI ao mesmo tempo (substituição)",
           "planUnknown": "Plano <strong>desconhecido · {key}</strong> · novos contêineres recusados",
@@ -12859,7 +12859,7 @@
         },
         "stop": {
           "button": "Parar contêineres",
-          "explainer": "Parar encerra agora o trabalho <strong>cobrado</strong> desta organização: CI, execuções de agente hospedado e instâncias de agente. Não suspende a organização.",
+          "explainer": "Parar encerra agora o trabalho <strong>cobrado</strong> desta organização: CI, execuções do agente Motir e instâncias de agente. Não suspende a organização.",
           "notPermitted": "Apenas um <strong>superadministrador</strong> pode parar os contêineres de uma organização. Você está conectado como <strong>{role}</strong>.",
           "nothing": "Nada para parar."
         },
@@ -12868,7 +12868,7 @@
           "lead": "Isto encerra o que {org} está executando na frota do Motir agora:",
           "ci": "{runs, plural, one {execução de CI cancelada} other {execuções de CI canceladas}} e <strong>{containers}</strong> {containers, plural, one {contêiner de CI destruído} other {contêineres de CI destruídos}}",
           "ciUnknown": "Execuções de CI não contadas — não foi possível ler o GitHub; a parada as cancela mesmo assim — e <strong>{containers}</strong> {containers, plural, one {contêiner de CI destruído} other {contêineres de CI destruídos}}",
-          "hosted": "{count, plural, one {execução de agente hospedado encerrada} other {execuções de agente hospedado encerradas}}",
+          "hosted": "{count, plural, one {execução do agente Motir encerrada} other {execuções do agente Motir encerradas}}",
           "instances": "{count, plural, one {instância de agente hibernada} other {instâncias de agente hibernadas}}",
           "index": "{count, plural, one {contêiner de indexação deixado} other {contêineres de indexação deixados}} para terminar — a indexação é custo do próprio Motir e nunca é cobrada da organização",
           "notSuspension": "<strong>Isto não é uma suspensão.</strong> Nada fica bloqueado: a próxima execução de CI, execução de agente ou início de agente de {org} passa pela admissão normal.",
@@ -12890,8 +12890,8 @@
           "partialTitle": "Parados, com falhas",
           "ci": "{runs, plural, one {# execução de CI cancelada} other {# execuções de CI canceladas}} · {stopped, plural, one {# contêiner de CI destruído} other {# contêineres de CI destruídos}}",
           "ciPartial": "CI: {runs} execuções canceladas · {stopped} de {total} contêineres destruídos",
-          "hosted": "{ended, plural, one {# execução de agente hospedado encerrada} other {# execuções de agente hospedado encerradas}}",
-          "hostedPartial": "Execuções de agente hospedado: {ended} encerradas",
+          "hosted": "{ended, plural, one {# execução do agente Motir encerrada} other {# execuções do agente Motir encerradas}}",
+          "hostedPartial": "Execuções do agente Motir: {ended} encerradas",
           "instances": "{hibernated, plural, one {# instância de agente hibernada} other {# instâncias de agente hibernadas}}",
           "instancesPartial": "Instâncias de agente: {hibernated} de {total} hibernadas",
           "failed": "{count} não puderam ser parados — o reconciliador vai tentar novamente."
@@ -12911,7 +12911,7 @@
           "when": "{time} · {actor}",
           "unknownActor": "um ex-operador",
           "noReason": "Nenhum motivo registrado",
-          "counts": "{runs} execuções de CI · {containers} contêineres de CI · {hosted} execuções hospedadas · {instances} instâncias de agente"
+          "counts": "{runs} execuções de CI · {containers} contêineres de CI · {hosted} execuções do agente Motir · {instances} instâncias de agente"
         },
         "orgAdminStop": {
           "title": "Última parada por um administrador da organização",
@@ -12994,17 +12994,17 @@
       }
     },
     "runModels": {
-      "breadcrumb": "Operações · Modelos de execução hospedada",
-      "title": "Modelos de execução hospedada",
-      "subtitle": "Quais modelos uma execução hospedada pode usar, para todos os projetos. Um projeto escolhe entre os modelos listados que o motir-ai oferece agora.",
+      "breadcrumb": "Operações · Modelos do agente Motir",
+      "title": "Modelos do agente Motir",
+      "subtitle": "Quais modelos uma execução do agente Motir pode usar, para todos os projetos. Um projeto escolhe entre os modelos listados que o motir-ai oferece agora.",
       "lineLive": "Um modelo listado que o motir-ai deixa de oferecer desaparece de todos os seletores de uma vez. Um modelo não listado nunca aparece.",
       "lineProjectsLead": "Os projetos nunca veem esta lista.",
-      "lineProjectsBody": "Eles veem o resultado: o seletor Executar hospedado e as configurações de agente hospedado deles oferecem apenas estes modelos.",
+      "lineProjectsBody": "Eles veem o resultado: o seletor Executar e as configurações do agente Motir deles oferecem apenas estes modelos.",
       "card": {
-        "title": "Modelos que uma execução hospedada pode usar",
-        "subtitle": "Cadastrada com todos os modelos que o motir-ai oferecia para execuções hospedadas quando a lista foi lida pela primeira vez, para que nenhum projeto perdesse o modelo que tinha escolhido."
+        "title": "Modelos que uma execução do agente Motir pode usar",
+        "subtitle": "Cadastrada com todos os modelos que o motir-ai oferecia para execuções do agente Motir quando a lista foi lida pela primeira vez, para que nenhum projeto perdesse o modelo que tinha escolhido."
       },
-      "notOffered": "Fora da oferta de execução hospedada do motir-ai agora: foi retirado, não tem tarifa, não é um modelo de chat ou o provedor dele não está configurado para execuções hospedadas.",
+      "notOffered": "Fora da oferta do agente Motir do motir-ai agora: foi retirado, não tem tarifa, não é um modelo de chat ou o provedor dele não está configurado para execuções do agente Motir.",
       "level": {
         "trivial": "trivial",
         "low": "baixa",
@@ -13016,19 +13016,19 @@
         "projects": "{n, plural, one {# projeto} other {# projetos}}"
       },
       "add": {
-        "title": "Adicionar um modelo para execuções hospedadas",
-        "body": "Os projetos podem escolhê-lo para Executar hospedado e para as configurações por dificuldade assim que ele for adicionado.",
+        "title": "Adicionar um modelo para execuções do agente Motir",
+        "body": "Os projetos podem escolhê-lo para Executar e para as configurações por dificuldade assim que ele for adicionado.",
         "modelLabel": "Modelo",
         "placeholder": "Escolha um modelo",
-        "pickerFoot": "Modelos que o motir-ai oferece para execuções hospedadas e que ainda não estão na lista.",
-        "nothing": "Todos os modelos que o motir-ai oferece para execuções hospedadas já estão listados.",
+        "pickerFoot": "Modelos que o motir-ai oferece para execuções do agente Motir e que ainda não estão na lista.",
+        "nothing": "Todos os modelos que o motir-ai oferece para execuções do agente Motir já estão listados.",
         "confirm": "Adicionar modelo",
-        "notOffered": "Não adicionado: o motir-ai não oferece mais {model} para execuções hospedadas.",
+        "notOffered": "Não adicionado: o motir-ai não oferece mais {model} para execuções do agente Motir.",
         "alreadyListed": "Não adicionado: {model} já está listado."
       },
       "remove": {
-        "title": "Remover {model} dos modelos de execução hospedada?",
-        "body": "A partir de agora, nenhum projeto pode escolhê-lo para uma execução hospedada. Nenhum projeto e nenhum padrão da plataforma o usam.",
+        "title": "Remover {model} dos modelos do agente Motir?",
+        "body": "A partir de agora, nenhum projeto pode escolhê-lo para uma execução do agente Motir. Nenhum projeto e nenhum padrão da plataforma o usam.",
         "confirm": "Remover modelo",
         "inUse": "Não removido: {model} está em uso. {platformDefaultClause}{projectsClause} Altere-os primeiro.",
         "inUseParts": {
@@ -13040,20 +13040,20 @@
         },
         "notListed": "Não removido: {model} não está mais na lista."
       },
-      "added": "{model} adicionado. Os projetos já podem escolhê-lo para execuções hospedadas.",
-      "removed": "{model} removido dos modelos de execução hospedada.",
+      "added": "{model} adicionado. Os projetos já podem escolhê-lo para execuções do agente Motir.",
+      "removed": "{model} removido dos modelos do agente Motir.",
       "empty": {
         "title": "Nenhum modelo na lista",
-        "body": "Nenhuma execução hospedada pode começar até que um modelo seja adicionado. Adicione um da oferta do motir-ai.",
-        "bodyReadOnly": "Nenhuma execução hospedada pode começar até que um superadmin adicione um modelo."
+        "body": "Nenhuma execução do agente Motir pode começar até que um modelo seja adicionado. Adicione um da oferta do motir-ai.",
+        "bodyReadOnly": "Nenhuma execução do agente Motir pode começar até que um superadmin adicione um modelo."
       },
       "unavailable": {
-        "title": "Não foi possível carregar os modelos de execução hospedada",
+        "title": "Não foi possível carregar os modelos do agente Motir",
         "body": "O motir-ai não respondeu, então não se sabe se cada modelo listado é oferecido e nenhuma lista é exibida. Nada foi alterado."
       },
       "defaults": {
         "title": "Padrões do lado da execução",
-        "subtitle": "O modelo com que começa uma revisão hospedada, uma execução de design ou uma execução de agente quando nem a pessoa, nem o projeto, nem a organização escolheram um. Escolhido na lista acima.",
+        "subtitle": "O modelo com que começa uma revisão do agente Motir, uma execução de design ou uma execução de agente quando nem a pessoa, nem o projeto, nem a organização escolheram um. Escolhido na lista acima.",
         "count": "6 configurações",
         "col": {
           "function": "Função"
@@ -13061,27 +13061,27 @@
         "row": {
           "review": {
             "name": "Agente de revisão",
-            "desc": "Revisões hospedadas"
+            "desc": "Revisões do agente Motir"
           },
           "design": {
             "name": "Execução de design",
-            "desc": "Uma execução hospedada em um item de trabalho de design"
+            "desc": "Uma execução do agente Motir em um item de trabalho de design"
           },
           "trivial": {
             "name": "Execução de agente · Trivial",
-            "desc": "Execuções de build hospedadas em um item de trabalho trivial"
+            "desc": "Execuções de build do agente Motir em um item de trabalho trivial"
           },
           "low": {
             "name": "Execução de agente · Baixa",
-            "desc": "Execuções de build hospedadas em um item de trabalho de dificuldade baixa"
+            "desc": "Execuções de build do agente Motir em um item de trabalho de dificuldade baixa"
           },
           "medium": {
             "name": "Execução de agente · Média",
-            "desc": "Execuções de build hospedadas em um item de trabalho de dificuldade média"
+            "desc": "Execuções de build do agente Motir em um item de trabalho de dificuldade média"
           },
           "high": {
             "name": "Execução de agente · Alta",
-            "desc": "Execuções de build hospedadas em um item de trabalho de dificuldade alta"
+            "desc": "Execuções de build do agente Motir em um item de trabalho de dificuldade alta"
           }
         },
         "inherits": {
@@ -13098,7 +13098,7 @@
         },
         "defaultGroup": "Padrão",
         "pickerAria": "Modelo padrão de {name}",
-        "pickerFoot": "Somente modelos da lista acima que o motir-ai oferece para execuções hospedadas.",
+        "pickerFoot": "Somente modelos da lista acima que o motir-ai oferece para execuções do agente Motir.",
         "changed": {
           "seededFromEnv": "Obtido do ambiente · nunca alterado",
           "neverSet": "Nunca definido"
@@ -13108,7 +13108,7 @@
           "body": "{name} volta para {what} até você escolher outro.",
           "bodyReadOnly": "{name} volta para {what} até um superadministrador escolher outro."
         },
-        "refused": "{model} não é mais oferecido para execuções hospedadas ou não está na lista, então não foi salvo. A página foi atualizada — escolha outro modelo.",
+        "refused": "{model} não é mais oferecido para execuções do agente Motir ou não está na lista, então não foi salvo. A página foi atualizada — escolha outro modelo.",
         "confirmTitle": "Alterar o modelo de plataforma de {name}?",
         "confirmBody": {
           "review": "{from} → {to}. Vale a partir da próxima revisão para toda organização que não escolheu o seu. Revisões já em andamento terminam no modelo com que começaram.",
@@ -13377,6 +13377,7 @@
       "codeScanning": {
         "fleet": "na frota ({label})",
         "githubHosted": "em runners hospedados pelo GitHub",
+        "pendingFleet": "em runners hospedados pelo GitHub até o próximo job da frota — o runner desse job permite movê-lo para a frota ({label})",
         "unknownStatus": "não foi possível ler: o GitHub respondeu HTTP {status}",
         "unknownUnreachable": "não foi possível ler: o GitHub não pôde ser contatado",
         "none": "Nenhum repositório privado em {org} tem a configuração padrão do CodeQL ativada."
@@ -14124,8 +14125,8 @@
       },
       "image": {
         "hosted": {
-          "title": "Imagem do agente hospedado",
-          "subtitle": "O que cada execução hospedada inicia. Fixada por MOTIR_HOSTED_AGENT_IMAGE; a mais recente é o último build de main de ghcr.io/motir-co/motir-hosted-agent."
+          "title": "Imagem do agente Motir",
+          "subtitle": "O que cada execução do agente Motir inicia. Fixada por MOTIR_HOSTED_AGENT_IMAGE; a mais recente é o último build de main de ghcr.io/motir-co/motir-hosted-agent."
         },
         "runner": {
           "title": "Imagem do runner de CI",
@@ -14141,7 +14142,7 @@
         }
       },
       "imageName": {
-        "hosted": "imagem do agente hospedado",
+        "hosted": "imagem do agente Motir",
         "runner": "imagem do runner de CI",
         "indexer": "imagem do indexador",
         "sandbox": "imagens das instâncias de agente"
@@ -14215,7 +14216,7 @@
         "button": "Publicar a mais recente",
         "republish": "Publicar de novo",
         "note": {
-          "hosted": "Fixa o último build de main pelo workflow de fixação do agente hospedado. Web e worker passam a usá-lo.",
+          "hosted": "Fixa o último build de main pelo workflow de fixação do agente Motir. Web e worker passam a usá-lo.",
           "runner": "Fixa {release} pelo workflow de fixação do runner. Web e worker passam a usá-la.",
           "indexer": "Fixa {release} pelo pull request de fixação do indexador. Web e worker passam a usá-la.",
           "sandbox": "Publica {release} de novo. Só as {count} tags que faltam são enviadas; nada muda em produção.",
@@ -14232,7 +14233,7 @@
         }
       },
       "confirm": {
-        "hostedTitle": "Publicar a imagem mais recente do agente hospedado?",
+        "hostedTitle": "Publicar a imagem mais recente do agente Motir?",
         "runnerTitle": "Publicar {release}?",
         "sandboxTitle": "Publicar {release} de novo?",
         "from": "De",
@@ -14240,7 +14241,7 @@
         "cancel": "Cancelar",
         "audited": "Registrado no log de auditoria como você, {email}.",
         "sandboxFrom": "{published} de {total} tags em {version}",
-        "hostedBody": "Isto inicia o workflow de fixação do agente hospedado. Ele move MOTIR_HOSTED_AGENT_IMAGE para o build mais recente e implanta: <strong>web e worker são renovados</strong> com a nova fixação, e as execuções hospedadas iniciadas após a renovação iniciam a nova imagem.",
+        "hostedBody": "Isto inicia o workflow de fixação do agente Motir. Ele move MOTIR_HOSTED_AGENT_IMAGE para o build mais recente e implanta: <strong>web e worker são renovados</strong> com a nova fixação, e as execuções do agente Motir iniciadas após a renovação iniciam a nova imagem.",
         "runnerBody": "Isto inicia o workflow de fixação do runner. Ele move MOTIR_RUNNER_IMAGE para {release} e implanta: <strong>web e worker são renovados</strong> com a nova fixação. A AMI do runner não muda.",
         "indexerBody": "Isto abre o pull request de fixação do indexador, que move MOTIR_INDEXER_IMAGE para {release} e entra na fila para ser mesclado. A implantação dele então <strong>renova web e worker</strong>, e as execuções de indexação iniciadas depois da renovação iniciam a nova imagem. As que já estão em andamento terminam na imagem com que começaram.",
         "sandboxBody": "Isto executa de novo a release do sandbox para {release} e envia só as tags que faltam: {missing}. {published} já estão publicadas e não são enviadas de novo. <strong>Nada muda em produção.</strong>",
@@ -14273,7 +14274,7 @@
         "retry": "Tentar de novo"
       },
       "workflow": {
-        "hosted": "Fixação do agente hospedado",
+        "hosted": "Fixação do agente Motir",
         "runner": "Fixação do runner",
         "indexer": "Fixação do indexador",
         "sandbox": "Release do sandbox {tag}",
@@ -15196,8 +15197,8 @@
       "pillReady": "Pronta para retomar",
       "gate": "{kind} em {key}",
       "waitingMany": "{count} aprovações",
-      "waitingHosted": "Esta execução parou em uma etapa de aprovação — aguardando <b>{gate}</b>. O trabalho está guardado em <d>{branch}</d>, e ela <b>segue sozinha</b> no agente hospedado quando a etapa for aprovada.",
-      "waitingHostedNoBranch": "Esta execução parou em uma etapa de aprovação — aguardando <b>{gate}</b>. O trabalho está guardado, e ela <b>segue sozinha</b> no agente hospedado quando a etapa for aprovada.",
+      "waitingHosted": "Esta execução parou em uma etapa de aprovação — aguardando <b>{gate}</b>. O trabalho está guardado em <d>{branch}</d>, e ela <b>segue sozinha</b> no agente Motir quando a etapa for aprovada.",
+      "waitingHostedNoBranch": "Esta execução parou em uma etapa de aprovação — aguardando <b>{gate}</b>. O trabalho está guardado, e ela <b>segue sozinha</b> no agente Motir quando a etapa for aprovada.",
       "waitingLocal": "Esta execução parou em uma etapa de aprovação — aguardando <b>{gate}</b>. O trabalho está guardado no branch; quando a etapa for aprovada, continue-a com <d>{command}</d>.",
       "ready": "Pronta para retomar — <b>{approved} de {total} aprovações dadas</b>. Continue-a para construir o que foi aprovado; ela para novamente em qualquer etapa de aprovação ainda pendente:",
       "resuming": "Retomando — <b>{name}</b> aprovou {gate}, então uma nova execução segue no mesmo branch. <link>Ver a nova execução</link>",
@@ -15402,12 +15403,12 @@
       "cancel": "Cancelar"
     },
     "hostedRuns": {
-      "ready": "Execuções hospedadas podem gravar aqui — o app do Motir envia os branches delas e abre os pull requests delas.",
+      "ready": "Execuções do agente Motir podem gravar aqui — o app do Motir envia os branches delas e abre os pull requests delas.",
       "needsPermissionsTitle": "Requer permissões atualizadas.",
-      "needsPermissionsBody": "O Motir Integration em {account} ainda não pode gravar — um proprietário de {account} precisa aceitar as permissões atualizadas no GitHub. Até lá, uma execução hospedada que toque neste repositório é recusada antes de qualquer coisa começar.",
+      "needsPermissionsBody": "O Motir Integration em {account} ainda não pode gravar — um proprietário de {account} precisa aceitar as permissões atualizadas no GitHub. Até lá, uma execução do agente Motir que toque neste repositório é recusada antes de qualquer coisa começar.",
       "reviewPermissions": "Revisar permissões no GitHub",
       "unreachableTitle": "O Motir Integration não consegue mais acessar {repo}.",
-      "unreachableBody": "A instalação foi removida ou suspensa, ou não inclui mais este repositório. Reconecte-a no GitHub; até lá, uma execução hospedada que toque nele é recusada.",
+      "unreachableBody": "A instalação foi removida ou suspensa, ou não inclui mais este repositório. Reconecte-a no GitHub; até lá, uma execução do agente Motir que toque nele é recusada.",
       "reconnect": "Reconectar"
     }
   },
@@ -16300,11 +16301,11 @@
         "lead": "<b>A revisão não pôde ser executada:</b> <reason></reason>",
         "reason": {
           "no_credits": "sua organização está sem créditos de IA.",
-          "no_model": "nenhum modelo está disponível para execuções hospedadas.",
+          "no_model": "nenhum modelo está disponível para execuções do agente Motir.",
           "repository_unreadable": "a revisão não consegue ler um dos repositórios que revisa.",
           "no_verdict": "a execução da revisão terminou sem um veredito — <run>{label}</run>.",
           "no_verdictNoRun": "a execução da revisão terminou sem um veredito.",
-          "boot_failed": "a máquina hospedada para a revisão não conseguiu iniciar.",
+          "boot_failed": "a máquina do agente Motir para a revisão não conseguiu iniciar.",
           "no_actor": "ninguém pode executá-la — o item de trabalho não tem responsável nem relator, e o workspace não tem um gerente substituto.",
           "unknown": "a execução da revisão não conseguiu iniciar.",
           "noCapacity": "o modelo da revisão está sem capacidade para execuções de agente agora. Tente novamente em breve."
@@ -16330,7 +16331,7 @@
       }
     },
     "autoRerun": {
-      "started": "Reexecutando no agente hospedado",
+      "started": "Reexecutando no agente Motir",
       "startedCount": "reexecução automática {ordinal} de {cap}",
       "viewRun": "Ver execução",
       "skipped": "Reexecução automática ignorada",
@@ -16348,14 +16349,14 @@
         "no_capacity": "{detail}, o modelo em que ele rodou por último, está sem capacidade para execuções de agente agora."
       },
       "next": {
-        "cap_reached": "Executar no agente hospedado",
-        "dispatcher_gone": "Executar no agente hospedado",
-        "no_project_access": "Executar no agente hospedado",
+        "cap_reached": "Executar no agente Motir",
+        "dispatcher_gone": "Executar no agente Motir",
+        "no_project_access": "Executar no agente Motir",
         "ci_credits_exhausted": "Cobrança",
         "model_not_offered": "Escolher um modelo e executar",
-        "models_unavailable": "Executar no agente hospedado",
+        "models_unavailable": "Executar no agente Motir",
         "out_of_credits": "Comprar créditos",
-        "credits_unavailable": "Executar no agente hospedado",
+        "credits_unavailable": "Executar no agente Motir",
         "repository_not_writable": "Repositórios",
         "no_capacity": "Escolher outro modelo e executar"
       }
@@ -16395,7 +16396,7 @@
         "second": "Uma segunda revisão de uma versão já decidida. Não decidiu nada.",
         "notified": "{name} foi notificado.",
         "findings": "Constatações",
-        "agentHosted": "O agente hospedado do Motir",
+        "agentHosted": "Agente Motir",
         "agentOwn": "O agente de {name} ({harness})",
         "dismissed": "<actor></actor> descartou a revisão do agente em {commits}",
         "dismissedReason": "Motivo: {reason}"
@@ -16430,7 +16431,7 @@
         "reviewed": "Revisado",
         "reviewedName": "Revisado por um agente nos commits atuais",
         "card": {
-          "hosted": "Revisado pelo agente hospedado do Motir",
+          "hosted": "Revisado pelo agente Motir",
           "own": "Revisado pelo próprio agente de {name}",
           "harness": "{harness} · {model}",
           "commits": "Nestes commits",
@@ -16440,7 +16441,7 @@
       "line": {
         "label": "Revisão do agente",
         "reviewed": "<b>Revisado por um agente</b> · {who} · {when}",
-        "whoHosted": "O agente hospedado do Motir",
+        "whoHosted": "Agente Motir",
         "whoOwn": "O agente de {name} · {harness}",
         "findings": "Constatações e checklist",
         "skipped": "<b>Revisão ignorada por {name}</b> — “{reason}”",
@@ -16454,7 +16455,7 @@
         "subtitle": "{title} · {key}",
         "verdictPassed": "Aprovada",
         "verdictSentBack": "Pediu alterações",
-        "byHosted": "O agente hospedado do Motir",
+        "byHosted": "Agente Motir",
         "byOwn": "O agente próprio de {name}",
         "byOwnHarness": "O agente próprio de {name} · {harness} · {model}",
         "commits": "Nestes commits",
@@ -16582,13 +16583,13 @@
       "offWhat": "Um item de trabalho é oferecido para aprovação assim que as verificações passam.",
       "unavailable": "Indisponível",
       "unavailableWhat": "Este projeto faz merge automaticamente, então nada aguarda uma revisão. Escolha <strong>Perguntar antes do merge</strong> para ativar o agente revisor.",
-      "billingNote": "Cada revisão é uma execução de agente hospedado, paga com os créditos de IA da sua organização.",
+      "billingNote": "Cada revisão é uma execução do agente Motir, paga com os créditos de IA da sua organização.",
       "offNote": "Desativar isto cancela as revisões em andamento — esses itens de trabalho seguem direto para o fluxo comum.",
       "saved": "Salvo",
       "saveError": "Não foi possível salvar — tente novamente.",
       "source": {
         "label": "Quem revisa",
-        "hosted": "Agente hospedado do Motir",
+        "hosted": "Agente Motir",
         "hostedWhat": "O Motir inicia uma execução de revisão quando as verificações passam. <strong>Usa créditos de IA.</strong>",
         "own": "Seu próprio agente",
         "ownWhat": "Grátis. A revisão espera até alguém executar <cmd>motir review</cmd> a partir do próprio agente. Nada começa sozinho."
@@ -16976,10 +16977,10 @@
       "openingDevelopment": "Abrindo Desenvolvimento…",
       "sentBackByAgent": "Isto precisa de uma correção: o agente revisor o devolveu — “{note}”",
       "sentBackByAgentNoNote": "Isto precisa de uma correção: o agente revisor o devolveu.",
-      "hostedLead": "Corrija no agente hospedado — sem precisar de terminal:",
+      "hostedLead": "Corrija no agente Motir — sem precisar de terminal:",
       "orTerminal": "Ou repare pelo seu terminal:",
-      "fixingHosted": "Um reparo hospedado está em execução — iniciado por <b>{name}</b> <when></when> · <run>{label}</run>",
-      "fixingHostedByYou": "Um reparo hospedado está em execução — iniciado por <b>você</b> <when></when> · <run>{label}</run>",
+      "fixingHosted": "Um reparo do agente Motir está em execução — iniciado por <b>{name}</b> <when></when> · <run>{label}</run>",
+      "fixingHostedByYou": "Um reparo do agente Motir está em execução — iniciado por <b>você</b> <when></when> · <run>{label}</run>",
       "carries": "{count, plural, one {Mais # item de trabalho está travado junto} other {Mais # itens de trabalho estão travados junto}}: <keys></keys>",
       "carriesMore": "e mais {count}",
       "repairedWithHead": "Repare junto com <b>{head}</b> — eles compartilham um pull request.",

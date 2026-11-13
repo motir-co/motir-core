@@ -110,7 +110,7 @@ describe('OrgFleetCard', () => {
     expect(within(screen.getByTestId('org-fleet-tile-index')).getByText('1')).toBeTruthy();
     // MOTIR-9377: the plan and its four figures, each tile against its own.
     expect(screen.getByTestId('org-fleet-plan').textContent).toBe(
-      'Plan Standard · hosted runs at once: 1 · agents per person: 1 · agents: 5 · CI jobs at once: 5',
+      'Plan Standard · Motir agent runs at once: 1 · agents per person: 1 · agents: 5 · CI jobs at once: 5',
     );
     expect(screen.getByTestId('org-fleet-tile-ciRunner').textContent).toContain('3 of 5');
     expect(screen.getByTestId('org-fleet-tile-hostedAgent').textContent).toContain('1 of 1');
@@ -205,7 +205,7 @@ describe('OrgFleetCard', () => {
     expect(last.textContent).toContain('2 minutes ago · ops@moooon.net');
     expect(last.textContent).toContain('Monitor: running, not debited for 25 min');
     expect(last.textContent).toContain(
-      '2 CI runs · 3 CI containers · 1 hosted runs · 2 agent instances',
+      '2 CI runs · 3 CI containers · 1 Motir agent runs · 2 agent instances',
     );
     expect(stopButton().hasAttribute('disabled')).toBe(true);
   });

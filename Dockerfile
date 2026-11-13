@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# motir-core's production image (MOTIR-2387), run on AWS ECS Fargate since the
-# MOTIR-9699 cutover (`.github/workflows/aws-deploy.yml`, `docs/aws-deploy.md`).
+# motir-core — the production image (MOTIR-2387), built and pushed to ECR by
+# `.github/workflows/aws-deploy.yml` and run on ECS Fargate.
 #
 # ── Why this shape ──────────────────────────────────────────────────────────
 # `next build` with `output: 'standalone'` traces the whole app ONCE and emits a
@@ -120,8 +120,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ⚠️ THE AUTH TOKEN IS A SECRET AND IS DELIBERATELY *NOT* HERE. A `--build-arg`
 # value is recorded in the build's own metadata; a credential goes in through
 # `--mount=type=secret` on the RUN below, where it exists for one command and is
-# never written to a layer. The deploy's `docker/build-push-action` `secrets:`
-# input (`.github/workflows/aws-deploy.yml`) is the other half.
+# never written to a layer. The `secrets:` input of aws-deploy.yml's image build
+# is the other half.
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT=""
 ARG MOTIR_RELEASE=""

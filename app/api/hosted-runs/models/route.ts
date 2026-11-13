@@ -32,7 +32,7 @@ export async function GET(request: Request): Promise<Response> {
     return NextResponse.json(
       {
         code: 'hosted_models_unavailable',
-        error: 'The models a hosted run may use could not be read. Try again shortly.',
+        error: 'The models a Motir agent run may use could not be read. Try again shortly.',
       },
       { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
     );

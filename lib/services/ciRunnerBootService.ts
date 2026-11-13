@@ -56,6 +56,7 @@ import {
 } from '@/lib/orchestrator';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { fleetCodeScanningCatchUpService } from '@/lib/services/fleetCodeScanningCatchUpService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
 import {
   githubRunnerCallLedgerService as runnerCallLedger,
@@ -1496,6 +1497,17 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       tx,
     ),
   );
+
+  // THE DEFERRED CODEQL MOVE. A runner for this repository is registered now —
+  // the one moment GitHub lets its CodeQL default setup move onto the fleet
+  // label, which turning the fleet ON could not do while the fleet was idle.
+  // Not awaited and never throws: it must not hold or fail the boot.
+  void fleetCodeScanningCatchUpService.afterRunnerRegistered({
+    projectId: intent.projectId,
+    owner: intent.repoOwner,
+    repo: intent.repoName,
+    target: runnerTarget,
+  });
 
   // ── 3 · Hand the loop everything it needs, as JSON ────────────────────────
   return {

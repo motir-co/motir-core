@@ -19,12 +19,12 @@ const ON_WHAT = 'Every work item is reviewed before you are asked to approve it.
 const OFF_WHAT = 'A work item is offered for approval as soon as its checks pass.';
 const UNAVAILABLE_WHAT =
   'This project merges automatically, so nothing waits for a review. Choose Ask before merging to turn the review agent on.';
-const BILLING = "Each review is a hosted agent run, paid from your organisation's AI credits.";
+const BILLING = "Each review is a Motir agent run, paid from your organisation's AI credits.";
 const OFF_NOTE =
   'Turning this off cancels reviews in progress — those work items go straight to the ordinary flow.';
 const BLOCKED = 'Turn the review agent off to merge automatically.';
 const ASK = 'Ask before merging';
-const HOSTED = "Motir's hosted agent";
+const HOSTED = 'Motir agent';
 const OWN = 'Your own agent';
 const POSTING = 'Post agent reviews on pull requests';
 const POSTING_ON =
@@ -335,7 +335,7 @@ describe('the pair on the page — each card reads the other’s CURRENT value',
     expect(screen.getByText('已开启')).toBeTruthy();
     expect(screen.getByText('每个工作项都会先经过审查，然后才会请你批准。')).toBeTruthy();
     expect(
-      screen.getByText('每次审查都是一次托管智能体运行，费用从你组织的 AI 额度中扣除。'),
+      screen.getByText('每次审查都是一次 Motir 智能体运行，费用从你组织的 AI 额度中扣除。'),
     ).toBeTruthy();
     expect(
       screen.getByText('关闭后，进行中的审查会被取消——这些工作项将直接进入常规流程。'),
@@ -630,7 +630,7 @@ describe('the exclusion holds under EITHER source (S6)', () => {
   it('renders the source choice and bot posting in zh', () => {
     renderPair('manual', true, 'zh', 'own');
     expect(screen.getByRole('radiogroup', { name: '由谁审查' })).toBeTruthy();
-    expect(option('Motir 托管智能体').getAttribute('aria-checked')).toBe('false');
+    expect(option('Motir 智能体').getAttribute('aria-checked')).toBe('false');
     expect(option('你自己的智能体').getAttribute('aria-checked')).toBe('true');
     expect(textOf(option('你自己的智能体'))).toContain(
       '免费。审查会等待有人从自己的智能体运行 motir review。不会自动开始。',

@@ -224,7 +224,7 @@ describe('FleetUseSection — the figures', () => {
       ),
     ]);
     renderSection();
-    expect(await screen.findByText(/Your plan includes no hosted agent runs/)).toBeTruthy();
+    expect(await screen.findByText(/Your plan includes no Motir agent runs/)).toBeTruthy();
     expect(screen.queryByTestId('fleet-figure-agentRunsInParallel')).toBeNull();
   });
 

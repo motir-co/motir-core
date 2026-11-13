@@ -139,7 +139,7 @@ export async function POST(
     ) {
       return problem(
         'hosted_run_unavailable',
-        'Hosted runs are not available right now. Try again shortly.',
+        'Motir agent runs are not available right now. Try again shortly.',
         503,
       );
     }

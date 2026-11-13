@@ -178,18 +178,24 @@ Unit + e2e test scaffolding (Vitest, Playwright) lands in later Subtasks.
 
 ## Deploys
 
-Production runs on AWS: core's web, worker and relay are ECS Fargate services
-over an RDS PostgreSQL database (Epic MOTIR-9699). The full runbook is
-[`docs/aws-deploy.md`](./docs/aws-deploy.md).
+Production runs on AWS: core's web, worker and relay services on ECS Fargate,
+with its PostgreSQL database on Amazon RDS and its stored files on Amazon S3. The
+infrastructure is motir-infra's CDK app; [`docs/aws-deploy.md`](./docs/aws-deploy.md)
+is the release lane in full.
 
-- **Production**: every push to `main` runs `.github/workflows/aws-deploy.yml`,
-  which builds the `Dockerfile` image, pushes it to ECR, and hands its digest
-  to `pnpm deploy:aws`. That migrates the database, rolls web, worker and
-  relay, and records the digest only when every service completed; any failure
-  leaves the previous tasks serving.
-- **Env vars**: set on the ECS task definitions (their environment and
-  secrets). Never commit secrets to git. `.env.example` documents what's needed
-  locally.
+- **Production**: every push to `main` runs
+  [`.github/workflows/aws-deploy.yml`](.github/workflows/aws-deploy.yml),
+  which builds the image from the `Dockerfile`, pushes it to ECR and runs
+  `pnpm deploy:aws` with its digest: the migrate task runs first, then web,
+  worker and relay roll. The app answers at <https://app.motir.co>.
+- **Rollback**: a failed roll leaves the previous tasks serving. To go back
+  to an earlier release on purpose, revert the change on `main`; the next
+  deploy ships the revert.
+- **Env vars**: each service's task definition carries its environment, and
+  its secrets come from AWS Secrets Manager. `DATABASE_URL` is the runtime
+  connection; `DATABASE_URL_UNPOOLED` is the direct connection
+  `prisma migrate deploy` uses. Never commit secrets to git. `.env.example`
+  documents what's needed locally.
 - **Service-to-service tokens (open-core boundary)**: `motir-ai` calls
   `motir-core` over a shared bearer. `MOTIR_AI_TO_CORE_SERVICE_TOKEN`
   authenticates the inbound billing-propagation route

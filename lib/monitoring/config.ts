@@ -86,8 +86,8 @@ export function clientSentryDsn(): string | undefined {
  *
  * ⚠️ It has to be a build argument, and the reason is not stylistic: source maps
  * are uploaded DURING the image build and must be tagged with the same string
- * the running code reports. The platform's runtime metadata identifies the
- * task or machine, not the build — and `.git` is in
+ * the running code reports. The host's runtime metadata (the ECS task id and
+ * region) identifies the running task, not the build — and `.git` is in
  * `.dockerignore`, so the SDK's own `git rev-parse HEAD` fallback finds nothing
  * inside the image. Without this argument a release is simply never named.
  *
@@ -146,7 +146,7 @@ export function clientMonitoringEnvironment(): string {
  * WHERE it is made. A constant could only be raised for every deployment of an
  * image at once, and a staging load test needs a rate production must not pay
  * for. So it is a runtime setting, set per deployment (on ECS, in the task
- * definition's environment).
+ * definition's environment: `SENTRY_TRACES_SAMPLE_RATE=…`).
  *
  * **Unset ⇒ 0, which is the behaviour before this setting existed.** Nothing
  * traces until a deployment opts in. A value that is not a finite number in

@@ -20,7 +20,7 @@ import en from '@/messages/en.json';
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
 // The review agent sent a card back. Where the card's fix part offered only the terminal
-// command, there is now a model picker and **Fix on the hosted agent** above
+// command, there is now a model picker and **Fix in Motir agent** above
 // `motir fix <KEY>` — on the Development frame and on the To fix banner. One press, and
 // the card says it is being fixed by you on the hosted agent, with the run's link, and
 // neither repair is offered any more: the open repair is the lock. On a second card, a
@@ -80,7 +80,7 @@ async function openSentBack(page: Page, key: string): Promise<Locator> {
   return part;
 }
 
-test.describe('Fix on the hosted agent', () => {
+test.describe('Fix in Motir agent', () => {
   let s: ContinueHostedSeed;
   let benApi: APIRequestContext;
 
@@ -156,7 +156,7 @@ test.describe('Fix on the hosted agent', () => {
       // told it is hosted, with the run's link — and neither repair is offered.
       await expect(part).toHaveAttribute('data-state', 'in_progress', { timeout: 30_000 });
       const line = part.getByTestId('repair-hosted-fixing');
-      await expect(line).toContainText('Being fixed by you on the hosted agent');
+      await expect(line).toContainText('Being fixed by you in Motir agent');
       await expect(part.getByTestId('repair-hosted-run-link')).toHaveAttribute(
         'href',
         new RegExp(dispatchRunId),
@@ -165,7 +165,7 @@ test.describe('Fix on the hosted agent', () => {
       await expect(part).not.toContainText(`motir fix ${agentCard.identifier}`);
       // The banner says the same, and offers nothing either.
       await expect(banner(page).getByTestId('to-fix-banner-hosted-fixing')).toContainText(
-        'A hosted repair is running — started by you',
+        'A Motir agent repair is running — started by you',
       );
       await expect(banner(page).getByTestId('fix-hosted-door')).toHaveCount(0);
     });

@@ -15,7 +15,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 //     the verdict is posted with the run token the container was handed
 //     (`MOTIR_RUN_TOKEN` in the boot spec), through `POST /api/v1/work-items/{key}/agent-review`;
 //   · a person's presses are the session routes (decide, Review again, the switch, the
-//     merge mode, Fix on the hosted agent); `motir fix` is `POST /api/v1/work-items/{key}/repair`.
+//     merge mode, Fix in Motir agent); `motir fix` is `POST /api/v1/work-items/{key}/repair`.
 //
 // ⚠️ THE STUBS, AND NOTHING ELSE: the SESSION (a route test has no cookie jar and no
 // request scope, so the compliance gate hands back the signed-in person — the seam the
@@ -1169,9 +1169,9 @@ describe('9 · conventions are optional — a two-repository card with motir-ai 
   }
 });
 
-// ── 10. Fix on the hosted agent (§12.4b · §8.6) — the server half ──────────────────
+// ── 10. Fix in Motir agent (§12.4b · §8.6) — the server half ──────────────────
 
-describe('10 · Fix on the hosted agent — the press → the fix run → its push → the next review', () => {
+describe('10 · Fix in Motir agent — the press → the fix run → its push → the next review', () => {
   it('a sent-back card is repaired on the hosted agent; the push reads Fixing and the next green clears it and is reviewed', async () => {
     const w = await makeWorld();
     const { d, review, run: reviewRun, runToken } = await greenToReviewRun(w, 211);

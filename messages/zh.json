@@ -1598,7 +1598,7 @@
     "provenanceSourceMcp": "MCP",
     "provenanceSourceManual": "手动",
     "provenanceSourceApi": "API",
-    "provenanceSourceHosted": "托管",
+    "provenanceSourceHosted": "Motir 智能体",
     "provenanceSourceByok": "自带密钥",
     "changedElsewhereRefreshing": "此工作项已在别处发生变更——正在刷新。",
     "editIssue": "编辑工作项",
@@ -1984,7 +1984,7 @@
       "fields": "字段",
       "components": "模块",
       "aiPlanning": "AI规划",
-      "hostedAgent": "托管智能体",
+      "hostedAgent": "Motir 智能体",
       "translation": "翻译设置",
       "rules": "规则",
       "repositories": "代码仓库",
@@ -3791,8 +3791,8 @@
       }
     },
     "hostedAgent": {
-      "title": "托管智能体",
-      "pageDescription": "托管运行使用哪个模型。“托管运行”会根据工作项的难度预选模型；发起运行的人仍可以选择其他模型。",
+      "title": "Motir 智能体",
+      "pageDescription": "Motir 智能体运行使用哪个模型。“运行”按钮会根据工作项的难度预选模型；发起运行的人仍可以选择其他模型。",
       "card": {
         "title": "按难度选择模型",
         "subtitle": "除非你覆盖，否则每个难度都使用平台默认模型。父工作项使用其叶子工作项中最高难度对应的模型。"
@@ -3810,14 +3810,14 @@
       "optionDefault": "{difficulty}难度的平台默认",
       "reset": "恢复默认",
       "withdrawn": "已保存的模型 <id>{model}</id> 已不再提供，因此{difficulty}难度的运行使用平台默认模型。恢复默认即可清除它。",
-      "noDifficulty": "没有难度的工作项使用平台默认模型 <id>{model}</id>——即“托管运行”标记为<b>默认</b>的模型。",
-      "readOnlyBanner": "只有项目管理员可以更改托管智能体设置。",
-      "unavailableBody": "无法连接 Motir AI，因此暂时无法显示或更改托管模型。在它恢复响应之前，托管运行不可用。",
-      "emptyBody": "目前没有模型可以运行托管工作项，因此没有可选的模型。",
-      "savedTitle": "托管智能体设置已保存",
-      "savedDesc": "新的托管运行将使用这些模型。",
+      "noDifficulty": "没有难度的工作项使用平台默认模型 <id>{model}</id>——即“运行”选择器标记为<b>默认</b>的模型。",
+      "readOnlyBanner": "只有项目管理员可以更改 Motir 智能体设置。",
+      "unavailableBody": "无法连接 Motir AI，因此暂时无法显示或更改 Motir 智能体模型。在它恢复响应之前，Motir 智能体运行不可用。",
+      "emptyBody": "目前没有模型可以在 Motir 智能体中运行工作项，因此没有可选的模型。",
+      "savedTitle": "Motir 智能体设置已保存",
+      "savedDesc": "新的 Motir 智能体运行将使用这些模型。",
       "errorTitle": "无法保存",
-      "saveError": "你的托管智能体设置未保存，请重试。",
+      "saveError": "你的 Motir 智能体设置未保存，请重试。",
       "autoFix": {
         "label": "在工作项自己的智能体中修复未通过的拉取请求。",
         "help": "当拉取请求的检查未通过，且该工作项上一次运行所在的智能体已登录并在线时，Motir 会在该智能体中启动修复。关闭（默认）时，不会自动启动任何修复。"
@@ -4112,7 +4112,7 @@
         "components": "模块由项目管理员管理。如需新增或修改，请联系管理员。",
         "bugs": "本项目缺陷的归档位置由项目管理员管理。如需更改，请联系管理员。",
         "ai-planning": "本项目的 AI 规划——其节奏——由项目管理员配置。如需调整，请联系管理员。",
-        "hosted-agent": "托管运行使用哪个模型，只向能在此项目上发起托管运行的人显示。如需查看，请联系项目管理员。",
+        "hosted-agent": "Motir 智能体运行使用哪个模型，只向能在此项目上发起 Motir 智能体运行的人显示。如需查看，请联系项目管理员。",
         "translation": "此项目工作内容是否为每位读者翻译，仅向可以查看项目工作项的人显示。如需查看，请联系项目管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。",
         "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。",
@@ -4368,16 +4368,16 @@
           },
           "review": {
             "name": "评审智能体",
-            "desc": "托管评审。项目是否使用智能体评审仍在其审批设置中。"
+            "desc": "Motir 智能体评审。项目是否使用智能体评审仍在其审批设置中。"
           },
           "design": {
             "name": "设计运行",
-            "desc": "在设计工作项上的托管运行"
+            "desc": "在设计工作项上的 Motir 智能体运行"
           }
         },
         "agentRun": {
           "name": "智能体运行",
-          "desc": "按工作项难度划分的托管构建运行。项目针对某个难度的自身覆盖仍优先于组织的选择。"
+          "desc": "按工作项难度划分的 Motir 智能体构建运行。项目针对某个难度的自身覆盖仍优先于组织的选择。"
         },
         "modelFor": "{function}的模型",
         "loadingTrigger": "正在加载模型…",
@@ -4404,7 +4404,7 @@
           "failed": "未保存：无法保存{function}。它保留当前模型；请重试。"
         },
         "precedence": {
-          "body": "<b>作业使用哪个模型</b>，以第一个匹配项为准：本人在“托管运行”中的选择 → 项目自身的覆盖（仅限智能体运行）→ {org} 的选择 → 平台默认模型。",
+          "body": "<b>作业使用哪个模型</b>，以第一个匹配项为准：本人在“运行”中的选择 → 项目自身的覆盖（仅限智能体运行）→ {org} 的选择 → 平台默认模型。",
           "cost": "每个模型按其自身费率计费，因此更强的模型会消耗 {org} 更多的额度。"
         },
         "footer": {
@@ -6960,7 +6960,7 @@
     },
     "ai": {
       "name": "Motir AI",
-      "tagline": "规划与托管智能体 —— 按组织的每月额度池。",
+      "tagline": "规划与 Motir 智能体 —— 按组织的每月额度池。",
       "creditsPerMo": "{n} 额度 / 月",
       "creditsOneTime": "{n} 额度 · 一次性",
       "planFee": "套餐费用",
@@ -7075,7 +7075,7 @@
     "plans": {
       "breadcrumb": "组织 · {org} · Motir AI",
       "title": "Motir AI —— 套餐与订阅",
-      "subtitle": "管理你组织的 AI 套餐 —— 规划与托管智能体。与 Motir 席位分开计费，因此本页仅含 AI。",
+      "subtitle": "管理你组织的 AI 套餐 —— 规划与 Motir 智能体。与 Motir 席位分开计费，因此本页仅含 AI。",
       "back": "返回账单",
       "currentStrip": "{n} 额度 / 月 · 剩余 {left} · {date} 续订",
       "currentStripOneTime": "{n} 额度 · 一次性 · 剩余 {left}",
@@ -7389,7 +7389,7 @@
         "ciJobsInFlight": "进行中的 CI 任务"
       },
       "explain": {
-        "agentRunsInParallel": "同时运行的托管智能体任务，超出部分排队等待。",
+        "agentRunsInParallel": "同时运行的 Motir 智能体任务，超出部分排队等待。",
         "agentsInOrg": "整个组织中的活动托管智能体，无论运行中还是休眠中，超出时新建会被拒绝，不排队。",
         "agentsPerPerson": "每人可持有的活动托管智能体，超出时新建会被拒绝，不排队。",
         "ciJobsInFlight": "Motir 运行器上同时进行的 CI 任务，超出部分排队等待。"
@@ -7438,7 +7438,7 @@
       "notReadNotice": "未能读取你的计划上限或当前运行情况。这里不是零，而是未知。",
       "tryAgain": "重试",
       "noPlanLimitsNote": "该组织由 Motir 运营，没有计划上限。当前运行情况不显示上限。",
-      "noFleet": "你的计划不包含托管智能体运行、CI 运行器或智能体。请在上方的 Motir AI 中选择计划来运行它们。",
+      "noFleet": "你的计划不包含 Motir 智能体运行、CI 运行器或智能体。请在上方的 Motir AI 中选择计划来运行它们。",
       "accounts": {
         "title": "你自己的 AWS 账户",
         "notRead": "暂时未能读取你的账户状态。",
@@ -7449,7 +7449,7 @@
         },
         "role": {
           "ci_runner": "运行你的 CI 任务",
-          "hosted_agent": "运行你的托管智能体任务",
+          "hosted_agent": "运行你的 Motir 智能体任务",
           "indexer_and_hoster": "为你的代码建索引并托管你的智能体"
         },
         "state": {
@@ -8130,20 +8130,20 @@
         "personSentBackAnon": "这些提交被退回了。智能体会在{count, plural, =1 {同一个拉取请求} other {同一组拉取请求}}上修复它们，并把退回原因写进提示词。",
         "reviewedAgain": "下一个检查通过的版本会再次接受审查。",
         "hosted": {
-          "lead": "在这里用托管智能体修复——无需终端：",
-          "button": "用托管智能体修复",
+          "lead": "在这里，在 Motir 智能体中修复——无需终端：",
+          "button": "在 Motir 智能体中修复",
           "orTerminal": "或者在终端中将修复交给智能体：",
           "eitherWay": "无论哪种方式，智能体都会在每个拉取请求自己的分支上工作并推送，然后检查会重新运行。",
           "fixing": {
-            "byYou": "<b>你</b>正在用托管智能体修复 · <when></when>开始 · <run>{label}</run>",
-            "by": "<b>{name}</b> 正在用托管智能体修复 · <when></when>开始 · <run>{label}</run>",
+            "byYou": "<b>你</b>正在 Motir 智能体中修复 · <when></when>开始 · <run>{label}</run>",
+            "by": "<b>{name}</b> 正在 Motir 智能体中修复 · <when></when>开始 · <run>{label}</run>",
             "why": "同一时间只运行一个修复。它推送后，检查会重新运行，下一个检查通过的版本会再次接受审查。"
           },
           "refused": {
             "taken": "未启动——已有一个修复在运行，由 <b>{name}</b> 于<when></when>开始。",
             "takenByYou": "未启动——你已有一个修复在运行（<when></when>开始）。",
             "outOfCredits": {
-              "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次用托管智能体修复——或者在终端中修复。"
+              "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次在 Motir 智能体中修复——或者在终端中修复。"
             }
           }
         },
@@ -8198,8 +8198,8 @@
           "interrupted": "运行已在其终端中被停止（<when></when>）。",
           "failed": "智能体出错退出（<when></when>）。",
           "cancelled": "运行已被取消（<when></when>）。",
-          "stalled": "托管智能体停滞——15 分钟无输出（<when></when>）。",
-          "backstop": "托管运行已达 12 小时上限（<when></when>）。"
+          "stalled": "Motir 智能体停滞——15 分钟无输出（<when></when>）。",
+          "backstop": "Motir 智能体运行已达 12 小时上限（<when></when>）。"
         },
         "ranBy": "由 <b>{name}</b> 通过 <mono>{command}</mono> 运行 · <when></when>开始",
         "ranBySomeone": "通过 <mono>{command}</mono> 运行 · <when></when>开始",
@@ -8232,7 +8232,7 @@
         "error": "无法检查此工作项的运行是否仍在进行。",
         "retry": "重试",
         "hosted": {
-          "lead": "在这里用托管容器继续——无需终端：",
+          "lead": "在这里，在 Motir 智能体中继续——无需终端：",
           "button": "继续",
           "buttonParent": "继续 {key}",
           "orTerminal": "或者在终端中继续：",
@@ -8242,8 +8242,8 @@
             "rowWithPr": "<b>{repository}</b> · <ref>{branch}</ref> · 拉取请求 <b>{pr}</b>"
           },
           "continuing": {
-            "byYou": "<b>你</b>正在用托管容器继续 · <when></when>开始",
-            "by": "<b>{name}</b> 正在用托管容器继续 · <when></when>开始",
+            "byYou": "<b>你</b>正在 Motir 智能体中继续 · <when></when>开始",
+            "by": "<b>{name}</b> 正在 Motir 智能体中继续 · <when></when>开始",
             "watch": "在上方的“运行”中查看其进度。"
           },
           "refused": {
@@ -10345,7 +10345,7 @@
       },
       "toResume": {
         "title": "没有待继续的运行",
-        "body": "当运行停在它所需的审批处时，会在这里等待，直到审批通过——随后在托管智能体上自动继续，或在终端中用 motir continue 继续。"
+        "body": "当运行停在它所需的审批处时，会在这里等待，直到审批通过——随后在 Motir 智能体中自动继续，或在终端中用 motir continue 继续。"
       },
       "recentlyFinished": {
         "title": "本周还没有完成的工作",
@@ -10495,8 +10495,8 @@
         "title": "已复制",
         "body": "请将 {command} 粘贴到终端。"
       },
-      "fixingHosted": "<b>{name}</b> 正在用托管智能体修复 · <run>{label}</run>",
-      "fixingHostedByYou": "<b>你</b>正在用托管智能体修复 · <run>{label}</run>",
+      "fixingHosted": "<b>{name}</b> 正在 Motir 智能体中修复 · <run>{label}</run>",
+      "fixingHostedByYou": "<b>你</b>正在 Motir 智能体中修复 · <run>{label}</run>",
       "entry": {
         "carriesRun": "此运行中另有 {count, plural, other {#}} 个工作项",
         "carriesPullRequests": "相同拉取请求上另有 {count, plural, other {#}} 个工作项",
@@ -10514,10 +10514,10 @@
       "readyByYou": "可以继续 · 你已于<when></when>批准 {key} 的{kind}",
       "readyBare": "可以继续",
       "readySome": "可以继续 · {total} 项审批中已通过 {approved} 项",
-      "resuming": "正在托管智能体上继续 · <when></when>开始",
+      "resuming": "正在 Motir 智能体中继续 · <when></when>开始",
       "couldNot": "未能自动继续 · <reason></reason>",
       "ranBy": {
-        "hosted": "{name} 在托管智能体上运行",
+        "hosted": "{name} 在 Motir 智能体中运行了它",
         "terminal": "{name} 在终端中运行",
         "runbook": "{name} 通过运行手册运行",
         "instance": "{name} 在 {agent} 中运行"
@@ -10551,8 +10551,8 @@
       },
       "seeRun": "查看运行",
       "next": {
-        "waitingHosted": "审批通过后，此运行会在托管智能体上自动继续。",
-        "waitingHostedMany": "任一审批通过后，此运行会在托管智能体上自动继续，并在其余审批处再次停下。",
+        "waitingHosted": "审批通过后，此运行会在 Motir 智能体中自动继续。",
+        "waitingHostedMany": "任一审批通过后，此运行会在 Motir 智能体中自动继续，并在其余审批处再次停下。",
         "waitingLocal": "审批通过后，在终端中继续——命令会显示在这里。",
         "ready": "智能体会在原分支上接手此运行，构建该审批放行的工作，并在仍需等待的审批处再次停下。",
         "readySome": "现在继续会构建已通过审批放行的工作，并在仍在等待的 {count} 项审批处再次停下。",
@@ -10755,7 +10755,7 @@
       "navPlanningLessons": "规划经验",
       "navPlannerFindings": "规划器发现",
       "navIdeas": "创意",
-      "navRunModels": "托管运行模型",
+      "navRunModels": "Motir 智能体模型",
       "navFleetSettings": "集群设置",
       "navServices": "服务",
       "navCapacity": "服务商容量",
@@ -10932,9 +10932,9 @@
               "remove": "从规划模型列表移除了模型"
             },
             "run_model_list": {
-              "seed": "初始化了托管运行模型列表",
-              "add": "向托管运行模型列表添加了模型",
-              "remove": "从托管运行模型列表移除了模型"
+              "seed": "初始化了 Motir 智能体模型列表",
+              "add": "向 Motir 智能体模型列表添加了模型",
+              "remove": "从 Motir 智能体模型列表移除了模型"
             },
             "lesson": {
               "edit": "编辑了规划经验",
@@ -11034,7 +11034,7 @@
           "unreachableDetail": {
             "unreachable": "数据库没有响应 ping。这不是延迟为零——什么都没测到。"
           },
-          "linkOut": "RDS 控制台"
+          "linkOut": "Amazon RDS 控制台"
         },
         "hosting": {
           "title": "托管",
@@ -11259,7 +11259,7 @@
           "stat": {
             "orgs": "正在运行容器的组织",
             "ciRunners": "CI 运行器 · 每个组织受其套餐的突发上限约束",
-            "hostedAgents": "托管智能体运行 · 每个组织受其套餐的并行运行数约束",
+            "hostedAgents": "Motir 智能体运行 · 每个组织受其套餐的并行运行数约束",
             "instances": "运行中的智能体实例 · 每个组织受其套餐的上限约束",
             "mismatched": "不一致 · 运行与扣费不符"
           },
@@ -11271,7 +11271,7 @@
             "org": "组织",
             "plan": "套餐",
             "ciRunner": "CI 运行器",
-            "hostedAgent": "托管智能体运行",
+            "hostedAgent": "Motir 智能体运行",
             "index": "索引容器",
             "agentInstance": "智能体实例",
             "accrued": "CI 分钟 · 最近 {minutes} 分钟",
@@ -11304,7 +11304,7 @@
           "foot": "显示第 {from}–{to} 个，共 {total} 个 · 不一致的在前，其次是容器最多的 · 只判定 CI——它是唯一在运行时扣费的工作负载",
           "empty": {
             "title": "没有组织在运行容器集群中的容器",
-            "body": "当前没有组织持有 CI 运行器、托管智能体运行、智能体实例或索引容器，因此没有可与扣费对比的内容。这是健康的读数，不是故障。"
+            "body": "当前没有组织持有 CI 运行器、Motir 智能体运行、智能体实例或索引容器，因此没有可与扣费对比的内容。这是健康的读数，不是故障。"
           },
           "error": {
             "title": "无法读取容器集群",
@@ -11613,8 +11613,8 @@
         "remaining": "剩余",
         "grantedConsumed": "已发放 {granted} · 已消耗 {consumed}",
         "unknownFigure": "未知",
-        "creditNote": "由规划器和托管智能体消耗。本周期 Token 花费：{spend} 额度。",
-        "creditNoteUnknownSpend": "由规划器和托管智能体消耗。本周期 Token 花费：未知。",
+        "creditNote": "由规划器和 Motir 智能体消耗。本周期 Token 花费：{spend} 额度。",
+        "creditNoteUnknownSpend": "由规划器和 Motir 智能体消耗。本周期 Token 花费：未知。",
         "indexNote": "仅由索引消耗。在任何情况下都不会动用额度余额。",
         "notGrantedYet": "尚未发放额度——该组织在当前周期内还没有进行过索引。",
         "notConfigured": "未配置额度——由工作人员在套餐上设置。在此之前没有可越过的门槛。",
@@ -12013,7 +12013,7 @@
         "sheetDone": "完成"
       },
       "source": {
-        "in_loop": "托管审查",
+        "in_loop": "Motir 智能体审查",
         "check_plan": "Check plan"
       },
       "planner": {
@@ -12719,7 +12719,7 @@
           "whenOff": "新的规划任务会被拒绝，并提示“你的组织已暂停规划”。已在运行的任务会完成。"
         },
         "hosted_runs": {
-          "name": "托管智能体运行",
+          "name": "Motir 智能体运行",
           "whenOff": "新的智能体运行和智能体实例会被拒绝。正在运行的容器会被停止。"
         },
         "web_search": {
@@ -12823,7 +12823,7 @@
         "subtitleEmpty": "该组织当前没有在集群上运行任何内容。",
         "workload": {
           "ciRunner": "CI 运行器",
-          "hostedAgent": "托管智能体运行",
+          "hostedAgent": "Motir 智能体运行",
           "agentInstance": "智能体实例",
           "index": "索引容器"
         },
@@ -12838,8 +12838,8 @@
           "override": "覆盖值"
         },
         "facts": {
-          "plan": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {agents} 个智能体 · 同时 {ci} 个 CI 作业",
-          "planCiUnreadable": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {agents} 个智能体 · CI 上限无法读取",
+          "plan": "套餐 <strong>{plan}</strong> · 同时 {runs} 个 Motir 智能体运行 · 每人 {perUser} 个智能体 · {agents} 个智能体 · 同时 {ci} 个 CI 作业",
+          "planCiUnreadable": "套餐 <strong>{plan}</strong> · 同时 {runs} 个 Motir 智能体运行 · 每人 {perUser} 个智能体 · {agents} 个智能体 · CI 上限无法读取",
           "planExempt": "套餐 <strong>无套餐限制</strong>",
           "planExemptOverride": "套餐 <strong>无套餐限制</strong> · 同时 {ci} 个 CI 作业（覆盖值）",
           "planUnknown": "套餐 <strong>未知 · {key}</strong> · 新容器被拒绝",
@@ -12850,7 +12850,7 @@
         },
         "stop": {
           "button": "停止容器",
-          "explainer": "停止会立即结束该组织<strong>计费中</strong>的工作：CI、托管智能体运行和智能体实例。它不会暂停该组织。",
+          "explainer": "停止会立即结束该组织<strong>计费中</strong>的工作：CI、Motir 智能体运行和智能体实例。它不会暂停该组织。",
           "notPermitted": "只有<strong>超级管理员</strong>可以停止组织的容器。你当前的身份是 <strong>{role}</strong>。",
           "nothing": "没有可停止的内容。"
         },
@@ -12859,7 +12859,7 @@
           "lead": "这将结束 {org} 此刻在 Motir 集群上运行的内容：",
           "ci": "{runs, plural, other {个 CI 运行被取消}}，<strong>{containers}</strong> {containers, plural, other {个 CI 容器被销毁}}",
           "ciUnknown": "CI 运行数未知——无法读取 GitHub，停止操作仍会取消它们——<strong>{containers}</strong> {containers, plural, other {个 CI 容器被销毁}}",
-          "hosted": "{count, plural, other {个托管智能体运行被结束}}",
+          "hosted": "{count, plural, other {个 Motir 智能体运行被结束}}",
           "instances": "{count, plural, other {个智能体实例被休眠}}",
           "index": "{count, plural, other {个索引容器}}保留至完成——索引是 Motir 自身的成本，从不向组织计费",
           "notSuspension": "<strong>这不是暂停。</strong>不会阻止任何操作：{org} 的下一次 CI 运行、智能体运行或智能体启动都会照常准入。",
@@ -12881,8 +12881,8 @@
           "partialTitle": "已停止，但有失败",
           "ci": "已取消 {runs, plural, other {#}} 个 CI 运行 · 已销毁 {stopped, plural, other {#}} 个 CI 容器",
           "ciPartial": "CI：已取消 {runs} 个运行 · 已销毁 {stopped} / {total} 个容器",
-          "hosted": "已结束 {ended, plural, other {#}} 个托管智能体运行",
-          "hostedPartial": "托管智能体运行：已结束 {ended} 个",
+          "hosted": "已结束 {ended, plural, other {#}} 个 Motir 智能体运行",
+          "hostedPartial": "Motir 智能体运行：已结束 {ended} 个",
           "instances": "已休眠 {hibernated, plural, other {#}} 个智能体实例",
           "instancesPartial": "智能体实例：已休眠 {hibernated} / {total} 个",
           "failed": "{count} 个未能停止——协调器将重试。"
@@ -12902,7 +12902,7 @@
           "when": "{time} · {actor}",
           "unknownActor": "一位前任操作者",
           "noReason": "未记录原因",
-          "counts": "{runs} 个 CI 运行 · {containers} 个 CI 容器 · {hosted} 个托管运行 · {instances} 个智能体实例"
+          "counts": "{runs} 个 CI 运行 · {containers} 个 CI 容器 · {hosted} 个 Motir 智能体运行 · {instances} 个智能体实例"
         },
         "orgAdminStop": {
           "title": "组织管理员上次停止",
@@ -12985,17 +12985,17 @@
       }
     },
     "runModels": {
-      "breadcrumb": "运维 · 托管运行模型",
-      "title": "托管运行模型",
-      "subtitle": "托管运行可以使用哪些模型，适用于所有项目。项目从已列入、且 motir-ai 当前提供的模型中选择。",
+      "breadcrumb": "运维 · Motir 智能体模型",
+      "title": "Motir 智能体模型",
+      "subtitle": "Motir 智能体运行可以使用哪些模型，适用于所有项目。项目从已列入、且 motir-ai 当前提供的模型中选择。",
       "lineLive": "motir-ai 不再提供的已列入模型会立即从所有选择器中消失。未列入的模型永远不会出现。",
       "lineProjectsLead": "项目看不到这个列表。",
-      "lineProjectsBody": "它们看到的是结果：“托管运行”选择器和项目的托管智能体设置只提供这些模型。",
+      "lineProjectsBody": "它们看到的是结果：“运行”选择器和项目的 Motir 智能体设置只提供这些模型。",
       "card": {
-        "title": "托管运行可使用的模型",
-        "subtitle": "列表首次读取时，用 motir-ai 当时为托管运行提供的所有模型初始化，因此没有项目失去它已选择的模型。"
+        "title": "Motir 智能体运行可使用的模型",
+        "subtitle": "列表首次读取时，用 motir-ai 当时为 Motir 智能体运行提供的所有模型初始化，因此没有项目失去它已选择的模型。"
       },
-      "notOffered": "当前不在 motir-ai 的托管运行可用模型中：它可能已撤下、没有费率、不是对话模型，或其提供方未为托管运行配置。",
+      "notOffered": "当前不在 motir-ai 为 Motir 智能体提供的模型中：它可能已撤下、没有费率、不是对话模型，或其提供方未为 Motir 智能体运行配置。",
       "level": {
         "trivial": "极简",
         "low": "低",
@@ -13007,19 +13007,19 @@
         "projects": "{n, plural, other {#}} 个项目"
       },
       "add": {
-        "title": "添加一个托管运行模型",
-        "body": "添加后，项目就可以在“托管运行”和按难度的设置中选择它。",
+        "title": "添加一个 Motir 智能体模型",
+        "body": "添加后，项目就可以在“运行”和按难度的设置中选择它。",
         "modelLabel": "模型",
         "placeholder": "选择一个模型",
-        "pickerFoot": "motir-ai 为托管运行提供、但尚未列入的模型。",
-        "nothing": "motir-ai 为托管运行提供的模型都已列入。",
+        "pickerFoot": "motir-ai 为 Motir 智能体运行提供、但尚未列入的模型。",
+        "nothing": "motir-ai 为 Motir 智能体运行提供的模型都已列入。",
         "confirm": "添加模型",
-        "notOffered": "未添加：motir-ai 已不再为托管运行提供 {model}。",
+        "notOffered": "未添加：motir-ai 已不再为 Motir 智能体运行提供 {model}。",
         "alreadyListed": "未添加：{model} 已在列表中。"
       },
       "remove": {
-        "title": "要从托管运行模型中移除 {model} 吗？",
-        "body": "从现在起，任何项目都不能为托管运行选择它。没有项目或平台默认值在使用它。",
+        "title": "要从 Motir 智能体模型中移除 {model} 吗？",
+        "body": "从现在起，任何项目都不能为 Motir 智能体运行选择它。没有项目或平台默认值在使用它。",
         "confirm": "移除模型",
         "inUse": "未移除：{model} 正在使用中。{platformDefaultClause}{projectsClause}请先更改这些设置。",
         "inUseParts": {
@@ -13031,20 +13031,20 @@
         },
         "notListed": "未移除：{model} 已不在列表中。"
       },
-      "added": "已添加 {model}。项目现在可以为托管运行选择它。",
-      "removed": "已从托管运行模型中移除 {model}。",
+      "added": "已添加 {model}。项目现在可以为 Motir 智能体运行选择它。",
+      "removed": "已从 Motir 智能体模型中移除 {model}。",
       "empty": {
         "title": "没有列入任何模型",
-        "body": "在添加模型之前，任何托管运行都无法启动。请从 motir-ai 提供的模型中添加。",
-        "bodyReadOnly": "在超级管理员添加模型之前，任何托管运行都无法启动。"
+        "body": "在添加模型之前，任何 Motir 智能体运行都无法启动。请从 motir-ai 提供的模型中添加。",
+        "bodyReadOnly": "在超级管理员添加模型之前，任何 Motir 智能体运行都无法启动。"
       },
       "unavailable": {
-        "title": "无法加载托管运行模型",
+        "title": "无法加载 Motir 智能体模型",
         "body": "motir-ai 没有响应，因此无法确定每个已列入模型是否可用，不显示列表。没有任何更改。"
       },
       "defaults": {
         "title": "运行侧默认值",
-        "subtitle": "当个人、项目和组织都未选择模型时，托管审查、设计运行或智能体运行启动所用的模型。从上方列表中选择。",
+        "subtitle": "当个人、项目和组织都未选择模型时，Motir 智能体审查、设计运行或智能体运行启动所用的模型。从上方列表中选择。",
         "count": "6 项设置",
         "col": {
           "function": "功能"
@@ -13052,27 +13052,27 @@
         "row": {
           "review": {
             "name": "审查智能体",
-            "desc": "托管审查"
+            "desc": "Motir 智能体审查"
           },
           "design": {
             "name": "设计运行",
-            "desc": "在设计工作项上的托管运行"
+            "desc": "在设计工作项上的 Motir 智能体运行"
           },
           "trivial": {
             "name": "智能体运行 · 极简",
-            "desc": "在极简工作项上的托管构建运行"
+            "desc": "在极简工作项上的 Motir 智能体构建运行"
           },
           "low": {
             "name": "智能体运行 · 低",
-            "desc": "在低难度工作项上的托管构建运行"
+            "desc": "在低难度工作项上的 Motir 智能体构建运行"
           },
           "medium": {
             "name": "智能体运行 · 中",
-            "desc": "在中等难度工作项上的托管构建运行"
+            "desc": "在中等难度工作项上的 Motir 智能体构建运行"
           },
           "high": {
             "name": "智能体运行 · 高",
-            "desc": "在高难度工作项上的托管构建运行"
+            "desc": "在高难度工作项上的 Motir 智能体构建运行"
           }
         },
         "inherits": {
@@ -13089,7 +13089,7 @@
         },
         "defaultGroup": "默认",
         "pickerAria": "{name} 的默认模型",
-        "pickerFoot": "仅显示上方列表中、且 motir-ai 为托管运行提供的模型。",
+        "pickerFoot": "仅显示上方列表中、且 motir-ai 为 Motir 智能体运行提供的模型。",
         "changed": {
           "seededFromEnv": "来自环境 · 从未更改",
           "neverSet": "从未设置"
@@ -13099,7 +13099,7 @@
           "body": "在选择其他模型之前，{name} 会回退到{what}。",
           "bodyReadOnly": "在超级管理员选择其他模型之前，{name} 会回退到{what}。"
         },
-        "refused": "{model} 已不再为托管运行提供或不在列表中，因此未保存。页面已刷新 — 请选择其他模型。",
+        "refused": "{model} 已不再为 Motir 智能体运行提供或不在列表中，因此未保存。页面已刷新 — 请选择其他模型。",
         "confirmTitle": "更改平台的 {name} 模型？",
         "confirmBody": {
           "review": "{from} → {to}。从下一次审查起，对所有未自行选择的组织生效。已在进行的审查会用开始时的模型完成。",
@@ -13368,6 +13368,7 @@
       "codeScanning": {
         "fleet": "在集群上运行（{label}）",
         "githubHosted": "在 GitHub 托管的运行器上运行",
+        "pendingFleet": "在下一个集群作业之前在 GitHub 托管的运行器上运行——该作业的运行器出现后即可移到集群上（{label}）",
         "unknownStatus": "无法读取 —— GitHub 返回 HTTP {status}",
         "unknownUnreachable": "无法读取 —— 无法连接到 GitHub",
         "none": "{org} 上没有任何私有仓库配置了 CodeQL 默认设置。"
@@ -14115,8 +14116,8 @@
       },
       "image": {
         "hosted": {
-          "title": "托管智能体镜像",
-          "subtitle": "每次托管运行启动的镜像。由 MOTIR_HOSTED_AGENT_IMAGE 固定;最新的是 ghcr.io/motir-co/motir-hosted-agent 的最新 main 构建。"
+          "title": "Motir 智能体镜像",
+          "subtitle": "每次 Motir 智能体运行启动的镜像。由 MOTIR_HOSTED_AGENT_IMAGE 固定;最新的是 ghcr.io/motir-co/motir-hosted-agent 的最新 main 构建。"
         },
         "runner": {
           "title": "CI 运行器镜像",
@@ -14132,7 +14133,7 @@
         }
       },
       "imageName": {
-        "hosted": "托管智能体镜像",
+        "hosted": "Motir 智能体镜像",
         "runner": "CI 运行器镜像",
         "indexer": "索引器镜像",
         "sandbox": "智能体实例镜像"
@@ -14206,7 +14207,7 @@
         "button": "发布最新",
         "republish": "重新发布",
         "note": {
-          "hosted": "通过托管智能体固定工作流固定最新 main 构建。Web 和 worker 会切换到它。",
+          "hosted": "通过 Motir 智能体固定工作流固定最新 main 构建。Web 和 worker 会切换到它。",
           "runner": "通过运行器固定工作流固定 {release}。Web 和 worker 会切换到它。",
           "indexer": "通过索引器固定拉取请求固定 {release}。Web 和 worker 会切换到它。",
           "sandbox": "重新发布 {release}。只推送缺失的 {count} 个标签;生产环境不会切换。",
@@ -14223,7 +14224,7 @@
         }
       },
       "confirm": {
-        "hostedTitle": "发布最新的托管智能体镜像?",
+        "hostedTitle": "发布最新的 Motir 智能体镜像?",
         "runnerTitle": "发布 {release}?",
         "sandboxTitle": "重新发布 {release}?",
         "from": "从",
@@ -14231,7 +14232,7 @@
         "cancel": "取消",
         "audited": "将以你的身份({email})记录在审计日志中。",
         "sandboxFrom": "{version} 的 {total} 个标签中有 {published} 个",
-        "hostedBody": "这将启动托管智能体固定工作流。它会把 MOTIR_HOSTED_AGENT_IMAGE 移到最新构建并部署:<strong>web 和 worker 会切换</strong>到新的固定,切换后启动的托管运行会使用新镜像。",
+        "hostedBody": "这将启动 Motir 智能体固定工作流。它会把 MOTIR_HOSTED_AGENT_IMAGE 移到最新构建并部署:<strong>web 和 worker 会切换</strong>到新的固定,切换后启动的 Motir 智能体运行会使用新镜像。",
         "runnerBody": "这将启动运行器固定工作流。它会把 MOTIR_RUNNER_IMAGE 移到 {release} 并部署:<strong>web 和 worker 会切换</strong>到新的固定。运行器 AMI 不会改变。",
         "indexerBody": "这将打开索引器固定拉取请求,它把 MOTIR_INDEXER_IMAGE 移到 {release} 并排队等待合并。随后它的部署会<strong>切换 web 和 worker</strong>,切换之后开始的索引运行会启动新镜像。已在进行的索引运行会以它们启动时的镜像结束。",
         "sandboxBody": "这将重新运行 {release} 的沙箱发布,只推送缺失的标签:{missing}。{published} 已发布,不会再次推送。<strong>生产环境不会切换。</strong>",
@@ -14264,7 +14265,7 @@
         "retry": "重试"
       },
       "workflow": {
-        "hosted": "托管智能体固定",
+        "hosted": "Motir 智能体固定",
         "runner": "运行器固定",
         "indexer": "索引器固定",
         "sandbox": "沙箱发布 {tag}",
@@ -15187,8 +15188,8 @@
       "pillReady": "可以继续",
       "gate": "{key} 的{kind}",
       "waitingMany": "{count} 项审批",
-      "waitingHosted": "此运行停在审批处——正在等待<b>{gate}</b>。其工作保留在分支 <d>{branch}</d> 上，审批通过后会在托管智能体上<b>自动继续</b>。",
-      "waitingHostedNoBranch": "此运行停在审批处——正在等待<b>{gate}</b>。其工作已保留，审批通过后会在托管智能体上<b>自动继续</b>。",
+      "waitingHosted": "此运行停在审批处——正在等待<b>{gate}</b>。其工作保留在分支 <d>{branch}</d> 上，审批通过后会在 Motir 智能体中<b>自动继续</b>。",
+      "waitingHostedNoBranch": "此运行停在审批处——正在等待<b>{gate}</b>。其工作已保留，审批通过后会在 Motir 智能体中<b>自动继续</b>。",
       "waitingLocal": "此运行停在审批处——正在等待<b>{gate}</b>。其工作保留在分支上；审批通过后，用 <d>{command}</d> 继续。",
       "ready": "可以继续——<b>{total} 项审批中已通过 {approved} 项</b>。继续即可构建已批准的工作；它会在仍在等待的审批处再次停下：",
       "resuming": "正在继续——<b>{name}</b> 已批准{gate}，新的运行正在同一分支上继续。<link>查看新运行</link>",
@@ -15393,12 +15394,12 @@
       "cancel": "取消"
     },
     "hostedRuns": {
-      "ready": "托管运行可以写入这里——Motir 的应用会推送它们的分支并打开它们的拉取请求。",
+      "ready": "Motir 智能体运行可以写入这里——Motir 的应用会推送它们的分支并打开它们的拉取请求。",
       "needsPermissionsTitle": "需要更新权限。",
-      "needsPermissionsBody": "{account} 上的 Motir Integration 还不能写入——需要 {account} 的所有者在 GitHub 上接受它更新后的权限。在此之前，涉及此仓库的托管运行会在开始前被拒绝。",
+      "needsPermissionsBody": "{account} 上的 Motir Integration 还不能写入——需要 {account} 的所有者在 GitHub 上接受它更新后的权限。在此之前，涉及此仓库的 Motir 智能体运行会在开始前被拒绝。",
       "reviewPermissions": "在 GitHub 上查看权限",
       "unreachableTitle": "Motir Integration 已无法访问 {repo}。",
-      "unreachableBody": "它的安装已被移除或暂停，或不再包含此仓库。请在 GitHub 上重新连接；在此之前，涉及它的托管运行会被拒绝。",
+      "unreachableBody": "它的安装已被移除或暂停，或不再包含此仓库。请在 GitHub 上重新连接；在此之前，涉及它的 Motir 智能体运行会被拒绝。",
       "reconnect": "重新连接"
     }
   },
@@ -16291,11 +16292,11 @@
         "lead": "<b>审查未能运行：</b><reason></reason>",
         "reason": {
           "no_credits": "你的组织 AI 额度已用完。",
-          "no_model": "没有可用于托管运行的模型。",
+          "no_model": "没有可用于 Motir 智能体运行的模型。",
           "repository_unreadable": "审查无法读取它要审查的某个代码仓库。",
           "no_verdict": "审查运行结束时没有给出结论——<run>{label}</run>。",
           "no_verdictNoRun": "审查运行结束时没有给出结论。",
-          "boot_failed": "审查所用的托管机器未能启动。",
+          "boot_failed": "审查所用的 Motir 智能体机器未能启动。",
           "no_actor": "没有人可以运行它——该工作项没有负责人或创建人，工作区也没有代理管理员。",
           "unknown": "审查运行未能启动。",
           "noCapacity": "审查所用的模型目前没有智能体运行容量，请稍后再试。"
@@ -16321,7 +16322,7 @@
       }
     },
     "autoRerun": {
-      "started": "正在托管智能体上重新运行",
+      "started": "正在 Motir 智能体中重新运行",
       "startedCount": "第 {ordinal} 次自动重新运行（共 {cap} 次）",
       "viewRun": "查看运行",
       "skipped": "已跳过自动重新运行",
@@ -16339,14 +16340,14 @@
         "no_capacity": "它上次使用的模型 {detail} 目前没有智能体运行容量。"
       },
       "next": {
-        "cap_reached": "在托管智能体上运行",
-        "dispatcher_gone": "在托管智能体上运行",
-        "no_project_access": "在托管智能体上运行",
+        "cap_reached": "在 Motir 智能体中运行",
+        "dispatcher_gone": "在 Motir 智能体中运行",
+        "no_project_access": "在 Motir 智能体中运行",
         "ci_credits_exhausted": "账单",
         "model_not_offered": "选择模型并运行",
-        "models_unavailable": "在托管智能体上运行",
+        "models_unavailable": "在 Motir 智能体中运行",
         "out_of_credits": "购买额度",
-        "credits_unavailable": "在托管智能体上运行",
+        "credits_unavailable": "在 Motir 智能体中运行",
         "repository_not_writable": "仓库",
         "no_capacity": "选择其他模型并运行"
       }
@@ -16386,7 +16387,7 @@
         "second": "在已决定的版本上的第二次审查。此审查未作出任何决定。",
         "notified": "已通知 {name}。",
         "findings": "发现",
-        "agentHosted": "Motir 托管智能体",
+        "agentHosted": "Motir 智能体",
         "agentOwn": "{name} 的智能体（{harness}）",
         "dismissed": "<actor></actor> 驳回了智能体在 {commits} 上的审查",
         "dismissedReason": "理由：{reason}"
@@ -16421,7 +16422,7 @@
         "reviewed": "已审查",
         "reviewedName": "已由智能体在当前提交上审查",
         "card": {
-          "hosted": "由 Motir 托管智能体审查",
+          "hosted": "由 Motir 智能体审查",
           "own": "由 {name} 自己的智能体审查",
           "harness": "{harness} · {model}",
           "commits": "审查的提交",
@@ -16431,7 +16432,7 @@
       "line": {
         "label": "智能体审查",
         "reviewed": "<b>已由智能体审查</b> · {who} · {when}",
-        "whoHosted": "Motir 托管智能体",
+        "whoHosted": "Motir 智能体",
         "whoOwn": "{name} 的智能体 · {harness}",
         "findings": "发现和检查清单",
         "skipped": "<b>{name} 跳过了审查</b> — “{reason}”",
@@ -16445,7 +16446,7 @@
         "subtitle": "{title} · {key}",
         "verdictPassed": "已通过",
         "verdictSentBack": "要求修改",
-        "byHosted": "Motir 托管智能体",
+        "byHosted": "Motir 智能体",
         "byOwn": "{name} 自己的智能体",
         "byOwnHarness": "{name} 自己的智能体 · {harness} · {model}",
         "commits": "审查的提交",
@@ -16573,13 +16574,13 @@
       "offWhat": "工作项的检查一通过，就会提交给你批准。",
       "unavailable": "不可用",
       "unavailableWhat": "该项目会自动合并，因此没有需要等待审查的内容。请选择<strong>合并前询问</strong>以开启审查智能体。",
-      "billingNote": "每次审查都是一次托管智能体运行，费用从你组织的 AI 额度中扣除。",
+      "billingNote": "每次审查都是一次 Motir 智能体运行，费用从你组织的 AI 额度中扣除。",
       "offNote": "关闭后，进行中的审查会被取消——这些工作项将直接进入常规流程。",
       "saved": "已保存",
       "saveError": "保存失败，请重试。",
       "source": {
         "label": "由谁审查",
-        "hosted": "Motir 托管智能体",
+        "hosted": "Motir 智能体",
         "hostedWhat": "检查通过后，Motir 会启动一次审查运行。<strong>会消耗 AI 额度。</strong>",
         "own": "你自己的智能体",
         "ownWhat": "免费。审查会等待有人从自己的智能体运行 <cmd>motir review</cmd>。不会自动开始。"
@@ -16967,10 +16968,10 @@
       "openingDevelopment": "正在打开“开发”…",
       "sentBackByAgent": "需要修复：审查智能体已将它退回——“{note}”",
       "sentBackByAgentNoNote": "需要修复：审查智能体已将它退回。",
-      "hostedLead": "在这里用托管智能体修复——无需终端：",
+      "hostedLead": "在 Motir 智能体中修复——无需终端：",
       "orTerminal": "或者在终端中修复：",
-      "fixingHosted": "托管修复正在运行——由 <b>{name}</b> 于<when></when>开始 · <run>{label}</run>",
-      "fixingHostedByYou": "托管修复正在运行——由<b>你</b>于<when></when>开始 · <run>{label}</run>",
+      "fixingHosted": "Motir 智能体修复正在运行——由 <b>{name}</b> 于<when></when>开始 · <run>{label}</run>",
+      "fixingHostedByYou": "Motir 智能体修复正在运行——由<b>你</b>于<when></when>开始 · <run>{label}</run>",
       "carries": "另有 {count, plural, other {#}} 个工作项随它受阻：<keys></keys>",
       "carriesMore": "等另外 {count} 个",
       "repairedWithHead": "随 <b>{head}</b> 一起修复——它们共用同一个拉取请求。",

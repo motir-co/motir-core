@@ -16,7 +16,7 @@ import type {
 /**
  * The console's per-function default rows (Story MOTIR-10838 · MOTIR-10844;
  * design `console--function-defaults.mock.html`): Guide, Debug and Ask on the AI
- * planning table, and the Run-side defaults card on the Hosted-run models page.
+ * planning table, and the Run-side defaults card on the Motir agent models page.
  * The actions are stubbed — their codes have their own suites — and each code is
  * driven to the state the design draws for it.
  */
@@ -472,7 +472,7 @@ describe('the Run-side defaults card', () => {
     fireEvent.click(screen.getByRole('option', { name: /claude-haiku-5-5/ }));
     await saveWith(rowOf('design'), 'x');
     expect(within(rowOf('design')).getByRole('alert').textContent).toContain(
-      'claude-haiku-5-5 is no longer offered for hosted runs or not on the list',
+      'claude-haiku-5-5 is no longer offered for Motir agent runs or not on the list',
     );
     expect(refresh).toHaveBeenCalled();
   });

@@ -420,7 +420,7 @@ describe('POST /api/work-items/[id]/hosted-runs — mode continue', () => {
   });
 });
 
-// Fix on the hosted agent (Story MOTIR-1626 · MOTIR-6928) — `mode: 'fix'`.
+// Fix in Motir agent (Story MOTIR-1626 · MOTIR-6928) — `mode: 'fix'`.
 describe('POST /api/work-items/[id]/hosted-runs — mode fix', () => {
   /** A card In Review, one open green pull request, optionally sent back by the review agent. */
   async function reviewedCard(sentBack: boolean, checks: 'success' | 'failure' = 'success') {

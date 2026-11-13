@@ -34,10 +34,15 @@ export type FleetOrgCiVariableDTO =
  *  GitHub (MOTIR-10289). Its runner is a per-repository setting no workflow
  *  file reads, so the org variable does not move it — the flip does.
  *  `fleet` = labelled with the fleet label; `github_hosted` = `standard`, or a
- *  label that is not the fleet's; `not_configured` / `unavailable` = no default
- *  setup at all; `unknown` = the read failed. */
+ *  label that is not the fleet's; `pending_fleet` = the pair is ON and the move
+ *  waits for a registered fleet runner (the next boot makes it);
+ *  `not_configured` / `unavailable` = no default setup at all; `unknown` = the
+ *  read failed. */
 export type FleetOrgCiCodeScanningDTO =
-  | { repo: string; state: 'fleet' | 'github_hosted' | 'not_configured' | 'unavailable' }
+  | {
+      repo: string;
+      state: 'fleet' | 'pending_fleet' | 'github_hosted' | 'not_configured' | 'unavailable';
+    }
   | { repo: string; state: 'unknown'; status: number | null };
 
 /** The console's full reading of one pair. */

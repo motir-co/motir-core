@@ -355,7 +355,7 @@ export class RunModelNotOfferedError extends Error {
   readonly code = 'RUN_MODEL_NOT_OFFERED';
 
   constructor(readonly model: string) {
-    super(`"${model}" is not offered for hosted runs by motir-ai right now`);
+    super(`"${model}" is not offered for Motir agent runs by motir-ai right now`);
     this.name = 'RunModelNotOfferedError';
   }
 }
@@ -365,7 +365,7 @@ export class RunModelAlreadyListedError extends Error {
   readonly code = 'RUN_MODEL_ALREADY_LISTED';
 
   constructor(readonly model: string) {
-    super(`"${model}" is already on the hosted-run model list`);
+    super(`"${model}" is already on the Motir agent model list`);
     this.name = 'RunModelAlreadyListedError';
   }
 }
@@ -375,7 +375,7 @@ export class RunModelNotListedError extends Error {
   readonly code = 'RUN_MODEL_NOT_LISTED';
 
   constructor(readonly model: string) {
-    super(`"${model}" is not on the hosted-run model list`);
+    super(`"${model}" is not on the Motir agent model list`);
     this.name = 'RunModelNotListedError';
   }
 }

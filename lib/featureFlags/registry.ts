@@ -35,7 +35,7 @@ export const ORG_FEATURE_FLAG_REGISTRY: Readonly<
   },
   hosted_runs: {
     defaultEnabled: true,
-    whenOff: 'New hosted agent runs and agent instances are refused.',
+    whenOff: 'New Motir agent runs and agent instances are refused.',
   },
   web_search: {
     defaultEnabled: true,

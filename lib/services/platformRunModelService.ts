@@ -58,7 +58,7 @@ import type { Prisma } from '@/generated/prisma/client';
  */
 
 const SEED_REASON =
-  "Initialised from motir-ai's hosted-run offer on the list's first read, so no project loses its model.";
+  "Initialised from motir-ai's Motir agent offer on the list's first read, so no project loses its model.";
 
 /** Rolls back a seed that another first read already performed. */
 class AlreadySeeded extends Error {}
@@ -86,7 +86,7 @@ async function seed(
   const entry: PlatformAuditEntry = {
     action: 'ai.run_model_list.seed',
     targetKind: 'platform',
-    targetLabel: 'hosted-run model list',
+    targetLabel: 'Motir agent model list',
     reason: SEED_REASON,
     metadata: { models },
   };
@@ -170,7 +170,7 @@ async function readPage(
 const LIST_READ: PlatformAuditEntry = {
   action: 'estate.read',
   targetKind: 'platform',
-  targetLabel: 'hosted-run model list',
+  targetLabel: 'Motir agent model list',
 };
 
 export const platformRunModelService = {

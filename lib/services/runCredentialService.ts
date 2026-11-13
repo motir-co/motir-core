@@ -94,7 +94,7 @@ export const runCredentialService = {
         {
           userId: input.dispatcherUserId,
           workspaceId: run.workspaceId,
-          label: `Hosted run ${run.id}`,
+          label: `Motir agent run ${run.id}`,
           tokenHash: hashToken(token),
           tokenPrefix: tokenPrefixOf(token),
           expiresAt: input.expiresAt,

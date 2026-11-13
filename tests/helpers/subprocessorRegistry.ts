@@ -193,10 +193,18 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   'modelcontextprotocol.io': 'documentation link shown to the user',
 
   // Operator CONSOLE links, rendered by `lib/services/platformHealthService.ts`
-  // for a human to click through to a vendor's own dashboard, would sit here.
-  // None does today: `console.neon.tech` left with MOTIR-11150, when the
-  // Database signal moved to RDS (its console link is built per region, not a
-  // fixed host), and `app.inngest.com` left with MOTIR-3418.
+  // for a human to click through to a vendor's own dashboard. The server never
+  // requests them.
+  //
+  // ⚠️ Each of these vendors IS real, and excusing the console host does NOT
+  // excuse the vendor — that is the distinction the whole file exists for. What
+  // is excused here is the DASHBOARD hostname, which is not where any data of
+  // ours goes; the vendors' API paths are covered by their own entries.
+  // (`app.inngest.com` sat here until MOTIR-3418 deleted the last link to it, and
+  // `console.neon.tech` until MOTIR-11158 pointed the Database card at the RDS
+  // console. That host is built per region (`<region>.console.aws.amazon.com`),
+  // so it is no literal this scan reads; its vendor is Amazon Web Services,
+  // disclosed by the signature above.)
 
   // The vendor LEFT, the arm stayed (MOTIR-10939). `lib/email.ts` keeps a Resend
   // arm for any deployment that selects it, so the endpoint is still in the tree;

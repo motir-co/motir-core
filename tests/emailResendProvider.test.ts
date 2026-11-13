@@ -456,7 +456,9 @@ describe('resendProvider', () => {
 
     it('names how to set the missing value on the deployment', () => {
       delete process.env['RESEND_API_KEY'];
-      expect(() => getEmailProvider()).toThrowError(/on ECS: the task definition's secrets/);
+      expect(() => getEmailProvider()).toThrowError(
+        /on ECS: RESEND_API_KEY in the task definition's secrets/,
+      );
     });
 
     it('does not reach the network when credentials are missing', () => {

@@ -15531,8 +15531,8 @@ model AgentTerminalConnection {
   closeCode      Int?                 @map("close_code")
   /// The relay's word for why (`AgentTerminalCloseReason`).
   closeReason    String?              @map("close_reason")
-  /// The relay process holding this connection (MOTIR-6959): the ECS task id on
-  /// Fargate, or hostname+pid elsewhere (`relayMachineId`). Its boot closes its
+  /// The relay process holding this connection (MOTIR-6959): the host's instance
+  /// id (the ECS task id), or hostname+pid off a managed host. Its boot closes its
   /// own leftovers by it.
   relayMachineId String?              @map("relay_machine_id")
   /// Refreshed by the holding relay about once a minute while the row is open

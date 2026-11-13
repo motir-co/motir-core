@@ -437,19 +437,23 @@ describe('a shard matrix fails fast in the QUEUE and fans out on a PR (MOTIR-440
 });
 
 describe('this workflow releases nothing, and its push run is still the tripwire (MOTIR-10935)', () => {
-  it('carries no deploy job and no release concurrency group', () => {
-    // The old deploy job, its own concurrency group and its two cutover
-    // switches were deleted by MOTIR-10935. Motir's own services ship through
-    // ONE lane, `aws-deploy.yml`, which needs nothing in this file; a deploy job
-    // reappearing here would be a second release path. A release job carries a
-    // NON-cancelling group of its own (a deploy in flight must never be killed),
-    // so the workflow-level group, which cancels on a pull request, is the only
-    // one this file may hold.
-    expect([...ciJobs.keys()].filter((id) => /deploy|release/i.test(id))).toEqual([]);
+  it('carries no deploy job and no release of any kind', () => {
+    // The retired deploy job, its concurrency group and its two cutover
+    // switches were deleted with the old host's app manifests. Motir's own
+    // services ship through ONE lane, `aws-deploy.yml`, which needs nothing in
+    // this file; a deploy job reappearing here would be a second release path.
+    // So the guard names no host: it refuses a deploy JOB, a deploy GROUP, a
+    // deploy SWITCH and any `<tool> deploy` command, whichever host it targets.
+    expect(ciJobs.has('deploy')).toBe(false);
     const code = codeOf(ci);
-    expect(code.match(/^\s*group:/gm)).toHaveLength(1);
-    expect(code).not.toMatch(/cancel-in-progress:\s*false/);
-    expect(code).not.toMatch(/MOTIR_RELAY_ENABLED/);
+    expect(code).not.toMatch(/group:\s*\S*deploy/);
+    expect(code).not.toMatch(/MOTIR_\w*DEPLOY_ENABLED|MOTIR_RELAY_ENABLED/);
+    // `prisma migrate deploy` applies migrations to the job's own ephemeral
+    // Postgres; it is the one `deploy` verb a CI job may run.
+    const deployCommands = [...code.matchAll(/\b([\w-]+)\s+deploy\b/g)]
+      .map((m) => m[1])
+      .filter((tool) => tool !== 'migrate');
+    expect(deployCommands).toEqual([]);
   });
 
   it('runs the tripwire on a push, so a BYPASSED merge still meets a gate', () => {
