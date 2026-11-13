@@ -2412,11 +2412,20 @@
 @scope ([data-style='neumorphism']) to ([data-style]) {
   [data-surface='input'] {
     background-color: var(--el-surface);
-    border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
     box-shadow:
       inset var(--neu-distance-sm) var(--neu-distance-sm) var(--neu-blur-sm) var(--neu-shadow),
       inset calc(-1 * var(--neu-distance-sm)) calc(-1 * var(--neu-distance-sm)) var(--neu-blur-sm)
         var(--neu-light);
+  }
+}
+/* The softened edge colours only an editable, valid field. `data-surface` is on
+   the Input's WRAPPER, so an invalid or disabled field keeps the primitive's own
+   `border-(--el-danger)` / `border-(--el-input-disabled-border)`. Setting
+   `border-color` in the base rule above would put an UNLAYERED declaration over
+   the utility's `@layer utilities` edge in EVERY state (MOTIR-10730). */
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
   }
 }
 
@@ -2429,7 +2438,7 @@
     [data-surface='card'],
     [data-surface='popover'],
     [data-surface='modal'],
-    [data-surface='input'],
+    [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']),
     [data-surface='sidebar'] {
       border-color: var(--el-border-strong);
       box-shadow: var(--shadow-card);
