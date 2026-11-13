@@ -2,7 +2,11 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
-import { plansService, PLAN_STEP_SESSION_KEY_MAX } from '@/lib/services/plansService';
+import {
+  plansService,
+  PLAN_CORRECTION_BATCH_MAX,
+  PLAN_STEP_SESSION_KEY_MAX,
+} from '@/lib/services/plansService';
 import type {
   PlanDto,
   ProposalSectionsInput,
@@ -48,7 +52,12 @@ import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
-import { isWorkItemKey, resolveCorrectionKeyRefs, resolveKeyRefs } from '@/lib/plans/keyRefs';
+import {
+  isWorkItemKey,
+  resolveCorrectionKeyRefs,
+  resolveCorrectionsKeyRefs,
+  resolveKeyRefs,
+} from '@/lib/plans/keyRefs';
 import { EDGE_REASON_MAX } from '@/lib/plans/edgeReasons';
 import {
   REASON_CLASSIFIED_KIND,
@@ -1028,16 +1037,16 @@ const {
   ...updatePlanItemFieldsSchema
 } = updatePlanItemInputSchema;
 
-const updatePlanProposalInputSchema = {
-  ...updatePlanItemFieldsSchema,
-  planItemId: z
-    .string()
-    .trim()
-    .min(1)
-    .describe(
-      'The proposal to correct — one of the ids `add_plan_items` returned in `planItemIds`, ' +
-        'in the order you sent them.',
-    ),
+// The fields ONE correction carries (bug MOTIR-11225: shared by the single form
+// and by each entry of the `corrections` batch below, so the two cannot drift).
+const {
+  planId: _correctionPlanId,
+  planItemId: _correctionPlanItemId,
+  ...correctionContentFieldsSchema
+} = updatePlanItemFieldsSchema;
+
+const correctionFieldsSchema = {
+  ...correctionContentFieldsSchema,
   parentRef: correctionRefField
     .nullable()
     .optional()
@@ -1131,6 +1140,45 @@ const updatePlanProposalInputSchema = {
         'mistyped `planItem:` ref is sitting on. It is also how a `modify`’s MARK is corrected: ' +
         'the replacement patch’s `obsolescence`, `obsolescenceNoteMd` and four supersedes lists ' +
         'are re-checked exactly as the append checks them, including the finished-target rule.',
+    ),
+};
+
+const updatePlanProposalInputSchema = {
+  planId: updatePlanItemFieldsSchema.planId,
+  planItemId: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      'The proposal to correct — one of the ids `add_plan_items` returned in `planItemIds`, ' +
+        'in the order you sent them. Required unless you send `corrections` instead.',
+    ),
+  ...correctionFieldsSchema,
+  corrections: z
+    .array(
+      z.object({
+        planItemId: z
+          .string()
+          .trim()
+          .min(1)
+          .describe('The proposal this correction is to — an id `add_plan_items` returned.'),
+        ...correctionFieldsSchema,
+      }),
+    )
+    .min(1)
+    .max(PLAN_CORRECTION_BATCH_MAX)
+    .optional()
+    .describe(
+      'A BATCH: several corrections of this plan in ONE transaction, each ' +
+        '`{ planItemId, …the fields above }` with the same sparse semantics. The plan is judged ' +
+        'ONCE, as the whole batch leaves it, so corrections that are each refused alone are ' +
+        'accepted together — move a card and the card it is `blocked_by` out of their story in ' +
+        'one call, and their edge is never cross-level in between. ALL OR NOTHING: one refusal ' +
+        'writes nothing, and the error names the correction it hit — `corrections[<i>] ' +
+        '(proposal <id>)` — under the refusal’s own code. Every correction lands on the plan’s ' +
+        `timeline. 1 to ${PLAN_CORRECTION_BATCH_MAX} entries, each to a different proposal. ` +
+        'Send it INSTEAD of `planItemId` and the single-correction fields, never beside them.',
     ),
 };
 
@@ -1541,7 +1589,11 @@ interface ReportPlanStepArgs {
   lessonCalls?: unknown[];
 }
 
-interface UpdatePlanProposalArgs extends Omit<UpdatePlanItemArgs, 'authorFinished'> {
+/** The fields of ONE correction, single or batched (bug MOTIR-11225). */
+interface PlanProposalCorrectionFields extends Omit<
+  UpdatePlanItemArgs,
+  'authorFinished' | 'planId' | 'planItemId'
+> {
   parentRef?: string | null;
   blockedByRefs?: string[];
   supersedesRefs?: string[];
@@ -1552,6 +1604,12 @@ interface UpdatePlanProposalArgs extends Omit<UpdatePlanItemArgs, 'authorFinishe
   targetRepoRole?: string | null;
   subject?: string | null;
   patch?: Record<string, unknown> | null;
+}
+
+interface UpdatePlanProposalArgs extends PlanProposalCorrectionFields {
+  planId: string;
+  planItemId?: string;
+  corrections?: (PlanProposalCorrectionFields & { planItemId: string })[];
 }
 
 interface WithdrawPlanProposalArgs {
@@ -1834,6 +1892,30 @@ function summarizeCorrection(
   ]
     .filter((line, i, all) => line !== '' || all[i - 1] !== '')
     .join('\n');
+}
+
+/** The summary of a BATCH correction (bug MOTIR-11225): one line per correction. */
+function summarizeBatchCorrection(
+  plan: PlanWithItemsDto,
+  corrections: readonly { planItemId: string; changed: readonly string[] }[],
+): string {
+  return [
+    `Corrected ${corrections.length} proposal(s) on plan ${plan.id} in ONE transaction — ` +
+      `${plan.status}, ${plan.itemCount} proposal(s) in total. The plan was judged once, as the ` +
+      'whole batch left it.',
+    ...corrections.map(
+      (c, i) => `- corrections[${i}] — proposal ${c.planItemId}: ${c.changed.join(', ')}.`,
+    ),
+    'Every other field was left as it was; every ref you sent was re-validated and resolves.',
+    '',
+    plan.status === 'planned'
+      ? 'This plan is `planned` — it is in front of a reviewer, and each correction is on its ' +
+        'timeline with the harness and model that made it.'
+      : `Still \`generating\` — send \`final: true\` on a last \`${ADD_PLAN_ITEMS_TOOL_NAME}\` ` +
+        'batch to put the plan in front of a reviewer.',
+    '',
+    PROPOSAL_GATE,
+  ].join('\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2122,6 +2204,70 @@ export async function runUpdatePlanProposal(
   args: UpdatePlanProposalArgs,
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
+  const { input, changed } = correctionInputOf(args);
+  if (args.corrections !== undefined) {
+    // THE BATCH (bug MOTIR-11225) — never mixed with the single form: a call
+    // carrying both would leave it unsayable which proposal a top-level field
+    // was meant for.
+    if (args.planItemId !== undefined || changed.length > 0) {
+      throw new InvalidProposalError(
+        'Send `corrections` INSTEAD of `planItemId` and the single-correction fields, not ' +
+          `beside them — this call also carried ${[
+            ...(args.planItemId !== undefined ? ['planItemId'] : []),
+            ...changed,
+          ].join(', ')}.`,
+      );
+    }
+    const corrections = args.corrections.map((c) => ({
+      ...correctionInputOf(c).input,
+      planItemId: c.planItemId,
+    }));
+    const resolved = await resolveCorrectionsKeyRefs(corrections, ctx);
+    const plan = await plansService.correctProposals(args.planId, resolved, ctx);
+    return toolOk(
+      summarizeBatchCorrection(
+        plan,
+        args.corrections.map((c) => ({
+          planItemId: c.planItemId,
+          changed: correctionInputOf(c).changed,
+        })),
+      ) +
+        linkWarningsText(plan.warnings) +
+        rescopeWarningsText(plan.rescopeWarnings),
+      derived(planPayload, presentMcpPlan(plan)),
+    );
+  }
+  if (args.planItemId === undefined) {
+    throw new InvalidProposalError(
+      'Name the proposal to correct with `planItemId`, or send several as `corrections`.',
+    );
+  }
+
+  // KEY → ID, before the service sees them (MOTIR-3934) — the same rewrite
+  // `add_plan_items` applies, at the same layer, so the two doors cannot store
+  // different things in one column. A key that names nothing is refused HERE,
+  // where it is written, rather than at the approve button on a plan a reviewer
+  // has already read.
+  const resolved = await resolveCorrectionKeyRefs(input, ctx);
+
+  const plan = await plansService.correctProposal(args.planId, args.planItemId, resolved, ctx);
+
+  return toolOk(
+    summarizeCorrection(plan, args.planItemId, changed) +
+      linkWarningsText(plan.warnings) +
+      rescopeWarningsText(plan.rescopeWarnings),
+    derived(planPayload, presentMcpPlan(plan)),
+  );
+}
+
+/**
+ * The service input of ONE correction, and the fields it set — read by presence,
+ * so the summary cannot claim a field the call did not touch.
+ */
+function correctionInputOf(args: PlanProposalCorrectionFields): {
+  input: CorrectProposalInput;
+  changed: string[];
+} {
   const patchable = [
     'title',
     'kind',
@@ -2154,22 +2300,7 @@ export async function runUpdatePlanProposal(
     (input as Record<string, unknown>)[key] = args[key];
     changed.push(key);
   }
-
-  // KEY → ID, before the service sees them (MOTIR-3934) — the same rewrite
-  // `add_plan_items` applies, at the same layer, so the two doors cannot store
-  // different things in one column. A key that names nothing is refused HERE,
-  // where it is written, rather than at the approve button on a plan a reviewer
-  // has already read.
-  const resolved = await resolveCorrectionKeyRefs(input, ctx);
-
-  const plan = await plansService.correctProposal(args.planId, args.planItemId, resolved, ctx);
-
-  return toolOk(
-    summarizeCorrection(plan, args.planItemId, changed) +
-      linkWarningsText(plan.warnings) +
-      rescopeWarningsText(plan.rescopeWarnings),
-    derived(planPayload, presentMcpPlan(plan)),
-  );
+  return { input, changed };
 }
 
 /**
@@ -2703,6 +2834,10 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'way into a `planItem:` ref that names nothing, and a ref to the proposal itself is ' +
         'refused rather than stored. The correction appears on the plan’s timeline with the ' +
         'harness and model that made it, so a reviewer can see the tree changed under them. ' +
+        'To change SEVERAL proposals that are only legal together — a card and the card it is ' +
+        '`blocked_by`, moved out of their story at once — send them as `corrections` instead ' +
+        'of `planItemId`: one transaction, judged once on the plan the whole batch leaves, all ' +
+        'or nothing, the refusal naming the correction it hit. ' +
         'IMPORTANT: this creates NO work item and changes nothing in the tree. Approving the ' +
         'plan in Motir is the only path from a proposal to a work item, and approval does not ' +
         'happen on this surface. Costs nothing and starts no job.',

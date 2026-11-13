@@ -1621,6 +1621,15 @@ export interface CorrectProposalInput extends UpdateProposalInput {
 }
 
 /**
+ * ONE correction of a batch (bug MOTIR-11225) — `plansService.correctProposals`:
+ * the proposal it corrects, and the same fields {@link CorrectProposalInput}
+ * carries, with the same sparse semantics.
+ */
+export interface PlanProposalCorrection extends CorrectProposalInput {
+  planItemId: string;
+}
+
+/**
  * The keys {@link UpdateProposalInput} declares — THE SINGLE DECLARED SOURCE
  * every transport onto the deepen / correction service derives from (MOTIR-3865).
  *

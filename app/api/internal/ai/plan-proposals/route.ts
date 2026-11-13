@@ -20,7 +20,12 @@ import {
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
-import type { ProposalInput } from '@/lib/dto/plans';
+import type { PlanProposalCorrection, ProposalInput } from '@/lib/dto/plans';
+import {
+  contentPatchFrom,
+  correctionFrom,
+  proposalEditErrorResponse,
+} from '@/lib/ai/planProposalEditRequest';
 
 // POST /api/internal/ai/plan-proposals (Subtask 7.4.4 · MOTIR-846) — the INTERNAL
 // append seam motir-ai's `generate_tree` handler (7.4.2 · MOTIR-844) calls,
@@ -322,6 +327,84 @@ export async function POST(req: Request): Promise<Response> {
         { status: 500 },
       );
     }
+    throw err;
+  }
+}
+
+// PATCH /api/internal/ai/plan-proposals (bug MOTIR-11225) — CORRECT SEVERAL of the
+// job's proposals in ONE transaction: `{ jobId, corrections: [{ planItemId, … }] }`,
+// each correction in exactly the wire shape `PATCH …/plan-proposals/[itemId]`
+// takes with `mode: 'correct'` (its content keys under `patch`, its structural
+// keys beside them, a `modify`'s patch as `modifyPatch`).
+//
+// It exists for corrections that are each illegal ALONE and legal TOGETHER — the
+// post-merge cut moving a deploy card and the alarms card `blocked_by` it out of
+// their story at once. The single door judges the plan as each write leaves it,
+// so it refuses both moves `cross_level`; this one judges the plan as the WHOLE
+// batch leaves it (`plansService.correctProposals`). All or nothing.
+//
+// Typed errors → status: those of the single correction door, with the same
+// codes, plus — on a refusal that a correction of the batch caused —
+// `correctionIndex` (0-based) and `planItemId` naming it. A body that is not
+// `{ jobId, corrections: [ … ] }` is 400 `PROPOSALS_INVALID`.
+export async function PATCH(req: Request): Promise<Response> {
+  let auth;
+  try {
+    auth = await authenticateAndLimitJobRequest(req);
+  } catch (err) {
+    const failure = mapJobRequestError(err);
+    if (failure) return failure;
+    throw err;
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { code: 'PROPOSALS_INVALID', error: 'request body must be valid JSON' },
+      { status: 400 },
+    );
+  }
+  const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  if (typeof b.jobId !== 'string' || !b.jobId) {
+    return NextResponse.json(
+      { code: 'PROPOSALS_INVALID', error: '`jobId` is required.' },
+      { status: 400 },
+    );
+  }
+  if (!Array.isArray(b.corrections)) {
+    return NextResponse.json(
+      { code: 'PROPOSALS_INVALID', error: '`corrections` must be an array of corrections.' },
+      { status: 400 },
+    );
+  }
+  const corrections: PlanProposalCorrection[] = [];
+  for (const [index, entry] of b.corrections.entries()) {
+    const c = (typeof entry === 'object' && entry !== null ? entry : {}) as Record<string, unknown>;
+    if (typeof c.planItemId !== 'string' || !c.planItemId) {
+      return NextResponse.json(
+        {
+          code: 'PROPOSALS_INVALID',
+          error: `corrections[${index}] needs a \`planItemId\`.`,
+          correctionIndex: index,
+        },
+        { status: 400 },
+      );
+    }
+    corrections.push({
+      ...correctionFrom(c, contentPatchFrom(c.patch)),
+      planItemId: c.planItemId,
+    });
+  }
+
+  try {
+    return NextResponse.json(
+      await aiGenerationService.correctProposalsForJob(b.jobId, corrections, auth.ctx),
+    );
+  } catch (err) {
+    const response = await proposalEditErrorResponse(err);
+    if (response) return response;
     throw err;
   }
 }

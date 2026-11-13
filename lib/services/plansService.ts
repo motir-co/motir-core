@@ -187,6 +187,7 @@ import {
   PlanItemNotFoundError,
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
+  PlanCorrectionRefusedError,
   PlanNotEditableError,
   PlanApprovingError,
   PlanProposalReferencedError,
@@ -261,6 +262,7 @@ import type {
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
+  PlanProposalCorrection,
   CorrectPlanBriefInput,
   CorrectPlanBriefKey,
   PlanItemOpDto,
@@ -2021,6 +2023,623 @@ async function assertBlockedByAcyclicAtAppend(
     );
     assertBlockedByGraphAcyclic(nodes, liveById, existing);
   });
+}
+
+// ── ONE CORRECTION, AND A BATCH OF THEM (bug MOTIR-11225) ─────────────────────
+//
+// `correctProposal` used to do everything inside one method: resolve the pins,
+// merge and check the fields, judge the corrected shape, write, re-run the
+// close's gate. A BATCH needs the same steps in a different order — every
+// correction built and checked on its own, then the SHAPE judged on the plan as
+// the WHOLE batch leaves it, then every write, then the gate ONCE — because two
+// moves that are each illegal alone (a card and the card it waits on, leaving a
+// story together) are legal only together. So the steps are split into the
+// three helpers below, and both doors run them.
+
+/** A correction's repository pins, resolved before any transaction opens. */
+interface ResolvedCorrectionPins {
+  resolvedTargetRepo: string | null | undefined;
+  resolvedRepoSet: ResolvedRepoSet | undefined;
+}
+
+/**
+ * Resolve a correction's repository pins against the project — the reads the
+ * write lock has no business holding — and refuse a role the set cannot
+ * resolve. Runs BEFORE the transaction.
+ */
+async function resolveCorrectionPins(
+  planItemId: string,
+  input: CorrectProposalInput,
+  planProjectId: string,
+  ctx: ServiceContext,
+): Promise<ResolvedCorrectionPins> {
+  // Resolved BEFORE the transaction, because it reads the project's repository
+  // domain and that is a read the write lock has no business holding.
+  //
+  // ⚠️ AND THE AXIS MAY BE DESCRIBED ONCE (bug MOTIR-4904), through the direct
+  // door's own guard — before either resolver runs, so a contradictory
+  // correction is refused rather than half-resolved. The singular ROW-ID pin
+  // (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) joins the same
+  // exclusivity set as the name and the SET forms.
+  assertSingleTargetRepoInput(
+    input.targetRepo,
+    input.targetRepos,
+    input.targetRepositories,
+    input.targetRepositoryRef,
+  );
+  let resolvedTargetRepo: string | null | undefined;
+  if (input.targetRepo !== undefined) {
+    try {
+      resolvedTargetRepo = await resolveAuthoredTargetRepoInProject(
+        input.targetRepo,
+        planProjectId,
+        ctx,
+      );
+    } catch (err) {
+      if (err instanceof UnknownTargetRepoError) {
+        throw new PlanItemUnknownTargetRepoError(planItemId, input.targetRepo ?? '', err.message);
+      }
+      throw err;
+    }
+  }
+  // The SET forms, validated the same way and in the same slot (bug
+  // MOTIR-4904). The RESOLVED names are what the proposal stores — approve
+  // re-resolves them against the project domain either way, and storing the
+  // resolved spelling is what makes a corrected set read back the way the
+  // reviewer will see it, exactly as the singular pin above does.
+  let resolvedRepoSet: ResolvedRepoSet | undefined;
+  if (input.targetRepos !== undefined || input.targetRepositories !== undefined) {
+    try {
+      resolvedRepoSet =
+        input.targetRepositories !== undefined
+          ? await resolveAuthoredRepoRefsInProject(input.targetRepositories, planProjectId, ctx)
+          : await resolveAuthoredRepoPinsInProject(input.targetRepos!, planProjectId, ctx);
+    } catch (err) {
+      if (err instanceof UnknownTargetRepoError || err instanceof UnknownProjectRepoRefError) {
+        throw new PlanItemUnknownTargetRepoError(
+          planItemId,
+          (input.targetRepositories ?? input.targetRepos ?? []).join(', '),
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+      throw err;
+    }
+  }
+
+  // A RE-PIN to a role the project's set resolves to no single row (MOTIR-11039)
+  // — an `add`'s `targetRepoRole` or a `modify`'s replacement patch — refused
+  // here, beside the name resolution above and before the transaction, so the
+  // stored proposal keeps the pin it had.
+  await assertRolePinsResolvableInProject(
+    [
+      {
+        role:
+          input.targetRepoRole !== undefined ? input.targetRepoRole : input.patch?.targetRepoRole,
+        planItemId,
+        label: `\`${planItemId}\``,
+      },
+    ],
+    planProjectId,
+    ctx,
+  );
+  return { resolvedTargetRepo, resolvedRepoSet };
+}
+
+/** One correction, merged, field-checked and ready to write. */
+interface BuiltCorrection {
+  item: PlanItem;
+  input: CorrectProposalInput;
+  data: PlanItemUpdateInput;
+  /** The fields the trail row names. */
+  touched: string[];
+  /** The proposal as the correction leaves it, for the shape and edge gates. */
+  correctedNode: ProposalNode;
+  /** An `add`'s merged fields, which the re-kind gate reads. */
+  mergedAdd: PlanItemProposedFields | undefined;
+}
+
+/**
+ * Merge ONE correction onto its proposal and run every check that is about
+ * that proposal alone: the field rules, the ref check, the self-consistency and
+ * folder gates. Writes nothing. The checks that read the rest of the plan's
+ * SHAPE are {@link assertCorrectedShapesLegal}'s, so a batch can run them on the
+ * plan as the whole batch leaves it.
+ */
+async function buildCorrection(
+  item: PlanItem,
+  input: CorrectProposalInput,
+  pins: ResolvedCorrectionPins,
+  all: readonly PlanItem[],
+  fresh: Plan,
+  planProjectId: string,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<BuiltCorrection> {
+  const { resolvedTargetRepo, resolvedRepoSet } = pins;
+  let mergedAdd: PlanItemProposedFields | undefined;
+  const data: PlanItemUpdateInput = {};
+  const touched: string[] = [];
+
+  if (item.op === 'add') {
+    if (input.patch !== undefined) {
+      throw new InvalidProposalError(
+        'A `patch` belongs to a `modify` proposal; this proposal is an `add`.',
+      );
+    }
+    const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
+    // The language statement (MOTIR-8743), the deepen's check.
+    validateProposedLanguages(
+      input.languages,
+      proposalLabel({ op: item.op, workItemId: item.workItemId, title: current.title }),
+    );
+    const next = mergeProposedFields(current, input);
+    mergedAdd = next;
+    // ⚠️ THE REPOSITORY AXIS IS REPLACED, NOT MERGED (bug MOTIR-4904). Every
+    // other key here is sparse per KEY; these FOUR spellings are one field in
+    // one axis, so correcting one CLEARS the others. Merging instead would
+    // store the exact contradiction `assertSingleTargetRepoInput` refuses at
+    // the append — a stale `targetRepo` beside a new `targetRepos` — and
+    // approve would then have to invent a precedence rule over a state
+    // nobody authored.
+    if (
+      resolvedTargetRepo !== undefined ||
+      resolvedRepoSet !== undefined ||
+      input.targetRepo !== undefined ||
+      input.targetRepositoryRef !== undefined
+    ) {
+      delete next.targetRepo;
+      delete next.targetRepos;
+      delete next.targetRepositories;
+      delete next.targetRepositoryRef;
+    }
+    if (resolvedTargetRepo !== undefined) next.targetRepo = resolvedTargetRepo;
+    if (resolvedRepoSet !== undefined) {
+      // Stored under the spelling the correction used, so a later reader of
+      // the proposal sees which form its author chose — and, for the row-id
+      // form, so the ids the author pinned survive rather than being
+      // silently rewritten to the names they happen to resolve to today.
+      if (input.targetRepositories !== undefined) {
+        next.targetRepositories = input.targetRepositories;
+      } else {
+        next.targetRepos = resolvedRepoSet.names;
+      }
+    }
+    // The singular ROW-ID half of the pin (Story MOTIR-2732 · MOTIR-3045,
+    // surfaced by MOTIR-4924), stored under its own spelling for the same
+    // reason the SET row-id form is: the id the author pinned survives
+    // rather than being rewritten to the name it happens to resolve to
+    // today. Membership of the project's row set is re-validated at approve
+    // (`proposalRepoRef`'s byId check), exactly as it is on the append path.
+    if (input.targetRepositoryRef !== undefined) {
+      next.targetRepositoryRef = input.targetRepositoryRef;
+    }
+    // The ROLE half of the pin (MOTIR-3865), applied HERE rather than in
+    // `mergeProposedFields` for the same reason its NAME twin is: that
+    // helper is the DEEPEN turn's merge and the repo pin is deliberately
+    // outside the deepen's editable set. A correction is the different act
+    // AMENDMENT 7 opened, and it reaches both halves of the pin or it
+    // cannot correct an ONBOARDING plan at all — such a plan pins a role
+    // and no name, because its repositories do not exist yet.
+    //
+    // Validated against the closed VOCABULARY, exactly as the append and a
+    // `modify`'s patch are, and before the write: an unrecognised role is
+    // `PlanItemUnknownTargetRepoRoleError` (a typed 422 at the transport),
+    // never a string smuggled into `proposedFields`. `undefined` leaves the
+    // pin alone and an explicit `null` unpins — `assertKnownRepoRole` passes
+    // both, which is what makes the sparse semantics expressible.
+    if (input.targetRepoRole !== undefined) {
+      assertKnownRepoRole(
+        input.targetRepoRole,
+        item.id,
+        proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+      );
+      next.targetRepoRole = input.targetRepoRole;
+    }
+    // The SUBJECT coordinate (Story MOTIR-5062 · MOTIR-5065), applied HERE
+    // and NOT in `mergeProposedFields` for exactly the reason the repo pin
+    // is: that helper is the DEEPEN turn's merge, and a subject is settled
+    // at the `lay` beside `type` and the pin — it says which RULES an
+    // authoring pass reads, which is where the card sits in the corpus
+    // rather than what it says. So a deepen may not touch it and a
+    // correction may, which is AMENDMENT 3 D3's rule applied rather than an
+    // exception to it.
+    //
+    // Re-validated by the SAME shape check the append runs, so a correction
+    // cannot introduce a subject the append would have refused. The KIND half
+    // of both doors retired with MOTIR-5607. `undefined` leaves it alone and an explicit `null` unpins.
+    // MEMBERSHIP is not checked here, in either door — the vocabulary is
+    // the rule-pack file set, and this repository deliberately does not
+    // hold it.
+    if (input.subject !== undefined) {
+      if (input.subject === null) {
+        delete next.subject;
+      } else {
+        assertCorrectedSubjectValid(input.subject, item.id);
+        next.subject = input.subject;
+      }
+    }
+    if (!next.title?.trim()) {
+      throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
+    }
+    validateProposedSizing(next);
+    // The STEPS, on the MERGED result — the same rule the deepen turn
+    // applies, on the same basis (MOTIR-4616 · AMENDMENT 14 D3-D4).
+    validateProposedTodos(
+      next.todos,
+      next.kind ?? DEFAULT_PROPOSED_KIND,
+      proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+    );
+    // The DIFFICULTY, on the MERGED result — the deepen's rule (MOTIR-6133).
+    validateProposedDifficulty(
+      next.difficulty,
+      next.kind ?? DEFAULT_PROPOSED_KIND,
+      proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+    );
+    // The PRIORITY, on the MERGED result — the deepen's rule (MOTIR-10656).
+    validateProposedPriority(
+      next.priority,
+      proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+      item.id,
+    );
+    // The card-level EXECUTOR, on the MERGED result — the deepen's rule
+    // (MOTIR-10678).
+    validateProposedExecutor(
+      next.executor,
+      proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+      item.id,
+    );
+    // A malformed item link is WARNED on the response (MOTIR-10104), and
+    // the links the correction writes must name a proposal on the plan
+    // (bug MOTIR-9175), judged on the bodies it writes (bug MOTIR-9836).
+    assertEditBodyRefsResolve(
+      current,
+      input,
+      next,
+      new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
+      proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+    );
+    // A card written by hand is stamped as its body lands (MOTIR-10490).
+    data.proposedFields = (await stampHandWrittenBody(
+      input,
+      next,
+      liveSessionReader(fresh, tx),
+    )) as unknown as Prisma.InputJsonValue;
+    // `authorFinished` is planner state, not a change to the card, so it is
+    // left out of what the trail row lists (MOTIR-10490).
+    touched.push(
+      ...editedFieldsOf(Object.keys(input)).filter(
+        (k) =>
+          k !== 'parentRef' &&
+          k !== 'blockedByRefs' &&
+          k !== 'edgeReasons' &&
+          k !== 'supersedesRefs',
+      ),
+    );
+  } else {
+    // A `modify` / `remove` targets an EXISTING work item, so it carries no
+    // proposed body and no pin of its own — the content keys and
+    // `targetRepo` are meaningless on it rather than merely unsupported.
+    const contentKeys = Object.keys(input).filter(
+      (k) =>
+        k !== 'patch' &&
+        k !== 'blockedByRefs' &&
+        k !== 'edgeReasons' &&
+        k !== 'parentRef' &&
+        k !== 'supersedesRefs',
+    );
+    if (contentKeys.length > 0) {
+      throw new InvalidProposalError(
+        `A \`${item.op}\` proposal has no proposed body to correct; ${contentKeys.join(', ')} apply to an \`add\`. Correct its \`patch\` instead.`,
+      );
+    }
+    if (input.patch !== undefined) {
+      if (item.op !== 'modify') {
+        throw new InvalidProposalError('Only a `modify` proposal carries a `patch`.');
+      }
+      // The correction REPLACES the patch, so it is held to the append's
+      // own key check (bug MOTIR-6259) — a correction door looser than the
+      // append would be the way round it.
+      assertKnownPatchKeys(
+        input.patch,
+        proposalLabel({ op: item.op, workItemId: item.workItemId }),
+      );
+      validateStoryPoints(input.patch?.storyPoints ?? null);
+      validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+      // The replacement patch's language statement (MOTIR-8743).
+      validateProposedLanguages(
+        input.patch?.languages,
+        proposalLabel({ op: item.op, workItemId: item.workItemId }),
+      );
+      // The replacement patch's RE-KIND (bug MOTIR-8192), held to the
+      // append's membership check here and to its tree check below.
+      validateProposedKindChange(
+        input.patch?.kind,
+        proposalLabel({ op: item.op, workItemId: item.workItemId }),
+      );
+      // The replacement patch's MARK (MOTIR-6629), held to the append's check.
+      validateProposedObsolescence(
+        input.patch,
+        proposalLabel({ op: item.op, workItemId: item.workItemId }),
+      );
+      // ...and to the append's FINISHED-TARGET rule (MOTIR-6663), against
+      // the target's live status category. Asked HERE rather than left to
+      // the before/after gate below, which admits a correction to a plan
+      // that was already unapprovable — and a mark on an unfinished card is
+      // a mistake this write introduces, not a repair of one it inherits.
+      if (item.workItemId && patchSetsObsolescence(input.patch)) {
+        const targetId = item.workItemId;
+        await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+          const [target] = await workItemRepository.findByIdsInWorkspace(
+            [targetId],
+            ctx.workspaceId,
+            tx,
+          );
+          if (!target) return;
+          const categoryById = await resolveStatusCategories([target], ctx, tx);
+          assertMarkTargetIsFinished(
+            input.patch,
+            {
+              key: target.identifier,
+              status: target.status,
+              statusCategory: categoryById.get(target.id) ?? null,
+            },
+            proposalLabel({ op: item.op, workItemId: item.workItemId }),
+          );
+        });
+      }
+      // The replacement patch's malformed links are WARNED on the response
+      // (MOTIR-10104); a canonical link to no proposal is refused (MOTIR-9175).
+      assertBodyRefsResolve(
+        input.patch ?? {},
+        new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
+        proposalLabel({ op: item.op, workItemId: item.workItemId }),
+      );
+      // The replacement patch's PRIORITY (MOTIR-10656) — membership, as the
+      // append's `modify` arm checks it.
+      validateProposedPriority(
+        input.patch?.priority,
+        proposalLabel({ op: item.op, workItemId: item.workItemId }),
+        item.id,
+      );
+      // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the
+      // TARGET's PROJECTED kind — the patch's re-kind when it carries one
+      // (bug MOTIR-8192), else the live kind — the append's two halves in
+      // one call, since the transaction is already open.
+      if (input.patch?.difficulty !== undefined && input.patch?.difficulty !== null) {
+        const target = item.workItemId
+          ? await workItemRepository.findById(item.workItemId, tx)
+          : null;
+        validateProposedDifficulty(
+          input.patch.difficulty,
+          input.patch.kind ?? (target ? target.kind : null),
+          proposalLabel({ op: item.op, workItemId: item.workItemId }),
+        );
+      }
+      // The replacement patch's STEPS (MOTIR-8668), the same way: the rows
+      // against the store's caps always, the container half against the
+      // target's PROJECTED kind, read only when the list is non-empty.
+      if (Array.isArray(input.patch?.todos) && input.patch.todos.length > 0) {
+        const target = item.workItemId
+          ? await workItemRepository.findById(item.workItemId, tx)
+          : null;
+        validateProposedTodos(
+          input.patch.todos,
+          input.patch.kind ?? (target ? target.kind : null),
+          proposalLabel({ op: item.op, workItemId: item.workItemId }),
+        );
+      } else {
+        validateProposedTodos(
+          input.patch?.todos,
+          null,
+          proposalLabel({ op: item.op, workItemId: item.workItemId }),
+        );
+      }
+      assertKnownRepoRole(
+        input.patch?.targetRepoRole,
+        item.id,
+        proposalLabel({ op: item.op, workItemId: item.workItemId }),
+      );
+      // The replacement patch clears the append's boundary checks with it
+      // (bug MOTIR-4904): a correction REPLACES the patch, so a patch that
+      // describes the repository axis twice must be refused here exactly as
+      // `validateProposal` refuses one at the append.
+      assertSingleTargetRepoInput(
+        input.patch?.targetRepo,
+        input.patch?.targetRepos,
+        input.patch?.targetRepositories,
+        input.patch?.targetRepositoryRef,
+      );
+      data.patch = (input.patch ?? Prisma.JsonNull) as Prisma.InputJsonValue;
+      touched.push('patch');
+    }
+  }
+
+  if (input.parentRef !== undefined) {
+    if (item.op !== 'add') {
+      throw new InvalidProposalError('Only an `add` proposal carries a `parentRef`.');
+    }
+    data.parentRef = input.parentRef;
+    touched.push('parentRef');
+  }
+  if (input.blockedByRefs !== undefined) {
+    data.blockedByRefs = input.blockedByRefs;
+    touched.push('blockedByRefs');
+  }
+  // The reasons REPLACE with the edges they explain (MOTIR-9827), held to the
+  // refs the corrected proposal draws.
+  if (input.edgeReasons !== undefined) {
+    const correctedEdges = {
+      op: item.op,
+      blockedByRefs: (data.blockedByRefs as string[] | undefined) ?? item.blockedByRefs,
+      patch: (input.patch !== undefined ? input.patch : item.patch) as {
+        blockedByAdd?: string[];
+      } | null,
+      edgeReasons: input.edgeReasons,
+    };
+    assertEdgeReasonsKeyed(
+      correctedEdges,
+      proposalLabel({ op: item.op, workItemId: item.workItemId }),
+    );
+    data.edgeReasons = input.edgeReasons;
+    touched.push('edgeReasons');
+  }
+  // REPLACES the `add`'s supersedes set (MOTIR-6630), as `blockedByRefs`
+  // does; a `modify` corrects its edges through its `patch`.
+  if (input.supersedesRefs !== undefined) {
+    if (item.op !== 'add') {
+      throw new InvalidProposalError(
+        "Only an `add` proposal carries `supersedesRefs`; correct a `modify`'s supersedes edges through its `patch`.",
+      );
+    }
+    data.supersedesRefs = input.supersedesRefs;
+    touched.push('supersedesRefs');
+  }
+
+  // A write carrying only `authorFinished` changes the stored state and no
+  // field of the card (MOTIR-10490) — legal, and recorded below as no row.
+  const setsAuthorState = item.op === 'add' && input.authorFinished !== undefined;
+  if (touched.length === 0 && !setsAuthorState)
+    throw new InvalidProposalError('A correction must change something.');
+
+  // ⚠️ THE APPEND'S OWN CHECK, RE-RUN ON THE CORRECTED SHAPE (MOTIR-3539).
+  // The resolvable set is every OTHER `add` on this plan — excluding this
+  // one, so `planItem:<itself>` is refused rather than stored as a
+  // one-node cycle for materialize to trip over.
+  const corrected: ProposalRefCarrier = {
+    label: proposalLabel({
+      op: item.op,
+      workItemId: item.workItemId,
+      title: (data.proposedFields as { title?: string } | undefined)?.title,
+    }),
+    parentRef: (data.parentRef as string | null | undefined) ?? item.parentRef,
+    blockedByRefs: (data.blockedByRefs as string[] | undefined) ?? item.blockedByRefs,
+    supersedesRefs: (data.supersedesRefs as string[] | undefined) ?? item.supersedesRefs ?? [],
+    patch: (input.patch !== undefined
+      ? input.patch
+      : (item.patch as ProposalRefCarrier['patch'])) as ProposalRefCarrier['patch'],
+  };
+  assertTempRefsResolvable(
+    [corrected],
+    new Set(all.filter((i) => i.op === 'add' && i.id !== item.id).map((i) => i.id)),
+    (ref, proposal) => new UnresolvedPlanRefError(ref, proposal),
+  );
+
+  // The append's FOLDER gate on the corrected shape (MOTIR-5414), run
+  // unconditionally rather than left to the before/after verdict below —
+  // that verdict ADMITS a correction to a plan that was already
+  // unapprovable, and an unknown folder is a mistake this write
+  // introduces, not a repair of one it inherits.
+  const correctedNode: ProposalNode = {
+    ...toProposalNode(item),
+    parentRef: corrected.parentRef ?? null,
+    blockedByRefs: [...(corrected.blockedByRefs ?? [])],
+    supersedesRefs: [...(corrected.supersedesRefs ?? [])],
+    patch: (corrected.patch ?? null) as ProposalNode['patch'],
+  };
+  assertProposalSetSelfConsistent([correctedNode]);
+  if (collectReferencedFolderIds([correctedNode]).length > 0) {
+    await assertFolderPlacementsLegalAtAppend([correctedNode], ctx, planProjectId, tx);
+  }
+  return {
+    item,
+    input,
+    data,
+    touched,
+    correctedNode: mergedAdd
+      ? { ...correctedNode, proposedFields: mergedAdd as ProposalNode['proposedFields'] }
+      : correctedNode,
+    mergedAdd,
+  };
+}
+
+/**
+ * The append's SHAPE gates — an `add`'s re-kind, a `modify`'s re-parent and
+ * re-kind, and (on a `generating` plan) the `blocked_by` cycle check — judged on
+ * the plan as EVERY correction in `built` leaves it. A single correction is the
+ * batch of one. Writes nothing.
+ */
+async function assertCorrectedShapesLegal(
+  built: readonly BuiltCorrection[],
+  all: readonly PlanItem[],
+  planStatus: string,
+  planProjectId: string,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const byId = new Map(built.map((b) => [b.item.id, b.correctedNode]));
+  const others = all.filter((i) => !byId.has(i.id)).map(toProposalNode);
+  const projected = [...others, ...built.map((b) => b.correctedNode)];
+  // A RE-KIND, held to what the new kind owes (bug MOTIR-8192 · AMENDMENT 25
+  // §4): no leaf field on a container, and a placement the plan's own tree
+  // admits — judged with every corrected parent in the batch.
+  for (const b of built) {
+    if (b.item.op !== 'add' || b.input.kind === undefined || !b.mergedAdd) continue;
+    await assertReKindedAddLegal(
+      b.item.id,
+      b.mergedAdd,
+      projected,
+      proposalLabel({ op: b.item.op, workItemId: b.item.workItemId, title: b.mergedAdd.title }),
+      ctx,
+      planProjectId,
+      tx,
+    );
+  }
+  const corrected = built.map((b) => b.correctedNode);
+  // The append's RE-PARENT gate on the corrected shape — including a move under
+  // a proposed `add` (AMENDMENT 18 §1, MOTIR-6050), judged against the plan's
+  // OTHER proposals, which is the set the corrected ones will sit among. Run
+  // unconditionally rather than left to the before/after verdict, which ADMITS a
+  // correction to a plan that was already unapprovable.
+  if (anyReparent(corrected)) {
+    await assertReparentsLegalAtAppend(projected, ctx, planProjectId, tx);
+  }
+  // …and the append's RE-KIND gate (bug MOTIR-8192), for the same reason: a kind
+  // the projected tree refuses is a mistake this write introduces.
+  if (corrected.some((n) => n.op === 'modify' && n.patch?.kind !== undefined)) {
+    await assertKindChangesLegalAtAppend(projected, ctx, planProjectId, tx);
+  }
+  // A `blocked_by` CYCLE the correction closes on a GENERATING plan
+  // (MOTIR-9267) — refused where the edge is written, as the append does, and
+  // before the write. A `planned` plan is held by the before/after gate.
+  const edged = built.filter(
+    (b) => b.input.blockedByRefs !== undefined || (b.input.patch?.blockedByAdd?.length ?? 0) > 0,
+  );
+  if (planStatus === 'generating' && edged.length > 0) {
+    await assertBlockedByAcyclicAtAppend(
+      projected,
+      new Set(edged.map((b) => b.item.id)),
+      ctx,
+      planProjectId,
+      tx,
+    );
+  }
+}
+
+/** The most corrections one batch may carry. */
+export const PLAN_CORRECTION_BATCH_MAX = 50;
+
+/** A refusal of the plan's own typed taxonomy — every one carries a string `code`. */
+function isTypedRefusal(err: unknown): err is Error & { code: string } {
+  return err instanceof Error && typeof (err as { code?: unknown }).code === 'string';
+}
+
+/**
+ * WHICH correction of a batch a shape or gate refusal hit (bug MOTIR-11225): the
+ * proposal the refusal names when that proposal is one the batch corrects, else
+ * the first corrected proposal its message names (an edge left cross-level onto
+ * a moved card names the moved card as its ref). `null` when it names none.
+ */
+function correctionHit(
+  err: Error,
+  ids: readonly string[],
+): { index: number; planItemId: string } | null {
+  const named = (err as { planItemId?: unknown }).planItemId;
+  if (typeof named === 'string') {
+    const index = ids.indexOf(named);
+    if (index !== -1) return { index, planItemId: named };
+  }
+  const index = ids.findIndex((id) => err.message.includes(id));
+  return index === -1 ? null : { index, planItemId: ids[index]! };
 }
 
 // ── THE CORRECTION DOORS MAY NOT BREAK A PLAN (MOTIR-3936) ───────────────────
@@ -7548,75 +8167,7 @@ export const plansService = {
     // proposal is authoring, not deciding.
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
-    // Resolved BEFORE the transaction, because it reads the project's repository
-    // domain and that is a read the write lock has no business holding.
-    //
-    // ⚠️ AND THE AXIS MAY BE DESCRIBED ONCE (bug MOTIR-4904), through the direct
-    // door's own guard — before either resolver runs, so a contradictory
-    // correction is refused rather than half-resolved. The singular ROW-ID pin
-    // (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) joins the same
-    // exclusivity set as the name and the SET forms.
-    assertSingleTargetRepoInput(
-      input.targetRepo,
-      input.targetRepos,
-      input.targetRepositories,
-      input.targetRepositoryRef,
-    );
-    let resolvedTargetRepo: string | null | undefined;
-    if (input.targetRepo !== undefined) {
-      try {
-        resolvedTargetRepo = await resolveAuthoredTargetRepoInProject(
-          input.targetRepo,
-          plan.projectId,
-          ctx,
-        );
-      } catch (err) {
-        if (err instanceof UnknownTargetRepoError) {
-          throw new PlanItemUnknownTargetRepoError(planItemId, input.targetRepo ?? '', err.message);
-        }
-        throw err;
-      }
-    }
-    // The SET forms, validated the same way and in the same slot (bug
-    // MOTIR-4904). The RESOLVED names are what the proposal stores — approve
-    // re-resolves them against the project domain either way, and storing the
-    // resolved spelling is what makes a corrected set read back the way the
-    // reviewer will see it, exactly as the singular pin above does.
-    let resolvedRepoSet: ResolvedRepoSet | undefined;
-    if (input.targetRepos !== undefined || input.targetRepositories !== undefined) {
-      try {
-        resolvedRepoSet =
-          input.targetRepositories !== undefined
-            ? await resolveAuthoredRepoRefsInProject(input.targetRepositories, plan.projectId, ctx)
-            : await resolveAuthoredRepoPinsInProject(input.targetRepos!, plan.projectId, ctx);
-      } catch (err) {
-        if (err instanceof UnknownTargetRepoError || err instanceof UnknownProjectRepoRefError) {
-          throw new PlanItemUnknownTargetRepoError(
-            planItemId,
-            (input.targetRepositories ?? input.targetRepos ?? []).join(', '),
-            err instanceof Error ? err.message : String(err),
-          );
-        }
-        throw err;
-      }
-    }
-
-    // A RE-PIN to a role the project's set resolves to no single row (MOTIR-11039)
-    // — an `add`'s `targetRepoRole` or a `modify`'s replacement patch — refused
-    // here, beside the name resolution above and before the transaction, so the
-    // stored proposal keeps the pin it had.
-    await assertRolePinsResolvableInProject(
-      [
-        {
-          role:
-            input.targetRepoRole !== undefined ? input.targetRepoRole : input.patch?.targetRepoRole,
-          planItemId,
-          label: `\`${planItemId}\``,
-        },
-      ],
-      plan.projectId,
-      ctx,
-    );
+    const pins = await resolveCorrectionPins(planItemId, input, plan.projectId, ctx);
 
     // The project's TERMINAL statuses, for the post-correction gate below.
     // Resolved OUT HERE because `getTerminalStatusKeys` opens its own workspace
@@ -7644,450 +8195,9 @@ export const plansService = {
         const item = all.find((i) => i.id === planItemId);
         if (!item || item.planId !== planId) throw new PlanItemNotFoundError(planItemId);
 
-        const data: PlanItemUpdateInput = {};
-        const touched: string[] = [];
-
-        if (item.op === 'add') {
-          if (input.patch !== undefined) {
-            throw new InvalidProposalError(
-              'A `patch` belongs to a `modify` proposal; this proposal is an `add`.',
-            );
-          }
-          const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
-          // The language statement (MOTIR-8743), the deepen's check.
-          validateProposedLanguages(
-            input.languages,
-            proposalLabel({ op: item.op, workItemId: item.workItemId, title: current.title }),
-          );
-          const next = mergeProposedFields(current, input);
-          // ⚠️ THE REPOSITORY AXIS IS REPLACED, NOT MERGED (bug MOTIR-4904). Every
-          // other key here is sparse per KEY; these FOUR spellings are one field in
-          // one axis, so correcting one CLEARS the others. Merging instead would
-          // store the exact contradiction `assertSingleTargetRepoInput` refuses at
-          // the append — a stale `targetRepo` beside a new `targetRepos` — and
-          // approve would then have to invent a precedence rule over a state
-          // nobody authored.
-          if (
-            resolvedTargetRepo !== undefined ||
-            resolvedRepoSet !== undefined ||
-            input.targetRepo !== undefined ||
-            input.targetRepositoryRef !== undefined
-          ) {
-            delete next.targetRepo;
-            delete next.targetRepos;
-            delete next.targetRepositories;
-            delete next.targetRepositoryRef;
-          }
-          if (resolvedTargetRepo !== undefined) next.targetRepo = resolvedTargetRepo;
-          if (resolvedRepoSet !== undefined) {
-            // Stored under the spelling the correction used, so a later reader of
-            // the proposal sees which form its author chose — and, for the row-id
-            // form, so the ids the author pinned survive rather than being
-            // silently rewritten to the names they happen to resolve to today.
-            if (input.targetRepositories !== undefined) {
-              next.targetRepositories = input.targetRepositories;
-            } else {
-              next.targetRepos = resolvedRepoSet.names;
-            }
-          }
-          // The singular ROW-ID half of the pin (Story MOTIR-2732 · MOTIR-3045,
-          // surfaced by MOTIR-4924), stored under its own spelling for the same
-          // reason the SET row-id form is: the id the author pinned survives
-          // rather than being rewritten to the name it happens to resolve to
-          // today. Membership of the project's row set is re-validated at approve
-          // (`proposalRepoRef`'s byId check), exactly as it is on the append path.
-          if (input.targetRepositoryRef !== undefined) {
-            next.targetRepositoryRef = input.targetRepositoryRef;
-          }
-          // The ROLE half of the pin (MOTIR-3865), applied HERE rather than in
-          // `mergeProposedFields` for the same reason its NAME twin is: that
-          // helper is the DEEPEN turn's merge and the repo pin is deliberately
-          // outside the deepen's editable set. A correction is the different act
-          // AMENDMENT 7 opened, and it reaches both halves of the pin or it
-          // cannot correct an ONBOARDING plan at all — such a plan pins a role
-          // and no name, because its repositories do not exist yet.
-          //
-          // Validated against the closed VOCABULARY, exactly as the append and a
-          // `modify`'s patch are, and before the write: an unrecognised role is
-          // `PlanItemUnknownTargetRepoRoleError` (a typed 422 at the transport),
-          // never a string smuggled into `proposedFields`. `undefined` leaves the
-          // pin alone and an explicit `null` unpins — `assertKnownRepoRole` passes
-          // both, which is what makes the sparse semantics expressible.
-          if (input.targetRepoRole !== undefined) {
-            assertKnownRepoRole(
-              input.targetRepoRole,
-              item.id,
-              proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-            );
-            next.targetRepoRole = input.targetRepoRole;
-          }
-          // The SUBJECT coordinate (Story MOTIR-5062 · MOTIR-5065), applied HERE
-          // and NOT in `mergeProposedFields` for exactly the reason the repo pin
-          // is: that helper is the DEEPEN turn's merge, and a subject is settled
-          // at the `lay` beside `type` and the pin — it says which RULES an
-          // authoring pass reads, which is where the card sits in the corpus
-          // rather than what it says. So a deepen may not touch it and a
-          // correction may, which is AMENDMENT 3 D3's rule applied rather than an
-          // exception to it.
-          //
-          // Re-validated by the SAME shape check the append runs, so a correction
-          // cannot introduce a subject the append would have refused. The KIND half
-          // of both doors retired with MOTIR-5607. `undefined` leaves it alone and an explicit `null` unpins.
-          // MEMBERSHIP is not checked here, in either door — the vocabulary is
-          // the rule-pack file set, and this repository deliberately does not
-          // hold it.
-          if (input.subject !== undefined) {
-            if (input.subject === null) {
-              delete next.subject;
-            } else {
-              assertCorrectedSubjectValid(input.subject, item.id);
-              next.subject = input.subject;
-            }
-          }
-          if (!next.title?.trim()) {
-            throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
-          }
-          validateProposedSizing(next);
-          // The STEPS, on the MERGED result — the same rule the deepen turn
-          // applies, on the same basis (MOTIR-4616 · AMENDMENT 14 D3-D4).
-          validateProposedTodos(
-            next.todos,
-            next.kind ?? DEFAULT_PROPOSED_KIND,
-            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-          );
-          // The DIFFICULTY, on the MERGED result — the deepen's rule (MOTIR-6133).
-          validateProposedDifficulty(
-            next.difficulty,
-            next.kind ?? DEFAULT_PROPOSED_KIND,
-            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-          );
-          // The PRIORITY, on the MERGED result — the deepen's rule (MOTIR-10656).
-          validateProposedPriority(
-            next.priority,
-            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-            item.id,
-          );
-          // The card-level EXECUTOR, on the MERGED result — the deepen's rule
-          // (MOTIR-10678).
-          validateProposedExecutor(
-            next.executor,
-            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-            item.id,
-          );
-          // A malformed item link is WARNED on the response (MOTIR-10104), and
-          // the links the correction writes must name a proposal on the plan
-          // (bug MOTIR-9175), judged on the bodies it writes (bug MOTIR-9836).
-          assertEditBodyRefsResolve(
-            current,
-            input,
-            next,
-            new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
-            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-          );
-          // A RE-KIND, held to what the new kind owes (bug MOTIR-8192 ·
-          // AMENDMENT 25 §4): no leaf field on a container, and a placement the
-          // plan's own tree admits — judged with this correction's parentRef.
-          if (input.kind !== undefined) {
-            await assertReKindedAddLegal(
-              item.id,
-              next,
-              all.map((i) =>
-                i.id === item.id
-                  ? {
-                      ...toProposalNode(i),
-                      parentRef: input.parentRef !== undefined ? input.parentRef : i.parentRef,
-                      proposedFields: next as ProposalNode['proposedFields'],
-                    }
-                  : toProposalNode(i),
-              ),
-              proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-              ctx,
-              plan.projectId,
-              tx,
-            );
-          }
-          // A card written by hand is stamped as its body lands (MOTIR-10490).
-          data.proposedFields = (await stampHandWrittenBody(
-            input,
-            next,
-            liveSessionReader(fresh, tx),
-          )) as unknown as Prisma.InputJsonValue;
-          // `authorFinished` is planner state, not a change to the card, so it is
-          // left out of what the trail row lists (MOTIR-10490).
-          touched.push(
-            ...editedFieldsOf(Object.keys(input)).filter(
-              (k) =>
-                k !== 'parentRef' &&
-                k !== 'blockedByRefs' &&
-                k !== 'edgeReasons' &&
-                k !== 'supersedesRefs',
-            ),
-          );
-        } else {
-          // A `modify` / `remove` targets an EXISTING work item, so it carries no
-          // proposed body and no pin of its own — the content keys and
-          // `targetRepo` are meaningless on it rather than merely unsupported.
-          const contentKeys = Object.keys(input).filter(
-            (k) =>
-              k !== 'patch' &&
-              k !== 'blockedByRefs' &&
-              k !== 'edgeReasons' &&
-              k !== 'parentRef' &&
-              k !== 'supersedesRefs',
-          );
-          if (contentKeys.length > 0) {
-            throw new InvalidProposalError(
-              `A \`${item.op}\` proposal has no proposed body to correct; ${contentKeys.join(', ')} apply to an \`add\`. Correct its \`patch\` instead.`,
-            );
-          }
-          if (input.patch !== undefined) {
-            if (item.op !== 'modify') {
-              throw new InvalidProposalError('Only a `modify` proposal carries a `patch`.');
-            }
-            // The correction REPLACES the patch, so it is held to the append's
-            // own key check (bug MOTIR-6259) — a correction door looser than the
-            // append would be the way round it.
-            assertKnownPatchKeys(
-              input.patch,
-              proposalLabel({ op: item.op, workItemId: item.workItemId }),
-            );
-            validateStoryPoints(input.patch?.storyPoints ?? null);
-            validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
-            // The replacement patch's language statement (MOTIR-8743).
-            validateProposedLanguages(
-              input.patch?.languages,
-              proposalLabel({ op: item.op, workItemId: item.workItemId }),
-            );
-            // The replacement patch's RE-KIND (bug MOTIR-8192), held to the
-            // append's membership check here and to its tree check below.
-            validateProposedKindChange(
-              input.patch?.kind,
-              proposalLabel({ op: item.op, workItemId: item.workItemId }),
-            );
-            // The replacement patch's MARK (MOTIR-6629), held to the append's check.
-            validateProposedObsolescence(
-              input.patch,
-              proposalLabel({ op: item.op, workItemId: item.workItemId }),
-            );
-            // ...and to the append's FINISHED-TARGET rule (MOTIR-6663), against
-            // the target's live status category. Asked HERE rather than left to
-            // the before/after gate below, which admits a correction to a plan
-            // that was already unapprovable — and a mark on an unfinished card is
-            // a mistake this write introduces, not a repair of one it inherits.
-            if (item.workItemId && patchSetsObsolescence(input.patch)) {
-              const targetId = item.workItemId;
-              await withProjectNarrowingSuspended(tx, plan.projectId, async () => {
-                const [target] = await workItemRepository.findByIdsInWorkspace(
-                  [targetId],
-                  ctx.workspaceId,
-                  tx,
-                );
-                if (!target) return;
-                const categoryById = await resolveStatusCategories([target], ctx, tx);
-                assertMarkTargetIsFinished(
-                  input.patch,
-                  {
-                    key: target.identifier,
-                    status: target.status,
-                    statusCategory: categoryById.get(target.id) ?? null,
-                  },
-                  proposalLabel({ op: item.op, workItemId: item.workItemId }),
-                );
-              });
-            }
-            // The replacement patch's malformed links are WARNED on the response
-            // (MOTIR-10104); a canonical link to no proposal is refused (MOTIR-9175).
-            assertBodyRefsResolve(
-              input.patch ?? {},
-              new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
-              proposalLabel({ op: item.op, workItemId: item.workItemId }),
-            );
-            // The replacement patch's PRIORITY (MOTIR-10656) — membership, as the
-            // append's `modify` arm checks it.
-            validateProposedPriority(
-              input.patch?.priority,
-              proposalLabel({ op: item.op, workItemId: item.workItemId }),
-              item.id,
-            );
-            // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the
-            // TARGET's PROJECTED kind — the patch's re-kind when it carries one
-            // (bug MOTIR-8192), else the live kind — the append's two halves in
-            // one call, since the transaction is already open.
-            if (input.patch?.difficulty !== undefined && input.patch?.difficulty !== null) {
-              const target = item.workItemId
-                ? await workItemRepository.findById(item.workItemId, tx)
-                : null;
-              validateProposedDifficulty(
-                input.patch.difficulty,
-                input.patch.kind ?? (target ? target.kind : null),
-                proposalLabel({ op: item.op, workItemId: item.workItemId }),
-              );
-            }
-            // The replacement patch's STEPS (MOTIR-8668), the same way: the rows
-            // against the store's caps always, the container half against the
-            // target's PROJECTED kind, read only when the list is non-empty.
-            if (Array.isArray(input.patch?.todos) && input.patch.todos.length > 0) {
-              const target = item.workItemId
-                ? await workItemRepository.findById(item.workItemId, tx)
-                : null;
-              validateProposedTodos(
-                input.patch.todos,
-                input.patch.kind ?? (target ? target.kind : null),
-                proposalLabel({ op: item.op, workItemId: item.workItemId }),
-              );
-            } else {
-              validateProposedTodos(
-                input.patch?.todos,
-                null,
-                proposalLabel({ op: item.op, workItemId: item.workItemId }),
-              );
-            }
-            assertKnownRepoRole(
-              input.patch?.targetRepoRole,
-              item.id,
-              proposalLabel({ op: item.op, workItemId: item.workItemId }),
-            );
-            // The replacement patch clears the append's boundary checks with it
-            // (bug MOTIR-4904): a correction REPLACES the patch, so a patch that
-            // describes the repository axis twice must be refused here exactly as
-            // `validateProposal` refuses one at the append.
-            assertSingleTargetRepoInput(
-              input.patch?.targetRepo,
-              input.patch?.targetRepos,
-              input.patch?.targetRepositories,
-              input.patch?.targetRepositoryRef,
-            );
-            data.patch = (input.patch ?? Prisma.JsonNull) as Prisma.InputJsonValue;
-            touched.push('patch');
-          }
-        }
-
-        if (input.parentRef !== undefined) {
-          if (item.op !== 'add') {
-            throw new InvalidProposalError('Only an `add` proposal carries a `parentRef`.');
-          }
-          data.parentRef = input.parentRef;
-          touched.push('parentRef');
-        }
-        if (input.blockedByRefs !== undefined) {
-          data.blockedByRefs = input.blockedByRefs;
-          touched.push('blockedByRefs');
-        }
-        // The reasons REPLACE with the edges they explain (MOTIR-9827), held to the
-        // refs the corrected proposal draws.
-        if (input.edgeReasons !== undefined) {
-          const correctedEdges = {
-            op: item.op,
-            blockedByRefs: (data.blockedByRefs as string[] | undefined) ?? item.blockedByRefs,
-            patch: (input.patch !== undefined ? input.patch : item.patch) as {
-              blockedByAdd?: string[];
-            } | null,
-            edgeReasons: input.edgeReasons,
-          };
-          assertEdgeReasonsKeyed(
-            correctedEdges,
-            proposalLabel({ op: item.op, workItemId: item.workItemId }),
-          );
-          data.edgeReasons = input.edgeReasons;
-          touched.push('edgeReasons');
-        }
-        // REPLACES the `add`'s supersedes set (MOTIR-6630), as `blockedByRefs`
-        // does; a `modify` corrects its edges through its `patch`.
-        if (input.supersedesRefs !== undefined) {
-          if (item.op !== 'add') {
-            throw new InvalidProposalError(
-              "Only an `add` proposal carries `supersedesRefs`; correct a `modify`'s supersedes edges through its `patch`.",
-            );
-          }
-          data.supersedesRefs = input.supersedesRefs;
-          touched.push('supersedesRefs');
-        }
-
-        // A write carrying only `authorFinished` changes the stored state and no
-        // field of the card (MOTIR-10490) — legal, and recorded below as no row.
-        const setsAuthorState = item.op === 'add' && input.authorFinished !== undefined;
-        if (touched.length === 0 && !setsAuthorState)
-          throw new InvalidProposalError('A correction must change something.');
-
-        // ⚠️ THE APPEND'S OWN CHECK, RE-RUN ON THE CORRECTED SHAPE (MOTIR-3539).
-        // The resolvable set is every OTHER `add` on this plan — excluding this
-        // one, so `planItem:<itself>` is refused rather than stored as a
-        // one-node cycle for materialize to trip over.
-        const corrected: ProposalRefCarrier = {
-          label: proposalLabel({
-            op: item.op,
-            workItemId: item.workItemId,
-            title: (data.proposedFields as { title?: string } | undefined)?.title,
-          }),
-          parentRef: (data.parentRef as string | null | undefined) ?? item.parentRef,
-          blockedByRefs: (data.blockedByRefs as string[] | undefined) ?? item.blockedByRefs,
-          supersedesRefs:
-            (data.supersedesRefs as string[] | undefined) ?? item.supersedesRefs ?? [],
-          patch: (input.patch !== undefined
-            ? input.patch
-            : (item.patch as ProposalRefCarrier['patch'])) as ProposalRefCarrier['patch'],
-        };
-        assertTempRefsResolvable(
-          [corrected],
-          new Set(all.filter((i) => i.op === 'add' && i.id !== item.id).map((i) => i.id)),
-          (ref, proposal) => new UnresolvedPlanRefError(ref, proposal),
-        );
-
-        // The append's FOLDER gate on the corrected shape (MOTIR-5414), run
-        // unconditionally rather than left to the before/after verdict below —
-        // that verdict ADMITS a correction to a plan that was already
-        // unapprovable, and an unknown folder is a mistake this write
-        // introduces, not a repair of one it inherits.
-        const correctedNode: ProposalNode = {
-          ...toProposalNode(item),
-          parentRef: corrected.parentRef ?? null,
-          blockedByRefs: [...(corrected.blockedByRefs ?? [])],
-          supersedesRefs: [...(corrected.supersedesRefs ?? [])],
-          patch: (corrected.patch ?? null) as ProposalNode['patch'],
-        };
-        assertProposalSetSelfConsistent([correctedNode]);
-        if (collectReferencedFolderIds([correctedNode]).length > 0) {
-          await assertFolderPlacementsLegalAtAppend([correctedNode], ctx, plan.projectId, tx);
-        }
-        // The append's RE-PARENT gate on the corrected shape, for the same reason
-        // as the folder gate above — including a move under a proposed `add`
-        // (AMENDMENT 18 §1, MOTIR-6050), judged against the plan's OTHER
-        // proposals, which is the set the corrected one will sit among.
-        if (anyReparent([correctedNode])) {
-          await assertReparentsLegalAtAppend(
-            [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
-            ctx,
-            plan.projectId,
-            tx,
-          );
-        }
-        // …and the append's RE-KIND gate (bug MOTIR-8192), for the same reason:
-        // a kind the projected tree refuses is a mistake this write introduces.
-        if (correctedNode.op === 'modify' && correctedNode.patch?.kind !== undefined) {
-          await assertKindChangesLegalAtAppend(
-            [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
-            ctx,
-            plan.projectId,
-            tx,
-          );
-        }
-
-        // A `blocked_by` CYCLE the correction closes on a GENERATING plan
-        // (MOTIR-9267) — refused where the edge is written, as the append does,
-        // and before the write. A `planned` plan is held by the before/after
-        // gate below.
-        if (
-          fresh.status === 'generating' &&
-          (input.blockedByRefs !== undefined || (input.patch?.blockedByAdd?.length ?? 0) > 0)
-        ) {
-          await assertBlockedByAcyclicAtAppend(
-            [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
-            new Set([correctedNode.id]),
-            ctx,
-            plan.projectId,
-            tx,
-          );
-        }
+        const built = await buildCorrection(item, input, pins, all, fresh, plan.projectId, ctx, tx);
+        await assertCorrectedShapesLegal([built], all, fresh.status, plan.projectId, ctx, tx);
+        const { data, touched } = built;
 
         await planItemRepository.update(planItemId, data, tx);
 
@@ -8135,6 +8245,154 @@ export const plansService = {
       },
     );
     return withLinkWarnings(toPlanWithItemsDto(row, items), items, [planItemId], ctx);
+  },
+
+  /**
+   * CORRECT SEVERAL proposals of one plan in ONE transaction (bug MOTIR-11225) —
+   * the door for corrections that are each illegal alone and legal together.
+   *
+   * The case that needed it: the post-merge cut moves a deploy card AND the
+   * alarms card `blocked_by` it out of their story, to hang beside it under the
+   * epic. Sent one at a time, the first move leaves the alarms card two levels
+   * down waiting on a card one level down, and the second leaves it the other
+   * way round — each refused `cross_level` by the close's gate, which judges the
+   * plan as each single write leaves it. A drop-move-restore sequence over the
+   * single door was rejected: it is not atomic, and a failure half way leaves a
+   * plan missing an edge.
+   *
+   * So the batch runs `correctProposal`'s own steps in a different order: every
+   * correction is merged and checked ON ITS OWN ({@link buildCorrection}), the
+   * SHAPE gates run once on the plan as the whole batch leaves it
+   * ({@link assertCorrectedShapesLegal}), every write lands, and the close's gate
+   * runs ONCE on the result — with `correctProposal`'s before/after rule, so a
+   * batch that repairs an already-broken plan is admitted.
+   *
+   * ALL OR NOTHING: any refusal rolls every write back and is raised as
+   * {@link PlanCorrectionRefusedError}, which names the correction it hit and
+   * carries the typed refusal underneath. Each correction lands on the plan's
+   * timeline as `correctProposal`'s does, with the batch's size and its index.
+   *
+   * Legal on `generating` AND `planned`; `approved` / `declined` are FROZEN, with
+   * the same `PlanNotEditableError` the single door raises. A batch is 1 to
+   * {@link PLAN_CORRECTION_BATCH_MAX} corrections, each to a different proposal.
+   */
+  async correctProposals(
+    planId: string,
+    corrections: readonly PlanProposalCorrection[],
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsAndWarningsDto> {
+    if (corrections.length === 0 || corrections.length > PLAN_CORRECTION_BATCH_MAX) {
+      throw new InvalidProposalError(
+        `A batch correction carries 1 to ${PLAN_CORRECTION_BATCH_MAX} corrections; this one carries ${corrections.length}.`,
+      );
+    }
+    const ids = corrections.map((c) => c.planItemId);
+    const inputs = corrections.map(({ planItemId: _id, ...input }) =>
+      normalizeCorrectionEdges(input),
+    );
+    // Each correction is wrapped with WHICH it was, so the refusal names it.
+    const refusedAt = (index: number, err: unknown): unknown =>
+      isTypedRefusal(err) ? new PlanCorrectionRefusedError(index, ids[index]!, err) : err;
+    const refusedHit = (err: unknown): unknown => {
+      if (!isTypedRefusal(err)) return err;
+      const hit = correctionHit(err, ids);
+      return new PlanCorrectionRefusedError(hit?.index ?? null, hit?.planItemId ?? null, err);
+    };
+    const duplicate = ids.findIndex((id, index) => ids.indexOf(id) !== index);
+    if (duplicate !== -1) {
+      throw refusedAt(
+        duplicate,
+        new InvalidProposalError(
+          `A batch corrects each proposal once; ${ids[duplicate]} appears more than once. Merge its corrections into one.`,
+        ),
+      );
+    }
+
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+
+    const pins: ResolvedCorrectionPins[] = [];
+    for (const [index, input] of inputs.entries()) {
+      try {
+        pins.push(await resolveCorrectionPins(ids[index]!, input, plan.projectId, ctx));
+      } catch (err) {
+        throw refusedAt(index, err);
+      }
+    }
+    const terminalStatusKeys = await workflowsService.getTerminalStatusKeys(
+      plan.projectId,
+      ctx.workspaceId,
+    );
+
+    const { row, items } = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        await refuseWhileApproving(planId, ctx.workspaceId, tx);
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+        if (!fresh) throw new PlanNotFoundError(planId);
+        assertPlanProposalsEditable(fresh);
+
+        const all = await planItemRepository.findByPlan(planId, tx);
+        const built: BuiltCorrection[] = [];
+        for (const [index, input] of inputs.entries()) {
+          try {
+            const item = all.find((i) => i.id === ids[index]);
+            if (!item || item.planId !== planId) throw new PlanItemNotFoundError(ids[index]!);
+            built.push(
+              await buildCorrection(item, input, pins[index]!, all, fresh, plan.projectId, ctx, tx),
+            );
+          } catch (err) {
+            throw refusedAt(index, err);
+          }
+        }
+        try {
+          await assertCorrectedShapesLegal(built, all, fresh.status, plan.projectId, ctx, tx);
+          for (const b of built) await planItemRepository.update(b.item.id, b.data, tx);
+          // THE CLOSE'S OWN GATE, ONCE, on the plan as the WHOLE batch leaves it.
+          // A throw rolls every write above back.
+          await assertCorrectionKeepsPlanApprovable(
+            all,
+            await planItemRepository.findByPlan(planId, tx),
+            ctx,
+            terminalStatusKeys,
+            plan.projectId,
+            tx,
+          );
+        } catch (err) {
+          throw refusedHit(err);
+        }
+
+        // Each correction on the plan's content trail, as `correctProposal`
+        // records one, marked with the batch it rode in.
+        for (const [index, b] of built.entries()) {
+          if (b.touched.length === 0) continue;
+          await planRevisionsService.recordRevision(
+            {
+              planId,
+              planItemId: b.item.id,
+              changeKind: 'edited',
+              ...generationActor(fresh, ctx),
+              diff: {
+                fields: b.touched,
+                proposalCount: 1,
+                correction: true,
+                batch: { size: built.length, index },
+              },
+            },
+            tx,
+          );
+        }
+        // The plan's activity stamp (MOTIR-7822).
+        await stampPlanActivity(fresh, new Date(), tx);
+        return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };
+      },
+    );
+    return withLinkWarnings(toPlanWithItemsDto(row, items), items, ids, ctx);
   },
 
   /**

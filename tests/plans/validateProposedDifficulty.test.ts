@@ -126,7 +126,10 @@ describe('ONE validator module serves every proposal door (MOTIR-6133)', () => {
     // so the Sharpen write-back can apply several edits under one lock; the
     // validator call moved with it, and every edit door reaches it from there.
     ['the deepen / human edit', 'async function applyAddProposalEdit(', 1],
-    ['the correction — merged add + modify patch', 'async correctProposal(', 2],
+    // MOTIR-11225 split the correction's per-proposal half out of
+    // `correctProposal` so the BATCH door can build several corrections under
+    // one lock; the validator calls moved with it, and both doors reach them.
+    ['the correction — merged add + modify patch', 'async function buildCorrection(', 2],
   ];
 
   it.each(DOORS)('%s calls validateProposedDifficulty', (_door, signature, calls) => {
