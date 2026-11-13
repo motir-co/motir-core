@@ -140,9 +140,16 @@ describe('the analytics seam is the ONE reader (MOTIR-1163)', () => {
   });
 });
 
+/** A `build-args:` key — `[1]` its prefix up to the key's column (a sequence
+ * entry's `- ` included), `[2]` whatever follows the colon. */
+const BUILD_ARGS_KEY = /^(\s*(?:-\s+)?)build-args\s*:(.*)$/;
+/** A block scalar header: `|` or `>`, with optional chomping/indentation indicators. */
+const BLOCK_SCALAR_HEADER = /^[|>][-+0-9]*$/;
+
 /**
  * Does this text carry a BUILD-TIME reference to the analytics variable — a
- * `NEXT_PUBLIC_` name, a Dockerfile `ARG`, or a `--build-arg`?
+ * `NEXT_PUBLIC_` name, a Dockerfile `ARG`, a `--build-arg`, or an entry in a
+ * workflow's `build-args:` input?
  *
  * Extracted so the assertions below can be shown to FIRE (the fixture test at
  * the end). A guard that asserts an ABSENCE passes just as green when its
@@ -159,11 +166,40 @@ describe('the analytics seam is the ONE reader (MOTIR-1163)', () => {
  * pins `ARG MOTIR_RELEASE` as a non-match. What changed is only that the
  * vacuity worry is now hypothetical rather than the tree's actual state; the
  * fixture test, not this sentence, is what answers it.
+ *
+ * ⚠️ AMENDED (MOTIR-11179): the three line shapes were written for the retired
+ * Fly deploy, which passed `--build-arg` on a command line. `aws-deploy.yml`
+ * hands its build arguments to `docker/build-push-action` as a YAML
+ * `build-args:` input instead — one `NAME=value` per line of a block scalar,
+ * with no `--build-arg` anywhere — so a PLAUSIBLE entry there matched none of
+ * them and the guard passed vacuously on the real release lane. A line is now
+ * ALSO a build-time reference when it carries a `build-args:` value: the
+ * inline value on the key's own line, or any line of the block scalar under
+ * the key. Per YAML, that block runs until the first non-blank line indented
+ * no deeper than the key; blank lines inside it do not end it.
  */
 function buildTimeAnalyticsReferences(text: string): string[] {
+  let buildArgsKeyColumn: number | null = null;
   return text.split('\n').filter((line) => {
+    const indent = line.length - line.trimStart().length;
+    let isBuildArg = false;
+    if (buildArgsKeyColumn !== null && (line.trim() === '' || indent > buildArgsKeyColumn)) {
+      isBuildArg = true;
+    } else {
+      buildArgsKeyColumn = null;
+      const key = BUILD_ARGS_KEY.exec(line);
+      if (key) {
+        const value = key[2]!.replace(/\s+#.*$/, '').trim();
+        if (value === '' || BLOCK_SCALAR_HEADER.test(value)) {
+          buildArgsKeyColumn = key[1]!.length;
+        } else {
+          isBuildArg = true;
+        }
+      }
+    }
     if (!/PLAUSIBLE/i.test(line)) return false;
     return (
+      isBuildArg ||
       /NEXT_PUBLIC_[A-Z0-9_]*PLAUSIBLE/i.test(line) ||
       /^\s*ARG\s/.test(line) ||
       /--build-arg/.test(line)
@@ -200,8 +236,50 @@ describe('PLAUSIBLE_SCRIPT_SRC stays a RUNTIME variable (MOTIR-1163)', () => {
     expect(
       buildTimeAnalyticsReferences('NEXT_PUBLIC_PLAUSIBLE_SCRIPT_SRC=https://example.test'),
     ).toHaveLength(1);
+    // MOTIR-11179 — the shape aws-deploy.yml actually uses: an entry in the
+    // `build-args:` block scalar handed to docker/build-push-action.
+    const blockEntry = '            PLAUSIBLE_SCRIPT_SRC=${{ secrets.PLAUSIBLE_SCRIPT_SRC }}';
+    expect(
+      buildTimeAnalyticsReferences(
+        [
+          '          build-args: |',
+          '            MOTIR_RELEASE=${{ github.sha }}',
+          blockEntry,
+          '          secrets: |',
+        ].join('\n'),
+      ),
+    ).toEqual([blockEntry]);
+    // …a blank line inside the block does not end it, and a sequence entry or a
+    // chomping indicator on the header does not hide it…
+    expect(
+      buildTimeAnalyticsReferences(
+        ['      - build-args: |-  # Sentry', '          MOTIR_RELEASE=x', '', blockEntry].join(
+          '\n',
+        ),
+      ),
+    ).toEqual([blockEntry]);
+    // …nor a bare key whose value is a plain multi-line scalar…
+    expect(
+      buildTimeAnalyticsReferences(['build-args:', '  PLAUSIBLE_SCRIPT_SRC=$X'].join('\n')),
+    ).toHaveLength(1);
+    // …and neither does an inline value on the key's own line.
+    expect(
+      buildTimeAnalyticsReferences('          build-args: PLAUSIBLE_SCRIPT_SRC=$X'),
+    ).toHaveLength(1);
     // …and stays quiet on the runtime forms that are correct.
     expect(buildTimeAnalyticsReferences('PLAUSIBLE_SCRIPT_SRC=https://example.test')).toEqual([]);
     expect(buildTimeAnalyticsReferences('ARG MOTIR_RELEASE')).toEqual([]);
+    // A step's runtime `env:` after the block is NOT a build argument: the block
+    // ends at the first line indented no deeper than its key.
+    expect(
+      buildTimeAnalyticsReferences(
+        [
+          '          build-args: |',
+          '            MOTIR_RELEASE=${{ github.sha }}',
+          '        env:',
+          '          PLAUSIBLE_SCRIPT_SRC: ${{ secrets.PLAUSIBLE_SCRIPT_SRC }}',
+        ].join('\n'),
+      ),
+    ).toEqual([]);
   });
 });
