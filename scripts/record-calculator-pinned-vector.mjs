@@ -5,7 +5,7 @@
 // Nothing in the record is hand-written: when the engine's answer moves, run this again
 // and commit the whole file. The routes take no credential.
 //
-//   node scripts/record-calculator-pinned-vector.mjs [origin]   (default https://motir-ai.fly.dev)
+//   node scripts/record-calculator-pinned-vector.mjs [origin]   (default https://ai.motir.co)
 //
 // The record is a JSON file, not a TypeScript module, so that motir-marketing can carry a
 // BYTE-IDENTICAL copy (`tests/fixtures/calculator/pinned-vector.json` there): the billing
@@ -14,7 +14,7 @@
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 
-const origin = process.argv[2] ?? 'https://motir-ai.fly.dev';
+const origin = process.argv[2] ?? 'https://ai.motir.co';
 const out = new URL('../tests/fixtures/calculatorPinnedVector.json', import.meta.url);
 
 const CATEGORIES_PATH = '/v1/public/calculator/categories';

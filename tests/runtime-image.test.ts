@@ -365,7 +365,7 @@ describe('Dockerfile — the standalone SCOPE ASSERTION, RUN rather than read (M
     // The regression this replaces the prune with. A widened trace used to be
     // invisible — the prune deleted the evidence and the image was merely
     // rebuilt from a sweep nobody saw. Now it stops the build, on the one path
-    // that ships the bytes, and `flyctl deploy` runs only AFTER a merge.
+    // that ships the bytes, and the AWS deploy's image build runs only AFTER a merge.
     withScopeCheck([returned], (res) => {
       expect(res.status).not.toBe(0);
       expect(res.stderr).toContain(`'${returned}/' is in the standalone output`);

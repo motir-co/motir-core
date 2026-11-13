@@ -84,8 +84,8 @@ const SSE_HEADERS = {
   Connection: 'keep-alive',
 } as const;
 
-// The push cadence, exported from here so the tests and the staging checks read
-// the numbers from the route they are about.
+// The push cadence, exported from here so the tests read the numbers from the
+// route they are about.
 export { WORKBENCH_STREAM_BACKSTOP_MS } from '@/lib/workbench/workbenchStreamSession';
 export { WORKBENCH_STREAM_COALESCE_MS } from '@/lib/workbench/workbenchStreamCoalescer';
 

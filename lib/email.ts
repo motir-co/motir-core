@@ -269,13 +269,13 @@ const RESEND_QUOTA_EXHAUSTED = new Set(['daily_quota_exceeded', 'monthly_quota_e
 
 /**
  * Where to set each production arm's variables, for its boot refusal. Resend's
- * secrets were Fly secrets on `motir-core`; SES runs on ECS, where the task
- * definition's environment and secrets carry them.
+ * secrets, like SES's settings, run on ECS, where the task definition's
+ * environment and secrets (from AWS Secrets Manager) carry them.
  */
 const PROVIDER_ENV_HINT: Record<'resend' | 'ses', (name: string) => string> = {
   resend: (name) =>
     `Set it on the deployment alongside RESEND_API_KEY and EMAIL_FROM ` +
-    `(on Fly: \`flyctl secrets set -a motir-core ${name}=…\`; locally: .env.local). `,
+    `(on ECS: ${name} in the task definition's secrets, from AWS Secrets Manager; locally: .env.local). `,
   ses: () =>
     `Set it on the deployment alongside AWS_REGION, EMAIL_FROM and SES_CONFIGURATION_SET ` +
     `(on ECS: the task definition's environment; locally: .env.local). `,

@@ -82,11 +82,14 @@ describe('off Fargate', () => {
     expect(hostProcessGroup(env)).toBeUndefined();
   });
 
-  it('reads no Fly variable: a former Fly machine answers undefined', () => {
-    const fly = { FLY_MACHINE_ID: '148e21ea7e5389', FLY_REGION: 'iad', FLY_PROCESS_GROUP: 'app' };
-    expect(hostInstanceId(fly)).toBeUndefined();
-    expect(hostRegion(fly)).toBeUndefined();
-    expect(hostProcessGroup(fly)).toBeUndefined();
+  it("reads no other host's variables: a machine with only its own host tags answers undefined", () => {
+    // A previous or another host's instance, region and process-group variables
+    // are not Fargate's; none of them is read (the port-boundary guard keeps the
+    // retired host's names out of `lib/` altogether).
+    const other = { MACHINE_ID: '148e21ea7e5389', REGION: 'iad', PROCESS_GROUP: 'app' };
+    expect(hostInstanceId(other)).toBeUndefined();
+    expect(hostRegion(other)).toBeUndefined();
+    expect(hostProcessGroup(other)).toBeUndefined();
   });
 });
 

@@ -8,18 +8,19 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The cutover integration gate (Story MOTIR-9712 · MOTIR-10077): the window's
-// step 5 then step 6, in one test against real Postgres. Rows on the Tigris
-// public base are rewritten to keys by the shipped service while the configured
-// base still names Tigris; the base then switches to S3, and the rows are read
-// through the DTO mappers users actually see. Every image must land on S3 with
-// no Tigris host and no doubled bucket segment, and a foreign avatar must pass
-// through untouched.
+// step 5 then step 6, in one test against real Postgres. Rows on the previous
+// store's public base are rewritten to keys by the shipped service while the
+// configured base still names that store; the base then switches to S3, and the
+// rows are read through the DTO mappers users actually see. Every image must land
+// on S3 with no previous-store host and no doubled bucket segment, and a foreign
+// avatar must pass through untouched. The previous store's hosts are neutral
+// `.test` names: the service takes the base as an argument and knows no vendor.
 
 const S3 = 'https://motir-core-public.s3.eu-central-1.amazonaws.com';
 const GOOGLE = 'https://lh3.googleusercontent.com/a/ACg8ocK-cutover=s96-c';
 const BASES = {
-  'path-style': 'https://fly.storage.tigris.dev/motir-core-public',
-  'virtual-host': 'https://motir-core-public.fly.storage.tigris.dev',
+  'path-style': 'https://previous-store.test/motir-core-public',
+  'virtual-host': 'https://motir-core-public.previous-store.test',
 };
 
 beforeEach(async () => {
@@ -42,10 +43,10 @@ async function readProject(id: string) {
   return adminDb.project.findUniqueOrThrow({ where: { id } });
 }
 
-describe.each(Object.entries(BASES))('a %s Tigris base', (_style, tigris) => {
+describe.each(Object.entries(BASES))('a %s previous-store base', (_style, previous) => {
   it('rewrites to keys that resolve on the S3 base, leaving foreign URLs and keys alone', async () => {
-    // Before the switch: the configured base is still Tigris.
-    vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', tigris);
+    // Before the switch: the configured base is still the previous store's.
+    vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', previous);
     const a = await createTestWorkspace({ name: 'Alpha' });
     const google = await createTestWorkspace({ name: 'Google' });
     const keyed = await createTestWorkspace({ name: 'Keyed' });
@@ -59,18 +60,18 @@ describe.each(Object.entries(BASES))('a %s Tigris base', (_style, tigris) => {
     const keyedKey = `avatars/${keyed.owner.id}/k.png`;
     await adminDb.user.update({
       where: { id: a.owner.id },
-      data: { image: `${tigris}/${userKey}` },
+      data: { image: `${previous}/${userKey}` },
     });
     await adminDb.user.update({ where: { id: google.owner.id }, data: { image: GOOGLE } });
     await adminDb.user.update({ where: { id: keyed.owner.id }, data: { image: keyedKey } });
     await adminDb.project.update({
       where: { id: project.id },
-      data: { image: `${tigris}/${projectKey}` },
+      data: { image: `${previous}/${projectKey}` },
     });
 
     // Step 5: the rewrite, named with the old base.
     const applied = await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
-      fromBase: tigris,
+      fromBase: previous,
       apply: true,
     });
     expect(applied.users.before + applied.projects.before).toBe(2);
@@ -82,7 +83,7 @@ describe.each(Object.entries(BASES))('a %s Tigris base', (_style, tigris) => {
     expect(userImage).toBe(`${S3}/${userKey}`);
     expect(projectImage).toBe(`${S3}/${projectKey}`);
     for (const url of [userImage, projectImage]) {
-      expect(url).not.toMatch(/tigris/);
+      expect(url).not.toContain(new URL(previous).host);
       expect(url).not.toContain('motir-core-public/motir-core-public');
       expect(new URL(url!).pathname.split('/').filter((s) => s === 'motir-core-public')).toEqual(
         [],
@@ -97,13 +98,13 @@ describe.each(Object.entries(BASES))('a %s Tigris base', (_style, tigris) => {
     expect((await readUser(keyed.owner.id)).image).toBe(keyedKey);
     expect(toUserProfileDto(await readUser(keyed.owner.id)).image).toBe(`${S3}/${keyedKey}`);
 
-    // Nothing in the database names the Tigris host any more…
-    const tigrisHost = new URL(tigris).host;
-    expect(await adminDb.user.count({ where: { image: { contains: tigrisHost } } })).toBe(0);
-    expect(await adminDb.project.count({ where: { image: { contains: tigrisHost } } })).toBe(0);
+    // Nothing in the database names the previous store's host any more…
+    const previousHost = new URL(previous).host;
+    expect(await adminDb.user.count({ where: { image: { contains: previousHost } } })).toBe(0);
+    expect(await adminDb.project.count({ where: { image: { contains: previousHost } } })).toBe(0);
     // …and a second dry run finds nothing to do.
     const again = await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
-      fromBase: tigris,
+      fromBase: previous,
       apply: false,
     });
     expect(again.users.before).toBe(0);

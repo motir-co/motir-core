@@ -56,7 +56,7 @@ function readout(over: Partial<TopStatementsReadout> = {}): TopStatementsReadout
     limit: 20,
     extensionSchema: 'public',
     answeredBy: {
-      host: 'ep-calm-1.eu-central-1.aws.neon.tech',
+      host: 'db-1.eu-central-1.example.test',
       database: 'neondb',
       serverVersion: '17.2',
       computeStartedAt: '2026-10-14T08:00:00.000Z',
@@ -101,8 +101,8 @@ describe('parseArgs', () => {
 });
 
 describe('resolveDirectUrl', () => {
-  const DIRECT = 'postgresql://u:secret@ep-calm-1.eu-central-1.aws.neon.tech/neondb';
-  const POOLER = 'postgresql://u:secret@ep-calm-1-pooler.eu-central-1.aws.neon.tech/neondb';
+  const DIRECT = 'postgresql://u:secret@db-1.eu-central-1.example.test/neondb';
+  const POOLER = 'postgresql://u:secret@db-1-pooler.eu-central-1.example.test/neondb';
   const LOCAL = 'postgresql://prodect:prodect@localhost:5433/prodect';
 
   it('prefers DATABASE_URL_UNPOOLED', () => {
@@ -133,7 +133,7 @@ describe('resolveDirectUrl', () => {
   });
 
   it('hostOf never carries the credentials', () => {
-    expect(hostOf(DIRECT)).toBe('ep-calm-1.eu-central-1.aws.neon.tech');
+    expect(hostOf(DIRECT)).toBe('db-1.eu-central-1.example.test');
     expect(hostOf(LOCAL)).toBe('localhost:5433');
     expect(hostOf(DIRECT)).not.toContain('secret');
   });
@@ -142,7 +142,7 @@ describe('resolveDirectUrl', () => {
 describe('renderText', () => {
   it('prints the answered-by block, the coverage line and three ranked sections', () => {
     const out = renderText(readout());
-    expect(out).toContain('host=ep-calm-1.eu-central-1.aws.neon.tech');
+    expect(out).toContain('host=db-1.eu-central-1.example.test');
     expect(out).toContain('database=neondb');
     expect(out).toContain('server_version=17.2');
     expect(out).toContain('compute started: 2026-10-14T08:00:00.000Z');

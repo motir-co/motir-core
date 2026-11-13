@@ -11043,7 +11043,7 @@
           "unreachableDetail": {
             "unreachable": "Baza danych nie odpowiedziała na ping. To nie jest opóźnienie zerowe — nic nie zostało zmierzone."
           },
-          "linkOut": "Konsola Neon"
+          "linkOut": "Konsola Amazon RDS"
         },
         "hosting": {
           "title": "Hosting",

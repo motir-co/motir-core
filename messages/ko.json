@@ -11037,7 +11037,7 @@
           "unreachableDetail": {
             "unreachable": "데이터베이스가 ping에 응답하지 않았습니다. 지연 시간이 0이라는 뜻이 아니라, 아무것도 측정되지 않았다는 뜻입니다."
           },
-          "linkOut": "Neon 콘솔"
+          "linkOut": "Amazon RDS 콘솔"
         },
         "hosting": {
           "title": "호스팅",

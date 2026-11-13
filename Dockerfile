@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# motir-core on Fly.io — the production image (MOTIR-2387).
+# motir-core — the production image (MOTIR-2387), built and pushed to ECR by
+# `.github/workflows/aws-deploy.yml` and run on ECS Fargate.
 #
 # ── Why this shape ──────────────────────────────────────────────────────────
 # `next build` with `output: 'standalone'` traces the whole app ONCE and emits a
@@ -119,7 +120,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ⚠️ THE AUTH TOKEN IS A SECRET AND IS DELIBERATELY *NOT* HERE. A `--build-arg`
 # value is recorded in the build's own metadata; a credential goes in through
 # `--mount=type=secret` on the RUN below, where it exists for one command and is
-# never written to a layer. `flyctl deploy --build-secret` is the other half.
+# never written to a layer. The `secrets:` input of aws-deploy.yml's image build
+# is the other half.
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT=""
 ARG MOTIR_RELEASE=""
@@ -293,8 +295,8 @@ RUN pnpm build:data-script
 # `pnpm assert:nft-trace` (CI's `build` job) asserts the same fact one level up,
 # against the `.nft.json` files themselves, and catches it on the PULL REQUEST.
 # This one is the backstop on the path that actually ships the bytes — and it is
-# the only one of the two that runs on a `flyctl deploy`, which happens after
-# the merge.
+# the only one of the two that runs on the AWS deploy's image build, which
+# happens after the merge.
 RUN set -eu; \
     cd .next/standalone; \
     echo "standalone: $(du -sm . | cut -f1) MB"; \

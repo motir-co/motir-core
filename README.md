@@ -178,30 +178,24 @@ Unit + e2e test scaffolding (Vitest, Playwright) lands in later Subtasks.
 
 ## Deploys
 
-Deployed on [Vercel](https://vercel.com) (Hobby tier for v1). Database is
-managed [Neon](https://neon.tech) Postgres via the official Vercel-Neon
-integration, which auto-provisions an isolated database branch for each
-Vercel preview deploy.
+Production runs on AWS: core's web, worker and relay services on ECS Fargate,
+with its PostgreSQL database on Amazon RDS and its stored files on Amazon S3. The
+infrastructure is motir-infra's CDK app; [`docs/aws-deploy.md`](./docs/aws-deploy.md)
+is the release lane in full.
 
-- **Production**: every push to `main` triggers a production deploy at
-  <https://motir-core.vercel.app> (Vercel's auto-assigned default; a real
-  apex domain lands in Epic 5).
-- **Previews**: every PR triggers an isolated preview deploy. Vercel posts
-  the preview URL as a PR comment. The preview URL follows the pattern
-  `motir-core-git-<branch>-zhuyue11s-projects.vercel.app` (per-branch
-  stable) or `motir-core-<hash>-zhuyue11s-projects.vercel.app` (per-deploy).
-  Each preview gets its own Neon DB branch so PRs can safely run destructive
-  migrations without affecting production.
-- **Rollback**: Vercel dashboard → Deployments → click any previous deploy
-  → "Promote to Production". Or `vercel rollback` from the Vercel CLI.
-- **Env vars**: managed in the Vercel dashboard (Settings → Environment
-  Variables). The Neon integration sets ~10 env vars; the two we use are
-  `DATABASE_URL` (pooled, for runtime queries via PgBouncer — used by
-  `lib/db.ts`) and `DATABASE_URL_UNPOOLED` (direct connection — used by
-  `prisma migrate deploy`, since PgBouncer in transaction mode breaks
-  migrations). The other env vars (`POSTGRES_URL`, `PGHOST`, etc.) are
-  unused by Motir and can be ignored. Never commit secrets to git.
-  `.env.example` documents what's needed locally.
+- **Production**: every push to `main` runs
+  [`.github/workflows/aws-deploy.yml`](.github/workflows/aws-deploy.yml),
+  which builds the image from the `Dockerfile`, pushes it to ECR and runs
+  `pnpm deploy:aws` with its digest: the migrate task runs first, then web,
+  worker and relay roll. The app answers at <https://app.motir.co>.
+- **Rollback**: a failed roll leaves the previous tasks serving. To go back
+  to an earlier release on purpose, revert the change on `main`; the next
+  deploy ships the revert.
+- **Env vars**: each service's task definition carries its environment, and
+  its secrets come from AWS Secrets Manager. `DATABASE_URL` is the runtime
+  connection; `DATABASE_URL_UNPOOLED` is the direct connection
+  `prisma migrate deploy` uses. Never commit secrets to git. `.env.example`
+  documents what's needed locally.
 - **Service-to-service tokens (open-core boundary)**: `motir-ai` calls
   `motir-core` over a shared bearer. `MOTIR_AI_TO_CORE_SERVICE_TOKEN`
   authenticates the inbound billing-propagation route
@@ -210,10 +204,6 @@ Vercel preview deploy.
   both sides; the route fails CLOSED (rejects every request) when it is unset.
   Stripe secrets never enter `motir-core` — only this plain propagated state
   crosses the boundary.
-- **Build pipeline**: Vercel runs `pnpm install` (which triggers
-  `postinstall: prisma generate` to refresh the Prisma client against the
-  current schema), then `pnpm build` (which is `next build`). Prisma
-  migrations run automatically against the connected Neon branch.
 
 ## Docs
 
