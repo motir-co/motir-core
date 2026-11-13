@@ -144,14 +144,18 @@ export async function seedPlanProgress(slug: string): Promise<PlanProgressSeed> 
 
 /**
  * Backdate a plan past the stalled threshold, as the server's own clock would
- * see it after `byMs` of silence: its `last_activity_at` and every one of its
- * step rows' `started_at`. Both, because the derivation reads both — the plan's
- * activity for STALLED, each step's start for the QUIET drop.
+ * see it after `byMs` of silence: its `last_activity_at`, every one of its step
+ * rows' `started_at`, and its proposals' writes (`plan_item.created_at`,
+ * `plan_revision.changed_at`). All of them, because the derivation reads all of
+ * them — the plan's activity for STALLED, each step's start and its target's
+ * last write for the QUIET drop (MOTIR-11184).
  */
 export async function backdatePlanActivity(planId: string, byMs: number): Promise<Date> {
   const at = new Date(Date.now() - byMs);
   await adminDb.plan.update({ where: { id: planId }, data: { lastActivityAt: at } });
   await adminDb.planStep.updateMany({ where: { planId }, data: { startedAt: at } });
+  await adminDb.planItem.updateMany({ where: { planId }, data: { createdAt: at } });
+  await adminDb.planRevision.updateMany({ where: { planId }, data: { changedAt: at } });
   return at;
 }
 

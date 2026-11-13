@@ -879,7 +879,7 @@ describe('G. stalled held off by sentences, and the progress line unchanged', ()
     expect(readPlanProgress(onTab, now).state).not.toBe('stalled');
   });
 
-  it('G17 — narration never reaches the progress surfaces, and no sentence is on the Workbench read', async () => {
+  it('G17 — narration moves only a step’s last sign of life on the progress surfaces, and no sentence is on the Workbench read', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'PNO' });
     const client = await connectClient(fx.ctx);
     const jobId = 'job_narration_g17';
@@ -902,9 +902,21 @@ describe('G. stalled held off by sentences, and the progress line unchanged', ()
     const afterReview = await reviewRead(fx, planId);
     const { raw, page } = await tabRead(fx);
     const afterTab = page.items.find((r) => r.planId === planId)!.progress;
-    expect(afterReview.progress!.steps).toEqual(beforeReview.progress!.steps);
+    // A sentence is the session's latest sign of life, so it may move a step's
+    // `lastActivityAt` (MOTIR-11184) — and nothing else: no phrase, target or
+    // order changes, and no sentence text reaches either read.
+    const withoutActivity = (steps: readonly { lastActivityAt: string }[]) =>
+      steps.map(({ lastActivityAt: _a, ...rest }) => rest);
+    expect(withoutActivity(afterReview.progress!.steps)).toEqual(
+      withoutActivity(beforeReview.progress!.steps),
+    );
     expect(afterReview.inFlightSteps).toEqual(beforeReview.inFlightSteps);
-    expect(afterTab.steps).toEqual(beforeTab.steps);
+    expect(withoutActivity(afterTab.steps)).toEqual(withoutActivity(beforeTab.steps));
+    const p1 = afterReview.progress!.steps.find((x) => x.sessionKey === 'p1')!;
+    const p1Before = beforeReview.progress!.steps.find((x) => x.sessionKey === 'p1')!;
+    expect(Date.parse(p1.lastActivityAt)).toBeGreaterThanOrEqual(
+      Date.parse(p1Before.lastActivityAt),
+    );
     expect(raw).not.toContain('unmistakable-narration-marker');
   });
 });

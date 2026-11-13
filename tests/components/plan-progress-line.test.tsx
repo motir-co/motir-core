@@ -52,6 +52,7 @@ function step(
     targetNodeId: title ? `node-${sessionKey}` : null,
     targetTitle: title,
     startedAt: iso(startedAt),
+    lastActivityAt: iso(startedAt),
     providerWait: null,
   };
 }

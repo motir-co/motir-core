@@ -76,6 +76,10 @@ export default defineConfig({
       'tests/components/plan-narration.test.tsx',
       'tests/components/plan-narration-hook.test.tsx',
       'tests/planning/planNarrationGroups.test.ts',
+      // MOTIR-11184 — `findLatestBySessionForPlans`, the quiet drop's author
+      // signal, is called directly (and with no plans) by the progress service's
+      // own suite.
+      'tests/integration/plans/planProgressService.test.ts',
     ],
     coverage: {
       provider: 'v8',

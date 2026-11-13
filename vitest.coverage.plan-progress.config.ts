@@ -94,6 +94,7 @@ export default defineConfig({
       'tests/integration/ai/planStepRoute.test.ts',
       // MOTIR-7825 — the derivation and its server half.
       'tests/plans/planProgress.test.ts',
+      'tests/plans/planProgressStepActivity.test.ts',
       'tests/integration/plans/planProgressService.test.ts',
       // MOTIR-7828 — the reader's read and the landing cascade it must not move.
       'tests/integration/workbench/planning-read.test.ts',

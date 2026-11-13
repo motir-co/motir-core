@@ -1,6 +1,6 @@
 import { Prisma, type Plan, type PlanItem, type PlanStatus } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
-import type { PlanProgressAddRow } from '@/lib/plans/planProgress';
+import type { PlanProgressAddRow, PlanProgressWriteRow } from '@/lib/plans/planProgress';
 
 /**
  * The `PlanItem` create shape, NAMED BY THE OWNING REPOSITORY
@@ -22,6 +22,12 @@ export type PlanItemUpdateInput = Prisma.PlanItemUncheckedUpdateInput;
  * (MOTIR-7825, MOTIR-10496).
  */
 export type PlanProgressRow = PlanProgressAddRow & { planId: string };
+
+/**
+ * One row of {@link planItemRepository.findWriteRowsByPlanIds}: a proposal's
+ * identity and its last write, never its bodies (MOTIR-11184).
+ */
+export type PlanWriteRow = PlanProgressWriteRow & { planId: string; writtenAt: Date };
 
 /**
  * One row of {@link planItemRepository.findHistoryByWorkItemId}: the proposal's
@@ -369,6 +375,37 @@ export const planItemRepository = {
       FROM "plan_item" pi
       WHERE pi."plan_id" = ANY(${[...planIds]}::text[])
         AND pi."op" = 'add'
+      ORDER BY pi."plan_id", pi."created_at", pi."id"
+    `;
+  },
+
+  /**
+   * Every proposal of many plans with its LAST WRITE — the quiet drop's input
+   * (MOTIR-11184, `PlanProgressWriteRow`). ONE query for a whole page of plans.
+   * `writtenAt` is the later of the proposal's append (`created_at`) and its
+   * latest `edited` timeline row — a deepen, a correction, a merged `modify`;
+   * `GREATEST` skips the NULL of a proposal never edited. Any op: an author step
+   * on a committed card writes a `modify`. No body crosses the wire.
+   */
+  async findWriteRowsByPlanIds(
+    planIds: readonly string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<PlanWriteRow[]> {
+    if (planIds.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.$queryRaw<PlanWriteRow[]>`
+      SELECT
+        pi."id"            AS "id",
+        pi."plan_id"       AS "planId",
+        pi."op"::text      AS "op",
+        pi."work_item_id"  AS "workItemId",
+        pi."parent_ref"    AS "parentRef",
+        GREATEST(pi."created_at", MAX(pr."changed_at")) AS "writtenAt"
+      FROM "plan_item" pi
+      LEFT JOIN "plan_revision" pr
+        ON pr."plan_item_id" = pi."id" AND pr."change_kind" = 'edited'
+      WHERE pi."plan_id" = ANY(${[...planIds]}::text[])
+      GROUP BY pi."id"
       ORDER BY pi."plan_id", pi."created_at", pi."id"
     `;
   },

@@ -26,6 +26,7 @@ const AUTHOR: PlanProgressStep = {
   targetNodeId: 'pi_1',
   targetTitle: 'Invoice export',
   startedAt: iso(T0 - MIN),
+  lastActivityAt: iso(T0 - MIN),
   providerWait: null,
 };
 const SETTLE: PlanProgressStep = {
@@ -36,6 +37,7 @@ const SETTLE: PlanProgressStep = {
   targetNodeId: null,
   targetTitle: null,
   startedAt: iso(T0 - 10_000),
+  lastActivityAt: iso(T0 - 10_000),
   providerWait: null,
 };
 

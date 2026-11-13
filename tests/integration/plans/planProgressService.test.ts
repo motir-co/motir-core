@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planProgressService } from '@/lib/services/planProgressService';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
+import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
+import { readPlanProgress } from '@/lib/plans/planProgress';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
@@ -310,5 +312,200 @@ describe('GET /api/plans/[id] carries progress', () => {
     expect(live.progress!.steps.map((s) => [s.sessionKey, s.providerWait])).toEqual([
       ['relay', { attempt: 2, maxAttempts: 3, since: expect.any(String), retryAt }],
     ]);
+  });
+});
+
+// Bug MOTIR-11184 — the quiet drop measures a step's LAST WRITE, not its start.
+// The write rows are read in SQL for both doors; these pin what they carry.
+describe('findWriteRowsByPlanIds — every proposal’s last write (MOTIR-11184)', () => {
+  it('is the append for an unedited proposal and the latest `edited` row once deepened', async () => {
+    const fx = await makeWorkItemFixture();
+    const committed = await createTestWorkItem(fx, { title: 'Committed parent', kind: 'story' });
+    const { planId, addIds } = await generatingPlan(fx, committed.id);
+    const longAgo = new Date(Date.now() - 60 * 60_000);
+    await adminDb.planItem.updateMany({ where: { planId }, data: { createdAt: longAgo } });
+    await plansService.deepenProposal(planId, addIds[1]!, { descriptionMd: 'Now written' }, fx.ctx);
+
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planItemRepository.findWriteRowsByPlanIds([planId], tx),
+    );
+    // Every op, not only the adds: an author step on a committed card writes a `modify`.
+    expect(rows.map((r) => r.op).sort()).toEqual(['add', 'add', 'modify']);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(addIds[0]!)).toMatchObject({ planId, parentRef: null, workItemId: null });
+    expect(byId.get(addIds[0]!)!.writtenAt.getTime()).toBe(longAgo.getTime());
+    expect(byId.get(addIds[1]!)!.writtenAt.getTime()).toBeGreaterThan(
+      longAgo.getTime() + 30 * 60_000,
+    );
+    const modify = rows.find((r) => r.op === 'modify')!;
+    expect(modify.workItemId).not.toBeNull();
+    expect(Object.keys(modify).sort()).toEqual(
+      ['id', 'op', 'parentRef', 'planId', 'workItemId', 'writtenAt'].sort(),
+    );
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planItemRepository.findWriteRowsByPlanIds([], tx),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('both doors keep a long lay step live while it writes children (MOTIR-11184)', () => {
+  /** A generating plan whose lay step on `committedId` started 20 minutes ago and
+   *  whose first child under it lands now. */
+  async function longLay(fx: WorkItemFixture, committedId: string) {
+    const { planId } = await generatingPlan(fx, committedId);
+    const startedAt = new Date(Date.now() - 20 * 60_000);
+    await adminDb.planStep.updateMany({ where: { planId }, data: { startedAt } });
+    await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          parentRef: committedId,
+          proposedFields: { title: 'First child', kind: 'task' },
+        },
+      ],
+      fx.ctx,
+    );
+    return { planId, startedAt };
+  }
+
+  it('snapshotsForPlans: the step carries its child’s write and reads live past 15 min', async () => {
+    const fx = await makeWorkItemFixture();
+    const committed = await createTestWorkItem(fx, { title: 'Large story', kind: 'story' });
+    const { planId, startedAt } = await longLay(fx, committed.id);
+    const snap = (
+      await planProgressService.snapshotsForPlans(await planInputs([planId]), fx.ctx)
+    ).get(planId)!;
+    const [step] = snap.steps;
+    expect(step!.startedAt).toBe(startedAt.toISOString());
+    expect(Date.parse(step!.lastActivityAt)).toBeGreaterThan(startedAt.getTime() + 19 * 60_000);
+    expect(readPlanProgress(snap, Date.now()).liveSteps.map((s) => s.sessionKey)).toEqual([
+      'relay',
+    ]);
+  });
+
+  it('GET /api/plans/[id]: the review snapshot reads the same writes', async () => {
+    const fx = await makeWorkItemFixture();
+    session.current = { user: { id: fx.ownerId, email: 'owner@example.com', name: 'Owner' } };
+    wsCtx.current = { userId: fx.ownerId, workspaceId: fx.workspaceId };
+    const committed = await createTestWorkItem(fx, { title: 'Large story', kind: 'story' });
+    const { planId, startedAt } = await longLay(fx, committed.id);
+    const res = await planRoute(new Request(`http://localhost/api/plans/${planId}`), {
+      params: Promise.resolve({ id: planId }),
+    });
+    const live = (await res.json()) as PlanReviewDto;
+    const step = live.progress!.steps[0]!;
+    expect(step.startedAt).toBe(startedAt.toISOString());
+    expect(Date.parse(step.lastActivityAt)).toBeGreaterThan(startedAt.getTime() + 19 * 60_000);
+    expect(readPlanProgress(live.progress!, Date.now()).liveSteps).toHaveLength(1);
+  });
+
+  it('GET /api/plans/[id]: a settle-only plan reads no writes and keeps the start', async () => {
+    const fx = await makeWorkItemFixture();
+    session.current = { user: { id: fx.ownerId, email: 'owner@example.com', name: 'Owner' } };
+    wsCtx.current = { userId: fx.ownerId, workspaceId: fx.workspaceId };
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Settling' }, fx.ctx);
+    await plansService.recordPlanStep(
+      plan.id,
+      { sessionKey: 'settler', kind: 'settle', targetRef: null },
+      fx.ctx,
+    );
+    const res = await planRoute(new Request(`http://localhost/api/plans/${plan.id}`), {
+      params: Promise.resolve({ id: plan.id }),
+    });
+    const live = (await res.json()) as PlanReviewDto;
+    const [step] = live.progress!.steps;
+    expect(step).toMatchObject({ phrase: 'settling' });
+    expect(step!.lastActivityAt).toBe(step!.startedAt);
+  });
+});
+
+// The author form (MOTIR-11184): parallel author sessions narrate throughout but
+// may not write their target for longer than the threshold — their newest
+// narration is what keeps them live. Read as ONE grouped query for both doors.
+describe('both doors keep a long step live while its session narrates (MOTIR-11184)', () => {
+  /** A generating plan whose step started 20 minutes ago, wrote nothing since,
+   *  and whose session (plus a sibling session) narrated at the given instants. */
+  async function narratingStep(fx: WorkItemFixture, committedId: string, ownAt: Date) {
+    const { planId } = await generatingPlan(fx, committedId);
+    const startedAt = new Date(Date.now() - 20 * 60_000);
+    await adminDb.planStep.updateMany({ where: { planId }, data: { startedAt } });
+    await adminDb.planItem.updateMany({ where: { planId }, data: { createdAt: startedAt } });
+    const [step] = await adminDb.planStep.findMany({ where: { planId } });
+    await adminDb.planNarration.createMany({
+      data: [
+        { planId, sessionKey: step!.sessionKey, seq: 1, body: 'Reading.', createdAt: startedAt },
+        { planId, sessionKey: step!.sessionKey, seq: 2, body: 'Writing.', createdAt: ownAt },
+        { planId, sessionKey: 'sibling', seq: 3, body: 'Elsewhere.', createdAt: new Date() },
+      ],
+    });
+    return { planId, startedAt, sessionKey: step!.sessionKey };
+  }
+
+  it('findLatestBySessionForPlans: one row per session, its newest sentence', async () => {
+    const fx = await makeWorkItemFixture();
+    const committed = await createTestWorkItem(fx, { title: 'Story', kind: 'story' });
+    const ownAt = new Date(Date.now() - 2 * 60_000);
+    const { planId, sessionKey } = await narratingStep(fx, committed.id, ownAt);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planNarrationRepository.findLatestBySessionForPlans([planId], tx),
+    );
+    const byKey = new Map(rows.map((r) => [r.sessionKey, r]));
+    expect(rows).toHaveLength(2);
+    expect(byKey.get(sessionKey)).toMatchObject({ planId });
+    expect(byKey.get(sessionKey)!.narratedAt.getTime()).toBe(ownAt.getTime());
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planNarrationRepository.findLatestBySessionForPlans([], tx),
+      ),
+    ).toEqual([]);
+  });
+
+  it('snapshotsForPlans: the step carries its own newest narration and reads live', async () => {
+    const fx = await makeWorkItemFixture();
+    const committed = await createTestWorkItem(fx, { title: 'Story', kind: 'story' });
+    const ownAt = new Date(Date.now() - 2 * 60_000);
+    const { planId, startedAt } = await narratingStep(fx, committed.id, ownAt);
+    const snap = (
+      await planProgressService.snapshotsForPlans(await planInputs([planId]), fx.ctx)
+    ).get(planId)!;
+    const [step] = snap.steps;
+    expect(step!.startedAt).toBe(startedAt.toISOString());
+    expect(step!.lastActivityAt).toBe(ownAt.toISOString());
+    expect(readPlanProgress(snap, Date.now()).liveSteps).toHaveLength(1);
+  });
+
+  it('GET /api/plans/[id]: the review snapshot reads the same narration', async () => {
+    const fx = await makeWorkItemFixture();
+    session.current = { user: { id: fx.ownerId, email: 'owner@example.com', name: 'Owner' } };
+    wsCtx.current = { userId: fx.ownerId, workspaceId: fx.workspaceId };
+    const committed = await createTestWorkItem(fx, { title: 'Story', kind: 'story' });
+    const ownAt = new Date(Date.now() - 2 * 60_000);
+    const { planId } = await narratingStep(fx, committed.id, ownAt);
+    const res = await planRoute(new Request(`http://localhost/api/plans/${planId}`), {
+      params: Promise.resolve({ id: planId }),
+    });
+    const live = (await res.json()) as PlanReviewDto;
+    expect(live.progress!.steps[0]!.lastActivityAt).toBe(ownAt.toISOString());
+    expect(readPlanProgress(live.progress!, Date.now()).liveSteps).toHaveLength(1);
+  });
+
+  it("a sibling session's narration does not keep a silent step live", async () => {
+    const fx = await makeWorkItemFixture();
+    const committed = await createTestWorkItem(fx, { title: 'Story', kind: 'story' });
+    const { planId, startedAt } = await narratingStep(
+      fx,
+      committed.id,
+      new Date(Date.now() - 19 * 60_000),
+    );
+    const snap = (
+      await planProgressService.snapshotsForPlans(await planInputs([planId]), fx.ctx)
+    ).get(planId)!;
+    expect(Date.parse(snap.steps[0]!.lastActivityAt)).toBeLessThan(
+      startedAt.getTime() + 2 * 60_000,
+    );
+    expect(readPlanProgress(snap, Date.now()).liveSteps).toEqual([]);
   });
 });

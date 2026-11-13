@@ -235,6 +235,7 @@ function step(kind: PlanProgressStep['kind'], targetNodeId: string | null, sessi
     targetNodeId,
     targetTitle: targetNodeId ? `title ${targetNodeId}` : null,
     startedAt: iso(T0 - 30_000),
+    lastActivityAt: iso(T0 - 30_000),
     providerWait: null,
   } satisfies PlanProgressStep;
 }

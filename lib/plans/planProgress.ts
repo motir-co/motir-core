@@ -59,13 +59,22 @@ import type { PlanStepDto, PlanStepKindDto, PlanStepProviderWaitDto } from '@/li
 /**
  * THE stalled threshold — design Part XXVI §26.9: **15 minutes**, measured (the
  * longest healthy quiet stretch observed on real walks was 582 s, so the
- * story's assumed 10 minutes left 3 % headroom). It has TWO uses and they are
+ * story's assumed 10 minutes left 3 % headroom). That figure is a gap between
+ * WRITES; a single step can run far longer than it — a hosted lay session on a
+ * large story spent 17 m 41 s before its first child (MOTIR-11184) — which is
+ * why neither use below measures a step's age. It has TWO uses and they are
  * deliberately the same number:
  *   1. the plan is `stalled` when `now − lastActivityAt > PLAN_STALLED_AFTER_MS`
  *      (equal is NOT stalled; +1 ms is);
- *   2. a single step is dropped as QUIET when `now − step.startedAt >
- *      PLAN_STALLED_AFTER_MS` — a session that died without clearing stops
- *      naming an item even while its siblings keep the plan alive.
+ *   2. a single step is dropped as QUIET when `now − step.lastActivityAt >
+ *      PLAN_STALLED_AFTER_MS` — its LAST SIGN OF LIFE, the latest of its start,
+ *      its provider-wait report, its session's newest narration and the newest
+ *      write it made ({@link stepLastActivity}). Author sessions that start
+ *      together narrate throughout but write their target late, so the
+ *      narration is what keeps their Drafting cues up. A session that died
+ *      without clearing stops naming an item even while its siblings keep the
+ *      plan alive; one still writing under its target stays named however long
+ *      ago it started.
  * The abandoned-plan sweep's DEAD rule reads it too (MOTIR-8132), with the same
  * comparison, so the rail's `stalled` and the sweep's `silent` cannot disagree.
  * A plan RESUMED AUTOMATICALLY (MOTIR-8309) is measured from the resume, for free:
@@ -127,8 +136,15 @@ export interface PlanProgressStep {
   /** The canvas node the step names — `PlanReviewItemDto.nodeId`'s rule. */
   targetNodeId: string | null;
   targetTitle: string | null;
-  /** Server instant (ISO). */
+  /** Server instant (ISO). The step's IDENTITY and ORDER key — never re-stamped. */
   startedAt: string;
+  /**
+   * The step's last sign of life (server ISO): the latest of `startedAt`, its
+   * provider-wait report, its session's newest narration and the newest write
+   * under or to its target ({@link stepLastActivity}). Read ONLY by the
+   * quiet drop; identity and order stay on `startedAt` (MOTIR-11184).
+   */
+  lastActivityAt: string;
   /** The session's provider-retry wait (MOTIR-9619), `null` when it is not waiting. */
   providerWait: PlanStepProviderWaitDto | null;
 }
@@ -200,6 +216,32 @@ export interface PlanProgressAddRow {
   authorFinished: boolean;
 }
 
+/**
+ * One proposal's LAST WRITE, as the quiet drop reads it (MOTIR-11184): the
+ * proposal's identity, the refs that say which step's target it is under or is,
+ * and when it was last written — the later of its append and its latest `edited`
+ * timeline row. ANY op, because an author step on a committed card writes a
+ * `modify`. The SAME shape `planItemRepository.findWriteRowsByPlanIds` computes in
+ * SQL for both snapshot doors.
+ */
+export interface PlanProgressWriteRow {
+  id: string;
+  op: string;
+  workItemId: string | null;
+  parentRef: string | null;
+  writtenAt: string | Date;
+}
+
+/**
+ * One session's NEWEST narration sentence (MOTIR-11184): a session that is still
+ * talking is still working, whether or not it has written its target yet. Keyed
+ * by the `session_key` the step row carries.
+ */
+export interface PlanProgressNarrationRow {
+  sessionKey: string;
+  narratedAt: string | Date;
+}
+
 // ── The authored test ─────────────────────────────────────────────────────────
 //
 // "N authored" answers *has its author session finished writing it?* (Story
@@ -263,6 +305,69 @@ export function progressRowOfAdd(item: {
 
 const iso = (v: string | Date): string => (typeof v === 'string' ? v : v.toISOString());
 
+/** Whether `write` is a write the step makes — the table on {@link stepLastActivity}. */
+function isStepWrite(
+  step: { kind: PlanStepKindDto; targetRef: string | null },
+  write: PlanProgressWriteRow,
+): boolean {
+  if (step.kind === 'lay') return write.op === 'add' && write.parentRef === step.targetRef;
+  if (step.kind !== 'author' || step.targetRef === null) return false;
+  if (step.targetRef.startsWith(TEMP_REF_PREFIX)) {
+    return write.id === step.targetRef.slice(TEMP_REF_PREFIX.length);
+  }
+  return write.workItemId === step.targetRef;
+}
+
+/**
+ * A step's LAST SIGN OF LIFE (MOTIR-11184): the latest of its `startedAt`, its
+ * provider-wait report (`providerWait.since`), its session's newest narration
+ * (`narratedAt`) and the newest write it makes. A step is reported ONCE, when its
+ * session starts, so its start says nothing about whether it is still working —
+ * its session's sentences and the plan's own items do. The narration is the
+ * author signal: parallel author sessions narrate throughout and may not write
+ * their target for longer than the threshold. The writes are the lay signal.
+ *
+ * The writes that count:
+ *
+ * | kind     | targetRef            | the writes that count                          |
+ * | -------- | -------------------- | ---------------------------------------------- |
+ * | lay      | a ref R              | the `add`s whose `parentRef` is R              |
+ * | lay      | null                 | the top-level `add`s (`parentRef` null)        |
+ * | author   | `planItem:<id>`      | that proposal                                  |
+ * | author   | a work-item id W     | the proposals ON W (`workItemId` W)            |
+ * | author   | null · settle        | none — its start                               |
+ *
+ * A write older than the start never moves it back, so a step that writes
+ * nothing is measured from its start exactly as before.
+ */
+export function stepLastActivity(
+  step: {
+    kind: PlanStepKindDto;
+    targetRef: string | null;
+    startedAt: string | Date;
+    providerWait?: { since: string } | null;
+  },
+  writes: readonly PlanProgressWriteRow[],
+  narratedAt: string | Date | null = null,
+): string {
+  let latest = iso(step.startedAt);
+  let latestMs = Date.parse(latest);
+  const consider = (v: string | Date) => {
+    const at = iso(v);
+    const atMs = Date.parse(at);
+    if (atMs > latestMs) {
+      latest = at;
+      latestMs = atMs;
+    }
+  };
+  if (step.providerWait) consider(step.providerWait.since);
+  if (narratedAt !== null) consider(narratedAt);
+  for (const write of writes) {
+    if (isStepWrite(step, write)) consider(write.writtenAt);
+  }
+  return latest;
+}
+
 /**
  * Build the time-independent half. Each step resolves by the phrase table:
  * - a NULL target is KEPT with its untargeted phrase — a real state of both
@@ -278,6 +383,9 @@ const iso = (v: string | Date): string => (typeof v === 'string' ? v : v.toISOSt
  *   is the lost machine's own row, never cleared, and naming it would say a
  *   dead session is authoring an item (MOTIR-8309). Dropping it HERE, not at
  *   read time, keeps the canvas cues and the words on one list.
+ * Each kept step carries its `lastActivityAt` from `writes`, its session's
+ * newest narration in `narrations` and its provider wait
+ * ({@link stepLastActivity}); with none of them it is the step's start.
  * Steps are ordered by `startedAt`, ties by `sessionKey`.
  */
 export function buildPlanProgressSnapshot(args: {
@@ -287,7 +395,13 @@ export function buildPlanProgressSnapshot(args: {
   committedTitles: ReadonlyMap<string, string>;
   observedAt: string | Date;
   autoResume?: { at: string | Date; count: number } | null;
+  /** Every proposal's last write ({@link PlanProgressWriteRow}) — the quiet drop's input. */
+  writes?: readonly PlanProgressWriteRow[];
+  /** Each session's newest narration ({@link PlanProgressNarrationRow}) — the author signal. */
+  narrations?: readonly PlanProgressNarrationRow[];
 }): PlanProgressSnapshot {
+  const writes = args.writes ?? [];
+  const narratedAt = new Map((args.narrations ?? []).map((n) => [n.sessionKey, n.narratedAt]));
   const addById = new Map(args.addRows.map((r) => [r.id, r]));
   const autoResume = args.autoResume
     ? { at: iso(args.autoResume.at), count: args.autoResume.count }
@@ -301,6 +415,7 @@ export function buildPlanProgressSnapshot(args: {
       kind: step.kind,
       targetRef: step.targetRef,
       startedAt: iso(step.startedAt),
+      lastActivityAt: stepLastActivity(step, writes, narratedAt.get(step.sessionKey) ?? null),
       providerWait: step.providerWait ?? null,
     };
     if (step.kind === 'settle' || step.targetRef === null) {
@@ -379,8 +494,9 @@ export function readPlanProgress(
     return { ...common, state: 'stalled', liveSteps: [], providerWait: null };
   }
   // The QUIET drop — a session that died without clearing stops naming an item.
+  // Measured from the step's LAST SIGN OF LIFE, never its start (MOTIR-11184).
   const liveSteps = snapshot.steps.filter(
-    (s) => nowMs - Date.parse(s.startedAt) <= PLAN_STALLED_AFTER_MS,
+    (s) => nowMs - lastSignOfLifeMs(s) <= PLAN_STALLED_AFTER_MS,
   );
   const resuming =
     snapshot.autoResume !== null &&
@@ -394,6 +510,18 @@ export function readPlanProgress(
         ? 'starting'
         : 'writing';
   return { ...common, state, liveSteps, providerWait: providerWaitAt(snapshot.steps, nowMs) };
+}
+
+/**
+ * The instant the quiet drop measures from: the step's `lastActivityAt`, never
+ * earlier than its start. A snapshot without the field — one a server built
+ * before MOTIR-11184, read by a newer client mid-deploy — falls back to the start,
+ * which is exactly the old rule.
+ */
+function lastSignOfLifeMs(step: PlanProgressStep): number {
+  const startedMs = Date.parse(step.startedAt);
+  const activityMs = Date.parse(step.lastActivityAt);
+  return Number.isNaN(activityMs) ? startedMs : Math.max(startedMs, activityMs);
 }
 
 /**

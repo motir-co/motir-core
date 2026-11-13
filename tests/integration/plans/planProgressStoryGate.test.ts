@@ -308,12 +308,19 @@ const withoutObservedAt = ({ observedAt: _o, ...rest }: PlanProgressSnapshot) =>
 const sessionsOf = (steps: readonly { sessionKey: string }[]) =>
   steps.map((s) => s.sessionKey).sort();
 
-/** Push a plan, and every step on it, `byMs` into the past — the server clock's. */
+/**
+ * Push a plan, and every step on it, `byMs` into the past — the server clock's.
+ * The plan's proposals and their edits go back with it: a step is quiet only when
+ * nothing under its target was written either (MOTIR-11184), and a fixture whose
+ * cards were appended a moment ago would otherwise keep a "dead" step alive.
+ */
 async function backdate(planId: string, byMs: number, sessionKeys?: string[]): Promise<void> {
   const at = new Date(Date.now() - byMs);
   if (!sessionKeys) {
     await adminDb.plan.update({ where: { id: planId }, data: { lastActivityAt: at } });
   }
+  await adminDb.planItem.updateMany({ where: { planId }, data: { createdAt: at } });
+  await adminDb.planRevision.updateMany({ where: { planId }, data: { changedAt: at } });
   await adminDb.planStep.updateMany({
     where: { planId, ...(sessionKeys ? { sessionKey: { in: sessionKeys } } : {}) },
     data: { startedAt: at },
