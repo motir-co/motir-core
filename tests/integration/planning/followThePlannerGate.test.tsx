@@ -8,7 +8,7 @@
 // the derivation (`plannerDrive.test.ts`) feeds `PlanProgressStep` fixtures, the
 // canvas (`canvas-follow-while-on.test.tsx`) feeds arbitrary `{ key, trail }`, the
 // host (`planning-workspace-follow-planner.test.tsx`) mocks the conversation hook,
-// and the typewriter (`proposal-peek-type-in.test.tsx`) re-renders `ProposalPeek`.
+// and the live draft (`proposal-peek-live-draft.test.tsx`) re-renders `ProposalPeek`.
 // This file mounts the assembled path and mocks nothing on it:
 //
 //   the planners' own writers        `lib/mcp/tools/authorPlan.ts` — `create_plan`,
@@ -24,7 +24,8 @@
 //                                    → ProjectRoadmapCanvas, each level read
 //                                    through the REAL roadmap route
 //     → ProposalPeek                 → IssueQuickViewPanel in proposal mode →
-//                                    TypeInText (seam 2)
+//                                    LiveDraftField (seam 2; MOTIR-11201 replaced
+//                                    the typewriter with the live draft)
 //
 // The substitutions are the live-drawing gate's (`liveDrawingGate.test.tsx`), all
 // OUTSIDE the path: the session cookie and the project it resolves, the router,
@@ -33,14 +34,10 @@
 // the panel. `ProjectRoadmapCanvas` and `PlanProposalViews` are WRAPPED, never
 // replaced: the wrapper records the follow props the real component was handed.
 //
-// ⚠️ TWO CLOCKS. Only `setInterval` is faked, so the poll ticks when a test says
-// so. The typewriter runs on `requestAnimationFrame` and the REAL clock; a
-// mid-type frame is never raced — the seam-2 cases record every copy frame with
-// a MutationObserver from before the value arrives, so "a partial value was
-// shown" is asserted as having happened rather than caught in the act. (The cap
-// cannot be slowed through `--transition-slow` here: happy-dom resolves no
-// custom property through `getComputedStyle`, so the component uses its
-// fallback constants — the real 750ms cap.)
+// ⚠️ ONE CLOCK. Only `setInterval` is faked, so the poll ticks when a test says
+// so. The live draft is DATA on that read, not motion: the partial on screen is
+// whatever the latest read carried, so a seam-2 case asserts it after a tick
+// rather than racing a frame.
 import { afterAll, afterEach, beforeEach, describe, expect, it as vitestIt, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../../helpers/renderWithIntl';
@@ -148,6 +145,7 @@ const { GET: sessionRoute } = await import('@/app/api/ai/plan-change/session/rou
 const { GET: roadmapRoute } = await import('@/app/api/projects/[key]/roadmap/route');
 const { runCreatePlan, runAddPlanItems, runUpdatePlanProposal, runReportPlanStep } =
   await import('@/lib/mcp/tools/authorPlan');
+const { plansService } = await import('@/lib/services/plansService');
 const { POLL_MS, FAILING_AFTER } = await import('@/lib/hooks/useGeneratingPlanPoll');
 const { parsePlanningLaunch } = await import('@/lib/planning/launcher');
 const { PlanningWorkspaceHost } = await import('@/components/planning/PlanningWorkspaceHost');
@@ -244,7 +242,7 @@ function alive(): void {
 /**
  * ⚠️ THE TEST'S BUDGET IS LARGER THAN ANY ONE WAIT'S (MOTIR-8887). `until` gives
  * each condition its own 15 s, and a case chains several of them after a DB-backed
- * `drivenToS()` and a real-clock typewriter — so with the suite's 15 s
+ * `drivenToS()` and several poll reads — so with the suite's 15 s
  * `testTimeout` the TEST expired together with its FIRST slow wait, on a loaded
  * shard, as a bare `Test timed out in 15000ms` that named no condition. A wait
  * that really never resolves still throws its own assertion at 15 s, naming what
@@ -794,22 +792,22 @@ describe('seam 1 · poll snapshot → driven step → follow request → canvas 
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-const BODY =
-  'The planner wrote this description while the reader watched it arrive, a character at a time.';
+const BODY = 'The planner wrote this description while the reader watched it arrive.';
 
-/** Every frame the typing copy drew for a field, recorded as it happened. */
-function watchTyping(field: string): { frames: string[]; stop: () => void } {
-  const frames: string[] = [];
-  const read = () => {
-    const copy = document.querySelector(
-      `[data-testid="quick-view-typein-${field}"] [data-typewriter-copy]`,
-    );
-    const text = copy?.textContent ?? null;
-    if (text !== null && frames.at(-1) !== text) frames.push(text);
-  };
-  const obs = new MutationObserver(read);
-  obs.observe(document.body, { subtree: true, childList: true, characterData: true });
-  return { frames, stop: () => obs.disconnect() };
+/** An `author` session's in-flight card, as the plan-step door holds it (MOTIR-11199). */
+async function drafting(
+  planId: string,
+  sessionKey: string,
+  planItemId: string,
+  seq: number,
+  fields: { title?: string; descriptionMd?: string; explanationMd?: string },
+) {
+  alive();
+  await plansService.recordPlanItemDraft(
+    planId,
+    { sessionKey, itemDraft: { target: pi(planItemId), seq, ...fields } },
+    fx.ctx as never,
+  );
 }
 
 /** The accessible text of `root`: its text without any `aria-hidden` subtree. */
@@ -823,11 +821,11 @@ function accessibleText(root: Element): string {
   walk(root);
   return out;
 }
-const occurrences = (hay: string, needle: string) => hay.split(needle).length - 1;
-const typedPhase = (field: string) =>
-  document
-    .querySelector(`[data-testid="quick-view-typein-${field}"]`)
-    ?.getAttribute('data-typewriter') ?? null;
+const liveText = (field: string) =>
+  document.querySelector(`[data-testid="quick-view-live-${field}"] [data-live-partial]`)
+    ?.textContent ?? null;
+const cueState = () =>
+  screen.queryByTestId('quick-view-live-cue')?.getAttribute('data-live-cue') ?? null;
 
 /** Open a proposal's quick view through the CANVAS door. */
 async function viewOnCanvas(nodeId: string) {
@@ -837,90 +835,75 @@ async function viewOnCanvas(nodeId: string) {
   await until(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
 }
 
-describe('seam 2 · snapshot → the quick view’s typed field', () => {
-  it('⭐ a description written while the quick view is open types in (canvas door)', async () => {
+describe('seam 2 · snapshot → the quick view’s live field (MOTIR-11201, Part XXIX)', () => {
+  it('⭐ a description being written grows in the open quick view, then the stored card lands (canvas door)', async () => {
     const { planId, a } = await drivenToS();
     await viewOnCanvas(await nodeIdOf(planId, a));
-    expect(typedPhase('descriptionMd')).toBe('waiting');
-    const typing = watchTyping('descriptionMd');
-    await deepen(planId, a, { descriptionMd: BODY });
+    // The author step targets the card before any partial: the cue, no live field.
+    await until(() => expect(cueState()).toBe('writing'));
+    expect(liveText('descriptionMd')).toBeNull();
+
+    await drafting(planId, 'sess_a', a, 1, { descriptionMd: 'The planner wrote' });
     await tick();
-    await until(() => expect(typedPhase('descriptionMd')).toBe('typing'));
-    await until(() => expect(typing.frames.length).toBeGreaterThan(0));
-    // Mid-type: the accessible text holds the final value exactly once.
+    await until(() => expect(liveText('descriptionMd')).toBe('The planner wrote'));
+    // A screen reader never meets the partial; the one live region is the cue.
     const peek = screen.getByTestId('proposal-peek');
-    expect(occurrences(accessibleText(peek), BODY)).toBe(1);
-    expect(peek.querySelector('[aria-live]')).toBeNull();
-    await until(() => expect(typedPhase('descriptionMd')).toBe('final'));
-    typing.stop();
-    const partial = typing.frames.filter((f) => f.length > 0 && f.length < BODY.length);
-    expect(partial.length).toBeGreaterThan(0);
-    expect(typing.frames.every((f) => BODY.startsWith(f))).toBe(true);
-    expect(occurrences(accessibleText(peek), BODY)).toBe(1);
-  });
+    expect(accessibleText(peek)).not.toContain('The planner wrote');
+    expect(peek.querySelectorAll('[role="status"], [aria-live]').length).toBe(1);
 
-  it('a quick view opened on a deepened proposal shows it in full, and a later change at once', async () => {
-    const { planId, a } = await drivenToS();
+    await drafting(planId, 'sess_a', a, 2, { descriptionMd: 'The planner wrote this description' });
+    await tick();
+    await until(() => expect(liveText('descriptionMd')).toBe('The planner wrote this description'));
+
+    // The write lands and the step ends: the stored card replaces the partial.
     await deepen(planId, a, { descriptionMd: BODY });
+    await reportStep(planId, 'sess_a', 'end');
     await tick();
-    await viewOnCanvas(await nodeIdOf(planId, a));
+    await until(() => expect(cueState()).toBe('written'));
+    expect(liveText('descriptionMd')).toBeNull();
     expect(screen.getByText(BODY)).toBeTruthy();
-    expect(typedPhase('descriptionMd')).toBeNull();
-    await deepen(planId, a, { descriptionMd: 'Rewritten, in full.' });
-    await tick();
-    await until(() => expect(screen.getByText('Rewritten, in full.')).toBeTruthy());
-    expect(typedPhase('descriptionMd')).toBeNull();
+    expect(screen.getByTestId('quick-view-live-cue').textContent).toBe('Written');
   });
 
-  it('closing and reopening mid-type shows everything at once', async () => {
+  it('a draft that ends with no write is dropped, and nothing is announced', async () => {
+    const { planId, a } = await drivenToS();
+    await viewOnCanvas(await nodeIdOf(planId, a));
+    await drafting(planId, 'sess_a', a, 1, { descriptionMd: 'Half a thought' });
+    await tick();
+    await until(() => expect(liveText('descriptionMd')).toBe('Half a thought'));
+    await reportStep(planId, 'sess_a', 'end');
+    await tick();
+    await until(() => expect(cueState()).toBe('idle'));
+    expect(screen.queryByText('Half a thought')).toBeNull();
+    expect(screen.getByTestId('quick-view-live-cue').textContent).toBe('');
+  });
+
+  it('closing and reopening mid-stream shows the current partial at once', async () => {
     const { planId, a } = await drivenToS();
     const nodeId = await nodeIdOf(planId, a);
-    await viewOnCanvas(nodeId);
-    await deepen(planId, a, { descriptionMd: BODY });
+    await drafting(planId, 'sess_a', a, 1, { title: 'Read the snapshot, then' });
     await tick();
-    await until(() => expect(typedPhase('descriptionMd')).toBe('typing'));
+    await viewOnCanvas(nodeId);
+    await until(() => expect(liveText('title')).toBe('Read the snapshot, then'));
     fireEvent.click(
       within(screen.getByTestId('proposal-peek')).getAllByRole('button', { name: /close/i })[0]!,
     );
     await settle();
     await until(() => expect(screen.queryByTestId('proposal-peek')).toBeNull());
     await viewOnCanvas(nodeId);
-    expect(typedPhase('descriptionMd')).toBeNull();
-    expect(screen.getByText(BODY)).toBeTruthy();
+    expect(liveText('title')).toBe('Read the snapshot, then');
+    expect(cueState()).toBe('writing');
   });
 
-  it('the List door’s quick view types the same way', async () => {
+  it('the List door’s quick view shows the same draft', async () => {
     const { planId, a } = await drivenToS();
     fireEvent.click(screen.getByRole('button', { name: /List/ }));
     await settle();
     fireEvent.click(screen.getByRole('button', { name: /Open .*Read the snapshot/ }));
     await until(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
-    await deepen(planId, a, { descriptionMd: BODY });
+    await drafting(planId, 'sess_a', a, 1, { explanationMd: 'Because the reader' });
     await tick();
-    await until(() => expect(typedPhase('descriptionMd')).toBe('typing'));
-  });
-
-  it('under prefers-reduced-motion the arriving description is in full at once', async () => {
-    vi.spyOn(window, 'matchMedia').mockImplementation(
-      (query: string) =>
-        ({
-          matches: query.includes('reduce'),
-          media: query,
-          onchange: null,
-          addListener: () => {},
-          removeListener: () => {},
-          addEventListener: () => {},
-          removeEventListener: () => {},
-          dispatchEvent: () => false,
-        }) as MediaQueryList,
-    );
-    const { planId, a } = await drivenToS();
-    await viewOnCanvas(await nodeIdOf(planId, a));
-    await deepen(planId, a, { descriptionMd: BODY });
-    await tick();
-    await until(() => expect(screen.getByText(BODY)).toBeTruthy());
-    expect(typedPhase('descriptionMd')).toBe('final');
-    vi.restoreAllMocks();
+    await until(() => expect(liveText('explanationMd')).toBe('Because the reader'));
   });
 });
 
@@ -983,12 +966,15 @@ const COMMITTED: QuickViewData = {
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-describe('guards · never driven, never typed', () => {
+describe('guards · never driven, never a partial off the overlay', () => {
   it('⭐ PlanDetail over a GENERATING plan is handed no followMode, reading or control, and never moves', async () => {
     const { planId } = await agentOpensPlan();
     const [a] = await agentAppends(planId, [addUnder(tree.S, 'Read the snapshot')]);
     const [b] = await agentAppends(planId, [addUnder(tree.S2, 'Hand over')]);
     await reportStep(planId, 'sess_a', 'author', pi(a!));
+    await drafting(planId, 'sess_a', a!, 1, {
+      descriptionMd: 'A partial the plan page never shows',
+    });
     const review = await readReview(planId);
     expect(review.status).toBe('generating');
     search.value = 'view=canvas';
@@ -1010,7 +996,8 @@ describe('guards · never driven, never typed', () => {
     expect(canvasLog.every((c) => c.followMode === null && !c.hasControl)).toBe(true);
     expect(followState()).toBeNull();
     expect(followButton()).toBeNull();
-    expect(document.querySelector('[data-typewriter]')).toBeNull();
+    expect(document.querySelector('[data-testid^="quick-view-live-"]')).toBeNull();
+    expect(screen.queryByText('A partial the plan page never shows')).toBeNull();
   });
 
   it('the List view: a driven step changes no row and draws no driven state', async () => {
@@ -1026,16 +1013,19 @@ describe('guards · never driven, never typed', () => {
     expect(list.querySelector('[data-testid="canvas-bar-trips"]')).toBeNull();
   });
 
-  it('a committed-card quick view handed typeIn types nothing', async () => {
+  it('a committed-card quick view handed a live draft shows none of it', async () => {
     renderWithIntl(
       <IssueQuickViewPanel
         state="ready"
         data={COMMITTED}
-        typeIn={new Set(['title', 'descriptionMd', 'explanationMd'] as const)}
+        {...({
+          live: { draft: { writing: true, fields: { title: 'A partial title' } } },
+        } as object)}
         onClose={() => {}}
       />,
     );
     expect(screen.getByText('Email + password sign-in')).toBeTruthy();
-    expect(document.querySelector('[data-typewriter]')).toBeNull();
+    expect(screen.queryByText('A partial title')).toBeNull();
+    expect(screen.queryByTestId('quick-view-live-cue')).toBeNull();
   });
 });

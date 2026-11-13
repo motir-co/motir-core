@@ -419,6 +419,10 @@
       "slow": "仍在处理 —— 计划越大，耗时越长。无需再次点击。",
       "timedOutTitle": "未创建任何内容 —— 批准耗时过长。",
       "timedOutNext": "这份计划仍在等待你的决定，内容未变。可以放心再次批准。"
+    },
+    "peekLive": {
+      "beingWritten": "正在撰写",
+      "written": "已写入"
     }
   },
   "projectAccess": {

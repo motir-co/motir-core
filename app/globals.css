@@ -226,12 +226,6 @@ body {
   --canvas-ease-enter: cubic-bezier(0.2, 0, 0, 1);
   /* accelerate — anything leaving */
   --canvas-ease-exit: cubic-bezier(0.3, 0, 1, 1);
-  /* THE TYPEWRITER'S PACE (MOTIR-8595; design Part XXVIII §28.6) — one character
-     of a proposal field typing into the overlay's quick view. A per-character
-     interval, an order of magnitude under the smallest whole-transition token,
-     so no motion token expresses it. Each field is capped at
-     calc(var(--transition-slow) * 3), so the cap follows a [data-style]. */
-  --typewriter-char-interval: 12ms;
 }
 /* The keyframes name only the END they leave from / arrive at, so an edge dimmed
    by the selection (its inline opacity) fades to and from ITS value, not to 1. */

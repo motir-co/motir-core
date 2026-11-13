@@ -74,11 +74,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // profile as the ink guards — one whole-tree parse, no database, nothing
   // rendered — and it imports nothing from `lib/` or `app/`.
   'tests/theme/modalScrollContainer.test.ts',
-  // ── tests/guards/ — the follow-and-typewriter mount pins (MOTIR-8596) ─────
+  // ── tests/guards/ — the follow and live-draft mount pins (MOTIR-8596, MOTIR-11201)
   // Its own `readdirSync` over `app/` and `components/`, text-matching the JSX
-  // sites that may pass `followMode` / `typeIn` / render `TypeInText`. No
+  // sites that may pass `followMode` / `liveDrafts` / render `LiveDraftField`. No
   // database, nothing imported from `lib/` or `app/`.
-  'tests/guards/follow-and-typewriter-mounts.test.ts',
+  'tests/guards/follow-mounts.test.ts',
   // ── tests/ — the coverage gate's own guard (MOTIR-3497) ───────────────────
   // The instance the IMPORT-shaped membership predicate could not see. It pays
   // one memoised `tinyglobby` resolution of the whole `coverage.include` set —

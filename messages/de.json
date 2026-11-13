@@ -419,6 +419,10 @@
       "slow": "Wird noch bearbeitet – ein großer Plan dauert länger. Sie müssen nicht erneut klicken.",
       "timedOutTitle": "Es wurde nichts erstellt – die Genehmigung hat zu lange gedauert.",
       "timedOutNext": "Dieser Plan wartet weiterhin unverändert auf Ihre Entscheidung. Sie können ihn bedenkenlos erneut genehmigen."
+    },
+    "peekLive": {
+      "beingWritten": "Wird geschrieben",
+      "written": "Geschrieben"
     }
   },
   "projectAccess": {

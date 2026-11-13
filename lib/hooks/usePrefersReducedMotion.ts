@@ -3,8 +3,8 @@
 import { useSyncExternalStore } from 'react';
 
 // `prefers-reduced-motion: reduce`, live. The other readers in this tree take a
-// one-off `matchMedia` snapshot at the moment they animate; the typewriter
-// (MOTIR-8595) renders a different tree under reduce, so it subscribes.
+// one-off `matchMedia` snapshot at the moment they animate; a reader that renders
+// a different tree under reduce (`BrandMarkFlow`) subscribes instead.
 
 const QUERY = '(prefers-reduced-motion: reduce)';
 

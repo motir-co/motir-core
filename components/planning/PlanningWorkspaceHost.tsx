@@ -1286,6 +1286,9 @@ function PlanWorkspaceHost({
                 discarded={paneDiscarded}
                 // The plan BESIDE the reader's level offers the trip (MOTIR-6223).
                 offerPlanElsewhere
+                // The cards being written (MOTIR-11201): the open proposal's quick
+                // view shows their partial text while the plan is `generating`.
+                inFlightDrafts={paneReview.inFlightDrafts ?? null}
               />
             ) : openingNamedSession ? (
               <div className="h-full w-full" data-testid="planning-pane-opening" aria-busy>

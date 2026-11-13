@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Info, List, Workflow } from 'lucide-react';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
@@ -10,6 +10,8 @@ import { Segmented } from '@/components/ui/Segmented';
 import type { PlanViewDto } from '@/lib/planning/planView';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { PlanItemDraftDto } from '@/lib/dto/plans';
+import { authoringTargets, type LiveDrafts } from '@/lib/planning/liveDraft';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { addedProposalIds, newlyAddedCount } from '@/lib/planning/livePane';
 import { PlanProgressLineView } from '@/components/planning/PlanProgressLine';
@@ -167,6 +169,12 @@ export interface PlanProposalViewsProps {
    * ONE interval. Absent (the plan page), this component reads its own.
    */
   progressReading?: PlanProgressClockReading | null;
+  /**
+   * The cards being WRITTEN (Story MOTIR-11190 · MOTIR-11201; design Part XXIX) —
+   * the live read's `inFlightDrafts`. Read only while `live`: the open proposal's
+   * quick view shows its partial fields. The plan page passes nothing.
+   */
+  inFlightDrafts?: readonly PlanItemDraftDto[] | null;
 }
 
 export function PlanProposalViews({
@@ -196,6 +204,7 @@ export function PlanProposalViews({
   progress = null,
   progressFailing = false,
   progressReading: hostReading,
+  inFlightDrafts = null,
 }: PlanProposalViewsProps) {
   const t = useTranslations('planReview');
   // THE ONE CLOCK (MOTIR-7829): read once here, so the line and anything else
@@ -225,6 +234,21 @@ export function PlanProposalViews({
   const presenceSteps =
     progressReading?.state === 'stalled' ? heldSteps : (progressReading?.liveSteps ?? null);
   const showingList = view === 'list';
+  // A CARD BEING WRITTEN (MOTIR-11201, Part XXIX §29.2): its drafts, and the
+  // proposals an `author` step targets — read off the SAME presence steps the
+  // canvas's drafting cue reads (§26.6), so the peek's cue and the card's agree.
+  // Keyed by the ids, because a reading recomputes its arrays on every tick.
+  const authoringIds = [...authoringTargets(presenceSteps)].join('\n');
+  const liveDrafts = useMemo<LiveDrafts | null>(
+    () =>
+      live
+        ? {
+            drafts: inFlightDrafts ?? [],
+            authoring: new Set(authoringIds ? authoringIds.split('\n') : []),
+          }
+        : null,
+    [live, inFlightDrafts, authoringIds],
+  );
   const announcement = useBatchAnnouncement(items, live);
   const canvas = (
     <PlanReviewCanvas
@@ -244,6 +268,7 @@ export function PlanProposalViews({
       followLevelId={followLevelId}
       onLevelChange={onCanvasLevelChange}
       live={live}
+      liveDrafts={liveDrafts}
       offerPlanElsewhere={offerPlanElsewhere}
       // THE CUES (MOTIR-7830) — the line's own clock's live steps, so the words
       // and the canvas stop naming a step at the same instant. A dropped read
@@ -341,7 +366,13 @@ export function PlanProposalViews({
             canvas answers where a proposal LANDS; the list answers what exactly
             is being approved, which is a question about a SET. */}
         {showingList ? (
-          <PlanProposalList items={items} outcome={outcome} live={live} discarded={discarded} />
+          <PlanProposalList
+            items={items}
+            outcome={outcome}
+            live={live}
+            liveDrafts={liveDrafts}
+            discarded={discarded}
+          />
         ) : null}
         {preserveCanvasLevel ? (
           // KEPT MOUNTED under List (21.7). The drilled level lives in the

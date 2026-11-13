@@ -30,6 +30,7 @@ import {
 import { proposalLevelKey } from '@/lib/planning/planShape';
 import { folderChangeCounts } from '@/lib/planning/planChangeDiff';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
+import type { LiveDrafts } from '@/lib/planning/liveDraft';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 // ⚠️ `arrivalLevel` LIVES IN `lib/` NOW (MOTIR-6161) — the planning surface asks
@@ -152,6 +153,11 @@ export interface PlanReviewCanvasProps {
    */
   live?: boolean;
   /**
+   * The cards being WRITTEN (MOTIR-11201, Part XXIX) — handed to the open
+   * proposal's quick view. Read only while `live`.
+   */
+  liveDrafts?: LiveDrafts | null;
+  /**
    * OFFER THE TRIP when the plan is BESIDE the reader (bug MOTIR-6223, second
    * half): the pending plan places nothing on the level in view and something on
    * another, so the bar arms MOTIR-6161's *"Plan is in {identifier} · Go there"*.
@@ -198,6 +204,7 @@ export function PlanReviewCanvas({
   followLevelId,
   onLevelChange,
   live = false,
+  liveDrafts = null,
   offerPlanElsewhere = false,
   liveSteps = null,
   movingSteps = null,
@@ -765,6 +772,7 @@ export function PlanReviewCanvas({
       <ProposalPeek
         item={peekedProposal}
         live={live}
+        liveDrafts={liveDrafts}
         outcome={outcome}
         onClose={closePeek}
         onOpenProposal={openProposalById}

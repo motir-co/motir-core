@@ -2,19 +2,21 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// WHERE FOLLOWING AND THE TYPEWRITER MAY BE MOUNTED (MOTIR-8596, Story MOTIR-8590;
-// design `design/ai-planning/design-notes.md` Part XXVIII §28.2, §28.6, §28.10).
+// WHERE FOLLOWING AND A CARD BEING WRITTEN MAY BE MOUNTED (MOTIR-8596, Story
+// MOTIR-8590; design `design/ai-planning/design-notes.md` Part XXVIII §28.2,
+// §28.10 — and MOTIR-11201, Story MOTIR-11190, Part XXIX §29.5, which replaced
+// the typewriter this file first pinned with the live draft).
 //
 // The design is explicit that both behaviours live in ONE place: the planning
 // overlay's proposed-plan pane while the plan is written. The plan page
 // (`PlanDetail`) renders the same `PlanProposalViews` over a generating plan and
 // must never be driven; the pre-plan roadmap canvas (`PlanChangeCanvas`) keeps
 // MOTIR-6154's own follow-move and must never be handed the driven mode; and a
-// committed card's quick view must never type. The integration gate
+// committed card's quick view must never show a partial. The integration gate
 // (`tests/integration/planning/followThePlannerGate.test.tsx`) proves each of
 // those at runtime for the mounts that exist TODAY. This file is the other half:
 // it pins the mount sites themselves, so a NEW site — a second host passing
-// `followMode`, a canvas card rendering `TypeInText` — fails here by name rather
+// `followMode`, a canvas card rendering `LiveDraftField` — fails here by name rather
 // than shipping a behaviour nobody designed for that surface.
 //
 // The lists are asserted EXACT in both directions: a site that disappears fails
@@ -66,15 +68,30 @@ function jsxElements(src: string, name: string): string[] {
 
 const HOST = 'components/planning/PlanningWorkspaceHost.tsx';
 
-describe('the typewriter is mounted in one place', () => {
-  it('only the quick-view panel renders TypeInText', () => {
-    expect(sitesOf(/<TypeInText[\s>/]/)).toEqual([
+describe('a card being written is shown in one place', () => {
+  it('only the quick-view panel renders LiveDraftField', () => {
+    expect(sitesOf(/<LiveDraftField[\s>/]/)).toEqual([
       'app/(authed)/items/_components/IssueQuickViewPanel.tsx',
     ]);
   });
 
-  it('only the proposal peek hands the panel a typeIn', () => {
-    expect(sitesOf(/\btypeIn=\{/)).toEqual(['components/planning/ProposalPeek.tsx']);
+  it('only the proposal peek hands the panel a live draft', () => {
+    expect(sitesOf(/<IssueQuickViewPanel[^>]*\blive=\{/)).toEqual([
+      'components/planning/ProposalPeek.tsx',
+    ]);
+  });
+
+  it('the drafts are passed by the overlay host, and forwarded down the views to the peek only', () => {
+    expect(sitesOf(/\binFlightDrafts=\{/)).toEqual([HOST]);
+    expect(sitesOf(/\bliveDrafts=\{/)).toEqual([
+      'components/planning/PlanProposalList.tsx',
+      'components/planning/PlanProposalViews.tsx',
+      'components/planning/PlanReviewCanvas.tsx',
+    ]);
+  });
+
+  it('the typewriter is gone', () => {
+    expect(sitesOf(/\bTypeInText\b|\btypeIn=\{|data-typewriter/)).toEqual([]);
   });
 });
 
@@ -111,7 +128,9 @@ describe('following is mounted in one place', () => {
 
   it('the plan page passes none of them', () => {
     const src = read(join(ROOT, 'components/planning/PlanDetail.tsx'));
-    expect(src).not.toMatch(/\bfollowMode=|\bfollowControl=|\bprogressReading=|\btypeIn=/);
+    expect(src).not.toMatch(
+      /\bfollowMode=|\bfollowControl=|\bprogressReading=|\binFlightDrafts=|\bliveDrafts=/,
+    );
   });
 });
 

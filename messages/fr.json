@@ -419,6 +419,10 @@
       "slow": "Traitement en cours – un plan volumineux prend plus de temps. Inutile de cliquer à nouveau.",
       "timedOutTitle": "Rien n’a été créé – l’approbation a pris trop de temps.",
       "timedOutNext": "Ce plan attend toujours votre décision, sans modification. Vous pouvez l’approuver à nouveau en toute sécurité."
+    },
+    "peekLive": {
+      "beingWritten": "Rédaction en cours",
+      "written": "Rédigé"
     }
   },
   "projectAccess": {

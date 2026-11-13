@@ -419,6 +419,10 @@
       "slow": "Still working — a large plan takes longer. There’s no need to press again.",
       "timedOutTitle": "Nothing was created — approving took too long.",
       "timedOutNext": "This plan still awaits your decision, unchanged. It’s safe to approve again."
+    },
+    "peekLive": {
+      "beingWritten": "Being written",
+      "written": "Written"
     }
   },
   "projectAccess": {

@@ -359,6 +359,8 @@
   "planReview.approveProgress.slow": "Still working — a large plan takes longer. There’s no need to press again.",
   "planReview.approveProgress.timedOutTitle": "Nothing was created — approving took too long.",
   "planReview.approveProgress.timedOutNext": "This plan still awaits your decision, unchanged. It’s safe to approve again.",
+  "planReview.peekLive.beingWritten": "Being written",
+  "planReview.peekLive.written": "Written",
   "projectAccess.noAccessTitle": "You don’t have access to this project",
   "projectAccess.noAccessDescription": "This project is private. Ask a project admin to add you, or switch to a project you can access.",
   "projectAccess.backToProjects": "Back to projects",

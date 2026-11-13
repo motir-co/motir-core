@@ -419,6 +419,10 @@
       "slow": "Seguimos trabajando: un plan grande tarda más. No hace falta volver a pulsar.",
       "timedOutTitle": "No se creó nada: la aprobación tardó demasiado.",
       "timedOutNext": "Este plan sigue esperando tu decisión, sin cambios. Puedes volver a aprobarlo con seguridad."
+    },
+    "peekLive": {
+      "beingWritten": "Redactándose",
+      "written": "Redactado"
     }
   },
   "projectAccess": {

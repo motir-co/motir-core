@@ -419,6 +419,10 @@
       "slow": "Ainda processando: um plano grande demora mais. Não é preciso clicar de novo.",
       "timedOutTitle": "Nada foi criado: a aprovação demorou demais.",
       "timedOutNext": "Este plano continua aguardando sua decisão, sem alterações. É seguro aprovar novamente."
+    },
+    "peekLive": {
+      "beingWritten": "Sendo escrito",
+      "written": "Escrito"
     }
   },
   "projectAccess": {
