@@ -112,11 +112,13 @@ export const planNarrationRepository = {
       where: { planId: { in: [...planIds] } },
       _max: { createdAt: true },
     });
-    return groups.flatMap((g) =>
-      g._max.createdAt
-        ? [{ planId: g.planId, sessionKey: g.sessionKey, narratedAt: g._max.createdAt }]
-        : [],
-    );
+    // `_max.createdAt` types as nullable because Prisma cannot know the column
+    // is NOT NULL and that a group holds at least one row; it is never null here.
+    return groups.map((g) => ({
+      planId: g.planId,
+      sessionKey: g.sessionKey,
+      narratedAt: g._max.createdAt!,
+    }));
   },
 
   /** One plan's sessions, in the order they first reported a step. */
