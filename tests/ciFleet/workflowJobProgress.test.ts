@@ -232,4 +232,27 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
     expect(result).toEqual({ event: 'workflow_job', outcome: 'failed' });
     expect(error.mock.calls[0]?.[0]).toContain('job-progress stamp failed');
   });
+
+  it('a non-Error failure is logged without its message', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(ciRunnerProvisioningService, 'recordJobProgress').mockRejectedValue('boom');
+
+    const result = await githubWebhookService.handleWorkflowJob(
+      delivery('completed', { jobId: '1' }),
+    );
+
+    expect(result).toEqual({ event: 'workflow_job', outcome: 'failed' });
+    expect(error.mock.calls[0]?.[1]).toMatchObject({ error: 'unknown', runnerId: null });
+  });
+
+  it('a QUEUED delivery still takes the provisioning path, not the progress one', async () => {
+    const progress = vi.spyOn(ciRunnerProvisioningService, 'recordJobProgress');
+    const queuedJob = delivery('queued', { jobId: '1', labels: ['ubuntu-latest'] });
+    (queuedJob.workflow_job as Record<string, unknown>)['started_at'] = '2026-11-13T10:00:00Z';
+
+    const result = await githubWebhookService.handleWorkflowJob(queuedJob);
+
+    expect(result).toEqual({ event: 'workflow_job', outcome: 'not_fleet_job' });
+    expect(progress).not.toHaveBeenCalled();
+  });
 });
