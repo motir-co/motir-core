@@ -15,6 +15,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import * as orchestrator from '@/lib/orchestrator';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { INSTALL_FLEET_SHARD_ID } from '@/lib/ciFleet/installFleet';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
@@ -644,5 +645,49 @@ describe('each container is stopped in the account it was booted in (MOTIR-8964)
     expect(fakeOrchestrator.teardowns).toEqual([
       { handleId: legacy.containerId, reason: 'gate_revoked' },
     ]);
+  });
+});
+
+describe('an install-fleet runner is stopped through the install fleet (MOTIR-11232)', () => {
+  afterEach(async () => {
+    await adminDb.ciRunnerProvisioningIntent.deleteMany({});
+    orchestrator.resetShardFakes();
+    fleetShardOrchestratorService.resetCache();
+  });
+
+  it('tears it down there, never through the process-wide fleet', async () => {
+    const fx = await seedTenant();
+    const install = orchestrator.fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+    const handle = await install.provision({ region: 'us-east-1' } as ContainerSpec);
+    jobSeq += 1;
+    await adminDb.ciRunnerProvisioningIntent.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        organizationId: fx.organizationId,
+        projectId: fx.projectId,
+        installationId: '556677',
+        runId: String(7000 + jobSeq),
+        runAttempt: 1,
+        jobId: String(80_000 + jobSeq),
+        jobName: 'build',
+        workflowName: 'CI',
+        repoOwner: MOTIR_ORG,
+        repoName: 'acme-web',
+        requestedLabels: [MOTIR_RUNNER_LABEL],
+        queuedAt: new Date(),
+        status: 'running',
+        containerProvider: handle.provider,
+        containerId: handle.id,
+        containerRegion: handle.region,
+        bootedAt: handle.createdAt,
+        installFleet: true,
+      },
+    });
+
+    const result = await fleetStopService.stopOrganization(fx.organizationId, 'admin_stop');
+
+    expect(result).toMatchObject({ containersStopped: 1, failures: 0 });
+    expect(install.teardowns).toEqual([{ handleId: handle.id, reason: 'gate_revoked' }]);
+    expect(fakeOrchestrator.teardowns).toEqual([]);
   });
 });

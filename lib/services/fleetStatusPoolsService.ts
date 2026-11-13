@@ -28,6 +28,7 @@ import type { PlatformPoolBlockDTO } from '@/lib/dto/platformFleetPools';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { withPlatformRead } from '@/lib/platform/context';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
@@ -52,6 +53,8 @@ import { withSystemContext } from '@/lib/workspaces/context';
  * (`fleet_shard_id` null — the pseudo-account id is never stored, MOTIR-10858)
  * held by the install's own org (the meta org on cloud, any org with cloud off),
  * the same pair `codeGraphIndexAdmissionService` exempts from the shared caps.
+ * The CI runner writes no slot: its count is the org's in-flight intents carrying
+ * the install-fleet flag (MOTIR-11232).
  * For the agent hoster those slots are the AWAKE instances; the hibernated ones
  * are its live instances on the install fleet's app in `hibernated`. A machine's
  * vCPU is its instance type's. The one quota is the account's EC2 On-Demand
@@ -108,7 +111,11 @@ async function readInstallCounts(now: Date): Promise<InstallCounts> {
       if (!installFleetTakesKind(kind)) continue;
       running.set(
         kind,
-        await fleetInFlightSlotRepository.countLiveUnplacedForWorkload(kind, orgIds, now, tx),
+        // A CI runner writes no slot: its in-flight intents on the install fleet
+        // are what admission placed there (MOTIR-11232).
+        kind === 'ci_runner'
+          ? await ciRunnerProvisioningIntentRepository.countInFlightOnInstallFleetInTx(orgIds, tx)
+          : await fleetInFlightSlotRepository.countLiveUnplacedForWorkload(kind, orgIds, now, tx),
       );
     }
     const hibernated = installFleetTakesKind('agent_instance')
@@ -278,7 +285,7 @@ async function shardPool(
 
 export const fleetStatusPoolsService = {
   /**
-   * The install-fleet block: the three pools' running machines and vCPU against
+   * The install-fleet block: each pool's running machines and vCPU against
    * the account's EC2 vCPU quota. One `fleet.status.read` audit row per call,
    * written with the quota's read mark.
    */

@@ -65,7 +65,14 @@ import {
 import {
   classifyProvisionRefusal,
   fleetShardAdmissionService,
+  SHARD_CAPACITY_DETAIL,
+  type ProvisionRefusal,
 } from '@/lib/services/fleetShardAdmissionService';
+import {
+  ciRunnerIntentShardId,
+  INSTALL_FLEET_SHARD_ID,
+  installFleetConfig,
+} from '@/lib/ciFleet/installFleet';
 import {
   ciFleetAdmissionLockRepository as locks,
   FLEET_ADMISSION_SCOPE,
@@ -1257,11 +1264,26 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   // switch is Fly. On the Fly path an unconfigured orchestrator is handled as a
   // process with none: claim released. An ACCOUNT that cannot be reached is a
   // provider outage and moves the job (below).
+  //
+  // THE INSTALL FLEET (MOTIR-11232): a job of the install's own org, admitted
+  // there, boots in core's own account through the install fleet's orchestrator,
+  // in its region. It has no account row (`bootShardId` stays null) and no other
+  // account to move to: a capacity refusal or an outage defers it, never spills
+  // it to a pool account or to Fly.
+  const onInstallFleet = verdict.installFleet;
   let bootShardId: string | null = verdict.fleetShardId;
   let bootShard: FleetShardDTO | null = null;
   let orchestrator: ContainerOrchestrator | null = null;
   let accountUnreachable: unknown = null;
-  if (bootShardId === null) {
+  let installRegion: string | null = null;
+  if (onInstallFleet) {
+    try {
+      installRegion = installFleetConfig().region;
+      orchestrator = await fleetShardOrchestratorService.forShard(INSTALL_FLEET_SHARD_ID);
+    } catch (err) {
+      accountUnreachable = err;
+    }
+  } else if (bootShardId === null) {
     try {
       orchestrator = getOrchestrator();
     } catch (err) {
@@ -1388,6 +1410,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
       orchestrator: through,
       ...(shard ? { region: shard.fly?.region ?? shard.aws?.region ?? '' } : {}),
+      ...(installRegion !== null ? { region: installRegion } : {}),
     });
 
   // THE IN-BOOT MOVE (AMENDMENT 1, MOTIR-8968). An account that refuses for
@@ -1412,6 +1435,11 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     }
     accountUnreachable = null;
 
+    if (onInstallFleet) {
+      const installReason = classifyProvisionRefusal(refusal);
+      if (installReason === 'job_fault') return failedProvision(refusal);
+      return installFleetRefused(refusal, installReason);
+    }
     const reason = bootShardId === null ? 'job_fault' : classifyProvisionRefusal(refusal);
     if (bootShardId === null || reason === 'job_fault') {
       return failedProvision(refusal);
@@ -1466,6 +1494,23 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     } catch (err) {
       accountUnreachable = err;
     }
+  }
+
+  /** The install fleet refused for capacity or is unreachable (MOTIR-11232):
+   *  the job waits for it, as a job waits for its org's own account. */
+  async function installFleetRefused(err: unknown, reason: ProvisionRefusal): Promise<BootResult> {
+    await deregisterQuietly(jit.runnerId, intentId, runnerTarget);
+    await ciRunnerAdmissionService.releaseClaimForShardCapacity(intentId, now());
+    console.warn('[ciRunnerBootService] the install fleet refused the provision — deferred', {
+      intentId,
+      reason,
+      detail: detailOf(err),
+    });
+    return terminal({
+      outcome: 'gate_deferred',
+      reason: 'shard_capacity',
+      detail: SHARD_CAPACITY_DETAIL,
+    });
   }
 
   async function failedProvision(err: unknown): Promise<BootResult> {
@@ -1554,6 +1599,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         createdAt: handle.createdAt.toISOString(),
         ...(handle.volumeId ? { volumeId: handle.volumeId } : {}),
         ...(bootShardId ? { shardId: bootShardId } : {}),
+        ...(onInstallFleet ? { shardId: INSTALL_FLEET_SHARD_ID } : {}),
       },
       githubRunnerId: jit.runnerId,
       runnerTarget: runnerTarget ?? null,
@@ -2050,7 +2096,8 @@ async function releaseClaim(intentId: string): Promise<void> {
 async function resolveReapAttribution(handle: ContainerHandle): Promise<{
   attribution: UsageAttribution;
   hosted: LiveAgentUsage | null;
-  /** The account the CI intent recorded its container in; null otherwise. */
+  /** The account the CI intent recorded its container in — the install fleet's
+   *  pseudo-account id for an install-fleet runner (MOTIR-11232); null otherwise. */
   shardId: string | null;
 } | null> {
   const intent = await withSystemContext((tx) =>
@@ -2089,7 +2136,7 @@ async function resolveReapAttribution(handle: ContainerHandle): Promise<{
   if (!Number.isInteger(workflowJobId)) return null;
   return {
     hosted: null,
-    shardId: intent.fleetShardId,
+    shardId: ciRunnerIntentShardId(intent),
     attribution: {
       orgId: intent.organizationId,
       workspaceId: intent.workspaceId,

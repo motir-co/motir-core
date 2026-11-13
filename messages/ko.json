@@ -14339,16 +14339,16 @@
       },
       "install": {
         "title": "Motir 자체 계정 · 설치 플릿",
-        "subtitle": "Motir 자체 조직이 인덱스, 에이전트 호스트, 에이전트 실행 작업을 돌리는 머신입니다. 세 풀은 계정의 EC2 vCPU 할당량 하나를 공유하며, 어느 풀도 자체 크기가 없습니다.",
+        "subtitle": "Motir 자체 조직이 CI, 인덱스, 에이전트 호스트, 에이전트 실행 작업을 돌리는 머신입니다. 풀들은 계정의 EC2 vCPU 할당량 하나를 공유하며, 어느 풀도 자체 크기가 없습니다.",
         "nearQuota": "vCPU 할당량에 근접",
         "quota": {
-          "label": "EC2 vCPU 할당량 · 세 풀이 공유",
+          "label": "EC2 vCPU 할당량 · 모든 풀이 공유",
           "read": "실행 중인 온디맨드 표준 인스턴스 · {age} 읽음",
           "notRead": "AWS가 응답하지 않았습니다 · {when}"
         },
-        "used": "세 풀이 사용 중",
+        "used": "모든 풀이 사용 중",
         "percent": "할당량 사용률",
-        "nearBody": "할당량의 {percent}%로, 70% 여유 기준을 넘었습니다. 세 풀 전체에 {left} vCPU가 남아 있습니다.",
+        "nearBody": "할당량의 {percent}%로, 70% 여유 기준을 넘었습니다. 모든 풀 전체에 {left} vCPU가 남아 있습니다.",
         "table": {
           "col": {
             "pool": "풀",
@@ -14364,7 +14364,7 @@
         "machines": "{count, plural, other {머신 #대}}",
         "awake": "활성 {count}",
         "hibernated": "최대 절전 {count}, 집계 제외",
-        "readOnly": "읽기 전용입니다. 여기서 실행되는 풀은 MOTIR_INSTALL_FLEET_KINDS가 정하며, CI 러너는 실행되지 않습니다.",
+        "readOnly": "읽기 전용입니다. 여기서 실행되는 풀은 MOTIR_INSTALL_FLEET_KINDS가 정합니다.",
         "error": {
           "title": "Motir 자체 계정을 읽을 수 없습니다",
           "body": "AWS가 응답하지 않아 여기에 아무것도 불러오지 않았습니다. 어떤 수치도 0이 아니며 공급자도 표시하지 않습니다. add-shard 풀과 이미지는 영향을 받지 않습니다. 다시 시도하려면 새로 고치십시오."

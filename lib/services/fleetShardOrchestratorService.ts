@@ -12,7 +12,11 @@ import {
   type PersistentContainerOrchestrator,
 } from '@/lib/orchestrator';
 import { fleetShardService } from '@/lib/services/fleetShardService';
-import { INSTALL_FLEET_TAG, isInstallFleetShardId } from '@/lib/ciFleet/installFleet';
+import {
+  ciRunnerIntentShardId,
+  INSTALL_FLEET_TAG,
+  isInstallFleetShardId,
+} from '@/lib/ciFleet/installFleet';
 
 // WHICH ORCHESTRATOR a CI-runner container is reached through (Story MOTIR-8953 ·
 // MOTIR-8964) — the one seam every container path (boot, poll, settle, stop,
@@ -53,11 +57,13 @@ export const fleetShardOrchestratorService = {
     return this.forShardRow(await fleetShardService.getShard(shardId));
   },
 
-  /** The orchestrator for the account an intent's container was booted in. */
+  /** The orchestrator for the account an intent's container was booted in — the
+   *  install fleet's for an install-fleet runner (MOTIR-11232), which records
+   *  no account. */
   async forIntent(
-    intent: Pick<CiRunnerProvisioningIntent, 'fleetShardId'>,
+    intent: Pick<CiRunnerProvisioningIntent, 'fleetShardId' | 'installFleet'>,
   ): Promise<ContainerOrchestrator> {
-    return this.forShard(intent.fleetShardId);
+    return this.forShard(ciRunnerIntentShardId(intent));
   },
 
   /**

@@ -149,3 +149,64 @@ describe('the fake adapter', () => {
     expect(await isCiFleetConfigured()).toBe(true);
   });
 });
+
+describe('with cloud off and the CI runner on the install fleet (MOTIR-11232)', () => {
+  // A 1-account self-host has no pool account and no Fly fleet: its one org's CI
+  // boots on the install fleet, so the gate asks for what that boot reads.
+  function configureInstallFleet(): void {
+    vi.stubEnv('MOTIR_CLOUD', 'false');
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'ci_runner');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SUBNET_IDS', 'subnet-a');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SECURITY_GROUP_ID', 'sg-install');
+    vi.stubEnv(
+      'MOTIR_INSTALL_FLEET_INSTANCE_PROFILE_ARN',
+      'arn:aws:iam::944842271421:instance-profile/motir-install-fleet',
+    );
+    vi.stubEnv('MOTIR_INSTALL_FLEET_REGION', 'us-east-1');
+    vi.stubEnv(AWS_RUNNER_AMI_ENV_VAR, AMI);
+  }
+
+  it('is configured with no Fly fleet and no pool variable set', async () => {
+    configureInstallFleet();
+    expect(await ciFleetMissingConfig()).toEqual([]);
+    expect(await isCiFleetConfigured()).toBe(true);
+    expect(isOrchestratorConfigured()).toBe(false);
+  });
+
+  it('names every missing install-fleet variable and the runner AMI at once', async () => {
+    configureInstallFleet();
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SUBNET_IDS', '');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_REGION', '');
+    vi.stubEnv(AWS_RUNNER_AMI_ENV_VAR, '');
+    expect(await ciFleetMissingConfig()).toEqual([
+      'MOTIR_INSTALL_FLEET_SUBNET_IDS',
+      'MOTIR_INSTALL_FLEET_REGION',
+      AWS_RUNNER_AMI_ENV_VAR,
+    ]);
+    expect(await isCiFleetConfigured()).toBe(false);
+  });
+
+  it('needs no AMI under the lane’s fake EC2', async () => {
+    configureInstallFleet();
+    vi.stubEnv(AWS_RUNNER_AMI_ENV_VAR, '');
+    setAwsEc2OverrideForTests((() => ({})) as never);
+    expect(await ciFleetMissingConfig()).toEqual([]);
+  });
+
+  it('on cloud, the install fleet does not stand in for the pool: the switch’s fleet is asked', async () => {
+    configureInstallFleet();
+    vi.stubEnv('MOTIR_CLOUD', 'true');
+    expect(await ciFleetMissingConfig()).toEqual([
+      'FLY_FLEET_API_TOKEN',
+      'FLY_FLEET_APP',
+      'MOTIR_RUNNER_IMAGE',
+    ]);
+  });
+
+  it('with the CI runner unlisted, cloud off asks the switch’s fleet as before', async () => {
+    configureInstallFleet();
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'code_graph_index');
+    expect(await ciFleetMissingConfig()).not.toEqual([]);
+  });
+});

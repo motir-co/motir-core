@@ -14345,16 +14345,16 @@
       },
       "install": {
         "title": "Cuenta propia de Motir · flota de instalación",
-        "subtitle": "Las máquinas en las que la organización propia de Motir ejecuta sus trabajos de índice, host de agentes y ejecución de agentes. Los tres pools comparten la única cuota de vCPU de EC2 de la cuenta; ninguno tiene un tamaño propio.",
+        "subtitle": "Las máquinas en las que la organización propia de Motir ejecuta sus trabajos de CI, índice, host de agentes y ejecución de agentes. Los pools comparten la única cuota de vCPU de EC2 de la cuenta; ninguno tiene un tamaño propio.",
         "nearQuota": "Cerca de la cuota de vCPU",
         "quota": {
-          "label": "Cuota de vCPU de EC2 · compartida por los tres pools",
+          "label": "Cuota de vCPU de EC2 · compartida por todos los pools",
           "read": "Instancias On-Demand Standard en ejecución · leída {age}",
           "notRead": "AWS no respondió · {when}"
         },
-        "used": "En uso por los tres pools",
+        "used": "En uso por todos los pools",
         "percent": "De la cuota en uso",
-        "nearBody": "Al {percent} % de la cuota, por encima de la marca de margen del 70 %. Quedan {left} vCPU para los tres pools.",
+        "nearBody": "Al {percent} % de la cuota, por encima de la marca de margen del 70 %. Quedan {left} vCPU para todos los pools.",
         "table": {
           "col": {
             "pool": "Pool",
@@ -14370,7 +14370,7 @@
         "machines": "{count, plural, one {# máquina} other {# máquinas}}",
         "awake": "{count} activas",
         "hibernated": "{count} hibernadas, no contadas",
-        "readOnly": "Solo lectura. Qué pools se ejecutan aquí lo fija MOTIR_INSTALL_FLEET_KINDS; un runner de CI nunca.",
+        "readOnly": "Solo lectura. Qué pools se ejecutan aquí lo fija MOTIR_INSTALL_FLEET_KINDS.",
         "error": {
           "title": "No se pudo leer la cuenta propia de Motir",
           "body": "AWS no respondió, así que aquí no hay nada cargado: ninguna cifra es cero y no se afirma ningún proveedor. Los pools add-shard y las imágenes no se ven afectados. Recarga para volver a intentarlo."

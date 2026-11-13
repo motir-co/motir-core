@@ -63,8 +63,9 @@ import { installFleetTakesKind, isInstallOrganization } from '@/lib/ciFleet/inst
 // above, the switch included: a job of the install's own org — the meta org on
 // cloud, any org with cloud off — of a kind `MOTIR_INSTALL_FLEET_KINDS` lists
 // runs in core's own account, with no `fleet_shard` read, no account and no
-// shared or org cap (as an org-owned account takes none). A CI runner never
-// does, and every other org's job is placed exactly as before.
+// shared or org cap (as an org-owned account takes none). The CI runner is one
+// of those kinds (MOTIR-11232), and every other org's job is placed exactly as
+// before.
 
 /** The job admission places. */
 export interface ShardPlacementJob {
@@ -351,8 +352,8 @@ export const fleetShardAdmissionService = {
 
   /**
    * Does the INSTALL FLEET take this job (MOTIR-10794)? Its kind is listed in
-   * `MOTIR_INSTALL_FLEET_KINDS` (never `ci_runner`), and its org is the install's
-   * own: with cloud off any org — nothing is read — and on cloud the meta org,
+   * `MOTIR_INSTALL_FLEET_KINDS` (`ci_runner` included, MOTIR-11232), and its org
+   * is the install's own: with cloud off any org — nothing is read — and on cloud the meta org,
    * read from the job's own org row in the caller's transaction, never a flag.
    */
   async installFleetTakesInTx(

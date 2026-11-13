@@ -14345,16 +14345,16 @@
       },
       "install": {
         "title": "Własne konto Motir · flota instalacyjna",
-        "subtitle": "Maszyny, na których własna organizacja Motir uruchamia zadania indeksu, hosta agentów i uruchomień agentów. Trzy pule dzielą jeden limit vCPU EC2 konta; żadna nie ma własnego rozmiaru.",
+        "subtitle": "Maszyny, na których własna organizacja Motir uruchamia zadania CI, indeksu, hosta agentów i uruchomień agentów. Pule dzielą jeden limit vCPU EC2 konta; żadna nie ma własnego rozmiaru.",
         "nearQuota": "Blisko limitu vCPU",
         "quota": {
-          "label": "Limit vCPU EC2 · wspólny dla trzech pul",
+          "label": "Limit vCPU EC2 · wspólny dla wszystkich pul",
           "read": "Działające instancje On-Demand Standard · odczytano {age}",
           "notRead": "AWS nie odpowiedział · {when}"
         },
-        "used": "Używane przez trzy pule",
+        "used": "Używane przez wszystkie pule",
         "percent": "Wykorzystanie limitu",
-        "nearBody": "{percent}% limitu, powyżej progu zapasu 70%. Dla wszystkich trzech pul zostało {left} vCPU.",
+        "nearBody": "{percent}% limitu, powyżej progu zapasu 70%. Dla wszystkich pul zostało {left} vCPU.",
         "table": {
           "col": {
             "pool": "Pula",
@@ -14370,7 +14370,7 @@
         "machines": "{count, plural, one {# maszyna} few {# maszyny} many {# maszyn} other {# maszyny}}",
         "awake": "Aktywne: {count}",
         "hibernated": "Uśpione: {count}, nie liczone",
-        "readOnly": "Tylko do odczytu. O tym, które pule tu działają, decyduje MOTIR_INSTALL_FLEET_KINDS; runner CI nigdy.",
+        "readOnly": "Tylko do odczytu. O tym, które pule tu działają, decyduje MOTIR_INSTALL_FLEET_KINDS.",
         "error": {
           "title": "Nie udało się odczytać własnego konta Motir",
           "body": "AWS nie odpowiedział, więc nic tu nie jest wczytane: żadna liczba nie jest zerem i żaden dostawca nie jest wskazany. Pule add-shard i obrazy nie są objęte problemem. Odśwież stronę, aby spróbować ponownie."

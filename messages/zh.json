@@ -14336,16 +14336,16 @@
       },
       "install": {
         "title": "Motir 自己的账户 · 安装集群",
-        "subtitle": "Motir 自己的组织运行其索引、智能体托管和智能体运行作业的机器。三个池共享账户唯一的 EC2 vCPU 配额，没有一个池有自己的大小。",
+        "subtitle": "Motir 自己的组织运行其 CI、索引、智能体托管和智能体运行作业的机器。这些池共享账户唯一的 EC2 vCPU 配额，没有一个池有自己的大小。",
         "nearQuota": "接近 vCPU 配额",
         "quota": {
-          "label": "EC2 vCPU 配额 · 由三个池共享",
+          "label": "EC2 vCPU 配额 · 由所有池共享",
           "read": "正在运行的按需标准实例 · {age}读取",
           "notRead": "AWS 没有响应 · {when}"
         },
-        "used": "三个池正在使用",
+        "used": "所有池正在使用",
         "percent": "配额使用率",
-        "nearBody": "已达配额的 {percent}%，超过 70% 余量线。三个池共剩 {left} vCPU。",
+        "nearBody": "已达配额的 {percent}%，超过 70% 余量线。所有池共剩 {left} vCPU。",
         "table": {
           "col": {
             "pool": "池",
@@ -14361,7 +14361,7 @@
         "machines": "{count, plural, other {# 台机器}}",
         "awake": "{count} 个活跃",
         "hibernated": "{count} 个休眠，不计入",
-        "readOnly": "只读。哪些池在这里运行由 MOTIR_INSTALL_FLEET_KINDS 决定；CI 运行器从不在这里运行。",
+        "readOnly": "只读。哪些池在这里运行由 MOTIR_INSTALL_FLEET_KINDS 决定。",
         "error": {
           "title": "无法读取 Motir 自己的账户",
           "body": "AWS 没有响应，因此这里没有加载任何内容：没有数字为零，也没有声明任何提供商。add-shard 池和镜像不受影响。请刷新重试。"

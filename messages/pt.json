@@ -14345,16 +14345,16 @@
       },
       "install": {
         "title": "Conta da própria Motir · frota de instalação",
-        "subtitle": "As máquinas em que a organização da própria Motir roda seus jobs de índice, host de agentes e execução de agentes. Os três pools compartilham a única cota de vCPU do EC2 da conta; nenhum tem tamanho próprio.",
+        "subtitle": "As máquinas em que a organização da própria Motir roda seus jobs de CI, índice, host de agentes e execução de agentes. Os pools compartilham a única cota de vCPU do EC2 da conta; nenhum tem tamanho próprio.",
         "nearQuota": "Perto da cota de vCPU",
         "quota": {
-          "label": "Cota de vCPU do EC2 · compartilhada pelos três pools",
+          "label": "Cota de vCPU do EC2 · compartilhada por todos os pools",
           "read": "Instâncias On-Demand Standard em execução · lida {age}",
           "notRead": "A AWS não respondeu · {when}"
         },
-        "used": "Em uso pelos três pools",
+        "used": "Em uso por todos os pools",
         "percent": "Da cota em uso",
-        "nearBody": "Em {percent}% da cota, acima da marca de folga de 70%. Restam {left} vCPU para os três pools.",
+        "nearBody": "Em {percent}% da cota, acima da marca de folga de 70%. Restam {left} vCPU para todos os pools.",
         "table": {
           "col": {
             "pool": "Pool",
@@ -14370,7 +14370,7 @@
         "machines": "{count, plural, one {# máquina} other {# máquinas}}",
         "awake": "{count} ativas",
         "hibernated": "{count} hibernadas, não contadas",
-        "readOnly": "Somente leitura. Quais pools rodam aqui é definido por MOTIR_INSTALL_FLEET_KINDS; um runner de CI nunca.",
+        "readOnly": "Somente leitura. Quais pools rodam aqui é definido por MOTIR_INSTALL_FLEET_KINDS.",
         "error": {
           "title": "Não foi possível ler a conta da própria Motir",
           "body": "A AWS não respondeu, então nada aqui foi carregado: nenhum número é zero e nenhum provedor é afirmado. Os pools add-shard e as imagens não são afetados. Recarregue para tentar de novo."
