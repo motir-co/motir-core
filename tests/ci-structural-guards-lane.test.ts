@@ -157,6 +157,7 @@ const SELF_WALKING_MEMBERS = [
   'tests/theme/inkContrastScan.test.ts',
   'tests/theme/shellViewportUnits.test.ts',
   'tests/guards/follow-mounts.test.ts',
+  'tests/guards/retired-replay-word.test.ts',
   // MOTIR-3497's sweep. `importGraph.test.ts` walks `['app', 'lib',
   // 'components']` with its own `readdirSync` and imports no scanner, so the
   // derivation cannot see it — the same half this list has always covered.

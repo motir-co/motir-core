@@ -79,6 +79,10 @@ export const STRUCTURAL_GUARD_SPECS = [
   // sites that may pass `followMode` / `liveDrafts` / render `LiveDraftField`. No
   // database, nothing imported from `lib/` or `app/`.
   'tests/guards/follow-mounts.test.ts',
+  // ── tests/guards/ — the retired replay word (MOTIR-11204) ─────────────────
+  // `git ls-files` outside `design/`, every file read once for one word. No
+  // database, nothing imported from `lib/` or `app/`.
+  'tests/guards/retired-replay-word.test.ts',
   // ── tests/ — the coverage gate's own guard (MOTIR-3497) ───────────────────
   // The instance the IMPORT-shaped membership predicate could not see. It pays
   // one memoised `tinyglobby` resolution of the whole `coverage.include` set —
