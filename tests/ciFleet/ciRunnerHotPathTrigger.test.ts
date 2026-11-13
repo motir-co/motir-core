@@ -306,7 +306,9 @@ describe('every OTHER outcome dispatches NOTHING', () => {
 
     const result = await handle(delivery({ action: 'in_progress' }));
 
-    expect(result).toMatchObject({ outcome: 'ignored_action' });
+    // MOTIR-11230: the delivery now stamps job progress for supervision — and
+    // still boots nothing.
+    expect(result).toMatchObject({ outcome: 'progress_recorded' });
     expect(bootEvents(captured.events)).toHaveLength(0);
   });
 });

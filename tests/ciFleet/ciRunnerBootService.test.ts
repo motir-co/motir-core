@@ -1946,3 +1946,246 @@ describe('the GitHub runner-call ledger (MOTIR-8969)', () => {
     expect(await adminDb.githubRunnerCallEvent.count()).toBe(0);
   });
 });
+
+// ── MOTIR-11230 · a runner that has NO JOB is retired ─────────────────────────
+//
+// A fleet runner is single-use but not bound to the job it was booted for, so a
+// burst leaves runners with nothing to take. They used to idle to the job
+// timeout. Supervision now retires one that has taken no job within the idle
+// timeout, or whose own job another runner already finished — and only after
+// GitHub has CONFIRMED the runner's removal, so a runner that took a job is
+// never torn down from under it.
+
+/** GitHub's GET of the minted runner (id 9001). */
+function runnerReadCalls(): GithubCall[] {
+  return githubCalls.filter((c) => c.method === 'GET' && /\/actions\/runners\/9001$/.test(c.url));
+}
+
+/** Answer the runner read and the runner delete; the mint keeps its default. */
+function answerRunner(
+  read: () => Response,
+  remove: () => Response = () => new Response(null, { status: 204 }),
+) {
+  const mint = jitHandler;
+  jitHandler = (call) => {
+    if (/\/actions\/runners\/9001$/.test(call.url)) {
+      return call.method === 'DELETE' ? remove() : read();
+    }
+    return mint(call);
+  };
+}
+
+/** A container that runs and never exits, supervised with a long job timeout so
+ *  only the retirement can end it early. */
+const IDLE_FAST = {
+  bootDeadlineMs: 40,
+  idleTimeoutMs: 20,
+  jobTimeoutMs: 400,
+  pollIntervalMs: 1,
+} as const;
+
+describe('MOTIR-11230 — a runner with no job is retired, not left to idle for the hour', () => {
+  it('IDLE: a runner that takes no job within the idle timeout is de-registered, torn down and settled runner_idle', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    fakeOrchestrator.setBootBehaviour('hang');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    answerRunner(() => json(200, { id: 9001, busy: false, status: 'online' }));
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...IDLE_FAST,
+      jobTimeoutMs: 60_000,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'runner_idle' });
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(settled.status).toBe('completed');
+    expect(settled.teardownReason).toBe('runner_idle');
+    expect(settled.settledAt).not.toBeNull();
+    // The removal happened ONCE — the settle does not ask GitHub a second time —
+    // and it is on the runner-call ledger.
+    expect(deleteRunnerCalls()).toHaveLength(1);
+    expect(
+      (await adminDb.githubRunnerCallEvent.findMany()).filter((e) => e.kind === 'delete'),
+    ).toHaveLength(1);
+  });
+
+  it('JOB DONE ELSEWHERE: a runner whose job is already completed is retired on the next poll, before the idle timeout', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    // The `completed` delivery arrived before this runner even booted.
+    await adminDb.ciRunnerProvisioningIntent.update({
+      where: { id: intent.id },
+      data: { jobCompletedAt: new Date() },
+    });
+    fakeOrchestrator.setBootBehaviour('hang');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    answerRunner(() => json(200, { id: 9001, busy: false, status: 'online' }));
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...IDLE_FAST,
+      idleTimeoutMs: 60_000,
+      jobTimeoutMs: 60_000,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_done_elsewhere' });
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    // ONE poll decided it: one read, one delete.
+    expect(runnerReadCalls()).toHaveLength(1);
+    expect(deleteRunnerCalls()).toHaveLength(1);
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(settled.status).toBe('completed');
+    expect(settled.teardownReason).toBe('job_done_elsewhere');
+  });
+
+  it('BUSY: a runner running a job past the idle timeout is NOT torn down, and GitHub is asked only once', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    fakeOrchestrator.setBootBehaviour('hang');
+    answerRunner(() => json(200, { id: 9001, busy: true, status: 'online' }));
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...IDLE_FAST,
+      idleTimeoutMs: 1,
+      jobTimeoutMs: 150,
+    });
+
+    // It ran to the JOB timeout — the idle timeout never touched it.
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(settled.jobPickedUpAt).not.toBeNull();
+    // The busy answer was stamped, so later polls did not ask again; the only
+    // DELETE is the settle's ordinary de-registration.
+    expect(runnerReadCalls()).toHaveLength(1);
+    expect(deleteRunnerCalls()).toHaveLength(1);
+  });
+
+  it('PICKED UP: a runner the webhook saw take a job is never read or retired', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    await adminDb.ciRunnerProvisioningIntent.update({
+      where: { id: intent.id },
+      data: { jobPickedUpAt: new Date(), jobCompletedAt: new Date() },
+    });
+    fakeOrchestrator.setBootBehaviour('hang');
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...IDLE_FAST,
+      idleTimeoutMs: 1,
+      jobTimeoutMs: 100,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
+    expect(runnerReadCalls()).toHaveLength(0);
+  });
+
+  it('GONE: a runner GitHub no longer knows (it ran a job and left) is kept to its own exit, and stamped', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    fakeOrchestrator.setBootBehaviour('hang');
+    answerRunner(() => json(404, { message: 'Not Found' }));
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...IDLE_FAST,
+      idleTimeoutMs: 1,
+      jobTimeoutMs: 100,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
+    expect(runnerReadCalls()).toHaveLength(1);
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(settled.jobPickedUpAt).not.toBeNull();
+  });
+
+  it('REFUSED DELETE: a runner that took a job between the read and the delete keeps its job', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    fakeOrchestrator.setBootBehaviour('hang');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // GitHub refuses to delete a runner that is running a job.
+    answerRunner(
+      () => json(200, { id: 9001, busy: false, status: 'online' }),
+      () => json(422, { message: 'Bad request - Runner "motir-runner" is still running a job"' }),
+    );
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...IDLE_FAST,
+      idleTimeoutMs: 1,
+      jobTimeoutMs: 100,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('could not decide'))).toBe(true);
+    // Each refusal reached GitHub, so each is on the ledger.
+    const deletes = (await adminDb.githubRunnerCallEvent.findMany()).filter(
+      (e) => e.kind === 'delete',
+    );
+    expect(deletes.length).toBe(deleteRunnerCalls().length);
+  });
+
+  it('DELETE SAYS GONE: a runner that vanished between the read and the delete is not retired', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    fakeOrchestrator.setBootBehaviour('hang');
+    answerRunner(
+      () => json(200, { id: 9001, busy: false, status: 'online' }),
+      () => json(404, { message: 'Not Found' }),
+    );
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...IDLE_FAST,
+      idleTimeoutMs: 1,
+      jobTimeoutMs: 60,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
+  });
+
+  it('UNREADABLE: a runner read that fails keeps the runner — the job timeout stays the bound', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    fakeOrchestrator.setBootBehaviour('hang');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    answerRunner(() => json(500, { message: 'boom' }));
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...IDLE_FAST,
+      idleTimeoutMs: 1,
+      jobTimeoutMs: 60,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
+    expect(runnerReadCalls().length).toBeGreaterThanOrEqual(1);
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+  });
+
+  it('UNSTAMPABLE: a failed progress read keeps supervising rather than throwing out of the poll', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    fakeOrchestrator.setBootBehaviour('hang');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(ciRunnerProvisioningIntentRepository, 'findJobProgress').mockRejectedValue(
+      new Error('db blip'),
+    );
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...IDLE_FAST,
+      idleTimeoutMs: 1,
+      jobTimeoutMs: 60,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
+    expect(runnerReadCalls()).toHaveLength(0);
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+  });
+});

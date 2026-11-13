@@ -295,6 +295,70 @@ describe('deleteRunner — the dangling-JIT cleanup', () => {
   });
 });
 
+describe('removeRunner — a delete whose answer the caller decides on (MOTIR-11230)', () => {
+  it("answers 'removed' when GitHub deleted it", async () => {
+    handler = () => new Response(null, { status: 204 });
+    await expect(runnerJitConfigClient.removeRunner(9001)).resolves.toBe('removed');
+    expect(runnerCalls()[0]).toMatchObject({
+      method: 'DELETE',
+      url: `https://api.github.com/orgs/${MOTIR_ORG}/actions/runners/9001`,
+    });
+  });
+
+  it("answers 'gone' on a 404 — the runner already left", async () => {
+    handler = () => json(404, { message: 'Not Found' });
+    await expect(runnerJitConfigClient.removeRunner(9001)).resolves.toBe('gone');
+  });
+
+  it('throws on a refusal — GitHub will not delete a runner that is running a job', async () => {
+    handler = () => json(422, { message: 'Runner is still running a job' });
+    await expect(runnerJitConfigClient.removeRunner(9001)).rejects.toMatchObject({
+      code: 'RUNNER_JIT_API_FAILED',
+      status: 422,
+    });
+  });
+});
+
+describe('readRunner — is the runner running a job? (MOTIR-11230)', () => {
+  it('reads busy and online from the runner row', async () => {
+    handler = () => json(200, { id: 9001, name: 'motir-intent-1', status: 'online', busy: true });
+    await expect(runnerJitConfigClient.readRunner(9001)).resolves.toEqual({
+      busy: true,
+      online: true,
+    });
+    expect(runnerCalls()[0]).toMatchObject({
+      method: 'GET',
+      url: `https://api.github.com/orgs/${MOTIR_ORG}/actions/runners/9001`,
+    });
+  });
+
+  it('an offline idle runner is not busy and not online', async () => {
+    handler = () => json(200, { id: 9001, status: 'offline', busy: false });
+    await expect(runnerJitConfigClient.readRunner(9001)).resolves.toEqual({
+      busy: false,
+      online: false,
+    });
+  });
+
+  it('answers null on a 404 — GitHub no longer knows the runner', async () => {
+    handler = () => json(404, { message: 'Not Found' });
+    await expect(runnerJitConfigClient.readRunner(9001)).resolves.toBeNull();
+  });
+
+  it('throws on a failed read rather than guessing', async () => {
+    handler = () => json(502, { message: 'Bad Gateway' });
+    await expect(runnerJitConfigClient.readRunner(9001)).rejects.toMatchObject({
+      code: 'RUNNER_JIT_API_FAILED',
+      status: 502,
+    });
+  });
+
+  it('throws on a body with no busy flag — an unknown answer is not "idle"', async () => {
+    handler = () => json(200, { id: 9001, status: 'online' });
+    await expect(runnerJitConfigClient.readRunner(9001)).rejects.toThrow(/no busy flag/);
+  });
+});
+
 describe('deleteRunnersNamed — cleaning up a mint that never answered', () => {
   /** GitHub's list-runners shape, narrowed to what the client reads. */
   function runnerList(...runners: Array<{ id: number; name: string }>): Response {

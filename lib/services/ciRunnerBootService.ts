@@ -108,6 +108,16 @@ import {
 // container, which is the only useful definition of "guaranteed" for something
 // whose failure is silent.
 //
+// ⚠️ A RUNNER WITH NO JOB ENDS EARLY, THROUGH THE SAME EXIT (MOTIR-11230). A fleet
+// runner is single-use but not bound to the job it was booted for — GitHub hands
+// it the oldest queued job with its label — so a burst leaves runners that find
+// nothing to take. {@link ciRunnerBootService.pollOnce} now returns a `done`
+// verdict (`runner_idle`, or `job_done_elsewhere` when the job it was booted for
+// is already completed) for a runner that has taken no job within
+// {@link DEFAULT_IDLE_TIMEOUT_MS}, after GitHub has CONFIRMED its removal. That
+// verdict goes to `settleSupervision` like every other, so guarantees 3 and 4 are
+// untouched; the job timeout still bounds a runner that is running a job.
+//
 // ⚠️ GUARANTEE 3 WAS A `finally`, THEN A STEP, AND IS A `finally` AGAIN — and
 // the round trip is worth reading in full, because the INCIDENT is not reversed
 // even though its remedy is (MOTIR-2007, then MOTIR-3485).
@@ -191,6 +201,12 @@ const CI_RUNNER_WORKLOAD = 'ci_runner' satisfies FleetWorkloadKind;
 const HOSTED_AGENT_WORKLOAD = 'hosted_agent' satisfies FleetWorkloadKind;
 /** The failure detail a reaped container's run ends with. */
 const REAPED_DETAIL = 'the container outlived its supervisor and was reaped';
+/** The teardown reasons whose intent settles `completed` rather than `failed`. */
+const SETTLED_AS_COMPLETED: ReadonlySet<TeardownReason> = new Set<TeardownReason>([
+  'job_completed',
+  'runner_idle',
+  'job_done_elsewhere',
+]);
 
 /** How long a container has to reach a running state before it is written off as
  *  a boot that never happened. §6 budgets p95 ≤ 60s end to end; double that is a
@@ -203,6 +219,17 @@ const DEFAULT_BOOT_DEADLINE_MS = 120_000;
  *  surface, leave it to the user's re-run) to the fleet's operational story; what
  *  is fixed here is that the CONTAINER stops. */
 const DEFAULT_JOB_TIMEOUT_MS = 3_600_000;
+
+/** The IDLE timeout (MOTIR-11230). A fleet runner is single-use but not bound to
+ *  the job it was booted for: GitHub hands it the oldest queued job with its
+ *  label, so in a burst a runner can find nothing to take and would idle to
+ *  {@link DEFAULT_JOB_TIMEOUT_MS}, billed and holding a fleet slot. A runner that
+ *  has taken no job this long after its boot is retired. Five minutes is the
+ *  scale-down floor mature runner fleets use (philips-labs'
+ *  terraform-aws-github-runner `minimum_running_time_in_minutes` defaults to 5):
+ *  long past the boot deadline and a normal queue-to-pickup, short against the
+ *  hour. It never touches a runner that has taken a job. */
+const DEFAULT_IDLE_TIMEOUT_MS = 300_000;
 
 /** How soon after boot supervision first asks the provider what the container is
  *  doing. Short, because a fast job should settle fast: the sooner a terminal
@@ -330,6 +357,7 @@ const DEFAULT_REAP_AFTER_MS = DEFAULT_JOB_TIMEOUT_MS + 10 * 60_000;
  */
 export const FLEET_TIME_BUDGETS = {
   bootDeadlineMs: DEFAULT_BOOT_DEADLINE_MS,
+  idleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS,
   jobTimeoutMs: DEFAULT_JOB_TIMEOUT_MS,
   pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
   maxPollIntervalMs: MAX_POLL_INTERVAL_MS,
@@ -393,6 +421,8 @@ export const INLINE_RUNNER_STEPS: RunnerSupervisionSteps = {
  *  pass them, which is why they are optional and undocumented in the API. */
 export interface SupervisionOptions {
   bootDeadlineMs?: number;
+  /** {@link DEFAULT_IDLE_TIMEOUT_MS} (MOTIR-11230). */
+  idleTimeoutMs?: number;
   jobTimeoutMs?: number;
   pollIntervalMs?: number;
   maxPollIntervalMs?: number;
@@ -496,6 +526,9 @@ export type PollResult =
       /** Set when the loop ended because the provider could not be read, so the
        *  settled intent can say so rather than reporting a bare timeout. */
       failureDetail: string | null;
+      /** The poll already de-registered the runner from GitHub to retire it
+       *  (MOTIR-11230), so the settle does not call GitHub a second time. */
+      runnerRemoved?: boolean;
     };
 
 /** What {@link ciRunnerBootService.bootIntent} returns: either nothing was
@@ -1658,15 +1691,104 @@ async function pollContainerOnce(
     };
   }
 
-  return (
-    deadlineVerdict(null, status.state) ?? {
-      done: false,
-      startedAt,
-      bootLatencyMs,
-      consecutiveReadFailures: 0,
-      lastState: status.state,
+  const deadline = deadlineVerdict(null, status.state);
+  if (deadline) return deadline;
+
+  // A RUNNER WITH NO JOB (MOTIR-11230). Checked only on a successful read of a
+  // live container, after the deadlines, so it can only END a supervision
+  // earlier — never extend one.
+  const retired = await retirementVerdict(session, options, now());
+  if (retired) return { ...retired, startedAt, bootLatencyMs };
+
+  return {
+    done: false,
+    startedAt,
+    bootLatencyMs,
+    consecutiveReadFailures: 0,
+    lastState: status.state,
+  };
+}
+
+/**
+ * Whether this runner should be RETIRED because it has no job (MOTIR-11230), and
+ * if so, de-register it — returning the verdict that routes the container to the
+ * ordinary settle. `null` = keep supervising.
+ *
+ * A runner is a candidate when it has not been seen taking a job (no
+ * `jobPickedUpAt`) and either the job its intent was booted for is already
+ * COMPLETED on GitHub, or {@link DEFAULT_IDLE_TIMEOUT_MS} has passed since the
+ * boot. The webhook stamps make the common case a single row read; GitHub is
+ * asked only at a decision point, never on every poll.
+ *
+ * ⚠️ IT REMOVES THE RUNNER FROM GITHUB *BEFORE* THE CONTAINER IS DESTROYED, and
+ * only a removal GitHub CONFIRMED retires it. GitHub refuses to delete a runner
+ * that is running a job, so the DELETE is the atomic "still idle?" check: a
+ * runner handed a job between the busy read and the delete keeps its job, and
+ * this keeps supervising it. The busy read in front only spares that refusal in
+ * the common case. Everything else — a runner GitHub no longer knows (404, it
+ * ran a job and left), a read or a delete that failed — is "do not retire": the
+ * job timeout and the reaper remain the bound, exactly as before.
+ *
+ * ⚠️ NEVER THROWS, like the poll it is part of.
+ */
+async function retirementVerdict(
+  session: SupervisionSession,
+  options: SupervisionOptions,
+  at: Date,
+): Promise<Pick<
+  Extract<PollResult, { done: true }>,
+  'done' | 'reason' | 'failureDetail' | 'runnerRemoved'
+> | null> {
+  const runnerId = session.githubRunnerId;
+  if (runnerId === null) return null;
+  const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+  const target = session.runnerTarget ?? undefined;
+  try {
+    const progress = await withSystemContext((tx) => intents.findJobProgress(session.intentId, tx));
+    if (!progress || progress.jobPickedUpAt) return null;
+    const jobDone = progress.jobCompletedAt !== null;
+    const idle = at.getTime() - new Date(session.bootedAt).getTime() >= idleTimeoutMs;
+    if (!jobDone && !idle) return null;
+
+    const runner = await runnerJitConfigClient.readRunner(runnerId, target);
+    if (runner === null || runner.busy) {
+      // Busy: it has a job the webhook did not tell us about. Gone: an
+      // ephemeral runner de-registers itself after its job. Either way it is not
+      // idle — stamp it so later polls skip the GitHub read.
+      await withSystemContext((tx) => intents.markJobPickedUp(session.intentId, at, tx));
+      return null;
     }
-  );
+
+    let removed: 'removed' | 'gone';
+    try {
+      removed = await runnerJitConfigClient.removeRunner(runnerId, target);
+    } catch (err) {
+      // A refused DELETE reached GitHub — most often because the runner took a
+      // job a moment ago — so it is counted, and the runner is left alone.
+      if (runnerCallReachedGithub(err)) {
+        await runnerCallLedger.recordForTargetQuietly(target, 'delete', null);
+      }
+      throw err;
+    }
+    await runnerCallLedger.recordForTargetQuietly(target, 'delete', null);
+    // 'gone' = GitHub no longer knew it: it ran a job and left on its own.
+    if (removed !== 'removed') return null;
+
+    const reason: TeardownReason = jobDone ? 'job_done_elsewhere' : 'runner_idle';
+    console.warn('[ciRunnerBootService] retired a runner that had no job', {
+      intentId: session.intentId,
+      runnerId,
+      reason,
+    });
+    return { done: true, reason, failureDetail: null, runnerRemoved: true };
+  } catch (err) {
+    console.warn('[ciRunnerBootService] could not decide whether a runner is idle — kept', {
+      intentId: session.intentId,
+      runnerId,
+      detail: detailOf(err),
+    });
+    return null;
+  }
 }
 
 /**
@@ -1727,13 +1849,18 @@ async function settleSupervisedContainer(
     size: FLEET_CONTAINER_SIZE,
     observedStartedAt,
   });
-  await deregisterQuietly(session.githubRunnerId, intentId, session.runnerTarget ?? undefined);
+  if (!verdict.runnerRemoved) {
+    await deregisterQuietly(session.githubRunnerId, intentId, session.runnerTarget ?? undefined);
+  }
 
   if (usage) {
     await recordContainerUsage(usage);
     await settleIntent(intentId, session.attribution.projectId, {
-      status:
-        verdict.reason === 'job_completed' ? CI_RUNNER_INTENT_COMPLETED : CI_RUNNER_INTENT_FAILED,
+      // A retired idle runner (MOTIR-11230) ended as designed, not as a fault:
+      // its job ran elsewhere, or there was none for it.
+      status: SETTLED_AS_COMPLETED.has(verdict.reason)
+        ? CI_RUNNER_INTENT_COMPLETED
+        : CI_RUNNER_INTENT_FAILED,
       teardownReason: verdict.reason,
       settledAt: now(),
       failureDetail: verdict.failureDetail,

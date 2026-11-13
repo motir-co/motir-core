@@ -170,7 +170,12 @@ export type TeardownReason =
   | 'job_timed_out'
   | 'provision_failed'
   | 'gate_revoked'
-  | 'reaped'; // the orchestrator crashed; the sweeper found it
+  | 'reaped' // the orchestrator crashed; the sweeper found it
+  /** A CI runner took no job within the idle timeout and was retired (MOTIR-11230). */
+  | 'runner_idle'
+  /** A CI runner took no job, and the job it was booted for was already done on
+   *  GitHub — run by another runner, or finished before this one booted (MOTIR-11230). */
+  | 'job_done_elsewhere';
 
 /**
  * Provider-truth status, for the reaper and for diagnostics (§4's `describe`).

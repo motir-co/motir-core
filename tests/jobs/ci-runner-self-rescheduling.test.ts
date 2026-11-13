@@ -414,6 +414,8 @@ describe('what this change may not move', () => {
   it('leaves `FLEET_TIME_BUDGETS` byte-identical', () => {
     expect(FLEET_TIME_BUDGETS).toEqual({
       bootDeadlineMs: 120_000,
+      // ADDED by MOTIR-11230 (the idle-runner retirement); every other budget is unchanged.
+      idleTimeoutMs: 300_000,
       jobTimeoutMs: 3_600_000,
       pollIntervalMs: 3_000,
       maxPollIntervalMs: 30_000,

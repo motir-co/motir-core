@@ -52,7 +52,7 @@ describe('the fleet time budgets are stated once and stay internally consistent'
     );
   });
 
-  it('the deadlines are ordered: poll ≤ maxPoll < bootDeadline < jobTimeout < reapAfter', () => {
+  it('the deadlines are ordered: poll ≤ maxPoll < bootDeadline < idleTimeout < jobTimeout < reapAfter', () => {
     const b = FLEET_TIME_BUDGETS;
     // A boot deadline must be observable at poll granularity, or it is overshot
     // by a whole interval...
@@ -61,6 +61,13 @@ describe('the fleet time budgets are stated once and stay internally consistent'
     // ...and must be able to fire before the job timeout does, or a container
     // that never started would be reported as one that ran over.
     expect(b.bootDeadlineMs).toBeLessThan(b.jobTimeoutMs);
+    // THE IDLE TIMEOUT (MOTIR-11230) sits between the two: a runner that never
+    // STARTED is a boot failure, not an idle one, so the boot deadline fires
+    // first; and an idle runner must be retired long before the hour it used
+    // to idle for. It must also be observable at poll granularity.
+    expect(b.bootDeadlineMs).toBeLessThan(b.idleTimeoutMs);
+    expect(b.maxPollIntervalMs).toBeLessThan(b.idleTimeoutMs);
+    expect(b.idleTimeoutMs * 10).toBeLessThanOrEqual(b.jobTimeoutMs);
     // THE REAPER STAYS THE BACKSTOP. It may only ever meet containers
     // supervision has already given up on — never ones it is about to settle.
     expect(b.reapAfterMs).toBeGreaterThan(b.jobTimeoutMs);

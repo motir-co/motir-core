@@ -18,6 +18,7 @@ import type {
   NormalizedStatusEvent,
   NormalizedWorkflowJob,
   NormalizedWorkflowJobEvent,
+  NormalizedWorkflowJobProgressEvent,
   NormalizedProductionImageRun,
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
@@ -670,6 +671,15 @@ export interface GitProvider {
    * no GitLab job the fleet would ever boot a runner for.
    */
   parseWorkflowJobEvent?(rawPayload: unknown): NormalizedWorkflowJobEvent | null;
+
+  /**
+   * Normalize a raw `workflow_job` webhook payload whose action is
+   * `in_progress` or `completed` into the job-progress shape the fleet's
+   * supervision reads (MOTIR-11230), or `null` for any other action, event or
+   * a malformed body. PURE. OPTIONAL for the same reason as
+   * {@link parseWorkflowJobEvent}.
+   */
+  parseWorkflowJobProgressEvent?(rawPayload: unknown): NormalizedWorkflowJobProgressEvent | null;
 
   /**
    * Normalize a raw COMPLETED-workflow-run webhook payload into the facts a

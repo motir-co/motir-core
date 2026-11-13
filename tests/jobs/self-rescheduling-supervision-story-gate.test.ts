@@ -446,6 +446,9 @@ describe('§2.2 the budgets are byte-identical to their pre-story values', () =>
     });
     expect(FLEET_TIME_BUDGETS).toEqual({
       bootDeadlineMs: 120_000,
+      // ADDED by MOTIR-11230 (the idle-runner retirement), after this story; every
+      // budget this story pinned is unchanged.
+      idleTimeoutMs: 300_000,
       jobTimeoutMs: 3_600_000,
       pollIntervalMs: 3_000,
       maxPollIntervalMs: 30_000,

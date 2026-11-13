@@ -49,6 +49,7 @@ import type {
   NormalizedStatusEvent,
   NormalizedWorkflowJob,
   NormalizedWorkflowJobEvent,
+  NormalizedWorkflowJobProgressEvent,
   NormalizedProductionImageRun,
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
@@ -2005,6 +2006,59 @@ export const githubProvider: GitProvider = {
       repoName,
       requestedLabels,
       queuedAt,
+    };
+  },
+
+  parseWorkflowJobProgressEvent(rawPayload: unknown): NormalizedWorkflowJobProgressEvent | null {
+    const payload = asRecord(rawPayload);
+    if (!payload) return null;
+    // The two actions supervision reads (MOTIR-11230): a runner TOOK the job,
+    // or the job is FINISHED. `queued` is the provisioning signal above, and
+    // `waiting` (an environment approval) moves nothing a runner does.
+    const action = payload['action'];
+    if (action !== 'in_progress' && action !== 'completed') return null;
+
+    const job = asRecord(payload['workflow_job']);
+    const repo = asRecord(payload['repository']);
+    if (!job || !repo) return null;
+
+    const runId = idToString(job['run_id']);
+    const jobId = idToString(job['id']);
+    const repoOwner =
+      typeof asRecord(repo['owner'])?.['login'] === 'string'
+        ? (asRecord(repo['owner'])!['login'] as string)
+        : null;
+    const repoName = typeof repo['name'] === 'string' ? repo['name'] : null;
+    if (!runId || !jobId || !repoOwner || !repoName) return null;
+
+    const rawAttempt = job['run_attempt'];
+    const runAttempt =
+      typeof rawAttempt === 'number' && Number.isInteger(rawAttempt) && rawAttempt > 0
+        ? rawAttempt
+        : 1;
+
+    // `runner_id` is the runner GitHub ASSIGNED the job to. It is null (or 0)
+    // on a job cancelled while still queued, which completes with no runner.
+    const rawRunnerId = job['runner_id'];
+    const runnerId =
+      typeof rawRunnerId === 'number' && Number.isInteger(rawRunnerId) && rawRunnerId > 0
+        ? rawRunnerId
+        : null;
+
+    const requestedLabels = Array.isArray(job['labels'])
+      ? job['labels'].filter((label): label is string => typeof label === 'string')
+      : [];
+
+    return {
+      action,
+      runId,
+      runAttempt,
+      jobId,
+      runnerId,
+      repoOwner,
+      repoName,
+      requestedLabels,
+      completedAt: action === 'completed' ? parseDate(job['completed_at']) : null,
     };
   },
 
