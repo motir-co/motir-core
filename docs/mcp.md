@@ -5114,7 +5114,8 @@ remedy was to author a whole second plan and ask a person to decline the first.
 | Input                                | Type           | Required | Notes                                                                                                                                                                                                             |
 | ------------------------------------ | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `planId`                             | string         | yes      | The id `create_plan` returned.                                                                                                                                                                                    |
-| `planItemId`                         | string         | yes      | The proposal to correct.                                                                                                                                                                                          |
+| `planItemId`                         | string         | yes ¹    | The proposal to correct.                                                                                                                                                                                          |
+| `corrections`                        | object[]       | no       | The BATCH form (MOTIR-11225): 1–50 entries, each `{ planItemId, …the correction fields above }`, applied in ONE transaction. Not combined with a top-level `planItemId` or correction field.                      |
 | every field `update_plan_item` takes | —              | no       | Same sparse semantics — `difficulty` included, leaf-only on the merged kind (`INVALID_PROPOSAL` on a container).                                                                                                  |
 | `parentRef`                          | string \| null | no       | `add` only. Re-parent it — a key, an id, `planItem:<id>`, or `folder:<folderId>` to file it into a folder; `null` makes it top-level. Re-validated as at the append.                                              |
 | `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it.                                                                                                                                                 |
@@ -5174,6 +5175,33 @@ add_plan_items({ planId, proposals: [
 update_plan_proposal({ planId, planItemId: "ck_modify",
   patch: { blockedByAdd: ["planItem:ck_prereq"] } })
 ```
+
+¹ Required unless `corrections` is sent.
+
+**The batch form — several corrections that are only legal TOGETHER** (MOTIR-11225).
+Some edits cannot be made one at a time. Moving A and B (A `blocked_by` B) out of a
+story to sit under its epic is the worked case: moved alone, A is a task blocked by a
+subtask, which the persist gate refuses `cross_level`; B moved alone is refused the
+same way from the other side. `corrections` applies every entry against the plan in
+ONE transaction and judges the plan's edges ONCE, on the result — so the pair lands,
+both re-kinded, the edge kept.
+
+```jsonc
+update_plan_proposal({ planId, corrections: [
+  { planItemId: "ck_deploy", parentRef: "MOTIR-1", kind: "task" },
+  { planItemId: "ck_alarms", parentRef: "MOTIR-1", kind: "task" },
+]})
+```
+
+**All or nothing.** Every correction is validated exactly as the single form
+validates it; one that is refused refuses the batch and NOTHING is written — the
+proposals stay byte-identical. The refusal keeps the cause's code (`INVALID_PROPOSAL`,
+`UNRESOLVED_PLAN_REF`, `PLAN_NOT_EDITABLE`, …) and its message names the correction it
+hit — `corrections[1] (ck_alarms) was refused, so nothing in the batch was written: …`.
+A refusal the batch as a whole earns (a cycle, a cross-level edge on the result) names the
+first correction its message names, and otherwise says the batch was refused. Each entry
+lands on the plan's timeline as its own correction, marked with its place in the batch.
+The same statuses, permission and freeze apply; a `planItemId` listed twice is refused.
 
 Requires **`ai:view_plan`** — the key `plansService.correctProposal` asserts, the
 same one `add_plan_items` and `update_plan_item` name.

@@ -1151,7 +1151,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       'Correct a proposal — including its parent, its dependency and supersedes edges, its obsolescence mark and note, and its whole repository axis (a repo, a row, a set, or a role) — even after the plan is in review; a corrected mark is re-checked, so setting one on an unfinished card is refused.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '9225d81c855e',
+    // Re-pinned for MOTIR-11225 summary re-read: the description gained the
+    // `corrections` batch, and the summary above is still true of the tool.
+    descriptionFingerprint: '2974cc9c9e4f',
   },
   withdraw_plan_proposal: {
     // The SUMMARY stands as written and MOTIR-4146 only re-pinned the

@@ -30,11 +30,16 @@ import {
   type PlanProviderRetryInput,
 } from '@/lib/services/plansService';
 import { NoPlanForJobError } from '@/lib/plans/errors';
-import { resolveCorrectionKeyRefs, resolveKeyRefs } from '@/lib/plans/keyRefs';
+import {
+  resolveCorrectionKeyRefs,
+  resolveCorrectionsKeyRefs,
+  resolveKeyRefs,
+} from '@/lib/plans/keyRefs';
 import { NATIVE_PLANNER_HARNESS } from '@/lib/ai/plannerTenantBug';
 import type { RevisionReasonBranch } from '@/lib/plans/revisionReason';
 import type {
   CorrectProposalInput,
+  PlanProposalCorrection,
   PlanItemDto,
   ProposalLinkWarningDto,
   ProposalRescopeWarningDto,
@@ -841,6 +846,37 @@ export const aiGenerationService = {
     return {
       planId: plan.id,
       item,
+      ...(result.warnings ? { warnings: result.warnings } : {}),
+      ...(result.rescopeWarnings ? { rescopeWarnings: result.rescopeWarnings } : {}),
+    };
+  },
+
+  // The INTERNAL BATCH-CORRECTION seam (bug MOTIR-11225) — the same shape as
+  // `correctProposalForJob` above, onto `plansService.correctProposals`: several
+  // corrections of the job's plan in ONE transaction, judged on the plan the
+  // whole batch leaves. The post-merge cut sends a round's moves through it, so
+  // a card and the card it waits on can leave their story together.
+  async correctProposalsForJob(
+    jobId: string,
+    corrections: readonly PlanProposalCorrection[],
+    ctx: ServiceContext,
+  ): Promise<{
+    planId: string;
+    items: PlanItemDto[];
+    warnings?: ProposalLinkWarningDto[];
+    rescopeWarnings?: ProposalRescopeWarningDto[];
+  }> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new NoPlanForJobError(jobId);
+    const resolved = await resolveCorrectionsKeyRefs(corrections, ctx);
+    const result = await plansService.correctProposals(plan.id, resolved, ctx);
+    // The corrected proposals, in the order the batch named them.
+    const byId = new Map(result.items.map((i) => [i.id, i]));
+    return {
+      planId: plan.id,
+      items: corrections.flatMap((c) => byId.get(c.planItemId) ?? []),
       ...(result.warnings ? { warnings: result.warnings } : {}),
       ...(result.rescopeWarnings ? { rescopeWarnings: result.rescopeWarnings } : {}),
     };

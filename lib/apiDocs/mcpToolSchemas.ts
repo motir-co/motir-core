@@ -4478,7 +4478,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'The proposal to correct — one of the ids `add_plan_items` returned in `planItemIds`, in the order you sent them.',
+          'The proposal to correct — one of the ids `add_plan_items` returned in `planItemIds`, in the order you sent them. Required unless you send `corrections` instead.',
       },
       title: {
         type: 'string',
@@ -4887,8 +4887,445 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           '`modify` only: REPLACES that proposal’s patch. This is the op no door could touch at all before — and the one that carries a dependency edit, so it is usually what a mistyped `planItem:` ref is sitting on. It is also how a `modify`’s MARK is corrected: the replacement patch’s `obsolescence`, `obsolescenceNoteMd` and four supersedes lists are re-checked exactly as the append checks them, including the finished-target rule.',
       },
+      corrections: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            planItemId: {
+              type: 'string',
+              minLength: 1,
+              description: 'The proposal this correction is to — an id `add_plan_items` returned.',
+            },
+            title: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'Replace the proposed title. Cannot be blanked — a proposal needs a title.',
+            },
+            kind: {
+              type: 'string',
+              enum: ['epic', 'story', 'task', 'bug', 'subtask'],
+              description: 'Replace the proposed kind.',
+            },
+            descriptionMd: {
+              type: ['string', 'null'],
+              description:
+                'Markdown body — WHAT to do. Send `null` to clear it; omit to leave it as it is.',
+            },
+            sections: {
+              type: 'object',
+              additionalProperties: {},
+              description:
+                'OPTIONAL. The card’s sections as named values, instead of composing headings inside `descriptionMd`: the door checks them against the section set for the proposal’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_PROPOSAL, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` itself is never stored. Never send it together with `descriptionMd` (refused, naming both). The section sets, their shapes and which are required are served by `get_section_sets`. On an EDIT it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list. Omit it to keep sending a plain `descriptionMd` exactly as before.',
+            },
+            explanationMd: {
+              type: ['string', 'null'],
+              description:
+                'Markdown body — WHY it matters. Send `null` to clear it; omit to leave it as it is.',
+            },
+            type: {
+              anyOf: [
+                {
+                  type: 'string',
+                  enum: [
+                    'code',
+                    'design',
+                    'test',
+                    'content',
+                    'copy',
+                    'translate',
+                    'research',
+                    'review',
+                    'verification',
+                    'decision',
+                    'choice',
+                    'deploy',
+                    'manual',
+                    'legal',
+                    'chore',
+                  ],
+                },
+                { type: 'null' },
+              ],
+              description:
+                'Leaf work type. A CLOSED set: these fourteen members ARE the schema enum; `null` clears it.',
+            },
+            priority: {
+              anyOf: [
+                { type: 'string', enum: ['lowest', 'low', 'medium', 'high', 'highest'] },
+                { type: 'null' },
+              ],
+              description: 'Priority; `null` clears it.',
+            },
+            executor: {
+              anyOf: [{ type: 'string', enum: ['coding_agent', 'human'] }, { type: 'null' }],
+              description:
+                'WHO executes this leaf. Worth setting whenever you set `type`: approving a plan does NOT derive an executor from the type, so a proposal that never carried one materializes unassigned. `null` clears it.',
+            },
+            storyPoints: {
+              type: ['number', 'null'],
+              description:
+                'Agile sizing, re-validated on the merged result exactly as at append; `null` clears it.',
+            },
+            estimateMinutes: {
+              anyOf: [{ type: 'integer' }, { type: 'null' }],
+              description: 'Estimated minutes of work; `null` clears it.',
+            },
+            difficulty: {
+              anyOf: [
+                { type: 'string', enum: ['trivial', 'low', 'medium', 'high'] },
+                { type: 'null' },
+              ],
+              description:
+                'How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the MERGED kind. Send `null` to clear it; omit to leave it as it is.',
+            },
+            todos: {
+              anyOf: [
+                {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      text: {
+                        type: 'string',
+                        description:
+                          'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                      },
+                      notesMd: {
+                        type: ['string', 'null'],
+                        description:
+                          'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                      },
+                      commandText: {
+                        type: ['string', 'null'],
+                        description:
+                          'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                      },
+                      executor: {
+                        anyOf: [
+                          { type: 'string', enum: ['coding_agent', 'human'] },
+                          { type: 'null' },
+                        ],
+                        description:
+                          'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                      },
+                    },
+                    required: ['text'],
+                    additionalProperties: false,
+                  },
+                },
+                { type: 'null' },
+              ],
+              description:
+                'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children. REPLACES the list whole — a list has no sparse edit — so send the set you want; `[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
+            },
+            parentRef: {
+              type: ['string', 'null'],
+              description:
+                '`add` only: re-parent the proposal. A work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming another `add` on THIS plan; `folder:<folderId>` to file it into a folder of this project instead; `null` makes it top-level. Re-validated by the same checks the append runs, so a key or a ref naming nothing is refused here rather than at approve — and a ref to the proposal ITSELF is refused too.',
+            },
+            blockedByRefs: {
+              type: 'array',
+              items: {
+                anyOf: [
+                  {
+                    type: 'string',
+                    description:
+                      'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three are interchangeable (MOTIR-3934).',
+                  },
+                  {
+                    type: 'object',
+                    properties: {
+                      ref: {
+                        type: 'string',
+                        description:
+                          'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three are interchangeable (MOTIR-3934).',
+                      },
+                      reason: {
+                        type: 'string',
+                        description:
+                          'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                      },
+                    },
+                    required: ['ref', 'reason'],
+                    additionalProperties: false,
+                  },
+                ],
+              },
+              description:
+                'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`. The edges’ reasons are replaced with them. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
+            },
+            supersedesRefs: {
+              type: 'array',
+              items: {
+                type: 'string',
+                description:
+                  'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three are interchangeable (MOTIR-3934).',
+              },
+              description:
+                'REPLACES an `add`’s supersedes set wholesale — send the set you want, `[]` to clear it. `add` only: the OLDER cards the created card REPLACES. Approve writes one `supersedes` link from the new card to each. Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be marked superseded by a card this plan creates. A key is resolved to its id here, and one that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind. Refused on a `modify` (it spells its edges on the patch: `supersedesAdd` / `supersededByAdd`) and on a `remove`. This does NOT mark the older card — to mark it `outdated`, send a mark-only `modify` of it with `supersededByAdd: ["planItem:<this add>"]` in a LATER call. To change a `modify`’s supersedes edges, replace its `patch` instead.',
+            },
+            targetRepo: {
+              type: ['string', 'null'],
+              description:
+                '`add` only: re-pin WHICH REPO this proposal ships in, validated against the project’s repository set (a repository connected to the workspace but not linked to the project is rejected); `null` unpins it.',
+            },
+            targetRepos: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '`add` only: REPLACE this proposal’s repository set with these ordered names; `[]` unpins it. ⚠️ The repository axis is REPLACED rather than merged — correcting one of `targetRepo` / `targetRepos` / `targetRepositories` CLEARS the other two, because they are one field in three spellings and a proposal carrying two would be a contradiction approve had to guess at.',
+            },
+            targetRepositories: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '`add` only: the same replacement, as the project’s repository ROW IDS. Clears the other two spellings, for the reason above.',
+            },
+            targetRepositoryRef: {
+              type: ['string', 'null'],
+              description:
+                '`add` only: re-pin the SINGULAR ROW-ID half of the pin (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) — the one spelling that names one of two rows sharing a role. `null` unpins it. Clears the other spellings, for the reason above.',
+            },
+            targetRepoRole: {
+              type: ['string', 'null'],
+              description:
+                '`add` only: re-pin the PORTABLE half of the pin — a ROLE of the project’s repository set, validated against the closed role vocabulary rather than the project’s rows; `null` unpins it. This is the pin an ONBOARDING plan actually carries, because its repositories do not exist yet.',
+            },
+            subject: {
+              type: ['string', 'null'],
+              description:
+                '`add` only: re-pin the SUBJECT coordinate — which rule packs an authoring pass composes for this leaf. An explicit `null` unpins it. Correctable here and NOT on the deepen turn, deliberately: a subject says where the card sits in the RULE CORPUS rather than what it says, so it is settled at the `lay` beside `type` and the repo pin. Re-validated by the same shape and container checks the append runs; membership is not checked here in either door.',
+            },
+            patch: {
+              anyOf: [
+                {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string', description: 'Re-title the target.' },
+                    descriptionMd: {
+                      type: ['string', 'null'],
+                      description: 'Markdown body — WHAT to do. An explicit `null` clears it.',
+                    },
+                    explanationMd: {
+                      type: ['string', 'null'],
+                      description:
+                        'Markdown body — WHY it matters. An explicit `null` clears it. Patch it whenever a re-scope moves the card’s rationale: a survivor keeps its OLD explanation unless you rewrite it, and a stale WHY is worse than a null one.',
+                    },
+                    priority: {
+                      anyOf: [
+                        { type: 'string', enum: ['lowest', 'low', 'medium', 'high', 'highest'] },
+                        { type: 'null' },
+                      ],
+                    },
+                    type: {
+                      anyOf: [
+                        {
+                          type: 'string',
+                          enum: [
+                            'code',
+                            'design',
+                            'test',
+                            'content',
+                            'copy',
+                            'translate',
+                            'research',
+                            'review',
+                            'verification',
+                            'decision',
+                            'choice',
+                            'deploy',
+                            'manual',
+                            'legal',
+                            'chore',
+                          ],
+                        },
+                        { type: 'null' },
+                      ],
+                      description:
+                        'Leaf work type. A CLOSED set: these fourteen members ARE the schema enum. An explicit `null` clears it.',
+                    },
+                    kind: {
+                      type: 'string',
+                      enum: ['story', 'task', 'bug', 'subtask'],
+                      description:
+                        'RE-KIND the target — the plan door’s `change_kind` (never `epic`). Judged against the PROJECTED tree: the parent must admit the new kind, the new kind must admit every child the target keeps, and re-kinding a leaf into a `story` must clear its leaf fields in the same patch (`type: null`, `difficulty: null`) or it is refused by name. The executor is not a patch key: a re-kind to a container clears it at approve.',
+                    },
+                    storyPoints: {
+                      type: ['number', 'null'],
+                      description: 'Re-scope the agile sizing. An explicit `null` clears it.',
+                    },
+                    estimateMinutes: {
+                      anyOf: [{ type: 'integer' }, { type: 'null' }],
+                      description: 'Re-scope the time estimate. An explicit `null` clears it.',
+                    },
+                    difficulty: {
+                      anyOf: [
+                        { type: 'string', enum: ['trivial', 'low', 'medium', 'high'] },
+                        { type: 'null' },
+                      ],
+                      description:
+                        'Re-judge the target’s difficulty. How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the target’s MERGED kind. An explicit `null` clears it.',
+                    },
+                    todos: {
+                      anyOf: [
+                        {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              text: {
+                                type: 'string',
+                                description:
+                                  'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                              },
+                              notesMd: {
+                                type: ['string', 'null'],
+                                description:
+                                  'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                              },
+                              commandText: {
+                                type: ['string', 'null'],
+                                description:
+                                  'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                              },
+                              executor: {
+                                anyOf: [
+                                  { type: 'string', enum: ['coding_agent', 'human'] },
+                                  { type: 'null' },
+                                ],
+                                description:
+                                  'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                              },
+                            },
+                            required: ['text'],
+                            additionalProperties: false,
+                          },
+                        },
+                        { type: 'null' },
+                      ],
+                      description:
+                        'REPLACE the target’s ordered steps (its to-do list). Approve makes the list exactly this array, in order, none ticked, and DELETES every existing row — ticked ones included; the review and `get_plan` show how many steps that drops and how many were ticked. Omit the key to leave the list alone; `[]` or `null` clears it. Leaf kinds only (judged on the target’s MERGED kind). Not a mark key: a `modify` of a done or cancelled card that carries it is refused.',
+                    },
+                    targetRepo: {
+                      type: ['string', 'null'],
+                      description:
+                        'RE-PIN which repo the item ships in. An explicit `null` unpins it.',
+                    },
+                    targetRepos: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'RE-PIN the target’s WHOLE repository set, ordered, first element primary. Omit the key to leave it alone; `[]` unpins the card entirely. Mutually exclusive with `targetRepo` and `targetRepositories` on the same patch.',
+                    },
+                    targetRepositories: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'The same re-pin, as the project’s repository ROW IDS. Mutually exclusive with the two fields above.',
+                    },
+                    targetRepositoryRef: {
+                      type: ['string', 'null'],
+                      description:
+                        'RE-PIN the target’s repo ROW (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) — the `modify` mirror of the `add` path’s row pin, for the re-plan that moves work to a specific row the role cannot name. An explicit `null` unpins it.',
+                    },
+                    targetRepoRole: {
+                      type: ['string', 'null'],
+                      description: 'RE-PIN the portable repo role. An explicit `null` unpins it.',
+                    },
+                    parentRef: {
+                      type: ['string', 'null'],
+                      description:
+                        'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. It may also be a `planItem:<id>` ref naming an `add` ALREADY on this plan (from an earlier call), to move an existing card under a card this plan creates; approve creates the `add` first, then moves the card. The move is checked against the tree the plan would produce — the kind-parent matrix, no cycle (never under a proposal this plan creates BELOW the card), the depth cap, and a refusal to hang new work under a FINISHED parent. Or `folder:<folderId>` to FILE the target into a folder of this project instead of under a work item — any kind may be filed, `subtask` included, and an unknown folder or another project’s is refused at the append.',
+                    },
+                    blockedByAdd: {
+                      type: 'array',
+                      items: {
+                        anyOf: [
+                          { type: 'string' },
+                          {
+                            type: 'object',
+                            properties: {
+                              ref: { type: 'string' },
+                              reason: {
+                                type: 'string',
+                                description:
+                                  'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                              },
+                            },
+                            required: ['ref', 'reason'],
+                            additionalProperties: false,
+                          },
+                        ],
+                      },
+                      description:
+                        'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same depth below their nearest common ancestor — under any parent; a cross-level edge is refused `cross_level`. An epic is blocked only by another epic. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
+                    },
+                    blockedByRemove: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'Dependency edges to REMOVE — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs.',
+                    },
+                    obsolescence: {
+                      anyOf: [
+                        { type: 'string', enum: ['outdated', 'deprecated'] },
+                        { type: 'null' },
+                      ],
+                      description:
+                        'MARK the target as no longer TRUE OF THE CODE: "outdated" or "deprecated" — "outdated" when the text no longer describes what shipped (the capability lives on in another shape), "deprecated" when it was retired or overturned on purpose. An explicit `null` clears it; omit it to leave the mark alone. A value outside the enum is refused INVALID_PROPOSAL. A plan may SET a mark only on a FINISHED target — one whose status is in the `done` category (`done`, `cancelled`, or a custom done status). On a to-do or in-progress target it is refused with INVALID_PROPOSAL: "a plan may mark only a finished work item; <KEY> is at <status>. A work item nobody will finish is removed — send `{ op: \'remove\', workItemId, reason }` instead." (at the append, at `update_plan_proposal`, and again at approve, where `validate_plan` reports it). Clearing a mark (`null`) is legal on any target. A MARK-ONLY `modify` — a patch carrying nothing but `obsolescence`, `obsolescenceNoteMd` and the four supersedes lists — is the ONE change a plan may make to a `done` or `cancelled` card; approve writes it and leaves the card’s status alone. Add any other key and the target is refused PLAN_TARGET_IMMUTABLE. Marking is never archiving: the card stays in the tree, and a `remove` never marks anything.',
+                    },
+                    obsolescenceNoteMd: {
+                      type: ['string', 'null'],
+                      description:
+                        'The Markdown note saying WHY the target is marked — what changed and what to read instead. Independent of `obsolescence` (clearing the mark keeps the note); an explicit `null` clears it. A mark key: legal in a mark-only `modify` of a `done` / `cancelled` card.',
+                    },
+                    supersedesAdd: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'On the NEWER card: the target REPLACES each listed card. Each entry names an OLDER card; approve writes one `supersedes` link from the target to it. Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be marked superseded by a card this plan creates. A key is resolved to its id here, and one that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind. Unioned with an earlier `modify` of the same card; the same ref in `supersedesRemove` cancels it. A mark key.',
+                    },
+                    supersedesRemove: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'On the NEWER card: DELETE the `supersedes` link from the target to each listed (older) card at approve; a link that does not exist is a no-op. Same ref forms as `supersedesAdd`. A mark key.',
+                    },
+                    supersededByAdd: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'On the OLD card: `supersededByAdd` names the card that REPLACES it. Each entry names a NEWER card; approve writes one `supersedes` link from it to the target — the same row the newer card’s `supersedesAdd` would write, so spelling one edge from both ends lands one link. This is the list a mark on a done card usually needs beside `obsolescence`. Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be marked superseded by a card this plan creates. A key is resolved to its id here, and one that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind. A mark key.',
+                    },
+                    supersededByRemove: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'On the OLD card: DELETE the `supersedes` link from each listed (newer) card to the target at approve; a link that does not exist is a no-op. Same ref forms as `supersededByAdd`. A mark key.',
+                    },
+                  },
+                  additionalProperties: true,
+                  description:
+                    '`modify` only: the SPARSE patch to apply to the target at approve. A key you omit is left untouched; an explicit `null` CLEARS a nullable field. Nothing is applied until someone approves the plan in Motir.',
+                },
+                { type: 'null' },
+              ],
+              description:
+                '`modify` only: REPLACES that proposal’s patch. This is the op no door could touch at all before — and the one that carries a dependency edit, so it is usually what a mistyped `planItem:` ref is sitting on. It is also how a `modify`’s MARK is corrected: the replacement patch’s `obsolescence`, `obsolescenceNoteMd` and four supersedes lists are re-checked exactly as the append checks them, including the finished-target rule.',
+            },
+          },
+          required: ['planItemId'],
+          additionalProperties: false,
+        },
+        minItems: 1,
+        maxItems: 50,
+        description:
+          'A BATCH: several corrections of this plan in ONE transaction, each `{ planItemId, …the fields above }` with the same sparse semantics. The plan is judged ONCE, as the whole batch leaves it, so corrections that are each refused alone are accepted together — move a card and the card it is `blocked_by` out of their story in one call, and their edge is never cross-level in between. ALL OR NOTHING: one refusal writes nothing, and the error names the correction it hit — `corrections[<i>] (proposal <id>)` — under the refusal’s own code. Every correction lands on the plan’s timeline. 1 to 50 entries, each to a different proposal. Send it INSTEAD of `planItemId` and the single-correction fields, never beside them.',
+      },
     },
-    required: ['planId', 'planItemId'],
+    required: ['planId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

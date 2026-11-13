@@ -251,6 +251,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       "The correction doors' status refusal — a plan already `approved` or `declined` cannot be corrected. Approve does not edit proposals.",
   },
+  PLAN_CORRECTION_REFUSED: {
+    cause: 'not-approve',
+    justification:
+      "The batch correction door's wrapper (bug MOTIR-11225): it names which correction of a batch a refusal hit and carries that refusal as its cause. Approve corrects nothing.",
+  },
   INVALID_PLAN_HISTORY_CURSOR: {
     cause: 'not-approve',
     justification:

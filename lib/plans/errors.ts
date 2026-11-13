@@ -863,6 +863,31 @@ export class PlanItemFieldRejectedError extends Error {
 }
 
 /**
+ * A BATCH correction was refused (bug MOTIR-11225) — `plansService.correctProposals`.
+ * Nothing was written: the batch is all or nothing. It NAMES the correction the
+ * refusal hit — its 0-based `correctionIndex` in the batch and its `planItemId`,
+ * both `null` when the refusal (the close's gate, on the plan the whole batch
+ * left) names no corrected proposal — and carries the plan's own typed refusal
+ * as `cause`, whose `code` and status the doors answer with.
+ */
+export class PlanCorrectionRefusedError extends Error {
+  readonly code = 'PLAN_CORRECTION_REFUSED' as const;
+  constructor(
+    readonly correctionIndex: number | null,
+    readonly planItemId: string | null,
+    override readonly cause: Error & { code: string },
+  ) {
+    super(
+      (correctionIndex === null
+        ? 'The batch correction was refused and nothing was written'
+        : `corrections[${correctionIndex}] (proposal ${planItemId}) was refused, so nothing in the batch was written`) +
+        `: ${cause.message}`,
+    );
+    this.name = 'PlanCorrectionRefusedError';
+  }
+}
+
+/**
  * A CORRECTION, a WITHDRAW, a REVISION APPEND or a BRIEF EDIT was attempted on a
  * plan that is FROZEN (Story MOTIR-3533 · Subtask MOTIR-3540; the third verb
  * MOTIR-4153; the fourth MOTIR-4637).

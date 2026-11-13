@@ -1,7 +1,12 @@
-import type { CorrectProposalInput, PlanItemPatch, ProposalInput } from '@/lib/dto/plans';
+import type {
+  CorrectProposalInput,
+  PlanItemPatch,
+  PlanProposalCorrection,
+  ProposalInput,
+} from '@/lib/dto/plans';
 import { normalizeCorrectionEdges, normalizeProposalEdges } from '@/lib/plans/edgeReasons';
 import { resolveWorkItemIdsByKeys } from '@/lib/mcp/tools/workItemRef';
-import { PlanRefGraphError } from '@/lib/plans/errors';
+import { PlanCorrectionRefusedError, PlanRefGraphError } from '@/lib/plans/errors';
 import { isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -228,6 +233,30 @@ export async function resolveCorrectionKeyRefs(
   if (input.patch) resolved.patch = swapPatchRefs(input.patch, swap) as PlanItemPatch;
   if (input.edgeReasons !== undefined) {
     resolved.edgeReasons = swapReasonKeys(input.edgeReasons, swap);
+  }
+  return resolved;
+}
+
+/**
+ * {@link resolveCorrectionKeyRefs} over every correction of a BATCH (bug
+ * MOTIR-11225), keeping each one's `planItemId`. A key that names nothing is
+ * refused as {@link PlanCorrectionRefusedError}, naming the correction it was on,
+ * exactly as the batch's own refusals are.
+ */
+export async function resolveCorrectionsKeyRefs(
+  corrections: readonly PlanProposalCorrection[],
+  ctx: ServiceContext,
+): Promise<PlanProposalCorrection[]> {
+  const resolved: PlanProposalCorrection[] = [];
+  for (const [index, { planItemId, ...input }] of corrections.entries()) {
+    try {
+      resolved.push({ ...(await resolveCorrectionKeyRefs(input, ctx)), planItemId });
+    } catch (err) {
+      if (err instanceof PlanRefGraphError) {
+        throw new PlanCorrectionRefusedError(index, planItemId, err);
+      }
+      throw err;
+    }
   }
   return resolved;
 }

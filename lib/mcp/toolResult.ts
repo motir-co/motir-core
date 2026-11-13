@@ -71,6 +71,7 @@ import {
 import {
   DuplicatePlanTargetError,
   InvalidProposalError,
+  PlanCorrectionRefusedError,
   NoPlanForJobError,
   PlanItemNotFoundError,
   PlanNotFoundError,
@@ -303,6 +304,12 @@ export function toFilterDecodeToolError(
  * 404-not-403 cross-tenant rule) carries to the MCP surface unchanged.
  */
 export function toToolError(err: unknown): CallToolResult {
+  // A BATCH correction's refusal (bug MOTIR-11225) carries the plan's own typed
+  // refusal as its cause: answer with THAT code, and the batch's message, which
+  // names the correction it hit and says nothing in the batch was written.
+  if (err instanceof PlanCorrectionRefusedError) {
+    return toolError(err.cause.code, err.message);
+  }
   // A per-org kill-switch (MOTIR-750) — the message names the switch, so an
   // agent reports "planning is paused for this organization" rather than retrying.
   if (err instanceof OrgFeatureDisabledError) return toolError(err.code, err.message);
