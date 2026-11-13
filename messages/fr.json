@@ -8750,7 +8750,7 @@
       },
       "stop": "Arrêter",
       "stoppingAction": "Arrêt…",
-      "stopping": "Arrêt en cours — fin de cet élément de travail d'abord.",
+      "stopping": "Arrêt en cours — les éléments de travail déjà rédigés sont conservés.",
       "stopped": "Vous avez arrêté cette exécution.",
       "queuedLabel": "en file",
       "queuedRead": "lu",

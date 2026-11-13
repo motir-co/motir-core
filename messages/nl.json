@@ -8750,7 +8750,7 @@
       },
       "stop": "Stoppen",
       "stoppingAction": "Stoppen…",
-      "stopping": "Stoppen — eerst wordt dit werkitem afgemaakt.",
+      "stopping": "Stoppen — al geschreven werkitems blijven behouden.",
       "stopped": "Je hebt deze run gestopt.",
       "queuedLabel": "in wachtrij",
       "queuedRead": "gelezen",

@@ -8750,7 +8750,7 @@
       },
       "stop": "Stoppen",
       "stoppingAction": "Wird gestoppt…",
-      "stopping": "Wird gestoppt – dieses Arbeitselement wird zuerst fertiggestellt.",
+      "stopping": "Wird gestoppt – bereits geschriebene Arbeitselemente bleiben erhalten.",
       "stopped": "Sie haben diesen Lauf gestoppt.",
       "queuedLabel": "eingereiht",
       "queuedRead": "gelesen",

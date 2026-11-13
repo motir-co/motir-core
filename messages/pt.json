@@ -8750,7 +8750,7 @@
       },
       "stop": "Parar",
       "stoppingAction": "Parando…",
-      "stopping": "Parando — concluindo primeiro este item de trabalho.",
+      "stopping": "Parando — os itens de trabalho já escritos são mantidos.",
       "stopped": "Você parou esta execução.",
       "queuedLabel": "na fila",
       "queuedRead": "lida",

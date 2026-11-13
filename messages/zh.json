@@ -8741,7 +8741,7 @@
       },
       "stop": "停止",
       "stoppingAction": "正在停止…",
-      "stopping": "正在停止 —— 先完成当前这个工作项。",
+      "stopping": "正在停止 —— 已写好的工作项会保留。",
       "stopped": "你停止了这次运行。",
       "queuedLabel": "待读",
       "queuedRead": "已读",

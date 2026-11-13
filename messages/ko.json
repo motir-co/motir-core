@@ -8744,7 +8744,7 @@
       },
       "stop": "중지",
       "stoppingAction": "중지하는 중…",
-      "stopping": "중지하는 중 — 먼저 이 작업 항목을 마무리합니다.",
+      "stopping": "중지하는 중 — 이미 작성된 작업 항목은 유지됩니다.",
       "stopped": "이 실행을 중지했습니다.",
       "queuedLabel": "대기 중",
       "queuedRead": "읽음",

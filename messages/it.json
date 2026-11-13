@@ -8750,7 +8750,7 @@
       },
       "stop": "Interrompi",
       "stoppingAction": "Interruzione…",
-      "stopping": "Interruzione in corso: prima viene completato questo elemento di lavoro.",
+      "stopping": "Interruzione in corso: gli elementi di lavoro già scritti vengono mantenuti.",
       "stopped": "Hai interrotto questa esecuzione.",
       "queuedLabel": "in coda",
       "queuedRead": "letto",
