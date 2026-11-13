@@ -79,7 +79,7 @@ describe('AgentAutoFixRow', () => {
     await press();
     expect(sw().getAttribute('aria-checked')).toBe('false');
     expect(sw().disabled).toBe(false);
-    expect(screen.getByText(/hosted agent settings weren.t saved/i)).toBeTruthy();
+    expect(screen.getByText(/Motir agent settings weren.t saved/i)).toBeTruthy();
   });
 
   it('a write that never reaches the server restores the switch the same way', async () => {
@@ -88,7 +88,7 @@ describe('AgentAutoFixRow', () => {
     await press();
     expect(sw().getAttribute('aria-checked')).toBe('true');
     expect(sw().disabled).toBe(false);
-    expect(screen.getByText(/hosted agent settings weren.t saved/i)).toBeTruthy();
+    expect(screen.getByText(/Motir agent settings weren.t saved/i)).toBeTruthy();
   });
 
   it('turning it off sends the off value', async () => {
