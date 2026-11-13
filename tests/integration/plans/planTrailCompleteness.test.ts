@@ -293,9 +293,27 @@ describe('no plan mutation escapes the trail', () => {
       );
     }
 
+    // ⚠️ NOR IS A CARD A PLANNER IS STILL WRITING (Story MOTIR-11190 · MOTIR-11199).
+    // `recordPlanItemDraft` takes the same lock and holds the author session's partial title,
+    // description and explanation on its own `plan_step` row — replaced whole on every report and
+    // dropped with the step. It never touches the proposal, so what the plan PROPOSES is
+    // unchanged until the session's write lands, and that write reaches the trail itself; a trail
+    // row per streamed draft would bury the history under hundreds of half-sentences.
+    const NOT_A_PLAN_CHANGE_DRAFT = new Set(['recordPlanItemDraft']);
+    for (const name of NOT_A_PLAN_CHANGE_DRAFT) {
+      expect(mutations, `${name} is no longer a derived mutation`).toContain(name);
+      expect(reaches(name, bodies).has('setItemDraft'), `${name} no longer holds the draft`).toBe(
+        true,
+      );
+      expect(reaches(name, bodies).has('recordRevision'), `${name} now writes a revision`).toBe(
+        false,
+      );
+    }
+
     const untracked = mutations.filter(
       (name) =>
         !NOT_A_PLAN_CHANGE.has(name) &&
+        !NOT_A_PLAN_CHANGE_DRAFT.has(name) &&
         !NOT_A_PLAN_CHANGE_CODE_READS.has(name) &&
         !NOT_A_PLAN_CHANGE_LESSON_CALLS.has(name) &&
         !NOT_A_PLAN_CHANGE_GAPS.has(name) &&
