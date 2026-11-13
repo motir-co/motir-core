@@ -9051,6 +9051,10 @@
       "layingIn": "{identifier} 배치 중 · 이동",
       "newAndDraftingIn": "{identifier}에 새 항목 {arrived}개 · {drafting}개 초안 작성 중 · 이동",
       "draftingAcross": "다른 위치에서 {count}개 초안 작성 중 · 첫 항목은 {identifier}에 있음 · 이동",
+      "changedIn": "{identifier}에서 {count}개 변경됨 · 이동",
+      "changedAcross": "다른 위치에서 {count}개 변경됨 · 최신 항목은 {identifier}에 있음 · 이동",
+      "newAndChangedIn": "{identifier}에 새 항목 {arrived}개 · {changed}개 변경됨 · 이동",
+      "changedName": "방금 변경됨",
       "levelChange": {
         "srPrefix": "이 수준의 보류 중인 변경:",
         "changed": "이 수준",

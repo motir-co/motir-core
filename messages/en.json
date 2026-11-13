@@ -9054,6 +9054,10 @@
       "layingIn": "Laying {identifier} · Go there",
       "newAndDraftingIn": "{arrived} new · {drafting} being drafted in {identifier} · Go there",
       "draftingAcross": "{count} being drafted elsewhere · first in {identifier} · Go there",
+      "changedIn": "{count} changed in {identifier} · Go there",
+      "changedAcross": "{count} changed elsewhere · latest in {identifier} · Go there",
+      "newAndChangedIn": "{arrived} new · {changed} changed in {identifier} · Go there",
+      "changedName": "Just changed",
       "levelChange": {
         "srPrefix": "Pending change to this level:",
         "changed": "This level",

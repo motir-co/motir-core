@@ -9,6 +9,7 @@ import { fullestContainer } from '@/lib/planning/planShape';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
+import { lastEditedAtByItem } from '@/lib/plans/planItemEdits';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planProgressService } from '@/lib/services/planProgressService';
 import {
@@ -1105,6 +1106,9 @@ export const planReviewService = {
     // method already has. An unrevised plan yields an empty set and every row
     // renders exactly as it did before this story.
     const revisedItemIds = revisedSince(revisions, revisionStartedAt);
+    // WHEN EACH PROPOSAL WAS LAST CHANGED (MOTIR-11185) — off the same trail, so
+    // the live canvas can highlight a card the planner patches after it arrived.
+    const lastEditedAt = lastEditedAtByItem(revisions);
 
     // One batched, workspace-scoped read of every existing target (modify/remove)
     // — includes archived rows, so a "will be archived" / drifted target still
@@ -1975,6 +1979,9 @@ export const planReviewService = {
         todos: item.op === 'add' ? resolvedTodos : null,
         // A RECENCY fact, not a second reading of `op` (Part XII §E).
         revised: revisedItemIds.has(item.id),
+        // The newest `edited` row naming this proposal (MOTIR-11185) — what the
+        // live canvas diffs between two polls to highlight a changed card.
+        lastEditedAt: lastEditedAt.get(item.id) ?? null,
         stale: reasons.length > 0,
         staleReasons: reasons,
         targetMissing,

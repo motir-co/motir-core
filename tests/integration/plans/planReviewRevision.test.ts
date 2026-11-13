@@ -127,3 +127,28 @@ describe('the review model reads the revision off the trail', () => {
     await plansService.approvePlan(planId, fx.ctx);
   });
 });
+
+describe('the live read carries each proposal’s last EDIT time (MOTIR-11185)', () => {
+  it('is null until a proposal is edited, then the newest edited row’s time — for that row only', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, firstId, secondId } = await plannedPlan(fx);
+
+    const before = await planReviewService.getPlanReview(planId, fx.ctx);
+    expect(before.items.map((i) => i.lastEditedAt)).toEqual([null, null]);
+
+    await plansService.correctProposal(planId, secondId, { title: 'Edited once' }, fx.ctx);
+    await plansService.correctProposal(planId, secondId, { title: 'Edited twice' }, fx.ctx);
+
+    const edits = await adminDb.planRevision.findMany({
+      where: { planId, changeKind: 'edited', planItemId: secondId },
+      orderBy: { changedAt: 'desc' },
+      select: { changedAt: true },
+    });
+    expect(edits).toHaveLength(2);
+
+    const after = await planReviewService.getPlanReview(planId, fx.ctx);
+    const byId = new Map(after.items.map((i) => [i.planItemId, i.lastEditedAt]));
+    expect(byId.get(secondId)).toBe(edits[0]!.changedAt.toISOString());
+    expect(byId.get(firstId)).toBeNull();
+  });
+});
