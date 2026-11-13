@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidProposalError } from '@/lib/plans/errors';
-import { applySectionsInput, hasSectionsInput } from '@/lib/plans/applySectionsInput';
+import {
+  applySectionsInput,
+  hasSectionsInput,
+  PERSON_CARD_STEPS_REFUSAL,
+} from '@/lib/plans/applySectionsInput';
 import { splitPlanBody } from '@/lib/markdown/planBody';
 import { parseSections } from '@/lib/workItems/sections/parse';
 import { renderSections } from '@/lib/workItems/sections/render';
@@ -272,5 +276,66 @@ describe('a framing whose every line carries a "| " gutter', () => {
     const split = splitPlanBody(body);
     expect(split.acceptanceCriteria).toHaveLength(2);
     expect(split.contextRefs).toEqual(['lib/a.ts']);
+  });
+});
+
+// Bug MOTIR-11161 — a person's card keeps its steps in `todos`. Both planners were
+// told the steps live in the list alone AND offered a deploy `## Steps` section, so
+// a person's deploy carried its procedure twice and the copies drifted. The door
+// every body write passes refuses a SENT `steps` on a person's card by name.
+describe("a `steps` section on a person's card (MOTIR-11161)", () => {
+  const steps = '- Run the suite.\n- Record the result.';
+  const deploy = { type: 'deploy' } as const;
+  const personMessage = `${LABEL}: sections invalid section(s): steps (${PERSON_CARD_STEPS_REFUSAL}).`;
+
+  it('refuses a human deploy that sends `steps`, naming the section and pointing at todos', () => {
+    const message = refusal(() => apply({ ...base, steps }, { ...deploy, executor: 'human' }));
+    expect(message).toBe(personMessage);
+    expect(message).toContain('`todos`');
+  });
+
+  it('refuses it on a `manual` card with no executor, by the same name — not as an unknown section', () => {
+    const message = refusal(() => apply({ ...base, steps }, { type: 'manual' }));
+    expect(message).toBe(personMessage);
+    expect(message).not.toContain('not defined');
+  });
+
+  it('refuses a malformed `steps` on a person’s card with the one finding, not two', () => {
+    const message = refusal(() =>
+      apply({ ...base, steps: 42 }, { type: 'verification', executor: 'human' }),
+    );
+    expect(message).toBe(personMessage);
+  });
+
+  it('names the refusal beside the other findings of the same write', () => {
+    const { acceptanceCriteria: _omitted, ...without } = base;
+    const message = refusal(() => apply({ ...without, steps }, { ...deploy, executor: 'human' }));
+    expect(message).toContain('missing required section(s): acceptanceCriteria');
+    expect(message).toContain(`steps (${PERSON_CARD_STEPS_REFUSAL})`);
+  });
+
+  it('keeps `steps` on an agent-run deploy, explicit or seeded', () => {
+    for (const executor of ['coding_agent', null, undefined]) {
+      const body = apply({ ...base, steps }, { ...deploy, executor });
+      expect(body).toBe(renderSections('task', 'deploy', { ...base, steps }));
+      expect(body).toContain('## Steps');
+    }
+  });
+
+  it('lets an edit of a stored human deploy that already holds `## Steps` land when it does not resend it', () => {
+    const stored = renderSections('task', 'deploy', { ...base, steps });
+    const next = apply(
+      { scopeBoundary: 'Stops at the deploy.' },
+      { ...deploy, executor: 'human', currentBody: stored },
+    );
+    expect(next).toContain('Stops at the deploy.');
+    expect(next).toContain('## Steps');
+  });
+
+  it('lets an explicit `steps: null` clear the stored section on a person’s card', () => {
+    const stored = renderSections('task', 'deploy', { ...base, steps });
+    const next = apply({ steps: null }, { ...deploy, executor: 'human', currentBody: stored });
+    expect(next).not.toContain('## Steps');
+    expect(parseSections(next, 'task', 'deploy').sections.steps).toBeUndefined();
   });
 });

@@ -1930,6 +1930,8 @@ export interface CreateWorkItemOptions {
 function resolveSectionsWrite(args: {
   kind: string;
   type: string | null;
+  /** The card's executor AFTER this write — a person's card refuses `steps`. */
+  executor: string | null;
   sections: unknown;
   descriptionMd: string | null | undefined;
   currentBody: string | null;
@@ -2090,6 +2092,7 @@ export const workItemsService = {
         ? resolveSectionsWrite({
             kind: input.kind,
             type: itemType,
+            executor: itemExecutor,
             sections: input.sections,
             descriptionMd: input.descriptionMd,
             currentBody: null,
@@ -2842,6 +2845,13 @@ export const workItemsService = {
           ? resolveSectionsWrite({
               kind: patch.kind !== undefined ? patch.kind : current.kind,
               type: patch.type !== undefined ? patch.type : current.type,
+              // The executor the row will carry once this patch lands — the same
+              // seed-if-absent rule the type/executor block below writes.
+              executor: resolveExecutor(
+                patch.type !== undefined ? patch.type : current.type,
+                patch.executor,
+                current.executor,
+              ),
               sections: patch.sections,
               descriptionMd: patch.descriptionMd,
               currentBody: current.descriptionMd,

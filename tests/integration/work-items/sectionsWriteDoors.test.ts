@@ -256,3 +256,87 @@ describe('a plain descriptionMd write is unchanged', () => {
     });
   }
 });
+
+// Bug MOTIR-11161 — a person's card keeps its steps in `todos`, so a `steps`
+// section SENT on one is refused by name on the work-item doors, while an agent's
+// deploy keeps it and a stored `## Steps` never blocks a later edit.
+describe("a `steps` section on a person's card (MOTIR-11161)", () => {
+  const STEPS = '- Run the suite.\n- Record the result.';
+
+  it('create refuses a human deploy that sends `steps`, naming it, and creates nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const err = await workItemsService
+      .createWorkItem(
+        {
+          projectId: fx.projectId,
+          kind: 'task',
+          title: 'Ship it',
+          type: 'deploy',
+          executor: 'human',
+          sections: { ...LEAF, steps: STEPS },
+        },
+        fx.ctx,
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InvalidSectionsError);
+    expect((err as InvalidSectionsError).invalid.map((i) => i.section)).toEqual(['steps']);
+    expect((err as InvalidSectionsError).message).toContain('`todos`');
+    expect(await count()).toBe(0);
+  });
+
+  it('create keeps `steps` on a deploy the agent runs (the seeded executor)', async () => {
+    const fx = await makeWorkItemFixture();
+    const dto = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Ship it',
+        type: 'deploy',
+        sections: { ...LEAF, steps: STEPS },
+      },
+      fx.ctx,
+    );
+    expect(dto.executor).toBe('coding_agent');
+    expect(await storedBody(dto.id)).toContain('## Steps');
+  });
+
+  it('update refuses `steps` once the patch makes the card a person’s, and changes nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const created = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Ship it', type: 'deploy', sections: LEAF },
+      fx.ctx,
+    );
+    const before = await storedBody(created.id);
+    const err = await workItemsService
+      .updateWorkItem(created.id, { executor: 'human', sections: { steps: STEPS } }, fx.ctx)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InvalidSectionsError);
+    expect((err as InvalidSectionsError).message).toContain('steps');
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: created.id } });
+    expect(row.executor).toBe('coding_agent');
+    expect(row.descriptionMd).toBe(before);
+  });
+
+  it('update lets a stored human deploy that holds `## Steps` take an edit that does not resend it', async () => {
+    const fx = await makeWorkItemFixture();
+    const created = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Ship it',
+        type: 'deploy',
+        sections: { ...LEAF, steps: STEPS },
+      },
+      fx.ctx,
+    );
+    await workItemsService.updateWorkItem(created.id, { executor: 'human' }, fx.ctx);
+    await workItemsService.updateWorkItem(
+      created.id,
+      { sections: { scopeBoundary: 'Only production.' } },
+      fx.ctx,
+    );
+    const body = (await storedBody(created.id)) ?? '';
+    expect(body).toContain('Only production.');
+    expect(body).toContain('## Steps');
+  });
+});

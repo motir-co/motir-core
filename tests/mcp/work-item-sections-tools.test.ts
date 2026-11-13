@@ -114,3 +114,58 @@ describe('sections on the MCP work-item tools', () => {
     expect(text).toContain('acceptanceCriteria');
   });
 });
+
+// Bug MOTIR-11161 — the refusal reaches the agent as the typed tool error.
+describe("a `steps` section on a person's card through the MCP tools (MOTIR-11161)", () => {
+  const STEPS = '- Run the suite.\n- Record the result.';
+
+  it('create_work_item and update_work_item refuse it as INVALID_SECTIONS naming steps and todos', async () => {
+    const fx = await makeWorkItemFixture();
+    const refusedCreate = await runCreateWorkItem(
+      {
+        projectKey: 'PROD',
+        kind: 'task',
+        title: 'Ship it',
+        type: 'deploy',
+        executor: 'human',
+        sections: { ...LEAF, steps: STEPS },
+      },
+      fx.ctx,
+    );
+    expect(refusedCreate.isError).toBe(true);
+    const createText = JSON.stringify(refusedCreate.content);
+    expect(createText).toContain('INVALID_SECTIONS');
+    expect(createText).toContain('steps');
+    expect(createText).toContain('todos');
+    expect(await adminDb.workItem.count()).toBe(0);
+
+    const created = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'task', title: 'Do it', type: 'manual', sections: LEAF },
+      fx.ctx,
+    );
+    expect(created.isError).toBeFalsy();
+    const key = (created.structuredContent as Structured).identifier;
+    const refusedUpdate = await runUpdateWorkItem({ key, sections: { steps: STEPS } }, fx.ctx);
+    expect(refusedUpdate.isError).toBe(true);
+    const updateText = JSON.stringify(refusedUpdate.content);
+    expect(updateText).toContain('INVALID_SECTIONS');
+    expect(updateText).toContain('todos');
+  });
+
+  it('create_work_item keeps `steps` on an agent-run deploy', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await runCreateWorkItem(
+      {
+        projectKey: 'PROD',
+        kind: 'task',
+        title: 'Ship it',
+        type: 'deploy',
+        executor: 'coding_agent',
+        sections: { ...LEAF, steps: STEPS },
+      },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+    expect((res.structuredContent as Structured).descriptionMd).toContain('## Steps');
+  });
+});
