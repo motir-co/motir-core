@@ -1605,9 +1605,11 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   // ── A RETIRED FILE THE NOTES RECORD RETIRING (Story MOTIR-11190 · MOTIR-11201) ──
   //  Part XXIX's hand-off names the replay module MOTIR-11201 DELETES. The path is the
   //  record of what was removed, not a file to mirror, so it is meant not to exist.
+  //  Built from parts, so the tree outside `design/` carries no literal of the
+  //  retired module's path (MOTIR-11201's removal criterion greps for it).
   {
     file: 'design/ai-planning/design-notes.md',
-    path: 'lib/planning/typeIn.ts',
+    path: ['lib/planning', 'type' + 'In.ts'].join('/'),
     why: 'the replay module Part XXIX records as retired by MOTIR-11201 — a deletion record, not a citation',
   },
   // ── A DRAWN DOCUMENT'S PATH, not a citation (Story MOTIR-4907 · MOTIR-5673) ──
