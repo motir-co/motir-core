@@ -13,8 +13,9 @@ import { truncateAuthTables } from '../helpers/db';
 import { FakeOrganization } from '../helpers/addShardFakes';
 
 // THE LIVE GRANTED vCPU QUOTA (Story MOTIR-9362 · MOTIR-9458), against real
-// Postgres and a fake AWS organization: every shared active AWS account of a
-// kind on its pool is read each pass, written only when AWS's answer changed,
+// Postgres and a fake AWS organization: every shared active AWS account — and
+// every AWS spare not disabled (MOTIR-11233) — of a kind on its pool is read each
+// pass, written only when AWS's answer changed,
 // and an unreadable account is a typed failure that touches nothing.
 
 const SESSION = {
@@ -154,13 +155,17 @@ describe('refreshLiveGrantedQuotas', () => {
     expect((await fleetShardService.getShard(shard.id)).limits.vcpuQuota).toBe(64);
   });
 
-  it('skips a kind on Fly, provisioning and disabled accounts, spares and Fly accounts', async () => {
+  it('skips a kind on Fly, provisioning and disabled shared accounts, disabled spares and Fly accounts', async () => {
     const read = await awsAccount();
     await awsAccount({ state: 'provisioning' });
     const disabled = await awsAccount();
     await fleetShardService.setState(disabled.id, 'disabled');
-    await awsAccount({ role: 'spare' });
+    const spare = await awsAccount({ role: 'spare' });
+    const provisioningSpare = await awsAccount({ role: 'spare', state: 'provisioning' });
+    const retiredSpare = await awsAccount({ role: 'spare', state: 'provisioning' });
+    await fleetShardService.setState(retiredSpare.id, 'disabled');
     await awsAccount({ fleetKind: 'code_graph_index' }); // still on Fly
+    await awsAccount({ fleetKind: 'code_graph_index', role: 'spare' }); // still on Fly
     await fleetShardService.createShard({
       name: 'quota-test-fly',
       fleetKind: 'ci_runner',
@@ -177,10 +182,38 @@ describe('refreshLiveGrantedQuotas', () => {
 
     const readings = await fleetShardQuotaService.refreshLiveGrantedQuotas(undefined, deps());
 
-    expect(readings.map((r) => r.shardId)).toEqual([read.id]);
+    // The shared accounts first, then the spares (active before provisioning).
+    expect(readings.map((r) => r.shardId)).toEqual([read.id, spare.id, provisioningSpare.id]);
     expect(org.calls.filter((c) => c.startsWith('assumeMemberRole'))).toEqual([
       `assumeMemberRole:${read.aws!.accountId}`,
+      `assumeMemberRole:${spare.aws!.accountId}`,
+      `assumeMemberRole:${provisioningSpare.aws!.accountId}`,
     ]);
+  });
+
+  // MOTIR-11233: a spare's raise AWS closed as CASE_CLOSED after applying 300
+  // left the row at 32 for good; the per-pass read is what corrects it.
+  it('a spare’s stored quota follows its live value each pass', async () => {
+    const spare = await awsAccount({
+      role: 'spare',
+      state: 'provisioning',
+      limits: { vcpuQuota: 32, githubRegistrationsPer5Min: 1500 },
+    });
+    org.quotaByAccount.set(spare.aws!.accountId, 300);
+
+    const [first] = await fleetShardQuotaService.refreshLiveGrantedQuotas('ci_runner', deps());
+    expect(okOf(first!)).toEqual({
+      shardId: spare.id,
+      fleetKind: 'ci_runner',
+      granted: 300,
+      changed: true,
+    });
+    const row = await fleetShardService.getShard(spare.id);
+    expect(row.limits).toMatchObject({ vcpuQuota: 300, githubRegistrationsPer5Min: 1500 });
+    expect(row.limitsSource).toMatchObject({ vcpuQuota: 'provider_read' });
+
+    const [again] = await fleetShardQuotaService.refreshLiveGrantedQuotas('ci_runner', deps());
+    expect(okOf(again!)).toMatchObject({ granted: 300, changed: false });
   });
 
   it('reads nothing, and builds no management client, when no kind is on its pool', async () => {

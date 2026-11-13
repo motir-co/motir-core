@@ -5,7 +5,7 @@ import {
   type AwsManagementApi,
   type FleetWorkloadKind,
 } from '@motir/orchestrator';
-import type { FleetShard } from '@/generated/prisma/client';
+import type { FleetShard, Prisma } from '@/generated/prisma/client';
 import { LiveQuotaReadFailedError } from '@/lib/ciFleet/errors';
 import type { FleetShardLimitSource } from '@/lib/dto/fleetShard';
 import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
@@ -17,8 +17,10 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // account's `L-1216C47A` once, at creation; a raise AWS grants later never
 // reached the row, so the 70% reading compared use against a stale number. This
 // re-reads it on every growth pass for every SHARED (`primary`), `active` AWS
-// account of the kinds switched to their pool, and writes it only when AWS's
-// answer differs from the row.
+// account of the kinds switched to their pool — and for each such kind's AWS
+// spares that are not disabled, whose readiness is measured against the same
+// figure (MOTIR-11233) — and writes it only when AWS's answer differs from the
+// row.
 //
 // ⚠️ A read that fails is a typed failure, never a fallback: the stored value and
 // no default stand in for what AWS says, so growth can neither trigger nor be
@@ -104,10 +106,31 @@ export async function recordGrantedVcpuQuota(
   });
 }
 
+/**
+ * The accounts of one kind whose granted quota is read each pass: the shared
+ * (`primary`), `active` AWS accounts, then the kind's AWS spares that are not
+ * disabled (MOTIR-11233). A spare is read because its readiness is measured
+ * against its granted quota: a raise AWS closed without approving can still
+ * have applied an increase, and nothing else would ever correct the row.
+ */
+async function accountsToRead(
+  fleetKind: FleetWorkloadKind,
+  tx: Prisma.TransactionClient,
+): Promise<FleetShard[]> {
+  const shared = await fleetShardRepository.listByRole(
+    'primary',
+    { fleetKind, state: 'active', provider: 'aws' },
+    tx,
+  );
+  const spares = await fleetShardRepository.listSparesForKind(fleetKind, tx);
+  return [...shared, ...spares.filter((spare) => spare.provider === 'aws')];
+}
+
 export const fleetShardQuotaService = {
   /**
-   * Read the live granted `L-1216C47A` of every shared, active AWS account of
-   * `kind` (or of every kind) switched to its pool, and write each to its row
+   * Read the live granted `L-1216C47A` of every shared, active AWS account and
+   * every AWS spare not disabled, of `kind` (or of every kind) switched to its
+   * pool, and write each to its row
    * only when it changed. One reading per account; one account's failure never
    * stops the others.
    */
@@ -123,15 +146,7 @@ export const fleetShardQuotaService = {
 
     const shards: FleetShard[] = [];
     for (const fleetKind of kinds) {
-      shards.push(
-        ...(await withSystemContext((tx) =>
-          fleetShardRepository.listByRole(
-            'primary',
-            { fleetKind, state: 'active', provider: 'aws' },
-            tx,
-          ),
-        )),
-      );
+      shards.push(...(await withSystemContext((tx) => accountsToRead(fleetKind, tx))));
     }
     if (shards.length === 0) return [];
 

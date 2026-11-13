@@ -35,9 +35,11 @@ import { withSystemContext } from '@/lib/workspaces/context';
 
 // THE FLEET'S OWN QUOTA RAISES (Story MOTIR-9362 · MOTIR-9459): file an
 // `L-1216C47A` increase for one fleet account through Service Quotas, store it
-// with AWS's request id, and read each open one back until AWS closes it. An
-// approved raise writes its granted value to the account's row at once
-// (source `raised`), so the 70% comparison measures against it on the next pass.
+// with AWS's request id, and read each open one back until AWS closes it. A
+// closed raise writes the account's applied quota to its row at once — source
+// `raised` when approved, `provider_read` for any other close, since AWS can
+// apply part of an increase and still close the case (MOTIR-11233) — so the 70%
+// comparison and spare readiness measure against it on the next pass.
 //
 // AWS is called OUTSIDE any database transaction; each result is stored after,
 // in a short one. No schedule and no command of its own: add-shard files a new
@@ -214,8 +216,9 @@ export const fleetQuotaRaiseService = {
 
   /**
    * Read every open request (of `kind`, or of every kind) from AWS and store its
-   * status, granted value and read time. A terminal status closes the request;
-   * an `approved` one also writes its granted value to the account's row. One
+   * status, granted value and read time. A terminal status closes the request
+   * and writes the account's applied quota, read live, to its row — whatever the
+   * status, as a partial grant can close `case_closed` (MOTIR-11233). One
    * request's failure is returned and never stops the others.
    */
   async refreshOpenRequests(
@@ -269,15 +272,24 @@ export const fleetQuotaRaiseService = {
           results.push(fail(`UnknownStatus:${read.status}`));
           continue;
         }
-        // `GetRequestedServiceQuotaChange` carries only the desired value: what
-        // was granted is the account's applied quota once AWS approves.
-        const grantedValue =
-          status === 'approved'
-            ? await management.readVcpuQuota(credentials, location.region)
-            : null;
-        if (grantedValue !== null) {
-          await recordGrantedVcpuQuota(shard.id, grantedValue, 'raised', deps.now());
+        // `GetRequestedServiceQuotaChange` carries only the desired value, so a
+        // closed raise's outcome is the account's APPLIED quota, read live. AWS
+        // can apply part of an increase and still close the case `CASE_CLOSED`
+        // or `NOT_APPROVED` (MOTIR-11233), so EVERY terminal read records the
+        // applied value on the row — not only an approved one. The request
+        // itself carries a granted value only when AWS approved it.
+        const applied = isTerminalQuotaRequestStatus(status)
+          ? await management.readVcpuQuota(credentials, location.region)
+          : null;
+        if (applied !== null) {
+          await recordGrantedVcpuQuota(
+            shard.id,
+            applied,
+            status === 'approved' ? 'raised' : 'provider_read',
+            deps.now(),
+          );
         }
+        const grantedValue = status === 'approved' ? applied : null;
         const stored = await fleetQuotaRequestService.recordRead(
           request.id,
           { status, grantedValue },

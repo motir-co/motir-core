@@ -20,8 +20,9 @@ import { FakeOrganization } from '../helpers/addShardFakes';
 
 // THE FLEET'S OWN QUOTA RAISES (Story MOTIR-9362 · MOTIR-9459), against real
 // Postgres and a fake AWS organization: file once, idempotently; refuse a raise
-// that is not one; refresh each open request until AWS closes it, writing an
-// approved grant to the account's row; one failure never stops the others.
+// that is not one; refresh each open request until AWS closes it, writing the
+// account's applied quota to its row however AWS closed it (MOTIR-11233); one
+// failure never stops the others.
 
 const SESSION = {
   accessKeyId: 'ASIAFAKEMEMBER',
@@ -172,19 +173,78 @@ describe('refreshOpenRequests', () => {
   });
 
   it.each(['DENIED', 'NOT_APPROVED', 'CASE_CLOSED', 'INVALID_REQUEST'])(
-    'a %s request closes and leaves the account’s quota as it was',
+    'a %s request closes, and the row is left alone while AWS still applies its quota',
     async (awsStatus) => {
       const shard = await awsAccount();
+      org.quotaByAccount.set(shard.aws!.accountId, 64); // AWS applied nothing
       const request = await fleetQuotaRaiseService.fileRaise(shard.id, 200, deps());
       org.settleQuotaRequest(request.awsRequestId, awsStatus);
+      const before = await adminDb.fleetShard.findUniqueOrThrow({ where: { id: shard.id } });
 
       const [read] = await fleetQuotaRaiseService.refreshOpenRequests(undefined, deps());
 
-      expect(ok(read!)).toMatchObject({ status: quotaRequestStatusOf(awsStatus), closed: true });
-      expect((await fleetShardService.getShard(shard.id)).limits.vcpuQuota).toBe(64);
+      expect(ok(read!)).toMatchObject({
+        status: quotaRequestStatusOf(awsStatus),
+        grantedValue: null,
+        closed: true,
+      });
+      const after = await adminDb.fleetShard.findUniqueOrThrow({ where: { id: shard.id } });
+      expect(after.vcpuQuota).toBe(64);
+      expect(after.updatedAt).toEqual(before.updatedAt);
       expect(await fleetQuotaRequestService.listOpen()).toEqual([]);
     },
   );
+
+  // MOTIR-11233: ci-runner-pool-1 asked for 2500, AWS applied 300 and closed the
+  // case CASE_CLOSED — the row kept its 32 and the spare was never ready.
+  it.each(['DENIED', 'NOT_APPROVED', 'CASE_CLOSED', 'INVALID_REQUEST'])(
+    'a %s request AWS closed after applying an increase leaves the row at the applied value',
+    async (awsStatus) => {
+      const shard = await awsAccount({ role: 'spare', state: 'provisioning' });
+      const request = await fleetQuotaRaiseService.fileRaise(shard.id, 2500, deps());
+      org.settleQuotaRequest(request.awsRequestId, awsStatus);
+      org.quotaByAccount.set(shard.aws!.accountId, 300);
+
+      const [read] = await fleetQuotaRaiseService.refreshOpenRequests('ci_runner', deps());
+
+      expect(ok(read!)).toMatchObject({ status: quotaRequestStatusOf(awsStatus), closed: true });
+      const row = await fleetShardService.getShard(shard.id);
+      expect(row.limits).toMatchObject({ vcpuQuota: 300, githubApiPerHour: 15000 });
+      expect(row.limitsSource).toEqual({
+        vcpuQuota: 'provider_read',
+        githubApiPerHour: 'documented',
+      });
+      expect(row.limitsVerifiedAt).toBe(AT.toISOString());
+      // The request records a grant only when AWS approved it.
+      expect((await fleetQuotaRequestService.getRequest(request.id)).grantedValue).toBeNull();
+    },
+  );
+
+  it('a closed request whose applied quota cannot be read stays open for the next pass', async () => {
+    const shard = await awsAccount();
+    const request = await fleetQuotaRaiseService.fileRaise(shard.id, 200, deps());
+    org.settleQuotaRequest(request.awsRequestId, 'CASE_CLOSED');
+    org.readFailures.set(
+      shard.aws!.accountId,
+      new AwsManagementApiError('service-quotas', 'TooManyRequestsException', 429),
+    );
+
+    const [read] = await fleetQuotaRaiseService.refreshOpenRequests(undefined, deps());
+
+    expect('failure' in read! && read.failure).toMatchObject({
+      shardId: shard.id,
+      reason: 'TooManyRequestsException',
+    });
+    expect(await fleetQuotaRequestService.getRequest(request.id)).toEqual(request);
+    expect((await fleetShardService.getShard(shard.id)).limits.vcpuQuota).toBe(64);
+  });
+
+  it('an open request reads no quota — only its status', async () => {
+    const shard = await awsAccount();
+    await fleetQuotaRaiseService.fileRaise(shard.id, 200, deps());
+    await fleetQuotaRaiseService.refreshOpenRequests(undefined, deps());
+    expect(org.calls.some((c) => c.startsWith('readVcpuQuota'))).toBe(false);
+  });
 
   it('a failed read is a typed failure, leaves that request, and the others are read', async () => {
     const broken = await awsAccount();

@@ -97,8 +97,11 @@ const audits = () =>
   });
 const shard = (id: string) => adminDb.fleetShard.findUniqueOrThrow({ where: { id } });
 
-/** A spare holding 200 vCPU, with a raise in `status` (none for `null`). */
+/** A spare holding 200 vCPU — on its row and, live, in AWS — with a raise in
+ *  `status` (none for `null`). The pass reads a spare's live quota too
+ *  (MOTIR-11233), so the two must agree. */
 async function spareWithRaise(status: string | null, state: 'active' | 'provisioning' = 'active') {
+  organization.quotaByAccount.set('444455556666', 200);
   const spare = await fleetShardService.createShard({
     name: 'ci-runner-motir-spare',
     fleetKind: 'ci_runner',
@@ -392,7 +395,7 @@ describe('slow and refused quota raises', () => {
     expect(alerts).toHaveLength(1);
   });
 
-  it('a raise that closes denied alerts once and leaves the granted quota alone', async () => {
+  it('a raise that closes denied alerts once and keeps the quota AWS still applies', async () => {
     awsKinds = new Set(['hosted_agent']);
     const { spare, request } = await filedRaise();
     expect((await pass()).requestAlerts).toBe(0);
@@ -405,6 +408,70 @@ describe('slow and refused quota raises', () => {
     expect((await fleetQuotaRequestService.getRequest(request.id)).status).toBe('denied');
     expect(await shard(spare.id)).toMatchObject({ vcpuQuota: 200 });
     expect((await pass(minutes(2))).requestAlerts).toBe(0);
+  });
+});
+
+// MOTIR-11233, the production shape: ci-runner-pool-1 asked for 2500, AWS applied
+// 300 and closed the case CASE_CLOSED; the row kept 32 and the spare stayed
+// `provisioning`, so the 10:15 UTC growth created ci-runner-pool-2 beside it.
+describe('a spare whose raise AWS closed with a partial grant', () => {
+  async function partiallyGrantedSpare() {
+    const spare = await fleetShardService.createShard({
+      name: 'ci-runner-pool-1',
+      fleetKind: 'ci_runner',
+      provider: 'aws',
+      role: 'spare',
+      state: 'provisioning',
+      githubOrg: ORG,
+      githubInstallationId: '9001',
+      awsAccountId: '478747422311',
+      awsRegion: 'us-east-1',
+      credentialRef: 'FLEET_SHARD_CI_RUNNER_POOL_1',
+      limits: { vcpuQuota: 32 },
+    });
+    const request = await fleetQuotaRequestService.createRequest({
+      shardId: spare.id,
+      desiredValue: 2500,
+      awsRequestId: 'pool-1-raise',
+    });
+    await fleetQuotaRequestService.recordRead(request.id, {
+      status: 'case_closed',
+      grantedValue: null,
+    });
+    organization.quotaByAccount.set('478747422311', 300); // what AWS applied
+    return spare;
+  }
+
+  it('below 70%, one pass corrects its quota and makes it the kind’s ready spare', async () => {
+    const spare = await partiallyGrantedSpare();
+    inUse = 10;
+
+    const summary = await pass();
+
+    expect(summary.kinds.ci_runner).toBe('below_threshold');
+    expect(await shard(spare.id)).toMatchObject({
+      role: 'spare',
+      state: 'active',
+      vcpuQuota: 300,
+    });
+    expect(organization.calls.filter((c) => c === 'createOrganizationAccount')).toEqual([]);
+  });
+
+  it('at 70%, the pass promotes it rather than leaving it beside a new account', async () => {
+    const spare = await partiallyGrantedSpare();
+
+    const summary = await pass();
+
+    expect(summary.kinds.ci_runner).toBe('grown');
+    const [event] = await events();
+    expect(event).toMatchObject({ outcome: 'spare_promoted', spareShardId: spare.id });
+    expect(await shard(spare.id)).toMatchObject({
+      role: 'primary',
+      state: 'active',
+      vcpuQuota: 300,
+    });
+    // The one account created is the promoted spare's replacement.
+    expect(organization.calls.filter((c) => c === 'createOrganizationAccount')).toHaveLength(1);
   });
 });
 
