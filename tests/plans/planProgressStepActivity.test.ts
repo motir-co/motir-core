@@ -6,6 +6,7 @@ import {
   readPlanProgress,
   stepLastActivity,
   type PlanProgressAddRow,
+  type PlanProgressNarrationRow,
   type PlanProgressSnapshot,
   type PlanProgressStep,
   type PlanProgressWriteRow,
@@ -49,6 +50,7 @@ function build(args: {
   addRows?: PlanProgressAddRow[];
   lastActivityAt?: string;
   titles?: [string, string][];
+  narrations?: PlanProgressNarrationRow[];
 }): PlanProgressSnapshot {
   return buildPlanProgressSnapshot({
     plan: {
@@ -60,6 +62,7 @@ function build(args: {
     committedTitles: new Map(args.titles ?? [[STORY, 'Indexing runs from a queue']]),
     observedAt: FIRST_CHILD,
     writes: args.writes,
+    narrations: args.narrations,
   });
 }
 
@@ -298,5 +301,103 @@ describe('identity and order still read `startedAt`', () => {
     expect(r.liveSteps.map((s) => s.sessionKey)).toEqual(['old', 'new']);
     const held = { id: drivenStepId(after.steps[1]!), levelId: STORY, trail: [] };
     expect(nextDrivenStep(held, r.liveSteps, items, 'New')?.id).toBe(held.id);
+  });
+});
+
+// The author form of the same defect, from plan `cmweuark508iy01adxz8l9blg` on
+// 2026-11-13: 18 author sessions started together at 11:16:40; their targets
+// were last written by the lay (≤ 11:13) and not again, yet every session kept
+// narrating. Measured from writes alone, every Drafting cue vanished at ≈ 11:31.
+describe('an author session that narrates stays live (MOTIR-11184)', () => {
+  const AUTHOR_START = '2026-11-13T11:16:40.000Z';
+  const TARGET_WRITTEN = '2026-11-13T11:10:12.000Z';
+  const LAST_SENTENCE = '2026-11-13T11:38:27.000Z';
+  const NOW = ms('2026-11-13T11:41:03.000Z');
+  const author = step({
+    sessionKey: 'ai:session:17',
+    kind: 'author',
+    targetRef: 'planItem:c1',
+    startedAt: AUTHOR_START,
+  });
+  const authorItems = [planReviewItem({ planItemId: 'c1', nodeId: 'c1', parentNodeId: STORY })];
+
+  it('its newest narration moves its last sign of life past a stale target write', () => {
+    expect(
+      stepLastActivity(author, [write({ id: 'c1', writtenAt: TARGET_WRITTEN })], LAST_SENTENCE),
+    ).toBe(LAST_SENTENCE);
+  });
+
+  it('stays in liveSteps and keeps its drafting cue with the production timings', () => {
+    const s = build({
+      steps: [author],
+      addRows: [addRow('c1')],
+      writes: [write({ id: 'c1', writtenAt: TARGET_WRITTEN })],
+      narrations: [{ sessionKey: 'ai:session:17', narratedAt: LAST_SENTENCE }],
+      lastActivityAt: LAST_SENTENCE,
+    });
+    const r = readPlanProgress(s, NOW);
+    expect(r.liveSteps.map((x) => x.sessionKey)).toEqual(['ai:session:17']);
+    const { cues } = inFlightCues(authorItems, readPlanAtWork(r).steps, 'New');
+    expect(cues.get('c1')).toBe('drafting');
+  });
+
+  it('without its narration the same step is dropped — writes alone do not cover authors', () => {
+    const s = build({
+      steps: [author],
+      addRows: [addRow('c1')],
+      writes: [write({ id: 'c1', writtenAt: TARGET_WRITTEN })],
+      lastActivityAt: LAST_SENTENCE,
+    });
+    expect(readPlanProgress(s, NOW).liveSteps).toEqual([]);
+  });
+
+  it("another session's narration does not keep it alive", () => {
+    const s = build({
+      steps: [author],
+      addRows: [addRow('c1')],
+      narrations: [{ sessionKey: 'ai:session:12', narratedAt: LAST_SENTENCE }],
+      lastActivityAt: LAST_SENTENCE,
+    });
+    expect(readPlanProgress(s, NOW).liveSteps).toEqual([]);
+  });
+
+  it('a session silent past the threshold is dropped as before', () => {
+    const quietSince = new Date(NOW - PLAN_STALLED_AFTER_MS - 1).toISOString();
+    const s = build({
+      steps: [author],
+      addRows: [addRow('c1')],
+      narrations: [{ sessionKey: 'ai:session:17', narratedAt: quietSince }],
+      lastActivityAt: LAST_SENTENCE,
+    });
+    expect(readPlanProgress(s, NOW).liveSteps).toEqual([]);
+  });
+
+  it('a provider-wait report counts as a sign of life', () => {
+    const waiting = {
+      ...author,
+      providerWait: {
+        attempt: 2,
+        maxAttempts: 5,
+        since: '2026-11-13T11:35:00.000Z',
+        retryAt: '2026-11-13T11:42:00.000Z',
+      },
+    };
+    expect(stepLastActivity(waiting, [])).toBe('2026-11-13T11:35:00.000Z');
+    const s = build({ steps: [waiting], addRows: [addRow('c1')], lastActivityAt: LAST_SENTENCE });
+    expect(readPlanProgress(s, NOW).liveSteps.map((x) => x.sessionKey)).toEqual(['ai:session:17']);
+  });
+
+  it('an untargeted step and a settle are kept alive by their narration too', () => {
+    for (const st of [
+      step({ sessionKey: 'u', kind: 'author', targetRef: null, startedAt: AUTHOR_START }),
+      step({ sessionKey: 'u', kind: 'settle', targetRef: null, startedAt: AUTHOR_START }),
+    ]) {
+      const s = build({
+        steps: [st],
+        narrations: [{ sessionKey: 'u', narratedAt: LAST_SENTENCE }],
+        lastActivityAt: LAST_SENTENCE,
+      });
+      expect(readPlanProgress(s, NOW).liveSteps.map((x) => x.sessionKey)).toEqual(['u']);
+    }
   });
 });

@@ -553,7 +553,9 @@ describe('the provider-retry wait (Story MOTIR-9540 · MOTIR-9619)', () => {
         .steps,
     });
     const reading = readPlanProgress(s, now);
-    expect(reading.liveSteps).toEqual([]);
+    // The wait report is the session's latest sign of life (MOTIR-11184), so the
+    // step stays live however long ago it started.
+    expect(reading.liveSteps.map((x) => x.sessionKey)).toEqual(['old']);
     expect(reading.providerWait).toEqual(w);
   });
 

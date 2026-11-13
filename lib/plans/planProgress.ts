@@ -67,8 +67,11 @@ import type { PlanStepDto, PlanStepKindDto, PlanStepProviderWaitDto } from '@/li
  *   1. the plan is `stalled` when `now − lastActivityAt > PLAN_STALLED_AFTER_MS`
  *      (equal is NOT stalled; +1 ms is);
  *   2. a single step is dropped as QUIET when `now − step.lastActivityAt >
- *      PLAN_STALLED_AFTER_MS` — its LAST SIGN OF LIFE, the later of its start and
- *      the newest write it made ({@link stepLastActivity}). A session that died
+ *      PLAN_STALLED_AFTER_MS` — its LAST SIGN OF LIFE, the latest of its start,
+ *      its provider-wait report, its session's newest narration and the newest
+ *      write it made ({@link stepLastActivity}). Author sessions that start
+ *      together narrate throughout but write their target late, so the
+ *      narration is what keeps their Drafting cues up. A session that died
  *      without clearing stops naming an item even while its siblings keep the
  *      plan alive; one still writing under its target stays named however long
  *      ago it started.
@@ -136,8 +139,9 @@ export interface PlanProgressStep {
   /** Server instant (ISO). The step's IDENTITY and ORDER key — never re-stamped. */
   startedAt: string;
   /**
-   * The step's last sign of life (server ISO): the later of `startedAt` and the
-   * newest write under its target ({@link stepLastActivity}). Read ONLY by the
+   * The step's last sign of life (server ISO): the latest of `startedAt`, its
+   * provider-wait report, its session's newest narration and the newest write
+   * under or to its target ({@link stepLastActivity}). Read ONLY by the
    * quiet drop; identity and order stay on `startedAt` (MOTIR-11184).
    */
   lastActivityAt: string;
@@ -228,6 +232,16 @@ export interface PlanProgressWriteRow {
   writtenAt: string | Date;
 }
 
+/**
+ * One session's NEWEST narration sentence (MOTIR-11184): a session that is still
+ * talking is still working, whether or not it has written its target yet. Keyed
+ * by the `session_key` the step row carries.
+ */
+export interface PlanProgressNarrationRow {
+  sessionKey: string;
+  narratedAt: string | Date;
+}
+
 // ── The authored test ─────────────────────────────────────────────────────────
 //
 // "N authored" answers *has its author session finished writing it?* (Story
@@ -305,9 +319,15 @@ function isStepWrite(
 }
 
 /**
- * A step's LAST SIGN OF LIFE (MOTIR-11184): the later of its `startedAt` and the
- * newest write it makes. A step is reported ONCE, when its session starts, so its
- * start says nothing about whether it is still working — the plan's own items do.
+ * A step's LAST SIGN OF LIFE (MOTIR-11184): the latest of its `startedAt`, its
+ * provider-wait report (`providerWait.since`), its session's newest narration
+ * (`narratedAt`) and the newest write it makes. A step is reported ONCE, when its
+ * session starts, so its start says nothing about whether it is still working —
+ * its session's sentences and the plan's own items do. The narration is the
+ * author signal: parallel author sessions narrate throughout and may not write
+ * their target for longer than the threshold. The writes are the lay signal.
+ *
+ * The writes that count:
  *
  * | kind     | targetRef            | the writes that count                          |
  * | -------- | -------------------- | ---------------------------------------------- |
@@ -321,19 +341,29 @@ function isStepWrite(
  * nothing is measured from its start exactly as before.
  */
 export function stepLastActivity(
-  step: { kind: PlanStepKindDto; targetRef: string | null; startedAt: string | Date },
+  step: {
+    kind: PlanStepKindDto;
+    targetRef: string | null;
+    startedAt: string | Date;
+    providerWait?: { since: string } | null;
+  },
   writes: readonly PlanProgressWriteRow[],
+  narratedAt: string | Date | null = null,
 ): string {
   let latest = iso(step.startedAt);
   let latestMs = Date.parse(latest);
-  for (const write of writes) {
-    if (!isStepWrite(step, write)) continue;
-    const at = iso(write.writtenAt);
+  const consider = (v: string | Date) => {
+    const at = iso(v);
     const atMs = Date.parse(at);
     if (atMs > latestMs) {
       latest = at;
       latestMs = atMs;
     }
+  };
+  if (step.providerWait) consider(step.providerWait.since);
+  if (narratedAt !== null) consider(narratedAt);
+  for (const write of writes) {
+    if (isStepWrite(step, write)) consider(write.writtenAt);
   }
   return latest;
 }
@@ -353,8 +383,9 @@ export function stepLastActivity(
  *   is the lost machine's own row, never cleared, and naming it would say a
  *   dead session is authoring an item (MOTIR-8309). Dropping it HERE, not at
  *   read time, keeps the canvas cues and the words on one list.
- * Each kept step carries its `lastActivityAt` from `writes`
- * ({@link stepLastActivity}); with no `writes` it is the step's start.
+ * Each kept step carries its `lastActivityAt` from `writes`, its session's
+ * newest narration in `narrations` and its provider wait
+ * ({@link stepLastActivity}); with none of them it is the step's start.
  * Steps are ordered by `startedAt`, ties by `sessionKey`.
  */
 export function buildPlanProgressSnapshot(args: {
@@ -366,8 +397,11 @@ export function buildPlanProgressSnapshot(args: {
   autoResume?: { at: string | Date; count: number } | null;
   /** Every proposal's last write ({@link PlanProgressWriteRow}) — the quiet drop's input. */
   writes?: readonly PlanProgressWriteRow[];
+  /** Each session's newest narration ({@link PlanProgressNarrationRow}) — the author signal. */
+  narrations?: readonly PlanProgressNarrationRow[];
 }): PlanProgressSnapshot {
   const writes = args.writes ?? [];
+  const narratedAt = new Map((args.narrations ?? []).map((n) => [n.sessionKey, n.narratedAt]));
   const addById = new Map(args.addRows.map((r) => [r.id, r]));
   const autoResume = args.autoResume
     ? { at: iso(args.autoResume.at), count: args.autoResume.count }
@@ -381,7 +415,7 @@ export function buildPlanProgressSnapshot(args: {
       kind: step.kind,
       targetRef: step.targetRef,
       startedAt: iso(step.startedAt),
-      lastActivityAt: stepLastActivity(step, writes),
+      lastActivityAt: stepLastActivity(step, writes, narratedAt.get(step.sessionKey) ?? null),
       providerWait: step.providerWait ?? null,
     };
     if (step.kind === 'settle' || step.targetRef === null) {

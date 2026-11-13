@@ -97,6 +97,28 @@ export const planNarrationRepository = {
     });
   },
 
+  /**
+   * Each session's NEWEST sentence across many plans (MOTIR-11184) — the quiet
+   * drop's author signal. ONE grouped query on the `(plan_id, session_key)`
+   * index; no sentence body crosses the wire.
+   */
+  async findLatestBySessionForPlans(
+    planIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ planId: string; sessionKey: string; narratedAt: Date }[]> {
+    if (planIds.length === 0) return [];
+    const groups = await tx.planNarration.groupBy({
+      by: ['planId', 'sessionKey'],
+      where: { planId: { in: [...planIds] } },
+      _max: { createdAt: true },
+    });
+    return groups.flatMap((g) =>
+      g._max.createdAt
+        ? [{ planId: g.planId, sessionKey: g.sessionKey, narratedAt: g._max.createdAt }]
+        : [],
+    );
+  },
+
   /** One plan's sessions, in the order they first reported a step. */
   async listSessionsByPlan(
     planId: string,
