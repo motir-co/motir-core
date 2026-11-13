@@ -3,7 +3,7 @@
 import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { RelatedTitles } from '../[key]/_components/translation/RelatedTitles';
 import { personDisplayName } from '@/lib/people/personLabel';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Archive,
@@ -15,6 +15,7 @@ import {
   Clock,
   Component as ComponentIcon,
   Goal,
+  PenLine,
   SearchX,
   User,
 } from 'lucide-react';
@@ -25,16 +26,18 @@ import { DevelopmentSection, hasOpenPullRequest } from '@/components/github/Deve
 import { DesignResultPanel } from '../[key]/_components/DesignResultPanel';
 import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import { MarkdownView } from '@/components/ui/MarkdownView';
-import { TypeInText } from '@/components/planning/TypeInText';
+import { LiveDraftField } from '@/components/planning/LiveDraftField';
 import { ProposalRef } from '@/components/planning/ProposalRef';
-import { usePrefersReducedMotion } from '@/lib/hooks/usePrefersReducedMotion';
 import {
-  finishTypeIn,
-  foldTypeIn,
-  startTypeIn,
-  typeInPhase,
-  type TypedField,
-} from '@/lib/planning/typeIn';
+  IDLE_CUE,
+  grewLast,
+  nextLiveCue,
+  partialMarkdown,
+  storedKey,
+  type LiveCue,
+  type LiveField,
+  type PeekLiveDraft,
+} from '@/lib/planning/liveDraft';
 import { TodoRowReadOnly } from '@/app/(authed)/items/[key]/_components/TodoListSection';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
@@ -192,14 +195,15 @@ type IssueQuickViewPanelProps = {
        */
       onOpenProposal?: (planItemId: string) => void;
       /**
-       * THE TYPEWRITER (Story MOTIR-8590 · MOTIR-8595, design Part XXVIII §28.6) —
-       * the fields that were UNWRITTEN when this quick view opened, on the
-       * overlay while the plan is written. Each one that then arrives types itself
-       * in, in reading order. Decided by the host (`ProposalPeek`), which holds the
-       * review item; this panel only renders what it is told to type. Ignored
-       * without `proposal`, so no committed host can ever type.
+       * A CARD BEING WRITTEN (Story MOTIR-11190 · MOTIR-11201, design Part XXIX) —
+       * present only on the planning overlay while the plan is `generating`
+       * (`null` / absent everywhere else: the plan page, a finished plan, every
+       * committed host). `draft` is this proposal's partial fields as the live
+       * read serves them, or `null` when no session is writing it. Decided by the
+       * host (`ProposalPeek`); this panel only renders it. Ignored without
+       * `proposal`, so no committed host can ever show a partial.
        */
-      typeIn?: ReadonlySet<TypedField> | null;
+      live?: { draft: PeekLiveDraft | null } | null;
     }
 );
 
@@ -211,6 +215,40 @@ type IssueQuickViewPanelProps = {
  * `notYetCreated` rather than `opAdd` on the `add` arm: it is the stronger
  * statement and it is the copy that head already shipped.
  */
+/** Two reads carry the same partial fields. */
+function sameFields(a: PeekLiveDraft['fields'] | null, b: PeekLiveDraft['fields']): boolean {
+  if (a === null) return false;
+  return (['title', 'descriptionMd', 'explanationMd'] as const).every((f) => a[f] === b[f]);
+}
+
+/**
+ * The in-progress cue's line (Part XXIX §29.4, §29.6): `pen-line` + _Being
+ * written_ while the card is written; `sr-only` _Written_ once the stored card
+ * landed; mounted and EMPTY after a refused write, so nothing is announced. It
+ * wraps under the per-op header when the PEEK (not the viewport) is narrow.
+ */
+function LiveCueLine({ state }: { state: LiveCue['state'] }) {
+  const tPlan = useTranslations('planReview');
+  if (state === 'writing') {
+    return (
+      <p
+        role="status"
+        data-testid="quick-view-live-cue"
+        data-live-cue="writing"
+        className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-(--el-text-secondary) @max-[32rem]/peek:order-last @max-[32rem]/peek:basis-full"
+      >
+        <PenLine aria-hidden="true" className="size-3.5 shrink-0 text-(--el-accent-on-surface)" />
+        {tPlan('peekLive.beingWritten')}
+      </p>
+    );
+  }
+  return (
+    <p role="status" data-testid="quick-view-live-cue" data-live-cue={state} className="sr-only">
+      {state === 'written' ? tPlan('peekLive.written') : null}
+    </p>
+  );
+}
+
 function ProposalOpChip({
   op,
   outcome,
@@ -443,42 +481,57 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     // Obsolescence row lifts the hold with no re-read.
     edit.effective ? edit.effective.obsolescence : ready?.obsolescence,
   );
-  // THE TYPEWRITER'S RUN for this open (MOTIR-8595) — above the early returns for
-  // hook order. The panel is keyed per proposal, so the run is per open. Folded in
-  // render: an armed field that arrives queues, a changed one shows final, and
-  // reduced motion or a finished plan (`typeIn` gone) shows everything at once.
-  const typeInArmed = props.state === 'ready' && props.proposal ? (props.typeIn ?? null) : null;
-  const reducedMotion = usePrefersReducedMotion();
-  const [typeRun, setTypeRun] = useState(() => startTypeIn(typeInArmed));
-  const typeRunNow = foldTypeIn(
-    typeRun,
-    ready
-      ? {
-          title: ready.title,
-          descriptionMd: ready.descriptionMd,
-          explanationMd: ready.explanationMd,
-        }
-      : {},
-    typeInArmed !== null && !reducedMotion,
-  );
-  if (typeRunNow !== typeRun) setTypeRun(typeRunNow);
-  const finishTyping = useCallback(
-    (field: TypedField) => setTypeRun((run) => finishTypeIn(run, field)),
-    [],
-  );
-  const typed = (field: TypedField, node: ReactNode, placeholder: ReactNode = null) =>
-    typeInArmed?.has(field) ? (
-      <TypeInText
-        phase={typeInPhase(typeRunNow, field)}
-        placeholder={placeholder}
-        onDone={() => finishTyping(field)}
-        testId={`quick-view-typein-${field}`}
-      >
-        {node}
-      </TypeInText>
-    ) : (
+  // A CARD BEING WRITTEN (MOTIR-11201, Part XXIX) — above the early returns for
+  // hook order. The panel is keyed per proposal, so this state is per open; the
+  // draft is data, not a replay, so a reopen shows the current partial at once.
+  const liveOn = props.state === 'ready' && props.proposal ? (props.live ?? null) : null;
+  const liveDraft = liveOn?.draft ?? null;
+  const stored = ready ? storedKey(ready) : '';
+  // The cue's state across reads (§29.4): `writing` → `written` on the hand-over,
+  // → `idle` on a refused write. Folded in render, the shipped pattern here.
+  const [cue, setCue] = useState<LiveCue>(IDLE_CUE);
+  // A plan that stops generating mid-write still settles the cue: the hand-over
+  // of its last card is announced even as the overlay leaves `generating`.
+  const cueNow =
+    liveOn || cue.state === 'writing'
+      ? nextLiveCue(cue, {
+          writing: liveDraft !== null,
+          // A partial on screen; none, with the step still open, is the hand-over's read.
+          drafted: liveDraft !== null && Object.keys(liveDraft.fields).length > 0,
+          stored,
+        })
+      : cue;
+  if (cueNow !== cue) setCue(cueNow);
+  // Which live field holds the caret: the one that grew on the latest read
+  // (§29.3). Kept across reads that grow nothing.
+  const [growth, setGrowth] = useState<{
+    fields: PeekLiveDraft['fields'] | null;
+    field: LiveField | null;
+  }>({ fields: null, field: null });
+  if (liveDraft && !sameFields(growth.fields, liveDraft.fields)) {
+    setGrowth({
+      fields: liveDraft.fields,
+      field: grewLast(growth.fields, liveDraft.fields) ?? growth.field,
+    });
+  } else if (!liveDraft && growth.fields !== null) {
+    setGrowth({ fields: null, field: null });
+  }
+  // A live field (§29.2): the partial through the field's own element, the stored
+  // element `sr-only` beside it. A field the draft does not carry is a WAITING
+  // field and renders exactly as shipped.
+  const livePartial = (field: LiveField, render: (text: string) => ReactNode, node: ReactNode) => {
+    const text = liveDraft?.fields[field];
+    return text === undefined ? (
       node
+    ) : (
+      <LiveDraftField
+        field={field}
+        partial={render(text)}
+        stored={node}
+        growing={growth.field === field}
+      />
     );
+  };
   const labelEdit = useLabelEditing({
     workItemId: ready?.id ?? '',
     projectKey: ready?.projectIdentifier ?? '',
@@ -736,7 +789,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     // this modal, so without this the composed `EstimateBadge` silently falls
     // back to a read-only default and is inert on every peek surface.
     <EstimationConfigProvider config={data.estimation} canEdit={data.estimation.canEdit}>
-      <QuickViewHeader>
+      <QuickViewHeader className={proposal ? 'flex-wrap gap-y-1.5' : undefined}>
         <IssueTypeIcon type={data.kind} className="h-[18px] w-[18px] shrink-0" />
         {/* WHICH work item this is. An un-materialized `add` has no key until
             approve creates one, so it says so in the same mono slot with the
@@ -771,6 +824,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             header reads *what the plan does* → *where it is now*. An `add` has
             no status at all, so the two never crowd. */}
         {proposal ? <ProposalOpChip op={proposal.op} outcome={proposalOutcome ?? null} /> : null}
+        {/* THE IN-PROGRESS CUE (MOTIR-11201, Part XXIX §29.4) — right after the op
+            chip, mounted for as long as the peek is open on a generating plan so
+            its two changes are announced (the ONE live region, §29.6). */}
+        {proposal && (liveOn || cue.state === 'written') ? <LiveCueLine state={cue.state} /> : null}
         {/* THE STATUS SLOT AND THE MANUAL CHIP (MOTIR-10534) — the canvas card's tag
             row, shared, so the peek names the item's state the way the roadmap card
             and the board card do: Done › To plan › Ready › the status chip, then
@@ -888,8 +945,13 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         <QuickViewMain>
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {typed(
+              {livePartial(
                 'title',
+                (text) => (
+                  <h2 className="font-serif text-[27px] leading-tight font-semibold text-(--el-text)">
+                    {text}
+                  </h2>
+                ),
                 <h2 className="font-serif text-[27px] leading-tight font-semibold text-(--el-text)">
                   <TranslatableTitle
                     title={data.title}
@@ -962,8 +1024,16 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               <FieldTranslationMark fieldRef={fieldRef.description()} field="description" />
             </span>
           </span>
-          {typed(
+          {livePartial(
             'descriptionMd',
+            (text) => (
+              <MarkdownView
+                value={partialMarkdown(text)}
+                workItemRefs={data.workItemRefs}
+                pageRefs={data.pageRefs}
+                {...proposalRefs}
+              />
+            ),
             data.descriptionMd ? (
               <TranslatableMarkdown
                 fieldRef={fieldRef.description()}
@@ -976,7 +1046,6 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             ) : (
               <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>
             ),
-            <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>,
           )}
           {/* THE EXPLANATION, INLINE (Part XIV §6). The shipped peek defers it
               to the full page; a proposal has no page, and deferring to a thing
@@ -990,8 +1059,16 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               <span className="mt-6 mb-2 block text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
                 {tPlan('sectionExplanation')}
               </span>
-              {typed(
+              {livePartial(
                 'explanationMd',
+                (text) => (
+                  <MarkdownView
+                    value={partialMarkdown(text)}
+                    workItemRefs={data.workItemRefs}
+                    pageRefs={data.pageRefs}
+                    {...proposalRefs}
+                  />
+                ),
                 data.explanationMd ? (
                   <MarkdownView
                     value={data.explanationMd}
@@ -1005,9 +1082,6 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     {tPlan('noExplanation')}
                   </p>
                 ),
-                <p className="text-sm text-(--el-text-secondary) italic">
-                  {tPlan('noExplanation')}
-                </p>,
               )}
             </>
           ) : null}

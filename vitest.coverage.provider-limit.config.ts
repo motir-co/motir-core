@@ -38,6 +38,9 @@ export default defineConfig({
     ...baseConfig.test,
     include: [
       'tests/integration/plans/providerLimitStoryGate.test.ts',
+      // MOTIR-11199 — the route's `itemDraft` form (Story MOTIR-11190): its 400 /
+      // 404 / 409 / 422 refusals and the applied / stale answers.
+      'tests/integration/ai/planStepDraft.test.ts',
       'tests/integration/plans/providerLimitStoryGate.host.test.tsx',
       'tests/planChange/providerLimitView.test.ts',
       'tests/components/plan-change-rail-provider-limit.test.tsx',

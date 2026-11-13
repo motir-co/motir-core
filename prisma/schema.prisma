@@ -7766,48 +7766,48 @@ model Plan {
   /// keeps none — every plan written before the column, and every hosted plan.
   plannerRecord        Json?                   @map("planner_record")
 
-  workspace         Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  session           PlanChangeSession?     @relation(fields: [sessionId], references: [id], onDelete: NoAction)
-  decidedBy         User?                  @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-  createdBy         User?                  @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  items             PlanItem[]
-  revisions         PlanRevision[]
+  workspace           Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project             Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session             PlanChangeSession?       @relation(fields: [sessionId], references: [id], onDelete: NoAction)
+  decidedBy           User?                    @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdBy           User?                    @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items               PlanItem[]
+  revisions           PlanRevision[]
   /// The step each RUNNING planner session is on (Story MOTIR-7820 ·
   /// MOTIR-7822) — one row per session, replaced on its next report and
   /// deleted when it ends. Read only while the plan is `generating`.
-  steps             PlanStep[]
+  steps               PlanStep[]
   /// The planner's NARRATION (Story MOTIR-8060 · MOTIR-8062) — every plain-language
   /// sentence a planner session wrote about its work, append-only and kept after
   /// the step ends and after the plan is decided.
-  narration         PlanNarration[]
+  narration           PlanNarration[]
   /// Each planner session's STEP WORDS (MOTIR-8062) — kind + target title as
   /// last reported, kept after the session's `end` deletes its `PlanStep`.
-  narrationSessions PlanNarrationSession[]
+  narrationSessions   PlanNarrationSession[]
   /// Every CODE READ a planner session made (MOTIR-10122) — what it asked, at
   /// which commit, and how much came back; never the contents. Append-only and
   /// kept as long as the narration.
-  codeReads         PlanCodeRead[]
+  codeReads           PlanCodeRead[]
   /// Every LESSON CALL a planner session made (MOTIR-10191) — its searches with
   /// the ids they returned in rank order, its reinforcements and additions, and the
   /// ids a hosted session was handed in code. Ids only; kept as long as the narration.
-  lessonCalls       PlanLessonCall[]
+  lessonCalls         PlanLessonCall[]
   /// The sessions whose lesson log was recorded at all (MOTIR-10191) — what makes
   /// an empty log read "made no lesson call" rather than "not recorded".
-  lessonSessions    PlanLessonSession[]
+  lessonSessions      PlanLessonSession[]
   /// Every GAP a planner's author session raised on this plan (MOTIR-10176) — kept
   /// on the plan rather than in the walk's memory, so a resumed walk hands its
   /// level's amend the gaps the dead attempt raised.
-  raisedGaps        PlanRaisedGap[]
+  raisedGaps          PlanRaisedGap[]
   /// The hand-offs and renames its author sessions registered (MOTIR-11085), kept
   /// on the plan for the same reason, so a resumed walk's amend applies them.
   authorRegistrations PlanAuthorRegistration[]
   /// The targets this plan has PARKED at `planning` while it is open
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
-  targetLocks       PlanTargetLock[]
+  targetLocks         PlanTargetLock[]
   /// Sharpen sessions about this plan (Task MOTIR-1101 · MOTIR-8182). Cascade.
-  sharpenSessions   SharpenSession[]
+  sharpenSessions     SharpenSession[]
 
   @@index([workspaceId])
   @@index([projectId, createdAt])
@@ -8072,6 +8072,18 @@ model PlanStep {
   providerWaitUntil       DateTime?    @map("provider_wait_until") @db.Timestamptz
   providerWaitAttempt     Int?         @map("provider_wait_attempt")
   providerWaitMaxAttempts Int?         @map("provider_wait_max_attempts")
+  /// The session's IN-FLIGHT CARD (MOTIR-11199): the partial title, description
+  /// and explanation an `author` session's model has written so far, held BESIDE
+  /// the proposal `draftPlanItemId` names and never in it. `draftPlanItemId`,
+  /// `draftSeq` and `draftUpdatedAt` are set or NULL together (CHECK
+  /// `plan_step_item_draft_complete`); a NULL text field is one not started yet.
+  /// A step report and the proposal's completed write both null them.
+  draftPlanItemId         String?      @map("draft_plan_item_id")
+  draftSeq                Int?         @map("draft_seq")
+  draftTitle              String?      @map("draft_title")
+  draftDescriptionMd      String?      @map("draft_description_md")
+  draftExplanationMd      String?      @map("draft_explanation_md")
+  draftUpdatedAt          DateTime?    @map("draft_updated_at") @db.Timestamptz
 
   plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
 

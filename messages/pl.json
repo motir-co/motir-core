@@ -419,6 +419,10 @@
       "slow": "Nadal trwa przetwarzanie – duży plan zajmuje więcej czasu. Nie musisz klikać ponownie.",
       "timedOutTitle": "Nic nie zostało utworzone – zatwierdzanie trwało zbyt długo.",
       "timedOutNext": "Ten plan nadal czeka na Twoją decyzję, bez zmian. Możesz bezpiecznie zatwierdzić go ponownie."
+    },
+    "peekLive": {
+      "beingWritten": "W trakcie pisania",
+      "written": "Napisano"
     }
   },
   "projectAccess": {

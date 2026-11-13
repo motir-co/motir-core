@@ -7,7 +7,7 @@ import type { QuickViewData } from '@/lib/dto/quickView';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
-import { unwrittenFields, type TypedField } from '@/lib/planning/typeIn';
+import { liveDraftFor, type LiveDrafts } from '@/lib/planning/liveDraft';
 
 // READ A PROPOSAL WITH THE SHIPPED PEEK (MOTIR-4185, story MOTIR-4181, design
 // `design/ai-planning/design-notes.md` Part XIV).
@@ -168,6 +168,7 @@ export function ProposalPeek({
   onClose,
   onOpenProposal,
   live = false,
+  liveDrafts = null,
 }: {
   /** The proposal to read, or null when the peek is closed. */
   item: PlanReviewItemDto | null;
@@ -189,9 +190,15 @@ export function ProposalPeek({
   onOpenProposal?: (planItemId: string) => void;
   /**
    * The plan is being WRITTEN (the overlay while `generating`; the plan page never
-   * passes it). Only then do fields type in (MOTIR-8595, Part XXVIII §28.6).
+   * passes it). Only then does a card being written show its partial text
+   * (MOTIR-11201, Part XXIX §29.5).
    */
   live?: boolean;
+  /**
+   * The live read's in-flight state — `inFlightDrafts` and the proposals an
+   * `author` step targets (MOTIR-11199). Honoured only when `live`.
+   */
+  liveDrafts?: LiveDrafts | null;
 }) {
   // THREE states, not two (MOTIR-4185). `pending` renders the shipped skeleton;
   // `ready` renders the peek; `notfound` renders the shipped not-found panel.
@@ -240,25 +247,16 @@ export function ProposalPeek({
     return () => controller.abort();
   }, [targetKey]);
 
-  // ⭐ WHAT TYPES IS DECIDED PER OPEN (MOTIR-8595; design Part XXVIII §28.6): the
-  // typeable fields unwritten on the REVIEW item at the moment this proposal's
-  // quick view became VISIBLE — its first ready render, which for a `modify` /
-  // `remove` is when the skeleton gives way. Read from the review item, never from
-  // the panel's payload, which fills defaults. Reset when the peek closes or moves
-  // to another proposal, so a reopen captures afresh and shows everything at once.
-  const visible = item !== null && (!targetKey || (fetched !== null && fetched.key === targetKey));
-  const [armed, setArmed] = useState<{
-    planItemId: string;
-    fields: ReadonlySet<TypedField>;
-  } | null>(null);
-  if (!item || !visible) {
-    if (armed !== null && armed.planItemId !== item?.planItemId) setArmed(null);
-  } else if (armed?.planItemId !== item.planItemId) {
-    setArmed({ planItemId: item.planItemId, fields: unwrittenFields(item) });
-  }
-  const typeIn =
-    live && item && armed?.planItemId === item.planItemId && armed.fields.size > 0
-      ? armed.fields
+  // ⭐ A CARD BEING WRITTEN (MOTIR-11201; design Part XXIX): on the overlay while
+  // the plan is `generating`, the open proposal's partial fields as the live read
+  // serves them — data, not a replay, so nothing is remembered per open and a
+  // reopen shows the current partial at once (§29.5). Off the overlay the panel
+  // gets nothing, and shows the stored proposal exactly as shipped (P9).
+  const livePanel =
+    live && item
+      ? {
+          draft: liveDraftFor(liveDrafts, item.planItemId, { live, proposal: true }),
+        }
       : null;
 
   if (!item) return null;
@@ -381,7 +379,8 @@ export function ProposalPeek({
       className="h-[680px] max-h-[82vh] w-[90vw] p-0"
     >
       {/* modal-scroll-container: measured 1280x700, tallest = the ready peek; the panel pins its own height and IssueQuickViewPanel's two columns scroll, panel 574px */}
-      <div className="flex h-full flex-col" data-testid="proposal-peek">
+      {/* `@container/peek`: the in-progress cue wraps by the PEEK's width (Part XXIX §29.4). */}
+      <div className="@container/peek flex h-full flex-col" data-testid="proposal-peek">
         <IssueQuickViewPanel
           key={item.planItemId}
           state="ready"
@@ -389,7 +388,7 @@ export function ProposalPeek({
           proposal={item.proposal}
           proposalOutcome={outcome}
           onClose={onClose}
-          typeIn={typeIn}
+          live={livePanel}
           {...(onOpenProposal ? { onOpenProposal } : {})}
         />
       </div>

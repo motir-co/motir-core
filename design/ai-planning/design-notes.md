@@ -36,6 +36,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **A plan being written: progress and cues**     | **`plan-review--live-progress.mock.html`**                | MOTIR-7821           | Part XXVI   |
 | **A plan resumed after a lost machine**         | **`plan-review--live-progress--resuming.mock.html`**      | MOTIR-8306           | Part XXVII  |
 | **Following the planner, and fields typing in** | **`plan-review--follow-the-planner.mock.html`**           | MOTIR-8591           | Part XXVIII |
+| **A card's text as it is written, in the peek** | **`peek-proposal-mode--being-written.mock.html`**         | MOTIR-11196          | Part XXIX   |
 | **The Plans page lists CONVERSATIONS**          | `plans-sessions--list.mock.html` (on the design result)   | MOTIR-6019           | by title    |
 | **The list shows only what reached planning**   | **`plans-sessions--reached-planning.mock.html`**          | MOTIR-9298           | § at end    |
 
@@ -8411,6 +8412,8 @@ word for the planner, e.g. `detailsNoSteps`.)
 
 ## 28.6 C — fields type in, in the proposal quick view
 
+> **SUPERSEDED 2026-11-13 by MOTIR-11190** — see §28.13 and Part XXIX (`peek-proposal-mode--being-written.mock.html`, MOTIR-11196).
+
 Only in the peek opened from the overlay's canvas while the plan is `generating`. The plan page's peek
 (`PlanDetail`) never types, and no peek opens by itself.
 
@@ -8446,6 +8449,8 @@ added (a typewriter is linear in characters).
 
 ## 28.7 Accessibility
 
+> **The _a typed field_ row is SUPERSEDED 2026-11-13 by MOTIR-11190** — §28.13; its successor is Part XXIX §29.6. Every other row stands.
+
 | element                         | disposition                                                                                                                                                                                                                                                                                                                                 |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | the following status            | plain text in the bar's `nav`; NOT a live region, because the bar is read on demand. Its glyph is `aria-hidden`; the faint idle glyph is decorative, which is the one use `--el-text-faint` is allowed                                                                                                                                      |
@@ -8458,6 +8463,8 @@ added (a typewriter is linear in characters).
 | contrast                        | the status and button label are `--el-text-secondary` (≥ 6.18:1 on every surface); the glyph is `--el-accent-on-surface` (a graphic, 3:1); the caret is a graphic                                                                                                                                                                           |
 
 ## 28.8 Token and shape roles
+
+> **The _typing caret_ and _typewriter_ rows are SUPERSEDED 2026-11-13 by MOTIR-11190** — §28.13 (the caret lives on as Part XXIX's in-progress cue). Every other row stands.
 
 | element            | colour                                                                                                                   | shape                                                                          | motion                                                                     |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
@@ -8484,6 +8491,8 @@ Chromium and looked at in light and dark. Both temporary files were deleted; the
 (`vitest --config vitest.design.config.ts`) is green over the asset.
 
 ## 28.10 GIVES / TAKES
+
+> **The MOTIR-8595 row and MOTIR-8597's `data-typewriter` testid are SUPERSEDED 2026-11-13 by MOTIR-11190** — §28.13. Every other row stands.
 
 - **MOTIR-8592** (the driven-step derivation) — **TAKES** what it must produce: the driven step and
   its level, ordered as the snapshot's steps, holding the first step's level until that step ends, and
@@ -8538,6 +8547,29 @@ Chromium and looked at in light and dark. Both temporary files were deleted; the
 - The plan page (`PlanDetail`): never driven, never typing. The List view's own content. An
   auto-opened quick view. A typewriter anywhere but the overlay's proposal quick view.
 - A dwell rule between driven moves (flag 1).
+
+## 28.13 The SUPERSESSION record for Table C — dated 2026-11-13 (Story MOTIR-11190 · design MOTIR-11196)
+
+**What is replaced.** The proposal quick view no longer REPLAYS a field that already arrived; it
+shows the model's partial text while the `author` session writes the card, and the stored card when
+the write lands. The design is **Part XXIX**, the delta
+[`peek-proposal-mode--being-written.mock.html`](./peek-proposal-mode--being-written.mock.html)
+(MOTIR-11196). Superseded by **MOTIR-11190**:
+
+| row                                                                                                                           | where  | successor                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------- |
+| Table C — every row (which fields type, the order, the pace, the cap, the per-open memory, the long body, reduced motion, AT) | §28.6  | Part XXIX §29.1–§29.5, §29.7                                                              |
+| the token `--typewriter-char-interval` (`12ms`)                                                                               | §28.6  | none: the text is driven by arriving data, not a pace (§29.9) — retired                   |
+| _a typed field_                                                                                                               | §28.7  | §29.6, the final-value announcement                                                       |
+| _the typing caret_                                                                                                            | §28.8  | the same caret, reused by the in-progress cue (§29.3–§29.4)                               |
+| _the typewriter_                                                                                                              | §28.8  | none — retired                                                                            |
+| MOTIR-8595 **TAKES** Table C                                                                                                  | §28.10 | MOTIR-11201 TAKES Part XXIX (§29.11)                                                      |
+| the `data-typewriter="typing" \| "waiting" \| "final"` testid in MOTIR-8597's row                                             | §28.10 | `quick-view-live-cue` (`data-live-cue`) and `quick-view-live-<field>` (`data-live-field`) |
+
+**What stands unchanged.** Following the planner on the canvas (§28.1–§28.2), Table A (§28.3), the
+driven move B (§28.4), §28.5's copy and live region, every other row of §28.7, §28.8 and §28.10, the
+flags (§28.11) and §28.12. **MOTIR-8591 and MOTIR-8595 are `done` and are not edited**; this record
+and the one-line pointers under §28.6, §28.7, §28.8 and §28.10 are the whole change to Part XXVIII.
 
 ## ⭐ The guide-seeded Plans row (MOTIR-8686, 2026-10-15)
 
@@ -8660,3 +8692,244 @@ The reads (MOTIR-9300), the gate and the lease (MOTIR-9299), the fresh-start not
 MOTIR-9303); the rows, the Mine/Project switch, the read-failed state, the paging sentinel, the
 `?session=` highlight and the overlay — all shipped and unchanged. No PNG is exported: a new asset
 is a mock alone (`docs/decisions/design-result.md` AMENDMENT 4).
+
+# Part XXIX — the proposal quick view of a card BEING WRITTEN: live fields, the in-progress cue, the stored hand-over and the refused write (MOTIR-11196 · Story MOTIR-11190 — `peek-proposal-mode--being-written.mock.html`, DATED 2026-11-13)
+
+**Design system, identified first.** Read `package.json` (line 145, `"@motir/design-system":
+"workspace:*"`) and `app/globals.css` (line 13, `@import '@motir/design-system/theme.css'`). Both
+hold, so the verdict is **(a) ON MOTIR DESIGN**, package **v0.22.4**
+(`packages/design-system/package.json`). The axes are per person (`app/layout.tsx` stamps the
+reader's `data-style` / `data-palette` / `data-type`; a signed-out Visitor gets none), so the board
+renders at the package defaults (`warm-editorial` · `motir` · `motir`). The package exports
+`@motir/design-system/mock`, and the board is built with its `renderMock` at `boardWidth: 'full'`.
+Every part on this surface is product-local, so the board composes those parts' **real emitted
+markup**:
+
+| part                                                              | kind                    | reason                                                                           |
+| ----------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------- |
+| `IssueQuickViewPanel` in proposal mode (opened by `ProposalPeek`) | product-local component | the Part XIV peek, cited and not redrawn                                         |
+| `PlanItemNode` (P0, the access path)                              | product-local component | the overlay canvas card that opens the peek; its drafting cue is Part XXVI §26.6 |
+| the **in-progress cue** (`quick-view-live-cue`)                   | product-local component | NEW, one line in the peek's header; nothing to add to the package                |
+| the **live field** wrapper (`quick-view-live-<field>`)            | product-local component | NEW, a wrapper around the peek's own field elements                              |
+
+Nothing is proposed for `@motir/design-system`. **No token is added**, and one is retired (§29.9).
+
+**The number.** _Part XXIX_ is free. Checked on 2026-11-13 against this file's index (Part XXVIII,
+MOTIR-8591, is the last Part row) and its headings (`grep -n "^# Part" design-notes.md`: XXVIII is the
+last), and against the area's published results (`list_designs { projectKey: "MOTIR", pathPrefix:
+"design/ai-planning/" }`: the newest is MOTIR-9298's delta, which took no Part number, and nothing is
+published past XXVIII).
+
+**A DELTA.** Base: `peek-proposal-mode.mock.html` (Part XIV, the proposal quick view) — not edited.
+It SUPERSEDES Part XXVIII §28.6 Table C (the replay typewriter) and its dependent rows; the dated
+record is **§28.13**. The rest of Part XXVIII (following the planner, Tables A and B, §28.5's copy)
+stands unchanged.
+
+**Asset:** [`peek-proposal-mode--being-written.mock.html`](./peek-proposal-mode--being-written.mock.html).
+
+| Panel | State                                                                                                       |
+| ----- | ----------------------------------------------------------------------------------------------------------- |
+| P0    | The access path: the card being written on the overlay canvas opens the quick view                          |
+| P1    | Writing, no partial yet — the cue shows, every field is a waiting field                                     |
+| P2    | Writing, one field growing — the description, caret at its end                                              |
+| P3    | Writing, several fields — title partial, description growing (inside an open bold run), explanation waiting |
+| P4    | A long description growing past the fold — the reader's scroll position is kept                             |
+| P5    | Opened mid-stream — the first frame already shows the partial, the next read grows it                       |
+| P6    | The stored hand-over — last live frame beside the landed card                                               |
+| P7    | The refused-write state — growing beside dropped                                                            |
+| P8    | Closed and reopened during writing — the current partial at once                                            |
+| P9    | The plan page's peek (`PlanDetail`) and any peek outside `generating` — shipped, no live field              |
+| P10   | A Visitor on a public project — the same live view, read-only                                               |
+| P11   | `prefers-reduced-motion: reduce`                                                                            |
+| P12   | Dark: growing (P3) and landed (P6)                                                                          |
+| P13   | Narrow split (480px): the cue wraps under the per-op header; en and zh                                      |
+| P14   | The final-value announcement: what a screen reader meets at each moment                                     |
+
+## 29.0 Rendered before drawn
+
+Every peek on the board is the emitted markup of `ProposalPeek` → `IssueQuickViewPanel` in proposal
+mode at motir-core `2ad6b104` (main) plus the MOTIR-11199 commit on the story branch, captured in
+happy-dom through `tests/helpers/renderWithIntl` (en; zh in P13), one capture per state, with the
+dialog panel itself (`[data-surface="modal"]`) taken as the frame. The delta is applied to those
+captures and to nothing else. What the render showed:
+
+- **The header row is one line, `flex items-center`, with no wrap** (`QuickViewHeader`): type glyph,
+  _New_ (or the key), the op chip, a `flex-1` spacer, then Close. There is room after the op chip on
+  every width the overlay gives the peek except the narrowest, which is why the cue goes there and
+  why the narrow form wraps (§29.4).
+- **The three live-able fields are each ONE element in the main column**: the title `h2`
+  (`font-serif text-[27px]`), the description (`TranslatableMarkdown`, `.motir-prose`) or its empty
+  `p`, and the explanation (`MarkdownView`) or its empty `p`. A partial rendered through those same
+  elements lays out exactly as the stored value will, so the hand-over moves nothing.
+- **The rail's empty states are the shipped ones**: Type, Executor and Difficulty read _None_, Story
+  points and Estimate are absent rows, and **Priority reads _Medium_** because `proposedPayload`
+  defaults an unset priority to `medium` (that is the shipped empty treatment; this delta does not
+  change it).
+- **The shipped typewriter is dormant on this capture** (the peek opened with `live` off): no
+  `data-typewriter` node, no `--typewriter-char-interval` read. Nothing of it is reused but its caret
+  class.
+
+## 29.1 The rule, in one sentence
+
+**On the planning overlay, while the plan is `generating`, the quick view of a proposal that an
+`author` session is writing shows that session's partial title, description and explanation as the
+overlay's live plan read serves them, in the fields' own elements, with an in-progress cue; when the
+completed write lands the stored proposal replaces them in place, and when the draft is dropped
+without a write they vanish.** Nothing is replayed: the text on screen is the text the model has
+written so far.
+
+## 29.2 The elements, named
+
+| element                      | what it is                                                                                                                                                                                                                                                                                                                                                                 | reads                                                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **live field**               | The title, description or explanation of a card being written, showing its PARTIAL text and growing as later reads arrive. Rendered **through the field's own element** (the `h2`, `TranslatableMarkdown`, `MarkdownView`), inside an `aria-hidden` copy, with the field's stored element (or its empty state) `sr-only` beside it. Only these three fields are ever live. | the partial `title` / `descriptionMd` / `explanationMd` of ONE proposal on the overlay's live plan read                                                           |
+| **waiting field**            | A live-able field with no partial yet: the stored value if the proposal has one (the title it was laid with), else Part XIV's empty treatment (_No description yet._ / _No explanation yet._, cited).                                                                                                                                                                      | the stored proposal                                                                                                                                               |
+| **in-progress cue**          | (1) A quiet status line in the header, right after the op chip: `pen-line` + _Being written_. (2) The shipped static caret at the end of the live field that grew most recently. **One caret at a time.** Shown whenever the session is writing the card, even before any partial arrives (P1).                                                                            | that this proposal is being written: the live read's current `author` step targets it (the same signal as Part XXVI's drafting cue), or a draft for it is present |
+| **stored hand-over**         | The completed write landed: the stored proposal replaces each live field in place, in the same element, with no reflow. The cue line and the caret leave; the rail scalars take their stored values at the same moment.                                                                                                                                                    | the stored proposal, on the read that carries no draft and a changed proposal                                                                                     |
+| **refused-write state**      | The draft is cleared without a stored write (refused, the step ended, the plan stopped generating). The partial text is dropped; every field returns to its stored value or empty treatment; the cue leaves. Nothing reads as saved and no partial stays on screen.                                                                                                        | the stored proposal, on the read that carries no draft and an UNCHANGED proposal                                                                                  |
+| **final-value announcement** | The accessibility rule (§29.6): a screen reader meets only the field's stored value (or empty state); the cue's line is the one polite `role="status"`, saying _Being written_ once and _Written_ once.                                                                                                                                                                    | the cue's state                                                                                                                                                   |
+
+**The data, by the card that defines it.** The partial fields come from the plan-step door card
+(MOTIR-11199) and ride the live plan read as `inFlightDrafts[]` (`planItemId`, `title`,
+`descriptionMd`, `explanationMd`, each a string or null, newest per proposal); its field names
+govern. This Part draws the draft's STATES — absent, present and growing, landed, dropped — never its
+shape. A field that is `null` in the draft is a waiting field; a non-null one is a live field.
+
+**Hand-over versus refusal, as the reader sees them.** Both are a read on which the draft is gone.
+If the stored proposal changed on that read, it is the hand-over (_Written_ is announced); if it did
+not, it is the refusal (nothing is announced). The peek decides nothing else: the text simply becomes
+whatever the stored proposal holds.
+
+## 29.3 How a live field renders — no reflow at the hand-over
+
+```
+<div class="min-w-0" data-testid="quick-view-live-<field>" data-live-field="growing|partial">
+  <div aria-hidden="true" data-live-partial>  …the field's own element, rendering the PARTIAL…  <caret/></div>
+  <div class="sr-only">                       …the field's own element, rendering the STORED value or empty state…</div>
+</div>
+```
+
+- `data-live-field="growing"` is the field holding the caret; the other live fields are `"partial"`.
+- **The caret** is the shipped one, reused: `inline-block h-[1em] w-0.5 align-text-bottom
+bg-(--el-accent-on-surface)`, `aria-hidden`, static (no blink: a blink is a loop), placed after the
+  last character of the partial inside its real block (a paragraph, a list item).
+- **Which field holds it**: the field whose partial changed on the latest read. If several changed on
+  one read, the last of them in reading order (title → description → explanation), because the model
+  writes in that order.
+- **Partial markdown that is unterminated renders as plain text up to the cut, never as broken
+  markup.** Every block already closed renders as markdown; a list item that has begun renders in its
+  list; an inline run still open (`**`, a backtick, a link's `[`) shows its text as plain text with
+  its opening marker WITHHELD until the run closes (P3: _…revoked by Sign out_ with no `**`). Never a
+  literal `**`, never a half link, never a `- ` with nothing after it.
+- **When the write lands** the wrapper is replaced by the field's element rendering the stored value
+  — the same element the partial used, so the same lines. The only geometry that changes is the
+  header losing the cue line (it sits in the header row, so the row keeps its height) and the last
+  characters arriving.
+
+## 29.4 The in-progress cue — placement and anatomy
+
+| part                | spec                                                                                                                                                                                                                                                                       |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| element             | `<p role="status" data-testid="quick-view-live-cue" data-live-cue="writing">`, the header's next child after the op chip (the per-op header of Part XIV §4)                                                                                                                |
+| layout              | `inline-flex min-w-0 items-center gap-1.5`                                                                                                                                                                                                                                 |
+| glyph               | lucide `pen-line` — the authoring act's glyph (the act record's `authoring`, the drafting chip of §26.6) — `size-3.5 shrink-0`, `--el-accent-on-surface`, `aria-hidden`                                                                                                    |
+| label               | _Being written_, `text-xs font-medium`, `--el-text-secondary`                                                                                                                                                                                                              |
+| narrow (P13)        | when the header cannot hold it on one row, it **wraps under** the per-op header onto its own line (`order-last basis-full`, header `flex-wrap gap-y-1.5`), driven by a container query on the peek so it follows the peek's width, not the viewport's. It never truncates. |
+| after the hand-over | the visible line leaves; the element stays mounted as `sr-only` text _Written_ (`data-live-cue="written"`)                                                                                                                                                                 |
+| after a refusal     | the visible line leaves; the element stays mounted and EMPTY (`data-live-cue="idle"`), so nothing is announced                                                                                                                                                             |
+| motion              | none: it appears and leaves with the read that carries the change, in both motion modes                                                                                                                                                                                    |
+
+The status element is mounted for as long as the quick view is open on a generating plan, so its two
+changes are real changes to a live region and are announced.
+
+## 29.5 Where the reader's eye stays
+
+A growing description never scrolls the peek for the reader. `QuickViewMain` is its own scroller;
+its `scrollTop` is kept across reads (P4). Text appended below the viewport never moves what the
+reader sees, and the caret is allowed to be out of view; text that grows above the reader (a title
+wrapping to a second line) is absorbed by native scroll anchoring (`overflow-anchor: auto`, the
+browser default — nothing may turn it off on this column). It is the same principle as the canvas
+never jumping after the reader navigates (Part XXIII).
+
+**Where it shows.** Only in the peek opened from the overlay's canvas (or list) while the plan is
+`generating`. The plan page's peek (`PlanDetail`) never shows partial text (P9), as today. A Visitor
+on a public project sees the same live view; proposal mode already suppresses every editor (Part XIV
+§5), so it is read-only by construction (P10). Opening or reopening mid-stream shows the partial so
+far at once (P5, P8): the draft is data, not a replay, so nothing is remembered per open.
+
+## 29.6 Accessibility — the final-value announcement
+
+| element              | disposition                                                                                                                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a live field         | its partial copy is `aria-hidden`; the tree holds the field's STORED element (or its empty state), `sr-only`. A screen reader never meets a partial value and no value is ever announced                                                  |
+| the in-progress cue  | the ONE live element: `role="status"` (polite). It says _Being written_ once, when writing starts, and _Written_ once, when the stored card lands. It announces the state, never a value. On a refused write it says nothing (it empties) |
+| opened mid-stream    | the cue's text is already in the tree when the peek opens, so it is read in order with the header, not announced                                                                                                                          |
+| the caret, the glyph | decorative, `aria-hidden`; graphics (3:1): `--el-accent-on-surface`                                                                                                                                                                       |
+| contrast             | the cue label is `--el-text-secondary` (≥ 6.18:1 on every surface, both themes)                                                                                                                                                           |
+| the dialog           | unchanged: still the Part XIV dialog the person reads; no `aria-busy`, which would hide the stored values from some readers for the whole stream                                                                                          |
+
+## 29.7 Reduced motion
+
+Nothing in this delta animates. Under `prefers-reduced-motion: reduce` the text still updates as reads
+arrive (it is data, not motion), and the cue arrives and leaves without a transition — exactly as in
+the default mode (P11).
+
+## 29.8 Copy — `messages/en.json` and `messages/zh.json`
+
+| key                                | `en`            | `zh`       | where                                                    |
+| ---------------------------------- | --------------- | ---------- | -------------------------------------------------------- |
+| `planReview.peekLive.beingWritten` | `Being written` | `正在撰写` | the cue's visible label and its first announcement       |
+| `planReview.peekLive.written`      | `Written`       | `已写入`   | the cue's `sr-only` text after the hand-over (announced) |
+
+`planReview` is the namespace the peek already reads in proposal mode (`tPlan`: `newItem`,
+`noExplanation`). No other string is added, and the typewriter added none to remove. The other nine
+locales follow the catalogue's parity rule in the card that adds the keys.
+
+## 29.9 Token and shape roles
+
+| element    | colour                          | shape                                   | motion |
+| ---------- | ------------------------------- | --------------------------------------- | ------ |
+| cue line   | label `--el-text-secondary`     | `gap-1.5` (layout)                      | none   |
+| cue glyph  | `--el-accent-on-surface`        | `size-3.5`                              | none   |
+| the caret  | `--el-accent-on-surface`        | `w-0.5` · `h-[1em]` (the shipped caret) | none   |
+| live field | the field's own inks, unchanged | the field's own element, unchanged      | none   |
+
+**No token is added.** The replacement is driven by arriving data, not by a pace, so the typewriter's
+`--typewriter-char-interval` has no successor; it is retired with the typewriter (§28.13). No raw
+colour, no new easing and no new dependency.
+
+## 29.10 How the asset was produced
+
+A temporary vitest file rendered `ProposalPeek` in happy-dom with a fixture proposal (`Remember me on
+this device`, an `add` under `ACME-2 Sign-in page`), once with the stored values and once with each
+state's partial values, took the dialog panel of each capture, and applied the delta to the stored
+capture: the live-field wrappers (the partial capture's field element inside an `aria-hidden` copy,
+the stored element `sr-only` beside it, the caret after the last character) and the cue line. A
+temporary script handed the captures to `renderMock`, with the shipped `.motir-prose` rules of
+`components/ui/markdown-editor.css` copied into the board's style (labelled there) because
+`theme.css` does not carry them. Board-only liberties: the dialog is drawn static at a fixed size
+instead of `w-[90vw]`, and P13 drops the `md:` two-column rail as the overlay's narrow viewport does.
+Every panel was screenshotted in Chromium and looked at; P12 is the dark board. Both temporary files
+were deleted; the design lane (`vitest --config vitest.design.config.ts`) is green over the asset.
+
+## 29.11 GIVES / TAKES
+
+- **MOTIR-11199** (the draft door, `inFlightDrafts` on the review read) — **GIVES** the data: the
+  partial `title` / `descriptionMd` / `explanationMd` for one proposal, absent when there is none.
+  This Part reads its states only.
+- **MOTIR-11201** (the quick view) — **TAKES** everything above verbatim: the live field and its
+  wrapper, the waiting field, the in-progress cue (placement, glyph, label, narrow wrap, its three
+  `data-live-cue` states), the caret rule, the partial-markdown rule, the stored hand-over, the
+  refused-write state, the scroll rule, the final-value announcement, the two message keys, and
+  retiring the typewriter (`lib/planning/typeIn.ts`, `TypeInText`, `--typewriter-char-interval`,
+  `data-typewriter`).
+- **The story's E2E** — **TAKES** the `data-testid`s `quick-view-live-cue` (with `data-live-cue`) and
+  `quick-view-live-<field>` (with `data-live-field`), in place of `data-typewriter`.
+- **Part XIV** (the peek) and **Part XXVI §26.6** (the drafting cue on the canvas card) — **TAKE
+  nothing.**
+
+## 29.12 What Part XXIX does NOT draw or decide
+
+How the partial text travels from motir-ai to motir-core, the live read's shape, and the planner's
+streaming; deleting the typewriter's code, token and tests (the quick-view card's); the other nine
+locales' strings; the plan page's peek (unchanged); the canvas card's drafting cue (unchanged).

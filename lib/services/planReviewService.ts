@@ -15,6 +15,7 @@ import { planProgressService } from '@/lib/services/planProgressService';
 import {
   toPlanNarrationDto,
   toPlanNarrationSessionDto,
+  toPlanItemDraftDto,
   toPlanStepDto,
 } from '@/lib/mappers/planMappers';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
@@ -55,11 +56,12 @@ import type {
   PlanNarrationReadDto,
   PlanWithItemsDto,
   StaleReason,
+  PlanItemDraftDto,
 } from '@/lib/dto/plans';
 import type { ExecutorDto, WorkItemRefMap, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { resolveExecutor } from '@/lib/issues/executorDefaults';
 import { isContainerKind } from '@/lib/plans/validateProposedKind';
-import type { PlanRevision, Prisma } from '@/generated/prisma/client';
+import type { PlanRevision, PlanStep, Prisma } from '@/generated/prisma/client';
 import { planRepository } from '@/lib/repositories/planRepository';
 import {
   isMarkChangeField,
@@ -798,6 +800,21 @@ function earlierCountOf(entries: readonly { seq: number }[]): number {
   return entries.length === 0 ? 0 : entries[0]!.seq - 1;
 }
 
+/**
+ * The in-flight cards the live read serves (MOTIR-11199): one per proposal, the
+ * newest report when two sessions somehow hold a draft of the same card.
+ */
+function inFlightDraftsOf(steps: readonly PlanStep[]): PlanItemDraftDto[] {
+  const byItem = new Map<string, PlanItemDraftDto>();
+  for (const step of steps) {
+    const draft = toPlanItemDraftDto(step);
+    if (!draft) continue;
+    const held = byItem.get(draft.planItemId);
+    if (!held || held.updatedAt < draft.updatedAt) byItem.set(draft.planItemId, draft);
+  }
+  return [...byItem.values()];
+}
+
 export const planReviewService = {
   /**
    * An EARLIER page of a plan's narration sentences (MOTIR-8063): up to `limit`
@@ -1063,7 +1080,7 @@ export const planReviewService = {
     // and every `withWorkspaceServiceContext` is a BEGIN, a `set_config` and a COMMIT around its
     // statements: three round trips of overhead apiece, paid on every tick of the poll. None of them
     // reads what another wrote, so they share the one.
-    const { revisions, lastActivityAt, inFlightSteps, conversation, narration } =
+    const { revisions, lastActivityAt, inFlightSteps, inFlightDrafts, conversation, narration } =
       await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
         const trail = await planRevisionRepository.listByPlan(planId, tx);
         const row = await planRepository.findById(planId, ctx.workspaceId, tx);
@@ -1086,6 +1103,9 @@ export const planReviewService = {
           revisions: trail,
           lastActivityAt: (row?.lastActivityAt ?? new Date(plan.createdAt)).toISOString(),
           inFlightSteps: steps.map(toPlanStepDto),
+          // The in-flight cards (MOTIR-11199), off the SAME generating-gated rows:
+          // no extra query, and `[]` whenever the plan is not being written.
+          inFlightDrafts: inFlightDraftsOf(steps),
           conversation,
           narration,
         };
@@ -2338,6 +2358,7 @@ export const planReviewService = {
       // Only a `generating` plan is polled, so only it is handed a token to poll with.
       ...(version?.status === 'generating' ? { reviewVersion: version.token } : {}),
       inFlightSteps,
+      inFlightDrafts,
       progress,
       gate,
       conversation,

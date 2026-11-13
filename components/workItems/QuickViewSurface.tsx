@@ -24,9 +24,20 @@ import { Tooltip } from '@/components/ui/Tooltip';
 // Deliberately presentational: no fetching, no state, no domain types.
 
 /** The peek's header rail: the row of affordances above the body. */
-export function QuickViewHeader({ children }: { children: ReactNode }) {
+export function QuickViewHeader({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  /** Extra layout classes — the proposal peek wraps its in-progress cue (MOTIR-11201). */
+  className?: string;
+}) {
   return (
-    <header className="flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5">
+    <header
+      className={`flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5${
+        className ? ` ${className}` : ''
+      }`}
+    >
       {children}
     </header>
   );

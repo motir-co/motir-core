@@ -23,7 +23,7 @@
 import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ApprovalGateStateDTO, PlanGateHeldDTO } from '@/lib/dto/approvalGate';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import type { PlanNarrationReadDto, PlanStepDto } from '@/lib/dto/plans';
+import type { PlanItemDraftDto, PlanNarrationReadDto, PlanStepDto } from '@/lib/dto/plans';
 import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 import type { ExecutorDto, WorkItemDifficultyDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type {
@@ -1228,6 +1228,15 @@ export interface PlanReviewDto {
    * `getPlanReview` always sets it.
    */
   inFlightSteps?: PlanStepDto[];
+  /**
+   * The IN-FLIGHT CARDS (Story MOTIR-11190 · MOTIR-11199) — one entry per proposal
+   * an `author` session is writing right now, with the partial title, description
+   * and explanation its model has produced so far. Never the stored card: the
+   * proposal's own fields stay in {@link items}. ALWAYS `[]` when the plan is not
+   * `generating`. OPTIONAL on the type only so hand-built review fixtures stay
+   * valid; `getPlanReview` always sets it.
+   */
+  inFlightDrafts?: PlanItemDraftDto[];
   /**
    * The plan's PROGRESS — the ONE derivation's server half (Story MOTIR-7820 ·
    * MOTIR-7825; `lib/plans/planProgress.ts`): the steps resolved to phrases and

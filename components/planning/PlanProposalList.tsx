@@ -9,6 +9,7 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { StatusPill } from '@/components/issues/StatusPill';
 import { DifficultyIndicator } from '@/components/issues/DifficultyPicker';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
+import type { LiveDrafts } from '@/lib/planning/liveDraft';
 import { changeCellText } from '@/components/planning/changeCellText';
 import { SupersedesChips } from '@/components/planning/SupersedesChip';
 import { proposedMarkOf } from '@/components/planning/PlanItemNode';
@@ -519,6 +520,11 @@ export interface PlanProposalListProps {
    */
   live?: boolean;
   /**
+   * The cards being WRITTEN (MOTIR-11201, Part XXIX) — handed to the open
+   * proposal's quick view. Read only while `live`.
+   */
+  liveDrafts?: LiveDrafts | null;
+  /**
    * The plan was DISCARDED before it finished (§23.12): the empty statement keeps
    * the shipped title and drops the body, whose *"Declining ends it"* is false of
    * a plan already declined.
@@ -530,6 +536,7 @@ export function PlanProposalList({
   items,
   outcome,
   live = false,
+  liveDrafts = null,
   discarded = false,
 }: PlanProposalListProps) {
   const t = useTranslations('planReview');
@@ -680,6 +687,7 @@ export function PlanProposalList({
       <ProposalPeek
         item={peekedProposal}
         live={live}
+        liveDrafts={liveDrafts}
         outcome={outcome}
         onClose={closePeek}
         onOpenProposal={openProposalById}

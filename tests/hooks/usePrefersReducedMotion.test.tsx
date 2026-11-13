@@ -4,7 +4,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { usePrefersReducedMotion } from '@/lib/hooks/usePrefersReducedMotion';
 
-// The live `prefers-reduced-motion` read the typewriter subscribes to (MOTIR-8595).
+// The live `prefers-reduced-motion` read (MOTIR-8595), which `BrandMarkFlow` subscribes to.
 
 function Probe() {
   return <span data-testid="reduced">{String(usePrefersReducedMotion())}</span>;

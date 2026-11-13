@@ -419,6 +419,10 @@
       "slow": "Nog bezig – een groot plan duurt langer. Je hoeft niet opnieuw te klikken.",
       "timedOutTitle": "Er is niets aangemaakt – goedkeuren duurde te lang.",
       "timedOutNext": "Dit plan wacht nog steeds ongewijzigd op je beslissing. Je kunt het veilig opnieuw goedkeuren."
+    },
+    "peekLive": {
+      "beingWritten": "Wordt geschreven",
+      "written": "Geschreven"
     }
   },
   "projectAccess": {

@@ -40,7 +40,8 @@ import {
   type PlanItemUpdateInput,
 } from '@/lib/repositories/planItemRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
-import { planStepRepository } from '@/lib/repositories/planStepRepository';
+import { PLAN_STEP_NO_DRAFT, planStepRepository } from '@/lib/repositories/planStepRepository';
+import { PlanItemDraftRefusal, parsePlanItemDraft } from '@/lib/plans/planItemDraft';
 import { hasBodyBeyondBoundary } from '@/lib/plans/authorFinished';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
 import { planCodeReadRepository } from '@/lib/repositories/planCodeReadRepository';
@@ -5241,9 +5242,10 @@ async function editAddProposal(
   // The project comes from the PLAN row, never from the actor's active project.
   await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
-  const { row, items } = await withWorkspaceContext(
-    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-    async (tx) => {
+  const scope = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId };
+  let edited;
+  try {
+    edited = await withWorkspaceContext(scope, async (tx) => {
       await refuseWhileApproving(planId, ctx.workspaceId, tx);
       const locked = await planRepository.lockById(planId, tx);
       if (!locked) throw new PlanNotFoundError(planId);
@@ -5259,8 +5261,20 @@ async function editAddProposal(
       await applyAddProposalEdit(fresh, planItemId, input, ctx, mode, tx);
       const allItems = await planItemRepository.findByPlan(planId, tx);
       return { row: fresh, items: allItems };
-    },
-  );
+    });
+  } catch (err) {
+    // A REFUSED deepen leaves no partial standing beside the card (MOTIR-11199):
+    // the author's completed write was the draft's end whether or not it landed,
+    // and the rollback above took nothing of the draft with it. A separate write,
+    // because the refused transaction is gone.
+    if (mode === 'deepen') {
+      await withWorkspaceContext(scope, (tx) =>
+        planStepRepository.clearItemDrafts(planId, planItemId, tx),
+      );
+    }
+    throw err;
+  }
+  const { row, items } = edited;
   return withLinkWarnings(toPlanWithItemsDto(row, items), items, [planItemId], ctx);
 }
 
@@ -5378,6 +5392,10 @@ async function applyAddProposalEdit(
     { proposedFields: stored as unknown as Prisma.InputJsonValue },
     tx,
   );
+  // The completed write ends any in-flight draft of this card (MOTIR-11199), in
+  // the same transaction, so the live read never shows a partial beside the
+  // stored card it was a partial of.
+  await planStepRepository.clearItemDrafts(fresh.id, planItemId, tx);
   // The edit, on the plan's content trail (MOTIR-3535), in the same
   // transaction as the merge it records — and the row this whole story
   // exists for: `editAddProposal` merges into `proposedFields` IN PLACE, so
@@ -5948,7 +5966,16 @@ export type ReportPlanStepResult =
   | { kind: 'lessonCalls'; lessonCalls: PlanLessonCallDto[] }
   | { kind: 'gaps'; gaps: PlanGapsRecordedDto }
   | { kind: 'registrations'; registrations: PlanRegistrationsRecordedDto }
-  | { kind: 'providerRetry'; providerWait: PlanStepProviderWaitDto | null };
+  | { kind: 'providerRetry'; providerWait: PlanStepProviderWaitDto | null }
+  | { kind: 'itemDraft'; itemDraft: PlanItemDraftRecordedDto };
+
+/** What one `itemDraft` report did (MOTIR-11199): `applied: false` is a STALE
+ *  report — its `seq` was not above the stored one — and `seq` is the stored
+ *  sequence after the call either way. */
+export interface PlanItemDraftRecordedDto {
+  applied: boolean;
+  seq: number;
+}
 
 /** The most retries one provider wait may name (MOTIR-9619) — `attempt` and
  *  `maxAttempts` are integers in `1..PLAN_PROVIDER_RETRY_ATTEMPTS_MAX`. */
@@ -8364,6 +8391,8 @@ export const plansService = {
           providerWaitUntil: null,
           providerWaitAttempt: null,
           providerWaitMaxAttempts: null,
+          // ...and a session that moved on has finished its in-flight card (MOTIR-11199).
+          ...PLAN_STEP_NO_DRAFT,
         },
         tx,
       );
@@ -8938,6 +8967,81 @@ export const plansService = {
   },
 
   /**
+   * Hold an `author` session's IN-FLIGHT CARD (Story MOTIR-11190 · MOTIR-11199):
+   * the partial title, description and explanation its model has written so
+   * far, REPLACING the session's previous draft whole. Refused
+   * {@link InvalidPlanStepError} (nothing written) when a field is over its cap,
+   * when the session's step is not `author` on exactly `itemDraft.target`, or
+   * when that ref names no `add` on this plan; {@link PlanNotGeneratingError} on
+   * a plan not `generating`.
+   *
+   * ⚠️ A STALE REPORT LOSES UNDER THE LOCK. The sequence guard is in the one
+   * update's `WHERE`, inside `withGeneratingPlanStep`'s row lock, so a report
+   * whose `seq` is not above the stored one changes nothing and is answered
+   * `applied: false` with the stored `seq` — advisory, never a refusal.
+   *
+   * ⚠️ IT NEVER TOUCHES THE PROPOSAL. The draft lives on the step row; the
+   * proposal is only read to check it exists, so `get_plan`, approve and every
+   * write refusal see the stored card alone.
+   */
+  async recordPlanItemDraft(
+    planId: string,
+    input: { sessionKey: string; itemDraft: unknown },
+    ctx: ServiceContext,
+  ): Promise<PlanItemDraftRecordedDto> {
+    const sessionKey = assertSessionKey(input.sessionKey);
+    let draft;
+    try {
+      draft = parsePlanItemDraft(input.itemDraft);
+    } catch (err) {
+      if (err instanceof PlanItemDraftRefusal) {
+        throw new InvalidPlanStepError(`${err.message} Nothing was recorded.`);
+      }
+      throw err;
+    }
+    return withGeneratingPlanStep(planId, ctx, async (_plan, tx, now) => {
+      const step = await planStepRepository.findForSession(planId, sessionKey, tx);
+      if (!step || step.kind !== 'author' || step.targetRef !== draft.target) {
+        throw new InvalidPlanStepError(
+          `Session \`${sessionKey}\` is not authoring \`${draft.target}\` — a draft is ` +
+            'reported only for the card the session’s current `author` step names; nothing ' +
+            'was recorded.',
+        );
+      }
+      if (!draft.target.startsWith(TEMP_REF_PREFIX)) {
+        throw new InvalidPlanStepError(
+          `\`${draft.target}\` is not a \`planItem:<id>\` ref — a draft is for a proposal; ` +
+            'nothing was recorded.',
+        );
+      }
+      const planItemId = draft.target.slice(TEMP_REF_PREFIX.length);
+      const item = await planItemRepository.findById(planItemId, tx);
+      if (!item || item.planId !== planId || item.op !== 'add') {
+        throw new InvalidPlanStepError(
+          `\`${draft.target}\` names no \`add\` proposal on this plan — nothing was recorded.`,
+        );
+      }
+      const count = await planStepRepository.setItemDraft(
+        planId,
+        sessionKey,
+        {
+          planItemId,
+          seq: draft.seq,
+          title: draft.title ?? null,
+          descriptionMd: draft.descriptionMd ?? null,
+          explanationMd: draft.explanationMd ?? null,
+          updatedAt: now,
+        },
+        tx,
+      );
+      if (count > 0) return { applied: true, seq: draft.seq };
+      // Stale: the stored draft is at `seq` or later, and it stands.
+      const stored = await planStepRepository.findForSession(planId, sessionKey, tx);
+      return { applied: false, seq: stored?.draftSeq ?? draft.seq };
+    });
+  },
+
+  /**
    * Clear a session's step (MOTIR-7822). A session with no step is a no-op
    * SUCCESS — a planner clearing on every exit must not be able to fail — and
    * still stamps the activity: an ending session is a sign of life. Refused on a
@@ -8975,12 +9079,14 @@ export const plansService = {
       lessonCalls?: unknown[];
       /** The hand-offs and renames registered and relayed (MOTIR-11085) — the seventh. */
       registrations?: unknown[];
+      /** An author session's in-flight card (MOTIR-11199) — the eighth. */
+      itemDraft?: unknown;
     },
     ctx: ServiceContext,
   ): Promise<ReportPlanStepResult> {
     // EXACTLY ONE of `step` / `narration` / `providerRetry` / `codeReads` / `gaps` /
-    // `lessonCalls` / `registrations` (MOTIR-8062 · MOTIR-9619 · MOTIR-10122 ·
-    // MOTIR-10176 · MOTIR-10191 · MOTIR-11085):
+    // `lessonCalls` / `registrations` / `itemDraft` (MOTIR-8062 · MOTIR-9619 ·
+    // MOTIR-10122 · MOTIR-10176 · MOTIR-10191 · MOTIR-11085 · MOTIR-11199):
     // a step report re-stamps `startedAt`, so keeping them apart is what lets the
     // others never touch the step.
     const forms = [
@@ -8991,12 +9097,27 @@ export const plansService = {
       input.gaps,
       input.lessonCalls,
       input.registrations,
+      input.itemDraft,
     ].filter((form) => form !== undefined).length;
     if (forms !== 1) {
       throw new InvalidPlanStepError(
         'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads`, `gaps`, ' +
-          '`lessonCalls` or `registrations` — nothing was recorded.',
+          '`lessonCalls`, `registrations` or `itemDraft` — nothing was recorded.',
       );
+    }
+    if (input.itemDraft !== undefined) {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError(
+          'An `itemDraft` call names its target inside the draft — send no top-level target; ' +
+            'nothing was recorded.',
+        );
+      }
+      const itemDraft = await plansService.recordPlanItemDraft(
+        planId,
+        { sessionKey: input.sessionKey, itemDraft: input.itemDraft },
+        ctx,
+      );
+      return { kind: 'itemDraft', itemDraft };
     }
     if (input.registrations !== undefined) {
       if (input.targetRef !== null) {

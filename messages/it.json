@@ -419,6 +419,10 @@
       "slow": "Ancora in corso: un piano grande richiede più tempo. Non serve premere di nuovo.",
       "timedOutTitle": "Non è stato creato nulla: l’approvazione ha richiesto troppo tempo.",
       "timedOutNext": "Questo piano attende ancora la tua decisione, invariato. Puoi approvarlo di nuovo in sicurezza."
+    },
+    "peekLive": {
+      "beingWritten": "In fase di stesura",
+      "written": "Scritto"
     }
   },
   "projectAccess": {

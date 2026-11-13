@@ -42,17 +42,19 @@ import en from '@/messages/en.json';
 // on the first of several drafts rather than hopping between them — until the
 // person moves it; then it stays where they put it and offers *Follow the
 // planner*, which hands it back. A proposal's quick view, opened on a card that
-// has no description yet, types the description in as it arrives; anything
-// already written, or opened again, shows at once. Reduced motion holds still,
+// has no description yet, shows the stored description in place the moment it
+// lands — nothing is replayed (MOTIR-11201 retired the replay; the partial
+// text of a card being written is the story MOTIR-11190 E2E's to show, through
+// the hosted planner's draft door, which this spec's MCP agent does not use).
+// Anything already written, or opened again, shows at once. Reduced motion holds still,
 // and when the plan is proposed the control goes. The plan page never drives.
 //
 // ── Why this cannot be a lower tier ─────────────────────────────────────────
 // The integration gate (MOTIR-8596) proves the seams — snapshot → driven step →
-// follow request → canvas level, and snapshot → typed field — against Postgres
+// follow request → canvas level, and snapshot → live field — against Postgres
 // with the poll on a faked clock. What only a browser shows is a person WATCHING
-// it: a canvas moving under the real 2.5 s poll, a real click taking it over, a
-// character-by-character reveal in a real `requestAnimationFrame` loop, and the
-// `prefers-reduced-motion` media query.
+// it: a canvas moving under the real 2.5 s poll, a real click taking it over, and
+// the `prefers-reduced-motion` media query.
 //
 // ── What is real, and what is not ───────────────────────────────────────────
 // The planner is PLAYED through ONE door, the MCP planner, as `prompts/plan.py`
@@ -78,9 +80,9 @@ import en from '@/messages/en.json';
 // response whose BODY carries the change (armed before the call), and only then
 // asserts the DOM. A HOLD — "the canvas stays here" — is asserted after EACH of
 // several consecutive responses that carry the steps, never after a sleep. The
-// typewriter is observed by an in-page MutationObserver that records every
-// length the typing copy ever held, installed before the value arrives, so
-// "it typed" and "it did not" are records, never a lucky screenshot. Nothing
+// quick view is observed by an in-page MutationObserver that records every live
+// field it ever drew, installed before the value
+// arrives, so "nothing was replayed" is a record, never a lucky screenshot. Nothing
 // sleeps to wait for state; the receipt's holds (`beat()`, `chapter()`'s own)
 // are pacing for a viewer only — remove every one and every assertion is
 // unchanged (`acceptance-video.ts` § Pacing).
@@ -129,8 +131,7 @@ const expectLevel = (page: Page, title: string) =>
 const followState = (page: Page) => workspace(page).getByTestId('canvas-follow-state');
 const followButton = (page: Page) => workspace(page).getByTestId('canvas-follow-planner');
 const peek = (page: Page) => page.getByRole('dialog').getByTestId('proposal-peek');
-const typedField = (page: Page, field: string) =>
-  peek(page).getByTestId(`quick-view-typein-${field}`);
+const liveCue = (page: Page) => peek(page).getByTestId('quick-view-live-cue');
 
 const stepOf = (steps: Steps | undefined, sessionKey: string) =>
   (steps ?? []).find((s) => s.sessionKey === sessionKey);
@@ -175,50 +176,40 @@ async function closeQuickView(page: Page): Promise<void> {
 
 // ── The in-page recorders ───────────────────────────────────────────────────
 
-interface TypingRecord {
-  /** Every length each field's typing copy held, in order. */
-  lens: Record<string, number[]>;
-  /** Fields seen in the `typing` phase. */
-  typed: string[];
-  /** Every text any `aria-live` region held. */
+interface QuickViewRecord {
+  /** Every live field (`quick-view-live-<field>`) the quick view drew. */
   live: string[];
+  /** Every text any `aria-live` region held. */
+  said: string[];
 }
 
-/** Record, from now on, everything the quick view's typewriter draws. */
-async function recordTyping(page: Page): Promise<void> {
+/** Record, from now on, every live field the quick view draws. */
+async function recordQuickView(page: Page): Promise<void> {
   await page.evaluate(() => {
     const w = window as unknown as {
-      __typing: { lens: Record<string, number[]>; typed: string[]; live: string[] };
-      __typingObs?: MutationObserver;
+      __qv: { live: string[]; said: string[] };
+      __qvObs?: MutationObserver;
     };
-    w.__typingObs?.disconnect();
-    w.__typing = { lens: {}, typed: [], live: [] };
+    w.__qvObs?.disconnect();
+    w.__qv = { live: [], said: [] };
     const read = () => {
-      document.querySelectorAll('[data-testid^="quick-view-typein-"]').forEach((box) => {
-        const field = box.getAttribute('data-testid')!.slice('quick-view-typein-'.length);
-        if (box.getAttribute('data-typewriter') === 'typing') w.__typing.typed.push(field);
-        const copy = box.querySelector('[data-typewriter-copy]');
-        if (copy) (w.__typing.lens[field] ??= []).push((copy.textContent ?? '').length);
+      document.querySelectorAll('[data-testid^="quick-view-live-"]').forEach((box) => {
+        const id = box.getAttribute('data-testid')!.slice('quick-view-live-'.length);
+        if (id !== 'cue') w.__qv.live.push(id);
       });
       document.querySelectorAll('[aria-live]').forEach((region) => {
         const text = region.textContent ?? '';
-        if (text) w.__typing.live.push(text);
+        if (text) w.__qv.said.push(text);
       });
     };
     read();
-    w.__typingObs = new MutationObserver(read);
-    w.__typingObs.observe(document.body, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ['data-typewriter'],
-    });
+    w.__qvObs = new MutationObserver(read);
+    w.__qvObs.observe(document.body, { subtree: true, childList: true, characterData: true });
   });
 }
 
-const typingRecord = (page: Page) =>
-  page.evaluate(() => (window as unknown as { __typing: TypingRecord }).__typing);
+const quickViewRecord = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __qv: QuickViewRecord }).__qv);
 
 /** How many times `text` occurs in `scope`'s ACCESSIBLE text (no `aria-hidden` subtree). */
 const accessibleOccurrences = (scope: Locator, text: string) =>
@@ -261,7 +252,7 @@ const levelTransition = (page: Page) =>
 // THE RECEIPT
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('the canvas follows the planner while a plan is written, stops when the reader takes over, comes back on Follow the planner, and a quick view types in what arrives', async ({
+test('the canvas follows the planner while a plan is written, stops when the reader takes over, comes back on Follow the planner, and a quick view shows what lands at once', async ({
   page,
   baseURL,
   chapter,
@@ -469,14 +460,13 @@ test('the canvas follows the planner while a plan is written, stops when the rea
     });
 
     await chapter(
-      'A description that arrives while its quick view is open types itself in',
+      'A description that lands while its quick view is open shows in place, at once',
       async () => {
         await openQuickView(page, A1);
-        await expect(typedField(page, 'descriptionMd')).toHaveAttribute(
-          'data-typewriter',
-          'waiting',
-        );
-        await recordTyping(page);
+        // The planner's author step targets this card: the in-progress cue says so.
+        await expect(liveCue(page)).toHaveAttribute('data-live-cue', 'writing');
+        await expect(liveCue(page)).toHaveText(en.planReview.peekLive.beingWritten);
+        await recordQuickView(page);
         const arrived = polled(page, planId, (b) => itemOf(b, a1!)?.descriptionMd === BODY);
         await tool(agent, UPDATE_PLAN_ITEM_TOOL_NAME, {
           planId,
@@ -484,40 +474,33 @@ test('the canvas follows the planner while a plan is written, stops when the rea
           descriptionMd: BODY,
         });
         await arrived;
-        await expect(typedField(page, 'descriptionMd')).toHaveAttribute('data-typewriter', 'final');
-        await expect(typedField(page, 'descriptionMd')).toContainText(BODY);
-        const record = await typingRecord(page);
-        const lens = record.lens['descriptionMd'] ?? [];
-        expect(
-          lens.some((n) => n > 0 && n < BODY.length),
-          'it typed',
-        ).toBe(true);
-        expect(Math.max(0, ...lens)).toBeLessThan(BODY.length);
-        // A screen reader meets the final value once, and no live region a partial one.
+        await expect(peek(page)).toContainText(BODY);
+        const record = await quickViewRecord(page);
+        // Nothing is replayed: no partial is drawn without a draft.
+        expect(record.live).toEqual([]);
+        // A screen reader meets the value once, and no live region a partial one.
         expect(await accessibleOccurrences(peek(page), BODY)).toBe(1);
-        expect(record.live.filter((t) => BODY.startsWith(t) && t !== BODY)).toEqual([]);
+        expect(record.said.filter((t) => BODY.startsWith(t) && t !== BODY)).toEqual([]);
         await beat();
       },
     );
 
     await chapter('Anything written, or opened again, shows at once', async () => {
       await closeQuickView(page);
-      await recordTyping(page);
+      await recordQuickView(page);
       await openQuickView(page, A1);
       await expect(peek(page)).toContainText(BODY);
       await closeQuickView(page);
       await openQuickView(page, A2);
       await expect(peek(page)).toContainText(AUTHORED_LEAF.descriptionMd);
-      const record = await typingRecord(page);
-      expect(record.typed).toEqual([]);
-      expect(record.lens).toEqual({});
-      await expect(peek(page).locator('[data-typewriter="typing"]')).toHaveCount(0);
+      const record = await quickViewRecord(page);
+      expect(record.live).toEqual([]);
       await closeQuickView(page);
       await beat();
     });
 
     await chapter(
-      'Under reduced motion the canvas moves without a transition, and nothing types',
+      'Under reduced motion the canvas moves without a transition, and the quick view shows what lands',
       async () => {
         await page.emulateMedia({ reducedMotion: 'reduce' });
         const moved = polled(page, planId, (b) => !carries(b, 'resume-s') && carries(b, 'calm'));
@@ -530,7 +513,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
         await expect.poll(() => levelTransition(page)).toBe('none');
 
         await openQuickView(page, B1);
-        await recordTyping(page);
+        await recordQuickView(page);
         const arrived = polled(page, planId, (b) => itemOf(b, b1!)?.descriptionMd === BODY_REDUCED);
         await tool(agent, UPDATE_PLAN_ITEM_TOOL_NAME, {
           planId,
@@ -539,9 +522,8 @@ test('the canvas follows the planner while a plan is written, stops when the rea
         });
         await arrived;
         await expect(peek(page)).toContainText(BODY_REDUCED);
-        const record = await typingRecord(page);
-        expect(record.typed).toEqual([]);
-        expect(record.lens).toEqual({});
+        const record = await quickViewRecord(page);
+        expect(record.live).toEqual([]);
         await closeQuickView(page);
         await page.emulateMedia({ reducedMotion: 'no-preference' });
         await beat();

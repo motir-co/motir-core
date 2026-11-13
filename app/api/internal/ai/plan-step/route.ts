@@ -7,6 +7,7 @@ import {
   PLAN_PROVIDER_RETRY_ATTEMPTS_MAX,
   type PlanProviderRetryInput,
 } from '@/lib/services/plansService';
+import { PlanItemDraftRefusal, parsePlanItemDraft } from '@/lib/plans/planItemDraft';
 import {
   InvalidPlanStepError,
   NoPlanForJobError,
@@ -82,6 +83,20 @@ import {
 // ids only, never a lesson's text. Shape and caps are the store's
 // (`plansService.recordPlanLessonCalls`, `lib/plans/planLessonCall.ts`), refused
 // 422; it names no `target` and needs no step. Answers `{ planId, lessonCalls }`.
+//
+// ITEM DRAFT (Story MOTIR-11190 · MOTIR-11199): the body may carry `itemDraft`
+// INSTEAD — `{ target: 'planItem:<id>', seq, title?, descriptionMd?, explanationMd? }`,
+// an `author` session's in-flight card: the partial text its model has written so
+// far, each field WHOLE (not a delta), an absent field not started yet, at least
+// one present. `target` must equal the session's current `author` step target and
+// name an `add` on this plan (422 otherwise); `seq` is an integer ≥ 1, strictly
+// increasing per session. A report REPLACES the session's previous draft; a stale
+// one (`seq` not above the stored one) changes nothing. It names no top-level
+// `target`. Answers `{ planId, itemDraft: { applied, seq } }`. The draft is held on
+// the session's step row, NEVER in the proposal, and served on the overlay's live
+// read as `inFlightDrafts` until the proposal's completed write, a refused deepen
+// of it, the session's next step or `end`, or the plan leaving `generating`. Caps
+// are `lib/plans/planItemDraft.ts`'s, refused 422.
 //
 // The signal is ADVISORY, so every refusal is a stable `{ code, error }` and
 // never a 500: the walk matches the code and carries on.
@@ -160,7 +175,7 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof sessionKey !== 'string') {
     return fail(INVALID, '`sessionKey` is required and must be a string.', 400);
   }
-  const { narration, providerRetry, codeReads, gaps, lessonCalls, registrations } = b;
+  const { narration, providerRetry, codeReads, gaps, lessonCalls, registrations, itemDraft } = b;
   const forms = [
     step,
     narration,
@@ -169,14 +184,28 @@ export async function POST(req: Request): Promise<Response> {
     gaps,
     lessonCalls,
     registrations,
+    itemDraft,
   ].filter((form) => form !== undefined).length;
   if (forms !== 1) {
     return fail(
       INVALID,
       'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads`, `gaps`, ' +
-        '`lessonCalls` or `registrations`.',
+        '`lessonCalls`, `registrations` or `itemDraft`.',
       400,
     );
+  }
+  if (itemDraft !== undefined) {
+    if (target != null) {
+      return fail(INVALID, 'An `itemDraft` call names no top-level `target`.', 400);
+    }
+    try {
+      parsePlanItemDraft(itemDraft);
+    } catch (err) {
+      // A malformed body is the door's 400; a field over its cap is the store's
+      // 422, refused again there (`plansService.recordPlanItemDraft`).
+      if (!(err instanceof PlanItemDraftRefusal)) throw err;
+      if (err.reason === 'shape') return fail(INVALID, err.message, 400);
+    }
   }
   if (registrations !== undefined) {
     if (!Array.isArray(registrations)) {
@@ -235,6 +264,7 @@ export async function POST(req: Request): Promise<Response> {
         ...(gaps !== undefined ? { gaps: gaps as unknown[] } : {}),
         ...(lessonCalls !== undefined ? { lessonCalls: lessonCalls as unknown[] } : {}),
         ...(registrations !== undefined ? { registrations: registrations as unknown[] } : {}),
+        ...(itemDraft !== undefined ? { itemDraft } : {}),
       },
       auth,
     );

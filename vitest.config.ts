@@ -2485,14 +2485,16 @@ export default defineConfig({
         'components/planning/PlanDestinationTag.tsx',
 
         // Story MOTIR-8590 · Subtask MOTIR-8596 — FOLLOW THE PLANNER. The driven-step
-        // derivation, the follow control, the typewriter's pure half, the field
-        // that types and the live reduced-motion read: each new with the story,
-        // each GATED in `thresholds` below, measured first.
+        // derivation, the follow control and the live reduced-motion read: each new
+        // with the story, each GATED in `thresholds` below, measured first. (The
+        // replay that story also shipped was retired by MOTIR-11201.)
         'lib/planning/plannerDrive.ts',
         'components/planning/FollowPlannerControl.tsx',
-        'lib/planning/typeIn.ts',
-        'components/planning/TypeInText.tsx',
         'lib/hooks/usePrefersReducedMotion.ts',
+        // Story MOTIR-11190 · Subtask MOTIR-11201 — A CARD BEING WRITTEN, in the
+        // proposal quick view: the pure rules and the live field. Both GATED below.
+        'lib/planning/liveDraft.ts',
+        'components/planning/LiveDraftField.tsx',
 
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle.
         // The story's decision code, in one place: what a pull request delivers
@@ -7666,14 +7668,13 @@ export default defineConfig({
         // Measured with the story's unit floors and its integration gate:
         //   plannerDrive.ts             100 branch · 100 fn · 100 lines
         //   FollowPlannerControl.tsx    100 branch · 100 fn · 100 lines
-        //   typeIn.ts                  97.9 branch · 100 fn · 100 lines
-        //   TypeInText.tsx             91.9 branch · 100 fn · 100 lines
         //   usePrefersReducedMotion.ts  100 branch · 100 fn · 100 lines
         'lib/planning/plannerDrive.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/FollowPlannerControl.tsx': { branches: 90, functions: 90, lines: 90 },
-        'lib/planning/typeIn.ts': { branches: 90, functions: 90, lines: 90 },
-        'components/planning/TypeInText.tsx': { branches: 90, functions: 90, lines: 90 },
         'lib/hooks/usePrefersReducedMotion.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-11190 · Subtask MOTIR-11201 — a card being written (see `include`).
+        'lib/planning/liveDraft.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/LiveDraftField.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle
         // (see the `include` note above for why these five and not the three
         // pre-existing files the story also widened). MEASURED on this branch

@@ -14,6 +14,35 @@ export interface PlanStepWriteInput {
   providerWaitUntil: Date | null;
   providerWaitAttempt: number | null;
   providerWaitMaxAttempts: number | null;
+  /** The session's in-flight card (MOTIR-11199) — a step write passes all six
+   *  null, which is how a session that moved on clears its draft. */
+  draftPlanItemId: null;
+  draftSeq: null;
+  draftTitle: null;
+  draftDescriptionMd: null;
+  draftExplanationMd: null;
+  draftUpdatedAt: null;
+}
+
+/** The draft columns nulled — what a step write and a completed write both carry. */
+export const PLAN_STEP_NO_DRAFT = {
+  draftPlanItemId: null,
+  draftSeq: null,
+  draftTitle: null,
+  draftDescriptionMd: null,
+  draftExplanationMd: null,
+  draftUpdatedAt: null,
+} as const;
+
+/** An author session's in-flight card as one write carries it (MOTIR-11199). */
+export interface PlanStepItemDraftInput {
+  /** The bare `PlanItem` id the draft is for. */
+  planItemId: string;
+  seq: number;
+  title: string | null;
+  descriptionMd: string | null;
+  explanationMd: string | null;
+  updatedAt: Date;
 }
 
 /** A session's provider-retry wait as one write carries it (MOTIR-9619). */
@@ -93,6 +122,63 @@ export const planStepRepository = {
       },
     });
     return r.count;
+  },
+
+  /**
+   * Store a session's in-flight card (MOTIR-11199), REPLACING its previous draft
+   * whole — ONE `updateMany` whose `WHERE` carries the sequence guard, so the
+   * compare and the write are a single statement under the caller's plan lock.
+   * Returns how many rows it touched: 0 when the session holds no step or its
+   * stored draft is at `seq` or later, 1 otherwise.
+   */
+  async setItemDraft(
+    planId: string,
+    sessionKey: string,
+    draft: PlanStepItemDraftInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.planStep.updateMany({
+      where: {
+        planId,
+        sessionKey,
+        OR: [{ draftSeq: null }, { draftSeq: { lt: draft.seq } }],
+      },
+      data: {
+        draftPlanItemId: draft.planItemId,
+        draftSeq: draft.seq,
+        draftTitle: draft.title,
+        draftDescriptionMd: draft.descriptionMd,
+        draftExplanationMd: draft.explanationMd,
+        draftUpdatedAt: draft.updatedAt,
+      },
+    });
+    return r.count;
+  },
+
+  /**
+   * Clear every session's draft of ONE proposal (MOTIR-11199) — what the
+   * proposal's completed write, or a refused deepen of it, does. Leaves the
+   * steps themselves alone. Returns how many rows it touched.
+   */
+  async clearItemDrafts(
+    planId: string,
+    planItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.planStep.updateMany({
+      where: { planId, draftPlanItemId: planItemId },
+      data: PLAN_STEP_NO_DRAFT,
+    });
+    return r.count;
+  },
+
+  /** One session's step, or null when it holds none. */
+  async findForSession(
+    planId: string,
+    sessionKey: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanStep | null> {
+    return tx.planStep.findUnique({ where: { planId_sessionKey: { planId, sessionKey } } });
   },
 
   /** Clear a session's step. Returns how many rows went (0 or 1). */

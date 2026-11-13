@@ -24,7 +24,11 @@ import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 import { planRepository } from '@/lib/repositories/planRepository';
-import { plansService, type PlanProviderRetryInput } from '@/lib/services/plansService';
+import {
+  plansService,
+  type PlanItemDraftRecordedDto,
+  type PlanProviderRetryInput,
+} from '@/lib/services/plansService';
 import { NoPlanForJobError } from '@/lib/plans/errors';
 import { resolveCorrectionKeyRefs, resolveKeyRefs } from '@/lib/plans/keyRefs';
 import { NATIVE_PLANNER_HARNESS } from '@/lib/ai/plannerTenantBug';
@@ -532,6 +536,8 @@ export const aiGenerationService = {
       lessonCalls?: unknown[];
       /** The hand-offs and renames registered and relayed (MOTIR-11085) — INSTEAD of `step`. */
       registrations?: unknown[];
+      /** An author session's in-flight card (MOTIR-11199) — INSTEAD of `step`. */
+      itemDraft?: unknown;
     },
     auth: { ctx: ServiceContext; projectId: string },
   ): Promise<
@@ -542,6 +548,7 @@ export const aiGenerationService = {
     | { planId: string; registrations: PlanRegistrationsRecordedDto }
     | { planId: string; lessonCalls: PlanLessonCallDto[] }
     | { planId: string; providerWait: PlanStepProviderWaitDto | null }
+    | { planId: string; itemDraft: PlanItemDraftRecordedDto }
   > {
     const { ctx, projectId } = auth;
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -562,9 +569,11 @@ export const aiGenerationService = {
         ...(input.gaps !== undefined ? { gaps: input.gaps } : {}),
         ...(input.lessonCalls !== undefined ? { lessonCalls: input.lessonCalls } : {}),
         ...(input.registrations !== undefined ? { registrations: input.registrations } : {}),
+        ...(input.itemDraft !== undefined ? { itemDraft: input.itemDraft } : {}),
       },
       ctx,
     );
+    if (result.kind === 'itemDraft') return { planId: plan.id, itemDraft: result.itemDraft };
     if (result.kind === 'narration') return { planId: plan.id, narration: result.narration };
     if (result.kind === 'codeReads') return { planId: plan.id, codeReads: result.codeReads };
     if (result.kind === 'gaps') return { planId: plan.id, gaps: result.gaps };
