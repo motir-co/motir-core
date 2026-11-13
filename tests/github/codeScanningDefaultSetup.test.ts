@@ -4,6 +4,7 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import {
   CodeScanningDefaultSetupApiError,
   codeScanningDefaultSetupClient as client,
+  isNoRunnerWithLabelRefusal,
   runnerRequests,
 } from '@/lib/github/codeScanningDefaultSetup';
 import type { GithubOrgTarget } from '@/lib/github/orgTarget';
@@ -187,5 +188,31 @@ describe('runnerRequests', () => {
     expect(runnerRequests({ type: 'labeled', label: 'motir-runner' }, 'motir-runner')).toBe(true);
     expect(runnerRequests({ type: 'labeled', label: 'big-box' }, 'motir-runner')).toBe(false);
     expect(runnerRequests({ type: 'standard' }, 'motir-runner')).toBe(false);
+  });
+});
+
+describe('isNoRunnerWithLabelRefusal', () => {
+  it("is GitHub's 422 for a label no runner carries, and nothing else", async () => {
+    answer = () =>
+      json(422, {
+        message:
+          'Code scanning default setup can only be enabled if a runner with the specified label is assigned to this repository.',
+      });
+    const err = await client
+      .setRunner('acme-ci', 'motir-ai', { type: 'labeled', label: 'motir-runner' }, TARGET)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CodeScanningDefaultSetupApiError);
+    expect((err as CodeScanningDefaultSetupApiError).detail).toContain('specified label');
+    expect(isNoRunnerWithLabelRefusal(err)).toBe(true);
+
+    expect(
+      isNoRunnerWithLabelRefusal(new CodeScanningDefaultSetupApiError(422, 'Validation Failed')),
+    ).toBe(false);
+    expect(
+      isNoRunnerWithLabelRefusal(
+        new CodeScanningDefaultSetupApiError(403, 'a runner with the specified label'),
+      ),
+    ).toBe(false);
+    expect(isNoRunnerWithLabelRefusal(new Error('a runner with the specified label'))).toBe(false);
   });
 });

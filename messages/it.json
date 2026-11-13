@@ -13377,6 +13377,7 @@
       "codeScanning": {
         "fleet": "sulla flotta ({label})",
         "githubHosted": "su runner ospitati da GitHub",
+        "pendingFleet": "su runner ospitati da GitHub fino al prossimo job della flotta — il runner di quel job permette di spostarlo sulla flotta ({label})",
         "unknownStatus": "impossibile leggere: GitHub ha risposto HTTP {status}",
         "unknownUnreachable": "impossibile leggere: GitHub non era raggiungibile",
         "none": "Nessun repository privato su {org} ha la configurazione predefinita di CodeQL attiva."

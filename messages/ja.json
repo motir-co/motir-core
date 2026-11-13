@@ -13374,6 +13374,7 @@
       "codeScanning": {
         "fleet": "フリート上 ({label})",
         "githubHosted": "GitHub ホストのランナー上",
+        "pendingFleet": "次のフリートのジョブまでは GitHub ホストのランナー上 — そのジョブのランナーがあればフリートへ移せます ({label})",
         "unknownStatus": "読み取れませんでした — GitHub は HTTP {status} を返しました",
         "unknownUnreachable": "読み取れませんでした — GitHub に接続できませんでした",
         "none": "{org} のプライベートリポジトリで CodeQL の既定のセットアップが構成されているものはありません。"

@@ -13371,6 +13371,7 @@
       "codeScanning": {
         "fleet": "플릿에서 실행 ({label})",
         "githubHosted": "GitHub 호스팅 러너에서 실행",
+        "pendingFleet": "다음 플릿 작업 전까지 GitHub 호스팅 러너에서 실행 — 그 작업의 러너가 있으면 플릿으로 옮길 수 있습니다 ({label})",
         "unknownStatus": "읽을 수 없습니다 — GitHub가 HTTP {status}을(를) 반환했습니다",
         "unknownUnreachable": "읽을 수 없습니다 — GitHub에 연결할 수 없습니다",
         "none": "{org}의 비공개 리포지토리 중 CodeQL 기본 설정이 구성된 곳이 없습니다."
