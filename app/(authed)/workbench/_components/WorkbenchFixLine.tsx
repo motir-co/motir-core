@@ -17,6 +17,10 @@ import {
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
 import { FixingTag } from '@/components/workItems/ToFixTag';
+import {
+  SentBackFindingsLink,
+  sentBackFindingsRefOf,
+} from '@/components/approvals/SentBackFindingsLink';
 import { Pill } from '@/components/ui/Pill';
 import { CommandChip } from '@/components/ui/CommandChip';
 import { cn } from '@/lib/utils/cn';
@@ -248,6 +252,7 @@ const keyBold = (chunks: ReactNode) => <b className="font-semibold text-(--el-te
 
 export function WorkbenchFixLine({
   itemKey,
+  title = null,
   reason,
   detail,
   carried = null,
@@ -270,6 +275,8 @@ export function WorkbenchFixLine({
    *  and keeps the command. */
   repairRun?: OpenRepairRunDto | null;
   itemKey: string;
+  /** The card's title — the in-place findings view's subtitle while its read loads. */
+  title?: string | null;
   reason: WorkItemFixReasonDto;
   detail: FixDetailDto;
   /**
@@ -327,6 +334,9 @@ export function WorkbenchFixLine({
   // offered: neither the command nor the hosted door.
   const fixTarget = reviewSentBack && canFixHosted && !repairRun && !fixing ? itemKey : null;
   const fixPress = useFixHosted(fixTarget, { onStarted, onStateMoved });
+  // § 43.1: a card the review AGENT sent back opens that review's findings and checklist in
+  // place. The link stays Fixing, under a hosted repair and on a HELD row (§ 43.3).
+  const findingsRef = sentBackFindingsRefOf(reason, detail);
 
   let repairs: ReactNode = null;
   if (held) {
@@ -424,6 +434,16 @@ export function WorkbenchFixLine({
             Fixing row wears the Fixing tag in its place, and its reason goes quiet (§ 40.1). */}
         {held ? null : fixing ? <FixingTag /> : <ReasonGlyph reason={reason} />}
         <span className="min-w-0 truncate">{REASON_SENTENCE[reason](t, detail, context)}</span>
+        {/* § 43.1: OUTSIDE the truncating span, so it never wraps or truncates, and above
+            the row's stretched link, so pressing it opens the view and never the card. */}
+        {findingsRef ? (
+          <SentBackFindingsLink
+            identifier={itemKey}
+            title={title}
+            reviewRef={findingsRef}
+            variant="row"
+          />
+        ) : null}
         {/* THE ENTRY CLAUSE (§ 34.3) — how many other cards this one repair clears. */}
         {carried && carried.count > 0 ? (
           <span

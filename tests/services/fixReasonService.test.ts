@@ -22,6 +22,8 @@ import {
   REVIEW_AGENT_REVIEWER_NAME,
   reviewerNameOf,
   sameFixReason,
+  changesRequestedOf,
+  sentBackReviewRefOf,
   type AnsweredMember,
 } from '@/lib/workItems/fixReason';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -196,6 +198,7 @@ describe('the pure half', () => {
       reviewerName: null,
       notePreview: null,
       gate: null,
+      reviewRef: null,
       ...NO_DEAD_RUN,
       affected: 1,
       total: 1,
@@ -304,6 +307,7 @@ describe('each reason alone', () => {
         reviewerName: null,
         notePreview: null,
         gate: null,
+        reviewRef: null,
         ...NO_DEAD_RUN,
         affected: 1,
         total: 1,
@@ -359,6 +363,7 @@ describe('each reason alone', () => {
         reviewerName: fx.owner.name,
         notePreview: 'Rename the export button.',
         gate: 'pull_request_approval',
+        reviewRef: null,
         ...NO_DEAD_RUN,
         affected: 1,
         total: 1,
@@ -404,6 +409,7 @@ describe('each reason alone', () => {
       fixDetail: {
         repair: 'fix',
         gate: 'acceptance_result',
+        reviewRef: null,
         reviewerName: fx.owner.name,
         notePreview: 'The empty board should say how to add the first card.',
       },
@@ -454,6 +460,7 @@ describe('In Review with a red member (MOTIR-7491)', () => {
           reviewerName: null,
           notePreview: null,
           gate: null,
+          reviewRef: null,
           ...NO_DEAD_RUN,
           affected: 1,
           total: 2,
@@ -822,7 +829,9 @@ describe('a standing review refusal the repair claim does not admit', () => {
   it('the review agent’s refusal on a card at Approved is changes_requested on agent_review, naming the agent', async () => {
     const fx = await makeWorkItemFixture();
     const { card, repo, pr } = await cardWith(fx, 'approved');
-    await requestChanges(fx, card.id, versionOf(repo.name, pr.number), { kind: 'agent_review' });
+    const gate = await requestChanges(fx, card.id, versionOf(repo.name, pr.number), {
+      kind: 'agent_review',
+    });
     // The claim refuses the card, so this is the not-claimable arm.
     expect(
       await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx),
@@ -840,6 +849,8 @@ describe('a standing review refusal the repair claim does not admit', () => {
         reviewerName: REVIEW_AGENT_REVIEWER_NAME,
         notePreview: 'Rename the export button.',
         gate: 'agent_review',
+        // The refusal's own pass, by its gate — no decided record carries it here (MOTIR-11234).
+        reviewRef: { kind: 'gate', id: gate.id },
         ...NO_DEAD_RUN,
         affected: 1,
         total: 1,
@@ -875,6 +886,7 @@ describe('a standing review refusal the repair claim does not admit', () => {
         fixDetail: {
           repair: 'fix',
           gate: 'pull_request_approval',
+          reviewRef: null,
           reviewerName: nameOf(fx),
           notePreview: 'Rename the export button.',
           // Nothing open is left to repair; the reason still stands until a head moves.
@@ -1052,6 +1064,7 @@ describe('run_died — read through the continue claim’s own evaluation', () =
         reviewerName: null,
         notePreview: null,
         gate: null,
+        reviewRef: null,
         lastHeardAt: view.deadRun.lastHeardAt,
         ranByName: view.deadRun.dispatcher?.name ?? null,
         branch: view.branch,
@@ -1223,6 +1236,7 @@ describe('Fixing — the pure half', () => {
       reviewerName: null,
       notePreview: null,
       gate: null,
+      reviewRef: null,
       ...NO_DEAD_RUN,
       affected: 1,
       total: 2,
@@ -1569,6 +1583,7 @@ describe('Fixing — a quick green at the new head landed first (Bug MOTIR-10747
         reviewerName: null,
         notePreview: null,
         gate: null,
+        reviewRef: null,
         ...NO_DEAD_RUN,
         affected: 1,
         total: 2,
@@ -2340,6 +2355,7 @@ describe('Fixing while repairing — the pure half', () => {
       reviewerName: null,
       notePreview: null,
       gate: null,
+      reviewRef: null,
       ...NO_DEAD_RUN,
       affected: 1,
       total: 1,
@@ -2548,5 +2564,186 @@ describe('Fixing while repairing — a live `fix` run on the card', () => {
     });
 
     expect(await recompute(fx, card.id)).toEqual(before);
+  });
+});
+
+// THE REVIEW *FINDINGS AND CHECKLIST* OPENS (MOTIR-11234; `design/workbench/design-notes.md`
+// § 43.1). A card the review AGENT sent back stores the ref of that very review — the
+// verdict record whenever one holds it (it carries the checklist), the decided gate
+// otherwise — and a person's Request changes or an acceptance Re-run stores none.
+describe('the send-back review ref — the pure half', () => {
+  const agent = { kind: 'agent_review' as const, gateId: 'g1', recordId: null };
+
+  it('prefers the record that holds the send-back, then the decided record, then the gate', () => {
+    expect(sentBackReviewRefOf({ ...agent, gateId: null, recordId: 'r1' }, null)).toEqual({
+      kind: 'record',
+      id: 'r1',
+    });
+    expect(sentBackReviewRefOf(agent, 'r2')).toEqual({ kind: 'record', id: 'r2' });
+    expect(sentBackReviewRefOf(agent, null)).toEqual({ kind: 'gate', id: 'g1' });
+    expect(sentBackReviewRefOf({ ...agent, gateId: null }, null)).toBeNull();
+  });
+
+  it('is null for a person’s Request changes, whatever ids it carries', () => {
+    expect(
+      sentBackReviewRefOf({ kind: 'pull_request_approval', gateId: 'g1', recordId: 'r1' }, 'r2'),
+    ).toBeNull();
+  });
+
+  it('changesRequestedOf keeps the ref on the agent_review gate only', () => {
+    const ref = { kind: 'record' as const, id: 'r1' };
+    const of = (gate: 'agent_review' | 'pull_request_approval' | 'acceptance_result') =>
+      changesRequestedOf({ gate, reviewerName: null, noteMd: null, reviewRef: ref }, 1).fixDetail!
+        .reviewRef;
+    expect(of('agent_review')).toEqual(ref);
+    expect(of('pull_request_approval')).toBeNull();
+    expect(of('acceptance_result')).toBeNull();
+    expect(
+      changesRequestedOf({ gate: 'agent_review', reviewerName: null, noteMd: null }, 1).fixDetail!
+        .reviewRef,
+    ).toBeNull();
+  });
+
+  it('sameFixReason: a row stored before the ref existed differs, so the recompute writes it in', () => {
+    const next = changesRequestedOf(
+      {
+        gate: 'agent_review',
+        reviewerName: null,
+        noteMd: null,
+        reviewRef: { kind: 'gate', id: 'g1' },
+      },
+      1,
+    );
+    const { reviewRef: _dropped, ...legacy } = next.fixDetail!;
+    expect(sameFixReason({ fixReason: next.fixReason, fixDetail: legacy }, next)).toBe(false);
+    expect(sameFixReason({ fixReason: next.fixReason, fixDetail: next.fixDetail }, next)).toBe(
+      true,
+    );
+    const other = { ...next.fixDetail!, reviewRef: { kind: 'gate', id: 'g2' } };
+    expect(sameFixReason({ fixReason: next.fixReason, fixDetail: other }, next)).toBe(false);
+    const asRecord = { ...next.fixDetail!, reviewRef: { kind: 'record', id: 'g1' } };
+    expect(sameFixReason({ fixReason: next.fixReason, fixDetail: asRecord }, next)).toBe(false);
+    for (const odd of ['g1', ['g1'], null]) {
+      expect(
+        sameFixReason(
+          { fixReason: next.fixReason, fixDetail: { ...legacy, reviewRef: odd } },
+          next,
+        ),
+      ).toBe(false);
+    }
+    // …and a reason with no ref reads a stored null and a missing key alike.
+    const none = changesRequestedOf(
+      { gate: 'pull_request_approval', reviewerName: null, noteMd: null },
+      1,
+    );
+    const { reviewRef: _none, ...noKey } = none.fixDetail!;
+    expect(sameFixReason({ fixReason: none.fixReason, fixDetail: noKey }, none)).toBe(true);
+  });
+});
+
+describe('the send-back review ref — read through the recompute', () => {
+  async function verdictRecord(
+    fx: WorkItemFixture,
+    workItemId: string,
+    subjectVersion: string,
+    over: { gateId?: string | null; outcome?: 'decided' | 'recorded'; createdAt?: Date } = {},
+  ) {
+    return adminDb.reviewVerdictRecord.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId,
+        gateId: over.gateId ?? null,
+        subjectVersion,
+        verdict: 'changes_requested',
+        outcome: over.outcome ?? 'recorded',
+        findingsMd: 'The export drops the header row.',
+        checklist: [{ criterion: 'Exports keep the header', status: 'not_met', evidence: '' }],
+        submittedById: fx.ownerId,
+        harness: 'Claude Code',
+        model: 'test-model',
+        ...(over.createdAt ? { createdAt: over.createdAt } : {}),
+      },
+    });
+  }
+
+  it('a decided agent gate with no record stores the gate; its decided record, once there, replaces it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await cardWith(fx, 'in_review');
+    const version = versionOf(repo.name, pr.number);
+    const gate = await requestChanges(fx, card.id, version, { kind: 'agent_review' });
+
+    expect((await recompute(fx, card.id)).fixDetail).toMatchObject({
+      gate: 'agent_review',
+      reviewRef: { kind: 'gate', id: gate.id },
+    });
+
+    const record = await verdictRecord(fx, card.id, version, {
+      gateId: gate.id,
+      outcome: 'decided',
+    });
+    expect((await recompute(fx, card.id)).fixDetail).toMatchObject({
+      reviewRef: { kind: 'record', id: record.id },
+    });
+    expect((await stored(card.id)).fixDetail).toMatchObject({
+      reviewRef: { kind: 'record', id: record.id },
+    });
+  });
+
+  it('a gate-off send-back stores its own record', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await cardWith(fx, 'in_review');
+    const record = await verdictRecord(fx, card.id, versionOf(repo.name, pr.number));
+
+    expect(await recompute(fx, card.id)).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: { gate: 'agent_review', reviewRef: { kind: 'record', id: record.id } },
+    });
+  });
+
+  it('keeps the ref while Fixing — the review that sent it back, not a later one', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await cardWith(fx, 'implemented');
+    const record = await verdictRecord(fx, card.id, versionOf(repo.name, pr.number));
+    expect((await recompute(fx, card.id)).fixDetail).toMatchObject({
+      reviewRef: { kind: 'record', id: record.id },
+    });
+
+    await ciStarts(pr.id);
+    expect(await recompute(fx, card.id)).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: { fixing: true, reviewRef: { kind: 'record', id: record.id } },
+    });
+  });
+
+  it('a standing agent refusal the claim does not admit stores the ref too', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await cardWith(fx, 'approved');
+    const version = versionOf(repo.name, pr.number);
+    const gate = await requestChanges(fx, card.id, version, { kind: 'agent_review' });
+    const record = await verdictRecord(fx, card.id, version, {
+      gateId: gate.id,
+      outcome: 'decided',
+    });
+
+    expect((await recompute(fx, card.id)).fixDetail).toMatchObject({
+      gate: 'agent_review',
+      reviewRef: { kind: 'record', id: record.id },
+    });
+  });
+
+  it('a person’s Request changes stores no ref, even with an agent record about another gate', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await cardWith(fx, 'in_review');
+    const gate = await requestChanges(fx, card.id, versionOf(repo.name, pr.number));
+    await verdictRecord(fx, card.id, 'acme/other#1@' + HEAD, {
+      gateId: gate.id,
+      outcome: 'decided',
+    });
+
+    expect((await recompute(fx, card.id)).fixDetail).toMatchObject({
+      gate: 'pull_request_approval',
+      reviewRef: null,
+    });
   });
 });

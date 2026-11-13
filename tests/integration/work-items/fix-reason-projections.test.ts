@@ -115,6 +115,7 @@ describe('fixReason + fixDetail on the item page read (MOTIR-6611)', () => {
       reviewerName: 'Ana Ruiz',
       notePreview: 'Double-counts a moved card.',
       gate: 'pull_request_approval',
+      reviewRef: null,
       affected: 2,
       total: 2,
     } as const;

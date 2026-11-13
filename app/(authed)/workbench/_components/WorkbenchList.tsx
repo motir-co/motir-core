@@ -487,6 +487,7 @@ function WorkbenchRowImpl({
         </div>
         <WorkbenchFixLine
           itemKey={row.identifier}
+          title={row.title}
           reason={row.fix.reason}
           detail={row.fix.detail}
           carried={

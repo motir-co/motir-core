@@ -769,6 +769,7 @@ describe('6 · the reader keeps their place through a burst (criterion 4)', () =
       reviewerName: null,
       notePreview: null,
       gate: null,
+      reviewRef: null,
       lastHeardAt: null,
       ranByName: null,
       branch: null,

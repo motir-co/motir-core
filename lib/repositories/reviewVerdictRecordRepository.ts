@@ -115,6 +115,22 @@ export const reviewVerdictRecordRepository = {
     });
   },
 
+  /**
+   * The verdict that DECIDED `gateId` — its `decided` row — or null (a gate decided before
+   * records existed, or decided by a person). What a gate-on agent send-back's *Findings and
+   * checklist* opens, because the record carries the checklist and the gate does not
+   * (MOTIR-11234).
+   */
+  async findDecidedByGate(
+    gateId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ReviewVerdictRecord | null> {
+    return tx.reviewVerdictRecord.findFirst({
+      where: { gateId, outcome: 'decided' },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
   /** One verdict by id, or null (absent, or another workspace's under RLS). */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<ReviewVerdictRecord | null> {
     return tx.reviewVerdictRecord.findUnique({ where: { id } });

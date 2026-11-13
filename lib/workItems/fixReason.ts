@@ -1,4 +1,5 @@
 import type { ApprovalGate } from '@/generated/prisma/client';
+import type { ReviewFindingsRefDto } from '@/lib/dto/agentReview';
 import type { FixBranchDto, FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { RunDiedReason, WorkItemContinueRefusal } from '@/lib/dto/workItemContinue';
 import type { RepairPullRequestDto } from '@/lib/dto/workItemRepair';
@@ -50,6 +51,7 @@ const EMPTY_DETAIL: Omit<FixDetailDto, 'repair' | 'affected' | 'total'> = {
   reviewerName: null,
   notePreview: null,
   gate: null,
+  reviewRef: null,
   lastHeardAt: null,
   ranByName: null,
   branch: null,
@@ -344,6 +346,12 @@ export function changesRequestedOf(
     /** The reviewer as a SURFACE draws them — `reviewerNameOf`, never the audit label. */
     reviewerName: string | null;
     noteMd: string | null;
+    /**
+     * The review AGENT's send-back — what *Findings and checklist* opens
+     * ({@link sentBackReviewRefOf}). Kept only on the `agent_review` gate: a person's
+     * Request changes and an acceptance Re-run have no agent review to open.
+     */
+    reviewRef?: ReviewFindingsRefDto | null;
   },
   total: number,
 ): FixReasonValue {
@@ -355,10 +363,45 @@ export function changesRequestedOf(
       reviewerName: refusal.reviewerName,
       notePreview: notePreviewOf(refusal.noteMd),
       gate: refusal.gate,
+      reviewRef: refusal.gate === 'agent_review' ? (refusal.reviewRef ?? null) : null,
       affected: total,
       total,
     },
   };
+}
+
+/**
+ * Where a send-back's review lives — the two sources a standing or answered review refusal
+ * reads (`lib/approvalGates/reviewRefusal.ts`): a decided gate (`gateId`) or a gate-off
+ * verdict record (`recordId`).
+ */
+export interface SentBackReviewSource {
+  kind: 'agent_review' | 'pull_request_approval';
+  gateId: string | null;
+  recordId: string | null;
+}
+
+/**
+ * The ref *Findings and checklist* opens for a card the review AGENT sent back
+ * (MOTIR-11234; `design/workbench/design-notes.md` § 43.1), or null when there is no agent
+ * review to open.
+ *
+ * ⚠️ THE RECORD, WHENEVER ONE HOLDS THE SEND-BACK — it carries the checklist rows, and the
+ * gate does not. A gate-off send-back IS a record; a gate the review agent decided has the
+ * `decided` record that decided it (`decidedRecordId`, read by the caller), and only a gate
+ * decided before records existed falls back to the gate itself — the review state's own
+ * rule for a pass (`agentPasses`). ⚠️ The review that SENT IT BACK, never a later or
+ * earlier pass: the ids come from the refusal itself, not from the card's newest review.
+ */
+export function sentBackReviewRefOf(
+  source: SentBackReviewSource,
+  decidedRecordId: string | null,
+): ReviewFindingsRefDto | null {
+  if (source.kind !== 'agent_review') return null;
+  if (source.recordId) return { kind: 'record', id: source.recordId };
+  if (decidedRecordId) return { kind: 'record', id: decidedRecordId };
+  if (source.gateId) return { kind: 'gate', id: source.gateId };
+  return null;
 }
 
 /**
@@ -431,6 +474,14 @@ const FIX_DETAIL_FIELDS = [
   'total',
 ] as const satisfies readonly (keyof FixDetailDto)[];
 
+/** Two send-back review refs are the same — a stored row with no ref reads as null. */
+function sameReviewRef(stored: unknown, next: ReviewFindingsRefDto | null): boolean {
+  if (next === null) return (stored ?? null) === null;
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) return false;
+  const s = stored as { kind?: unknown; id?: unknown };
+  return s.kind === next.kind && s.id === next.id;
+}
+
 /** Two recorded head maps are the same — key by key, for {@link sameFixReason}'s reason. */
 function sameRaisedHeads(stored: unknown, next: Readonly<Record<string, string>> | null): boolean {
   if (next === null) return (stored ?? null) === null;
@@ -470,6 +521,8 @@ export function sameFixReason(
   return (
     FIX_DETAIL_FIELDS.every((field) => (stored[field] ?? null) === b.fixDetail![field]) &&
     sameBranches(stored.branches, b.fixDetail.branches) &&
+    // A row stored before the review ref existed has none: the recompute writes it in.
+    sameReviewRef(stored.reviewRef, b.fixDetail.reviewRef) &&
     // A row stored before Fixing existed has no `fixing` key: it reads as off.
     (stored.fixing === true) === b.fixDetail.fixing &&
     sameRaisedHeads(stored.raisedHeads, b.fixDetail.raisedHeads)

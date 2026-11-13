@@ -34,6 +34,7 @@ describe('toFixDetailDto', () => {
       reviewerName: null,
       notePreview: null,
       gate: null,
+      reviewRef: null,
       lastHeardAt: '2026-09-28T20:00:00.000Z',
       ranByName: 'Mara S.',
       branch: 'subtask/PROD-42-work',
@@ -64,6 +65,31 @@ describe('toFixDetailDto', () => {
         fixing: false,
         raisedHeads: null,
       });
+    }
+  });
+
+  it('carries the send-back review ref (MOTIR-11234), dropping one that is not the shape', () => {
+    for (const ref of [
+      { kind: 'record', id: 'rec_1' },
+      { kind: 'gate', id: 'gate_1' },
+    ]) {
+      expect(toFixDetailDto('changes_requested', { reviewRef: ref })?.reviewRef).toEqual(ref);
+    }
+    expect(
+      toFixDetailDto('changes_requested', { reviewRef: { kind: 'gate', id: 'g', extra: 1 } })
+        ?.reviewRef,
+    ).toEqual({ kind: 'gate', id: 'g' });
+    for (const reviewRef of [
+      undefined,
+      null,
+      'rec_1',
+      ['rec_1'],
+      { kind: 'pass', id: 'rec_1' },
+      { kind: 'record', id: '' },
+      { kind: 'record', id: 7 },
+      { kind: 'record' },
+    ]) {
+      expect(toFixDetailDto('changes_requested', { reviewRef })?.reviewRef).toBeNull();
     }
   });
 

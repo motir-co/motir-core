@@ -4,6 +4,7 @@ import type {
   FixRepairCommandDto,
   WorkItemFixReasonDto,
 } from '@/lib/dto/fixReason';
+import type { ReviewFindingsRefDto } from '@/lib/dto/agentReview';
 import type { RunDiedReason } from '@/lib/dto/workItemContinue';
 
 // `WorkItem.fixDetail` → its DTO (Story MOTIR-6588 · MOTIR-6600).
@@ -68,6 +69,19 @@ function raisedHeads(v: unknown): Record<string, string> | null {
   return heads;
 }
 
+/**
+ * The send-back's review ref — `{ kind: 'record' | 'gate', id }`. Anything else, including
+ * a row stored before the field existed, reads as null: no link rather than a wrong one.
+ */
+function reviewRef(v: unknown): ReviewFindingsRefDto | null {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
+  const r = v as { kind?: unknown; id?: unknown };
+  if ((r.kind !== 'record' && r.kind !== 'gate') || typeof r.id !== 'string' || r.id === '') {
+    return null;
+  }
+  return { kind: r.kind, id: r.id };
+}
+
 function count(v: unknown): number {
   return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : 0;
 }
@@ -94,6 +108,7 @@ export function toFixDetailDto(
       d.gate === 'agent_review'
         ? d.gate
         : null,
+    reviewRef: reviewRef(d.reviewRef),
     lastHeardAt: str(d.lastHeardAt),
     ranByName: str(d.ranByName),
     branch: str(d.branch),
