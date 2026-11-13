@@ -28,7 +28,16 @@ import type { InstallationToken } from '@/lib/git/types';
 //   * `'provisioning'` — the "Motir Studio" App, installed ONLY on Motir's own
 //     org, holding `Administration: write` there and nowhere else. It is what
 //     creates every new project's repositories. It can never reach a repository
-//     a user owns, because it is not installed anywhere a user owns.
+//     a user owns, because it is not installed anywhere a user owns. It also
+//     holds `Actions: read and write` on that org: the Fleet status page's
+//     Publish latest (`lib/services/fleetStatusImagesService.ts`) starts each
+//     image's publish workflow with it (`POST …/actions/workflows/<wf>/dispatches`,
+//     which `Actions: read` alone answers 403, MOTIR-11229).
+//
+// A TOKEN CARRIES THE PERMISSIONS IT WAS MINTED WITH. Granting an App a new
+// permission does not reach a token already in the cache below, so a caller that
+// is refused 403 and can tell a grant may since have landed drops that token with
+// `evictInstallationToken` and mints again rather than wait out its hour.
 //
 // Folding the two into one registration would force `Administration: write` onto
 // the App users install, which the amendment records as a funnel loss (a repo
@@ -193,6 +202,22 @@ export async function mintInstallationToken(
   const token: InstallationToken = { token: body.token, expiresAt: new Date(body.expires_at) };
   cache.set(key, token);
   return token;
+}
+
+/**
+ * Drop the cached installation token of `role` for `installationId`, so the next
+ * {@link mintInstallationToken} mints a new one. A GitHub token keeps the
+ * permissions it was minted with, so a permission granted since the mint is
+ * invisible to the cached token for the rest of its hour (MOTIR-11229); a caller
+ * refused 403 evicts and retries once. Evicting a token that is not cached is a
+ * no-op. Only the entry of that role is dropped: the two Apps' tokens for the
+ * same numeric id are different secrets.
+ */
+export function evictInstallationToken(
+  installationId: string,
+  role: GithubAppRole = 'user-facing',
+): void {
+  cache.delete(`${role}:${installationId}`);
 }
 
 /** Test-only: clear the in-memory installation-token cache between tests. */

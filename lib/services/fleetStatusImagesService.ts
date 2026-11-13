@@ -955,16 +955,13 @@ export const fleetStatusImagesService = {
     }
     let run: PublishWorkflowRun;
     try {
-      run = await publishWorkflowsClient.dispatch(
-        MOTIR_CORE,
-        target.workflow,
-        target.ref,
-        target.inputs,
-        token,
-      );
+      run = await dispatchWithFreshTokenOn403(target, token);
     } catch (err) {
-      if (err instanceof PublishWorkflowError) return { outcome: 'failed', detail: err.message };
-      throw err;
+      if (!(err instanceof PublishWorkflowError)) throw err;
+      return {
+        outcome: 'failed',
+        detail: err.status === 403 ? actionsPermissionDetail(target.workflow, err) : err.message,
+      };
     }
     // The workflow is running whatever happens next, so the press is answered
     // as dispatched even if its row cannot be written; that failure is logged
@@ -1038,6 +1035,42 @@ export const fleetStatusImagesService = {
     return pinned !== null && digestOf(pinned) === target;
   },
 };
+
+/**
+ * Start the row's workflow, and on a 403 retry ONCE with a newly minted token.
+ * A GitHub token carries the permissions it was minted with, and the provisioning
+ * token is cached for up to an hour (the page's own reads mint it on load), so a
+ * permission granted since — `Actions: read and write`, which the dispatch needs
+ * — reaches no press until the cache drops it (MOTIR-11229). The retry evicts it
+ * (`sourceRepoToken`'s `fresh`); a second 403, or a retry with no token to send,
+ * is the refusal standing.
+ */
+async function dispatchWithFreshTokenOn403(
+  target: FleetPublishTargetDTO,
+  token: string,
+): Promise<PublishWorkflowRun> {
+  const dispatch = (bearer: string) =>
+    publishWorkflowsClient.dispatch(MOTIR_CORE, target.workflow, target.ref, target.inputs, bearer);
+  try {
+    return await dispatch(token);
+  } catch (err) {
+    if (!(err instanceof PublishWorkflowError) || err.status !== 403) throw err;
+    const fresh = await sourceRepoToken(MOTIR_CORE.owner, { fresh: true });
+    if (!fresh) throw err;
+    return dispatch(fresh);
+  }
+}
+
+/** The failure a press shows when GitHub still answers 403 with a fresh token:
+ *  which App, on which org, needs which permission to start which workflow —
+ *  then GitHub's own words, so a 403 that is not the permission (a secondary
+ *  rate limit answers 403 too) still says what it is. */
+function actionsPermissionDetail(workflow: string, err: PublishWorkflowError): string {
+  return (
+    `Motir Studio's installation on ${MOTIR_CORE.owner} needs Actions: read and write ` +
+    `to start ${workflow}. ${err.message}`
+  );
+}
 
 function safeHostedPin(): string | null {
   try {

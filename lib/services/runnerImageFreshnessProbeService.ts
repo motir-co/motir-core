@@ -1,5 +1,6 @@
 import { Ec2ApiError, listImageTags, readImageLabels } from '@motir/orchestrator';
 import {
+  evictInstallationToken,
   GithubAppNotConfiguredError,
   GithubAppTokenError,
   isGithubAppConfigured,
@@ -81,12 +82,21 @@ const MAX_SHA_TAGS = 60;
 /** An installation token for the source repository's owner when this deployment
  *  has the provisioning App there, else null — the repository is public, and an
  *  anonymous read answers the same question. Also used by the runner-version
- *  support probe (MOTIR-10706), which reads the same repository. */
-export async function sourceRepoToken(owner: string): Promise<string | null> {
+ *  support probe (MOTIR-10706), which reads the same repository.
+ *
+ *  `fresh: true` drops the cached token for that installation first, so the
+ *  answer is newly minted and carries the installation's permissions as they
+ *  are NOW: a cached token keeps the ones it was minted with for up to an hour,
+ *  so a caller refused 403 retries with one of these (MOTIR-11229). */
+export async function sourceRepoToken(
+  owner: string,
+  { fresh = false }: { fresh?: boolean } = {},
+): Promise<string | null> {
   if (!isGithubAppConfigured('provisioning')) return null;
   try {
     const installation = await getOrgInstallation(owner, 'provisioning');
     if (!installation || installation.suspendedAt) return null;
+    if (fresh) evictInstallationToken(installation.id, 'provisioning');
     return (await mintInstallationToken(installation.id, 'provisioning')).token;
   } catch (err) {
     if (
