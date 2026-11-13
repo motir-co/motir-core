@@ -461,11 +461,13 @@ describe('idempotency — redelivery vs. re-run', () => {
 });
 
 describe('the event surface', () => {
-  it.each(['in_progress', 'completed'])('ignores the `%s` action entirely', async (action) => {
+  it.each(['in_progress', 'completed'])('records NO intent for the `%s` action', async (action) => {
+    // MOTIR-11230: these actions now stamp job PROGRESS on existing intents
+    // (tests/ciFleet/workflowJobProgress.test.ts) — and still provision nothing.
     await seedTenant();
     expect(await handle(delivery({ action }))).toEqual({
       event: 'workflow_job',
-      outcome: 'ignored_action',
+      outcome: 'progress_recorded',
     });
     const ciRunnerProvisioningIntentCount2 = await adminDb.ciRunnerProvisioningIntent.count();
     expect(ciRunnerProvisioningIntentCount2).toBe(0);
