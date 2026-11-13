@@ -166,11 +166,13 @@ describe('STOPPING — the interval is honest', () => {
     );
 
     const bar = screen.getByTestId('plan-change-running-bar');
-    // The click is not the stop: `runWalk` reads the flag at its NEXT phase
-    // boundary, which can be a whole authoring session away. A surface that
-    // claims the run is over while it is still narrating is worse than a slow
-    // stop, so the bar keeps its spinner and says what is actually happening.
-    expect(bar.textContent).toContain('Stopping');
+    // The click is not the stop: motir-ai acts on the flag when its inbox next
+    // reads it — seconds, no longer a phase boundary away (MOTIR-11191). A surface
+    // that claims the run is over while it is still narrating is worse than a slow
+    // stop, so the bar keeps its spinner and says what is actually happening — and
+    // no longer promises to finish the work item it is on, because it does not.
+    expect(bar.textContent).toContain('Stopping — work items already written are kept.');
+    expect(bar.textContent).not.toContain('finishing this work item');
     expect(bar.textContent).not.toContain('You stopped this run');
     // The spinner is DECORATIVE here (`aria-hidden`), which is correct: the bar's
     // copy carries the state in words, so a screen reader is told what is

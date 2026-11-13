@@ -8746,7 +8746,7 @@
       },
       "stop": "Zatrzymaj",
       "stoppingAction": "Zatrzymywanie…",
-      "stopping": "Zatrzymywanie — najpierw kończę ten element roboczy.",
+      "stopping": "Zatrzymywanie — już napisane elementy robocze zostają zachowane.",
       "stopped": "To uruchomienie zostało zatrzymane przez Ciebie.",
       "queuedLabel": "w kolejce",
       "queuedRead": "przeczytane",

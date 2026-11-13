@@ -63,15 +63,15 @@ const COMPOSER_MAX_ROWS = 8;
  * What the pinned bar says while a run is in flight, and what its control does.
  *
  * ⚠️ `stopping` IS NOT `stopped`, and the distinction is the point (MOTIR-4068).
- * The click is not the stop: the walk reads the flag at its NEXT phase boundary,
- * which can be a whole authoring session away, so between the two the surface
- * says the run is **stopping**. A run that keeps narrating after the UI called it
- * over is worse than a slow stop.
+ * The click is not the stop: the walk acts on the flag when its inbox next reads it
+ * (a few seconds, MOTIR-11191 — it no longer waits for the phase boundary), so
+ * between the two the surface says the run is **stopping**. A run that keeps
+ * narrating after the UI called it over is worse than a slow stop.
  */
 export interface RunningBar {
   /** The current narration line — the same text the transcript's live region shows. */
   line: string;
-  /** The user has asked for a stop and the walk has not reached its boundary yet. */
+  /** The user has asked for a stop and the run's stream has not ended yet. */
   stopping: boolean;
   /**
    * The Stop. ABSENT for a viewer who may not end the run (bug MOTIR-10428): a

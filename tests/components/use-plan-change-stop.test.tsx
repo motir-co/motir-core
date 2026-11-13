@@ -221,6 +221,44 @@ describe('the stop RAISES, and does not claim the run is over', () => {
   });
 });
 
+// MOTIR-11191 — motir-ai now ends the job within seconds of the stop (it aborts the
+// author sessions in flight rather than waiting for the phase boundary), so the
+// stream ending is the ONLY thing the overlay waits on: the moment it ends, the bar
+// goes stopping → stopped, and the plan written before the stop is reviewable.
+describe('the overlay follows the run’s end, and nothing else (MOTIR-11191)', () => {
+  it('goes stopping → stopped on the stream’s end, with the plan open for Approve or Discard', async () => {
+    const release = heldStream();
+    const { result } = await mounted();
+
+    let running!: Promise<void>;
+    await act(async () => {
+      running = result.current.send('Add a stop control.', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.state.phase).toBe('streaming'));
+    await act(async () => {
+      await result.current.stop();
+    });
+    expect(result.current.state.stopping).toBe(true);
+    expect(result.current.state.stopped).toBe(false);
+
+    // The job ends on the stop: written cards stand, one cut off has its title.
+    readPending.mockResolvedValue({ planId: 'plan-1', items: [{ id: 'i1' }, { id: 'i2' }] });
+    await act(async () => {
+      release();
+      await running;
+    });
+
+    // No further wait, poll or retry stands between the stream's end and `stopped`.
+    expect(result.current.state.stopping).toBe(false);
+    expect(result.current.state.stopped).toBe(true);
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.review).toMatchObject({ planId: 'plan-1' });
+    expect(result.current.state.errorCode).toBeNull();
+    expect(stopRun).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the stop is SAFE where the click is redundant', () => {
   it('does nothing when no run is in flight', async () => {
     const { result } = await mounted();
