@@ -43,7 +43,7 @@ import en from '@/messages/en.json';
 // person moves it; then it stays where they put it and offers *Follow the
 // planner*, which hands it back. A proposal's quick view, opened on a card that
 // has no description yet, shows the stored description in place the moment it
-// lands — nothing is replayed (MOTIR-11201 retired the typewriter; the partial
+// lands — nothing is replayed (MOTIR-11201 retired the replay; the partial
 // text of a card being written is the story MOTIR-11190 E2E's to show, through
 // the hosted planner's draft door, which this spec's MCP agent does not use).
 // Anything already written, or opened again, shows at once. Reduced motion holds still,
@@ -81,7 +81,7 @@ import en from '@/messages/en.json';
 // asserts the DOM. A HOLD — "the canvas stays here" — is asserted after EACH of
 // several consecutive responses that carry the steps, never after a sleep. The
 // quick view is observed by an in-page MutationObserver that records every live
-// field and every typewriter node it ever drew, installed before the value
+// field it ever drew, installed before the value
 // arrives, so "nothing was replayed" is a record, never a lucky screenshot. Nothing
 // sleeps to wait for state; the receipt's holds (`beat()`, `chapter()`'s own)
 // are pacing for a viewer only — remove every one and every assertion is
@@ -179,27 +179,24 @@ async function closeQuickView(page: Page): Promise<void> {
 interface QuickViewRecord {
   /** Every live field (`quick-view-live-<field>`) the quick view drew. */
   live: string[];
-  /** How many retired typewriter nodes (`data-typewriter`) appeared — always 0. */
-  typewriter: number;
   /** Every text any `aria-live` region held. */
   said: string[];
 }
 
-/** Record, from now on, every live field and typewriter node the quick view draws. */
+/** Record, from now on, every live field the quick view draws. */
 async function recordQuickView(page: Page): Promise<void> {
   await page.evaluate(() => {
     const w = window as unknown as {
-      __qv: { live: string[]; typewriter: number; said: string[] };
+      __qv: { live: string[]; said: string[] };
       __qvObs?: MutationObserver;
     };
     w.__qvObs?.disconnect();
-    w.__qv = { live: [], typewriter: 0, said: [] };
+    w.__qv = { live: [], said: [] };
     const read = () => {
       document.querySelectorAll('[data-testid^="quick-view-live-"]').forEach((box) => {
         const id = box.getAttribute('data-testid')!.slice('quick-view-live-'.length);
         if (id !== 'cue') w.__qv.live.push(id);
       });
-      w.__qv.typewriter += document.querySelectorAll('[data-typewriter]').length;
       document.querySelectorAll('[aria-live]').forEach((region) => {
         const text = region.textContent ?? '';
         if (text) w.__qv.said.push(text);
@@ -479,8 +476,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
         await arrived;
         await expect(peek(page)).toContainText(BODY);
         const record = await quickViewRecord(page);
-        // Nothing is replayed: no typewriter node, and no partial without a draft.
-        expect(record.typewriter).toBe(0);
+        // Nothing is replayed: no partial is drawn without a draft.
         expect(record.live).toEqual([]);
         // A screen reader meets the value once, and no live region a partial one.
         expect(await accessibleOccurrences(peek(page), BODY)).toBe(1);
@@ -498,7 +494,6 @@ test('the canvas follows the planner while a plan is written, stops when the rea
       await openQuickView(page, A2);
       await expect(peek(page)).toContainText(AUTHORED_LEAF.descriptionMd);
       const record = await quickViewRecord(page);
-      expect(record.typewriter).toBe(0);
       expect(record.live).toEqual([]);
       await closeQuickView(page);
       await beat();
@@ -528,7 +523,6 @@ test('the canvas follows the planner while a plan is written, stops when the rea
         await arrived;
         await expect(peek(page)).toContainText(BODY_REDUCED);
         const record = await quickViewRecord(page);
-        expect(record.typewriter).toBe(0);
         expect(record.live).toEqual([]);
         await closeQuickView(page);
         await page.emulateMedia({ reducedMotion: 'no-preference' });

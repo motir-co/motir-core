@@ -25,7 +25,7 @@
 //                                    through the REAL roadmap route
 //     → ProposalPeek                 → IssueQuickViewPanel in proposal mode →
 //                                    LiveDraftField (seam 2; MOTIR-11201 replaced
-//                                    the typewriter with the live draft)
+//                                    the replay with the live draft)
 //
 // The substitutions are the live-drawing gate's (`liveDrawingGate.test.tsx`), all
 // OUTSIDE the path: the session cookie and the project it resolves, the router,

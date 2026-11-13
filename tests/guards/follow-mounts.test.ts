@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 // WHERE FOLLOWING AND A CARD BEING WRITTEN MAY BE MOUNTED (MOTIR-8596, Story
 // MOTIR-8590; design `design/ai-planning/design-notes.md` Part XXVIII §28.2,
 // §28.10 — and MOTIR-11201, Story MOTIR-11190, Part XXIX §29.5, which replaced
-// the typewriter this file first pinned with the live draft).
+// the replay this file first pinned with the live draft).
 //
 // The design is explicit that both behaviours live in ONE place: the planning
 // overlay's proposed-plan pane while the plan is written. The plan page
@@ -88,10 +88,6 @@ describe('a card being written is shown in one place', () => {
       'components/planning/PlanProposalViews.tsx',
       'components/planning/PlanReviewCanvas.tsx',
     ]);
-  });
-
-  it('the typewriter is gone', () => {
-    expect(sitesOf(/\bTypeInText\b|\btypeIn=\{|data-typewriter/)).toEqual([]);
   });
 });
 

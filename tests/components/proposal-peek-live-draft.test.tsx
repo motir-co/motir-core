@@ -216,6 +216,32 @@ describe('the hand-over and the refused write', () => {
   });
 });
 
+describe('reduced motion (§29.7, P11)', () => {
+  it('the text still updates with each read, and nothing transitions', () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query.includes('reduce'),
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    );
+    const r = render(peek(ADD, drafts([draft({ descriptionMd: 'Keep' })])));
+    r.rerender(peek(ADD, drafts([draft({ descriptionMd: 'Keep the session' })])));
+    expect(shown('descriptionMd')).toBe('Keep the session');
+    for (const el of [cue()!, box('descriptionMd')!, caretIn('descriptionMd')!]) {
+      expect(el.className).not.toMatch(/transition|animate/);
+    }
+    r.rerender(peek({ ...ADD, descriptionMd: 'Keep the session.' }, drafts([])));
+    expect(cue()!.getAttribute('data-live-cue')).toBe('written');
+  });
+});
+
 describe('only the live overlay shows a partial (P9)', () => {
   it('the plan page (no `live`) never does, whatever the read carries', () => {
     render(peek(ADD, drafts([draft({ title: 'Remember me' })], ['pi_add']), false));

@@ -2487,7 +2487,7 @@ export default defineConfig({
         // Story MOTIR-8590 · Subtask MOTIR-8596 — FOLLOW THE PLANNER. The driven-step
         // derivation, the follow control and the live reduced-motion read: each new
         // with the story, each GATED in `thresholds` below, measured first. (The
-        // typewriter that story also shipped was retired by MOTIR-11201.)
+        // replay that story also shipped was retired by MOTIR-11201.)
         'lib/planning/plannerDrive.ts',
         'components/planning/FollowPlannerControl.tsx',
         'lib/hooks/usePrefersReducedMotion.ts',
