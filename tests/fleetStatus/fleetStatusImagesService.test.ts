@@ -856,17 +856,91 @@ describe('Publish latest', () => {
     expect(gh.dispatch).not.toHaveBeenCalled();
   });
 
-  it('a refused dispatch is failed with GitHub’s words and records nothing', async () => {
-    gh.dispatch.mockRejectedValueOnce(
-      new PublishWorkflowError(403, 'Resource not accessible by integration'),
-    );
+  it('a refused dispatch is failed with GitHub’s words, records nothing and is not retried', async () => {
+    gh.dispatch.mockRejectedValueOnce(new PublishWorkflowError(422, 'Unexpected inputs provided'));
     expect(await service.publish(currentPrincipal, 'hosted')).toEqual({
       outcome: 'failed',
-      detail: 'GitHub refused the call (HTTP 403: Resource not accessible by integration).',
+      detail: 'GitHub refused the call (HTTP 422: Unexpected inputs provided).',
     });
+    expect(gh.dispatch).toHaveBeenCalledTimes(1);
+    expect(probe.token).not.toHaveBeenCalledWith('motir-co', { fresh: true });
     expect(await adminDb.platformAuditLog.count({ where: { action: 'fleet.image.publish' } })).toBe(
       0,
     );
+  });
+
+  // MOTIR-11229: the provisioning token is cached for up to an hour and keeps the
+  // permissions it was minted with, so a press after `Actions: write` was granted
+  // still sent the pre-grant token and got the same 403.
+  describe('a 403 from the dispatch (MOTIR-11229)', () => {
+    const refused = () => new PublishWorkflowError(403, 'Resource not accessible by integration');
+
+    it('retries once with a newly minted token, and a retry that succeeds is dispatched', async () => {
+      probe.token.mockImplementation(async (_owner: string, opts?: { fresh?: boolean }) =>
+        opts?.fresh ? 'tok-fresh' : 'tok-cached',
+      );
+      gh.dispatch.mockRejectedValueOnce(refused());
+
+      expect(await service.publish(currentPrincipal, 'hosted')).toEqual({
+        outcome: 'dispatched',
+        runUrl: 'https://github.com/motir-co/motir-core/actions/runs/77',
+        runNumber: 13,
+      });
+      expect(probe.token).toHaveBeenCalledWith('motir-co', { fresh: true });
+      expect(gh.dispatch).toHaveBeenCalledTimes(2);
+      expect(gh.dispatch.mock.calls[0]![4]).toBe('tok-cached');
+      expect(gh.dispatch.mock.calls[1]).toEqual([
+        { owner: 'motir-co', name: 'motir-core' },
+        'hosted-agent-image.yml',
+        'main',
+        { digest: NEW, source_commit: NEW_COMMIT },
+        'tok-fresh',
+      ]);
+      expect(
+        await adminDb.platformAuditLog.count({ where: { action: 'fleet.image.publish' } }),
+      ).toBe(1);
+    });
+
+    it('still 403 with the fresh token: the detail names the fix, then GitHub’s words', async () => {
+      gh.dispatch.mockRejectedValueOnce(refused()).mockRejectedValueOnce(refused());
+
+      expect(await service.publish(currentPrincipal, 'runner')).toEqual({
+        outcome: 'failed',
+        detail:
+          "Motir Studio's installation on motir-co needs Actions: read and write to start " +
+          'release-runner-image.yml. GitHub refused the call (HTTP 403: Resource not accessible by integration).',
+      });
+      expect(gh.dispatch).toHaveBeenCalledTimes(2);
+      expect(
+        await adminDb.platformAuditLog.count({ where: { action: 'fleet.image.publish' } }),
+      ).toBe(0);
+    });
+
+    it('no token to retry with: the first 403 stands, named the same way', async () => {
+      probe.token.mockImplementation(async (_owner: string, opts?: { fresh?: boolean }) =>
+        opts?.fresh ? null : 'tok',
+      );
+      gh.dispatch.mockRejectedValueOnce(refused());
+
+      expect(await service.publish(currentPrincipal, 'hosted')).toEqual({
+        outcome: 'failed',
+        detail:
+          "Motir Studio's installation on motir-co needs Actions: read and write to start " +
+          'hosted-agent-image.yml. GitHub refused the call (HTTP 403: Resource not accessible by integration).',
+      });
+      expect(gh.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('a retry that fails some other way is that failure, not the permission', async () => {
+      gh.dispatch
+        .mockRejectedValueOnce(refused())
+        .mockRejectedValueOnce(new PublishWorkflowError(null, 'socket hang up'));
+
+      expect(await service.publish(currentPrincipal, 'hosted')).toEqual({
+        outcome: 'failed',
+        detail: 'GitHub could not be reached (socket hang up).',
+      });
+    });
   });
 
   // Review finding on #4140: the dispatch is a remote call of up to tens of

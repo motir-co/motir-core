@@ -20,6 +20,7 @@ vi.mock('@motir/orchestrator', async (importOriginal) => ({
 const app = vi.hoisted(() => ({
   getOrgInstallation: vi.fn(),
   mintInstallationToken: vi.fn(),
+  evictInstallationToken: vi.fn(),
 }));
 vi.mock('@/lib/github/orgInstallation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/github/orgInstallation')>()),
@@ -28,6 +29,7 @@ vi.mock('@/lib/github/orgInstallation', async (importOriginal) => ({
 vi.mock('@/lib/github/appAuth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/github/appAuth')>()),
   mintInstallationToken: app.mintInstallationToken,
+  evictInstallationToken: app.evictInstallationToken,
 }));
 
 // The AMI arm (MOTIR-10395): the fleet account it is read in, and EC2 there.
@@ -54,7 +56,7 @@ vi.mock('@/lib/orchestrator', async (importOriginal) => ({
 
 const { RunnerAmiStaleError, RunnerImageStaleError } =
   await import('@/lib/jobs/definitions/dailyHealthCheck');
-const { runnerImageFreshnessProbeService, unreleasedChanges } =
+const { runnerImageFreshnessProbeService, sourceRepoToken, unreleasedChanges } =
   await import('@/lib/services/runnerImageFreshnessProbeService');
 const { Ec2ApiError, OrchestratorNotConfiguredError } = await import('@motir/orchestrator');
 const { repoCommitHistoryClient, RepoCommitHistoryError } =
@@ -109,6 +111,7 @@ afterEach(() => {
   registry.listImageTags.mockReset();
   app.getOrgInstallation.mockReset();
   app.mintInstallationToken.mockReset();
+  app.evictInstallationToken.mockReset();
   fleet.listByRole.mockReset();
   fleet.describeAwsImages.mockReset();
 });
@@ -674,6 +677,48 @@ describe('runnerImageFreshnessProbeService.check', () => {
       app.getOrgInstallation.mockRejectedValue(new TypeError('boom'));
       await expect(runnerImageFreshnessProbeService.check({ now: NOW })).rejects.toThrow('boom');
     });
+  });
+});
+
+// MOTIR-11229: Publish latest retries a 403 with a token minted under the
+// installation's permissions as they are now, because the cached one keeps the
+// permissions it was minted with for up to an hour.
+describe('sourceRepoToken', () => {
+  const installation = {
+    id: '77',
+    permissions: {},
+    events: [],
+    repositorySelection: 'all' as const,
+    suspendedAt: null,
+  };
+
+  beforeEach(() => {
+    vi.stubEnv('GITHUB_STUDIO_APP_ID', '4242');
+    vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', 'a-key');
+    app.getOrgInstallation.mockResolvedValue(installation);
+    app.mintInstallationToken.mockResolvedValue({
+      token: 'ghs_install',
+      expiresAt: new Date('2026-11-05T10:00:00Z'),
+    });
+  });
+
+  it('serves the cached token unless asked for a fresh one', async () => {
+    expect(await sourceRepoToken('motir-co')).toBe('ghs_install');
+    expect(app.evictInstallationToken).not.toHaveBeenCalled();
+  });
+
+  it('fresh: evicts that installation’s provisioning token before minting', async () => {
+    expect(await sourceRepoToken('motir-co', { fresh: true })).toBe('ghs_install');
+    expect(app.evictInstallationToken).toHaveBeenCalledWith('77', 'provisioning');
+    expect(app.evictInstallationToken.mock.invocationCallOrder[0]!).toBeLessThan(
+      app.mintInstallationToken.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('fresh: evicts nothing when there is no installation to mint for', async () => {
+    app.getOrgInstallation.mockResolvedValue(null);
+    expect(await sourceRepoToken('motir-co', { fresh: true })).toBeNull();
+    expect(app.evictInstallationToken).not.toHaveBeenCalled();
   });
 });
 

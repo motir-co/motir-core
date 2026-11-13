@@ -47,6 +47,16 @@ no AWS credential. The deploy of the merge writes `/<prefix>/core/indexer-image`
 before it rolls `web` and `worker`, and index runs started after the roll boot
 the new image.
 
+Publish latest starts every image's workflow — this one, `hosted-agent-image.yml`,
+`release-runner-image.yml` and `release-sandbox.yml` — as the provisioning GitHub
+App, **Motir Studio**, on its `motir-co` installation. Starting a workflow
+(`POST /repos/{owner}/{repo}/actions/workflows/{workflow}/dispatches`) needs
+**Actions: read and write**; with `Actions: read` alone GitHub answers 403
+`Resource not accessible by integration`, and the page names the missing
+permission (MOTIR-11229). A token keeps the permissions it was minted with, so
+after granting it the next press retries its 403 once with a newly minted token
+rather than waiting out the cached one's hour.
+
 To move it by hand, dispatch the same workflow:
 
 ```sh

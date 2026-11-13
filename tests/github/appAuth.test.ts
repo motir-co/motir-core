@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateKeyPairSync, verify as cryptoVerify } from 'node:crypto';
 import {
   createAppJwt,
+  evictInstallationToken,
   mintInstallationToken,
   GithubAppNotConfiguredError,
   GithubAppTokenError,
@@ -153,5 +154,63 @@ describe('mintInstallationToken', () => {
     vi.stubEnv('GITHUB_APP_ID', '');
     vi.stubEnv('GITHUB_APP_PRIVATE_KEY', '');
     await expect(mintInstallationToken('1')).rejects.toBeInstanceOf(GithubAppNotConfiguredError);
+  });
+});
+
+// MOTIR-11229: a GitHub token keeps the permissions it was minted with, so a
+// permission granted since the mint never reaches the cached token. Evicting it
+// is how a caller refused 403 gets one minted under the grant.
+describe('evictInstallationToken', () => {
+  /** A token endpoint answering a new token on every mint: tok-1, tok-2, … */
+  function mockMintingEndpoint(): ReturnType<typeof vi.fn> {
+    let minted = 0;
+    const fetchMock = vi.fn(async () => {
+      minted += 1;
+      return new Response(
+        JSON.stringify({
+          token: `tok-${minted}`,
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('drops the cached token, so the next mint is a new one', async () => {
+    configureApp();
+    const fetchMock = mockMintingEndpoint();
+
+    expect((await mintInstallationToken('42')).token).toBe('tok-1');
+    expect((await mintInstallationToken('42')).token).toBe('tok-1'); // cached
+    evictInstallationToken('42');
+    expect((await mintInstallationToken('42')).token).toBe('tok-2');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops only that role’s token for that installation', async () => {
+    configureApp();
+    vi.stubEnv('GITHUB_STUDIO_APP_ID', '999');
+    vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
+    mockMintingEndpoint();
+
+    const userFacing = (await mintInstallationToken('42')).token;
+    const provisioning = (await mintInstallationToken('42', 'provisioning')).token;
+    const other = (await mintInstallationToken('43', 'provisioning')).token;
+
+    evictInstallationToken('42', 'provisioning');
+
+    expect((await mintInstallationToken('42')).token).toBe(userFacing);
+    expect((await mintInstallationToken('43', 'provisioning')).token).toBe(other);
+    expect((await mintInstallationToken('42', 'provisioning')).token).not.toBe(provisioning);
+  });
+
+  it('is a no-op for a token that is not cached', async () => {
+    configureApp();
+    const fetchMock = mockMintingEndpoint();
+    evictInstallationToken('never-minted', 'provisioning');
+    expect((await mintInstallationToken('42')).token).toBe('tok-1');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
