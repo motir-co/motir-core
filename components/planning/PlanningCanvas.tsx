@@ -36,6 +36,7 @@ import {
   type MotionDiff,
   type MotionStage,
 } from '@/lib/planning/canvasMotion';
+import { CHANGED_HIGHLIGHT_MS } from '@/lib/planning/livePane';
 
 // The reusable spatial planning CANVAS (Subtask 7.3.76 / MOTIR-1236) — a Miro-style
 // pan / zoom / drag / fit viewport that renders caller-supplied nodes + READ-ONLY
@@ -198,7 +199,25 @@ export interface PlanningCanvasProps {
    * reduced motion nothing is retained. A laying cue never moves and never lingers.
    */
   nodeCues?: ReadonlyMap<string, NodeCue> | null;
+  /**
+   * THE CHANGED HIGHLIGHT (MOTIR-11185) — a node id → highlight map of the cards
+   * the planner CHANGED just now. A lit node's box gains `data-changed`, the class
+   * `canvas-node--changed`, a solid ring (`.canvas-changed-ring`, between the
+   * deepen outline and the dotted cue ring, so it composes with both) and a
+   * visually hidden name joined into `aria-describedby`. The ring is keyed on
+   * `seq`, so a new change remounts it and restarts its fade instead of stacking.
+   * Under reduced motion it is a static outline. The caller takes it off.
+   *
+   * ⚠️ Absent or `null`, the rendered DOM is what it was before this prop existed.
+   */
+  nodeHighlights?: ReadonlyMap<string, NodeHighlight> | null;
   className?: string;
+}
+
+/** One changed-card highlight: `seq` restarts it, `label` names it (*Just changed*). */
+export interface NodeHighlight {
+  seq: number;
+  label: string;
 }
 
 /** One cue on a node box (§26.6 / §26.7). `label` is its accessible name
@@ -446,6 +465,7 @@ export function PlanningCanvas({
   motion = false,
   animateInitial = false,
   nodeCues = null,
+  nodeHighlights = null,
   className,
 }: PlanningCanvasProps) {
   const t = useTranslations('roadmap.canvas');
@@ -1048,6 +1068,13 @@ export function PlanningCanvas({
                 ? 'at-work'
                 : undefined;
             const cueId = cue ? `${mId}-cue-${n.id}` : undefined;
+            // THE CHANGED HIGHLIGHT (MOTIR-11185) — never on a node that is leaving.
+            const lit =
+              nodeHighlights && mv?.motion !== 'exit' && nodeById.has(n.id)
+                ? (nodeHighlights.get(n.id) ?? null)
+                : null;
+            const litId = lit ? `${mId}-changed-${n.id}` : undefined;
+            const describedBy = [cueId, litId].filter(Boolean).join(' ') || undefined;
             const boxClass = withMotion(
               `absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) ${
                 onNodeMove ? 'cursor-grab active:cursor-grabbing' : ''
@@ -1061,7 +1088,8 @@ export function PlanningCanvas({
                 data-motion={mv?.motion}
                 data-cue={cue?.kind}
                 data-cue-motion={cueMotion}
-                aria-describedby={cueId}
+                data-changed={lit ? '' : undefined}
+                aria-describedby={describedBy}
                 tabIndex={0}
                 onKeyDown={
                   onNodeActivate
@@ -1090,7 +1118,9 @@ export function PlanningCanvas({
                       }
                     : undefined
                 }
-                className={cue ? `${boxClass} canvas-node--${cue.kind}` : boxClass}
+                className={`${boxClass}${cue ? ` canvas-node--${cue.kind}` : ''}${
+                  lit ? ' canvas-node--changed' : ''
+                }`}
                 style={
                   mv?.delay !== undefined
                     ? { left: r.x, top: r.y, animationDelay: `${mv.delay}ms` }
@@ -1098,6 +1128,20 @@ export function PlanningCanvas({
                 }
               >
                 {renderNode(n)}
+                {lit ? (
+                  <>
+                    <span
+                      key={`changed-${lit.seq}`}
+                      aria-hidden="true"
+                      data-testid="canvas-changed-ring"
+                      className="canvas-changed-ring"
+                      style={{ animationDuration: `${CHANGED_HIGHLIGHT_MS}ms` }}
+                    />
+                    <span id={litId} className="sr-only">
+                      {lit.label}
+                    </span>
+                  </>
+                ) : null}
                 {cue ? (
                   <>
                     {/* The dotted RING — outside the deepen outline (7px vs 2px),

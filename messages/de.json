@@ -9057,6 +9057,10 @@
       "layingIn": "{identifier} wird angelegt · Dorthin wechseln",
       "newAndDraftingIn": "{arrived} neu · {drafting} werden in {identifier} entworfen · Dorthin wechseln",
       "draftingAcross": "{count} werden an anderer Stelle entworfen · zuerst in {identifier} · Dorthin wechseln",
+      "changedIn": "{count} geändert in {identifier} · Dorthin wechseln",
+      "changedAcross": "{count} geändert an anderer Stelle · zuletzt in {identifier} · Dorthin wechseln",
+      "newAndChangedIn": "{arrived} neu · {changed} geändert in {identifier} · Dorthin wechseln",
+      "changedName": "Gerade geändert",
       "levelChange": {
         "srPrefix": "Ausstehende Änderung an dieser Ebene:",
         "changed": "Diese Ebene",

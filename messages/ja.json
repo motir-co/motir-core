@@ -9054,6 +9054,10 @@
       "layingIn": "{identifier} を配置中 · 移動",
       "newAndDraftingIn": "{identifier} に {arrived} 件の新規 · {drafting} 件を下書き中 · 移動",
       "draftingAcross": "別の場所で {count} 件を下書き中 · 最初は {identifier} · 移動",
+      "changedIn": "{identifier} で {count} 件を変更 · 移動",
+      "changedAcross": "別の場所で {count} 件を変更 · 最新は {identifier} · 移動",
+      "newAndChangedIn": "{identifier} に {arrived} 件の新規 · {changed} 件を変更 · 移動",
+      "changedName": "変更されたばかり",
       "levelChange": {
         "srPrefix": "この階層への保留中の変更:",
         "changed": "この階層",

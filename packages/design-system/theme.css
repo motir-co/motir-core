@@ -4699,6 +4699,12 @@
      (`--el-drafting-surface`). Base keeps the in-progress hue; Motir warms it. */
   --el-drafting: var(--el-status-in-progress);
   --el-drafting-surface: var(--el-tint-sky);
+  /* THE CHANGED HIGHLIGHT (MOTIR-11185) — a card the planner changed AFTER it was
+     drawn: the ring and the one glow pulse on the planning canvas. Mapped to the
+     palette's RE-PLANNING hue, which every palette keeps distinct from the
+     drafting cue's (in-progress / warm accent) and from the deepen outline's
+     accent ink, so "just changed" never reads as "being drafted". */
+  --el-changed: var(--el-status-planning);
   /* The WARM primary CTA (MOTIR-8251 Revision 5 · built by MOTIR-8254) — the
      onboarding screens' one warm element: the palette's decorative highlight as
      the FILL, ink as the LABEL. The label is dark in BOTH themes, because white

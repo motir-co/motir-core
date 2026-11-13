@@ -9057,6 +9057,10 @@
       "layingIn": "{identifier} indelen · Ga erheen",
       "newAndDraftingIn": "{arrived} nieuw · {drafting} worden opgesteld in {identifier} · Ga erheen",
       "draftingAcross": "{count} worden elders opgesteld · eerste in {identifier} · Ga erheen",
+      "changedIn": "{count} gewijzigd in {identifier} · Ga erheen",
+      "changedAcross": "{count} gewijzigd elders · nieuwste in {identifier} · Ga erheen",
+      "newAndChangedIn": "{arrived} nieuw · {changed} gewijzigd in {identifier} · Ga erheen",
+      "changedName": "Zojuist gewijzigd",
       "levelChange": {
         "srPrefix": "Openstaande wijziging op dit niveau:",
         "changed": "Dit niveau",

@@ -9048,6 +9048,10 @@
       "layingIn": "正在铺设 {identifier} · 前往",
       "newAndDraftingIn": "{identifier} 中有 {arrived} 项新内容 · {drafting} 项正在起草 · 前往",
       "draftingAcross": "其他层级有 {count} 项正在起草 · 首个在 {identifier} · 前往",
+      "changedIn": "{identifier} 中有 {count} 项已更改 · 前往",
+      "changedAcross": "其他层级有 {count} 项已更改 · 最新在 {identifier} · 前往",
+      "newAndChangedIn": "{identifier} 中有 {arrived} 项新内容 · {changed} 项已更改 · 前往",
+      "changedName": "刚刚更改",
       "levelChange": {
         "srPrefix": "此层级的待定变更：",
         "changed": "当前层级",

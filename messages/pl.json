@@ -9057,6 +9057,10 @@
       "layingIn": "Rozkładanie: {identifier} · Przejdź tam",
       "newAndDraftingIn": "Nowe: {arrived} · szkice w {identifier}: {drafting} · Przejdź tam",
       "draftingAcross": "Szkice gdzie indziej: {count} · pierwszy w {identifier} · Przejdź tam",
+      "changedIn": "Zmienione w {identifier}: {count} · Przejdź tam",
+      "changedAcross": "Zmienione gdzie indziej: {count} · najnowsze w {identifier} · Przejdź tam",
+      "newAndChangedIn": "Nowe: {arrived} · zmienione w {identifier}: {changed} · Przejdź tam",
+      "changedName": "Właśnie zmieniono",
       "levelChange": {
         "srPrefix": "Oczekująca zmiana tego poziomu:",
         "changed": "Ten poziom",
