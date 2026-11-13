@@ -233,8 +233,8 @@ function unimplementedProvider(name: string): SendEmail {
 //
 // Provisioned by MOTIR-1123: the `motir.co` sending domain is authenticated
 // (SPF + DKIM + DMARC) in Resend's us-east-1 region, and the three values
-// below are Fly secrets on the `motir-core` app — RESEND_API_KEY (send-only
-// scope), EMAIL_FROM, EMAIL_PROVIDER. Nothing here is hardcoded to that
+// below are set on the deployment — RESEND_API_KEY (send-only scope),
+// EMAIL_FROM, EMAIL_PROVIDER. Nothing here is hardcoded to that
 // vendor account: a self-hoster points the same three env vars at their own
 // Resend workspace, or leaves EMAIL_PROVIDER unset and keeps 'console'.
 //
@@ -268,15 +268,15 @@ const RESEND_RETRYABLE_CONFLICTS = new Set(['concurrent_idempotent_requests']);
 const RESEND_QUOTA_EXHAUSTED = new Set(['daily_quota_exceeded', 'monthly_quota_exceeded']);
 
 /**
- * Where to set each production arm's variables, for its boot refusal. Resend's
- * secrets were Fly secrets on `motir-core`; SES runs on ECS, where the task
- * definition's environment and secrets carry them.
+ * Where to set each production arm's variables, for its boot refusal. Motir's
+ * production runs on ECS, where the task definition carries them: Resend's API
+ * key is one of its secrets, and SES reads plain environment.
  */
-const PROVIDER_ENV_HINT: Record<'resend' | 'ses', (name: string) => string> = {
-  resend: (name) =>
+const PROVIDER_ENV_HINT: Record<'resend' | 'ses', string> = {
+  resend:
     `Set it on the deployment alongside RESEND_API_KEY and EMAIL_FROM ` +
-    `(on Fly: \`flyctl secrets set -a motir-core ${name}=…\`; locally: .env.local). `,
-  ses: () =>
+    `(on ECS: the task definition's secrets; locally: .env.local). `,
+  ses:
     `Set it on the deployment alongside AWS_REGION, EMAIL_FROM and SES_CONFIGURATION_SET ` +
     `(on ECS: the task definition's environment; locally: .env.local). `,
 };
@@ -292,7 +292,7 @@ function requireEmailEnv(provider: 'resend' | 'ses', name: string): string {
   if (value === undefined || value.trim() === '') {
     throw new Error(
       `EMAIL_PROVIDER='${provider}' requires ${name}, which is unset or empty. ` +
-        PROVIDER_ENV_HINT[provider](name) +
+        PROVIDER_ENV_HINT[provider] +
         `Set EMAIL_PROVIDER=console for local dev if you don't want to send real email.`,
     );
   }

@@ -18,15 +18,15 @@ const BILLING: DeclaredCredential = {
   source: 'MOTIR-1908',
 };
 
-const FLY: DeclaredCredential = {
-  envVar: 'FLY_DEPLOYMENT_READ_TOKEN',
-  name: 'Fly deployment read token',
+const STATUS: DeclaredCredential = {
+  envVar: 'STATUS_PAGE_READ_TOKEN',
+  name: 'Status page read token',
   expiresAt: '2028-01-01',
-  renewal: 'mint a replacement Fly token',
+  renewal: 'mint a replacement status page token',
   source: 'MOTIR-7332',
 };
 
-const SET = { GITHUB_BILLING_TOKEN: 'ghp_x', FLY_DEPLOYMENT_READ_TOKEN: 'fo1_x' };
+const SET = { GITHUB_BILLING_TOKEN: 'ghp_x', STATUS_PAGE_READ_TOKEN: 'sp_x' };
 
 describe('probeCredentialExpiry', () => {
   it('is HEALTHY well before the lead time, and records the entry anyway', () => {
@@ -97,7 +97,7 @@ describe('probeCredentialExpiry', () => {
   });
 
   it('with two credentials, names only the one that fires', () => {
-    const verdict = probeCredentialExpiry([BILLING, FLY], SET, new Date('2027-07-05T09:00:00Z'));
+    const verdict = probeCredentialExpiry([BILLING, STATUS], SET, new Date('2027-07-05T09:00:00Z'));
 
     expect(verdict.verdict).toBe('expiring');
     if (verdict.verdict !== 'expiring') throw new Error('unreachable');
@@ -107,7 +107,7 @@ describe('probeCredentialExpiry', () => {
 
   it('EXPIRED outranks EXPIRING and still carries the expiring ones', () => {
     const verdict = probeCredentialExpiry(
-      [BILLING, { ...FLY, expiresAt: '2027-08-20' }],
+      [BILLING, { ...STATUS, expiresAt: '2027-08-20' }],
       SET,
       new Date('2027-08-01T09:00:00Z'),
     );
@@ -115,7 +115,7 @@ describe('probeCredentialExpiry', () => {
     expect(verdict.verdict).toBe('expired');
     if (verdict.verdict !== 'expired') throw new Error('unreachable');
     expect(verdict.offenders.map((e) => e.envVar)).toEqual(['GITHUB_BILLING_TOKEN']);
-    expect(verdict.expiring.map((e) => e.envVar)).toEqual(['FLY_DEPLOYMENT_READ_TOKEN']);
+    expect(verdict.expiring.map((e) => e.envVar)).toEqual(['STATUS_PAGE_READ_TOKEN']);
   });
 
   it('THROWS on an unparseable date — a registry typo must not read as "never expires"', () => {
@@ -193,9 +193,6 @@ describe('CREDENTIAL_REGISTRY', () => {
     const billing = CREDENTIAL_REGISTRY.find((c) => c.envVar === 'GITHUB_BILLING_TOKEN');
 
     expect(billing).toMatchObject({ expiresAt: '2027-07-31' });
-    // The Hosting card's Fly read token left with its adapter (MOTIR-10952):
-    // nothing at main reads it, so its expiry is no longer watched.
-    expect(CREDENTIAL_REGISTRY.map((c) => c.envVar)).not.toContain('FLY_DEPLOYMENT_READ_TOKEN');
     for (const entry of CREDENTIAL_REGISTRY) {
       expect(entry.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(Number.isNaN(Date.parse(`${entry.expiresAt}T00:00:00.000Z`))).toBe(false);

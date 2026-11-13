@@ -20,7 +20,7 @@
  * Fargate variables the whole file reads — `deploymentIdentity()` and the three
  * host-tag accessors at the bottom (`hostInstanceId`, `hostRegion`,
  * `hostProcessGroup`) that feed the terminal relay and Sentry's instance tags.
- * Since MOTIR-10962 none of them reads a `FLY_*` variable.
+ * Since MOTIR-10962 none of them reads the retired platform's variables.
  *
  * ---------------------------------------------------------------------------
  * ⚠️ IT IS NOT PART OF THE FLEET'S PORT, AND SAYING SO MATTERS

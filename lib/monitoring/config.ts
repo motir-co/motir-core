@@ -86,8 +86,8 @@ export function clientSentryDsn(): string | undefined {
  *
  * ⚠️ It has to be a build argument, and the reason is not stylistic: source maps
  * are uploaded DURING the image build and must be tagged with the same string
- * the running code reports. Fly injects `FLY_APP_NAME` / `FLY_MACHINE_ID` at
- * runtime, which identify the machine, not the build — and `.git` is in
+ * the running code reports. The platform's runtime metadata identifies the
+ * task or machine, not the build — and `.git` is in
  * `.dockerignore`, so the SDK's own `git rev-parse HEAD` fallback finds nothing
  * inside the image. Without this argument a release is simply never named.
  *
@@ -145,8 +145,8 @@ export function clientMonitoringEnvironment(): string {
  * decision with a bill attached". It is still that decision; what changed is
  * WHERE it is made. A constant could only be raised for every deployment of an
  * image at once, and a staging load test needs a rate production must not pay
- * for. So it is a Fly runtime secret, set per app
- * (`flyctl secrets set -a <app> SENTRY_TRACES_SAMPLE_RATE=…`).
+ * for. So it is a runtime setting, set per deployment (on ECS, in the task
+ * definition's environment).
  *
  * **Unset ⇒ 0, which is the behaviour before this setting existed.** Nothing
  * traces until a deployment opts in. A value that is not a finite number in

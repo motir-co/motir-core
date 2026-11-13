@@ -206,7 +206,7 @@ describe('/admin/monitoring — the Fleet section', () => {
           id: 'database',
           state: 'healthy',
           values: { ms: 4, region: 'fra' },
-          linkOut: 'https://console.neon.tech',
+          linkOut: 'https://us-east-1.console.aws.amazon.com/rds/home?region=us-east-1#databases:',
         },
         {
           id: 'lastHealthCheck',

@@ -570,7 +570,8 @@ describe('a REJECTED action (not merely a refused one)', () => {
 describe('the containment rule for a wide command', () => {
   it('carries all THREE parts — the cell is min-w-0, the value scrolls itself, the button does not shrink', () => {
     const long =
-      'fly deploy --app motir-core --image registry.fly.io/motir-core@sha256:' + 'a'.repeat(64);
+      'docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/motir/motir-core@sha256:' +
+      'a'.repeat(64);
     const { container } = mount([todo({ text: 'Deploy', commandText: long })]);
 
     const pre = container.querySelector('pre')!;

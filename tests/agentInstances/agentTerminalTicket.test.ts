@@ -693,7 +693,5 @@ describe('a relay that dies leaves no row open for ever (MOTIR-6959)', () => {
     expect(relayMachineId({ ...fargate, ECS_CONTAINER_METADATA_URI_V4: '' }, () => 'h', 9)).toBe(
       'h-9',
     );
-    // A former Fly machine's variable no longer names the relay.
-    expect(relayMachineId({ FLY_MACHINE_ID: '148e21' }, () => 'host', 42)).toBe('host-42');
   });
 });

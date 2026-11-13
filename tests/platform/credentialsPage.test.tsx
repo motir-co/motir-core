@@ -63,7 +63,7 @@ function cred(envVar: string, expiresAt: string, over: Partial<DeclaredCredentia
 /** The design's mixed board: 1 expired, 1 expiring, 1 not set, 3 healthy. */
 const MIXED = [
   cred('GITHUB_BILLING_TOKEN', '2027-07-31'),
-  cred('FLY_DEPLOYMENT_READ_TOKEN', '2046-09-27'),
+  cred('STATUS_PAGE_READ_TOKEN', '2046-09-27'),
   cred('EXPIRED_TOKEN', '2026-11-09'),
   cred('EXPIRING_TOKEN', '2026-11-24'),
   cred('UNSET_TOKEN', '2027-03-01'),
@@ -71,7 +71,7 @@ const MIXED = [
 ];
 const SET = {
   GITHUB_BILLING_TOKEN: 'ghp_SECRET_must_not_render',
-  FLY_DEPLOYMENT_READ_TOKEN: 'fo1_SECRET_must_not_render',
+  STATUS_PAGE_READ_TOKEN: 'sp_SECRET_must_not_render',
   EXPIRED_TOKEN: 'x',
   EXPIRING_TOKEN: 'x',
   LATER_TOKEN: 'x',
@@ -154,7 +154,7 @@ describe('the credentials card', () => {
       'UNSET_TOKEN',
       'GITHUB_BILLING_TOKEN',
       'LATER_TOKEN',
-      'FLY_DEPLOYMENT_READ_TOKEN',
+      'STATUS_PAGE_READ_TOKEN',
     ]);
 
     // Each state's day words.

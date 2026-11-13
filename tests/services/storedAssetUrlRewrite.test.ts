@@ -17,7 +17,8 @@ import { parseArgs, printReport } from '../../scripts/rewrite-stored-asset-urls'
 // workspaces, so the sweep's cross-tenant read and its per-project binding are what
 // is under test.
 
-const TIGRIS = 'https://motir-core-public.fly.storage.tigris.dev';
+// The public base the rows were written on (Tigris, in the cutover window).
+const OLD_BASE = 'https://motir-core-public.old-store.test';
 const S3 = 'https://assets.motir.co';
 const GOOGLE = 'https://lh3.googleusercontent.com/a/abc123';
 
@@ -54,12 +55,12 @@ async function seed() {
   const older = await createTestWorkspace({ name: 'Epsilon' });
 
   const values = {
-    userA: `${TIGRIS}/avatars/${a.owner.id}/me.png`,
-    userB: `${TIGRIS}/avatars/${b.owner.id}/a%20b.png`,
+    userA: `${OLD_BASE}/avatars/${a.owner.id}/me.png`,
+    userB: `${OLD_BASE}/avatars/${b.owner.id}/a%20b.png`,
     userKeyed: `avatars/${keyed.owner.id}/me.png`,
     userGoogle: GOOGLE,
     userOlder: `https://old-public.blob.example/avatars/${older.owner.id}/me.png`,
-    projectA: `${TIGRIS}/projects/${pa.id}/mark.png`,
+    projectA: `${OLD_BASE}/projects/${pa.id}/mark.png`,
     projectB: `projects/${pb.id}/mark.png`,
   };
   await adminDb.user.update({ where: { id: a.owner.id }, data: { image: values.userA } });
@@ -105,12 +106,12 @@ describe('the dry run (the default)', () => {
     const { ids, values } = await seed();
 
     const report = await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
-      fromBase: `${TIGRIS}/`,
+      fromBase: `${OLD_BASE}/`,
       apply: false,
     });
 
     expect(report.apply).toBe(false);
-    expect(report.fromBase).toBe(TIGRIS);
+    expect(report.fromBase).toBe(OLD_BASE);
     expect(report.users.before).toBe(2);
     expect(report.users.rows).toEqual(
       expect.arrayContaining([
@@ -137,7 +138,7 @@ describe('--apply', () => {
     const { ids, values } = await seed();
 
     const report = await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
-      fromBase: TIGRIS,
+      fromBase: OLD_BASE,
       apply: true,
     });
 
@@ -155,11 +156,14 @@ describe('--apply', () => {
 
   it('a second apply counts 0 and writes nothing', async () => {
     const { ids } = await seed();
-    await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({ fromBase: TIGRIS, apply: true });
+    await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
+      fromBase: OLD_BASE,
+      apply: true,
+    });
     const afterFirst = await images(ids);
 
     const again = await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
-      fromBase: TIGRIS,
+      fromBase: OLD_BASE,
       apply: true,
     });
 
@@ -171,11 +175,11 @@ describe('--apply', () => {
   it('rolls everything back, naming the row, when one does not reduce to a key', async () => {
     const { ids, values } = await seed();
     // A `..` between encoded slashes survives decoding, so it never reduces.
-    const bad = `${TIGRIS}/avatars/x%2F..%2Fy/me.png`;
+    const bad = `${OLD_BASE}/avatars/x%2F..%2Fy/me.png`;
     await adminDb.user.update({ where: { id: ids.userKeyed }, data: { image: bad } });
 
     const err = await storedAssetUrlRewriteService
-      .rewriteAbsoluteAssetUrls({ fromBase: TIGRIS, apply: true })
+      .rewriteAbsoluteAssetUrls({ fromBase: OLD_BASE, apply: true })
       .catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(StoredAssetRewriteError);
@@ -194,7 +198,7 @@ describe('--apply', () => {
     vi.spyOn(projectRepository, 'compareAndSetImage').mockResolvedValue(0);
 
     const err = await storedAssetUrlRewriteService
-      .rewriteAbsoluteAssetUrls({ fromBase: TIGRIS, apply: true })
+      .rewriteAbsoluteAssetUrls({ fromBase: OLD_BASE, apply: true })
       .catch((e: unknown) => e);
 
     expect(err).toMatchObject({
@@ -217,7 +221,7 @@ describe('--apply', () => {
     });
 
     const err = await storedAssetUrlRewriteService
-      .rewriteAbsoluteAssetUrls({ fromBase: TIGRIS, apply: true })
+      .rewriteAbsoluteAssetUrls({ fromBase: OLD_BASE, apply: true })
       .catch((e: unknown) => e);
 
     expect(err).toMatchObject({ code: 'STORED_ASSET_REWRITE_INCOMPLETE' });
@@ -230,7 +234,7 @@ describe('--apply', () => {
     vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', S3);
 
     const report = await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
-      fromBase: TIGRIS,
+      fromBase: OLD_BASE,
       apply: true,
     });
 
@@ -243,21 +247,21 @@ describe('--apply', () => {
 describe('the base and the arguments', () => {
   it('requires --from-base and refuses a non-https one before any query', () => {
     expect(() => parseFromBase(undefined)).toThrowError(/--from-base is required/);
-    expect(() => parseFromBase('http://motir-core-public.fly.storage.tigris.dev')).toThrowError(
-      /https/,
-    );
+    expect(() => parseFromBase('http://motir-core-public.old-store.test')).toThrowError(/https/);
     expect(() => parseFromBase('not a url')).toThrowError(/not a URL/);
-    expect(parseFromBase(`${TIGRIS}//`)).toBe(TIGRIS);
+    expect(parseFromBase(`${OLD_BASE}//`)).toBe(OLD_BASE);
   });
 
   it('the script defaults to a dry run, takes --apply, and refuses anything else', () => {
-    expect(parseArgs([`--from-base=${TIGRIS}`])).toEqual({ fromBase: TIGRIS, apply: false });
-    expect(parseArgs([`--from-base=${TIGRIS}`, '--apply'])).toEqual({
-      fromBase: TIGRIS,
+    expect(parseArgs([`--from-base=${OLD_BASE}`])).toEqual({ fromBase: OLD_BASE, apply: false });
+    expect(parseArgs([`--from-base=${OLD_BASE}`, '--apply'])).toEqual({
+      fromBase: OLD_BASE,
       apply: true,
     });
     expect(() => parseArgs(['--apply'])).toThrowError(StoredAssetRewriteError);
-    expect(() => parseArgs([`--from-base=${TIGRIS}`, '--force'])).toThrowError(/unknown argument/);
+    expect(() => parseArgs([`--from-base=${OLD_BASE}`, '--force'])).toThrowError(
+      /unknown argument/,
+    );
   });
 
   it('prints each row with its key, and says when there is nothing to apply', async () => {
@@ -267,7 +271,7 @@ describe('the base and the arguments', () => {
 
     printReport(
       await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
-        fromBase: TIGRIS,
+        fromBase: OLD_BASE,
         apply: false,
       }),
     );
@@ -277,7 +281,7 @@ describe('the base and the arguments', () => {
     lines.length = 0;
     printReport(
       await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
-        fromBase: TIGRIS,
+        fromBase: OLD_BASE,
         apply: true,
       }),
     );
@@ -286,7 +290,7 @@ describe('the base and the arguments', () => {
     lines.length = 0;
     printReport(
       await storedAssetUrlRewriteService.rewriteAbsoluteAssetUrls({
-        fromBase: TIGRIS,
+        fromBase: OLD_BASE,
         apply: false,
       }),
     );

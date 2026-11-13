@@ -178,7 +178,7 @@ describe('the release payload is read loudly or not at all', () => {
 describe('the report names the gap on its first screen', () => {
   it('carries the deployed commit, the head, the age and the ceiling', () => {
     const text = formatResult(
-      'https://motir-core.fly.dev/api/health/release',
+      'https://app.motir.co/api/health/release',
       verdict({ undeployed: [commit(B, '2026-08-28T07:44:30Z')] }),
     );
     expect(text).toContain('STALE');

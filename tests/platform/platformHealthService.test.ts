@@ -439,34 +439,55 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     expect(errors).toMatchObject({ state: 'unreachable', values: { reason: 'notConfigured' } });
   });
 
-  it('a NEON url yields the region out of the HOST and the console link', async () => {
+  it('an RDS url yields the region out of the HOST and its RDS console', async () => {
     // The region is a READING of the connection actually open, not a lookup in a
-    // decision record — a deployment pointed elsewhere would still say `iad` if
-    // this came from an ADR.
-    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@ep-cool-1234-us-east-1.aws.neon.tech/db');
+    // decision record — a deployment pointed elsewhere would still say
+    // `us-east-1` if this came from an ADR.
+    vi.stubEnv(
+      'DATABASE_URL',
+      'postgresql://u:p@motir-core.c9akciq32.us-east-1.rds.amazonaws.com:5432/db',
+    );
 
     const database = signal(
       (await platformHealthService.read(currentPrincipal)).signals,
       'database',
     );
     expect(database.values['region']).toBe('us-east-1');
-    expect(database.linkOut).toBe('https://console.neon.tech/app/projects');
+    expect(database.linkOut).toBe(
+      'https://us-east-1.console.aws.amazon.com/rds/home?region=us-east-1#databases:',
+    );
   });
 
-  it('a Neon host the region pattern does not match renders the RAW HOST, still the truth', async () => {
-    // ⚠️ ASSERTED AS THE BEHAVIOUR, NOT AS A WISH. `databaseRegion`'s pattern
-    // wants the region joined by a DASH (`…-us-east-1.aws.neon.tech`); a host
-    // that separates it with a DOT does not match, and the accessor falls back to
-    // the host — which its own comment calls "still the truth". Asserting a region
-    // here would be asserting a regex this file does not own.
-    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@ep-cool-1234-pooler.us-east-1.aws.neon.tech/db');
+  it('an RDS PROXY endpoint is read the same way, region and all', async () => {
+    // A proxy's endpoint inserts a `proxy-<id>` label but keeps the region as the
+    // label before `.rds.amazonaws.com`, so the one reading covers both.
+    vi.stubEnv(
+      'DATABASE_URL',
+      'postgresql://u:p@motir-core.proxy-c9akciq32.eu-central-1.rds.amazonaws.com/db',
+    );
 
     const database = signal(
       (await platformHealthService.read(currentPrincipal)).signals,
       'database',
     );
-    expect(database.values['region']).toBe('ep-cool-1234-pooler.us-east-1.aws.neon.tech');
-    expect(database.linkOut).toBe('https://console.neon.tech/app/projects');
+    expect(database.values['region']).toBe('eu-central-1');
+    expect(database.linkOut).toBe(
+      'https://eu-central-1.console.aws.amazon.com/rds/home?region=eu-central-1#databases:',
+    );
+  });
+
+  it('a host that is not RDS renders the RAW HOST, still the truth, with no console link', async () => {
+    // A self-host or a local database: nothing about the host names a region,
+    // so the card says where it is connected rather than guessing, and links to
+    // no console it cannot vouch for.
+    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@db.internal.example:5432/motir');
+
+    const database = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'database',
+    );
+    expect(database.values['region']).toBe('db.internal.example');
+    expect(database.linkOut).toBeNull();
   });
 
   it('a MALFORMED or absent DATABASE_URL degrades to an em-dash rather than throwing', async () => {
@@ -481,6 +502,15 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     const absent = signal((await platformHealthService.read(currentPrincipal)).signals, 'database');
     expect(absent.values['region']).toBe('—');
     expect(absent.linkOut).toBeNull();
+
+    // A socket URL parses but names no host at all.
+    vi.stubEnv('DATABASE_URL', 'postgresql:///motir');
+    const hostless = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'database',
+    );
+    expect(hostless.values['region']).toBe('—');
+    expect(hostless.linkOut).toBeNull();
   });
 
   it('a SLOW database ping reads DEGRADED, with the real latency beside it', async () => {

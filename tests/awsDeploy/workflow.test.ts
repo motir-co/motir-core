@@ -66,11 +66,11 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     expect(job.if).toBe("vars.AWS_DEPLOY_ROLE_ARN != ''");
   });
 
-  it('is independent of the Fly deploy: no needs, no workflow_run, no reference to ci.yml or flyctl', () => {
+  it('is independent of the CI workflow: no needs, no workflow_run, no reference to ci.yml', () => {
     expect(job.needs).toBeUndefined();
     expect('workflow_run' in workflow.on).toBe(false);
     expect(steps.some((s) => s.uses?.startsWith('./.github/workflows/'))).toBe(false);
-    expect(code).not.toMatch(/ci\.yml|flyctl|needs:/);
+    expect(code).not.toMatch(/ci\.yml|needs:/);
   });
 
   // 80: the 20-minute stack wait of MOTIR-10436 on top of the deploy's 60.

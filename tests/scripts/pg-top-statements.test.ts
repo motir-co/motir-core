@@ -56,8 +56,8 @@ function readout(over: Partial<TopStatementsReadout> = {}): TopStatementsReadout
     limit: 20,
     extensionSchema: 'public',
     answeredBy: {
-      host: 'ep-calm-1.eu-central-1.aws.neon.tech',
-      database: 'neondb',
+      host: 'motir-core.c9akciq32.us-east-1.rds.amazonaws.com',
+      database: 'motir',
       serverVersion: '17.2',
       computeStartedAt: '2026-10-14T08:00:00.000Z',
       latestMigration: { name: '20261013_add_x', finishedAt: '2026-10-13T10:00:00.000Z' },
@@ -101,8 +101,8 @@ describe('parseArgs', () => {
 });
 
 describe('resolveDirectUrl', () => {
-  const DIRECT = 'postgresql://u:secret@ep-calm-1.eu-central-1.aws.neon.tech/neondb';
-  const POOLER = 'postgresql://u:secret@ep-calm-1-pooler.eu-central-1.aws.neon.tech/neondb';
+  const DIRECT = 'postgresql://u:secret@motir-core.c9akciq32.us-east-1.rds.amazonaws.com/motir';
+  const POOLER = 'postgresql://u:secret@db-pooler.internal.example.test/motir';
   const LOCAL = 'postgresql://prodect:prodect@localhost:5433/prodect';
 
   it('prefers DATABASE_URL_UNPOOLED', () => {
@@ -119,7 +119,7 @@ describe('resolveDirectUrl', () => {
     });
   });
 
-  it('refuses a Neon pooler host, naming DATABASE_URL_UNPOOLED', () => {
+  it('refuses a `-pooler.` host, naming DATABASE_URL_UNPOOLED', () => {
     expect(() => resolveDirectUrl({ DATABASE_URL: POOLER })).toThrow(PgTopStatementsUsageError);
     expect(() => resolveDirectUrl({ DATABASE_URL: POOLER })).toThrow(/DATABASE_URL_UNPOOLED/);
     expect(() => resolveDirectUrl({ DATABASE_URL_UNPOOLED: POOLER })).toThrow(/pooler/);
@@ -133,7 +133,7 @@ describe('resolveDirectUrl', () => {
   });
 
   it('hostOf never carries the credentials', () => {
-    expect(hostOf(DIRECT)).toBe('ep-calm-1.eu-central-1.aws.neon.tech');
+    expect(hostOf(DIRECT)).toBe('motir-core.c9akciq32.us-east-1.rds.amazonaws.com');
     expect(hostOf(LOCAL)).toBe('localhost:5433');
     expect(hostOf(DIRECT)).not.toContain('secret');
   });
@@ -142,8 +142,8 @@ describe('resolveDirectUrl', () => {
 describe('renderText', () => {
   it('prints the answered-by block, the coverage line and three ranked sections', () => {
     const out = renderText(readout());
-    expect(out).toContain('host=ep-calm-1.eu-central-1.aws.neon.tech');
-    expect(out).toContain('database=neondb');
+    expect(out).toContain('host=motir-core.c9akciq32.us-east-1.rds.amazonaws.com');
+    expect(out).toContain('database=motir');
     expect(out).toContain('server_version=17.2');
     expect(out).toContain('compute started: 2026-10-14T08:00:00.000Z');
     expect(out).toContain('latest migration: 20261013_add_x (finished 2026-10-13T10:00:00.000Z)');

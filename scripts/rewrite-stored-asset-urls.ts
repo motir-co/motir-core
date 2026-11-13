@@ -22,13 +22,16 @@
  * it would match nothing and report a false 0. A non-`https:` base is refused before
  * any query runs.
  *
- * Usage (against NEON's core database, after the freeze and before the dump —
- * motir-infra `docs/core-cutover.md` step 5 says why; any core database works):
+ * Usage (in the AWS window: against the old core database, after the freeze and
+ * before the dump — motir-infra `docs/core-cutover.md` step 5 says why; any core
+ * database works):
  *
  *   DATABASE_URL='<core url>' pnpm db:rewrite:stored-asset-urls \
- *     --from-base=https://motir-core-public.fly.storage.tigris.dev
+ *     --from-base=<the old public base>
  *   DATABASE_URL='<core url>' pnpm db:rewrite:stored-asset-urls \
- *     --from-base=https://motir-core-public.fly.storage.tigris.dev --apply
+ *     --from-base=<the old public base> --apply
+ *
+ * In the AWS window `<the old public base>` was Tigris's public base.
  *
  * Exit 0 on a completed run, 1 on a refusal (bad base, a row that does not reduce,
  * a row that changed since it was counted, a non-zero re-count) or any error.

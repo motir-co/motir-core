@@ -10,14 +10,14 @@ import {
 } from '@/lib/blob/s3';
 import { signedDownloadUrl } from '@/lib/blob/uploader';
 
-// MOTIR-9925 — the client's two credential modes. On Tigris (and a self-hosted
-// MinIO) it signs with a static key against a custom endpoint; on AWS neither is
+// MOTIR-9925 — the client's two credential modes. On an S3-compatible store
+// (a self-hosted MinIO) it signs with a static key against a custom endpoint; on AWS neither is
 // set and the SDK's default credential chain resolves the ECS task role. No
 // network and no SDK mock: every assertion reads the constructed client's
 // resolved config, or a presigned URL the SDK builds locally.
 
 const KEYED = {
-  [S3_ENV.endpoint]: 'https://fly.storage.tigris.dev',
+  [S3_ENV.endpoint]: 'https://minio.example.test',
   [S3_ENV.accessKeyId]: 'static-access-key',
   [S3_ENV.secretAccessKey]: 'static-secret-key',
 };
@@ -49,7 +49,7 @@ afterEach(() => {
   resetS3ClientForTests();
 });
 
-describe('s3Client with a static key and an endpoint (Tigris)', () => {
+describe('s3Client with a static key and an endpoint (an S3-compatible store)', () => {
   it('signs with the key pair, path-style, in region auto', async () => {
     setEnv(KEYED);
     const client = s3Client();
@@ -62,7 +62,7 @@ describe('s3Client with a static key and an endpoint (Tigris)', () => {
     });
     expect(credentials.sessionToken).toBeUndefined();
     const endpoint = await client.config.endpoint?.();
-    expect(endpoint?.hostname).toBe('fly.storage.tigris.dev');
+    expect(endpoint?.hostname).toBe('minio.example.test');
   });
 
   it('keeps an explicit region over the auto default', async () => {

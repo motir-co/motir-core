@@ -164,10 +164,6 @@ const contextFor = (event: Event): Record<string, string> => ({
   // entry reach, and a draft is the one state in which a pull request skips it.
   'github.event.pull_request.draft': 'false',
   'github.ref': event === 'push' ? 'refs/heads/main' : 'refs/pull/1/merge',
-  // The cutover's Fly off switch (MOTIR-10074), UNSET — an unset repository
-  // variable reads as the empty string, which is every repository's state until
-  // the window sets it, and which deploys.
-  'vars.MOTIR_FLY_DEPLOY_ENABLED': '',
   'needs.changes.outputs.app': 'true',
   'needs.changes.outputs.images': 'true',
   // The package lanes' flags (MOTIR-5323), `'true'` for the same reason.
@@ -441,15 +437,19 @@ describe('a shard matrix fails fast in the QUEUE and fans out on a PR (MOTIR-440
 });
 
 describe('this workflow releases nothing, and its push run is still the tripwire (MOTIR-10935)', () => {
-  it('carries no deploy job and no Fly release', () => {
-    // The `Deploy to Fly` job, its `fly-deploy` group and its two cutover
-    // switches were deleted with the Fly app manifests. Motir's own services
-    // ship through ONE lane, `aws-deploy.yml`, which needs nothing in this
-    // file; a deploy job reappearing here would be a second release path.
-    expect(ciJobs.has('deploy')).toBe(false);
+  it('carries no deploy job and no release concurrency group', () => {
+    // The old deploy job, its own concurrency group and its two cutover
+    // switches were deleted by MOTIR-10935. Motir's own services ship through
+    // ONE lane, `aws-deploy.yml`, which needs nothing in this file; a deploy job
+    // reappearing here would be a second release path. A release job carries a
+    // NON-cancelling group of its own (a deploy in flight must never be killed),
+    // so the workflow-level group, which cancels on a pull request, is the only
+    // one this file may hold.
+    expect([...ciJobs.keys()].filter((id) => /deploy|release/i.test(id))).toEqual([]);
     const code = codeOf(ci);
-    expect(code).not.toMatch(/flyctl\s+deploy/);
-    expect(code).not.toMatch(/MOTIR_FLY_DEPLOY_ENABLED|MOTIR_RELAY_ENABLED|fly-deploy/);
+    expect(code.match(/^\s*group:/gm)).toHaveLength(1);
+    expect(code).not.toMatch(/cancel-in-progress:\s*false/);
+    expect(code).not.toMatch(/MOTIR_RELAY_ENABLED/);
   });
 
   it('runs the tripwire on a push, so a BYPASSED merge still meets a gate', () => {

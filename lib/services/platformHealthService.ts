@@ -303,14 +303,14 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
     await withSystemContext((tx) => databaseHealthRepository.ping(tx));
     return true;
   });
-  if (!ok) return unreachable('database', 'unreachable', neonConsoleUrl());
+  if (!ok) return unreachable('database', 'unreachable', databaseConsoleUrl());
 
   const ms = Date.now() - startedAt;
   return {
     id: 'database',
     state: ms > DB_SLOW_MS ? 'degraded' : 'healthy',
     values: { ms, region: databaseRegion() },
-    linkOut: neonConsoleUrl(),
+    linkOut: databaseConsoleUrl(),
   };
 }
 
@@ -326,8 +326,8 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
  * through the port in `lib/deployment/deploymentStatus.ts`), and names no
  * platform, no environment variable and no console host.
  *
- * (This service failed that guard on its first push, with three raw `FLY_*`
- * reads inline. The guard was right and the fix is the accessor, not an
+ * (This service failed that guard on its first push, with three raw
+ * platform-variable reads inline. The guard was right and the fix is the accessor, not an
  * exemption for a service.)
  *
  * The verdict, in order:
@@ -605,37 +605,54 @@ async function lastHealthCheckSignal(now: Date): Promise<PlatformSignalDTO> {
 }
 
 /**
- * The Neon project the app talks to, named from `DATABASE_URL`'s HOST rather
- * than from a decision record.
+ * The AWS region of the RDS database the app talks to, read from
+ * `DATABASE_URL`'s HOST rather than from a decision record.
  *
  * The host is the one identifier that is true of the connection actually open —
- * an ADR records where the project was created, and a deployment pointed
- * somewhere else would still read `iad` out of it. Neon encodes the region in
- * the hostname (`…-<region>.aws.neon.tech`), so the substring is a reading and
- * not a lookup; anything else renders as the raw host, which is still the truth.
+ * an ADR records where the database was created, and a deployment pointed
+ * somewhere else would still read `us-east-1` out of it. An RDS endpoint (an
+ * instance, a cluster or an RDS Proxy) carries the region as the label before
+ * `.rds.amazonaws.com`, so the substring is a reading and not a lookup; anything
+ * else renders as the raw host, which is still the truth.
  */
 function databaseRegion(): string {
-  const url = process.env['DATABASE_URL'];
-  if (!url) return '—';
-  try {
-    const host = new URL(url).hostname;
-    const match = /-([a-z]{2}-[a-z]+-\d)\.aws\.neon\.tech$/.exec(host);
-    return match?.[1] ?? host;
-  } catch {
-    return '—';
-  }
+  const host = databaseHost();
+  if (!host) return '—';
+  return rdsRegionOf(host) ?? host;
 }
 
 /**
- * The Neon console, or null when this deployment is not on Neon.
+ * The RDS console's databases page for the database's region, or null when
+ * this deployment's database is not on RDS.
  *
- * There is no project id in the connection string, so the link is to the
- * console's project list rather than to this project — a deliberate under-claim.
- * A constructed deep link that 404s during an incident is worse than a list.
+ * There is no instance identifier the console can be deep-linked by that the
+ * connection string reliably carries (a proxy or cluster endpoint names neither
+ * the instance), so the link is to the region's database list — a deliberate
+ * under-claim. A constructed deep link that 404s during an incident is worse
+ * than a list; `lib/deployment/identity.ts` makes the same call for ECS.
  */
-function neonConsoleUrl(): string | null {
+function databaseConsoleUrl(): string | null {
+  const host = databaseHost();
+  const region = host ? rdsRegionOf(host) : null;
+  if (!region) return null;
+  const r = encodeURIComponent(region);
+  return `https://${r}.console.aws.amazon.com/rds/home?region=${r}#databases:`;
+}
+
+/** `DATABASE_URL`'s hostname, or null when it is unset or not a URL. */
+function databaseHost(): string | null {
   const url = process.env['DATABASE_URL'];
-  return url?.includes('neon.tech') ? 'https://console.neon.tech/app/projects' : null;
+  if (!url) return null;
+  try {
+    return new URL(url).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+/** The region label of an RDS endpoint (`….<region>.rds.amazonaws.com`), else null. */
+function rdsRegionOf(host: string): string | null {
+  return /\.([a-z]{2}(?:-[a-z]+)+-\d)\.rds\.amazonaws\.com$/.exec(host)?.[1] ?? null;
 }
 
 /**

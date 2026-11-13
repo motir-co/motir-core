@@ -8,8 +8,8 @@ import {
 } from '@motir/orchestrator';
 
 // Story MOTIR-9709 · MOTIR-9933 — the story gate over BOTH credential modes.
-// On Fly, motir-core signs with static keys (Tigris's pair, the management IAM
-// user's key); on Fargate it holds no key and the SDK's default chain resolves
+// Keyed, motir-core signs with static keys (an S3-compatible store's pair, the
+// management IAM user's key); on Fargate it holds no key and the SDK's default chain resolves
 // the task role. Each card tested its own half; this file runs the keyed and the
 // key-free mode side by side across the blob client, the uploader's operations,
 // the management credentials and `fleet-admin check-quota`, so neither mode can
@@ -45,9 +45,9 @@ const BUCKETS = {
 };
 const KEYED = {
   ...BUCKETS,
-  [S3_ENV.endpoint]: 'https://fly.storage.tigris.dev',
-  [S3_ENV.accessKeyId]: 'tigris-access-key',
-  [S3_ENV.secretAccessKey]: 'tigris-secret-key',
+  [S3_ENV.endpoint]: 'https://minio.example.test',
+  [S3_ENV.accessKeyId]: 'static-access-key',
+  [S3_ENV.secretAccessKey]: 'static-secret-key',
 };
 /** What the chain reads on a machine with no profile — standing in for the task role. */
 const CHAIN = {
@@ -81,12 +81,12 @@ describe('the blob client in both modes, in one run', () => {
     setEnv(KEYED);
     const client = s3Client();
     expect(await client.config.credentials()).toMatchObject({
-      accessKeyId: 'tigris-access-key',
-      secretAccessKey: 'tigris-secret-key',
+      accessKeyId: 'static-access-key',
+      secretAccessKey: 'static-secret-key',
     });
     expect(client.config.forcePathStyle).toBe(true);
     const url = new URL(await signedDownloadUrl('a/b.png'));
-    expect(url.hostname).toBe('fly.storage.tigris.dev');
+    expect(url.hostname).toBe('minio.example.test');
     expect(url.pathname).toBe('/core-private/a/b.png');
     expect(url.searchParams.get('X-Amz-Security-Token')).toBeNull();
   });
@@ -161,7 +161,7 @@ describe('the uploader in both modes', () => {
       'task-role-session',
       'core-private.s3.us-east-1.amazonaws.com',
     ],
-    ['keyed', KEYED, 'tigris-access-key', undefined, 'fly.storage.tigris.dev'],
+    ['keyed', KEYED, 'static-access-key', undefined, 'minio.example.test'],
   ])(
     '%s: put, head, delete and a presigned GET all sign and complete',
     async (_mode, env, credential, token, host) => {
