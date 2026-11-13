@@ -306,7 +306,7 @@ describe('recordPlanRegistrations — a registration is on the plan before the n
         { sessionKey: 's', targetRef: null, gaps: [], registrations: [rename] },
         fx.ctx,
       ),
-    ).rejects.toThrow(/`lessonCalls` or `registrations`/);
+    ).rejects.toThrow(/`lessonCalls`, `registrations` or `itemDraft`/);
     expect(await rowsOf(planId)).toHaveLength(1);
   });
 });

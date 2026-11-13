@@ -25,6 +25,7 @@ import type {
   PlanRaisedGapDto,
   PlanAuthorRegistrationDto,
   PlanNarrationSessionDto,
+  PlanItemDraftDto,
   PlanStepDto,
   PlanWithItemsDto,
   SharpenedRequirementDto,
@@ -125,6 +126,25 @@ export function toPlanStepDto(row: PlanStep): PlanStepDto {
             retryAt: row.providerWaitUntil.toISOString(),
           }
         : null,
+  };
+}
+
+/**
+ * A step row's in-flight card as the live read serves it (MOTIR-11199), or `null`
+ * when the session holds no draft.
+ */
+export function toPlanItemDraftDto(row: PlanStep): PlanItemDraftDto | null {
+  if (row.draftPlanItemId === null || row.draftSeq === null || row.draftUpdatedAt === null) {
+    return null;
+  }
+  return {
+    planItemId: row.draftPlanItemId,
+    sessionKey: row.sessionKey,
+    seq: row.draftSeq,
+    title: row.draftTitle,
+    descriptionMd: row.draftDescriptionMd,
+    explanationMd: row.draftExplanationMd,
+    updatedAt: row.draftUpdatedAt.toISOString(),
   };
 }
 

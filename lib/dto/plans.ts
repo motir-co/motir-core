@@ -856,6 +856,24 @@ export interface PlanStepDto {
 }
 
 /**
+ * An `author` session's IN-FLIGHT CARD as the overlay's live read serves it (Story
+ * MOTIR-11190 · MOTIR-11199): the partial text the model has written so far, held
+ * BESIDE the proposal `planItemId` names and never in it. A `null` field is one the
+ * model has not started; a proposal with no entry has no draft. `seq` orders one
+ * session's reports; `updatedAt` is the server's clock at the report, ISO-8601.
+ */
+export interface PlanItemDraftDto {
+  /** The bare `PlanItem` id — what the quick view looks a proposal up by. */
+  planItemId: string;
+  sessionKey: string;
+  seq: number;
+  title: string | null;
+  descriptionMd: string | null;
+  explanationMd: string | null;
+  updatedAt: string;
+}
+
+/**
  * A planner session waiting out a model-provider limit (Story MOTIR-9540 ·
  * MOTIR-9619): retry `attempt` of `maxAttempts` goes out at `retryAt`; `since`
  * is when core heard the wait began. Both times are the server's, ISO-8601.
