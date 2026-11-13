@@ -405,6 +405,22 @@ describe('PATCH /api/internal/ai/plan-proposals — the batch door', () => {
     );
     expect(res.status).toBe(401);
   });
+
+  it('a key ref naming no work item refuses the batch and names its correction', async () => {
+    const fx = await makeWorkItemFixture();
+    const p = await pairPlan(fx, 'job-batch-key');
+    const before = await storedProposals(p.planId);
+    const [first] = wireMoves(p);
+    const res = await batchRequest(fx, {
+      jobId: 'job-batch-key',
+      corrections: [first, { planItemId: p.alarmsId, blockedByRefs: ['NOPE-424242'] }],
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.correctionIndex).toBe(1);
+    expect(String(body.error)).toContain('corrections[1]');
+    expect(await storedProposals(p.planId)).toBe(before);
+  });
 });
 
 // ── The MCP twin: `update_plan_proposal` with `corrections` ───────────────────
