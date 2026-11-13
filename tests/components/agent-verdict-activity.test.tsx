@@ -83,7 +83,7 @@ describe('the agent-verdict activity entry', () => {
 
   it('the hosted agent is named as Motir’s', () => {
     const { container } = renderEntry({ hosted: true, harness: 'Motir hosted review' });
-    expect(container.textContent).toContain(`Motir's hosted agent passed the review at ${COMMITS}`);
+    expect(container.textContent).toContain(`Motir agent passed the review at ${COMMITS}`);
   });
 
   it('a send-back opens its findings and says who was notified', () => {
@@ -193,7 +193,7 @@ describe('the agent-verdict activity entry', () => {
 
   it('renders in zh with the glossary’s 智能体', () => {
     const { container } = renderEntry({ hosted: true }, zh);
-    expect(container.textContent).toContain(`Motir 托管智能体 在 ${COMMITS} 上通过了审查`);
+    expect(container.textContent).toContain(`Motir 智能体 在 ${COMMITS} 上通过了审查`);
   });
 });
 

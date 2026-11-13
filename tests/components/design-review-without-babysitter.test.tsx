@@ -179,21 +179,16 @@ describe('ApprovalGateControl — the automatic re-run line', () => {
       ...REFUSED,
       autoRerun: rerun({ outcome: 'started', dispatchRunId: 'run_7c1e', ordinal: 2 }),
     });
-    expect(screen.getByText('Re-running on the hosted agent')).toBeTruthy();
+    expect(screen.getByText('Re-running in Motir agent')).toBeTruthy();
     expect(screen.getByText(/automatic re-run 2 of 3/)).toBeTruthy();
     const link = screen.getByRole('link', { name: 'View run' });
     expect(link.getAttribute('href')).toContain('run=run_7c1e');
   });
 
   it.each([
-    ['cap_reached', null, /sent back 3 times/, 'Run on the hosted agent'],
-    ['dispatcher_gone', null, /no longer here/, 'Run on the hosted agent'],
-    [
-      'no_project_access',
-      'Grace Hopper',
-      /Grace Hopper, who last ran it/,
-      'Run on the hosted agent',
-    ],
+    ['cap_reached', null, /sent back 3 times/, 'Run in Motir agent'],
+    ['dispatcher_gone', null, /no longer here/, 'Run in Motir agent'],
+    ['no_project_access', 'Grace Hopper', /Grace Hopper, who last ran it/, 'Run in Motir agent'],
     ['ci_credits_exhausted', null, /CI credits are used up/, 'Billing'],
     [
       'model_not_offered',
@@ -201,7 +196,7 @@ describe('ApprovalGateControl — the automatic re-run line', () => {
       /claude-opus-5-5, the model it last ran on/,
       'Choose a model and run',
     ],
-    ['models_unavailable', null, /list of models could not be read/, 'Run on the hosted agent'],
+    ['models_unavailable', null, /list of models could not be read/, 'Run in Motir agent'],
     ['out_of_credits', null, /out of credits/, 'Buy credits'],
     // MOTIR-9633: recorded with the model, never retried.
     [
@@ -210,7 +205,7 @@ describe('ApprovalGateControl — the automatic re-run line', () => {
       /claude-opus-5-5, the model it last ran on, has no agent-run capacity right now/,
       'Pick another model and run',
     ],
-    ['credits_unavailable', null, /credit balance could not be read/, 'Run on the hosted agent'],
+    ['credits_unavailable', null, /credit balance could not be read/, 'Run in Motir agent'],
     [
       'repository_not_writable',
       'moooon-B-V/motir-core',

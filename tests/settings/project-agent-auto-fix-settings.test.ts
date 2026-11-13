@@ -13,7 +13,7 @@ import { truncateAuthTables } from '../helpers/db';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // MOTIR-9060 — the agent auto-fix switch's service over the REAL stack: the READ
-// takes `work_item:edit` and the WRITE `ai:configure` (the Hosted agent room's two
+// takes `work_item:edit` and the WRITE `ai:configure` (the Motir agent room's two
 // keys), and a patch naming the held value writes nothing.
 
 const PASSWORD = 'agent-auto-fix-pass-123';
@@ -92,7 +92,7 @@ async function seed(slug: string): Promise<Seeded> {
 const stored = async (projectId: string) =>
   (await adminDb.project.findUniqueOrThrow({ where: { id: projectId } })).agentAutoFixEnabled;
 
-describe('access: the Hosted agent room’s two keys', () => {
+describe('access: the Motir agent room’s two keys', () => {
   it('a project MEMBER reads the stored value (off on a fresh project)', async () => {
     const s = await seed('member-read');
     await expect(service.getSettings(s.projectId, s.member)).resolves.toEqual({

@@ -386,7 +386,7 @@ describe('a container that exits with its run still OPEN is a crash, never a suc
       status: 'failed',
       stopReason: 'halted',
     });
-    expect((await lastLog(data.dispatchRunId))?.body).toContain('hosted run ended (crash)');
+    expect((await lastLog(data.dispatchRunId))?.body).toContain('Motir agent run ended (crash)');
     expect((await cardOf(cardId)).status).toBe(card.status);
     await expectNothingAlive(data.dispatchRunId);
   });
@@ -462,7 +462,9 @@ describe('cancel — revoked and closed now, torn down by its supervisor at the 
       status: 'cancelled',
       stopReason: 'interrupted',
     });
-    expect((await lastLog(data.dispatchRunId))?.body).toContain('hosted run ended (cancelled)');
+    expect((await lastLog(data.dispatchRunId))?.body).toContain(
+      'Motir agent run ended (cancelled)',
+    );
     await expectNothingAlive(data.dispatchRunId);
 
     // The supervisor, the machine's one owner, tears it down with the cancel's reason.
@@ -587,7 +589,7 @@ describe('cancel — revoked and closed now, torn down by its supervisor at the 
     const lines = await adminDb.dispatchRunEvent.findMany({
       where: { dispatchRunId: runId, kind: 'log' },
     });
-    expect(lines.filter((e) => (e.body ?? '').includes('hosted run ended'))).toEqual([]);
+    expect(lines.filter((e) => (e.body ?? '').includes('Motir agent run ended'))).toEqual([]);
   });
 });
 
@@ -709,7 +711,7 @@ describe('the backstop and a lost supervision chain take the same path', () => {
       status: 'timed_out',
       stopReason: 'abandoned',
     });
-    expect((await lastLog(data.dispatchRunId))?.body).toContain('hosted run ended (backstop)');
+    expect((await lastLog(data.dispatchRunId))?.body).toContain('Motir agent run ended (backstop)');
     expect((await cardOf(cardId)).status).toBe(card.status);
     await expectNothingAlive(data.dispatchRunId);
   });
@@ -764,7 +766,7 @@ describe('the backstop and a lost supervision chain take the same path', () => {
       stopReason: 'abandoned',
     });
     expect((await lastLog(data.dispatchRunId))?.body).toContain(
-      'hosted run ended (lost supervision)',
+      'Motir agent run ended (lost supervision)',
     );
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
     expect(
@@ -864,7 +866,7 @@ describe('a hosted run whose container the REAPER destroys is settled, charged a
       stopReason: 'abandoned',
     });
     expect((await lastLog(data.dispatchRunId))?.body).toContain(
-      'hosted run ended (lost supervision)',
+      'Motir agent run ended (lost supervision)',
     );
     expect((await cardOf(cardId)).status).toBe(card.status);
     await expectNothingAlive(data.dispatchRunId);

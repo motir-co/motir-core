@@ -68,7 +68,7 @@ describe('every settings destination is guarded (MOTIR-2469)', () => {
     // MOTIR-5278 had widened this pattern so the approvals page could import
     // `settingsEntryKeys` beside the guard. That page imports the guard alone again.
     // MOTIR-6995 widens it again for the one room with a distinct view key
-    // (Hosted agent), whose page reads its WRITE key through `settingsEntryKeys`.
+    // (Motir agent), whose page reads its WRITE key through `settingsEntryKeys`.
     expect(source, `${file} does not import guardSettingsPage`).toMatch(
       /import \{ guardSettingsPage(, settingsEntryKeys)? \} from '\.{1,2}(\/\.\.)*\/_guard';/,
     );
@@ -204,7 +204,7 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
         // MOTIR-5278 had read the entry's VIEW key here.
         // The invariant, stated once: refused EXACTLY when the key is absent.
         // Not "usually", and never on a different key than the rail hid it on.
-        // MOTIR-6995 — read through the entry's effective VIEW key: Hosted agent
+        // MOTIR-6995 — read through the entry's effective VIEW key: Motir agent
         // declares `work_item:edit`; every other entry's view key IS `permission`.
         expect(refusal === null).toBe(held.has(settingsEntryViewKey(entry)));
       },
@@ -220,11 +220,11 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had inverted this to "refused everything but Approvals".
-  // MOTIR-6995 — bar ONE room: Hosted agent opens on `work_item:edit`, which a
+  // MOTIR-6995 — bar ONE room: Motir agent opens on `work_item:edit`, which a
   // member holds, so a member stands in it read-only (design MOTIR-6991).
   // MOTIR-8830 — and bar Translation, whose view key is `project:browse`.
   // MOTIR-10037 — and bar Production, whose view key is `project:browse` too.
-  it('a MEMBER is refused everything but Environment, Production, Hosted agent and Translation, each with its OWN copy key', () => {
+  it('a MEMBER is refused everything but Environment, Production, Motir agent and Translation, each with its OWN copy key', () => {
     const admitted = new Set(['environment', 'production', 'hosted-agent', 'translation']);
     const refused = PROJECT_SETTINGS_NAV.filter((entry) => !admitted.has(entry.id));
     const keys = refused.map(

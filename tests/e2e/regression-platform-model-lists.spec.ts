@@ -18,7 +18,7 @@ import enMessages from '@/messages/en.json';
 //
 // Two lists and one consequence. On AI planning, a superadmin adds a model to
 // the planning list with a reason, finds it offered in an audience picker, and
-// is refused removing a model an audience plans on. On Hosted-run models, the
+// is refused removing a model an audience plans on. On Motir agent models, the
 // same person removes an unused model and is refused removing one a project's
 // override uses. Then, as that project's owner, the Run hosted picker no longer
 // offers the removed model. Last, an operator sees both lists read-only.

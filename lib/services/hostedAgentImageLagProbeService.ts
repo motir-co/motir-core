@@ -65,7 +65,7 @@ export const hostedAgentImageLagProbeService = {
       return {
         verdict: 'not_applicable',
         checkedAt,
-        detail: `this deployment runs no hosted agent (${HOSTED_AGENT_IMAGE_ENV_VAR} is unset)`,
+        detail: `this deployment runs no Motir agent (${HOSTED_AGENT_IMAGE_ENV_VAR} is unset)`,
       };
     }
     let pinned: string;

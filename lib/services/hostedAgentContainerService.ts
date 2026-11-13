@@ -146,7 +146,7 @@ export const HOSTED_AGENT_CHARGE_RETRY_MS = 60_000;
 /** Thrown INSIDE the charge step so the engine does not memoize a failure. */
 class HostedAgentChargeNotLandedError extends Error {
   constructor(readonly detail: string) {
-    super(`the hosted run's machine charge did not land: ${detail}`);
+    super(`the Motir agent run's machine charge did not land: ${detail}`);
     this.name = 'HostedAgentChargeNotLandedError';
   }
 }
@@ -734,7 +734,7 @@ export const hostedAgentContainerService = {
               phase: 'terminal',
               outcome: {
                 outcome: 'image_unpullable',
-                detail: `the hosted-agent image could not be pulled: ${detailOf(err)}`,
+                detail: `the Motir agent image could not be pulled: ${detailOf(err)}`,
               },
             };
           }
@@ -742,7 +742,7 @@ export const hostedAgentContainerService = {
             phase: 'terminal',
             outcome: {
               outcome: 'provision_failed',
-              detail: `could not boot a hosted-agent container: ${detailOf(err)}`,
+              detail: `could not boot a Motir agent container: ${detailOf(err)}`,
             },
           };
         }
@@ -856,7 +856,7 @@ export const hostedAgentContainerService = {
           reason: 'job_timed_out',
           startedAt,
           exitCode: null,
-          failureDetail: 'the hosted-agent run outlived its timeout',
+          failureDetail: 'the Motir agent run outlived its timeout',
         };
       }
       return null;

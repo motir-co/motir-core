@@ -193,7 +193,7 @@ function detailOf(err: unknown): string {
   return err instanceof Error ? err.message.slice(0, 300) : 'unknown';
 }
 
-/** "CI runners 12, code-graph index 8, hosted agents 4" — the breakdown an
+/** "CI runners 12, code-graph index 8, Motir agent runs 4" — the breakdown an
  *  operator needs to know which workload to lean on. Exported because the CI and
  *  index gates report the same refusal from their own transactions, and two
  *  spellings of one pool's log would be two pools as far as a reader is

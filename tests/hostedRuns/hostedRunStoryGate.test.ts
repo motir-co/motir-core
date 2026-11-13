@@ -863,7 +863,7 @@ describe('the no-leak guard — nothing a run held survives any of its seven end
       where: { dispatchRunId, kind: 'log' },
       orderBy: { seq: 'desc' },
     });
-    expect(log?.body).toContain('hosted run ended (backstop)');
+    expect(log?.body).toContain('Motir agent run ended (backstop)');
     await assertNoLeak(dispatchRunId, runToken);
     expect(machineChargeCalls).toBe(1);
   });
@@ -920,7 +920,7 @@ describe('the no-leak guard — nothing a run held survives any of its seven end
       where: { dispatchRunId, kind: 'log' },
       orderBy: { seq: 'desc' },
     });
-    expect(log?.body).toContain('hosted run ended (lost supervision)');
+    expect(log?.body).toContain('Motir agent run ended (lost supervision)');
     await assertNoLeak(dispatchRunId, runToken);
     expect(machineChargeCalls).toBe(1);
     await truncateJobRuns();

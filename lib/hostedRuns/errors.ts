@@ -18,7 +18,7 @@ import type { AgentCapacityReason } from './capacityReasons';
 export class HostedModelNotOfferedError extends Error {
   readonly code = 'hosted_model_not_offered' as const;
   constructor(readonly model: string) {
-    super(`The model ${model} is not offered for hosted runs.`);
+    super(`The model ${model} is not offered for Motir agent runs.`);
     this.name = 'HostedModelNotOfferedError';
   }
 }
@@ -31,7 +31,7 @@ export class HostedModelNotOfferedError extends Error {
 export class HostedModelsUnavailableError extends Error {
   readonly code = 'hosted_models_unavailable' as const;
   constructor(detail: string) {
-    super(`The models a hosted run may use could not be read: ${detail}`);
+    super(`The models a Motir agent run may use could not be read: ${detail}`);
     this.name = 'HostedModelsUnavailableError';
   }
 }
@@ -46,7 +46,7 @@ export class HostedModelsUnavailableError extends Error {
 export class HostedNoModelOfferedError extends Error {
   readonly code = 'hosted_no_model_offered' as const;
   constructor() {
-    super('No model is offered for hosted runs.');
+    super('No model is offered for Motir agent runs.');
     this.name = 'HostedNoModelOfferedError';
   }
 }
@@ -176,7 +176,7 @@ export class HostedRunCardNotReadyError extends Error {
     readonly key: string,
     readonly detail: string,
   ) {
-    super(`${key} cannot be run hosted: ${detail}`);
+    super(`${key} cannot be run in Motir agent: ${detail}`);
     this.name = 'HostedRunCardNotReadyError';
   }
 }
@@ -189,7 +189,7 @@ export class HostedRunCardNotReadyError extends Error {
 export class HostedRunOutOfCreditsError extends Error {
   readonly code = 'hosted_run_out_of_credits' as const;
   constructor(readonly balanceCredits: number | null) {
-    super('The organization has no credits left for a hosted run.');
+    super('The organization has no credits left for a Motir agent run.');
     this.name = 'HostedRunOutOfCreditsError';
   }
 }
@@ -222,7 +222,7 @@ export class HostedRunNoCapacityError extends Error {
 export class HostedRunCreditsUnavailableError extends Error {
   readonly code = 'hosted_run_credits_unavailable' as const;
   constructor() {
-    super('The credit check for a hosted run could not be made. Try again shortly.');
+    super('The credit check for a Motir agent run could not be made. Try again shortly.');
     this.name = 'HostedRunCreditsUnavailableError';
   }
 }
@@ -240,7 +240,7 @@ export class HostedRunBootFailedError extends Error {
     readonly dispatchRunId: string,
     readonly detail: string,
   ) {
-    super(`The hosted run could not be started: ${detail}`);
+    super(`The Motir agent run could not be started: ${detail}`);
     this.name = 'HostedRunBootFailedError';
   }
 }
@@ -250,7 +250,7 @@ export class HostedRunBootFailedError extends Error {
 export class HostedRunNotFoundError extends Error {
   readonly code = 'hosted_run_not_found' as const;
   constructor(readonly dispatchRunId: string) {
-    super(`No hosted run ${dispatchRunId}.`);
+    super(`No Motir agent run ${dispatchRunId}.`);
     this.name = 'HostedRunNotFoundError';
   }
 }
@@ -332,7 +332,7 @@ export class HostedContinueRefusedError extends Error {
     /** The parent to continue instead — `continue_the_parent`. */
     readonly parentKey: string | null = null,
   ) {
-    super(`${key} cannot be continued hosted: ${HOSTED_CONTINUE_WHY[reason]}`);
+    super(`${key} cannot be continued in Motir agent: ${HOSTED_CONTINUE_WHY[reason]}`);
     this.name = 'HostedContinueRefusedError';
     this.code = HOSTED_CONTINUE_CODE[reason];
   }
@@ -341,7 +341,7 @@ export class HostedContinueRefusedError extends Error {
 // --- Repairing a card a review sent back, hosted (Story MOTIR-1626 · MOTIR-6928) ---
 
 /**
- * Why a *Fix on the hosted agent* was refused (`hosted-agent-run.md` §8.6,
+ * Why a *Fix in Motir agent* was refused (`hosted-agent-run.md` §8.6,
  * `approval-gates.md` §12.4b).
  *
  * - `not_sent_back` — the card is repairable, but NOT because a review sent it back: red
@@ -361,13 +361,13 @@ const HOSTED_FIX_CODE = {
 } as const satisfies Record<HostedFixRefusal, string>;
 
 const HOSTED_FIX_WHY: Record<HostedFixRefusal, string> = {
-  not_sent_back: 'only a card a review sent back can be repaired on the hosted agent',
+  not_sent_back: 'only a card a review sent back can be repaired in Motir agent',
   not_repairable: 'there is nothing for a repair to do on it',
   taken: 'somebody is already repairing it',
 };
 
 /**
- * A *Fix on the hosted agent* the repair claim would refuse — or did, under its lock.
+ * A *Fix in Motir agent* the repair claim would refuse — or did, under its lock.
  * Nothing was opened, minted or booted: each answers before the lock is taken, or is
  * the lock's own refusal.
  */
@@ -394,7 +394,7 @@ export class HostedFixRefusedError extends Error {
     } = {},
   ) {
     super(
-      `${key} cannot be repaired on the hosted agent: ${HOSTED_FIX_WHY[reason]}${
+      `${key} cannot be repaired in Motir agent: ${HOSTED_FIX_WHY[reason]}${
         detail.repairRefusal ? ` (${detail.repairRefusal})` : ''
       }`,
     );

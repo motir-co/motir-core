@@ -32,7 +32,7 @@ function errorResponse(err: unknown): Response | null {
     return NextResponse.json(
       {
         code: 'HOSTED_MODELS_UNAVAILABLE',
-        error: 'The models a hosted run may use could not be read. Try again shortly.',
+        error: 'The models a Motir agent run may use could not be read. Try again shortly.',
       },
       { status: 503 },
     );

@@ -36,7 +36,7 @@ const LABELS = {
   navPlannerFindings: 'Planner findings',
   navIdeas: 'Ideas',
   navStarters: 'Starters',
-  navRunModels: 'Hosted-run models',
+  navRunModels: 'Motir agent models',
   navAuditLog: 'Audit log',
   staffMarkTitle: 'Platform staff',
   staffMarkSubtitle: 'All reads audited',

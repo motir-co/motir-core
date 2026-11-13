@@ -93,7 +93,7 @@ export const hostedRunChargeService = {
         credits,
         billableSeconds,
         externalRef: dispatchRunId,
-        reason: 'hosted run machine time',
+        reason: 'Motir agent machine time',
         // WHERE the run ran (MOTIR-7240): the run's own workspace and project, so the
         // platform usage rollup places its coding spend below the org. The client
         // sends the pair only when both are present; the charge never waits on it.

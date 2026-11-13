@@ -9,7 +9,7 @@ import { toProjectHostedAgentSettingsDto } from '@/lib/mappers/projectHostedAgen
 import type { ProjectHostedAgentSettingsDto } from '@/lib/dto/projectHostedAgentSettings';
 import type { ProjectHostedModelOverridesRow } from '@/lib/repositories/projectRepository';
 
-// HostedAgentSettingsEditor (Story MOTIR-6989 · MOTIR-6995) — the Hosted agent
+// HostedAgentSettingsEditor (Story MOTIR-6989 · MOTIR-6995) — the Motir agent
 // settings room, per `design/settings/hosted-agent.mock.html` (MOTIR-6991).
 // Driven under happy-dom (DB-free): the editor is a client island over
 // `GET / PATCH /api/projects/[key]/hosted-agent-settings`, so global fetch is
@@ -116,7 +116,7 @@ describe('HostedAgentSettingsEditor — the default room (panel 1)', () => {
     }
     // The no-difficulty note names motir-ai's single default.
     expect(screen.getByTestId('hosted-agent-no-difficulty').textContent).toBe(
-      'A work item with no difficulty runs on the platform default, claude-opus-5-5 — the model Run hosted marks Default.',
+      'A work item with no difficulty runs on the platform default, claude-opus-5-5 — the model the Run picker marks Default.',
     );
     // The footer is there, and there is nothing to save.
     expect(saveButton().disabled).toBe(true);
@@ -160,7 +160,7 @@ describe('HostedAgentSettingsEditor — overriding a level (panels 2 and 3)', ()
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ low: 'claude-opus-5' });
     expect(source('low')).toBe('Override');
     expect(saveButton().disabled).toBe(true);
-    expect(screen.getByText('Hosted agent settings saved')).toBeTruthy();
+    expect(screen.getByText('Motir agent settings saved')).toBeTruthy();
   });
 
   it('Reset to default on a saved override stages a null, which Save sends', async () => {
@@ -240,7 +240,7 @@ describe('HostedAgentSettingsEditor — read-only (panel 5)', () => {
     fetchMock.mockResolvedValueOnce(ok(settings({ hostedModelHigh: 'claude-opus-5' })));
     await mount(false);
     expect(screen.getByTestId('hosted-agent-readonly-banner').textContent).toBe(
-      'Only a project admin can change hosted agent settings.',
+      'Only a project admin can change Motir agent settings.',
     );
     for (const difficulty of ['Trivial', 'Low', 'Medium', 'High']) {
       expect(select(difficulty).disabled).toBe(true);
@@ -270,7 +270,7 @@ describe('HostedAgentSettingsEditor — loading, unavailable, empty (panels 6, 7
     const callout = screen.getByTestId('hosted-agent-unavailable');
     expect(callout.getAttribute('role')).toBe('status');
     expect(callout.textContent).toContain(
-      'Couldn’t reach Motir AI, so the hosted models can’t be shown or changed right now. Hosted runs are off until it answers.',
+      'Couldn’t reach Motir AI, so the Motir agent models can’t be shown or changed right now. Motir agent runs are off until it answers.',
     );
     expect(select('Low').textContent).toContain('Models unavailable');
     expect(select('Low').disabled).toBe(true);
@@ -300,7 +300,7 @@ describe('HostedAgentSettingsEditor — loading, unavailable, empty (panels 6, 7
     );
     await mount();
     expect(screen.getByTestId('hosted-agent-empty').textContent).toBe(
-      'No model can run a hosted work item right now, so there is nothing to choose.',
+      'No model can run a work item in Motir agent right now, so there is nothing to choose.',
     );
     expect(select('Low').textContent).toContain('No model available');
     expect(select('Low').disabled).toBe(true);

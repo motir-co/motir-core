@@ -21,7 +21,7 @@ import type { SeededHostedCard } from './hosted-run-seed';
 //
 // ⚠️ THE REFUSAL IS SEEDED, NOT RAISED. How a review decides is the review agent's own
 // lane (MOTIR-6827's receipt). This spec is about what a PERSON does with a card already
-// sent back: press *Fix on the hosted agent*.
+// sent back: press *Fix in Motir agent*.
 
 const HEAD = 'd'.repeat(40);
 let prSeq = 600;

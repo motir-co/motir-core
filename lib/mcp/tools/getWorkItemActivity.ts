@@ -155,7 +155,7 @@ function partText(part: ActivityEntryPartDto): string {
     // An agent's verdict (MOTIR-10338): what it said, whether it decided anything, which
     // commits it read, and who ran it — the findings in full for an agent reading the card.
     case 'agentVerdict': {
-      const agent = part.hosted ? "Motir's hosted agent" : `${part.harness} (${part.model})`;
+      const agent = part.hosted ? 'Motir agent' : `${part.harness} (${part.model})`;
       const said = part.verdict === 'pass' ? 'passed the review' : 'asked for changes';
       const decided =
         part.outcome === 'late'

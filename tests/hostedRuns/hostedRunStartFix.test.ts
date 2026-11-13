@@ -295,7 +295,7 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('Fix on the hosted agent — the run it starts', () => {
+describe('Fix in Motir agent — the run it starts', () => {
   it('opens ONE hosted `fix` run as the presser, boots MOTIR_RUN_MODE=fix, and moves nothing', async () => {
     const { card, prs, gate } = await sentBackCard('agent_review');
 
@@ -534,7 +534,7 @@ describe('Fix on the hosted agent — the run it starts', () => {
   });
 });
 
-describe('Fix on the hosted agent — who it is for', () => {
+describe('Fix in Motir agent — who it is for', () => {
   it('a red build (class `ci`) is refused not_sent_back, opening nothing', async () => {
     const { card } = await cardWith('implemented', { checks: { Vitest: 'failure' } });
 
@@ -606,7 +606,7 @@ describe('Fix on the hosted agent — who it is for', () => {
   });
 });
 
-describe('Fix on the hosted agent — one repair at a time, local or hosted', () => {
+describe('Fix in Motir agent — one repair at a time, local or hosted', () => {
   it('a local `motir fix` holds it: refused taken, naming the holder and when it started', async () => {
     const { card } = await sentBackCard();
     const rival = await member('Terminal Fixer');
@@ -678,7 +678,7 @@ describe('Fix on the hosted agent — one repair at a time, local or hosted', ()
   });
 });
 
-describe('Fix on the hosted agent — every pre-flight refuses before the lock', () => {
+describe('Fix in Motir agent — every pre-flight refuses before the lock', () => {
   const cases: Array<{
     name: string;
     arrange: (repoName: string) => void;
@@ -743,7 +743,7 @@ describe('Fix on the hosted agent — every pre-flight refuses before the lock',
   }
 });
 
-describe('Fix on the hosted agent — how it ends moves no card', () => {
+describe('Fix in Motir agent — how it ends moves no card', () => {
   for (const outcome of ['failed', 'cancelled', 'backstop'] as const) {
     it(`ended ${outcome}: the card stays To fix changes_requested (never run_died), and a new press is accepted`, async () => {
       const { card } = await sentBackCard();
@@ -769,7 +769,7 @@ describe('Fix on the hosted agent — how it ends moves no card', () => {
 // ── MOTIR-7208: a DeepSeek offered entry — the env is <provider>/<id>, the key BARE ──
 const DEEPSEEK = 'deepseek-v4-pro';
 
-describe('Fix on the hosted agent with a DeepSeek model (MOTIR-7208)', () => {
+describe('Fix in Motir agent with a DeepSeek model (MOTIR-7208)', () => {
   it('boots MOTIR_MODEL=deepseek/<id> and mints the key for the bare id', async () => {
     const { card } = await sentBackCard('agent_review');
     stub({ models: { ids: [MODEL, DEEPSEEK] } });
@@ -786,7 +786,7 @@ describe('Fix on the hosted agent with a DeepSeek model (MOTIR-7208)', () => {
 });
 
 // ── NO AGENT-RUN CAPACITY (Story MOTIR-9541 · MOTIR-9628) ───────────────────
-describe('Fix on the hosted agent — a model with no agent-run capacity', () => {
+describe('Fix in Motir agent — a model with no agent-run capacity', () => {
   it('refused before the repair claim: no run, no lock, and the next press succeeds', async () => {
     const { card } = await sentBackCard();
     const verdict = vi

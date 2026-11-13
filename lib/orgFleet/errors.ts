@@ -13,7 +13,7 @@ export class OrgFleetRunNotFoundError extends Error {
   readonly code = 'ORG_FLEET_RUN_NOT_FOUND';
 
   constructor(readonly dispatchRunId: string) {
-    super(`No live hosted run ${dispatchRunId} in this organization`);
+    super(`No live Motir agent run ${dispatchRunId} in this organization`);
     this.name = 'OrgFleetRunNotFoundError';
   }
 }

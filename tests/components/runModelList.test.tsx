@@ -121,7 +121,7 @@ describe('RunModelList', () => {
     const glm = rowOf('glm-5.2');
     expect(glm.textContent).toContain('not in the catalog');
     expect(glm.textContent).toContain('Not offered');
-    expect(glm.textContent).toContain('Not in motir-ai’s hosted-run offer right now');
+    expect(glm.textContent).toContain('Not in motir-ai’s Motir agent offer right now');
     expect(glm.textContent).toContain('Nothing');
     expect(glm.textContent).toMatch(/Added .* by ops@moooon\.net/);
   });
@@ -135,13 +135,13 @@ describe('RunModelList', () => {
     await pickAndAdd(dialog, 'kimi-k2.6', ' Try it ');
     expect(addRunModelAction).toHaveBeenCalledWith('kimi-k2.6', 'Try it');
     expect(
-      await screen.findByText('kimi-k2.6 added. Projects can choose it for hosted runs now.'),
+      await screen.findByText('kimi-k2.6 added. Projects can choose it for Motir agent runs now.'),
     ).toBeTruthy();
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   it.each([
-    ['NOT_OFFERED', 'Not added: motir-ai no longer offers kimi-k2.6 for hosted runs.'],
+    ['NOT_OFFERED', 'Not added: motir-ai no longer offers kimi-k2.6 for Motir agent runs.'],
     ['ALREADY_LISTED', 'Not added: kimi-k2.6 is already listed.'],
     ['UNAVAILABLE', 'motir-ai didn’t respond, so nothing was changed. Try again.'],
   ])('a %s add keeps the dialog open with its line', async (code, text) => {
@@ -156,7 +156,7 @@ describe('RunModelList', () => {
     renderList(list({ addable: [] }));
     const dialog = await openAdd();
     expect(within(dialog).getByTestId('run-model-add-nothing').textContent).toBe(
-      'Every model motir-ai offers for hosted runs is already listed.',
+      'Every model motir-ai offers for Motir agent runs is already listed.',
     );
     expect(within(dialog).queryByRole('combobox')).toBeNull();
   });
@@ -165,7 +165,7 @@ describe('RunModelList', () => {
     renderList(list());
     await removeWith('glm-5.2', ' unused ');
     expect(removeRunModelAction).toHaveBeenCalledWith('glm-5.2', 'unused');
-    expect(await screen.findByText('glm-5.2 removed from hosted-run models.')).toBeTruthy();
+    expect(await screen.findByText('glm-5.2 removed from Motir agent models.')).toBeTruthy();
   });
 
   it('Panel 7b: refused in use — the row names the platform default and the projects', async () => {
@@ -250,7 +250,7 @@ describe('RunModelList', () => {
   it('Panel 9: empty and read-only — who can add, and no Add', () => {
     renderList(list({ entries: [], canEdit: false }));
     expect(screen.getByTestId('run-model-list-empty').textContent).toContain(
-      'No hosted run can start until a superadmin adds a model.',
+      'No Motir agent run can start until a superadmin adds a model.',
     );
     expect(screen.queryByRole('button', { name: 'Add model' })).toBeNull();
   });
@@ -298,7 +298,7 @@ describe('RunModelList', () => {
 
   it('Panel 11: unavailable — the error card with Retry re-reads', async () => {
     render(<RunModelListUnavailable />);
-    expect(screen.getByText('Couldn’t load hosted-run models')).toBeTruthy();
+    expect(screen.getByText('Couldn’t load Motir agent models')).toBeTruthy();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     });

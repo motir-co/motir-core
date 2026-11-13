@@ -279,7 +279,7 @@ describe('To fix offers Continue hosted where the reader may edit (§ 31, MOTIR-
   });
 });
 
-describe('To fix offers Fix on the hosted agent on a row a REVIEW sent back (§ 32, MOTIR-6930)', () => {
+describe('To fix offers Fix in Motir agent on a row a REVIEW sent back (§ 32, MOTIR-6930)', () => {
   async function sentBackBy(
     fx: WorkItemFixture,
     title: string,

@@ -240,7 +240,7 @@ describe('the hosted-agent card', () => {
     expect(html).toContain('data-verdict="publishing"');
     expect(html).toContain('data-publish="running"');
     expect(html).toContain('Publishing.');
-    expect(html).toContain('Hosted-agent pin · run #12');
+    expect(html).toContain('Motir agent pin · run #12');
     expect(html).toContain('by ops+publisher@example.test');
     expect(html).toContain('Publish started by ops+publisher@example.test');
     expect(html).toContain('Publishing…');
@@ -253,7 +253,7 @@ describe('the hosted-agent card', () => {
       blocked: 'running',
     });
     const html = await hosted(hostedRow({ publish }));
-    expect(html).toContain('Hosted-agent pin · run<');
+    expect(html).toContain('Motir agent pin · run<');
     expect(html).toContain('Publish started by —');
   });
 
@@ -289,7 +289,7 @@ describe('the hosted-agent card', () => {
 
   it('not read and unset rows are their own cards, with no button', async () => {
     const notRead = await hosted({ status: 'not_read', source: 'github', detail: 'secret' });
-    expect(notRead).toContain("Couldn't read the hosted-agent image");
+    expect(notRead).toContain("Couldn't read the Motir agent image");
     expect(notRead).toContain("GitHub didn't answer");
     expect(notRead).not.toContain('Publish latest<');
     expect(notRead).not.toContain('secret');

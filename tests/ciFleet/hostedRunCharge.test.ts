@@ -181,7 +181,7 @@ describe('a settled hosted-agent container charges its run once', () => {
       credits: machineCreditsFor(machine.billableSeconds),
       billableSeconds: machine.billableSeconds,
       externalRef: runId,
-      reason: 'hosted run machine time',
+      reason: 'Motir agent machine time',
       // MOTIR-7240 — the run's own workspace and project, so motir-ai attributes it.
       coreWorkspaceId: tenant.workspaceId,
       coreProjectId: tenant.projectId,
@@ -423,7 +423,7 @@ describe('the charge carries where the run ran', () => {
     coreOrganizationId: 'org_1',
     credits: 3,
     billableSeconds: 180,
-    reason: 'hosted run machine time',
+    reason: 'Motir agent machine time',
   };
 
   it('sends both ids with a run charge, and drops a half address instead of sending it', async () => {
