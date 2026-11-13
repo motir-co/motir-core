@@ -32,8 +32,6 @@ import {
 // credential each client was built with and that no key was ever minted.
 
 const MANAGEMENT = {
-  accessKeyId: 'AKIAMANAGEMENT',
-  secretAccessKey: 'management-secret',
   roleArn: 'arn:aws:iam::576360162297:role/motir-add-shard',
 };
 
@@ -115,127 +113,75 @@ const MEMBER: AwsSessionCredentials = {
   expiration: null,
 };
 
-describe('awsManagementCredentials', () => {
-  it('reads the three variables', () => {
-    expect(
-      awsManagementCredentials({
-        AWS_ORG_ADMIN_ACCESS_KEY_ID: ' AKIA ',
-        AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's',
-        AWS_ORG_ADMIN_ROLE_ARN: 'arn',
-      }),
-    ).toEqual({ accessKeyId: 'AKIA', secretAccessKey: 's', roleArn: 'arn' });
-  });
+// The two variable names the management key used to be read from (MOTIR-9839),
+// derived from the role's own name so the retired names appear nowhere in the
+// tree (MOTIR-10302's search criterion): setting them must change nothing.
+const RETIRED_KEY_VARIABLES = ['ACCESS_KEY_ID', 'SECRET_ACCESS_KEY'].map((suffix) =>
+  AWS_MANAGEMENT_ENV.roleArn.replace(/ROLE_ARN$/, suffix),
+);
 
-  it('names every missing variable at once', () => {
-    expect(() => awsManagementCredentials({ AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's' })).toThrow(
-      new OrchestratorNotConfiguredError(
-        `set ${AWS_MANAGEMENT_ENV.accessKeyId}, ${AWS_MANAGEMENT_ENV.roleArn}`,
-      ),
-    );
-  });
-  // MOTIR-9839: no key at all is the default credential chain, not a gap.
-  it('reads the role ARN alone when neither key variable is set', () => {
-    expect(awsManagementCredentials({ AWS_ORG_ADMIN_ROLE_ARN: ' arn ' })).toEqual({
+describe('awsManagementCredentials', () => {
+  it('reads the role ARN, trimmed, and nothing else', () => {
+    expect(awsManagementCredentials({ AWS_ORG_ADMIN_ROLE_ARN: ' arn ' })).toStrictEqual({
       roleArn: 'arn',
     });
-    expect(
-      awsManagementCredentials({
-        AWS_ORG_ADMIN_ACCESS_KEY_ID: ' ',
-        AWS_ORG_ADMIN_SECRET_ACCESS_KEY: '',
-        AWS_ORG_ADMIN_ROLE_ARN: 'arn',
-      }),
-    ).toEqual({ roleArn: 'arn' });
   });
 
+  // MOTIR-10302: the key path is gone; the role is always assumed from the
+  // SDK's default credential chain.
   it.each([
-    [AWS_MANAGEMENT_ENV.accessKeyId, { AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's' }],
-    [AWS_MANAGEMENT_ENV.secretAccessKey, { AWS_ORG_ADMIN_ACCESS_KEY_ID: 'AKIA' }],
-  ])('names %s when only the other half of the key is set', (missing, half) => {
-    expect(() => awsManagementCredentials({ ...half, AWS_ORG_ADMIN_ROLE_ARN: 'arn' })).toThrow(
-      new OrchestratorNotConfiguredError(`set ${missing}`),
-    );
+    ['the retired access key id', { [RETIRED_KEY_VARIABLES[0]!]: 'AKIA' }],
+    ['the retired secret', { [RETIRED_KEY_VARIABLES[1]!]: 's' }],
+    [
+      'both retired key variables',
+      { [RETIRED_KEY_VARIABLES[0]!]: 'AKIA', [RETIRED_KEY_VARIABLES[1]!]: 's' },
+    ],
+    ['the SDK’s own key', { AWS_ACCESS_KEY_ID: 'AKIA', AWS_SECRET_ACCESS_KEY: 's' }],
+  ])('changes nothing when %s is set', (_label, extra) => {
+    expect(awsManagementCredentials({ ...extra, AWS_ORG_ADMIN_ROLE_ARN: 'arn' })).toStrictEqual({
+      roleArn: 'arn',
+    });
   });
 
-  it('names the role ARN when it is unset, with the key and without it', () => {
+  it('names the role ARN, and only it, when it is unset — with a retired key set or not', () => {
     const roleMissing = new OrchestratorNotConfiguredError(`set ${AWS_MANAGEMENT_ENV.roleArn}`);
     expect(() => awsManagementCredentials({})).toThrow(roleMissing);
-    expect(() =>
-      awsManagementCredentials({
-        AWS_ORG_ADMIN_ACCESS_KEY_ID: 'AKIA',
-        AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's',
-      }),
-    ).toThrow(roleMissing);
+    expect(() => awsManagementCredentials({ AWS_ORG_ADMIN_ROLE_ARN: '  ' })).toThrow(roleMissing);
+    const keyed = Object.fromEntries(RETIRED_KEY_VARIABLES.map((name) => [name, 'x']));
+    expect(() => awsManagementCredentials(keyed)).toThrow(roleMissing);
+    expect(RETIRED_KEY_VARIABLES).toHaveLength(2);
+    expect(RETIRED_KEY_VARIABLES.every((name) => name.startsWith('AWS_ORG_ADMIN_'))).toBe(true);
   });
 });
 
 describe('awsManagementRequiredEnv', () => {
-  it('is the role ARN alone with no key, and all three once either half is set', () => {
-    const all = Object.values(AWS_MANAGEMENT_ENV);
-    expect(awsManagementRequiredEnv({})).toEqual([AWS_MANAGEMENT_ENV.roleArn]);
-    expect(awsManagementRequiredEnv({ AWS_ORG_ADMIN_ROLE_ARN: 'arn' })).toEqual([
-      AWS_MANAGEMENT_ENV.roleArn,
-    ]);
-    expect(awsManagementRequiredEnv({ AWS_ORG_ADMIN_ACCESS_KEY_ID: 'AKIA' }).sort()).toEqual(
-      [...all].sort(),
-    );
-    expect(awsManagementRequiredEnv({ AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's' }).sort()).toEqual(
-      [...all].sort(),
-    );
+  it('is the role ARN alone', () => {
+    expect(awsManagementRequiredEnv()).toEqual([AWS_MANAGEMENT_ENV.roleArn]);
+    expect(Object.values(AWS_MANAGEMENT_ENV)).toEqual([AWS_MANAGEMENT_ENV.roleArn]);
   });
 });
 
-describe('the management role, with the key and on the default chain (MOTIR-9839)', () => {
-  const handlers = {
-    AssumeRoleCommand: assume,
-    ListAccountsCommand: () => ({ Accounts: [] }),
-    ListCreateAccountStatusCommand: () => ({ CreateAccountStatuses: [] }),
-  };
-
-  it('builds the first STS client from the key, when the key is set', async () => {
-    const { api, calls } = harness(handlers);
+describe('the management role, on the default chain (MOTIR-9839 · MOTIR-10302)', () => {
+  it('builds the first STS client with no credentials, so the default chain supplies them', async () => {
+    const { api, calls } = harness({
+      AssumeRoleCommand: assume,
+      ListAccountsCommand: () => ({ Accounts: [] }),
+      ListCreateAccountStatusCommand: () => ({ CreateAccountStatuses: [] }),
+    });
     await api.findOrganizationAccount('x');
     expect(calls[0]).toMatchObject({
       service: 'sts',
       command: 'AssumeRoleCommand',
-      hasCredentials: true,
-      accessKeyId: MANAGEMENT.accessKeyId,
-      sessionToken: undefined,
-    });
-  });
-
-  it('builds it with no credentials, for the same AssumeRole, when there is no key', async () => {
-    const keyed = harness(handlers);
-    const chained = harness(
-      handlers,
-      {
-        t: 0,
-      },
-      { roleArn: MANAGEMENT.roleArn },
-    );
-    await keyed.api.findOrganizationAccount('x');
-    await chained.api.findOrganizationAccount('x');
-
-    expect(chained.calls[0]).toMatchObject({
-      service: 'sts',
-      command: 'AssumeRoleCommand',
       hasCredentials: false,
       accessKeyId: undefined,
+      input: { RoleArn: MANAGEMENT.roleArn },
     });
-    expect(chained.calls[0]?.region).toBe(keyed.calls[0]?.region);
-    // Same role, session name and duration as the key path.
-    expect(chained.calls[0]?.input).toEqual(keyed.calls[0]?.input);
-    // Every later call runs on the assumed session, exactly as with the key.
-    expect(chained.calls.slice(1)).toEqual(keyed.calls.slice(1));
+    // Every later call runs on the assumed session.
+    expect(calls.slice(1).every((c) => c.accessKeyId === 'ASIAMGMT')).toBe(true);
   });
 
-  it('assumes member roles from the management session on the default chain too', async () => {
-    const { api, calls } = harness(
-      { AssumeRoleCommand: assume },
-      { t: 0 },
-      {
-        roleArn: MANAGEMENT.roleArn,
-      },
-    );
+  it('assumes member roles from the management session', async () => {
+    const { api, calls } = harness({ AssumeRoleCommand: assume });
     await api.assumeMemberRole('222222222222');
     expect(calls.map((c) => [c.hasCredentials, c.accessKeyId, c.sessionToken])).toEqual([
       [false, undefined, undefined],
@@ -275,7 +221,7 @@ describe('findOrganizationAccount', () => {
     });
     expect(calls[0]).toMatchObject({
       service: 'sts',
-      accessKeyId: MANAGEMENT.accessKeyId,
+      accessKeyId: undefined,
       sessionToken: undefined,
       command: 'AssumeRoleCommand',
       input: { RoleArn: MANAGEMENT.roleArn, DurationSeconds: 900 },

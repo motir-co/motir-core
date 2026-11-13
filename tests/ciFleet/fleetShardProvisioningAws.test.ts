@@ -58,8 +58,6 @@ const BELOW_TARGET = CI_TARGET - 50;
 const SECRETS = {
   admin: 'ghp_ADMIN_SECRET_never_printed',
   installation: 'ghs_INSTALL_SECRET_never_printed',
-  managementKey: 'AKIA_MANAGEMENT_never_printed',
-  managementSecret: 'MANAGEMENT_SECRET_never_printed',
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -145,8 +143,6 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', SLUG);
   vi.stubEnv('GITHUB_ENTERPRISE_ADMIN_TOKEN', SECRETS.admin);
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
   stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
@@ -372,20 +368,12 @@ describe('refusals', () => {
     expect(organization.calls).toEqual([]);
   });
 
-  // MOTIR-9839: the role ARN alone is a whole management credential.
-  it('preflight passes with the role ARN alone, and names the missing half of a half-set key', async () => {
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
-    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
+  // MOTIR-9839 · MOTIR-10302: the role ARN alone is the whole management credential.
+  it('preflight passes with the role ARN alone', async () => {
     const roleOnly = await run(args({ region: 'Mars' }));
     expect(roleOnly.code).toBe(1);
     expect(roleOnly.err).toContain('--region Mars is not an AWS region id');
     expect(roleOnly.err).not.toContain('missing env');
-
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
-    const halfKey = await run(args());
-    expect(halfKey.code).toBe(1);
-    expect(halfKey.err).toContain('missing env: AWS_ORG_ADMIN_SECRET_ACCESS_KEY');
-    expect(halfKey.err).not.toContain('AWS_ORG_ADMIN_ACCESS_KEY_ID');
     expect(github.calls).toEqual([]);
     expect(organization.calls).toEqual([]);
   });

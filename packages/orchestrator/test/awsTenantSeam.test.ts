@@ -31,11 +31,7 @@ import {
 // fault-injecting fake. No live AWS call: the SDK is a recording stub.
 
 const ACCOUNT = '210987654321';
-const MANAGEMENT = {
-  accessKeyId: 'AKIABASE',
-  secretAccessKey: 'base-secret',
-  roleArn: 'arn:aws:iam::576360162297:role/motir-org-admin',
-};
+const MANAGEMENT = { roleArn: 'arn:aws:iam::576360162297:role/motir-org-admin' };
 const TAGS = { 'motir:organization': 'cmorg1', 'motir:repository': 'cmrepo1' };
 const INPUT: ApplyStackInput = {
   stackName: 'motir-registry-cmrepo1',
@@ -118,7 +114,8 @@ describe('the deploy-role client factory', () => {
     // The base identity only assumes the management role; the management
     // session only assumes the deploy role — once, held for the second call.
     expect(managementCalls).toEqual([
-      { key: 'AKIABASE', command: 'AssumeRoleCommand', role: MANAGEMENT.roleArn },
+      // The default chain's identity: the client is built with no credentials.
+      { key: undefined, command: 'AssumeRoleCommand', role: MANAGEMENT.roleArn },
       {
         key: 'ASIAMGMT',
         command: 'AssumeRoleCommand',

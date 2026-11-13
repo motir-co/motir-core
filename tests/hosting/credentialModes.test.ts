@@ -12,9 +12,11 @@ import {
 // motir-core signs with static keys (the store's pair, the management IAM
 // user's key); on Fargate it holds no key and the SDK's default chain resolves
 // the task role. Each card tested its own half; this file runs the keyed and the
-// key-free mode side by side across the blob client, the uploader's operations,
-// the management credentials and `fleet-admin check-quota`, so neither mode can
-// regress the other unnoticed. No network and no database: the object store is
+// key-free mode side by side across the blob client and the uploader's
+// operations, so neither mode can regress the other unnoticed. The management
+// credential has ONE mode since MOTIR-10302 — the role ARN, assumed from the
+// default chain — and this file pins that a key in the environment, the SDK's
+// standard one included, never becomes a static management credential. No network and no database: the object store is
 // an in-process transport, the management SDK a recording factory, and the
 // database modules throw on any call.
 
@@ -189,12 +191,10 @@ describe('the uploader in both modes', () => {
 });
 
 const ROLE_ARN = 'arn:aws:iam::111111111111:role/motir-add-shard';
-const MANAGEMENT_KEYED = {
-  [AWS_MANAGEMENT_ENV.accessKeyId]: 'AKIAMANAGEMENT',
-  [AWS_MANAGEMENT_ENV.secretAccessKey]: 'management-secret',
-  [AWS_MANAGEMENT_ENV.roleArn]: ROLE_ARN,
-};
 const MANAGEMENT_KEY_FREE = { [AWS_MANAGEMENT_ENV.roleArn]: ROLE_ARN };
+/** The role ARN beside the SDK's own standard key: the chain reads that key
+ *  itself, so Motir must not hand it to a client (MOTIR-10302). */
+const MANAGEMENT_ON_A_KEYED_CHAIN = { ...CHAIN, [AWS_MANAGEMENT_ENV.roleArn]: ROLE_ARN };
 
 interface Built {
   service: string;
@@ -230,7 +230,7 @@ function managementSdk() {
   return { factory, built, sent };
 }
 
-describe('the fleet management credentials in both modes', () => {
+describe('the fleet management credentials, on the default chain only', () => {
   it('role ARN only: builds, and the first STS client gets no static credentials', async () => {
     const { factory, built } = managementSdk();
     const credentials = awsManagementCredentials(MANAGEMENT_KEY_FREE);
@@ -238,35 +238,30 @@ describe('the fleet management credentials in both modes', () => {
     const api = createAwsManagementApi(credentials, { clientFactory: factory });
     await api.readVcpuQuota(await api.assumeMemberRole('222222222222'), 'us-east-1');
     expect(built[0]).toEqual({ service: 'sts', credentials: undefined });
-    expect(built.some((b) => b.credentials?.accessKeyId === 'AKIAMANAGEMENT')).toBe(false);
+    expect(built.some((b) => b.credentials?.accessKeyId === CHAIN.AWS_ACCESS_KEY_ID)).toBe(false);
   });
 
-  it('the key trio: the first STS client signs with the management key, as before', async () => {
+  it('a key in the environment is the chain’s to read: the first STS client still gets none', async () => {
     const { factory, built } = managementSdk();
-    const api = createAwsManagementApi(awsManagementCredentials(MANAGEMENT_KEYED), {
-      clientFactory: factory,
-    });
+    const credentials = awsManagementCredentials(MANAGEMENT_ON_A_KEYED_CHAIN);
+    expect(credentials).toStrictEqual({ roleArn: ROLE_ARN });
+    const api = createAwsManagementApi(credentials, { clientFactory: factory });
     await api.assumeMemberRole('222222222222');
-    expect(built[0]).toMatchObject({
-      service: 'sts',
-      credentials: { accessKeyId: 'AKIAMANAGEMENT' },
-    });
+    expect(built[0]).toEqual({ service: 'sts', credentials: undefined });
   });
 
-  it('no role ARN throws OrchestratorNotConfiguredError naming every unset variable', () => {
+  it('no role ARN throws OrchestratorNotConfiguredError naming it, and only it', () => {
     expect(() => awsManagementCredentials({})).toThrow(OrchestratorNotConfiguredError);
-    expect(() => awsManagementCredentials({})).toThrow(AWS_MANAGEMENT_ENV.roleArn);
-    const halfKey = { [AWS_MANAGEMENT_ENV.accessKeyId]: 'AKIA' };
-    expect(() => awsManagementCredentials(halfKey)).toThrow(
-      new RegExp(`${AWS_MANAGEMENT_ENV.secretAccessKey}.*${AWS_MANAGEMENT_ENV.roleArn}`),
+    expect(() => awsManagementCredentials(CHAIN)).toThrow(
+      new OrchestratorNotConfiguredError(`set ${AWS_MANAGEMENT_ENV.roleArn}`),
     );
   });
 });
 
-describe('fleet-admin check-quota in both modes', () => {
+describe('fleet-admin check-quota on the default chain', () => {
   it.each([
-    ['key-free', MANAGEMENT_KEY_FREE],
-    ['keyed', MANAGEMENT_KEYED],
+    ['role ARN only', MANAGEMENT_KEY_FREE],
+    ['role ARN beside the SDK’s standard key', MANAGEMENT_ON_A_KEYED_CHAIN],
   ])('%s: exits 0 with one line, one member assumption and one quota read', async (_mode, env) => {
     const { factory, sent } = managementSdk();
     const out: string[] = [];

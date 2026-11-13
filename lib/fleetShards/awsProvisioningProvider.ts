@@ -151,12 +151,12 @@ export function createAwsShardProvisioningProvider(
       },
     ],
 
-    // The role ARN alone is a full management credential (the default chain
-    // supplies the rest); a key, once either half is set, must be whole.
+    // The role ARN alone is the management credential: the default chain
+    // assumes it (MOTIR-10302).
     // The pool-account definition (MOTIR-9845): the StackSet, the kind's unit
     // and the quota to request, from this deployment's configuration.
     requiredEnv: (ctx) => [
-      ...awsManagementRequiredEnv(deps.env()),
+      ...awsManagementRequiredEnv(),
       ...awsPoolDefinitionRequiredEnv(ctx.fleetKind),
     ],
 

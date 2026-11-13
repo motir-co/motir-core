@@ -70,10 +70,10 @@ import {
 // lives in memory for one run, and `CreateAccessKey` is never called: creating
 // the runner's key is a person's step, which add-shard only words.
 //
-// The credential chain (MOTIR-9271): the management IAM user's key assumes the
-// management role (`AWS_ORG_ADMIN_ROLE_ARN`), which may call Organizations and
-// assume `OrganizationAccountAccessRole` in a member account; that member role
-// reads Service Quotas, manages IAM and builds the network.
+// The credential chain (MOTIR-9271 · MOTIR-10302): the SDK's default credential
+// chain assumes the management role (`AWS_ORG_ADMIN_ROLE_ARN`), which may call
+// Organizations and assume `OrganizationAccountAccessRole` in a member account;
+// that member role reads Service Quotas, manages IAM and builds the network.
 //
 // API references, read 2026-10-24:
 //   Organizations — https://docs.aws.amazon.com/organizations/latest/APIReference/API_ListAccounts.html,
@@ -465,13 +465,9 @@ export function createAwsManagementApi(
   async function managementRole(): Promise<AwsSessionCredentials> {
     const expiresAt = managementSession?.expiration?.getTime() ?? Infinity;
     if (managementSession && expiresAt - now() > 60_000) return managementSession;
-    const { accessKeyId, secretAccessKey } = management;
-    // No management key: an STS client with no `credentials`, so the SDK's
-    // default chain supplies them.
-    const sts =
-      accessKeyId && secretAccessKey
-        ? client('sts', { accessKeyId, secretAccessKey })
-        : factory('sts', { region: GLOBAL_REGION });
+    // An STS client with no `credentials`, so the SDK's default chain supplies
+    // them (MOTIR-10302: there is no management key).
+    const sts = factory('sts', { region: GLOBAL_REGION });
     const response = await call<Parameters<typeof sessionOf>[0]>(
       'sts',
       sts,

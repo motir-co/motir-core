@@ -3,7 +3,6 @@
 // (`pnpm hosting:deploy-check`, MOTIR-9805) runs from a laptop with only the Fly
 // token set. `./index` re-exports everything here.
 import {
-  AWS_MANAGEMENT_ENV,
   createFakeHostingDeployPort,
   createFlyHostingDeployPort,
   createServerlessHostingDeployPort,
@@ -15,7 +14,6 @@ import {
   type HostingDeployPort,
   type HostingDeployTarget,
   type ReleaseUsage,
-  type ServerlessSourceCredentials,
 } from '@motir/orchestrator';
 import { createConfiguredAwsHostingPort } from './awsHosting';
 import { selectedOrchestratorProvider } from './provider';
@@ -127,28 +125,15 @@ function buildHostingAdapter(
     });
   }
   if (target === 'serverless') {
-    return createServerlessHostingDeployPort(
-      { ...serverlessHostingConfig(), ...(appPrefix ? { appPrefix } : {}) },
-      { sourceCredentials: serverlessSourceCredentials() },
-    );
+    // No source credentials: the scoped role is assumed from the SDK's default
+    // credential chain — the task role on AWS, an operator's own profile on a
+    // laptop. Motir's management key is gone (MOTIR-10302).
+    return createServerlessHostingDeployPort({
+      ...serverlessHostingConfig(),
+      ...(appPrefix ? { appPrefix } : {}),
+    });
   }
   throw new OrchestratorNotConfiguredError(`no ${target} hosting adapter is registered`);
-}
-
-/**
- * Who assumes the serverless account's scoped role. On the app it is Motir's
- * management key and the role it assumes there (`motir-add-shard`), which the
- * scoped role trusts (MOTIR-9970); unset, the SDK's default chain — an operator's
- * own profile on a laptop. Read here, at the composition root, so the adapter
- * itself reads only its role and region.
- */
-function serverlessSourceCredentials(): ServerlessSourceCredentials | null {
-  const read = (name: string) => process.env[name]?.trim() ?? '';
-  const accessKeyId = read(AWS_MANAGEMENT_ENV.accessKeyId);
-  const secretAccessKey = read(AWS_MANAGEMENT_ENV.secretAccessKey);
-  if (!accessKeyId || !secretAccessKey) return null;
-  const roleArn = read(AWS_MANAGEMENT_ENV.roleArn);
-  return { accessKeyId, secretAccessKey, ...(roleArn ? { roleArn } : {}) };
 }
 
 const ORIGIN_SECRET_KEY_ENV = 'MOTIR_HOSTING_ORIGIN_SECRET_KEY';

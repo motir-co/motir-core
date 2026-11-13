@@ -355,8 +355,6 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', ADD_SHARD_ENTERPRISE_SLUG);
   vi.stubEnv('GITHUB_ENTERPRISE_ADMIN_TOKEN', 'ghp_ADMIN_E2E');
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA_MANAGEMENT_E2E');
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'MANAGEMENT_SECRET_E2E');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
   stubPoolDefinitionEnv();
   installAddShardGithub(newGithubWorld(), 'ghs_INSTALL_E2E');

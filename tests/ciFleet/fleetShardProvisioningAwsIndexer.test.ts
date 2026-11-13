@@ -58,8 +58,6 @@ const BELOW_TARGET = INDEX_TARGET - 8;
 const SECRETS = {
   admin: 'ghp_ADMIN_SECRET_never_printed',
   installation: 'ghs_INSTALL_SECRET_never_printed',
-  managementKey: 'AKIA_MANAGEMENT_never_printed',
-  managementSecret: 'MANAGEMENT_SECRET_never_printed',
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -147,8 +145,6 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', SLUG);
   vi.stubEnv('GITHUB_ENTERPRISE_ADMIN_TOKEN', SECRETS.admin);
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
   stubPoolDefinitionEnv();
   _resetInstallationTokenCache();

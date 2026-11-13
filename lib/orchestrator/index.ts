@@ -217,9 +217,7 @@ export async function ciFleetMissingConfig(): Promise<string[]> {
   if (selectedOrchestratorProvider() === 'fake') return [];
   if (await fleetKindOnPool('ci_runner')) {
     if (awsEc2Override()) return [];
-    const missing = awsManagementRequiredEnv(process.env).filter(
-      (name) => !process.env[name]?.trim(),
-    );
+    const missing = awsManagementRequiredEnv().filter((name) => !process.env[name]?.trim());
     if (!process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim()) missing.push(AWS_RUNNER_AMI_ENV_VAR);
     return missing;
   }
@@ -493,7 +491,7 @@ function awsShardClient(
   const values: Record<string, string> = {};
   const missing = management
     ? []
-    : awsManagementRequiredEnv(process.env).filter((name) => !process.env[name]?.trim());
+    : awsManagementRequiredEnv().filter((name) => !process.env[name]?.trim());
   for (const name of extra) {
     const value = process.env[name]?.trim();
     if (value) values[name] = value;
@@ -504,7 +502,7 @@ function awsShardClient(
       `set ${missing.join(', ')}` +
         (management
           ? ''
-          : ` (the management credential, ${Object.values(AWS_MANAGEMENT_ENV).join(', ')}, assumes ${AWS_RUNNER_IAM_ROLE})`),
+          : ` (the management credential, ${AWS_MANAGEMENT_ENV.roleArn} on the default credential chain, assumes ${AWS_RUNNER_IAM_ROLE})`),
     );
   }
   if (!shard.aws) {

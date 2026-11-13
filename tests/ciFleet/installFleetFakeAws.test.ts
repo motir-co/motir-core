@@ -80,8 +80,6 @@ function stubInstallEnv(): void {
 
 /** No management credential at all: the pool path could not assume anything. */
 function noManagementCredential(): void {
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
 }
 

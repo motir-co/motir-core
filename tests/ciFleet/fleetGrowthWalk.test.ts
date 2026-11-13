@@ -29,7 +29,7 @@ import {
   installAddShardGithub,
   newGithubWorld,
 } from '../helpers/addShardFakes';
-import { TEST_MANAGEMENT_KEY, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
+import { stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // THE STORY'S VERIFICATION WALK (Story MOTIR-9362 · MOTIR-9465). The seven-step
 // recipe, in order, as a platform admin meets it: `fleet-admin pool-status`,
@@ -49,8 +49,6 @@ const SPARE_ACCOUNT = '444455556666';
 const INDEX_ACCOUNT = '999900001111';
 const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
-  managementKey: TEST_MANAGEMENT_KEY.accessKeyId,
-  managementSecret: TEST_MANAGEMENT_KEY.secretAccessKey,
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',

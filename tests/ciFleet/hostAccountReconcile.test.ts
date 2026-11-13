@@ -37,7 +37,7 @@ import {
   newGithubWorld,
   type GithubWorld,
 } from '../helpers/addShardFakes';
-import { TEST_MANAGEMENT_KEY, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
+import { stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // THE HOST ACCOUNT RECONCILE (Story MOTIR-9365 · MOTIR-9582), against a real
 // database for the rows, attempts and audit entries, GitHub stubbed at `fetch`,
@@ -53,8 +53,6 @@ const GITHUB_ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
-  managementKey: TEST_MANAGEMENT_KEY.accessKeyId,
-  managementSecret: TEST_MANAGEMENT_KEY.secretAccessKey,
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',

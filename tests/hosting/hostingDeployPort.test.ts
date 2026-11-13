@@ -28,8 +28,6 @@ function stubAwsEnv() {
   vi.stubEnv('MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN', 'arn:aws:iam::1:role/forwarder');
   vi.stubEnv('MOTIR_HOSTING_AWS_APP_DOMAIN', 'apps.motir.test');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::1:role/motir-org-admin');
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
 }
 
 describe('getHostingDeployPort', () => {
@@ -95,11 +93,8 @@ describe('getHostingDeployPort', () => {
       'MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN',
       'arn:aws:iam::212859366014:role/motir-hosting-serverless-deploy',
     );
-    // With and without Motir's management key as the identity that assumes it.
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+    // The default chain assumes it, whatever the management role (MOTIR-10302).
     expect(getHostingDeployPort('serverless').target).toBe('serverless');
-    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA');
-    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'secret');
     vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
     expect(getHostingDeployPort('serverless', { appPrefix: 'mh-check-' }).target).toBe(
       'serverless',
