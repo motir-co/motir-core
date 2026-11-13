@@ -128,9 +128,22 @@ export interface HostedJob {
   token: string;
 }
 
+/** An in-flight card's partial fields (Story MOTIR-11190 · MOTIR-11199): the
+ *  `itemDraft` body form the hosted planner streams while an author turn writes. */
+export interface HostedItemDraft {
+  /** The proposal being written, as `planItem:<id>`. */
+  target: string;
+  /** Strictly increasing per session; a stale one changes nothing. */
+  seq: number;
+  title?: string;
+  descriptionMd?: string;
+  explanationMd?: string;
+}
+
 export type HostedStepBody =
   | { step: PlanStepKindDto | 'end'; target?: string }
-  | { narration: string[] };
+  | { narration: string[] }
+  | { itemDraft: HostedItemDraft };
 
 /** One call to the real `POST /api/internal/ai/plan-step`, as motir-ai makes it. */
 export function hostedPlanStep(
