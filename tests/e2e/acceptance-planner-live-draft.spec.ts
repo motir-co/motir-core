@@ -26,6 +26,7 @@ import {
 import { composer, node, openFromCard, showCanvas, views } from './_helpers/plan-progress-harness';
 import { E2E_CORE_CALLBACK_SECRET } from './_helpers/log-bug-as-ai';
 import { GET_PLAN_TOOL_NAME } from '@/lib/mcp/tools/getPlan';
+import { apiTokensService } from '@/lib/services/apiTokensService';
 import { POLL_MS } from '@/lib/hooks/useGeneratingPlanPoll';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanItemDto } from '@/lib/dto/plans';
@@ -415,7 +416,14 @@ test('a card being written shows its real text growing in the open quick view, t
     await expect(liveCue(page)).toHaveText(en.planReview.peekLive.written);
 
     // The stored card IS the card the planner's reader gets back.
-    agent = await agentSession(seed.token, baseURL!);
+    // `get_plan` reads under `project:browse`, which the seed's step token does not carry —
+    // the planner's reader is its own token, minted for that read alone.
+    const reader = await apiTokensService.create(seed.reader.userId, seed.workspaceId, {
+      label: 'live-draft-get-plan',
+      projectId: seed.projectId,
+      permissions: ['project:browse', 'ai:view_plan'],
+    });
+    agent = await agentSession(reader.token, baseURL!);
     const plan = await callTool<{ items: PlanItemDto[] }>(agent, GET_PLAN_TOOL_NAME, {
       planId: hosted.planId,
     });
