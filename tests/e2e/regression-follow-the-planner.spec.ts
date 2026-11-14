@@ -177,13 +177,20 @@ async function closeQuickView(page: Page): Promise<void> {
 // ── The in-page recorders ───────────────────────────────────────────────────
 
 interface QuickViewRecord {
-  /** Every live field (`quick-view-live-<field>`) the quick view drew. */
+  /**
+   * Every live DRAFT field the quick view drew — `LiveDraftField`'s box, the one
+   * element carrying `data-live-field`, by its `quick-view-live-<field>` id. The
+   * selector is that attribute, not the testid prefix alone: the in-progress cue,
+   * its group and the _Follow the writing_ control (MOTIR-11248) share the
+   * `quick-view-live-` prefix and are present whenever a card is being written,
+   * partial or not (MOTIR-11271).
+   */
   live: string[];
   /** Every text any `aria-live` region held. */
   said: string[];
 }
 
-/** Record, from now on, every live field the quick view draws. */
+/** Record, from now on, every live draft field the quick view draws. */
 async function recordQuickView(page: Page): Promise<void> {
   await page.evaluate(() => {
     const w = window as unknown as {
@@ -193,12 +200,11 @@ async function recordQuickView(page: Page): Promise<void> {
     w.__qvObs?.disconnect();
     w.__qv = { live: [], said: [] };
     const read = () => {
-      document.querySelectorAll('[data-testid^="quick-view-live-"]').forEach((box) => {
-        const id = box.getAttribute('data-testid')!.slice('quick-view-live-'.length);
-        // Only the three live FIELDS — not the cue, nor the header group and its
-        // Follow control (MOTIR-11248), which share the prefix.
-        if (['title', 'descriptionMd', 'explanationMd'].includes(id)) w.__qv.live.push(id);
-      });
+      document
+        .querySelectorAll('[data-live-field][data-testid^="quick-view-live-"]')
+        .forEach((box) => {
+          w.__qv.live.push(box.getAttribute('data-testid')!.slice('quick-view-live-'.length));
+        });
       document.querySelectorAll('[aria-live]').forEach((region) => {
         const text = region.textContent ?? '';
         if (text) w.__qv.said.push(text);
@@ -466,9 +472,8 @@ test('the canvas follows the planner while a plan is written, stops when the rea
       async () => {
         await openQuickView(page, A1);
         // The planner's author step targets this card: the in-progress cue says so.
-        // The MCP door streams no partial, so it reads THINKING (MOTIR-11254, §31.7).
-        await expect(liveCue(page)).toHaveAttribute('data-live-cue', 'thinking');
-        await expect(liveCue(page)).toHaveText(en.planReview.peekLive.thinking);
+        await expect(liveCue(page)).toHaveAttribute('data-live-cue', 'writing');
+        await expect(liveCue(page)).toHaveText(en.planReview.peekLive.beingWritten);
         await recordQuickView(page);
         const arrived = polled(page, planId, (b) => itemOf(b, a1!)?.descriptionMd === BODY);
         await tool(agent, UPDATE_PLAN_ITEM_TOOL_NAME, {

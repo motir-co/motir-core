@@ -13,6 +13,13 @@ name: AWS deploy
 # queue, whose required checks already include the CI workflow's `build` job and
 # its schema-drift guard.
 #
+# A tab left open across a release keeps working (MOTIR-11241): the image is
+# built with `assetPrefix` pointing at the static-asset origin motir-infra
+# publishes (MOTIR-11240), this release's `_next/static` is uploaded there and
+# checked BEFORE any task rolls, and after the roll the run goes red unless the
+# app loads this build from the origin and the previous release's files are
+# still served (`scripts/aws-deploy/staticAssets.ts`).
+#
 # The release guards the retired deploy job carried live here (MOTIR-11059): the
 # job refuses to build without its monitoring secrets or its Server Action salt,
 # the image build uploads source maps for the release, and the run goes red if
@@ -95,6 +102,25 @@ jobs:
 
       - uses: actions/checkout@v6
       - uses: ./.github/actions/buildx
+      - uses: ./.github/actions/pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: '0'
+
+      # ⚠️ THE ORIGIN IS READ BEFORE THE BUILD, because `assetPrefix` is baked into
+      # every HTML page and chunk reference the build emits (MOTIR-11241). The
+      # deploy role reads `/<prefix>/core/static-assets`; until motir-infra's
+      # core-static stack exists and `static.motir.co` answers, both outputs are
+      # empty, the image is built with no prefix exactly as before, a warning says
+      # so, and every static step below stands down.
+      - name: Assume the deploy role to read the static-asset origin
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Read the static-asset origin
+        id: static
+        run: pnpm --silent deploy:static target
 
       # The push role can push images and nothing else; the deploy role below
       # can run ECS and SSM calls and cannot push. Two steps, two sessions.
@@ -133,6 +159,11 @@ jobs:
       # the Server Action salt go in as BuildKit SECRETS, never as build
       # arguments: a build argument is recorded in the image's metadata, and the
       # Dockerfile mounts each secret for the single `next build` command.
+      #
+      # `MOTIR_RELEASE` is also Next's `deploymentId` and `MOTIR_ASSET_PREFIX` its
+      # `assetPrefix` (MOTIR-11241, `lib/build/versionSkew.ts`). `load: true` keeps
+      # the image in the runner's Docker too, so the upload below copies this
+      # build's `.next/static` out of it without pulling it back from ECR.
       - name: Build and push the image
         id: build
         if: steps.existing.outputs.digest == ''
@@ -140,12 +171,14 @@ jobs:
         with:
           context: .
           push: true
+          load: true
           tags: ${{ steps.ecr.outputs.registry }}/${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core:${{ github.sha }}
           build-args: |
             NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
             MOTIR_RELEASE=${{ github.sha }}
             SENTRY_ORG=${{ secrets.SENTRY_ORG }}
             SENTRY_PROJECT=${{ secrets.SENTRY_PROJECT }}
+            MOTIR_ASSET_PREFIX=${{ steps.static.outputs.url }}
           secrets: |
             SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
             NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
@@ -174,10 +207,56 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - uses: ./.github/actions/pnpm
-      - run: pnpm install --frozen-lockfile
+      # ⚠️ UPLOAD BEFORE ANY TASK ROLLS, NEVER `--delete` (MOTIR-11241). A tab
+      # loaded from an earlier release keeps asking the origin for that release's
+      # files; the bucket's lifecycle rule, not a deploy, expires them. Copying
+      # the files out of the image (the runner's `/app/.next/static`) uploads
+      # exactly what the HTML will name. A re-run of a commit whose image was
+      # already pushed pulls that image by digest and uploads again, which is
+      # idempotent: every file is named by its content hash.
+      - name: Upload this release's static files to the origin
+        if: steps.static.outputs.url != ''
         env:
-          HUSKY: '0'
+          REPOSITORY: ${{ steps.ecr.outputs.registry }}/${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          BUCKET: ${{ steps.static.outputs.bucket }}
+        run: |
+          set -euo pipefail
+          image="$REPOSITORY:$GITHUB_SHA"
+          if ! docker image inspect "$image" >/dev/null 2>&1; then
+            image="$REPOSITORY@$DIGEST"
+            docker pull --quiet "$image"
+          fi
+          cid="$(docker create "$image")"
+          trap 'docker rm -f "$cid" >/dev/null' EXIT
+          rm -rf "$RUNNER_TEMP/release-static"
+          docker cp "$cid:/app/.next/static" "$RUNNER_TEMP/release-static"
+          count="$(find "$RUNNER_TEMP/release-static" -type f | wc -l)"
+          aws s3 cp "$RUNNER_TEMP/release-static" "s3://$BUCKET/_next/static/" \
+            --recursive --only-show-errors \
+            --cache-control "public, max-age=31536000, immutable"
+          echo "Static files: $count uploaded to \`s3://$BUCKET/_next/static/\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # A missing CNAME, a CORS rule or a cache header that is not there fails
+      # HERE, while the old tasks still serve — not after the roll, when every
+      # page would name files nobody can load.
+      - name: Check the origin serves this release's files
+        if: steps.static.outputs.url != ''
+        env:
+          STATIC_URL: ${{ steps.static.outputs.url }}
+        run: pnpm --silent deploy:static verify-upload --url "$STATIC_URL" --dir "$RUNNER_TEMP/release-static"
+
+      # One file the LIVE release loads from the origin, read before this run can
+      # replace it, for the post-roll check below. Empty while the live release
+      # still serves its own files (the first release after the switch). Deploys
+      # are serialised by the concurrency group, so nothing else replaces it
+      # between here and the roll.
+      - name: Note the live release's static file
+        id: previous
+        if: steps.static.outputs.url != ''
+        env:
+          STATIC_URL: ${{ steps.static.outputs.url }}
+        run: pnpm --silent deploy:static capture-previous --url "$STATIC_URL"
 
       # Waits out a motir-infra update of the services stack, and stands down if
       # this commit is no longer main's newest (MOTIR-10436, docs/aws-deploy.md).
@@ -217,6 +296,19 @@ jobs:
             tail -n 1 /tmp/aws-deploy.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # ⚠️ THE TAB-ACROSS-A-DEPLOY PROMISE, PROVED ON THE LIVE APP (MOTIR-11241).
+      # Red unless app.motir.co's HTML loads THIS build's files from the origin,
+      # and the previous release's file noted before the roll still answers 200
+      # there. Only when this run rolled.
+      - name: Assert the app loads this release from the static origin
+        if: steps.gate.outputs.deploy == 'true' && steps.static.outputs.url != '' && vars.AWS_DEPLOY_NO_ROLL != 'true'
+        env:
+          STATIC_URL: ${{ steps.static.outputs.url }}
+          PREVIOUS: ${{ steps.previous.outputs.previous }}
+        run: |
+          pnpm --silent deploy:static verify-release --url "$STATIC_URL" \
+            --dir "$RUNNER_TEMP/release-static" --previous "$PREVIOUS"
 
       # ⚠️ "CONFIGURED" IS NOT "RAN" (MOTIR-2403: `outputFileTracingExcludes` is a
       # `next.config` key Turbopack never read, and it read as solved for months).

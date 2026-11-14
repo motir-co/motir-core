@@ -123,20 +123,25 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
   });
 
   it('assumes the push role, then pushes, then assumes the deploy role in a separate step', () => {
-    const roles = steps.filter((s) => s.uses?.startsWith('aws-actions/configure-aws-credentials'));
-    expect(roles.map((s) => s.with?.['role-to-assume'])).toEqual([
+    const roles = steps
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => s.uses?.startsWith('aws-actions/configure-aws-credentials'));
+    // MOTIR-11241: the deploy role is assumed once BEFORE the push role too, only
+    // to read the static-asset origin the build bakes in as `assetPrefix`.
+    expect(roles.map(({ s }) => s.with?.['role-to-assume'])).toEqual([
+      '${{ vars.AWS_DEPLOY_ROLE_ARN }}',
       '${{ vars.AWS_ECR_PUSH_ROLE_ARN }}',
       '${{ vars.AWS_DEPLOY_ROLE_ARN }}',
       '${{ vars.AWS_DEPLOY_ROLE_ARN }}',
     ]);
-    const push = stepIndex((s) => s.with?.['role-to-assume'] === roles[0]!.with!['role-to-assume']);
+    const [originRole, push, deployRole] = roles.map(({ i }) => i);
+    const origin = stepIndex((s) => s.id === 'static');
     const build = stepIndex((s) => !!s.uses?.startsWith('docker/build-push-action'));
-    const deployRole = stepIndex(
-      (s) => s.with?.['role-to-assume'] === roles[1]!.with!['role-to-assume'],
-    );
     const deploy = stepIndex((s) => !!s.run?.includes('deploy:aws'));
+    expect(originRole).toBeLessThan(origin);
+    expect(origin).toBeLessThan(push!);
     expect(push).toBeLessThan(build);
-    expect(build).toBeLessThan(deployRole);
+    expect(build).toBeLessThan(deployRole!);
     expect(deployRole).toBeLessThan(deploy);
   });
 
@@ -167,7 +172,9 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     const gate = stepIndex((s) => s.id === 'gate');
     const deploy = stepIndex((s) => !!s.run?.includes('deploy:aws'));
     const deployRole = stepIndex(
-      (s) => s.with?.['role-to-assume'] === '${{ vars.AWS_DEPLOY_ROLE_ARN }}',
+      (s) =>
+        s.with?.['role-to-assume'] === '${{ vars.AWS_DEPLOY_ROLE_ARN }}' &&
+        stepIndex((t) => !!t.uses?.startsWith('docker/build-push-action')) < steps.indexOf(s),
     );
     expect(gate).toBeGreaterThan(deployRole);
     expect(deploy).toBe(gate + 2);
@@ -202,5 +209,79 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
 
   it('writes the digest and the result line to the job summary', () => {
     expect(code.match(/GITHUB_STEP_SUMMARY/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// MOTIR-11241: a tab left open across a deploy keeps working. The build bakes in
+// the static-asset origin, the release's `_next/static` is uploaded and checked
+// before any task rolls, and the live app is checked after the roll.
+describe('the static-asset origin in the AWS deploy (MOTIR-11241)', () => {
+  const at = (id: string) => stepIndex((s) => s.id === id);
+  const named = (name: string) => stepIndex((s) => s.name === name);
+  const upload = named("Upload this release's static files to the origin");
+  const verifyUpload = named("Check the origin serves this release's files");
+  const verifyRelease = named('Assert the app loads this release from the static origin');
+  const build = stepIndex((s) => !!s.uses?.startsWith('docker/build-push-action'));
+  const deploy = stepIndex((s) => !!s.run?.includes('deploy:aws'));
+
+  it('reads the origin before the build and bakes it in as a build argument', () => {
+    expect(steps[at('static')]!.run).toBe('pnpm --silent deploy:static target');
+    expect(at('static')).toBeLessThan(build);
+    const args = steps[build]!.with!['build-args']!;
+    expect(args).toContain('MOTIR_ASSET_PREFIX=${{ steps.static.outputs.url }}');
+    // The commit SHA is both the Sentry release and Next's deploymentId.
+    expect(args).toContain('MOTIR_RELEASE=${{ github.sha }}');
+    expect(String(steps[build]!.with!['load'])).toBe('true');
+  });
+
+  it('uploads and checks the files after the digest and before the gate and the roll', () => {
+    const digest = at('digest');
+    expect(digest).toBeLessThan(upload);
+    expect(upload).toBeLessThan(verifyUpload);
+    expect(verifyUpload).toBeLessThan(at('previous'));
+    expect(at('previous')).toBeLessThan(at('gate'));
+    expect(at('gate')).toBeLessThan(deploy);
+    for (const i of [upload, verifyUpload, at('previous')]) {
+      expect(steps[i]!.if).toBe("steps.static.outputs.url != ''");
+    }
+  });
+
+  it('copies the files out of the image, immutable, never deleting an earlier release', () => {
+    const run = steps[upload]!.run!;
+    expect(run).toContain('docker cp "$cid:/app/.next/static"');
+    expect(run).toContain('s3://$BUCKET/_next/static/');
+    expect(run).toContain('--cache-control "public, max-age=31536000, immutable"');
+    expect(run).toContain('set -euo pipefail');
+    expect(code).not.toMatch(/--delete\b/);
+    expect(steps[upload]!.env?.['BUCKET']).toBe('${{ steps.static.outputs.bucket }}');
+  });
+
+  it('uploads again on a re-run whose image was already pushed, pulling it by digest', () => {
+    const run = steps[upload]!.run!;
+    expect(steps[upload]!.env?.['DIGEST']).toBe('${{ steps.digest.outputs.digest }}');
+    expect(run).toContain('docker image inspect "$image"');
+    expect(run).toContain('image="$REPOSITORY@$DIGEST"');
+    expect(run).toContain('docker pull');
+  });
+
+  it('checks the origin serves the upload before the roll', () => {
+    expect(steps[verifyUpload]!.run).toBe(
+      'pnpm --silent deploy:static verify-upload --url "$STATIC_URL" --dir "$RUNNER_TEMP/release-static"',
+    );
+    expect(steps[at('previous')]!.run).toBe(
+      'pnpm --silent deploy:static capture-previous --url "$STATIC_URL"',
+    );
+  });
+
+  it('goes red after the roll unless the app loads this build and the previous file survives', () => {
+    const step = steps[verifyRelease]!;
+    expect(verifyRelease).toBeGreaterThan(deploy);
+    expect(step.if).toBe(
+      "steps.gate.outputs.deploy == 'true' && steps.static.outputs.url != '' && vars.AWS_DEPLOY_NO_ROLL != 'true'",
+    );
+    expect(step.env?.['PREVIOUS']).toBe('${{ steps.previous.outputs.previous }}');
+    expect(step.run).toContain('deploy:static verify-release');
+    expect(step.run).toContain('--previous "$PREVIOUS"');
+    expect(step['continue-on-error' as keyof typeof step]).toBeUndefined();
   });
 });
