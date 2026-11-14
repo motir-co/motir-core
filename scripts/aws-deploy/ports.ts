@@ -98,8 +98,12 @@ export interface DeployAws {
   putParameter(name: string, value: string): Promise<void>;
   /** A parameter's current string; `not_granted` when the role is refused it. */
   readParameter(name: string): Promise<ParameterRead>;
-  /** Whether the repository holds an image with this digest. */
-  imageExists(repositoryName: string, digest: string): Promise<boolean>;
+  /**
+   * The tags ECR holds for the image with this digest — `[]` for an image with
+   * none (an index's platform child, MOTIR-11274) — or `null` when the
+   * repository holds no image with this digest.
+   */
+  imageTags(repositoryName: string, digest: string): Promise<string[] | null>;
   describeTaskDefinition(familyOrArn: string): Promise<TaskDefinition>;
   /** Registers a revision and returns its ARN. */
   registerTaskDefinition(input: RegisterTaskDefinitionInput): Promise<string>;
@@ -127,7 +131,7 @@ export const ACTION_OF: Record<Exclude<keyof DeployAws, 'sleep' | 'now'>, Grante
   getParameter: 'ssm:GetParameter',
   putParameter: 'ssm:PutParameter',
   readParameter: 'ssm:GetParameter',
-  imageExists: 'ecr:DescribeImages',
+  imageTags: 'ecr:DescribeImages',
   describeTaskDefinition: 'ecs:DescribeTaskDefinition',
   registerTaskDefinition: 'ecs:RegisterTaskDefinition',
   runTask: 'ecs:RunTask',
@@ -175,14 +179,15 @@ export function awsSdkPorts(region: string): DeployAws {
         throw err;
       }
     },
-    async imageExists(repositoryName, digest) {
+    async imageTags(repositoryName, digest) {
       try {
         const out = await ecr.send(
           new DescribeImagesCommand({ repositoryName, imageIds: [{ imageDigest: digest }] }),
         );
-        return (out.imageDetails ?? []).length > 0;
+        const image = out.imageDetails?.[0];
+        return image ? (image.imageTags ?? []) : null;
       } catch (err) {
-        if (err instanceof ImageNotFoundException) return false;
+        if (err instanceof ImageNotFoundException) return null;
         throw err;
       }
     },
