@@ -7,17 +7,18 @@ import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChan
 // MOTIR-7650; `docs/decisions/conversation-turn-intent.md` AMENDMENT 3). The rail
 // draws the SERVER's thread, so these cases pin what reaches state:
 //
-//   * the control writes the confirm onto the thread and closes nothing;
-//   * Keep planning lands the marker the server returns, and nothing else moves;
+//   * the control's dialog confirms with `confirmRestart` (MOTIR-11261): the restart
+//     and nothing written first, resolving whether it happened, with no rail error;
+//   * a LEGACY confirm turn's Keep planning lands the marker the server returns,
+//     and nothing else moves;
 //   * Confirm SWAPS onto the new session in place, carrying nothing across, and
 //     tells the host the new id;
 //   * the address that then names the new session opens nothing;
 //   * a refused answer is the recoverable session error.
 
-const { open, readSession, requestConfirm, answer } = vi.hoisted(() => ({
+const { open, readSession, answer } = vi.hoisted(() => ({
   open: vi.fn(),
   readSession: vi.fn(),
-  requestConfirm: vi.fn(),
   answer: vi.fn(),
 }));
 
@@ -27,7 +28,6 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
     earlier: null,
   }),
   getPlanChangeSession: readSession,
-  requestRestartConfirm: requestConfirm,
   answerRestart: answer,
   startCopiedSession: vi.fn(),
   resumeContextualSession: vi.fn(async () => ({ session: null, planId: null })),
@@ -95,7 +95,6 @@ const FRESH = session('s2', []);
 beforeEach(() => {
   open.mockResolvedValue(OPEN);
   readSession.mockResolvedValue(OPEN);
-  requestConfirm.mockResolvedValue(WITH_CONFIRM);
 });
 
 afterEach(() => {
@@ -116,45 +115,69 @@ async function mounted(opts: { sessionId?: string; onRestarted?: (id: string) =>
   return hook;
 }
 
-describe('the control', () => {
-  it('writes the confirm onto the thread and closes nothing', async () => {
-    const { result } = await mounted();
+describe('the dialog confirm (MOTIR-11261)', () => {
+  it('restarts with nothing written first, swaps, and resolves true', async () => {
+    answer.mockResolvedValue({ outcome: 'restarted', endedSessionId: 's1', session: FRESH });
+    const onRestarted = vi.fn();
+    const { result } = await mounted({ onRestarted });
 
+    let ok: boolean | undefined;
     await act(async () => {
-      await result.current.requestRestart();
+      ok = await result.current.confirmRestart();
     });
 
-    expect(requestConfirm).toHaveBeenCalledWith('s1');
-    expect(result.current.state.session?.turns.at(-1)).toMatchObject({ confirm: 'new_session' });
-    expect(result.current.state.session?.id).toBe('s1');
+    expect(ok).toBe(true);
+    expect(answer).toHaveBeenCalledTimes(1);
+    expect(answer).toHaveBeenCalledWith('s1', 'confirm');
+    expect(result.current.state).toMatchObject({
+      session: FRESH,
+      restartedFrom: 's1',
+      restarting: false,
+      errorCode: null,
+    });
+    expect(onRestarted).toHaveBeenCalledWith('s2');
+  });
+
+  it('a refused restart resolves false, keeps the session, and records no rail error', async () => {
+    answer.mockRejectedValue(new PlanEditsClientError(409, 'PLAN_SESSION_ENDED'));
+    const { result } = await mounted();
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.confirmRestart();
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.state.session).toEqual(OPEN);
+    expect(result.current.state.errorCode).toBeNull();
     expect(result.current.state.restarting).toBe(false);
-    expect(answer).not.toHaveBeenCalled();
+  });
+
+  it('an aborted restart resolves false', async () => {
+    answer.mockRejectedValue(new DOMException('aborted', 'AbortError'));
+    const { result } = await mounted();
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.confirmRestart();
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.state.errorCode).toBeNull();
   });
 
   it('does nothing on an ended session', async () => {
     open.mockResolvedValue({ ...OPEN, endedAt: '2026-10-06T11:00:00.000Z', endReason: 'idle' });
     const { result } = await mounted();
 
+    let ok: boolean | undefined;
     await act(async () => {
-      await result.current.requestRestart();
+      ok = await result.current.confirmRestart();
       await result.current.answerRestartConfirm('confirm');
     });
 
-    expect(requestConfirm).not.toHaveBeenCalled();
+    expect(ok).toBe(false);
     expect(answer).not.toHaveBeenCalled();
-  });
-
-  it('a refused raise is the recoverable session error, and the thread is untouched', async () => {
-    requestConfirm.mockRejectedValue(new PlanEditsClientError(404, 'PLAN_SESSION_NOT_FOUND'));
-    const { result } = await mounted();
-
-    await act(async () => {
-      await result.current.requestRestart();
-    });
-
-    expect(result.current.state.errorCode).toBe('SESSION_UNAVAILABLE');
-    expect(result.current.state.session).toEqual(OPEN);
-    expect(result.current.state.restarting).toBe(false);
   });
 });
 
@@ -250,41 +273,41 @@ describe('the edges', () => {
     const { result } = await mounted();
 
     await act(async () => {
-      await result.current.requestRestart();
+      await result.current.confirmRestart();
       await result.current.answerRestartConfirm('keep');
     });
 
-    expect(requestConfirm).not.toHaveBeenCalled();
     expect(answer).not.toHaveBeenCalled();
   });
 
   it('a second press while one is in flight sends nothing', async () => {
-    let release: (s: PlanChangeSessionDto) => void = () => {};
-    requestConfirm.mockReturnValue(new Promise((r) => (release = r)));
+    let release: (r: unknown) => void = () => {};
+    answer.mockReturnValue(new Promise((r) => (release = r)));
     const { result } = await mounted();
 
+    let second: boolean | undefined;
     await act(async () => {
-      const first = result.current.requestRestart();
-      await result.current.requestRestart();
+      const first = result.current.confirmRestart();
+      second = await result.current.confirmRestart();
       await result.current.answerRestartConfirm('confirm');
-      release(WITH_CONFIRM);
+      await result.current.answerRestartConfirm('keep');
+      release({ outcome: 'restarted', endedSessionId: 's1', session: FRESH });
       await first;
     });
 
-    expect(requestConfirm).toHaveBeenCalledTimes(1);
-    expect(answer).not.toHaveBeenCalled();
+    expect(second).toBe(false);
+    expect(answer).toHaveBeenCalledTimes(1);
   });
 
   it('an aborted call is not a session error', async () => {
     const aborted = new DOMException('aborted', 'AbortError');
-    requestConfirm.mockRejectedValue(aborted);
     answer.mockRejectedValue(aborted);
     open.mockResolvedValue(WITH_CONFIRM);
     const { result } = await mounted();
 
     await act(async () => {
-      await result.current.requestRestart();
       await result.current.answerRestartConfirm('confirm');
+      await result.current.answerRestartConfirm('keep');
     });
 
     expect(result.current.state.errorCode).toBeNull();
@@ -308,7 +331,6 @@ describe('the edges', () => {
     let release: (s: PlanChangeSessionDto) => void = () => {};
     open.mockResolvedValue(WITH_CONFIRM);
     answer.mockReturnValue(new Promise((r) => (release = r)));
-    requestConfirm.mockReturnValue(new Promise(() => {}));
     const onRestarted = vi.fn();
     const hook = await mounted({ onRestarted });
 
@@ -345,20 +367,24 @@ describe('nothing is written once the overlay has gone (unmount mid-call)', () =
     return onRestarted;
   }
 
-  it('the raise, landing or refused', async () => {
+  it('the dialog confirm, landing or refused, tells the host nothing', async () => {
     for (const ok of [true, false]) {
       let done!: () => void;
-      requestConfirm.mockReturnValueOnce(
+      answer.mockReturnValueOnce(
         new Promise((res, rej) => {
-          done = () => (ok ? res(WITH_CONFIRM) : rej(new Error('network')));
+          done = () =>
+            ok ? res({ session: FRESH, endedSessionId: 's1' }) : rej(new Error('network'));
         }),
       );
-      await unmountDuring(
-        (h) => h.result.current.requestRestart(),
+      const onRestarted = await unmountDuring(
+        async (h) => {
+          await h.result.current.confirmRestart();
+        },
         () => done(),
       );
-      expect(requestConfirm).toHaveBeenCalled();
-      requestConfirm.mockClear();
+      expect(answer).toHaveBeenCalledWith('s1', 'confirm');
+      expect(onRestarted).not.toHaveBeenCalled();
+      answer.mockClear();
     }
   });
 

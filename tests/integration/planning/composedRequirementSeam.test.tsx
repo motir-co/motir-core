@@ -96,7 +96,7 @@ const { conversation } = vi.hoisted(() => ({
     approve: vi.fn(),
     discard: vi.fn(),
     dismissError: vi.fn(),
-    requestRestart: vi.fn(),
+    confirmRestart: vi.fn(),
     answerRestartConfirm: vi.fn(),
     confirmPlanOffer: vi.fn(),
     declinePlanOffer: vi.fn(),

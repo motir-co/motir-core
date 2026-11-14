@@ -36,7 +36,6 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   }),
   getPlanChangeSession: readSession,
   answerPlanOffer: answerOffer,
-  requestRestartConfirm: vi.fn(),
   answerRestart: vi.fn(),
   startCopiedSession: vi.fn(),
   resumeContextualSession: vi.fn(async () => ({ session: null, planId: null })),

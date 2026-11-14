@@ -97,7 +97,7 @@ const INTENT_ALLOWED: Record<string, string> = {
   'lib/planning/askResult.ts': 'readAskOutcome’s stale-result arms, which settle silent',
   'lib/test-ai-jobs-mock.ts': 'the acceptance mock’s result vocabulary',
   'lib/services/planChangeSessionsService.ts':
-    'the stored debug landing claim and the person-pressed restart confirm',
+    'the stored debug landing claim and the Keep planning read of a stored confirm',
   'lib/services/debugLandingService.ts': 'lands a stored debug turn',
   'components/planning/PlanChangeRail.tsx': 'renders a stored new-session confirm',
   'tests/components/debug-turn-rail.test.tsx': 'seeds stored debug turns and a confirm',
@@ -112,6 +112,8 @@ const INTENT_ALLOWED: Record<string, string> = {
   'tests/planning/askResult.test.ts': 'readAskOutcome’s stale-result arms',
   'tests/integration/planning/planSomethingNewGate.test.ts': 'reads the restart confirm',
   'tests/triage/triageBugConversationAnchor.test.ts': 'settles a stale debug result',
+  'tests/helpers/legacyRestartConfirm.ts':
+    'seeds a stored confirm turn from before the dialog (MOTIR-11261)',
 };
 
 function sourceFiles(dir: string): string[] {

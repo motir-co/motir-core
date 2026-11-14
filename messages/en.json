@@ -9284,7 +9284,17 @@
       "earlier": "Your earlier session is closed",
       "earlierOpen": "Open it",
       "disabledStreaming": "Available when this run finishes",
-      "swapped": "Your earlier session is closed. A new session is open."
+      "swapped": "Your earlier session is closed. A new session is open.",
+      "dialog": {
+        "title": "Start something new?",
+        "body": "This closes the current planning session and gives its work items back.",
+        "writing": "Motir AI is writing a plan in this session. It stops, and what it has written so far is discarded.",
+        "waiting": "The plan waiting for your review stays. Open the earlier session to keep working on it.",
+        "confirm": "Start something new",
+        "keep": "Keep planning",
+        "error": "Something new could not be started. Nothing has changed: try again, or keep planning.",
+        "retry": "Try again"
+      }
     },
     "waiting": {
       "failedHead": "This attempt stopped",

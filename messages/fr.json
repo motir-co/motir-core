@@ -9287,7 +9287,17 @@
       "earlier": "Votre session précédente est fermée",
       "earlierOpen": "L'ouvrir",
       "disabledStreaming": "Disponible à la fin de cette exécution",
-      "swapped": "Votre session précédente est fermée. Une nouvelle session est ouverte."
+      "swapped": "Votre session précédente est fermée. Une nouvelle session est ouverte.",
+      "dialog": {
+        "title": "Démarrer autre chose ?",
+        "body": "Cela ferme la session de planification en cours et libère ses éléments de travail.",
+        "writing": "Motir AI rédige un plan dans cette session. La rédaction s'arrête et ce qui a déjà été écrit est abandonné.",
+        "waiting": "Le plan qui attend votre relecture est conservé. Ouvrez la session précédente pour continuer à y travailler.",
+        "confirm": "Démarrer autre chose",
+        "keep": "Continuer la planification",
+        "error": "Impossible de démarrer autre chose. Rien n'a changé : réessayez, ou continuez la planification.",
+        "retry": "Réessayer"
+      }
     },
     "waiting": {
       "failedHead": "Cette tentative s’est arrêtée",
