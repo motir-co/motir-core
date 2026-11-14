@@ -59,6 +59,18 @@ describe('parseJobWalkStop', () => {
     expect(parseJobWalkStop({ ...WALK_STOP, notPlannedYet: lines })?.notPlannedYet).toEqual(lines);
   });
 
+  // MOTIR-11256 — a walk that stopped in the reconcile, the final check or its fix
+  // records that phase, so the stop phrase can name it.
+  it.each(['amend', 'check', 'repair'] as const)('reads a walkStop in the %s phase', (phase) => {
+    expect(parseJobWalkStop({ ...WALK_STOP, phase, target: null })).toMatchObject({
+      phase,
+      target: null,
+    });
+    expect(
+      walkPositionOf({ event: 'walk_position', data: { phase, target: null, depth: 0 } }),
+    ).toEqual({ phase, target: null, depth: 0 });
+  });
+
   it('reads a walkStop without notPlannedYet as before', () => {
     const parsed = parseJobWalkStop(WALK_STOP);
     expect(parsed).not.toBeNull();

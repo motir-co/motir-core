@@ -352,7 +352,12 @@
       "detailsResumingHead": "Continuando de onde parou",
       "detailsResuming": "A máquina que escrevia este plano foi perdida. O Motir reiniciou o plano sozinho, e ele continua de onde parou — os itens já escritos são mantidos e não são escritos novamente.",
       "detailsResumedAt": "Retomado automaticamente às {time}",
-      "detailsResumedAtSecond": "Retomado automaticamente às {time} · segunda tentativa"
+      "detailsResumedAtSecond": "Retomado automaticamente às {time} · segunda tentativa",
+      "amendingChildrenOf": "Conciliando: {title}",
+      "amendingTopLevel": "Conciliando o nível superior do projeto",
+      "checkingPlan": "Fazendo a verificação final",
+      "checkingCard": "Verificando: {title}",
+      "repairing": "Corrigindo o que a verificação final encontrou"
     },
     "cue": {
       "drafting": "Redigindo",
@@ -8813,7 +8818,15 @@
         "authoringLine": "Escrevendo {title}",
         "resumed": "retomar",
         "resumedLine": "Perdeu sua máquina — o Motir o reiniciou e ele continua de onde parou",
-        "resumedLineSecond": "Perdeu sua máquina de novo — segunda tentativa automática, continuando de onde parou"
+        "resumedLineSecond": "Perdeu sua máquina de novo — segunda tentativa automática, continuando de onde parou",
+        "amending": "conciliar",
+        "checking": "verificar",
+        "repairing": "corrigir",
+        "amendingLine": "Conciliando os itens de {target}",
+        "amendingTopLine": "Conciliando os itens do nível superior",
+        "checkingLine": "Fazendo a verificação final",
+        "checkingCardLine": "Verificando {title}",
+        "repairingLine": "Corrigindo o que a verificação final encontrou"
       },
       "openerFollowUp": "Você acabou de escolher {label}. O Motir AI está planejando o que isso condiciona.",
       "composerPlaceholderGuide": "Conte ao Motir AI como foi a etapa…",
@@ -10674,7 +10687,11 @@
         "lay": "Posicionando {title}",
         "layTop": "Posicionando o nível superior do projeto",
         "author": "Escrevendo {title}",
-        "draft": "Rascunhando um novo item"
+        "draft": "Rascunhando um novo item",
+        "amend": "Conciliando os itens de {title}",
+        "amendTop": "Conciliando os itens do nível superior",
+        "check": "Fazendo a verificação final",
+        "repair": "Corrigindo o que a verificação final encontrou"
       },
       "reason": {
         "rate_limited": "o modelo atingiu o limite de requisições",
@@ -10942,7 +10959,7 @@
               "set": "Alterou o modelo de planejamento"
             },
             "planner_review_model": {
-              "set": "Alterou o modelo de revisão da simulação"
+              "set": "Modelo de revisão da verificação final alterado"
             },
             "planner_model_list": {
               "add": "Adicionou um modelo à lista de planejamento",
@@ -11747,24 +11764,24 @@
         "failed": "Não foi possível salvar a alteração. Nada foi alterado."
       },
       "review": {
-        "name": "Revisão da simulação",
+        "name": "Verificação final",
         "desc": "A verificação somente leitura de cada plano antes de ser exibido",
         "same": "Igual ao modelo de planejamento",
         "sameDesc": "Cada job de planejamento revisa com o modelo com que planeja",
         "defaultGroup": "Padrão",
-        "pickerAria": "Modelo de revisão da simulação",
+        "pickerAria": "Modelo da verificação final",
         "withdrawnBody": "As revisões usam o modelo de planejamento de cada job até você escolher outro.",
         "withdrawnBodyReadOnly": "As revisões usam o modelo de planejamento de cada job até um superadmin escolher outro.",
-        "confirmTitle": "Alterar o modelo de revisão da simulação?",
-        "confirmBody": "{from} → {to}. A alteração vale para a simulação do próximo job de planejamento de todas as organizações. Os jobs já em execução terminam no modelo com que começaram.",
+        "confirmTitle": "Alterar o modelo da verificação final?",
+        "confirmBody": "{from} → {to}. A alteração vale para a verificação final do próximo job de planejamento de todas as organizações. Os jobs já em execução terminam no modelo com que começaram.",
         "savedTitle": "Modelo de revisão alterado",
-        "savedBody": "As revisões da simulação usam {model} a partir do próximo job de planejamento.",
-        "unchanged": "A revisão da simulação já usa {model}."
+        "savedBody": "As verificações finais passam a usar {model} a partir do próximo job de planejamento.",
+        "unchanged": "A verificação final já usa {model}."
       },
       "group": {
         "audiences": "Planejamento · por público",
         "functions": "Guide · Debug · Ask · padrões da plataforma",
-        "review": "Revisão da simulação · somente plataforma"
+        "review": "Verificação final · somente plataforma"
       },
       "functions": {
         "guide": {
@@ -11995,7 +12012,7 @@
     "plannerFindings": {
       "breadcrumb": "Operações · Achados do planejador",
       "title": "Achados do planejador",
-      "subtitle": "O que a execução de teste do planejador hospedado e a skill check plan encontraram de errado nos planos, mantido depois que esses planos são fechados ou excluídos. Veja quais defeitos se repetem e depois defina de quem foi a culpa, transforme um achado em lição, registre o bug que você abriu ou dispense-o.",
+      "subtitle": "O que a verificação final do planejador hospedado e a skill check plan encontraram de errado nos planos, mantido depois que esses planos são fechados ou excluídos. Veja quais defeitos se repetem e depois defina de quem foi a culpa, transforme um achado em lição, registre o bug que você abriu ou dispense-o.",
       "infoLead": "Os achados citam planos de clientes.",
       "infoBody": "Somente administradores da plataforma podem ver esta página, e cada alteração feita aqui é gravada no log de auditoria.",
       "view": {
@@ -12095,7 +12112,7 @@
       },
       "empty": {
         "title": "Nenhum achado ainda",
-        "body": "Os achados aparecem aqui depois que a execução de teste do planejador hospedado revisa um plano, ou depois que alguém executa a skill check plan. Nenhum foi mantido ainda."
+        "body": "Os achados aparecem aqui depois que a verificação final do planejador hospedado revisa um plano, ou depois que alguém executa a skill check plan. Nenhum foi mantido ainda."
       },
       "unavailable": {
         "title": "Não foi possível carregar os achados",

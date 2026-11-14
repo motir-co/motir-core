@@ -173,6 +173,12 @@ export type PlanChangeProgress =
   /** A level being laid, and one card being written. */
   | { kind: 'laying'; target: string | null }
   | { kind: 'authoring'; title: string | null }
+  /** A laid level's amend reconciling its cards, the plan's final check, and the
+   *  fix after it (MOTIR-11256) — none of them lays a level. `target` is the
+   *  level's parent, as the `lay` frame names it; `null` at the top level. */
+  | { kind: 'amending'; target: string | null }
+  | { kind: 'checking' }
+  | { kind: 'repairing' }
   /** The planner's OWN prose line for the act it just took. The producer emits
    *  nothing when the text is blank, so this is never an empty row. */
   | { kind: 'note'; text: string }
@@ -791,6 +797,14 @@ export function narrateFrame(event: string, data: unknown): PlanChangeProgress |
       const title = d['title'];
       return { kind: 'authoring', title: typeof title === 'string' ? title : null };
     }
+    case 'amending': {
+      const target = d['target'];
+      return { kind: 'amending', target: typeof target === 'string' ? target : null };
+    }
+    case 'checking':
+      return { kind: 'checking' };
+    case 'repairing':
+      return { kind: 'repairing' };
     case 'note': {
       const text = d['text'];
       // Defensive on OUR side too: the producer already refuses to emit a blank

@@ -5,9 +5,11 @@
     "paths": ["src"]
   },
   "kinds": [
+    "amend",
     "assistant",
     "audit",
     "author",
+    "check",
     "clause_list",
     "code_graph",
     "comparables",
@@ -55,6 +57,7 @@
     "read",
     "reauthor_target",
     "registration",
+    "repair",
     "resume_seeded",
     "retrieval",
     "retrieval_ready",

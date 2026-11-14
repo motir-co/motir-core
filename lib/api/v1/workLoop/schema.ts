@@ -1351,6 +1351,10 @@ export const planJobCostSchema = z.object({
     author: z.number().nullable(),
     entry_author: z.number().nullable(),
     tool: z.number().nullable(),
+    // A level's amend, the plan's final check and the fix after it (MOTIR-11256).
+    amend: z.number().nullable(),
+    check: z.number().nullable(),
+    repair: z.number().nullable(),
   }),
 });
 
@@ -1369,6 +1373,9 @@ export function presentPlanJobCost(cost: PlanJobCostDto): V1PlanJobCost {
       author: k.author,
       entry_author: k.entry_author,
       tool: k.tool,
+      amend: k.amend,
+      check: k.check,
+      repair: k.repair,
     },
   };
 }

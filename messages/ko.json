@@ -352,7 +352,12 @@
       "detailsResumingHead": "중단된 지점부터 이어서 작성",
       "detailsResuming": "이 계획을 작성하던 머신이 손실되었습니다. Motir가 계획을 자동으로 다시 시작했으며, 중단된 지점부터 이어서 진행합니다 — 이미 작성된 항목은 유지되며 다시 작성되지 않습니다.",
       "detailsResumedAt": "{time}에 자동으로 재개됨",
-      "detailsResumedAtSecond": "{time}에 자동으로 재개됨 · 두 번째 시도"
+      "detailsResumedAtSecond": "{time}에 자동으로 재개됨 · 두 번째 시도",
+      "amendingChildrenOf": "조정 중: {title}",
+      "amendingTopLevel": "프로젝트 최상위 수준을 조정하는 중",
+      "checkingPlan": "최종 검사를 실행하는 중",
+      "checkingCard": "검사 중: {title}",
+      "repairing": "최종 검사에서 찾은 문제를 수정하는 중"
     },
     "cue": {
       "drafting": "초안 작성 중",
@@ -8807,7 +8812,15 @@
         "authoringLine": "{title} 작성 중",
         "resumed": "재개",
         "resumedLine": "머신 손실 — Motir가 다시 시작했으며 중단된 지점부터 이어서 진행합니다",
-        "resumedLineSecond": "머신이 다시 손실됨 — 두 번째 자동 시도, 중단된 지점부터 이어서 진행합니다"
+        "resumedLineSecond": "머신이 다시 손실됨 — 두 번째 자동 시도, 중단된 지점부터 이어서 진행합니다",
+        "amending": "조정",
+        "checking": "검사",
+        "repairing": "수정",
+        "amendingLine": "{target} 아래 항목을 조정하는 중",
+        "amendingTopLine": "최상위 수준의 항목을 조정하는 중",
+        "checkingLine": "최종 검사를 실행하는 중",
+        "checkingCardLine": "{title} 검사 중",
+        "repairingLine": "최종 검사에서 찾은 문제를 수정하는 중"
       },
       "openerFollowUp": "방금 {label}을(를) 선택했습니다. Motir AI가 이 선택에 달린 작업을 계획하고 있습니다.",
       "composerPlaceholderGuide": "단계가 어떻게 진행되었는지 Motir AI에게 알려 주세요…",
@@ -10668,7 +10681,11 @@
         "lay": "{title} 배치 중",
         "layTop": "프로젝트 최상위 배치 중",
         "author": "{title} 작성 중",
-        "draft": "새 항목 초안 작성 중"
+        "draft": "새 항목 초안 작성 중",
+        "amend": "{title} 아래 항목 조정 중",
+        "amendTop": "최상위 항목 조정 중",
+        "check": "최종 검사 실행 중",
+        "repair": "최종 검사에서 찾은 문제 수정 중"
       },
       "reason": {
         "rate_limited": "모델의 요청 한도를 초과했습니다",
@@ -10936,7 +10953,7 @@
               "set": "계획 모델 변경함"
             },
             "planner_review_model": {
-              "set": "시험 실행 검토 모델 변경함"
+              "set": "최종 검사 검토 모델 변경"
             },
             "planner_model_list": {
               "add": "계획 목록에 모델 추가함",
@@ -11741,24 +11758,24 @@
         "failed": "변경 사항을 저장할 수 없습니다. 변경된 것은 없습니다."
       },
       "review": {
-        "name": "시험 실행 검토",
+        "name": "최종 검사 검토",
         "desc": "표시하기 전에 모든 계획을 읽기 전용으로 확인하는 검사",
         "same": "계획 모델과 동일",
         "sameDesc": "각 계획 작업은 계획에 쓰는 모델로 검토합니다",
         "defaultGroup": "기본값",
-        "pickerAria": "시험 실행 검토 모델",
+        "pickerAria": "최종 검사 검토 모델",
         "withdrawnBody": "다른 모델을 선택할 때까지 검토는 각 작업의 계획 모델로 실행됩니다.",
         "withdrawnBodyReadOnly": "슈퍼 관리자가 다른 모델을 선택할 때까지 검토는 각 작업의 계획 모델로 실행됩니다.",
-        "confirmTitle": "시험 실행 검토 모델을 변경하시겠습니까?",
-        "confirmBody": "{from} → {to}. 변경 사항은 모든 조직의 다음 계획 작업의 시험 실행부터 적용됩니다. 이미 실행 중인 작업은 시작할 때의 모델로 끝까지 진행됩니다.",
+        "confirmTitle": "최종 검사 검토 모델을 변경할까요?",
+        "confirmBody": "{from} → {to}. 변경 사항은 모든 조직의 다음 계획 작업의 최종 검사부터 적용됩니다. 이미 실행 중인 작업은 시작할 때의 모델로 끝까지 진행됩니다.",
         "savedTitle": "검토 모델이 변경되었습니다",
-        "savedBody": "다음 계획 작업부터 시험 실행 검토는 {model}(으)로 실행됩니다.",
-        "unchanged": "시험 실행 검토는 이미 {model}(으)로 실행되고 있습니다."
+        "savedBody": "다음 계획 작업부터 최종 검사 검토가 {model}에서 실행됩니다.",
+        "unchanged": "최종 검사 검토는 이미 {model}에서 실행되고 있습니다."
       },
       "group": {
         "audiences": "계획 · 대상별",
         "functions": "Guide · Debug · Ask · 플랫폼 기본값",
-        "review": "시험 실행 검토 · 플랫폼 전용"
+        "review": "최종 검사 검토 · 플랫폼 전용"
       },
       "functions": {
         "guide": {
@@ -11989,7 +12006,7 @@
     "plannerFindings": {
       "breadcrumb": "운영 · 계획 도구 발견 사항",
       "title": "계획 도구 발견 사항",
-      "subtitle": "호스팅된 계획 도구의 시험 실행과 check plan 스킬이 계획에서 찾아낸 잘못된 점으로, 해당 계획이 닫히거나 삭제된 뒤에도 보관됩니다. 어떤 결함이 반복되는지 확인한 다음 각각 누구의 잘못인지 지정하거나, 교훈으로 승격하거나, 등록한 버그를 기록하거나, 무시하십시오.",
+      "subtitle": "호스팅된 계획 도구의 최종 검사과 check plan 스킬이 계획에서 찾아낸 잘못된 점으로, 해당 계획이 닫히거나 삭제된 뒤에도 보관됩니다. 어떤 결함이 반복되는지 확인한 다음 각각 누구의 잘못인지 지정하거나, 교훈으로 승격하거나, 등록한 버그를 기록하거나, 무시하십시오.",
       "infoLead": "발견 사항에는 고객의 계획이 인용됩니다.",
       "infoBody": "이 페이지는 플랫폼 관리자만 볼 수 있으며, 여기서 하는 모든 변경은 감사 로그에 기록됩니다.",
       "view": {
@@ -12089,7 +12106,7 @@
       },
       "empty": {
         "title": "아직 발견 사항이 없습니다",
-        "body": "호스팅된 계획 도구의 시험 실행이 계획을 검토하거나 누군가 check plan 스킬을 실행하면 여기에 발견 사항이 표시됩니다. 아직 보관된 항목이 없습니다."
+        "body": "호스팅된 계획 도구의 최종 검사이 계획을 검토하거나 누군가 check plan 스킬을 실행하면 여기에 발견 사항이 표시됩니다. 아직 보관된 항목이 없습니다."
       },
       "unavailable": {
         "title": "발견 사항을 불러올 수 없습니다",

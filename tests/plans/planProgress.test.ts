@@ -77,6 +77,11 @@ describe('the threshold and the copy keys are the design’s', () => {
       layingChildrenOf: 'planReview.progress.layingChildrenOf',
       authoring: 'planReview.progress.authoring',
       draftingNew: 'planReview.progress.draftingNew',
+      amendingTopLevel: 'planReview.progress.amendingTopLevel',
+      amendingChildrenOf: 'planReview.progress.amendingChildrenOf',
+      checkingPlan: 'planReview.progress.checkingPlan',
+      checkingCard: 'planReview.progress.checkingCard',
+      repairing: 'planReview.progress.repairing',
     });
   });
 });
@@ -236,6 +241,31 @@ describe('buildPlanProgressSnapshot — the phrase table', () => {
       ['layingChildrenOf', 'Committed parent', 'wi1'],
       ['draftingNew', null, null],
       ['authoring', 'Proposed story', 'add1'],
+    ]);
+  });
+
+  // MOTIR-11256 — the reconcile, the final check and its fix read as themselves.
+  it('yields the amend, check and repair phrases, untargeted and on a card', () => {
+    const s = build({
+      addRows: adds,
+      committedTitles,
+      steps: [
+        step({ sessionKey: '1', kind: 'amend', targetRef: null, startedAt: at(1) }),
+        step({ sessionKey: '2', kind: 'amend', targetRef: 'wi1', startedAt: at(2) }),
+        step({ sessionKey: '3', kind: 'check', targetRef: null, startedAt: at(3) }),
+        step({ sessionKey: '4', kind: 'check', targetRef: 'planItem:add1', startedAt: at(4) }),
+        step({ sessionKey: '5', kind: 'repair', targetRef: null, startedAt: at(5) }),
+        step({ sessionKey: '6', kind: 'repair', targetRef: 'wi1', startedAt: at(6) }),
+        step({ sessionKey: '7', kind: 'check', targetRef: 'planItem:gone', startedAt: at(7) }),
+      ],
+    });
+    expect(s.steps.map((x) => [x.kind, x.phrase, x.targetTitle, x.targetNodeId])).toEqual([
+      ['amend', 'amendingTopLevel', null, null],
+      ['amend', 'amendingChildrenOf', 'Committed parent', 'wi1'],
+      ['check', 'checkingPlan', null, null],
+      ['check', 'checkingCard', 'Proposed story', 'add1'],
+      ['repair', 'repairing', null, null],
+      ['repair', 'repairing', 'Committed parent', 'wi1'],
     ]);
   });
 

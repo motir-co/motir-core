@@ -9,13 +9,19 @@
 // answer — not found, an outage, motir-ai not configured — is the all-null
 // block, so it can never pass for a job that cost nothing.
 
-/** The five session kinds motir-ai prices a planning job's sessions by. */
+/** The session kinds motir-ai prices a planning job's sessions by. `amend`,
+ *  `check` and `repair` (MOTIR-11256) are a level's amend, the plan's final check
+ *  and the fix after it, which were priced under `lay` and `tool` before. A job
+ *  priced before that reads `0` for them only when motir-ai answers `0`. */
 export const PLAN_JOB_SESSION_KINDS = [
   'conversation',
   'lay',
   'author',
   'entry_author',
   'tool',
+  'amend',
+  'check',
+  'repair',
 ] as const;
 
 export type PlanJobSessionKind = (typeof PLAN_JOB_SESSION_KINDS)[number];
@@ -41,5 +47,8 @@ export const UNKNOWN_PLAN_JOB_COST: Readonly<PlanJobCostDto> = Object.freeze({
     author: null,
     entry_author: null,
     tool: null,
+    amend: null,
+    check: null,
+    repair: null,
   }),
 });

@@ -31,6 +31,25 @@ describe('stopPhraseKeyOf — where the walk stopped, in the progress line’s s
     expect(stopPhraseKeyOf({ stopPhase: null, stopTitle: null })).toBe('draft');
     expect(stopPhraseKeyOf({ stopPhase: 'author', stopTitle: null })).toBe('draft');
   });
+  // MOTIR-11256 — a walk stopped in the reconcile, the final check or its fix names
+  // that step, never the lay it used to be reported as.
+  it('amend → Reconciling the items under {title}, or at the top level', () => {
+    expect(stopPhraseKeyOf({ stopPhase: 'amend', stopTitle: 'Export' })).toBe('amend');
+    expect(stopPhraseKeyOf({ stopPhase: 'amend', stopTitle: null })).toBe('amendTop');
+  });
+  it('check and repair name the final check, with or without a card title', () => {
+    for (const stopTitle of ['Export', null]) {
+      expect(stopPhraseKeyOf({ stopPhase: 'check', stopTitle })).toBe('check');
+      expect(stopPhraseKeyOf({ stopPhase: 'repair', stopTitle })).toBe('repair');
+    }
+  });
+  it('every stop key has words in both locales, and none says "dry run"', () => {
+    for (const key of ['amend', 'amendTop', 'check', 'repair'] as const) {
+      expect(en.workbench.planningSession.stop[key]).toBeTruthy();
+      expect(zh.workbench.planningSession.stop[key]).toBeTruthy();
+      expect(en.workbench.planningSession.stop[key]).not.toMatch(/dry.?run/i);
+    }
+  });
 });
 
 describe('resumeReasonKeyOf — TOTAL over the eight stored codes', () => {

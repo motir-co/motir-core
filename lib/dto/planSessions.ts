@@ -1,5 +1,5 @@
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
-import type { PlanStatusDto } from '@/lib/dto/plans';
+import type { PlanStatusDto, PlanWalkPhaseDto } from '@/lib/dto/plans';
 
 // The Plans page's SESSION LIST (MOTIR-6025, `agent-authored-plans.md`
 // AMENDMENT 17 §8; built to `design/ai-planning/design-notes.md` Part XIX).
@@ -136,7 +136,7 @@ export interface PlanSessionRowDto {
   failure?: {
     failedAt: string;
     reason: string;
-    stopPhase: 'lay' | 'author' | null;
+    stopPhase: PlanWalkPhaseDto | null;
     stopTitle: string | null;
     /** The cards the halted walk left unplanned, one line each, worded by motir-ai for the
      *  person (`walkStop.notPlannedYet`, MOTIR-10209) — rendered verbatim and in order. Absent

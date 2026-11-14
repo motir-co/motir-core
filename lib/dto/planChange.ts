@@ -6,6 +6,7 @@ import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type { PlanOfferCannotStart, PlanOfferState } from '@/lib/planChange/planOffer';
+import type { PlanWalkPhaseDto } from '@/lib/dto/plans';
 
 // DTO types for the plan-change CONVERSATION (Story 7.30 · MOTIR-1728) — the
 // shape that crosses the API boundary. No Prisma row leaks: the
@@ -408,7 +409,7 @@ export interface PlanSessionFailureDto {
   resumable?: boolean;
   failedAt: string;
   reason: PlanSessionFailureReasonDto;
-  stopPhase: 'lay' | 'author' | null;
+  stopPhase: PlanWalkPhaseDto | null;
   stopRef: string | null;
   stopTitle: string | null;
   /** The cards the halted walk left unplanned, one line each, worded by motir-ai for the

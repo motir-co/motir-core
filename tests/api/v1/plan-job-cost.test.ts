@@ -36,19 +36,39 @@ import { truncateAuthTables } from '../../helpers/db';
 
 const BASE = 'http://localhost:3000/api/v1';
 
+const KINDS = {
+  conversation: 100,
+  lay: 300,
+  author: 300,
+  entry_author: 0,
+  tool: 0,
+  amend: 40,
+  check: 25,
+  repair: 0,
+};
+
 const COMPLETE: RawJobCost = {
   jobId: 'job_cost',
   ledgerComplete: true,
   totalCostMicroUsd: 700,
   credits: 10,
-  bySessionKind: { conversation: 100, lay: 300, author: 300, entry_author: 0, tool: 0 },
+  bySessionKind: KINDS,
 };
 
 const ALL_NULL = {
   ledgerComplete: null,
   totalCostMicroUsd: null,
   credits: null,
-  bySessionKind: { conversation: null, lay: null, author: null, entry_author: null, tool: null },
+  bySessionKind: {
+    conversation: null,
+    lay: null,
+    author: null,
+    entry_author: null,
+    tool: null,
+    amend: null,
+    check: null,
+    repair: null,
+  },
 };
 
 async function readPlan(caller: V1ProjectCaller, planId: string): Promise<Response> {
@@ -112,16 +132,20 @@ describe('a plan a motir-ai job produced', () => {
         ledgerComplete: true,
         totalCostMicroUsd: 700,
         credits: 10,
-        bySessionKind: { conversation: 100, lay: 300, author: 300, entry_author: 0, tool: 0 },
+        bySessionKind: KINDS,
       });
       expect(cost?.bySessionKind.entry_author).toBe(0);
+      // MOTIR-11256 — the amend, the final check and its fix are priced as their own kinds.
+      expect(cost?.bySessionKind.amend).toBe(40);
+      expect(cost?.bySessionKind.check).toBe(25);
+      expect(cost?.bySessionKind.repair).toBe(0);
     }
     // Asked with the plan's own job and project.
     expect(vi.mocked(getJobCost)).toHaveBeenCalledWith('job_cost', caller.fixture.projectId);
     const lines = text.split('\n');
     expect(lines[2]).toBe(
       'Job cost: total 700 µUSD · 10 credits · ledger complete · conversation 100 · lay 300 · ' +
-        'author 300 · entry_author 0 · tool 0',
+        'author 300 · entry_author 0 · tool 0 · amend 40 · check 25 · repair 0',
     );
   });
 
@@ -150,7 +174,8 @@ describe('a plan a motir-ai job produced', () => {
     }
     expect(text).toContain(
       'Job cost: total unknown · unknown · ledger complete · conversation 0 · lay unknown · ' +
-        'author 5 · entry_author unknown · tool unknown',
+        'author 5 · entry_author unknown · tool unknown · amend unknown · check unknown · ' +
+        'repair unknown',
     );
   });
 
@@ -160,7 +185,7 @@ describe('a plan a motir-ai job produced', () => {
     vi.mocked(getJobCost).mockResolvedValue({
       ...COMPLETE,
       totalCostMicroUsd: null,
-      bySessionKind: { conversation: 100, lay: 300, author: null, entry_author: 0, tool: 0 },
+      bySessionKind: { ...KINDS, author: null },
     });
 
     const { v1, mcp } = await bothSurfaces(caller, planId);

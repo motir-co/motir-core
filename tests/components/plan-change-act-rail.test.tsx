@@ -211,6 +211,37 @@ describe('PlanChangeRail — the lines (sheet 3’s table)', () => {
   });
 });
 
+// MOTIR-11256 — the reconcile, the final check and its fix read as themselves.
+describe('PlanChangeRail — the amend, check and repair acts', () => {
+  it('each has its own label and line; none reads as laying or says dry run', () => {
+    renderRail(
+      stateWith([
+        { kind: 'amending', target: 'MOTIR-42' },
+        { kind: 'amending', target: null },
+        { kind: 'checking' },
+        { kind: 'repairing' },
+      ]),
+    );
+    const all = rows();
+    expect(all.map((r) => r.querySelector('.font-mono')?.textContent)).toEqual([
+      'reconcile',
+      'reconcile',
+      'check',
+      'fix',
+    ]);
+    const text = all.map((r) => r.textContent ?? '');
+    expect(text[0]).toContain('Reconciling the items under MOTIR-42');
+    expect(text[1]).toContain('Reconciling the items at the top level');
+    expect(text[2]).toContain('Running the final check');
+    expect(text[3]).toContain('Fixing what the final check found');
+    for (const line of text) {
+      expect(line).not.toMatch(/laying|dry.?run/i);
+    }
+    // The newest row is live and takes the spinner; the past ones carry their glyph.
+    for (const row of all.slice(0, -1)) expect(row.querySelector('svg')).not.toBeNull();
+  });
+});
+
 describe('PlanChangeRail — the running bar repeats the live act’s OWN line', () => {
   it('a note in the bar is the planner’s words', () => {
     const onStop = vi.fn();

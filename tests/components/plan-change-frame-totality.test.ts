@@ -164,6 +164,27 @@ describe('`lay` and `author` name what they act on — and survive a thin payloa
   });
 });
 
+// MOTIR-11256 — the reconcile, the final check and its fix each draw their own act.
+describe('`amend`, `check` and `repair` are their own acts, never a lay', () => {
+  it('an amend names the level it reconciles, or the top level with none', () => {
+    expect(narrateFrame('amend', { target: 'MOTIR-42', depth: 1 })).toEqual({
+      kind: 'amending',
+      target: 'MOTIR-42',
+    });
+    expect(narrateFrame('amend', { target: null, depth: 0 })).toEqual({
+      kind: 'amending',
+      target: null,
+    });
+    expect(narrateFrame('amend', undefined)).toEqual({ kind: 'amending', target: null });
+  });
+
+  it('the final check and its fix name the plan step, whatever the payload', () => {
+    expect(narrateFrame('check', {})).toEqual({ kind: 'checking' });
+    expect(narrateFrame('check', undefined)).toEqual({ kind: 'checking' });
+    expect(narrateFrame('repair', { target: 'x' })).toEqual({ kind: 'repairing' });
+  });
+});
+
 describe('the planner’s PROSE line', () => {
   it('renders the text the planner wrote', () => {
     expect(
@@ -219,12 +240,15 @@ describe('the enumeration is a SNAPSHOT, and says so', () => {
     const shown = PLAN_CHANGE_FRAME_KINDS.filter((k) => 'show' in FRAME_DISPOSITIONS[k]);
     expect([...shown].sort()).toEqual(
       [
+        'amend',
         'author',
+        'check',
         'lay',
         'level_complete',
         'note',
         'pass',
         'planned',
+        'repair',
         'validated',
         'validation_skipped',
       ].sort(),

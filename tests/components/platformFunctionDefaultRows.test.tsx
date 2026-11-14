@@ -155,7 +155,7 @@ describe('Guide, Debug and Ask on the AI planning table', () => {
     const order = [
       'Planning · by audience',
       'Guide · Debug · Ask · platform defaults',
-      'Dry-run review · platform only',
+      'Final check review · platform only',
     ];
     const at = order.map((s) => text.indexOf(s));
     expect(at.every((i) => i >= 0)).toBe(true);

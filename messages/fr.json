@@ -352,7 +352,12 @@
       "detailsResumingHead": "Reprend là où il s’était arrêté",
       "detailsResuming": "La machine qui rédigeait ce plan a été perdue. Motir a relancé le plan de lui-même, et il reprend là où il s’était arrêté — les éléments déjà rédigés sont conservés et ne sont pas rédigés à nouveau.",
       "detailsResumedAt": "Repris automatiquement à {time}",
-      "detailsResumedAtSecond": "Repris automatiquement à {time} · deuxième tentative"
+      "detailsResumedAtSecond": "Repris automatiquement à {time} · deuxième tentative",
+      "amendingChildrenOf": "Réconciliation : {title}",
+      "amendingTopLevel": "Réconciliation du niveau supérieur du projet",
+      "checkingPlan": "Vérification finale en cours",
+      "checkingCard": "Vérification : {title}",
+      "repairing": "Correction de ce que la vérification finale a trouvé"
     },
     "cue": {
       "drafting": "Rédaction",
@@ -8813,7 +8818,15 @@
         "authoringLine": "Rédaction de {title}",
         "resumed": "reprise",
         "resumedLine": "Machine perdue — Motir l’a relancé et il reprend là où il s’était arrêté",
-        "resumedLineSecond": "Machine de nouveau perdue — deuxième tentative automatique, reprise là où il s’était arrêté"
+        "resumedLineSecond": "Machine de nouveau perdue — deuxième tentative automatique, reprise là où il s’était arrêté",
+        "amending": "réconcilier",
+        "checking": "vérifier",
+        "repairing": "corriger",
+        "amendingLine": "Réconciliation des éléments sous {target}",
+        "amendingTopLine": "Réconciliation des éléments du niveau supérieur",
+        "checkingLine": "Vérification finale en cours",
+        "checkingCardLine": "Vérification de {title}",
+        "repairingLine": "Correction de ce que la vérification finale a trouvé"
       },
       "openerFollowUp": "Vous venez de choisir {label}. Motir AI planifie ce que ce choix conditionne.",
       "composerPlaceholderGuide": "Dites à Motir AI comment s'est passée l'étape…",
@@ -10674,7 +10687,11 @@
         "lay": "Mise en place de {title}",
         "layTop": "Mise en place du niveau supérieur du projet",
         "author": "Rédaction de {title}",
-        "draft": "Rédaction d’un nouvel élément"
+        "draft": "Rédaction d’un nouvel élément",
+        "amend": "Réconciliation des éléments sous {title}",
+        "amendTop": "Réconciliation des éléments du niveau supérieur",
+        "check": "Vérification finale en cours",
+        "repair": "Correction de ce que la vérification finale a trouvé"
       },
       "reason": {
         "rate_limited": "le modèle a atteint sa limite de requêtes",
@@ -10942,7 +10959,7 @@
               "set": "A changé le modèle de planification"
             },
             "planner_review_model": {
-              "set": "A changé le modèle de revue de la simulation"
+              "set": "Modèle de la vérification finale modifié"
             },
             "planner_model_list": {
               "add": "A ajouté un modèle à la liste de planification",
@@ -11747,24 +11764,24 @@
         "failed": "La modification n'a pas pu être enregistrée. Rien n'a été modifié."
       },
       "review": {
-        "name": "Revue de la simulation",
+        "name": "Vérification finale",
         "desc": "La vérification en lecture seule de chaque plan avant son affichage",
         "same": "Identique au modèle de planification",
         "sameDesc": "Chaque tâche de planification fait sa revue avec le modèle qui planifie",
         "defaultGroup": "Par défaut",
-        "pickerAria": "Modèle de revue de la simulation",
+        "pickerAria": "Modèle de la vérification finale",
         "withdrawnBody": "Les revues utilisent le modèle de planification de chaque tâche jusqu'à ce que vous en choisissiez un autre.",
         "withdrawnBodyReadOnly": "Les revues utilisent le modèle de planification de chaque tâche jusqu'à ce qu'un superadmin en choisisse un autre.",
-        "confirmTitle": "Changer le modèle de revue de la simulation ?",
-        "confirmBody": "{from} → {to}. La modification s'applique à la simulation de la prochaine tâche de planification de chaque organisation. Les tâches déjà en cours se terminent avec le modèle avec lequel elles ont démarré.",
+        "confirmTitle": "Modifier le modèle de la vérification finale ?",
+        "confirmBody": "{from} → {to}. La modification s'applique à la vérification finale de la prochaine tâche de planification de chaque organisation. Les tâches déjà en cours se terminent avec le modèle avec lequel elles ont démarré.",
         "savedTitle": "Modèle de revue modifié",
-        "savedBody": "Les revues de la simulation utilisent {model} dès la prochaine tâche de planification.",
-        "unchanged": "La revue de la simulation utilise déjà {model}."
+        "savedBody": "Les vérifications finales s’exécutent avec {model} à partir de la prochaine tâche de planification.",
+        "unchanged": "La vérification finale s’exécute déjà avec {model}."
       },
       "group": {
         "audiences": "Planification · par public",
         "functions": "Guide · Debug · Ask · valeurs par défaut de la plateforme",
-        "review": "Revue de la simulation · plateforme uniquement"
+        "review": "Vérification finale · plateforme uniquement"
       },
       "functions": {
         "guide": {
@@ -11995,7 +12012,7 @@
     "plannerFindings": {
       "breadcrumb": "Opérations · Constats du planificateur",
       "title": "Constats du planificateur",
-      "subtitle": "Ce que l’exécution à blanc du planificateur hébergé et la skill check plan ont trouvé d’erroné dans les plans, conservé après la fermeture ou la suppression de ces plans. Voyez quels défauts se répètent, puis indiquez à qui revient chaque faute, transformez-en un en leçon, enregistrez le bug que vous avez créé ou ignorez-le.",
+      "subtitle": "Ce que la vérification finale du planificateur hébergé et la skill check plan ont trouvé d’erroné dans les plans, conservé après la fermeture ou la suppression de ces plans. Voyez quels défauts se répètent, puis indiquez à qui revient chaque faute, transformez-en un en leçon, enregistrez le bug que vous avez créé ou ignorez-le.",
       "infoLead": "Les constats citent les plans des clients.",
       "infoBody": "Seuls les administrateurs de la plateforme peuvent voir cette page, et chaque modification que vous faites ici est écrite dans le journal d’audit.",
       "view": {
@@ -12095,7 +12112,7 @@
       },
       "empty": {
         "title": "Aucun constat pour l’instant",
-        "body": "Les constats apparaissent ici après que l’exécution à blanc du planificateur hébergé a examiné un plan, ou après que quelqu’un a lancé la skill check plan. Aucun n’a encore été conservé."
+        "body": "Les constats apparaissent ici après que la vérification finale du planificateur hébergé a examiné un plan, ou après que quelqu’un a lancé la skill check plan. Aucun n’a encore été conservé."
       },
       "unavailable": {
         "title": "Impossible de charger les constats",

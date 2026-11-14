@@ -4,15 +4,18 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   CornerDownRight,
+  GitMerge,
   Hourglass,
   ListTree,
   MessageSquareText,
   PenLine,
   RotateCcw,
   ScanSearch,
+  SearchCheck,
   Send,
   ShieldCheck,
   Sparkles,
+  Wrench,
 } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import type { PlanChangeProgress } from '@/lib/hooks/usePlanChangeConversation';
@@ -39,6 +42,11 @@ const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
   redirected: CornerDownRight,
   laying: ListTree,
   authoring: PenLine,
+  // MOTIR-11256: an amend merges a level's hand-offs into its written cards; the final
+  // check is the design's Checking glyph (MOTIR-11253 §31); the fix mends what it found.
+  amending: GitMerge,
+  checking: SearchCheck,
+  repairing: Wrench,
   note: MessageSquareText,
   proposed: Sparkles,
   validating: ShieldCheck,
@@ -62,6 +70,14 @@ export function actLine(act: PlanChangeProgress, tc: Tc): string {
       return tc('act.layingLine', { target: act.target ?? '' });
     case 'authoring':
       return tc('act.authoringLine', { title: act.title ?? '' });
+    case 'amending':
+      return act.target !== null
+        ? tc('act.amendingLine', { target: act.target })
+        : tc('act.amendingTopLine');
+    case 'checking':
+      return tc('act.checkingLine');
+    case 'repairing':
+      return tc('act.repairingLine');
     // ⚠️ THE PLANNER'S OWN WORDS, rendered verbatim rather than through a
     // catalog string — it is prose the model wrote about the act it just took,
     // and there is nothing to translate.

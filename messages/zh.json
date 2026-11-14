@@ -352,7 +352,12 @@
       "detailsResumingHead": "从中断处接着写",
       "detailsResuming": "编写此计划的机器丢失了。Motir 已自动重新开始此计划，它会从中断处继续 — 已写好的工作项会保留，不会重写。",
       "detailsResumedAt": "已于 {time} 自动继续",
-      "detailsResumedAtSecond": "已于 {time} 自动继续 · 第二次尝试"
+      "detailsResumedAtSecond": "已于 {time} 自动继续 · 第二次尝试",
+      "amendingChildrenOf": "正在协调：{title}",
+      "amendingTopLevel": "正在协调项目的顶层",
+      "checkingPlan": "正在进行最终检查",
+      "checkingCard": "正在检查：{title}",
+      "repairing": "正在修复最终检查发现的内容"
     },
     "cue": {
       "drafting": "起草中",
@@ -8804,7 +8809,15 @@
         "authoringLine": "正在撰写 {title}",
         "resumed": "继续",
         "resumedLine": "机器丢失 — Motir 已重新开始，从中断处继续",
-        "resumedLineSecond": "机器再次丢失 — 第二次自动尝试，从中断处继续"
+        "resumedLineSecond": "机器再次丢失 — 第二次自动尝试，从中断处继续",
+        "amending": "协调",
+        "checking": "检查",
+        "repairing": "修复",
+        "amendingLine": "正在协调 {target} 下的工作项",
+        "amendingTopLine": "正在协调顶层的工作项",
+        "checkingLine": "正在进行最终检查",
+        "checkingCardLine": "正在检查 {title}",
+        "repairingLine": "正在修复最终检查发现的内容"
       },
       "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。",
       "composerPlaceholderGuide": "告诉 Motir AI 这一步进展如何…",
@@ -10665,7 +10678,11 @@
         "lay": "正在铺设「{title}」",
         "layTop": "正在铺设项目顶层",
         "author": "正在撰写「{title}」",
-        "draft": "正在起草新条目"
+        "draft": "正在起草新条目",
+        "amend": "正在协调「{title}」下的工作项",
+        "amendTop": "正在协调顶层的工作项",
+        "check": "正在进行最终检查",
+        "repair": "正在修复最终检查发现的内容"
       },
       "reason": {
         "rate_limited": "请求过于频繁",
@@ -10933,7 +10950,7 @@
               "set": "已更改规划模型"
             },
             "planner_review_model": {
-              "set": "已更改试运行审查模型"
+              "set": "已更改最终检查的审查模型"
             },
             "planner_model_list": {
               "add": "向规划模型列表添加了模型",
@@ -11738,24 +11755,24 @@
         "failed": "无法保存更改。未做任何更改。"
       },
       "review": {
-        "name": "试运行审查",
+        "name": "最终检查审查",
         "desc": "在展示前以只读方式检查每个计划",
         "same": "与规划模型相同",
         "sameDesc": "每个规划任务都使用其规划所用的模型进行审查",
         "defaultGroup": "默认",
-        "pickerAria": "试运行审查模型",
+        "pickerAria": "最终检查审查模型",
         "withdrawnBody": "在你选择其他模型之前，审查会使用每个任务的规划模型运行。",
         "withdrawnBodyReadOnly": "在超级管理员选择其他模型之前，审查会使用每个任务的规划模型运行。",
-        "confirmTitle": "要更改试运行审查模型吗？",
-        "confirmBody": "{from} → {to}。更改将应用于每个组织下一个规划任务的试运行。正在运行的任务会在其开始时使用的模型上完成。",
+        "confirmTitle": "要更改最终检查的审查模型吗？",
+        "confirmBody": "{from} → {to}。更改将应用于每个组织下一个规划任务的最终检查。正在运行的任务会在其开始时使用的模型上完成。",
         "savedTitle": "审查模型已更改",
-        "savedBody": "从下一个规划任务起，试运行审查将使用 {model} 运行。",
-        "unchanged": "试运行审查已在使用 {model}。"
+        "savedBody": "从下一个规划任务起，最终检查的审查将使用 {model} 运行。",
+        "unchanged": "最终检查的审查已在使用 {model}。"
       },
       "group": {
         "audiences": "规划 · 按受众",
         "functions": "Guide · Debug · Ask · 平台默认值",
-        "review": "试运行审查 · 仅平台"
+        "review": "最终检查审查 · 仅平台"
       },
       "functions": {
         "guide": {
@@ -11986,7 +12003,7 @@
     "plannerFindings": {
       "breadcrumb": "运营 · 规划器发现",
       "title": "规划器发现",
-      "subtitle": "托管规划器的试运行和 check plan 技能在计划中发现的错误，在这些计划关闭或删除后仍会保留。查看哪些错误反复出现，然后设定每条是谁的责任、将其提升为经验、记录已提交的缺陷，或将其忽略。",
+      "subtitle": "托管规划器的最终检查和 check plan 技能在计划中发现的错误，在这些计划关闭或删除后仍会保留。查看哪些错误反复出现，然后设定每条是谁的责任、将其提升为经验、记录已提交的缺陷，或将其忽略。",
       "infoLead": "发现会引用客户的计划。",
       "infoBody": "只有平台管理员可以查看此页面，在此所做的每项更改都会写入审计日志。",
       "view": {
@@ -12086,7 +12103,7 @@
       },
       "empty": {
         "title": "暂无发现",
-        "body": "托管规划器的试运行审查计划后，或有人运行 check plan 技能后，发现会显示在这里。目前还没有保留任何发现。"
+        "body": "托管规划器的最终检查审查计划后，或有人运行 check plan 技能后，发现会显示在这里。目前还没有保留任何发现。"
       },
       "unavailable": {
         "title": "无法加载发现",

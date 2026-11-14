@@ -330,6 +330,46 @@ describe('lastActivityAt — stamped by every content write, never by a decision
     expect((await activityOf(planId)).getTime(), 'approvePlan').toBe(stamp.getTime());
   });
 
+  // MOTIR-11256 — the amend, the final check and its fix each report their own
+  // step kind through the same door, and each one stamps the plan's activity, so a
+  // walk spending ten minutes in a final check never reads as stalled.
+  it.each(['amend', 'check', 'repair'] as const)(
+    'a %s step is stored, untargeted or on an add, and stamps lastActivityAt',
+    async (kind) => {
+      const fx = await makeWorkItemFixture();
+      const { planId, addId } = await generatingPlan(fx);
+
+      let past = await backdate(planId);
+      const whole = await plansService.recordPlanStep(
+        planId,
+        { sessionKey: `${kind}-whole`, kind, targetRef: null },
+        fx.ctx,
+      );
+      expect(whole).toMatchObject({ kind, targetRef: null });
+      expect((await activityOf(planId)).getTime(), `${kind} untargeted`).toBeGreaterThan(
+        past.getTime(),
+      );
+
+      past = await backdate(planId);
+      await plansService.recordPlanStep(
+        planId,
+        { sessionKey: `${kind}-card`, kind, targetRef: `planItem:${addId}` },
+        fx.ctx,
+      );
+      expect((await activityOf(planId)).getTime(), `${kind} targeted`).toBeGreaterThan(
+        past.getTime(),
+      );
+      expect((await stepsOf(planId)).map((r) => [r.kind, r.targetRef])).toEqual([
+        [kind, null],
+        [kind, `planItem:${addId}`],
+      ]);
+
+      past = await backdate(planId);
+      await plansService.endPlanStep(planId, `${kind}-card`, fx.ctx);
+      expect((await activityOf(planId)).getTime(), `${kind} end`).toBeGreaterThan(past.getTime());
+    },
+  );
+
   it('does not move on a decline', async () => {
     const fx = await makeWorkItemFixture();
     const { planId } = await generatingPlan(fx);

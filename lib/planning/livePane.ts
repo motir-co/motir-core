@@ -1,4 +1,5 @@
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { PlanStepKindDto } from '@/lib/dto/plans';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { levelTrail } from '@/lib/planning/planArrival';
 import { proposalLevelKey } from '@/lib/planning/planShape';
@@ -404,7 +405,7 @@ export interface InFlightCue {
 
 /** The fields of a live step the mapping reads (`PlanProgressStep`'s). */
 export interface InFlightStep {
-  kind: 'settle' | 'lay' | 'author';
+  kind: PlanStepKindDto;
   targetNodeId: string | null;
 }
 
@@ -412,20 +413,25 @@ export interface InFlightStep {
  * THE LEVEL A STEP NAMES (MOTIR-8592) — the one rule the cues, *Go there* and the
  * planner-driven canvas share, so "where is this step?" has a single answer.
  *
- * - `author` → the level the target item SITS on: its parent's children, or the
- *   top level (`levelId: null`, `trail: []`) for a root item.
- * - `lay` → the target's OWN children level, and only when the plan's items can
- *   place it: some item sits on that level and the trail ends at the node.
- * - `settle`, a step with no target, or a target the items do not hold → `null`.
+ * - `author`, and a final-check session's `check` (MOTIR-11256) → the level the
+ *   target item SITS on: its parent's children, or the top level (`levelId: null`,
+ *   `trail: []`) for a root item.
+ * - `lay`, and a level's `amend` (MOTIR-11256) → the target's OWN children level,
+ *   and only when the plan's items can place it: some item sits on that level and
+ *   the trail ends at the node.
+ * - `settle`, `repair` (the fix names no level of its own), a step with no target,
+ *   or a target the items do not hold → `null`.
  */
 export function stepLevel(
   items: readonly PlanReviewItemDto[],
   step: InFlightStep,
   proposedWord: string,
 ): { levelId: string | null; trail: CanvasCrumb[] } | null {
-  if (step.kind === 'settle' || step.targetNodeId === null) return null;
+  if (step.kind === 'settle' || step.kind === 'repair' || step.targetNodeId === null) {
+    return null;
+  }
   const nodeId = step.targetNodeId;
-  if (step.kind === 'author') {
+  if (step.kind === 'author' || step.kind === 'check') {
     const item = items.find((i) => i.nodeId === nodeId);
     if (!item) return null;
     const levelId = proposalLevelKey(item);
@@ -440,8 +446,11 @@ export function stepLevel(
 /**
  * Map the live steps to cues. A `settle` step, and any step with no target node
  * (the untargeted lay and author), mark nothing (§26.6: an item not yet on the
- * plan has no cell). Several steps → several cues; one node named by both kinds
- * is `drafting`. `inFlight` holds one entry per cue whose level the plan's items
+ * plan has no cell). Only a `lay` draws the laying cue and only an `author` the
+ * drafting one: an `amend` reconciles a level already laid, a `check` reviews a
+ * card already written and a `repair` names no card, so none of them says a level
+ * is being laid (MOTIR-11256; the final check's own Checking cue is MOTIR-11254's).
+ * Several steps → several cues; one node named by both kinds is `drafting`. `inFlight` holds one entry per cue whose level the plan's items
  * can place ({@link stepLevel}) — a committed target the walk has not written a
  * `modify` for, or a parent with no child proposed yet, keeps its node cue
  * wherever it is drawn and adds no entry, because *Go there* would have nowhere to
@@ -454,7 +463,8 @@ export function inFlightCues(
 ): { cues: Map<string, InFlightCueKind>; inFlight: InFlightCue[] } {
   const cues = new Map<string, InFlightCueKind>();
   for (const step of steps) {
-    if (step.kind === 'settle' || step.targetNodeId === null) continue;
+    if (step.targetNodeId === null) continue;
+    if (step.kind !== 'author' && step.kind !== 'lay') continue;
     const kind: InFlightCueKind = step.kind === 'author' ? 'drafting' : 'laying';
     if (cues.get(step.targetNodeId) !== 'drafting') cues.set(step.targetNodeId, kind);
   }

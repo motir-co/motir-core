@@ -292,6 +292,7 @@ import type {
 import {
   PLAN_ITEM_REASON_MAX,
   PLAN_STATUS_DTO_VALUES,
+  PLAN_STEP_KIND_VALUES,
   PLANNER_RECORD_MAX_BYTES,
   WORK_ITEM_PENDING_PLAN_STATUSES,
 } from '@/lib/dto/plans';
@@ -6487,7 +6488,7 @@ export interface RecordPlanStepInput {
   targetRef: string | null;
 }
 
-const PLAN_STEP_KINDS: readonly PlanStepKindDto[] = ['settle', 'lay', 'author'];
+const PLAN_STEP_KINDS: readonly PlanStepKindDto[] = PLAN_STEP_KIND_VALUES;
 
 function assertSessionKey(sessionKey: unknown): string {
   if (typeof sessionKey !== 'string' || sessionKey.trim().length === 0) {
@@ -6503,9 +6504,10 @@ function assertSessionKey(sessionKey: unknown): string {
 
 /**
  * Validate a step's target against THIS plan, inside the step's transaction
- * (MOTIR-7822). `settle` never names one; `lay` / `author` name a proposal
- * (`planItem:<id>`, which must be an `add` on this plan) or a committed work item
- * in the plan's project — or nothing, which is the untargeted form and legal.
+ * (MOTIR-7822). `settle` never names one; every other kind (`lay`, `author`, and
+ * MOTIR-11256's `amend`, `check`, `repair`) names a proposal (`planItem:<id>`,
+ * which must be an `add` on this plan) or a committed work item in the plan's
+ * project — or nothing, which is the untargeted form and legal.
  * Any other shape (a `folder:` ref, a key, an empty string) is refused.
  */
 async function assertStepTarget(

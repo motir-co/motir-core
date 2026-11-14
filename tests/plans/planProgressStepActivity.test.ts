@@ -151,11 +151,59 @@ describe('stepLastActivity — which writes keep a step alive', () => {
     }
   });
 
+  // MOTIR-11256 — an amend writes where a lay does; the final check writes
+  // nothing, and its fix's writes land anywhere, so both run from their start.
+  it('an amend step is kept alive by the `add`s on the level it reconciles, as a lay', () => {
+    const writes = [
+      write({ id: 'kid', writtenAt: '2026-11-13T11:20:00.000Z' }),
+      write({ id: 'root', parentRef: null, writtenAt: '2026-11-13T11:30:00.000Z' }),
+    ];
+    expect(stepLastActivity(step({ sessionKey: 's', kind: 'amend' }), writes)).toBe(
+      '2026-11-13T11:20:00.000Z',
+    );
+    expect(
+      stepLastActivity(step({ sessionKey: 's', kind: 'amend', targetRef: null }), writes),
+    ).toBe('2026-11-13T11:30:00.000Z');
+  });
+
+  it('a check and a repair step are measured from their start, whatever is written', () => {
+    const writes = [
+      write({ id: 'kid', writtenAt: '2026-11-13T11:20:00.000Z' }),
+      write({ id: 'root', parentRef: null, writtenAt: '2026-11-13T11:30:00.000Z' }),
+    ];
+    for (const kind of ['check', 'repair'] as const) {
+      for (const targetRef of [STORY, null, 'planItem:kid']) {
+        expect(stepLastActivity(step({ sessionKey: 's', kind, targetRef }), writes)).toBe(
+          STEP_START,
+        );
+      }
+    }
+  });
+
   it('the snapshot carries it on every step; with no writes it is the start', () => {
     const plain = build({ steps: [step({ sessionKey: 's' })] });
     expect(plain.steps[0]).toMatchObject({ startedAt: STEP_START, lastActivityAt: STEP_START });
     const written = build({ steps: [step({ sessionKey: 's' })], writes: [write({ id: 'a' })] });
     expect(written.steps[0]).toMatchObject({ startedAt: STEP_START, lastActivityAt: FIRST_CHILD });
+  });
+});
+
+describe('inFlightCues — only a lay lays and only an author drafts (MOTIR-11256)', () => {
+  it('an amend, a check and a repair draw no cue and no Go there entry', () => {
+    const items = [child('k1')];
+    const { cues, inFlight } = inFlightCues(
+      items,
+      [
+        { kind: 'amend', targetNodeId: STORY },
+        { kind: 'check', targetNodeId: 'k1' },
+        { kind: 'repair', targetNodeId: 'k1' },
+      ],
+      'New',
+    );
+    expect([...cues]).toEqual([]);
+    expect(inFlight).toEqual([]);
+    const laid = inFlightCues(items, [{ kind: 'lay', targetNodeId: STORY }], 'New');
+    expect([...laid.cues]).toEqual([[STORY, 'laying']]);
   });
 });
 

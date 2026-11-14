@@ -352,7 +352,12 @@
       "detailsResumingHead": "Gaat verder waar het stopte",
       "detailsResuming": "De machine die dit plan schreef, is verloren gegaan. Motir heeft het plan zelf opnieuw gestart, en het gaat verder waar het stopte — items die al zijn geschreven blijven behouden en worden niet opnieuw geschreven.",
       "detailsResumedAt": "Automatisch hervat om {time}",
-      "detailsResumedAtSecond": "Automatisch hervat om {time} · tweede poging"
+      "detailsResumedAtSecond": "Automatisch hervat om {time} · tweede poging",
+      "amendingChildrenOf": "Afstemmen: {title}",
+      "amendingTopLevel": "Hoogste niveau van het project wordt afgestemd",
+      "checkingPlan": "Eindcontrole wordt uitgevoerd",
+      "checkingCard": "Controleren: {title}",
+      "repairing": "Wat de eindcontrole vond wordt hersteld"
     },
     "cue": {
       "drafting": "Wordt opgesteld",
@@ -8813,7 +8818,15 @@
         "authoringLine": "{title} schrijven",
         "resumed": "hervatten",
         "resumedLine": "Machine verloren — Motir heeft het opnieuw gestart en het gaat verder waar het stopte",
-        "resumedLineSecond": "Machine opnieuw verloren — tweede automatische poging, gaat verder waar het stopte"
+        "resumedLineSecond": "Machine opnieuw verloren — tweede automatische poging, gaat verder waar het stopte",
+        "amending": "afstemmen",
+        "checking": "controle",
+        "repairing": "herstel",
+        "amendingLine": "Items onder {target} worden afgestemd",
+        "amendingTopLine": "Items op het hoogste niveau worden afgestemd",
+        "checkingLine": "Eindcontrole wordt uitgevoerd",
+        "checkingCardLine": "{title} wordt gecontroleerd",
+        "repairingLine": "Wat de eindcontrole vond wordt hersteld"
       },
       "openerFollowUp": "Je hebt net {label} gekozen. Motir AI plant wat daarop wacht.",
       "composerPlaceholderGuide": "Vertel Motir AI hoe de stap ging…",
@@ -10674,7 +10687,11 @@
         "lay": "{title} wordt neergezet",
         "layTop": "Het hoogste niveau van het project wordt neergezet",
         "author": "{title} wordt geschreven",
-        "draft": "Een nieuw item wordt opgesteld"
+        "draft": "Een nieuw item wordt opgesteld",
+        "amend": "Items onder {title} worden afgestemd",
+        "amendTop": "Items op het hoogste niveau worden afgestemd",
+        "check": "Eindcontrole wordt uitgevoerd",
+        "repair": "Wat de eindcontrole vond wordt hersteld"
       },
       "reason": {
         "rate_limited": "het model de limiet voor aanvragen bereikte",
@@ -10942,7 +10959,7 @@
               "set": "Het planningsmodel gewijzigd"
             },
             "planner_review_model": {
-              "set": "Het beoordelingsmodel van de proefrun gewijzigd"
+              "set": "Beoordelingsmodel van de eindcontrole gewijzigd"
             },
             "planner_model_list": {
               "add": "Een model toegevoegd aan de planningslijst",
@@ -11747,24 +11764,24 @@
         "failed": "De wijziging kon niet worden opgeslagen. Er is niets gewijzigd."
       },
       "review": {
-        "name": "Beoordeling van de proefrun",
+        "name": "Eindcontrole",
         "desc": "De alleen-lezen controle van elk plan voordat het wordt getoond",
         "same": "Hetzelfde als het planningsmodel",
         "sameDesc": "Elke planningstaak beoordeelt met het model waarmee hij plant",
         "defaultGroup": "Standaard",
-        "pickerAria": "Beoordelingsmodel van de proefrun",
+        "pickerAria": "Model van de eindcontrole",
         "withdrawnBody": "Beoordelingen draaien op het planningsmodel van elke taak totdat u een ander kiest.",
         "withdrawnBodyReadOnly": "Beoordelingen draaien op het planningsmodel van elke taak totdat een superadmin een ander kiest.",
-        "confirmTitle": "Het beoordelingsmodel van de proefrun wijzigen?",
-        "confirmBody": "{from} → {to}. De wijziging geldt voor de proefrun van de volgende planningstaak van elke organisatie. Taken die al lopen, ronden af op het model waarmee ze zijn gestart.",
+        "confirmTitle": "Model van de eindcontrole wijzigen?",
+        "confirmBody": "{from} → {to}. De wijziging geldt voor de eindcontrole van de volgende planningstaak van elke organisatie. Taken die al lopen, ronden af op het model waarmee ze zijn gestart.",
         "savedTitle": "Beoordelingsmodel gewijzigd",
-        "savedBody": "Beoordelingen van de proefrun draaien vanaf de volgende planningstaak op {model}.",
-        "unchanged": "De beoordeling van de proefrun draait al op {model}."
+        "savedBody": "Eindcontroles draaien vanaf de volgende planningstaak op {model}.",
+        "unchanged": "De eindcontrole draait al op {model}."
       },
       "group": {
         "audiences": "Planning · per doelgroep",
         "functions": "Guide · Debug · Ask · platformstandaarden",
-        "review": "Beoordeling van de proefrun · alleen platform"
+        "review": "Eindcontrole · alleen platform"
       },
       "functions": {
         "guide": {
@@ -11995,7 +12012,7 @@
     "plannerFindings": {
       "breadcrumb": "Beheer · Plannerbevindingen",
       "title": "Plannerbevindingen",
-      "subtitle": "Wat de proefrun van de gehoste planner en de skill check plan fout vonden in plannen, bewaard nadat die plannen zijn gesloten of verwijderd. Zie welke fouten terugkomen, en leg dan vast wiens fout elke was, maak er een les van, leg de bug vast die u hebt aangemaakt, of negeer hem.",
+      "subtitle": "Wat de eindcontrole van de gehoste planner en de skill check plan fout vonden in plannen, bewaard nadat die plannen zijn gesloten of verwijderd. Zie welke fouten terugkomen, en leg dan vast wiens fout elke was, maak er een les van, leg de bug vast die u hebt aangemaakt, of negeer hem.",
       "infoLead": "Bevindingen citeren plannen van klanten.",
       "infoBody": "Alleen platformbeheerders kunnen deze pagina zien, en elke wijziging die u hier maakt, wordt in het auditlogboek geschreven.",
       "view": {
@@ -12095,7 +12112,7 @@
       },
       "empty": {
         "title": "Nog geen bevindingen",
-        "body": "Bevindingen verschijnen hier nadat de proefrun van de gehoste planner een plan heeft beoordeeld, of nadat iemand de skill check plan heeft uitgevoerd. Er is er nog geen bewaard."
+        "body": "Bevindingen verschijnen hier nadat de eindcontrole van de gehoste planner een plan heeft beoordeeld, of nadat iemand de skill check plan heeft uitgevoerd. Er is er nog geen bewaard."
       },
       "unavailable": {
         "title": "Kan de bevindingen niet laden",

@@ -7623,10 +7623,15 @@ enum PlanSessionFailureReason {
 }
 
 /// Which kind of session the failed walk had open (Story MOTIR-7905). Null on the
-/// session when the attempt failed before the walk reached a level.
+/// session when the attempt failed before the walk reached a level. `amend`,
+/// `check` and `repair` (MOTIR-11256) are the level's amend, the plan's final
+/// check and the fix after it — none of them lays a level.
 enum PlanSessionWalkPhase {
   lay
   author
+  amend
+  check
+  repair
 
   @@map("plan_session_walk_phase")
 }
@@ -8032,11 +8037,18 @@ model PlanRevision {
 /// The KIND of step a running planner session is on (Story MOTIR-7820 ·
 /// MOTIR-7822). `settle` never names a target; `lay` and `author` may name one
 /// or, in their UNTARGETED forms, none (laying the project's top level, and
-/// authoring an item not yet on the plan).
+/// authoring an item not yet on the plan). `amend` (a laid level's reconciling
+/// pass, targeting its parent), `check` (the plan's final check — untargeted for
+/// the run, the card under review for one of its sessions) and `repair` (the fix
+/// after the final check, and the closing repair) are MOTIR-11256's: sessions
+/// that used to report themselves as a lay or as no step.
 enum PlanStepKind {
   settle
   lay
   author
+  amend
+  check
+  repair
 
   @@map("plan_step_kind")
 }

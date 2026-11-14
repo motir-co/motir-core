@@ -2,6 +2,7 @@ import type { ProjectContext } from '@/lib/projects';
 import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { planReviewService } from '@/lib/services/planReviewService';
+import type { PlanStepKindDto } from '@/lib/dto/plans';
 
 // THE RUN SNAPSHOT an `ask_project` turn carries during a planning run (Story
 // MOTIR-7990 · MOTIR-7996) — the `context.run` object motir-ai's answering session
@@ -29,7 +30,8 @@ export interface PendingOfferInput {
 }
 
 export interface RunContextStep {
-  step: 'settle' | 'lay' | 'author';
+  /** The step's kind. motir-ai drops a kind it does not know rather than misread it. */
+  step: PlanStepKindDto;
   target: string | null;
   title: string | null;
   startedAt: string;

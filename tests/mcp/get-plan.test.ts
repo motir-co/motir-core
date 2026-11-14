@@ -163,6 +163,9 @@ describe('get_plan — the transport contract', () => {
         author: null,
         entry_author: null,
         tool: null,
+        amend: null,
+        check: null,
+        repair: null,
       },
     };
     expect(struct(res)).toEqual(expected);
