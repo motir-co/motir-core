@@ -12,6 +12,7 @@ import type { CommitComparison, DefaultBranchHead, RepoRef } from '@/lib/github/
 import { NotPlatformStaffError } from '@/lib/platform/errors';
 import {
   accountOfArn,
+  applicationImageOf,
   createVersionReader,
   IMAGE_SOURCE_REPOSITORIES,
   judgeComparison,
@@ -63,7 +64,7 @@ function service(
     current?: string;
     deployments?: EcsDeploymentRead[];
     sizes?: Record<string, { cpuUnits: number | null; memoryMib: number | null }>;
-    /** The image each task definition's first container names (MOTIR-11112). */
+    /** The image each task definition's application container names (MOTIR-11112). */
     images?: Record<string, string>;
   } = {},
 ): EcsServiceRead {
@@ -83,7 +84,9 @@ function service(
           family: family!,
           revision: Number(revision),
           ...(sizes[arn] ?? { cpuUnits: 1024, memoryMib: 2048 }),
-          image: opts.images?.[arn] ?? null,
+          containers: opts.images?.[arn]
+            ? [{ name, image: opts.images[arn]!, essential: true }]
+            : [],
         },
       ];
     }),
@@ -852,6 +855,61 @@ describe('the version on the row and the header counts', () => {
     });
     expect(primaryImageOf(svc)).toBe(image('motir/motir-core', '5'));
     expect(primaryImageOf({ ...svc, taskDefinitions: {} })).toBeNull();
+  });
+
+  // ── The APPLICATION container, whatever its position (MOTIR-11275) ──────────
+  // core-web runs `web` beside the `request-timing-collector` OpenTelemetry
+  // sidecar; motir-core-web:282 lists the sidecar first, :274 (CDK) lists web
+  // first. Both must read web's ECR image.
+  const SIDECAR = {
+    name: 'request-timing-collector',
+    image: 'public.ecr.aws/aws-observability/aws-otel-collector:v0.40.0',
+    essential: true,
+  };
+  const WEB = { name: 'web', image: image('motir/motir-core', '1'), essential: true };
+
+  it('reads the app container’s ECR image when a public.ecr.aws sidecar is listed first', () => {
+    expect(applicationImageOf('motir-core-web', [SIDECAR, WEB])).toBe(WEB.image);
+  });
+
+  it('reads the same image when the app container is listed first', () => {
+    expect(applicationImageOf('motir-core-web', [WEB, SIDECAR])).toBe(WEB.image);
+  });
+
+  it('the service’s PRIMARY image is its app container’s in either order', () => {
+    const svc = (containers: (typeof WEB)[]) => {
+      const base = service('motir-core-web');
+      const arn = base.taskDefinitionArn;
+      return {
+        ...base,
+        taskDefinitions: { [arn]: { ...base.taskDefinitions[arn]!, containers } },
+      };
+    };
+    expect(primaryImageOf(svc([SIDECAR, WEB]))).toBe(WEB.image);
+    expect(primaryImageOf(svc([WEB, SIDECAR]))).toBe(WEB.image);
+  });
+
+  it('prefers the mapped ECR container named after the service when several are', () => {
+    const relay = { name: 'relay', image: image('motir/motir-core', '2'), essential: true };
+    expect(applicationImageOf('motir-core-web', [relay, WEB])).toBe(WEB.image);
+    // None named after the service: the first mapped ECR container, not the sidecar.
+    expect(applicationImageOf('motir-core-worker', [SIDECAR, relay, WEB])).toBe(relay.image);
+  });
+
+  it('skips a non-essential mapped ECR container and an unmapped ECR repository', () => {
+    const init = { name: 'migrate', image: image('motir/motir-core', '3'), essential: false };
+    const unmapped = { name: 'cache', image: image('motir/edge-cache', '4'), essential: true };
+    expect(applicationImageOf('motir-core-web', [init, unmapped, SIDECAR, WEB])).toBe(WEB.image);
+  });
+
+  it('falls back to the container named after the service, then to the first', () => {
+    const app = { name: 'web', image: 'docker.io/library/nginx:1', essential: true };
+    expect(applicationImageOf('motir-core-web', [SIDECAR, app])).toBe(app.image);
+    expect(applicationImageOf('web', [SIDECAR, app])).toBe(app.image);
+    expect(applicationImageOf('motir-core-relay', [SIDECAR, app])).toBe(SIDECAR.image);
+    const unnamed = { name: null, image: null, essential: true };
+    expect(applicationImageOf('motir-core-web', [unnamed, SIDECAR])).toBeNull();
+    expect(applicationImageOf('motir-core-web', [])).toBeNull();
   });
 
   it('counts stale-or-diverged rows, a rolling one by its primary, and never behind-fresh', () => {
