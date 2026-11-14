@@ -43,16 +43,30 @@ export interface EcsDeploymentRead {
   taskDefinitionArn: string;
 }
 
+/** One container of a task definition, as the task definition names it. */
+export interface EcsContainerRead {
+  /** The container's name (`web`, `request-timing-collector`), or null when ECS gives none. */
+  name: string | null;
+  /** Its image reference (`<registry>/<repository>@sha256:…` or `…:<tag>`), or
+   *  null when it names none. */
+  image: string | null;
+  /** ECS's `essential` flag. ECS treats an omitted flag as essential, and so
+   *  does this read. */
+  essential: boolean;
+}
+
 /** A task definition's size — Fargate's task-level `cpu` (units) and `memory` (MiB). */
 export interface EcsTaskSizeRead {
   family: string;
   revision: number;
   cpuUnits: number | null;
   memoryMib: number | null;
-  /** The FIRST container's image reference, as the task definition names it
-   *  (`<registry>/<repository>@sha256:…` or `…:<tag>`), or null when it names
-   *  none. The Services page reads the deployed commit from it (MOTIR-11112). */
-  image: string | null;
+  /** EVERY container, in the order the task definition lists them. The order
+   *  is NOT meaningful: it depends on which tool registered the revision (the
+   *  deploy workflow lists core-web's OpenTelemetry sidecar first, the CDK app
+   *  lists `web` first), so the Services page picks the APPLICATION container
+   *  from these by what it is, never by its position (MOTIR-11275). */
+  containers: EcsContainerRead[];
 }
 
 /** One ECS service, with the size of every task definition its deployments run. */
@@ -107,7 +121,11 @@ async function describeTaskSize(client: ECSClient, arn: string): Promise<EcsTask
     revision: taskDefinition.revision,
     cpuUnits: size(taskDefinition.cpu),
     memoryMib: size(taskDefinition.memory),
-    image: taskDefinition.containerDefinitions?.[0]?.image ?? null,
+    containers: (taskDefinition.containerDefinitions ?? []).map((c) => ({
+      name: c.name ?? null,
+      image: c.image ?? null,
+      essential: c.essential !== false,
+    })),
   };
 }
 

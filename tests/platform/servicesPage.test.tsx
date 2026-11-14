@@ -95,7 +95,7 @@ function service(
             family: family!,
             revision: Number(revision),
             ...(opts.sizes?.[arn] ?? { cpuUnits: 1024, memoryMib: 2048 }),
-            image: null,
+            containers: [],
           },
         ];
       }),
