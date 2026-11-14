@@ -34,7 +34,7 @@ export default function AuthedError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
-  useReportCaughtError(error, 'authed-page');
+  const eventId = useReportCaughtError(error, 'authed-page');
   const copy = useServerErrorCopy('page');
   const [retryPending, startRetry] = useTransition();
 
@@ -42,7 +42,7 @@ export default function AuthedError({
     <div className="flex w-full justify-center px-(--spacing-lg) py-(--spacing-2xl)">
       <ServerErrorView
         copy={copy}
-        digest={error.digest}
+        reference={error.digest ?? eventId}
         onRetry={() => startRetry(() => retry())}
         retryPending={retryPending}
         showHome={false}

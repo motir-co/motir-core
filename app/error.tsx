@@ -25,7 +25,7 @@ export default function AppError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
-  useReportCaughtError(error, 'app');
+  const eventId = useReportCaughtError(error, 'app');
   const copy = useServerErrorCopy('app');
   const [retryPending, startRetry] = useTransition();
 
@@ -33,7 +33,7 @@ export default function AppError({
     <main className="mx-auto flex min-h-dvh max-w-[48rem] flex-col items-center justify-center px-(--spacing-lg) py-(--spacing-2xl)">
       <ServerErrorView
         copy={copy}
-        digest={error.digest}
+        reference={error.digest ?? eventId}
         onRetry={() => startRetry(() => retry())}
         retryPending={retryPending}
         showHome
