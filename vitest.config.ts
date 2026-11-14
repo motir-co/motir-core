@@ -1813,6 +1813,14 @@ export default defineConfig({
         // missing from its own clone, as before). Pinned at the floor below.
         'scripts/aws-deploy/infraBaseline.ts',
         'scripts/aws-deploy/stackWait.ts',
+        // MOTIR-11241 — the static-asset origin's target read, upload check and
+        // post-roll check, and the next.config keys they pair with. MEASURED
+        // against `tests/awsDeploy/staticAssets.test.ts` and
+        // `tests/build/versionSkew.test.ts`: staticAssets 100 / 98.11 / 100 / 100,
+        // versionSkew 100 on all four (the process adapters and entry are
+        // v8-ignored, as awsDeploy's entry is). Pinned at the floor below.
+        'scripts/aws-deploy/staticAssets.ts',
+        'lib/build/versionSkew.ts',
         'scripts/fleet/fleetAdminCheckQuota.ts',
         // MOTIR-10264 — the fleet-admin bundle's entry and its Fargate database URL.
         // MEASURED against `tests/ciFleet/fleetAdminFargateEntry.test.ts`: both 100 on
@@ -3977,6 +3985,19 @@ export default defineConfig({
           statements: 90,
         },
         'scripts/aws-deploy/stackWait.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-11241 — measured above, pinned at the floor.
+        'scripts/aws-deploy/staticAssets.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/build/versionSkew.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

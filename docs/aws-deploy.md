@@ -35,6 +35,37 @@ It carries the release guards that job carried (MOTIR-11059):
   the run red when it is not `200`. It runs after the roll, so an outage of
   Sentry's API never holds a release back.
 
+## Static assets — a tab open across a release keeps working
+
+Each task serves only its own build's `/_next/static`, so when a roll stopped the
+old task, a tab loaded from it asked for a chunk the new task had never built and
+fell to the error page (MOTIR-11241). The release now serves those files from the
+durable origin motir-infra builds (MOTIR-11240, its `docs/static-assets.md`):
+
+- **Before the build**, `pnpm deploy:static target` reads
+  `/<prefix>/core/static-assets` with the deploy role. Its `url` is passed as the
+  `MOTIR_ASSET_PREFIX` build argument, which `next.config.ts` turns into
+  `assetPrefix`; `MOTIR_RELEASE` also becomes Next's `deploymentId`, so a tab
+  whose build no longer matches the server does a full page load instead of
+  mixing two builds (`lib/build/versionSkew.ts`).
+- **While there is no origin** — the parameter is missing, the role is not
+  granted it, or `static.motir.co` does not answer yet — the step warns
+  `No static-asset origin`, the image is built with no prefix as before, and every
+  step below stands down. The first release after the origin answers switches
+  over by itself.
+- **Before the gate and the roll**, the job copies `/app/.next/static` out of the
+  image and uploads it to `s3://<bucket>/_next/static/` with
+  `Cache-Control: public, max-age=31536000, immutable`, never with `--delete`:
+  the bucket's lifecycle rule expires old releases. `pnpm deploy:static
+verify-upload` then fails the run, before anything rolls, unless one of the
+  files answers `200` from the origin with CORS for the app. A re-run of a commit
+  whose image was already pushed pulls that image by digest and uploads again.
+- **After the roll**, `pnpm deploy:static verify-release` turns the run red unless
+  the app's HTML loads this build's files from the origin and a file the previous
+  release loaded from there (noted before the roll) still answers `200`. On the
+  first release after the switch the previous release served its own files, so
+  only the first half is checked.
+
 ## Repository secrets
 
 | Secret                               | Used for                                                       |

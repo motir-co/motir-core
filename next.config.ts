@@ -1,6 +1,7 @@
 import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
+import { versionSkewConfig } from './lib/build/versionSkew';
 import { MONITORING_TUNNEL_ROUTE, monitoringRelease } from './lib/monitoring/config';
 
 // Wires next-intl's request config (./i18n/request.ts by default) into the build.
@@ -265,6 +266,14 @@ const nextConfig: NextConfig = {
   // normal `pnpm dev` session's indicator untouched.
   ...(process.env['E2E_DISABLE_DEV_INDICATOR'] ? { devIndicators: false as const } : {}),
   output: 'standalone',
+
+  // ⚠️ A TAB LEFT OPEN ACROSS A DEPLOY (MOTIR-11241). In the production IMAGE
+  // build only: `assetPrefix` serves `/_next/static` from static.motir.co, which
+  // keeps every release's files after its task stops, and `deploymentId` (the
+  // commit SHA) makes Next hard-navigate a tab whose build no longer matches the
+  // server's instead of mixing two builds. Dev, CI and test builds get neither.
+  // See `lib/build/versionSkew.ts`.
+  ...versionSkewConfig(),
 
   // ⚠️ There is deliberately NO `outputFileTracingExcludes` here, and the
   // pruning it used to claim lives in the `Dockerfile`'s BUILDER stage instead

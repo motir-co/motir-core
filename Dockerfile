@@ -127,11 +127,18 @@ ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT=""
 ARG MOTIR_RELEASE=""
 ARG SENTRY_ORG=""
 ARG SENTRY_PROJECT=""
+# The static origin a tab left open across a deploy keeps loading its build's
+# files from (MOTIR-11241, `lib/build/versionSkew.ts`). Empty — every build but
+# the AWS release image — serves `/_next/static` from the app itself. With it,
+# `MOTIR_RELEASE` above also becomes Next's `deploymentId`. The runner below
+# still copies `.next/static`, so the image keeps serving its own files too.
+ARG MOTIR_ASSET_PREFIX=""
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
     NEXT_PUBLIC_SENTRY_ENVIRONMENT=$NEXT_PUBLIC_SENTRY_ENVIRONMENT \
     MOTIR_RELEASE=$MOTIR_RELEASE \
     SENTRY_ORG=$SENTRY_ORG \
-    SENTRY_PROJECT=$SENTRY_PROJECT
+    SENTRY_PROJECT=$SENTRY_PROJECT \
+    MOTIR_ASSET_PREFIX=$MOTIR_ASSET_PREFIX
 
 # ── the SERVER-ACTION SALT (MOTIR-3948) ─────────────────────────────────────
 # ⚠️ THIS ONE IS WHY AN OPEN TAB STOPS BEING ABLE TO WRITE AFTER A DEPLOY.
