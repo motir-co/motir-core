@@ -17,7 +17,12 @@ import type { ServerErrorCopy } from './serverErrorCopy';
 
 export interface ServerErrorViewProps {
   copy: ServerErrorCopy;
-  digest?: string;
+  /**
+   * What the reader quotes to support: the error's `digest` when the server
+   * rendered it, else the Sentry event ID of the browser's report
+   * (MOTIR-11243). Absent ⇒ no reference line.
+   */
+  reference?: string;
   onRetry: () => void;
   retryPending: boolean;
   showHome: boolean;
@@ -25,7 +30,7 @@ export interface ServerErrorViewProps {
 
 export function ServerErrorView({
   copy,
-  digest,
+  reference,
   onRetry,
   retryPending,
   showHome,
@@ -54,9 +59,9 @@ export function ServerErrorView({
           {copy.home}
         </a>
       ) : null}
-      {digest ? (
+      {reference ? (
         <ErrorReference
-          digest={digest}
+          reference={reference}
           label={copy.reference}
           copyLabel={copy.copyReference}
           copiedLabel={copy.copied}

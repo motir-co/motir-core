@@ -49,14 +49,14 @@ export function GlobalErrorContent({
   retry: () => void;
   locale: Locale;
 }) {
-  useReportCaughtError(error, 'global');
+  const eventId = useReportCaughtError(error, 'global');
   const [retryPending, startRetry] = useTransition();
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-[48rem] flex-col items-center justify-center px-(--spacing-lg) py-(--spacing-2xl)">
       <ServerErrorView
         copy={GLOBAL_ERROR_COPY[locale]}
-        digest={error.digest}
+        reference={error.digest ?? eventId}
         onRetry={() => startRetry(() => retry())}
         retryPending={retryPending}
         showHome
