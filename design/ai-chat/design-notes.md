@@ -7556,3 +7556,185 @@ the `--retro-glow` lift carry it, and none of them changes.
 - The ink: the label stays `--el-accent-text` in every row.
 - No mock. The pill's shape, copy and placement are as drawn; only two mix percentages move, and the
   shipped component renders them on the card.
+
+## ⭐ The final check — a project setting, Skip the final check while it runs, and how a skipped plan reads (MOTIR-11263, 2026-11-14)
+
+**Design system.** Files read: `package.json` (depends on `@motir/design-system`, `workspace:*`),
+`app/globals.css` (imports `@motir/design-system/theme.css`), `app/layout.tsx` (axes
+`warm-editorial` / `motir` / `motir`). Verdict: **on Motir Design** (branch a). The mock is built
+with `renderMock` from `@motir/design-system/mock` at those axes; every part is the real shipped
+component rendered from source (`AiPlanningSettingsEditor`, `SettingsCard`, `SwitchRow`,
+`PlanActRecord`, `PlanNarration`, `PlanBriefing`, `MarkdownView`, `Button`, `Spinner`), with the
+two changed components rendered from proposed copies. No part is missing from the package and no
+product-local component is new: the confirm is the shipped `Modal`, drawn statically (a Radix
+portal does not render on the server) with exactly the classes the primitive emits.
+
+**Mock:** `design/ai-chat/planning-workspace--skip-final-check.mock.html` (a delta; panels 1–9c,
+each in light and dark, at desktop and at 390px). **Amends** the AI planning settings page
+(`design/ai-settings/design-notes.md` §4 _Three cards, one footer_ and §6 _Copy_, Planner card;
+its mock `design/ai-settings/ai-planning-settings--no-model.mock.html` is a record and is not
+edited), the planner narration (§ _⭐ Planner narration in the chat panel_, MOTIR-8061, and the
+final check's own heads, MOTIR-11256), and the confirm pattern of § _⭐ Plan something new confirms
+in a modal dialog_ (MOTIR-11260), whose dialog this one matches. **Decided by** the product owner on
+2026-11-14 (story MOTIR-11262). **Built by** MOTIR-11264 (setting), MOTIR-11265 (motir-ai honours
+it), MOTIR-11266 (control, dialog, mailbox), MOTIR-11267 (motir-ai ends the check on a skip).
+
+The person-facing name is **the final check** everywhere. "Dry run" is the code's name and never
+appears in a string this section adds.
+
+### 1. The setting — a second row on the Planner card (panels 1–3)
+
+| Element       | Spec                                                                                                                                                                                                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Placement     | The **Planner** card (`settings.aiPlanning.planner`), a second `SwitchRow` directly under _Draft a why for each item_ and above the data-practice callout, which stays at the card's foot (§D2). The card's subject is how the planner works for this project; the final check is part of that, so it gets no card of its own.             |
+| Row           | `SwitchRow` (`testId="ai-planning-final-check"`): label `finalCheckLabel` (`--el-text`, 14px medium), hint `finalCheckHint` (the shipped hint ink). On by default.                                                                                                                                                                         |
+| Off callout   | Only while the switch reads off (saved or not), inside the row's label column as `SwitchRow` children: the editor's `Callout` on a new `yellow` slot — `--el-tint-yellow` fill, `--el-border-soft`, `--el-text-strong` ink, `TriangleAlert` 15px in `--el-warning`, `--radius-card`, `--spacing-card-padding-12/-8`. Copy `finalCheckOff`. |
+| Save          | The page's one footer on the last editable card, unchanged: the switch makes the page dirty (_Unsaved changes_, Save enabled); Save sends `aiFinalCheck` with the other fields in the same PATCH, optimistic with reconcile.                                                                                                               |
+| Read-only     | A member without `ai:configure`: the shipped read-only banner on the first card, the switch `disabled` at its saved value (label and hint drop to `--el-text-faint`, the exempt disabled state), no footer. The off callout still shows when the saved value is off: a member should know why a plan says it was not checked.              |
+| Not connected | As every row: disabled under the shipped not-connected banner.                                                                                                                                                                                                                                                                             |
+
+**Disabled text says it is disabled.** A disabled row's label and hint (and a disabled dependent
+field's label, hint and unit) take `--el-text-faint`, which only the disabled exemption of WCAG
+1.4.3 allows. The mock marks each with `aria-disabled="true"` so the exemption is stated on the
+element (the design ink guard reads it); the shipped `SwitchRow` and the editor's `DependentField`
+paint the ink without the attribute, and MOTIR-11264 adds it where it touches them.
+
+**Why a yellow callout, and only when off.** On is the default and the quiet state, as on the other
+switches (§8.1 — a callout explains a setting that is live, the default view stays quiet). Off
+changes what every plan of the project is: it is proposed unchecked. Saying so where the switch is
+flipped is the cheapest moment to be honest about the trade. Yellow because the three tinted slots
+the editor already uses (sky, lavender, peach) belong to other meanings; a fourth distinct slot keeps
+the callouts from reading alike (§9).
+
+### 2. Skip the final check — the control (panels 4, 4b, 7)
+
+| Element   | Spec                                                                                                                                                                                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Placement | In `PlanNarration`, directly under the **live** final-check head (a group whose session `stepKind` is `check` and is live — the check's own head or the card it is reviewing now), indented to the notes column (`ml-5.5`). It sits between the head and the message list, so _Hide planner notes_ (which hides the lists) never hides it. |
+| Control   | `Button` `secondary` `sm` (`--radius-btn`, `--height-btn-sm`, `--el-button-border`, `--el-text`), `leftIcon` `SkipForward` 14px `aria-hidden`. Copy `narration.skipCheck`. `data-testid="plan-narration-skip-check-control"`.                                                                                                              |
+| Who       | Shown only to a person who may steer the plan (`ai:plan`, the gate the shipped Stop uses). A Visitor, or a member without it, sees the notes with no control.                                                                                                                                                                              |
+| When      | Only while a final-check session is live. Never during a lay, a card being written, an amend, **the fix after the check** (panel 4b) or once the plan is proposed. A project with the setting off never opens a check session, so it never shows.                                                                                          |
+| Pending   | After a confirmed skip is accepted (the mailbox entry is written), the control's place reads `narration.skippingCheck` beside a `Spinner` sm, `role="status"`, `--el-text-secondary` — until the check's head turns `· done` (the job ended it). Then the row is gone.                                                                     |
+
+**Why under the live head.** The card asks for the control beside the final check's head; the check
+is the one step a person may want to cut, and the live head is where the notes show what it is doing
+now. A control in the sticky notes bar would be visible for every step and need its own disabled
+state; one under the live head appears and disappears with the thing it acts on.
+
+### 3. The confirm (panels 5, 6, 8, 8b)
+
+Composed from the shipped `Modal` exactly as § MOTIR-11260's dialog composes it (`PlanCloseGuard`'s
+footer, `FolderDeleteDialog`'s tinted line and refusal line, `DeleteWorkItemDialog`'s _Try again_).
+No new primitive.
+
+| Element          | Spec                                                                                                                                                                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel            | `Modal`, `role="alertdialog"`, `size="md"` (28rem; 90% of a narrow viewport). `--radius-modal`, `--el-page-bg`, `--el-border`, `--shadow-modal`, `--spacing-card-padding`. Scrim `--el-overlay-scrim` over the whole planning overlay.                                                   |
+| Title            | `skipFinalCheck.title` — the `Modal` title (serif, `--el-text`); the accessible name.                                                                                                                                                                                                    |
+| Description      | `skipFinalCheck.body` — what the final check does, for someone who has never heard of it. `--el-text-subtitle`, 14px.                                                                                                                                                                    |
+| Consequence line | `skipFinalCheck.consequence` — what skipping means. A `<p>` in `Modal.Body`: `--el-tint-peach`, `--el-text-strong`, 13px, `--radius-control`, `--spacing-control-x-12` / `--spacing-control-y`; `CircleStop` 16px `--el-warning` `aria-hidden`. Part of the description (`describedBy`). |
+| Footer           | `Modal.Footer` `flex-wrap`: **Keep checking** (`Button` ghost sm) then **Skip the final check** (`Button` primary sm, `--el-accent` / `--el-accent-text`, `SkipForward` leftIcon).                                                                                                       |
+| Close (×)        | The `Modal`'s own close control, `common.close`.                                                                                                                                                                                                                                         |
+| Error line       | After a failed request only: `role="alert"`, `AlertCircle` 14px `--el-danger` `aria-hidden`, `skipFinalCheck.error` in `--el-text`, 13px. The primary reads `skipFinalCheck.retry`.                                                                                                      |
+| Finished line    | When the server refuses because the check had already ended: the consequence line is replaced by `skipFinalCheck.finished` on `--el-tint-mint`, `Info` 16px `--el-success`, `role="status"`; the footer holds one **Close** (`Button` primary sm, focused).                              |
+
+**Why primary, not danger.** Skipping deletes nothing the person made: the plan is still proposed,
+and everything already written stays. The loss is a check that did not finish, which the peach line
+names in words. MOTIR-11260 made the same call for the same reason.
+
+**States.**
+
+| #   | State    | What shows                                                                                                                                                                        |
+| --- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5   | Open     | Title, description, the peach line, Keep checking (focused) and Skip the final check.                                                                                             |
+| —   | Kept     | Keep checking, Escape, × or a scrim click closes it. Nothing is written; the check runs on. Focus returns to the control.                                                         |
+| 6   | Skipping | Skip the final check shows the `Button` loading spinner; both buttons and × disabled; `Modal.Body` `aria-busy`. Escape and the scrim are ignored until the request answers.       |
+| 7   | Skipped  | The request is accepted: the dialog closes, focus returns to the notes (the pending status row, then the next head), and the notes take over (§2 Pending, §4).                    |
+| 8   | Failed   | The dialog stays with the error line; the primary reads _Try again_ and sends the same request. Keep checking, Escape and × dismiss. Nothing changed: the check is still running. |
+| 8b  | Refused  | The check ended between the press and the answer (the job reached its fix, or proposed): the finished line and one Close. Behind it the control is already gone.                  |
+
+### 4. A plan whose final check did not run (panels 9a, 9b, 9c)
+
+Two places say it, and a plan whose check ran reads exactly as today (9c).
+
+**The planning notes (act record).** The final check's stage says why it ended, as the shipped skip
+lines do (`dryRunSkippedLine` in motir-ai `src/jobs/progressNotes.ts`). These lines are motir-ai's
+own, in English, and render verbatim as `note` acts:
+
+- Turned off: _Skipped the final check of the plan: it is turned off for this project_
+- Skipped by a person: _Ended the final check of the plan early because it was skipped: nothing it found was fixed_
+
+**The briefing (the plan's summary, `PlanBriefing`).** A bold claim line ends **section 2, _What the
+plan does_**, which is open by default, so the plan reads differently at a glance without opening
+anything; the counts line stays last in section 6:
+
+- Skipped by a person: **The final check was skipped** before it finished, so this plan was not
+  fully checked and nothing it found was fixed.
+- Turned off: **The final check did not run**: it is turned off for this project, so this plan was
+  not checked before it was proposed.
+
+After a person's skip, **section 5** carries what the check found before it was cut, in the place the
+check's block goes today: _Final check: skipped after {n} finding(s) was/were made; none was fixed._
+and one _Left unfixed: {card} — skipped before the fix._ line per finding. With no findings, section 5
+says nothing about the check. With the setting off, section 5 says nothing about it either.
+
+### 5. Focus, keyboard and screen readers
+
+Following the shipped confirm dialogs (`PlanCloseGuard`, `DeleteWorkItemDialog`, `FolderDeleteDialog`,
+and MOTIR-11260's dialog, all Radix through `Modal`):
+
+- **On open**, focus lands on **Keep checking**, the safe answer (first focusable element, so Radix
+  lands there itself).
+- **Tab / Shift+Tab** cycle Keep checking → Skip the final check → × (focus trap; the overlay
+  behind is inert).
+- **Enter / Space** press the focused button only.
+- **Escape**, **×** and a **scrim click** dismiss as Keep checking does, except while skipping.
+- **On close**, focus returns to the control (`onCloseAutoFocus` prevents the default and focuses
+  it); after an accepted skip the control is replaced by the pending status, so focus goes to that
+  row's group head.
+- **Naming:** `role="alertdialog"`, `aria-labelledby` the title, `aria-describedby` the description
+  and the consequence line. The error line is `role="alert"`; the finished line and the pending row
+  are `role="status"`.
+- **The setting:** the switch is named by its label (`aria-labelledby`, as `SwitchRow` does) and its
+  hint is read with it; the off callout is plain text under it, not a live region.
+
+### 6. Test ids
+
+`ai-planning-final-check` (the switch), `ai-planning-final-check-off` (the callout),
+`plan-narration-skip-check` (the row), `plan-narration-skip-check-control`,
+`plan-narration-skip-check-pending`, `planning-skip-check-dialog`,
+`planning-skip-check-dialog-consequence`, `planning-skip-check-dialog-error`,
+`planning-skip-check-dialog-finished`, `planning-skip-check-keep`, `planning-skip-check-confirm`.
+
+### 7. Copy
+
+New catalogue keys (every locale, under the catalogue parity rule; the other ten locales are written
+by the building cards). The notes lines and briefing lines in §4 are motir-ai's and stay English.
+
+| key                                                      | en                                                                                                                                                                                                                |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `settings.aiPlanning.planner.finalCheckLabel`            | Run the final check                                                                                                                                                                                               |
+| `settings.aiPlanning.planner.finalCheckHint`             | Before a plan is proposed, Motir AI reads its cards again in build order, checks that each can be built on what the cards before it deliver, and fixes what it finds. On a large plan this can take many minutes. |
+| `settings.aiPlanning.planner.finalCheckOff`              | Plans for this project are proposed without the final check. Each plan’s summary says it was not checked.                                                                                                         |
+| `planningWorkspace.conversation.narration.skipCheck`     | Skip the final check                                                                                                                                                                                              |
+| `planningWorkspace.conversation.narration.skippingCheck` | Skipping the final check…                                                                                                                                                                                         |
+| `planningWorkspace.skipFinalCheck.title`                 | Skip the final check?                                                                                                                                                                                             |
+| `planningWorkspace.skipFinalCheck.body`                  | The final check reads every card of this plan again in build order, checks that each can be built on what the cards before it deliver, and fixes what it finds.                                                   |
+| `planningWorkspace.skipFinalCheck.consequence`           | If you skip it, the plan is proposed now without that check. What it has found so far is listed in the plan’s summary, but nothing is fixed.                                                                      |
+| `planningWorkspace.skipFinalCheck.confirm`               | Skip the final check                                                                                                                                                                                              |
+| `planningWorkspace.skipFinalCheck.keep`                  | Keep checking                                                                                                                                                                                                     |
+| `planningWorkspace.skipFinalCheck.error`                 | The final check could not be skipped. It is still running: try again, or keep checking.                                                                                                                           |
+| `planningWorkspace.skipFinalCheck.retry`                 | Try again                                                                                                                                                                                                         |
+| `planningWorkspace.skipFinalCheck.finished`              | The final check had already finished, so there was nothing to skip.                                                                                                                                               |
+
+The control and the confirm share the words _Skip the final check_ but have their own keys, so the
+two can change apart. The confirm button repeats the title's verb so it can be answered without
+rereading the title (the MOTIR-11260 rule).
+
+### 8. Out of scope
+
+What the final check reviews and how it fixes; its own step kind, heads and narration (MOTIR-11256,
+MOTIR-11257); the Checking tag (MOTIR-11253, MOTIR-11254); the model it runs on (a platform
+setting); plan.py and the check plan skill; stopping the whole plan (the shipped Stop). The shipped
+section-5 block of a plan whose check ran still opens _Dry run:_ (panel 9c draws it as it ships);
+that wording is filed as its own bug, not changed here.
