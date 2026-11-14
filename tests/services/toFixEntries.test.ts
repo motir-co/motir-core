@@ -49,6 +49,7 @@ const DETAIL = {
   reviewerName: null,
   notePreview: null,
   gate: null,
+  reviewRef: null,
   lastHeardAt: null,
   ranByName: null,
   branch: null,

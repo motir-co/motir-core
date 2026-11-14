@@ -7,6 +7,10 @@ import { relativeLabel, RepairRunLink } from '@/components/github/RepairFixPart'
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import { FixingTag, toFixTagState } from '@/components/workItems/ToFixTag';
 import { FixReasonSentence } from '@/app/(authed)/workbench/_components/WorkbenchFixLine';
+import {
+  SentBackFindingsLink,
+  sentBackFindingsRefOf,
+} from '@/components/approvals/SentBackFindingsLink';
 import Link from 'next/link';
 import type { FixDetailDto, FixGroupPointerDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
@@ -33,8 +37,12 @@ import { useLandOnLateSection } from './useLandOnLateSection';
 // command:* for every command (`leadRun` retired, MOTIR-6825; § 32).
 //
 // ⚠️ A REFUSAL THE REVIEW AGENT WROTE (`fixDetail.gate === 'agent_review'`) NAMES THE
-// AGENT and the findings' first line (§ 32), never the run's attributed user — the
-// findings in full are one link below, in the Development frame's review band.
+// AGENT and the findings' first line (§ 32), never the run's attributed user — and the
+// banner's last line opens the findings and the checklist IN PLACE, *Findings and checklist*
+// first, then the link down to the Development frame (MOTIR-11234;
+// `design/workbench/design-notes.md` § 43.1). The item page mounts the in-place view for this
+// link alone (`ReviewFindingsInPlace scope="toFix"`); the page's other findings links keep
+// going to the card.
 //
 // ⚠️ IT DRAWS WHAT THE STORED DETAIL SAYS AND NOTHING ELSE. No pull request is
 // read here: the Development block below already lists them, and the banner points
@@ -73,6 +81,8 @@ const bold = (chunks: ReactNode) => <b className="font-semibold">{chunks}</b>;
 export interface ToFixBannerProps {
   /** The `PROD-N` key — the command names it. */
   identifier: string;
+  /** The card's title — the in-place findings view's subtitle while its read loads. */
+  title?: string | null;
   fixReason: WorkItemFixReasonDto | null;
   fixDetail: FixDetailDto | null;
   /** The item's status CATEGORY — a `done` card draws nothing (`toFixTagState`). */
@@ -97,6 +107,7 @@ export interface ToFixBannerProps {
 
 export function ToFixBanner({
   identifier,
+  title = null,
   fixReason,
   fixDetail,
   statusCategory,
@@ -135,6 +146,27 @@ export function ToFixBanner({
   const reviewSentBack = isReviewSentBack(fixReason, fixDetail);
   const hostedRepair = reviewSentBack && repairRun?.hosted ? repairRun : null;
   const door = reviewSentBack && !repairRun ? hostedDoor : null;
+  // § 43.1: the review AGENT's send-back opens its findings and checklist in place — on the
+  // banner, Fixing, under a hosted repair and on a carried card alike (§ 43.3).
+  const findingsRef = sentBackFindingsRefOf(fixReason, fixDetail);
+  const findingsLink = findingsRef ? (
+    <SentBackFindingsLink
+      identifier={identifier}
+      title={title}
+      reviewRef={findingsRef}
+      variant="banner"
+    />
+  ) : null;
+  /** The banner's last line: the findings link first, then the shipped link (§ 43.1). */
+  const linkRow = (link: ReactNode) =>
+    findingsLink ? (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        {findingsLink}
+        {link}
+      </div>
+    ) : (
+      link
+    );
 
   const sentence = ((): ReactNode => {
     switch (reason) {
@@ -256,22 +288,24 @@ export function ToFixBanner({
             </p>
           ) : null}
           {/* No command (§ 40.3): `motir fix` refuses a card whose checks are running. */}
-          <a
-            href={`#${DEVELOPMENT_SECTION_ID}`}
-            onClick={(event) => {
-              event.preventDefault();
-              press();
-            }}
-            aria-busy={pending || undefined}
-            className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-          >
-            {t('toDevelopment')}
-            {pending ? (
-              <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-            )}
-          </a>
+          {linkRow(
+            <a
+              href={`#${DEVELOPMENT_SECTION_ID}`}
+              onClick={(event) => {
+                event.preventDefault();
+                press();
+              }}
+              aria-busy={pending || undefined}
+              className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {t('toDevelopment')}
+              {pending ? (
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+              )}
+            </a>,
+          )}
           <span className="sr-only" role="status" aria-live="polite">
             {pending ? t('opening') : ''}
           </span>
@@ -366,34 +400,38 @@ export function ToFixBanner({
         {carriedBy ? (
           // A carried card points at the HEAD's page — its Development block holds both
           // repairs — never at a Workbench row the reader may not have.
-          <Link
-            href={routes.item(carriedBy, DEVELOPMENT_SECTION_ID)}
-            data-testid="to-fix-banner-to-head"
-            className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-          >
-            {t('toHead', { head: carriedBy })}
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-          </Link>
+          linkRow(
+            <Link
+              href={routes.item(carriedBy, DEVELOPMENT_SECTION_ID)}
+              data-testid="to-fix-banner-to-head"
+              className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {t('toHead', { head: carriedBy })}
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>,
+          )
         ) : (
           <>
             {/* A real `#development` link, so it works with scripting off; with it on,
             the press waits for the late stack the way the header marker does. */}
-            <a
-              href={`#${DEVELOPMENT_SECTION_ID}`}
-              onClick={(event) => {
-                event.preventDefault();
-                press();
-              }}
-              aria-busy={pending || undefined}
-              className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-            >
-              {t(isDeadRun ? (nothingPushed ? 'toStartOver' : 'toContinue') : 'toDevelopment')}
-              {pending ? (
-                <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              ) : (
-                <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-              )}
-            </a>
+            {linkRow(
+              <a
+                href={`#${DEVELOPMENT_SECTION_ID}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  press();
+                }}
+                aria-busy={pending || undefined}
+                className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              >
+                {t(isDeadRun ? (nothingPushed ? 'toStartOver' : 'toContinue') : 'toDevelopment')}
+                {pending ? (
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                )}
+              </a>,
+            )}
             <span className="sr-only" role="status" aria-live="polite">
               {pending ? t(isDeadRun ? 'openingDevelopment' : 'opening') : ''}
             </span>

@@ -313,6 +313,8 @@ describe('§12.4 — what each decision does', () => {
     expect(card.fixReason).toBe('changes_requested');
     expect(card.fixDetail).toMatchObject({
       gate: 'agent_review',
+      // The findings the To fix link opens: this verdict's own pass (MOTIR-11234).
+      reviewRef: { kind: 'gate', id: review.id },
       reviewerName: 'Review agent',
       notePreview: 'The migration drops a column the reader still selects.',
       repair: 'fix',

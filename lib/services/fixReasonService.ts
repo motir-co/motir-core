@@ -3,7 +3,9 @@ import type { Prisma } from '@/generated/prisma/client';
 import {
   readAnsweredReviewRefusal,
   readStandingReviewRefusal,
+  type StandingReviewRefusal,
 } from '@/lib/approvalGates/reviewRefusal';
+import type { ReviewFindingsRefDto } from '@/lib/dto/agentReview';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import {
   hasHeadDecidedBeforeRunningChecks,
@@ -16,6 +18,7 @@ import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
+import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import {
   workItemDeliveryRepository,
@@ -46,11 +49,13 @@ import {
   reviewerNameOf,
   runFixGroupKey,
   sameFixReason,
+  sentBackReviewRefOf,
   withFixGroupKey,
   withRaisedHeads,
   type AnsweredMember,
   type FixReasonValue,
   type RunningHead,
+  type SentBackReviewSource,
 } from '@/lib/workItems/fixReason';
 import { queueFailureAnsweredByHead } from '@/lib/workItems/deliverySet';
 
@@ -145,6 +150,31 @@ async function reviewerName(
   const user = decidedById ? await userRepository.findById(decidedById, tx) : null;
   return reviewerNameOf(user, decidedByLabel);
 }
+
+/**
+ * The review a card the review AGENT sent back opens under *Findings and checklist*
+ * (MOTIR-11234; `sentBackReviewRefOf`): the gate-off record itself, else the record that
+ * decided the gate, else the gate. Read only for an agent send-back on a gate — nothing is
+ * read for a person's Request changes.
+ */
+async function sentBackReviewRef(
+  source: SentBackReviewSource | null,
+  tx: Prisma.TransactionClient,
+): Promise<ReviewFindingsRefDto | null> {
+  if (!source || source.kind !== 'agent_review') return null;
+  const decided =
+    source.recordId === null && source.gateId !== null
+      ? await reviewVerdictRecordRepository.findDecidedByGate(source.gateId, tx)
+      : null;
+  return sentBackReviewRefOf(source, decided?.id ?? null);
+}
+
+/** A standing or answered review refusal, as the source its review ref is read from. */
+const sourceOfRefusal = (refusal: StandingReviewRefusal): SentBackReviewSource => ({
+  kind: refusal.kind,
+  gateId: refusal.id,
+  recordId: refusal.recordId,
+});
 
 /**
  * The pull-request reason the RUNNING members' push answered, rebuilt from durable rows
@@ -332,6 +362,7 @@ export async function deriveFixReason(
               gate: verdict.reviewRefusal.gate,
               reviewerName: verdict.reviewRefusal.reviewerName,
               noteMd: verdict.reviewRefusal.findingsMd,
+              reviewRef: await sentBackReviewRef(verdict.reviewSource, tx),
             },
             total,
           ),
@@ -400,6 +431,7 @@ export async function deriveFixReason(
                 ? REVIEW_AGENT_REVIEWER_NAME
                 : await reviewerName(answered.decidedById, answered.decidedByLabel, tx),
               noteMd: answered.noteMd,
+              reviewRef: await sentBackReviewRef(sourceOfRefusal(answered), tx),
             },
             total,
           ),
@@ -429,6 +461,7 @@ export async function deriveFixReason(
               ? REVIEW_AGENT_REVIEWER_NAME
               : await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
             noteMd: latest.noteMd,
+            reviewRef: await sentBackReviewRef(sourceOfRefusal(latest), tx),
           },
           total,
         ),

@@ -314,6 +314,7 @@ describe('per reason — an event puts the card on To fix, and only there', () =
       fixDetail: {
         repair: 'fix',
         gate: 'pull_request_approval',
+        reviewRef: null,
         notePreview: 'Rename the export button.',
       },
     });

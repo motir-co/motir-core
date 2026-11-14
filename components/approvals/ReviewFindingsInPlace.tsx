@@ -28,6 +28,14 @@ import type { ReviewFindingsRefDto } from '@/lib/dto/agentReview';
 // mounted {@link useInPlaceFindings} hands each link a click handler; everywhere else it
 // hands `null` and the link is the plain card link it always was.
 //
+// ⚠️ AND ON THE ITEM PAGE, FOR THE TO FIX BANNER ALONE (MOTIR-11234; § 43.2). The To fix
+// row and banner's *Findings and checklist* — a card the review agent sent back — opens the
+// same view in place. The item page mounts {@link ReviewFindingsInPlace} with
+// `scope="toFix"`, which switches on ONLY the links that ask for that scope
+// (`useInPlaceFindings('toFix')`): the Development frame's review band and gate frame on the
+// same page keep going to the card, as § 42 left them. The Workbench's mount is `all`, which
+// covers the To fix row too.
+//
 // ⚠️ NOT WRITTEN TO THE ADDRESS. A plain primary click opens the view (`usePeekRowClick`'s
 // contract); a modified, middle or secondary click keeps the real `href` (the card in a new
 // tab). Nothing navigates, so the list underneath keeps its scroll, its rows, any row held
@@ -46,8 +54,23 @@ export interface ReviewFindingsTarget {
 
 type Opener = (target: ReviewFindingsTarget, returnFocusTo: HTMLElement | null) => void;
 
-const EnableContext = createContext<(() => () => void) | null>(null);
-const OpenerContext = createContext<Opener | null>(null);
+/**
+ * Which links a mount switches on: `all` — every findings link (the Workbench); `toFix` —
+ * only the To fix row and banner's link (the item page, § 43.2).
+ */
+export type InPlaceFindingsScope = 'all' | 'toFix';
+
+type Enabled = Record<InPlaceFindingsScope, number>;
+
+const NONE_ENABLED: Enabled = { all: 0, toFix: 0 };
+
+/** Whether a link of `scope` opens in place under these mounts — `all` covers `toFix`. */
+function isOn(enabled: Enabled, scope: InPlaceFindingsScope): boolean {
+  return enabled.all > 0 || (scope === 'toFix' && enabled.toFix > 0);
+}
+
+const EnableContext = createContext<((scope: InPlaceFindingsScope) => () => void) | null>(null);
+const OpenerContext = createContext<Record<InPlaceFindingsScope, Opener | null> | null>(null);
 
 /** A row door to fall back to when the opener's row is gone by the time the view closes. */
 function nextRowDoorOf(opener: HTMLElement | null): HTMLElement | null {
@@ -58,30 +81,43 @@ function nextRowDoorOf(opener: HTMLElement | null): HTMLElement | null {
 
 export function ReviewFindingsProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [enabled, setEnabled] = useState(0);
-  const [open, setOpen] = useState<{ target: ReviewFindingsTarget; pathname: string } | null>(null);
+  const [enabled, setEnabled] = useState<Enabled>(NONE_ENABLED);
+  const [open, setOpen] = useState<{
+    target: ReviewFindingsTarget;
+    pathname: string;
+    scope: InPlaceFindingsScope;
+  } | null>(null);
   const returnFocus = useRef<{ opener: HTMLElement | null; fallback: HTMLElement | null }>({
     opener: null,
     fallback: null,
   });
 
-  const enable = useCallback(() => {
-    setEnabled((n) => n + 1);
-    return () => setEnabled((n) => n - 1);
+  const enable = useCallback((scope: InPlaceFindingsScope) => {
+    setEnabled((n) => ({ ...n, [scope]: n[scope] + 1 }));
+    return () => setEnabled((n) => ({ ...n, [scope]: n[scope] - 1 }));
   }, []);
 
-  const opener = useMemo<Opener | null>(
-    () =>
-      enabled > 0
-        ? (target, returnFocusTo) => {
-            returnFocus.current = {
-              opener: returnFocusTo,
-              fallback: nextRowDoorOf(returnFocusTo),
-            };
-            setOpen({ target, pathname });
-          }
-        : null,
-    [enabled, pathname],
+  const openIn = useCallback(
+    (
+      scope: InPlaceFindingsScope,
+      target: ReviewFindingsTarget,
+      returnFocusTo: HTMLElement | null,
+    ) => {
+      returnFocus.current = {
+        opener: returnFocusTo,
+        fallback: nextRowDoorOf(returnFocusTo),
+      };
+      setOpen({ target, pathname, scope });
+    },
+    [pathname],
+  );
+
+  const openers = useMemo<Record<InPlaceFindingsScope, Opener | null>>(
+    () => ({
+      all: isOn(enabled, 'all') ? (target, from) => openIn('all', target, from) : null,
+      toFix: isOn(enabled, 'toFix') ? (target, from) => openIn('toFix', target, from) : null,
+    }),
+    [enabled, openIn],
   );
 
   const close = useCallback(() => {
@@ -99,11 +135,12 @@ export function ReviewFindingsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const shown = open !== null && enabled > 0 && open.pathname === pathname ? open.target : null;
+  const shown =
+    open !== null && isOn(enabled, open.scope) && open.pathname === pathname ? open.target : null;
 
   return (
     <EnableContext.Provider value={enable}>
-      <OpenerContext.Provider value={opener}>
+      <OpenerContext.Provider value={openers}>
         {children}
         {shown ? <ReviewFindingsDialog target={shown} onClose={close} /> : null}
       </OpenerContext.Provider>
@@ -111,26 +148,32 @@ export function ReviewFindingsProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Mounted by the Workbench page: while it is, the findings links open in place. */
-export function ReviewFindingsInPlace() {
+/**
+ * Mounted by the Workbench page (`all`): while it is, the findings links open in place. The
+ * item page mounts it with `scope="toFix"`, for the To fix banner's link alone (§ 43.2).
+ */
+export function ReviewFindingsInPlace({ scope = 'all' }: { scope?: InPlaceFindingsScope }) {
   const enable = useContext(EnableContext);
-  useEffect(() => enable?.(), [enable]);
+  useEffect(() => enable?.(scope), [enable, scope]);
   return null;
 }
 
 /**
  * The findings link's click handler while the view opens in place, else `null` — the link
  * then navigates to its `href` as it always did. `returnFocusTo` is what takes focus back
- * on close; it defaults to the link pressed.
+ * on close; it defaults to the link pressed. `scope` is the link's own: `toFix` for the To
+ * fix row and banner (§ 43), `all` for every other findings link.
  */
-export function useInPlaceFindings():
+export function useInPlaceFindings(
+  scope: InPlaceFindingsScope = 'all',
+):
   | ((
       event: MouseEvent<HTMLElement>,
       target: ReviewFindingsTarget,
       returnFocusTo?: HTMLElement | null,
     ) => void)
   | null {
-  const opener = useContext(OpenerContext);
+  const opener = useContext(OpenerContext)?.[scope] ?? null;
   return useMemo(
     () =>
       opener

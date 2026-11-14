@@ -44,6 +44,7 @@ const DETAIL = {
   reviewerName: null,
   notePreview: null,
   gate: null,
+  reviewRef: null,
   affected: 1,
   total: 1,
 };

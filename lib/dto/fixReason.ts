@@ -6,6 +6,7 @@
 // render time: the tab pages and counts like the other tabs, and a row that had to
 // open its pull requests to say why it is listed would be a read per row.
 
+import type { ReviewFindingsRefDto } from '@/lib/dto/agentReview';
 import type { RunDiedReason } from '@/lib/dto/workItemContinue';
 
 /**
@@ -87,6 +88,18 @@ export interface FixDetailDto {
    *  a story's acceptance video, or the REVIEW AGENT's review (MOTIR-6819). Null on the
    *  pull-request reasons. */
   gate: 'pull_request_approval' | 'acceptance_result' | 'agent_review' | null;
+  /**
+   * `changes_requested` on `agent_review` ONLY: the review that sent the card back — the
+   * ref the in-place view's read (`app/api/work-items/[id]/review-findings/route.ts`)
+   * takes, so the To fix row and banner's *Findings and checklist* opens exactly that
+   * review's findings and checklist (MOTIR-11234; `design/workbench/design-notes.md` § 43).
+   * A verdict RECORD whenever one holds the send-back — the gate-off record itself, or the
+   * record that decided the gate — else the decided `agent_review` gate (a review decided
+   * before records existed). Null on every other reason and gate, and on a row stored
+   * before the field existed: the surfaces then draw no link, and the next recompute
+   * fills it.
+   */
+  reviewRef: ReviewFindingsRefDto | null;
   /** `run_died`: when the dead run was last heard from, ISO-8601 — the continue view's
    *  `deadRun.lastHeardAt`. */
   lastHeardAt: string | null;

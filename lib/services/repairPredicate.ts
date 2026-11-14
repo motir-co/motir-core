@@ -28,6 +28,7 @@ import {
   REVIEW_AGENT_REVIEWER_NAME,
   reviewerNameOf,
   type RunningHead,
+  type SentBackReviewSource,
 } from '@/lib/workItems/fixReason';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
@@ -58,6 +59,13 @@ export type RepairEvaluation =
       acceptanceRefusal: AcceptanceRefusalDto | null;
       /** Set exactly on the `review` class (MOTIR-6822). */
       reviewRefusal: ReviewRefusalDto | null;
+      /**
+       * Where that refusal is stored — its decided gate or its gate-off verdict record —
+       * set exactly with {@link reviewRefusal}. Internal to the stored To fix answer, which
+       * names the review *Findings and checklist* opens (MOTIR-11234); the claim never
+       * hands it out.
+       */
+      reviewSource: SentBackReviewSource | null;
     }
   | {
       ok: false;
@@ -269,6 +277,7 @@ export async function evaluateRepair(
         ok: true,
         repairClass: 'acceptance_rerun',
         reviewRefusal: null,
+        reviewSource: null,
         acceptanceRefusal: {
           reasonMd: rerun.reasonMd,
           decidedByLabel: rerun.decidedByLabel,
@@ -319,6 +328,7 @@ export async function evaluateRepair(
             : reviewerNameOf(person, review.decidedByLabel),
           decidedAt: review.decidedAt.toISOString(),
         },
+        reviewSource: { kind: review.kind, gateId: review.id, recordId: review.recordId },
         pullRequests: openRows.map((row) =>
           toRepairPullRequest({
             row,
@@ -421,6 +431,7 @@ export async function evaluateRepair(
     repairClass: 'ci',
     acceptanceRefusal: null,
     reviewRefusal: null,
+    reviewSource: null,
     pullRequests: failing,
   };
 }

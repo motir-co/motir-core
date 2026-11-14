@@ -33,6 +33,7 @@ import type { Locale } from '@/lib/i18n/locales';
 import { ArchivedBanner } from './_components/ArchivedBanner';
 import { PendingPlanNotice } from './_components/PendingPlanNotice';
 import { ToFixBanner } from './_components/ToFixBanner';
+import { ReviewFindingsInPlace } from '@/components/approvals/ReviewFindingsInPlace';
 import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
 import { ToFixHostedDoor } from './_components/ToFixHostedDoor';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
@@ -760,8 +761,13 @@ export default async function ItemView({
               IS, what holds it now, what a plan proposes it become). Renders
               nothing when nothing is waiting on a repair, which is nearly every
               card, or on a done card. */}
+                    {/* MOTIR-11234 (§ 43.2): the banner's *Findings and checklist* opens the
+              review in place over the item page — switched on for that link alone, so the
+              Development frame's findings links keep going to the card. */}
+                    <ReviewFindingsInPlace scope="toFix" />
                     <ToFixBanner
                       identifier={item.identifier}
+                      title={item.title}
                       fixReason={detail.fixReason}
                       fixDetail={detail.fixDetail}
                       fixGroup={detail.fixGroup}

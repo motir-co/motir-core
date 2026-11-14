@@ -68,6 +68,7 @@ function detail(over: Partial<FixDetailDto> = {}): FixDetailDto {
     reviewerName: null,
     notePreview: null,
     gate: null,
+    reviewRef: null,
     lastHeardAt: null,
     ranByName: null,
     branch: null,
