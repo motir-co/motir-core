@@ -422,7 +422,9 @@
     },
     "peekLive": {
       "beingWritten": "Sendo escrito",
-      "written": "Escrito"
+      "written": "Escrito",
+      "follow": "Seguir a escrita",
+      "followHint": "Mantém o texto que está sendo escrito à vista. Role para parar."
     }
   },
   "projectAccess": {

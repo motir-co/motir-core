@@ -422,7 +422,9 @@
     },
     "peekLive": {
       "beingWritten": "W trakcie pisania",
-      "written": "Napisano"
+      "written": "Napisano",
+      "follow": "Podążaj za pisaniem",
+      "followHint": "Utrzymuje pisany tekst w polu widzenia. Przewiń, aby zatrzymać."
     }
   },
   "projectAccess": {

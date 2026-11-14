@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 
@@ -65,9 +65,27 @@ export function QuickViewBody({
   );
 }
 
-/** The scrollable main column — title, bodies, banners. */
-export function QuickViewMain({ children }: { children: ReactNode }) {
-  return <div className="min-w-0 overflow-y-auto px-7 pt-6 pb-7">{children}</div>;
+/**
+ * The scrollable main column — title, bodies, banners. `scrollerRef` reaches the
+ * scroller itself: the proposal peek's _Follow the writing_ writes its `scrollTop`
+ * and listens on it for the reader's own scroll (MOTIR-11248, Part XXX §30.4).
+ */
+export function QuickViewMain({
+  children,
+  scrollerRef,
+}: {
+  children: ReactNode;
+  scrollerRef?: Ref<HTMLDivElement>;
+}) {
+  return (
+    <div
+      ref={scrollerRef}
+      data-testid="quick-view-main"
+      className="min-w-0 overflow-y-auto px-7 pt-6 pb-7"
+    >
+      {children}
+    </div>
+  );
 }
 
 /**

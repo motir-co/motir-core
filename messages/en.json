@@ -422,7 +422,9 @@
     },
     "peekLive": {
       "beingWritten": "Being written",
-      "written": "Written"
+      "written": "Written",
+      "follow": "Follow the writing",
+      "followHint": "Keep the text being written in view. Scroll to stop."
     }
   },
   "projectAccess": {

@@ -422,7 +422,9 @@
     },
     "peekLive": {
       "beingWritten": "Redactándose",
-      "written": "Redactado"
+      "written": "Redactado",
+      "follow": "Seguir la redacción",
+      "followHint": "Mantén a la vista el texto que se está redactando. Desplázate para detenerlo."
     }
   },
   "projectAccess": {

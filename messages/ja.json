@@ -422,7 +422,9 @@
     },
     "peekLive": {
       "beingWritten": "作成中",
-      "written": "作成完了"
+      "written": "作成完了",
+      "follow": "作成を追従",
+      "followHint": "作成中のテキストを表示し続けます。スクロールすると停止します。"
     }
   },
   "projectAccess": {

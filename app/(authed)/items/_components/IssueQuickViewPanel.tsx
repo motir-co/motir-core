@@ -3,7 +3,7 @@
 import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { RelatedTitles } from '../[key]/_components/translation/RelatedTitles';
 import { personDisplayName } from '@/lib/people/personLabel';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Archive,
@@ -27,6 +27,8 @@ import { DesignResultPanel } from '../[key]/_components/DesignResultPanel';
 import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { LiveDraftField } from '@/components/planning/LiveDraftField';
+import { FollowWritingControl } from '@/components/planning/FollowWritingControl';
+import { useFollowWriting } from '@/components/planning/useFollowWriting';
 import { ProposalRef } from '@/components/planning/ProposalRef';
 import {
   IDLE_CUE,
@@ -224,8 +226,9 @@ function sameFields(a: PeekLiveDraft['fields'] | null, b: PeekLiveDraft['fields'
 /**
  * The in-progress cue's line (Part XXIX §29.4, §29.6): `pen-line` + _Being
  * written_ while the card is written; `sr-only` _Written_ once the stored card
- * landed; mounted and EMPTY after a refused write, so nothing is announced. It
- * wraps under the per-op header when the PEEK (not the viewport) is narrow.
+ * landed; mounted and EMPTY after a refused write, so nothing is announced. Its
+ * group (`LiveGroup`) wraps it under the per-op header when the PEEK (not the
+ * viewport) is narrow.
  */
 function LiveCueLine({ state }: { state: LiveCue['state'] }) {
   const tPlan = useTranslations('planReview');
@@ -235,7 +238,7 @@ function LiveCueLine({ state }: { state: LiveCue['state'] }) {
         role="status"
         data-testid="quick-view-live-cue"
         data-live-cue="writing"
-        className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-(--el-text-secondary) @max-[32rem]/peek:order-last @max-[32rem]/peek:basis-full"
+        className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-(--el-text-secondary)"
       >
         <PenLine aria-hidden="true" className="size-3.5 shrink-0 text-(--el-accent-on-surface)" />
         {tPlan('peekLive.beingWritten')}
@@ -246,6 +249,39 @@ function LiveCueLine({ state }: { state: LiveCue['state'] }) {
     <p role="status" data-testid="quick-view-live-cue" data-live-cue={state} className="sr-only">
       {state === 'written' ? tPlan('peekLive.written') : null}
     </p>
+  );
+}
+
+/**
+ * The cue and _Follow the writing_ as ONE header item (MOTIR-11248, Part XXX §30.3),
+ * so the two wrap together under the per-op header when the peek is narrow. Mounted
+ * for exactly as long as the cue is, and only its classes change: the cue's `<p
+ * role="status">` must never be remounted, or the _Written_ announcement is lost.
+ * Once writing ends it holds the cue alone and is `contents`, adding nothing to the
+ * header's layout.
+ */
+function LiveGroup({
+  state,
+  following,
+  onToggleFollow,
+}: {
+  state: LiveCue['state'];
+  following: boolean;
+  onToggleFollow: () => void;
+}) {
+  const writing = state === 'writing';
+  return (
+    <div
+      data-testid="quick-view-live-group"
+      className={
+        writing
+          ? 'inline-flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 @max-[32rem]/peek:order-last @max-[32rem]/peek:basis-full'
+          : 'contents'
+      }
+    >
+      <LiveCueLine state={state} />
+      {writing ? <FollowWritingControl following={following} onToggle={onToggleFollow} /> : null}
+    </div>
   );
 }
 
@@ -519,6 +555,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // A live field (§29.2): the partial through the field's own element, the stored
   // element `sr-only` beside it. A field the draft does not carry is a WAITING
   // field and renders exactly as shipped.
+  // FOLLOW THE WRITING (MOTIR-11248, Part XXX): off on every open — the panel is
+  // keyed per proposal — on while the toggle is pressed, off when the reader
+  // scrolls the main column or the writing ends.
+  const mainRef = useRef<HTMLDivElement>(null);
+  const follow = useFollowWriting(liveOn !== null && cue.state === 'writing', mainRef);
   const livePartial = (field: LiveField, render: (text: string) => ReactNode, node: ReactNode) => {
     const text = liveDraft?.fields[field];
     return text === undefined ? (
@@ -827,7 +868,13 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         {/* THE IN-PROGRESS CUE (MOTIR-11201, Part XXIX §29.4) — right after the op
             chip, mounted for as long as the peek is open on a generating plan so
             its two changes are announced (the ONE live region, §29.6). */}
-        {proposal && (liveOn || cue.state === 'written') ? <LiveCueLine state={cue.state} /> : null}
+        {proposal && (liveOn || cue.state === 'written') ? (
+          <LiveGroup
+            state={cue.state}
+            following={follow.following}
+            onToggleFollow={follow.toggle}
+          />
+        ) : null}
         {/* THE STATUS SLOT AND THE MANUAL CHIP (MOTIR-10534) — the canvas card's tag
             row, shared, so the peek names the item's state the way the roadmap card
             and the board card do: Done › To plan › Ready › the status chip, then
@@ -942,7 +989,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
 
       <QuickViewBody>
         {/* Main — title + the FULL description (scrollable). */}
-        <QuickViewMain>
+        <QuickViewMain scrollerRef={mainRef}>
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {livePartial(

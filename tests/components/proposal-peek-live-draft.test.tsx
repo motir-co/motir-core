@@ -90,8 +90,13 @@ describe('the in-progress cue', () => {
   it('sits right after the op chip, and wraps by the peek width', () => {
     render(peek(ADD, drafts([draft({ title: 'Remember' })])));
     const line = cue()!;
-    expect(line.previousElementSibling?.getAttribute('data-testid')).toMatch(/^quick-view-op/);
-    expect(line.className).toContain('@max-[32rem]/peek:basis-full');
+    // Since MOTIR-11248 (Part XXX §30.3) the cue sits first in the live GROUP, which
+    // takes its place after the op chip and carries the narrow wrap for both.
+    const liveGroup = line.parentElement!;
+    expect(liveGroup.getAttribute('data-testid')).toBe('quick-view-live-group');
+    expect(line.previousElementSibling).toBeNull();
+    expect(liveGroup.previousElementSibling?.getAttribute('data-testid')).toMatch(/^quick-view-op/);
+    expect(liveGroup.className).toContain('@max-[32rem]/peek:basis-full');
     expect(line.closest('header')!.className).toContain('flex-wrap');
     expect(screen.getByTestId('proposal-peek').className).toContain('@container/peek');
   });

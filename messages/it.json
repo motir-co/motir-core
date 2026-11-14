@@ -422,7 +422,9 @@
     },
     "peekLive": {
       "beingWritten": "In fase di stesura",
-      "written": "Scritto"
+      "written": "Scritto",
+      "follow": "Segui la stesura",
+      "followHint": "Mantiene in vista il testo in fase di stesura. Scorri per interrompere."
     }
   },
   "projectAccess": {

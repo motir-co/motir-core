@@ -422,7 +422,9 @@
     },
     "peekLive": {
       "beingWritten": "正在撰写",
-      "written": "已写入"
+      "written": "已写入",
+      "follow": "跟随撰写",
+      "followHint": "让正在撰写的文字保持在视野内。滚动即可停止。"
     }
   },
   "projectAccess": {
