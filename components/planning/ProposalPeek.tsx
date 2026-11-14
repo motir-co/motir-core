@@ -8,6 +8,7 @@ import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { liveDraftFor, type LiveDrafts } from '@/lib/planning/liveDraft';
+import { firstOpeningStop } from '@/components/planning/FollowWritingControl';
 
 // READ A PROPOSAL WITH THE SHIPPED PEEK (MOTIR-4185, story MOTIR-4181, design
 // `design/ai-planning/design-notes.md` Part XIV).
@@ -376,6 +377,10 @@ export function ProposalPeek({
       // own close button — measured at two glyphs 40px apart, and two controls
       // with the identical accessible name `Close` in one dialog.
       hideClose
+      // Opening on a card being written must not land on the Follow-the-writing
+      // toggle (MOTIR-11248): it would open its tooltip at once and take the
+      // first Escape. Focus goes to the stop it went to before the toggle existed.
+      onOpenAutoFocus={focusFirstStopOnOpen}
       className="h-[680px] max-h-[82vh] w-[90vw] p-0"
     >
       {/* modal-scroll-container: measured 1280x700, tallest = the ready peek; the panel pins its own height and IssueQuickViewPanel's two columns scroll, panel 574px */}
@@ -394,4 +399,14 @@ export function ProposalPeek({
       </div>
     </Modal>
   );
+}
+
+/** The dialog's opening focus, skipping a control that opts out of it. */
+export function focusFirstStopOnOpen(event: Event) {
+  const root = event.currentTarget;
+  if (!(root instanceof HTMLElement)) return;
+  const stop = firstOpeningStop(root);
+  if (!stop) return;
+  event.preventDefault();
+  stop.focus();
 }

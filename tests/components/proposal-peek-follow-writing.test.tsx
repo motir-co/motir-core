@@ -390,6 +390,43 @@ describe('reduced motion (F8)', () => {
   });
 });
 
+describe('opening the quick view on a card being written (§30.6)', () => {
+  it('never lands focus on the toggle, so its tooltip stays shut and Escape closes the view', () => {
+    render(peek(ADD, drafts([draft({ descriptionMd: 'Keep' })])));
+    expect(toggle()).not.toBeNull();
+    expect(document.activeElement).not.toBe(toggle());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }));
+  });
+
+  it('firstOpeningStop passes over an opted-out control, inert and hidden stops', async () => {
+    const { firstOpeningStop } = await import('@/components/planning/FollowWritingControl');
+    document.body.innerHTML = `
+      <div id="root">
+        <button data-skip-opening-focus id="skip">skip</button>
+        <div inert><a href="/x">inert</a></div>
+        <div hidden><input id="hidden" /></div>
+        <textarea id="first"></textarea>
+      </div>`;
+    const root = document.getElementById('root')!;
+    expect(firstOpeningStop(root)?.id).toBe('first');
+    document.getElementById('first')!.remove();
+    expect(firstOpeningStop(root)).toBeNull();
+    document.body.innerHTML = '';
+  });
+
+  it('with no stop, or no element, the dialog keeps its own default', async () => {
+    const { focusFirstStopOnOpen } = await import('@/components/planning/ProposalPeek');
+    const opening = (target: EventTarget | null) => {
+      const event = new Event('focusScope.autoFocusOnMount', { cancelable: true });
+      Object.defineProperty(event, 'currentTarget', { value: target });
+      focusFirstStopOnOpen(event);
+      return event.defaultPrevented;
+    };
+    expect(opening(null)).toBe(false);
+    expect(opening(document.createElement('div'))).toBe(false);
+  });
+});
+
 describe('nextFocusStop — where focus goes when the control leaves (§30.6)', () => {
   it('takes the next focusable in the header, skipping the control, earlier stops and inert ones', async () => {
     const { nextFocusStop } = await import('@/components/planning/FollowWritingControl');
