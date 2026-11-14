@@ -1,4 +1,4 @@
-import type { WorkItem } from '@/generated/prisma/client';
+import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -9,7 +9,11 @@ import {
   toWorkItemRefAssigneeDto,
   toWorkItemRefSummaryDto,
 } from '@/lib/mappers/workItemMappers';
-import { parseWorkItemTokenIds, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
+import {
+  canonicalWorkItemKey,
+  parseWorkItemTokenIds,
+  type WorkItemRefs,
+} from '@/lib/mentions/workItemRefs';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -19,6 +23,42 @@ import { isVisitorContext } from '@/lib/visitor/readScope';
 /** The distinct non-null assignee ids of the rows a gate already admitted. */
 export function distinctAssigneeIds(rows: Pick<WorkItem, 'assigneeId'>[]): string[] {
   return [...new Set(rows.map((r) => r.assigneeId).filter((id): id is string => id !== null))];
+}
+
+/**
+ * The token ids of `refs` split into real ids and the KEYS some were written as
+ * (bug MOTIR-11281): `[MOTIR-9730](motir:MOTIR-9730)` puts a key where the id
+ * belongs, and a body sealed for a decision cannot be re-saved to correct it.
+ * `aliases` maps each canonical key to the token(s) that spelled it, so the
+ * summary is also keyed by the href the render layer looks up.
+ */
+export function splitKeyTokens(ids: readonly string[]): {
+  ids: string[];
+  keys: string[];
+  aliases: Map<string, string[]>;
+} {
+  const real: string[] = [];
+  const aliases = new Map<string, string[]>();
+  for (const id of ids) {
+    const key = canonicalWorkItemKey(id);
+    if (key === null) {
+      real.push(id);
+      continue;
+    }
+    aliases.set(key, [...(aliases.get(key) ?? []), id]);
+  }
+  return { ids: real, keys: [...aliases.keys()], aliases };
+}
+
+/** The rows the key-shaped tokens name, across the workspace — none when there are none. */
+function findKeyTokenRows(
+  keys: readonly string[],
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<WorkItem[]> {
+  return keys.length
+    ? workItemRepository.findByIdentifiersInWorkspace(keys, workspaceId, tx)
+    : Promise.resolve<WorkItem[]>([]);
 }
 
 // Read-side resolution for work-item references (Story 5.8 · Subtask 5.8.6) —
@@ -53,20 +93,25 @@ export async function resolveWorkItemRefSummaries(
   // project's prefix, so resolution is project-scoped — like auto-relate); token
   // ids → rows within the workspace (includes archived; a cross-workspace /
   // deleted id simply doesn't come back).
-  const [keyRows, idRows] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+  // A token written with a KEY where the id belongs (MOTIR-11281) is resolved as
+  // that key across the workspace — not only the active project — because a token
+  // id is workspace-wide and a project identifier is workspace-unique.
+  const tokens = splitKeyTokens(refs.ids);
+  const [keyRows, idRows, keyTokenRows] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     Promise.all([
       refs.keys.length
         ? workItemRepository.findByIdentifiers(activeProjectId, refs.keys, tx)
         : Promise.resolve<WorkItem[]>([]),
-      refs.ids.length
-        ? workItemRepository.findByIdsInWorkspace(refs.ids, ctx.workspaceId, tx)
+      tokens.ids.length
+        ? workItemRepository.findByIdsInWorkspace(tokens.ids, ctx.workspaceId, tx)
         : Promise.resolve<WorkItem[]>([]),
+      findKeyTokenRows(tokens.keys, ctx.workspaceId, tx),
     ]),
   );
 
   // Dedupe by id — a token id and a bare key can name the same item.
   const rowById = new Map<string, WorkItem>();
-  for (const r of [...idRows, ...keyRows]) rowById.set(r.id, r);
+  for (const r of [...idRows, ...keyRows, ...keyTokenRows]) rowById.set(r.id, r);
   if (rowById.size === 0) return {};
 
   // View scope: the exact `filterBrowsable` gate `quickSearch` / auto-relate
@@ -91,9 +136,12 @@ export async function resolveWorkItemRefSummaries(
 
   const map: WorkItemRefMap = {};
   for (const row of rowById.values()) {
+    const spelled = tokens.aliases.get(row.identifier.toUpperCase()) ?? [];
     if (!browsableProjectIds.has(row.projectId)) {
       // In-workspace but not viewable → bare key only (no title/status leak).
-      map[row.id] = { accessible: false, id: row.id };
+      const noAccess = { accessible: false as const, id: row.id };
+      map[row.id] = noAccess;
+      for (const token of spelled) map[token] = noAccess;
       continue;
     }
     const status = statusMeta.get(row.projectId)?.get(row.status) ?? null;
@@ -103,9 +151,11 @@ export async function resolveWorkItemRefSummaries(
       status,
       member ? toWorkItemRefAssigneeDto(member) : null,
     );
-    // Keyed by id (token href) AND current identifier (bare-key / title path).
+    // Keyed by id (token href) AND current identifier (bare-key / title path),
+    // and by every key-shaped token that named it, as written.
     map[row.id] = summary;
     map[row.identifier] = summary;
+    for (const token of spelled) map[token] = summary;
   }
   return map;
 }
@@ -168,17 +218,19 @@ async function resolveVisitorRefSummaries(
   ctx: VisitorReadContext,
 ): Promise<WorkItemRefMap> {
   const { id: projectId, workspaceId } = ctx.project;
-  const [keyRows, idRows] = await withWorkspaceServiceContext(workspaceId, (tx) =>
+  const tokens = splitKeyTokens(refs.ids);
+  const [keyRows, idRows, keyTokenRows] = await withWorkspaceServiceContext(workspaceId, (tx) =>
     Promise.all([
       refs.keys.length
         ? workItemRepository.findByIdentifiers(projectId, refs.keys, tx)
         : Promise.resolve<WorkItem[]>([]),
-      refs.ids.length
-        ? workItemRepository.findByIdsInWorkspace(refs.ids, workspaceId, tx)
+      tokens.ids.length
+        ? workItemRepository.findByIdsInWorkspace(tokens.ids, workspaceId, tx)
         : Promise.resolve<WorkItem[]>([]),
+      findKeyTokenRows(tokens.keys, workspaceId, tx),
     ]),
   );
-  const visible = [...idRows, ...keyRows].filter(
+  const visible = [...idRows, ...keyRows, ...keyTokenRows].filter(
     (r) => r.projectId === projectId && !ctx.hiddenIds.has(r.id),
   );
   if (visible.length === 0) return {};
@@ -194,6 +246,8 @@ async function resolveVisitorRefSummaries(
     );
     map[row.id] = summary;
     map[row.identifier] = summary;
+    for (const token of tokens.aliases.get(row.identifier.toUpperCase()) ?? [])
+      map[token] = summary;
   }
   return map;
 }

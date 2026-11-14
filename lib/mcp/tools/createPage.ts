@@ -8,6 +8,7 @@ import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
 import { pageProjectKeyField, resolvePageProject } from './pageRef';
+import { unresolvedItemLinksNotice } from './pageItemLinks';
 
 // `create_page` (Story MOTIR-5760 · MOTIR-7411) — a new page with a MARKDOWN
 // body, filed under a parent page, a folder or the project root, under
@@ -82,7 +83,8 @@ export async function runCreatePage(
     });
     return toolOk(
       `Created page ${page.title || 'Untitled'} (${page.id}) at /pages/${page.id} · ` +
-        `revision ${page.revision}. Send that revision to \`update_page\` to change its body.`,
+        `revision ${page.revision}. Send that revision to \`update_page\` to change its body.` +
+        unresolvedItemLinksNotice(page.unresolvedItemLinks),
       exempt(CREATE_PAGE_TOOL_NAME, { ...page }),
     );
   } catch (err) {

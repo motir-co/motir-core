@@ -370,6 +370,26 @@ export interface RestorePageVersionInput {
  * One page as an AGENT reads it: its body as markdown, never the Yjs bytes, and
  * the `revision` a later `savePageMarkdown` must state.
  */
+/**
+ * One `motir:` link or embed a page MARKDOWN save stored that names no card the
+ * writer can see (bug MOTIR-11281) — drawn as a deleted chip, and linking the page
+ * to nothing. A link written with the card's KEY where its id belongs is not one:
+ * the save rewrites it to the id.
+ */
+export interface PageUnresolvedItemLinkDto {
+  /** The link as stored, e.g. `[MOTIR-1](motir:MOTIR-1)` or `![x](motir:abc)`. */
+  link: string;
+  label: string;
+  /** What follows `motir:` in the link. */
+  target: string;
+}
+
+/** A page written from markdown: the page as read back, and the item links it could not resolve. */
+export interface PageMarkdownWriteDto extends PageMarkdownDto {
+  /** `[]` when every `motir:` link in the saved body names a card. */
+  unresolvedItemLinks: PageUnresolvedItemLinkDto[];
+}
+
 export interface PageMarkdownDto {
   id: string;
   projectId: string;

@@ -177,3 +177,84 @@ export function markdownLinks(text: string): MarkdownLink[] {
   visit(tree);
   return links;
 }
+
+/** One `motir:` link or image as written: what it shows and the destination after `motir:`. */
+export interface MotirDestination {
+  /** `link` for `[label](motir:…)`, `image` for the block embed `![label](motir:…)`. */
+  kind: 'link' | 'image';
+  label: string;
+  /** Everything after `motir:` — an id, a key, or whatever the author wrote. */
+  target: string;
+}
+
+/** The source span of one inline `link` / `image` whose destination is `motir:…`. */
+interface MotirDestinationSpan extends MotirDestination {
+  /** Offset of the `motir:` destination inside `text`. */
+  start: number;
+  end: number;
+}
+
+/**
+ * Every inline link / image whose destination is written `motir:…` — the spans a
+ * work-item chip and a work-item embed render from — with the offsets of the
+ * destination itself, so a rewrite can change exactly those bytes. Code spans,
+ * code blocks and raw HTML hold no link by construction (the same parse as
+ * {@link markdownLinks}); a reference-style link, whose destination lives in a
+ * definition, is not a span and is left alone.
+ */
+function motirDestinationSpans(text: string): MotirDestinationSpan[] {
+  if (!text.includes('motir:')) return [];
+  const tree = parser.parse(text) as unknown as MarkdownNode;
+  const spans: MotirDestinationSpan[] = [];
+  const visit = (node: MarkdownNode): void => {
+    const isLinkLike = node.type === 'link' || node.type === 'image';
+    if (isLinkLike && typeof node.url === 'string' && node.url.startsWith('motir:')) {
+      const start = node.position?.start.offset;
+      const end = node.position?.end.offset;
+      if (start != null && end != null) {
+        // The destination is the last `(motir:…` in the node's own source: the
+        // label precedes it and a title, if any, follows it inside the parens.
+        const at = text.lastIndexOf(`(${node.url}`, end);
+        if (at >= start) {
+          spans.push({
+            kind: node.type === 'image' ? 'image' : 'link',
+            label: textContent(node),
+            target: node.url.slice('motir:'.length),
+            start: at + 1,
+            end: at + 1 + node.url.length,
+          });
+        }
+      }
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(tree);
+  // Pre-order meets an image nested in a link after the link it sits in.
+  return spans.sort((a, b) => a.start - b.start);
+}
+
+/** Every `motir:` link and image destination in `text`, in source order. Pure — no IO. */
+export function motirDestinations(text: string): MotirDestination[] {
+  return motirDestinationSpans(text).map(({ kind, label, target }) => ({ kind, label, target }));
+}
+
+/**
+ * Rewrite the `motir:` destinations of `text`'s links and images (MOTIR-11281):
+ * `replace` receives what follows `motir:` and returns the new target, or `null`
+ * to leave that destination as written. Every other byte — the label, prose,
+ * code, any other link — comes back exactly as authored.
+ */
+export function replaceMotirDestinations(
+  text: string,
+  replace: (target: string) => string | null,
+): string {
+  let out = '';
+  let cursor = 0;
+  for (const span of motirDestinationSpans(text)) {
+    const next = replace(span.target);
+    if (next === null || next === span.target) continue;
+    out += `${text.slice(cursor, span.start)}motir:${next}`;
+    cursor = span.end;
+  }
+  return out + text.slice(cursor);
+}

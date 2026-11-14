@@ -7,6 +7,8 @@ import { fuseRankings, PAGE_SEARCH_FUSION_POOL } from '@/lib/pages/pageSearchFus
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { pageBodyRefsService } from '@/lib/services/pageBodyRefsService';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { decisionPagePublicationRepository } from '@/lib/repositories/decisionPagePublicationRepository';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
@@ -76,6 +78,7 @@ import type {
   PageDto,
   PageListItemDto,
   PageMarkdownDto,
+  PageMarkdownWriteDto,
   PageMoveResultDto,
   PageSummaryDto,
   PageTrailDto,
@@ -230,6 +233,25 @@ async function candidatesWithPlace(
       parentId === undefined ? null : (relatedById.get(parentId)?.title ?? null),
     );
   });
+}
+
+/**
+ * The markdown a page save stores (bug MOTIR-11281): a `motir:` link written with a
+ * card's key carries the card's id, a bare key in prose is a chip, and every link
+ * still naming no card is reported — `pageBodyRefsService` owns the rule.
+ */
+async function normalizePageMarkdown(
+  ctx: ServiceContext,
+  projectId: string,
+  markdown: string,
+  tx: Prisma.TransactionClient,
+) {
+  const project = await projectRepository.findById(projectId, tx);
+  return pageBodyRefsService.normalizeMarkdown(
+    { markdown, projectId, projectIdentifier: project?.identifier ?? '' },
+    ctx,
+    tx,
+  );
 }
 
 function scopeTo(ctx: ServiceContext, projectId: string) {
@@ -866,18 +888,20 @@ export const pagesService = {
   async savePageMarkdown(
     ctx: ServiceContext,
     input: SavePageMarkdownInput,
-  ): Promise<PageMarkdownDto> {
+  ): Promise<PageMarkdownWriteDto> {
     const saved = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const store = pageStoreFor(tx);
       await findInProject(store, input.projectId, input.pageId);
+      const body = await normalizePageMarkdown(ctx, input.projectId, input.markdown, tx);
       await savePageMarkdownProcedure(store, systemClock, {
         pageId: input.pageId,
         actorId: ctx.userId,
-        markdown: input.markdown,
+        markdown: body.markdown,
         expectedRevision: input.expectedRevision,
       });
-      return (await readPageMarkdown(input.projectId, input.pageId, tx))!;
+      const page = (await readPageMarkdown(input.projectId, input.pageId, tx))!;
+      return { ...page, unresolvedItemLinks: body.unresolvedItemLinks };
     });
     await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, [input.pageId]);
     return saved;
@@ -893,7 +917,7 @@ export const pagesService = {
   async createPageFromMarkdown(
     ctx: ServiceContext,
     input: CreatePageFromMarkdownInput,
-  ): Promise<PageMarkdownDto> {
+  ): Promise<PageMarkdownWriteDto> {
     const parent = parsePlacement(input.parent ?? { kind: 'root' });
     const created = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
@@ -905,15 +929,19 @@ export const pagesService = {
         title: input.title,
         parent,
       });
+      let unresolvedItemLinks: PageMarkdownWriteDto['unresolvedItemLinks'] = [];
       if (input.markdown) {
+        const body = await normalizePageMarkdown(ctx, input.projectId, input.markdown, tx);
+        unresolvedItemLinks = body.unresolvedItemLinks;
         await savePageMarkdownProcedure(store, systemClock, {
           pageId: row.id,
           actorId: ctx.userId,
-          markdown: input.markdown,
+          markdown: body.markdown,
           expectedRevision: row.revision,
         });
       }
-      return (await readPageMarkdown(input.projectId, row.id, tx))!;
+      const page = (await readPageMarkdown(input.projectId, row.id, tx))!;
+      return { ...page, unresolvedItemLinks };
     });
     await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, [created.id]);
     return created;

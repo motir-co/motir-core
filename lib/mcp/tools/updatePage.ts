@@ -6,6 +6,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
+import { unresolvedItemLinksNotice } from './pageItemLinks';
 import { pageIdField, pageProjectKeyField, resolvePageProject } from './pageRef';
 
 // `update_page` (Story MOTIR-5760 · MOTIR-7411) — REPLACE a page's whole body
@@ -65,7 +66,8 @@ export async function runUpdatePage(
       expectedRevision: args.revision,
     });
     return toolOk(
-      `Saved page ${page.title || 'Untitled'} (${page.id}) · now at revision ${page.revision}.`,
+      `Saved page ${page.title || 'Untitled'} (${page.id}) · now at revision ${page.revision}.` +
+        unresolvedItemLinksNotice(page.unresolvedItemLinks),
       exempt(UPDATE_PAGE_TOOL_NAME, { ...page }),
     );
   } catch (err) {
