@@ -8,6 +8,7 @@
  * nothing here reads a key variable: CI hands the script the deploy role it
  * assumed through GitHub OIDC, in its environment.
  */
+import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 import { CloudWatchLogsClient, GetLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import { DescribeImagesCommand, ECRClient, ImageNotFoundException } from '@aws-sdk/client-ecr';
 import {
@@ -61,6 +62,10 @@ export const GRANTED_ACTIONS = [
   // those secrets alone, with the secrets key through Secrets Manager.
   'secretsmanager:GetSecretValue',
   'secretsmanager:PutSecretValue',
+  // The services stack only (motir-infra's `ReadServicesStack`): the roll waits
+  // for an update of it to finish after the migrate (MOTIR-11235), as
+  // `deploy-gate.sh` does before the deploy starts (MOTIR-10436).
+  'cloudformation:DescribeStacks',
 ] as const;
 
 export type GrantedAction = (typeof GRANTED_ACTIONS)[number];
@@ -80,6 +85,12 @@ export type SecretRead = { state: 'granted'; value: string | undefined } | { sta
  * the strict read the deploy target and the digest need.
  */
 export type ParameterRead = SecretRead;
+
+/**
+ * A stack's status (`UPDATE_IN_PROGRESS`, `UPDATE_COMPLETE`, …), or that the
+ * role may not read it. `value` is undefined for a stack that does not exist.
+ */
+export type StackRead = SecretRead;
 
 /** One method per AWS call the script makes, plus the clock it waits on. */
 export interface DeployAws {
@@ -105,6 +116,8 @@ export interface DeployAws {
   getSecretValue(secretId: string): Promise<SecretRead>;
   /** Make `value` the secret's current version. */
   putSecretValue(secretId: string, value: string): Promise<void>;
+  /** A stack's current status; `not_granted` when the role is refused it. */
+  stackStatus(stackName: string): Promise<StackRead>;
   sleep(ms: number): Promise<void>;
   now(): number;
 }
@@ -126,6 +139,7 @@ export const ACTION_OF: Record<Exclude<keyof DeployAws, 'sleep' | 'now'>, Grante
   tailLog: 'logs:GetLogEvents',
   getSecretValue: 'secretsmanager:GetSecretValue',
   putSecretValue: 'secretsmanager:PutSecretValue',
+  stackStatus: 'cloudformation:DescribeStacks',
 };
 
 /** DescribeServices takes at most this many services per call. */
@@ -138,6 +152,7 @@ export function awsSdkPorts(region: string): DeployAws {
   const ecr = new ECRClient({ region });
   const logs = new CloudWatchLogsClient({ region });
   const secrets = new SecretsManagerClient({ region });
+  const cloudformation = new CloudFormationClient({ region });
   return {
     async getParameter(name) {
       const out = await ssm.send(new GetParameterCommand({ Name: name }));
@@ -248,6 +263,22 @@ export function awsSdkPorts(region: string): DeployAws {
     },
     async putSecretValue(secretId, value) {
       await secrets.send(new PutSecretValueCommand({ SecretId: secretId, SecretString: value }));
+    },
+    async stackStatus(stackName) {
+      try {
+        const out = await cloudformation.send(new DescribeStacksCommand({ StackName: stackName }));
+        return { state: 'granted', value: out.Stacks?.[0]?.StackStatus };
+      } catch (err) {
+        if (!(err instanceof Error)) throw err;
+        // CloudFormation answers a stack that does not exist with this name.
+        if (err.name === 'ValidationError' && /does not exist/.test(err.message)) {
+          return { state: 'granted', value: undefined };
+        }
+        if (err.name === 'AccessDenied' || err.name === 'AccessDeniedException') {
+          return { state: 'not_granted' };
+        }
+        throw err;
+      }
     },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => Date.now(),

@@ -1,7 +1,14 @@
-import type { ContainerDefinition, Service, Task, TaskDefinition } from '@aws-sdk/client-ecs';
+import type {
+  ContainerDefinition,
+  KeyValuePair,
+  Service,
+  Task,
+  TaskDefinition,
+} from '@aws-sdk/client-ecs';
 import type {
   DeployAws,
   ParameterRead,
+  StackRead,
   RegisterTaskDefinitionInput,
   SecretRead,
 } from '@/scripts/aws-deploy/ports';
@@ -31,6 +38,13 @@ export const TARGET = {
   region: 'us-east-1',
 };
 
+/** `registeredBy` on a revision a motir-infra stack update registered. */
+export const CLOUDFORMATION = `arn:aws:sts::${ACCOUNT}:assumed-role/cdk-hnb659fds-cfn-exec-role-${ACCOUNT}-us-east-1/AWSCloudFormation`;
+/** `registeredBy` on a revision the core deploy registered. */
+export const DEPLOY_ROLE = `arn:aws:sts::${ACCOUNT}:assumed-role/motir-core-deploy/GitHubActions`;
+/** `registeredBy` on a revision a person registered by hand. */
+export const OPERATOR = `arn:aws:sts::${ACCOUNT}:assumed-role/AWSReservedSSO_Admin/operator`;
+
 const tdArn = (family: string, revision: number) =>
   `arn:aws:ecs:us-east-1:${ACCOUNT}:task-definition/${family}:${String(revision)}`;
 
@@ -54,7 +68,8 @@ export function taskDefinition(
     cpu: '512',
     memory: '1024',
     registeredAt: new Date('2026-10-27T10:00:00Z'),
-    registeredBy: `arn:aws:sts::${ACCOUNT}:assumed-role/cdk-deploy/session`,
+    // motir-infra's CloudFormation registers the services' revisions (MOTIR-11235).
+    registeredBy: CLOUDFORMATION,
     containerDefinitions: containers,
   };
 }
@@ -120,6 +135,9 @@ export class FakeDeployAws implements DeployAws {
   pinParameterGranted = true;
   /** A parameter whose write is refused. */
   failPutParameterOf: string | null = null;
+  /** The services stack's status on each read, by read number (MOTIR-11235). */
+  stack: (read: number) => StackRead = () => ({ state: 'granted', value: 'UPDATE_COMPLETE' });
+  stackReads = 0;
 
   constructor() {
     this.params.set(`/${PREFIX}/core/deploy-target`, JSON.stringify(TARGET));
@@ -132,7 +150,13 @@ export class FakeDeployAws implements DeployAws {
   addDefinition(definition: TaskDefinition): string {
     const arn = definition.taskDefinitionArn ?? '';
     this.definitions.set(arn, definition);
-    this.definitions.set(definition.family ?? '', definition);
+    this.definitions.set(`${String(definition.family)}:${String(definition.revision)}`, definition);
+    // The family name reads its newest revision, as DescribeTaskDefinition does;
+    // a definition with no revision number replaces it outright.
+    const latest = this.definitions.get(definition.family ?? '');
+    if (definition.revision === undefined || (latest?.revision ?? 0) <= definition.revision) {
+      this.definitions.set(definition.family ?? '', definition);
+    }
     return arn;
   }
 
@@ -162,6 +186,23 @@ export class FakeDeployAws implements DeployAws {
           command: ['node', 'breach/breach.mjs', 'memory', '--percent', '90'],
           environment: [{ name: 'MOTIR_BREACH_ENABLED', value: 'true' }],
         },
+      ]),
+    );
+    const breach = this.definitions.get(arn);
+    if (breach) breach.registeredBy = OPERATOR;
+    this.services.set(name, arn);
+    return arn;
+  }
+
+  /**
+   * Register `name`'s next revision the way motir-infra's CloudFormation update
+   * does — the same container, with `environment` added — and point the service
+   * at it, as its UpdateService does (MOTIR-11235).
+   */
+  addCdkRevision(name: string, revision: number, environment: KeyValuePair[]) {
+    const arn = this.addDefinition(
+      taskDefinition(`motir-prod-core-${name}`, revision, [
+        { ...container(name, `${CORE_REPO}@${OLD_DIGEST}`), environment },
       ]),
     );
     this.services.set(name, arn);
@@ -221,6 +262,8 @@ export class FakeDeployAws implements DeployAws {
       this.addDefinition({
         ...input,
         revision,
+        status: 'ACTIVE',
+        registeredBy: DEPLOY_ROLE,
         taskDefinitionArn: tdArn(input.family ?? '', revision),
       }),
     );
@@ -305,6 +348,11 @@ export class FakeDeployAws implements DeployAws {
     }
     this.secrets.set(secretId, value);
     return Promise.resolve();
+  }
+
+  stackStatus(stackName: string): Promise<StackRead> {
+    this.record('stackStatus', stackName);
+    return Promise.resolve(this.stack(this.stackReads++));
   }
 
   sleep(ms: number) {

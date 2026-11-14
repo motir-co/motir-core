@@ -98,7 +98,7 @@ roll as before.
 
 The job summary shows the digest and, on success, the deploy script's JSON
 result line:
-`{ digest, migrate: { taskArn, exitCode }, services: [{ name, taskDefinition, rolloutState }], pins: [{ name, value, state }], recorded }`,
+`{ digest, migrate: { taskArn, exitCode }, services: [{ name, taskDefinition, base, clonedFrom, rolloutState }], pins: [{ name, value, state }], recorded }`,
 where a pin's `state` is `written`, `unchanged`, `not_granted` or `restored`.
 On a failure the step log shows why (a migrate exit code or stop reason with
 the last 50 migrate log lines, or the services' rollout states) and that every
@@ -111,8 +111,7 @@ makes its own revision PRIMARY. The roll then reports that service
 the other deployer's revision. Forcing the previous revision back would undo
 the infra change, and every later deploy would copy the stale revision
 forward. The log names the service and the revision it was left on. Re-run the
-workflow once the other deploy has finished: it copies the revision each
-service runs now.
+workflow once the other deploy has finished.
 
 Before it rolls, the workflow runs `scripts/aws-deploy/deploy-gate.sh`
 (MOTIR-10436). It stands down when a first attempt's commit is no longer main's
@@ -125,10 +124,41 @@ stack to finish, which avoids most of those collisions. An update that starts
 after the roll begins still collides. The roll then assumes the deploy role again,
 because a session lasts an hour and the wait may have spent a third of it.
 
-The roll registers each service's next revision by copying the one it runs now,
-with only the image changed. So before it migrates or changes anything, the
-deploy refuses a service whose revision sets `MOTIR_BREACH_ENABLED` on a
-container (MOTIR-10093): that is a hand-registered breach revision, and copying
-it would make the breach the service's next release, run in a loop. The log
+The roll copies each service's next revision from the newest revision of its
+family that motir-infra's CloudFormation registered, with only the image
+changed (MOTIR-11235). That revision is the CDK template as deployed, so every
+infra-owned field (environment values, secrets, sizes, roles) comes from the
+template, and an infra update the deploy overlapped is kept. Copying the
+revision a service ran instead put a stale one back whenever an infra deploy
+landed during the migrate, and CloudFormation, which still recorded its own
+revision, never put it right. The roll finds the source by reading the family's
+revisions downward from the newest, up to 100, and takes the first ACTIVE one
+whose `registeredBy` is CloudFormation's `AWSCloudFormation` session. When it
+finds none, or a read fails, the log says why and that service is copied from
+the revision it runs, as before. A revision a person registered by hand is
+never a source, so the next deploy replaces it with the template's.
+
+Three more things keep the roll off an infra update's toes:
+
+- After the migrate, the deploy waits up to the timeout while the services
+  stack (`<prefix>-services`) is mid-update, as `deploy-gate.sh` does before
+  the deploy starts. A status it cannot read, or a stack still busy at the
+  deadline, is logged and the roll goes ahead.
+- Each service is read again right before its register, and is registered and
+  updated in turn. A service that moved while the migrate ran is rolled back,
+  on a failure, to the revision it ran at that moment, never to the one the
+  deploy first read. The log says
+  `roll: <service> moved from <old> to <new> after the deploy read it`.
+- If another revision of the family is registered between that read and the
+  register, the roll waits one poll and reads again, up to three times, and
+  then fails with nothing more rolled.
+
+The result line names each service's `base` (the revision it ran before its
+update) and `clonedFrom` (the revision its new one copies).
+
+Before it migrates or changes anything, and again before each service's
+register, the deploy refuses a service whose revision sets `MOTIR_BREACH_ENABLED` on a
+container (MOTIR-10093): that is a hand-registered breach revision, and a breach
+run holds the service. The log
 names the service and the revision. Point the service back at its own revision
 once the breach ends, then re-run the workflow.
