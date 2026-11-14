@@ -630,6 +630,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
           blockedBy: `planItem:${storyAId}`,
           itemParent: `planItem:${epicBId}`,
           blockerParent: `planItem:${epicAId}`,
+          blockerDone: false,
         },
       ],
       crossLevelEdges: [],

@@ -264,6 +264,7 @@ describe('validity over COMMITTED rows', () => {
         blockedBy: t.y.identifier,
         itemParent: t.b.identifier,
         blockerParent: t.a.identifier,
+        blockerDone: false,
       },
     ]);
     expect(before.valid).toBe(false);
@@ -336,6 +337,7 @@ describe('validity over a PROJECTION', () => {
         blockedBy: t.y.identifier,
         itemParent: t.b.identifier,
         blockerParent: t.a.identifier,
+        blockerDone: false,
       },
     ]);
     await client.close();
@@ -585,6 +587,7 @@ describe('a PLAN owns only the edge findings it introduces (MOTIR-7727)', () => 
         blockedBy: t.y.identifier,
         itemParent: t.c.identifier,
         blockerParent: t.a.identifier,
+        blockerDone: false,
       },
     ]);
     expect(verdict.crossLevelEdges).toEqual([]);
@@ -614,6 +617,7 @@ describe('a PLAN owns only the edge findings it introduces (MOTIR-7727)', () => 
         blockedBy: t.y.identifier,
         itemParent: t.b.identifier,
         blockerParent: t.a.identifier,
+        blockerDone: false,
       },
     ]);
     await client.close();

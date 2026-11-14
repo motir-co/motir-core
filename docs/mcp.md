@@ -4018,9 +4018,13 @@ parents, but then the blocked item's parent must itself be directly `blocked_by`
 the blocker's parent — and that parent edge is asked the same question one level
 up, so a subtask edge across epics owes the story edge AND the epic edge.
 `invalidEdges` lists every same-level `blocked_by` FROM a not-done subtree member
-that fails it, as `{ item, blockedBy, itemParent, blockerParent }`. Two items
+that fails it, as `{ item, blockedBy, itemParent, blockerParent, blockerDone }`. Two items
 under one parent are never listed, and an end with no work-item parent (a root,
-or an item filed in a folder) is exempt.
+or an item filed in a folder) is exempt. `blockerDone` is `true` when the blocker
+is already done or cancelled in its own project (MOTIR-10860): such an edge holds
+nothing, so it is still LISTED — how the tree was wired stays visible — but it does
+not count against `valid`, and the roadmap draws it as a plain arrow from a neutral
+anchor.
 
 **An edge across LEVELS is INVALID — "blocked elsewhere"** (MOTIR-6509,
 `docs/decisions/edge-level-is-position.md` Amendment 2). `crossLevelEdges` lists
@@ -4049,8 +4053,8 @@ that blocker without its ancestors).
 }
 ```
 
-**`valid` is `true` only when `blockers`, `invalidEdges` AND `crossLevelEdges`
-are all empty.** A caller asking only _"can this be
+**`valid` is `true` only when `blockers` AND `crossLevelEdges` are empty and every
+`invalidEdges` row has `blockerDone: true`.** A caller asking only _"can this be
 finished?"_ reads `blockers` — the scope claim (`motir run <story>`) does, so a
 story with an uncovered edge is still claimable and its pull request is where the
 parent edge gets added. The predicate is `lib/workItems/crossParentCoverage.ts`,
@@ -5611,11 +5615,15 @@ rule under `validate_work_item` above, asked of the PROJECTION — proposed pare
 proposed kinds, an `add`'s `blockedByRefs`, and a `modify`'s `blockedByAdd` /
 `blockedByRemove` on a child or on a parent. A **verdict only**: neither the
 append nor approve refuses an uncovered edge, because a titles-first pass appends
-children before it may have drawn every parent edge. `crossLevelEdges` is the
+children before it may have drawn every parent edge. A row whose committed
+blocker the projection reads as done carries `blockerDone: true` and does not
+count against `valid` (MOTIR-10860); a proposal's blocker is judged as proposed,
+so it is never done here. `crossLevelEdges` is the
 "blocked elsewhere" verdict under `validate_work_item` above, asked of the
 PROJECTION: a PROPOSED cross-level edge is a `cross_level` rejection instead, so
 what it reports is a COMMITTED cross-level edge (the link door writes one —
-MOTIR-6509). `valid` is `true` only when all four lists are empty.
+MOTIR-6509). `valid` is `true` only when `blockers`, `rejections` and
+`crossLevelEdges` are empty and every `invalidEdges` row has `blockerDone: true`.
 
 **`advisories` rides beside the verdict and never changes it (MOTIR-9007,
 widened by MOTIR-10087).** It lists every SHAPE advisory (`kind: "shape"`) on a

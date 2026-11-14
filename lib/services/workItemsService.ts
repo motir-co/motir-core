@@ -307,6 +307,7 @@ import type {
   WorkItemTreeRowDto,
   WorkItemLanguageField,
 } from '@/lib/dto/workItems';
+import { isOpenInvalidEdge } from '@/lib/dto/workItems';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import {
   assertWriteLanguage,
@@ -9525,7 +9526,15 @@ async function computeWorkItemValidity(
     membersById,
     chains,
   );
-  const invalidEdges = await computeInvalidEdges(edges, membersById, chains, ctx);
+  // An uncovered cross-parent edge onto a DONE blocker is still LISTED, but marked
+  // satisfied and left out of `valid` (bug MOTIR-10860) — the blocker's state
+  // decides, by the same per-project terminal set as `blockers` above.
+  const doneBlockerIds = new Set(
+    edges
+      .filter((e) => terminalByProject.get(e.blockerProjectId)?.has(e.blockerStatus) ?? false)
+      .map((e) => e.blockerId),
+  );
+  const invalidEdges = await computeInvalidEdges(edges, membersById, chains, doneBlockerIds, ctx);
   const coverage = await computeSubtreeCoverageAdvisories(notDone, members, ctx);
   const titleCoverage = await computeSubtreeTitleCoverageAdvisories(notDone, members, ctx);
   // The PATH-REFERENCE family (MOTIR-5424), off the SAME scanned bodies the prose
@@ -9543,10 +9552,14 @@ async function computeWorkItemValidity(
   );
   return {
     key: root.identifier,
-    // Finishable AND every cross-parent edge covered (MOTIR-6370) AND no edge
-    // crossing levels (MOTIR-6509). A gate that asks only "can this be
-    // finished?" reads `blockers` (the scope claim does).
-    valid: blockers.length === 0 && invalidEdges.length === 0 && crossLevelEdges.length === 0,
+    // Finishable AND every cross-parent edge onto an OPEN blocker covered
+    // (MOTIR-6370 · MOTIR-10860) AND no edge crossing levels (MOTIR-6509). A gate
+    // that asks only "can this be finished?" reads `blockers` (the scope claim
+    // does).
+    valid:
+      blockers.length === 0 &&
+      !invalidEdges.some(isOpenInvalidEdge) &&
+      crossLevelEdges.length === 0,
     blockers,
     invalidEdges,
     crossLevelEdges,
@@ -9630,6 +9643,10 @@ async function withRoadmapEdgeCoverage(
  * blocker whose parent is in another project the caller cannot see) still has
  * its parent id from the edge read, so it is judged; only its NAME falls back to
  * the id.
+ *
+ * Each row says whether its blocker is already terminal (`blockerDone`, bug
+ * MOTIR-10860): the edge is still a fact about how the tree was wired, so it is
+ * listed either way, and the caller leaves a done one out of `valid`.
  */
 async function computeInvalidEdges(
   edges: ReadonlyArray<{
@@ -9644,6 +9661,7 @@ async function computeInvalidEdges(
     { id: string; identifier: string; kind: string; parentId: string | null }
   >,
   chains: ReadonlyMap<string, readonly string[]>,
+  doneBlockerIds: ReadonlySet<string>,
   ctx: ServiceContext,
 ): Promise<InvalidEdgeDto[]> {
   const info = new Map<string, CoverageNodeInfo>();
@@ -9712,6 +9730,7 @@ async function computeInvalidEdges(
       blockedBy: name(e.blockerId),
       itemParent: name(info.get(e.blockedId)!.parentId!),
       blockerParent: name(info.get(e.blockerId)!.parentId!),
+      blockerDone: doneBlockerIds.has(e.blockerId),
     }))
     .sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
 }

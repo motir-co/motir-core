@@ -961,7 +961,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // now exempts `type: test` beside `type: design` — advisory channel only.
     // Re-pinned for MOTIR-10627, summary UNCHANGED: `crossLevelEdges` leaves out an
     // edge onto a DONE blocker, which holds nothing; the three questions are the same.
-    descriptionFingerprint: '0a0889eee8cd',
+    // Re-pinned for MOTIR-10860, summary UNCHANGED: an `invalidEdges` row onto a DONE
+    // blocker is still listed, marked `blockerDone: true`, and no longer counts
+    // against `valid`; the three questions are the same.
+    descriptionFingerprint: 'c09e833ea827',
   },
   get_plan_code_reads: {
     // MOTIR-10122: what each planner session read, at which commit — the evidence a check of a
@@ -1024,7 +1027,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-10381, summary UNCHANGED: `leaf-multi-repo` joins them.
     // Re-pinned for MOTIR-10496, summary UNCHANGED: `notYetWritten` (the adds no author
     // session finished) is advisory, beside the verdict, never in it.
-    descriptionFingerprint: 'eeeca24f2f1d',
+    // Re-pinned for MOTIR-10860, summary UNCHANGED: an `invalidEdges` row whose
+    // committed blocker is DONE is still listed, marked `blockerDone: true`, and no
+    // longer counts against `valid`; the four questions are the same.
+    descriptionFingerprint: '0dec5905e6a3',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

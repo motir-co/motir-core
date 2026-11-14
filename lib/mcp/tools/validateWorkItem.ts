@@ -399,22 +399,43 @@ export function invalidEdgeLines(
     blockedBy: string;
     itemParent: string;
     blockerParent: string;
+    blockerDone: boolean;
   }>,
 ): string[] {
-  if (invalidEdges.length === 0) return [];
-  return [
-    '',
-    `${invalidEdges.length} cross-parent edge(s) are not carried by their parents — a ` +
-      'blocked_by between items under DIFFERENT parents is valid only when the parents carry ' +
-      'the same edge:',
-    ...invalidEdges.map(
-      (e) =>
-        `  ${e.item} is blocked by ${e.blockedBy}, but ${e.itemParent} is not blocked_by ` +
-        `${e.blockerParent}`,
-    ),
-    'Wire each missing parent edge (and ask the same of it one level up), or drop the ' +
-      'dependency if it is not real.',
-  ];
+  // An uncovered edge onto a DONE blocker is listed, but satisfied (bug
+  // MOTIR-10860): it holds nothing and does not make the verdict INVALID, so it
+  // reads apart from the rows that do.
+  const open = invalidEdges.filter((e) => !e.blockerDone);
+  const done = invalidEdges.filter((e) => e.blockerDone);
+  const lines: string[] = [];
+  if (open.length > 0) {
+    lines.push(
+      '',
+      `${open.length} cross-parent edge(s) are not carried by their parents — a ` +
+        'blocked_by between items under DIFFERENT parents is valid only when the parents carry ' +
+        'the same edge:',
+      ...open.map(
+        (e) =>
+          `  ${e.item} is blocked by ${e.blockedBy}, but ${e.itemParent} is not blocked_by ` +
+          `${e.blockerParent}`,
+      ),
+      'Wire each missing parent edge (and ask the same of it one level up), or drop the ' +
+        'dependency if it is not real.',
+    );
+  }
+  if (done.length > 0) {
+    lines.push(
+      '',
+      `${done.length} cross-parent edge(s) are not carried by their parents, but their blocker ` +
+        'is DONE, so they hold nothing and do not count against the verdict (blockerDone: true):',
+      ...done.map(
+        (e) =>
+          `  ${e.item} is blocked by ${e.blockedBy} (done), and ${e.itemParent} is not ` +
+          `blocked_by ${e.blockerParent}`,
+      ),
+    );
+  }
+  return lines;
 }
 
 /**
@@ -519,6 +540,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
   if (result.valid) {
     return [
       `Work item ${result.key} is VALID — its whole subtree can be finished within itself${over}.`,
+      ...invalidEdgeLines(result.invalidEdges),
       ...softBlockLines(result),
       ...advisoryLines(result),
       ...sectionFindingLines(result.sectionFindings, 'valid'),
@@ -612,15 +634,18 @@ export function registerValidateWorkItem(
         'advisories: [...], softBlocks: [...], sectionFindings: [...] }` — `blockers` naming each in-subtree item and the out-of-subtree, ' +
         'unsatisfied work gating it (always an item’s OWN blocked_by edge); `invalidEdges` naming ' +
         'each same-level blocked_by between items under DIFFERENT parents whose parents carry no ' +
-        'matching edge (`{ item, blockedBy, itemParent, blockerParent }` — a cross-parent edge is ' +
-        'valid only when the parents carry it; an end with no work-item parent is exempt); ' +
+        'matching edge (`{ item, blockedBy, itemParent, blockerParent, blockerDone }` — a ' +
+        'cross-parent edge is valid only when the parents carry it; an end with no work-item ' +
+        'parent is exempt; a row whose blocker is DONE carries `blockerDone: true`, is still ' +
+        'listed and does not count against `valid`); ' +
         '`crossLevelEdges` naming each blocked_by FROM a subtree member to an item on ANOTHER ' +
         'LEVEL — a different depth below their nearest common ancestor, or an epic and a ' +
         'non-epic — as `{ item, blockedBy, itemDepth, blockedByDepth, reason: ' +
         '"blocked_elsewhere", explanation }` (the link door writes such an edge and it holds ' +
         'the item out of the ready set until its blocker is done; an edge onto a DONE blocker ' +
         'is satisfied and not reported; the plan gate refuses a PROPOSED one). ' +
-        '`valid` is true only when ALL THREE are empty. `softBlocks` is NON-GATING: each open ' +
+        '`valid` is true only when `blockers` and `crossLevelEdges` are empty and every ' +
+        '`invalidEdges` row has `blockerDone: true`. `softBlocks` is NON-GATING: each open ' +
         'blocked_by of one of the target’s ANCESTORS, as `{ via: { key, title }, blockedBy: ' +
         '{ key, title }, blockerStatus }` — a block that reaches the target only through the ' +
         'readiness cascade and that `--allow-soft-block` overrides at run time; it never changes ' +
