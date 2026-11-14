@@ -903,6 +903,7 @@ export const projectRepository = {
     aiSprintLengthDays: number;
     aiGenerateExplanations: boolean;
     aiRecordPlanningMistakes: boolean | null;
+    aiFinalCheck: boolean | null;
   } | null> {
     const client = tx ?? dbRead;
     return client.project.findUnique({
@@ -914,6 +915,7 @@ export const projectRepository = {
         aiSprintLengthDays: true,
         aiGenerateExplanations: true,
         aiRecordPlanningMistakes: true,
+        aiFinalCheck: true,
       },
     });
   },
@@ -1320,6 +1322,7 @@ export const projectRepository = {
       aiSprintLengthDays?: number;
       aiGenerateExplanations?: boolean;
       aiRecordPlanningMistakes?: boolean;
+      aiFinalCheck?: boolean;
     },
     tx: Prisma.TransactionClient,
   ): Promise<Project> {

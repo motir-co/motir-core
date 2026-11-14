@@ -57,3 +57,23 @@ export const AI_RECORD_PLANNING_MISTAKES_DEFAULT = true;
 export function resolveRecordPlanningMistakes(value: boolean | null | undefined): boolean {
   return value ?? AI_RECORD_PLANNING_MISTAKES_DEFAULT;
 }
+
+// ── The "Run the final check" default (Story MOTIR-11262 · MOTIR-11264) ───────
+//
+// The same resolution as the planning-mistakes default above, for the same
+// reason: `Project.aiFinalCheck` is nullable with no database default, NULL
+// means "never written", and EVERY reader — the mapper, the job-envelope
+// producer — resolves it here, so the "on when unset" rule is stated ONCE and a
+// project's final check can never be switched off by a reader that forgot it.
+export const AI_FINAL_CHECK_DEFAULT = true;
+
+/**
+ * Resolve the stored `aiFinalCheck` column to the effective setting.
+ *
+ * `null` (never written — including every row that predates the column) resolves
+ * to {@link AI_FINAL_CHECK_DEFAULT}, i.e. ON. Only an explicit `false` turns the
+ * final check off for the project's plans.
+ */
+export function resolveFinalCheck(value: boolean | null | undefined): boolean {
+  return value ?? AI_FINAL_CHECK_DEFAULT;
+}

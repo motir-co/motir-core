@@ -41,6 +41,12 @@ vi.mock('@/lib/ai/lessonCapture', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/lessonCapture')>()),
   resolveRecordPlanningMistakesForJob: vi.fn(),
 }));
+// The final-check resolver (MOTIR-11264), mocked for the same reason: it reads
+// the settings row, covered against Postgres in `tests/ai/finalCheck.test.ts`.
+vi.mock('@/lib/ai/finalCheck', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/finalCheck')>()),
+  resolveFinalCheckForJob: vi.fn(),
+}));
 vi.mock('@/lib/services/plansService');
 vi.mock('@/lib/repositories/workItemRepository');
 // …and the project gate (MOTIR-2357). These cases drive a SYNTHETIC ProjectContext
@@ -62,6 +68,7 @@ import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
+import { FINAL_CHECK_CONTEXT_FIELD, resolveFinalCheckForJob } from '@/lib/ai/finalCheck';
 import { plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ProjectContext } from '@/lib/projects';
@@ -142,6 +149,8 @@ beforeEach(() => {
   vi.mocked(resolveProjectRepoContext).mockResolvedValue(undefined);
   // Default ON, which is what an untouched project resolves to (MOTIR-3349).
   vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(true);
+  // Default ON, which is what an untouched project resolves to (MOTIR-11264).
+  vi.mocked(resolveFinalCheckForJob).mockResolvedValue(true);
   vi.mocked(plansService.createPlan).mockResolvedValue({ id: 'plan_1' } as PlanDto);
 });
 
@@ -669,6 +678,57 @@ describe('aiPlanEditsService — the record-planning-mistakes flag rides every p
   });
 });
 
+// ─── The final-check setting on the wire (MOTIR-11264) ───────────────────────
+// The same cross-repo discipline as the flag above: motir-ai reads whether to run
+// the final check ONLY from `context.finalCheck`, and an absent field reads as ON,
+// so every plan-edit submit must send it, `false` included.
+describe('aiPlanEditsService — the final-check setting rides every plan-edit envelope', () => {
+  const WIRE_KEY = 'finalCheck';
+
+  const CASES: Array<{
+    name: string;
+    run: (c: ProjectContext) => Promise<{ jobId: string; planId: string }>;
+  }> = [
+    { name: 'submitAugment', run: (c) => aiPlanEditsService.submitAugment('add a login flow', c) },
+    {
+      name: 'submitContextual',
+      run: (c) => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], c),
+    },
+    { name: 'submitExpand', run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c) },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
+      mockWorkItem({ identifier: 'MOTIR-100', kind: 'story' }),
+    );
+  });
+
+  for (const c of CASES) {
+    it(`${c.name} sends true for a project with the final check on`, async () => {
+      vi.mocked(resolveFinalCheckForJob).mockResolvedValue(true);
+      await c.run(ctx);
+      const context = vi.mocked(submitJob).mock.calls[0]![2] as Record<string, unknown>;
+      expect(context[WIRE_KEY]).toBe(true);
+    });
+
+    it(`${c.name} sends false — PRESENT, not omitted — when the project turned it off`, async () => {
+      vi.mocked(resolveFinalCheckForJob).mockResolvedValue(false);
+      await c.run(ctx);
+      const context = vi.mocked(submitJob).mock.calls[0]![2] as Record<string, unknown>;
+      expect(context[WIRE_KEY]).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(context, WIRE_KEY)).toBe(true);
+      expect(resolveFinalCheckForJob).toHaveBeenCalledWith('pj_1', {
+        userId: 'user_1',
+        workspaceId: 'ws_1',
+      });
+    });
+  }
+
+  it('the exported constant IS the wire string', () => {
+    expect(FINAL_CHECK_CONTEXT_FIELD).toBe(WIRE_KEY);
+  });
+});
+
 // ─── ONE PLANNING KIND ON THE WIRE (MOTIR-4304 · ADR §6 step 2) ──────────────
 //
 // Every planning submit in the product sends `plan`. The five old kinds were
@@ -778,6 +838,7 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
     vi.mocked(resolvePlanningCodeContext).mockResolvedValue({ repos: ['owner/repo'] } as never);
     vi.mocked(resolveProjectRepoContext).mockResolvedValue({ repositories: [] } as never);
     vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(false);
+    vi.mocked(resolveFinalCheckForJob).mockResolvedValue(false);
 
     await aiPlanEditsService.submitExpand('MOTIR-100', ctxWithExplanations);
 
@@ -792,14 +853,15 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
     // changed no field "in passing". A field added later, deliberately, by a card
     // that says so is not what this guard forbids; a field that vanishes from a
     // refactor still is. `recordPlanningMistakes` was the first such amendment
-    // (MOTIR-4343), `onboarding` the second (MOTIR-4736) and `starterLibrary` the
-    // third (MOTIR-11041). Amending the pin
+    // (MOTIR-4343), `onboarding` the second (MOTIR-4736), `starterLibrary` the
+    // third (MOTIR-11041) and `finalCheck` the fourth (MOTIR-11264). Amending the pin
     // and silently loosening it to `toMatchObject` look similar and are opposite
     // in kind: the exact equality is the whole instrument, and it stays.
     expect(context).toEqual({
       rootItemKey: 'MOTIR-100',
       generateExplanations: true,
       recordPlanningMistakes: false,
+      finalCheck: false,
       // `true`: the mocked project carries a null `onboardingRanAt` (above).
       onboarding: true,
       code: { repos: ['owner/repo'] },
@@ -829,6 +891,8 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
       targetKeys: ['MOTIR-100', 'MOTIR-101'],
       generateExplanations: false,
       recordPlanningMistakes: true,
+      // Never conditional (MOTIR-11264): absent reads on the far side as ON.
+      finalCheck: true,
       onboarding: true,
       // Not conditional either (MOTIR-11041): `[]` is an answer, and a project with
       // no repositories is the case it is for.

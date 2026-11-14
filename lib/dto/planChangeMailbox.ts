@@ -74,4 +74,25 @@ export interface MailboxDeliveryDto {
    * the run, and the ending is the later fact.
    */
   stopped: boolean;
+  /**
+   * A person asked to SKIP the plan's final check (MOTIR-11266): end the check
+   * now, fix nothing it found, and propose the plan. It ends only the check,
+   * never the plan.
+   *
+   * ⚠️ Derived from a `skip_final_check` entry EXISTING, as `stopped` is, so every
+   * read after the first still says it. Always sent; a motir-ai that predates the
+   * field ignores it (its parse is total), and the check then runs to its end.
+   */
+  skipFinalCheck: boolean;
+}
+
+/**
+ * What the skip door answers (MOTIR-11266): `skipped` when the entry is written
+ * (or was already, under the same key), `not_running` when the plan's final check
+ * is not running, so there was nothing to skip and nothing was written. Either
+ * way the mailbox as it now stands.
+ */
+export interface SkipFinalCheckResultDto {
+  outcome: 'skipped' | 'not_running';
+  mailbox: MailboxDeliveryDto;
 }

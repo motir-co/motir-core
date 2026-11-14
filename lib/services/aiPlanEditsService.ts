@@ -6,6 +6,7 @@ import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
+import { FINAL_CHECK_CONTEXT_FIELD, resolveFinalCheckForJob } from '@/lib/ai/finalCheck';
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import {
@@ -251,6 +252,11 @@ async function buildPlanningJobContext(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  // Does this project's plan run the final check (MOTIR-11264)? ALWAYS sent.
+  const finalCheck = await resolveFinalCheckForJob(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
   // The plan's SHARPENED requirement as the run's own (Task MOTIR-1101 · MOTIR-8450):
   // a submit that writes an existing plan carries what a Grill me session settled on
   // it as `requirement`, which satisfies PART 1 on the far side, so the run does not
@@ -263,6 +269,7 @@ async function buildPlanningJobContext(
       ...(requirement ? { requirement } : {}),
       generateExplanations: ctx.project.aiGenerateExplanations,
       [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
+      [FINAL_CHECK_CONTEXT_FIELD]: finalCheck,
       // Is this the project's FIRST plan (MOTIR-4736)?
       [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
       ...(code ? { code } : {}),

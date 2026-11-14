@@ -44,6 +44,7 @@ import {
   resumeAlreadyStartedJobId,
   resumePlanSession,
   stopPlanChangeRun,
+  skipPlanFinalCheck,
   submitPlanChange,
   type AskRedirectResponse,
   type AskSettleResponse,
@@ -3740,6 +3741,23 @@ export function usePlanChangeConversation({
     await raiseStop(stateRef.current.session?.id ?? '', jobId);
   }, [raiseStop]);
 
+  /**
+   * SKIP THE FINAL CHECK of the run in flight (MOTIR-11266) — the confirm's
+   * press. Answers what the door said: `skipped`, or `not_running` when the check
+   * had already ended (or there is no plan job to address), so the confirm can
+   * say there was nothing to skip. A failed request THROWS: the confirm keeps
+   * its error line and its Try again, which sends the same key, so a retry of a
+   * press that did land writes nothing new.
+   */
+  const skipFinalCheck = useCallback(async (): Promise<'skipped' | 'not_running'> => {
+    const { jobId, phase, session } = stateRef.current;
+    if (phase !== 'streaming' || !jobId || !session || jobId === unstoppableJobRef.current) {
+      return 'not_running';
+    }
+    const answer = await skipPlanFinalCheck(session.id, jobId, `skip-final-check:${jobId}`);
+    return answer.outcome;
+  }, []);
+
   // `failing` and `reads` are the poll's own, so they ride on the state they describe.
   const exposed = useMemo(
     () =>
@@ -4040,6 +4058,7 @@ export function usePlanChangeConversation({
     discard,
     dismissError,
     stop,
+    skipFinalCheck,
     startCopied,
     confirmRestart,
     answerRestartConfirm,

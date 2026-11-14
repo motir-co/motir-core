@@ -21,8 +21,10 @@ export type MailboxContext = Pick<ProjectContext, 'userId' | 'workspaceId' | 'pr
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeMailboxRepository } from '@/lib/repositories/planChangeMailboxRepository';
+import { planRepository } from '@/lib/repositories/planRepository';
+import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { getJob } from '@/lib/ai/motirAiClient';
-import type { MailboxDeliveryDto } from '@/lib/dto/planChangeMailbox';
+import type { MailboxDeliveryDto, SkipFinalCheckResultDto } from '@/lib/dto/planChangeMailbox';
 import {
   EmptyPlanChangeTurnError,
   PlanChangeJobNotRunningError,
@@ -121,7 +123,7 @@ export interface AttachTurnInput {
 /** Build the two-repo contract's shape from rows. The ONE place it is built. */
 function toDelivery(
   entries: readonly PlanChangeMailboxEntry[],
-  stopped: boolean,
+  flags: { stopped: boolean; skipFinalCheck: boolean },
 ): MailboxDeliveryDto {
   return {
     // Already `seq`-ordered by the repository. The array IS the order claim:
@@ -140,8 +142,49 @@ function toDelivery(
         ...(e.declinesPauseId ? { declinesPause: e.declinesPauseId } : {}),
         ...(e.answersPauseId ? { answersQuestion: e.answersPauseId } : {}),
       })),
-    stopped,
+    stopped: flags.stopped,
+    skipFinalCheck: flags.skipFinalCheck,
   };
+}
+
+/** The two flags a delivery derives from an entry EXISTING, read in one place. */
+async function readFlags(
+  sessionId: string,
+  jobId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<{ stopped: boolean; skipFinalCheck: boolean }> {
+  const stopped = await planChangeMailboxRepository.hasStop(sessionId, jobId, workspaceId, tx);
+  const skipFinalCheck = await planChangeMailboxRepository.hasSkipFinalCheck(
+    sessionId,
+    jobId,
+    workspaceId,
+    tx,
+  );
+  return { stopped, skipFinalCheck };
+}
+
+/** An empty mailbox: nothing waiting, nothing stopped, nothing skipped. */
+function emptyDelivery(): MailboxDeliveryDto {
+  return { turns: [], stopped: false, skipFinalCheck: false };
+}
+
+/**
+ * Is the final check of the plan this job is writing RUNNING now (MOTIR-11266)?
+ *
+ * The plan the job writes into is the one whose `sourceJobId` is the job; it is
+ * running a check while it is `generating` and holds a live `check` step. A live
+ * `repair` step means the check has ended and its fix has begun, which a skip no
+ * longer reaches (design § "Skip the final check", When). Bound, because
+ * `plan_step`'s policy joins to `plan` and an unbound read is an empty set.
+ */
+async function finalCheckRunning(jobId: string, pctx: MailboxContext): Promise<boolean> {
+  return withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+    const plan = await planRepository.findBySourceJobId(jobId, pctx.workspaceId, tx);
+    if (!plan || plan.projectId !== pctx.projectId || plan.status !== 'generating') return false;
+    const steps = await planStepRepository.listByPlan(plan.id, tx);
+    return steps.some((s) => s.kind === 'check') && !steps.some((s) => s.kind === 'repair');
+  });
 }
 
 /**
@@ -161,7 +204,7 @@ async function appendLocked(
   pctx: MailboxContext,
   entry: {
     jobId: string;
-    kind: 'turn' | 'stop';
+    kind: 'turn' | 'stop' | 'skip_final_check';
     body?: string | null;
     disposition?: 'fold' | 'restart' | null;
     restartTarget?: string | null;
@@ -412,6 +455,50 @@ export const planChangeMailboxService = {
   },
 
   /**
+   * SKIP THE FINAL CHECK (MOTIR-11266) — the same pipe as the stop, taking its
+   * own kind, so it ends only the final check and never the plan.
+   *
+   * ⚠️ NOT AN ERROR PATH, as the stop is not. The control is reachable after the
+   * check has ended (the job reached its fix, or proposed, between render and
+   * press), and that answers `not_running` with nothing written — the surface
+   * says the check had already finished. A key already written answers
+   * `skipped` again with nothing new, whatever the check is doing now, so a
+   * retried press reads as the press it repeats.
+   *
+   * The order: the permission, the thread (a 404 for a job not on it), the key,
+   * then the running check — the last two outside any lock, because the running
+   * read is a plan read the append does not depend on, and the append re-checks
+   * the key inside its lock.
+   */
+  async raiseSkipFinalCheck(
+    jobId: string,
+    idempotencyKey: string,
+    pctx: MailboxContext,
+    expectedSessionId?: string,
+  ): Promise<SkipFinalCheckResultDto> {
+    await projectAccessService.assertPermission(pctx.projectId, pctx, 'ai:plan');
+    const { sessionId } = await requireThreadForJob(jobId, pctx, expectedSessionId);
+    const already = await planChangeMailboxService.entryIdForKey(
+      jobId,
+      sessionId,
+      idempotencyKey,
+      pctx,
+    );
+    if (!already && !(await finalCheckRunning(jobId, pctx))) {
+      const mailbox = await planChangeMailboxService.peek(jobId, sessionId, pctx);
+      return { outcome: 'not_running', mailbox };
+    }
+    const entry = await appendLocked(sessionId, pctx, {
+      jobId,
+      kind: 'skip_final_check',
+      idempotencyKey,
+      authorId: pctx.userId,
+    });
+    const mailbox = await planChangeMailboxService.peek(jobId, entry.sessionId, pctx);
+    return { outcome: 'skipped', mailbox };
+  },
+
+  /**
    * What is waiting for a JOB, without consuming it — {@link peek} addressed by
    * the job rather than by the session (Story MOTIR-4054 · MOTIR-4274).
    *
@@ -442,7 +529,7 @@ export const planChangeMailboxService = {
     const session = await findThreadForJob(jobId, pctx);
     // Same reading as the boundary read: no thread for this job means nothing is
     // waiting, which is true, and is not an error.
-    if (!session) return { turns: [], stopped: false };
+    if (!session) return emptyDelivery();
     return planChangeMailboxService.peek(jobId, session.id, pctx);
   },
 
@@ -462,14 +549,21 @@ export const planChangeMailboxService = {
         pctx.workspaceId,
         tx,
       );
-      const stopped = await planChangeMailboxRepository.hasStop(
-        sessionId,
-        jobId,
-        pctx.workspaceId,
-        tx,
-      );
-      return toDelivery(pending, stopped);
+      return toDelivery(pending, await readFlags(sessionId, jobId, pctx.workspaceId, tx));
     });
+  },
+
+  /**
+   * THE BOUNDARY READ WITHOUT CONSUMING (MOTIR-11267) — what the final check's skip
+   * watch reads on its timer. The same answer {@link readForBoundary} gives, by the
+   * job token's tenancy and without the `ai:plan` gate (the job reads its own
+   * mailbox), but nothing is stamped `consumed_at`: the turns stay for the pass that
+   * folds them. A job with no thread reads empty, as the consuming read does.
+   */
+  async peekForBoundary(jobId: string, pctx: MailboxContext): Promise<MailboxDeliveryDto> {
+    const session = await findThreadForJob(jobId, pctx);
+    if (!session) return emptyDelivery();
+    return planChangeMailboxService.peek(jobId, session.id, pctx);
   },
 
   /**
@@ -489,7 +583,7 @@ export const planChangeMailboxService = {
    * ended, and a consumed stop would silently un-stop the next check.
    *
    * ⚠️ AND AN EMPTY MAILBOX IS AN ANSWER, NOT A FAILURE. This returns
-   * `{ turns: [], stopped: false }` and a 200; the caller's *"could not tell"* is
+   * `{ turns: [], stopped: false, skipFinalCheck: false }` and a 200; the caller's *"could not tell"* is
    * a transport error or a non-2xx, which `readDelivery` reads as empty anyway.
    * The two are distinguishable at the wire, which is what the card asks for:
    * only "nothing waiting" lets the run proceed on the strength of the answer.
@@ -503,7 +597,7 @@ export const planChangeMailboxService = {
     // card's own criterion is that the run can tell "nothing waiting" from
     // "could not tell" — only the first lets it proceed on the answer, and a
     // failure shaped like an empty mailbox erases that distinction.
-    if (!session) return { turns: [], stopped: false };
+    if (!session) return emptyDelivery();
 
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
@@ -512,7 +606,7 @@ export const planChangeMailboxService = {
         // duplicated worker): the loser re-reads and finds the entries already
         // consumed rather than delivering them twice.
         const locked = await planChangeSessionRepository.lockById(session.id, tx);
-        if (!locked) return { turns: [], stopped: false };
+        if (!locked) return emptyDelivery();
 
         const pending = await planChangeMailboxRepository.listPending(
           session.id,
@@ -520,19 +614,14 @@ export const planChangeMailboxService = {
           pctx.workspaceId,
           tx,
         );
-        const stopped = await planChangeMailboxRepository.hasStop(
-          session.id,
-          jobId,
-          pctx.workspaceId,
-          tx,
-        );
+        const flags = await readFlags(session.id, jobId, pctx.workspaceId, tx);
         await planChangeMailboxRepository.markConsumed(
           pending.map((e) => e.id),
           pctx.workspaceId,
           new Date(),
           tx,
         );
-        return toDelivery(pending, stopped);
+        return toDelivery(pending, flags);
       },
     );
   },
