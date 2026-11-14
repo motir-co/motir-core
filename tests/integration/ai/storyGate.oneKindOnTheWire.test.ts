@@ -270,6 +270,16 @@ describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () =>
     // being dropped from both lists rather than moved between them.
     expect(carriesFlag.length + dropsFlag.length).toBe(Object.keys(sent).length);
     expect([...carriesFlag].sort()).toEqual(Object.keys(sent).sort());
+
+    // `finalCheck` (MOTIR-11264) rides ALL FIVE as well, always PRESENT: motir-ai
+    // reads an absent field as ON, so an entrance that dropped it would run the
+    // final check for a project that turned it off.
+    for (const [name, body] of Object.entries(sent)) {
+      expect(
+        Object.prototype.hasOwnProperty.call(ctxOf(body), 'finalCheck'),
+        `${name} dropped finalCheck — an absent field reads as ON on the far side (MOTIR-11264)`,
+      ).toBe(true);
+    }
   });
 });
 

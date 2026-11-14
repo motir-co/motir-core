@@ -94,6 +94,8 @@ describe('GET /api/projects/[key]/ai-settings', () => {
       // MOTIR-3349 — the one field that is ON by default, resolved from a NULL
       // column rather than written to the row.
       aiRecordPlanningMistakes: true,
+      // MOTIR-11264 — ON by default the same way.
+      aiFinalCheck: true,
     });
   });
 
@@ -140,6 +142,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiSprintLengthDays: 3,
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
+      aiFinalCheck: false,
     });
 
     expect(res.status).toBe(200);
@@ -150,6 +153,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiSprintLengthDays: 3,
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
+      aiFinalCheck: false,
     });
 
     // Read back through the service — the write really landed on the columns.
@@ -196,6 +200,8 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       // — so a route that dropped falsy keys would make switching it off a
       // silent no-op, the one direction that matters here.
       aiRecordPlanningMistakes: false,
+      // MOTIR-11264: the same — off is `false`, the default is `true`.
+      aiFinalCheck: false,
     });
 
     expect(res.status).toBe(200);
@@ -203,6 +209,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiAutoPlanEnabled: false,
       aiGenerateExplanations: false,
       aiRecordPlanningMistakes: false,
+      aiFinalCheck: false,
     });
   });
 

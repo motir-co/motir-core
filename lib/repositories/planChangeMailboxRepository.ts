@@ -126,6 +126,24 @@ export const planChangeMailboxRepository = {
   },
 
   /**
+   * Whether a person has ever asked to SKIP this job's final check
+   * (MOTIR-11266) — existence, not pending-ness, for {@link hasStop}'s reason:
+   * a consumed skip would read as "keep checking" at the next boundary.
+   */
+  async hasSkipFinalCheck(
+    sessionId: string,
+    jobId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const found = await tx.planChangeMailboxEntry.findFirst({
+      where: { sessionId, jobId, workspaceId, kind: 'skip_final_check' },
+      select: { id: true },
+    });
+    return found !== null;
+  },
+
+  /**
    * Claim the entries a boundary just read. Scoped by `workspaceId` as well as
    * by id so the write cannot reach outside the caller's tenant even if an id
    * leaked, and it only ever moves `consumedAt` from null — a re-read that

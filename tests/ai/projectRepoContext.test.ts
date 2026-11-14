@@ -375,6 +375,7 @@ describe('the planning-job ENVELOPE', () => {
       // The consent flag rides every planning submit (MOTIR-4343), generation
       // included — ON here because this fixture never touches the setting.
       recordPlanningMistakes: true,
+      finalCheck: true,
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
@@ -442,6 +443,7 @@ describe('the planning-job ENVELOPE', () => {
       prompt: 'start fresh',
       generateExplanations: false,
       recordPlanningMistakes: true,
+      finalCheck: true,
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,

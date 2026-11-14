@@ -88,6 +88,9 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   if ('aiRecordPlanningMistakes' in raw) {
     patch.aiRecordPlanningMistakes = raw.aiRecordPlanningMistakes as boolean;
   }
+  if ('aiFinalCheck' in raw) {
+    patch.aiFinalCheck = raw.aiFinalCheck as boolean;
+  }
 
   try {
     const settings = await projectAiSettingsService.updateAiSettings(key, patch, ctx);

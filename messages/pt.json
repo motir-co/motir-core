@@ -3673,7 +3673,10 @@
         "explanationsHint": "Cada item de trabalho proposto recebe um breve “por que isso importa” que você pode ler sem abrir o código.",
         "dataPracticeCommitment": "Nem o Motir nem o gateway dele treinam modelos com o conteúdo deste projeto.",
         "dataPracticeReport": "O que um provedor faz com uma solicitação depois que ela chega até ele é a posição publicada pelo próprio provedor.",
-        "dataPracticeLink": "O que cada provedor declara"
+        "dataPracticeLink": "O que cada provedor declara",
+        "finalCheckLabel": "Executar a verificação final",
+        "finalCheckHint": "Antes de um plano ser proposto, o Motir AI lê novamente os seus itens de trabalho por ordem de construção, verifica que cada um pode ser construído sobre o que os itens anteriores entregam e corrige o que encontrar. Num plano grande, isto pode demorar muitos minutos.",
+        "finalCheckOff": "Os planos deste projeto são propostos sem a verificação final. O resumo de cada plano indica que não foi verificado."
       },
       "lessonCapture": {
         "title": "Erros de planejamento",
@@ -8842,7 +8845,9 @@
         "kindSettle": "definir",
         "settleLine": "Definindo o que mudar",
         "groupLive": "{step} — em andamento",
-        "groupFinished": "{step} — concluído"
+        "groupFinished": "{step} — concluído",
+        "skipCheck": "Ignorar a verificação final",
+        "skippingCheck": "Ignorando a verificação final…"
       }
     },
     "codeUnreadable": {
@@ -9368,6 +9373,16 @@
       "none": "Nada aqui",
       "correctionHint": "Para mudar algo aqui, escreva a correção na conversa.",
       "notice": "Nenhum requisito foi redigido para esta oferta. O planejamento o redigirá quando você confirmar."
+    },
+    "skipFinalCheck": {
+      "title": "Ignorar a verificação final?",
+      "body": "A verificação final lê novamente cada item de trabalho deste plano por ordem de construção, verifica que cada um pode ser construído sobre o que os itens anteriores entregam e corrige o que encontrar.",
+      "consequence": "Se a ignorar, o plano é proposto agora sem essa verificação. O que encontrou até agora é listado no resumo do plano, mas nada é corrigido.",
+      "confirm": "Ignorar a verificação final",
+      "keep": "Continuar a verificar",
+      "error": "Não foi possível ignorar a verificação final. Ainda está a decorrer: tente novamente ou continue a verificar.",
+      "retry": "Tentar novamente",
+      "finished": "A verificação final já tinha terminado, por isso não havia nada para ignorar."
     }
   },
   "codeHealth": {

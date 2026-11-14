@@ -1,6 +1,14 @@
 'use client';
 
-import { useId, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ChevronDown,
@@ -9,8 +17,14 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   CircleCheck,
+  SkipForward,
 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import {
+  SkipFinalCheckDialog,
+  type SkipFinalCheckPhase,
+} from '@/components/planning/SkipFinalCheckDialog';
 import type { PlanNarrationSessionDto, PlanStepKindDto } from '@/lib/dto/plans';
 import type { NarrationGroup, NarrationHeadLine } from '@/components/planning/planNarration';
 
@@ -165,6 +179,24 @@ export interface PlanNarrationProps {
   earlierCount: number;
   loadingEarlier?: boolean;
   onShowEarlier?: () => void;
+  /**
+   * SKIP THE FINAL CHECK (MOTIR-11266): the confirm's press, answering what the
+   * door said. Given only on a run in flight and to a viewer holding `ai:plan`;
+   * absent, no control is drawn. The control itself shows only under a LIVE
+   * final-check head, and never while the fix after it runs.
+   */
+  onSkipCheck?: () => Promise<'skipped' | 'not_running'>;
+}
+
+/**
+ * The group the Skip the final check control sits under: the first LIVE group
+ * whose session is the final check (its own head or a card it is reviewing),
+ * and none at all while a `repair` session is live — the fix has begun and
+ * there is no check left to skip (design § "⭐ The final check" §2, When).
+ */
+export function skipCheckGroupKey(groups: readonly NarrationGroup[]): string | null {
+  if (groups.some((g) => g.live && g.session?.stepKind === 'repair')) return null;
+  return groups.find((g) => g.live && g.session?.stepKind === 'check')?.sessionKey ?? null;
 }
 
 export function PlanNarration({
@@ -174,10 +206,19 @@ export function PlanNarration({
   earlierCount,
   loadingEarlier = false,
   onShowEarlier,
+  onSkipCheck,
 }: PlanNarrationProps) {
   const tc = useTranslations('planningWorkspace.conversation');
   const baseId = useId();
   const fold = useFoldState();
+  const skip = useSkipCheck(onSkipCheck);
+  const skipKey = onSkipCheck ? skipCheckGroupKey(groups) : null;
+  const { clearPending } = skip;
+  // The check ended (or its fix began): a pending skip has done its work, so the
+  // next run's check starts with the control again.
+  useEffect(() => {
+    if (skipKey === null) clearPending();
+  }, [skipKey, clearPending]);
   if (groups.length === 0) return null;
   const listId = (i: number) => `${baseId}-notes-${i}`;
   const foldable = groups.flatMap((g, i) => (g.messages.length > 0 ? [{ g, i }] : []));
@@ -233,12 +274,96 @@ export function PlanNarration({
             listId={listId(i)}
             folded={fold.isFolded(group.sessionKey)}
             onToggle={() => fold.toggle(group.sessionKey)}
+            skipRow={group.sessionKey === skipKey ? skip.row(tc) : null}
             tc={tc}
           />
         ))}
       </ol>
+      {onSkipCheck ? skip.dialog : null}
     </div>
   );
+}
+
+/**
+ * The control, its pending row and its confirm (design § "⭐ The final check" §2,
+ * §3, §5). Pending holds from an accepted skip until the check's head is no longer
+ * live, when the row is not drawn at all; a later run's check starts clean because
+ * the control unmounts with its run.
+ */
+function useSkipCheck(onSkipCheck: PlanNarrationProps['onSkipCheck']) {
+  const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<SkipFinalCheckPhase>('open');
+  const [pending, setPending] = useState(false);
+  const controlRef = useRef<HTMLButtonElement>(null);
+  const pendingRef = useRef<HTMLDivElement>(null);
+
+  const confirm = async () => {
+    if (!onSkipCheck || phase === 'skipping') return;
+    setPhase('skipping');
+    try {
+      const outcome = await onSkipCheck();
+      if (outcome === 'not_running') {
+        setPhase('finished');
+        return;
+      }
+      setPending(true);
+      setOpen(false);
+    } catch {
+      setPhase('failed');
+    }
+  };
+
+  const row = (tc: Tc): ReactNode => (
+    <div data-testid="plan-narration-skip-check" className="ml-5.5">
+      {pending ? (
+        <div
+          ref={pendingRef}
+          tabIndex={-1}
+          role="status"
+          data-testid="plan-narration-skip-check-pending"
+          className="flex items-center gap-2 text-(--el-text-secondary) focus-visible:outline-none"
+        >
+          <Spinner size="sm" aria-hidden="true" />
+          {tc('narration.skippingCheck')}
+        </div>
+      ) : (
+        <Button
+          ref={controlRef}
+          variant="secondary"
+          size="sm"
+          leftIcon={<SkipForward className="size-3.5" aria-hidden="true" />}
+          data-testid="plan-narration-skip-check-control"
+          onClick={() => {
+            setPhase('open');
+            setOpen(true);
+          }}
+        >
+          {tc('narration.skipCheck')}
+        </Button>
+      )}
+    </div>
+  );
+
+  const dialog = (
+    <SkipFinalCheckDialog
+      open={open}
+      phase={phase}
+      onKeep={() => setOpen(false)}
+      onConfirm={() => void confirm()}
+      onCloseAutoFocus={(event) => {
+        // Back to the control when kept; to the pending row once accepted. When
+        // neither is drawn any more (the check ended), Radix's default applies.
+        const target = pendingRef.current ?? controlRef.current;
+        if (!target) return;
+        event.preventDefault();
+        target.focus();
+      }}
+    />
+  );
+
+  const clearPending = useCallback(() => setPending(false), []);
+
+  return { row, dialog, clearPending };
 }
 
 /**
@@ -277,12 +402,16 @@ function NarrationGroupRow({
   listId,
   folded,
   onToggle,
+  skipRow,
   tc,
 }: {
   group: NarrationGroup;
   listId: string;
   folded: boolean;
   onToggle: () => void;
+  /** The Skip the final check row, under the live check head only; between the
+   *  head and the list, so hiding the notes never hides it. */
+  skipRow: ReactNode;
   tc: Tc;
 }) {
   const state = group.session === null ? 'unattributed' : group.live ? 'live' : 'finished';
@@ -327,6 +456,7 @@ function NarrationGroupRow({
           tc={tc}
         />
       ) : null}
+      {skipRow}
       {hasMessages ? (
         <ol
           id={listId}

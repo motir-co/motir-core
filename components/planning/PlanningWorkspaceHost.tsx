@@ -169,6 +169,10 @@ export interface PlanningWorkspaceHostProps {
    *  access: it renders what it is told, and every gate is decided one level up
    *  where the provider is. */
   canManage?: boolean;
+  /** May this viewer steer the plan (`ai:plan`)? Gates the Skip the final check
+   *  control (MOTIR-11266), whose door asserts it. Passed explicitly for
+   *  {@link canManage}'s reason. Absent → no control. */
+  canPlan?: boolean;
   /** Close the workspace. The overlay routes Close, `Esc`, the scrim and a
    *  browser Back through ONE `requestClose()`, which is the seam the pending
    *  guard (MOTIR-4731) intercepts — so this control must call it rather than
@@ -310,6 +314,7 @@ export function PlanningWorkspaceHost(props: PlanningWorkspaceHostProps) {
 
 function PlanWorkspaceHost({
   canManage = false,
+  canPlan = false,
   projectKey,
   projectName,
   launch,
@@ -504,6 +509,7 @@ function PlanWorkspaceHost({
     approve,
     discard,
     stop,
+    skipFinalCheck,
     startCopied,
     confirmRestart,
     answerRestartConfirm,
@@ -1422,6 +1428,7 @@ function PlanWorkspaceHost({
           onApprove={() => approveFrom('rail')}
           onDiscard={discardNow}
           onStop={stop}
+          {...(canPlan ? { onSkipFinalCheck: skipFinalCheck } : {})}
           onStartNewSession={() => void startCopied()}
           onConfirmRestart={confirmRestart}
           onAnswerRestart={(answer) => void answerRestartConfirm(answer)}

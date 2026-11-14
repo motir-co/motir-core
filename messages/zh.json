@@ -3673,7 +3673,10 @@
         "explanationsHint": "每个提议的工作项都会附带一段简短的“为何重要”，无需查看代码即可读懂。",
         "dataPracticeCommitment": "Motir 及其网关都不会使用本项目的内容训练模型。",
         "dataPracticeReport": "请求到达服务商之后，该服务商如何处理，取决于其自行公布的政策。",
-        "dataPracticeLink": "查看各服务商的公开说明"
+        "dataPracticeLink": "查看各服务商的公开说明",
+        "finalCheckLabel": "运行最终检查",
+        "finalCheckHint": "在提议计划之前，Motir AI 会按构建顺序重新阅读其工作项，检查每个工作项都能基于前面工作项交付的内容来构建，并修复所发现的缺陷。对于大型计划，这可能需要很多分钟。",
+        "finalCheckOff": "此项目的计划会在没有最终检查的情况下提议。每个计划的摘要都会说明它未经检查。"
       },
       "lessonCapture": {
         "title": "规划失误",
@@ -8833,7 +8836,9 @@
         "kindSettle": "收束",
         "settleLine": "正在确定要改什么",
         "groupLive": "{step} —— 进行中",
-        "groupFinished": "{step} —— 已完成"
+        "groupFinished": "{step} —— 已完成",
+        "skipCheck": "跳过最终检查",
+        "skippingCheck": "正在跳过最终检查…"
       }
     },
     "codeUnreadable": {
@@ -9359,6 +9364,16 @@
       "none": "此处为空",
       "correctionHint": "如需修改，请在对话中输入更正。",
       "notice": "此提议没有写出需求。确认后，规划会自行撰写。"
+    },
+    "skipFinalCheck": {
+      "title": "跳过最终检查？",
+      "body": "最终检查会按构建顺序重新阅读此计划的每个工作项，检查每个工作项都能基于前面工作项交付的内容来构建，并修复所发现的缺陷。",
+      "consequence": "如果跳过，计划会在没有该检查的情况下立即提议。到目前为止发现的内容会列在计划摘要中，但不会修复任何内容。",
+      "confirm": "跳过最终检查",
+      "keep": "继续检查",
+      "error": "无法跳过最终检查。它仍在运行：请重试，或继续检查。",
+      "retry": "重试",
+      "finished": "最终检查已经完成，因此没有可跳过的内容。"
     }
   },
   "codeHealth": {

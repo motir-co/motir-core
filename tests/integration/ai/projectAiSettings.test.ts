@@ -75,6 +75,8 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
       // ON, and NOT because a default was written to the row — the column is
       // NULL on a fresh project and the mapper resolves it (MOTIR-3349).
       aiRecordPlanningMistakes: true,
+      // ON the same way: a NULL column the mapper resolves (MOTIR-11264).
+      aiFinalCheck: true,
     });
   });
 
@@ -93,6 +95,8 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
     // distinguishes "unset" from "written true" — the migration adds no default,
     // so a project that never touches the setting stores nothing at all.
     expect(row.aiRecordPlanningMistakes).toBeNull();
+    // MOTIR-11264: NULL on the row too, for the same reason.
+    expect(row.aiFinalCheck).toBeNull();
   });
 
   it('the mapper projects the row (and the repository projection) to the same DTO', async () => {
@@ -120,6 +124,7 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
         aiSprintLengthDays: 7,
         aiGenerateExplanations: true,
         aiRecordPlanningMistakes: false,
+        aiFinalCheck: false,
       },
       ctxFor(fx),
     );
@@ -131,6 +136,7 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
       aiSprintLengthDays: 7,
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
+      aiFinalCheck: false,
     });
     // Committed, not just returned.
     const reread = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
@@ -235,6 +241,55 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
 
     expect(after.aiAutoPlanEnabled).toBe(true);
     expect(after.aiRecordPlanningMistakes).toBe(false);
+  });
+
+  // ── MOTIR-11264 · the final-check switch ──────────────────────────────────────
+
+  it('the final check: a row that predates the column reads as ON', async () => {
+    const fx = await makeFixture();
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { aiFinalCheck: null } });
+
+    const settings = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
+    expect(settings.aiFinalCheck).toBe(true);
+  });
+
+  it('the final check: an explicit false turns it off, back on reads true, and another field leaves it alone', async () => {
+    const fx = await makeFixture();
+
+    // Another field first: the column stays NULL rather than acquiring a true.
+    await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiSprintLengthDays: 4 },
+      ctxFor(fx),
+    );
+    expect(
+      (await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } })).aiFinalCheck,
+    ).toBeNull();
+
+    const off = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiFinalCheck: false },
+      ctxFor(fx),
+    );
+    expect(off.aiFinalCheck).toBe(false);
+    expect(
+      (await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } })).aiFinalCheck,
+    ).toBe(false);
+
+    // An explicit false survives a later patch of another field.
+    const still = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiAutoPlanEnabled: true },
+      ctxFor(fx),
+    );
+    expect(still.aiFinalCheck).toBe(false);
+
+    const backOn = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiFinalCheck: true },
+      ctxFor(fx),
+    );
+    expect(backOn.aiFinalCheck).toBe(true);
   });
 
   it('accepts the bound VALUES themselves (the range is inclusive)', async () => {
@@ -390,9 +445,20 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
       ),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
 
+    // MOTIR-11264: and the final check — a member cannot turn it off either.
+    expect(read.aiFinalCheck).toBe(true);
+    await expect(
+      projectAiSettingsService.updateAiSettings(
+        fx.projectIdentifier,
+        { aiFinalCheck: false },
+        ctxFor(fx, member.id),
+      ),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+
     const after = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
     expect(after.aiAutoPlanEnabled).toBe(false);
     expect(after.aiRecordPlanningMistakes).toBe(true);
+    expect(after.aiFinalCheck).toBe(true);
   });
 
   it('names `ai:configure` on the refusal — not the umbrella, and not `ai:plan`', async () => {

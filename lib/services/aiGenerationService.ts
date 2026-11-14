@@ -10,6 +10,7 @@ import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
+import { FINAL_CHECK_CONTEXT_FIELD, resolveFinalCheckForJob } from '@/lib/ai/finalCheck';
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { routeOnboardingContextFor } from '@/lib/ai/routeOnboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
@@ -203,6 +204,13 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The final check (MOTIR-11264) — sent on EVERY plan submit, this one
+    // included: the routing run can go on to plan, and an absent field reads on
+    // the far side as ON.
+    const finalCheck = await resolveFinalCheckForJob(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     // The two languages (MOTIR-8741): reached only from a click, so the clicker is
     // the person who started it.
     const languages = await resolveTenantLanguages({
@@ -226,6 +234,7 @@ export const aiGenerationService = {
         prompt: null,
         [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
         [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
+        [FINAL_CHECK_CONTEXT_FIELD]: finalCheck,
         ...routeOnboardingContextFor(ctx.project),
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),
@@ -297,6 +306,13 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // Does this project's plan run the final check (MOTIR-11264)? Resolved here
+    // for the same reason as the flag above: this submit bypasses
+    // `aiPlanEditsService`'s shared planning context.
+    const finalCheck = await resolveFinalCheckForJob(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     // The two languages (MOTIR-8741): a generation starts from a click, so the
     // clicker is the person who started the plan.
     const languages = await resolveTenantLanguages({
@@ -334,6 +350,8 @@ export const aiGenerationService = {
         // the exported constant, not a literal: there is no shared type across
         // the boundary and a typo is not a type error.
         [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
+        // ALWAYS present, `false` when off (MOTIR-11264) — absent reads as ON.
+        [FINAL_CHECK_CONTEXT_FIELD]: finalCheck,
         // Is this the project's FIRST plan (MOTIR-4736)? Read off the marker the
         // service already holds — `ProjectContext.project` is a `ProjectDTO` and
         // `onboardingRanAt` rides the base DTO, so this costs no round-trip and

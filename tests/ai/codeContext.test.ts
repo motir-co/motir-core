@@ -524,6 +524,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       // The consent flag rides every planning submit (MOTIR-4343), generation
       // included — ON here because this fixture never touches the setting.
       recordPlanningMistakes: true,
+      finalCheck: true,
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
@@ -640,6 +641,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       prompt: 'start fresh',
       generateExplanations: false,
       recordPlanningMistakes: true,
+      finalCheck: true,
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
@@ -675,6 +677,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       prompt: 'start fresh',
       generateExplanations: false,
       recordPlanningMistakes: true,
+      finalCheck: true,
       onboarding: true,
       // The starter library (MOTIR-11041) — sent on every planning submit.
       starterLibrary: await seedRegistryService.listActiveEntries(),
