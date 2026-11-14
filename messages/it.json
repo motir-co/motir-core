@@ -13598,7 +13598,10 @@
         "count": "{count, plural, one {# servizio} other {# servizi}}",
         "rolling": "{count} in rilascio",
         "rolloutFailed": "{count, plural, one {# rilascio non riuscito} other {# rilasci non riusciti}}",
-        "short": "{count, plural, one {# servizio con task mancanti} other {# servizi con task mancanti}}"
+        "short": "{count, plural, one {# servizio con task mancanti} other {# servizi con task mancanti}}",
+        "staleOrDiverged": "{count, plural, one {# servizio arretrato o divergente} other {# servizi arretrati o divergenti}}",
+        "versionsNotRead": "Versioni non lette",
+        "versionsNotReadLabel": "Non è stato possibile leggere la versione rilasciata di alcun servizio"
       },
       "verdict": {
         "under": "{percent}% della quota Fargate",
@@ -13614,7 +13617,8 @@
         "vcpuPerTask": "vCPU per task",
         "memoryPerTask": "Memoria per task",
         "vcpu": "vCPU",
-        "deployment": "Rilascio"
+        "deployment": "Rilascio",
+        "commit": "Commit"
       },
       "caption": "Servizi ECS nel cluster {cluster}, con il totale rispetto alla quota vCPU On-Demand di Fargate",
       "taskDefinition": "definizione di task {family}:{revision}",
@@ -13678,6 +13682,34 @@
       "phone": {
         "listLabel": "Servizi ECS nel cluster {cluster}",
         "perTask": "Per task"
+      },
+      "commit": {
+        "notKnown": "Non noto",
+        "linkLabel": "Commit {commit} di {repo} su GitHub"
+      },
+      "version": {
+        "latest": "Aggiornato",
+        "behind": "{count, plural, one {# commit indietro} other {# commit indietro}}",
+        "oldest": "il più vecchio non rilasciato {age}",
+        "compare": "Confronta su GitHub",
+        "diverged": "Divergente",
+        "divergedDetail": "non sul ramo predefinito",
+        "rolling": "In rilascio",
+        "rollingDetail": "il commit del nuovo rilascio",
+        "unknown": "Sconosciuta",
+        "unknownLabel": "Versione sconosciuta: {reason}",
+        "reason": {
+          "no_sha_tag": "L’immagine in esecuzione non ha alcun tag di commit, quindi il suo commit non è noto.",
+          "ecr_not_read": "Non è stato possibile leggere i tag dell’immagine da ECR, quindi il suo commit non è noto.",
+          "github_not_read": "Al momento non è stato possibile confrontare con GitHub, quindi non si sa se questo commit è il più recente.",
+          "source_not_mapped": "Nessun repository di origine è associato a questa immagine, quindi il suo commit non viene confrontato."
+        },
+        "reasonShort": {
+          "no_sha_tag": "nessun tag di commit sull’immagine",
+          "ecr_not_read": "tag dell’immagine non letti",
+          "github_not_read": "GitHub non confrontato",
+          "source_not_mapped": "nessun repository di origine associato"
+        }
       }
     },
     "capacity": {

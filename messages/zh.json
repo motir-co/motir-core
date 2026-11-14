@@ -13589,7 +13589,10 @@
         "count": "{count, plural, other {# 个服务}}",
         "rolling": "{count} 个正在发布",
         "rolloutFailed": "{count, plural, other {# 次发布失败}}",
-        "short": "{count, plural, other {# 个服务任务不足}}"
+        "short": "{count, plural, other {# 个服务任务不足}}",
+        "staleOrDiverged": "{count, plural, other {# 个服务过时或已分叉}}",
+        "versionsNotRead": "未读取版本",
+        "versionsNotReadLabel": "没有任何服务的已部署版本能被读取"
       },
       "verdict": {
         "under": "占 Fargate 配额的 {percent}%",
@@ -13605,7 +13608,8 @@
         "vcpuPerTask": "每任务 vCPU",
         "memoryPerTask": "每任务内存",
         "vcpu": "vCPU",
-        "deployment": "部署状态"
+        "deployment": "部署状态",
+        "commit": "提交"
       },
       "caption": "集群 {cluster} 中的 ECS 服务，以及与 Fargate 按需 vCPU 配额对比的总计",
       "taskDefinition": "任务定义 {family}:{revision}",
@@ -13669,6 +13673,34 @@
       "phone": {
         "listLabel": "集群 {cluster} 中的 ECS 服务",
         "perTask": "每任务"
+      },
+      "commit": {
+        "notKnown": "未知",
+        "linkLabel": "GitHub 上 {repo} 的提交 {commit}"
+      },
+      "version": {
+        "latest": "最新",
+        "behind": "{count, plural, other {落后 # 个提交}}",
+        "oldest": "最早未部署的提交于{age}",
+        "compare": "在 GitHub 上比较",
+        "diverged": "已分叉",
+        "divergedDetail": "不在默认分支上",
+        "rolling": "正在发布",
+        "rollingDetail": "新部署的提交",
+        "unknown": "未知",
+        "unknownLabel": "版本未知：{reason}",
+        "reason": {
+          "no_sha_tag": "正在运行的镜像没有提交标签，因此不知道它的提交。",
+          "ecr_not_read": "无法从 ECR 读取镜像的标签，因此不知道它的提交。",
+          "github_not_read": "目前无法与 GitHub 比较，因此不知道这个提交是否为最新。",
+          "source_not_mapped": "这个镜像没有对应的源仓库，因此不比较它的提交。"
+        },
+        "reasonShort": {
+          "no_sha_tag": "镜像没有提交标签",
+          "ecr_not_read": "未读取镜像标签",
+          "github_not_read": "未与 GitHub 比较",
+          "source_not_mapped": "没有对应的源仓库"
+        }
       }
     },
     "capacity": {

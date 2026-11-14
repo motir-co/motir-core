@@ -4,6 +4,7 @@ import {
   CircleHelp,
   CircleMinus,
   Container,
+  GitBranch,
   Info,
   LoaderCircle,
   OctagonAlert,
@@ -12,9 +13,13 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { HEADROOM_ALERT_FRACTION } from '@/lib/ciFleet/shardTargets';
 import type {
+  PlatformServiceCommitDTO,
   PlatformServiceRowDTO,
+  PlatformServiceVersionDTO,
+  PlatformServiceVersionJudgementDTO,
   PlatformServicesDTO,
   PlatformServicesQuotaDTO,
   PlatformServicesShareDTO,
@@ -38,6 +43,12 @@ import {
  * ⚠️ AN UNREAD FIGURE IS A WORD, NEVER A NUMBER. A failed cluster read renders
  * "ECS did not answer" with no row and no total; an unread quota renders
  * "Not read" and the share "Not available", with no bar.
+ *
+ * THE COMMIT COLUMN, THE VERSION PILL AND THE STALE COUNT (MOTIR-11112, design
+ * MOTIR-11242, `platform-admin/design-notes.md` § _AMENDMENT 2026-11-13 —
+ * Services: the Commit column, the version pill and the stale count`). A commit
+ * that did not resolve is "Not known" and a version that was not judged is
+ * "Unknown" with its reason — never a number, never a green pill.
  */
 
 type T = Awaited<ReturnType<typeof getTranslations<'platformAdmin.services'>>>;
@@ -184,6 +195,7 @@ function HeaderPills({ dto, w }: { dto: PlatformServicesDTO; w: Words }) {
           {t('pill.rolloutFailed', { count: read.failed })}
         </Pill>
       ) : null}
+      <StaleCountPill read={read} t={t} />
       {read.short > 0 ? (
         <Pill severity="warning">
           <TriangleAlert aria-hidden className={GLYPH} />
@@ -192,6 +204,32 @@ function HeaderPills({ dto, w }: { dto: PlatformServicesDTO; w: Words }) {
       ) : null}
       <VerdictPill share={dto.share} t={t} />
     </>
+  );
+}
+
+/** Stale-or-diverged services, after the rollout-failed pill. Absent at zero;
+ *  "Versions not read" when no row's version was judged — never a zero. */
+function StaleCountPill({
+  read,
+  t,
+}: {
+  read: Extract<PlatformServicesDTO['read'], { status: 'ok' }>;
+  t: T;
+}) {
+  if (read.versionsNotRead) {
+    return (
+      <Pill tone="awaiting" aria-label={t('pill.versionsNotReadLabel')} data-element="stale-count">
+        <CircleHelp aria-hidden className={GLYPH} />
+        {t('pill.versionsNotRead')}
+      </Pill>
+    );
+  }
+  if (read.staleOrDiverged === 0) return null;
+  return (
+    <Pill severity="danger" data-element="stale-count">
+      <OctagonAlert aria-hidden className={GLYPH} />
+      {t('pill.staleOrDiverged', { count: read.staleOrDiverged })}
+    </Pill>
   );
 }
 
@@ -380,6 +418,168 @@ function DeploymentCell({ row, w }: { row: PlatformServiceRowDTO; w: Words }) {
   }
 }
 
+// ── The commit cell and the version pill (MOTIR-11112) ──────────────────────
+
+/** The deployed commit: linked to GitHub, plain when no repository is mapped,
+ *  and "Not known" when none resolved. */
+function CommitCell({ commit, t }: { commit: PlatformServiceCommitDTO | null; t: T }) {
+  if (commit === null) {
+    return (
+      <span data-element="commit-cell" className="italic text-(--el-text-secondary)">
+        {t('commit.notKnown')}
+      </span>
+    );
+  }
+  const short = commit.sha.slice(0, 7);
+  if (commit.url === null || commit.repository === null) {
+    return (
+      <span data-element="commit-cell" className="font-mono text-xs text-(--el-text-identifier)">
+        {short}
+      </span>
+    );
+  }
+  return (
+    <a
+      data-element="commit-cell"
+      href={commit.url}
+      aria-label={t('commit.linkLabel', { commit: short, repo: commit.repository })}
+      className="font-mono text-xs text-(--el-link) underline underline-offset-2"
+    >
+      {short}
+    </a>
+  );
+}
+
+/** One judgement's pill — glyph + words, never colour alone. */
+function JudgementPill({ judgement, t }: { judgement: PlatformServiceVersionJudgementDTO; t: T }) {
+  switch (judgement.state) {
+    case 'latest':
+      return (
+        <Pill severity="success" data-version="latest">
+          <CircleCheck aria-hidden className={GLYPH} />
+          {t('version.latest')}
+        </Pill>
+      );
+    case 'behind': {
+      const stale = judgement.severity === 'stale';
+      const Glyph = stale ? OctagonAlert : TriangleAlert;
+      return (
+        <Pill severity={stale ? 'danger' : 'warning'} data-version={`behind-${judgement.severity}`}>
+          <Glyph aria-hidden className={GLYPH} />
+          {t('version.behind', { count: judgement.count })}
+        </Pill>
+      );
+    }
+    case 'diverged':
+      return (
+        <Pill severity="danger" data-version="diverged">
+          <GitBranch aria-hidden className={GLYPH} />
+          {t('version.diverged')}
+        </Pill>
+      );
+    default: {
+      const reason = t(`version.reason.${judgement.reason}`);
+      return (
+        <Tooltip content={reason} className="max-w-[18rem]">
+          <Pill
+            tone="neutral"
+            tabIndex={0}
+            aria-label={t('version.unknownLabel', { reason })}
+            data-reason={judgement.reason}
+          >
+            <CircleHelp aria-hidden className={GLYPH} />
+            {t('version.unknown')}
+          </Pill>
+        </Tooltip>
+      );
+    }
+  }
+}
+
+/** What sits under a judgement's pill: the behind line, the diverged line, and
+ *  on the phone (no hover) Unknown's short reason. */
+function JudgementLines({
+  judgement,
+  phone,
+  w,
+}: {
+  judgement: PlatformServiceVersionJudgementDTO;
+  phone: boolean;
+  w: Words;
+}) {
+  const { t, ft, now } = w;
+  switch (judgement.state) {
+    case 'behind':
+      return (
+        <>
+          <Sub>
+            {t('version.oldest', {
+              age: ago(ft, secondsSince(judgement.oldestUndeployedAt, now)),
+            })}
+          </Sub>
+          <a
+            href={judgement.compareUrl}
+            className="font-sans text-xs text-(--el-link) underline underline-offset-2"
+          >
+            {t('version.compare')}
+          </a>
+        </>
+      );
+    case 'diverged':
+      return <Sub>{t('version.divergedDetail')}</Sub>;
+    case 'unknown':
+      return phone ? <Sub>{t(`version.reasonShort.${judgement.reason}`)}</Sub> : null;
+    default:
+      return null;
+  }
+}
+
+function VersionBody({
+  version,
+  phone,
+  w,
+}: {
+  version: PlatformServiceVersionDTO;
+  phone: boolean;
+  w: Words;
+}) {
+  const { t } = w;
+  if (version.state === 'rolling') {
+    return (
+      <span className="flex flex-col items-start gap-1" data-version="rolling">
+        <span className="flex flex-wrap items-center gap-1">
+          <Pill severity="info">
+            <LoaderCircle aria-hidden className={GLYPH} />
+            {t('version.rolling')}
+          </Pill>
+          <JudgementPill judgement={version.primary} t={t} />
+        </span>
+        <Sub>{t('version.rollingDetail')}</Sub>
+        <JudgementLines judgement={version.primary} phone={phone} w={w} />
+      </span>
+    );
+  }
+  return (
+    <span
+      className="flex flex-col items-start gap-1"
+      data-version={version.state === 'unknown' ? 'unknown' : undefined}
+    >
+      <JudgementPill judgement={version} t={t} />
+      <JudgementLines judgement={version} phone={phone} w={w} />
+    </span>
+  );
+}
+
+/** The Commit column's cell: the commit, the version pill directly under it. */
+function VersionCell({ row, phone, w }: { row: PlatformServiceRowDTO; phone: boolean; w: Words }) {
+  return (
+    <span className="flex flex-col items-start gap-1" data-element="version-cell">
+      <CommitCell commit={row.commit} t={w.t} />
+      <VersionBody version={row.version} phone={phone} w={w} />
+    </span>
+  );
+}
+
 // ── The total against the quota ──────────────────────────────────────────────
 
 /** The use bar with its 70% tick: accent under 70%, warning at or over it,
@@ -491,11 +691,18 @@ interface ReadProps {
 
 const DASH = <span className="text-(--el-text-secondary)">—</span>;
 
+/** The Commit column's dash on the total and quota rows: no commit belongs there. */
+const DASH_HIDDEN = (
+  <span aria-hidden className="text-(--el-text-secondary)">
+    —
+  </span>
+);
+
 function ServicesTable({ cluster, rows, total, quota, share, w }: ReadProps) {
   const { t, format } = w;
   return (
     <div className="hidden overflow-x-auto sm:block">
-      <table className="w-full min-w-[54rem] border-collapse font-sans text-sm">
+      <table className="w-full min-w-[62rem] border-collapse font-sans text-sm">
         <caption className="sr-only">{t('caption', { cluster })}</caption>
         <thead className="border-b border-(--el-border)">
           <tr>
@@ -513,6 +720,7 @@ function ServicesTable({ cluster, rows, total, quota, share, w }: ReadProps) {
               {t('col.vcpu')}
             </Th>
             <Th scope="col">{t('col.deployment')}</Th>
+            <Th scope="col">{t('col.commit')}</Th>
           </tr>
         </thead>
         <tbody>
@@ -540,6 +748,9 @@ function ServicesTable({ cluster, rows, total, quota, share, w }: ReadProps) {
               </Td>
               <Td>
                 <DeploymentCell row={row} w={w} />
+              </Td>
+              <Td>
+                <VersionCell row={row} phone={false} w={w} />
               </Td>
             </tr>
           ))}
@@ -569,6 +780,7 @@ function ServicesTable({ cluster, rows, total, quota, share, w }: ReadProps) {
             <Td>
               <ShareBody share={share} w={w} />
             </Td>
+            <Td>{DASH_HIDDEN}</Td>
           </tr>
           <tr data-row="quota">
             <Td rail={false}>
@@ -588,6 +800,7 @@ function ServicesTable({ cluster, rows, total, quota, share, w }: ReadProps) {
                 {quota.status === 'ok' ? t('quota.body') : t('quota.bodyNotRead')}
               </span>
             </Td>
+            <Td>{DASH_HIDDEN}</Td>
           </tr>
         </tfoot>
       </table>
@@ -644,6 +857,11 @@ function ServicesList({ cluster, rows, total, quota, share, w }: ReadProps) {
               <Pair label={t('col.deployment')}>
                 <DeploymentCell row={row} w={w} />
               </Pair>
+              <div className="col-span-2">
+                <Pair label={t('col.commit')}>
+                  <VersionCell row={row} phone w={w} />
+                </Pair>
+              </div>
             </dl>
           </li>
         ))}

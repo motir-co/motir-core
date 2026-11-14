@@ -13595,7 +13595,10 @@
         "count": "{count, plural, other {# 件のサービス}}",
         "rolling": "{count} 件ロールアウト中",
         "rolloutFailed": "{count, plural, other {# 件のロールアウトが失敗}}",
-        "short": "{count, plural, other {# 件のサービスでタスクが不足}}"
+        "short": "{count, plural, other {# 件のサービスでタスクが不足}}",
+        "staleOrDiverged": "{count, plural, other {# 件のサービスが古いか分岐}}",
+        "versionsNotRead": "バージョン未読み込み",
+        "versionsNotReadLabel": "どのサービスのデプロイ済みバージョンも読み込めませんでした"
       },
       "verdict": {
         "under": "Fargate クォータの {percent}%",
@@ -13611,7 +13614,8 @@
         "vcpuPerTask": "タスクあたりの vCPU",
         "memoryPerTask": "タスクあたりのメモリ",
         "vcpu": "vCPU",
-        "deployment": "デプロイ"
+        "deployment": "デプロイ",
+        "commit": "コミット"
       },
       "caption": "クラスター {cluster} の ECS サービスと、Fargate オンデマンド vCPU クォータに対する合計",
       "taskDefinition": "タスク定義 {family}:{revision}",
@@ -13675,6 +13679,34 @@
       "phone": {
         "listLabel": "クラスター {cluster} の ECS サービス",
         "perTask": "タスクあたり"
+      },
+      "commit": {
+        "notKnown": "不明",
+        "linkLabel": "GitHub 上の {repo} のコミット {commit}"
+      },
+      "version": {
+        "latest": "最新",
+        "behind": "{count, plural, other {# コミット遅れ}}",
+        "oldest": "未デプロイの最古 {age}",
+        "compare": "GitHub で比較",
+        "diverged": "分岐",
+        "divergedDetail": "デフォルトブランチ上にない",
+        "rolling": "ロールアウト中",
+        "rollingDetail": "新しいデプロイのコミット",
+        "unknown": "不明",
+        "unknownLabel": "バージョン不明: {reason}",
+        "reason": {
+          "no_sha_tag": "実行中のイメージにコミットタグがないため、コミットは不明です。",
+          "ecr_not_read": "ECR からイメージのタグを読み込めなかったため、コミットは不明です。",
+          "github_not_read": "現在 GitHub と比較できないため、このコミットが最新かどうかは不明です。",
+          "source_not_mapped": "このイメージにはソースリポジトリが割り当てられていないため、コミットは比較されません。"
+        },
+        "reasonShort": {
+          "no_sha_tag": "イメージにコミットタグなし",
+          "ecr_not_read": "イメージのタグ未読み込み",
+          "github_not_read": "GitHub と未比較",
+          "source_not_mapped": "ソースリポジトリ未割り当て"
+        }
       }
     },
     "capacity": {

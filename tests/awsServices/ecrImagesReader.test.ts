@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DescribeImagesCommand, ECRClient } from '@aws-sdk/client-ecr';
-import { createEcrImagesReader, parseEcrImageReference } from '@/lib/awsServices/ecrImagesReader';
+import {
+  createEcrImagesReader,
+  createEcrImageTagsReader,
+  parseEcrImageAddress,
+  parseEcrImageReference,
+} from '@/lib/awsServices/ecrImagesReader';
 
 // THE FLEET STATUS PAGE'S INDEXER IMAGE READ (MOTIR-10986). The SDK client is
 // driven at its `send`, so what is asserted is the command, the region the client
@@ -85,6 +90,86 @@ describe('createEcrImagesReader', () => {
       throw new Error('AccessDeniedException');
     }) as never);
     await expect(createEcrImagesReader().listImages(REPO)).rejects.toThrow('AccessDenied');
+  });
+});
+
+// THE SERVICES PAGE'S DEPLOYED-COMMIT READ (MOTIR-11112): the tags of the ONE
+// image a task definition runs, by digest or by tag.
+
+const SHA = 'db9aef8a3c51e7f02b6d4a9e1c8f37b25d06e4a1';
+const CORE = '944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/motir-core';
+const CORE_REPO = {
+  registryId: '944842271421',
+  region: 'us-east-1',
+  repositoryName: 'motir/motir-core',
+};
+
+describe('parseEcrImageAddress', () => {
+  it('reads a reference by digest, by tag, and by both', () => {
+    expect(parseEcrImageAddress(` ${CORE}@${DIGEST} `)).toEqual({
+      ...CORE_REPO,
+      tag: null,
+      digest: DIGEST,
+    });
+    expect(parseEcrImageAddress(`${CORE}:${SHA}`)).toEqual({
+      ...CORE_REPO,
+      tag: SHA,
+      digest: null,
+    });
+    expect(parseEcrImageAddress(`${CORE}:main@${DIGEST}`)).toEqual({
+      ...CORE_REPO,
+      tag: 'main',
+      digest: DIGEST,
+    });
+  });
+
+  it('is null for an image outside ECR, or one that names neither a tag nor a digest', () => {
+    expect(parseEcrImageAddress(`ghcr.io/motir-co/motir-core:${SHA}`)).toBeNull();
+    expect(parseEcrImageAddress(CORE)).toBeNull();
+    expect(parseEcrImageAddress(`${CORE}@sha256:short`)).toBeNull();
+  });
+});
+
+describe('createEcrImageTagsReader', () => {
+  it('describes the one image by digest, in the reference’s region, and answers its tags', async () => {
+    const send = vi.spyOn(ECRClient.prototype, 'send').mockImplementation((async () => ({
+      imageDetails: [{ imageDigest: DIGEST, imageTags: [SHA, 'main'] }],
+    })) as never);
+    const reader = createEcrImageTagsReader();
+    const image = { ...CORE_REPO, region: 'eu-central-1', tag: 'main', digest: DIGEST };
+    expect(await reader.tagsOf(image)).toEqual([SHA, 'main']);
+    const command = send.mock.calls[0]![0] as DescribeImagesCommand;
+    expect(command).toBeInstanceOf(DescribeImagesCommand);
+    expect(command.input).toEqual({
+      registryId: CORE_REPO.registryId,
+      repositoryName: CORE_REPO.repositoryName,
+      imageIds: [{ imageDigest: DIGEST }],
+    });
+    expect(await (send.mock.contexts[0] as ECRClient).config.region()).toBe('eu-central-1');
+  });
+
+  it('describes by tag when the reference names no digest; an untagged image has no tags', async () => {
+    const send = vi.spyOn(ECRClient.prototype, 'send').mockImplementation((async () => ({
+      imageDetails: [{ imageDigest: DIGEST }],
+    })) as never);
+    expect(
+      await createEcrImageTagsReader().tagsOf({ ...CORE_REPO, tag: 'latest', digest: null }),
+    ).toEqual([]);
+    expect((send.mock.calls[0]![0] as DescribeImagesCommand).input.imageIds).toEqual([
+      { imageTag: 'latest' },
+    ]);
+  });
+
+  it('fails when ECR describes no image, and throws what ECR throws', async () => {
+    const send = vi
+      .spyOn(ECRClient.prototype, 'send')
+      .mockImplementation((async () => ({})) as never);
+    const image = { ...CORE_REPO, tag: null, digest: DIGEST };
+    await expect(createEcrImageTagsReader().tagsOf(image)).rejects.toThrow('described no image');
+    send.mockImplementation((async () => {
+      throw new Error('ImageNotFoundException');
+    }) as never);
+    await expect(createEcrImageTagsReader().tagsOf(image)).rejects.toThrow('ImageNotFound');
   });
 });
 

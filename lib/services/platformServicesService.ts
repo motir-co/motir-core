@@ -8,9 +8,24 @@ import {
   type EcsServicesReader,
   type EcsTaskSizeRead,
 } from '@/lib/awsServices/ecsServicesReader';
+import {
+  createEcrImageTagsReader,
+  parseEcrImageAddress,
+  type EcrImageAddress,
+  type EcrImageTagsReader,
+} from '@/lib/awsServices/ecrImagesReader';
 import { HEADROOM_ALERT_FRACTION } from '@/lib/ciFleet/shardTargets';
+import {
+  repoCommitHistoryClient,
+  type CommitComparison,
+  type DefaultBranchHead,
+  type RepoRef,
+} from '@/lib/github/repoCommitHistory';
 import type {
+  PlatformServiceCommitDTO,
   PlatformServiceRowDTO,
+  PlatformServiceVersionDTO,
+  PlatformServiceVersionJudgementDTO,
   PlatformServicesClusterDTO,
   PlatformServicesDTO,
   PlatformServicesQuotaDTO,
@@ -19,6 +34,7 @@ import type {
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import { withPlatformRead } from '@/lib/platform/context';
 import { platformAwsReadRepository } from '@/lib/repositories/platformAwsReadRepository';
+import { sourceRepoToken } from '@/lib/services/runnerImageFreshnessProbeService';
 
 /**
  * THE SERVICES PAGE'S READ (MOTIR-10890, design MOTIR-10889) — every ECS service
@@ -37,6 +53,19 @@ import { platformAwsReadRepository } from '@/lib/repositories/platformAwsReadRep
  * would make the total a guess, and a guessed total against the quota is the
  * figure this page exists not to show.
  *
+ * THE DEPLOYED COMMIT (MOTIR-11112, design MOTIR-11242). Each service's PRIMARY
+ * deployment runs a task definition whose first container names its image; every
+ * deploy tags that image in ECR with the full commit SHA, so the commit is the
+ * image's 40-hex tag (a reference BY that tag is used directly). The image
+ * repository maps to its source repository on GitHub (`IMAGE_SOURCE_REPOSITORIES`)
+ * and the commit is compared with that repository's default-branch head. Every
+ * part is read on its own and per row: an ECR or GitHub failure, an image with no
+ * commit tag or an unmapped repository makes THAT row's version `unknown` with
+ * the reason, never an error for the page. Reads are shared across the rows of
+ * one request — one ECR read per image, one head per repository, one compare per
+ * (repository, deployed commit) — so the three motir-core services cost one
+ * compare.
+ *
  * The AWS calls run BEFORE the audited transaction (`withPlatformRead` holds the
  * audit chain lock until it commits, so a remote call inside it would hold every
  * other staff action at the door). The transaction then writes the
@@ -47,6 +76,24 @@ import { platformAwsReadRepository } from '@/lib/repositories/platformAwsReadRep
 export function servicesCluster(): string {
   return process.env.MOTIR_ECS_CLUSTER?.trim() || 'motir-core';
 }
+
+/**
+ * Image repository (ECR) → the GitHub repository its images are built from. A
+ * repository not listed here is `source_not_mapped`, never a guess.
+ */
+export const IMAGE_SOURCE_REPOSITORIES: Readonly<Record<string, RepoRef>> = {
+  'motir/motir-core': { owner: 'motir-co', name: 'motir-core' },
+  'motir/motir-ai': { owner: 'motir-co', name: 'motir-ai' },
+  'motir/motir-gateway': { owner: 'motir-co', name: 'motir-gateway' },
+  'motir/edge': { owner: 'motir-co', name: 'motir-gateway' },
+};
+
+/** The normal merge → CI → deploy window: an undeployed commit younger than
+ *  this is `fresh`, one this old or older is `stale`. */
+export const STALE_AFTER_MS = 45 * 60_000;
+
+/** A full commit SHA, as every deploy tags its image. */
+const SHA_TAG = /^[0-9a-f]{40}$/;
 
 const CLUSTER_SUBJECT = (cluster: string) => `ecs:${cluster}`;
 const QUOTA_SUBJECT = `servicequotas:${FARGATE_ON_DEMAND_VCPU_QUOTA.serviceCode}/${FARGATE_ON_DEMAND_VCPU_QUOTA.quotaCode}`;
@@ -73,12 +120,12 @@ function sizeOf(
   return { ...size, cpuUnits: size.cpuUnits, memoryMib: size.memoryMib };
 }
 
-/**
- * One service, judged. Rolling = more than one deployment, or the PRIMARY's
- * rollout in progress; failed = a deployment whose rollout FAILED; short =
- * running < desired while not rolling; scaled to 0 = desired 0 and running 0.
- */
-export function judgeService(service: EcsServiceRead): PlatformServiceRowDTO {
+/** The service's deployments — one standing in for the service when ECS lists
+ *  none — and the PRIMARY one among them. */
+function deploymentsOf(service: EcsServiceRead): {
+  deployments: EcsDeploymentRead[];
+  primary: EcsDeploymentRead;
+} {
   const deployments: EcsDeploymentRead[] =
     service.deployments.length > 0
       ? service.deployments
@@ -93,6 +140,47 @@ export function judgeService(service: EcsServiceRead): PlatformServiceRowDTO {
           },
         ];
   const primary = deployments.find((d) => d.status === 'PRIMARY') ?? deployments[0]!;
+  return { deployments, primary };
+}
+
+/** The image the service's PRIMARY deployment runs, or null when its task
+ *  definition names none. */
+export function primaryImageOf(service: EcsServiceRead): string | null {
+  return service.taskDefinitions[deploymentsOf(service).primary.taskDefinitionArn]?.image ?? null;
+}
+
+/** What one deployment's image resolved to: its commit, and that commit judged. */
+export interface DeploymentVersionRead {
+  commit: PlatformServiceCommitDTO | null;
+  judgement: PlatformServiceVersionJudgementDTO;
+}
+
+/** A service whose version was never read — the judges' default, so a cluster
+ *  judged without a version read says so rather than inventing one. */
+const NOT_READ: DeploymentVersionRead = {
+  commit: null,
+  judgement: { state: 'unknown', reason: 'ecr_not_read' },
+};
+
+/** A rolling service's version is its PRIMARY deployment's, said to be rolling. */
+function effectiveJudgement(
+  version: PlatformServiceVersionDTO,
+): PlatformServiceVersionJudgementDTO {
+  return version.state === 'rolling' ? version.primary : version;
+}
+
+/**
+ * One service, judged. Rolling = more than one deployment, or the PRIMARY's
+ * rollout in progress; failed = a deployment whose rollout FAILED; short =
+ * running < desired while not rolling; scaled to 0 = desired 0 and running 0.
+ * The version is the PRIMARY deployment's (`read`), wrapped in `rolling` while
+ * the deployment rolls.
+ */
+export function judgeService(
+  service: EcsServiceRead,
+  read: DeploymentVersionRead = NOT_READ,
+): PlatformServiceRowDTO {
+  const { deployments, primary } = deploymentsOf(service);
   const others = deployments.filter((d) => d !== primary);
   const failedDeployment = deployments.find((d) => d.rolloutState === 'FAILED') ?? null;
 
@@ -159,14 +247,24 @@ export function judgeService(service: EcsServiceRead): PlatformServiceRowDTO {
     vcpu,
     uniformSize,
     deployment,
+    commit: read.commit,
+    version:
+      deployment.state === 'rolling'
+        ? { state: 'rolling', primary: read.judgement }
+        : read.judgement,
   };
 }
 
-/** The cluster, judged: rows by name, the total and the pill counts. */
+/** The cluster, judged: rows by name, the total and the pill counts. `versions`
+ *  holds each service's version read, by service name. */
 export function judgeCluster(
   services: EcsServiceRead[],
+  versions: ReadonlyMap<string, DeploymentVersionRead> = new Map(),
 ): Extract<PlatformServicesClusterDTO, { status: 'ok' }> {
-  const rows = services.map(judgeService).sort((a, b) => a.name.localeCompare(b.name));
+  const rows = services
+    .map((service) => judgeService(service, versions.get(service.name)))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const judged = rows.map((r) => effectiveJudgement(r.version));
   return {
     status: 'ok',
     services: rows,
@@ -179,7 +277,184 @@ export function judgeCluster(
     rolling: rows.filter((r) => r.deployment.state === 'rolling').length,
     failed: rows.filter((r) => r.deployment.state === 'failed').length,
     short: rows.filter((r) => r.tasks === 'short').length,
+    staleOrDiverged: judged.filter(
+      (v) => v.state === 'diverged' || (v.state === 'behind' && v.severity === 'stale'),
+    ).length,
+    versionsNotRead: judged.length > 0 && judged.every((v) => v.state === 'unknown'),
   };
+}
+
+// ── The deployed commit (MOTIR-11112) ────────────────────────────────────────
+
+/** Where the version read reads from — handed in by tests, else ECR over the
+ *  default chain and GitHub with the Fleet status page's token. */
+export interface ServiceVersionSources {
+  ecr: EcrImageTagsReader;
+  github: {
+    defaultBranchHead(repo: RepoRef, token: string | null): Promise<DefaultBranchHead>;
+    compare(
+      repo: RepoRef,
+      base: string,
+      head: string,
+      token: string | null,
+    ): Promise<CommitComparison>;
+  };
+  token(owner: string): Promise<string | null>;
+}
+
+function defaultVersionSources(): ServiceVersionSources {
+  return {
+    ecr: createEcrImageTagsReader(),
+    github: repoCommitHistoryClient,
+    token: (owner) => sourceRepoToken(owner),
+  };
+}
+
+/** A read that failed, so the row is `unknown` for `reason`. */
+class VersionReadError extends Error {
+  constructor(
+    readonly reason: 'ecr_not_read' | 'github_not_read',
+    readonly underlying: unknown,
+  ) {
+    super(reason);
+    this.name = 'VersionReadError';
+  }
+}
+
+/** One promise per key, so rows that share a read share its one call. */
+function memo<T>(make: (key: string) => Promise<T>): (key: string) => Promise<T> {
+  const made = new Map<string, Promise<T>>();
+  return (key) => {
+    let promise = made.get(key);
+    if (!promise) {
+      promise = make(key);
+      made.set(key, promise);
+    }
+    return promise;
+  };
+}
+
+const repoKey = (repo: RepoRef) => `${repo.owner}/${repo.name}`;
+
+/** The deployed commit judged against the default-branch head. */
+export function judgeComparison(
+  repo: RepoRef,
+  deployed: string,
+  head: DefaultBranchHead,
+  comparison: CommitComparison,
+  now: Date,
+): PlatformServiceVersionJudgementDTO {
+  if (comparison.relation === 'identical') return { state: 'latest' };
+  if (comparison.relation !== 'ahead') return { state: 'diverged' };
+  if (comparison.oldestAheadAt === null) {
+    throw new Error('GitHub named no oldest undeployed commit');
+  }
+  const age = now.getTime() - new Date(comparison.oldestAheadAt).getTime();
+  return {
+    state: 'behind',
+    count: comparison.aheadBy,
+    oldestUndeployedAt: comparison.oldestAheadAt,
+    severity: age >= STALE_AFTER_MS ? 'stale' : 'fresh',
+    compareUrl: `https://github.com/${repoKey(repo)}/compare/${deployed}...${encodeURIComponent(head.branch)}`,
+  };
+}
+
+/**
+ * The version reader of ONE request: `versionOf(image)` resolves an image to its
+ * commit and judges it. It never throws — every failure is the row's `unknown`
+ * reason — and it shares each ECR read, head read and compare across the rows.
+ */
+export function createVersionReader(
+  sources: ServiceVersionSources,
+  now: Date,
+): (image: string | null) => Promise<DeploymentVersionRead> {
+  const token = memo((owner) => sources.token(owner));
+  const tags = memo(async (image) => {
+    try {
+      return await sources.ecr.tagsOf(parseEcrImageAddress(image)!);
+    } catch (err) {
+      throw new VersionReadError('ecr_not_read', err);
+    }
+  });
+  const github = async <T>(read: () => Promise<T>): Promise<T> => {
+    try {
+      return await read();
+    } catch (err) {
+      throw new VersionReadError('github_not_read', err);
+    }
+  };
+  const heads = memo((key) => {
+    const repo = repoOf(key);
+    return github(async () => sources.github.defaultBranchHead(repo, await token(repo.owner)));
+  });
+  const compares = memo((key) => {
+    const [repoPart, deployed, head] = key.split('@') as [string, string, string];
+    const repo = repoOf(repoPart);
+    return github(async () =>
+      sources.github.compare(repo, deployed, head, await token(repo.owner)),
+    );
+  });
+
+  async function commitOf(address: EcrImageAddress, image: string): Promise<string | null> {
+    if (address.tag && SHA_TAG.test(address.tag)) return address.tag;
+    return (await tags(image)).find((tag) => SHA_TAG.test(tag)) ?? null;
+  }
+
+  async function judge(repo: RepoRef, sha: string): Promise<PlatformServiceVersionJudgementDTO> {
+    const head = await heads(repoKey(repo));
+    if (head.sha === sha) return { state: 'latest' };
+    const comparison = await compares(`${repoKey(repo)}@${sha}@${head.sha}`);
+    return github(async () => judgeComparison(repo, sha, head, comparison, now));
+  }
+
+  return async (image) => {
+    const address = image === null ? null : parseEcrImageAddress(image);
+    if (image === null || address === null) {
+      return {
+        commit: null,
+        judgement: {
+          state: 'unknown',
+          reason: image === null ? 'no_sha_tag' : 'source_not_mapped',
+        },
+      };
+    }
+    let commit: PlatformServiceCommitDTO | null = null;
+    try {
+      const sha = await commitOf(address, image);
+      if (sha === null) return { commit, judgement: { state: 'unknown', reason: 'no_sha_tag' } };
+      const source = IMAGE_SOURCE_REPOSITORIES[address.repositoryName] ?? null;
+      if (source === null) {
+        commit = { sha, repository: null, url: null };
+        return { commit, judgement: { state: 'unknown', reason: 'source_not_mapped' } };
+      }
+      commit = {
+        sha,
+        repository: source.name,
+        url: `https://github.com/${repoKey(source)}/commit/${sha}`,
+      };
+      return { commit, judgement: await judge(source, sha) };
+    } catch (err) {
+      if (!(err instanceof VersionReadError)) throw err;
+      logVersionFailure(address.repositoryName, err);
+      return { commit, judgement: { state: 'unknown', reason: err.reason } };
+    }
+  };
+}
+
+function repoOf(key: string): RepoRef {
+  const [owner, name] = key.split('/') as [string, string];
+  return { owner, name };
+}
+
+/** Every service's version, by name — each service's PRIMARY deployment image. */
+async function readVersions(
+  services: EcsServiceRead[],
+  sources: ServiceVersionSources,
+  now: Date,
+): Promise<Map<string, DeploymentVersionRead>> {
+  const versionOf = createVersionReader(sources, now);
+  const reads = await Promise.all(services.map((s) => versionOf(primaryImageOf(s))));
+  return new Map(services.map((s, i) => [s.name, reads[i]!]));
 }
 
 /**
@@ -206,6 +481,8 @@ export function judgeShare(vcpu: number, quota: number): PlatformServicesShareDT
 export interface PlatformServicesReadOptions {
   now?: Date;
   reader?: EcsServicesReader;
+  /** Where the deployed commits are read from (MOTIR-11112). */
+  versionSources?: ServiceVersionSources;
 }
 
 export const platformServicesService = {
@@ -214,9 +491,14 @@ export const platformServicesService = {
     const now = options.now ?? new Date();
     const reader = options.reader ?? createEcsServicesReader();
     const cluster = servicesCluster();
+    const versionSources = options.versionSources ?? defaultVersionSources();
 
     const [clusterRead, quotaRead] = await Promise.allSettled([
-      reader.listServices(cluster).then(judgeAndKeep),
+      reader
+        .listServices(cluster)
+        .then(async (services) =>
+          judgeAndKeep(services, await readVersions(services, versionSources, now)),
+        ),
       reader.readFargateVcpuQuota(),
     ]);
     if (clusterRead.status === 'rejected') logFailure('cluster', cluster, clusterRead.reason);
@@ -274,9 +556,18 @@ export const platformServicesService = {
 };
 
 /** Judge the read where it lands, so a task definition with no size fails it. */
-function judgeAndKeep(services: EcsServiceRead[]) {
+function judgeAndKeep(services: EcsServiceRead[], versions: Map<string, DeploymentVersionRead>) {
   const account = services.map((s) => accountOfArn(s.arn)).find((a) => a !== null) ?? null;
-  return { judged: judgeCluster(services), account };
+  return { judged: judgeCluster(services, versions), account };
+}
+
+/** A version read that failed, by its error NAME only, like `logFailure`. */
+function logVersionFailure(repository: string, failure: VersionReadError): void {
+  console.error('[admin] services version read failed', {
+    repository,
+    reason: failure.reason,
+    error: failure.underlying instanceof Error ? failure.underlying.name : 'unknown',
+  });
 }
 
 /** The failure, by its error NAME only — an AWS message can carry ARNs and request ids. */

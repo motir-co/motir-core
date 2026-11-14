@@ -49,6 +49,10 @@ export interface EcsTaskSizeRead {
   revision: number;
   cpuUnits: number | null;
   memoryMib: number | null;
+  /** The FIRST container's image reference, as the task definition names it
+   *  (`<registry>/<repository>@sha256:…` or `…:<tag>`), or null when it names
+   *  none. The Services page reads the deployed commit from it (MOTIR-11112). */
+  image: string | null;
 }
 
 /** One ECS service, with the size of every task definition its deployments run. */
@@ -103,6 +107,7 @@ async function describeTaskSize(client: ECSClient, arn: string): Promise<EcsTask
     revision: taskDefinition.revision,
     cpuUnits: size(taskDefinition.cpu),
     memoryMib: size(taskDefinition.memory),
+    image: taskDefinition.containerDefinitions?.[0]?.image ?? null,
   };
 }
 

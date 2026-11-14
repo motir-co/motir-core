@@ -129,3 +129,87 @@ describe('repoCommitHistoryClient.relation', () => {
     );
   });
 });
+
+// The Services page's two reads (MOTIR-11112).
+
+describe('repoCommitHistoryClient.defaultBranchHead', () => {
+  it('reads the default branch, then its head commit, with the token', async () => {
+    const fetch = vi.fn(async (url: string) =>
+      url.endsWith('/branches/trunk')
+        ? new Response(JSON.stringify({ name: 'trunk', commit: { sha: 'f00d' } }))
+        : new Response(JSON.stringify({ default_branch: 'trunk' })),
+    );
+    vi.stubGlobal('fetch', fetch);
+    expect(await repoCommitHistoryClient.defaultBranchHead(REPO, 'ghs_x')).toEqual({
+      branch: 'trunk',
+      sha: 'f00d',
+    });
+    const calls = fetch.mock.calls as unknown as [string, RequestInit][];
+    expect(calls.map(([url]) => url)).toEqual([
+      'https://api.github.com/repos/motir-co/motir-core',
+      'https://api.github.com/repos/motir-co/motir-core/branches/trunk',
+    ]);
+    expect((calls[1]![1].headers as Record<string, string>)['authorization']).toBe('Bearer ghs_x');
+  });
+
+  it('throws on a repository with no default branch, and a branch with no head', async () => {
+    vi.stubGlobal('fetch', reply(200, { default_branch: '' }));
+    await expect(repoCommitHistoryClient.defaultBranchHead(REPO, null)).rejects.toThrow(
+      'repository named no default branch',
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('/branches/')
+          ? new Response(JSON.stringify({ commit: {} }))
+          : new Response(JSON.stringify({ default_branch: 'main' })),
+      ),
+    );
+    await expect(repoCommitHistoryClient.defaultBranchHead(REPO, null)).rejects.toThrow(
+      'branch carried no head commit',
+    );
+  });
+});
+
+describe('repoCommitHistoryClient.compare', () => {
+  it('answers the relation, the count, and the oldest commit head has (page 1 of one)', async () => {
+    const fetch = reply(200, {
+      status: 'ahead',
+      ahead_by: 7,
+      commits: [{ sha: 'old', commit: { committer: { date: '2026-11-12T09:00:00Z' } } }],
+    });
+    vi.stubGlobal('fetch', fetch);
+    expect(await repoCommitHistoryClient.compare(REPO, 'dep', 'head', null)).toEqual({
+      relation: 'ahead',
+      aheadBy: 7,
+      oldestAheadAt: '2026-11-12T09:00:00Z',
+    });
+    expect((fetch.mock.calls[0] as unknown as [string])[0]).toBe(
+      'https://api.github.com/repos/motir-co/motir-core/compare/dep...head?per_page=1&page=1',
+    );
+  });
+
+  it('carries no oldest commit when head has none base lacks', async () => {
+    vi.stubGlobal('fetch', reply(200, { status: 'identical', ahead_by: 0, commits: [] }));
+    expect(await repoCommitHistoryClient.compare(REPO, 'a', 'a', null)).toEqual({
+      relation: 'identical',
+      aheadBy: 0,
+      oldestAheadAt: null,
+    });
+  });
+
+  it('throws on an answer with no status or count, and on commits with no date', async () => {
+    vi.stubGlobal('fetch', reply(200, { status: 'ahead' }));
+    await expect(repoCommitHistoryClient.compare(REPO, 'a', 'b', null)).rejects.toThrow(
+      'compare returned no status',
+    );
+    vi.stubGlobal('fetch', reply(200, { status: 'ahead', ahead_by: 2, commits: 'x' }));
+    await expect(repoCommitHistoryClient.compare(REPO, 'a', 'b', null)).rejects.toThrow(
+      'compare listed no dated commit',
+    );
+    vi.stubGlobal('fetch', reply(200, { status: 'diverged', ahead_by: 1, commits: [{}] }));
+    await expect(repoCommitHistoryClient.compare(REPO, 'a', 'b', null)).rejects.toThrow(
+      'compare listed no dated commit',
+    );
+  });
+});

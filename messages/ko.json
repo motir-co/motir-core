@@ -13592,7 +13592,10 @@
         "count": "{count, plural, other {서비스 #개}}",
         "rolling": "{count}개 롤아웃 중",
         "rolloutFailed": "{count, plural, other {롤아웃 #개 실패}}",
-        "short": "{count, plural, other {태스크가 부족한 서비스 #개}}"
+        "short": "{count, plural, other {태스크가 부족한 서비스 #개}}",
+        "staleOrDiverged": "{count, plural, other {오래되었거나 갈라진 서비스 #개}}",
+        "versionsNotRead": "버전을 읽지 않음",
+        "versionsNotReadLabel": "어떤 서비스의 배포된 버전도 읽을 수 없음"
       },
       "verdict": {
         "under": "Fargate 할당량의 {percent}%",
@@ -13608,7 +13611,8 @@
         "vcpuPerTask": "태스크당 vCPU",
         "memoryPerTask": "태스크당 메모리",
         "vcpu": "vCPU",
-        "deployment": "배포"
+        "deployment": "배포",
+        "commit": "커밋"
       },
       "caption": "클러스터 {cluster}의 ECS 서비스와 Fargate 온디맨드 vCPU 할당량 대비 합계",
       "taskDefinition": "태스크 정의 {family}:{revision}",
@@ -13672,6 +13676,34 @@
       "phone": {
         "listLabel": "클러스터 {cluster}의 ECS 서비스",
         "perTask": "태스크당"
+      },
+      "commit": {
+        "notKnown": "알 수 없음",
+        "linkLabel": "GitHub의 {repo} 커밋 {commit}"
+      },
+      "version": {
+        "latest": "최신",
+        "behind": "{count, plural, other {커밋 #개 뒤처짐}}",
+        "oldest": "가장 오래된 미배포 커밋 {age}",
+        "compare": "GitHub에서 비교",
+        "diverged": "갈라짐",
+        "divergedDetail": "기본 브랜치에 없음",
+        "rolling": "롤아웃 중",
+        "rollingDetail": "새 배포의 커밋",
+        "unknown": "알 수 없음",
+        "unknownLabel": "버전 알 수 없음: {reason}",
+        "reason": {
+          "no_sha_tag": "실행 중인 이미지에 커밋 태그가 없어 커밋을 알 수 없습니다.",
+          "ecr_not_read": "ECR에서 이미지 태그를 읽을 수 없어 커밋을 알 수 없습니다.",
+          "github_not_read": "지금은 GitHub와 비교할 수 없어 이 커밋이 최신인지 알 수 없습니다.",
+          "source_not_mapped": "이 이미지에 연결된 소스 저장소가 없어 커밋을 비교하지 않습니다."
+        },
+        "reasonShort": {
+          "no_sha_tag": "이미지에 커밋 태그 없음",
+          "ecr_not_read": "이미지 태그를 읽지 않음",
+          "github_not_read": "GitHub와 비교하지 않음",
+          "source_not_mapped": "연결된 소스 저장소 없음"
+        }
       }
     },
     "capacity": {

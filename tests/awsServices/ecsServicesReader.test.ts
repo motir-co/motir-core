@@ -27,9 +27,19 @@ function ecsAnswering(answer: (command: Sent) => unknown) {
     .mockImplementation((async (command: Sent) => answer(command)) as never);
 }
 
-const sizes: Record<string, { cpu?: string; memory?: string }> = {
+const IMAGE = `944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/motir-core@sha256:${'b'.repeat(64)}`;
+
+const sizes: Record<
+  string,
+  { cpu?: string; memory?: string; containerDefinitions?: { image?: string }[] }
+> = {
   [td('web', 3)]: { cpu: '1024', memory: '2048' },
-  [td('web', 4)]: { cpu: '1024', memory: '2048' },
+  [td('web', 4)]: {
+    cpu: '1024',
+    memory: '2048',
+    // The FIRST container's image is the one read (MOTIR-11112).
+    containerDefinitions: [{ image: IMAGE }, { image: 'public.ecr.aws/sidecar:1' }],
+  },
   [td('worker', 7)]: { cpu: '256', memory: '512' },
 };
 
@@ -125,8 +135,10 @@ describe('listServices', () => {
     const steady = services[1]!;
     expect(steady.deployments[0]!.taskDefinitionArn).toBe(td('web', 4));
     expect(steady.taskDefinitions).toEqual({
-      [td('web', 4)]: { family: 'web', revision: 4, cpuUnits: 1024, memoryMib: 2048 },
+      [td('web', 4)]: { family: 'web', revision: 4, cpuUnits: 1024, memoryMib: 2048, image: IMAGE },
     });
+    // A task definition with no container names no image.
+    expect(rolling.taskDefinitions[td('web', 3)]!.image).toBeNull();
   });
 
   it('answers an empty cluster with no service and no describe call', async () => {
@@ -171,6 +183,7 @@ describe('listServices', () => {
       revision: 7,
       cpuUnits: null,
       memoryMib: null,
+      image: null,
     });
   });
 

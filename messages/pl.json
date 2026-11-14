@@ -13598,7 +13598,10 @@
         "count": "{count, plural, one {# usługa} few {# usługi} many {# usług} other {# usługi}}",
         "rolling": "{count} we wdrażaniu",
         "rolloutFailed": "{count, plural, one {# nieudane wdrożenie} few {# nieudane wdrożenia} many {# nieudanych wdrożeń} other {# nieudanego wdrożenia}}",
-        "short": "{count, plural, one {# usługa z brakiem zadań} few {# usługi z brakiem zadań} many {# usług z brakiem zadań} other {# usługi z brakiem zadań}}"
+        "short": "{count, plural, one {# usługa z brakiem zadań} few {# usługi z brakiem zadań} many {# usług z brakiem zadań} other {# usługi z brakiem zadań}}",
+        "staleOrDiverged": "{count, plural, one {# usługa nieaktualna lub rozbieżna} few {# usługi nieaktualne lub rozbieżne} many {# usług nieaktualnych lub rozbieżnych} other {# usługi nieaktualnej lub rozbieżnej}}",
+        "versionsNotRead": "Wersje nieodczytane",
+        "versionsNotReadLabel": "Nie udało się odczytać wdrożonej wersji żadnej usługi"
       },
       "verdict": {
         "under": "{percent}% limitu Fargate",
@@ -13614,7 +13617,8 @@
         "vcpuPerTask": "vCPU na zadanie",
         "memoryPerTask": "Pamięć na zadanie",
         "vcpu": "vCPU",
-        "deployment": "Wdrożenie"
+        "deployment": "Wdrożenie",
+        "commit": "Commit"
       },
       "caption": "Usługi ECS w klastrze {cluster}, z sumą w odniesieniu do limitu vCPU Fargate On-Demand",
       "taskDefinition": "definicja zadania {family}:{revision}",
@@ -13678,6 +13682,34 @@
       "phone": {
         "listLabel": "Usługi ECS w klastrze {cluster}",
         "perTask": "Na zadanie"
+      },
+      "commit": {
+        "notKnown": "Nieznany",
+        "linkLabel": "Commit {commit} repozytorium {repo} na GitHubie"
+      },
+      "version": {
+        "latest": "Najnowsza",
+        "behind": "{count, plural, one {# commit w tyle} few {# commity w tyle} many {# commitów w tyle} other {# commita w tyle}}",
+        "oldest": "najstarszy niewdrożony {age}",
+        "compare": "Porównaj na GitHubie",
+        "diverged": "Rozbieżna",
+        "divergedDetail": "poza gałęzią domyślną",
+        "rolling": "We wdrażaniu",
+        "rollingDetail": "commit nowego wdrożenia",
+        "unknown": "Nieznana",
+        "unknownLabel": "Wersja nieznana: {reason}",
+        "reason": {
+          "no_sha_tag": "Uruchomiony obraz nie ma tagu commita, więc jego commit jest nieznany.",
+          "ecr_not_read": "Nie udało się odczytać tagów obrazu z ECR, więc jego commit jest nieznany.",
+          "github_not_read": "Nie udało się teraz porównać z GitHubem, więc nie wiadomo, czy ten commit jest najnowszy.",
+          "source_not_mapped": "Do tego obrazu nie przypisano repozytorium źródłowego, więc jego commit nie jest porównywany."
+        },
+        "reasonShort": {
+          "no_sha_tag": "brak tagu commita na obrazie",
+          "ecr_not_read": "tagi obrazu nieodczytane",
+          "github_not_read": "GitHub nieporównany",
+          "source_not_mapped": "brak przypisanego repozytorium źródłowego"
+        }
       }
     },
     "capacity": {
