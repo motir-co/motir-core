@@ -177,13 +177,20 @@ async function closeQuickView(page: Page): Promise<void> {
 // ── The in-page recorders ───────────────────────────────────────────────────
 
 interface QuickViewRecord {
-  /** Every live field (`quick-view-live-<field>`) the quick view drew. */
+  /**
+   * Every live DRAFT field the quick view drew — `LiveDraftField`'s box, the one
+   * element carrying `data-live-field`, by its `quick-view-live-<field>` id. The
+   * selector is that attribute, not the testid prefix alone: the in-progress cue,
+   * its group and the _Follow the writing_ control (MOTIR-11248) share the
+   * `quick-view-live-` prefix and are present whenever a card is being written,
+   * partial or not (MOTIR-11271).
+   */
   live: string[];
   /** Every text any `aria-live` region held. */
   said: string[];
 }
 
-/** Record, from now on, every live field the quick view draws. */
+/** Record, from now on, every live draft field the quick view draws. */
 async function recordQuickView(page: Page): Promise<void> {
   await page.evaluate(() => {
     const w = window as unknown as {
@@ -193,10 +200,11 @@ async function recordQuickView(page: Page): Promise<void> {
     w.__qvObs?.disconnect();
     w.__qv = { live: [], said: [] };
     const read = () => {
-      document.querySelectorAll('[data-testid^="quick-view-live-"]').forEach((box) => {
-        const id = box.getAttribute('data-testid')!.slice('quick-view-live-'.length);
-        if (id !== 'cue') w.__qv.live.push(id);
-      });
+      document
+        .querySelectorAll('[data-live-field][data-testid^="quick-view-live-"]')
+        .forEach((box) => {
+          w.__qv.live.push(box.getAttribute('data-testid')!.slice('quick-view-live-'.length));
+        });
       document.querySelectorAll('[aria-live]').forEach((region) => {
         const text = region.textContent ?? '';
         if (text) w.__qv.said.push(text);
