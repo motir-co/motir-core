@@ -181,10 +181,18 @@ export interface PlanProposalViewsProps {
    * the live read's `inFlightDrafts`. While `live`, the open proposal's quick view
    * shows its partial fields. On EVERY host — the plan page too (MOTIR-11254,
    * §31.5) — they decide each authored card's cue: Thinking until a draft exists
-   * for it, Drafting once one does. The array's identity is also the hold's READ
-   * counter (§31.4): a host hands a NEW array exactly when a read arrives.
+   * for it, Drafting once one does.
    */
   inFlightDrafts?: readonly PlanItemDraftDto[] | null;
+  /**
+   * The hold's READ counter (MOTIR-11254, §31.4): a value that changes exactly when
+   * a live read is ANSWERED — `useGeneratingPlanPoll`'s `reads`. NOT the drafts
+   * array: `mergePlanReview` keeps an equal array's reference and an `unchanged`
+   * answer files nothing, so a cleared draft would hand the same `[]` down read
+   * after read and never fall back to Thinking. A failed or dropped read never
+   * moves it (§31.5). Absent, the drafts array's identity stands in.
+   */
+  cueReads?: number;
 }
 
 export function PlanProposalViews({
@@ -215,6 +223,7 @@ export function PlanProposalViews({
   progressFailing = false,
   progressReading: hostReading,
   inFlightDrafts = null,
+  cueReads,
 }: PlanProposalViewsProps) {
   const t = useTranslations('planReview');
   // THE ONE CLOCK (MOTIR-7829): read once here, so the line and anything else
@@ -268,7 +277,7 @@ export function PlanProposalViews({
   const nextCueHold = holdCardCues(
     cueHold,
     deriveCardCues(items, presenceSteps, inFlightDrafts),
-    inFlightDrafts,
+    cueReads ?? inFlightDrafts,
   );
   if (nextCueHold !== cueHold) setCueHold(nextCueHold);
   const cardCues = nextCueHold.cues;

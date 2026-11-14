@@ -7,9 +7,10 @@
 // derivation and its two-read hold (`lib/planning/cueState.ts`), and the canvas
 // (`PlanReviewCanvas` → `ProjectRoadmapCanvas` → `PlanningCanvas`), the list
 // (`PlanProposalList`) and the quick view (`ProposalPeek` → `IssueQuickViewPanel`).
-// What is mocked: the poll — each read is a re-render with the next snapshot and a
-// NEW `inFlightDrafts` array, exactly as a read that arrived hands them down — and
-// the roadmap level read (`fetch`).
+// What is mocked: the poll — each read is a re-render with the next snapshot, as
+// the real hosts hand it down: the poll's `reads` count moves on every ANSWERED read
+// (never on a failed one), and the `inFlightDrafts` array KEEPS its reference while
+// it is equal, as `mergePlanReview` keeps it — and the roadmap level read (`fetch`).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
@@ -264,6 +265,15 @@ function mount(
     locale?: 'zh';
   } = {},
 ) {
+  // The host's poll: answered reads counted, an equal drafts array kept by reference.
+  let reads = 0;
+  let held: PlanItemDraftDto[] = [];
+  const arrive = (r: Read) => {
+    if (r.failing) return; // a failed read files nothing and counts nothing
+    reads += 1;
+    const drafts = r.drafts ?? [];
+    if (JSON.stringify(drafts) !== JSON.stringify(held)) held = [...drafts];
+  };
   const el = (r: Read, progress: PlanProgressSnapshot | null = snap(r.steps)) => (
     <PlanProposalViews
       items={ITEMS}
@@ -278,19 +288,22 @@ function mount(
       canvasHeldTrail={opts.trail ?? INSIDE_EPIC}
       progress={progress}
       progressFailing={r.failing ?? false}
-      // A NEW array per read — what a host hands down when a read arrives.
-      inFlightDrafts={[...(r.drafts ?? [])]}
+      inFlightDrafts={held}
+      cueReads={reads}
     />
   );
+  arrive(first);
   const view = render(
     el(first),
     opts.locale === 'zh' ? { locale: 'zh', messages: zhMessages } : undefined,
   );
   return {
-    next: (r: Read) => view.rerender(el(r)),
-    /** A re-render that is NOT a read: the same props object handed down again. */
-    rerender: view.rerender,
-    el,
+    next: (r: Read) => {
+      arrive(r);
+      view.rerender(el(r));
+    },
+    /** A re-render that is NOT a read: the same snapshot and count handed down again. */
+    rerender: (r: Read) => view.rerender(el(r)),
   };
 }
 
@@ -367,17 +380,30 @@ describe('the canvas node box — three states (§31.1, §31.2)', () => {
   });
 
   it('a re-render that is not a read does not advance the hold (no flicker on the clock)', async () => {
-    const { next, rerender, el } = mount({
+    const { next, rerender } = mount({
       steps: [step('author', 'pi_a')],
       drafts: [draft('pi_a')],
     });
     await loaded();
-    const emptyRead = el({ steps: [step('author', 'pi_a')], drafts: [] });
-    rerender(emptyRead);
+    const emptyRead = { steps: [step('author', 'pi_a')], drafts: [] };
+    next(emptyRead);
     expect(cueOf('pi_a')).toBe('drafting');
     rerender(emptyRead);
     rerender(emptyRead);
+    rerender(emptyRead);
     expect(cueOf('pi_a')).toBe('drafting');
+    next(emptyRead);
+    expect(cueOf('pi_a')).toBe('thinking');
+  });
+
+  it('the cleared draft falls back even though the poll hands the SAME empty array down (the merge keeps it)', async () => {
+    const { next } = mount({ steps: [step('author', 'pi_a')], drafts: [draft('pi_a')] });
+    await loaded();
+    const empty: PlanItemDraftDto[] = [];
+    next({ steps: [step('author', 'pi_a')], drafts: empty });
+    expect(cueOf('pi_a')).toBe('drafting');
+    // Another answered read with nothing new: the harness, like `mergePlanReview`,
+    // hands down the very array it handed last time — only the read count moved.
     next({ steps: [step('author', 'pi_a')], drafts: [] });
     expect(cueOf('pi_a')).toBe('thinking');
   });

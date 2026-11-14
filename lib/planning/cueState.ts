@@ -23,8 +23,9 @@ import { proposalLevelKey } from '@/lib/planning/planShape';
 // THE ANTI-FLICKER HOLD (§31.4 T3): a card that showed Drafting keeps Drafting
 // through ONE read that arrives without its draft, and falls back to Thinking on
 // the second such read in a row. Reads are counted by the `read` token the host
-// passes — a value that changes exactly when a read ARRIVES (the live read's
-// `inFlightDrafts` array) — so a dropped read, a stall, or a re-render on the
+// passes — a value that changes exactly when a read ARRIVES (the live poll's
+// `reads` count; never the drafts array, whose reference `mergePlanReview` keeps
+// while it is equal) — so a dropped read, a stall, or a re-render on the
 // clock's tick never advances it. The hold never outlives the step: a card no
 // step targets leaves at once (T5).
 //
