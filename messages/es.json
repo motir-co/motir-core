@@ -8826,6 +8826,7 @@
         "laying": "organizar",
         "authoring": "redactar",
         "note": "nota",
+        "codeGraphRefreshedLine": "{count, plural, one {Tu grafo de código de {repos} se actualizó desde el último turno. Las respuestas anteriores usaron el grafo anterior.} other {Los grafos de código de {repos} se actualizaron desde el último turno. Las respuestas anteriores usaron los grafos anteriores.}}",
         "proposed": "propuesto",
         "validating": "validar",
         "layingLine": "Organizando {target}",

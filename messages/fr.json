@@ -8826,6 +8826,7 @@
         "laying": "organisation",
         "authoring": "rédaction",
         "note": "note",
+        "codeGraphRefreshedLine": "{count, plural, one {Votre graphe de code pour {repos} a été actualisé depuis le dernier tour. Les réponses précédentes utilisaient l’ancien graphe.} other {Les graphes de code pour {repos} ont été actualisés depuis le dernier tour. Les réponses précédentes utilisaient les anciens graphes.}}",
         "proposed": "proposé",
         "validating": "validation",
         "layingLine": "Organisation de {target}",

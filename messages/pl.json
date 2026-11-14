@@ -8826,6 +8826,7 @@
         "laying": "rozkładanie",
         "authoring": "pisanie",
         "note": "notatka",
+        "codeGraphRefreshedLine": "{count, plural, one {Graf kodu dla {repos} został odświeżony od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzedniego grafu.} few {Grafy kodu dla {repos} zostały odświeżone od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzednich grafów.} many {Grafy kodu dla {repos} zostały odświeżone od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzednich grafów.} other {Grafy kodu dla {repos} zostały odświeżone od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzednich grafów.}}",
         "proposed": "propozycja",
         "validating": "weryfikacja",
         "layingLine": "Rozkładanie: {target}",

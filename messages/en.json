@@ -8823,6 +8823,7 @@
         "laying": "lay",
         "authoring": "author",
         "note": "note",
+        "codeGraphRefreshedLine": "{count, plural, one {Your code graph for {repos} was refreshed since the last turn. Earlier answers used the previous graph.} other {Code graphs for {repos} were refreshed since the last turn. Earlier answers used the previous graphs.}}",
         "proposed": "proposed",
         "validating": "validate",
         "layingLine": "Laying out {target}",

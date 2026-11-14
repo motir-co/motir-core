@@ -12,6 +12,7 @@
     "check",
     "clause_list",
     "code_graph",
+    "code_graph_refreshed",
     "comparables",
     "contextual_context",
     "contextual_scope",

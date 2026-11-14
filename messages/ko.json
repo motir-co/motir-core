@@ -8820,6 +8820,7 @@
         "laying": "배치",
         "authoring": "작성",
         "note": "메모",
+        "codeGraphRefreshedLine": "{count, plural, other {{repos}의 코드 그래프가 지난 턴 이후 새로 고쳐졌습니다. 이전 답변은 이전 그래프를 기준으로 했습니다.}}",
         "proposed": "제안됨",
         "validating": "검증",
         "layingLine": "{target} 배치 중",

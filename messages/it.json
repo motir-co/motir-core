@@ -8826,6 +8826,7 @@
         "laying": "disposizione",
         "authoring": "scrittura",
         "note": "nota",
+        "codeGraphRefreshedLine": "{count, plural, one {Il tuo grafo del codice per {repos} è stato aggiornato dall’ultimo turno. Le risposte precedenti usavano il grafo precedente.} other {I grafi del codice per {repos} sono stati aggiornati dall’ultimo turno. Le risposte precedenti usavano i grafi precedenti.}}",
         "proposed": "proposto",
         "validating": "verifica",
         "layingLine": "Disposizione di {target}",

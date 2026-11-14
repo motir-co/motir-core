@@ -13643,5 +13643,6 @@
   "planningWorkspace.skipFinalCheck.keep": "Keep checking",
   "planningWorkspace.skipFinalCheck.error": "The final check could not be skipped. It is still running: try again, or keep checking.",
   "planningWorkspace.skipFinalCheck.retry": "Try again",
-  "planningWorkspace.skipFinalCheck.finished": "The final check had already finished, so there was nothing to skip."
+  "planningWorkspace.skipFinalCheck.finished": "The final check had already finished, so there was nothing to skip.",
+  "planningWorkspace.conversation.act.codeGraphRefreshedLine": "{count, plural, one {Your code graph for {repos} was refreshed since the last turn. Earlier answers used the previous graph.} other {Code graphs for {repos} were refreshed since the last turn. Earlier answers used the previous graphs.}}"
 }

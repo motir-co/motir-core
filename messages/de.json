@@ -8826,6 +8826,7 @@
         "laying": "anlegen",
         "authoring": "verfassen",
         "note": "Notiz",
+        "codeGraphRefreshedLine": "{count, plural, one {Ihr Code-Graph für {repos} wurde seit der letzten Runde aktualisiert. Frühere Antworten beruhten auf dem vorherigen Graphen.} other {Die Code-Graphen für {repos} wurden seit der letzten Runde aktualisiert. Frühere Antworten beruhten auf den vorherigen Graphen.}}",
         "proposed": "vorgeschlagen",
         "validating": "prüfen",
         "layingLine": "{target} wird angelegt",

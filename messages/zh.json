@@ -8817,6 +8817,7 @@
         "laying": "铺层",
         "authoring": "撰写",
         "note": "说明",
+        "codeGraphRefreshedLine": "{count, plural, other {{repos} 的代码图自上一轮以来已刷新。之前的回答基于之前的代码图。}}",
         "proposed": "提案",
         "validating": "校验",
         "layingLine": "正在铺开 {target}",

@@ -67,6 +67,7 @@ describe('every frame kind is ACCOUNTED FOR', () => {
         target: 'MOTIR-1',
         title: 'A card',
         text: 'because the billing epic already owns it',
+        refreshes: [{ ref: 'acme/widgets', previousSha: 'a', currentSha: 'b' }],
       });
       if ('show' in disposition) {
         expect(narrated, `${kind} is SHOW and must narrate`).not.toBeNull();
@@ -243,6 +244,7 @@ describe('the enumeration is a SNAPSHOT, and says so', () => {
         'amend',
         'author',
         'check',
+        'code_graph_refreshed',
         'lay',
         'level_complete',
         'note',

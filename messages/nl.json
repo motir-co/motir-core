@@ -8826,6 +8826,7 @@
         "laying": "indelen",
         "authoring": "schrijven",
         "note": "notitie",
+        "codeGraphRefreshedLine": "{count, plural, one {Je codegraaf voor {repos} is sinds de vorige beurt vernieuwd. Eerdere antwoorden gebruikten de vorige graaf.} other {De codegrafen voor {repos} zijn sinds de vorige beurt vernieuwd. Eerdere antwoorden gebruikten de vorige grafen.}}",
         "proposed": "voorgesteld",
         "validating": "toetsen",
         "layingLine": "{target} indelen",

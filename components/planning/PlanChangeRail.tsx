@@ -6,7 +6,7 @@ import {
 } from '@/components/planning/CodeUnreadableTurn';
 import { Fragment, forwardRef, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import {
   Bot,
   Check,
@@ -501,6 +501,7 @@ export function PlanChangeRail({
   // …and it is REWRITING the plan in hand rather than writing a first one.
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
+  const locale = useLocale();
   const tcs = useTranslations('planningWorkspace.codeUnsearchable');
   const ts = useTranslations('planningWorkspace.session');
   // The Planning tab's own copy (§ 36.13) — its reopened line, nothing else.
@@ -2167,7 +2168,7 @@ export function PlanChangeRail({
                   // An ADOPTED run has no act yet until its stream replays one
                   // (MOTIR-10428): nothing was sent from this screen, so the bar
                   // says the plan is being written rather than "Sending…".
-                  line: runningBarLine(acts, tc) ?? tc('progress.watching'),
+                  line: runningBarLine(acts, tc, locale) ?? tc('progress.watching'),
                   stopping: state.stopping,
                   onStop,
                   ...(paused && runPause ? { paused: { kind: runPause.kind } } : {}),

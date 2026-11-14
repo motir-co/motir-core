@@ -182,6 +182,11 @@ export type PlanChangeProgress =
   /** The planner's OWN prose line for the act it just took. The producer emits
    *  nothing when the text is blank, so this is never an empty row. */
   | { kind: 'note'; text: string }
+  /** The code graphs of these repositories were refreshed since the session's
+   *  last turn (MOTIR-11293): the repos as motir-ai listed them, never empty. The
+   *  content hashes the frame also carries are never kept here — nothing renders
+   *  them (MOTIR-7181). */
+  | { kind: 'codeGraphRefreshed'; repos: string[] }
   | { kind: 'proposed'; count: number }
   | { kind: 'validating' };
 
@@ -819,6 +824,19 @@ export function narrateFrame(event: string, data: unknown): PlanChangeProgress |
       // render as a hole"), and a hole is exactly what a bad payload would draw.
       const trimmed = typeof text === 'string' ? text.trim() : '';
       return trimmed.length === 0 ? null : { kind: 'note', text: trimmed };
+    }
+    case 'codeGraphRefreshed': {
+      // `{ refreshes: [{ ref, previousSha, currentSha }] }`. Read loosely: an
+      // entry without a string `ref` is skipped, and a frame that names no
+      // repository draws nothing rather than a line about nothing.
+      const raw = d['refreshes'];
+      const repos = Array.isArray(raw)
+        ? raw.flatMap((entry) => {
+            const ref = (entry as Record<string, unknown> | null)?.['ref'];
+            return typeof ref === 'string' && ref.trim() !== '' ? [ref.trim()] : [];
+          })
+        : [];
+      return repos.length === 0 ? null : { kind: 'codeGraphRefreshed', repos };
     }
     case 'proposed': {
       const raw = d['proposed'];

@@ -8823,6 +8823,7 @@
         "laying": "配置",
         "authoring": "作成",
         "note": "メモ",
+        "codeGraphRefreshedLine": "{count, plural, other {{repos} のコードグラフは前回のターン以降に更新されました。それまでの回答は以前のグラフに基づいています。}}",
         "proposed": "提案",
         "validating": "検証",
         "layingLine": "{target} を配置しています",

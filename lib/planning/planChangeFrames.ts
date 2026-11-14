@@ -107,6 +107,7 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'check',
   'clause_list',
   'code_graph',
+  'code_graph_refreshed',
   'comparables',
   'contextual_context',
   'contextual_scope',
@@ -228,6 +229,12 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
    *  text is blank (`signalNote` returns early), so "its absence is not an empty
    *  row" is guaranteed upstream as well as here. */
   note: { show: 'note' },
+  /** The turn-boundary notice that a bound repository's code graph moved since the
+   *  session's last turn (MOTIR-5361). motir-ai sends ONE per turn carrying facts
+   *  only — `{ refreshes: [{ ref, previousSha, currentSha }] }` — and the line is
+   *  this catalogue's, in the reader's locale (MOTIR-11293). It replaced a `note`
+   *  per repository carrying an English sentence. */
+  code_graph_refreshed: { show: 'codeGraphRefreshed' },
 
   // ── THE OUTCOMES (narrated before this card; unchanged by it) ─────────────
   pass: { show: 'proposed' },
