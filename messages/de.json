@@ -9287,7 +9287,17 @@
       "earlier": "Ihre frühere Sitzung ist geschlossen",
       "earlierOpen": "Öffnen",
       "disabledStreaming": "Verfügbar, wenn dieser Lauf abgeschlossen ist",
-      "swapped": "Ihre frühere Sitzung ist geschlossen. Eine neue Sitzung ist geöffnet."
+      "swapped": "Ihre frühere Sitzung ist geschlossen. Eine neue Sitzung ist geöffnet.",
+      "dialog": {
+        "title": "Etwas Neues beginnen?",
+        "body": "Dadurch wird die aktuelle Planungssitzung geschlossen und ihre Arbeitselemente werden freigegeben.",
+        "writing": "Motir AI schreibt in dieser Sitzung gerade einen Plan. Das wird beendet, und was bisher geschrieben wurde, wird verworfen.",
+        "waiting": "Der Plan, der auf Ihre Prüfung wartet, bleibt erhalten. Öffnen Sie die frühere Sitzung, um weiter daran zu arbeiten.",
+        "confirm": "Etwas Neues beginnen",
+        "keep": "Weiter planen",
+        "error": "Etwas Neues konnte nicht begonnen werden. Es hat sich nichts geändert: Versuchen Sie es erneut, oder planen Sie weiter.",
+        "retry": "Erneut versuchen"
+      }
     },
     "waiting": {
       "failedHead": "Dieser Versuch wurde angehalten",

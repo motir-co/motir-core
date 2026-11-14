@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { DebugLandingDto } from '@/lib/dto/planChange';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
+import { seedLegacyRestartConfirm } from '../helpers/legacyRestartConfirm';
 import {
   createTestWorkItem,
   makeWorkItemFixture,
@@ -279,7 +280,8 @@ describe('turns stored under the retired intents stay readable', () => {
       {},
       address,
     );
-    await planChangeSessionsService.requestRestartConfirm(ctx, address);
+    // A legacy confirm turn — nothing writes one since MOTIR-11261.
+    await seedLegacyRestartConfirm(ctx, address.sessionId);
 
     const loaded = await planChangeSessionsService.getById(ctx, first.session.id);
     const byId = (id: string) => loaded!.turns.find((t) => t.id === id)!;

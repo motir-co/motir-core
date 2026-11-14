@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { PROJECT_SCOPE } from '@/lib/planChange/scope';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
-import { PlanSessionEndedError, PlanSessionNotFoundError } from '@/lib/planChange/errors';
+import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
 import { KEEP_PLANNING_MARKER_BODY, NEW_SESSION_CONFIRM_BODY } from '@/lib/planChange/restart';
 import { readAskOutcome } from '@/lib/planning/askResult';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
@@ -12,11 +12,14 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { seedLegacyRestartConfirm } from '../helpers/legacyRestartConfirm';
 
 // PLAN SOMETHING NEW (story MOTIR-7631 · MOTIR-7649) — against a REAL Postgres.
-// `docs/decisions/conversation-turn-intent.md` AMENDMENT 3: the control writes the
-// fixed confirm (A3.3) — the words no longer do since AMENDMENT 5 (MOTIR-9231), Keep planning closes nothing, and Confirm ends the session
-// `restarted` and returns a new, empty session for the same scope (A3.3/A3.4).
+// `docs/decisions/conversation-turn-intent.md` AMENDMENT 3: Keep planning closes
+// nothing, and Confirm ends the session `restarted` and returns a new, empty
+// session for the same scope (A3.3/A3.4). Nothing writes the fixed confirm TURN
+// any more — the words stopped in AMENDMENT 5 (MOTIR-9231), and the control asks
+// in a dialog since MOTIR-11261 — so the confirm below is a LEGACY turn, seeded.
 // The story's assembled gate (refusals, isolation, the ask door) is MOTIR-7652.
 
 const DB_TEST_TIMEOUT_MS = 30_000;
@@ -88,21 +91,25 @@ describe('readAskOutcome — the new_session redirect', () => {
 });
 
 describe('the confirm', () => {
+  it('the service no longer writes a confirm turn (MOTIR-11261)', () => {
+    expect('requestRestartConfirm' in planChangeSessionsService).toBe(false);
+  });
+
   it(
-    'the control writes the SAME confirm, and pressing it again writes nothing',
+    'a legacy confirm turn is read back as the pending confirm',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const sessionId = await sessionOn(await seedCard());
+      await seedLegacyRestartConfirm(me(), sessionId);
+      await seedLegacyRestartConfirm(me(), sessionId);
 
-      const once = await planChangeSessionsService.requestRestartConfirm(me(), { sessionId });
-      const twice = await planChangeSessionsService.requestRestartConfirm(me(), { sessionId });
-
-      expect(once.turns.at(-1)).toMatchObject({
+      const read = await planChangeSessionsService.getById(me(), sessionId);
+      expect(read!.turns.at(-1)).toMatchObject({
         role: 'assistant',
         confirm: 'new_session',
         body: NEW_SESSION_CONFIRM_BODY,
       });
-      expect(twice.turns).toHaveLength(once.turns.length);
+      expect(read!.turns.filter((t) => t.confirm === 'new_session')).toHaveLength(1);
     },
   );
 
@@ -112,7 +119,7 @@ describe('the confirm', () => {
     async () => {
       const card = await seedCard();
       const sessionId = await sessionOn(card);
-      await planChangeSessionsService.requestRestartConfirm(me(), { sessionId });
+      await seedLegacyRestartConfirm(me(), sessionId);
 
       const kept = await planChangeSessionsService.keepPlanning(me(), { sessionId });
       expect(kept.turns.at(-1)).toMatchObject({ role: 'system', body: KEEP_PLANNING_MARKER_BODY });
@@ -127,18 +134,18 @@ describe('the confirm', () => {
       );
     },
   );
-
   it(
-    'the control on an ended session is PLAN_SESSION_ENDED',
+    'Keep planning on a legacy confirm of an ended session writes nothing',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const sessionId = await sessionOn(await seedCard());
+      await seedLegacyRestartConfirm(me(), sessionId);
       await planChangeSessionsService.endSession(sessionId, 'idle', {
         workspaceId: fx.workspaceId,
       });
-      await expect(
-        planChangeSessionsService.requestRestartConfirm(me(), { sessionId }),
-      ).rejects.toBeInstanceOf(PlanSessionEndedError);
+      const before = await adminDb.planChangeTurn.count({ where: { sessionId } });
+      await planChangeSessionsService.keepPlanning(me(), { sessionId });
+      expect(await adminDb.planChangeTurn.count({ where: { sessionId } })).toBe(before);
     },
   );
 });
@@ -150,7 +157,7 @@ describe('restart — Confirm', () => {
     async () => {
       const card = await seedCard();
       const sessionId = await sessionOn(card);
-      await planChangeSessionsService.requestRestartConfirm(me(), { sessionId });
+      await seedLegacyRestartConfirm(me(), sessionId);
 
       const out = await planChangeSessionsService.restart(me(), { sessionId });
 
@@ -208,7 +215,7 @@ describe('restart — Confirm', () => {
         PlanSessionNotFoundError,
       );
       await expect(
-        planChangeSessionsService.requestRestartConfirm(me(), { sessionId }),
+        planChangeSessionsService.keepPlanning(me(), { sessionId }),
       ).rejects.toBeInstanceOf(PlanSessionNotFoundError);
     },
   );

@@ -140,7 +140,7 @@ const { conversation } = vi.hoisted(() => ({
     onApproved: null as ((r: unknown) => void) | null,
     anchorId: null as string | null,
     seedGateId: null as string | null,
-    requestRestart: vi.fn(),
+    confirmRestart: vi.fn(),
     answerRestartConfirm: vi.fn(),
     onRestarted: null as ((sessionId: string) => void) | null,
   },
@@ -703,7 +703,7 @@ describe('PlanningWorkspaceHost — Plan something new (MOTIR-7650)', () => {
     window.history.replaceState(null, '', '/');
   });
 
-  it('wires the rail control and the confirm answers to the conversation', () => {
+  it('wires the rail control, its dialog and the legacy confirm answers to the conversation', () => {
     renderHost(
       { mode: 'replan', from: 'project' },
       {
@@ -732,12 +732,18 @@ describe('PlanningWorkspaceHost — Plan something new (MOTIR-7650)', () => {
         },
       },
     );
-    fireEvent.click(screen.getByTestId('planning-restart-control'));
-    expect(conversation.requestRestart).toHaveBeenCalledTimes(1);
+    // The legacy confirm turn's answers (a session written before MOTIR-11261).
     fireEvent.click(screen.getByTestId('planning-restart-keep'));
     expect(conversation.answerRestartConfirm).toHaveBeenCalledWith('keep');
     fireEvent.click(screen.getByTestId('planning-restart-confirm'));
     expect(conversation.answerRestartConfirm).toHaveBeenCalledWith('confirm');
+    // The control opens the dialog; its confirm is the conversation's `confirmRestart`.
+    fireEvent.click(screen.getByTestId('planning-restart-control'));
+    expect(conversation.confirmRestart).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByTestId('planning-restart-confirm'),
+    );
+    expect(conversation.confirmRestart).toHaveBeenCalledTimes(1);
   });
 
   it('the swap re-points an address that named the old session, re-keys the canvas and asks a reread', () => {

@@ -911,10 +911,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // (MOTIR-9294).
     'app/api/ai/plan-change/session/offer/decline/route.ts',
     'app/api/ai/plan-change/session/planner-turn/route.ts',
-    // PLAN SOMETHING NEW (Story MOTIR-7631 · MOTIR-7649): the control writes a
-    // fixed confirm turn and the answer ends a session and opens an empty one —
-    // database writes only, no model job (AMENDMENT 3, A3.3).
-    'app/api/ai/plan-change/session/restart/confirm/route.ts',
+    // PLAN SOMETHING NEW (Story MOTIR-7631 · MOTIR-7649): the restart ends a
+    // session and opens an empty one, or answers a confirm turn a thread already
+    // holds — database writes only, no model job (AMENDMENT 3, A3.3).
     'app/api/ai/plan-change/session/restart/route.ts',
     'app/api/ai/plan-change/session/route.ts',
     // The planner's mid-run PAUSE: reads and answers one row, and the answer

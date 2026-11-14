@@ -505,7 +505,7 @@ function PlanWorkspaceHost({
     discard,
     stop,
     startCopied,
-    requestRestart,
+    confirmRestart,
     answerRestartConfirm,
     confirmPlanOffer,
     declinePlanOffer,
@@ -1423,7 +1423,7 @@ function PlanWorkspaceHost({
           onDiscard={discardNow}
           onStop={stop}
           onStartNewSession={() => void startCopied()}
-          onRequestRestart={() => void requestRestart()}
+          onConfirmRestart={confirmRestart}
           onAnswerRestart={(answer) => void answerRestartConfirm(answer)}
           // THE PLAN OFFER on an answer turn (MOTIR-9294): the doors decide what a
           // press starts; the hook refetches and follows.

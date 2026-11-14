@@ -4,7 +4,7 @@ import {
   CodeUnreadableAskNotice,
   CodeUnreadableDeclinedTurn,
 } from '@/components/planning/CodeUnreadableTurn';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, forwardRef, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 import {
@@ -71,6 +71,10 @@ import { CodeUnsearchableBanner } from '@/components/planning/CodeUnsearchableBa
 import { isOpenUnclear, pauseAnchorIndex, pauseOf, pauseOwnedIds } from '@/lib/planning/runPause';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
+import {
+  PlanRestartDialog,
+  type PlanRestartDialogPlan,
+} from '@/components/planning/PlanRestartDialog';
 import { PlanDecisionRefusalText } from '@/components/planning/PlanDecisionRefusalText';
 import { isPlanDecisionRefusal } from '@/lib/planning/planReview';
 import {
@@ -343,11 +347,15 @@ export interface PlanChangeRailProps {
    */
   onStartNewSession?: () => void;
   /**
-   * PLAN SOMETHING NEW (MOTIR-7650; ADR AMENDMENT 3). `onRequestRestart` is the
-   * rail-head control — it raises the fixed confirm on the thread; `onAnswerRestart`
-   * answers that confirm. Optional: a host that offers no restart draws neither.
+   * PLAN SOMETHING NEW (MOTIR-7650; ADR AMENDMENT 3; MOTIR-11261). The rail-head
+   * control opens `PlanRestartDialog`, whose confirm calls `onConfirmRestart` —
+   * it resolves `true` once the new session is open and `false` when nothing
+   * changed, which the dialog shows as its error line and *Try again*. Nothing is
+   * written to the thread. `onAnswerRestart` answers a LEGACY confirm turn (one a
+   * session written before MOTIR-11261 still carries). Optional: a host that
+   * offers no restart draws neither.
    */
-  onRequestRestart?: () => void;
+  onConfirmRestart?: () => Promise<boolean>;
   onAnswerRestart?: (answer: 'confirm' | 'keep') => void;
   /**
    * THE CARRY (Story MOTIR-7928 · MOTIR-7932): the send of an ENDED session whose
@@ -446,7 +454,7 @@ export function PlanChangeRail({
   approveProgress = null,
   conversationElsewhere = null,
   onStartNewSession,
-  onRequestRestart,
+  onConfirmRestart,
   onAnswerRestart,
   onCarrySend,
   onPlanAgain,
@@ -956,13 +964,59 @@ export function PlanChangeRail({
   // read-only reopen, somebody else's session, or an ended one, which already
   // shows its own way forward. Disabled, with its reason, while a run streams.
   const restartable =
-    Boolean(onRequestRestart) &&
+    Boolean(onConfirmRestart) &&
     state.session !== null &&
     !ended &&
     !state.readOnly &&
     state.session.origin === 'conversation' &&
     state.session.startedByViewer !== false;
   const restartBusy = busy || Boolean(state.restarting);
+  // THE PLAN SOMETHING NEW DIALOG (MOTIR-11261; design MOTIR-11260). The rail owns
+  // whether it is open, whether a confirm is in flight, and whether the last one
+  // failed; the hook owns the restart itself.
+  const restartControlRef = useRef<HTMLButtonElement>(null);
+  const [restartDialogOpen, setRestartDialogOpen] = useState(false);
+  const [restartConfirming, setRestartConfirming] = useState(false);
+  const [restartFailed, setRestartFailed] = useState(false);
+  // Where focus goes when the dialog closes: back to the control on Keep planning,
+  // to the new session's composer after a restart (design § focus).
+  const restartFocusComposerRef = useRef(false);
+  // The plan line (panels 3 and 3b): a plan being written stops; a plan waiting
+  // for review stays with the earlier session. The same facts `hasUndecidedPlan`
+  // and `writingPlan` read for the composer.
+  const restartPlan: PlanRestartDialogPlan = state.liveReview
+    ? 'writing'
+    : state.review && !state.decided
+      ? 'waiting'
+      : null;
+  // The control and the dialog's buttons are disabled while anything is in
+  // flight, so these handlers run only when their press is legal.
+  const openRestartDialog = () => {
+    setRestartFailed(false);
+    restartFocusComposerRef.current = false;
+    setRestartDialogOpen(true);
+  };
+  const keepPlanningFromDialog = () => {
+    setRestartDialogOpen(false);
+    setRestartFailed(false);
+  };
+  const confirmRestartFromDialog = async (confirm: () => Promise<boolean>) => {
+    setRestartFailed(false);
+    setRestartConfirming(true);
+    let ok = false;
+    try {
+      ok = await confirm();
+    } catch {
+      ok = false;
+    }
+    setRestartConfirming(false);
+    if (ok) {
+      restartFocusComposerRef.current = true;
+      setRestartDialogOpen(false);
+    } else {
+      setRestartFailed(true);
+    }
+  };
   // The confirm is ANSWERABLE while it is the latest turn of an open session
   // (A3.2): a later turn leaves it as a record without its buttons.
   const lastTurn = turns.at(-1) ?? null;
@@ -1118,12 +1172,32 @@ export function PlanChangeRail({
         </Pill>
         {restartable ? (
           <RestartControl
+            ref={restartControlRef}
             disabled={restartBusy}
             streaming={busy}
-            onPress={() => onRequestRestart?.()}
+            onPress={openRestartDialog}
           />
         ) : null}
       </div>
+      {onConfirmRestart ? (
+        <PlanRestartDialog
+          open={restartDialogOpen}
+          plan={restartPlan}
+          confirming={restartConfirming}
+          failed={restartFailed}
+          onKeepPlanning={keepPlanningFromDialog}
+          onConfirm={() => void confirmRestartFromDialog(onConfirmRestart)}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (restartFocusComposerRef.current) {
+              restartFocusComposerRef.current = false;
+              railRef.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus();
+            } else {
+              restartControlRef.current?.focus();
+            }
+          }}
+        />
+      ) : null}
 
       {/* HISTORY (MOTIR-9307; design MOTIR-9305 panel 1): the viewer's own past
           conversations, collapsed, between the head and the thread. A member's
@@ -2589,23 +2663,24 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
 };
 
 /** THE PLAN SOMETHING NEW CONTROL (MOTIR-7650; design panel 1) — the rail head's
- *  last item. While a run streams it stays in place, disabled, and names why in
- *  its tooltip (panel 5). */
-function RestartControl({
-  disabled,
-  streaming,
-  onPress,
-}: {
-  disabled: boolean;
-  streaming: boolean;
-  onPress: () => void;
-}) {
+ *  last item. A press opens the confirm dialog (MOTIR-11261). While a run streams
+ *  it stays in place, disabled, and names why in its tooltip (panel 5). */
+const RestartControl = forwardRef<
+  HTMLButtonElement,
+  {
+    disabled: boolean;
+    streaming: boolean;
+    onPress: () => void;
+  }
+>(function RestartControl({ disabled, streaming, onPress }, ref) {
   const tr = useTranslations('planningWorkspace.restart');
   const button = (
     <Button
+      ref={ref}
       variant="secondary"
       size="sm"
       leftIcon={<SquarePen className="size-3.5" aria-hidden="true" />}
+      aria-haspopup="dialog"
       onClick={onPress}
       disabled={disabled}
       data-testid="planning-restart-control"
@@ -2622,7 +2697,7 @@ function RestartControl({
       </span>
     </Tooltip>
   );
-}
+});
 
 function Turn(props: TurnProps) {
   const Render = TURN_RENDERERS[props.turn.role];

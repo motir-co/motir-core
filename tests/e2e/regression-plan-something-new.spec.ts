@@ -2,11 +2,12 @@
 // Story MOTIR-7631; `conversation-turn-intent.md` AMENDMENT 3).
 //
 // The walk: an open session on a card shows *Plan something new* in the rail
-// head; pressing it asks first, and *Keep planning* changes nothing. Pressing it
-// again and confirming closes the session, gives the card back, and opens a new
-// empty session in place — the overlay never closes. On the project thread the
-// person's WORDS are ANSWERED like any turn (AMENDMENT 5 · MOTIR-9231) and write no
-// confirm; the control there raises it, and Confirm opens another new session.
+// head; pressing it asks first — in a confirm DIALOG that writes nothing to the
+// thread (MOTIR-11261) — and *Keep planning* changes nothing. Pressing it again
+// and confirming closes the session, gives the card back, and opens a new empty
+// session in place — the overlay never closes. On the project thread the person's
+// WORDS are ANSWERED like any turn (AMENDMENT 5 · MOTIR-9231) and write no confirm;
+// the control there opens the dialog, and its confirm opens another new session.
 // The card session reached planning — a card's first turn always opens a plan — so
 // Plans lists it; the project thread only asked, so Plans does not (MOTIR-9217: a
 // conversation that never proposed a plan is a question that was answered).
@@ -31,6 +32,7 @@ import en from '@/messages/en.json';
 test.describe.configure({ timeout: 240_000 });
 
 const restart = en.planningWorkspace.restart;
+const dialogCopy = restart.dialog;
 
 // ── Locators ─────────────────────────────────────────────────────────────────
 
@@ -42,9 +44,11 @@ const orb = (page: Page) => page.getByRole('button', { name: 'Motir AI', exact: 
 const calloutPanel = (page: Page) => page.getByRole('dialog', { name: 'Motir AI' });
 const control = (page: Page) => rail(page).getByTestId('planning-restart-control');
 const confirmTurn = (page: Page) => rail(page).getByTestId('planning-restart-confirm-turn');
-const confirmButton = (page: Page) => rail(page).getByTestId('planning-restart-confirm');
-const keepButton = (page: Page) => rail(page).getByTestId('planning-restart-keep');
 const kept = (page: Page) => rail(page).getByTestId('planning-restart-kept');
+// The dialog is portalled out of the rail (MOTIR-11261), so it is found by its role and name.
+const restartDialog = (page: Page) => page.getByRole('alertdialog', { name: dialogCopy.title });
+const confirmButton = (page: Page) => restartDialog(page).getByTestId('planning-restart-confirm');
+const keepButton = (page: Page) => restartDialog(page).getByTestId('planning-restart-keep');
 const earlier = (page: Page) => rail(page).getByTestId('planning-restart-earlier');
 
 const overlayOpen = (url: URL) => url.searchParams.has('plan');
@@ -161,28 +165,35 @@ async function askOnProject(page: Page, text: string): Promise<void> {
   await expect(rail(page).getByText(text).first()).toBeVisible();
 }
 
-/** Press the control; the confirm POST's 200 is the signal the turn was written. */
+/** Press the control; the dialog opening is the signal — it posts nothing (MOTIR-11261). */
 async function pressControl(page: Page): Promise<void> {
   await expect(control(page)).toBeEnabled({ timeout: 60_000 });
-  const raised = page.waitForResponse(
-    (r) =>
-      new URL(r.url()).pathname === '/api/ai/plan-change/session/restart/confirm' &&
-      r.request().method() === 'POST',
-  );
   await control(page).click();
-  expect((await raised).status()).toBe(200);
+  await expect(restartDialog(page)).toBeVisible();
+  await expect(restartDialog(page)).toContainText(dialogCopy.body);
+  // Focus lands on the safe answer.
+  await expect(keepButton(page)).toBeFocused();
 }
 
-/** Answer the confirm; returns the restart door's JSON. */
-async function answer(page: Page, which: 'keep' | 'confirm'): Promise<Record<string, unknown>> {
+/** Keep planning in the dialog: it closes, focus returns to the control, nothing is posted. */
+async function keepPlanning(page: Page): Promise<void> {
+  await keepButton(page).click();
+  await expect(restartDialog(page)).toHaveCount(0);
+  await expect(control(page)).toBeFocused();
+}
+
+/** Confirm in the dialog; returns the restart door's JSON. */
+async function confirmRestart(page: Page): Promise<Record<string, unknown>> {
   const answered = page.waitForResponse(
     (r) =>
       new URL(r.url()).pathname === '/api/ai/plan-change/session/restart' &&
       r.request().method() === 'POST',
   );
-  await (which === 'keep' ? keepButton(page) : confirmButton(page)).click();
+  await confirmButton(page).click();
   const res = await answered;
   expect(res.status()).toBe(200);
+  expect(JSON.parse(res.request().postData() ?? '{}')).toMatchObject({ answer: 'confirm' });
+  await expect(restartDialog(page)).toHaveCount(0);
   return (await res.json()) as Record<string, unknown>;
 }
 
@@ -230,20 +241,23 @@ test('Plan something new closes the session, gives the card back, and opens a ne
   });
 
   await chapter('It asks first, and Keep planning changes nothing', async () => {
+    const turnsBefore = await turnCount(cardSessionId);
     await pressControl(page);
-    await expect(confirmTurn(page)).toContainText(restart.confirm.body);
-    // PERSISTED: asking closed nothing.
+    // The question is in the dialog, never on the thread.
+    await expect(confirmTurn(page)).toHaveCount(0);
+    // PERSISTED: asking closed nothing and wrote nothing.
     expect((await sessionRow(cardSessionId)).endedAt).toBeNull();
     expect(await cardStatus(key)).toBe('planning');
+    expect(await turnCount(cardSessionId)).toBe(turnsBefore);
     await beat();
 
-    const keptBody = await answer(page, 'keep');
-    expect(keptBody['id']).toBe(cardSessionId);
-    await expect(kept(page)).toContainText(restart.kept);
-    await expect(confirmButton(page)).toHaveCount(0);
+    await keepPlanning(page);
+    await expect(kept(page)).toHaveCount(0);
+    await expect(confirmTurn(page)).toHaveCount(0);
     await expect(control(page)).toBeVisible();
 
-    // PERSISTED: the same session, still open, still holding the card.
+    // PERSISTED: the same session, still open, still holding the card, no turn added.
+    expect(await turnCount(cardSessionId)).toBe(turnsBefore);
     expect((await sessionRow(cardSessionId)).endedAt).toBeNull();
     expect(await cardStatus(key)).toBe('planning');
     expect((await latestPlanningSession(email)).id).toBe(cardSessionId);
@@ -254,8 +268,8 @@ test('Plan something new closes the session, gives the card back, and opens a ne
     'Confirm — a new empty session opens in place, and the card is given back',
     async () => {
       await pressControl(page);
-      await expect(confirmButton(page)).toBeVisible();
-      const swapped = await answer(page, 'confirm');
+      await expect(confirmButton(page)).toContainText(dialogCopy.confirm);
+      const swapped = await confirmRestart(page);
       expect(swapped).toMatchObject({ outcome: 'restarted', endedSessionId: cardSessionId });
       const fresh = (swapped['session'] as { id: string }).id;
       expect(fresh).not.toBe(cardSessionId);
@@ -266,6 +280,8 @@ test('Plan something new closes the session, gives the card back, and opens a ne
       await expect(earlier(page)).toContainText(restart.earlier);
       await expect(rail(page).getByText(CARD_TURN)).toHaveCount(0);
       await expect(composer(page)).toBeEnabled();
+      // Focus goes to the new session's composer.
+      await expect(composer(page)).toBeFocused();
 
       // PERSISTED: the old session ended `restarted`, the new one is empty and
       // carries nothing across, and the card is back where it was.
@@ -307,12 +323,12 @@ test('Plan something new closes the session, gives the card back, and opens a ne
       expect((await sessionRow(projectSessionId)).endedAt).toBeNull();
       await beat();
 
-      // The control is the door to the confirm.
+      // The control is the door to the confirm dialog.
       await pressControl(page);
-      await expect(confirmTurn(page)).toContainText(restart.confirm.body);
+      await expect(confirmTurn(page)).toHaveCount(0);
       await beat();
 
-      const swapped = await answer(page, 'confirm');
+      const swapped = await confirmRestart(page);
       expect(swapped).toMatchObject({ outcome: 'restarted', endedSessionId: projectSessionId });
       const fresh = (swapped['session'] as { id: string }).id;
       await expect(earlier(page)).toBeVisible();

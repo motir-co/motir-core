@@ -89,7 +89,11 @@ const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' 
 const composer = (page: Page) => rail(page).getByRole('textbox');
 const entrance = (page: Page) => page.getByRole('main').getByTestId('work-item-plan-entrance');
 const restartControl = (page: Page) => rail(page).getByTestId('planning-restart-control');
-const restartConfirm = (page: Page) => rail(page).getByTestId('planning-restart-confirm');
+// The confirm dialog is portalled out of the rail (MOTIR-11261).
+const restartConfirm = (page: Page) =>
+  page
+    .getByRole('alertdialog', { name: en.planningWorkspace.restart.dialog.title })
+    .getByTestId('planning-restart-confirm');
 const endMarker = (page: Page) => rail(page).getByTestId('planning-session-end');
 
 const notice = (page: Page) => page.getByRole('main').getByTestId('pending-plan-notice');
@@ -266,13 +270,7 @@ async function openPlans(page: Page): Promise<void> {
 /** *Plan something new* → Confirm: the person ends the open session (`restarted`). */
 async function planSomethingNew(page: Page, sessionId: string): Promise<void> {
   await expect(restartControl(page)).toBeEnabled({ timeout: 60_000 });
-  const raised = page.waitForResponse(
-    (r) =>
-      new URL(r.url()).pathname === '/api/ai/plan-change/session/restart/confirm' &&
-      r.request().method() === 'POST',
-  );
   await restartControl(page).click();
-  expect((await raised).status()).toBe(200);
   await expect(restartConfirm(page)).toBeVisible();
 
   const answered = page.waitForResponse(

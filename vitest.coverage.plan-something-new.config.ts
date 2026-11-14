@@ -3,7 +3,9 @@ import baseConfig from './vitest.config';
 
 // Coverage for PLAN SOMETHING NEW — Story MOTIR-7631's integration gate, MOTIR-7652
 // (`docs/decisions/conversation-turn-intent.md` AMENDMENT 3): the restart's own
-// constants and the two doors the story added.
+// constants and the door the story added. (Its second door, the control's
+// `restart/confirm`, was retired by MOTIR-11261: the control asks in a dialog,
+// `PlanRestartDialog`, which this lane measures with the files it added.)
 //
 // ⚠️ MEASURED: the files the story ADDED. NOT measured: the large shared files it
 // extended by a branch each (`planChangeSessionsService`, `aiAskService`, the
@@ -16,7 +18,7 @@ import baseConfig from './vitest.config';
 const MEASURED = [
   'lib/planChange/restart.ts',
   'app/api/ai/plan-change/session/restart/route.ts',
-  'app/api/ai/plan-change/session/restart/confirm/route.ts',
+  'components/planning/PlanRestartDialog.tsx',
 ];
 
 export default defineConfig({
@@ -28,6 +30,7 @@ export default defineConfig({
       'tests/integration/planning/planSomethingNewGate.test.ts',
       'tests/components/use-plan-change-restart.test.tsx',
       'tests/components/plan-change-rail-restart.test.tsx',
+      'tests/components/plan-restart-dialog.test.tsx',
     ],
     coverage: {
       provider: 'v8',
@@ -44,17 +47,18 @@ export default defineConfig({
         functions: 100,
         lines: 94,
         'lib/planChange/restart.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+        // MEASURED 2026-11-14 at MOTIR-11261.
+        'components/planning/PlanRestartDialog.tsx': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
         'app/api/ai/plan-change/session/restart/route.ts': {
           statements: 95,
           branches: 91,
           functions: 100,
           lines: 94,
-        },
-        'app/api/ai/plan-change/session/restart/confirm/route.ts': {
-          statements: 94,
-          branches: 87,
-          functions: 100,
-          lines: 93,
         },
       },
     },

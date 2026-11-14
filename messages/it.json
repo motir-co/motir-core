@@ -9287,7 +9287,17 @@
       "earlier": "La sessione precedente è chiusa",
       "earlierOpen": "Aprila",
       "disabledStreaming": "Disponibile al termine di questa esecuzione",
-      "swapped": "La sessione precedente è chiusa. È aperta una nuova sessione."
+      "swapped": "La sessione precedente è chiusa. È aperta una nuova sessione.",
+      "dialog": {
+        "title": "Iniziare qualcosa di nuovo?",
+        "body": "La sessione di pianificazione corrente verrà chiusa e i suoi elementi di lavoro verranno rilasciati.",
+        "writing": "Motir AI sta scrivendo un piano in questa sessione. Si interrompe e quanto scritto finora viene scartato.",
+        "waiting": "Il piano in attesa della tua revisione resta. Apri la sessione precedente per continuare a lavorarci.",
+        "confirm": "Inizia qualcosa di nuovo",
+        "keep": "Continua a pianificare",
+        "error": "Non è stato possibile iniziare qualcosa di nuovo. Non è cambiato nulla: riprova o continua a pianificare.",
+        "retry": "Riprova"
+      }
     },
     "waiting": {
       "failedHead": "Questo tentativo si è interrotto",
