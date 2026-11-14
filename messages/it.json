@@ -4703,7 +4703,8 @@
         "claimed": "{host} — un solo nome per l’area di lavoro.",
         "none": "Nessun nome ancora rivendicato.",
         "manage": "Gestisci →",
-        "claim": "Rivendica un nome →"
+        "claim": "Rivendica un nome →",
+        "whyNone": "Perché non c’è un nome →"
       },
       "title": "Indirizzo pubblico",
       "subtitle": "L’unico nome a cui risponde la tua area di lavoro.",
@@ -4756,7 +4757,8 @@
         "rename": "Rinomina",
         "renaming": "Rinomina in corso…",
         "release": "Rilascia nome",
-        "releasing": "Rilascio in corso…"
+        "releasing": "Rilascio in corso…",
+        "lockAfterReleaseIneligible": "L’area di lavoro non può rivendicare un altro nome finché non ha un repository creato da Motir."
       },
       "toast": {
         "claimed": "{host} è tuo",
@@ -4781,7 +4783,15 @@
         "noneSub": "La tua area di lavoro non ha ancora un nome.",
         "projectPage": "La pagina pubblica di questo progetto è su {url}.",
         "change": "Modifica nelle impostazioni dell’area di lavoro →",
-        "claim": "Rivendica un nome per l’area di lavoro →"
+        "claim": "Rivendica un nome per l’area di lavoro →",
+        "whyNone": "Perché l’area di lavoro non ha un nome →"
+      },
+      "ineligible": {
+        "title": "Questa area di lavoro non può rivendicare un nome",
+        "body": "Un nome sotto {base} serve le applicazioni ospitate da Motir, e Motir ospita solo i repository che crea. Questa area di lavoro non ne ha: i repository che importi o colleghi girano sulla tua infrastruttura.",
+        "heldTitle": "Questo nome non può essere rinominato",
+        "heldBody": "Questa area di lavoro non ha più un repository creato da Motir. {host} continua a rispondere finché non lo rilasci, ma non può essere rinominato e, una volta rilasciato, l’area di lavoro non potrà rivendicare un altro nome.",
+        "reason": "Questa area di lavoro non ha un repository creato da Motir, quindi non può rivendicare né modificare un nome sotto {base}."
       }
     },
     "customDomains": {

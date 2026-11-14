@@ -131,6 +131,10 @@ export function refusalFromResponse(
           };
     case 'SUBDOMAIN_CHANGE_LIMIT':
       return { surface: 'toast', key: 'toast.refusedLimit', values: {}, date: body.nextAllowedAt };
+    // ADR §8 AMENDMENT 5 — a stale tab's claim or rename, after the workspace
+    // lost its last Motir repository. The base domain is the component's.
+    case 'SUBDOMAIN_REQUIRES_MOTIR_REPOSITORY':
+      return { surface: onField ? 'field' : 'toast', key: 'ineligible.reason', values: {} };
     case 'SUBDOMAIN_FORBIDDEN':
       return { surface: onField ? 'field' : 'toast', key: 'readOnly', values: {} };
     default:

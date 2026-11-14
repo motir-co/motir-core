@@ -4703,7 +4703,8 @@
         "claimed": "{host} — um nome para o espaço de trabalho.",
         "none": "Nenhum nome reivindicado ainda.",
         "manage": "Gerenciar →",
-        "claim": "Reivindicar um nome →"
+        "claim": "Reivindicar um nome →",
+        "whyNone": "Por que não há nome →"
       },
       "title": "Endereço público",
       "subtitle": "O único nome pelo qual seu espaço de trabalho responde.",
@@ -4756,7 +4757,8 @@
         "rename": "Renomear",
         "renaming": "Renomeando…",
         "release": "Liberar nome",
-        "releasing": "Liberando…"
+        "releasing": "Liberando…",
+        "lockAfterReleaseIneligible": "O espaço de trabalho não pode reivindicar outro nome até ter um repositório criado pelo Motir."
       },
       "toast": {
         "claimed": "{host} é seu",
@@ -4781,7 +4783,15 @@
         "noneSub": "Seu espaço de trabalho ainda não tem nome.",
         "projectPage": "A página pública deste projeto está em {url}.",
         "change": "Alterar nas configurações do espaço de trabalho →",
-        "claim": "Reivindicar um nome para o espaço de trabalho →"
+        "claim": "Reivindicar um nome para o espaço de trabalho →",
+        "whyNone": "Por que o espaço de trabalho não tem nome →"
+      },
+      "ineligible": {
+        "title": "Este espaço de trabalho não pode reivindicar um nome",
+        "body": "Um nome em {base} atende aplicações que o Motir hospeda, e o Motir só hospeda os repositórios que cria. Este espaço de trabalho não tem nenhum: os repositórios que você importa ou conecta rodam na sua própria infraestrutura.",
+        "heldTitle": "Este nome não pode ser renomeado",
+        "heldBody": "Este espaço de trabalho não tem mais um repositório criado pelo Motir. {host} continua respondendo até você liberá-lo, mas não pode ser renomeado e, depois de liberado, o espaço de trabalho não pode reivindicar outro nome.",
+        "reason": "Este espaço de trabalho não tem um repositório criado pelo Motir, então não pode reivindicar nem alterar um nome em {base}."
       }
     },
     "customDomains": {

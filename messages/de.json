@@ -4703,7 +4703,8 @@
         "claimed": "{host} – ein Name für den Arbeitsbereich.",
         "none": "Noch kein Name beansprucht.",
         "manage": "Verwalten →",
-        "claim": "Namen beanspruchen →"
+        "claim": "Namen beanspruchen →",
+        "whyNone": "Warum es keinen Namen gibt →"
       },
       "title": "Öffentliche Adresse",
       "subtitle": "Der eine Name, unter dem Ihr Arbeitsbereich erreichbar ist.",
@@ -4756,7 +4757,8 @@
         "rename": "Umbenennen",
         "renaming": "Wird umbenannt…",
         "release": "Namen freigeben",
-        "releasing": "Wird freigegeben…"
+        "releasing": "Wird freigegeben…",
+        "lockAfterReleaseIneligible": "Der Arbeitsbereich kann erst wieder einen Namen beanspruchen, wenn er ein von Motir angelegtes Repository hat."
       },
       "toast": {
         "claimed": "{host} gehört Ihnen",
@@ -4781,7 +4783,15 @@
         "noneSub": "Ihr Arbeitsbereich hat noch keinen Namen.",
         "projectPage": "Die öffentliche Seite dieses Projekts ist unter {url} erreichbar.",
         "change": "In den Arbeitsbereich-Einstellungen ändern →",
-        "claim": "Einen Namen für den Arbeitsbereich beanspruchen →"
+        "claim": "Einen Namen für den Arbeitsbereich beanspruchen →",
+        "whyNone": "Warum der Arbeitsbereich keinen Namen hat →"
+      },
+      "ineligible": {
+        "title": "Dieser Arbeitsbereich kann keinen Namen beanspruchen",
+        "body": "Ein Name unter {base} dient Anwendungen, die Motir hostet, und Motir hostet nur die Repositorys, die es selbst anlegt. Dieser Arbeitsbereich hat keines: Repositorys, die Sie importieren oder verbinden, laufen auf Ihrer eigenen Infrastruktur.",
+        "heldTitle": "Dieser Name kann nicht umbenannt werden",
+        "heldBody": "Dieser Arbeitsbereich hat kein von Motir angelegtes Repository mehr. {host} antwortet weiter, bis Sie den Namen freigeben, kann aber nicht umbenannt werden, und nach der Freigabe kann der Arbeitsbereich keinen anderen Namen beanspruchen.",
+        "reason": "Dieser Arbeitsbereich hat kein von Motir angelegtes Repository und kann daher keinen Namen unter {base} beanspruchen oder ändern."
       }
     },
     "customDomains": {

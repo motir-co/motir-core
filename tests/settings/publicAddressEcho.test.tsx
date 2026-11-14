@@ -25,9 +25,10 @@ const claimed: PublicSubdomainDto = {
   nextChangeAllowedAt: null,
 };
 
-async function render(subdomain: PublicSubdomainDto | null) {
+async function render(subdomain: PublicSubdomainDto | null, eligible?: boolean) {
   const el = await PublicAddressEcho({
     subdomain,
+    eligible,
     projectAddress: 'motir.co/p/ROADMAP',
     projectUrl: 'https://motir.co/p/ROADMAP',
   });
@@ -64,5 +65,26 @@ describe('the workspace address echo', () => {
     expect(screen.getByText('motir.co/p/ROADMAP')).toBeTruthy();
     const link = screen.getByRole('link', { name: 'Claim a name for the workspace →' });
     expect(link.getAttribute('href')).toBe('/settings/workspace/public-address');
+  });
+});
+
+// ADR §8 AMENDMENT 5 (MOTIR-11287) — with no name and no Motir repository the
+// link names the reason page instead of inviting a claim the pane refuses.
+describe('the echo for a workspace with no Motir repository', () => {
+  it('no name, not eligible: the link reads “Why the workspace has no name →”', async () => {
+    await render(null, false);
+    const link = screen.getByRole('link', { name: 'Why the workspace has no name →' });
+    expect(link.getAttribute('href')).toBe('/settings/workspace/public-address');
+    expect(screen.queryByRole('link', { name: /Claim a name/ })).toBeNull();
+  });
+
+  it('no name, eligible: the claim invitation, unchanged', async () => {
+    await render(null, true);
+    expect(screen.getByRole('link', { name: 'Claim a name for the workspace →' })).toBeTruthy();
+  });
+
+  it('a name held: the change link, whatever the eligibility', async () => {
+    await render(claimed, false);
+    expect(screen.getByRole('link', { name: 'Change in workspace settings →' })).toBeTruthy();
   });
 });

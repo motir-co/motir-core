@@ -58,30 +58,43 @@ export async function WorkspaceFoldInSection({
   // only where a base domain is configured: off-cloud the room 404s, and with no
   // base domain the door would name nothing.
   const offersAddress = isCloud() && isTenantDomainConfigured();
-  const [workspace, members, policy, role, roleContext, migration, subdomain, invites] =
-    await allSettledOrThrow([
-      workspacesService.getWorkspaceSummary(workspaceId, actorUserId),
-      workspacesService.listMembers(workspaceId, actorUserId),
-      // Story MOTIR-1215 · MOTIR-3647 — the workspace require-2FA control's SECOND
-      // home. Below the reveal threshold `/settings/workspace/security` 404s, so
-      // this is the only place a single-workspace org can reach it, which is the
-      // common case rather than the edge one.
-      twoFactorPolicyService.getWorkspacePolicy(workspaceId, actorUserId),
-      workspacesService.getMemberRole(actorUserId, workspaceId),
-      // The Members role column and the migration report fold in with Members
-      // (Story MOTIR-6168 · MOTIR-6465, design panel 4b).
-      workspacesService.getMemberRoleContext(workspaceId, actorUserId),
-      roleMigrationReportService.firstPageForViewer(workspaceId, actorUserId),
-      offersAddress
-        ? publicSubdomainService.getForWorkspace(workspaceId, actorUserId)
-        : Promise.resolve(null),
-      // The Members card's pending invitations fold in with it (MOTIR-9997), read
-      // as `/settings/workspace` reads them: the read refuses a viewer who may not
-      // invite, and a failed read draws the card without the block.
-      workspaceInvitesService
-        .listPendingInvites({ userId: actorUserId, workspaceId })
-        .catch(() => []),
-    ]);
+  const [
+    workspace,
+    members,
+    policy,
+    role,
+    roleContext,
+    migration,
+    subdomain,
+    invites,
+    eligibility,
+  ] = await allSettledOrThrow([
+    workspacesService.getWorkspaceSummary(workspaceId, actorUserId),
+    workspacesService.listMembers(workspaceId, actorUserId),
+    // Story MOTIR-1215 · MOTIR-3647 — the workspace require-2FA control's SECOND
+    // home. Below the reveal threshold `/settings/workspace/security` 404s, so
+    // this is the only place a single-workspace org can reach it, which is the
+    // common case rather than the edge one.
+    twoFactorPolicyService.getWorkspacePolicy(workspaceId, actorUserId),
+    workspacesService.getMemberRole(actorUserId, workspaceId),
+    // The Members role column and the migration report fold in with Members
+    // (Story MOTIR-6168 · MOTIR-6465, design panel 4b).
+    workspacesService.getMemberRoleContext(workspaceId, actorUserId),
+    roleMigrationReportService.firstPageForViewer(workspaceId, actorUserId),
+    offersAddress
+      ? publicSubdomainService.getForWorkspace(workspaceId, actorUserId)
+      : Promise.resolve(null),
+    // The Members card's pending invitations fold in with it (MOTIR-9997), read
+    // as `/settings/workspace` reads them: the read refuses a viewer who may not
+    // invite, and a failed read draws the card without the block.
+    workspaceInvitesService
+      .listPendingInvites({ userId: actorUserId, workspaceId })
+      .catch(() => []),
+    // ADR §8 AMENDMENT 5 (MOTIR-11287) — the door's link text follows it.
+    offersAddress
+      ? publicSubdomainService.getClaimEligibility(workspaceId, actorUserId)
+      : Promise.resolve({ eligible: true }),
+  ]);
   // The caller resolved this workspace from the actor's OWN membership list, so
   // a null here means it went away between the two reads. Nothing to host.
   if (!workspace) return null;
@@ -113,7 +126,12 @@ export async function WorkspaceFoldInSection({
 
       <RolesDoorCard customRoleCount={roleContext.customRoles.length} />
 
-      {offersAddress ? <PublicAddressDoorCard hostname={subdomain?.hostname ?? null} /> : null}
+      {offersAddress ? (
+        <PublicAddressDoorCard
+          hostname={subdomain?.hostname ?? null}
+          eligible={eligibility.eligible}
+        />
+      ) : null}
 
       {/* ⚠️ RELOCATING A SURFACE PRESERVES ITS GATE, AND THIS SECTION DOES NOT
           CARRY THIS ONE. This host renders for ANY member of the workspace —

@@ -8,7 +8,18 @@ import { Card } from '@/components/ui/Card';
 // DOOR to `/settings/workspace/public-address`, which — like the Roles room —
 // answers at every workspace count, so the door always lands.
 
-export function PublicAddressDoorCard({ hostname }: { hostname: string | null }) {
+export function PublicAddressDoorCard({
+  hostname,
+  eligible = true,
+}: {
+  hostname: string | null;
+  /**
+   * `getClaimEligibility`'s answer (MOTIR-11287). With no name and no Motir
+   * repository the link names the reason page rather than inviting a claim the
+   * pane would refuse.
+   */
+  eligible?: boolean;
+}) {
   const t = useTranslations('settings.workspaceAddress');
   return (
     <Card>
@@ -23,7 +34,7 @@ export function PublicAddressDoorCard({ hostname }: { hostname: string | null })
           href="/settings/workspace/public-address"
           className="inline-flex shrink-0 items-center font-sans text-sm font-medium text-(--el-link) hover:underline"
         >
-          {hostname ? t('door.manage') : t('door.claim')}
+          {hostname ? t('door.manage') : eligible ? t('door.claim') : t('door.whyNone')}
         </Link>
       </div>
     </Card>

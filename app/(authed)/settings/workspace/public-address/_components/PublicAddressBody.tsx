@@ -22,18 +22,23 @@ export async function PublicAddressBody({
 }) {
   let subdomain: PublicSubdomainDto | null = null;
   let canManage = false;
+  let eligible = true;
   let loadFailed = false;
   try {
     // `allSettledOrThrow`, never a bare `Promise.all`: both arms open a
     // transaction (MOTIR-3066).
-    const [dto, role] = await allSettledOrThrow([
+    const [dto, role, eligibility] = await allSettledOrThrow([
       publicSubdomainService.getForWorkspace(workspaceId, actorUserId),
       // The COMPOSED workspace role, so an org Owner / Admin sees the controls
       // the write path already lets them use (MOTIR-6462).
       workspacesService.getMemberRole(actorUserId, workspaceId),
+      // ADR §8 AMENDMENT 5 (MOTIR-11287) — may this workspace claim or rename?
+      // The service's own predicate, never restated here.
+      publicSubdomainService.getClaimEligibility(workspaceId, actorUserId),
     ]);
     subdomain = dto;
     canManage = roleMayManageAddress(role);
+    eligible = eligibility.eligible;
   } catch (err) {
     // The pane's load-error state (design panel 11): one line and a retry that
     // re-runs this read, rather than the route's error boundary taking the
@@ -48,6 +53,7 @@ export async function PublicAddressBody({
       baseDomain={tenantBaseDomain()}
       subdomain={subdomain}
       canManage={canManage}
+      eligible={eligible}
       loadFailed={loadFailed}
     />
   );

@@ -4703,7 +4703,8 @@
         "claimed": "{host} — un solo nombre para el espacio de trabajo.",
         "none": "Todavía no se ha reclamado ningún nombre.",
         "manage": "Gestionar →",
-        "claim": "Reclamar un nombre →"
+        "claim": "Reclamar un nombre →",
+        "whyNone": "Por qué no hay nombre →"
       },
       "title": "Dirección pública",
       "subtitle": "El único nombre con el que responde tu espacio de trabajo.",
@@ -4756,7 +4757,8 @@
         "rename": "Renombrar",
         "renaming": "Renombrando…",
         "release": "Liberar nombre",
-        "releasing": "Liberando…"
+        "releasing": "Liberando…",
+        "lockAfterReleaseIneligible": "El espacio de trabajo no puede reclamar otro nombre hasta que tenga un repositorio creado por Motir."
       },
       "toast": {
         "claimed": "{host} es tuyo",
@@ -4781,7 +4783,15 @@
         "noneSub": "Tu espacio de trabajo aún no tiene nombre.",
         "projectPage": "La página pública de este proyecto está en {url}.",
         "change": "Cambiar en la configuración del espacio de trabajo →",
-        "claim": "Reclamar un nombre para el espacio de trabajo →"
+        "claim": "Reclamar un nombre para el espacio de trabajo →",
+        "whyNone": "Por qué el espacio de trabajo no tiene nombre →"
+      },
+      "ineligible": {
+        "title": "Este espacio de trabajo no puede reclamar un nombre",
+        "body": "Un nombre en {base} sirve aplicaciones que aloja Motir, y Motir solo aloja los repositorios que crea. Este espacio de trabajo no tiene ninguno: los repositorios que importas o conectas se ejecutan en tu propia infraestructura.",
+        "heldTitle": "Este nombre no se puede renombrar",
+        "heldBody": "Este espacio de trabajo ya no tiene un repositorio creado por Motir. {host} sigue respondiendo hasta que lo liberes, pero no se puede renombrar y, una vez liberado, el espacio de trabajo no puede reclamar otro nombre.",
+        "reason": "Este espacio de trabajo no tiene un repositorio creado por Motir, así que no puede reclamar ni cambiar un nombre en {base}."
       }
     },
     "customDomains": {
