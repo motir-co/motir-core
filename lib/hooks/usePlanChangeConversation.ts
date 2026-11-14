@@ -35,7 +35,6 @@ import {
   submitMidRunAskTurn,
   submitLateChanges,
   startCopiedSession,
-  requestRestartConfirm,
   answerRestart,
   answerPlanOffer,
   submitAskTurn,
@@ -3802,55 +3801,28 @@ export function usePlanChangeConversation({
   }, []);
 
   /**
-   * PLAN SOMETHING NEW pressed (MOTIR-7650; ADR AMENDMENT 3, A3.3): the server
-   * writes the SAME fixed confirm the words produce. Nothing closes here, and a
-   * confirm already pending comes back unchanged.
+   * THE RESTART ITSELF (MOTIR-7650; ADR AMENDMENT 3, A3.3/A3.4): end the session
+   * `restarted` (its cards go back) and SWAP the overlay onto the new, empty
+   * session in place — the shape {@link startCopied} swaps with, plus the ended
+   * session's id for the rail's earlier-session line. A take-back (the server
+   * answers the person's other open session for the scope) swaps the same way.
+   *
+   * Resolves `restarted` once the swap is applied, `aborted` when the call was
+   * aborted, and `failed` when the restart did not happen — refused, failed, or
+   * not attempted because the session is ended, a run is attached or another
+   * restart is in flight. It records NO rail error: each caller says the failure
+   * where its question is asked.
    */
-  const requestRestart = useCallback(async () => {
+  const runRestart = useCallback(async (): Promise<'restarted' | 'failed' | 'aborted'> => {
     const session = stateRef.current.session;
-    if (!session || sessionEnded(session) || abortRef.current || restartingRef.current) return;
-    restartingRef.current = true;
-    setState((s) => ({ ...s, restarting: true }));
-    try {
-      const withConfirm = await requestRestartConfirm(session.id);
-      if (!mountedRef.current) return;
-      setState((s) => ({ ...s, session: withConfirm, restarting: false }));
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setState((s) => ({
-        ...s,
-        restarting: false,
-        errorCode:
-          err instanceof DOMException && err.name === 'AbortError'
-            ? s.errorCode
-            : 'SESSION_UNAVAILABLE',
-      }));
-    } finally {
-      restartingRef.current = false;
+    if (!session || sessionEnded(session) || abortRef.current || restartingRef.current) {
+      return 'failed';
     }
-  }, []);
-
-  /**
-   * The ANSWER to the confirm. `keep` lands the Keep planning marker and changes
-   * nothing else. `confirm` ends the session `restarted` (its cards go back) and
-   * SWAPS the overlay onto the new, empty session in place — the shape
-   * {@link startCopied} swaps with, plus the ended session's id for the rail's
-   * earlier-session line.
-   */
-  const answerRestartConfirm = useCallback(async (answer: 'confirm' | 'keep') => {
-    const session = stateRef.current.session;
-    if (!session || sessionEnded(session) || abortRef.current || restartingRef.current) return;
     restartingRef.current = true;
     setState((s) => ({ ...s, restarting: true }));
     try {
-      if (answer === 'keep') {
-        const kept = await answerRestart(session.id, 'keep');
-        if (!mountedRef.current) return;
-        setState((s) => ({ ...s, session: kept, restarting: false }));
-        return;
-      }
       const result = await answerRestart(session.id, 'confirm');
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return 'failed';
       adoptedSessionRef.current = result.session.id;
       lastAskTurnRef.current = null;
       lastAskAnchorRef.current = null;
@@ -3882,20 +3854,67 @@ export function usePlanChangeConversation({
         restarting: false,
       }));
       restartedCbRef.current?.(result.session.id);
+      return 'restarted';
     } catch (err) {
-      if (!mountedRef.current) return;
-      setState((s) => ({
-        ...s,
-        restarting: false,
-        errorCode:
-          err instanceof DOMException && err.name === 'AbortError'
-            ? s.errorCode
-            : 'SESSION_UNAVAILABLE',
-      }));
+      if (mountedRef.current) setState((s) => ({ ...s, restarting: false }));
+      return err instanceof DOMException && err.name === 'AbortError' ? 'aborted' : 'failed';
     } finally {
       restartingRef.current = false;
     }
   }, []);
+
+  /**
+   * PLAN SOMETHING NEW CONFIRMED IN ITS DIALOG (MOTIR-11261; design MOTIR-11260):
+   * the restart, and nothing written to the conversation first — no confirm turn,
+   * no answer marker. The dialog shows a failure itself, so the rail's error line
+   * stays as it was.
+   */
+  const confirmRestart = useCallback(
+    async (): Promise<boolean> => (await runRestart()) === 'restarted',
+    [runRestart],
+  );
+
+  /**
+   * The ANSWER to a `new_session` confirm TURN already on the thread (MOTIR-7650;
+   * A3.2) — the record a conversation kept from before the button opened a dialog
+   * (MOTIR-11261). `keep` lands the Keep planning marker and changes nothing else;
+   * `confirm` is {@link runRestart}. A failure of either reads on the rail, where
+   * the turn's two buttons are.
+   */
+  const answerRestartConfirm = useCallback(
+    async (answer: 'confirm' | 'keep') => {
+      const session = stateRef.current.session;
+      if (!session || sessionEnded(session) || abortRef.current || restartingRef.current) return;
+      if (answer === 'confirm') {
+        if ((await runRestart()) === 'failed' && mountedRef.current && !abortRef.current) {
+          setState((s) =>
+            s.session?.id === session.id ? { ...s, errorCode: 'SESSION_UNAVAILABLE' } : s,
+          );
+        }
+        return;
+      }
+      restartingRef.current = true;
+      setState((s) => ({ ...s, restarting: true }));
+      try {
+        const kept = await answerRestart(session.id, 'keep');
+        if (!mountedRef.current) return;
+        setState((s) => ({ ...s, session: kept, restarting: false }));
+      } catch (err) {
+        if (!mountedRef.current) return;
+        setState((s) => ({
+          ...s,
+          restarting: false,
+          errorCode:
+            err instanceof DOMException && err.name === 'AbortError'
+              ? s.errorCode
+              : 'SESSION_UNAVAILABLE',
+        }));
+      } finally {
+        restartingRef.current = false;
+      }
+    },
+    [runRestart],
+  );
 
   /**
    * ANSWER A PLAN OFFER (Story MOTIR-9219 · MOTIR-9294) — or a log-a-bug offer
@@ -4027,7 +4046,7 @@ export function usePlanChangeConversation({
     stop,
     skipFinalCheck,
     startCopied,
-    requestRestart,
+    confirmRestart,
     answerRestartConfirm,
     confirmPlanOffer,
     declinePlanOffer,

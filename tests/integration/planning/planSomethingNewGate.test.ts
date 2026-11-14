@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
@@ -10,6 +12,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { createTestUser } from '../../fixtures';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { seedLegacyRestartConfirm } from '../../helpers/legacyRestartConfirm';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   addToProjectAs,
@@ -26,8 +29,10 @@ import {
 //
 // `tests/planning/planSessionRestart.test.ts` pins the service seams one by one.
 // This file holds what only the doors together show: the words ANSWERED and
-// writing no confirm (AMENDMENT 5 · MOTIR-9231), the control's confirm answered over HTTP, the cards coming
-// back, the resume read naming the new session, and every refusal as a status.
+// writing no confirm (AMENDMENT 5 · MOTIR-9231), the control's dialog confirming
+// over the one restart door with nothing written to the thread first (MOTIR-11261),
+// a LEGACY confirm turn still answered, the cards coming back, the resume read
+// naming the new session, and every refusal as a status.
 
 const session = { current: null as { user: { id: string; email: string; name: string } } | null };
 const activeCtx = { current: null as ProjectContext | null };
@@ -57,7 +62,6 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 const { POST: ask } = await import('@/app/api/ai/ask/route');
 const { POST: settle } = await import('@/app/api/ai/ask/settle/route');
 const { POST: restart } = await import('@/app/api/ai/plan-change/session/restart/route');
-const { POST: confirm } = await import('@/app/api/ai/plan-change/session/restart/confirm/route');
 const { GET: readSession } = await import('@/app/api/ai/plan-change/session/route');
 
 const DB_TEST_TIMEOUT_MS = 30_000;
@@ -169,12 +173,13 @@ async function sayPlanSomethingNew(
   return settle(post('/api/ai/ask/settle', { jobId, sessionId }));
 }
 
-/** Press Plan something new — the control, now the only door to the confirm. */
-async function pressPlanSomethingNew(sessionId: string) {
-  const res = await confirm(post('/api/ai/plan-change/session/restart/confirm', { sessionId }));
-  expect(res.status).toBe(200);
-  return res;
-}
+/** The owner's project context, for seeding a legacy confirm turn. */
+const ownerCtx = (f: WorkItemFixture = fx): ProjectContext => ({
+  userId: f.ownerId,
+  workspaceId: f.workspaceId,
+  projectId: f.projectId,
+  project: f.project,
+});
 
 const statusOf = async (id: string) =>
   (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
@@ -213,12 +218,11 @@ describe('the words — answered, never a confirm (AMENDMENT 5 · MOTIR-9231)', 
 
 describe('Confirm — the session ends once, the cards come back, a new session opens', () => {
   it(
-    'ends `restarted`, releases the card, returns a new empty session the resume read names',
+    'the dialog confirm: ends `restarted` with nothing written first, releases the card, returns a new empty session the resume read names',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const card = await seedCard();
       const sessionId = await sessionOn(card);
-      await pressPlanSomethingNew(sessionId);
 
       const res = await restart(
         post('/api/ai/plan-change/session/restart', { sessionId, answer: 'confirm' }),
@@ -234,6 +238,9 @@ describe('Confirm — the session ends once, the cards come back, a new session 
       });
       expect(await statusOf(card.id)).toBe('todo');
       expect(await adminDb.planTargetLock.count({ where: { sessionId } })).toBe(0);
+      // MOTIR-11261: the dialog asked; the ended thread holds no confirm turn and
+      // no marker — only the turn it had.
+      expect(await adminDb.planChangeTurn.count({ where: { sessionId } })).toBe(1);
 
       expect(out.session.id).not.toBe(sessionId);
       expect(out.session.targetKeys).toEqual([card.key]);
@@ -282,20 +289,12 @@ describe('Confirm — the session ends once, the cards come back, a new session 
 
 describe('Keep planning — nothing ends', () => {
   it(
-    'the control raises the confirm, Keep planning answers it, the session and card stay',
+    'a legacy confirm turn: Keep planning answers it, the session and card stay',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const card = await seedCard();
       const sessionId = await sessionOn(card);
-
-      const raised = await confirm(
-        post('/api/ai/plan-change/session/restart/confirm', { sessionId }),
-      );
-      expect(raised.status).toBe(200);
-      const withConfirm = (await raised.json()) as PlanChangeSessionDto;
-      expect(withConfirm.turns.at(-1)).toMatchObject({ role: 'assistant', confirm: 'new_session' });
-      // The control runs no job either.
-      expect(submitJobMock).not.toHaveBeenCalled();
+      await seedLegacyRestartConfirm(ownerCtx(), sessionId);
 
       const kept = await restart(
         post('/api/ai/plan-change/session/restart', { sessionId, answer: 'keep' }),
@@ -308,6 +307,25 @@ describe('Keep planning — nothing ends', () => {
       expect((await sessionRow(sessionId)).endedAt).toBeNull();
       expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
       expect(await adminDb.planChangeSession.count({ where: { projectId: fx.projectId } })).toBe(1);
+      expect(submitJobMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it(
+    'a legacy confirm turn: Confirm answers it and ends the session',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const card = await seedCard();
+      const sessionId = await sessionOn(card);
+      await seedLegacyRestartConfirm(ownerCtx(), sessionId);
+
+      const res = await restart(
+        post('/api/ai/plan-change/session/restart', { sessionId, answer: 'confirm' }),
+      );
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as PlanSessionRestartResultDto).endedSessionId).toBe(sessionId);
+      expect(await sessionRow(sessionId)).toMatchObject({ endReason: 'restarted' });
+      expect(await statusOf(card.id)).toBe('todo');
     },
   );
 
@@ -316,8 +334,6 @@ describe('Keep planning — nothing ends', () => {
       post('/api/ai/plan-change/session/restart', { sessionId: 'x', answer: 'maybe' }),
     );
     expect(res.status).toBe(400);
-    const noId = await confirm(post('/api/ai/plan-change/session/restart/confirm', {}));
-    expect(noId.status).toBe(400);
   });
 });
 
@@ -361,7 +377,7 @@ describe('refusals', () => {
         await restart(
           post('/api/ai/plan-change/session/restart', { sessionId, answer: 'confirm' }),
         ),
-        await confirm(post('/api/ai/plan-change/session/restart/confirm', { sessionId })),
+        await restart(post('/api/ai/plan-change/session/restart', { sessionId, answer: 'keep' })),
       ]) {
         expect(res.status).toBe(404);
         expect(((await res.json()) as { code: string }).code).toBe('PLAN_SESSION_NOT_FOUND');
@@ -402,15 +418,19 @@ describe('refusals', () => {
   );
 
   it(
-    'the control on an ended session is PLAN_SESSION_ENDED',
+    'Keep planning on an ended session writes nothing',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const sessionId = await sessionOn(await seedCard());
+      await seedLegacyRestartConfirm(ownerCtx(), sessionId);
       await restart(post('/api/ai/plan-change/session/restart', { sessionId, answer: 'confirm' }));
+      const before = await adminDb.planChangeTurn.count({ where: { sessionId } });
 
-      const res = await confirm(post('/api/ai/plan-change/session/restart/confirm', { sessionId }));
-      expect(res.status).toBe(409);
-      expect(((await res.json()) as { code: string }).code).toBe('PLAN_SESSION_ENDED');
+      const res = await restart(
+        post('/api/ai/plan-change/session/restart', { sessionId, answer: 'keep' }),
+      );
+      expect(res.status).toBe(200);
+      expect(await adminDb.planChangeTurn.count({ where: { sessionId } })).toBe(before);
     },
   );
 });
@@ -454,7 +474,6 @@ describe('workspace isolation', () => {
           post('/api/ai/plan-change/session/restart', { sessionId, answer: 'confirm' }),
         ),
         await restart(post('/api/ai/plan-change/session/restart', { sessionId, answer: 'keep' })),
-        await confirm(post('/api/ai/plan-change/session/restart/confirm', { sessionId })),
       ]) {
         expect(res.status).toBe(404);
       }
@@ -473,33 +492,33 @@ describe('the doors refuse a malformed or unauthenticated request before any wri
       body,
     });
 
-  it('an unauthenticated caller is 401 at both doors', async () => {
+  it('an unauthenticated caller is 401', async () => {
     session.current = null;
     const a = await restart(
       post('/api/ai/plan-change/session/restart', { sessionId: 'x', answer: 'keep' }),
     );
-    const b = await confirm(
-      post('/api/ai/plan-change/session/restart/confirm', { sessionId: 'x' }),
-    );
-    expect([a.status, b.status]).toEqual([401, 401]);
+    expect(a.status).toBe(401);
   });
 
-  it('no active project is refused at both doors', async () => {
+  it('no active project is refused', async () => {
     activeCtx.current = null;
     const a = await restart(
       post('/api/ai/plan-change/session/restart', { sessionId: 'x', answer: 'keep' }),
     );
-    const b = await confirm(
-      post('/api/ai/plan-change/session/restart/confirm', { sessionId: 'x' }),
-    );
     expect(a.status).toBeGreaterThanOrEqual(400);
-    expect(b.status).toBe(a.status);
   });
 
-  it('a body that is not JSON, or names no session, is 400 at both doors', async () => {
+  it('a body that is not JSON, or names no session, is 400', async () => {
     const a = await restart(rawPost('/api/ai/plan-change/session/restart', '{not json'));
-    const b = await confirm(rawPost('/api/ai/plan-change/session/restart/confirm', '{not json'));
     const c = await restart(post('/api/ai/plan-change/session/restart', { answer: 'keep' }));
-    expect([a.status, b.status, c.status]).toEqual([400, 400, 400]);
+    expect([a.status, c.status]).toEqual([400, 400]);
+  });
+});
+
+describe('the retired confirm door (MOTIR-11261)', () => {
+  it('no route raises a confirm turn any more', () => {
+    expect(
+      existsSync(join(process.cwd(), 'app/api/ai/plan-change/session/restart/confirm/route.ts')),
+    ).toBe(false);
   });
 });

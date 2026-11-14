@@ -12,7 +12,6 @@ import {
   stopPlanChangeRun,
   skipPlanFinalCheck,
   recordPlannerTurn,
-  requestRestartConfirm,
   rerunAskTurn,
   resubmitContextualPlan,
   resumeContextualSession,
@@ -733,18 +732,9 @@ describe('the mailbox doors', () => {
   });
 });
 
-describe('planChangeClient — Plan something new (Story MOTIR-7631 · MOTIR-7650)', () => {
-  it('the control raises the confirm as a POST { sessionId } and returns the session', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(SESSION));
-
-    await expect(requestRestartConfirm('s1')).resolves.toEqual(SESSION);
-
-    const [url, init] = lastCall();
-    expect(url).toBe('/api/ai/plan-change/session/restart/confirm');
-    expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({ sessionId: 's1' });
-  });
-
+describe('planChangeClient — Plan something new (Story MOTIR-7631 · MOTIR-7650; MOTIR-11261)', () => {
+  // The dialog's confirm and a legacy confirm turn's answers both post the one
+  // restart door; nothing raises a confirm turn any more (MOTIR-11261).
   it('answers the confirm as a POST { sessionId, answer } — keep and confirm alike', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(SESSION));
     await expect(answerRestart('s1', 'keep')).resolves.toEqual(SESSION);

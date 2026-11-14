@@ -101,7 +101,10 @@ const verb = (scope: Locator, name: string) => scope.getByRole('button', { name,
 const byTestId = (page: Page, id: string) => rail(page).getByTestId(id);
 
 const restartControl = (page: Page) => byTestId(page, 'planning-restart-control');
-const restartConfirm = (page: Page) => byTestId(page, 'planning-restart-confirm');
+// The confirm dialog is portalled out of the rail (MOTIR-11261).
+const restartDialog = (page: Page) =>
+  page.getByRole('alertdialog', { name: en.planningWorkspace.restart.dialog.title });
+const restartConfirm = (page: Page) => restartDialog(page).getByTestId('planning-restart-confirm');
 const endMarker = (page: Page) => byTestId(page, 'planning-session-end');
 const carryGloss = (page: Page) => byTestId(page, 'planning-carry-gloss');
 const startSlot = (page: Page) => byTestId(page, 'planning-session-ended');
@@ -260,16 +263,10 @@ async function sendTurn(page: Page, text: string): Promise<Response> {
   return res;
 }
 
-/** Plan something new, confirmed — the control's confirm turn, then the restart. */
+/** Plan something new, confirmed — the control's dialog, then the restart (MOTIR-11261). */
 async function planSomethingNew(page: Page): Promise<{ fresh: string }> {
   await expect(restartControl(page)).toBeEnabled({ timeout: 60_000 });
-  const raised = page.waitForResponse(
-    (r) =>
-      new URL(r.url()).pathname === '/api/ai/plan-change/session/restart/confirm' &&
-      r.request().method() === 'POST',
-  );
   await restartControl(page).click();
-  expect((await raised).status()).toBe(200);
   await expect(restartConfirm(page)).toBeVisible();
   const answered = page.waitForResponse(
     (r) =>

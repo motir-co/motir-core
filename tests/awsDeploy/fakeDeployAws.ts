@@ -24,6 +24,10 @@ export const CORE_REPO = `${REGISTRY}/motir-prod/motir-core`;
 export const OTHER_REPO = `${REGISTRY}/motir-prod/motir-ai`;
 export const DIGEST = `sha256:${'a'.repeat(64)}`;
 export const OLD_DIGEST = `sha256:${'0'.repeat(64)}`;
+/** The release commit: CI pushes the image index at DIGEST under this tag. */
+export const COMMIT = 'c'.repeat(40);
+/** The index's untagged linux/amd64 child, which the docker loader's `digest` names (MOTIR-11274). */
+export const CHILD_DIGEST = `sha256:${'e'.repeat(64)}`;
 export const PREFIX = 'motir-prod';
 export const CLUSTER = 'motir-prod-core';
 export const SECRET_ARN = `arn:aws:secretsmanager:us-east-1:${ACCOUNT}:secret:motir-prod/core/database-owner-AbCdEf`;
@@ -113,7 +117,11 @@ export class FakeDeployAws implements DeployAws {
   readonly calls: string[][] = [];
   readonly registered: RegisterTaskDefinitionInput[] = [];
   readonly params = new Map<string, string>();
-  readonly images = new Set<string>([`motir-prod/motir-core|${DIGEST}`]);
+  /** `<repository>|<digest>` → the image's ECR tags. */
+  readonly images = new Map<string, string[]>([
+    [`motir-prod/motir-core|${DIGEST}`, [COMMIT]],
+    [`motir-prod/motir-core|${CHILD_DIGEST}`, []],
+  ]);
   readonly logLines: string[] = [];
   migrate: MigrateScript = migrateExits(0);
   rollouts = new Map<string, RolloutScript>();
@@ -242,9 +250,9 @@ export class FakeDeployAws implements DeployAws {
     return Promise.resolve({ state: 'granted', value: this.params.get(name) });
   }
 
-  imageExists(repositoryName: string, digest: string) {
-    this.record('imageExists', repositoryName, digest);
-    return Promise.resolve(this.images.has(`${repositoryName}|${digest}`));
+  imageTags(repositoryName: string, digest: string) {
+    this.record('imageTags', repositoryName, digest);
+    return Promise.resolve(this.images.get(`${repositoryName}|${digest}`) ?? null);
   }
 
   describeTaskDefinition(familyOrArn: string) {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 const { shallowPush } = vi.hoisted(() => ({ shallowPush: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -15,12 +15,17 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
+import { planReview, planReviewItem } from '../helpers/planReview';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 
 // PLAN SOMETHING NEW in the rail (Story MOTIR-7631 · MOTIR-7650), drawn to
 // MOTIR-7647's `planning-workspace--plan-something-new.mock.html`. The rail is
 // presentational, so each panel is asserted by handing it the server's thread.
+//
+// MOTIR-11261 (design MOTIR-11260, `planning-workspace--plan-something-new--modal.mock.html`):
+// the control asks in a confirm DIALOG, and writes nothing to the thread. The confirm
+// TURN below is the record a session kept from before — still drawn and answerable.
 
 const LAUNCH = parsePlanningLaunch({ mode: 'replan', from: 'project' });
 
@@ -100,7 +105,7 @@ const BASE: PlanChangeConversationState = {
   acts: [],
 };
 
-const onRequestRestart = vi.fn();
+const onConfirmRestart = vi.fn<() => Promise<boolean>>();
 const onAnswerRestart = vi.fn();
 
 function renderRail(
@@ -123,7 +128,7 @@ function renderRail(
       onAddTarget={vi.fn()}
       onRemoveTarget={vi.fn()}
       onStop={vi.fn()}
-      {...(opts.withRestart === false ? {} : { onRequestRestart, onAnswerRestart })}
+      {...(opts.withRestart === false ? {} : { onConfirmRestart, onAnswerRestart })}
     />,
     opts.messages ? { messages: opts.messages, locale: 'zh' } : {},
   );
@@ -135,13 +140,18 @@ afterEach(() => {
 });
 
 describe('the control (panel 1)', () => {
-  it('sits in the rail head of an open session and raises the confirm', () => {
+  it('sits in the rail head of an open session and opens the dialog, writing nothing', () => {
     renderRail();
     const control = screen.getByTestId('planning-restart-control');
     expect(control.textContent).toContain('Plan something new');
+    expect(control.getAttribute('aria-haspopup')).toBe('dialog');
     expect((control as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByTestId('planning-restart-dialog')).toBeNull();
     fireEvent.click(control);
-    expect(onRequestRestart).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+    expect(onConfirmRestart).not.toHaveBeenCalled();
+    expect(onAnswerRestart).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('planning-restart-confirm-turn')).toBeNull();
   });
 
   it('reads the zh catalogue', () => {
@@ -183,7 +193,147 @@ describe('where the control is absent or disabled (panel 5)', () => {
   });
 });
 
-describe('the confirm (panel 2)', () => {
+const WAITING = planReview([
+  planReviewItem({
+    planItemId: 'pi_1',
+    nodeId: 'pi_1',
+    kind: 'story',
+    title: 'Recurring invoices',
+  }),
+]);
+
+function openDialog() {
+  fireEvent.click(screen.getByTestId('planning-restart-control'));
+  return screen.getByRole('alertdialog');
+}
+
+describe('the dialog (MOTIR-11261)', () => {
+  it('asks the question, lands focus on Keep planning, and names no plan when there is none', () => {
+    renderRail();
+    const dialog = openDialog();
+    expect(dialog.textContent).toContain('Start something new?');
+    expect(dialog.textContent).toContain(
+      'This closes the current planning session and gives its work items back.',
+    );
+    expect(screen.queryByTestId('planning-restart-dialog-plan')).toBeNull();
+    expect(document.activeElement).toBe(within(dialog).getByTestId('planning-restart-keep'));
+  });
+
+  it('names a plan being written (panel 3)', () => {
+    renderRail({ liveReview: WAITING });
+    openDialog();
+    const line = screen.getByTestId('planning-restart-dialog-plan');
+    expect(line.getAttribute('data-plan')).toBe('writing');
+    expect(line.textContent).toContain('Motir AI is writing a plan in this session.');
+  });
+
+  it('names a plan waiting for review (panel 3b), and not a decided one', () => {
+    renderRail({ review: WAITING });
+    openDialog();
+    expect(screen.getByTestId('planning-restart-dialog-plan').getAttribute('data-plan')).toBe(
+      'waiting',
+    );
+    cleanup();
+    renderRail({ review: WAITING, decided: 'accepted' });
+    openDialog();
+    expect(screen.queryByTestId('planning-restart-dialog-plan')).toBeNull();
+  });
+
+  it('Keep planning closes it, posts nothing, and returns focus to the control', async () => {
+    renderRail();
+    const dialog = openDialog();
+    fireEvent.click(within(dialog).getByTestId('planning-restart-keep'));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(onConfirmRestart).not.toHaveBeenCalled();
+    expect(onAnswerRestart).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByTestId('planning-restart-control'));
+  });
+
+  it('Escape is Keep planning too', async () => {
+    renderRail();
+    const dialog = openDialog();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(onConfirmRestart).not.toHaveBeenCalled();
+  });
+
+  it('Start something new confirms; the dialog stays while it is in flight, then closes', async () => {
+    let resolve!: (ok: boolean) => void;
+    onConfirmRestart.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
+    renderRail();
+    const dialog = openDialog();
+    fireEvent.click(within(dialog).getByTestId('planning-restart-confirm'));
+    expect(onConfirmRestart).toHaveBeenCalledTimes(1);
+    expect(
+      (within(dialog).getByTestId('planning-restart-keep') as HTMLButtonElement).disabled,
+    ).toBe(true);
+    // Escape is ignored while the restart is in flight, and a second press does nothing.
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByTestId('planning-restart-confirm'));
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+    expect(onConfirmRestart).toHaveBeenCalledTimes(1);
+    await act(async () => resolve(true));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(onAnswerRestart).not.toHaveBeenCalled();
+    // Focus goes to the composer, not back to the control.
+    expect(document.activeElement?.tagName).toBe('TEXTAREA');
+  });
+
+  it('a failed restart keeps the dialog with its error line and Try again (panel 7)', async () => {
+    onConfirmRestart.mockResolvedValueOnce(false);
+    renderRail();
+    const dialog = openDialog();
+    fireEvent.click(within(dialog).getByTestId('planning-restart-confirm'));
+    const error = await screen.findByTestId('planning-restart-dialog-error');
+    expect(error.textContent).toContain('Something new could not be started.');
+    const retry = within(dialog).getByTestId('planning-restart-confirm');
+    expect(retry.textContent).toContain('Try again');
+
+    // A thrown restart reads the same way; a successful retry closes the dialog.
+    onConfirmRestart.mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(retry);
+    await waitFor(() => expect(onConfirmRestart).toHaveBeenCalledTimes(2));
+    expect(await screen.findByTestId('planning-restart-dialog-error')).toBeTruthy();
+    onConfirmRestart.mockResolvedValueOnce(true);
+    fireEvent.click(within(dialog).getByTestId('planning-restart-confirm'));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  });
+
+  it('reopening after a failure starts clean', async () => {
+    onConfirmRestart.mockResolvedValueOnce(false);
+    renderRail();
+    let dialog = openDialog();
+    fireEvent.click(within(dialog).getByTestId('planning-restart-confirm'));
+    await screen.findByTestId('planning-restart-dialog-error');
+    fireEvent.click(within(dialog).getByTestId('planning-restart-keep'));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    dialog = openDialog();
+    expect(screen.queryByTestId('planning-restart-dialog-error')).toBeNull();
+    expect(within(dialog).getByTestId('planning-restart-confirm').textContent).toContain(
+      'Start something new',
+    );
+  });
+
+  it('opens over a legacy confirm turn, and Keep planning leaves that turn as it is', async () => {
+    renderRail({ session: session([turn(0), CONFIRM]) });
+    const dialog = openDialog();
+    fireEvent.click(within(dialog).getByTestId('planning-restart-keep'));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    const confirmTurn = screen.getByTestId('planning-restart-confirm-turn');
+    expect(within(confirmTurn).getByTestId('planning-restart-confirm')).toBeTruthy();
+    expect(onAnswerRestart).not.toHaveBeenCalled();
+  });
+
+  it('reads the zh catalogue', () => {
+    renderRail({ review: WAITING }, { messages: zhMessages });
+    const dialog = openDialog();
+    expect(dialog.textContent).toContain('开始新的规划？');
+    expect(dialog.textContent).toContain('等待审阅的计划会保留');
+    expect(within(dialog).getByTestId('planning-restart-keep').textContent).toContain('继续规划');
+  });
+});
+
+describe('a legacy confirm turn (panel 2, before MOTIR-11261)', () => {
   it('renders the catalogue question with Confirm and Keep planning while it is the latest turn', () => {
     renderRail({ session: session([turn(0), turn(1, 'assistant'), CONFIRM]) });
     const confirmTurn = screen.getByTestId('planning-restart-confirm-turn');

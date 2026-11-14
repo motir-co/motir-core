@@ -5,6 +5,7 @@ import type { DebugLandingDto } from '@/lib/dto/planChange';
 import { MotirAiConfigError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { aiAskService, type AskSubmitResult } from '@/lib/services/aiAskService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
+import { seedLegacyRestartConfirm } from '../helpers/legacyRestartConfirm';
 import { PlanChangeFlipNotOfferedError } from '@/lib/planChange/errors';
 import {
   createTestWorkItem,
@@ -257,7 +258,8 @@ describe('turns stored under the retired intents reload unchanged', () => {
       {},
       address,
     );
-    await planChangeSessionsService.requestRestartConfirm(ctx, address);
+    // A legacy confirm turn — nothing writes one since MOTIR-11261.
+    await seedLegacyRestartConfirm(ctx, address.sessionId);
 
     const loaded = await planChangeSessionsService.getById(ctx, first.session.id);
     const byId = (id: string) => loaded!.turns.find((t) => t.id === id)!;

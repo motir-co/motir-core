@@ -451,11 +451,13 @@ test('Confirm pressed twice, and Confirm then a typed yes, each start one plan',
 
   // A second conversation: Confirm, then a typed yes to the same offer — still one.
   await expect(restartControl(page)).toBeEnabled({ timeout: 60_000 });
-  const raised = posted(page, '/api/ai/plan-change/session/restart/confirm');
   await restartControl(page).click();
-  expect((await raised).status()).toBe(200);
   const restarted = posted(page, '/api/ai/plan-change/session/restart');
-  await byId(page, 'planning-restart-confirm').click();
+  // The confirm dialog (MOTIR-11261), portalled out of the rail.
+  await page
+    .getByRole('alertdialog', { name: en.planningWorkspace.restart.dialog.title })
+    .getByTestId('planning-restart-confirm')
+    .click();
   const swapped = (await (await restarted).json()) as { session: { id: string } };
   const second = swapped.session.id;
 

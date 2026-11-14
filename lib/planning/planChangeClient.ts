@@ -178,21 +178,11 @@ export async function startCopiedSession(
   );
 }
 
-/** PLAN SOMETHING NEW pressed (MOTIR-7650; ADR AMENDMENT 3, A3.3): write the
- *  fixed confirm onto the caller's own open session. Closes nothing. */
-export async function requestRestartConfirm(
-  sessionId: string,
-  signal?: AbortSignal,
-): Promise<PlanChangeSessionDto> {
-  return post<PlanChangeSessionDto>(
-    '/api/ai/plan-change/session/restart/confirm',
-    { sessionId },
-    signal,
-  );
-}
-
-/** The ANSWER to that confirm: `keep` returns the same session with its marker;
- *  `confirm` ends it `restarted` and returns the NEW empty session to swap to. */
+/** The restart door (MOTIR-7650; A3.3): `confirm` ends the session `restarted`
+ *  and returns the NEW empty session to swap to — what the Plan something new
+ *  dialog's confirm posts (MOTIR-11261) and what a confirm turn already on the
+ *  thread posts; `keep` answers such a turn with its marker and returns the
+ *  same session. */
 export async function answerRestart(
   sessionId: string,
   answer: 'keep',

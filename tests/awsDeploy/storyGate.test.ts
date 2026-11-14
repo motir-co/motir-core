@@ -6,6 +6,7 @@ import { main } from '@/scripts/aws-deploy/awsDeploy';
 import { GRANTED_ACTIONS } from '@/scripts/aws-deploy/ports';
 import { stripComments } from '../helpers/importGraph';
 import {
+  COMMIT,
   CORE_REPO,
   DIGEST,
   FakeDeployAws,
@@ -29,7 +30,7 @@ const issued = new Set<string>();
 async function deploy(aws: FakeDeployAws, extra: string[] = []) {
   const err: string[] = [];
   const code = await main(
-    ['--digest', DIGEST, ...extra],
+    ['--digest', DIGEST, '--commit', COMMIT, ...extra],
     ENV,
     { out: () => undefined, err: (l) => err.push(l) },
     () => aws,
@@ -51,7 +52,7 @@ function fleet() {
   return { aws, previous };
 }
 
-const VERIFY = ['getParameter', 'describeTaskDefinition', 'imageExists'];
+const VERIFY = ['getParameter', 'describeTaskDefinition', 'imageTags'];
 const MIGRATE = ['describeTaskDefinition', 'registerTaskDefinition', 'runTask', 'describeTask'];
 const FIND = ['listServices', 'describeServices', 'describeTaskDefinition'];
 const ROLL = ['registerTaskDefinition', 'updateService', 'describeServices'];

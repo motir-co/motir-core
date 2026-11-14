@@ -509,7 +509,7 @@ describe('the debug turn after a RELOAD — drawn from the turn DTOs alone', () 
     });
     renderRail(
       { session: { ...thread, turns: [...thread.turns, restartUser, confirm] } },
-      { onRequestRestart: vi.fn(), onAnswerRestart: vi.fn() },
+      { onConfirmRestart: vi.fn(), onAnswerRestart: vi.fn() },
     );
 
     const line = screen.getByTestId('plan-change-debug-outcome');

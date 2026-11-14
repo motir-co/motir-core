@@ -41,7 +41,7 @@ vi.mock('@/lib/hooks/usePlanChangeConversation', () => ({
       dismissError: vi.fn(),
       stop: vi.fn(),
       startCopied: vi.fn(),
-      requestRestart: vi.fn(),
+      confirmRestart: vi.fn(),
       answerRestartConfirm: vi.fn(),
       answerRunPause: vi.fn(),
       planAgain: vi.fn(),

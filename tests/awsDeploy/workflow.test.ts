@@ -145,16 +145,42 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     expect(deployRole).toBeLessThan(deploy);
   });
 
-  it('builds the image once and hands the deploy the digest from the push result, validated', () => {
+  it('builds the image once and hands the deploy the digest ECR tags with this commit, validated', () => {
     expect(steps.filter((s) => s.uses?.startsWith('docker/build-push-action'))).toHaveLength(1);
     const take = steps[stepIndex((s) => s.id === 'digest')]!;
-    expect(take.env?.PUSHED).toBe('${{ steps.build.outputs.digest }}');
-    expect(take.env?.EXISTING).toBe('${{ steps.existing.outputs.digest }}');
     expect(take.run).toContain('^sha256:[a-f0-9]{64}$');
     expect(take.run).toContain('exit 1');
     const deploy = steps[stepIndex((s) => !!s.run?.includes('deploy:aws'))]!;
     expect(deploy.env?.DIGEST).toBe('${{ steps.digest.outputs.digest }}');
     expect(deploy.run).toContain('--digest "$DIGEST"');
+  });
+
+  // MOTIR-11274: with `load: true` the action's `digest` output is the untagged
+  // linux/amd64 child of the index it tags with the commit. Deployed, ECS ran an
+  // image the Services page could not name the commit of, so the digest is read
+  // back from ECR by the commit tag and refused unless ECR lists that tag on it.
+  it("resolves the digest from ECR by this commit's tag, never from the push result (MOTIR-11274)", () => {
+    const take = steps[stepIndex((s) => s.id === 'digest')]!;
+    const run = take.run!;
+    expect(run).toContain('set -euo pipefail');
+    expect(run).toMatch(/aws ecr describe-images[^\n]*\\\n\s*--image-ids "imageTag=\$GITHUB_SHA"/);
+    expect(run).toContain("--query 'imageDetails[0].imageDigest'");
+    // The push result is reported, never deployed: `digest=` is only ever the ECR read.
+    expect(run).not.toMatch(/digest="?\$\{?(PUSHED|EXISTING)/);
+    expect(take.env?.EXISTING).toBeUndefined();
+    expect(take.env?.REPOSITORY).toBe('${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core');
+  });
+
+  it('refuses to deploy a digest ECR does not tag with this commit', () => {
+    const run = steps[stepIndex((s) => s.id === 'digest')]!.run!;
+    expect(run).toContain('--image-ids "imageDigest=$digest"');
+    expect(run).toContain("--query 'imageDetails[0].imageTags'");
+    expect(run).toMatch(
+      /if ! tr '\\t' '\\n' <<<"\$tags" \| grep -qxF "\$GITHUB_SHA"; then\n[^\n]*::error::[^\n]*\n\s*exit 1/,
+    );
+    // ...and the deploy checks it again on the digest it is handed.
+    const deploy = steps[stepIndex((s) => !!s.run?.includes('deploy:aws'))]!;
+    expect(deploy.run).toContain('--commit "$GITHUB_SHA"');
   });
 
   it("tolerates an immutable tag already pushed by reading that commit's image digest", () => {
@@ -192,7 +218,7 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     expect(deploy.env?.NO_ROLL).toBe(
       "${{ vars.AWS_DEPLOY_NO_ROLL == 'true' && '--no-roll' || '' }}",
     );
-    expect(deploy.run).toContain('--digest "$DIGEST" $NO_ROLL');
+    expect(deploy.run).toContain('--digest "$DIGEST" --commit "$GITHUB_SHA" $NO_ROLL');
   });
 
   // MOTIR-10883: the deploy writes every image pin in `infra/image-pins/` into its

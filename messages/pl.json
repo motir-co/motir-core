@@ -9292,7 +9292,17 @@
       "earlier": "Twoja wcześniejsza sesja jest zamknięta",
       "earlierOpen": "Otwórz ją",
       "disabledStreaming": "Dostępne po zakończeniu tego uruchomienia",
-      "swapped": "Twoja wcześniejsza sesja jest zamknięta. Otwarto nową sesję."
+      "swapped": "Twoja wcześniejsza sesja jest zamknięta. Otwarto nową sesję.",
+      "dialog": {
+        "title": "Rozpocząć coś nowego?",
+        "body": "To zamknie bieżącą sesję planowania i zwolni jej elementy robocze.",
+        "writing": "Motir AI pisze plan w tej sesji. Pisanie zostanie przerwane, a to, co powstało do tej pory, zostanie odrzucone.",
+        "waiting": "Plan czekający na przegląd pozostaje. Otwórz wcześniejszą sesję, aby dalej nad nim pracować.",
+        "confirm": "Rozpocznij coś nowego",
+        "keep": "Planuj dalej",
+        "error": "Nie udało się rozpocząć czegoś nowego. Nic się nie zmieniło: spróbuj ponownie lub planuj dalej.",
+        "retry": "Spróbuj ponownie"
+      }
     },
     "waiting": {
       "failedHead": "Ta próba została zatrzymana",

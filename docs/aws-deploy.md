@@ -3,11 +3,30 @@
 `.github/workflows/aws-deploy.yml` deploys every push to `main` onto core's
 Fargate services (Story MOTIR-9709). It builds the image from the repository's
 `Dockerfile`, pushes it to the ECR repository `<prefix>/motir-core` tagged with
-the commit SHA, and runs `pnpm deploy:aws --digest <digest>` with the pushed
-image's digest. The deploy script (`scripts/aws-deploy/awsDeploy.ts`) runs the
-migrate task, rolls web, worker and relay, and records the digest in
-`/<prefix>/core/image-digest` only when every service has completed. Any
-failure leaves the previous tasks serving.
+the commit SHA, and runs `pnpm deploy:aws --digest <digest> --commit <sha>` with
+the digest ECR tags with that commit. The deploy script
+(`scripts/aws-deploy/awsDeploy.ts`) refuses a digest ECR does not tag with the
+commit, runs the migrate task, rolls web, worker and relay, and records the
+digest in `/<prefix>/core/image-digest` only when every service has completed.
+Any failure leaves the previous tasks serving.
+
+## The deployed digest is the one tagged with the commit
+
+The Services page names the commit each service runs by reading the ECR tags of
+the image its task definition pins (MOTIR-11112), so the digest a deploy hands
+ECS must be the image CI tagged with the full commit SHA. `docker/build-push-action`
+pushes an OCI image index under that tag, with an untagged linux/amd64 child and
+an attestation manifest beside it, and with `load: true` (MOTIR-11241) its
+`digest` output names the untagged child, not the index. Deploying that child
+left the page reading "Not known" for core's services (MOTIR-11274).
+
+So the workflow never deploys the push result's `digest`. Its "Resolve the digest
+ECR tags with this commit" step reads the digest back from ECR with
+`describe-images --image-ids imageTag=$GITHUB_SHA`, for a fresh push and a re-run
+alike, and fails unless ECR lists `$GITHUB_SHA` among that image's tags. The
+deploy script checks the same again before anything changes: `--commit` is
+required, and an image whose tags do not include it is refused with its tags
+named.
 
 ## The one release lane, and its guards
 

@@ -3,6 +3,7 @@ import 'server-only';
 import {
   createEcsServicesReader,
   FARGATE_ON_DEMAND_VCPU_QUOTA,
+  type EcsContainerRead,
   type EcsDeploymentRead,
   type EcsServiceRead,
   type EcsServicesReader,
@@ -54,7 +55,9 @@ import { sourceRepoToken } from '@/lib/services/runnerImageFreshnessProbeService
  * figure this page exists not to show.
  *
  * THE DEPLOYED COMMIT (MOTIR-11112, design MOTIR-11242). Each service's PRIMARY
- * deployment runs a task definition whose first container names its image; every
+ * deployment runs a task definition whose APPLICATION container names its image
+ * (`applicationImageOf` — picked by what it is, never by its position, because a
+ * sidecar may be listed first, MOTIR-11275); every
  * deploy tags that image in ECR with the full commit SHA, so the commit is the
  * image's 40-hex tag (a reference BY that tag is used directly). The image
  * repository maps to its source repository on GitHub (`IMAGE_SOURCE_REPOSITORIES`)
@@ -143,10 +146,51 @@ function deploymentsOf(service: EcsServiceRead): {
   return { deployments, primary };
 }
 
-/** The image the service's PRIMARY deployment runs, or null when its task
- *  definition names none. */
+/** Whether an image is a reference into ECR, in a repository this page maps to
+ *  its source — i.e. an image Motir itself builds and deploys. */
+function isMappedEcrImage(image: string | null): boolean {
+  const address = image === null ? null : parseEcrImageAddress(image);
+  return address !== null && Object.hasOwn(IMAGE_SOURCE_REPOSITORIES, address.repositoryName);
+}
+
+/** Whether a container is named after its service — `motir-core-web` runs `web`. */
+function isNamedAfter(serviceName: string, container: EcsContainerRead): boolean {
+  const name = container.name;
+  return !!name && (serviceName === name || serviceName.endsWith(`-${name}`));
+}
+
+/**
+ * The service's APPLICATION container's image (MOTIR-11275). A task definition
+ * may run a sidecar beside the application — core-web runs the OpenTelemetry
+ * collector from `public.ecr.aws` — and the order ECS lists them in depends on
+ * which tool registered the revision, so the pick never reads position:
+ *
+ * 1. an essential container whose image is a reference into ECR in a repository
+ *    `IMAGE_SOURCE_REPOSITORIES` maps — the one named after the service when
+ *    more than one is;
+ * 2. else the container named after the service;
+ * 3. else, only when nothing matches, the first container.
+ *
+ * Null when the task definition has no container or the picked one names no image.
+ */
+export function applicationImageOf(
+  serviceName: string,
+  containers: readonly EcsContainerRead[],
+): string | null {
+  const built = containers.filter((c) => c.essential && isMappedEcrImage(c.image));
+  const picked =
+    built.find((c) => isNamedAfter(serviceName, c)) ??
+    built[0] ??
+    containers.find((c) => isNamedAfter(serviceName, c)) ??
+    containers[0];
+  return picked?.image ?? null;
+}
+
+/** The image the service's PRIMARY deployment runs — its application
+ *  container's — or null when its task definition names none. */
 export function primaryImageOf(service: EcsServiceRead): string | null {
-  return service.taskDefinitions[deploymentsOf(service).primary.taskDefinitionArn]?.image ?? null;
+  const primary = service.taskDefinitions[deploymentsOf(service).primary.taskDefinitionArn];
+  return primary ? applicationImageOf(service.name, primary.containers) : null;
 }
 
 /** What one deployment's image resolved to: its commit, and that commit judged. */
