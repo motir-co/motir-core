@@ -364,7 +364,14 @@
       "draftingName": "En cours de rédaction",
       "laying": "Organisation de ses éléments enfants",
       "layingName": "Ses éléments enfants sont en cours d’organisation",
-      "layingHere": "Organisation de ce niveau"
+      "layingHere": "Organisation de ce niveau",
+      "thinking": "Réflexion",
+      "thinkingName": "En cours de réflexion — rien d’écrit pour l’instant",
+      "checking": "Vérification",
+      "checkingName": "En cours de vérification finale",
+      "checkingAll": "Vérification de ses éléments enfants",
+      "checkingAllName": "Ses éléments enfants sont vérifiés ensemble lors de la vérification finale",
+      "checkingHere": "Vérification de ce niveau"
     },
     "listWritingTitle": "Rien de proposé pour l’instant",
     "listWritingBody": "Les éléments apparaissent ici au fur et à mesure de la rédaction du plan.",
@@ -429,7 +436,9 @@
       "beingWritten": "Rédaction en cours",
       "written": "Rédigé",
       "follow": "Suivre la rédaction",
-      "followHint": "Garde le texte en cours de rédaction visible. Faites défiler pour arrêter."
+      "followHint": "Garde le texte en cours de rédaction visible. Faites défiler pour arrêter.",
+      "thinking": "Réflexion en cours",
+      "checking": "Vérification en cours"
     }
   },
   "projectAccess": {

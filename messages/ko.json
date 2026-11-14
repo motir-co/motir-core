@@ -364,7 +364,14 @@
       "draftingName": "지금 초안 작성 중",
       "laying": "하위 항목 배치 중",
       "layingName": "지금 하위 항목을 배치하는 중",
-      "layingHere": "이 수준 배치 중"
+      "layingHere": "이 수준 배치 중",
+      "thinking": "생각 중",
+      "thinkingName": "검토 중 — 아직 작성된 내용 없음",
+      "checking": "검사 중",
+      "checkingName": "최종 검사에서 검토 중",
+      "checkingAll": "하위 항목 검사 중",
+      "checkingAllName": "하위 항목을 최종 검사에서 함께 검토하는 중",
+      "checkingHere": "이 수준 검사 중"
     },
     "listWritingTitle": "아직 제안 없음",
     "listWritingBody": "계획이 작성되는 대로 항목이 여기에 표시됩니다.",
@@ -429,7 +436,9 @@
       "beingWritten": "작성 중",
       "written": "작성 완료",
       "follow": "작성 따라가기",
-      "followHint": "작성 중인 텍스트를 계속 화면에 표시합니다. 스크롤하면 멈춥니다."
+      "followHint": "작성 중인 텍스트를 계속 화면에 표시합니다. 스크롤하면 멈춥니다.",
+      "thinking": "생각 중",
+      "checking": "검사 중"
     }
   },
   "projectAccess": {

@@ -41,7 +41,8 @@ import { arrivalLevel } from '@/lib/planning/planArrival';
 import { inFlightCues, liveArrivals, liveEdits, proposalChangeKey } from '@/lib/planning/livePane';
 import type { NodeCue } from '@/components/planning/PlanningCanvas';
 import type { PlanProgressStep } from '@/lib/plans/planProgress';
-import { ListTree } from 'lucide-react';
+import { ListTree, SearchCheck } from 'lucide-react';
+import type { CardCues } from '@/lib/planning/cueState';
 import { levelChangeFor, planElsewhere } from '@/lib/planning/levelChange';
 import { LevelChangeBand } from '@/components/planning/LevelChangeBand';
 
@@ -185,6 +186,15 @@ export interface PlanReviewCanvasProps {
    * `liveSteps`'s: this only says which drawn cues move.
    */
   movingSteps?: readonly PlanProgressStep[] | null;
+  /**
+   * WHAT THE PLANNER IS DOING TO EACH CARD (Task MOTIR-11254; design Part XXXI
+   * §31.1, §31.5) — `PlanProposalViews`'s derivation, after its two-read hold. An
+   * `author` step's node reads THINKING or DRAFTING by it; a `check` step's node
+   * reads CHECKING (a container review: *Checking its cards* on the story's node,
+   * *Checking this level* in the bar inside it). Absent, an `author` step's node
+   * reads Drafting, as it shipped, and no check marks anything.
+   */
+  cardCues?: CardCues | null;
 }
 
 export function PlanReviewCanvas({
@@ -208,6 +218,7 @@ export function PlanReviewCanvas({
   offerPlanElsewhere = false,
   liveSteps = null,
   movingSteps = null,
+  cardCues = null,
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tPlan = useTranslations('planReview');
@@ -617,20 +628,34 @@ export function PlanReviewCanvas({
     if (!cueState) return null;
     const out = new Map<string, NodeCue>();
     for (const [nodeId, kind] of cueState.cues) {
+      if (kind === 'laying') {
+        out.set(nodeId, { kind, label: tCue('layingName'), text: tCue('laying') });
+      } else if (cardCues?.states.get(nodeId) === 'thinking') {
+        // THINKING (§31.1): the author session is on the card and nothing is
+        // written yet — static, so it never takes the at-work motion.
+        out.set(nodeId, { kind: 'thinking', label: tCue('thinkingName'), text: tCue('thinking') });
+      } else {
+        out.set(nodeId, {
+          kind: 'drafting',
+          label: tCue('draftingName'),
+          text: tCue('drafting'),
+          ...(moving?.get(nodeId) === 'drafting' ? { moving: true } : {}),
+        });
+      }
+    }
+    // CHECKING (§31.1, §31.5) — the final check's card, or the story whose cards it
+    // reviews together. It wins over any other cue on the node: the latest stage.
+    for (const [nodeId, state] of cardCues?.states ?? []) {
+      if (state !== 'checking') continue;
       out.set(
         nodeId,
-        kind === 'drafting'
-          ? {
-              kind,
-              label: tCue('draftingName'),
-              text: tCue('drafting'),
-              ...(moving?.get(nodeId) === 'drafting' ? { moving: true } : {}),
-            }
-          : { kind, label: tCue('layingName'), text: tCue('laying') },
+        cardCues?.containers.has(nodeId)
+          ? { kind: 'checking', label: tCue('checkingAllName'), text: tCue('checkingAll') }
+          : { kind: 'checking', label: tCue('checkingName'), text: tCue('checking') },
       );
     }
     return out;
-  }, [cueState, moving, tCue]);
+  }, [cueState, cardCues, moving, tCue]);
 
   // ── A CHANGE TO THE LEVEL ITSELF (bug MOTIR-6223; design MOTIR-6241) ───────
   // `mergePlanLevel` frames the nodes ON a level, and the level the reader stands
@@ -644,18 +669,31 @@ export function PlanReviewCanvas({
   const levelBand = useCallback(
     (focus: { id: string }) => {
       const change = levelChangeFor(items, focus.id, outcome);
-      const laying = cueState?.cues.get(focus.id) === 'laying';
-      const marker = laying ? (
-        <div
-          data-testid="canvas-crumb-cue"
-          className="mt-[5px] flex min-w-0 items-center border-t border-(--el-border-soft) pt-[5px]"
-        >
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-status-in-progress) bg-(--el-card) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11px] leading-none font-semibold text-(--el-text-secondary)">
-            <ListTree aria-hidden="true" className="size-3 text-(--el-status-in-progress)" />
-            {tCue('layingHere')}
-          </span>
-        </div>
-      ) : null;
+      // The final check reviewing THIS level's cards together (§31.5) — the
+      // shipped laying crumb chip with its token, glyph and word swapped.
+      const checking =
+        cardCues?.containers.has(focus.id) === true && cardCues.states.get(focus.id) === 'checking';
+      const laying = !checking && cueState?.cues.get(focus.id) === 'laying';
+      const marker =
+        checking || laying ? (
+          <div
+            data-testid="canvas-crumb-cue"
+            data-cue={checking ? 'checking' : undefined}
+            className="mt-[5px] flex min-w-0 items-center border-t border-(--el-border-soft) pt-[5px]"
+          >
+            {checking ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-checking) bg-(--el-card) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11px] leading-none font-semibold text-(--el-text-secondary)">
+                <SearchCheck aria-hidden="true" className="size-3 text-(--el-checking)" />
+                {tCue('checkingHere')}
+              </span>
+            ) : (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-status-in-progress) bg-(--el-card) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11px] leading-none font-semibold text-(--el-text-secondary)">
+                <ListTree aria-hidden="true" className="size-3 text-(--el-status-in-progress)" />
+                {tCue('layingHere')}
+              </span>
+            )}
+          </div>
+        ) : null;
       if (change && marker) {
         return (
           <>
@@ -666,7 +704,7 @@ export function PlanReviewCanvas({
       }
       return change ? <LevelChangeBand change={change} outcome={outcome} /> : marker;
     },
-    [items, outcome, cueState, tCue],
+    [items, outcome, cueState, cardCues, tCue],
   );
   // …and the plan BESIDE the reader, on the surface that opts in.
   const elsewhereOffer = useCallback(

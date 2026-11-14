@@ -244,6 +244,19 @@ test('a plan is followed from the Workbench Planning tab back to its canvas, its
       hostedStep(run, 'author-2', 'author', ref(ids[B]!)),
     ]);
     await both;
+    // Nothing written yet: both cards read THINKING (MOTIR-11254, Part XXXI §31.1).
+    await expect(node(page, A)).toHaveAttribute('data-cue', 'thinking');
+    await expect(node(page, B)).toHaveAttribute('data-cue', 'thinking');
+
+    // Each session's first partial lands — both cards read DRAFTING.
+    const drafted = planPolled(page, planId, (b) =>
+      [ids[A], ids[B]].every((id) => (b.inFlightDrafts ?? []).some((d) => d.planItemId === id)),
+    );
+    await Promise.all([
+      hostedDraft(run, 'author-1', ref(ids[A]!), 1, A),
+      hostedDraft(run, 'author-2', ref(ids[B]!), 1, B),
+    ]);
+    await drafted;
 
     await expect(node(page, A)).toHaveAttribute('data-cue', 'drafting');
     await expect(node(page, B)).toHaveAttribute('data-cue', 'drafting');
@@ -324,7 +337,8 @@ test('a plan is followed from the Workbench Planning tab back to its canvas, its
     await moved;
 
     await expect(node(page, A)).not.toHaveAttribute('data-cue');
-    await expect(node(page, C)).toHaveAttribute('data-cue', 'drafting');
+    // author-1 has written nothing on C yet: Thinking. B keeps its draft.
+    await expect(node(page, C)).toHaveAttribute('data-cue', 'thinking');
     await expect(node(page, B)).toHaveAttribute('data-cue', 'drafting');
     // The deepen plays the shipped mark on the card it changed.
     await expect.poll(() => marked(page, 'cue', C), { timeout: 4 * POLL_MS }).toBeGreaterThan(0);
@@ -350,7 +364,7 @@ test('a plan is followed from the Workbench Planning tab back to its canvas, its
 
     await arrivals(page).click();
     await expect(node(page, D)).toBeVisible();
-    await expect(node(page, D)).toHaveAttribute('data-cue', 'drafting');
+    await expect(node(page, D)).toHaveAttribute('data-cue', 'thinking');
   });
 
   await chapter('A level is laid — the card being laid carries its mark', async () => {
@@ -384,6 +398,30 @@ test('a plan is followed from the Workbench Planning tab back to its canvas, its
   });
 });
 
+/**
+ * The hosted planner's partial card (`itemDraft`, MOTIR-11199) — through the
+ * same service method `POST /api/internal/ai/plan-step` delegates to, as the
+ * steps are (see the header). It turns its card from Thinking to Drafting.
+ */
+async function hostedDraft(
+  run: HostedRun,
+  sessionKey: string,
+  target: string,
+  seq: number,
+  title: string,
+): Promise<void> {
+  await aiGenerationService.recordPlanStepForJob(
+    {
+      jobId: run.jobId,
+      planId: run.planId,
+      sessionKey,
+      targetRef: null,
+      itemDraft: { target, seq, title },
+    },
+    run.auth,
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FURTHER TESTS — not the receipt, no pacing holds
 // ─────────────────────────────────────────────────────────────────────────────
@@ -416,13 +454,14 @@ test('an MCP planner’s row names its harness and model, and its report moves t
     await openRow(page, row);
     await read;
     await showCanvas(page);
-    await expect(node(page, E)).toHaveAttribute('data-cue', 'drafting');
+    // The MCP door streams no partial text, so its author step reads THINKING.
+    await expect(node(page, E)).toHaveAttribute('data-cue', 'thinking');
 
     // A second report on the SAME session names another add — the cue moves.
     const moved = planPolled(page, planId, (b) => hasStep(b.inFlightSteps, 'session-1', ref(f!)));
     await mcpStep(agent, planId, 'session-1', 'author', ref(f!));
     await moved;
-    await expect(node(page, F)).toHaveAttribute('data-cue', 'drafting');
+    await expect(node(page, F)).toHaveAttribute('data-cue', 'thinking');
     await expect(node(page, E)).not.toHaveAttribute('data-cue');
     await expect(paneSteps(page)).toHaveText(authoring(F));
   } finally {
@@ -503,7 +542,7 @@ test('a plan quiet past the stalled threshold reads stalled on the row and the s
     await openRow(page, row);
     await opened;
     await showCanvas(page);
-    await expect(node(page, S1)).toHaveAttribute('data-cue', 'drafting');
+    await expect(node(page, S1)).toHaveAttribute('data-cue', 'thinking');
 
     // The server clock says nothing has happened for longer than the threshold.
     const at = await backdatePlanActivity(planId, PLAN_STALLED_AFTER_MS + 60_000);
@@ -518,7 +557,7 @@ test('a plan quiet past the stalled threshold reads stalled on the row and the s
     // drops its cue — the card last named HOLDS it, static (no `data-cue-motion`),
     // so a person can still see which card was being written. Was: no cued node.
     await expect(cuedNodes(page)).toHaveCount(1);
-    await expect(node(page, S1)).toHaveAttribute('data-cue', 'drafting');
+    await expect(node(page, S1)).toHaveAttribute('data-cue', 'thinking');
     await expect(node(page, S1)).not.toHaveAttribute('data-cue-motion');
 
     // …and the row says the same, on the tab's own read.
@@ -551,7 +590,7 @@ test('a plan quiet past the stalled threshold reads stalled on the row and the s
     await surfaceBack;
     await showCanvas(page);
     await expect(liveState(page)).toHaveText(planReview.liveWriting);
-    await expect(node(page, S2)).toHaveAttribute('data-cue', 'drafting');
+    await expect(node(page, S2)).toHaveAttribute('data-cue', 'thinking');
   } finally {
     await agent.close();
   }
@@ -577,7 +616,7 @@ test('a step whose target is withdrawn marks nothing, and nothing errors', async
     await openRow(page, planRow(page, title));
     await opened;
     await showCanvas(page);
-    await expect(node(page, J)).toHaveAttribute('data-cue', 'drafting');
+    await expect(node(page, J)).toHaveAttribute('data-cue', 'thinking');
 
     const gone = planPolled(page, planId, (b) => !b.items.some((i) => i.planItemId === j));
     await tool(agent, WITHDRAW_PLAN_PROPOSAL_TOOL_NAME, { planId, planItemId: j });
@@ -632,8 +671,9 @@ test('under reduced motion the cued boxes carry the static cue, and the cue play
     await both;
 
     for (const t of [L, M]) {
-      await expect(node(page, t)).toHaveAttribute('data-cue', 'drafting');
-      await expect(node(page, t)).toHaveClass(/(^|\s)canvas-node--drafting(\s|$)/);
+      // The MCP door streams no text, so the cue is THINKING — static by design.
+      await expect(node(page, t)).toHaveAttribute('data-cue', 'thinking');
+      await expect(node(page, t)).toHaveClass(/(^|\s)canvas-node--thinking(\s|$)/);
       // The ring is drawn, and drawn STILL.
       const running = await node(page, t)
         .locator('.canvas-cue-ring')

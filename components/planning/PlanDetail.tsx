@@ -511,6 +511,10 @@ export function PlanDetail({
             // this page passes no `live` and still shows the plan being written.
             progress={review.progress ?? null}
             progressFailing={liveFailing}
+            // The cards' cue state (MOTIR-11254, §31.5): Thinking until a draft
+            // exists, Drafting once it does. The same polled read already carries
+            // them; this page still shows no partial text (`live` is off).
+            inFlightDrafts={review.inFlightDrafts ?? null}
             band={
               establishSet && setHasEstablishWork(establishSet.view.set.rows) ? (
                 <div

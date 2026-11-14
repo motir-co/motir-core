@@ -364,7 +364,14 @@
       "draftingName": "In fase di stesura ora",
       "laying": "Disposizione degli elementi figli",
       "layingName": "I suoi elementi figli sono in fase di disposizione",
-      "layingHere": "Disposizione di questo livello"
+      "layingHere": "Disposizione di questo livello",
+      "thinking": "Riflessione in corso",
+      "thinkingName": "In fase di riflessione — ancora nulla di scritto",
+      "checking": "Verifica in corso",
+      "checkingName": "In fase di verifica finale",
+      "checkingAll": "Verifica degli elementi figli",
+      "checkingAllName": "I suoi elementi figli sono in verifica insieme nella verifica finale",
+      "checkingHere": "Verifica di questo livello"
     },
     "listWritingTitle": "Ancora nessuna proposta",
     "listWritingBody": "Gli elementi compaiono qui man mano che il piano viene scritto.",
@@ -429,7 +436,9 @@
       "beingWritten": "In fase di stesura",
       "written": "Scritto",
       "follow": "Segui la stesura",
-      "followHint": "Mantiene in vista il testo in fase di stesura. Scorri per interrompere."
+      "followHint": "Mantiene in vista il testo in fase di stesura. Scorri per interrompere.",
+      "thinking": "Riflessione in corso",
+      "checking": "Verifica in corso"
     }
   },
   "projectAccess": {

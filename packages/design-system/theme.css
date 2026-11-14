@@ -4708,6 +4708,13 @@
      (`--el-drafting-surface`). Base keeps the in-progress hue; Motir warms it. */
   --el-drafting: var(--el-status-in-progress);
   --el-drafting-surface: var(--el-tint-sky);
+  /* THE THINKING AND CHECKING CUES (MOTIR-11254; design Part XXXI §31.3) — the
+     card an author session is on before any text exists (`--el-thinking`: its
+     dashed ring, chip edge and brain) and the card the final check is reviewing
+     (`--el-checking`: its double ring, chip edge and search-check). Role tokens
+     over the status hues measured clean in all 28 palette × theme contexts. */
+  --el-thinking: var(--el-status-in-review);
+  --el-checking: var(--el-status-implemented);
   /* THE CHANGED HIGHLIGHT (MOTIR-11185) — a card the planner changed AFTER it was
      drawn: the ring and the one glow pulse on the planning canvas. Mapped to the
      palette's RE-PLANNING hue, which every palette keeps distinct from the
@@ -5705,6 +5712,9 @@
      drafting cue); a scoped amethyst tile keeps the base's in-progress hue. */
   --el-drafting: var(--el-status-in-progress);
   --el-drafting-surface: var(--el-tint-sky);
+  /* MOTIR-11254 — carried for the same reason: `motir` overrides both. */
+  --el-thinking: var(--el-status-in-review);
+  --el-checking: var(--el-status-implemented);
   --el-sidebar-item-bg-hover: #eeede9;
   /* MOTIR-5139 — carried here because `evergreen` OVERRIDES it. A token this
      block omits leaks from the ANCESTOR into a scoped `motir` tile, so an
@@ -6148,6 +6158,10 @@
   /* the drafting cue takes the warm accent and the peach wash (MOTIR-8414) */
   --el-drafting: var(--color-accent);
   --el-drafting-surface: var(--color-tint-peach);
+  /* …so the three planner cues read blue → orange → green (MOTIR-11254, §31.3):
+     Motir's implemented step is an ink grey, not a colour */
+  --el-thinking: var(--el-status-in-progress);
+  --el-checking: var(--el-success);
   /* the editor's focus border / rings stay the blue focus hue — the accent they
      borrowed is decorative-only here now */
   --el-editor-focus: var(--color-primary);
@@ -6251,6 +6265,8 @@
   --el-progress-fill: var(--color-accent);
   --el-drafting: var(--color-accent);
   --el-drafting-surface: var(--color-tint-peach);
+  --el-thinking: var(--el-status-in-progress);
+  --el-checking: var(--el-success);
   --el-editor-focus: var(--color-primary);
 }
 

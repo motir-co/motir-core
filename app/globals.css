@@ -428,7 +428,9 @@ body {
    step does. It DOES NOT LOOP (§26.6): only its arrival fades in, below. The ring
    is a BORDER at 7px, never `outline`, so the deepen's 2px outline sits inside it
    and a drafted card that deepens shows both. */
+.canvas-node--thinking > .canvas-cue-ring,
 .canvas-node--drafting > .canvas-cue-ring,
+.canvas-node--checking > .canvas-cue-ring,
 .canvas-node--laying > .canvas-cue-ring {
   pointer-events: none;
   position: absolute;
@@ -436,7 +438,9 @@ body {
   border: 2px dotted var(--el-status-in-progress);
   border-radius: calc(var(--radius-card) + 7px);
 }
+.canvas-node--thinking > .canvas-cue-chip,
 .canvas-node--drafting > .canvas-cue-chip,
+.canvas-node--checking > .canvas-cue-chip,
 .canvas-node--laying > .canvas-cue-chip {
   pointer-events: none;
   position: absolute;
@@ -457,9 +461,11 @@ body {
 .canvas-cue-chip > svg {
   color: var(--el-status-in-progress);
 }
-/* Drafting: the chip on the TOP edge. Laying: on the BOTTOM — where its children
-   will hang (§26.7). */
-.canvas-node--drafting > .canvas-cue-chip {
+/* Thinking, Drafting and Checking: the chip on the TOP edge. Laying: on the
+   BOTTOM — where its children will hang (§26.7). */
+.canvas-node--thinking > .canvas-cue-chip,
+.canvas-node--drafting > .canvas-cue-chip,
+.canvas-node--checking > .canvas-cue-chip {
   top: -18px;
 }
 .canvas-node--laying > .canvas-cue-chip {
@@ -474,14 +480,43 @@ body {
   }
 }
 @media (prefers-reduced-motion: no-preference) {
+  .canvas-node--thinking > .canvas-cue-ring,
   .canvas-node--drafting > .canvas-cue-ring,
+  .canvas-node--checking > .canvas-cue-ring,
   .canvas-node--laying > .canvas-cue-ring {
     animation: canvas-cue-ring-enter var(--transition-slow) var(--canvas-ease-enter) both;
   }
+  .canvas-node--thinking > .canvas-cue-chip,
   .canvas-node--drafting > .canvas-cue-chip,
+  .canvas-node--checking > .canvas-cue-chip,
   .canvas-node--laying > .canvas-cue-chip {
     animation: canvas-fade-in var(--transition-slow) var(--canvas-ease-enter) both;
   }
+}
+/* THINKING and CHECKING (Task MOTIR-11254; design Part XXXI §31.1–31.3,
+   `plan-review--thinking-cue.mock.html`). The same ring box and top-edge chip as
+   Drafting, each in its own role token, stroke and glyph so no state rests on
+   colour alone (§31.2): THINKING is a 2px DASHED `--el-thinking` ring with a
+   `brain` chip; CHECKING a 3px DOUBLE `--el-checking` ring — a frame around
+   finished work — with a `search-check` chip. Neither washes the card (nothing is
+   being written to it) and neither moves: only the C1 arrival above plays. */
+.canvas-node--thinking > .canvas-cue-ring {
+  border: 2px dashed var(--el-thinking);
+}
+.canvas-node--thinking > .canvas-cue-chip {
+  border-color: var(--el-thinking);
+}
+.canvas-node--thinking > .canvas-cue-chip > svg {
+  color: var(--el-thinking);
+}
+.canvas-node--checking > .canvas-cue-ring {
+  border: 3px double var(--el-checking);
+}
+.canvas-node--checking > .canvas-cue-chip {
+  border-color: var(--el-checking);
+}
+.canvas-node--checking > .canvas-cue-chip > svg {
+  color: var(--el-checking);
 }
 /* AT WORK (Story MOTIR-8413 · MOTIR-8416; design `design/ai-chat/design-notes.md`
    § _Motir at work_, `planning-workspace--at-work.mock.html`). The DRAFTING cue takes
@@ -572,6 +607,32 @@ body {
   }
   .canvas-node--drafting[data-cue-motion='leaving'] [data-testid='plan-item-node'] {
     animation: canvas-cue-wash-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+  /* DRAFTING → THINKING (MOTIR-11254, §31.4 T4): the draft was cleared mid-step.
+     The wash lifts and the box settles on the shipped leaving keyframes; the ring
+     and chip swap in ONE frame — the cue does not leave and come back, so the
+     Thinking arrival does not replay. */
+  .canvas-node--thinking[data-cue-motion='settling'] {
+    animation: canvas-cue-settle var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+  .canvas-node--thinking[data-cue-motion='settling'] > .canvas-cue-ring,
+  .canvas-node--thinking[data-cue-motion='settling'] > .canvas-cue-chip {
+    animation: none;
+  }
+  .canvas-node--thinking[data-cue-motion='settling'] [data-testid='plan-item-node'] {
+    animation: canvas-cue-wash-lift var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+}
+@keyframes canvas-cue-wash-lift {
+  from {
+    box-shadow:
+      inset 0 0 0 100vmax var(--el-drafting-surface),
+      var(--shadow-card);
+  }
+  to {
+    box-shadow:
+      inset 0 0 0 100vmax color-mix(in srgb, var(--el-drafting-surface) 0%, transparent),
+      var(--shadow-card);
   }
 }
 /* THE CHANGED HIGHLIGHT (MOTIR-11185) — a card the planner CHANGED after it was

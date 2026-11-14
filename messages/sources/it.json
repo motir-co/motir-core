@@ -13613,5 +13613,14 @@
   "workbench.planningSession.stop.amend": "Reconciling the items under {title}",
   "workbench.planningSession.stop.amendTop": "Reconciling the items at the top level",
   "workbench.planningSession.stop.check": "Running the final check",
-  "workbench.planningSession.stop.repair": "Fixing what the final check found"
+  "workbench.planningSession.stop.repair": "Fixing what the final check found",
+  "planReview.cue.thinking": "Thinking",
+  "planReview.cue.thinkingName": "Being thought through — nothing written yet",
+  "planReview.cue.checking": "Checking",
+  "planReview.cue.checkingName": "Being reviewed in the final check",
+  "planReview.cue.checkingAll": "Checking its items",
+  "planReview.cue.checkingAllName": "Its items are being reviewed together in the final check",
+  "planReview.cue.checkingHere": "Checking this level",
+  "planReview.peekLive.thinking": "Thinking",
+  "planReview.peekLive.checking": "Checking"
 }

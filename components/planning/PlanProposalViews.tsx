@@ -12,6 +12,13 @@ import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanItemDraftDto } from '@/lib/dto/plans';
 import { authoringTargets, type LiveDrafts } from '@/lib/planning/liveDraft';
+import {
+  EMPTY_HOLD,
+  cuesByProposal,
+  deriveCardCues,
+  holdCardCues,
+  type CardCueHold,
+} from '@/lib/planning/cueState';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { addedProposalIds, newlyAddedCount } from '@/lib/planning/livePane';
 import { PlanProgressLineView } from '@/components/planning/PlanProgressLine';
@@ -171,8 +178,11 @@ export interface PlanProposalViewsProps {
   progressReading?: PlanProgressClockReading | null;
   /**
    * The cards being WRITTEN (Story MOTIR-11190 · MOTIR-11201; design Part XXIX) —
-   * the live read's `inFlightDrafts`. Read only while `live`: the open proposal's
-   * quick view shows its partial fields. The plan page passes nothing.
+   * the live read's `inFlightDrafts`. While `live`, the open proposal's quick view
+   * shows its partial fields. On EVERY host — the plan page too (MOTIR-11254,
+   * §31.5) — they decide each authored card's cue: Thinking until a draft exists
+   * for it, Drafting once one does. The array's identity is also the hold's READ
+   * counter (§31.4): a host hands a NEW array exactly when a read arrives.
    */
   inFlightDrafts?: readonly PlanItemDraftDto[] | null;
 }
@@ -249,6 +259,24 @@ export function PlanProposalViews({
         : null,
     [live, inFlightDrafts, authoringIds],
   );
+  // WHAT THE PLANNER IS DOING TO EACH CARD (MOTIR-11254, Part XXXI §31.1 / §31.4):
+  // Thinking · Drafting · Checking, from the same presence steps and the read's
+  // drafts, folded through the two-read hold so a card does not blink between
+  // reads. ONE derivation feeds the canvas, the list and the quick view. Folded in
+  // render — the shipped pattern for a state that follows a read.
+  const [cueHold, setCueHold] = useState<CardCueHold>(EMPTY_HOLD);
+  const nextCueHold = holdCardCues(
+    cueHold,
+    deriveCardCues(items, presenceSteps, inFlightDrafts),
+    inFlightDrafts,
+  );
+  if (nextCueHold !== cueHold) setCueHold(nextCueHold);
+  const cardCues = nextCueHold.cues;
+  const proposalCues = useMemo(() => cuesByProposal(items, cardCues), [items, cardCues]);
+  const liveDraftsWithCues = useMemo<LiveDrafts | null>(
+    () => (liveDrafts ? { ...liveDrafts, cues: proposalCues.peek } : null),
+    [liveDrafts, proposalCues],
+  );
   const announcement = useBatchAnnouncement(items, live);
   const canvas = (
     <PlanReviewCanvas
@@ -268,13 +296,16 @@ export function PlanProposalViews({
       followLevelId={followLevelId}
       onLevelChange={onCanvasLevelChange}
       live={live}
-      liveDrafts={liveDrafts}
+      liveDrafts={liveDraftsWithCues}
       offerPlanElsewhere={offerPlanElsewhere}
       // THE CUES (MOTIR-7830) — the line's own clock's live steps, so the words
       // and the canvas stop naming a step at the same instant. A dropped read
-      // holds them because the hook does. The List gets no cue (§26.18).
+      // holds them because the hook does. The List carries its own row chip
+      // since §31.6 amended §26.18.
       liveSteps={presenceSteps}
       movingSteps={atWork.steps}
+      // Thinking · Drafting · Checking per card (MOTIR-11254, §31.1).
+      cardCues={cardCues}
     />
   );
   // THE DISCARDED BAND (§23.12) — the band idiom (`--el-surface-soft` +
@@ -370,7 +401,9 @@ export function PlanProposalViews({
             items={items}
             outcome={outcome}
             live={live}
-            liveDrafts={liveDrafts}
+            liveDrafts={liveDraftsWithCues}
+            // The row cue chip (MOTIR-11254, §31.6) — the same derivation and hold.
+            rowCues={proposalCues.rows}
             discarded={discarded}
           />
         ) : null}

@@ -257,6 +257,9 @@ export function ProposalPeek({
     live && item
       ? {
           draft: liveDraftFor(liveDrafts, item.planItemId, { live, proposal: true }),
+          // What the planner is doing to it (MOTIR-11254, §31.7): Thinking ·
+          // Drafting · Checking, the canvas's own derivation.
+          cue: liveDrafts?.cues?.get(item.planItemId) ?? null,
         }
       : null;
 
