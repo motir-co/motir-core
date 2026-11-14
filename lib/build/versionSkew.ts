@@ -9,7 +9,7 @@
  * close that, and each covers a different half:
  *
  * - **`assetPrefix`** — the release's `/_next/static` is served from a durable
- *   origin (`https://static.motir.co`, motir-infra's MOTIR-11240) that keeps
+ *   origin (motir-infra's MOTIR-11240 static-asset origin) that keeps
  *   every release's files after its task has stopped. The deploy uploads the
  *   build's files there BEFORE it rolls (`scripts/aws-deploy/staticAssets.ts`).
  * - **`deploymentId`** — the commit SHA. Next sends it with every in-app
