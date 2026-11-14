@@ -183,23 +183,41 @@ jobs:
             SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
             NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
 
-      # The deploy is handed the digest from the push result (or the existing
-      # image), never a tag, and nothing deploys unless it is well formed.
-      - name: Take the pushed digest
+      # ⚠️ THE DEPLOY IS HANDED THE DIGEST ECR TAGS WITH THIS COMMIT, never the
+      # push result's `digest` and never a tag (MOTIR-11274). With `load: true` the
+      # action's `digest` output is the untagged linux/amd64 CHILD of the image
+      # index it pushes under `$GITHUB_SHA`; deployed, ECS runs an image with no
+      # commit tag and the Services page cannot name the commit (MOTIR-11112).
+      # So the digest is read back from ECR by the tag, for a fresh push and a
+      # re-run alike, and nothing deploys unless it is well formed and ECR lists
+      # `$GITHUB_SHA` among its tags. `deploy:aws --commit` checks the same again.
+      - name: Resolve the digest ECR tags with this commit
         id: digest
         env:
+          REPOSITORY: ${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core
           PUSHED: ${{ steps.build.outputs.digest }}
-          EXISTING: ${{ steps.existing.outputs.digest }}
         run: |
           set -euo pipefail
-          digest="${PUSHED:-$EXISTING}"
+          digest="$(aws ecr describe-images --repository-name "$REPOSITORY" \
+            --image-ids "imageTag=$GITHUB_SHA" \
+            --query 'imageDetails[0].imageDigest' --output text)"
           if ! [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-            echo "::error::not an image digest: '$digest'"
+            echo "::error::no image in $REPOSITORY is tagged $GITHUB_SHA (read '$digest')"
+            exit 1
+          fi
+          tags="$(aws ecr describe-images --repository-name "$REPOSITORY" \
+            --image-ids "imageDigest=$digest" \
+            --query 'imageDetails[0].imageTags' --output text)"
+          if ! tr '\t' '\n' <<<"$tags" | grep -qxF "$GITHUB_SHA"; then
+            echo "::error::$digest carries no tag $GITHUB_SHA (its tags: $tags); refusing to deploy it"
             exit 1
           fi
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "### AWS deploy" >> "$GITHUB_STEP_SUMMARY"
-          echo "Digest: \`$digest\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Digest: \`$digest\` (tagged \`$GITHUB_SHA\`)" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$PUSHED" ] && [ "$PUSHED" != "$digest" ]; then
+            echo "The push reported \`$PUSHED\`, a child of the tagged index; it is not deployed." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Assume the deploy role
         uses: aws-actions/configure-aws-credentials@v4
@@ -289,7 +307,8 @@ jobs:
           NO_ROLL: ${{ vars.AWS_DEPLOY_NO_ROLL == 'true' && '--no-roll' || '' }}
         run: |
           set -euo pipefail
-          pnpm --silent deploy:aws --digest "$DIGEST" $NO_ROLL --pins infra/image-pins | tee /tmp/aws-deploy.json
+          pnpm --silent deploy:aws --digest "$DIGEST" --commit "$GITHUB_SHA" $NO_ROLL --pins infra/image-pins \
+            | tee /tmp/aws-deploy.json
           {
             echo "Result:"
             echo '```json'
