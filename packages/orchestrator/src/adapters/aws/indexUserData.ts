@@ -29,6 +29,15 @@ import { parseImageReference } from '../../imagePull';
 // other registry is pulled as before, with no login. A failed login is a failed
 // pull: it writes the same marker.
 //
+// THE RETRY (MOTIR-11276). The login and the pull each retry with exponential
+// backoff for {@link AWS_INDEX_PULL_RETRY_WINDOW_SECONDS} before the script calls
+// the pull failed. From 2026-11-09 a few index VMs a day timed out reaching ECR in
+// their first seconds (`dial tcp …:443: i/o timeout`, `context deadline exceeded`)
+// while every other run that day pulled the same digest, and one try lost the
+// whole run to it. A refusal that will not change (a missing image, a denied
+// role) is retried too and fails at the window's end: that costs a VM two
+// minutes, and telling the two apart from docker's text would be a guess.
+//
 // THE PULL-FAILURE CHANNEL is the serial console. The VM has no inbound rule, and
 // its role can do nothing but read the indexer image, so it reports nothing
 // through an AWS API. It can write to its own console, and `GetConsoleOutput`
@@ -94,6 +103,17 @@ export const AWS_INDEX_PULL_ERROR_LINE_CHARS = 300;
  *  sees it before the power-off (MOTIR-10823). Supervision polls at most every
  *  15 s; four polls fit inside it. */
 export const AWS_INDEX_MARKER_HOLD_SECONDS = 60;
+
+/** How long the boot keeps retrying a failed ECR login, and then a failed pull,
+ *  before it calls the pull failed (MOTIR-11276): a transient network timeout to
+ *  the registry at boot is retried instead of losing the whole index run. No new
+ *  attempt starts after the window; the one in flight runs to its own end. */
+export const AWS_INDEX_PULL_RETRY_WINDOW_SECONDS = 120;
+
+/** The first wait between attempts, doubled after each failure up to
+ *  {@link AWS_INDEX_PULL_RETRY_MAX_DELAY_SECONDS}: 5, 10, 20, 30, 30 … */
+export const AWS_INDEX_PULL_RETRY_FIRST_DELAY_SECONDS = 5;
+export const AWS_INDEX_PULL_RETRY_MAX_DELAY_SECONDS = 30;
 
 /** The comment line naming the image the script pulls. The fake EC2 reads it to
  *  decide whether the pull succeeds; nothing in AWS does. */
@@ -180,6 +200,21 @@ const FUNCTION_LINES = [
   '  shutdown -h now',
   '  exit 0',
   '}',
+  // retry: run the command until it succeeds, waiting with exponential backoff,
+  // and give up once the next wait would pass the window. `out` is left holding
+  // the LAST attempt's output, which is what `pull_failed` copies to the console.
+  // Every attempt's output goes to the boot log, never the console.
+  'retry() {',
+  `  local deadline=$((SECONDS + ${AWS_INDEX_PULL_RETRY_WINDOW_SECONDS})) delay=${AWS_INDEX_PULL_RETRY_FIRST_DELAY_SECONDS}`,
+  '  while :; do',
+  '    if out=$("$@" 2>&1); then return 0; fi',
+  '    printf \'%s\\n\' "$out"',
+  '    if (( SECONDS + delay > deadline )); then return 1; fi',
+  '    echo "$1 failed; retrying in ${delay}s"',
+  '    sleep "$delay"',
+  `    delay=$(( delay * 2 > ${AWS_INDEX_PULL_RETRY_MAX_DELAY_SECONDS} ? ${AWS_INDEX_PULL_RETRY_MAX_DELAY_SECONDS} : delay * 2 ))`,
+  '  done',
+  '}',
 ];
 
 /**
@@ -194,7 +229,8 @@ function ecrLoginLines(image: string): string[] {
     'if ! command -v aws >/dev/null 2>&1; then dnf install -y -q awscli-2; fi',
     // The whole pipe's stderr and docker's stdout are kept; the password is the
     // CLI's stdout, which only the pipe carries.
-    `if ! out=$({ aws ecr get-login-password --region '${ecr.region}' | docker login --username AWS --password-stdin '${ecr.registry}'; } 2>&1); then`,
+    `ecr_login() { aws ecr get-login-password --region '${ecr.region}' | docker login --username AWS --password-stdin '${ecr.registry}'; }`,
+    'if ! retry ecr_login; then',
     '  pull_failed "$out"',
     'fi',
   ];
@@ -222,7 +258,8 @@ export function buildIndexUserData(spec: {
     ENV_DELIMITER,
     `IMAGE='${image}'`,
     ...ecrLoginLines(image),
-    'if ! out=$(docker pull "$IMAGE" 2>&1); then',
+    'pull_image() { docker pull "$IMAGE"; }',
+    'if ! retry pull_image; then',
     '  pull_failed "$out"',
     'fi',
     'docker run --rm --env-file /run/motir-index.env "$IMAGE"',
@@ -236,16 +273,32 @@ export function buildIndexUserData(spec: {
   ].join('\n');
 }
 
-/** The container's exit code from a console read: the LAST exit marker on a line
- *  of its own, or null when there is none (a VM that never got that far). */
+/**
+ * The text after `marker` on one console line, or null when the line carries no
+ * marker. The marker may sit anywhere on the line, at its start or after
+ * whitespace: the serial console glues the first line the script writes to the
+ * getty login prompt it was printing (`ip-10-65-7-59 login: MOTIR_INDEX_BOOT: …`,
+ * MOTIR-11276), so a reader that wants the marker first on its line misses it.
+ * The marker must still begin a word, so the script's own source, should it ever
+ * reach the console, is not read as one (`console "MOTIR_INDEX_BOOT: …`).
+ */
+function afterMarker(line: string, marker: string): string | null {
+  const trimmed = line.trim();
+  for (let at = trimmed.indexOf(marker); at !== -1; at = trimmed.indexOf(marker, at + 1)) {
+    if (at === 0 || /\s/.test(trimmed[at - 1]!)) return trimmed.slice(at + marker.length);
+  }
+  return null;
+}
+
+/** The container's exit code from a console read: the LAST exit marker followed
+ *  by nothing but the code, or null when there is none (a VM that never got that
+ *  far). */
 export function consoleExitCode(output: string | null): number | null {
   let code: number | null = null;
   for (const line of (output ?? '').split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith(AWS_INDEX_EXIT_MARKER)) continue;
-    const value = trimmed.slice(AWS_INDEX_EXIT_MARKER.length);
+    const value = afterMarker(line, AWS_INDEX_EXIT_MARKER);
     // A process exit status is 0–255; anything else is not this script's line.
-    if (/^\d{1,3}$/.test(value) && Number(value) <= 255) code = Number(value);
+    if (value !== null && /^\d{1,3}$/.test(value) && Number(value) <= 255) code = Number(value);
   }
   return code;
 }
@@ -255,12 +308,13 @@ export function consoleExitCode(output: string | null): number | null {
 export function consolePullError(output: string | null): string[] {
   return (output ?? '')
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith(AWS_INDEX_PULL_ERROR_PREFIX))
-    .map((line) => line.slice(AWS_INDEX_PULL_ERROR_PREFIX.length));
+    .map((line) => afterMarker(line, AWS_INDEX_PULL_ERROR_PREFIX))
+    .filter((text): text is string => text !== null);
 }
 
-/** Whether a console read holds the pull-failure marker on a line of its own. */
+/** Whether a console read holds the pull-failure marker, ending its line. */
 export function consoleShowsPullFailure(output: string | null): boolean {
-  return (output ?? '').split(/\r?\n/).some((line) => line.trim() === AWS_INDEX_PULL_FAILED_MARKER);
+  return (output ?? '')
+    .split(/\r?\n/)
+    .some((line) => afterMarker(line, AWS_INDEX_PULL_FAILED_MARKER) === '');
 }
