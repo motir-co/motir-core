@@ -344,7 +344,9 @@ describe('the port boundary', () => {
         // `lib/awsServices/`, held to that folder by the same test. The
         // Services page's service test (MOTIR-11112) spies on the ECR client's
         // `send` to fail the image read those `lib/awsServices/` reads make, so
-        // it names the client too (MOTIR-11252).
+        // it names the client too (MOTIR-11252). The index-fleet boot
+        // preflight's test (MOTIR-11277) spies on the same client to fake the
+        // ECR login it mints before probing a private ECR image.
         allowed: [
           SERVERLESS,
           `${ORCHESTRATOR}/adapters/aws/`,
@@ -353,6 +355,7 @@ describe('the port boundary', () => {
           'lib/awsServices/',
           'tests/awsServices/',
           'tests/platform/platformServicesService.test.ts',
+          'tests/ciFleet/fleetImagePull.test.ts',
         ],
         modules: serverlessModules(),
         identifiers: new Set(),
