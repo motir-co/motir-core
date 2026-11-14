@@ -3674,9 +3674,9 @@
         "dataPracticeCommitment": "Weder Motir noch sein Gateway trainiert mit den Inhalten dieses Projekts.",
         "dataPracticeReport": "Was ein Anbieter mit einer Anfrage macht, sobald sie bei ihm eingeht, richtet sich nach dessen eigenen veröffentlichten Angaben.",
         "dataPracticeLink": "Was jeder Anbieter angibt",
-        "finalCheckLabel": "Abschließende Prüfung ausführen",
+        "finalCheckLabel": "Abschlussprüfung ausführen",
         "finalCheckHint": "Bevor ein Plan vorgeschlagen wird, liest Motir AI seine Arbeitselemente noch einmal in Baureihenfolge, prüft, dass jedes auf dem aufbauen kann, was die Elemente davor liefern, und behebt, was es findet. Bei einem großen Plan kann das viele Minuten dauern.",
-        "finalCheckOff": "Pläne für dieses Projekt werden ohne abschließende Prüfung vorgeschlagen. Die Zusammenfassung jedes Plans sagt, dass er nicht geprüft wurde."
+        "finalCheckOff": "Pläne für dieses Projekt werden ohne Abschlussprüfung vorgeschlagen. Die Zusammenfassung jedes Plans sagt, dass er nicht geprüft wurde."
       },
       "lessonCapture": {
         "title": "Planungsfehler",
@@ -8845,7 +8845,9 @@
         "kindSettle": "klären",
         "settleLine": "Klärt, was sich ändern soll",
         "groupLive": "{step} — läuft",
-        "groupFinished": "{step} — abgeschlossen"
+        "groupFinished": "{step} — abgeschlossen",
+        "skipCheck": "Abschlussprüfung überspringen",
+        "skippingCheck": "Abschlussprüfung wird übersprungen…"
       }
     },
     "codeUnreadable": {
@@ -9361,6 +9363,16 @@
       "none": "Nichts vorhanden",
       "correctionHint": "Um hier etwas zu ändern, schreibe die Korrektur in die Unterhaltung.",
       "notice": "Für dieses Angebot wurde keine Anforderung verfasst. Die Planung verfasst sie, sobald du bestätigst."
+    },
+    "skipFinalCheck": {
+      "title": "Abschlussprüfung überspringen?",
+      "body": "Die Abschlussprüfung liest jedes Arbeitselement dieses Plans noch einmal in Baureihenfolge, prüft, dass jedes auf dem aufbauen kann, was die Elemente davor liefern, und behebt, was sie findet.",
+      "consequence": "Wenn Sie sie überspringen, wird der Plan jetzt ohne diese Prüfung vorgeschlagen. Was sie bisher gefunden hat, steht in der Zusammenfassung des Plans, aber nichts wird behoben.",
+      "confirm": "Abschlussprüfung überspringen",
+      "keep": "Weiter prüfen",
+      "error": "Die Abschlussprüfung konnte nicht übersprungen werden. Sie läuft noch: Versuchen Sie es erneut oder prüfen Sie weiter.",
+      "retry": "Erneut versuchen",
+      "finished": "Die Abschlussprüfung war bereits beendet, es gab also nichts zu überspringen."
     }
   },
   "codeHealth": {

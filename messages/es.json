@@ -3674,9 +3674,9 @@
         "dataPracticeCommitment": "Ni Motir ni su pasarela entrenan con el contenido de este proyecto.",
         "dataPracticeReport": "Lo que hace un proveedor con una solicitud una vez que le llega es la postura que ese proveedor publica.",
         "dataPracticeLink": "Lo que declara cada proveedor",
-        "finalCheckLabel": "Ejecutar la comprobación final",
+        "finalCheckLabel": "Hacer la revisión final",
         "finalCheckHint": "Antes de proponer un plan, Motir AI vuelve a leer sus elementos de trabajo en orden de construcción, comprueba que cada uno se puede construir sobre lo que entregan los elementos anteriores y corrige lo que encuentra. En un plan grande puede tardar muchos minutos.",
-        "finalCheckOff": "Los planes de este proyecto se proponen sin la comprobación final. El resumen de cada plan indica que no se comprobó."
+        "finalCheckOff": "Los planes de este proyecto se proponen sin la revisión final. El resumen de cada plan indica que no se revisó."
       },
       "lessonCapture": {
         "title": "Errores de planificación",
@@ -8845,7 +8845,9 @@
         "kindSettle": "definir",
         "settleLine": "Definiendo qué cambiar",
         "groupLive": "{step} — en curso",
-        "groupFinished": "{step} — terminado"
+        "groupFinished": "{step} — terminado",
+        "skipCheck": "Omitir la revisión final",
+        "skippingCheck": "Omitiendo la revisión final…"
       }
     },
     "codeUnreadable": {
@@ -9361,6 +9363,16 @@
       "none": "Nada aquí",
       "correctionHint": "Para cambiar algo aquí, escribe la corrección en la conversación.",
       "notice": "No se redactó ningún requisito para esta oferta. La planificación lo redactará cuando confirmes."
+    },
+    "skipFinalCheck": {
+      "title": "¿Omitir la revisión final?",
+      "body": "La revisión final vuelve a leer cada elemento de trabajo de este plan en orden de construcción, comprueba que cada uno se puede construir sobre lo que entregan los elementos anteriores y corrige lo que encuentra.",
+      "consequence": "Si la omite, el plan se propone ahora sin esa revisión. Lo que ha encontrado hasta ahora aparece en el resumen del plan, pero no se corrige nada.",
+      "confirm": "Omitir la revisión final",
+      "keep": "Seguir revisando",
+      "error": "No se pudo omitir la revisión final. Sigue en curso: inténtelo de nuevo o siga revisando.",
+      "retry": "Intentar de nuevo",
+      "finished": "La revisión final ya había terminado, así que no había nada que omitir."
     }
   },
   "codeHealth": {

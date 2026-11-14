@@ -355,6 +355,106 @@ describe('ONE PIPE — the turns and the stop arrive in ONE answer', () => {
   });
 });
 
+/** The plan `JOB` writes into, with its live steps (MOTIR-11266). */
+async function seedPlanRunning(
+  kinds: ReadonlyArray<'lay' | 'author' | 'check' | 'repair'>,
+  status: 'generating' | 'planned' = 'generating',
+): Promise<string> {
+  const plan = await adminDb.plan.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      sessionId,
+      status,
+      sourceJobId: JOB,
+      createdById: fx.ownerId,
+    },
+  });
+  for (const [i, kind] of kinds.entries()) {
+    await adminDb.planStep.create({
+      data: { planId: plan.id, sessionKey: `s${i}`, kind, startedAt: new Date() },
+    });
+  }
+  return plan.id;
+}
+
+describe('SKIP THE FINAL CHECK — its own kind on the same pipe (MOTIR-11266)', () => {
+  it('writes ONE `skip_final_check` entry while the check runs, and every read says it', async () => {
+    await seedPlanRunning(['check', 'check']);
+    const answer = await planChangeMailboxService.raiseSkipFinalCheck(JOB, 'skip-1', pctx);
+    expect(answer.outcome).toBe('skipped');
+    expect(answer.mailbox.skipFinalCheck).toBe(true);
+    expect(answer.mailbox.stopped).toBe(false);
+
+    const row = await adminDb.planChangeMailboxEntry.findFirstOrThrow({ where: { sessionId } });
+    expect(row.kind).toBe('skip_final_check');
+    expect(row.body).toBeNull();
+    expect(row.disposition).toBeNull();
+    // Derived from existence, as the stop is: consumed, it is still read.
+    const first = await planChangeMailboxService.readForBoundary(JOB, pctx);
+    const second = await planChangeMailboxService.readForBoundary(JOB, pctx);
+    expect([first.skipFinalCheck, second.skipFinalCheck]).toEqual([true, true]);
+    expect(first.turns).toEqual([]);
+  });
+
+  it('shares the job’s ONE sequence with the turns typed before it', async () => {
+    await seedPlanRunning(['check']);
+    await planChangeMailboxService.attachTurn(
+      { jobId: JOB, body: 'typed before the skip', idempotencyKey: 't' },
+      pctx,
+    );
+    await planChangeMailboxService.raiseSkipFinalCheck(JOB, 'skip-1', pctx);
+    const rows = await adminDb.planChangeMailboxEntry.findMany({
+      where: { sessionId, jobId: JOB },
+      orderBy: { seq: 'asc' },
+    });
+    expect(rows.map((r) => [r.kind, r.seq])).toEqual([
+      ['turn', 0],
+      ['skip_final_check', 1],
+    ]);
+  });
+
+  it('a repeated key answers `skipped` again and writes nothing new, even once the check ended', async () => {
+    const planId = await seedPlanRunning(['check']);
+    await planChangeMailboxService.raiseSkipFinalCheck(JOB, 'skip-1', pctx);
+    await adminDb.planStep.deleteMany({ where: { planId } });
+    const again = await planChangeMailboxService.raiseSkipFinalCheck(JOB, 'skip-1', pctx);
+    expect(again.outcome).toBe('skipped');
+    expect(await adminDb.planChangeMailboxEntry.count({ where: { sessionId } })).toBe(1);
+  });
+
+  it.each([
+    ['before the check starts', ['lay', 'author'] as const, 'generating' as const],
+    ['once its fix has begun', ['check', 'repair'] as const, 'generating' as const],
+    ['once the plan is proposed', ['check'] as const, 'planned' as const],
+  ])('%s answers `not_running` and writes nothing', async (_n, kinds, status) => {
+    await seedPlanRunning(kinds, status);
+    const answer = await planChangeMailboxService.raiseSkipFinalCheck(JOB, 'skip-late', pctx);
+    expect(answer.outcome).toBe('not_running');
+    expect(answer.mailbox.skipFinalCheck).toBe(false);
+    expect(await adminDb.planChangeMailboxEntry.count({ where: { sessionId } })).toBe(0);
+  });
+
+  it('a job with no plan answers `not_running` and writes nothing', async () => {
+    const answer = await planChangeMailboxService.raiseSkipFinalCheck(JOB, 'skip-1', pctx);
+    expect(answer.outcome).toBe('not_running');
+    expect(await adminDb.planChangeMailboxEntry.count({ where: { sessionId } })).toBe(0);
+  });
+
+  it('REFUSES a job this thread is not on, as the stop does', async () => {
+    await expect(
+      planChangeMailboxService.raiseSkipFinalCheck('job-elsewhere', 'skip-1', pctx),
+    ).rejects.toBeInstanceOf(PlanChangeMailboxJobMismatchError);
+  });
+
+  it('a skip never reads as a stop', async () => {
+    await seedPlanRunning(['check']);
+    await planChangeMailboxService.raiseSkipFinalCheck(JOB, 'skip-1', pctx);
+    const delivery = await planChangeMailboxService.peekForJob(JOB, pctx);
+    expect(delivery).toEqual({ turns: [], stopped: false, skipFinalCheck: true });
+  });
+});
+
 describe('CONSUMPTION — a turn read at one boundary is not read at the next', () => {
   it('two boundaries against ONE delivery: the first gets it, the second is empty', async () => {
     await planChangeMailboxService.attachTurn(
@@ -423,10 +523,11 @@ describe('CONSUMPTION — a turn read at one boundary is not read at the next', 
 });
 
 describe('AN EMPTY MAILBOX answers cheaply and unambiguously', () => {
-  it('a running job with nothing waiting reads `{ turns: [], stopped: false }`', async () => {
+  it('a running job with nothing waiting reads `{ turns: [], stopped: false, skipFinalCheck: false }`', async () => {
     expect(await planChangeMailboxService.readForBoundary(JOB, pctx)).toEqual({
       turns: [],
       stopped: false,
+      skipFinalCheck: false,
     });
   });
 
@@ -435,6 +536,7 @@ describe('AN EMPTY MAILBOX answers cheaply and unambiguously', () => {
     expect(await planChangeMailboxService.readForBoundary(JOB, pctx)).toEqual({
       turns: [],
       stopped: false,
+      skipFinalCheck: false,
     });
   });
 
@@ -451,6 +553,7 @@ describe('AN EMPTY MAILBOX answers cheaply and unambiguously', () => {
     expect(await planChangeMailboxService.readForBoundary(JOB, pctx)).toEqual({
       turns: [],
       stopped: false,
+      skipFinalCheck: false,
     });
   });
 });

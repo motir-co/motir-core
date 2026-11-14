@@ -10582,7 +10582,8 @@ model PlanChangeMailboxEntry {
   /// array — which this column is what builds.
   seq             Int
   kind            PlanChangeMailboxKind
-  /// What the user typed, verbatim. Required on a `turn`, null on a `stop`.
+  /// What the user typed, verbatim. Required on a `turn`, null on a `stop` or a
+  /// `skip_final_check`.
   body            String?                       @db.Text
   /// What the run should DO with this turn — `fold` (carry on) or `restart`
   /// (withdraw what was appended and re-plan). Null on a `stop`. An absent or
@@ -10714,6 +10715,9 @@ model PlanChangeRunPause {
 enum PlanChangeMailboxKind {
   turn
   stop
+  /// End only the plan's FINAL CHECK, never the plan (MOTIR-11266). Read, like
+  /// `stop`, from the entry EXISTING, so every later read still says it.
+  skip_final_check
 
   @@map("plan_change_mailbox_kind")
 }

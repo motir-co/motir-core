@@ -8842,7 +8842,9 @@
         "kindSettle": "settle",
         "settleLine": "Settling what to change",
         "groupLive": "{step} — in progress",
-        "groupFinished": "{step} — finished"
+        "groupFinished": "{step} — finished",
+        "skipCheck": "Skip the final check",
+        "skippingCheck": "Skipping the final check…"
       }
     },
     "codeUnreadable": {
@@ -9358,6 +9360,16 @@
       "none": "Nothing here",
       "correctionHint": "To change anything here, type the correction in the conversation.",
       "notice": "No requirement was composed for this offer. Planning will compose it when you confirm."
+    },
+    "skipFinalCheck": {
+      "title": "Skip the final check?",
+      "body": "The final check reads every work item of this plan again in build order, checks that each can be built on what the items before it deliver, and fixes what it finds.",
+      "consequence": "If you skip it, the plan is proposed now without that check. What it has found so far is listed in the plan’s summary, but nothing is fixed.",
+      "confirm": "Skip the final check",
+      "keep": "Keep checking",
+      "error": "The final check could not be skipped. It is still running: try again, or keep checking.",
+      "retry": "Try again",
+      "finished": "The final check had already finished, so there was nothing to skip."
     }
   },
   "codeHealth": {

@@ -8845,7 +8845,9 @@
         "kindSettle": "bepalen",
         "settleLine": "Bepaalt wat er moet veranderen",
         "groupLive": "{step} — bezig",
-        "groupFinished": "{step} — klaar"
+        "groupFinished": "{step} — klaar",
+        "skipCheck": "Eindcontrole overslaan",
+        "skippingCheck": "Eindcontrole wordt overgeslagen…"
       }
     },
     "codeUnreadable": {
@@ -9361,6 +9363,16 @@
       "none": "Niets hier",
       "correctionHint": "Typ de correctie in het gesprek om hier iets te wijzigen.",
       "notice": "Voor dit voorstel is geen vereiste opgesteld. De planning stelt die op zodra je bevestigt."
+    },
+    "skipFinalCheck": {
+      "title": "Eindcontrole overslaan?",
+      "body": "De eindcontrole leest elk werkitem van dit plan opnieuw in bouwvolgorde, controleert dat elk item kan voortbouwen op wat de items ervoor opleveren, en herstelt wat ze vindt.",
+      "consequence": "Als u haar overslaat, wordt het plan nu voorgesteld zonder die controle. Wat ze tot nu toe heeft gevonden, staat in de samenvatting van het plan, maar er wordt niets hersteld.",
+      "confirm": "Eindcontrole overslaan",
+      "keep": "Blijven controleren",
+      "error": "De eindcontrole kon niet worden overgeslagen. Ze loopt nog: probeer het opnieuw, of blijf controleren.",
+      "retry": "Opnieuw proberen",
+      "finished": "De eindcontrole was al klaar, dus er was niets om over te slaan."
     }
   },
   "codeHealth": {

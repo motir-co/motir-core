@@ -31,16 +31,20 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 const attachTurn = vi.fn();
 const readForBoundary = vi.fn();
 const raiseStop = vi.fn();
+const raiseSkipFinalCheck = vi.fn();
 vi.mock('@/lib/services/planChangeMailboxService', () => ({
   planChangeMailboxService: {
     attachTurn: (...args: unknown[]) => attachTurn(...args),
     readForBoundary: (...args: unknown[]) => readForBoundary(...args),
     raiseStop: (...args: unknown[]) => raiseStop(...args),
+    raiseSkipFinalCheck: (...args: unknown[]) => raiseSkipFinalCheck(...args),
   },
 }));
 
 const { POST: ingest } = await import('@/app/api/ai/plan-change/session/mailbox/route');
 const { POST: stopDoor } = await import('@/app/api/ai/plan-change/session/mailbox/stop/route');
+const { POST: skipDoor } =
+  await import('@/app/api/ai/plan-change/session/mailbox/skip-final-check/route');
 const { POST: readDoor } = await import('@/app/api/internal/ai/plan-change-mailbox/route');
 const { mintJobToken } = await import('@/lib/ai/jobToken');
 const {
@@ -93,6 +97,10 @@ beforeEach(() => {
   attachTurn.mockResolvedValue(EMPTY);
   readForBoundary.mockResolvedValue(EMPTY);
   raiseStop.mockResolvedValue({ turns: [], stopped: true });
+  raiseSkipFinalCheck.mockResolvedValue({
+    outcome: 'skipped',
+    mailbox: { turns: [], stopped: false, skipFinalCheck: true },
+  });
 });
 
 function stopReq(body: unknown, opts: { session?: boolean } = {}): Request {
@@ -374,5 +382,78 @@ describe('the STOP door — POST /api/ai/plan-change/session/mailbox/stop (MOTIR
     raiseStop.mockRejectedValue(new PlanChangeMailboxJobMismatchError('someone-elses'));
     const res = await stopDoor(stopReq({ jobId: 'someone-elses', idempotencyKey: 'k' }));
     expect(res.status).toBe(404);
+  });
+});
+
+function skipReq(body: unknown, opts: { session?: boolean } = {}): Request {
+  const sent = opts.session === false ? body : withSession(body);
+  return new Request('http://localhost:3000/api/ai/plan-change/session/mailbox/skip-final-check', {
+    method: 'POST',
+    body: typeof sent === 'string' ? sent : JSON.stringify(sent),
+  });
+}
+
+describe('the SKIP door — POST /api/ai/plan-change/session/mailbox/skip-final-check (MOTIR-11266)', () => {
+  it('raises the skip through the SAME mailbox service and answers its outcome', async () => {
+    const res = await skipDoor(skipReq({ jobId: 'job-1', idempotencyKey: 'skip:job-1' }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('private, no-store');
+    await expect(res.json()).resolves.toEqual({
+      outcome: 'skipped',
+      mailbox: { turns: [], stopped: false, skipFinalCheck: true },
+    });
+    expect(raiseSkipFinalCheck).toHaveBeenCalledWith(
+      'job-1',
+      'skip:job-1',
+      activeCtx.current,
+      SESSION_ID,
+    );
+    expect(raiseStop).not.toHaveBeenCalled();
+  });
+
+  it('answers a check that already ended with 200 `not_running`, not a refusal', async () => {
+    raiseSkipFinalCheck.mockResolvedValue({ outcome: 'not_running', mailbox: EMPTY });
+    const res = await skipDoor(skipReq({ jobId: 'job-1', idempotencyKey: 'k' }));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ outcome: 'not_running' });
+  });
+
+  it('401s with no session and 404s with no active project', async () => {
+    session.current = null;
+    expect((await skipDoor(skipReq({ jobId: 'j', idempotencyKey: 'k' }))).status).toBe(401);
+    session.current = { user: { id: 'u1', email: 'yue@example.com', name: 'Yue' } };
+    activeCtx.current = null;
+    expect((await skipDoor(skipReq({ jobId: 'j', idempotencyKey: 'k' }))).status).toBe(404);
+    expect(raiseSkipFinalCheck).not.toHaveBeenCalled();
+  });
+
+  it('400s without a `jobId`, an `idempotencyKey` or a session, and on a bad body', async () => {
+    for (const body of [{ idempotencyKey: 'k' }, { jobId: 'j' }, 'not json']) {
+      expect((await skipDoor(skipReq(body))).status).toBe(400);
+    }
+    const noSession = skipReq({ jobId: 'j', idempotencyKey: 'k' }, { session: false });
+    expect((await skipDoor(noSession)).status).toBe(400);
+    expect(raiseSkipFinalCheck).not.toHaveBeenCalled();
+  });
+
+  it('403s a caller without `ai:plan`, as the stop door does', async () => {
+    const { PermissionDeniedError } = await import('@/lib/projects/errors');
+    raiseSkipFinalCheck.mockRejectedValue(new PermissionDeniedError('pj1', 'ai:plan'));
+    const res = await skipDoor(skipReq({ jobId: 'job-1', idempotencyKey: 'k' }));
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ permission: 'ai:plan' });
+  });
+
+  it('404s a job this thread is not on', async () => {
+    raiseSkipFinalCheck.mockRejectedValue(new PlanChangeMailboxJobMismatchError('someone-elses'));
+    const res = await skipDoor(skipReq({ jobId: 'someone-elses', idempotencyKey: 'k' }));
+    expect(res.status).toBe(404);
+  });
+
+  it('lets an unmapped error through', async () => {
+    raiseSkipFinalCheck.mockRejectedValue(new Error('boom'));
+    await expect(skipDoor(skipReq({ jobId: 'job-1', idempotencyKey: 'k' }))).rejects.toThrow(
+      'boom',
+    );
   });
 });

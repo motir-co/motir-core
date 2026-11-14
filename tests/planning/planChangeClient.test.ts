@@ -10,6 +10,7 @@ import {
   peekMailbox,
   readRunPause,
   stopPlanChangeRun,
+  skipPlanFinalCheck,
   recordPlannerTurn,
   requestRestartConfirm,
   rerunAskTurn,
@@ -694,6 +695,27 @@ describe('the mailbox doors', () => {
       sessionId: 's1',
       jobId: 'job-1',
       idempotencyKey: 'stop:job-1',
+    });
+  });
+
+  it('raises a SKIP of the final check through the same mailbox (MOTIR-11266)', async () => {
+    const answer = {
+      outcome: 'skipped',
+      mailbox: { turns: [], stopped: false, skipFinalCheck: true },
+    };
+    fetchMock.mockResolvedValue(jsonResponse(answer));
+
+    await expect(skipPlanFinalCheck('s1', 'job-1', 'skip-final-check:job-1')).resolves.toEqual(
+      answer,
+    );
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/mailbox/skip-final-check');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      sessionId: 's1',
+      jobId: 'job-1',
+      idempotencyKey: 'skip-final-check:job-1',
     });
   });
 

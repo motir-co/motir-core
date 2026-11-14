@@ -906,6 +906,8 @@ describe('the routes are actually WIRED to the guards', () => {
     // or a stop attached to a job that is ALREADY running and already paid for —
     // one row each, no model job submitted, the `turns` precedent exactly.
     'app/api/ai/plan-change/session/mailbox/route.ts',
+    // Skipping the final check is one more kind on that mailbox (MOTIR-11266).
+    'app/api/ai/plan-change/session/mailbox/skip-final-check/route.ts',
     'app/api/ai/plan-change/session/mailbox/stop/route.ts',
     // A plan offer's DECLINE stamps the decision on the offer and plans nothing
     // (MOTIR-9294).

@@ -307,6 +307,12 @@ export interface PlanChangeRailProps {
    */
   onStop?: () => void;
   /**
+   * SKIP THE FINAL CHECK of the run in flight (MOTIR-11266): the confirm's press,
+   * answering what the door said. Given only to a viewer holding `ai:plan`;
+   * absent, the planning notes draw no Skip the final check control.
+   */
+  onSkipFinalCheck?: () => Promise<'skipped' | 'not_running'>;
+  /**
    * THE PLAN GATE'S STATE for the plan in hand (Story MOTIR-6012 · MOTIR-6037; design
    * Part XXII §22.4–§22.5) — the SAME derivation the canvas bar reads, so the review block
    * mirrors the gate it sits beside. Absent → `ungated`: the shipped words.
@@ -437,6 +443,7 @@ export function PlanChangeRail({
   onApprove,
   onDiscard,
   onStop,
+  onSkipFinalCheck,
   gateView = { kind: 'ungated' },
   declining = false,
   onRequestDecline,
@@ -1627,6 +1634,11 @@ export function PlanChangeRail({
               earlierCount={narrationEarlierCount(narrationEntries)}
               loadingEarlier={state.narrationKept?.loadingEarlier ?? false}
               {...(onShowEarlierNarration ? { onShowEarlier: onShowEarlierNarration } : {})}
+              // The control rides only on a run this screen is following: a
+              // finished plan has no check left to skip.
+              {...(onSkipFinalCheck && state.phase === 'streaming'
+                ? { onSkipCheck: onSkipFinalCheck }
+                : {})}
             />
           </div>
         </div>

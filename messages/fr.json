@@ -8845,7 +8845,9 @@
         "kindSettle": "cadrer",
         "settleLine": "Détermine ce qui doit changer",
         "groupLive": "{step} — en cours",
-        "groupFinished": "{step} — terminé"
+        "groupFinished": "{step} — terminé",
+        "skipCheck": "Passer la vérification finale",
+        "skippingCheck": "Vérification finale en cours d’abandon…"
       }
     },
     "codeUnreadable": {
@@ -9361,6 +9363,16 @@
       "none": "Rien ici",
       "correctionHint": "Pour modifier quoi que ce soit ici, saisissez la correction dans la conversation.",
       "notice": "Aucune exigence n’a été rédigée pour cette offre. La planification la rédigera à votre confirmation."
+    },
+    "skipFinalCheck": {
+      "title": "Passer la vérification finale ?",
+      "body": "La vérification finale relit chaque élément de travail de ce plan dans l’ordre de construction, vérifie que chacun peut être construit sur ce que livrent les éléments qui le précèdent, et corrige ce qu’elle trouve.",
+      "consequence": "Si vous la passez, le plan est proposé maintenant sans cette vérification. Ce qu’elle a trouvé jusqu’ici figure dans le résumé du plan, mais rien n’est corrigé.",
+      "confirm": "Passer la vérification finale",
+      "keep": "Continuer la vérification",
+      "error": "La vérification finale n’a pas pu être passée. Elle est toujours en cours : réessayez, ou continuez la vérification.",
+      "retry": "Réessayer",
+      "finished": "La vérification finale était déjà terminée, il n’y avait donc rien à passer."
     }
   },
   "codeHealth": {

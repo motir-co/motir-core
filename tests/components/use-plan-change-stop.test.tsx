@@ -29,6 +29,7 @@ const resumeContextual = vi.fn();
 const recordPlannerTurn = vi.fn();
 const submitContextualPlan = vi.fn();
 const stopRun = vi.fn();
+const skipCheck = vi.fn();
 const streamContextual = vi.fn();
 const readPending = vi.fn();
 
@@ -43,6 +44,7 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   recordPlannerTurn: (...a: unknown[]) => recordPlannerTurn(...a),
   submitContextualPlan: (...a: unknown[]) => submitContextualPlan(...a),
   stopPlanChangeRun: (...a: unknown[]) => stopRun(...a),
+  skipPlanFinalCheck: (...a: unknown[]) => skipCheck(...a),
   submitPlanChange: vi.fn(),
   resubmitContextualPlan: vi.fn(),
   submitAskTurn: vi.fn(),
@@ -378,5 +380,47 @@ describe('the stop state is PER-RUN', () => {
     });
     expect(result.current.state.stopped).toBe(false);
     expect(result.current.state.stopping).toBe(false);
+  });
+});
+
+describe('the SKIP of the final check (MOTIR-11266)', () => {
+  it('answers `not_running` with no run in flight, and posts nothing', async () => {
+    const { result } = await mounted();
+    await expect(result.current.skipFinalCheck()).resolves.toBe('not_running');
+    expect(skipCheck).not.toHaveBeenCalled();
+  });
+
+  it('posts the running job with a key stable per job, and answers the door’s outcome', async () => {
+    const release = heldStream();
+    skipCheck.mockResolvedValue({
+      outcome: 'skipped',
+      mailbox: { turns: [], stopped: false, skipFinalCheck: true },
+    });
+    const { result } = await mounted();
+    let running!: Promise<void>;
+    await act(async () => {
+      running = result.current.send('Add a stop control.', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.state.phase).toBe('streaming'));
+
+    let outcome: string | undefined;
+    await act(async () => {
+      outcome = await result.current.skipFinalCheck();
+    });
+    expect(outcome).toBe('skipped');
+    expect(skipCheck).toHaveBeenCalledWith('s1', 'job-1', 'skip-final-check:job-1');
+    // A skip ends only the check: the run is neither stopping nor stopped.
+    expect(result.current.state.stopping).toBe(false);
+
+    skipCheck.mockRejectedValueOnce(new Error('network'));
+    await act(async () => {
+      await expect(result.current.skipFinalCheck()).rejects.toThrow('network');
+    });
+
+    await act(async () => {
+      release();
+      await running;
+    });
   });
 });

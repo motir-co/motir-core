@@ -8836,7 +8836,9 @@
         "kindSettle": "收束",
         "settleLine": "正在确定要改什么",
         "groupLive": "{step} —— 进行中",
-        "groupFinished": "{step} —— 已完成"
+        "groupFinished": "{step} —— 已完成",
+        "skipCheck": "跳过最终检查",
+        "skippingCheck": "正在跳过最终检查…"
       }
     },
     "codeUnreadable": {
@@ -9352,6 +9354,16 @@
       "none": "此处为空",
       "correctionHint": "如需修改，请在对话中输入更正。",
       "notice": "此提议没有写出需求。确认后，规划会自行撰写。"
+    },
+    "skipFinalCheck": {
+      "title": "跳过最终检查？",
+      "body": "最终检查会按构建顺序重新阅读此计划的每个工作项，检查每个工作项都能基于前面工作项交付的内容来构建，并修复所发现的缺陷。",
+      "consequence": "如果跳过，计划会在没有该检查的情况下立即提议。到目前为止发现的内容会列在计划摘要中，但不会修复任何内容。",
+      "confirm": "跳过最终检查",
+      "keep": "继续检查",
+      "error": "无法跳过最终检查。它仍在运行：请重试，或继续检查。",
+      "retry": "重试",
+      "finished": "最终检查已经完成，因此没有可跳过的内容。"
     }
   },
   "codeHealth": {

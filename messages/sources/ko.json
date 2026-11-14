@@ -13616,5 +13616,15 @@
   "workbench.planningSession.stop.repair": "Fixing what the final check found",
   "settings.aiPlanning.planner.finalCheckLabel": "Run the final check",
   "settings.aiPlanning.planner.finalCheckHint": "Before a plan is proposed, Motir AI reads its work items again in build order, checks that each can be built on what the items before it deliver, and fixes what it finds. On a large plan this can take many minutes.",
-  "settings.aiPlanning.planner.finalCheckOff": "Plans for this project are proposed without the final check. Each plan’s summary says it was not checked."
+  "settings.aiPlanning.planner.finalCheckOff": "Plans for this project are proposed without the final check. Each plan’s summary says it was not checked.",
+  "planningWorkspace.conversation.narration.skipCheck": "Skip the final check",
+  "planningWorkspace.conversation.narration.skippingCheck": "Skipping the final check…",
+  "planningWorkspace.skipFinalCheck.title": "Skip the final check?",
+  "planningWorkspace.skipFinalCheck.body": "The final check reads every work item of this plan again in build order, checks that each can be built on what the items before it deliver, and fixes what it finds.",
+  "planningWorkspace.skipFinalCheck.consequence": "If you skip it, the plan is proposed now without that check. What it has found so far is listed in the plan’s summary, but nothing is fixed.",
+  "planningWorkspace.skipFinalCheck.confirm": "Skip the final check",
+  "planningWorkspace.skipFinalCheck.keep": "Keep checking",
+  "planningWorkspace.skipFinalCheck.error": "The final check could not be skipped. It is still running: try again, or keep checking.",
+  "planningWorkspace.skipFinalCheck.retry": "Try again",
+  "planningWorkspace.skipFinalCheck.finished": "The final check had already finished, so there was nothing to skip."
 }
