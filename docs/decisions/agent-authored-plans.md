@@ -4312,7 +4312,8 @@ reasoning; what it changed:
 - **The job is a fast path only.** `failed`, `canceled`, or `succeeded` while still `generating`,
   and a 404, are dead at once. `queued` / `running`, an unreachable motir-ai and no job at all fall
   through to the silence rule (`silent`). The keep reasons for a generation are `writing`,
-  `session_waiting`, `row_moved` and `revision_held`.
+  `session_waiting`, `row_moved` and `revision_held`. _(Amended: `queued` is kept as `job_queued`
+  since MOTIR-9065, and `running` as `job_running` since AMENDMENT 30.)_
 - **Dead is recorded, never declined,** on the plan's open `conversation` or `mcp` session, through
   `recordFailureWithin` — now a compare-and-set on `lastActivityAt`, so a write that lands between
   the read and the record wins. To resume lists both origins. A job-less plan is recorded with
@@ -4442,3 +4443,30 @@ pending-plans boundary, the target-lock sweep's never-expire set. NOT a person's
 arm, the lapsed-revision and revision-hold reads (an approving plan cannot hold a lease). SILENT:
 the work-item pending-plan notice (`WORK_ITEM_PENDING_PLAN_SILENT_STATUSES`) — the decision is made.
 The session list carries `approving` as a ROW state, not a filter segment: it lasts seconds.
+
+---
+
+## AMENDMENT 30 — a job motir-ai reports `running` keeps its plan, however quiet (bug MOTIR-11258, 2026-11-14)
+
+AMENDMENT 26 made the job a fast path only: `running` fell through to the silence rule, on the ground
+that a worker that died mid-job leaves its row `running` for good. That premise stopped holding with
+motir-ai MOTIR-8303 — **reading a job reaps it when its lease has lapsed** (`getJobView` runs
+`reapAbandonedJob`; `LEASE_TTL_SECONDS` = 120, renewed by the live worker), so the sweep's own
+`resolveJobState` reads a dead worker's job `failed`. And plan silence is not job death: one step can
+run past `PLAN_STALLED_AFTER_MS` without writing (a plan's final check; a 17-minute lay, MOTIR-11184).
+On 2026-11-14 the sweep judged such a quiet stretch dead, cancelled a job motir-ai reported `running`
+mid-check, and declined its plan.
+
+- **A reachable `running` job keeps its plan at any silence**, with the keep reason `job_running`,
+  beside `queued`'s `job_queued` (MOTIR-9065). Its job is not cancelled and the plan stays `generating`.
+- **The silence rule judges only the plans the sweep cannot ask about** — motir-ai unreachable, or no
+  job (`sourceJobId` null). Without an answer, the plan's own writes are the only evidence.
+- **The fast path is unchanged.** `failed` / `canceled` / `succeeded` and a 404 are dead at once — a
+  dead worker's job included, one pass after its lease lapses, as `job_terminal`.
+- **The rail and the sweep may now disagree, deliberately.** The rail's `stalled` still reads
+  `PLAN_STALLED_AFTER_MS` alone; the sweep also asks the job. A quiet plan behind a live job reads
+  stalled on the rail and is kept by the sweep. AMENDMENT 26's "one rule" sentence holds for plans
+  whose job cannot be asked.
+
+Unchanged: `PLAN_STALLED_AFTER_MS` and the rail, the sweep's cadence, the revision backstop's
+`REVISION_JOB_MAX_AGE_MS`, and motir-ai's lease and reaper.

@@ -358,7 +358,9 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
     expect(await locksOf(sessionId)).toBe(1);
   });
 
-  it('records for job_gone and for a SILENT plan behind a running job too', T, async () => {
+  it('records for job_gone and for a SILENT plan whose job cannot be read too', T, async () => {
+    // The silent arm's job is UNREACHABLE: a reachable `running` job keeps its plan
+    // however quiet (MOTIR-11258), so only an unanswered ask is judged by silence.
     const goneSession = await openSession(await seedCard());
     await planIn(goneSession, { ageHours: 2, sourceJobId: 'job-gone' });
     const agedSession = await openSession(await seedCard());
@@ -373,7 +375,11 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
                 reachable: false,
                 failure: { code: 'MOTIR_AI_JOB_NOT_FOUND', message: 'gone' },
               }
-            : { status: 'running', reachable: true, failure: null },
+            : {
+                status: null,
+                reachable: false,
+                failure: { code: 'MOTIR_AI_UNAVAILABLE', message: 'connect ECONNREFUSED' },
+              },
         getFailedJobFacts: async () => ({ walkStop: null, lostMachine: false }),
       },
     });

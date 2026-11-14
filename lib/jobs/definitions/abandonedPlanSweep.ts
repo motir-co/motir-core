@@ -8,8 +8,12 @@ import { defineJob } from '../defineJob';
 // event: a producer appends, a person approves, a person declines. None of them
 // fire for the failure this recovers. motir-ai's inbound seams into core are the
 // success path, so a job that fails writes nothing here; and a motir-ai worker
-// that dies mid-job writes nothing ANYWHERE — its own row stays `running`. The
-// only thing left is to go and ask, which is what this does.
+// that dies mid-job writes nothing ANYWHERE — its row reads `running` until a read
+// reaps its lapsed lease and turns it `failed` (motir-ai MOTIR-8303). The only
+// thing left is to go and ask, which is what this does — and the answer is what
+// decides: a job motir-ai reports `running` or `queued` keeps its plan however
+// quiet the plan is, and only a plan whose job cannot be asked (motir-ai
+// unreachable, or no job) is judged by its silence (MOTIR-11258).
 //
 // The harm it undoes is quiet and permanent: `planRepository.findUndecidedByProject`
 // reads `generating` as UNDECIDED, that read is the pending-proposal gate
@@ -33,11 +37,14 @@ import { defineJob } from '../defineJob';
  * `lib/jobs/schedules.ts`) every sub-hourly `system.*` job shares (MOTIR-8132;
  * MOTIR-8130 §5).
  *
- * The sweep now judges a plan by its SILENCE against `PLAN_STALLED_AFTER_MS`, so its
- * period is part of how late a dead plan is noticed: 15 minutes of silence plus one
- * period, ≤ 20 minutes here against 75 hourly. A job motir-ai already reports
- * failed, canceled or gone is caught within one period. `*\/5` IS the conforming
- * cadence, so it needs no `SUB_HOURLY_CADENCE_EXCEPTIONS` entry.
+ * The sweep judges a plan it cannot ask about by its SILENCE against
+ * `PLAN_STALLED_AFTER_MS`, so its period is part of how late such a dead plan is
+ * noticed: 15 minutes of silence plus one period, ≤ 20 minutes here against 75
+ * hourly. A job motir-ai already reports failed, canceled or gone — a worker that
+ * died included, once its 120 s lease lapses and the read reaps it — is caught
+ * within one period, and a job it reports `running` is never judged by silence
+ * (MOTIR-11258). `*\/5` IS the conforming cadence, so it needs no
+ * `SUB_HOURLY_CADENCE_EXCEPTIONS` entry.
  *
  * The old ordering argument still holds: the cadence tick (`30 * * * *`) is this
  * sweep's consumer, and a pass always runs in the half hour before it, so a plan

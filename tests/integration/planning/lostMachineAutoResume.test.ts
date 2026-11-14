@@ -489,28 +489,43 @@ describe('B · every other failure waits in To resume, as before the story', () 
     expect(await planningIds()).not.toContain(planId);
   });
 
-  it('9 · silence alone is recorded and waits', T, async () => {
-    const { sessionId, planId } = await seed({ silentMs: PLAN_STALLED_AFTER_MS + MIN });
-    jobs.set('job-old', { status: 'running' });
+  it(
+    '9 · silence behind a RUNNING job is kept; once motir-ai reaps it, the sweep resumes it',
+    T,
+    async () => {
+      // ⚠️ REVERSED BY MOTIR-11258. This step read *"silence alone is recorded and waits"*,
+      // with the job still `running` and then cancelled. motir-ai's read reaps a lapsed
+      // lease before it answers (MOTIR-8303), so `running` is a live worker and a quiet
+      // plan behind it is one long step: kept, never cancelled. When the worker really
+      // dies, the next read answers the reaped `failed`, and the fast path takes it.
+      const { sessionId, planId } = await seed({ silentMs: PLAN_STALLED_AFTER_MS + MIN });
+      jobs.set('job-old', { status: 'running' });
 
-    const out = await sweep();
+      const kept = await sweep();
 
-    expect(out.outcomes).toEqual([
-      {
-        planId,
-        projectId: fx.projectId,
-        outcome: 'awaiting_resume',
-        reason: 'silent',
-        lostMachine: false,
-        autoResume: null,
-        jobCancel: { cancelled: true },
-      },
-    ]);
-    expect((await sessionRow(sessionId)).failedJobId).toBe('job-old');
-    // Core gave up on the job, so it is cancelled in motir-ai (MOTIR-9065).
-    expect(jobs.get('job-old')).toEqual({ status: 'canceled' });
-    await expectWaits(sessionId, planId);
-  });
+      expect(kept.outcomes).toEqual([
+        { planId, projectId: fx.projectId, outcome: 'left_as_is', reason: 'job_running' },
+      ]);
+      expect((await sessionRow(sessionId)).failedAt).toBeNull();
+      expect(jobs.get('job-old')).toEqual({ status: 'running' });
+      expect(submitJobMock).not.toHaveBeenCalled();
+
+      jobs.set('job-old', abandoned('job-old'));
+      const reaped = await sweep();
+
+      expect(reaped.outcomes).toEqual([
+        {
+          planId,
+          projectId: fx.projectId,
+          outcome: 'awaiting_resume',
+          reason: 'job_terminal',
+          lostMachine: true,
+          autoResume: { started: true, jobId: 'job-new-1', count: 1 },
+        },
+      ]);
+      await expectResumedOnce(sessionId, planId, 'job-new-1');
+    },
+  );
 
   it('10 · a revision’s lost machine settles through the revision arm', T, async () => {
     const { sessionId, planId } = await seed();

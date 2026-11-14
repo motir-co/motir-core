@@ -162,28 +162,64 @@ describe('a silent plan is RECORDED, not declined', () => {
     },
   );
 
-  it('a RUNNING job behind a silent plan keeps nothing alive — it is recorded', T, async () => {
-    const { planId, sessionId } = await mcpPlan();
-    await withJob(planId, 'job-running');
-    await silence(planId, SILENT_MS);
+  it(
+    'a RUNNING job keeps a silent plan alive — nothing is recorded or cancelled (MOTIR-11258)',
+    T,
+    async () => {
+      // ⚠️ REVERSED BY MOTIR-11258. This test read *"a RUNNING job behind a silent plan
+      // keeps nothing alive — it is recorded"*, and asserted the job was cancelled.
+      // motir-ai's read reaps a lapsed lease before it answers (MOTIR-8303), so a
+      // `running` answer is a live worker; recording and cancelling it threw away a
+      // final check that was still running.
+      const { planId, sessionId } = await mcpPlan();
+      await withJob(planId, 'job-running');
+      const stamp = await silence(planId, SILENT_MS);
 
-    const summary = await abandonedPlanService.reconcileAbandoned({
-      deps: deps(job('running')),
-    });
+      const summary = await abandonedPlanService.reconcileAbandoned({
+        deps: deps(job('running')),
+      });
 
-    expect(summary.outcomes[0]).toMatchObject({
-      outcome: 'awaiting_resume',
-      reason: 'silent',
-      jobCancel: { cancelled: true },
-    });
-    const session = await sessionRow(sessionId);
-    expect(session.failedJobId).toBe('job-running');
-    expect(session.failureReason).toBe('stalled');
-    expect(session.failureDetail).toMatch(/while motir-ai reported its job running\.$/);
-    expect((await planRow(planId)).status).toBe('generating');
-    // Core gave up on the job, so it cancels it in motir-ai (MOTIR-9065).
-    expect(cancels).toEqual([['job-running', fx.projectId]]);
-  });
+      expect(summary.outcomes).toEqual([
+        { planId, projectId: fx.projectId, outcome: 'left_as_is', reason: 'job_running' },
+      ]);
+      const plan = await planRow(planId);
+      expect(plan.status).toBe('generating');
+      expect(plan.lastActivityAt.getTime()).toBe(stamp.getTime());
+      const session = await sessionRow(sessionId);
+      expect(session.failedAt).toBeNull();
+      expect(session.endedAt).toBeNull();
+      expect(cancels).toEqual([]);
+      expect(await toResumeSessionIds()).toEqual([]);
+    },
+  );
+
+  it(
+    'the kept job FINISHES — a later `succeeded` read while still generating is settled as before',
+    T,
+    async () => {
+      // A job that finishes normally closes its plan itself (`planned`), so the sweep
+      // never sees it again. One that ended WITHOUT closing it is read on the next pass
+      // through the fast path, exactly as it would have been without the keep:
+      // recorded `job_terminal`, nothing cancelled (an ended job has nothing to cancel).
+      const { planId, sessionId } = await mcpPlan();
+      await withJob(planId, 'job-finishing');
+      await silence(planId, SILENT_MS);
+      const kept = await abandonedPlanService.reconcileAbandoned({ deps: deps(job('running')) });
+      expect(kept.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'job_running' });
+
+      const ended = await abandonedPlanService.reconcileAbandoned({
+        deps: deps(job('succeeded')),
+      });
+
+      expect(ended.outcomes[0]).toMatchObject({
+        outcome: 'awaiting_resume',
+        reason: 'job_terminal',
+      });
+      expect(ended.outcomes[0]).not.toHaveProperty('jobCancel');
+      expect((await sessionRow(sessionId)).failedJobId).toBe('job-finishing');
+      expect(cancels).toEqual([]);
+    },
+  );
 
   it(
     'a QUEUED job is never recorded by silence alone — it has not started (MOTIR-9065)',
@@ -248,9 +284,17 @@ describe('a silent plan is RECORDED, not declined', () => {
       const { planId, sessionId } = await mcpPlan();
       await withJob(planId, 'job-refused');
       await silence(planId, SILENT_MS);
+      // An unreachable read: since MOTIR-11258 the only verdict that gives up on a job
+      // judged by silence (a `running` answer keeps it).
+      const unreachable = {
+        jobId: 'job-refused',
+        status: null,
+        reachable: false,
+        failure: { code: 'MOTIR_AI_UNAVAILABLE', message: 'connect ECONNREFUSED' },
+      } as unknown as PlanJobStateDto;
 
       const summary = await abandonedPlanService.reconcileAbandoned({
-        deps: deps(job('running'), undefined, async () => {
+        deps: deps(unreachable, undefined, async () => {
           throw new Error('Not Found');
         }),
       });
@@ -293,7 +337,8 @@ describe('a silent plan is RECORDED, not declined', () => {
       deps: deps(job('running')),
     });
 
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'writing' });
+    // The live job decides it (MOTIR-11258); the minute-old write agrees.
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'job_running' });
     const plan = await planRow(planId);
     expect(plan.status).toBe('generating');
     expect(plan.lastActivityAt.getTime()).toBe(stamp.getTime());
@@ -380,8 +425,16 @@ describe('a write RACING the sweep wins', () => {
       await withJob(planId, 'job-racing');
       await silence(planId, SILENT_MS);
 
+      // Unreachable, so the verdict is the silence rule's and the write path runs
+      // (MOTIR-11258: a `running` answer would keep the plan before it).
+      const unreachable = {
+        jobId: 'job-racing',
+        status: null,
+        reachable: false,
+        failure: { code: 'MOTIR_AI_UNAVAILABLE', message: 'connect ECONNREFUSED' },
+      } as unknown as PlanJobStateDto;
       const summary = await abandonedPlanService.reconcileAbandoned({
-        deps: deps(job('running'), async () => {
+        deps: deps(unreachable, async () => {
           // The producer comes back WHILE the sweep is asking motir-ai about it.
           await plansService.reportPlanStep(
             planId,
