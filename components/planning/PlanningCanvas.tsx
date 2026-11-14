@@ -796,6 +796,10 @@ export function PlanningCanvas({
     if (!vp || !n) return;
     const r = vp.getBoundingClientRect();
     if (r.width === 0) return;
+    // An explicit focus outranks the one-time fit below: a level opened to centre
+    // a card (Locate reaching a card on another level, MOTIR-11298) mounts with the
+    // focus already requested, and the fit's later callback must not undo it.
+    didFit.current = true;
     setView((v) => centerOn(rectOf(n), { w: r.width, h: r.height }, focusScale ?? v.scale));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusNonce, focusNodeId]);

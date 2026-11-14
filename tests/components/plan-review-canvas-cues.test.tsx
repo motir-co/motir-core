@@ -460,3 +460,43 @@ describe('PlanReviewCanvas — the at-work motion (MOTIR-8416)', () => {
     expect(motionOf('pi_b')).toBe('at-work');
   });
 });
+
+describe('PlanReviewCanvas — Locate goes to the card being worked on (MOTIR-11298)', () => {
+  beforeEach(() => {
+    stubRoadmap();
+  });
+
+  const locate = () => screen.getByTestId('locate-button');
+  const selectedId = () =>
+    document
+      .querySelector('[data-node-id] [data-selected]')
+      ?.parentElement?.getAttribute('data-node-id') ?? null;
+
+  it('a CHECK step counts as activity: Locate names it and goes there first', async () => {
+    mount([step('check', 'pi_b')]);
+    await loaded();
+    // A check draws no cue of this canvas's own…
+    expect(cueOf('pi_b')).toBeNull();
+    // …and Locate still goes to it before the plan's first card.
+    expect(locate().getAttribute('aria-label')).toBe('Locate the item being worked on');
+    fireEvent.click(locate());
+    expect(selectedId()).toBe('pi_b');
+    expect(locate().getAttribute('aria-label')).toBe("Locate the next of this plan's items");
+  });
+
+  it('an author step on ANOTHER level: Locate opens that level and centres the card', async () => {
+    mount([step('author', 'pi_c')]);
+    await loaded();
+    fireEvent.click(locate());
+    await screen.findByText('Remember me');
+    await waitFor(() => expect(selectedId()).toBe('pi_c'));
+  });
+
+  it('no live step: Locate keeps the shipped label and goes to the first changed card', async () => {
+    mount(null);
+    await loaded();
+    expect(locate().getAttribute('aria-label')).toBe("Locate the next of this plan's items");
+    fireEvent.click(locate());
+    expect(selectedId()).toBe('pi_a');
+  });
+});

@@ -405,6 +405,7 @@
     "searchLabel": "搜索本计划",
     "showChangesAll": "此层级的每一项都来自本计划",
     "locateChange": "定位到本计划的下一项",
+    "locateActive": "定位到正在处理的项",
     "rowOpenAria": "打开 {name}",
     "openTargetAsItStands": "查看工作项的当前状态",
     "railChangedMark": "将变更",

@@ -405,6 +405,7 @@
     "searchLabel": "Diesen Plan durchsuchen",
     "showChangesAll": "Jedes Element auf dieser Ebene stammt aus diesem Plan",
     "locateChange": "Zum nächsten Element dieses Plans springen",
+    "locateActive": "Zum Element springen, an dem gerade gearbeitet wird",
     "rowOpenAria": "{name} öffnen",
     "openTargetAsItStands": "Arbeitselement im aktuellen Zustand öffnen",
     "railChangedMark": "geändert",

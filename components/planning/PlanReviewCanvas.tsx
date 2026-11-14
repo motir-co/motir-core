@@ -38,7 +38,13 @@ import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planRevie
 // every existing importer and every `plan-review-canvas*` test keeps working
 // against this module, unchanged.
 import { arrivalLevel } from '@/lib/planning/planArrival';
-import { inFlightCues, liveArrivals, liveEdits, proposalChangeKey } from '@/lib/planning/livePane';
+import {
+  inFlightCues,
+  liveArrivals,
+  liveEdits,
+  locateTargets,
+  proposalChangeKey,
+} from '@/lib/planning/livePane';
 import type { NodeCue } from '@/components/planning/PlanningCanvas';
 import type { PlanProgressStep } from '@/lib/plans/planProgress';
 import { ListTree, SearchCheck } from 'lucide-react';
@@ -617,6 +623,13 @@ export function PlanReviewCanvas({
     () => (liveSteps ? inFlightCues(items, liveSteps, proposedWord) : null),
     [items, liveSteps, proposedWord],
   );
+  // LOCATE GOES TO THE WORK FIRST (MOTIR-11298): every card a live step targets —
+  // `lay`, `author`, `check` or `repair` — wherever it is, beside the cues above,
+  // which are drawn for `author` and `lay` only.
+  const activeLocate = useMemo(
+    () => (liveSteps ? locateTargets(items, liveSteps, proposedWord) : []),
+    [items, liveSteps, proposedWord],
+  );
   const moving = useMemo(
     () =>
       movingSteps && movingSteps.length > 0
@@ -778,6 +791,11 @@ export function PlanReviewCanvas({
           // The LOCATE control walks this same set (§4). Its shipped labels name
           // a READY frontier, which a proposal never is.
           locateLabel: tPlan('locateChange'),
+          // …and while the plan is written, the cards being worked on come first.
+          active:
+            activeLocate.length > 0
+              ? { targets: activeLocate, label: tPlan('locateActive') }
+              : null,
         }}
         // ⚠️ MOUNTED HERE FOR THE FIRST TIME (MOTIR-4020). The control was doubly
         // out of reach on this surface: this consumer passed no `locatable`, and

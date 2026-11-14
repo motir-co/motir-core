@@ -405,6 +405,7 @@
     "searchLabel": "Rechercher dans ce plan",
     "showChangesAll": "Chaque élément de ce niveau provient de ce plan",
     "locateChange": "Localiser l’élément suivant de ce plan",
+    "locateActive": "Localiser l’élément en cours de traitement",
     "rowOpenAria": "Ouvrir {name}",
     "openTargetAsItStands": "Ouvrir l’élément de travail dans son état actuel",
     "railChangedMark": "modifié",

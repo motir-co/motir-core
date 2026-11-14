@@ -405,6 +405,7 @@
     "searchLabel": "이 계획 검색",
     "showChangesAll": "이 수준의 모든 항목은 이 계획에서 제안한 것입니다",
     "locateChange": "이 계획의 다음 항목 찾기",
+    "locateActive": "작업 중인 항목 찾기",
     "rowOpenAria": "{name} 열기",
     "openTargetAsItStands": "현재 상태의 작업 항목 열기",
     "railChangedMark": "변경됨",

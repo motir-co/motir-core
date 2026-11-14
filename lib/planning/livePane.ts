@@ -481,6 +481,57 @@ export function inFlightCues(
 }
 
 /**
+ * One card the LOCATE control goes to first while the plan is written (MOTIR-11298):
+ * the node a live step targets, and the trail to the level that card is DRAWN on —
+ * `null` when the plan's items cannot place that level, so only a reader already
+ * standing on it can be taken there.
+ */
+export interface LocateTarget {
+  nodeId: string;
+  trail: readonly CanvasCrumb[] | null;
+}
+
+/**
+ * THE CARDS THE PLANNER IS ON RIGHT NOW, for Locate (MOTIR-11298). Every live step
+ * that targets a card counts — `lay`, `author`, `check`, `repair`, and a level's
+ * `amend` beside the `lay` it re-runs — because the question Locate answers is
+ * *where is the work happening*, not which cue is drawn. That is why this is not
+ * {@link inFlightCues}: those cues are drawn for `author` and `lay` only, and a
+ * `check` or `repair` step must still be found.
+ *
+ * The trail is to the level the target card SITS on, from {@link stepLevel}:
+ * - a card the plan's items hold → its own level (the `author` rule);
+ * - else a `lay` / `amend` parent the items can place → the level being laid,
+ *   less its last crumb, which is the parent's own level;
+ * - else `null`.
+ *
+ * One entry per node, in the steps' order (earliest first). `settle` and an
+ * untargeted step name no card and add nothing.
+ */
+export function locateTargets(
+  items: readonly PlanReviewItemDto[],
+  steps: readonly InFlightStep[],
+  proposedWord: string,
+): LocateTarget[] {
+  const out: LocateTarget[] = [];
+  const seen = new Set<string>();
+  for (const step of steps) {
+    const nodeId = step.targetNodeId;
+    if (step.kind === 'settle' || nodeId === null || seen.has(nodeId)) continue;
+    seen.add(nodeId);
+    const own = stepLevel(items, { kind: 'author', targetNodeId: nodeId }, proposedWord);
+    if (own) {
+      out.push({ nodeId, trail: own.trail });
+      continue;
+    }
+    const laid =
+      step.kind === 'lay' || step.kind === 'amend' ? stepLevel(items, step, proposedWord) : null;
+    out.push({ nodeId, trail: laid ? laid.trail.slice(0, -1) : null });
+  }
+  return out;
+}
+
+/**
  * The cues the reader CANNOT see: the node is not on the drawn level, and it is
  * not a `laying` cue on the level the reader stands in (that one is the bar's
  * marker, §26.7 row 2).
