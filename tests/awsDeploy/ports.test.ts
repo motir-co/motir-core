@@ -134,32 +134,34 @@ describe('awsSdkPorts', () => {
     expect(await awsSdkPorts('us-east-1').getParameter('/p')).toBeUndefined();
   });
 
-  it('finds an image by digest, and reads ImageNotFound as absent', async () => {
+  it("reads an image's tags by digest, and reads ImageNotFound as absent", async () => {
     let found = true;
     const sent = stubClients(() => {
       if (!found) throw new ImageNotFoundException({ message: 'no', $metadata: {} });
-      return { imageDetails: [{ imageDigest: 'd' }] };
+      return { imageDetails: [{ imageDigest: 'd', imageTags: ['c0ffee'] }] };
     });
     const ports = awsSdkPorts('us-east-1');
-    expect(await ports.imageExists('motir-prod/motir-core', 'd')).toBe(true);
+    expect(await ports.imageTags('motir-prod/motir-core', 'd')).toEqual(['c0ffee']);
     expect(sent[0]).toEqual({
       command: 'DescribeImagesCommand',
       input: { repositoryName: 'motir-prod/motir-core', imageIds: [{ imageDigest: 'd' }] },
     });
     found = false;
-    expect(await ports.imageExists('r', 'd')).toBe(false);
+    expect(await ports.imageTags('r', 'd')).toBeNull();
   });
 
-  it('reads an empty image list as absent, and rethrows any other ECR error', async () => {
-    let fail = false;
+  it('reads an untagged image as no tags (MOTIR-11274), an empty list as absent, and rethrows any other ECR error', async () => {
+    let answer: unknown = { imageDetails: [{ imageDigest: 'd' }] };
     stubClients(() => {
-      if (fail) throw new Error('AccessDenied');
-      return {};
+      if (answer instanceof Error) throw answer;
+      return answer;
     });
     const ports = awsSdkPorts('us-east-1');
-    expect(await ports.imageExists('r', 'd')).toBe(false);
-    fail = true;
-    await expect(ports.imageExists('r', 'd')).rejects.toThrow('AccessDenied');
+    expect(await ports.imageTags('r', 'd')).toEqual([]);
+    answer = {};
+    expect(await ports.imageTags('r', 'd')).toBeNull();
+    answer = new Error('AccessDenied');
+    await expect(ports.imageTags('r', 'd')).rejects.toThrow('AccessDenied');
   });
 
   it('describes and registers task definitions, refusing an empty answer', async () => {

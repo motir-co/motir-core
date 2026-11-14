@@ -22,6 +22,7 @@ import {
 } from '@/scripts/aws-deploy/imagePins';
 import { GRANTED_ACTIONS } from '@/scripts/aws-deploy/ports';
 import {
+  COMMIT,
   CORE_REPO,
   DIGEST,
   FakeDeployAws,
@@ -78,7 +79,7 @@ async function deploy(aws: FakeDeployAws, dir: string, extra: string[] = []) {
   const out: string[] = [];
   const err: string[] = [];
   const code = await main(
-    ['--digest', DIGEST, '--pins', dir, ...extra],
+    ['--digest', DIGEST, '--commit', COMMIT, '--pins', dir, ...extra],
     ENV,
     { out: (l) => out.push(l), err: (l) => err.push(l) },
     () => aws,

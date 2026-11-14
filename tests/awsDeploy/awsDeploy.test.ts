@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  COMMIT_PATTERN,
   DIGEST_PATTERN,
   USAGE,
   entry,
@@ -11,7 +12,9 @@ import {
 } from '@/scripts/aws-deploy/awsDeploy';
 import { GRANTED_ACTIONS, type DeployAws } from '@/scripts/aws-deploy/ports';
 import {
+  CHILD_DIGEST,
   CLUSTER,
+  COMMIT,
   CORE_REPO,
   DATABASE_URL,
   DIGEST,
@@ -35,7 +38,11 @@ const CHANGES = ['registerTaskDefinition', 'runTask', 'updateService', 'putParam
 /** Every action issued across this file, held to the grant at the end. */
 const issued = new Set<string>();
 
-async function deploy(aws: FakeDeployAws, argv: string[] = ['--digest', DIGEST], env = ENV) {
+async function deploy(
+  aws: FakeDeployAws,
+  argv: string[] = ['--digest', DIGEST, '--commit', COMMIT],
+  env = ENV,
+) {
   const out: string[] = [];
   const err: string[] = [];
   const regions: string[] = [];
@@ -132,7 +139,7 @@ describe('refusals before anything changes', () => {
     ['a tag', 'latest'],
   ])('refuses %s without a single AWS call', async (_case, digest) => {
     const { aws } = coreFleet();
-    const { code, err } = await deploy(aws, ['--digest', digest]);
+    const { code, err } = await deploy(aws, ['--digest', digest, '--commit', COMMIT]);
     expect(code).toBe(1);
     expect(aws.calls).toEqual([]);
     expect(err).toEqual([`error: --digest must match ${DIGEST_PATTERN.source}`]);
@@ -141,11 +148,11 @@ describe('refusals before anything changes', () => {
   it('refuses an image ECR does not hold before registering, running or updating anything', async () => {
     const { aws } = coreFleet();
     const missing = `sha256:${'b'.repeat(64)}`;
-    const { code, err, result } = await deploy(aws, ['--digest', missing]);
+    const { code, err, result } = await deploy(aws, ['--digest', missing, '--commit', COMMIT]);
     expect(code).toBe(1);
     expect(aws.methods().filter((m) => CHANGES.includes(m))).toEqual([]);
-    expect(aws.calls.find(([m]) => m === 'imageExists')).toEqual([
-      'imageExists',
+    expect(aws.calls.find(([m]) => m === 'imageTags')).toEqual([
+      'imageTags',
       'motir-prod/motir-core',
       missing,
     ]);
@@ -153,14 +160,60 @@ describe('refusals before anything changes', () => {
     expect(result).toMatchObject({ migrate: null, recorded: false });
   });
 
+  // MOTIR-11274: with the docker loader, build-push-action's `digest` output is the
+  // index's untagged linux/amd64 child. Deployed, the Services page cannot name
+  // the commit a service runs, so the deploy refuses it before anything changes.
+  it('refuses the untagged child of the pushed index before registering, running or updating anything', async () => {
+    const { aws } = coreFleet();
+    const { code, err, result } = await deploy(aws, ['--digest', CHILD_DIGEST, '--commit', COMMIT]);
+    expect(code).toBe(1);
+    expect(aws.methods().filter((m) => CHANGES.includes(m))).toEqual([]);
+    expect(aws.params.get(DIGEST_PARAM)).toBe(OLD_DIGEST);
+    expect(err.at(-1)).toBe(
+      `error: Error: ${CORE_REPO}@${CHILD_DIGEST} is not tagged ${COMMIT} (it has no tags); ` +
+        'deploy the digest ECR tags with the release commit',
+    );
+    expect(result).toMatchObject({ migrate: null, recorded: false });
+  });
+
+  it('refuses an image tagged with another commit, naming the tags it does carry', async () => {
+    const { aws } = coreFleet();
+    const other = 'd'.repeat(40);
+    aws.images.set(`motir-prod/motir-core|${DIGEST}`, [other, 'latest']);
+    const { code, err } = await deploy(aws);
+    expect(code).toBe(1);
+    expect(aws.methods().filter((m) => CHANGES.includes(m))).toEqual([]);
+    expect(err.at(-1)).toBe(
+      `error: Error: ${CORE_REPO}@${DIGEST} is not tagged ${COMMIT} (its tags are ${other}, latest); ` +
+        'deploy the digest ECR tags with the release commit',
+    );
+  });
+
   it.each([
-    ['no digest', [], ENV],
-    ['an unknown flag', ['--digest', DIGEST, '--force'], ENV],
+    ['a short commit', 'c'.repeat(7)],
+    ['an uppercase commit', 'C'.repeat(40)],
+    ['a branch name', 'main'],
+  ])('refuses %s without a single AWS call', async (_case, commit) => {
+    const { aws } = coreFleet();
+    const { code, err } = await deploy(aws, ['--digest', DIGEST, '--commit', commit]);
+    expect(code).toBe(1);
+    expect(aws.calls).toEqual([]);
+    expect(err).toEqual([`error: --commit must match ${COMMIT_PATTERN.source}`]);
+  });
+
+  it.each([
+    ['no digest', ['--commit', COMMIT], ENV],
+    ['no commit', ['--digest', DIGEST], ENV],
+    ['an unknown flag', ['--digest', DIGEST, '--commit', COMMIT, '--force'], ENV],
     ['a positional', [DIGEST], ENV],
-    ['a zero timeout', ['--digest', DIGEST, '--timeout-minutes', '0'], ENV],
-    ['a fractional timeout', ['--digest', DIGEST, '--timeout-minutes', '1.5'], ENV],
-    ['no region', ['--digest', DIGEST], { AWS_DEPLOY_NAME_PREFIX: PREFIX }],
-    ['no name prefix', ['--digest', DIGEST], { AWS_REGION: 'us-east-1' }],
+    ['a zero timeout', ['--digest', DIGEST, '--commit', COMMIT, '--timeout-minutes', '0'], ENV],
+    [
+      'a fractional timeout',
+      ['--digest', DIGEST, '--commit', COMMIT, '--timeout-minutes', '1.5'],
+      ENV,
+    ],
+    ['no region', ['--digest', DIGEST, '--commit', COMMIT], { AWS_DEPLOY_NAME_PREFIX: PREFIX }],
+    ['no name prefix', ['--digest', DIGEST, '--commit', COMMIT], { AWS_REGION: 'us-east-1' }],
   ])('prints the usage for %s', async (_case, argv, env) => {
     const aws = new FakeDeployAws();
     const { code, err } = await deploy(aws, argv, env as typeof ENV);
@@ -229,7 +282,14 @@ describe('a failed migrate', () => {
     const { aws } = coreFleet();
     arrange(aws);
     aws.logLines.push('Applying migration 20261028_x', `connect ${'ok'}`);
-    const { code, err, result } = await deploy(aws, ['--digest', DIGEST, '--timeout-minutes', '1']);
+    const { code, err, result } = await deploy(aws, [
+      '--digest',
+      DIGEST,
+      '--commit',
+      COMMIT,
+      '--timeout-minutes',
+      '1',
+    ]);
     expect(code).toBe(1);
     expect(aws.methods()).not.toContain('updateService');
     expect(aws.methods()).not.toContain('putParameter');
@@ -259,7 +319,14 @@ describe('a failed roll', () => {
   it('rolls every service back when the wait times out, completed ones included', async () => {
     const { aws, previous } = coreFleet();
     aws.rollouts.set('worker', (_p, to) => ({ primary: to, state: 'IN_PROGRESS' }));
-    const { code, result } = await deploy(aws, ['--digest', DIGEST, '--timeout-minutes', '1']);
+    const { code, result } = await deploy(aws, [
+      '--digest',
+      DIGEST,
+      '--commit',
+      COMMIT,
+      '--timeout-minutes',
+      '1',
+    ]);
     expect(code).toBe(1);
     const updates = aws.calls.filter(([m]) => m === 'updateService').map(([, , n, td]) => [n, td]);
     expect(updates.slice(3)).toEqual([
@@ -367,7 +434,7 @@ describe('a deploy during a breach run (MOTIR-10093)', () => {
   it('is not consulted with --no-roll, which touches no service', async () => {
     const { aws } = coreFleet();
     aws.addBreachRevision('worker');
-    const { code } = await deploy(aws, ['--digest', DIGEST, '--no-roll']);
+    const { code } = await deploy(aws, ['--digest', DIGEST, '--commit', COMMIT, '--no-roll']);
     expect(code).toBe(0);
     expect(aws.methods()).not.toContain('listServices');
   });
@@ -440,7 +507,13 @@ describe('a motir-infra update that overlaps the deploy (MOTIR-11235)', () => {
 describe('--no-roll', () => {
   it('verifies, migrates and records, touching no service', async () => {
     const aws = new FakeDeployAws();
-    const { code, result } = await deploy(aws, ['--digest', DIGEST, '--no-roll']);
+    const { code, result } = await deploy(aws, [
+      '--digest',
+      DIGEST,
+      '--commit',
+      COMMIT,
+      '--no-roll',
+    ]);
     expect(code).toBe(0);
     expect(aws.methods()).not.toContain('listServices');
     expect(aws.methods()).not.toContain('updateService');
@@ -452,7 +525,7 @@ describe('--no-roll', () => {
   it('records nothing when the migrate task fails', async () => {
     const aws = new FakeDeployAws();
     aws.migrate = migrateExits(1);
-    const { code } = await deploy(aws, ['--digest', DIGEST, '--no-roll']);
+    const { code } = await deploy(aws, ['--digest', DIGEST, '--commit', COMMIT, '--no-roll']);
     expect(code).toBe(1);
     expect(aws.methods()).not.toContain('putParameter');
   });
@@ -475,7 +548,11 @@ describe('the grant and the credentials', () => {
         return target[name as string];
       },
     });
-    await deploy(new FakeDeployAws(), ['--digest', DIGEST, '--no-roll'], env as typeof ENV);
+    await deploy(
+      new FakeDeployAws(),
+      ['--digest', DIGEST, '--commit', COMMIT, '--no-roll'],
+      env as typeof ENV,
+    );
     expect([...read].sort()).toEqual(['AWS_DEPLOY_NAME_PREFIX', 'AWS_REGION']);
   });
 
@@ -531,19 +608,33 @@ describe('the grant and the credentials', () => {
 
 describe('parseDeployArgs', () => {
   it('defaults the timeout to 20 minutes and --no-roll to false', () => {
-    expect(parseDeployArgs(['--digest', DIGEST])).toEqual({
+    expect(parseDeployArgs(['--digest', DIGEST, '--commit', COMMIT])).toEqual({
       digest: DIGEST,
+      commit: COMMIT,
       timeoutMs: 20 * 60_000,
       noRoll: false,
       pinsDir: null,
     });
-    expect(parseDeployArgs(['--digest', DIGEST, '--timeout-minutes', '5', '--no-roll'])).toEqual({
+    expect(
+      parseDeployArgs([
+        '--digest',
+        DIGEST,
+        '--commit',
+        COMMIT,
+        '--timeout-minutes',
+        '5',
+        '--no-roll',
+      ]),
+    ).toEqual({
       digest: DIGEST,
+      commit: COMMIT,
       timeoutMs: 5 * 60_000,
       noRoll: true,
       pinsDir: null,
     });
-    expect(parseDeployArgs(['--digest', DIGEST, '--pins', 'infra/image-pins'])).toMatchObject({
+    expect(
+      parseDeployArgs(['--digest', DIGEST, '--commit', COMMIT, '--pins', 'infra/image-pins']),
+    ).toMatchObject({
       pinsDir: 'infra/image-pins',
     });
   });

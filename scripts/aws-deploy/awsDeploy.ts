@@ -1,9 +1,13 @@
 /**
- * `pnpm deploy:aws --digest sha256:<64 hex> [--timeout-minutes 20] [--no-roll]`
+ * `pnpm deploy:aws --digest sha256:<64 hex> --commit <40 hex> [--timeout-minutes 20] [--no-roll]`
  * (Story MOTIR-9709 · MOTIR-9927) — deploy an image CI has already pushed to ECR
  * onto core's Fargate services, in the one order that is safe:
  *
- *   1. verify the digest and that the image exists;
+ *   1. verify the digest, and that ECR holds the image tagged with `--commit`
+ *      — the release's full commit SHA, which the Services page reads back from
+ *      the running image (MOTIR-11112). A digest that carries no such tag, the
+ *      untagged platform child of the pushed index (MOTIR-11274), is refused
+ *      before anything changes;
  *   2. find the cluster's services that run the core image, and refuse before
  *      anything changes when none does or one runs a breach revision
  *      (MOTIR-10093) — a breach run holds that service;
@@ -58,10 +62,12 @@ export const EXIT_OK = 0;
 export const EXIT_ERROR = 1;
 
 export const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
+/** A full git commit SHA, the tag CI pushes the image under. */
+export const COMMIT_PATTERN = /^[a-f0-9]{40}$/;
 const DEFAULT_TIMEOUT_MINUTES = 20;
 
 export const USAGE =
-  'usage: deploy:aws --digest sha256:<64 hex> [--timeout-minutes <n>] [--no-roll] [--pins <dir>]' +
+  'usage: deploy:aws --digest sha256:<64 hex> --commit <40 hex> [--timeout-minutes <n>] [--no-roll] [--pins <dir>]' +
   ' (env: AWS_REGION, AWS_DEPLOY_NAME_PREFIX)';
 
 /** The parameter names motir-infra's `lib/config/core-deploy.ts` and `fargate-service.ts` use. */
@@ -75,6 +81,8 @@ export interface DeployIo {
 
 export interface DeployOptions {
   digest: string;
+  /** The release's full commit SHA; the image must carry it as an ECR tag. */
+  commit: string;
   timeoutMs: number;
   noRoll: boolean;
   namePrefix: string;
@@ -97,6 +105,7 @@ export function parseDeployArgs(argv: string[]) {
       args: argv,
       options: {
         digest: { type: 'string' },
+        commit: { type: 'string' },
         'timeout-minutes': { type: 'string' },
         'no-roll': { type: 'boolean' },
         pins: { type: 'string' },
@@ -105,9 +114,12 @@ export function parseDeployArgs(argv: string[]) {
       allowPositionals: false,
     });
     const minutes = Number(values['timeout-minutes'] ?? DEFAULT_TIMEOUT_MINUTES);
-    if (!values.digest || !Number.isInteger(minutes) || minutes <= 0) return null;
+    if (!values.digest || !values.commit || !Number.isInteger(minutes) || minutes <= 0) {
+      return null;
+    }
     return {
       digest: values.digest,
+      commit: values.commit,
       timeoutMs: minutes * 60_000,
       noRoll: !!values['no-roll'],
       pinsDir: values.pins ?? null,
@@ -132,16 +144,28 @@ async function readTarget(aws: DeployAws, prefix: string): Promise<DeployTarget>
   return target as DeployTarget;
 }
 
-/** Step 1: the core repository, read from the migrate task, and the image's presence. */
-async function verifyImage(aws: DeployAws, target: DeployTarget, digest: string) {
+/**
+ * Step 1: the core repository, read from the migrate task, and the image's
+ * presence under the release's commit tag. ⚠️ The tag is the only place the
+ * Services page learns which commit a service runs (MOTIR-11112), and with the
+ * docker loader `build-push-action`'s `digest` output is the untagged amd64
+ * child of the index it tags (MOTIR-11274) — so presence alone is not enough.
+ */
+async function verifyImage(aws: DeployAws, target: DeployTarget, digest: string, commit: string) {
   const migrate = await aws.describeTaskDefinition(target.migrateFamily);
   const image = migrate.containerDefinitions?.find(
     (c) => c.name === target.migrateContainer,
   )?.image;
   if (!image) throw new Error(`${target.migrateFamily} has no ${target.migrateContainer} image`);
   const repository = imageRepository(image);
-  if (!(await aws.imageExists(ecrRepositoryName(repository), digest))) {
-    throw new Error(`${repository} has no image ${digest}`);
+  const tags = await aws.imageTags(ecrRepositoryName(repository), digest);
+  if (tags === null) throw new Error(`${repository} has no image ${digest}`);
+  if (!tags.includes(commit)) {
+    const held = tags.length ? `its tags are ${tags.join(', ')}` : 'it has no tags';
+    throw new Error(
+      `${repository}@${digest} is not tagged ${commit} (${held}); ` +
+        `deploy the digest ECR tags with the release commit`,
+    );
   }
   return repository;
 }
@@ -210,7 +234,7 @@ async function deploy(
   log: DeployLog,
 ): Promise<string | null> {
   const target = await readTarget(aws, options.namePrefix);
-  const repository = await verifyImage(aws, target, options.digest);
+  const repository = await verifyImage(aws, target, options.digest, options.commit);
   const image = `${repository}@${options.digest}`;
   // A pin naming another account's indexer is refused before anything changes.
   if (!options.noRoll) checkPinTargets(options.namePrefix, repository, options.pins);
@@ -271,6 +295,10 @@ export async function main(
   }
   if (!DIGEST_PATTERN.test(parsed.digest)) {
     io.err(`error: --digest must match ${DIGEST_PATTERN.source}`);
+    return EXIT_ERROR;
+  }
+  if (!COMMIT_PATTERN.test(parsed.commit)) {
+    io.err(`error: --commit must match ${COMMIT_PATTERN.source}`);
     return EXIT_ERROR;
   }
   const { pinsDir, ...rest } = parsed;
