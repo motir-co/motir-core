@@ -427,7 +427,9 @@
     },
     "peekLive": {
       "beingWritten": "작성 중",
-      "written": "작성 완료"
+      "written": "작성 완료",
+      "follow": "작성 따라가기",
+      "followHint": "작성 중인 텍스트를 계속 화면에 표시합니다. 스크롤하면 멈춥니다."
     }
   },
   "projectAccess": {

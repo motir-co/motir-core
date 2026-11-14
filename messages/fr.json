@@ -427,7 +427,9 @@
     },
     "peekLive": {
       "beingWritten": "Rédaction en cours",
-      "written": "Rédigé"
+      "written": "Rédigé",
+      "follow": "Suivre la rédaction",
+      "followHint": "Garde le texte en cours de rédaction visible. Faites défiler pour arrêter."
     }
   },
   "projectAccess": {

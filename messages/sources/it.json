@@ -361,6 +361,8 @@
   "planReview.approveProgress.timedOutNext": "This plan still awaits your decision, unchanged. It’s safe to approve again.",
   "planReview.peekLive.beingWritten": "Being written",
   "planReview.peekLive.written": "Written",
+  "planReview.peekLive.follow": "Follow the writing",
+  "planReview.peekLive.followHint": "Keep the text being written in view. Scroll to stop.",
   "projectAccess.noAccessTitle": "You don’t have access to this project",
   "projectAccess.noAccessDescription": "This project is private. Ask a project admin to add you, or switch to a project you can access.",
   "projectAccess.backToProjects": "Back to projects",

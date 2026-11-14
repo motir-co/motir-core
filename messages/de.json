@@ -427,7 +427,9 @@
     },
     "peekLive": {
       "beingWritten": "Wird geschrieben",
-      "written": "Geschrieben"
+      "written": "Geschrieben",
+      "follow": "Dem Schreiben folgen",
+      "followHint": "Hält den Text, der gerade geschrieben wird, im Blick. Zum Beenden scrollen."
     }
   },
   "projectAccess": {

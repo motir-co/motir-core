@@ -427,7 +427,9 @@
     },
     "peekLive": {
       "beingWritten": "Wordt geschreven",
-      "written": "Geschreven"
+      "written": "Geschreven",
+      "follow": "Het schrijven volgen",
+      "followHint": "Houdt de tekst die wordt geschreven in beeld. Scroll om te stoppen."
     }
   },
   "projectAccess": {
