@@ -3673,7 +3673,10 @@
         "explanationsHint": "Każdy proponowany element roboczy otrzymuje krótkie „dlaczego to ważne”, które można przeczytać bez otwierania kodu.",
         "dataPracticeCommitment": "Ani Motir, ani jego brama nie trenują modeli na treściach tego projektu.",
         "dataPracticeReport": "To, co dostawca robi z żądaniem po jego otrzymaniu, określa jego własne opublikowane stanowisko.",
-        "dataPracticeLink": "Co deklaruje każdy dostawca"
+        "dataPracticeLink": "Co deklaruje każdy dostawca",
+        "finalCheckLabel": "Wykonuj końcowe sprawdzenie",
+        "finalCheckHint": "Zanim plan zostanie zaproponowany, Motir AI ponownie czyta jego elementy robocze w kolejności budowania, sprawdza, czy każdy można zbudować na tym, co dostarczają elementy przed nim, i poprawia to, co znajdzie. Przy dużym planie może to potrwać wiele minut.",
+        "finalCheckOff": "Plany dla tego projektu są proponowane bez końcowego sprawdzenia. Podsumowanie każdego planu informuje, że nie został sprawdzony."
       },
       "lessonCapture": {
         "title": "Błędy planowania",
@@ -8842,7 +8845,9 @@
         "kindSettle": "ustalenie",
         "settleLine": "Ustala, co zmienić",
         "groupLive": "{step} — w toku",
-        "groupFinished": "{step} — zakończone"
+        "groupFinished": "{step} — zakończone",
+        "skipCheck": "Pomiń końcowe sprawdzenie",
+        "skippingCheck": "Pomijanie końcowego sprawdzenia…"
       }
     },
     "codeUnreadable": {
@@ -9368,6 +9373,16 @@
       "none": "Brak treści",
       "correctionHint": "Aby coś tu zmienić, wpisz poprawkę w rozmowie.",
       "notice": "Dla tej propozycji nie napisano wymagania. Planowanie napisze je po potwierdzeniu."
+    },
+    "skipFinalCheck": {
+      "title": "Pominąć końcowe sprawdzenie?",
+      "body": "Końcowe sprawdzenie ponownie czyta każdy element roboczy tego planu w kolejności budowania, sprawdza, czy każdy można zbudować na tym, co dostarczają elementy przed nim, i poprawia to, co znajdzie.",
+      "consequence": "Jeśli je pominiesz, plan zostanie zaproponowany teraz bez tego sprawdzenia. To, co dotąd znalazło, jest wymienione w podsumowaniu planu, ale nic nie zostanie poprawione.",
+      "confirm": "Pomiń końcowe sprawdzenie",
+      "keep": "Sprawdzaj dalej",
+      "error": "Nie udało się pominąć końcowego sprawdzenia. Nadal trwa: spróbuj ponownie albo sprawdzaj dalej.",
+      "retry": "Spróbuj ponownie",
+      "finished": "Końcowe sprawdzenie już się zakończyło, więc nie było czego pomijać."
     }
   },
   "codeHealth": {

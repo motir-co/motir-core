@@ -3673,7 +3673,10 @@
         "explanationsHint": "Ogni elemento di lavoro proposto riceve un breve «perché è importante» che puoi leggere senza aprire il codice.",
         "dataPracticeCommitment": "Né Motir né il suo gateway addestrano modelli sul contenuto di questo progetto.",
         "dataPracticeReport": "Cosa fa un provider con una richiesta una volta ricevuta è definito dalla posizione pubblicata dal provider stesso.",
-        "dataPracticeLink": "Cosa dichiara ciascun provider"
+        "dataPracticeLink": "Cosa dichiara ciascun provider",
+        "finalCheckLabel": "Esegui la verifica finale",
+        "finalCheckHint": "Prima che un piano venga proposto, Motir AI rilegge i suoi elementi di lavoro in ordine di costruzione, verifica che ciascuno possa essere costruito su ciò che consegnano gli elementi precedenti e corregge ciò che trova. Su un piano grande può richiedere molti minuti.",
+        "finalCheckOff": "I piani di questo progetto vengono proposti senza la verifica finale. Il riepilogo di ogni piano indica che non è stato verificato."
       },
       "lessonCapture": {
         "title": "Errori di pianificazione",
@@ -8842,7 +8845,9 @@
         "kindSettle": "definire",
         "settleLine": "Sta definendo cosa cambiare",
         "groupLive": "{step} — in corso",
-        "groupFinished": "{step} — terminato"
+        "groupFinished": "{step} — terminato",
+        "skipCheck": "Salta la verifica finale",
+        "skippingCheck": "Salto della verifica finale…"
       }
     },
     "codeUnreadable": {
@@ -9368,6 +9373,16 @@
       "none": "Niente qui",
       "correctionHint": "Per cambiare qualcosa qui, scrivi la correzione nella conversazione.",
       "notice": "Per questa proposta non è stato scritto alcun requisito. La pianificazione lo scriverà quando confermi."
+    },
+    "skipFinalCheck": {
+      "title": "Saltare la verifica finale?",
+      "body": "La verifica finale rilegge ogni elemento di lavoro di questo piano in ordine di costruzione, verifica che ciascuno possa essere costruito su ciò che consegnano gli elementi precedenti e corregge ciò che trova.",
+      "consequence": "Se la salti, il piano viene proposto ora senza quella verifica. Ciò che ha trovato finora è elencato nel riepilogo del piano, ma nulla viene corretto.",
+      "confirm": "Salta la verifica finale",
+      "keep": "Continua la verifica",
+      "error": "Non è stato possibile saltare la verifica finale. È ancora in corso: riprova, oppure continua la verifica.",
+      "retry": "Riprova",
+      "finished": "La verifica finale era già terminata, quindi non c’era nulla da saltare."
     }
   },
   "codeHealth": {

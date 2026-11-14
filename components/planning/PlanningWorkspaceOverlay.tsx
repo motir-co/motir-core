@@ -871,6 +871,9 @@ export function PlanningWorkspaceOverlay({
             // `auditCoverageService.getCoverage` asserts `ai:configure`, so that is
             // what decides whether the banner is an invitation or a 403.
             canManage={can('ai:configure')}
+            // The skip door asserts `ai:plan` (MOTIR-11266), so the Skip the final
+            // check control is offered only to a viewer who holds it.
+            canPlan={can('ai:plan')}
             initialTarget={settled?.target ?? null}
             {...(justReturned ? { justReturnedFromOnboarding: true } : {})}
             {...(seededDraft

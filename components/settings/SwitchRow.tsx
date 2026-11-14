@@ -45,6 +45,7 @@ export function SwitchRow({
       <span className="min-w-0 flex-1">
         <span
           id={labelId}
+          {...(disabled ? { 'aria-disabled': true } : {})}
           className={
             disabled
               ? 'block text-sm font-medium text-(--el-text-faint)'
@@ -54,6 +55,7 @@ export function SwitchRow({
           {label}
         </span>
         <p
+          {...(disabled ? { 'aria-disabled': true } : {})}
           className={
             disabled
               ? 'text-(--el-text-faint) mt-0.5 max-w-[54ch] text-xs leading-relaxed'

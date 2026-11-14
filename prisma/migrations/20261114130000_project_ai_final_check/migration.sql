@@ -1,0 +1,17 @@
+-- MOTIR-11264 — the "Run the final check" setting, stored on the project.
+--
+-- NULLABLE, with NO DEFAULT, deliberately — the shape of
+-- `ai_record_planning_mistakes` (20260823230000) and for the same reasons. NULL
+-- means "this project has never expressed a preference", and every reader
+-- resolves NULL to TRUE through `resolveFinalCheck`
+-- (lib/projectAiSettings/limits.ts). So every project that existed before this
+-- migration keeps its final check, with no backfill step to miss rows, and a test
+-- can construct the "predates the column" state and assert the default.
+--
+-- Only an explicit FALSE turns the final check off. Adding a nullable column with
+-- no default is a metadata-only change in Postgres: no table rewrite, no lock
+-- held beyond the catalog update.
+--
+-- ⚠️ NO RLS CLAUSE HERE, AND THAT IS NOT AN OMISSION. RLS is a per-TABLE policy;
+-- this migration adds a column to a table whose policy already covers it.
+ALTER TABLE "project" ADD COLUMN "ai_final_check" BOOLEAN;

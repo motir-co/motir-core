@@ -3673,7 +3673,10 @@
         "explanationsHint": "제안된 모든 작업 항목에 코드를 열지 않고도 읽을 수 있는 짧은 “중요한 이유”가 추가됩니다.",
         "dataPracticeCommitment": "Motir와 그 게이트웨이는 이 프로젝트의 콘텐츠로 학습하지 않습니다.",
         "dataPracticeReport": "요청이 공급자에게 도달한 후 공급자가 이를 어떻게 처리하는지는 해당 공급자가 공개한 정책에 따릅니다.",
-        "dataPracticeLink": "각 공급자의 정책"
+        "dataPracticeLink": "각 공급자의 정책",
+        "finalCheckLabel": "최종 검사 실행",
+        "finalCheckHint": "계획을 제안하기 전에 Motir AI는 작업 항목을 빌드 순서대로 다시 읽고, 각 항목이 앞선 항목이 제공하는 것 위에 빌드될 수 있는지 확인하며, 발견한 문제를 수정합니다. 큰 계획에서는 몇 분 이상 걸릴 수 있습니다.",
+        "finalCheckOff": "이 프로젝트의 계획은 최종 검사 없이 제안됩니다. 각 계획의 요약에 검사되지 않았다고 표시됩니다."
       },
       "lessonCapture": {
         "title": "계획 실수",
@@ -8836,7 +8839,9 @@
         "kindSettle": "확정",
         "settleLine": "변경할 내용을 정하는 중",
         "groupLive": "{step} — 진행 중",
-        "groupFinished": "{step} — 완료"
+        "groupFinished": "{step} — 완료",
+        "skipCheck": "최종 검사 건너뛰기",
+        "skippingCheck": "최종 검사를 건너뛰는 중…"
       }
     },
     "codeUnreadable": {
@@ -9362,6 +9367,16 @@
       "none": "내용 없음",
       "correctionHint": "여기를 바꾸려면 대화에 수정 내용을 입력하세요.",
       "notice": "이 제안에는 작성된 요구사항이 없습니다. 확인하면 계획 단계에서 작성합니다."
+    },
+    "skipFinalCheck": {
+      "title": "최종 검사를 건너뛸까요?",
+      "body": "최종 검사는 이 계획의 모든 작업 항목을 빌드 순서대로 다시 읽고, 각 항목이 앞선 항목이 제공하는 것 위에 빌드될 수 있는지 확인하며, 발견한 문제를 수정합니다.",
+      "consequence": "건너뛰면 그 검사 없이 계획이 지금 제안됩니다. 지금까지 발견한 내용은 계획 요약에 표시되지만 아무것도 수정되지 않습니다.",
+      "confirm": "최종 검사 건너뛰기",
+      "keep": "계속 검사",
+      "error": "최종 검사를 건너뛸 수 없었습니다. 아직 실행 중입니다. 다시 시도하거나 계속 검사하세요.",
+      "retry": "다시 시도",
+      "finished": "최종 검사가 이미 끝나서 건너뛸 것이 없었습니다."
     }
   },
   "codeHealth": {

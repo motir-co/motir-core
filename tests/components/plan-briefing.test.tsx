@@ -210,3 +210,35 @@ describe('the plan detail rail', () => {
     expect(container.textContent).not.toContain('**premise**');
   });
 });
+
+// MOTIR-11266 — a plan whose final check did not run says so at the end of section
+// 2, which is open by default. motir-ai writes the line (MOTIR-11265 turned off,
+// MOTIR-11267 skipped); the briefing draws it as written, and a plan whose check
+// ran carries none.
+describe('a plan whose final check did not run', () => {
+  const withLine = (line: string) =>
+    BRIEFING.replace('Adds ten cards.', `Adds ten cards.\n\n${line}`);
+
+  it.each([
+    [
+      'skipped by a person',
+      '**The final check was skipped** before it finished, so this plan was not fully checked and nothing it found was fixed.',
+      'The final check was skipped',
+    ],
+    [
+      'turned off for the project',
+      '**The final check did not run**: it is turned off for this project, so this plan was not checked before it was proposed.',
+      'The final check did not run',
+    ],
+  ])('%s: section 2 says so, in bold, and is open', (_n, line, claim) => {
+    renderWithIntl(<PlanBriefing summary={withLine(line)} />, { messages: enMessages });
+    const section = screen.getByTestId('plan-briefing-section-2');
+    expect(section.textContent).toContain(claim);
+    expect(section.querySelector('strong')?.textContent).toBe(claim);
+  });
+
+  it('a plan whose check ran shows no such line', () => {
+    renderWithIntl(<PlanBriefing summary={BRIEFING} />, { messages: enMessages });
+    expect(screen.getByTestId('plan-briefing').textContent).not.toMatch(/final check/i);
+  });
+});

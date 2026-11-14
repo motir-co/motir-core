@@ -3673,7 +3673,10 @@
         "explanationsHint": "Elk voorgesteld werkitem krijgt een korte ‘waarom dit belangrijk is’ die je kunt lezen zonder de code te openen.",
         "dataPracticeCommitment": "Motir en zijn gateway trainen niet op de inhoud van dit project.",
         "dataPracticeReport": "Wat een provider doet met een verzoek zodra het bij hem aankomt, is het eigen gepubliceerde standpunt van die provider.",
-        "dataPracticeLink": "Wat elke provider verklaart"
+        "dataPracticeLink": "Wat elke provider verklaart",
+        "finalCheckLabel": "De eindcontrole uitvoeren",
+        "finalCheckHint": "Voordat een plan wordt voorgesteld, leest Motir AI de werkitems opnieuw in bouwvolgorde, controleert dat elk item kan voortbouwen op wat de items ervoor opleveren, en herstelt wat het vindt. Bij een groot plan kan dit vele minuten duren.",
+        "finalCheckOff": "Plannen voor dit project worden voorgesteld zonder de eindcontrole. De samenvatting van elk plan vermeldt dat het niet is gecontroleerd."
       },
       "lessonCapture": {
         "title": "Planningsfouten",
@@ -8842,7 +8845,9 @@
         "kindSettle": "bepalen",
         "settleLine": "Bepaalt wat er moet veranderen",
         "groupLive": "{step} — bezig",
-        "groupFinished": "{step} — klaar"
+        "groupFinished": "{step} — klaar",
+        "skipCheck": "Eindcontrole overslaan",
+        "skippingCheck": "Eindcontrole wordt overgeslagen…"
       }
     },
     "codeUnreadable": {
@@ -9368,6 +9373,16 @@
       "none": "Niets hier",
       "correctionHint": "Typ de correctie in het gesprek om hier iets te wijzigen.",
       "notice": "Voor dit voorstel is geen vereiste opgesteld. De planning stelt die op zodra je bevestigt."
+    },
+    "skipFinalCheck": {
+      "title": "Eindcontrole overslaan?",
+      "body": "De eindcontrole leest elk werkitem van dit plan opnieuw in bouwvolgorde, controleert dat elk item kan voortbouwen op wat de items ervoor opleveren, en herstelt wat ze vindt.",
+      "consequence": "Als u haar overslaat, wordt het plan nu voorgesteld zonder die controle. Wat ze tot nu toe heeft gevonden, staat in de samenvatting van het plan, maar er wordt niets hersteld.",
+      "confirm": "Eindcontrole overslaan",
+      "keep": "Blijven controleren",
+      "error": "De eindcontrole kon niet worden overgeslagen. Ze loopt nog: probeer het opnieuw, of blijf controleren.",
+      "retry": "Opnieuw proberen",
+      "finished": "De eindcontrole was al klaar, dus er was niets om over te slaan."
     }
   },
   "codeHealth": {

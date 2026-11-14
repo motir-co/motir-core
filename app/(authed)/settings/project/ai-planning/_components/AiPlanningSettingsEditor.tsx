@@ -107,6 +107,7 @@ interface WorkingSettings {
   sprintLengthDays: string;
   generateExplanations: boolean;
   recordPlanningMistakes: boolean;
+  finalCheck: boolean;
 }
 
 /** The persisted DTO → the panel's working state. */
@@ -121,6 +122,7 @@ function toWorking(dto: ProjectAiSettingsDto): WorkingSettings {
     // nullable column's "never written" state to ON (MOTIR-3349), so the panel
     // never has to know the default.
     recordPlanningMistakes: dto.aiRecordPlanningMistakes,
+    finalCheck: dto.aiFinalCheck,
   };
 }
 
@@ -132,7 +134,8 @@ export function aiSettingsEqual(a: WorkingSettings, b: WorkingSettings): boolean
     a.sprintPlanningEnabled === b.sprintPlanningEnabled &&
     a.sprintLengthDays === b.sprintLengthDays &&
     a.generateExplanations === b.generateExplanations &&
-    a.recordPlanningMistakes === b.recordPlanningMistakes
+    a.recordPlanningMistakes === b.recordPlanningMistakes &&
+    a.finalCheck === b.finalCheck
   );
 }
 
@@ -254,6 +257,7 @@ export function AiPlanningSettingsEditor({
         aiSprintLengthDays: Number(next.sprintLengthDays),
         aiGenerateExplanations: next.generateExplanations,
         aiRecordPlanningMistakes: next.recordPlanningMistakes,
+        aiFinalCheck: next.finalCheck,
       }),
     })
       .then(async (res) => {
@@ -452,6 +456,25 @@ export function AiPlanningSettingsEditor({
           hint={t('aiPlanning.planner.explanationsHint')}
         />
 
+        <SwitchRow
+          checked={working.finalCheck}
+          onCheckedChange={(v) => patch({ finalCheck: v })}
+          disabled={locked}
+          label={t('aiPlanning.planner.finalCheckLabel')}
+          hint={t('aiPlanning.planner.finalCheckHint')}
+          testId="ai-planning-final-check"
+        >
+          {working.finalCheck ? null : (
+            <Callout
+              tint="yellow"
+              icon={<TriangleAlert className="size-[15px]" aria-hidden />}
+              testId="ai-planning-final-check-off"
+            >
+              {t('aiPlanning.planner.finalCheckOff')}
+            </Callout>
+          )}
+        </SwitchRow>
+
         {/* THE DATA-PRACTICE PROMISE (Story MOTIR-3665 · MOTIR-3670; design
             §D2-D4, panel 7). At the FOOT of this card and nowhere else: the
             promise qualifies the act of CHOOSING A MODEL, so it belongs where
@@ -618,12 +641,14 @@ function DependentField({
   return (
     <div className="border-(--el-border-soft) ml-[50px] flex flex-col gap-1.5 border-l pl-3.5">
       <span
+        {...(disabled ? { 'aria-disabled': true } : {})}
         className={`text-sm font-medium ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text)'}`}
       >
         {label}
       </span>
       <p
         id={hintId}
+        {...(disabled ? { 'aria-disabled': true } : {})}
         className={`max-w-[52ch] text-xs leading-relaxed ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text-helper)'}`}
       >
         {hint}
@@ -716,7 +741,10 @@ function Stepper({
       >
         <Plus className="size-[15px]" aria-hidden />
       </button>
-      <span className={`text-xs ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text-muted)'}`}>
+      <span
+        {...(disabled ? { 'aria-disabled': true } : {})}
+        className={`text-xs ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text-muted)'}`}
+      >
         {unit}
       </span>
     </div>
@@ -748,7 +776,7 @@ function Callout({
   testId,
   role,
 }: {
-  tint: 'sky' | 'lavender' | 'peach' | 'plain';
+  tint: 'sky' | 'lavender' | 'peach' | 'yellow' | 'plain';
   icon: ReactNode;
   children: ReactNode;
   testId?: string;
@@ -763,13 +791,15 @@ function Callout({
         ? 'bg-(--el-tint-lavender) border-(--el-border-soft) text-(--el-text-strong)'
         : tint === 'peach'
           ? 'bg-(--el-tint-peach) border-(--el-border-soft) text-(--el-text-strong)'
-          : 'bg-(--el-surface) border-(--el-border) text-(--el-text-secondary)';
+          : tint === 'yellow'
+            ? 'bg-(--el-tint-yellow) border-(--el-border-soft) text-(--el-text-strong)'
+            : 'bg-(--el-surface) border-(--el-border) text-(--el-text-secondary)';
   const iconTone =
     tint === 'sky'
       ? 'text-(--el-info)'
       : tint === 'lavender'
         ? 'text-(--el-accent-on-surface)'
-        : tint === 'peach'
+        : tint === 'peach' || tint === 'yellow'
           ? 'text-(--el-warning)'
           : 'text-(--el-icon-muted)';
   return (

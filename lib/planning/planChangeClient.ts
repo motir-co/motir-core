@@ -366,6 +366,8 @@ export interface MailboxDeliveryResponse {
     target: string | null;
   }>;
   stopped: boolean;
+  /** A person asked to skip the final check (MOTIR-11266). */
+  skipFinalCheck?: boolean;
 }
 
 /**
@@ -446,6 +448,30 @@ export async function stopPlanChangeRun(
 ): Promise<MailboxDeliveryResponse> {
   return post<MailboxDeliveryResponse>(
     '/api/ai/plan-change/session/mailbox/stop',
+    { sessionId, jobId, idempotencyKey },
+    signal,
+  );
+}
+
+/** What the skip door answers (MOTIR-11266): `skipped`, or `not_running` when
+ *  the final check had already ended and nothing was written. */
+export interface SkipFinalCheckResponse {
+  outcome: 'skipped' | 'not_running';
+  mailbox: MailboxDeliveryResponse;
+}
+
+/**
+ * SKIP the final check of the run in flight (MOTIR-11266) — the stop door's
+ * sibling, on the same mailbox. It ends only the check, never the plan.
+ */
+export async function skipPlanFinalCheck(
+  sessionId: string,
+  jobId: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<SkipFinalCheckResponse> {
+  return post<SkipFinalCheckResponse>(
+    '/api/ai/plan-change/session/mailbox/skip-final-check',
     { sessionId, jobId, idempotencyKey },
     signal,
   );

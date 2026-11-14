@@ -577,6 +577,23 @@ export interface JobContextBag {
   // (`lib/ai/lessonCapture.ts`); the call sites use it as a computed key so this
   // string has exactly one home on this side of the boundary.
   recordPlanningMistakes?: boolean;
+  // WHETHER THIS PROJECT'S PLANS RUN THE FINAL CHECK (Story MOTIR-11262 ·
+  // MOTIR-11264 producer ↔ MOTIR-11265 consumer) — the wire form of
+  // `Project.aiFinalCheck`. The final check is the plan's last stage (motir-ai's
+  // `dryRunStage`): one review session per card in build order, then a repair of
+  // what it finds. `false` leaves both out; the plan is proposed and says so.
+  //
+  // ⚠️ ABSENT IS NOT `false`, exactly as for `recordPlanningMistakes` above.
+  // `false` means *this project turned the final check off*; ABSENT means *the
+  // producer predates this field*, which the consumer reads as ON — so every
+  // planning producer sends it UNCONDITIONALLY, and the consumer's fallback
+  // exists for version skew alone.
+  //
+  // Sent by every `plan` submit: `aiGenerationService` (the routing run and a
+  // project generation) and `aiPlanEditsService`'s shared planning context (every
+  // plan edit, revise and resume). The KEY is spelled once, in
+  // `FINAL_CHECK_CONTEXT_FIELD` (`lib/ai/finalCheck.ts`).
+  finalCheck?: boolean;
   // Is this the project's FIRST plan? Mirrors `Project.onboardingRanAt == null`
   // (the immutable onboarding marker of Subtask 7.4 / MOTIR-1264, stamped by
   // `plansService.approvePlan`) — MOTIR-4736 producer ↔ MOTIR-4737 consumer.

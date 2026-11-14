@@ -42,6 +42,8 @@ function dto(over: Partial<ProjectAiSettingsDto> = {}): ProjectAiSettingsDto {
     // MOTIR-3349 — ON by default, resolved from a NULL column by the mapper, so
     // the panel receives a real boolean and never re-derives the default.
     aiRecordPlanningMistakes: true,
+    // MOTIR-11264 — ON by default, resolved from a NULL column the same way.
+    aiFinalCheck: true,
     ...over,
   };
 }
@@ -92,6 +94,7 @@ const autoPlanSwitch = () => screen.getByRole('switch', { name: 'Expand the plan
 const sprintSwitch = () => screen.getByRole('switch', { name: 'Plan sprints with Motir' });
 const explanationsSwitch = () => screen.getByRole('switch', { name: 'Draft a why for each item' });
 const recordMistakesSwitch = () => screen.getByRole('switch', { name: 'Record planning mistakes' });
+const finalCheckSwitch = () => screen.getByRole('switch', { name: 'Run the final check' });
 const explanationText = () =>
   screen.getByTestId('ai-planning-record-mistakes-explanation').textContent ?? '';
 
@@ -152,10 +155,10 @@ describe('AiPlanningSettingsEditor — the four cards', () => {
     expect(screen.getByText('Planner')).toBeTruthy();
     expect(screen.getByText('Planning mistakes')).toBeTruthy();
 
-    // FOUR enable switches — the Story-7.4 `aiGenerateExplanations` column,
-    // which had no UI anywhere before this panel, plus the MOTIR-3331
-    // record-planning-mistakes switch.
-    expect(screen.getAllByRole('switch')).toHaveLength(4);
+    // FIVE enable switches — the Story-7.4 `aiGenerateExplanations` column,
+    // which had no UI anywhere before this panel, the MOTIR-3331
+    // record-planning-mistakes switch and the MOTIR-11264 final check.
+    expect(screen.getAllByRole('switch')).toHaveLength(5);
     expect(explanationsSwitch().getAttribute('aria-checked')).toBe('false');
 
     // NO planner-model control (MOTIR-7228): the model that plans is a platform
@@ -337,6 +340,7 @@ describe('AiPlanningSettingsEditor — save', () => {
       aiSprintLengthDays: 2,
       aiGenerateExplanations: false,
       aiRecordPlanningMistakes: true, // ON, and sent on every save
+      aiFinalCheck: true, // ON, and sent on every save (MOTIR-11264)
     });
     // Optimistic + reconciled: the footer settles back to not-dirty.
     await waitFor(() => expect(saveButton().disabled).toBe(true));
@@ -702,5 +706,65 @@ describe('the planner model has left the copy, in both locales (MOTIR-7228)', ()
         expect(line, `${lang}: "${line}"`).not.toMatch(/model|模型/i);
       }
     }
+  });
+});
+
+// ─── The final check (Story MOTIR-11262 · MOTIR-11264) ───────────────────────
+// A second row on the Planner card (design-notes § MOTIR-11263 §1): on by
+// default, a yellow callout only while it reads off, saved with the page, and
+// disabled at its saved value — callout included — for a member without
+// `ai:configure`.
+describe('AiPlanningSettingsEditor — the final check (MOTIR-11264)', () => {
+  const offCallout = () => screen.queryByTestId('ai-planning-final-check-off');
+
+  it('is on by default, with its hint and no callout', () => {
+    mount();
+    expect(finalCheckSwitch().getAttribute('aria-checked')).toBe('true');
+    expect(finalCheckSwitch().id).toBe('ai-planning-final-check');
+    expect(screen.getByText(/reads its work items again in build order/)).toBeTruthy();
+    expect(offCallout()).toBeNull();
+  });
+
+  it('switched off, it shows the callout, makes the page dirty and saves `aiFinalCheck: false`', async () => {
+    mount();
+
+    fireEvent.click(finalCheckSwitch());
+    expect(finalCheckSwitch().getAttribute('aria-checked')).toBe('false');
+    expect(offCallout()?.textContent).toBe(
+      'Plans for this project are proposed without the final check. Each plan’s summary says it was not checked.',
+    );
+    expect(screen.getByTestId('ai-planning-footer-hint').textContent).toBe('Unsaved changes');
+
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(body['aiFinalCheck']).toBe(false);
+    expect(body['aiRecordPlanningMistakes']).toBe(true);
+  });
+
+  it('a saved off reads off, with the callout, and turning it back on clears it', () => {
+    mount({ aiFinalCheck: false });
+    expect(finalCheckSwitch().getAttribute('aria-checked')).toBe('false');
+    expect(offCallout()).not.toBeNull();
+
+    fireEvent.click(finalCheckSwitch());
+    expect(offCallout()).toBeNull();
+  });
+
+  it('a non-admin sees it disabled at the saved value, the callout still shown, and the text marked disabled', () => {
+    mount({ aiFinalCheck: false }, { isAdmin: false });
+
+    const sw = finalCheckSwitch() as HTMLButtonElement;
+    expect(sw.disabled).toBe(true);
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    // A member should know why a plan says it was not checked.
+    expect(offCallout()).not.toBeNull();
+    // The faint ink on a disabled row is the WCAG 1.4.3 disabled exemption, and
+    // the element says so (design-notes § MOTIR-11263 §1).
+    const label = screen.getByText('Run the final check');
+    expect(label.getAttribute('aria-disabled')).toBe('true');
   });
 });

@@ -31,6 +31,12 @@ import { planChangeMailboxService } from '@/lib/services/planChangeMailboxServic
 // on to another run, answers `{ turns: [], stopped: false }` — which is TRUE —
 // and never a 404 that a caller would have to read as ambiguous.
 //
+// ⚠️ `peek: true` READS WITHOUT CONSUMING (MOTIR-11267). The final check watches for
+// a person's skip on a timer while its reviews run, and a consuming read there would
+// claim the turns typed meanwhile from the pass that is meant to fold them (the fix
+// after the check, or the late-change sweep). So the watch peeks: the same answer,
+// nothing stamped. Anything but `true` is the consuming read, as before.
+//
 // Service-to-service ONLY: the §4a service bearer + the §4b job token via
 // `authenticateAndLimitJobRequest`. The mailbox is read AS the token's user
 // within the token's project, so a job token from another tenant reads an empty
@@ -60,10 +66,14 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const delivery = await planChangeMailboxService.readForBoundary(jobId, {
+  const pctx = {
     userId: auth.ctx.userId,
     workspaceId: auth.ctx.workspaceId,
     projectId: auth.projectId,
-  });
+  };
+  const peek = (body as { peek?: unknown }).peek === true;
+  const delivery = peek
+    ? await planChangeMailboxService.peekForBoundary(jobId, pctx)
+    : await planChangeMailboxService.readForBoundary(jobId, pctx);
   return NextResponse.json(delivery, { headers: { 'Cache-Control': 'private, no-store' } });
 }
