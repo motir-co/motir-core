@@ -49,6 +49,7 @@ function machineBody(m: SimMachine) {
     state: m.state,
     region: 'iad',
     version: m.version,
+    instance_id: m.version,
     created_at: '2026-10-28T00:00:00.000Z',
     config: m.config,
     events: m.events,
@@ -66,6 +67,12 @@ export interface HostingFlySim {
   /** The exit statuses the next one-off Machines stop with, in order (0 when
    *  empty) — what `/wait?state=stopped` answers for a command Machine. */
   readonly exitCodes: number[];
+  /** How a release Machine's write settles (MOTIR-11250). Fly applies a create
+   *  or update asynchronously: the Machine is `created` / `replacing` until a
+   *  `/wait` lets it settle, and a write meanwhile is refused 409 "machine is
+   *  replacing". `stallWaits` is how many waits answer 408 before it settles;
+   *  `settleState` is the state it settles in (`started` unless a test says). */
+  readonly release: { stallWaits: number; settleState: string };
   /** A `fetch` to stub globally. */
   fetch(url: string, init: RequestInit): Promise<Response>;
 }
@@ -77,7 +84,12 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
   const tokens = new Map<string, SimToken[]>();
   const overrides: Array<(call: FlyCall) => Response | null> = [];
   const exitCodes: number[] = [];
+  const release = { stallWaits: 0, settleState: 'started' };
   let seq = 0;
+
+  const isCommand = (config: Record<string, unknown> | undefined) =>
+    (config?.['metadata'] as Record<string, unknown> | undefined)?.['motir_hosting'] === 'command';
+  const APPLYING = new Set(['created', 'replacing']);
 
   function simulate(call: FlyCall): Response {
     for (const o of overrides) {
@@ -119,7 +131,9 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
       const config = call.body?.['config'] as Record<string, unknown>;
       const m: SimMachine = {
         id: `m-${seq}`,
-        state: 'started',
+        // A release Machine is `created` until a wait settles it; a one-off
+        // command Machine runs at once.
+        state: isCommand(config) ? 'started' : 'created',
         version: `v${seq}`,
         config,
         versions: [{ version: `v${seq}`, user_config: config }],
@@ -132,6 +146,23 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
     const m = machines.find((x) => x.id === id);
     if (!m) return flyJson(404, { error: 'machine not found' });
     if (parts[4] === 'versions') return flyJson(200, [...m.versions].reverse());
+    if (parts[4] === 'wait' && !isCommand(m.config)) {
+      const query = new URLSearchParams(call.path.split('?')[1] ?? '');
+      const instance = query.get('instance_id');
+      if (instance && instance !== m.version) {
+        return flyJson(400, { error: `instance ${instance} is not the machine's current one` });
+      }
+      if (APPLYING.has(m.state)) {
+        if (release.stallWaits > 0) {
+          release.stallWaits -= 1;
+          return flyJson(408, { error: 'deadline_exceeded: machine did not reach the state' });
+        }
+        m.state = release.settleState;
+      }
+      return m.state === query.get('state')
+        ? flyJson(200, { ok: true })
+        : flyJson(408, { error: 'deadline_exceeded: machine did not reach the state' });
+    }
     if (parts[4] === 'wait') {
       // The command runs to its end at once: the Machine stops with the next
       // queued exit status.
@@ -149,9 +180,15 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
       machines.splice(machines.indexOf(m), 1);
       return flyJson(200, { ok: true });
     }
+    if (APPLYING.has(m.state)) {
+      return flyJson(409, {
+        error: 'aborted: machine is replacing: concurrent update in progress',
+      });
+    }
     const current = call.body?.['current_version'];
     if (current && current !== m.version) return flyJson(409, { error: 'version mismatch' });
     seq += 1;
+    m.state = 'replacing';
     m.version = `v${seq}`;
     m.config = call.body?.['config'] as Record<string, unknown>;
     m.versions.push({ version: m.version, user_config: m.config });
@@ -192,6 +229,7 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
     tokens,
     overrides,
     exitCodes,
+    release,
     async fetch(url, init) {
       const headers = (init.headers ?? {}) as Record<string, string>;
       const call: FlyCall = {

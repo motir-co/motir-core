@@ -341,7 +341,10 @@ describe('the port boundary', () => {
         // ECR and CloudWatch Logs through its own ports file, tested beside it.
         // The console's reads of core's OWN account (Services, Fleet status —
         // MOTIR-10890, MOTIR-10887, MOTIR-10986's ECR image read) live in
-        // `lib/awsServices/`, held to that folder by the same test.
+        // `lib/awsServices/`, held to that folder by the same test. The
+        // Services page's service test (MOTIR-11112) spies on the ECR client's
+        // `send` to fail the image read those `lib/awsServices/` reads make, so
+        // it names the client too (MOTIR-11252).
         allowed: [
           SERVERLESS,
           `${ORCHESTRATOR}/adapters/aws/`,
@@ -349,6 +352,7 @@ describe('the port boundary', () => {
           'tests/awsDeploy/',
           'lib/awsServices/',
           'tests/awsServices/',
+          'tests/platform/platformServicesService.test.ts',
         ],
         modules: serverlessModules(),
         identifiers: new Set(),

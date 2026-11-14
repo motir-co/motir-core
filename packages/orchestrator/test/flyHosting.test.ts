@@ -19,6 +19,7 @@ import {
   createHostingFlySim,
   flyJson,
   type FlyCall,
+  type HostingFlySim,
   type SimMachine,
   type SimToken,
 } from './contract/hostingFlySim';
@@ -46,6 +47,8 @@ let apps: Map<string, SimMachine[]>;
 let clock: number;
 let overrides: Array<(call: FlyCall) => Response | null>;
 let tokens: Map<string, SimToken[]>;
+let release: HostingFlySim['release'];
+let sleeps: number[];
 
 function input(over: Partial<DeployReleaseInput> = {}): DeployReleaseInput {
   return {
@@ -69,6 +72,9 @@ function port(): HostingDeployPort {
   return createFlyHostingDeployPort(CONFIG, {
     now: () => new Date(clock),
     newReleaseId: () => `rel-${(ids += 1)}`,
+    sleep: async (ms) => {
+      sleeps.push(ms);
+    },
   });
 }
 
@@ -86,9 +92,10 @@ const writes = () =>
 
 beforeEach(() => {
   ids = 0;
+  sleeps = [];
   clock = Date.parse('2026-10-28T00:00:00.000Z');
   const sim = createHostingFlySim(() => clock);
-  ({ calls, apps, overrides, tokens } = sim);
+  ({ calls, apps, overrides, tokens, release } = sim);
   vi.stubGlobal('fetch', sim.fetch);
 });
 
@@ -470,6 +477,20 @@ describe('deploy, describe, rollback', () => {
     expect(apps.get(PROD)).toHaveLength(1);
   });
 
+  it('the fake refuses a write while an update is in flight — the 409 a caller that does not wait meets', async () => {
+    await port().deploy(input());
+    apps.get(PROD)![0]!.state = 'replacing';
+    const res = await fetch(`https://api.machines.dev/v1/apps/${PROD}/machines/m-1`, {
+      method: 'POST',
+      headers: {},
+      body: JSON.stringify({ config: {} }),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: 'aborted: machine is replacing: concurrent update in progress',
+    });
+  });
+
   it('rollback runs the kept app under TODAY’s guard: a new guard image and a rotated key apply', async () => {
     await port().deploy(input());
     await port().deploy(input({ artifact: { kind: 'image', ref: 'img:2' } }));
@@ -826,5 +847,221 @@ describe('runReleaseCommand (MOTIR-10030)', () => {
     await expect(
       port().runReleaseCommand({ ...command, artifact: { kind: 'bundle', ref: 'x' } }),
     ).rejects.toBeInstanceOf(ReleaseArtifactUnsupportedError);
+  });
+});
+
+// MOTIR-11250: Fly applies a Machine create or update asynchronously, and refuses
+// any other write to the Machine until it has — `409 aborted: machine is
+// replacing: concurrent update in progress`. The sim holds a written release
+// Machine `created` / `replacing` until a `/wait` settles it, so a port that
+// returned on Fly's acceptance would meet that 409 on its very next write.
+describe('a release write settles before deploy and rollback return (MOTIR-11250)', () => {
+  const waits = () => calls.filter((c) => /\/machines\/[^/]+\/wait\?/.test(c.path));
+  const machine = () => apps.get(PROD)![0]!;
+
+  beforeEach(() => {
+    apps.set(PROD, []);
+  });
+
+  it('two back-to-back deploys to the same app both succeed, each waiting for its own instance to start', async () => {
+    const p = port();
+    const first = await p.deploy(input());
+    expect(machine().state).toBe('started');
+    const second = await p.deploy(
+      input({ env: [{ name: 'WHOAMI_NAME', value: 'release-2', secret: false }] }),
+    );
+    expect([first.releaseId, second.releaseId]).toEqual(['rel-1', 'rel-2']);
+    expect(waits().map((c) => c.path)).toEqual([
+      `/apps/${PROD}/machines/m-1/wait?state=started&timeout=10&instance_id=v1`,
+      `/apps/${PROD}/machines/m-1/wait?state=started&timeout=10&instance_id=v2`,
+    ]);
+    expect(machine()).toMatchObject({ state: 'started', version: 'v2' });
+    expect(await p.describe(second)).toMatchObject({ state: 'healthy', releaseId: 'rel-2' });
+    expect(sleeps).toEqual([]);
+  });
+
+  it('a rollback straight after a release succeeds, and a redeploy straight after the rollback', async () => {
+    const p = port();
+    await p.deploy(input());
+    await p.deploy(input({ artifact: { kind: 'image', ref: 'img:2' } }));
+    const back = await p.rollback({ appRef: PROD, environment: { kind: 'production' } });
+    expect(back.releaseId).toBe('rel-1');
+    expect(waits().at(-1)!.path).toBe(
+      `/apps/${PROD}/machines/m-1/wait?state=started&timeout=10&instance_id=v3`,
+    );
+    expect(machine().state).toBe('started');
+    await expect(p.deploy(input())).resolves.toMatchObject({ releaseId: 'rel-3' });
+  });
+
+  it('keeps waiting across windows that pass with the update still applying, reading the Machine between them', async () => {
+    release.stallWaits = 2;
+    await port().deploy(input());
+    expect(waits()).toHaveLength(3);
+    // Each window that ended without `started` is followed by a read of the Machine.
+    const after = (i: number) => calls[calls.indexOf(waits()[i]!) + 1]!;
+    expect([after(0), after(1)].map((c) => [c.method, c.path])).toEqual([
+      ['GET', `/apps/${PROD}/machines/m-1`],
+      ['GET', `/apps/${PROD}/machines/m-1`],
+    ]);
+    expect(machine().state).toBe('started');
+  });
+
+  it('returns when the update settles STOPPED rather than started, and describe reads it stopped — never deploying', async () => {
+    const p = port();
+    await p.deploy(input());
+    release.settleState = 'stopped';
+    const handle = await p.deploy(input());
+    expect(machine()).toMatchObject({ state: 'stopped', version: 'v2' });
+    expect((await p.describe(handle)).state).toBe('stopped');
+    release.settleState = 'suspended';
+    await expect(p.deploy(input())).resolves.toMatchObject({ releaseId: 'rel-3' });
+  });
+
+  it('a settled idle Machine at an OLDER instance is not the write settling', async () => {
+    await port().deploy(input());
+    const m = machine();
+    // The write is acknowledged, but the Machine reads stopped at the old version.
+    overrides.push((call) => {
+      if (call.method === 'POST' && call.path === `/apps/${PROD}/machines/m-1`) {
+        return flyJson(200, { id: 'm-1', state: 'replacing', instance_id: 'v9', config: {} });
+      }
+      if (call.path.includes('/wait?')) return flyJson(408, { error: 'deadline_exceeded' });
+      return null;
+    });
+    m.state = 'stopped';
+    await expect(port().deploy(input())).rejects.toMatchObject({
+      status: 408,
+      message: expect.stringContaining('did not finish applying its update within 300 s'),
+    });
+    expect(waits().filter((c) => c.path.includes('instance_id=v9'))).toHaveLength(30);
+  });
+
+  it('waits on the state alone when Fly’s answer names no instance', async () => {
+    overrides.push((call) =>
+      call.method === 'POST' && call.path === `/apps/${PROD}/machines`
+        ? flyJson(200, { id: 'm-x', state: 'created', config: {} })
+        : null,
+    );
+    apps.get(PROD)!.push({
+      id: 'm-x',
+      state: 'created',
+      version: 'v1',
+      config: {},
+      versions: [],
+      events: [],
+      checks: [],
+    });
+    release.settleState = 'stopped';
+    await expect(port().deploy(input())).resolves.toMatchObject({ providerRef: 'm-x' });
+    expect(waits().map((c) => c.path)).toEqual([
+      `/apps/${PROD}/machines/m-x/wait?state=started&timeout=10`,
+    ]);
+  });
+
+  it('gives up with a bounded wait: 300 s for a deploy, 60 s for a rollback', async () => {
+    const p = port();
+    await p.deploy(input());
+    await p.deploy(input({ artifact: { kind: 'image', ref: 'img:2' } }));
+    const before = waits().length;
+    release.stallWaits = Number.POSITIVE_INFINITY;
+    await expect(p.rollback({ appRef: PROD, environment: { kind: 'production' } })).rejects.toThrow(
+      'The fly orchestrator refused a call (HTTP 408: release Machine m-1 did not finish applying its update within 60 s).',
+    );
+    expect(waits().length - before).toBe(6);
+  });
+
+  it('retries a write Fly refuses because an earlier update is still applying, with doubling pauses', async () => {
+    const p = port();
+    await p.deploy(input());
+    machine().state = 'replacing';
+    let refusals = 0;
+    overrides.push((call) => {
+      if (call.method === 'POST' && call.path === `/apps/${PROD}/machines/m-1`) {
+        refusals += 1;
+        // The earlier update finishes after the second refusal.
+        if (refusals === 3) machine().state = 'started';
+      }
+      return null;
+    });
+    await expect(p.deploy(input())).resolves.toMatchObject({ releaseId: 'rel-2' });
+    expect(sleeps).toEqual([1000, 2000]);
+    expect(machine()).toMatchObject({ state: 'started', version: 'v2' });
+  });
+
+  it('stops retrying once the budget is spent, and throws Fly’s refusal', async () => {
+    const p = port();
+    await p.deploy(input());
+    await p.deploy(input({ artifact: { kind: 'image', ref: 'img:2' } }));
+    machine().state = 'replacing';
+    await expect(
+      p.rollback({ appRef: PROD, environment: { kind: 'production' } }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining('machine is replacing'),
+    });
+    expect(sleeps).toEqual([1, 2, 4, 8, 8, 8, 8, 8, 8, 5].map((s) => s * 1000));
+  });
+
+  it('does not retry any other 409 — a version mismatch is a real conflict', async () => {
+    const p = port();
+    await p.deploy(input());
+    overrides.push((call) =>
+      call.method === 'POST' && call.path === `/apps/${PROD}/machines/m-1`
+        ? flyJson(409, { error: 'version mismatch' })
+        : null,
+    );
+    await expect(p.deploy(input())).rejects.toMatchObject({ status: 409 });
+    expect(sleeps).toEqual([]);
+  });
+
+  it('a refused wait throws Fly’s refusal unless the Machine has settled at the written instance', async () => {
+    const p = port();
+    await p.deploy(input());
+    overrides.push((call) =>
+      call.path.includes('/wait?') ? flyJson(500, { error: 'internal' }) : null,
+    );
+    await expect(p.deploy(input())).rejects.toMatchObject({ status: 500 });
+    // That update has since applied. Fly then refuses to wait on a Machine that
+    // has already stopped at the new instance.
+    machine().state = 'started';
+    overrides.unshift((call) => {
+      if (!call.path.includes('/wait?')) return null;
+      machine().state = 'stopped';
+      return flyJson(400, { error: 'machine is stopped' });
+    });
+    await expect(p.deploy(input())).resolves.toMatchObject({ releaseId: 'rel-3' });
+  });
+
+  it('throws when the Machine is destroyed while its update applies', async () => {
+    const p = port();
+    await p.deploy(input());
+    overrides.push((call) => {
+      if (!call.path.includes('/wait?')) return null;
+      apps.set(PROD, []);
+      return flyJson(408, { error: 'deadline_exceeded' });
+    });
+    await expect(p.deploy(input())).rejects.toThrow(
+      'release Machine m-1 was destroyed while its update applied',
+    );
+    apps.set(PROD, [
+      {
+        id: 'm-1',
+        state: 'destroyed',
+        version: 'v1',
+        config: {},
+        versions: [],
+        events: [],
+        checks: [],
+      },
+    ]);
+    overrides.length = 0;
+    overrides.push((call) =>
+      call.path.includes('/wait?')
+        ? flyJson(408, { error: 'deadline_exceeded' })
+        : call.method === 'POST'
+          ? flyJson(200, { id: 'm-1', state: 'replacing', instance_id: 'v2', config: {} })
+          : null,
+    );
+    await expect(p.deploy(input())).rejects.toMatchObject({ status: 404 });
   });
 });
