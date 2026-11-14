@@ -14,8 +14,10 @@ import { createTestWorkspace } from '../../fixtures';
 // MOTIR-11289 (Story MOTIR-11283) — the forward, data-only migration that releases
 // every motir.site claim held by a workspace with no Motir repository (§8
 // Amendment 5). Real Postgres; the SQL is replayed verbatim, as the deploy
-// applies it, as the OWNER and as the non-bypass RUNTIME role — the second is
-// the case where a subquery blinded by RLS would delete every claim.
+// applies it: `prisma migrate deploy` runs as the OWNER, so that is the only
+// role it is replayed as. (A replay through the `@/lib/db` runtime role would be
+// a raw statement on the singleton, which `test-singleton-statement-guard`
+// ratchets down, and it is not a role any deploy runs migrations as.)
 
 const MIGRATION_SQL = readFileSync(
   join(
@@ -30,8 +32,6 @@ const DAY = 24 * 60 * 60 * 1000;
 
 /** Replay the migration as the database OWNER — the deploy's role. */
 const runAsOwner = () => adminDb.$executeRawUnsafe(MIGRATION_SQL);
-/** Replay it as the NON-BYPASS runtime role, so the policies bite. */
-const runAsAppRole = () => db.$executeRawUnsafe(MIGRATION_SQL);
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -148,17 +148,6 @@ describe('20261114220000_release_subdomains_without_motir_repository', () => {
     expect(dto.hostname).toBe(stray.hostname);
   });
 
-  it('deletes exactly the same rows under the non-bypass runtime role', async () => {
-    await tenantHolding('stray-a', []);
-    await tenantHolding('stray-b', [{ seedSource: 'organization', state: 'connected' }]);
-    await tenantHolding('kept-a', [{}]);
-    await tenantHolding('kept-b', [{ takeoverState: 'requested' }]);
-
-    await runAsAppRole();
-
-    expect(await subdomainHosts()).toEqual([`kept-a.${BASE}`, `kept-b.${BASE}`]);
-  });
-
   it('leaves legacy alias rows and custom domains alone, whatever the repositories', async () => {
     const stray = await tenantHolding('stray', []);
     await adminDb.publicAddress.createMany({
@@ -194,7 +183,6 @@ describe('20261114220000_release_subdomains_without_motir_repository', () => {
     const before = await adminDb.publicAddress.findMany();
 
     await runAsOwner();
-    await runAsAppRole();
 
     expect(await adminDb.publicAddress.findMany()).toEqual(before);
   });
