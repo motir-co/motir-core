@@ -37,6 +37,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **A plan resumed after a lost machine**         | **`plan-review--live-progress--resuming.mock.html`**      | MOTIR-8306           | Part XXVII  |
 | **Following the planner, and fields typing in** | **`plan-review--follow-the-planner.mock.html`**           | MOTIR-8591           | Part XXVIII |
 | **A card's text as it is written, in the peek** | **`peek-proposal-mode--being-written.mock.html`**         | MOTIR-11196          | Part XXIX   |
+| **Follow the writing, in the peek**             | **`peek-proposal-mode--follow-the-writing.mock.html`**    | MOTIR-11249          | Part XXX    |
 | **The Plans page lists CONVERSATIONS**          | `plans-sessions--list.mock.html` (on the design result)   | MOTIR-6019           | by title    |
 | **The list shows only what reached planning**   | **`plans-sessions--reached-planning.mock.html`**          | MOTIR-9298           | § at end    |
 
@@ -8745,6 +8746,8 @@ stands unchanged.
 | P13   | Narrow split (480px): the cue wraps under the per-op header; en and zh                                      |
 | P14   | The final-value announcement: what a screen reader meets at each moment                                     |
 
+> **P4 is SUPERSEDED in part 2026-11-14 by MOTIR-11249** — it now draws the DEFAULT, not-following state only; following the caret is Part XXX (`peek-proposal-mode--follow-the-writing.mock.html`).
+
 ## 29.0 Rendered before drawn
 
 Every peek on the board is the emitted markup of `ProposalPeek` → `IssueQuickViewPanel` in proposal
@@ -8844,6 +8847,8 @@ changes are real changes to a live region and are announced.
 
 ## 29.5 Where the reader's eye stays
 
+> **The first paragraph is SUPERSEDED 2026-11-14 by MOTIR-11249** — Part XXX (`peek-proposal-mode--follow-the-writing.mock.html`). The peek still never scrolls for the reader BY DEFAULT, but it now offers _Follow the writing_: pressed, it keeps the caret in view in whichever field holds it, and the reader's own scroll turns it off. The never-scroll rule below holds only while following is off. The second paragraph (_Where it shows_) stands.
+
 A growing description never scrolls the peek for the reader. `QuickViewMain` is its own scroller;
 its `scrollTop` is kept across reads (P4). Text appended below the viewport never moves what the
 reader sees, and the caret is allowed to be out of view; text that grows above the reader (a title
@@ -8933,3 +8938,263 @@ were deleted; the design lane (`vitest --config vitest.design.config.ts`) is gre
 How the partial text travels from motir-ai to motir-core, the live read's shape, and the planner's
 streaming; deleting the typewriter's code, token and tests (the quick-view card's); the other nine
 locales' strings; the plan page's peek (unchanged); the canvas card's drafting cue (unchanged).
+
+# Part XXX — _Follow the writing_: a control in the proposal quick view of a card BEING WRITTEN that keeps the caret in view until the reader scrolls (MOTIR-11249 · fix MOTIR-11248 — `peek-proposal-mode--follow-the-writing.mock.html`, DATED 2026-11-14)
+
+**Design system, identified first.** Read `package.json` (`"@motir/design-system": "workspace:*"`)
+and `app/globals.css` (`@import '@motir/design-system/theme.css'`). Both hold, so the verdict is
+**(a) ON MOTIR DESIGN**, package **v0.22.4** (`packages/design-system/package.json`). The axes are
+per person (`app/layout.tsx` stamps the reader's `data-style` / `data-palette` / `data-type`), so the
+board renders at the package defaults (`warm-editorial` · `motir` · `motir`). The package exports
+`@motir/design-system/mock`, and the board is built with its `renderMock` at `boardWidth: 'full'`.
+
+| part                                                              | kind                    | reason                                                                                                                                                  |
+| ----------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IssueQuickViewPanel` in proposal mode (opened by `ProposalPeek`) | product-local component | the Part XIV peek with Part XXIX's live fields and cue, shipped; cited and not redrawn                                                                  |
+| `PlanItemNode` (F0, the access path)                              | product-local component | the overlay canvas card that opens the peek; its drafting cue is Part XXVI §26.6, shipped                                                               |
+| the **follow toggle** (`quick-view-live-follow`)                  | product-local component | NEW. The shipped `FollowPlannerControl` off-button recipe plus `aria-pressed`; it belongs beside the overlay's other follow control, not in the package |
+| the **live group** (`quick-view-live-group`)                      | product-local component | NEW, a wrapper that holds the shipped cue and the toggle so they wrap onto one line together at the narrow width                                        |
+| `Tooltip`                                                         | `@motir/design-system`  | shipped, unchanged                                                                                                                                      |
+
+Nothing is proposed for `@motir/design-system`. **No token is added.**
+
+**The number.** _Part XXX_ is free. Checked on 2026-11-14 against this file's headings (`grep -n "^#
+Part"`: XXIX is the last) and against the area's published results (`list_designs { projectKey:
+"MOTIR", pathPrefix: "design/ai-planning/" }`: the newest is MOTIR-11196's Part XXIX).
+
+**A DELTA.** Base: `peek-proposal-mode--being-written.mock.html` (Part XXIX) — not edited. It
+SUPERSEDES the first paragraph of **§29.5** (_A growing description never scrolls the peek for the
+reader_) and narrows case **P4** to the default state; both carry a dated pointer here. Everything else
+in Part XXIX stands: the live field, the waiting field, the cue, the caret rule, the hand-over, the
+refused write, the announcement, the copy.
+
+**Asset:** [`peek-proposal-mode--follow-the-writing.mock.html`](./peek-proposal-mode--follow-the-writing.mock.html).
+
+| Panel | State                                                                                                                        |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------- |
+| F0    | The access path: the card being written on the overlay canvas opens the quick view, which offers the control at once         |
+| F1    | Writing, NOT following — the default on every open: the control is offered, the view does not move (light/dark, 928/480, zh) |
+| F1b   | The tooltip and the focus ring, hover or keyboard focus (light en, light zh, dark pressed)                                   |
+| F2    | FOLLOWING — pressed; the caret in the description is brought into view after every read (light/dark, 928/480, zh)            |
+| F3    | FOLLOWING across fields — the explanation grew last, so the view follows the caret there, not to the column's bottom         |
+| F4    | Following, then the reader scrolls — following turns off at once, the view stays where they put it, the control is offered   |
+| F5    | Writing ends while following, the stored card lands (written): the control goes, the view does not jump                      |
+| F6    | Writing ends while following, the draft goes with no write (idle): the control goes, nothing is announced                    |
+| F7    | A card NOT being written — a stored proposal on the generating overlay, and the plan page's peek (P9): no control            |
+| F8    | `prefers-reduced-motion: reduce` — every follow scroll is instant                                                            |
+| F9    | How the reader's scroll is told from the follow's own scroll, and the keyboard                                               |
+
+## 30.0 Rendered before drawn
+
+Every peek on the board is the emitted markup of `ProposalPeek` → `IssueQuickViewPanel` at motir-core
+`8ea1eedc8` (main, after MOTIR-11190 merged), captured in happy-dom through `tests/helpers/renderWithIntl`
+(en; zh where a caption says so), one capture per state, each a sequence of reads (rerenders) so the
+cue's state machine (`nextLiveCue`) reached the state drawn. The delta is applied to those captures and
+nothing else. What the render showed:
+
+- **The cue is ALREADY on its own wrapped line at the narrow width.** It carries
+  `@max-[32rem]/peek:order-last @max-[32rem]/peek:basis-full` and the header is `flex-wrap gap-y-1.5`
+  inside `@container/peek`. A control placed beside it must wrap WITH it, so both go into one group
+  that takes those two classes (§30.3).
+- **The cue `<p role="status">` must never be remounted.** It stays mounted (empty, or `sr-only`
+  _Written_) after writing ends so its changes are announced (§29.4, §29.6). A wrapper that appeared
+  and disappeared with the control would remount it and drop the _Written_ announcement. So the group
+  is mounted for exactly as long as the cue is, and only its classes change (§30.3).
+- **All three live fields are in ONE scroller.** The title `h2`, the description and the explanation
+  all render inside `QuickViewMain` (`min-w-0 overflow-y-auto px-7 pt-6 pb-7`); the rail is a
+  separate scroller. So following moves exactly one element's `scrollTop`.
+- **The overlay already ships a follow control:** `FollowPlannerControl` (Part XXVIII §28.3) on the
+  canvas bar — lucide `navigation`, _Follow the planner_, `--radius-control` /
+  `--spacing-control-x/y` on `--el-card` with `--el-border`. **`locate-fixed` is taken** by the
+  canvas's own _Locate_ control. This toggle reuses that recipe and glyph, so the overlay has one
+  follow vocabulary.
+- **The header row's height is set by Close** (`--height-control`). The toggle is
+  `py-(--spacing-control-y)` + `text-xs`, shorter than Close, so on the normal width the row does not
+  grow when it appears or leaves.
+
+## 30.1 The rule, in one sentence
+
+**While a card is being written, the quick view offers _Follow the writing_ beside the in-progress
+cue; it starts OFF on every open, pressing it brings the caret into view and keeps it there after every
+read in whichever field holds it, the reader's own scroll turns it OFF at once (keeping their
+position), pressing again turns it back ON, and when writing ends the control goes with the cue's
+visible line and the view does not move.**
+
+## 30.2 The states
+
+| state                                                   | control                                                                                             | the main column                                                                                                                                                     | panel |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| writing, not following (default; every open and reopen) | offered: `aria-pressed="false"`                                                                     | never moves for the reader: §29.5's rule, unchanged in this state. The caret may be out of view                                                                     | F1    |
+| following                                               | pressed: `aria-pressed="true"`                                                                      | after the press and after every read, the caret is brought into view (§30.4), in whichever field holds it (`grewLast`) — title, description or explanation          | F2 F3 |
+| following, then the reader scrolls                      | back to offered, in the same frame as the input                                                     | stays where the reader put it; text keeps growing out of view, as in the default state                                                                              | F4    |
+| writing ends while following — stored card lands        | removed, with the cue's visible line (the cue stays `sr-only` _Written_)                            | `scrollTop` is kept: no scroll to the top, no scroll to the end. The stored text replaces the partial in the same elements (§29.3), so nothing reflows              | F5    |
+| writing ends while following — draft goes with no write | removed, with the cue's visible line (the cue stays mounted and empty)                              | `scrollTop` is kept; the fields return to their stored value or empty treatment (§29.2 P7), so a shorter column clamps it — the browser's clamp, not a scroll by us | F6    |
+| a card not being written                                | absent: stored proposal on the overlay, any committed card, the plan page's peek (P9)               | shipped                                                                                                                                                             | F7    |
+| narrow peek (P13, below `32rem`)                        | wraps WITH the cue onto its own header line, after it; full label, never icon-only, never truncated | as in the width-independent states above                                                                                                                            | F1–F7 |
+| reduced motion                                          | unchanged                                                                                           | every follow scroll is instant                                                                                                                                      | F8    |
+| a Visitor on a public project                           | the same control: following is view state and writes nothing                                        | as for anyone                                                                                                                                                       | (P10) |
+
+**Per open, and per card.** Following lives in the open quick view only. Closing and reopening the
+peek, or opening another card's peek, starts OFF. It is not stored, not shared and not remembered.
+
+**Following with nothing to follow yet.** Pressed before any partial has arrived (P1), nothing moves
+until the first read carries a partial; then the caret is brought into view as usual.
+
+**A read that changes no field** (the caret keeps its field, §29.3) re-checks the caret's position and
+moves nothing if it is still in view.
+
+## 30.3 The control — placement and anatomy
+
+```
+<div data-testid="quick-view-live-group" class="inline-flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 @max-[32rem]/peek:order-last @max-[32rem]/peek:basis-full">
+  <p role="status" data-testid="quick-view-live-cue" data-live-cue="writing" class="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-(--el-text-secondary)">…Being written</p>
+  <Tooltip content="Keep the text being written in view. Scroll to stop.">
+    <button type="button" data-testid="quick-view-live-follow" aria-pressed="false|true" class="…">
+      <Navigation aria-hidden class="size-3.5 shrink-0 text-(--el-accent-on-surface)" /> <span>Follow the writing</span>
+    </button>
+  </Tooltip>
+</div>
+```
+
+| part         | spec                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the group    | takes the cue's place in the header, right after the op chip. It carries the narrow wrap the cue used to carry (`order-last basis-full` under `@max-[32rem]/peek`); the cue loses those two classes. **Mounted for exactly as long as the cue is**; when the cue is not `writing` it holds only the cue and is `class="contents"`, so it adds no flex item, no gap and nothing to the layout, and the cue element is never remounted |
+| the toggle   | the cue's next sibling inside the group. Rendered only while the cue is `writing`. A native `button` with `aria-pressed`                                                                                                                                                                                                                                                                                                             |
+| resting      | `inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text)` — `FollowPlannerControl`'s button, verbatim                                                                                                                                                            |
+| pressed      | `aria-pressed:border-(--el-accent) aria-pressed:bg-(--el-tint-lavender) aria-pressed:text-(--el-accent-on-surface)` (and the same text on hover) — the overlay's shipped pressed treatment (the show-changes toggle, Part XIII §3e), styled from the attribute so the state has one source                                                                                                                                           |
+| glyph        | lucide `navigation`, `size-3.5`, `--el-accent-on-surface`, `aria-hidden` — the overlay's follow glyph (§28 Table A). The SAME glyph in both states: the state is said by `aria-pressed`, the fill and the border, never by colour alone                                                                                                                                                                                              |
+| focus        | `focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none`                                                                                                                                                                                                                                                                                                                                            |
+| tooltip      | the shipped `Tooltip` (hover and focus, default delay), the same text in both states                                                                                                                                                                                                                                                                                                                                                 |
+| narrow (P13) | the group wraps under the per-op header as one line: cue, then the toggle. The label stays — the peek's narrowest width has room for both in en and zh (F1, F2), so there is no compact icon-only form (unlike the canvas bar, which is crowded at 32rem)                                                                                                                                                                            |
+| motion       | none: it appears and leaves with the read that changes the cue, in both motion modes                                                                                                                                                                                                                                                                                                                                                 |
+
+**Why a toggle, when the canvas's follow is a status.** On the canvas (Part XXVIII), ON is a plain
+status because moving the canvas already turns following off, so an ON button would offer nothing. The
+card for this control decided otherwise for the peek: the pressed state shows that following is on AND
+offers turning it off, since a reader who wants to stop without scrolling has no other way. So it is a
+toggle — one `button`, `aria-pressed` — built from the canvas control's resting recipe so the two read
+as one family.
+
+## 30.4 What following does to the column
+
+- **Target.** The caret element (`[data-live-caret]`) inside the field that holds it. Only
+  `QuickViewMain`'s `scrollTop` is written — never `scrollIntoView`, which would also scroll the
+  overlay and the page.
+- **Where the caret lands.** The minimal move that puts the caret's line inside the column with
+  **48px clear** below it (scrolling down) or above it (scrolling up, to the title): if it is already
+  inside that band, nothing moves. 48px is two lines of body text, so the reader sees the line being
+  written and room for the next one, without the column re-centring on every read.
+- **When.** Once on the press, then after each read that rendered (after layout, the same frame
+  `LiveDraftField` draws the caret in), while following is ON.
+- **Motion.** The press scrolls `smooth` in the default mode — it can be a long trip, and the reader
+  should see where they are being taken. Every later read is instant (`behavior: 'auto'`): reads
+  arrive often, and stacked smooth scrolls lag behind the text. Under `prefers-reduced-motion: reduce`
+  the press is instant too (F8).
+- **Upward.** When the title grows while the reader is following near the bottom (rare: the model
+  writes title → description → explanation), the column scrolls UP to it. Following follows the caret,
+  not the bottom — the reason this is a control and not a stick-to-bottom.
+- **Scroll anchoring stays on.** §29.5's `overflow-anchor: auto` is unchanged; it keeps the reader's
+  place while NOT following, and when following the follow move runs after it.
+
+## 30.5 Telling the reader's scroll from the follow's own
+
+**Following is turned off by the reader's INTENT to scroll, read from the input events that cause a
+scroll, never from the `scroll` event.** The follow's own `scrollTop` write and the browser's scroll
+anchoring both fire `scroll` too, so a `scroll` listener cannot tell them apart without a timing
+window or a "this one was mine" flag, both of which race. Input events are only ever the reader's.
+
+| input, on `QuickViewMain` (the main column)                                                                                     | while following                         |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `wheel` (mouse wheel, trackpad) — listener `{ passive: true }`                                                                  | OFF, in the same frame, before the move |
+| `touchstart` (a finger on the column) — `{ passive: true }`                                                                     | OFF                                     |
+| `pointerdown` whose `target` is the column itself (its scrollbar; a press on text targets the text, and selects it — no change) | OFF                                     |
+| `keydown` of ↑ ↓ PageUp PageDown Home End Space Shift+Space while focus is inside the column                                    | OFF                                     |
+| the follow's own `scrollTop` write; scroll anchoring; content growing                                                           | never OFF — no `scroll` event is read   |
+| any input on the RAIL (its own scroller) or the header                                                                          | never OFF — it does not move the column |
+
+Turning OFF changes nothing else: the reader's input then scrolls the column natively, from where it
+was. Turning ON again is only the control.
+
+## 30.6 Keyboard and screen readers
+
+| element / act               | disposition                                                                                                                                                                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| reaching the control        | Tab: it is the next focus stop after the op chip region (an `add` has no key link), before Close / the open-target link                                                                                                                        |
+| turning following on / off  | **Enter or Space** on the focused control. Focus stays on it, so a second press turns it off again                                                                                                                                             |
+| turning it off by scrolling | the scroll keys above, with focus in the main column (Tab into it, or click in it); the control then reads `aria-pressed="false"`                                                                                                              |
+| its name                    | the visible label, _Follow the writing_, in both states — WAI-ARIA's toggle-button rule: the name of an `aria-pressed` button must not change with its state, or a screen reader says _Following, pressed_ / _Follow the writing, not pressed_ |
+| its state                   | `aria-pressed`; announced by the screen reader on the press, as for any toggle. No live-region text is added, so the cue stays the ONE live region (§29.6)                                                                                     |
+| it leaves while focused     | when writing ends with focus on the control, focus moves to the next focus stop in the header (Close, or the open-target link on a `modify` / `remove`), so focus is never dropped to `<body>`                                                 |
+| the tooltip                 | the shipped `Tooltip` on hover and focus; supplementary, never the only place a fact lives                                                                                                                                                     |
+| contrast                    | label `--el-text-secondary` resting (≥ 6.18:1 on `--el-card`); pressed label `--el-accent-on-surface` on `--el-tint-lavender`, the pair `inkContrastLint` already asserts over every palette × theme; the glyph is a graphic (3:1)             |
+
+## 30.7 Copy — `messages/en.json` and `messages/zh.json`
+
+| key                              | `en`                                                   | `zh`                                           | where                        |
+| -------------------------------- | ------------------------------------------------------ | ---------------------------------------------- | ---------------------------- |
+| `planReview.peekLive.follow`     | `Follow the writing`                                   | `跟随撰写`                                     | the control's label and name |
+| `planReview.peekLive.followHint` | `Keep the text being written in view. Scroll to stop.` | `让正在撰写的文字保持在视野内。滚动即可停止。` | the tooltip                  |
+
+**Label:** _Follow the writing_. **Pressed-state label:** the same, _Follow the writing_ — the state is
+`aria-pressed` plus the pressed fill and border (§30.6 says why it does not change). **Accessible
+name:** the label (no `aria-label`). **Tooltip:** _Keep the text being written in view. Scroll to
+stop._ — the one fact the label cannot carry: how to stop.
+
+**Why these words over the alternatives.**
+
+- _Follow the writing_ — pairs with the cue right before it (_Being written_) and with the overlay's
+  shipped _Follow the planner_ (§28.7): one verb for one behaviour across the overlay. It names what
+  is followed (the writing, wherever it is), which matters because the caret moves between fields.
+- _Following_ as a pressed-state label (the card's recommendation) — not taken: a toggle whose name
+  changes breaks the toggle-button pattern above; the pressed fill already says it is on.
+- _Follow along_ — vague: along what?
+- _Follow the cursor_ — the caret is not the reader's cursor, and _cursor_ reads as the mouse pointer.
+- _Keep up with the writing_ — longer, and it is the view that keeps up, not the reader.
+- zh _跟随撰写_ follows _跟随规划器_ (§28.7) and _正在撰写_ (§29.8).
+
+`planReview` is the namespace the peek already reads (`peekLive.beingWritten`, `peekLive.written`).
+The other nine locales follow the catalogue's parity rule in the code card (MOTIR-11248).
+
+## 30.8 Token and shape roles
+
+| element           | colour                                                                       | shape                                       | motion                                           |
+| ----------------- | ---------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------ |
+| control, resting  | `--el-card` on `--el-border`; label `--el-text-secondary`, hover `--el-text` | `--radius-control`, `--spacing-control-x/y` | none                                             |
+| control, pressed  | `--el-tint-lavender` on `--el-accent`; label `--el-accent-on-surface`        | as resting                                  | none                                             |
+| glyph             | `--el-accent-on-surface`                                                     | `size-3.5`                                  | none                                             |
+| focus ring        | `--focus-ring-color`                                                         | `ring-2`                                    | none                                             |
+| tooltip           | shipped `Tooltip` (`--el-tooltip-bg` / `--el-tooltip-text`)                  | shipped                                     | shipped                                          |
+| the follow scroll | —                                                                            | 48px clear band                             | press `smooth` (reduced: instant); reads instant |
+
+No token is added; no raw colour, no new easing, no new dependency.
+
+## 30.9 How the asset was produced
+
+A temporary vitest file rendered `ProposalPeek` in happy-dom, one sequence of rerenders per state, and
+took the dialog panel of each capture; it also rendered the proposed toggle as static markup (the
+`FollowPlannerControl` button recipe, `Navigation`, `aria-pressed`). A second temporary file applied
+the delta to the captures — the group around the cue, the toggle inside it — and handed them to
+`renderMock`, with `components/ui/markdown-editor.css`'s `.motir-prose` rules as `fontCss` because
+`theme.css` does not carry them. Board-only liberties: the dialog is drawn static at a fixed size
+(928 × 600, the peek's `max-w-[58rem]`; narrow 480 × 560) instead of `w-[90vw]`; the narrow frames drop
+the `md:` two-column rail as the overlay's narrow viewport does; F1b draws the tooltip and the focus
+ring statically; and a short script at the end of the board sets each main column's `scrollTop` (a
+static board cannot hold one) — to the caret by §30.4's rule in the following panels, to a marked point
+in F5, to the reader's own position in F4. The script scrolls only the columns, never the page. Every
+panel was screenshotted in Chromium and looked at. Both temporary files were deleted.
+
+## 30.10 GIVES / TAKES
+
+- **MOTIR-11248** (the code card) — **TAKES** everything above: the group and its classes, the toggle
+  (markup, both states, tooltip, glyph), §30.4's follow rule, §30.5's input-event rule, §30.6's
+  keyboard and focus rules, the two message keys (and the nine other locales), and the
+  `data-testid`s `quick-view-live-group` and `quick-view-live-follow` (with `aria-pressed`).
+- **Part XXIX** — **GIVES** the cue, the caret and `grewLast` (`lib/planning/liveDraft.ts`); takes
+  only the dated pointers in §29.5 and P4.
+- **Part XXVIII** (`FollowPlannerControl`) — **GIVES** the recipe and the glyph; takes nothing.
+
+## 30.11 What Part XXX does NOT draw or decide
+
+How partial text renders (Part XXIX §29.3); the plan page's peek, which still never shows partial text
+(P9); the canvas and list views, including _Follow the planner_; a committed card's quick view; the
+planner side that sends drafts; the implementation.
