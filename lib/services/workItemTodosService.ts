@@ -116,6 +116,33 @@ async function lockTodoList(workItemId: string, tx: Prisma.TransactionClient): P
   await workItemRepository.lockById(workItemId, tx);
 }
 
+// ⚠️ ONE LOCK ORDER: THE CARD'S ROW FIRST, THEN THE STEP'S ROW (MOTIR-11259).
+//
+// Every structural write here ends by inserting a `work_item_revision`, and
+// that row's foreign key takes `FOR KEY SHARE` on the card's row. A write that
+// touched the STEP's row first — an edit's `UPDATE`, a delete's `DELETE` — and
+// only then reached the card (through that insert) took the two locks in the
+// opposite order to a move, which locks the card and then writes the step.
+// Racing on one step, each waited on the other until Postgres killed one with
+// `40P01`, which reached the caller as an internal error. So every write that
+// touches an EXISTING step goes through `resolveLockedTodo`: the card lock is
+// taken before the step's row is written, and the step is read AGAIN under it,
+// because the read before the lock describes a row another writer may since
+// have changed or deleted.
+async function resolveLockedTodo(
+  todoId: string,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<{ todo: WorkItemTodo; item: WorkItem }> {
+  const { todo: gated, item } = await resolveEditableTodo(todoId, ctx, tx);
+  await lockTodoList(gated.workItemId, tx);
+  const todo = await workItemTodoRepository.findById(todoId, tx);
+  // Deleted by a writer that held the lock first: the same not-found an
+  // unknown id answers, never the raw `P2025` the write would throw.
+  if (!todo) throw new WorkItemTodoNotFoundError(todoId);
+  return { todo, item };
+}
+
 /**
  * Resolve a work item under the hide-gates and assert the actor may EDIT it.
  * Missing / cross-workspace / non-browsable → `WorkItemNotFoundError` (404 —
@@ -383,7 +410,7 @@ export const workItemTodosService = {
     assertTodoLanguages(input);
 
     return withWorkspaceContext(ctx, async (tx) => {
-      const { todo, item } = await resolveEditableTodo(todoId, ctx, tx);
+      const { todo, item } = await resolveLockedTodo(todoId, ctx, tx);
       // Re-record a field's language only when THAT field is edited — its value
       // changed, or it came with an explicit language (MOTIR-8096). Editing the
       // notes alone leaves the text's language as it was, NULL included.
@@ -560,7 +587,7 @@ export const workItemTodosService = {
    */
   async deleteTodo(todoId: string, ctx: ServiceContext): Promise<TodoProgressDto> {
     return withWorkspaceContext(ctx, async (tx) => {
-      const { todo, item } = await resolveEditableTodo(todoId, ctx, tx);
+      const { todo, item } = await resolveLockedTodo(todoId, ctx, tx);
       await workItemTodoRepository.delete(todo.id, tx);
       await recordTodoRevision(
         item.id,
