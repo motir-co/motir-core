@@ -111,6 +111,47 @@ export function flyHostingConfig(): FlyHostingConfig {
  *  (its own ceiling is 60 s). */
 const COMMAND_WAIT_WINDOW_SECONDS = 60;
 
+// ⚠️ A RELEASE WRITE IS NOT DONE WHEN FLY ACCEPTS IT (MOTIR-11250). Fly applies a
+// Machine create or update ASYNCHRONOUSLY: the Machine is `created` or
+// `replacing` for as long as the image is pulled and the new version launched,
+// and every other write to it meanwhile is refused `409 aborted: machine is
+// replacing: concurrent update in progress`. So `deploy` and `rollback` wait for
+// the version they wrote to settle before they return, and a write that meets
+// an update already in flight (another caller's, or one whose wait ran out) is
+// retried with backoff instead of failing — all inside one bounded budget.
+
+/** How long a deploy waits for its write to settle, retries included: flyctl's
+ *  own `fly deploy --wait-timeout` default (5 minutes), since a new image may
+ *  have to be pulled first. */
+export const FLY_DEPLOY_SETTLE_SECONDS = 300;
+
+/** How long a rollback waits. It restores an image Fly already holds, and it
+ *  runs inside the rollback service's 120 s lock (`ROLLBACK_LOCK_TIMEOUT_MS`), so
+ *  it is held to one Machines-API wait window. */
+export const FLY_ROLLBACK_SETTLE_SECONDS = 60;
+
+/** Each `/wait` call is a window this long — short of Fly's 60 s ceiling
+ *  (MOTIR-9206), so a Machine that settles STOPPED rather than started is
+ *  noticed within seconds rather than at the end of a full minute. */
+const SETTLE_WAIT_WINDOW_SECONDS = 10;
+
+/** The longest pause between retries of a write refused for an update in flight. */
+const IN_FLIGHT_RETRY_MAX_SECONDS = 8;
+
+/** Seconds a release write may still spend retrying and settling. */
+interface SettleBudget {
+  remaining: number;
+  readonly total: number;
+}
+
+/** Fly's refusal of a write to a Machine whose previous update is still applying. */
+const IN_FLIGHT_UPDATE = /machine is replacing|concurrent update/i;
+
+/** A Machine state an applied update can settle in without having started: a
+ *  `suspend`-policy release may be stopped or suspended by Fly's proxy, and a
+ *  release whose process exits stops. Either way the write is applied. */
+const SETTLED_IDLE_STATES = new Set(['stopped', 'suspended']);
+
 /** Machine metadata the adapter reads back. */
 export const HOSTING_RELEASE_METADATA = {
   marker: 'motir_hosting',
@@ -137,6 +178,9 @@ export interface FlyHostingOptions {
   readonly now?: () => Date;
   /** A new release id. */
   readonly newReleaseId?: () => string;
+  /** The pause between retries of a write Fly refused for an update in flight —
+   *  a seam so a test need not wait real seconds. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 /** Where `docker push` reaches a Fly app's images. */
@@ -298,6 +342,15 @@ function versionOf(body: unknown): string | null {
   return typeof version === 'string' ? version : null;
 }
 
+/** The Machine's current instance — the version a write produced, which
+ *  `/wait?instance_id=` waits on. Fly names it `instance_id`; `version` is read
+ *  as a fallback, as the persistent adapter does. */
+function instanceIdOf(body: unknown): string | null {
+  const record = asRecord(body);
+  const id = record?.['instance_id'] ?? record?.['version'];
+  return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
 function checkStatusesOf(body: unknown): string[] {
   const checks = asRecord(body)?.['checks'];
   return (Array.isArray(checks) ? checks : []).flatMap((c) => {
@@ -344,6 +397,8 @@ export function createFlyHostingDeployPort(
 ): HostingDeployPort {
   const now = options.now ?? (() => new Date());
   const newReleaseId = options.newReleaseId ?? defaultReleaseId;
+  const sleep =
+    options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const { token } = config;
   const clientFor = (app: string) => flyMachinesClientFor({ token, app });
 
@@ -372,36 +427,111 @@ export function createFlyHostingDeployPort(
     );
   }
 
+  const budgetOf = (seconds: number): SettleBudget => ({ remaining: seconds, total: seconds });
+
+  function settleTimeout(id: string, budget: SettleBudget): OrchestratorApiError {
+    return new OrchestratorApiError(
+      'fly',
+      408,
+      `release Machine ${id} did not finish applying its update within ${budget.total} s`,
+    );
+  }
+
+  /** Write the release Machine — an update of `existing`, else a create — and
+   *  answer the Machine and the instance the write produced. A write Fly refuses
+   *  because an earlier update is still applying is retried with doubling pauses
+   *  while the budget lasts; any other refusal is thrown at once. */
   async function writeMachine(
     app: string,
     existing: { id: string; version: string | null } | null,
     body: Record<string, unknown>,
     region: string,
-  ): Promise<string> {
-    const res = existing
-      ? await flyRequest(appPath(app, `/machines/${encodeURIComponent(existing.id)}`), {
-          method: 'POST',
-          token,
-          body: JSON.stringify({
-            config: body,
-            ...(existing.version ? { current_version: existing.version } : {}),
-          }),
-        })
-      : await flyRequest(appPath(app, '/machines'), {
-          method: 'POST',
-          token,
-          body: JSON.stringify({ name: 'release', region, config: body }),
-        });
-    const parsed = await readFlyJson(res);
-    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(parsed));
-    const machine = toFlyMachine(parsed);
-    if (!machine)
-      throw new OrchestratorApiError(
-        'fly',
-        res.status,
-        'machine write returned an unexpected shape',
-      );
-    return machine.id;
+    budget: SettleBudget,
+  ): Promise<{ id: string; instanceId: string | null }> {
+    for (let pause = 1; ; pause = Math.min(pause * 2, IN_FLIGHT_RETRY_MAX_SECONDS)) {
+      const res = existing
+        ? await flyRequest(appPath(app, `/machines/${encodeURIComponent(existing.id)}`), {
+            method: 'POST',
+            token,
+            body: JSON.stringify({
+              config: body,
+              ...(existing.version ? { current_version: existing.version } : {}),
+            }),
+          })
+        : await flyRequest(appPath(app, '/machines'), {
+            method: 'POST',
+            token,
+            body: JSON.stringify({ name: 'release', region, config: body }),
+          });
+      const parsed = await readFlyJson(res);
+      if (res.ok) {
+        const machine = toFlyMachine(parsed);
+        if (!machine)
+          throw new OrchestratorApiError(
+            'fly',
+            res.status,
+            'machine write returned an unexpected shape',
+          );
+        return { id: machine.id, instanceId: instanceIdOf(parsed) };
+      }
+      const detail = flyErrorDetail(parsed);
+      if (res.status !== 409 || !IN_FLIGHT_UPDATE.test(detail)) {
+        throw new OrchestratorApiError('fly', res.status, detail);
+      }
+      if (budget.remaining <= 0) throw new OrchestratorApiError('fly', res.status, detail);
+      const wait = Math.min(pause, budget.remaining);
+      budget.remaining -= wait;
+      await sleep(wait * 1000);
+    }
+  }
+
+  /** Has the Machine settled at `instanceId` without starting? */
+  function settledIdle(read: { body: unknown; machine: FlyMachine }, instanceId: string | null) {
+    return (
+      SETTLED_IDLE_STATES.has(read.machine.state) &&
+      (instanceId === null || instanceIdOf(read.body) === instanceId)
+    );
+  }
+
+  /** Return once Fly has finished applying the write: its instance `started`
+   *  (Fly launches the Machine on every create and update), or — when it settled
+   *  idle instead — stopped or suspended at that instance. Waits in windows of
+   *  {@link SETTLE_WAIT_WINDOW_SECONDS} and reads the Machine after each window
+   *  that ends without `started`; throws once the budget is spent, or when the
+   *  wait is refused for any reason other than its window passing. */
+  async function settle(
+    app: string,
+    written: { id: string; instanceId: string | null },
+    budget: SettleBudget,
+  ): Promise<void> {
+    const path = `/machines/${encodeURIComponent(written.id)}`;
+    for (;;) {
+      const window = Math.min(SETTLE_WAIT_WINDOW_SECONDS, budget.remaining);
+      if (window <= 0) throw settleTimeout(written.id, budget);
+      const query = new URLSearchParams({ state: 'started', timeout: String(window) });
+      if (written.instanceId) query.set('instance_id', written.instanceId);
+      const waited = await flyRequest(appPath(app, `${path}/wait?${query.toString()}`), {
+        method: 'GET',
+        token,
+        timeoutMs: (window + 10) * 1000,
+      });
+      if (waited.ok) return;
+      const refusal = waited.status === 408 ? null : await readFlyJson(waited);
+      // 408: the window passed and the instance has not started. Spent either way.
+      budget.remaining -= window;
+      const read = await readMachine(app, written.id);
+      if (!read || read.machine.state === 'destroyed') {
+        throw new OrchestratorApiError(
+          'fly',
+          404,
+          `release Machine ${written.id} was destroyed while its update applied`,
+        );
+      }
+      if (settledIdle(read, written.instanceId)) return;
+      if (refusal !== null) {
+        throw new OrchestratorApiError('fly', waited.status, flyErrorDetail(refusal));
+      }
+    }
   }
 
   /** The app's release Machines; an app Fly no longer has has none. */
@@ -518,12 +648,16 @@ export function createFlyHostingDeployPort(
       };
       const replaced = current?.metadata[HOSTING_RELEASE_METADATA.releaseId];
       if (replaced) metadata[HOSTING_RELEASE_METADATA.previousReleaseId] = replaced;
-      const id = await writeMachine(
+      const budget = budgetOf(FLY_DEPLOY_SETTLE_SECONDS);
+      const written = await writeMachine(
         input.appRef,
         current ? { id: current.id, version: versionOf(currentRaw?.body) } : null,
         machineConfig(config, input, metadata),
         input.region ?? config.region,
+        budget,
       );
+      await settle(input.appRef, written, budget);
+      const id = written.id;
       return {
         target: 'fly',
         appRef: input.appRef,
@@ -589,12 +723,16 @@ export function createFlyHostingDeployPort(
         },
       };
       const raw = await readMachine(appRef, current.id);
-      const id = await writeMachine(
+      const budget = budgetOf(FLY_ROLLBACK_SETTLE_SECONDS);
+      const written = await writeMachine(
         appRef,
         { id: current.id, version: versionOf(raw?.body) },
         restored,
         current.region,
+        budget,
       );
+      await settle(appRef, written, budget);
+      const id = written.id;
       return {
         target: 'fly',
         appRef,

@@ -4,22 +4,25 @@ import { useEffect, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 
 // The REFERENCE line under the server-error card (design MOTIR-6854, § The
-// reference): the error's `digest` — Next's opaque hash of the server error,
-// no message and no data — which a reader can quote to support and which the
-// boundary tags its Sentry report with. Rendered only when there IS a digest:
-// an error thrown in the browser has none. The chip sits on `--el-surface`, so
-// its ink is `--el-text-secondary`, never muted (CLAUDE.md's contrast table).
+// reference): what a reader can quote to support. For a server error it is the
+// `digest` — Next's opaque hash of the server error, no message and no data —
+// which the boundary tags its Sentry report with. An error thrown in the browser
+// has no digest, so it is the ID of the Sentry event the boundary sent
+// (MOTIR-11243). Rendered only when there is one of the two. The chip sits on
+// `--el-surface`, so its ink is `--el-text-secondary`, never muted (CLAUDE.md's
+// contrast table). An event ID is 32 characters, three times a digest, so the
+// line may wrap on a narrow phone rather than run off it.
 
 const COPIED_MS = 2000;
 
 export interface ErrorReferenceProps {
-  digest: string;
+  reference: string;
   label: string;
   copyLabel: string;
   copiedLabel: string;
 }
 
-export function ErrorReference({ digest, label, copyLabel, copiedLabel }: ErrorReferenceProps) {
+export function ErrorReference({ reference, label, copyLabel, copiedLabel }: ErrorReferenceProps) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export function ErrorReference({ digest, label, copyLabel, copiedLabel }: ErrorR
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(digest);
+      await navigator.clipboard.writeText(reference);
       setCopied(true);
     } catch {
       // No clipboard (permission, insecure context): the chip is
@@ -39,10 +42,10 @@ export function ErrorReference({ digest, label, copyLabel, copiedLabel }: ErrorR
   }
 
   return (
-    <p className="text-(--el-text-secondary) m-0 inline-flex items-center gap-2 font-sans text-sm">
+    <p className="text-(--el-text-secondary) m-0 inline-flex max-w-full flex-wrap items-center justify-center gap-2 font-sans text-sm">
       <span>{label}</span>
-      <code className="bg-(--el-surface) border-(--el-border) text-(--el-text-secondary) select-all rounded-(--radius-control) border px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-mono text-xs">
-        {digest}
+      <code className="bg-(--el-surface) border-(--el-border) text-(--el-text-secondary) select-all break-all rounded-(--radius-control) border px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-mono text-xs">
+        {reference}
       </code>
       {copied ? (
         <span role="status" className="inline-flex items-center gap-1 text-xs">

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { readFileSync } from 'node:fs';
+import { renderToString } from 'react-dom/server';
 import { join } from 'node:path';
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
@@ -18,9 +19,32 @@ import { locales } from '@/lib/i18n/locales';
 // "Go to Motir". Plus the two seams state 3 needs because it has no `next-intl`
 // provider: its static copy equals the catalogs, and it picks its locale from
 // `NEXT_LOCALE`.
+//
+// MOTIR-11243: an error thrown in the BROWSER has no digest, so the reference is
+// the Sentry event ID of the boundary's report; a digest still wins when there
+// is one; and with Sentry off there is no reference at all. That the event the
+// ID names actually reaches Sentry is `tests/monitoring/caught-error-event.test.ts`.
 
-const captureException = vi.hoisted(() => vi.fn());
-vi.mock('@sentry/nextjs', () => ({ captureException }));
+const sentry = vi.hoisted(() => {
+  const scope = { setTags: vi.fn(), addEventProcessor: vi.fn() };
+  return {
+    scope,
+    captureException: vi.fn<(error: unknown) => string>(),
+    isEnabled: vi.fn<() => boolean>(),
+    withScope: vi.fn((callback: (s: typeof scope) => unknown) => callback(scope)),
+  };
+});
+vi.mock('@sentry/nextjs', () => ({
+  captureException: sentry.captureException,
+  isEnabled: sentry.isEnabled,
+  withScope: sentry.withScope,
+}));
+const { captureException } = sentry;
+
+/** The tags the boundary's report was captured with, call by call. */
+function reportedTags(): unknown[] {
+  return sentry.scope.setTags.mock.calls.map(([tags]) => tags);
+}
 
 import AuthedError from '@/app/(authed)/error';
 import AppError from '@/app/error';
@@ -37,8 +61,14 @@ function digestError(digest?: string): Error & { digest?: string } {
   return error;
 }
 
+let nextEventId = 0;
 beforeEach(() => {
   captureException.mockReset();
+  captureException.mockImplementation(() => `evt${(nextEventId += 1)}`);
+  sentry.isEnabled.mockReset();
+  sentry.isEnabled.mockReturnValue(true);
+  sentry.scope.setTags.mockReset();
+  sentry.scope.addEventProcessor.mockReset();
 });
 afterEach(() => {
   cleanup();
@@ -63,9 +93,10 @@ describe('app/(authed)/error.tsx — state 1, a page failed inside the shell', (
     rerender(<AuthedError error={error} retry={vi.fn()} />);
 
     expect(captureException).toHaveBeenCalledTimes(1);
-    expect(captureException).toHaveBeenCalledWith(error, {
-      tags: { boundary: 'error-boundary:authed-page', digest: '3a91f0c2' },
-    });
+    expect(captureException).toHaveBeenCalledWith(error);
+    expect(reportedTags()).toEqual([
+      { boundary: 'error-boundary:authed-page', digest: '3a91f0c2' },
+    ]);
   });
 
   it('reports a retry that failed again as a NEW failure with its new reference', () => {
@@ -79,9 +110,43 @@ describe('app/(authed)/error.tsx — state 1, a page failed inside the shell', (
     expect(screen.queryByText('3a91f0c2')).toBeNull();
   });
 
-  it('shows no reference line for an error that carries no digest', () => {
+  it('shows the Sentry event ID as the reference for a browser error with no digest', () => {
+    captureException.mockReturnValueOnce('9f2c4e1ab3d84c6f8e0a7b5d2c1f3e4a');
     renderWithIntl(<AuthedError error={digestError()} retry={vi.fn()} />);
+
+    expect(screen.getByText(enMessages.errors.serverError.reference)).toBeTruthy();
+    expect(screen.getByText('9f2c4e1ab3d84c6f8e0a7b5d2c1f3e4a')).toBeTruthy();
+    expect(reportedTags()).toEqual([{ boundary: 'error-boundary:authed-page' }]);
+  });
+
+  it('keeps showing the digest for a server error, not the event ID', () => {
+    captureException.mockReturnValueOnce('9f2c4e1ab3d84c6f8e0a7b5d2c1f3e4a');
+    renderWithIntl(<AuthedError error={digestError('3a91f0c2')} retry={vi.fn()} />);
+
+    expect(screen.getByText('3a91f0c2')).toBeTruthy();
+    expect(screen.queryByText('9f2c4e1ab3d84c6f8e0a7b5d2c1f3e4a')).toBeNull();
+  });
+
+  it('shows no reference line when Sentry is off and the error carries no digest', () => {
+    sentry.isEnabled.mockReturnValue(false);
+    renderWithIntl(<AuthedError error={digestError()} retry={vi.fn()} />);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(enMessages.errors.serverError.reference)).toBeNull();
+  });
+
+  it('copies the event ID from the reference line of a browser error', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    captureException.mockReturnValueOnce('0b7d2e9c41a64f3c9d8e1f2a3b4c5d6e');
+    renderWithIntl(<AuthedError error={digestError()} retry={vi.fn()} />);
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: enMessages.errors.serverError.copyReference }),
+      );
+    });
+    expect(writeText).toHaveBeenCalledWith('0b7d2e9c41a64f3c9d8e1f2a3b4c5d6e');
   });
 });
 
@@ -100,9 +165,14 @@ describe('app/error.tsx — state 2, the signed-in shell failed', () => {
 
     fireEvent.click(screen.getByRole('button', { name: enMessages.common.retry }));
     expect(retry).toHaveBeenCalledTimes(1);
-    expect(captureException).toHaveBeenCalledWith(expect.any(Error), {
-      tags: { boundary: 'error-boundary:app', digest: '3a91f0c2' },
-    });
+    expect(captureException).toHaveBeenCalledWith(expect.any(Error));
+    expect(reportedTags()).toEqual([{ boundary: 'error-boundary:app', digest: '3a91f0c2' }]);
+  });
+
+  it('shows the Sentry event ID when the shell failed in the browser', () => {
+    captureException.mockReturnValueOnce('5e6f7a8b9c0d4e1f8a2b3c4d5e6f7a8b');
+    renderWithIntl(<AppError error={digestError()} retry={vi.fn()} />);
+    expect(screen.getByText('5e6f7a8b9c0d4e1f8a2b3c4d5e6f7a8b')).toBeTruthy();
   });
 
   it('renders in zh from the zh catalog', () => {
@@ -126,9 +196,37 @@ describe('app/global-error.tsx — state 3, the root failed (no next-intl provid
     );
     fireEvent.click(screen.getByRole('button', { name: GLOBAL_ERROR_COPY.en.retry }));
     expect(retry).toHaveBeenCalledTimes(1);
-    expect(captureException).toHaveBeenCalledWith(expect.any(Error), {
-      tags: { boundary: 'error-boundary:global', digest: '3a91f0c2' },
+    expect(captureException).toHaveBeenCalledWith(expect.any(Error));
+    expect(reportedTags()).toEqual([{ boundary: 'error-boundary:global', digest: '3a91f0c2' }]);
+  });
+
+  // The 2026-11-13 22:11 page: a script that failed to load after a deploy took
+  // the root down in the browser, and the page promised a reference it never drew.
+  it('shows the Sentry event ID for a browser error with no digest, and copies it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    captureException.mockReturnValueOnce('c3d4e5f60718493a8b7c6d5e4f3a2b1c');
+    const chunkError = new Error(
+      'Failed to load chunk /_next/static/chunks/0u6a5fatitug2.js from module 41',
+    );
+    chunkError.name = 'ChunkLoadError';
+    render(<GlobalErrorContent error={chunkError} retry={vi.fn()} locale="en" />);
+
+    expect(screen.getByText(GLOBAL_ERROR_COPY.en.reference)).toBeTruthy();
+    expect(screen.getByText('c3d4e5f60718493a8b7c6d5e4f3a2b1c')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: GLOBAL_ERROR_COPY.en.copyReference }));
     });
+    expect(writeText).toHaveBeenCalledWith('c3d4e5f60718493a8b7c6d5e4f3a2b1c');
+  });
+
+  it('server-renders no event-ID reference: the report, and its ID, exist only after commit', () => {
+    const html = renderToString(
+      <GlobalErrorContent error={digestError()} retry={vi.fn()} locale="en" />,
+    );
+    expect(html).toContain(GLOBAL_ERROR_COPY.en.title);
+    expect(html).not.toContain(GLOBAL_ERROR_COPY.en.reference);
+    expect(captureException).not.toHaveBeenCalled();
   });
 
   it('picks zh from the NEXT_LOCALE cookie and en otherwise', () => {
@@ -210,7 +308,7 @@ describe('the pieces the boundaries compose', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     render(
       <ErrorReference
-        digest="3a91f0c2"
+        reference="3a91f0c2"
         label="Reference"
         copyLabel="Copy reference"
         copiedLabel="Copied"
