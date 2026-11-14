@@ -16,6 +16,14 @@ const { capacityAlertEvaluationService } =
 
 const SENTINEL = 'sentinel-capacity-token-9612';
 
+/** The saturation series with no source wired (MOTIR-9675), for a mocked result. */
+const saturation = {
+  reading: { outcome: 'unavailable', reason: 'not_configured' },
+  judgement: { state: 'unavailable', sharePercent: null, capacityConnections: null },
+  alertPercent: 70,
+  raised: null,
+} as const;
+
 // The fake seeds deepseek with 7 in flight (2 planning + 5 agent); a limit of 8
 // puts it at 87.5% of its limit, over the default 80% share.
 const overShare = () =>
@@ -94,6 +102,7 @@ describe('an unavailable read', () => {
         outcome: 'unavailable',
         reason,
         raised: [],
+        saturation,
       });
       expect(await job.run()).toMatchObject({ outcome: 'unavailable', reason });
       expect(fingerprints()).toEqual([['capacity-alert-job', reason]]);
@@ -108,6 +117,7 @@ describe('an unavailable read', () => {
         outcome: 'unavailable',
         reason,
         raised: [],
+        saturation,
       });
       expect(await job.run()).toMatchObject({ outcome: 'unavailable', reason });
       expect(captureException).not.toHaveBeenCalled();
@@ -140,6 +150,7 @@ describe('privacy', () => {
       outcome: 'unavailable',
       reason: 'auth_refused',
       raised: [],
+      saturation,
     });
     outputs.push(await job.run());
     vi.spyOn(capacityAlertEvaluationService, 'evaluate').mockRejectedValueOnce(new Error('boom'));

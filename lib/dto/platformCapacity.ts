@@ -9,6 +9,7 @@
 // field lists, so nothing a lower layer grows reaches the screen.
 
 import type { CapacityLimitUnit, CapacityProvider } from '@/lib/capacity/alertKeys';
+import type { GatewaySaturationState } from '@/lib/capacity/gatewaySaturation';
 import type { CapacityLimitState } from '@/lib/capacity/threshold';
 import type { CapacityLimit, CapacityLimitsEdit } from '@/lib/gateway/capacityClient';
 
@@ -79,12 +80,40 @@ export type PlatformCapacityReadDTO =
     }
   | { outcome: 'unavailable'; reason: PlatformCapacityUnavailableReason };
 
+/**
+ * The GATEWAY-SATURATION row (MOTIR-9675, design D6): connections in use over
+ * created machines × hard limit. Every figure is `null` where it was not read —
+ * never 0 — and `state` is the judge's.
+ */
+export interface PlatformGatewaySaturationDTO {
+  state: GatewaySaturationState;
+  /** Why the row is unavailable when the reader itself gave no figures. */
+  unavailableReason: 'not_configured' | 'read_failed' | null;
+  connectionsInUse: number | null;
+  createdMachines: number | null;
+  hardLimit: number | null;
+  /** createdMachines × hardLimit. */
+  capacityConnections: number | null;
+  /** Unrounded; `null` unless the row was judged. */
+  sharePercent: number | null;
+  /** The share the series alerts at (70, design D6). */
+  alertPercent: number;
+  /** The raised alert, as it stood when raised; `null` when not raised. */
+  raised: {
+    raisedAt: string;
+    observedValue: number;
+    limitValue: number;
+    alertSharePercent: number;
+  } | null;
+}
+
 export interface PlatformCapacityViewDTO {
   alertShare: PlatformCapacityAlertShareDTO;
   /** `operator` and up: the screen hides Edit otherwise; the actions refuse anyway. */
   canEdit: boolean;
   raised: PlatformCapacityRaisedDTO[];
   capacity: PlatformCapacityReadDTO;
+  saturation: PlatformGatewaySaturationDTO;
 }
 
 /** One provider/model's edit. An absent key is untouched; a `null` limit is "unknown". */

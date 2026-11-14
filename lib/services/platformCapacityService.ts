@@ -69,6 +69,7 @@ export const platformCapacityService = {
       read,
       evaluation,
       raised: result.raised,
+      saturation: result.saturation,
       alertShare,
       canEdit: platformRoleAtLeast(principal.role, 'operator'),
     });

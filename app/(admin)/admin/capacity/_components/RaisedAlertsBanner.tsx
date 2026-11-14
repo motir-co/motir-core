@@ -2,7 +2,10 @@
 
 import { useTranslations } from 'next-intl';
 import { TriangleAlert } from 'lucide-react';
-import type { PlatformCapacityRaisedDTO } from '@/lib/dto/platformCapacity';
+import type {
+  PlatformCapacityRaisedDTO,
+  PlatformGatewaySaturationDTO,
+} from '@/lib/dto/platformCapacity';
 import { utcClock } from './capacityDisplay';
 
 /**
@@ -13,10 +16,19 @@ import { utcClock } from './capacityDisplay';
  *
  * The share is the one the alert was raised at (`observedValue / limitValue`),
  * not this read's: the banner says what raised the alert and since when.
+ *
+ * The gateway-saturation alert (MOTIR-9675) is one more line, in the same list.
  */
-export function RaisedAlertsBanner({ raised }: { raised: PlatformCapacityRaisedDTO[] }) {
+export function RaisedAlertsBanner({
+  raised,
+  saturation = null,
+}: {
+  raised: PlatformCapacityRaisedDTO[];
+  saturation?: PlatformGatewaySaturationDTO['raised'];
+}) {
   const t = useTranslations('platformAdmin.capacity');
-  if (raised.length === 0) return null;
+  const count = raised.length + (saturation ? 1 : 0);
+  if (count === 0) return null;
   return (
     <div
       role="alert"
@@ -25,7 +37,7 @@ export function RaisedAlertsBanner({ raised }: { raised: PlatformCapacityRaisedD
     >
       <TriangleAlert aria-hidden className="mt-px h-4 w-4 shrink-0 text-(--el-danger)" />
       <div>
-        <strong>{t('alerts.title', { count: raised.length })}</strong>
+        <strong>{t('alerts.title', { count })}</strong>
         <ul className="mt-1.5 list-disc pl-4.5 leading-relaxed">
           {raised.map((alert) => (
             <li key={`${alert.provider}/${alert.model}/${alert.unit}`}>
@@ -43,6 +55,19 @@ export function RaisedAlertsBanner({ raised }: { raised: PlatformCapacityRaisedD
               </span>
             </li>
           ))}
+          {saturation && (
+            <li key="gateway-saturation" data-testid="capacity-raised-saturation">
+              <strong>
+                {t('alerts.saturationLine', {
+                  share: Math.round((saturation.observedValue * 100) / saturation.limitValue),
+                })}
+              </strong>
+              ,{' '}
+              <span className="text-(--el-text-secondary)">
+                {t('alerts.since', { time: utcClock(saturation.raisedAt, false) })}
+              </span>
+            </li>
+          )}
         </ul>
       </div>
     </div>

@@ -1,8 +1,10 @@
 import 'server-only';
 
 import {
-  type CapacityAlertKey,
+  type CapacityStoreKey,
   DEFAULT_ALERT_SHARE_PERCENT,
+  GATEWAY_SATURATION_ALERT_KEY,
+  isGatewaySaturationAlertKey,
   MAX_ALERT_SHARE_PERCENT,
   MIN_ALERT_SHARE_PERCENT,
   isCapacityLimitUnit,
@@ -13,10 +15,15 @@ import {
   CapacityAlertShareInvalidError,
   CapacityAlertShareUnchangedError,
 } from '@/lib/capacity/errors';
-import type { CapacityAlertShareDTO, CapacityRaisedAlertDTO } from '@/lib/dto/capacityAlerts';
+import type {
+  CapacityAlertShareDTO,
+  CapacityRaisedAlertDTO,
+  GatewaySaturationRaisedAlertDTO,
+} from '@/lib/dto/capacityAlerts';
 import {
   toCapacityAlertShareDTO,
   toCapacityRaisedAlertDTO,
+  toGatewaySaturationRaisedAlertDTO,
 } from '@/lib/mappers/capacityAlertMappers';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { withPlatformWrite } from '@/lib/platform/context';
@@ -60,7 +67,9 @@ function assertAlertShare(percent: unknown): asserts percent is number {
   }
 }
 
-function assertAlertKey(key: CapacityAlertKey): void {
+function assertAlertKey(key: CapacityStoreKey): void {
+  // The gateway-saturation key (MOTIR-9675) is one fixed key, accepted whole.
+  if (isGatewaySaturationAlertKey(key)) return;
   if (!isCapacityProvider(key.provider)) throw new CapacityAlertKeyInvalidError('provider');
   if (typeof key.model !== 'string' || key.model.trim() === '') {
     throw new CapacityAlertKeyInvalidError('model');
@@ -116,7 +125,7 @@ export const capacityAlertStateService = {
    *  only for the one call that inserted the row; a raised key keeps its first
    *  `raisedAt` and snapshot. A system effect: no principal, no audit row. */
   async raise(
-    key: CapacityAlertKey,
+    key: CapacityStoreKey,
     snapshot: CapacityAlertSnapshot,
   ): Promise<{ newlyRaised: boolean }> {
     assertAlertKey(key);
@@ -137,7 +146,7 @@ export const capacityAlertStateService = {
   },
 
   /** Clear the key. `cleared` is true only for the one call that deleted the row. */
-  async clear(key: CapacityAlertKey): Promise<{ cleared: boolean }> {
+  async clear(key: CapacityStoreKey): Promise<{ cleared: boolean }> {
     assertAlertKey(key);
     const cleared = await withSystemContext((tx) =>
       capacityRaisedAlertRepository.deleteByKey(key, tx),
@@ -145,7 +154,17 @@ export const capacityAlertStateService = {
     return { cleared };
   },
 
-  /** Every raised alert, by provider, model and unit. */
+  /** The raised gateway-saturation alert, or `null` (MOTIR-9675). */
+  async getSaturationRaised(): Promise<GatewaySaturationRaisedAlertDTO | null> {
+    const row = await withSystemContext((tx) =>
+      capacityRaisedAlertRepository.findByKey(GATEWAY_SATURATION_ALERT_KEY, tx),
+    );
+    return row ? toGatewaySaturationRaisedAlertDTO(row) : null;
+  },
+
+  /** Every raised PROVIDER alert, by provider, model and unit. The
+   *  gateway-saturation key is not a provider model and is read with
+   *  `getSaturationRaised`. */
   async listRaised(): Promise<CapacityRaisedAlertDTO[]> {
     const rows = await withSystemContext((tx) => capacityRaisedAlertRepository.listAll(tx));
     return rows
