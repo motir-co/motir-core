@@ -211,11 +211,13 @@ describe('PlannerModelRows', () => {
   });
 });
 
-describe('the dry-run review row (MOTIR-10632)', () => {
+describe('the final check review row (MOTIR-10632, reworded by MOTIR-11256)', () => {
   const reviewRow = () => screen.getByTestId('ai-planning-row-review');
 
   function pickReview(name: RegExp) {
-    fireEvent.click(within(reviewRow()).getByRole('combobox', { name: 'Dry-run review model' }));
+    fireEvent.click(
+      within(reviewRow()).getByRole('combobox', { name: 'Final check review model' }),
+    );
     fireEvent.click(screen.getByRole('option', { name }));
   }
 
@@ -236,8 +238,10 @@ describe('the dry-run review row (MOTIR-10632)', () => {
 
   it('offers "Same as the planning model" first, then the planning list', () => {
     renderRows(settings({ review: review() }));
-    expect(reviewRow().textContent).toContain('Dry-run review');
-    fireEvent.click(within(reviewRow()).getByRole('combobox', { name: 'Dry-run review model' }));
+    expect(reviewRow().textContent).toContain('Final check review');
+    fireEvent.click(
+      within(reviewRow()).getByRole('combobox', { name: 'Final check review model' }),
+    );
     const options = screen.getAllByRole('option').map((o) => o.textContent);
     expect(options[0]).toMatch(/Same as the planning model/);
     expect(options.slice(1).join(' ')).toMatch(/claude-opus-5-5.*claude-sonnet-5-5.*gpt-5/);
@@ -282,7 +286,7 @@ describe('the dry-run review row (MOTIR-10632)', () => {
     pickReview(/gpt-5/);
     await confirmReview('x');
     expect(within(reviewRow()).getByRole('alert').textContent).toBe(
-      'The dry-run review already runs on gpt-5.',
+      "The final check's review already runs on gpt-5.",
     );
     setPlannerReviewModelAction.mockResolvedValueOnce({
       ok: false,

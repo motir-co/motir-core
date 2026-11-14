@@ -254,6 +254,44 @@ describe('the narration message, grouped per session', () => {
     expect(within(group('s-settle')).queryByTestId('plan-narration-group-toggle')).toBeNull();
   });
 
+  // MOTIR-11256 — the reconcile, the final check and its fix each head their own
+  // group with their own words; none reads as laying, and none says "dry run".
+  it('amend, check and repair sessions head their groups with their own words and kind', () => {
+    const sessions = [
+      narrationSession('s-amend', 'amend', 'Session handling'),
+      narrationSession('s-amend-top', 'amend', null),
+      narrationSession('s-check', 'check', null),
+      narrationSession('s-check-card', 'check', 'Expire idle sessions server-side'),
+      narrationSession('s-repair', 'repair', null),
+    ];
+    renderRail(
+      stateWith(
+        narrationRead(
+          sessions,
+          sessions.map((x, i) => narrationEntry(i + 1, x.sessionKey, `note ${i + 1}`)),
+        ),
+      ),
+    );
+    const done = ` ${tEn('narration.done')}`;
+    expect(headLine('s-amend')).toBe(
+      tEn('act.amendingLine', { target: 'Session handling' }) + done,
+    );
+    expect(headLine('s-amend-top')).toBe(tEn('act.amendingTopLine') + done);
+    expect(headLine('s-check')).toBe(tEn('act.checkingLine') + done);
+    expect(headLine('s-check-card')).toBe(
+      tEn('act.checkingCardLine', { title: 'Expire idle sessions server-side' }) + done,
+    );
+    expect(headLine('s-repair')).toBe(tEn('act.repairingLine') + done);
+    for (const [key, label] of [
+      ['s-amend', 'act.amending'],
+      ['s-check', 'act.checking'],
+      ['s-repair', 'act.repairing'],
+    ] as const) {
+      expect(within(group(key)).getByText(tEn(label))).toBeTruthy();
+      expect(group(key).textContent).not.toMatch(/dry.?run/i);
+    }
+  });
+
   it('a sentence with no session row is a headless group before the headed ones', () => {
     renderRail(
       stateWith(narrationRead([LAY], [narrationEntry(1, 's-old', 'Before the store existed.')])),

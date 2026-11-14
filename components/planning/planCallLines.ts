@@ -25,6 +25,9 @@ const STEP_KINDS: ReadonlySet<PlanChangeProgress['kind']> = new Set([
   'redirected',
   'laying',
   'authoring',
+  'amending',
+  'checking',
+  'repairing',
   'validating',
 ]);
 
@@ -32,10 +35,17 @@ export function isStep(act: PlanChangeProgress): boolean {
   return STEP_KINDS.has(act.kind);
 }
 
-/** The two step rows a session head replaces once the plan's narration names its
- *  sessions (MOTIR-8061: "the session heads replace them, from the store"). */
+/** The step rows a session head replaces once the plan's narration names its
+ *  sessions (MOTIR-8061: "the session heads replace them, from the store") — the
+ *  lay and author rows, and the amend, final-check and fix rows (MOTIR-11256). */
 export function isSessionStep(act: PlanChangeProgress): boolean {
-  return act.kind === 'laying' || act.kind === 'authoring';
+  return (
+    act.kind === 'laying' ||
+    act.kind === 'authoring' ||
+    act.kind === 'amending' ||
+    act.kind === 'checking' ||
+    act.kind === 'repairing'
+  );
 }
 
 /**

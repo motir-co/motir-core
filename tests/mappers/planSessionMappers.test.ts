@@ -166,3 +166,27 @@ describe('toPlanSessionRowDto — a halted walk’s not-planned-yet lines (MOTIR
     });
   });
 });
+
+// MOTIR-11256 — a walk stopped in the reconcile, the final check or its fix keeps
+// that phase; a stored value this build does not know reads as no phase.
+describe('toPlanSessionRowDto — the stop phase', () => {
+  const failed = {
+    failedAt: new Date('2026-11-14T00:00:00.000Z'),
+    failureReason: 'job_failed',
+    failureStopTitle: null,
+  };
+
+  it.each(['lay', 'author', 'amend', 'check', 'repair'] as const)('keeps %s', (phase) => {
+    const dto = toPlanSessionRowDto(row({ ...failed, failureStopPhase: phase }));
+    expect(dto.failure?.stopPhase).toBe(phase);
+  });
+
+  it('reads an unknown or missing phase as null', () => {
+    for (const failureStopPhase of ['think', null]) {
+      const dto = toPlanSessionRowDto(
+        row({ ...failed, failureStopPhase: failureStopPhase as unknown as 'lay' }),
+      );
+      expect(dto.failure?.stopPhase).toBeNull();
+    }
+  });
+});

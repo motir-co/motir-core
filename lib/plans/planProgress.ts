@@ -103,14 +103,46 @@ export const PLAN_PROVIDER_WAIT_GRACE_MS = 300_000;
  * | lay      | resolves            | `layingChildrenOf`  |
  * | author   | null                | `draftingNew`       |
  * | author   | resolves            | `authoring`         |
- * | lay/auth | set, resolves to ∅  | — DROPPED           |
+ * | amend    | null                | `amendingTopLevel`  |
+ * | amend    | resolves            | `amendingChildrenOf`|
+ * | check    | null                | `checkingPlan`      |
+ * | check    | resolves            | `checkingCard`      |
+ * | repair   | null or resolves    | `repairing`         |
+ * | any else | set, resolves to ∅  | — DROPPED           |
+ *
+ * `amend`, `check` and `repair` are MOTIR-11256's: a laid level's amend, the
+ * plan's final check and the fix after it, which used to read as laying.
  */
 export type PlanStepPhrase =
   | 'settling'
   | 'layingTopLevel'
   | 'layingChildrenOf'
   | 'authoring'
-  | 'draftingNew';
+  | 'draftingNew'
+  | 'amendingTopLevel'
+  | 'amendingChildrenOf'
+  | 'checkingPlan'
+  | 'checkingCard'
+  | 'repairing';
+
+/** The phrase of a step with no target (or, for `settle`, the only one it has). */
+const UNTARGETED_PHRASE: Record<PlanStepKindDto, PlanStepPhrase> = {
+  settle: 'settling',
+  lay: 'layingTopLevel',
+  author: 'draftingNew',
+  amend: 'amendingTopLevel',
+  check: 'checkingPlan',
+  repair: 'repairing',
+};
+
+/** The phrase of a step whose target resolved. `settle` never has one. */
+const TARGETED_PHRASE: Record<Exclude<PlanStepKindDto, 'settle'>, PlanStepPhrase> = {
+  lay: 'layingChildrenOf',
+  author: 'authoring',
+  amend: 'amendingChildrenOf',
+  check: 'checkingCard',
+  repair: 'repairing',
+};
 
 /**
  * The design's copy key for each phrase (Part XXVI §26.13). TOTAL over
@@ -123,10 +155,16 @@ export const PLAN_STEP_PHRASE_MESSAGE_KEY: Record<PlanStepPhrase, string> = {
   layingChildrenOf: 'planReview.progress.layingChildrenOf',
   authoring: 'planReview.progress.authoring',
   draftingNew: 'planReview.progress.draftingNew',
+  amendingTopLevel: 'planReview.progress.amendingTopLevel',
+  amendingChildrenOf: 'planReview.progress.amendingChildrenOf',
+  checkingPlan: 'planReview.progress.checkingPlan',
+  checkingCard: 'planReview.progress.checkingCard',
+  repairing: 'planReview.progress.repairing',
 };
 
 /** One in-flight step, resolved. `targetNodeId` / `targetTitle` are null
- *  EXACTLY for `settling`, `layingTopLevel` and `draftingNew`. */
+ *  EXACTLY for the untargeted phrases (`settling`, `layingTopLevel`, `draftingNew`,
+ *  `amendingTopLevel`, `checkingPlan`, and an untargeted `repairing`). */
 export interface PlanProgressStep {
   sessionKey: string;
   kind: PlanStepKindDto;
@@ -310,7 +348,10 @@ function isStepWrite(
   step: { kind: PlanStepKindDto; targetRef: string | null },
   write: PlanProgressWriteRow,
 ): boolean {
-  if (step.kind === 'lay') return write.op === 'add' && write.parentRef === step.targetRef;
+  // An amend writes where a lay does: the cards it adds land on the level it reconciles.
+  if (step.kind === 'lay' || step.kind === 'amend') {
+    return write.op === 'add' && write.parentRef === step.targetRef;
+  }
   if (step.kind !== 'author' || step.targetRef === null) return false;
   if (step.targetRef.startsWith(TEMP_REF_PREFIX)) {
     return write.id === step.targetRef.slice(TEMP_REF_PREFIX.length);
@@ -333,9 +374,12 @@ function isStepWrite(
  * | -------- | -------------------- | ---------------------------------------------- |
  * | lay      | a ref R              | the `add`s whose `parentRef` is R              |
  * | lay      | null                 | the top-level `add`s (`parentRef` null)        |
+ * | amend    | as `lay`             | as `lay` — the cards it adds to its level      |
  * | author   | `planItem:<id>`      | that proposal                                  |
  * | author   | a work-item id W     | the proposals ON W (`workItemId` W)            |
  * | author   | null · settle        | none — its start                               |
+ * | check · repair | any            | none — its start (a check writes nothing; a    |
+ * |          |                      | fix's writes are anywhere, so none is its own) |
  *
  * A write older than the start never moves it back, so a step that writes
  * nothing is measured from its start exactly as before.
@@ -419,13 +463,12 @@ export function buildPlanProgressSnapshot(args: {
       providerWait: step.providerWait ?? null,
     };
     if (step.kind === 'settle' || step.targetRef === null) {
-      const phrase: PlanStepPhrase =
-        step.kind === 'settle'
-          ? 'settling'
-          : step.kind === 'lay'
-            ? 'layingTopLevel'
-            : 'draftingNew';
-      resolved.push({ ...base, phrase, targetNodeId: null, targetTitle: null });
+      resolved.push({
+        ...base,
+        phrase: UNTARGETED_PHRASE[step.kind],
+        targetNodeId: null,
+        targetTitle: null,
+      });
       continue;
     }
     let target: { nodeId: string; title: string } | null = null;
@@ -439,7 +482,7 @@ export function buildPlanProgressSnapshot(args: {
     if (!target) continue; // withdrawn / gone — dropped
     resolved.push({
       ...base,
-      phrase: step.kind === 'lay' ? 'layingChildrenOf' : 'authoring',
+      phrase: TARGETED_PHRASE[step.kind],
       targetNodeId: target.nodeId,
       targetTitle: target.title,
     });

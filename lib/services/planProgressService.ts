@@ -64,12 +64,16 @@ function committedTargetIds(steps: readonly { targetRef: string | null }[]): str
 
 /**
  * Whether a step can be kept alive by a write (`stepLastActivity`'s table): a
- * lay step, or an author step with a target. Settle and the untargeted author
- * are kept alive by their narration alone, so a snapshot of only those reads no
- * writes.
+ * lay or amend step, or an author step with a target. Settle, the untargeted
+ * author, the final check and the fix are kept alive by their narration alone, so
+ * a snapshot of only those reads no writes.
  */
 function stepCanWrite(step: { kind: string; targetRef: string | null }): boolean {
-  return step.kind === 'lay' || (step.kind === 'author' && step.targetRef !== null);
+  return (
+    step.kind === 'lay' ||
+    step.kind === 'amend' ||
+    (step.kind === 'author' && step.targetRef !== null)
+  );
 }
 
 /** Group rows carrying a `planId` by it, dropping the key. */

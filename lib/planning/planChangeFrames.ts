@@ -100,9 +100,11 @@ import type { PlanChangeProgress } from '@/lib/hooks/usePlanChangeConversation';
  * {@link SWEEP_FALSE_MATCHES}.
  */
 export const PLAN_CHANGE_FRAME_KINDS = [
+  'amend',
   'assistant',
   'audit',
   'author',
+  'check',
   'clause_list',
   'code_graph',
   'comparables',
@@ -150,6 +152,7 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'read',
   'reauthor_target',
   'registration',
+  'repair',
   'resume_seeded',
   'retrieval',
   'retrieval_ready',
@@ -216,6 +219,11 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
   // No lookup is an act: see the TOOL CALLS block below.
   lay: { show: 'laying' },
   author: { show: 'authoring' },
+  // The three sessions that used to read as laying (MOTIR-11256): a laid level's
+  // amend, the plan's final check (the code's dry run) and the fix after it.
+  amend: { show: 'amending' },
+  check: { show: 'checking' },
+  repair: { show: 'repairing' },
   /** The planner's own PROSE line. The producer emits nothing at all when the
    *  text is blank (`signalNote` returns early), so "its absence is not an empty
    *  row" is guaranteed upstream as well as here. */

@@ -126,6 +126,9 @@ const KIND_KEY: Record<PlanStepKindDto, string> = {
   settle: 'narration.kindSettle',
   lay: 'act.laying',
   author: 'act.authoring',
+  amend: 'act.amending',
+  check: 'act.checking',
+  repair: 'act.repairing',
 };
 
 // ── Locators — every one scoped to a role-resolved subtree ───────────────────

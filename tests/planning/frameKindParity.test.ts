@@ -87,6 +87,17 @@ describe('every frame kind motir-ai emits has a disposition in core', () => {
     expect((disposition as { quiet: string }).quiet).toMatch(/error/);
   });
 
+  it('amend, check and repair (MOTIR-11256) are emitted, and each draws its own act', () => {
+    for (const [kind, show] of [
+      ['amend', 'amending'],
+      ['check', 'checking'],
+      ['repair', 'repairing'],
+    ] as const) {
+      expect(emitted.kinds, kind).toContain(kind);
+      expect(FRAME_DISPOSITIONS[kind], kind).toEqual({ show });
+    }
+  });
+
   const checkout = process.env.MOTIR_AI_CHECKOUT ?? path.resolve(process.cwd(), '..', 'motir-ai');
   const live = existsSync(path.join(checkout, 'src')) ? it : it.skip;
   live('a live sweep of the motir-ai checkout finds no kind core has not listed', () => {

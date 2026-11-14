@@ -144,6 +144,54 @@ describe('POST /api/internal/ai/plan-step — what it records', () => {
   );
 });
 
+// MOTIR-11256 — the reconcile (amend), the final check and its fix each come
+// through this door as their own kind, untargeted for the whole-plan form and on a
+// card for the per-card form, and each one stamps the plan's lastActivityAt.
+describe('POST /api/internal/ai/plan-step — the amend, check and repair kinds', () => {
+  const activity = async (planId: string) =>
+    (await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).lastActivityAt.getTime();
+  const backdate = async (planId: string) => {
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await adminDb.plan.update({ where: { id: planId }, data: { lastActivityAt: past } });
+    return past.getTime();
+  };
+
+  it.each(['amend', 'check', 'repair'] as const)(
+    'records `%s` untargeted and on a card, stamping lastActivityAt each time',
+    async (step) => {
+      const fx = await makeFixture();
+      const jobId = `job_step_new_${step}`;
+      const { planId, addId } = await generatingPlan(fx, jobId);
+
+      let past = await backdate(planId);
+      const whole = await report(fx, jobId, { sessionKey: `${step}-whole`, step });
+      expect(whole.status).toBe(200);
+      expect(await whole.json()).toMatchObject({
+        planId,
+        step,
+        inFlight: { kind: step, targetRef: null },
+      });
+      expect(await activity(planId), `${step} untargeted`).toBeGreaterThan(past);
+
+      past = await backdate(planId);
+      const card = await report(fx, jobId, {
+        sessionKey: `${step}-card`,
+        step,
+        target: `planItem:${addId}`,
+      });
+      expect(card.status).toBe(200);
+      expect(await activity(planId), `${step} on a card`).toBeGreaterThan(past);
+
+      expect((await steps(planId, fx)).map((s) => [s.sessionKey, s.kind, s.targetRef])).toEqual(
+        expect.arrayContaining([
+          [`${step}-whole`, step, null],
+          [`${step}-card`, step, `planItem:${addId}`],
+        ]),
+      );
+    },
+  );
+});
+
 describe('auth and the no-leak posture', () => {
   it('401 without the service bearer, with a wrong one, and without the job token', async () => {
     const fx = await makeFixture();

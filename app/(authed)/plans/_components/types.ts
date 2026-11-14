@@ -1,5 +1,5 @@
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
-import type { PlanStatusDto } from '@/lib/dto/plans';
+import type { PlanStatusDto, PlanWalkPhaseDto } from '@/lib/dto/plans';
 import type {
   PlanSessionEndReasonDto,
   PlanSessionSeedDto,
@@ -38,7 +38,7 @@ export interface SessionRowView {
   failure?: {
     kind: 'walk' | 'change';
     reason: string;
-    stopPhase: 'lay' | 'author' | null;
+    stopPhase: PlanWalkPhaseDto | null;
     stopTitle: string | null;
     /** The halted walk's "not planned yet" lines, verbatim and in order (MOTIR-10209). */
     notPlannedYet?: readonly string[];

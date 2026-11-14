@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { PlanSessionFailureReason } from '@/generated/prisma/client';
+import { PLAN_WALK_PHASE_VALUES, type PlanWalkPhaseDto } from '@/lib/dto/plans';
 
 import {
   FAILURE_DETAIL_MAX,
@@ -27,7 +28,9 @@ import {
 
 /** Where a walk stopped, as motir-ai's terminal `Problem.walkStop` carries it. */
 export const jobWalkStopSchema = z.object({
-  phase: z.enum(['lay', 'author']),
+  // `amend` / `check` / `repair` since MOTIR-11256; an unknown phase fails the parse,
+  // and the stop reads as none rather than as a lay.
+  phase: z.enum(PLAN_WALK_PHASE_VALUES),
   target: z.string().nullable(),
   targetTitle: z.string().nullable().optional(),
   depth: z.number().int().nonnegative(),
@@ -50,7 +53,7 @@ export function parseJobWalkStop(raw: unknown): z.output<typeof jobWalkStopSchem
 /** The latest `walk_position` frame a relay saw — the stop point when the terminal
  *  `Problem` carries none (`ai_job_abandoned` after the machine died). */
 export interface JobWalkPosition {
-  phase: 'lay' | 'author';
+  phase: PlanWalkPhaseDto;
   target: string | null;
   targetTitle?: string | null;
   depth: number;
@@ -60,7 +63,7 @@ export interface JobWalkPosition {
 export function parseWalkPosition(raw: unknown): JobWalkPosition | null {
   const parsed = z
     .object({
-      phase: z.enum(['lay', 'author']),
+      phase: z.enum(PLAN_WALK_PHASE_VALUES),
       target: z.string().nullable(),
       targetTitle: z.string().nullable().optional(),
       depth: z.number().int().nonnegative(),

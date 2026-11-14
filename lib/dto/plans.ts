@@ -836,8 +836,39 @@ export interface PlanItemDto {
   createdAt: string;
 }
 
-/** The kind of step a running planner session is on (Story MOTIR-7820 · MOTIR-7822). */
-export type PlanStepKindDto = 'settle' | 'lay' | 'author';
+/**
+ * The kinds of step a running planner session can be on (Story MOTIR-7820 ·
+ * MOTIR-7822). `amend`, `check` and `repair` are MOTIR-11256's: a laid level's
+ * amend (its target the level's parent, or none for the top level), the plan's
+ * final check (untargeted for the whole check; the card under review for one of
+ * its sessions) and the fix after it (untargeted). None of the three lays a level.
+ */
+export const PLAN_STEP_KIND_VALUES = [
+  'settle',
+  'lay',
+  'author',
+  'amend',
+  'check',
+  'repair',
+] as const;
+
+/** The kind of step a running planner session is on. */
+export type PlanStepKindDto = (typeof PLAN_STEP_KIND_VALUES)[number];
+
+/**
+ * The kinds of session a failed walk can have had open — every step kind but
+ * `settle`, which runs before the walk (MOTIR-7905 · MOTIR-11256). A failure's
+ * stop point (`walkStop.phase`, the `walk_position` frame) carries one.
+ */
+export const PLAN_WALK_PHASE_VALUES = ['lay', 'author', 'amend', 'check', 'repair'] as const;
+
+/** The kind of session a failed walk stopped in. */
+export type PlanWalkPhaseDto = (typeof PLAN_WALK_PHASE_VALUES)[number];
+
+/** Whether `value` is a walk phase this build knows — an older or unknown one reads `null`. */
+export function isPlanWalkPhase(value: unknown): value is PlanWalkPhaseDto {
+  return (PLAN_WALK_PHASE_VALUES as readonly unknown[]).includes(value);
+}
 
 /**
  * The step ONE running planner session is on (Story MOTIR-7820 · MOTIR-7822).

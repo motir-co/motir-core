@@ -1,4 +1,5 @@
 import { OUT_OF_CREDITS_CODE } from '@/lib/planning/planEditsClient';
+import type { PlanWalkPhaseDto } from '@/lib/dto/plans';
 
 // THE WORDS OF A FAILED PLANNING SESSION'S TO RESUME ENTRY (Story MOTIR-7905 ·
 // MOTIR-7917; design `design/workbench/design-notes.md` § 37.2 / § 37.6).
@@ -32,20 +33,42 @@ export function resumeReasonKeyOf(code: string | null | undefined): ResumeReason
 }
 
 /** Where the walk stopped, as the progress line's step words (design § 37.2). */
-export type StopPhraseKey = 'lay' | 'layTop' | 'author' | 'draft';
+export type StopPhraseKey =
+  | 'lay'
+  | 'layTop'
+  | 'author'
+  | 'draft'
+  | 'amend'
+  | 'amendTop'
+  | 'check'
+  | 'repair';
 
 /**
  * `{lay, title}` → *Laying {title}* · `{lay, null}` → *Laying the project's top level* ·
- * `{author, title}` → *Writing {title}* · anything else (no phase, or an `author` with no
- * title to name) → *Drafting a new item*.
+ * `{author, title}` → *Writing {title}* · `{amend, title}` → *Reconciling the items under
+ * {title}* · `{amend, null}` → *Reconciling the items at the top level* · `check` → *Running
+ * the final check* · `repair` → *Fixing what the final check found* (MOTIR-11256: a stop in
+ * one of those three is not a lay) · anything else (no phase, or an `author` with no title
+ * to name) → *Drafting a new item*.
  */
 export function stopPhraseKeyOf(failure: {
-  stopPhase: 'lay' | 'author' | null;
+  stopPhase: PlanWalkPhaseDto | null;
   stopTitle: string | null;
 }): StopPhraseKey {
-  if (failure.stopPhase === 'lay') return failure.stopTitle ? 'lay' : 'layTop';
-  if (failure.stopPhase === 'author' && failure.stopTitle) return 'author';
-  return 'draft';
+  switch (failure.stopPhase) {
+    case 'lay':
+      return failure.stopTitle ? 'lay' : 'layTop';
+    case 'amend':
+      return failure.stopTitle ? 'amend' : 'amendTop';
+    case 'check':
+      return 'check';
+    case 'repair':
+      return 'repair';
+    case 'author':
+      return failure.stopTitle ? 'author' : 'draft';
+    default:
+      return 'draft';
+  }
 }
 
 /**

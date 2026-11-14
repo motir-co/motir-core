@@ -2,6 +2,7 @@ import type { GeneratingPlanRow } from '@/lib/repositories/planRepository';
 import type { ToResumePlanningSessionDto, WorkbenchPlanningRowDto } from '@/lib/dto/home';
 import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 import type { ToResumeForm, ToResumeFormResult } from '@/lib/planChange/toResumeForm';
+import type { PlanWalkPhaseDto } from '@/lib/dto/plans';
 
 // The Workbench Planning tab's row mapper (Story MOTIR-7820 · MOTIR-7828) — a
 // plan row from `planRepository.listGeneratingRequestedBy` plus the titles of its
@@ -53,7 +54,7 @@ export function toToResumePlanningSessionDto(
     targetKeys: readonly string[];
     failedAt?: Date | null;
     failureReason?: string | null;
-    failureStopPhase?: 'lay' | 'author' | null;
+    failureStopPhase?: PlanWalkPhaseDto | null;
     failureStopRef?: string | null;
     failureStopTitle?: string | null;
     failureNotPlannedYet?: readonly string[] | null;

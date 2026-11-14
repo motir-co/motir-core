@@ -1,5 +1,5 @@
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
-import type { PlanStatusDto } from '@/lib/dto/plans';
+import { isPlanWalkPhase, type PlanStatusDto } from '@/lib/dto/plans';
 import {
   PLAN_SESSION_SEED_GATE_KINDS,
   type PlanSessionEndReasonDto,
@@ -98,10 +98,7 @@ export function toPlanSessionRowDto(row: PlanSessionListRow): PlanSessionRowDto 
         ? {
             failedAt: row.failedAt.toISOString(),
             reason: row.failureReason,
-            stopPhase:
-              row.failureStopPhase === 'lay' || row.failureStopPhase === 'author'
-                ? row.failureStopPhase
-                : null,
+            stopPhase: isPlanWalkPhase(row.failureStopPhase) ? row.failureStopPhase : null,
             stopTitle: row.failureStopTitle ?? null,
             notPlannedYet: row.failureNotPlannedYet ?? [],
           }

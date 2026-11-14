@@ -36,6 +36,11 @@ const KIND: Record<PlanStepPhrase, PlanProgressStep['kind']> = {
   layingChildrenOf: 'lay',
   authoring: 'author',
   draftingNew: 'author',
+  amendingTopLevel: 'amend',
+  amendingChildrenOf: 'amend',
+  checkingPlan: 'check',
+  checkingCard: 'check',
+  repairing: 'repair',
 };
 
 function step(

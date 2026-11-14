@@ -67,21 +67,57 @@ const KIND_LABEL: Record<PlanStepKindDto, string> = {
   settle: 'narration.kindSettle',
   lay: 'act.laying',
   author: 'act.authoring',
+  amend: 'act.amending',
+  check: 'act.checking',
+  repair: 'act.repairing',
 };
 
 /** A marker no catalogue line contains, used to split a line around its title. */
 const TITLE_SLOT = '\u0001';
 
+/**
+ * The line a head with no title to name reads as, by kind, or `null` when the kind
+ * always names one. A settle names nothing; the final check's own head (not one of
+ * its card sessions) and the fix name the plan's step, not a card; an amend of the
+ * top level has no parent to name (MOTIR-11256).
+ */
+function untitledLine(session: PlanNarrationSessionDto, tc: Tc): string | null {
+  switch (session.stepKind) {
+    case 'settle':
+      return tc('narration.settleLine');
+    case 'repair':
+      return tc('act.repairingLine');
+    case 'check':
+      return session.targetRef === null ? tc('act.checkingLine') : null;
+    case 'amend':
+      return session.targetRef === null ? tc('act.amendingTopLine') : null;
+    default:
+      return null;
+  }
+}
+
+/** The titled line, with {@link TITLE_SLOT} where the stored title goes. */
+function titledLine(kind: PlanStepKindDto, tc: Tc): string {
+  switch (kind) {
+    case 'lay':
+      return tc('act.layingLine', { target: TITLE_SLOT });
+    case 'amend':
+      return tc('act.amendingLine', { target: TITLE_SLOT });
+    case 'check':
+      return tc('act.checkingCardLine', { title: TITLE_SLOT });
+    default:
+      return tc('act.authoringLine', { title: TITLE_SLOT });
+  }
+}
+
 /** A head's line split around the stored title: `[before, title, after]`, the
- *  title `null` for a settle head. Shipped act-line wording (MOTIR-8061 §One
- *  group per session), so one catalogue line serves live and finished. */
+ *  title `null` for a head that names none (a settle, the final check's own head,
+ *  the fix, a top-level amend). Shipped act-line wording (MOTIR-8061 §One group per
+ *  session), so one catalogue line serves live and finished. */
 function headParts(session: PlanNarrationSessionDto, tc: Tc): [string, string | null, string] {
-  if (session.stepKind === 'settle') return [tc('narration.settleLine'), null, ''];
-  const line =
-    session.stepKind === 'lay'
-      ? tc('act.layingLine', { target: TITLE_SLOT })
-      : tc('act.authoringLine', { title: TITLE_SLOT });
-  const [before = '', after = ''] = line.split(TITLE_SLOT);
+  const untitled = untitledLine(session, tc);
+  if (untitled !== null) return [untitled, null, ''];
+  const [before = '', after = ''] = titledLine(session.stepKind, tc).split(TITLE_SLOT);
   return [before, session.targetTitle ?? '', after];
 }
 

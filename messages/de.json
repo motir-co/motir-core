@@ -352,7 +352,12 @@
       "detailsResumingHead": "Setzt dort fort, wo es stehen blieb",
       "detailsResuming": "Die Maschine, die diesen Plan geschrieben hat, ist verloren gegangen. Motir hat den Plan selbst neu gestartet, und er wird dort fortgesetzt, wo er stehen blieb — bereits geschriebene Elemente bleiben erhalten und werden nicht neu geschrieben.",
       "detailsResumedAt": "Automatisch fortgesetzt um {time}",
-      "detailsResumedAtSecond": "Automatisch fortgesetzt um {time} · zweiter Versuch"
+      "detailsResumedAtSecond": "Automatisch fortgesetzt um {time} · zweiter Versuch",
+      "amendingChildrenOf": "Wird abgeglichen: {title}",
+      "amendingTopLevel": "Oberste Ebene des Projekts wird abgeglichen",
+      "checkingPlan": "Abschlussprüfung läuft",
+      "checkingCard": "Wird geprüft: {title}",
+      "repairing": "Ergebnisse der Abschlussprüfung werden behoben"
     },
     "cue": {
       "drafting": "Wird entworfen",
@@ -8813,7 +8818,15 @@
         "authoringLine": "{title} wird geschrieben",
         "resumed": "fortsetzen",
         "resumedLine": "Maschine verloren — Motir hat neu gestartet und setzt dort fort, wo es stehen blieb",
-        "resumedLineSecond": "Maschine erneut verloren — zweiter automatischer Versuch, setzt dort fort, wo es stehen blieb"
+        "resumedLineSecond": "Maschine erneut verloren — zweiter automatischer Versuch, setzt dort fort, wo es stehen blieb",
+        "amending": "abgleichen",
+        "checking": "prüfen",
+        "repairing": "beheben",
+        "amendingLine": "Elemente unter {target} werden abgeglichen",
+        "amendingTopLine": "Elemente der obersten Ebene werden abgeglichen",
+        "checkingLine": "Abschlussprüfung läuft",
+        "checkingCardLine": "{title} wird geprüft",
+        "repairingLine": "Ergebnisse der Abschlussprüfung werden behoben"
       },
       "openerFollowUp": "Sie haben gerade {label} gewählt. Motir AI plant, was davon abhängt.",
       "composerPlaceholderGuide": "Sagen Sie Motir AI, wie der Schritt gelaufen ist…",
@@ -10674,7 +10687,11 @@
         "lay": "{title} wird angelegt",
         "layTop": "Oberste Ebene des Projekts wird angelegt",
         "author": "{title} wird geschrieben",
-        "draft": "Neues Element wird entworfen"
+        "draft": "Neues Element wird entworfen",
+        "amend": "Elemente unter {title} werden abgeglichen",
+        "amendTop": "Elemente der obersten Ebene werden abgeglichen",
+        "check": "Abschlussprüfung läuft",
+        "repair": "Ergebnisse der Abschlussprüfung werden behoben"
       },
       "reason": {
         "rate_limited": "das Modell das Ratenlimit erreicht hat",
@@ -10942,7 +10959,7 @@
               "set": "Planungsmodell geändert"
             },
             "planner_review_model": {
-              "set": "Testlauf-Prüfmodell geändert"
+              "set": "Prüfmodell der Abschlussprüfung geändert"
             },
             "planner_model_list": {
               "add": "Modell zur Planungsliste hinzugefügt",
@@ -11747,24 +11764,24 @@
         "failed": "Die Änderung konnte nicht gespeichert werden. Es wurde nichts geändert."
       },
       "review": {
-        "name": "Testlauf-Prüfung",
+        "name": "Abschlussprüfung",
         "desc": "Die schreibgeschützte Prüfung jedes Plans, bevor er angezeigt wird",
         "same": "Wie das Planungsmodell",
         "sameDesc": "Jeder Planungsjob prüft mit dem Modell, mit dem er plant",
         "defaultGroup": "Standard",
-        "pickerAria": "Modell der Testlauf-Prüfung",
+        "pickerAria": "Modell der Abschlussprüfung",
         "withdrawnBody": "Prüfungen laufen mit dem Planungsmodell des jeweiligen Jobs, bis Sie ein anderes wählen.",
         "withdrawnBodyReadOnly": "Prüfungen laufen mit dem Planungsmodell des jeweiligen Jobs, bis ein Superadmin ein anderes wählt.",
-        "confirmTitle": "Modell der Testlauf-Prüfung ändern?",
-        "confirmBody": "{from} → {to}. Die Änderung gilt für den Testlauf des nächsten Planungsjobs jeder Organisation. Bereits laufende Jobs werden mit dem Modell abgeschlossen, mit dem sie gestartet sind.",
+        "confirmTitle": "Modell der Abschlussprüfung ändern?",
+        "confirmBody": "{from} → {to}. Die Änderung gilt für die Abschlussprüfung des nächsten Planungsjobs jeder Organisation. Bereits laufende Jobs werden mit dem Modell abgeschlossen, mit dem sie gestartet sind.",
         "savedTitle": "Prüfmodell geändert",
-        "savedBody": "Testlauf-Prüfungen laufen ab dem nächsten Planungsjob mit {model}.",
-        "unchanged": "Die Testlauf-Prüfung läuft bereits mit {model}."
+        "savedBody": "Abschlussprüfungen laufen ab dem nächsten Planungsjob mit {model}.",
+        "unchanged": "Die Abschlussprüfung läuft bereits mit {model}."
       },
       "group": {
         "audiences": "Planung · nach Zielgruppe",
         "functions": "Guide · Debug · Ask · Plattform-Standards",
-        "review": "Testlauf-Prüfung · nur Plattform"
+        "review": "Abschlussprüfung · nur Plattform"
       },
       "functions": {
         "guide": {
@@ -11995,7 +12012,7 @@
     "plannerFindings": {
       "breadcrumb": "Betrieb · Planer-Befunde",
       "title": "Planer-Befunde",
-      "subtitle": "Was der Probelauf des gehosteten Planers und der Skill „check plan“ in Plänen als fehlerhaft erkannt haben – auch nachdem diese Pläne geschlossen oder gelöscht wurden. Sehen Sie, welche Fehler sich wiederholen, und legen Sie dann fest, wessen Fehler es war, machen Sie einen Befund zur Lektion, erfassen Sie den angelegten Bug oder blenden Sie ihn aus.",
+      "subtitle": "Was die Abschlussprüfung des gehosteten Planers und der Skill „check plan“ in Plänen als fehlerhaft erkannt haben – auch nachdem diese Pläne geschlossen oder gelöscht wurden. Sehen Sie, welche Fehler sich wiederholen, und legen Sie dann fest, wessen Fehler es war, machen Sie einen Befund zur Lektion, erfassen Sie den angelegten Bug oder blenden Sie ihn aus.",
       "infoLead": "Befunde zitieren Pläne von Kunden.",
       "infoBody": "Nur Plattform-Admins sehen diese Seite, und jede Änderung, die Sie hier vornehmen, wird ins Audit-Log geschrieben.",
       "view": {
@@ -12095,7 +12112,7 @@
       },
       "empty": {
         "title": "Noch keine Befunde",
-        "body": "Befunde erscheinen hier, nachdem der Probelauf des gehosteten Planers einen Plan geprüft hat oder jemand den Skill „check plan“ ausgeführt hat. Bisher wurde keiner aufbewahrt."
+        "body": "Befunde erscheinen hier, nachdem die Abschlussprüfung des gehosteten Planers einen Plan geprüft hat oder jemand den Skill „check plan“ ausgeführt hat. Bisher wurde keiner aufbewahrt."
       },
       "unavailable": {
         "title": "Die Befunde konnten nicht geladen werden",

@@ -65,6 +65,21 @@ describe('stepLevel — the level a step names', () => {
     expect(stepLevel(items, { kind: 'author', targetNodeId: 'gone' }, 'New')).toBeNull();
     expect(stepLevel(items, { kind: 'lay', targetNodeId: 'po' }, 'New')).toBeNull();
   });
+
+  // MOTIR-11256 — the reconcile names its level as a lay does, a final-check
+  // session names the level its card sits on as an author does, and the fix names
+  // no level of its own.
+  it('amend follows like lay, check like author, and repair names no level', () => {
+    expect(stepLevel(items, { kind: 'amend', targetNodeId: 'ps' }, 'New')).toEqual(
+      stepLevel(items, { kind: 'lay', targetNodeId: 'ps' }, 'New'),
+    );
+    expect(stepLevel(items, { kind: 'amend', targetNodeId: 'po' }, 'New')).toBeNull();
+    expect(stepLevel(items, { kind: 'check', targetNodeId: 'pt' }, 'New')).toEqual(
+      stepLevel(items, { kind: 'author', targetNodeId: 'pt' }, 'New'),
+    );
+    expect(stepLevel(items, { kind: 'check', targetNodeId: null }, 'New')).toBeNull();
+    expect(stepLevel(items, { kind: 'repair', targetNodeId: 'ps' }, 'New')).toBeNull();
+  });
 });
 
 describe('nextDrivenStep — which step the canvas follows', () => {

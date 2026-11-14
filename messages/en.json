@@ -352,7 +352,12 @@
       "detailsResumingHead": "Picking up where it stopped",
       "detailsResuming": "The machine writing this plan was lost. Motir started the plan again by itself, and it continues from where it stopped — the items already written are kept and are not written again.",
       "detailsResumedAt": "Resumed automatically at {time}",
-      "detailsResumedAtSecond": "Resumed automatically at {time} · second attempt"
+      "detailsResumedAtSecond": "Resumed automatically at {time} · second attempt",
+      "amendingChildrenOf": "Reconciling: {title}",
+      "amendingTopLevel": "Reconciling the project's top level",
+      "checkingPlan": "Running the final check",
+      "checkingCard": "Checking: {title}",
+      "repairing": "Fixing what the final check found"
     },
     "cue": {
       "drafting": "Drafting",
@@ -8810,7 +8815,15 @@
         "authoringLine": "Writing {title}",
         "resumed": "resume",
         "resumedLine": "Lost its machine — Motir started it again and it picks up where it stopped",
-        "resumedLineSecond": "Lost its machine again — second automatic attempt, picking up where it stopped"
+        "resumedLineSecond": "Lost its machine again — second automatic attempt, picking up where it stopped",
+        "amending": "reconcile",
+        "checking": "check",
+        "repairing": "fix",
+        "amendingLine": "Reconciling the items under {target}",
+        "amendingTopLine": "Reconciling the items at the top level",
+        "checkingLine": "Running the final check",
+        "checkingCardLine": "Checking {title}",
+        "repairingLine": "Fixing what the final check found"
       },
       "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates.",
       "composerPlaceholderGuide": "Tell Motir AI how the step went…",
@@ -10671,7 +10684,11 @@
         "lay": "Laying {title}",
         "layTop": "Laying the project's top level",
         "author": "Writing {title}",
-        "draft": "Drafting a new item"
+        "draft": "Drafting a new item",
+        "amend": "Reconciling the items under {title}",
+        "amendTop": "Reconciling the items at the top level",
+        "check": "Running the final check",
+        "repair": "Fixing what the final check found"
       },
       "reason": {
         "rate_limited": "the model was rate-limited",
@@ -10939,7 +10956,7 @@
               "set": "Changed the planning model"
             },
             "planner_review_model": {
-              "set": "Changed the dry-run review model"
+              "set": "Changed the final check's review model"
             },
             "planner_model_list": {
               "add": "Added a model to the planning list",
@@ -11744,24 +11761,24 @@
         "failed": "The change could not be saved. Nothing was changed."
       },
       "review": {
-        "name": "Dry-run review",
+        "name": "Final check review",
         "desc": "The read-only check of every plan before it is shown",
         "same": "Same as the planning model",
         "sameDesc": "Each plan job reviews on the model it plans with",
         "defaultGroup": "Default",
-        "pickerAria": "Dry-run review model",
+        "pickerAria": "Final check review model",
         "withdrawnBody": "Reviews run on each job's planning model until you choose another.",
         "withdrawnBodyReadOnly": "Reviews run on each job's planning model until a superadmin chooses another.",
-        "confirmTitle": "Change the dry-run review model?",
-        "confirmBody": "{from} → {to}. The change applies to the dry run of the next plan job for every organisation. Jobs already running finish on the model they started with.",
+        "confirmTitle": "Change the final check's review model?",
+        "confirmBody": "{from} → {to}. The change applies to the final check of the next plan job for every organisation. Jobs already running finish on the model they started with.",
         "savedTitle": "Review model changed",
-        "savedBody": "Dry-run reviews now run on {model} from the next plan job.",
-        "unchanged": "The dry-run review already runs on {model}."
+        "savedBody": "Final check reviews now run on {model} from the next plan job.",
+        "unchanged": "The final check's review already runs on {model}."
       },
       "group": {
         "audiences": "Planning · by audience",
         "functions": "Guide · Debug · Ask · platform defaults",
-        "review": "Dry-run review · platform only"
+        "review": "Final check review · platform only"
       },
       "functions": {
         "guide": {
@@ -11992,7 +12009,7 @@
     "plannerFindings": {
       "breadcrumb": "Operations · Planner findings",
       "title": "Planner findings",
-      "subtitle": "What the hosted planner’s dry run and the check plan skill found wrong in plans, kept after those plans are closed or deleted. See which defects repeat, then set whose fault each was, promote one to a lesson, record the bug you filed, or dismiss it.",
+      "subtitle": "What the hosted planner’s final check and the check plan skill found wrong in plans, kept after those plans are closed or deleted. See which defects repeat, then set whose fault each was, promote one to a lesson, record the bug you filed, or dismiss it.",
       "infoLead": "Findings quote customers’ plans.",
       "infoBody": "Only platform admins can see this page, and every change you make here is written to the audit log.",
       "view": {
@@ -12092,7 +12109,7 @@
       },
       "empty": {
         "title": "No findings yet",
-        "body": "Findings appear here after the hosted planner’s dry run reviews a plan, or after someone runs the check plan skill. None has been kept yet."
+        "body": "Findings appear here after the hosted planner’s final check reviews a plan, or after someone runs the check plan skill. None has been kept yet."
       },
       "unavailable": {
         "title": "Couldn’t load the findings",

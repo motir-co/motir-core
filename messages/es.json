@@ -352,7 +352,12 @@
       "detailsResumingHead": "Retomando donde se detuvo",
       "detailsResuming": "Se perdió la máquina que redactaba este plan. Motir volvió a iniciar el plan por sí mismo y continúa donde se detuvo: los elementos ya redactados se conservan y no se vuelven a redactar.",
       "detailsResumedAt": "Reanudado automáticamente a las {time}",
-      "detailsResumedAtSecond": "Reanudado automáticamente a las {time} · segundo intento"
+      "detailsResumedAtSecond": "Reanudado automáticamente a las {time} · segundo intento",
+      "amendingChildrenOf": "Conciliando: {title}",
+      "amendingTopLevel": "Conciliando el nivel superior del proyecto",
+      "checkingPlan": "Haciendo la revisión final",
+      "checkingCard": "Revisando: {title}",
+      "repairing": "Corrigiendo lo que encontró la revisión final"
     },
     "cue": {
       "drafting": "Redactando",
@@ -8813,7 +8818,15 @@
         "authoringLine": "Escribiendo {title}",
         "resumed": "reanudar",
         "resumedLine": "Se perdió su máquina: Motir lo volvió a iniciar y retoma donde se detuvo",
-        "resumedLineSecond": "Se volvió a perder su máquina: segundo intento automático, retomando donde se detuvo"
+        "resumedLineSecond": "Se volvió a perder su máquina: segundo intento automático, retomando donde se detuvo",
+        "amending": "conciliar",
+        "checking": "revisar",
+        "repairing": "corregir",
+        "amendingLine": "Conciliando los elementos de {target}",
+        "amendingTopLine": "Conciliando los elementos del nivel superior",
+        "checkingLine": "Haciendo la revisión final",
+        "checkingCardLine": "Revisando {title}",
+        "repairingLine": "Corrigiendo lo que encontró la revisión final"
       },
       "openerFollowUp": "Acabas de elegir {label}. Motir AI está planificando lo que condiciona.",
       "composerPlaceholderGuide": "Cuéntale a Motir AI cómo fue el paso…",
@@ -10674,7 +10687,11 @@
         "lay": "Colocando {title}",
         "layTop": "Colocando el nivel superior del proyecto",
         "author": "Escribiendo {title}",
-        "draft": "Redactando un elemento nuevo"
+        "draft": "Redactando un elemento nuevo",
+        "amend": "Conciliando los elementos de {title}",
+        "amendTop": "Conciliando los elementos del nivel superior",
+        "check": "Haciendo la revisión final",
+        "repair": "Corrigiendo lo que encontró la revisión final"
       },
       "reason": {
         "rate_limited": "el modelo alcanzó su límite de solicitudes",
@@ -10942,7 +10959,7 @@
               "set": "Cambió el modelo de planificación"
             },
             "planner_review_model": {
-              "set": "Cambió el modelo de revisión de la simulación"
+              "set": "Se cambió el modelo de revisión de la revisión final"
             },
             "planner_model_list": {
               "add": "Añadió un modelo a la lista de planificación",
@@ -11747,24 +11764,24 @@
         "failed": "No se pudo guardar el cambio. No se cambió nada."
       },
       "review": {
-        "name": "Revisión de la simulación",
+        "name": "Revisión final",
         "desc": "La comprobación de solo lectura de cada plan antes de mostrarlo",
         "same": "Igual que el modelo de planificación",
         "sameDesc": "Cada trabajo de planificación revisa con el modelo con el que planifica",
         "defaultGroup": "Predeterminado",
-        "pickerAria": "Modelo de revisión de la simulación",
+        "pickerAria": "Modelo de la revisión final",
         "withdrawnBody": "Las revisiones usan el modelo de planificación de cada trabajo hasta que elija otro.",
         "withdrawnBodyReadOnly": "Las revisiones usan el modelo de planificación de cada trabajo hasta que un superadministrador elija otro.",
-        "confirmTitle": "¿Cambiar el modelo de revisión de la simulación?",
-        "confirmBody": "{from} → {to}. El cambio se aplica a la simulación del siguiente trabajo de planificación de todas las organizaciones. Los trabajos que ya están en curso terminan con el modelo con el que empezaron.",
+        "confirmTitle": "¿Cambiar el modelo de la revisión final?",
+        "confirmBody": "{from} → {to}. El cambio se aplica a la revisión final del siguiente trabajo de planificación de todas las organizaciones. Los trabajos que ya están en curso terminan con el modelo con el que empezaron.",
         "savedTitle": "Modelo de revisión cambiado",
-        "savedBody": "Las revisiones de la simulación usan {model} desde el siguiente trabajo de planificación.",
-        "unchanged": "La revisión de la simulación ya usa {model}."
+        "savedBody": "Las revisiones finales se ejecutan con {model} a partir del próximo trabajo de planificación.",
+        "unchanged": "La revisión final ya se ejecuta con {model}."
       },
       "group": {
         "audiences": "Planificación · por público",
         "functions": "Guide · Debug · Ask · predeterminados de plataforma",
-        "review": "Revisión de la simulación · solo plataforma"
+        "review": "Revisión final · solo plataforma"
       },
       "functions": {
         "guide": {
@@ -11995,7 +12012,7 @@
     "plannerFindings": {
       "breadcrumb": "Operaciones · Hallazgos del planificador",
       "title": "Hallazgos del planificador",
-      "subtitle": "Lo que la ejecución de prueba del planificador alojado y la skill check plan encontraron mal en los planes, conservado después de que esos planes se cierren o eliminen. Vea qué defectos se repiten y luego indique de quién fue la culpa de cada uno, conviértalo en lección, registre el bug que creó o descártelo.",
+      "subtitle": "Lo que la revisión final del planificador alojado y la skill check plan encontraron mal en los planes, conservado después de que esos planes se cierren o eliminen. Vea qué defectos se repiten y luego indique de quién fue la culpa de cada uno, conviértalo en lección, registre el bug que creó o descártelo.",
       "infoLead": "Los hallazgos citan planes de clientes.",
       "infoBody": "Solo los administradores de la plataforma pueden ver esta página, y cada cambio que haga aquí se escribe en el registro de auditoría.",
       "view": {
@@ -12095,7 +12112,7 @@
       },
       "empty": {
         "title": "Aún no hay hallazgos",
-        "body": "Los hallazgos aparecen aquí después de que la ejecución de prueba del planificador alojado revise un plan, o después de que alguien ejecute la skill check plan. Todavía no se ha conservado ninguno."
+        "body": "Los hallazgos aparecen aquí después de que la revisión final del planificador alojado revise un plan, o después de que alguien ejecute la skill check plan. Todavía no se ha conservado ninguno."
       },
       "unavailable": {
         "title": "No se pudieron cargar los hallazgos",

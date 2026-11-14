@@ -352,7 +352,12 @@
       "detailsResumingHead": "Riprende da dove si era fermato",
       "detailsResuming": "La macchina che stava scrivendo questo piano è andata persa. Motir ha riavviato il piano da solo, e riprende da dove si era fermato — gli elementi già scritti vengono mantenuti e non vengono riscritti.",
       "detailsResumedAt": "Ripreso automaticamente alle {time}",
-      "detailsResumedAtSecond": "Ripreso automaticamente alle {time} · secondo tentativo"
+      "detailsResumedAtSecond": "Ripreso automaticamente alle {time} · secondo tentativo",
+      "amendingChildrenOf": "Riconciliazione: {title}",
+      "amendingTopLevel": "Riconciliazione del livello superiore del progetto",
+      "checkingPlan": "Verifica finale in corso",
+      "checkingCard": "Verifica: {title}",
+      "repairing": "Correzione di quanto trovato dalla verifica finale"
     },
     "cue": {
       "drafting": "Stesura in corso",
@@ -8813,7 +8818,15 @@
         "authoringLine": "Scrittura di {title}",
         "resumed": "ripresa",
         "resumedLine": "Macchina persa — Motir l’ha riavviato e riprende da dove si era fermato",
-        "resumedLineSecond": "Macchina di nuovo persa — secondo tentativo automatico, riprende da dove si era fermato"
+        "resumedLineSecond": "Macchina di nuovo persa — secondo tentativo automatico, riprende da dove si era fermato",
+        "amending": "riconcilia",
+        "checking": "verifica",
+        "repairing": "correggi",
+        "amendingLine": "Riconciliazione degli elementi sotto {target}",
+        "amendingTopLine": "Riconciliazione degli elementi del livello superiore",
+        "checkingLine": "Verifica finale in corso",
+        "checkingCardLine": "Verifica di {title}",
+        "repairingLine": "Correzione di quanto trovato dalla verifica finale"
       },
       "openerFollowUp": "Hai appena scelto {label}. Motir AI sta pianificando ciò che questa scelta sblocca.",
       "composerPlaceholderGuide": "Racconta a Motir AI com’è andato il passaggio…",
@@ -10674,7 +10687,11 @@
         "lay": "Posizionamento di {title}",
         "layTop": "Posizionamento del livello superiore del progetto",
         "author": "Scrittura di {title}",
-        "draft": "Stesura di un nuovo elemento"
+        "draft": "Stesura di un nuovo elemento",
+        "amend": "Riconciliazione degli elementi sotto {title}",
+        "amendTop": "Riconciliazione degli elementi del livello superiore",
+        "check": "Verifica finale in corso",
+        "repair": "Correzione di quanto trovato dalla verifica finale"
       },
       "reason": {
         "rate_limited": "il modello ha raggiunto il limite di richieste",
@@ -10942,7 +10959,7 @@
               "set": "Modello di pianificazione modificato"
             },
             "planner_review_model": {
-              "set": "Modello di revisione della simulazione modificato"
+              "set": "Modello della verifica finale modificato"
             },
             "planner_model_list": {
               "add": "Aggiunto un modello all’elenco di pianificazione",
@@ -11747,24 +11764,24 @@
         "failed": "Impossibile salvare la modifica. Non è cambiato nulla."
       },
       "review": {
-        "name": "Revisione della simulazione",
+        "name": "Verifica finale",
         "desc": "Il controllo in sola lettura di ogni piano prima che venga mostrato",
         "same": "Come il modello di pianificazione",
         "sameDesc": "Ogni job di pianificazione esegue la revisione con il modello con cui pianifica",
         "defaultGroup": "Predefinito",
-        "pickerAria": "Modello di revisione della simulazione",
+        "pickerAria": "Modello della verifica finale",
         "withdrawnBody": "Le revisioni usano il modello di pianificazione di ogni job finché non ne scegli un altro.",
         "withdrawnBodyReadOnly": "Le revisioni usano il modello di pianificazione di ogni job finché un superadmin non ne sceglie un altro.",
-        "confirmTitle": "Cambiare il modello di revisione della simulazione?",
-        "confirmBody": "{from} → {to}. La modifica si applica alla simulazione del prossimo job di pianificazione per ogni organizzazione. I job già in esecuzione terminano con il modello con cui sono partiti.",
+        "confirmTitle": "Modificare il modello della verifica finale?",
+        "confirmBody": "{from} → {to}. La modifica si applica alla verifica finale del prossimo job di pianificazione per ogni organizzazione. I job già in esecuzione terminano con il modello con cui sono partiti.",
         "savedTitle": "Modello di revisione cambiato",
-        "savedBody": "Le revisioni della simulazione usano {model} dal prossimo job di pianificazione.",
-        "unchanged": "La revisione della simulazione usa già {model}."
+        "savedBody": "Le verifiche finali vengono eseguite con {model} dal prossimo job di pianificazione.",
+        "unchanged": "La verifica finale viene già eseguita con {model}."
       },
       "group": {
         "audiences": "Pianificazione · per pubblico",
         "functions": "Guide · Debug · Ask · predefiniti di piattaforma",
-        "review": "Revisione della simulazione · solo piattaforma"
+        "review": "Verifica finale · solo piattaforma"
       },
       "functions": {
         "guide": {
@@ -11995,7 +12012,7 @@
     "plannerFindings": {
       "breadcrumb": "Operazioni · Rilievi del pianificatore",
       "title": "Rilievi del pianificatore",
-      "subtitle": "Ciò che l’esecuzione di prova del pianificatore ospitato e la skill check plan hanno trovato di sbagliato nei piani, conservato anche dopo che quei piani sono stati chiusi o eliminati. Guarda quali difetti si ripetono, poi indica di chi è stata la colpa, trasforma un rilievo in lezione, registra il bug che hai aperto o ignoralo.",
+      "subtitle": "Ciò che la verifica finale del pianificatore ospitato e la skill check plan hanno trovato di sbagliato nei piani, conservato anche dopo che quei piani sono stati chiusi o eliminati. Guarda quali difetti si ripetono, poi indica di chi è stata la colpa, trasforma un rilievo in lezione, registra il bug che hai aperto o ignoralo.",
       "infoLead": "I rilievi citano i piani dei clienti.",
       "infoBody": "Solo gli amministratori della piattaforma possono vedere questa pagina, e ogni modifica che fai qui viene scritta nel registro di audit.",
       "view": {
@@ -12095,7 +12112,7 @@
       },
       "empty": {
         "title": "Ancora nessun rilievo",
-        "body": "I rilievi compaiono qui dopo che l’esecuzione di prova del pianificatore ospitato ha esaminato un piano, o dopo che qualcuno ha eseguito la skill check plan. Finora non ne è stato conservato nessuno."
+        "body": "I rilievi compaiono qui dopo che la verifica finale del pianificatore ospitato ha esaminato un piano, o dopo che qualcuno ha eseguito la skill check plan. Finora non ne è stato conservato nessuno."
       },
       "unavailable": {
         "title": "Impossibile caricare i rilievi",

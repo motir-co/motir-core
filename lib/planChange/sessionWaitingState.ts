@@ -4,6 +4,7 @@ import type {
   PlanSessionFailureReason,
   PlanSessionWalkPhase,
 } from '@/generated/prisma/client';
+import { PLAN_WALK_PHASE_VALUES } from '@/lib/dto/plans';
 
 // A planning session's WAITING STATE — the one place its definitions live (Story
 // MOTIR-7905 · MOTIR-7908).
@@ -196,7 +197,7 @@ export const planSessionFailureRecordSchema = z.object({
   failedJobId: z.string().min(1).nullable(),
   failureReason: z.enum(PLAN_SESSION_FAILURE_REASONS),
   failureDetail: capped(FAILURE_DETAIL_MAX),
-  failureStopPhase: z.enum(['lay', 'author']).nullable().optional().default(null),
+  failureStopPhase: z.enum(PLAN_WALK_PHASE_VALUES).nullable().optional().default(null),
   failureStopRef: capped(FAILURE_STOP_REF_MAX),
   failureStopTitle: capped(FAILURE_STOP_TITLE_MAX),
   failureResumable: z.boolean().nullable().optional().default(null),

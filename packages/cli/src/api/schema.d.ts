@@ -2793,6 +2793,9 @@ export interface components {
                     author: number | null;
                     entry_author: number | null;
                     tool: number | null;
+                    amend: number | null;
+                    check: number | null;
+                    repair: number | null;
                 };
             };
         };
@@ -11258,6 +11261,9 @@ export interface operations {
                                     author: number | null;
                                     entry_author: number | null;
                                     tool: number | null;
+                                    amend: number | null;
+                                    check: number | null;
+                                    repair: number | null;
                                 };
                             };
                         } | null;

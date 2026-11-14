@@ -3,6 +3,7 @@ import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
+import { PLAN_STEP_KIND_VALUES } from '@/lib/dto/plans';
 import {
   PLAN_PROVIDER_RETRY_ATTEMPTS_MAX,
   type PlanProviderRetryInput,
@@ -17,9 +18,10 @@ import {
 
 // POST /api/internal/ai/plan-step (Story MOTIR-7820 · Subtask MOTIR-7824) — the
 // HOSTED planner's door onto the plan's in-flight STEPS: motir-ai's walk reports
-// the step each of its sessions opens (`settle`, `lay`, `author`) and clears it
-// with `end`, so a person following the plan sees what is being drafted now.
-// `report_plan_step` is the MCP twin, with the same four values.
+// the step each of its sessions opens (`settle`, `lay`, `author`, and — MOTIR-11256 —
+// `amend`, `check`, `repair`) and clears it with `end`, so a person following the plan
+// sees what is being drafted now. `report_plan_step` is the MCP twin; plan.py, its one
+// caller, reports only the first three, so it takes those and `end`.
 //
 // Auth: §4a service bearer + §4b job token (`authenticateAndLimitJobRequest`),
 // exactly as `plan-proposals` and `plan-revision-reason`.
@@ -116,7 +118,7 @@ function fail(code: string, error: string, status: number): NextResponse {
 }
 
 const INVALID = 'PLAN_STEP_INVALID';
-const STEPS = ['settle', 'lay', 'author', 'end'] as const;
+const STEPS = [...PLAN_STEP_KIND_VALUES, 'end'] as const;
 type Step = (typeof STEPS)[number];
 
 function isStep(v: unknown): v is Step {

@@ -352,7 +352,12 @@
       "detailsResumingHead": "Kontynuuje od miejsca, w którym się zatrzymał",
       "detailsResuming": "Maszyna, która pisała ten plan, została utracona. Motir sam uruchomił plan ponownie i kontynuuje go od miejsca, w którym się zatrzymał — elementy już napisane zostają zachowane i nie są pisane ponownie.",
       "detailsResumedAt": "Wznowiono automatycznie o {time}",
-      "detailsResumedAtSecond": "Wznowiono automatycznie o {time} · druga próba"
+      "detailsResumedAtSecond": "Wznowiono automatycznie o {time} · druga próba",
+      "amendingChildrenOf": "Uzgadnianie: {title}",
+      "amendingTopLevel": "Uzgadnianie najwyższego poziomu projektu",
+      "checkingPlan": "Trwa końcowe sprawdzenie",
+      "checkingCard": "Sprawdzanie: {title}",
+      "repairing": "Poprawianie tego, co wykazało końcowe sprawdzenie"
     },
     "cue": {
       "drafting": "Tworzenie szkicu",
@@ -8813,7 +8818,15 @@
         "authoringLine": "Pisanie: {title}",
         "resumed": "wznowienie",
         "resumedLine": "Utracono maszynę — Motir uruchomił plan ponownie i kontynuuje od miejsca, w którym się zatrzymał",
-        "resumedLineSecond": "Ponownie utracono maszynę — druga automatyczna próba, kontynuacja od miejsca zatrzymania"
+        "resumedLineSecond": "Ponownie utracono maszynę — druga automatyczna próba, kontynuacja od miejsca zatrzymania",
+        "amending": "uzgodnij",
+        "checking": "sprawdź",
+        "repairing": "popraw",
+        "amendingLine": "Uzgadnianie elementów pod {target}",
+        "amendingTopLine": "Uzgadnianie elementów najwyższego poziomu",
+        "checkingLine": "Trwa końcowe sprawdzenie",
+        "checkingCardLine": "Sprawdzanie: {title}",
+        "repairingLine": "Poprawianie tego, co wykazało końcowe sprawdzenie"
       },
       "openerFollowUp": "Wybrano właśnie {label}. Motir AI planuje to, co ten wybór blokuje.",
       "composerPlaceholderGuide": "Powiedz Motir AI, jak poszedł ten krok…",
@@ -10674,7 +10687,11 @@
         "lay": "Układanie: {title}",
         "layTop": "Układanie najwyższego poziomu projektu",
         "author": "Pisanie: {title}",
-        "draft": "Szkicowanie nowego elementu"
+        "draft": "Szkicowanie nowego elementu",
+        "amend": "Uzgadnianie elementów pod {title}",
+        "amendTop": "Uzgadnianie elementów najwyższego poziomu",
+        "check": "Trwa końcowe sprawdzenie",
+        "repair": "Poprawianie tego, co wykazało końcowe sprawdzenie"
       },
       "reason": {
         "rate_limited": "model osiągnął limit zapytań",
@@ -10942,7 +10959,7 @@
               "set": "Zmieniono model planowania"
             },
             "planner_review_model": {
-              "set": "Zmieniono model przeglądu próby"
+              "set": "Zmieniono model końcowego sprawdzenia"
             },
             "planner_model_list": {
               "add": "Dodano model do listy planowania",
@@ -11747,24 +11764,24 @@
         "failed": "Nie udało się zapisać zmiany. Nic nie zostało zmienione."
       },
       "review": {
-        "name": "Przegląd próby",
+        "name": "Końcowe sprawdzenie",
         "desc": "Kontrola tylko do odczytu każdego planu, zanim zostanie pokazany",
         "same": "Taki sam jak model planowania",
         "sameDesc": "Każde zadanie planowania przegląda modelem, którym planuje",
         "defaultGroup": "Domyślne",
-        "pickerAria": "Model przeglądu próby",
+        "pickerAria": "Model końcowego sprawdzenia",
         "withdrawnBody": "Przeglądy działają na modelu planowania danego zadania, dopóki nie wybierzesz innego.",
         "withdrawnBodyReadOnly": "Przeglądy działają na modelu planowania danego zadania, dopóki superadministrator nie wybierze innego.",
-        "confirmTitle": "Zmienić model przeglądu próby?",
-        "confirmBody": "{from} → {to}. Zmiana obowiązuje od próby następnego zadania planowania w każdej organizacji. Zadania już uruchomione kończą się na modelu, z którym wystartowały.",
+        "confirmTitle": "Zmienić model końcowego sprawdzenia?",
+        "confirmBody": "{from} → {to}. Zmiana obowiązuje od końcowego sprawdzenia następnego zadania planowania w każdej organizacji. Zadania już uruchomione kończą się na modelu, z którym wystartowały.",
         "savedTitle": "Zmieniono model przeglądu",
-        "savedBody": "Przeglądy próby działają na {model} od następnego zadania planowania.",
-        "unchanged": "Przegląd próby już działa na {model}."
+        "savedBody": "Od następnego zadania planowania końcowe sprawdzenia działają na {model}.",
+        "unchanged": "Końcowe sprawdzenie już działa na {model}."
       },
       "group": {
         "audiences": "Planowanie · według odbiorców",
         "functions": "Guide · Debug · Ask · wartości domyślne platformy",
-        "review": "Przegląd próby · tylko platforma"
+        "review": "Końcowe sprawdzenie · tylko platforma"
       },
       "functions": {
         "guide": {
@@ -11995,7 +12012,7 @@
     "plannerFindings": {
       "breadcrumb": "Operacje · Ustalenia planisty",
       "title": "Ustalenia planisty",
-      "subtitle": "To, co przebieg próbny hostowanego planisty i skill check plan wykryły jako błędne w planach, zachowane także po zamknięciu lub usunięciu tych planów. Zobacz, które defekty się powtarzają, a następnie ustal, czyja to była wina, zamień ustalenie w lekcję, zapisz utworzony bug lub je odrzuć.",
+      "subtitle": "To, co końcowe sprawdzenie hostowanego planisty i skill check plan wykryły jako błędne w planach, zachowane także po zamknięciu lub usunięciu tych planów. Zobacz, które defekty się powtarzają, a następnie ustal, czyja to była wina, zamień ustalenie w lekcję, zapisz utworzony bug lub je odrzuć.",
       "infoLead": "Ustalenia cytują plany klientów.",
       "infoBody": "Tę stronę widzą tylko administratorzy platformy, a każda wprowadzona tu zmiana jest zapisywana w dzienniku audytu.",
       "view": {
@@ -12095,7 +12112,7 @@
       },
       "empty": {
         "title": "Brak ustaleń",
-        "body": "Ustalenia pojawiają się tutaj, gdy przebieg próbny hostowanego planisty przejrzy plan lub gdy ktoś uruchomi skill check plan. Żadne nie zostało jeszcze zachowane."
+        "body": "Ustalenia pojawiają się tutaj, gdy końcowe sprawdzenie hostowanego planisty przejrzy plan lub gdy ktoś uruchomi skill check plan. Żadne nie zostało jeszcze zachowane."
       },
       "unavailable": {
         "title": "Nie udało się wczytać ustaleń",

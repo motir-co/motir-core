@@ -1,6 +1,6 @@
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
-import type { PlanAuthorSourceDto, PlanOriginDto } from '@/lib/dto/plans';
+import type { PlanAuthorSourceDto, PlanOriginDto, PlanWalkPhaseDto } from '@/lib/dto/plans';
 import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 import type { ToResumeForm } from '@/lib/planChange/toResumeForm';
 import type { ApprovalGateKindDTO, ApprovalGateStateDTO } from '@/lib/dto/approvalGate';
@@ -262,7 +262,7 @@ export interface ToResumePlanningSessionDto {
     failedAt: string;
     /** The stable reason code as stored (`rate_limited`, `out_of_credits`, …). */
     reason: string;
-    stopPhase: 'lay' | 'author' | null;
+    stopPhase: PlanWalkPhaseDto | null;
     stopRef: string | null;
     stopTitle: string | null;
     /** The cards the halted walk left unplanned, one line each, worded by motir-ai for the
