@@ -7,6 +7,9 @@ import {
   AWS_INDEX_MARKER_HOLD_SECONDS,
   AWS_INDEX_PULL_ERROR_PREFIX,
   AWS_INDEX_PULL_FAILED_MARKER,
+  AWS_INDEX_PULL_RETRY_FIRST_DELAY_SECONDS,
+  AWS_INDEX_PULL_RETRY_MAX_DELAY_SECONDS,
+  AWS_INDEX_PULL_RETRY_WINDOW_SECONDS,
   AWS_DISPATCH_RUN_TAG_KEY,
   AWS_REAP_PAGE_SIZE,
   AwsInstanceSizeError,
@@ -853,19 +856,23 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
     const script = buildIndexUserData({ image, env: {} });
     const lines = script.split('\n');
     const login = lines.findIndex((l) => l.includes('aws ecr get-login-password'));
-    const pull = lines.indexOf('if ! out=$(docker pull "$IMAGE" 2>&1); then');
+    const pull = lines.indexOf('if ! retry pull_image; then');
     expect(login).toBeGreaterThan(-1);
     expect(login).toBeLessThan(pull);
     expect(lines[login]).toBe(
-      "if ! out=$({ aws ecr get-login-password --region 'us-east-1' | docker login --username AWS --password-stdin '944842271421.dkr.ecr.us-east-1.amazonaws.com'; } 2>&1); then",
+      "ecr_login() { aws ecr get-login-password --region 'us-east-1' | docker login --username AWS --password-stdin '944842271421.dkr.ecr.us-east-1.amazonaws.com'; }",
     );
     // The CLI is installed only when the AMI has none, before the login.
     expect(lines[login - 1]).toBe(
       'if ! command -v aws >/dev/null 2>&1; then dnf install -y -q awscli-2; fi',
     );
-    // A failed login is a failed pull: its output, the same marker, the hold,
-    // then power off (MOTIR-10823).
-    expect(lines.slice(login + 1, login + 3)).toEqual(['  pull_failed "$out"', 'fi']);
+    // The login is retried (MOTIR-11276); a login that still fails is a failed
+    // pull: its output, the same marker, the hold, then power off (MOTIR-10823).
+    expect(lines.slice(login + 1, login + 4)).toEqual([
+      'if ! retry ecr_login; then',
+      '  pull_failed "$out"',
+      'fi',
+    ]);
     // pipefail, so a CLI that fails is the pipe's failure, not docker's.
     expect(script).toContain('\nset -u -o pipefail\n');
     // The login runs on the host, after the env file and the console are set up.
@@ -877,7 +884,7 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
     expect(script).not.toContain('docker login');
     expect(script).not.toContain('awscli');
     expect(script).toContain(
-      'if ! out=$(docker pull "$IMAGE" 2>&1); then\n  pull_failed "$out"\nfi\n',
+      'pull_image() { docker pull "$IMAGE"; }\nif ! retry pull_image; then\n  pull_failed "$out"\nfi\n',
     );
   });
 
@@ -955,9 +962,16 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
     expect(ec2.count('getConsoleOutput')).toBe(0);
   });
 
-  it('only the marker on a line of its own counts', () => {
+  it('only the marker ending its line counts, wherever on the line it starts', () => {
     expect(consoleShowsPullFailure(`boot\n${AWS_INDEX_PULL_FAILED_MARKER}\r\n`)).toBe(true);
+    // The console glues the first marker to the getty login prompt (MOTIR-11276).
+    expect(consoleShowsPullFailure(`ip-10-65-7-59 login: ${AWS_INDEX_PULL_FAILED_MARKER}\n`)).toBe(
+      true,
+    );
     expect(consoleShowsPullFailure(`echo ${AWS_INDEX_PULL_FAILED_MARKER} later`)).toBe(false);
+    // The script's own source is not the marker: it does not begin a word there.
+    expect(consoleShowsPullFailure(`console '${AWS_INDEX_PULL_FAILED_MARKER}'`)).toBe(false);
+    expect(consoleShowsPullFailure(`x${AWS_INDEX_PULL_FAILED_MARKER}`)).toBe(false);
     expect(consoleShowsPullFailure(null)).toBe(false);
   });
 });
@@ -1112,15 +1126,96 @@ describe('an index VM reports its exit code through describe (MOTIR-9449)', () =
     expect(ec2.count('getConsoleOutput')).toBe(0);
   });
 
-  it('reads the last exit marker on a line of its own, 0–255 only', () => {
+  it('reads the last exit marker followed by its code alone, 0–255 only', () => {
     expect(consoleExitCode(`boot\n${AWS_INDEX_EXIT_MARKER}10\r\n`)).toBe(10);
     expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}1\n${AWS_INDEX_EXIT_MARKER}0\n`)).toBe(0);
-    expect(consoleExitCode(`echo ${AWS_INDEX_EXIT_MARKER}0`)).toBeNull();
+    // Glued to the getty login prompt, it is still read (MOTIR-11276).
+    expect(consoleExitCode(`ip-10-65-7-59 login: ${AWS_INDEX_EXIT_MARKER}3\n`)).toBe(3);
+    // The script's own source is not a marker.
+    expect(consoleExitCode(`console "${AWS_INDEX_EXIT_MARKER}$code"`)).toBeNull();
+    expect(consoleExitCode(`echo "${AWS_INDEX_EXIT_MARKER}0"`)).toBeNull();
+    expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}0 later`)).toBeNull();
     expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}256`)).toBeNull();
     expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}-1`)).toBeNull();
     expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}`)).toBeNull();
     expect(consoleExitCode(`${AWS_INDEX_PULL_FAILED_MARKER}`)).toBeNull();
     expect(consoleExitCode(null)).toBeNull();
+  });
+});
+
+describe('an index VM retries a failed ECR login and pull before it gives up (MOTIR-11276)', () => {
+  const ECR_IMAGE = `944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/indexer@sha256:${'b'.repeat(64)}`;
+
+  /** The script's `retry` function run under bash over a command that fails
+   *  `fails` times and then succeeds. `sleep` advances bash's own SECONDS clock
+   *  instead of waiting, so the window is measured as the VM would measure it. */
+  function runRetry(fails: number): { sleeps: number[]; attempts: number; result: string } {
+    const lines = buildIndexUserData({ image: ECR_IMAGE, env: {} }).split('\n');
+    const start = lines.indexOf('retry() {');
+    const end = lines.indexOf('}', start);
+    const harness = [
+      lines.slice(start, end + 1).join('\n'),
+      'sleep() { echo "SLEEP $1"; SECONDS=$((SECONDS + $1)); }',
+      // The command runs in a subshell, so its attempt count lives in a file.
+      'count=$(mktemp)',
+      'echo 0 >"$count"',
+      'attempt() { n=$(( $(cat "$count") + 1 )); echo "$n" >"$count"; if (( n > $1 )); then echo ok; else echo "timeout $n"; return 1; fi; }',
+      'if retry attempt "$1"; then echo "RESULT ok $out"; else echo "RESULT failed $out"; fi',
+      'echo "ATTEMPTS $(cat "$count")"',
+      'rm -f "$count"',
+    ].join('\n');
+    const out = execFileSync('bash', ['-c', harness, 'harness', String(fails)], {
+      encoding: 'utf8',
+    }).split('\n');
+    return {
+      sleeps: out.filter((l) => l.startsWith('SLEEP ')).map((l) => Number(l.slice(6))),
+      attempts: Number(out.find((l) => l.startsWith('ATTEMPTS '))!.slice(9)),
+      result: out.find((l) => l.startsWith('RESULT '))!.slice(7),
+    };
+  }
+
+  it('the login and the pull both go through retry before pull_failed', () => {
+    const lines = buildIndexUserData({ image: ECR_IMAGE, env: {} }).split('\n');
+    const login = lines.indexOf('if ! retry ecr_login; then');
+    const pull = lines.indexOf('if ! retry pull_image; then');
+    expect(login).toBeGreaterThan(lines.indexOf('retry() {'));
+    expect(pull).toBeGreaterThan(login);
+    expect(lines[login + 1]).toBe('  pull_failed "$out"');
+    expect(lines[pull + 1]).toBe('  pull_failed "$out"');
+    expect(lines[pull - 1]).toBe('pull_image() { docker pull "$IMAGE"; }');
+    // Nothing pulls outside the retry any more.
+    expect(lines.filter((l) => l.includes('docker pull'))).toHaveLength(1);
+  });
+
+  it('a transient failure is retried with backoff and then succeeds', () => {
+    expect(runRetry(2)).toEqual({
+      sleeps: [
+        AWS_INDEX_PULL_RETRY_FIRST_DELAY_SECONDS,
+        2 * AWS_INDEX_PULL_RETRY_FIRST_DELAY_SECONDS,
+      ],
+      attempts: 3,
+      result: 'ok ok',
+    });
+  });
+
+  it('a first-try success waits for nothing', () => {
+    expect(runRetry(0)).toEqual({ sleeps: [], attempts: 1, result: 'ok ok' });
+  });
+
+  it('gives up inside the window, capping each wait, with the last attempt’s output', () => {
+    const { sleeps, attempts, result } = runRetry(1000);
+    expect(sleeps).toEqual([5, 10, 20, 30, 30]);
+    expect(Math.max(...sleeps)).toBe(AWS_INDEX_PULL_RETRY_MAX_DELAY_SECONDS);
+    expect(sleeps.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(
+      AWS_INDEX_PULL_RETRY_WINDOW_SECONDS,
+    );
+    expect(attempts).toBe(sleeps.length + 1);
+    // `out` is the last attempt's, which pull_failed copies to the console.
+    expect(result).toBe(`failed timeout ${attempts}`);
+  });
+
+  it('bounds the window at about two minutes', () => {
+    expect(AWS_INDEX_PULL_RETRY_WINDOW_SECONDS).toBe(120);
   });
 });
 
@@ -1204,7 +1299,7 @@ describe('an index VM shows why its pull failed, and holds its marker up for a l
     // The captured output is the pipe's stderr and docker login's stdout; the
     // password is the CLI's stdout, which only the pipe carries.
     expect(script).toContain(
-      "out=$({ aws ecr get-login-password --region 'us-east-1' | docker login --username AWS --password-stdin",
+      "ecr_login() { aws ecr get-login-password --region 'us-east-1' | docker login --username AWS --password-stdin",
     );
     expect(lines.filter((l) => l === '  pull_failed "$out"')).toHaveLength(2);
     // The credential is written to the env file only, never echoed.
@@ -1289,6 +1384,44 @@ describe('an index VM shows why its pull failed, and holds its marker up for a l
         `boot\n${AWS_INDEX_PULL_ERROR_PREFIX}one\r\n  ${AWS_INDEX_PULL_ERROR_PREFIX}two  \n${AWS_INDEX_PULL_FAILED_MARKER}\n`,
       ),
     ).toEqual(['one', 'two']);
+    // The first line glued to the getty login prompt is kept (MOTIR-11276).
+    expect(
+      consolePullError(
+        `ip-10-65-7-59 login: ${AWS_INDEX_PULL_ERROR_PREFIX}Error response from daemon: i/o timeout\n${AWS_INDEX_PULL_ERROR_PREFIX}two\n`,
+      ),
+    ).toEqual(['Error response from daemon: i/o timeout', 'two']);
+    expect(consolePullError(`console "${AWS_INDEX_PULL_ERROR_PREFIX}$line"; done`)).toEqual([]);
     expect(consolePullError(null)).toEqual([]);
+  });
+
+  it('a running VM whose error lines are glued to the login prompt logs them (MOTIR-11276)', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+    ec2.failIndexPullHeld(
+      handle.id,
+      ['Error response from daemon: dial tcp 98.94.129.166:443: i/o timeout'],
+      'ip-10-65-7-59 login: ',
+    );
+
+    expect(await orchestrator.describe(handle)).toMatchObject({ imagePullFailed: true });
+    expect(warn).toHaveBeenCalledWith('[awsOrchestrator] an index VM could not pull its image', {
+      instanceId: handle.id,
+      detail: 'Error response from daemon: dial tcp 98.94.129.166:443: i/o timeout',
+    });
+  });
+
+  it('a stopped VM whose posted console glues its error to the login prompt logs it (MOTIR-11276)', async () => {
+    ec2.markImageUnpullable(INDEX_IMAGE, {
+      errorLines: ['Get "https://x/v2/": context deadline exceeded', 'second'],
+      gluedTo: 'ip-10-65-7-59 login: ',
+    });
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+
+    expect(await orchestrator.describe(handle)).toMatchObject({ imagePullFailed: true });
+    expect(warn).toHaveBeenCalledWith('[awsOrchestrator] an index VM could not pull its image', {
+      instanceId: handle.id,
+      detail: 'Get "https://x/v2/": context deadline exceeded | second',
+    });
   });
 });
