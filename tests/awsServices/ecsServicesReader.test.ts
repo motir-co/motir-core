@@ -31,14 +31,23 @@ const IMAGE = `944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/motir-core@sha
 
 const sizes: Record<
   string,
-  { cpu?: string; memory?: string; containerDefinitions?: { image?: string }[] }
+  {
+    cpu?: string;
+    memory?: string;
+    containerDefinitions?: { name?: string; image?: string; essential?: boolean }[];
+  }
 > = {
   [td('web', 3)]: { cpu: '1024', memory: '2048' },
   [td('web', 4)]: {
     cpu: '1024',
     memory: '2048',
-    // The FIRST container's image is the one read (MOTIR-11112).
-    containerDefinitions: [{ image: IMAGE }, { image: 'public.ecr.aws/sidecar:1' }],
+    // EVERY container is read, in order, with its name and essential flag
+    // (MOTIR-11275): the page picks the application container from them.
+    containerDefinitions: [
+      { name: 'request-timing-collector', image: 'public.ecr.aws/sidecar:1', essential: false },
+      { name: 'web', image: IMAGE },
+      {},
+    ],
   },
   [td('worker', 7)]: { cpu: '256', memory: '512' },
 };
@@ -135,10 +144,21 @@ describe('listServices', () => {
     const steady = services[1]!;
     expect(steady.deployments[0]!.taskDefinitionArn).toBe(td('web', 4));
     expect(steady.taskDefinitions).toEqual({
-      [td('web', 4)]: { family: 'web', revision: 4, cpuUnits: 1024, memoryMib: 2048, image: IMAGE },
+      [td('web', 4)]: {
+        family: 'web',
+        revision: 4,
+        cpuUnits: 1024,
+        memoryMib: 2048,
+        containers: [
+          { name: 'request-timing-collector', image: 'public.ecr.aws/sidecar:1', essential: false },
+          // An omitted `essential` is essential, as ECS reads it.
+          { name: 'web', image: IMAGE, essential: true },
+          { name: null, image: null, essential: true },
+        ],
+      },
     });
-    // A task definition with no container names no image.
-    expect(rolling.taskDefinitions[td('web', 3)]!.image).toBeNull();
+    // A task definition with no container lists none.
+    expect(rolling.taskDefinitions[td('web', 3)]!.containers).toEqual([]);
   });
 
   it('answers an empty cluster with no service and no describe call', async () => {
@@ -183,7 +203,7 @@ describe('listServices', () => {
       revision: 7,
       cpuUnits: null,
       memoryMib: null,
-      image: null,
+      containers: [],
     });
   });
 

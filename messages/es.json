@@ -9296,7 +9296,17 @@
       "earlier": "Tu sesión anterior está cerrada",
       "earlierOpen": "Abrirla",
       "disabledStreaming": "Disponible cuando termine esta Ejecución",
-      "swapped": "Tu sesión anterior está cerrada. Se abrió una sesión nueva."
+      "swapped": "Tu sesión anterior está cerrada. Se abrió una sesión nueva.",
+      "dialog": {
+        "title": "¿Empezar algo nuevo?",
+        "body": "Esto cierra la sesión de planificación actual y libera sus elementos de trabajo.",
+        "writing": "Motir AI está escribiendo un plan en esta sesión. Se detiene y lo que lleva escrito se descarta.",
+        "waiting": "El plan que espera tu revisión se conserva. Abre la sesión anterior para seguir trabajando en él.",
+        "confirm": "Empezar algo nuevo",
+        "keep": "Seguir planificando",
+        "error": "No se pudo empezar algo nuevo. No ha cambiado nada: inténtalo de nuevo o sigue planificando.",
+        "retry": "Reintentar"
+      }
     },
     "waiting": {
       "failedHead": "Este intento se detuvo",

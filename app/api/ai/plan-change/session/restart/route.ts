@@ -11,11 +11,13 @@ import {
   readSessionId,
 } from '../../_errors';
 
-// THE ANSWER to the Plan something new confirm (Story MOTIR-7631 · MOTIR-7649;
-// `docs/decisions/conversation-turn-intent.md` AMENDMENT 3, A3.3). `keep` writes
-// the Keep planning marker and returns the same session; `confirm` ends the
-// session `restarted` and returns the NEW empty session for the same scope, which
-// the overlay swaps to in place. `ai:plan`-gated in the service.
+// THE RESTART — Plan something new (Story MOTIR-7631 · MOTIR-7649;
+// `docs/decisions/conversation-turn-intent.md` AMENDMENT 3, A3.3). `confirm` ends
+// the session `restarted` and returns the NEW empty session for the same scope,
+// which the overlay swaps to in place: the Plan something new dialog posts it
+// (MOTIR-11261), with nothing written to the conversation first. `keep` answers a
+// confirm TURN a thread already holds — it writes the Keep planning marker and
+// returns the same session. `ai:plan`-gated in the service.
 // NOT rate-limited, deliberately: it submits no model job, so it spends nothing.
 export async function POST(req: Request): Promise<Response> {
   const gate = await requireCompliantSession();

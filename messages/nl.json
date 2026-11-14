@@ -9296,7 +9296,17 @@
       "earlier": "Je eerdere sessie is gesloten",
       "earlierOpen": "Openen",
       "disabledStreaming": "Beschikbaar zodra deze run klaar is",
-      "swapped": "Je eerdere sessie is gesloten. Er is een nieuwe sessie geopend."
+      "swapped": "Je eerdere sessie is gesloten. Er is een nieuwe sessie geopend.",
+      "dialog": {
+        "title": "Iets nieuws beginnen?",
+        "body": "Dit sluit de huidige planningssessie en geeft de werkitems ervan vrij.",
+        "writing": "Motir AI schrijft in deze sessie een plan. Dat stopt, en wat er tot nu toe is geschreven, wordt verwijderd.",
+        "waiting": "Het plan dat op je beoordeling wacht, blijft bestaan. Open de eerdere sessie om eraan verder te werken.",
+        "confirm": "Iets nieuws beginnen",
+        "keep": "Verder plannen",
+        "error": "Iets nieuws beginnen is niet gelukt. Er is niets veranderd: probeer het opnieuw, of plan verder.",
+        "retry": "Opnieuw proberen"
+      }
     },
     "waiting": {
       "failedHead": "Deze poging is gestopt",

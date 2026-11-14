@@ -135,7 +135,7 @@ const { conversation } = vi.hoisted(() => ({
     onApproved: null as ((r: unknown) => void) | null,
     anchorId: null as string | null,
     seedGateId: null as string | null,
-    requestRestart: vi.fn(),
+    confirmRestart: vi.fn(),
     answerRestartConfirm: vi.fn(),
     onRestarted: null as ((sessionId: string) => void) | null,
   },

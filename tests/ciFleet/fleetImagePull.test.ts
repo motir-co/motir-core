@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
 import { verifyFleetBootable, verifyIndexFleetBootable } from '@/lib/orchestrator';
+import type { EcrRegistryCredentialReader } from '@/lib/awsServices/ecrRegistryCredential';
 
 // THE FLEET BOOT PREFLIGHT (Story MOTIR-1916 · MOTIR-2006) — §7 of
 // `docs/decisions/fleet-image-pull.md`.
@@ -425,5 +427,186 @@ describe('verifyIndexFleetBootable — §5.3: the fleet has TWO pull paths, and 
 
     await expect(verifyIndexFleetBootable()).resolves.toMatchObject({ verdict: 'not_applicable' });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── THE ECR-HOSTED INDEXER (MOTIR-11277) ─────────────────────────────────────
+//
+// Since MOTIR-10123 the AWS deployment pins `MOTIR_INDEXER_IMAGE` to a digest in
+// core's own `motir/indexer` ECR repository, and indexes on the AWS pool
+// (`MOTIR_INDEX_FLEET_PROVIDER=aws`). The preflight probed that digest with the
+// Fly-only credential resolver, ECR's anonymous 401 is `Basic`, and so the
+// verdict was `indeterminate` on every run from 2026-11-11 until the daily
+// health check dead-lettered on 2026-11-14 with the very sentence the
+// reproduction below asserts.
+//
+// The fixture is ECR's documented registry-API behaviour, and the challenge is
+// the one production quoted: an anonymous manifest GET is `401 · Basic`
+// whatever the digest; a GET carrying `Basic base64(AWS:<token password>)` is
+// served the manifest (200 + `docker-content-digest`) for a digest the
+// repository holds and `404 MANIFEST_UNKNOWN` for one it does not.
+
+const ECR_HOST = '944842271421.dkr.ecr.us-east-1.amazonaws.com';
+const ECR_DIGEST = `sha256:2f91d206${'a'.repeat(56)}`;
+const ECR_INDEXER_IMAGE = `${ECR_HOST}/motir/indexer@${ECR_DIGEST}`;
+const ECR_BASIC_CHALLENGE = `Basic realm="https://${ECR_HOST}/",service="ecr.amazonaws.com"`;
+/** What ECR's GetAuthorizationToken decodes to: `AWS:<password>`. */
+const ECR_PASSWORD = 'eyJwYXlsb2FkIjoiZWNyLXB1bGwtdG9rZW4ifQ==';
+const ECR_AUTHORIZATION = `Basic ${Buffer.from(`AWS:${ECR_PASSWORD}`).toString('base64')}`;
+
+describe('verifyIndexFleetBootable — an ECR-hosted indexer image (MOTIR-11277)', () => {
+  /** The AWS deployment: indexing on the pool, the indexer pinned in ECR. */
+  function stubAwsIndexEnv(image = ECR_INDEXER_IMAGE) {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', 'aws');
+    vi.stubEnv('MOTIR_INDEXER_IMAGE', image);
+  }
+
+  /** ECR's registry API: Basic only, and the manifest only to ECR's own login. */
+  function ecrLike(presentDigests: string[]) {
+    return vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
+      urls.push(String(rawUrl));
+      const url = new URL(String(rawUrl));
+      const digest = /\/manifests\/(.+)$/.exec(url.pathname)?.[1] ?? '';
+      const auth = (init?.headers as Record<string, string> | undefined)?.['authorization'];
+      if (auth !== ECR_AUTHORIZATION) {
+        return json(401, {}, { 'www-authenticate': ECR_BASIC_CHALLENGE });
+      }
+      return presentDigests.includes(digest)
+        ? json(200, {}, { 'docker-content-digest': digest })
+        : json(404, { errors: [{ code: 'MANIFEST_UNKNOWN' }] });
+    });
+  }
+
+  /** A fake ECR that issues the token above, recording what it was asked. */
+  function ecrIssuing(): EcrRegistryCredentialReader & { asked: unknown[] } {
+    const asked: unknown[] = [];
+    return {
+      asked,
+      async credentialFor(registry) {
+        asked.push(registry);
+        return { username: 'AWS', password: ECR_PASSWORD };
+      },
+    };
+  }
+
+  it('is BOOTABLE for a digest the repository holds, probed with an ECR-issued credential', async () => {
+    stubAwsIndexEnv();
+    const fetchSpy = ecrLike([ECR_DIGEST]);
+    vi.stubGlobal('fetch', fetchSpy);
+    const ecr = ecrIssuing();
+
+    await expect(verifyIndexFleetBootable(ecr)).resolves.toEqual({
+      verdict: 'bootable',
+      reference: ECR_INDEXER_IMAGE,
+      digest: ECR_DIGEST,
+    });
+    // The token was minted for the registry the PIN names, in its region.
+    expect(ecr.asked).toEqual([
+      { host: ECR_HOST, registryId: '944842271421', region: 'us-east-1' },
+    ]);
+    // And the manifest GET that answered carried exactly ECR's `AWS:<password>`.
+    const auths = fetchSpy.mock.calls.map(
+      (c) => (c[1]?.headers as Record<string, string> | undefined)?.['authorization'],
+    );
+    expect(auths).toContain(ECR_AUTHORIZATION);
+    expect(new Set(fetchSpy.mock.calls.map((c) => new URL(String(c[0])).host))).toEqual(
+      new Set([ECR_HOST]),
+    );
+  });
+
+  it('is UNPULLABLE, naming the ECR reference, for a digest the repository does not hold', async () => {
+    stubAwsIndexEnv();
+    vi.stubGlobal('fetch', ecrLike([])); // the digest is gone
+
+    const verdict = await verifyIndexFleetBootable(ecrIssuing());
+
+    expect(verdict).toMatchObject({ verdict: 'unpullable', reference: ECR_INDEXER_IMAGE });
+    expect((verdict as { detail: string }).detail).toContain(ECR_HOST);
+    expect((verdict as { detail: string }).detail).toContain('absent');
+  });
+
+  it.each([
+    [
+      'no permission',
+      Object.assign(
+        new Error(
+          'User: arn:aws:sts::944842271421:assumed-role/core-worker/x is not authorized to perform: ecr:GetAuthorizationToken',
+        ),
+        { name: 'AccessDeniedException' },
+      ),
+      'AccessDeniedException',
+    ],
+    [
+      'a transport error',
+      new Error('connect ETIMEDOUT api.ecr.us-east-1.amazonaws.com'),
+      'ETIMEDOUT',
+    ],
+    ['a non-Error rejection', 'socket hang up', 'socket hang up'],
+  ])(
+    'is INDETERMINATE — never `unpullable` — when the ECR token cannot be obtained (%s), naming the cause',
+    async (_label, failure, cause) => {
+      stubAwsIndexEnv();
+      const fetchSpy = ecrLike([ECR_DIGEST]);
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const verdict = await verifyIndexFleetBootable({
+        credentialFor: () => Promise.reject(failure),
+      });
+
+      expect(verdict).toMatchObject({ verdict: 'indeterminate', reference: ECR_INDEXER_IMAGE });
+      const detail = (verdict as { detail: string }).detail;
+      expect(detail).toContain('could not obtain an ECR authorization token');
+      expect(detail).toContain(ECR_HOST);
+      expect(detail).toContain(cause);
+      // The image was never asked about, so nothing is claimed about it.
+      expect(fetchSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reads the token through the SDK when no reader is handed in (the production path)', async () => {
+    stubAwsIndexEnv();
+    vi.stubGlobal('fetch', ecrLike([ECR_DIGEST]));
+    const send = vi.spyOn(ECRClient.prototype, 'send').mockImplementation((async () => ({
+      authorizationData: [
+        { authorizationToken: Buffer.from(`AWS:${ECR_PASSWORD}`).toString('base64') },
+      ],
+    })) as never);
+
+    await expect(verifyIndexFleetBootable()).resolves.toMatchObject({ verdict: 'bootable' });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]![0]).toBeInstanceOf(GetAuthorizationTokenCommand);
+  });
+
+  it('asks ECR nothing for a reference it cannot parse, and answers `indeterminate`', async () => {
+    stubAwsIndexEnv(`@${ECR_DIGEST}`); // no repository at all
+    const fetchSpy = vi.fn(async () => json(200, {}));
+    vi.stubGlobal('fetch', fetchSpy);
+    const ecr = ecrIssuing();
+
+    await expect(verifyIndexFleetBootable(ecr)).resolves.toMatchObject({
+      verdict: 'indeterminate',
+    });
+    expect(ecr.asked).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Fly org credential for a `registry.fly.io` indexer — and never asks ECR', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
+    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', PUBLIC_IMAGE);
+    vi.stubEnv('MOTIR_INDEXER_IMAGE', INDEXER_IMAGE);
+    const fetchSpy = vi.fn(async (_url: string, init?: RequestInit) => {
+      const auth = (init?.headers as Record<string, string> | undefined)?.['authorization'];
+      return auth === `Basic ${Buffer.from('x:fly_fleet_token').toString('base64')}`
+        ? json(200, {}, { 'docker-content-digest': 'sha256:fly' })
+        : json(401, {}, { 'www-authenticate': FLY_BASIC_CHALLENGE });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const ecr = ecrIssuing();
+
+    await expect(verifyIndexFleetBootable(ecr)).resolves.toMatchObject({ verdict: 'bootable' });
+    expect(ecr.asked).toEqual([]);
   });
 });

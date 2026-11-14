@@ -58,6 +58,7 @@ import type { ProjectContext } from '@/lib/projects';
 import type { DebugLandingDto } from '@/lib/dto/planChange';
 import { projectsService } from '@/lib/services/projectsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
+import { seedLegacyRestartConfirm } from '../helpers/legacyRestartConfirm';
 import { workItemsService } from '@/lib/services/workItemsService';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
@@ -600,7 +601,8 @@ test('E. a stored debug turn with its landing and a stored new-session confirm s
       intent: 'new_session',
     },
   );
-  await planChangeSessionsService.requestRestartConfirm(pctx, { sessionId: newer });
+  // A legacy confirm turn — nothing writes one since MOTIR-11261.
+  await seedLegacyRestartConfirm(pctx, newer);
 
   await chapter('The older session reopens with its debug landing', async () => {
     await page.goto(withPlanningOverlay('/dashboard', { kind: 'project', sessionId: older.id }));

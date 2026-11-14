@@ -112,7 +112,7 @@ import { offerRestartStopKey } from '@/lib/planChange/offerRestart';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { endSession, endSessionWithin } from '@/lib/services/planSessionEndService';
 import { replanOfferOf, replanOfferStateOf } from '@/lib/planning/guideReplanOffer';
-import { KEEP_PLANNING_MARKER_BODY, NEW_SESSION_CONFIRM_BODY } from '@/lib/planChange/restart';
+import { KEEP_PLANNING_MARKER_BODY } from '@/lib/planChange/restart';
 
 /**
  * How a write ADDRESSES its session (AMENDMENT 17 §2, story MOTIR-6011): by its
@@ -1059,9 +1059,12 @@ function isCopyable(row: PlanChangeSession, waitingPlan: Plan | null): boolean {
 }
 
 /** The copyable read's answer for the caller's latest own conversation. */
-/** Whether the Plan something new confirm is PENDING on this thread
- *  (MOTIR-7649; ADR AMENDMENT 3, A3.2): the latest turn is that confirm. Read
- *  under the session's row lock by every caller, because it guards an append. */
+/** Whether a Plan something new confirm TURN is PENDING on this thread
+ *  (MOTIR-7649; ADR AMENDMENT 3, A3.2): the latest turn is that confirm. Nothing
+ *  writes one any more — the button asks in a dialog (MOTIR-11261) and typed
+ *  words are read and answered (MOTIR-9231) — but a thread that already holds
+ *  one keeps it answerable, so Keep planning still reads this under the
+ *  session's row lock, because it guards an append. */
 async function restartConfirmPendingWithin(
   sessionId: string,
   workspaceId: string,
@@ -1070,13 +1073,6 @@ async function restartConfirmPendingWithin(
   const latest = await planChangeTurnRepository.findLatestInSession(sessionId, workspaceId, tx);
   return latest?.role === 'assistant' && latest.confirm === 'new_session';
 }
-
-/** The confirm turn itself — one shape for the words and the button (A3.2). */
-const NEW_SESSION_CONFIRM_TURN: AppendTurn = {
-  role: 'assistant',
-  body: NEW_SESSION_CONFIRM_BODY,
-  confirm: 'new_session',
-};
 
 /** Plan something new acts only on the caller's OWN `conversation` session (A3.3):
  *  another member's session, a guide conversation and a session opened by any
@@ -2480,35 +2476,6 @@ export const planChangeSessionsService = {
           tx,
         );
         return toDto(fresh, pctx, tx);
-      },
-    );
-  },
-
-  /**
-   * THE CONTROL (MOTIR-7649; ADR AMENDMENT 3, A3.3) — Plan something new pressed:
-   * append the SAME fixed confirm the words produce to the caller's own open
-   * conversation session. Idempotent: a confirm already pending returns the
-   * session unchanged. An ended session is `PLAN_SESSION_ENDED`.
-   */
-  async requestRestartConfirm(
-    pctx: ProjectContext,
-    address: PlanChangeSessionAddress,
-  ): Promise<PlanChangeSessionDto> {
-    const session = await requireSession(pctx, address);
-    assertRestartable(session, pctx);
-    return withWorkspaceContext(
-      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      async (tx) => {
-        const locked = await planChangeSessionRepository.lockById(session.id, tx);
-        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-        const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
-        if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-        // Checked under the lock: an end that commits first is always seen.
-        if (fresh.endedAt) throw new PlanSessionEndedError(fresh.id);
-        const row = await appendWithin(fresh.id, pctx, NEW_SESSION_CONFIRM_TURN, {}, tx, (t) =>
-          restartConfirmPendingWithin(fresh.id, pctx.workspaceId, t),
-        );
-        return toDto(row, pctx, tx);
       },
     );
   },

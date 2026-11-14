@@ -278,9 +278,28 @@ export class AwsEc2Fake implements Ec2Api {
     this.failNextAfterCreate = code;
   }
 
-  /** No VM can pull `image`: an index VM booted for it fails its pull. */
-  markImageUnpullable(image: string): void {
+  /** No VM can pull `image`: an index VM booted for it fails its pull. With
+   *  `failure`, the failed VM's console carries those error lines before the
+   *  marker, the first glued to `failure.gluedTo` (a getty login prompt the
+   *  console printed with no line break, MOTIR-11276). */
+  markImageUnpullable(
+    image: string,
+    failure?: { readonly errorLines: readonly string[]; readonly gluedTo?: string },
+  ): void {
     this.unpullableImages.add(image);
+    if (failure) this.unpullableConsoles.set(image, failure);
+  }
+
+  private readonly unpullableConsoles = new Map<
+    string,
+    { readonly errorLines: readonly string[]; readonly gluedTo?: string }
+  >();
+
+  /** The console lines a failed pull writes: each error line with its prefix,
+   *  the first glued to `gluedTo` when given, then the marker. */
+  private pullFailureConsole(errorLines: readonly string[], gluedTo = ''): string {
+    const errors = errorLines.map((line) => `${AWS_INDEX_PULL_ERROR_PREFIX}${line}\n`).join('');
+    return `${gluedTo}${errors}${AWS_INDEX_PULL_FAILED_MARKER}\n`;
   }
 
   /** The image an index VM's boot script pulls, or null for any other launch. */
@@ -311,11 +330,11 @@ export class AwsEc2Fake implements Ec2Api {
 
   /** An index VM's login or pull fails: the script copies the failed command's
    *  lines and the pull-failure marker to the console, then HOLDS the VM up
-   *  (MOTIR-10823) — still `running`. */
-  failIndexPullHeld(instanceId: string, errorLines: readonly string[]): void {
+   *  (MOTIR-10823) — still `running`. `gluedTo` is console text the first line
+   *  is glued to, as a getty login prompt is (MOTIR-11276). */
+  failIndexPullHeld(instanceId: string, errorLines: readonly string[], gluedTo?: string): void {
     const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
-    const errors = errorLines.map((line) => `${AWS_INDEX_PULL_ERROR_PREFIX}${line}\n`).join('');
-    this.consoles.set(instanceId, `${before}${errors}${AWS_INDEX_PULL_FAILED_MARKER}\n`);
+    this.consoles.set(instanceId, `${before}${this.pullFailureConsole(errorLines, gluedTo)}`);
   }
 
   /** Console text EC2 has not posted yet — what a buffered read cannot see until
@@ -705,7 +724,11 @@ export class AwsEc2Fake implements Ec2Api {
     const image = this.indexImageOf(instanceId);
     if (image !== null && this.unpullableImages.has(image)) {
       // The pull fails on the VM: the marker on its console, then a power-off.
-      this.consoles.set(instanceId, `[  12.3] cloud-init\n${AWS_INDEX_PULL_FAILED_MARKER}\n`);
+      const failed = this.unpullableConsoles.get(image);
+      this.consoles.set(
+        instanceId,
+        `[  12.3] cloud-init\n${this.pullFailureConsole(failed?.errorLines ?? [], failed?.gluedTo)}`,
+      );
       this.powerOff(instanceId);
     }
     if (this.failNextAfterCreate) {
