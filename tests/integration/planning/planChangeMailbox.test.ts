@@ -447,6 +447,29 @@ describe('SKIP THE FINAL CHECK — its own kind on the same pipe (MOTIR-11266)',
     ).rejects.toBeInstanceOf(PlanChangeMailboxJobMismatchError);
   });
 
+  it('the PEEK read (MOTIR-11267) answers the skip and leaves every turn unconsumed', async () => {
+    await seedPlanRunning(['check']);
+    await planChangeMailboxService.attachTurn(
+      { jobId: JOB, body: 'typed during the check', idempotencyKey: 't' },
+      pctx,
+    );
+    await planChangeMailboxService.raiseSkipFinalCheck(JOB, 'skip-1', pctx);
+    const peeked = await planChangeMailboxService.peekForBoundary(JOB, pctx);
+    expect(peeked.skipFinalCheck).toBe(true);
+    expect(peeked.turns.map((t) => t.text)).toEqual(['typed during the check']);
+    // Still there for the pass that folds it.
+    const read = await planChangeMailboxService.readForBoundary(JOB, pctx);
+    expect(read.turns.map((t) => t.text)).toEqual(['typed during the check']);
+  });
+
+  it('the PEEK read of a job with no thread is empty', async () => {
+    expect(await planChangeMailboxService.peekForBoundary('job-none', pctx)).toEqual({
+      turns: [],
+      stopped: false,
+      skipFinalCheck: false,
+    });
+  });
+
   it('a skip never reads as a stop', async () => {
     await seedPlanRunning(['check']);
     await planChangeMailboxService.raiseSkipFinalCheck(JOB, 'skip-1', pctx);

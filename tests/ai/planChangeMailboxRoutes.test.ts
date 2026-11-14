@@ -30,12 +30,14 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 
 const attachTurn = vi.fn();
 const readForBoundary = vi.fn();
+const peekForBoundary = vi.fn();
 const raiseStop = vi.fn();
 const raiseSkipFinalCheck = vi.fn();
 vi.mock('@/lib/services/planChangeMailboxService', () => ({
   planChangeMailboxService: {
     attachTurn: (...args: unknown[]) => attachTurn(...args),
     readForBoundary: (...args: unknown[]) => readForBoundary(...args),
+    peekForBoundary: (...args: unknown[]) => peekForBoundary(...args),
     raiseStop: (...args: unknown[]) => raiseStop(...args),
     raiseSkipFinalCheck: (...args: unknown[]) => raiseSkipFinalCheck(...args),
   },
@@ -322,6 +324,26 @@ describe('the READ DOOR — POST /api/internal/ai/plan-change-mailbox', () => {
     const res = await readDoor(readReq({ jobId: 'nothing-waiting' }, authed()));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual(EMPTY);
+  });
+
+  it('`peek: true` reads WITHOUT consuming, for the final check’s skip watch (MOTIR-11267)', async () => {
+    const answer = { turns: [], stopped: false, skipFinalCheck: true };
+    peekForBoundary.mockResolvedValue(answer);
+    const res = await readDoor(readReq({ jobId: 'job-1', peek: true }, authed()));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual(answer);
+    expect(peekForBoundary).toHaveBeenCalledWith('job-1', {
+      userId: 'u1',
+      workspaceId: 'ws1',
+      projectId: 'pj1',
+    });
+    expect(readForBoundary).not.toHaveBeenCalled();
+  });
+
+  it('anything but `peek: true` is the consuming read, as before', async () => {
+    await readDoor(readReq({ jobId: 'job-1', peek: 'yes' }, authed()));
+    expect(readForBoundary).toHaveBeenCalledTimes(1);
+    expect(peekForBoundary).not.toHaveBeenCalled();
   });
 
   it('is not cached — the answer changes the moment it is read', async () => {

@@ -554,6 +554,19 @@ export const planChangeMailboxService = {
   },
 
   /**
+   * THE BOUNDARY READ WITHOUT CONSUMING (MOTIR-11267) — what the final check's skip
+   * watch reads on its timer. The same answer {@link readForBoundary} gives, by the
+   * job token's tenancy and without the `ai:plan` gate (the job reads its own
+   * mailbox), but nothing is stamped `consumed_at`: the turns stay for the pass that
+   * folds them. A job with no thread reads empty, as the consuming read does.
+   */
+  async peekForBoundary(jobId: string, pctx: MailboxContext): Promise<MailboxDeliveryDto> {
+    const session = await findThreadForJob(jobId, pctx);
+    if (!session) return emptyDelivery();
+    return planChangeMailboxService.peek(jobId, session.id, pctx);
+  },
+
+  /**
    * ONE BOUNDARY CHECK — what `motir-ai` reads, and the read that CONSUMES.
    *
    * Everything it returns is stamped `consumed_at` in the SAME transaction, so a
