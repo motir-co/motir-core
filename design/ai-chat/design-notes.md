@@ -4671,6 +4671,10 @@ session into the same overlay. **Keep planning** closes nothing.
 
 ### Panel 2 — the confirm
 
+> **Superseded for the button path on 2026-11-14** by § _Plan something new confirms in a modal
+> dialog (MOTIR-11260)_ below: pressing the control opens a modal dialog and writes no turn. The
+> confirm turn described here stays for a typed request only.
+
 - A planner `Bubble` (`--el-chat-bubble-ai`, `--el-text`) holding the fixed body
   `planningWorkspace.restart.confirm.body`, rendered from the turn's `confirm: 'new_session'` column
   with catalogue strings (never the stored body), so it reads in the viewer's locale.
@@ -4736,6 +4740,159 @@ wrap before they shrink.
 
 `session.end.reason.restarted` changes because "started over" reads like the in-session START OVER
 (`clear_plan`), which keeps the session.
+
+## ⭐ Plan something new confirms in a modal dialog (MOTIR-11260, 2026-11-14)
+
+**Mock:** `design/ai-chat/planning-workspace--plan-something-new--modal.mock.html` (a delta; panels
+1–8, each in light and dark, at desktop and at 390px). **Amends** §_Plan something new — the
+control in the rail head, the confirm, and the new session opening in place_ (MOTIR-7647) and its
+mock `design/ai-chat/planning-workspace--plan-something-new.mock.html`, which stays a record and is
+not edited. **Supersedes** that section's _Panel 2 — the confirm_ and _Panel 3 — after Keep
+planning_ **for the button path only**, and its opening sentence _"Either path raises the same
+confirm"_. Panels 1, 4, 5, 6–7 of that section stand. **Decided by** the product owner on
+2026-11-14: pressing **Plan something new** asks in a modal dialog, not as a message in the
+conversation. **Built by** MOTIR-11261.
+
+**Why.** The confirm turn made the person find a question in the conversation to answer it, and the
+question stayed in the thread afterwards. A button press asks a yes-or-no question about the
+session itself, which is what a confirm dialog is for; the conversation is for what the person and
+Motir AI say to each other.
+
+### What does not change
+
+Confirm still ends the session `restarted` (its `generating` plan discarded as the person's
+decision, every card it held given back) and swaps a new, empty session into the same overlay
+(§ MOTIR-7647 panel 4). The control, its placement, its absent and disabled states and its tooltip
+are as shipped (panel 1 of the mock redraws them only as the closed state).
+
+### The two ways in
+
+- **The button** opens the dialog. It writes nothing to the conversation: no confirm turn, no answer
+  marker, whether the person confirms, keeps planning or dismisses. So the button no longer calls
+  `POST /api/ai/plan-change/session/restart/confirm`; Confirm calls the restart directly, as the
+  turn's Confirm does today.
+- **Typed words** ("let's plan something new") keep the shipped in-conversation confirm turn
+  (MOTIR-7647 panels 2–3: the `confirm: 'new_session'` bubble with Confirm and Keep planning, and the
+  _Kept planning_ marker). Mock panel 8.
+
+  **Why the typed path keeps the turn.** The person spoke in the conversation, so the answer belongs
+  under their own words, where they are already looking. They do not have to find it. A dialog
+  opened by a classifier's reading of a message would interrupt the person when the reading is
+  wrong. A turn they can just type past costs nothing.
+
+- **Both at once.** If a typed confirm is pending and the person presses the button, the dialog
+  opens over it. Confirm in the dialog restarts (the pending turn ends with its session). Keep
+  planning in the dialog leaves the pending turn as it is, still answerable.
+
+### The dialog
+
+Composed from the shipped `Modal` (`components/ui/Modal.tsx`) the way the overlay's own confirm,
+`components/planning/PlanCloseGuard.tsx`, composes it, with the tinted consequence line and the
+refusal line of `components/folders/FolderDeleteDialog.tsx`, and the _Try again_ answer of
+`components/issues/actions/DeleteWorkItemDialog.tsx`. No new primitive.
+
+| Element            | Spec                                                                                                                                                                                                                                                                         |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel              | `Modal`, `role="alertdialog"`, `size="md"` (28rem; 90% of a narrow viewport). `--radius-modal`, `--el-page-bg`, `--el-border`, `--shadow-modal`, `--spacing-card-padding`. Scrim `--el-overlay-scrim` over the whole planning overlay.                                       |
+| Title              | `planningWorkspace.restart.dialog.title`, the `Modal` title (serif, `--el-text`). The dialog's accessible name.                                                                                                                                                              |
+| Description        | `planningWorkspace.restart.dialog.body`, the `Modal` description (`--el-text-subtitle`, 14px). Wired as `aria-describedby`.                                                                                                                                                  |
+| Plan line: writing | Only when the session's latest plan is `generating`. A `<p>` in `Modal.Body`: `--el-tint-peach` fill, `--el-text-strong` ink, 13px, `--radius-control`, `--spacing-control-x-12`; glyph `CircleStop` 16px in `--el-warning`, `aria-hidden`. Copy `.dialog.writing`.          |
+| Plan line: waiting | Only when the latest plan is `planned` or `stale`. Same row on `--el-tint-mint`; glyph `ArrowUpRight` in `--el-success`. Copy `.dialog.waiting`.                                                                                                                             |
+| Footer             | `Modal.Footer` with `flex-wrap`. **Keep planning** (`Button` ghost sm, `--el-text`), then **Start something new** (`Button` primary sm, `--el-accent` / `--el-accent-text`). `--radius-btn`, `--height-btn-sm`. At 390px both fit on one line; they wrap before they shrink. |
+| Close (×)          | The `Modal`'s own close control, labelled `common.close`.                                                                                                                                                                                                                    |
+| Error line         | Only after a failed restart. `role="alert"`, `AlertCircle` 14px in `--el-danger` (`aria-hidden`) beside `.dialog.error` in `--el-text`, 13px, as `FolderDeleteDialog`'s refusal.                                                                                             |
+
+The plan line is part of the description: `describedBy` names its id, so a screen reader reads it
+with the title. The line is drawn for one state at a time, `generating` before `planned`/`stale`,
+from the plan state the overlay already reads (the plan on review, or the plan being written). No line when there is no undecided plan.
+
+**Why a plan being written needs its own line.** Today's words say only that the session closes and
+gives its cards back. Confirming also stops a plan that is being written and throws away its draft
+(`endSessionWithin`, `lib/services/planSessionEndService.ts`). A person must not learn that after
+pressing. The control is disabled while the rail streams a run, but a plan can still be `generating`
+with the control live: a reopened session whose plan Motir AI is writing, or an agent writing it
+over MCP. **Why a waiting plan gets a line too.** The opposite worry: the person may think confirming
+throws away a plan they have not reviewed yet. It does not. The plan stays with the ended session,
+which can be carried into a new one (`docs/decisions/agent-authored-plans.md`, the carry of an
+undecided plan), so the line says so in the carry's own words.
+
+**Why primary, not danger.** Nothing the person made is deleted: the session and its turns stay
+readable, a waiting plan stays, and the cards return to where they were. The only loss is a draft
+Motir AI was writing, which the peach line names in words. `PlanCloseGuard` keeps `danger` for
+discarding proposed work items; this confirm is closer to its primary _Confirm_.
+
+### States (mock panels)
+
+| #   | State                    | What shows                                                                                                                                                                                                                                                 |
+| --- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Closed                   | The rail head as shipped, the control enabled; 1b the control disabled while a run streams, with its tooltip. The dialog cannot open while disabled.                                                                                                       |
+| 2   | Open                     | Title, description, Keep planning (focused) and Start something new.                                                                                                                                                                                       |
+| 3   | Open, plan being written | As 2, with the peach writing line. 3b: the mint waiting line.                                                                                                                                                                                              |
+| 4   | Confirming               | Start something new shows the `Button` loading spinner; both buttons `disabled`; `Modal.Body` `aria-busy`. Escape, × and a scrim click are ignored (as `PlanCloseGuard` ignores closing while `deciding`). The dialog stays until the new session is open. |
+| 5   | Confirmed                | The dialog closes, and the new session opens in place with the earlier-session line, exactly as MOTIR-7647 panel 4. Focus goes to the new session's composer. The ended session's thread carries no confirm and no answer.                                 |
+| 6   | Kept                     | Keep planning, Escape, × or a scrim click closes it. Nothing is written; the thread is unchanged. Focus returns to the control.                                                                                                                            |
+| 7   | Failed                   | The dialog stays open with the error line. The restart is one transaction, so nothing changed. Start something new reads _Try again_ and runs the same restart. Keep planning, Escape and × dismiss. The line clears when the retry starts.                |
+| 8   | Typed request            | The shipped confirm turn under the person's words (8), and the shipped _Kept planning_ marker after Keep planning on it (8b).                                                                                                                              |
+
+A refusal the overlay already handles by name keeps its handling. When the restart returns the
+person's other open session for the scope (the take-back), that is a success: the dialog closes and
+that session opens.
+
+### Focus, keyboard and screen readers
+
+Following the shipped confirm dialogs (`PlanCloseGuard`, `DeleteWorkItemDialog`, `FolderDeleteDialog`,
+all Radix through `Modal`):
+
+- **On open**, focus moves into the dialog and lands on **Keep planning**, the safe answer (the
+  `DeleteWorkItemDialog` rule: Cancel takes default focus). It is the first focusable element, so
+  Radix lands there itself; `onOpenAutoFocus` is not needed unless the order changes.
+- **Tab / Shift+Tab** cycle Keep planning → Start something new → × inside the dialog (focus trap).
+  The page behind is inert.
+- **Enter / Space** press the focused button. Enter does not confirm from anywhere else.
+- **Escape**, **×** and a **scrim click** dismiss it as Keep planning does, except while confirming.
+- **On close**, focus returns to the **Plan something new** control. The dialog has no
+  `Modal.Trigger`, so `onCloseAutoFocus` prevents the default and focuses the control. After a
+  confirm, the control's session is gone, so focus goes to the new session's composer, and the
+  shipped polite live region reads the earlier-session line (MOTIR-7647 panel 4).
+- **Naming:** `role="alertdialog"`, `aria-labelledby` the title, `aria-describedby` the description
+  and, when drawn, the plan line. The error line is `role="alert"`, so it is announced when it
+  appears.
+
+### Test ids
+
+`planning-restart-dialog` (the dialog), `planning-restart-dialog-plan` (the plan line, with
+`data-plan="writing" | "waiting"`), `planning-restart-dialog-error`. The two buttons keep the shipped
+ids `planning-restart-keep` and `planning-restart-confirm`, which the typed path's bubble also uses;
+scope a query to the dialog or the turn.
+
+### Copy
+
+New keys sit under `planningWorkspace.restart.dialog`. The typed path's `confirm.body`, `confirm.yes`,
+`confirm.keep` and `kept` stay as they are.
+
+| key                                        | en                                                                                                 | zh                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `planningWorkspace.restart.dialog.title`   | Start something new?                                                                               | 开始新的规划？                                                  |
+| `planningWorkspace.restart.dialog.body`    | This closes the current planning session and gives its work items back.                            | 这会关闭当前的规划会话，并归还它占用的工作项。                  |
+| `planningWorkspace.restart.dialog.writing` | Motir AI is writing a plan in this session. It stops, and what it has written so far is discarded. | Motir AI 正在这个会话中编写计划。它会停止，已写的内容将被丢弃。 |
+| `planningWorkspace.restart.dialog.waiting` | The plan waiting for your review stays. Open the earlier session to keep working on it.            | 等待你审阅的计划会保留。打开之前的会话即可继续处理它。          |
+| `planningWorkspace.restart.dialog.confirm` | Start something new                                                                                | 开始新的规划                                                    |
+| `planningWorkspace.restart.dialog.keep`    | Keep planning                                                                                      | 继续规划                                                        |
+| `planningWorkspace.restart.dialog.error`   | Something new could not be started. Nothing has changed: try again, or keep planning.              | 无法开始新的规划。一切都没有改变：请重试，或继续规划。          |
+| `planningWorkspace.restart.dialog.retry`   | Try again                                                                                          | 重试                                                            |
+
+**What changed from today's words, and why.**
+
+- **Title and body** are today's `confirm.body` split in two. Its question becomes the title, so
+  the dialog's accessible name is the question; the rest becomes the description, unchanged.
+- **Confirm → Start something new.** A dialog's confirm button names the action it takes, so the
+  person can answer without rereading the title (Apple's Human Interface Guidelines and Material
+  Design both ask for a specific verb over a generic "OK" or "Confirm"). It repeats the title's verb.
+- **Keep planning** is unchanged. It has its own `dialog.keep` key, so the two surfaces can drift
+  apart without a shared string.
+- **Writing, waiting, error and retry** are new. There was no error state before, because the
+  confirm turn had none.
+- The other nine locales are written in MOTIR-11261 under the catalogue parity rule.
 
 ## ⭐ The correction runs one way — no "Propose changes instead" under an answer (MOTIR-7924, 2026-10-09)
 
