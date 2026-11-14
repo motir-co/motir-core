@@ -6,6 +6,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 import { CHANGE_INTERVAL_DAYS, GRACE_HOURS, QUARANTINE_DAYS } from '@/lib/publicAddresses/nameHold';
 import en from '@/messages/en.json';
 
@@ -94,6 +95,9 @@ async function seedOwner(email: string, name: string, workspaceName: string, key
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });
+  // A repository Motir created, so the workspace may hold a motir.site name at
+  // all (§8 Amendment 5, MOTIR-11285).
+  await seedMotirRepository({ workspaceId: workspace.id, projectId: project.id });
   return { owner, workspace, project };
 }
 

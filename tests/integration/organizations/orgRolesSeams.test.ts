@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminDb } from '../../helpers/adminDb';
 import { setProjectAccess } from '@/tests/helpers/projectAccess';
+import { seedMotirRepository } from '../../helpers/motirRepository';
 
 // THE SEAMS THE UNIT SUITES MOCK (Story MOTIR-6167 · MOTIR-6315). Each code card
 // of the story tested its own half of these; none could test the join, because
@@ -174,6 +175,8 @@ describe('seam 2 — a workspace removed at the org tier, its survivals read bac
       actorUserId: org.owner.id,
       identifier: 'SPR',
     });
+    // A Motir repository, so the workspace may claim at all (§8 Amendment 5).
+    await seedMotirRepository({ workspaceId: spare.id, projectId: project.id });
     // Cloud on only now: the plan caps are cloud-only too, and would have
     // refused the second workspace above.
     process.env['MOTIR_CLOUD'] = 'true';

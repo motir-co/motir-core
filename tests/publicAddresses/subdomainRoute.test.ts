@@ -7,6 +7,7 @@ import {
   SubdomainChangeLimitError,
   SubdomainForbiddenError,
   SubdomainNotFoundError,
+  SubdomainRequiresMotirRepositoryError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
 import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDomain';
@@ -149,6 +150,7 @@ describe('the mapper, on this surface', () => {
     [new SubdomainForbiddenError(), 403],
     [new HostnameTakenError('acme.motir.site'), 409],
     [new NoSubdomainClaimedError(), 409],
+    [new SubdomainRequiresMotirRepositoryError(), 409],
     [new ReservedLabelError('admin', 'reserved'), 422],
     [new NameQuarantinedError('acme.motir.site', new Date('2027-01-01T00:00:00Z')), 409],
     [new SubdomainChangeLimitError(new Date('2026-11-01T00:00:00Z')), 409],

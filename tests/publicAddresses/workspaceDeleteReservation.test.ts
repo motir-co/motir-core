@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } from '../helpers/db';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // THE WORKSPACE DELETE HOLDS A NAME UNDER THE SAME RULE AS A RELEASE —
 // Story MOTIR-4528 · Subtask MOTIR-9508, `docs/decisions/public-tenant-addresses.md`
@@ -64,6 +65,7 @@ async function soleOwnerHolding(label: string, heldMs: number, email?: string) {
     name: `Holder ${label}`,
     ownerUserId: user.id,
   });
+  await seedMotirRepository({ workspaceId: workspace.id });
   await publicSubdomainService.claim(workspace.id, label, user.id);
   await adminDb.publicAddress.updateMany({
     where: { workspaceId: workspace.id, kind: 'workspace_subdomain' },
@@ -79,6 +81,7 @@ async function claimant() {
     name: 'Claimant',
     ownerUserId: user.id,
   });
+  await seedMotirRepository({ workspaceId: workspace.id });
   return { userId: user.id, workspaceId: workspace.id };
 }
 

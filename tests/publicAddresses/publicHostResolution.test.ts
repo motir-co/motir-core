@@ -4,6 +4,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
 import type { ProjectAccessMode } from '@/generated/prisma/client';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // Host resolution — Story MOTIR-3878 · Subtask MOTIR-4217.
 //
@@ -644,6 +645,7 @@ async function seedTenant(
       ...projectAccessData(mode),
     },
   });
+  await seedMotirRepository({ workspaceId: workspace.id, projectId: project.id });
   return {
     workspaceId: workspace.id,
     ownerId: owner.id,
