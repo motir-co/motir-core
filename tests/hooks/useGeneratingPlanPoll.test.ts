@@ -2,6 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanItemDraftDto } from '@/lib/dto/plans';
+import {
+  EMPTY_HOLD,
+  deriveCardCues,
+  holdCardCues,
+  type CardCueHold,
+} from '@/lib/planning/cueState';
 
 // THE generating-plan poll (Subtask MOTIR-6295) — the one poll the plan page,
 // the onboarding reveal and the planning surface share. Driven with FAKE TIMERS
@@ -443,6 +450,71 @@ describe('useGeneratingPlanPoll (MOTIR-6295)', () => {
 
       expect(fetchSince).not.toHaveBeenCalled();
       expect(fetchReview).toHaveBeenCalledTimes(3);
+      unmount();
+    });
+
+    it('`reads` moves on EVERY answered read — full or unchanged — and never on a failed one (MOTIR-11254)', async () => {
+      fetchReview.mockResolvedValueOnce(versioned('rv1.a'));
+      fetchSince.mockResolvedValueOnce({ unchanged: true, reviewVersion: 'rv1.a' });
+      fetchSince.mockRejectedValueOnce(new Error('network'));
+      fetchSince.mockRejectedValueOnce(new DOMException('aborted', 'AbortError'));
+      fetchSince.mockResolvedValue({ unchanged: true, reviewVersion: 'rv1.a' });
+      const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+      await flush();
+      expect(result.current.reads).toBe(1);
+      const held = result.current.review;
+      await tick(); // unchanged: the snapshot stands, the count moves
+      expect(result.current.review).toBe(held);
+      expect(result.current.reads).toBe(2);
+      await tick(); // failed
+      await tick(); // aborted
+      expect(result.current.reads).toBe(2);
+      await tick(); // answered again
+      expect(result.current.reads).toBe(3);
+      unmount();
+    });
+
+    it("a cleared draft falls back to Thinking on the hook's real reads, though the merge keeps the empty array (MOTIR-11254)", async () => {
+      const drafting = (drafts: PlanItemDraftDto[], version: string): PlanReviewDto => ({
+        ...versioned(version),
+        inFlightDrafts: drafts,
+      });
+      const d: PlanItemDraftDto = {
+        planItemId: 'a',
+        sessionKey: 's',
+        seq: 1,
+        title: 'A',
+        descriptionMd: null,
+        explanationMd: null,
+        updatedAt: '2026-11-14T10:00:00.000Z',
+      };
+      fetchReview.mockResolvedValueOnce(drafting([d], 'rv1.a'));
+      fetchSince.mockResolvedValueOnce(drafting([], 'rv1.b'));
+      fetchSince.mockResolvedValue({ unchanged: true, reviewVersion: 'rv1.b' });
+      const steps = [{ kind: 'author' as const, targetNodeId: 'a' }];
+      // The host's fold, exactly as `PlanProposalViews` runs it on each render.
+      let hold: CardCueHold = EMPTY_HOLD;
+      const shown = () => hold.cues.states.get('a') ?? null;
+      const { result, unmount } = renderHook(() => {
+        const poll = useGeneratingPlanPoll('plan_1');
+        if (poll.review) {
+          hold = holdCardCues(
+            hold,
+            deriveCardCues(poll.review.items, steps, poll.review.inFlightDrafts),
+            poll.reads,
+          );
+        }
+        return poll;
+      });
+      await flush();
+      expect(shown()).toBe('drafting');
+      await tick(); // the draft is cleared: ONE empty read is held
+      const emptied = result.current.review!.inFlightDrafts;
+      expect(emptied).toEqual([]);
+      expect(shown()).toBe('drafting');
+      await tick(); // unchanged answer — the SAME `[]`, yet a read arrived
+      expect(result.current.review!.inFlightDrafts).toBe(emptied);
+      expect(shown()).toBe('thinking');
       unmount();
     });
 

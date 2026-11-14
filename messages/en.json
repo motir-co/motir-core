@@ -364,7 +364,14 @@
       "draftingName": "Being drafted now",
       "laying": "Laying its children",
       "layingName": "Its children are being laid now",
-      "layingHere": "Laying this level"
+      "layingHere": "Laying this level",
+      "thinking": "Thinking",
+      "thinkingName": "Being thought through — nothing written yet",
+      "checking": "Checking",
+      "checkingName": "Being reviewed in the final check",
+      "checkingAll": "Checking its items",
+      "checkingAllName": "Its items are being reviewed together in the final check",
+      "checkingHere": "Checking this level"
     },
     "listWritingTitle": "Nothing proposed yet",
     "listWritingBody": "Items appear here as the plan is written.",
@@ -429,7 +436,9 @@
       "beingWritten": "Being written",
       "written": "Written",
       "follow": "Follow the writing",
-      "followHint": "Keep the text being written in view. Scroll to stop."
+      "followHint": "Keep the text being written in view. Scroll to stop.",
+      "thinking": "Thinking",
+      "checking": "Checking"
     }
   },
   "projectAccess": {

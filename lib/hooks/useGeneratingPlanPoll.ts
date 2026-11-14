@@ -121,6 +121,15 @@ export interface GeneratingPlanPoll {
   review: PlanReviewDto | null;
   /** Bumped on every applied snapshot whose proposals changed (MOTIR-8575). */
   version: number;
+  /**
+   * Bumped on every ANSWERED read — a full snapshot and an `unchanged` answer
+   * alike — and never on a failed, aborted, stale or dropped one (MOTIR-11254).
+   * It is the token that says a read ARRIVED: the snapshot cannot be, because
+   * `mergePlanReview` keeps every equal reference and an unchanged answer files
+   * nothing, so two reads in a row can hand down the very same objects. The
+   * planner cue's two-read hold (`lib/planning/cueState.ts`) counts by it.
+   */
+  reads: number;
   /** `true` after {@link FAILING_AFTER} consecutive failed reads; `false` again on
    *  the next success. The last good snapshot is kept throughout. */
   failing: boolean;
@@ -144,6 +153,7 @@ export function useGeneratingPlanPoll(
   const immediate = opts.immediate ?? true;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [version, setVersion] = useState(0);
+  const [reads, setReads] = useState(0);
   // Keyed by plan, so a `planId` change reads as "not failing" without a reset.
   const [failingFor, setFailingFor] = useState<string | null>(null);
 
@@ -233,6 +243,7 @@ export function useGeneratingPlanPoll(
           applied = seq;
           failures = 0;
           setFailingFor(null);
+          setReads((n) => n + 1);
           if ('unchanged' in answer) {
             // Nothing moved: the snapshot, `version` and `onSnapshot` all stand.
             unchangedRun += 1;
@@ -330,6 +341,7 @@ export function useGeneratingPlanPoll(
   return {
     review: current,
     version,
+    reads,
     failing: !!planId && failingFor === planId,
     refresh,
   };

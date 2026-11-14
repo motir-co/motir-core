@@ -1,4 +1,5 @@
 import type { PlanItemDraftDto } from '@/lib/dto/plans';
+import type { CardCueState } from '@/lib/planning/cueState';
 
 // A CARD BEING WRITTEN, AS THE PROPOSAL QUICK VIEW READS IT (Story MOTIR-11190 ·
 // MOTIR-11201; design `design/ai-planning/design-notes.md` Part XXIX).
@@ -32,6 +33,12 @@ export interface LiveDrafts {
   drafts: readonly PlanItemDraftDto[];
   /** Proposals an `author` step targets right now (bare `planItemId`s). */
   authoring: ReadonlySet<string>;
+  /**
+   * What the planner is doing to each proposal (MOTIR-11254, Part XXXI §31.7) —
+   * `thinking` · `drafting` · `checking`, after the two-read hold, by bare
+   * `planItemId`. Absent ⇒ the quick view's cue reads as it shipped.
+   */
+  cues?: ReadonlyMap<string, CardCueState>;
 }
 
 /** What the open quick view shows of a card being written. */
@@ -189,4 +196,24 @@ export function nextLiveCue(
   }
   if (prev.state !== 'writing') return prev;
   return prev.storedAtWriting !== read.stored ? WRITTEN_CUE : IDLE_CUE;
+}
+
+/** What the quick view's cue line shows (Part XXXI §31.7, MOTIR-11254): the
+ *  shipped three, plus THINKING (authored, nothing written yet) and CHECKING (the
+ *  final check is reviewing the card). */
+export type CueLineState = LiveCueState | 'thinking' | 'checking';
+
+/**
+ * The cue line's state from the read's fold (`nextLiveCue`) and the planner's cue
+ * on the card (`cueState.ts`, after its two-read hold): Checking first — the
+ * latest stage — then Thinking while the writing cue has no text yet, then the
+ * shipped state. Without a planner cue the line reads as it shipped.
+ */
+export function cueLineState(
+  state: LiveCueState,
+  planner: CardCueState | null | undefined,
+): CueLineState {
+  if (planner === 'checking') return 'checking';
+  if (state === 'writing' && planner === 'thinking') return 'thinking';
+  return state;
 }

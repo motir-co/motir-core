@@ -9,7 +9,7 @@ import {
   type PointerEvent as RPointerEvent,
   type ReactNode,
 } from 'react';
-import { Flag, ListTree, Maximize2, Minus, PenLine, Plus } from 'lucide-react';
+import { Brain, Flag, ListTree, Maximize2, Minus, PenLine, Plus, SearchCheck } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   type Rect,
@@ -220,10 +220,13 @@ export interface NodeHighlight {
   label: string;
 }
 
-/** One cue on a node box (§26.6 / §26.7). `label` is its accessible name
- *  (*Being drafted now*); `text` is the chip's visible word (*Drafting*). */
+/** One cue on a node box (§26.6 / §26.7; Part XXXI §31.1). `label` is its
+ *  accessible name (*Being drafted now*); `text` is the chip's visible word
+ *  (*Drafting*). THINKING (an author session with nothing written yet) and
+ *  CHECKING (the final check reviewing the card) are static, like LAYING; only
+ *  DRAFTING moves (MOTIR-11254). */
 export interface NodeCue {
-  kind: 'drafting' | 'laying';
+  kind: 'thinking' | 'drafting' | 'checking' | 'laying';
   label: string;
   text: string;
   /** Motir is writing this card RIGHT NOW (`readPlanAtWork(...).steps` names it).
@@ -245,6 +248,39 @@ export function leavingCuesOf(
   }
   for (const [id, cue] of prev ?? []) {
     if (cue.kind === 'drafting' && cue.moving && !next?.has(id) && drawn(id)) out[id] = cue;
+  }
+  return out;
+}
+
+/** The chip's glyph by state (§31.2) — the second non-colour channel. */
+function CueGlyph({ kind }: { kind: NodeCue['kind'] }) {
+  switch (kind) {
+    case 'thinking':
+      return <Brain aria-hidden="true" className="size-3" />;
+    case 'drafting':
+      return <PenLine aria-hidden="true" className="size-3" />;
+    case 'checking':
+      return <SearchCheck aria-hidden="true" className="size-3" />;
+    default:
+      return <ListTree aria-hidden="true" className="size-3" />;
+  }
+}
+
+/** The cues falling back from DRAFTING to THINKING (Part XXXI §31.4 T4) — the
+ *  draft was cleared mid-step, so the card's wash lifts and the box settles on the
+ *  shipped leaving keyframes while the ring and chip swap in one frame. Kept while
+ *  the node still reads Thinking, until the lift ends (pure). */
+export function settlingCuesOf(
+  prev: ReadonlyMap<string, NodeCue> | null,
+  next: ReadonlyMap<string, NodeCue> | null,
+  held: Readonly<Record<string, NodeCue>>,
+): Record<string, NodeCue> {
+  const out: Record<string, NodeCue> = {};
+  for (const [id, cue] of Object.entries(held)) {
+    if (next?.get(id)?.kind === 'thinking') out[id] = cue;
+  }
+  for (const [id, cue] of next ?? []) {
+    if (cue.kind === 'thinking' && prev?.get(id)?.kind === 'drafting') out[id] = cue;
   }
   return out;
 }
@@ -526,16 +562,28 @@ export function PlanningCanvas({
   // its ring and chip through the design's leaving fade, then is dropped on that
   // fade's end. Adjusted during render, like the motion layer above, so the first
   // render without the cue already draws it leaving. Reduced motion retains nothing.
+  // …and a DRAFTING cue that falls back to THINKING (MOTIR-11254, §31.4 T4) is
+  // marked SETTLING until its wash has lifted, by the same render-time fold.
   const [cueTrack, setCueTrack] = useState<{
     seen: ReadonlyMap<string, NodeCue> | null;
     leaving: Record<string, NodeCue>;
-  }>({ seen: nodeCues, leaving: {} });
+    settling: Record<string, NodeCue>;
+  }>({ seen: nodeCues, leaving: {}, settling: {} });
   if (cueTrack.seen !== nodeCues) {
-    const leaving = prefersReducedMotion()
+    const reduced = prefersReducedMotion();
+    const leaving = reduced
       ? {}
       : leavingCuesOf(cueTrack.seen, nodeCues, cueTrack.leaving, (id) => nodeById.has(id));
-    setCueTrack({ seen: nodeCues, leaving });
+    const settling = reduced ? {} : settlingCuesOf(cueTrack.seen, nodeCues, cueTrack.settling);
+    setCueTrack({ seen: nodeCues, leaving, settling });
   }
+  const dropSettlingCue = (id: string) =>
+    setCueTrack((t) => {
+      if (!(id in t.settling)) return t;
+      const settling = { ...t.settling };
+      delete settling[id];
+      return { ...t, settling };
+    });
   const dropLeavingCue = (id: string) =>
     setCueTrack((t) => {
       if (!(id in t.leaving)) return t;
@@ -681,6 +729,8 @@ export function PlanningCanvas({
   // A LEAVING cue (MOTIR-8416) goes on its ring's fade end, or after the same
   // duration + slack if that never fires — independent of `motion`, like the cue.
   useTimedEntries(Object.entries(cueTrack.leaving), exitMs, dropLeavingCue);
+  // A SETTLING cue (MOTIR-11254) is released on the same clock.
+  useTimedEntries(Object.entries(cueTrack.settling), exitMs, dropSettlingCue);
   // The outline: held, then faded (motion) or simply removed (reduced motion, §23.5).
   useTimedEntries(
     motion ? Object.entries(mo.marks) : [],
@@ -1066,7 +1116,9 @@ export function PlanningCanvas({
               ? 'leaving'
               : liveCue?.kind === 'drafting' && liveCue.moving
                 ? 'at-work'
-                : undefined;
+                : liveCue?.kind === 'thinking' && n.id in cueTrack.settling
+                  ? 'settling'
+                  : undefined;
             const cueId = cue ? `${mId}-cue-${n.id}` : undefined;
             // THE CHANGED HIGHLIGHT (MOTIR-11185) — never on a node that is leaving.
             const lit =
@@ -1157,8 +1209,9 @@ export function PlanningCanvas({
                           : undefined
                       }
                     />
-                    {/* The labelled CHIP — the cue's name; drafting on the top
-                        edge, laying on the bottom, where the children will hang. */}
+                    {/* The labelled CHIP — the cue's name; thinking, drafting and
+                        checking on the top edge, laying on the bottom, where the
+                        children will hang. Each state has its own glyph (§31.2). */}
                     <span
                       id={cueId}
                       role="img"
@@ -1166,11 +1219,7 @@ export function PlanningCanvas({
                       data-testid={`canvas-cue-${cue.kind}`}
                       className="canvas-cue-chip"
                     >
-                      {cue.kind === 'drafting' ? (
-                        <PenLine aria-hidden="true" className="size-3" />
-                      ) : (
-                        <ListTree aria-hidden="true" className="size-3" />
-                      )}
+                      <CueGlyph kind={cue.kind} />
                       {cue.text}
                     </span>
                   </>

@@ -364,8 +364,10 @@ test('a card being written shows its real text growing in the open quick view, t
     await step(page, hosted.job, { step: 'author', target: proposalRef(itemId) });
     await opened;
     await openQuickView(page, LAID_TITLE);
-    await expect(liveCue(page)).toHaveAttribute('data-live-cue', 'writing');
-    await expect(liveCue(page)).toHaveText(en.planReview.peekLive.beingWritten);
+    // Nothing written yet: the cue reads THINKING (MOTIR-11254, Part XXXI §31.7) —
+    // it turns to Being written with the first partial, below.
+    await expect(liveCue(page)).toHaveAttribute('data-live-cue', 'thinking');
+    await expect(liveCue(page)).toHaveText(en.planReview.peekLive.thinking);
     // Nothing has arrived yet: the shipped empty description, no live field.
     await expect(liveBox(page, 'descriptionMd')).toHaveCount(0);
     await expect(peek(page)).toContainText(en.issueViews.noDescription);

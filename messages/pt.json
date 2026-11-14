@@ -364,7 +364,14 @@
       "draftingName": "Sendo redigido agora",
       "laying": "Organizando os itens filhos",
       "layingName": "Os itens filhos estão sendo organizados agora",
-      "layingHere": "Organizando este nível"
+      "layingHere": "Organizando este nível",
+      "thinking": "Pensando",
+      "thinkingName": "Sendo pensado — nada escrito ainda",
+      "checking": "Verificando",
+      "checkingName": "Sendo revisado na verificação final",
+      "checkingAll": "Verificando os itens filhos",
+      "checkingAllName": "Os itens filhos estão sendo revisados juntos na verificação final",
+      "checkingHere": "Verificando este nível"
     },
     "listWritingTitle": "Nada proposto ainda",
     "listWritingBody": "Os itens aparecem aqui conforme o plano é escrito.",
@@ -429,7 +436,9 @@
       "beingWritten": "Sendo escrito",
       "written": "Escrito",
       "follow": "Seguir a escrita",
-      "followHint": "Mantém o texto que está sendo escrito à vista. Role para parar."
+      "followHint": "Mantém o texto que está sendo escrito à vista. Role para parar.",
+      "thinking": "Pensando",
+      "checking": "Verificando"
     }
   },
   "projectAccess": {

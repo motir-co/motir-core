@@ -82,7 +82,12 @@ describe('a card being written is shown in one place', () => {
   });
 
   it('the drafts are passed by the overlay host, and forwarded down the views to the peek only', () => {
-    expect(sitesOf(/\binFlightDrafts=\{/)).toEqual([HOST]);
+    // The plan page passes the drafts too since MOTIR-11254 (Part XXXI §31.5) — for
+    // the cards' Thinking / Drafting state alone. It passes no `live`, so no
+    // partial TEXT reaches its peek: `liveDrafts` stays below the overlay host.
+    expect(sitesOf(/\binFlightDrafts=\{/).sort()).toEqual(
+      [HOST, 'components/planning/PlanDetail.tsx'].sort(),
+    );
     expect(sitesOf(/\bliveDrafts=\{/)).toEqual([
       'components/planning/PlanProposalList.tsx',
       'components/planning/PlanProposalViews.tsx',
@@ -124,9 +129,10 @@ describe('following is mounted in one place', () => {
 
   it('the plan page passes none of them', () => {
     const src = read(join(ROOT, 'components/planning/PlanDetail.tsx'));
-    expect(src).not.toMatch(
-      /\bfollowMode=|\bfollowControl=|\bprogressReading=|\binFlightDrafts=|\bliveDrafts=/,
-    );
+    // `inFlightDrafts` is the one exception (MOTIR-11254, §31.5): it feeds the
+    // cards' cue state there, never partial text — the page passes no `live`.
+    expect(src).not.toMatch(/\bfollowMode=|\bfollowControl=|\bprogressReading=|\bliveDrafts=/);
+    expect(src).not.toMatch(/\blive=\{/);
   });
 });
 

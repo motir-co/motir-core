@@ -364,7 +364,14 @@
       "draftingName": "Szkic powstaje teraz",
       "laying": "Rozkładanie elementów podrzędnych",
       "layingName": "Jego elementy podrzędne są teraz rozkładane",
-      "layingHere": "Rozkładanie tego poziomu"
+      "layingHere": "Rozkładanie tego poziomu",
+      "thinking": "Analizowanie",
+      "thinkingName": "Jest analizowany — nic jeszcze nie napisano",
+      "checking": "Sprawdzanie",
+      "checkingName": "Sprawdzany w końcowym sprawdzeniu",
+      "checkingAll": "Sprawdzanie elementów podrzędnych",
+      "checkingAllName": "Jego elementy podrzędne są wspólnie sprawdzane w końcowym sprawdzeniu",
+      "checkingHere": "Sprawdzanie tego poziomu"
     },
     "listWritingTitle": "Brak propozycji",
     "listWritingBody": "Elementy pojawiają się tutaj w miarę pisania planu.",
@@ -429,7 +436,9 @@
       "beingWritten": "W trakcie pisania",
       "written": "Napisano",
       "follow": "Podążaj za pisaniem",
-      "followHint": "Utrzymuje pisany tekst w polu widzenia. Przewiń, aby zatrzymać."
+      "followHint": "Utrzymuje pisany tekst w polu widzenia. Przewiń, aby zatrzymać.",
+      "thinking": "Analizowanie",
+      "checking": "Sprawdzanie"
     }
   },
   "projectAccess": {

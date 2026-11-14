@@ -146,6 +146,8 @@ const loopsOf = (target: Locator) =>
 
 const ring = (page: Page, title: string) => node(page, title).locator('.canvas-cue-ring');
 const chip = (page: Page, title: string) => node(page, title).getByTestId('canvas-cue-drafting');
+const thinkingChip = (page: Page, title: string) =>
+  node(page, title).getByTestId('canvas-cue-thinking');
 const mark = (page: Page) => rail(page).getByTestId('plan-at-work-mark');
 
 /**
@@ -173,6 +175,18 @@ async function expectMoving(page: Page, title: string): Promise<void> {
   await expect
     .poll(() => runningIn(ring(page, title)), { timeout: 4 * POLL_MS })
     .toBeGreaterThan(0);
+}
+
+/**
+ * The card is THINKING (MOTIR-11254, design Part XXXI §31.1): an `author` step
+ * targets it and no partial has landed — the dashed ring and the Thinking chip,
+ * static, so nothing on it runs.
+ */
+async function expectThinking(page: Page, title: string): Promise<void> {
+  await expect(node(page, title)).toHaveAttribute('data-cue', 'thinking');
+  await expect(node(page, title)).not.toHaveAttribute('data-cue-motion');
+  await expect(thinkingChip(page, title)).toContainText(cueCopy.thinking);
+  await expectStill(page, title);
 }
 
 /** The card is STILL: nothing on it or inside it is running. */
@@ -317,6 +331,16 @@ interface Door {
    *  one level down); returns each card's plan-item id, in order. */
   lay(titles: readonly string[], parent: 'story' | 'task'): Promise<string[]>;
   step(sessionKey: string, step: PlanStepKindDto | 'end', targetRef?: string | null): Promise<void>;
+  /**
+   * Whether this door streams a card's partial text (`itemDraft`, MOTIR-11199).
+   * Only the hosted planner's does: `report_plan_step` has no draft form, so an
+   * MCP planner's `author` step reads THINKING for as long as it runs, and never
+   * takes Drafting's at-work motion (MOTIR-11254, Part XXXI §31.1).
+   */
+  drafts: boolean;
+  /** Stream a partial title for the card `targetRef` names, on `sessionKey`'s
+   *  current `author` step. Only on a door that {@link drafts}. */
+  draft(sessionKey: string, targetRef: string, title: string): Promise<void>;
   /** The walk closes: the plan leaves `generating`. */
   close(): Promise<void>;
   dispose(): Promise<void>;
@@ -355,6 +379,20 @@ async function openDoor(
         return laid.appendedItemIds;
       },
       step: (sessionKey, step, targetRef = null) => hostedStep(run, sessionKey, step, targetRef),
+      drafts: true,
+      async draft(sessionKey, targetRef, title) {
+        draftSeq += 1;
+        await aiGenerationService.recordPlanStepForJob(
+          {
+            jobId: run.jobId,
+            planId: run.planId,
+            sessionKey,
+            targetRef: null,
+            itemDraft: { target: targetRef, seq: draftSeq, title },
+          },
+          run.auth,
+        );
+      },
       async close() {
         await aiGenerationService.appendProposals(run.jobId, [], run.auth.ctx, { final: true });
       },
@@ -381,6 +419,8 @@ async function openDoor(
       mcpAdd(agent, planId, titles, parent === 'story' ? seed.storyKey : seed.taskKey),
     step: (sessionKey, step, targetRef = null) =>
       mcpStep(agent, planId, sessionKey, step, targetRef ?? undefined),
+    drafts: false,
+    draft: () => Promise.reject(new Error('the MCP door streams no draft')),
     async close() {
       await tool(agent, ADD_PLAN_ITEMS_TOOL_NAME, { planId, proposals: [], final: true });
     },
@@ -400,6 +440,41 @@ async function stepAndRead(
   const read = planPolled(page, door.planId, until);
   await door.step(sessionKey, step, targetRef);
   await read;
+}
+
+/** Strictly increasing across every draft this spec sends (a draft's `seq` must
+ *  rise within its session; one counter keeps every session's rising). */
+let draftSeq = 0;
+
+/**
+ * An `author` step on `targetRef`, met on the poll that carries it — and, on a
+ * door that streams drafts, the card's first partial after it, met the same way,
+ * so the card reads DRAFTING (and moves) rather than THINKING.
+ */
+async function authorAndRead(
+  page: Page,
+  door: Door,
+  sessionKey: string,
+  targetRef: string,
+  title: string,
+): Promise<void> {
+  await stepAndRead(page, door, sessionKey, 'author', targetRef, (b) =>
+    hasStep(b.inFlightSteps, sessionKey, targetRef),
+  );
+  if (!door.drafts) return;
+  const planItemId = targetRef.slice('planItem:'.length);
+  const drafted = planPolled(page, door.planId, (b) =>
+    (b.inFlightDrafts ?? []).some((d) => d.planItemId === planItemId && d.title === title),
+  );
+  await door.draft(sessionKey, targetRef, title);
+  await drafted;
+}
+
+/** The card is at work as its door allows: DRAFTING and moving where the door
+ *  streams text, THINKING and still where it does not. */
+async function expectAtWork(page: Page, door: Door, title: string): Promise<void> {
+  if (door.drafts) await expectMoving(page, title);
+  else await expectThinking(page, title);
 }
 
 /** Lay `titles` on the level on screen and wait for every card to be drawn. */
@@ -483,9 +558,7 @@ test('while Motir writes a plan, the card it is writing and the Motir mark move,
         await expectNothingAnimatesOnCards(page, level);
         before = await boxes(page, level);
 
-        await stepAndRead(page, door, 'author-1', 'author', ref(ids[W1]!), (b) =>
-          hasStep(b.inFlightSteps, 'author-1', ref(ids[W1]!)),
-        );
+        await authorAndRead(page, door, 'author-1', ref(ids[W1]!), W1);
         await expectMoving(page, W1);
         await expect(chip(page, W1)).toContainText(cueCopy.drafting);
         for (const t of [W2, W3, seed.taskTitle]) await expectStill(page, t);
@@ -498,9 +571,7 @@ test('while Motir writes a plan, the card it is writing and the Motir mark move,
     await timed('A second card is written — each card moves on its own', async () => {
       const first = await loopsOf(node(page, W1));
       expect(first.length, `${W1} runs its loops`).toBeGreaterThan(0);
-      await stepAndRead(page, door, 'author-2', 'author', ref(ids[W2]!), (b) =>
-        hasStep(b.inFlightSteps, 'author-2', ref(ids[W2]!)),
-      );
+      await authorAndRead(page, door, 'author-2', ref(ids[W2]!), W2);
       await expectMoving(page, W2);
       // Cueing the second card did not restart the first.
       expect(await loopsOf(node(page, W1))).toEqual(first);
@@ -575,22 +646,23 @@ for (const doorName of DOORS) {
         await expectNothingAnimatesOnCards(page, level);
         const before = await boxes(page, level);
 
-        // One live step names one card.
-        await stepAndRead(page, door, 'author-1', 'author', ref(w1!), (b) =>
-          hasStep(b.inFlightSteps, 'author-1', ref(w1!)),
-        );
-        await expectMoving(page, W1);
+        // One live step names one card — Drafting and moving once its text
+        // streams, Thinking and still on a door that streams none.
+        await authorAndRead(page, door, 'author-1', ref(w1!), W1);
+        await expectAtWork(page, door, W1);
         for (const t of [W2, W5, seed.taskTitle]) await expectStill(page, t);
         expectSameBoxes(before, await boxes(page, level));
 
         // Two live steps — the second does not restart the first.
         const first = await loopsOf(node(page, W1));
-        expect(first.length).toBeGreaterThan(0);
-        expect(first.every((l) => l.startTime !== null)).toBe(true);
-        await stepAndRead(page, door, 'author-2', 'author', ref(w2!), (b) =>
-          hasStep(b.inFlightSteps, 'author-2', ref(w2!)),
-        );
-        await expectMoving(page, W2);
+        if (door.drafts) {
+          expect(first.length).toBeGreaterThan(0);
+          expect(first.every((l) => l.startTime !== null)).toBe(true);
+        } else {
+          expect(first).toEqual([]);
+        }
+        await authorAndRead(page, door, 'author-2', ref(w2!), W2);
+        await expectAtWork(page, door, W2);
         expect(await loopsOf(node(page, W1))).toEqual(first);
 
         // A card drafted one level down — counted, not drawn, nothing moved.
@@ -614,11 +686,24 @@ for (const doorName of DOORS) {
         await door.step('author-1', 'end');
         await door.step('author-1', 'author', ref(w3!));
         await moved;
-        await expectMoving(page, W5);
+        if (door.drafts) {
+          const drafted = planPolled(page, door.planId, (b) =>
+            (b.inFlightDrafts ?? []).some((d) => d.planItemId === w3 && d.title === W5),
+          );
+          await door.draft('author-1', ref(w3!), W5);
+          await drafted;
+        }
+        await expectAtWork(page, door, W5);
         await expect(node(page, W1)).not.toHaveAttribute('data-cue', { timeout: 4 * POLL_MS });
         const left = await cueEvents(page, 'leaving', W1);
-        expect(left.length, `${W1} was retained as leaving`).toBeGreaterThan(0);
-        expect(left.some((e) => e.running.includes('canvas-fade-out'))).toBe(true);
+        if (door.drafts) {
+          // A MOVING (drafting) cue is retained for its leaving fade.
+          expect(left.length, `${W1} was retained as leaving`).toBeGreaterThan(0);
+          expect(left.some((e) => e.running.includes('canvas-fade-out'))).toBe(true);
+        } else {
+          // A static Thinking cue never moved, so it leaves at once — nothing retained.
+          expect(left).toEqual([]);
+        }
         await expectStill(page, W1);
 
         // The plan leaves `generating` — everything settles, nothing moved.
@@ -643,10 +728,8 @@ for (const doorName of DOORS) {
       const door = await openDoor(doorName, page, baseURL!, seed);
       try {
         const [w1] = await layLevel(page, door, [W1, W3]);
-        await stepAndRead(page, door, 'author-1', 'author', ref(w1!), (b) =>
-          hasStep(b.inFlightSteps, 'author-1', ref(w1!)),
-        );
-        await expectMoving(page, W1);
+        await authorAndRead(page, door, 'author-1', ref(w1!), W1);
+        await expectAtWork(page, door, W1);
         const loops = await loopsOf(node(page, W1));
 
         // ONE dropped read: the same animation runs on, and nothing reads reconnecting.
@@ -669,7 +752,10 @@ for (const doorName of DOORS) {
         expect(all.dropped()).toBeGreaterThanOrEqual(FAILING_AFTER);
         await expect(liveState(page)).toHaveText(planReview.liveReconnecting);
         // The last snapshot stands: the cue is still DRAWN, and still.
-        await expect(node(page, W1)).toHaveAttribute('data-cue', 'drafting');
+        await expect(node(page, W1)).toHaveAttribute(
+          'data-cue',
+          door.drafts ? 'drafting' : 'thinking',
+        );
         await expect(ring(page, W1)).toHaveCount(1);
         await expect(node(page, W1)).not.toHaveAttribute('data-cue-motion');
         await expectNothingAnimates(page);
@@ -682,7 +768,7 @@ for (const doorName of DOORS) {
         await all.release();
         await back;
         await expect(liveState(page)).not.toHaveAttribute('data-state', 'reconnecting');
-        await expectMoving(page, W1);
+        await expectAtWork(page, door, W1);
         await expectMarkAtWork(page);
       } finally {
         await door.dispose();
@@ -697,10 +783,8 @@ for (const doorName of DOORS) {
       const door = await openDoor(doorName, page, baseURL!, seed);
       try {
         const [w1] = await layLevel(page, door, [W1, W3]);
-        await stepAndRead(page, door, 'author-1', 'author', ref(w1!), (b) =>
-          hasStep(b.inFlightSteps, 'author-1', ref(w1!)),
-        );
-        await expectMoving(page, W1);
+        await authorAndRead(page, door, 'author-1', ref(w1!), W1);
+        await expectAtWork(page, door, W1);
         await expectMarkAtWork(page);
 
         const at = await backdatePlanActivity(door.planId, PLAN_STALLED_AFTER_MS + 60_000);
@@ -712,8 +796,9 @@ for (const doorName of DOORS) {
         await expect(liveState(page)).toHaveAttribute('data-state', 'stalled');
         await expect(liveState(page)).toHaveText(planReview.liveStalled);
         // The design's stalled HOLD: the card last written keeps its cue, static.
-        await expect(node(page, W1)).toHaveAttribute('data-cue', 'drafting');
-        await expect(chip(page, W1)).toContainText(cueCopy.drafting);
+        const held = door.drafts ? 'drafting' : 'thinking';
+        await expect(node(page, W1)).toHaveAttribute('data-cue', held);
+        await expect(node(page, W1).getByTestId(`canvas-cue-${held}`)).toContainText(cueCopy[held]);
         await expect(node(page, W1)).not.toHaveAttribute('data-cue-motion');
         await expect(node(page, W3)).not.toHaveAttribute('data-cue');
         await expectNothingAnimates(page);
@@ -732,14 +817,14 @@ for (const doorName of DOORS) {
       const door = await openDoor(doorName, page, baseURL!, seed);
       try {
         const [w1, w3] = await layLevel(page, door, [W1, W3]);
-        await stepAndRead(page, door, 'author-1', 'author', ref(w1!), (b) =>
-          hasStep(b.inFlightSteps, 'author-1', ref(w1!)),
-        );
-        await expect(node(page, W1)).toHaveAttribute('data-cue', 'drafting');
+        await authorAndRead(page, door, 'author-1', ref(w1!), W1);
+        const cue = door.drafts ? 'drafting' : 'thinking';
+        const cueChip = node(page, W1).getByTestId(`canvas-cue-${cue}`);
+        await expect(node(page, W1)).toHaveAttribute('data-cue', cue);
         await expect(ring(page, W1)).toBeVisible();
-        await expect(chip(page, W1)).toBeVisible();
-        await expect(chip(page, W1)).toContainText(cueCopy.drafting);
-        await expect(chip(page, W1)).toHaveAccessibleName(cueCopy.draftingName);
+        await expect(cueChip).toBeVisible();
+        await expect(cueChip).toContainText(cueCopy[cue]);
+        await expect(cueChip).toHaveAccessibleName(cueCopy[`${cue}Name` as const]);
         await expect(mark(page)).toBeVisible();
         await expectNothingAnimates(page);
 
@@ -754,7 +839,8 @@ for (const doorName of DOORS) {
         await door.step('author-1', 'end');
         await door.step('author-1', 'author', ref(w3!));
         await moved;
-        await expect(node(page, W3)).toHaveAttribute('data-cue', 'drafting');
+        // No draft for W3 yet on either door: it reads Thinking, and W1's cue is gone.
+        await expect(node(page, W3)).toHaveAttribute('data-cue', 'thinking');
         await expect(node(page, W1)).not.toHaveAttribute('data-cue');
         expect(await cueEvents(page, 'leaving', W1)).toEqual([]);
         await expectNothingAnimates(page);

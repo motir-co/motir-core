@@ -364,7 +364,14 @@
       "draftingName": "Wordt nu opgesteld",
       "laying": "Onderliggende items indelen",
       "layingName": "De onderliggende items worden nu ingedeeld",
-      "layingHere": "Dit niveau indelen"
+      "layingHere": "Dit niveau indelen",
+      "thinking": "Wordt overdacht",
+      "thinkingName": "Wordt overdacht — nog niets geschreven",
+      "checking": "Wordt gecontroleerd",
+      "checkingName": "Wordt gecontroleerd in de eindcontrole",
+      "checkingAll": "Onderliggende items controleren",
+      "checkingAllName": "De onderliggende items worden samen gecontroleerd in de eindcontrole",
+      "checkingHere": "Dit niveau controleren"
     },
     "listWritingTitle": "Nog niets voorgesteld",
     "listWritingBody": "Items verschijnen hier terwijl het plan wordt geschreven.",
@@ -429,7 +436,9 @@
       "beingWritten": "Wordt geschreven",
       "written": "Geschreven",
       "follow": "Het schrijven volgen",
-      "followHint": "Houdt de tekst die wordt geschreven in beeld. Scroll om te stoppen."
+      "followHint": "Houdt de tekst die wordt geschreven in beeld. Scroll om te stoppen.",
+      "thinking": "Wordt overdacht",
+      "checking": "Wordt gecontroleerd"
     }
   },
   "projectAccess": {
