@@ -30,6 +30,7 @@ import {
   isFlyIndexerImageConfigured,
   INDEXER_IMAGE_ENV_VAR,
   OrchestratorNotConfiguredError,
+  parseImageReference,
   probeImagePull,
   type AwsManagementApi,
   type ContainerOrchestrator,
@@ -62,6 +63,11 @@ import {
   shardHeldShared,
 } from '@/lib/orchestrator/shardFakeJournal';
 import { selectedOrchestratorProvider } from './provider';
+import {
+  createEcrRegistryCredentialReader,
+  parseEcrRegistryHost,
+  type EcrRegistryCredentialReader,
+} from '@/lib/awsServices/ecrRegistryCredential';
 import { indexFleetOnPool } from '@/lib/ciFleet/limits';
 // Also WIRES the CI runner's switch on import, so the CI gate below reads the same
 // reader admission does in every process that loads this module (MOTIR-10625).
@@ -1297,6 +1303,65 @@ const FLY_REGISTRY_HOST = 'registry.fly.io';
 const flyRegistryCredential: RegistryCredentialResolver = (registry) =>
   registry === FLY_REGISTRY_HOST ? { username: 'x', password: flyFleetConfig().token } : null;
 
+/** The message of a thrown value, for an operator-facing detail. */
+function failureText(err: unknown): string {
+  if (err instanceof Error) {
+    return err.name && err.name !== 'Error' ? `${err.name}: ${err.message}` : err.message;
+  }
+  return String(err);
+}
+
+/**
+ * The credential resolver for the INDEXER image — the Fly org credential for
+ * `registry.fly.io`, and, since the AWS deployment's indexer moved to ECR
+ * (MOTIR-10123), an ECR-issued one for that image's ECR registry (MOTIR-11277).
+ *
+ * ⚠️ THE ECR CREDENTIAL IS FETCHED UP FRONT, NOT INSIDE THE RESOLVER. A
+ * {@link RegistryCredentialResolver} is synchronous and `probeImagePull` reads a
+ * resolver's throw as "no credential" — which would fold a refused
+ * `ecr:GetAuthorizationToken` into the same `unauthenticatable` sentence this
+ * card exists to retire, and lose the cause. Fetched here, a failure becomes
+ * its OWN `indeterminate` answer that names it: a token ECR would not issue says
+ * nothing about the image, so it is never `unpullable`.
+ *
+ * ⚠️ IT IS THE SAME LOGIN THE PULL USES. The index VM runs
+ * `aws ecr get-login-password | docker login --username AWS` before its pull
+ * (`indexUserData.ts`), so probing with an ECR token asks the question the boot
+ * asks: will this registry serve this digest to a caller ECR itself
+ * authenticated? An intact digest is `bootable`; one the repository does not
+ * hold is a 404, `unpullable`.
+ */
+async function indexerRegistryCredential(
+  image: string,
+  ecr: EcrRegistryCredentialReader | undefined,
+): Promise<
+  { ok: true; resolve: RegistryCredentialResolver } | { ok: false; verdict: FleetBootableVerdict }
+> {
+  const registry = parseImageReference(image)?.registry;
+  const ecrRegistry = registry ? parseEcrRegistryHost(registry) : null;
+  if (!ecrRegistry) return { ok: true, resolve: flyRegistryCredential };
+  try {
+    const credential = await (ecr ?? createEcrRegistryCredentialReader()).credentialFor(
+      ecrRegistry,
+    );
+    // The probe consults a resolver only for the image's OWN registry host, and
+    // that host is `ecrRegistry.host` by construction — so the resolver needs no
+    // second arm, and has nothing to hand any other registry.
+    return { ok: true, resolve: () => credential };
+  } catch (err) {
+    return {
+      ok: false,
+      verdict: {
+        verdict: 'indeterminate',
+        reference: image,
+        detail:
+          `could not obtain an ECR authorization token for ${ecrRegistry.host} with this ` +
+          `deployment's AWS role (${failureText(err)}) — the image was not probed`,
+      },
+    };
+  }
+}
+
 /**
  * One pull path's probe, mapped onto the verdict's three non-trivial arms.
  *
@@ -1352,9 +1417,19 @@ async function probeToVerdict(
  * both would have to pick which reference to name, and the operator surface is a
  * MESSAGE — naming the wrong image is worse than naming none.
  *
+ * ⚠️ TWO REGISTRIES, TWO CREDENTIALS (MOTIR-11277). The Fly deployment mirrors
+ * the indexer into `registry.fly.io` and probes it with the fleet's org token;
+ * the AWS deployment pins a digest in core's own ECR repository (MOTIR-10123)
+ * and probes it with an ECR authorization token minted by this task's AWS role
+ * — see {@link indexerRegistryCredential}. `ecr` is the seam a test hands a
+ * fake ECR through; production passes nothing and reads the SDK's default
+ * credential chain.
+ *
  * NEVER THROWS, for the reason its twin does not: the caller is a health check.
  */
-export async function verifyIndexFleetBootable(): Promise<FleetBootableVerdict> {
+export async function verifyIndexFleetBootable(
+  ecr?: EcrRegistryCredentialReader,
+): Promise<FleetBootableVerdict> {
   if (selectedOrchestratorProvider() === 'fake') {
     return {
       verdict: 'not_applicable',
@@ -1384,7 +1459,9 @@ export async function verifyIndexFleetBootable(): Promise<FleetBootableVerdict> 
     };
   }
 
-  return probeToVerdict(image, flyRegistryCredential);
+  const credential = await indexerRegistryCredential(image, ecr);
+  if (!credential.ok) return credential.verdict;
+  return probeToVerdict(image, credential.resolve);
 }
 
 /**
