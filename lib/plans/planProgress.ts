@@ -76,7 +76,11 @@ import type { PlanStepDto, PlanStepKindDto, PlanStepProviderWaitDto } from '@/li
  *      plan alive; one still writing under its target stays named however long
  *      ago it started.
  * The abandoned-plan sweep's DEAD rule reads it too (MOTIR-8132), with the same
- * comparison, so the rail's `stalled` and the sweep's `silent` cannot disagree.
+ * comparison — but only for a plan whose job it cannot ask (motir-ai unreachable,
+ * or no job). The sweep ALSO asks the job, and a quiet plan whose job motir-ai
+ * reports `running` or `queued` is kept (MOTIR-11258), so the rail can show a plan
+ * `stalled` that the sweep leaves alone: a quiet stretch behind a live job is a
+ * long step, not a dead producer.
  * A plan RESUMED AUTOMATICALLY (MOTIR-8309) is measured from the resume, for free:
  * the resume's bind stamps `lastActivityAt` with the resume's own instant.
  * Re-measure and change THIS constant; never a surface.

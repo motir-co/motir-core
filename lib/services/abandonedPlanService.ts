@@ -124,6 +124,24 @@ import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 // entry keep the decline. `docs/decisions/agent-authored-plans.md` AMENDMENT 7 is
 // amended accordingly.
 
+// ⚠️ AND A JOB MOTIR-AI REPORTS `running` KEEPS ITS PLAN AGAIN (MOTIR-11258;
+// `docs/decisions/agent-authored-plans.md` AMENDMENT 30). The paragraph above let
+// `running` fall through to the silence rule on the ground that a worker that died
+// mid-job leaves its row `running` for good. That stopped being true with MOTIR-8303:
+// READING a job in motir-ai reaps it when its lease has lapsed (`getJobView` runs
+// `reapAbandonedJob`; the lease is `LEASE_TTL_SECONDS` = 120 s, renewed by the live
+// worker), so the sweep's own `resolveJobState` reads a dead worker's job `failed`
+// and the fast path ends it as `job_terminal`. A `running` answer therefore means a
+// worker renewed the lease in the last two minutes — the producer is ALIVE, however
+// long its plan has been quiet. And plan silence is not job death: one step can run
+// past `PLAN_STALLED_AFTER_MS` without writing (a final check's review sessions; a
+// 17-minute lay, MOTIR-11184), and judging that silence dead cancelled a live job
+// mid-check and declined its plan. So the silence rule now judges only the plans the
+// sweep CANNOT ask: motir-ai unreachable, or no job (`sourceJobId` null). The rail's
+// `stalled` is a separate reading of the same threshold and can now disagree with
+// the sweep, deliberately: a quiet plan behind a live job reads stalled on the rail
+// and is kept here.
+
 /**
  * How long the REVISION backstop lets a revision's job stay non-terminal before it
  * fails the revision anyway (MOTIR-7936) — the crashed-worker window for a lease, and
@@ -150,10 +168,11 @@ export type AbandonReason =
    *  the fast path's other arm. */
   | 'job_gone'
   /** The plan has written nothing for longer than `PLAN_STALLED_AFTER_MS`
-   *  (MOTIR-8132) — the one rule for every producer, the rail's own. It replaces
+   *  (MOTIR-8132), and nobody could say its producer is alive. It replaces
    *  `max_age` (a job that never answered for a day) and `no_producer` (a job-less
-   *  plan a day old): a `running` job, an unreachable motir-ai and no job at all
-   *  are all judged by it. */
+   *  plan a day old). Since MOTIR-11258 only an unreachable motir-ai and no job at
+   *  all are judged by it — a job motir-ai reports `running` is kept
+   *  (`job_running`). */
   | 'silent'
   /** A REVISION's job never reached a terminal state within
    *  {@link REVISION_JOB_MAX_AGE_MS} — the revision backstop's crashed-worker arm
@@ -169,8 +188,16 @@ export type AbandonReason =
 export type KeepReason =
   /** The plan wrote inside `PLAN_STALLED_AFTER_MS` and no fast-path answer says
    *  its producer is gone (MOTIR-8132) — it is being written. Replaces
-   *  `job_in_flight` and `no_producer_recent` for a `generating` plan. */
+   *  `job_in_flight` and `no_producer_recent` for a `generating` plan. Since
+   *  MOTIR-11258 it is the verdict only for a plan whose job could not be asked
+   *  (unreachable, or none): a reachable `running` job reads `job_running`. */
   | 'writing'
+  /** motir-ai reports the plan's job `running` (MOTIR-11258) — the producer is
+   *  ALIVE, however long the plan has been quiet. The read that answered reaps a
+   *  lapsed lease first (MOTIR-8303), so `running` means a worker renewed the lease
+   *  within `LEASE_TTL_SECONDS`; a worker that died reads `failed`, and the fast
+   *  path takes it as `job_terminal` on the next pass. */
+  | 'job_running'
   /** motir-ai reports the plan's job `queued` — it has not started, so the plan's
    *  silence says nothing about its producer (MOTIR-9065). A job that never leaves
    *  the queue is motir-ai's to fail (MOTIR-9064), and the fast path takes it then. */
@@ -297,12 +324,18 @@ function jobFastPath(
  *   * a job motir-ai says does not exist (404) → dead at once, `job_gone`;
  *   * a job motir-ai reports `queued` → kept, `job_queued`: it has not started, so
  *     silence proves nothing (MOTIR-9065);
- *   * anything else — `running`, motir-ai unreachable, or no job to ask
- *     (`sourceJobId` null) → the silence rule: dead (`silent`) when
- *     `silentMs > PLAN_STALLED_AFTER_MS`, otherwise kept (`writing`).
+ *   * a job motir-ai reports `running` → kept, `job_running`, at any silence: the
+ *     read reaps a lapsed lease first (MOTIR-8303), so `running` is a live worker,
+ *     and a quiet plan behind it is a long step, not a dead one (MOTIR-11258);
+ *   * motir-ai unreachable, or no job to ask (`sourceJobId` null) → the silence
+ *     rule: dead (`silent`) when `silentMs > PLAN_STALLED_AFTER_MS`, otherwise kept
+ *     (`writing`). Without an answer the sweep cannot tell live from dead, so the
+ *     plan's own writes are the only evidence left.
  *
  * The silence rule is `readPlanProgress`'s comparison exactly — equal is not
- * stalled, one millisecond more is — so the rail and the sweep cannot disagree.
+ * stalled, one millisecond more is. It is no longer the only reading: the rail
+ * shows a quiet plan behind a live job as stalled, and the sweep keeps it, because
+ * the sweep also asks the job and the rail does not.
  */
 export function classifyAbandonedCandidate(
   job: PlanJobStateDto | null,
@@ -317,6 +350,14 @@ export function classifyAbandonedCandidate(
     // job then started later against a session that no longer expected it.
     if (job.reachable && job.status === 'queued') {
       return { abandoned: false, reason: 'job_queued' };
+    }
+    // A RUNNING job is alive (MOTIR-11258): motir-ai's read reaps a lapsed lease before
+    // it answers (MOTIR-8303), so a worker that died reads `failed` and the fast path
+    // above already took it. The plan's silence here is one long step — a final
+    // check's review sessions write nothing for longer than the threshold — and
+    // cancelling the job threw the whole check away.
+    if (job.reachable && job.status === 'running') {
+      return { abandoned: false, reason: 'job_running' };
     }
   }
   if (silentMs > PLAN_STALLED_AFTER_MS) return { abandoned: true, reason: 'silent' };
@@ -504,8 +545,9 @@ export const abandonedPlanService = {
   /**
    * One reconciliation pass: read every `generating` plan, stalest first, ask
    * motir-ai about the ones with a job, and settle the ones whose producer is not
-   * coming back — a plan silent past `PLAN_STALLED_AFTER_MS`, or whose job already
-   * ended (MOTIR-8132). Empty or PARTIAL alike since MOTIR-3189. The latest plan of
+   * coming back — a plan whose job already ended (MOTIR-8132), or one silent past
+   * `PLAN_STALLED_AFTER_MS` that nobody could vouch for: a job motir-ai reports
+   * `running` or `queued` keeps its plan however quiet it is (MOTIR-11258). Empty or PARTIAL alike since MOTIR-3189. The latest plan of
    * an open `conversation` / `mcp` session is RECORDED as failed on that session
    * and stays `generating`; every other plan is DECLINED, as below.
    *
@@ -588,7 +630,8 @@ export const abandonedPlanService = {
       const verdict = classifyAbandonedCandidate(job, silentMs);
       // The job the sweep is GIVING UP ON (MOTIR-9065): one judged by silence, so as far
       // as motir-ai knows it may still run. A job the fast path found ended has nothing
-      // left to cancel.
+      // left to cancel. Since MOTIR-11258 a silent verdict with a job means motir-ai
+      // could not be read: a job it reports `running` is kept, never cancelled.
       const giveUpJobId =
         verdict.abandoned && verdict.reason === 'silent' ? plan.sourceJobId : null;
 

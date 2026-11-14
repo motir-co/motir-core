@@ -211,7 +211,9 @@ describe('reconcileAbandoned hands the lost-machine fact back (the sweep path)',
 
   it('a plan recorded for SILENCE alone, its job still running, reads false', T, async () => {
     const { planId } = await openSessionWithPlan({ silentMs: PLAN_STALLED_AFTER_MS + 60_000 });
-    // The shipped read, against a motir-ai that still reports the job running.
+    // The sweep's ask could not reach motir-ai, so the plan is judged by its silence —
+    // a reachable `running` answer would keep it (MOTIR-11258). The facts read that
+    // follows is the shipped one, against a motir-ai that reports the job running.
     process.env['MOTIR_AI_URL'] = 'https://ai.example.test';
     process.env['MOTIR_AI_SERVICE_TOKEN'] = 'svc-token';
     vi.stubGlobal(
@@ -228,7 +230,15 @@ describe('reconcileAbandoned hands the lost-machine fact back (the sweep path)',
     );
 
     const out = await abandonedPlanService.reconcileAbandoned({
-      deps: { resolveJobState: async () => state('running') },
+      deps: {
+        resolveJobState: async () =>
+          ({
+            jobId: 'job-sweep',
+            status: null,
+            reachable: false,
+            failure: { code: 'MOTIR_AI_UNAVAILABLE', message: 'connect ECONNREFUSED' },
+          }) as PlanJobStateDto,
+      },
     });
 
     expect(out.outcomes).toEqual([

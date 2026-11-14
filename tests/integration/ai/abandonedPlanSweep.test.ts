@@ -12,10 +12,11 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   submitJob: vi.fn(),
   streamJob: vi.fn(),
   getJob: vi.fn(),
+  cancelJob: vi.fn(),
 }));
 
 import { db } from '@/lib/db';
-import { getJob, submitJob } from '@/lib/ai/motirAiClient';
+import { cancelJob, getJob, submitJob } from '@/lib/ai/motirAiClient';
 import { MotirAiJobNotFoundError, MotirAiUnavailableError } from '@/lib/ai/errors';
 import {
   abandonedPlanService,
@@ -86,6 +87,7 @@ afterAll(async () => {
 });
 
 const MINUTE = 60 * 1000;
+const DAY_MS = 24 * 60 * MINUTE;
 const HOUR = 60 * MINUTE;
 
 /** Silent past the threshold — the ordinary dead candidate (MOTIR-8132). */
@@ -209,19 +211,41 @@ describe('the decision table — what counts as evidence the producer is gone', 
     expect(classifyAbandonedCandidate(gone(), 0)).toEqual({ abandoned: true, reason: 'job_gone' });
   });
 
-  it('a running job keeps NOTHING alive — the plan is judged by its silence', () => {
-    expect(classifyAbandonedCandidate(reachable('running'), WRITING_MS)).toEqual({
-      abandoned: false,
-      reason: 'writing',
+  it('a RUNNING job is kept at any silence — motir-ai reaped it first if it were dead (MOTIR-11258)', () => {
+    // ⚠️ THIS ROW WAS REVERSED BY MOTIR-11258. It read *"a running job keeps NOTHING
+    // alive — the plan is judged by its silence"* (MOTIR-8132), on the premise that a
+    // dead worker's row stays `running` for ever. motir-ai's read reaps a lapsed lease
+    // before it answers (MOTIR-8303), so `running` is a worker that renewed its lease
+    // in the last two minutes; a quiet plan behind it is one long step, and judging
+    // that silence dead cancelled a live final check and declined its plan.
+    for (const silentMs of [0, WRITING_MS, PLAN_STALLED_AFTER_MS + 1, SILENT_MS, DAY_MS]) {
+      expect(classifyAbandonedCandidate(reachable('running'), silentMs)).toEqual({
+        abandoned: false,
+        reason: 'job_running',
+      });
+    }
+  });
+
+  it('the job’s word OUTRANKS the clock in both directions — the fast path, then a live job', () => {
+    // The order the table reads: what motir-ai said decides whenever it said
+    // something conclusive; only no answer falls to the silence rule. A job read
+    // `failed` after a long `running` life is the reaped worker — dead at once.
+    expect(classifyAbandonedCandidate(reachable('failed'), WRITING_MS)).toEqual({
+      abandoned: true,
+      reason: 'job_terminal',
     });
     expect(classifyAbandonedCandidate(reachable('running'), SILENT_MS)).toEqual({
+      abandoned: false,
+      reason: 'job_running',
+    });
+    expect(classifyAbandonedCandidate(outage(), SILENT_MS)).toEqual({
       abandoned: true,
       reason: 'silent',
     });
   });
 
   it('a QUEUED job is kept at any silence — it has not started (MOTIR-9065)', () => {
-    for (const silentMs of [0, WRITING_MS, SILENT_MS, 24 * 60 * 60 * 1000]) {
+    for (const silentMs of [0, WRITING_MS, SILENT_MS, DAY_MS]) {
       expect(classifyAbandonedCandidate(reachable('queued'), silentMs)).toEqual({
         abandoned: false,
         reason: 'job_queued',
@@ -257,7 +281,9 @@ describe('the decision table — what counts as evidence the producer is gone', 
   });
 
   it('the threshold is the RAIL’s comparison — equal is writing, one millisecond more is silent', () => {
-    for (const job of [null, reachable('running'), outage()]) {
+    // Only for the plans the sweep cannot ask about (MOTIR-11258): a reachable
+    // `running` job is kept on both sides of it, above.
+    for (const job of [null, outage()]) {
       expect(classifyAbandonedCandidate(job, PLAN_STALLED_AFTER_MS)).toEqual({
         abandoned: false,
         reason: 'writing',
@@ -336,23 +362,55 @@ describe('the sweep — AC 1: a dead job’s plan stops reading as undecided', (
     const summary = await abandonedPlanService.reconcileAbandoned();
 
     expect(summary).toMatchObject({ scanned: 1, declined: 0 });
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'writing' });
+    // The live job is the evidence that decides (MOTIR-11258); the recent write
+    // agrees with it.
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'job_running' });
     const row = await planRow(planId);
     expect(row.status).toBe('generating');
     expect(row.decidedAt).toBeNull();
   });
 
-  it('declines a SILENT plan behind a job that still says `running` (MOTIR-8132)', async () => {
-    // A worker that died mid-job leaves its row `running` for good. The job's word
-    // no longer keeps a plan alive: fifteen minutes without a write is the verdict,
-    // the same one the rail shows as stalled — not a day later.
+  it('KEEPS a silent plan behind a job motir-ai reports `running`, and cancels nothing (MOTIR-11258)', async () => {
+    // ⚠️ REVERSED BY MOTIR-11258. This test read *"declines a SILENT plan behind a
+    // job that still says `running` (MOTIR-8132)"*, on the premise that a worker that
+    // died mid-job leaves its row `running` for good. motir-ai's read reaps a lapsed
+    // lease first (MOTIR-8303), so `running` is a live worker — the 2026-11-14 plan
+    // whose final check ran twenty quiet minutes was declined by exactly that row.
     const { fx } = await makeDrainedProject();
     const planId = await seedGeneratingPlan(fx);
     jobIn('running');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'silent' });
+    expect(summary).toMatchObject({ scanned: 1, declined: 0 });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'job_running' });
+    expect(cancelJob).not.toHaveBeenCalled();
+    const row = await planRow(planId);
+    expect(row.status).toBe('generating');
+    expect(row.decidedAt).toBeNull();
+    expect(row.decisionReason).toBeNull();
+  });
+
+  it('the kept job’s WORKER DIES — the next pass reads it reaped `failed` and declines it as `job_terminal`', async () => {
+    // The other half of trusting `running`: a worker that died stops renewing its
+    // lease, motir-ai's next read reaps it to `failed` (`ai_job_abandoned`), and the
+    // fast path settles the plan on that pass — no silence clock involved.
+    const { fx } = await makeDrainedProject();
+    const planId = await seedGeneratingPlan(fx);
+    jobIn('running');
+    const first = await abandonedPlanService.reconcileAbandoned();
+    expect(first.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'job_running' });
+
+    vi.mocked(getJob).mockResolvedValue({
+      jobId: 'job_dead',
+      status: 'failed',
+      result: null,
+      error: { code: 'ai_job_abandoned', message: 'the claim lapsed' },
+    } as Awaited<ReturnType<typeof getJob>>);
+    const second = await abandonedPlanService.reconcileAbandoned();
+
+    expect(second.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'job_terminal' });
+    expect(cancelJob).not.toHaveBeenCalled();
     expect((await planRow(planId)).decisionReason).toBe('abandoned');
   });
 
@@ -419,7 +477,7 @@ describe('the sweep — what it must NEVER touch', () => {
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'writing' });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'job_running' });
     expect((await planRow(planId)).status).toBe('generating');
     // And it still gates, which is the correct outcome for a live generation.
     await expect(
@@ -525,11 +583,11 @@ describe('the sweep — what it must NEVER touch', () => {
     // producer is alive — and the write is refused on the stamp.
     const { fx } = await makeDrainedProject();
     const planId = await seedGeneratingPlan(fx);
+    // An OUTAGE, so the verdict is the silence rule's (MOTIR-11258: a `running` answer
+    // would keep the plan before the write is ever attempted).
     vi.mocked(getJob).mockImplementation(async () => {
       await adminDb.plan.update({ where: { id: planId }, data: { lastActivityAt: new Date() } });
-      return { jobId: 'job_dead', status: 'running', result: null, error: null } as Awaited<
-        ReturnType<typeof getJob>
-      >;
+      throw new MotirAiUnavailableError('connect ECONNREFUSED');
     });
 
     const summary = await abandonedPlanService.reconcileAbandoned();
@@ -613,17 +671,18 @@ describe('the sweep — the PARTIAL arm (MOTIR-3189)', () => {
     },
   );
 
-  it('declines a SILENT partial plan — the crashed worker that never marked its job', async () => {
-    // The failure the ASK cannot see, reachable for a partial plan: the worker
-    // vanished mid-stream, so its row reads `running` for ever and the proposals it
-    // managed to append sit behind it. Silence settles it (MOTIR-8132).
+  it('declines a SILENT partial plan — the crashed worker whose job motir-ai reaped', async () => {
+    // The worker vanished mid-stream with proposals appended. Its row read `running`
+    // until motir-ai's read reaped the lapsed lease (MOTIR-8303), so the sweep's ask
+    // reads it `failed` and the fast path settles it (MOTIR-11258 — silence alone no
+    // longer outranks a live `running`).
     const { fx } = await makeDrainedProject();
     const planId = await seedGeneratingPlan(fx, { items: 4 });
-    jobIn('running');
+    jobIn('failed');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'silent' });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'job_terminal' });
     expect((await planRow(planId)).decisionReason).toBe('abandoned');
     await expect(adminDb.planItem.count({ where: { planId } })).resolves.toBe(4);
   });

@@ -407,8 +407,14 @@ describe('classifySessionCandidate — the second table', () => {
       action: 'record',
       reason: 'job_gone',
     });
-    const running = { status: 'running', reachable: true, failure: null } as const;
-    expect(classifySessionCandidate('open', dead(running))).toEqual({
+    // A silent plan whose job could not be read. (A reachable `running` job is no
+    // longer a dead verdict at all — it keeps its plan, MOTIR-11258.)
+    const unreadable = {
+      status: null,
+      reachable: false,
+      failure: { code: 'MOTIR_AI_UNAVAILABLE', message: 'x' },
+    } as const;
+    expect(classifySessionCandidate('open', dead(unreadable))).toEqual({
       action: 'record',
       reason: 'silent',
     });

@@ -472,10 +472,17 @@ describe('4 · every other failure waits in To resume, as recorded', () => {
   it('a silent plan is recorded `stalled` and starts nothing', T, async () => {
     const { sessionId, planId } = await walk({ silentMs: PLAN_STALLED_AFTER_MS + 60_000 });
 
+    // An unreachable ask: since MOTIR-11258 the only way a plan WITH a job is judged
+    // silent — a reachable `running` answer keeps it.
     const out = await abandonedPlanService.reconcileAbandoned({
       deps: {
         resolveJobState: async (jobId: string) =>
-          ({ jobId, status: 'running', reachable: true, failure: null }) as PlanJobStateDto,
+          ({
+            jobId,
+            status: null,
+            reachable: false,
+            failure: { code: 'MOTIR_AI_UNAVAILABLE', message: 'connect ECONNREFUSED' },
+          }) as PlanJobStateDto,
         getFailedJobFacts: async () => facts(),
         cancelJob: async (jobId: string) => ({ jobId, status: 'canceled' }),
       },
