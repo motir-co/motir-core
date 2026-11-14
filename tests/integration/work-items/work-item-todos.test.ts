@@ -821,4 +821,176 @@ describe('concurrency', () => {
     expect(order).toHaveLength(3);
     expect(new Set(order)).toEqual(new Set(['A', 'B', 'C']));
   });
+
+  // ── one lock order (MOTIR-11259) ──────────────────────────────────────────
+  //
+  // A move takes the card's row lock and then writes the step's row. A delete
+  // or an edit that wrote the step's row FIRST and only then inserted its
+  // revision — whose foreign key takes `FOR KEY SHARE` on the same card row —
+  // took the two locks in the opposite order, and Postgres killed one of them
+  // with `40P01`. A plain `Promise.all` only hits that window now and then
+  // (it reddened an unrelated pull request's CI), so these tests FORCE the
+  // interleaving: a third transaction holds the card's row, the move is let
+  // through its gate read and parks on the lock, the second writer is started
+  // and parks too, and only then is the card released.
+
+  /**
+   * Run `body` while a separate admin transaction holds `FOR UPDATE` on the
+   * card's row, and release it when `body` asks. The holder is always awaited,
+   * so no backend outlives the test.
+   */
+  async function whileCardIsHeld(
+    cardId: string,
+    body: (release: () => void) => Promise<void>,
+  ): Promise<void> {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let markHeld!: () => void;
+    const held = new Promise<void>((resolve) => {
+      markHeld = resolve;
+    });
+    const holder = adminDb.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "work_item" WHERE "id" = ${cardId} FOR UPDATE`;
+        markHeld();
+        await released;
+      },
+      { timeout: 15_000 },
+    );
+    try {
+      await held;
+      await body(release);
+    } finally {
+      release();
+      await holder;
+    }
+  }
+
+  /** Wait until `count` backends on this database are blocked on a lock. */
+  async function untilLockWaiters(count: number): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      const rows = await adminDb.$queryRawUnsafe<Array<{ n: number }>>(
+        `SELECT count(*)::int AS n
+           FROM pg_stat_activity
+          WHERE datname = current_database()
+            AND backend_type = 'client backend'
+            AND wait_event_type = 'Lock'`,
+      );
+      if ((rows[0]?.n ?? 0) >= count) return;
+      if (Date.now() > deadline)
+        throw new Error(`fewer than ${count} backends ever waited on a lock`);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+
+  /** Every settled result, so a rejection never leaves its sibling running. */
+  async function settle<A, B>(a: Promise<A>, b: Promise<B>) {
+    return Promise.allSettled([a, b]) as Promise<
+      [PromiseSettledResult<A>, PromiseSettledResult<B>]
+    >;
+  }
+
+  it('a MOVE queued ahead of a DELETE of the same step both finish — no deadlock', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    await workItemTodosService.addTodo(card, { text: 'Stays' }, fx.ctx);
+    const { todo: doomed } = await workItemTodosService.addTodo(card, { text: 'Doomed' }, fx.ctx);
+
+    let results!: [PromiseSettledResult<unknown>, PromiseSettledResult<unknown>];
+    await whileCardIsHeld(card, async (release) => {
+      const move = workItemTodosService.moveTodo(doomed.id, 0, fx.ctx);
+      await untilLockWaiters(1);
+      const del = workItemTodosService.deleteTodo(doomed.id, fx.ctx);
+      await untilLockWaiters(2);
+      release();
+      results = await settle(move, del);
+    });
+
+    const [moved, deleted] = results;
+    expect(deleted.status === 'rejected' ? deleted.reason : null).toBeNull();
+    // The move was queued first, so it holds the card lock first and wins; the
+    // only other legitimate answer is the typed conflict if the delete got in.
+    if (moved.status === 'rejected') expect(moved.reason).toBeInstanceOf(TodoReorderConflictError);
+    expect(await positions(card, fx)).toEqual(['Stays']);
+  });
+
+  it('a DELETE queued ahead of a MOVE of the same step answers the typed conflict', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    await workItemTodosService.addTodo(card, { text: 'Stays' }, fx.ctx);
+    const { todo: doomed } = await workItemTodosService.addTodo(card, { text: 'Doomed' }, fx.ctx);
+
+    let results!: [PromiseSettledResult<unknown>, PromiseSettledResult<unknown>];
+    await whileCardIsHeld(card, async (release) => {
+      const del = workItemTodosService.deleteTodo(doomed.id, fx.ctx);
+      await untilLockWaiters(1);
+      const move = workItemTodosService.moveTodo(doomed.id, 0, fx.ctx);
+      await untilLockWaiters(2);
+      release();
+      results = await settle(del, move);
+    });
+
+    const [deleted, moved] = results;
+    expect(deleted.status === 'rejected' ? deleted.reason : null).toBeNull();
+    expect(moved.status).toBe('rejected');
+    if (moved.status === 'rejected') expect(moved.reason).toBeInstanceOf(TodoReorderConflictError);
+    expect(await positions(card, fx)).toEqual(['Stays']);
+  });
+
+  it('a MOVE queued ahead of an EDIT of the same step both finish — no deadlock', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    await workItemTodosService.addTodo(card, { text: 'First' }, fx.ctx);
+    const { todo: step } = await workItemTodosService.addTodo(card, { text: 'Second' }, fx.ctx);
+
+    let results!: [PromiseSettledResult<unknown>, PromiseSettledResult<unknown>];
+    await whileCardIsHeld(card, async (release) => {
+      const move = workItemTodosService.moveTodo(step.id, 0, fx.ctx);
+      await untilLockWaiters(1);
+      const edit = workItemTodosService.updateTodo(step.id, { text: 'Second, edited' }, fx.ctx);
+      await untilLockWaiters(2);
+      release();
+      results = await settle(move, edit);
+    });
+
+    for (const r of results) expect(r.status === 'rejected' ? r.reason : null).toBeNull();
+    expect(await positions(card, fx)).toEqual(['Second, edited', 'First']);
+    // The edit read the step AFTER the move committed, so its revision's
+    // `from` is the row as it stood, not a snapshot from before the lock.
+    const edits = (await todoRevisions(card, fx.workspaceId)).filter(
+      (r) => (r.diff as { todos?: { edited?: unknown } }).todos?.edited,
+    );
+    expect(edits).toHaveLength(1);
+    expect(edits[0]!.diff).toMatchObject({
+      todos: {
+        edited: [{ id: step.id, from: { text: 'Second' }, to: { text: 'Second, edited' } }],
+      },
+    });
+  });
+
+  it('two DELETEs of the same step: one removes it, the other is a typed not-found', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    const { todo: doomed } = await workItemTodosService.addTodo(card, { text: 'Doomed' }, fx.ctx);
+
+    let results!: [PromiseSettledResult<unknown>, PromiseSettledResult<unknown>];
+    await whileCardIsHeld(card, async (release) => {
+      const first = workItemTodosService.deleteTodo(doomed.id, fx.ctx);
+      await untilLockWaiters(1);
+      const second = workItemTodosService.deleteTodo(doomed.id, fx.ctx);
+      await untilLockWaiters(2);
+      release();
+      results = await settle(first, second);
+    });
+
+    const [first, second] = results;
+    expect(first.status === 'rejected' ? first.reason : null).toBeNull();
+    expect(second.status).toBe('rejected');
+    if (second.status === 'rejected')
+      expect(second.reason).toBeInstanceOf(WorkItemTodoNotFoundError);
+    expect(await positions(card, fx)).toEqual([]);
+  });
 });
