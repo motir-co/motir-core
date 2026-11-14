@@ -672,15 +672,26 @@ describe('a burst of CI deliveries on the real worker (Bug MOTIR-10457)', () => 
     try {
       // AC 1 — the unrelated job is claimed and finished while every delivery of
       // the burst is still waiting on the gate.
+      //
+      // Both halves wait on their CONDITION, never on a fixed budget (MOTIR-11270).
+      // The gate stays shut for the whole block, so before the fix the unrelated
+      // run could never be claimed — the burst's waiters held every pool slot — and the
+      // first `until` times out however long it is given. And the park count is
+      // polled rather than read once: the unrelated run is claimed in the same
+      // batch as the burst's last deliveries, and it can finish while those are
+      // still on their way to the gate (loading the event, opening the ledger
+      // row). On a loaded CI shard a single read caught 11 of 13 parked.
       try {
         await until(
           async () =>
             (await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: unrelated.id } })).state ===
             'succeeded',
           'the unrelated job to settle while the CI gate is shut',
-          3_000,
         );
-        expect(worker.parkedCount).toBe(CHECKS.length + 1);
+        await until(
+          async () => worker.parkedCount === CHECKS.length + 1,
+          'every delivery of the burst to park on the shut CI gate',
+        );
         expect(await adminDb.githubWebhookDelivery.count({ where: { state: 'processed' } })).toBe(
           0,
         );
