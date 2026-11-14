@@ -617,7 +617,7 @@ body {
   }
   .canvas-node--thinking[data-cue-motion='settling'] > .canvas-cue-ring,
   .canvas-node--thinking[data-cue-motion='settling'] > .canvas-cue-chip {
-    animation: none;
+    animation-name: none;
   }
   .canvas-node--thinking[data-cue-motion='settling'] [data-testid='plan-item-node'] {
     animation: canvas-cue-wash-lift var(--transition-duration) var(--canvas-ease-exit) forwards;
