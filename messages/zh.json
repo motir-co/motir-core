@@ -364,7 +364,14 @@
       "draftingName": "正在起草",
       "laying": "正在铺设子项",
       "layingName": "正在铺设其子项",
-      "layingHere": "正在铺设此层级"
+      "layingHere": "正在铺设此层级",
+      "thinking": "思考中",
+      "thinkingName": "正在构思 — 尚未写入内容",
+      "checking": "检查中",
+      "checkingName": "正在最终检查中审阅",
+      "checkingAll": "检查其子项",
+      "checkingAllName": "其子项正在最终检查中一并审阅",
+      "checkingHere": "检查此层级"
     },
     "listWritingTitle": "尚无提案",
     "listWritingBody": "计划编写过程中，工作项会出现在这里。",
@@ -429,7 +436,9 @@
       "beingWritten": "正在撰写",
       "written": "已写入",
       "follow": "跟随撰写",
-      "followHint": "让正在撰写的文字保持在视野内。滚动即可停止。"
+      "followHint": "让正在撰写的文字保持在视野内。滚动即可停止。",
+      "thinking": "思考中",
+      "checking": "检查中"
     }
   },
   "projectAccess": {

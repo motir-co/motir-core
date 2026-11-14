@@ -26,6 +26,7 @@ import { renderWithIntl as render } from '../../helpers/renderWithIntl';
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import { PlanAtWorkMark } from '@/components/planning/PlanAtWorkMark';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { PlanItemDraftDto } from '@/lib/dto/plans';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import {
   PLAN_STALLED_AFTER_MS,
@@ -255,11 +256,43 @@ function snap(steps: PlanProgressStep[], over: Partial<PlanProgressSnapshot> = {
 
 type Host = 'overlay' | 'plan-page';
 
+/**
+ * The read's drafts: every card an `author` step names has begun to stream its
+ * text. Since MOTIR-11254 (Part XXXI §31.1) a card with no draft reads THINKING,
+ * and Thinking never moves — so this gate, which is about the DRAFTED card's
+ * motion, hands each authored card a draft, as the live read does once the
+ * session writes. Memoised per snapshot, because the array's identity is the
+ * cue hold's read counter.
+ */
+const draftsFor = (() => {
+  const seen = new WeakMap<object, PlanItemDraftDto[]>();
+  return (progress: PlanProgressSnapshot | null): PlanItemDraftDto[] | null => {
+    if (!progress) return null;
+    let out = seen.get(progress);
+    if (!out) {
+      out = progress.steps
+        .filter((st) => st.kind === 'author' && st.targetNodeId)
+        .map((st, seq) => ({
+          planItemId: st.targetNodeId!,
+          sessionKey: st.sessionKey,
+          seq,
+          title: `Draft of ${st.targetNodeId}`,
+          descriptionMd: null,
+          explanationMd: null,
+          updatedAt: st.startedAt,
+        }));
+      seen.set(progress, out);
+    }
+    return out;
+  };
+})();
+
 /** The pane as each host mounts it, plus the rail's one mark off the same datum. */
 function surface(host: Host, progress: PlanProgressSnapshot | null, failing = false) {
   return (
     <>
       <PlanProposalViews
+        inFlightDrafts={draftsFor(progress)}
         items={ITEMS}
         outcome={null}
         projectKey="ARP"

@@ -2,7 +2,7 @@
 
 import { Fragment, memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, FolderX, RotateCw } from 'lucide-react';
+import { AlertTriangle, Brain, FolderX, PenLine, RotateCw, SearchCheck } from 'lucide-react';
 
 import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -10,6 +10,7 @@ import { StatusPill } from '@/components/issues/StatusPill';
 import { DifficultyIndicator } from '@/components/issues/DifficultyPicker';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
 import type { LiveDrafts } from '@/lib/planning/liveDraft';
+import type { CardCueState } from '@/lib/planning/cueState';
 import { changeCellText } from '@/components/planning/changeCellText';
 import { SupersedesChips } from '@/components/planning/SupersedesChip';
 import { proposedMarkOf } from '@/components/planning/PlanItemNode';
@@ -310,18 +311,64 @@ function SupersedesRow({ refs }: { refs: NonNullable<PlanReviewItemDto['supersed
   );
 }
 
+/** The row cue chip's look per state (Part XXXI §31.6) — the canvas chip's token,
+ *  glyph, word and name, at the list's density. */
+const ROW_CUE = {
+  thinking: {
+    box: 'border-(--el-thinking) bg-(--el-card) text-(--el-text-secondary)',
+    glyph: 'text-(--el-thinking)',
+    Icon: Brain,
+  },
+  drafting: {
+    box: 'border-(--el-drafting) bg-(--el-drafting-surface) text-(--el-text-strong)',
+    glyph: 'text-(--el-drafting)',
+    Icon: PenLine,
+  },
+  checking: {
+    box: 'border-(--el-checking) bg-(--el-card) text-(--el-text-secondary)',
+    glyph: 'text-(--el-checking)',
+    Icon: SearchCheck,
+  },
+} as const;
+
+/**
+ * WHAT THE PLANNER IS DOING TO THIS ROW (Task MOTIR-11254; design Part XXXI §31.6,
+ * amending §26.18) — Thinking · Drafting · Checking, the canvas chip's state at the
+ * list's density. Static in every state: the list is a reading surface, so the
+ * chip appears, swaps and leaves with the read. Not a live region (§31.9).
+ */
+function RowCue({ state }: { state: CardCueState }) {
+  const t = useTranslations('planReview.cue');
+  const look = ROW_CUE[state];
+  return (
+    <span
+      role="img"
+      aria-label={t(`${state}Name`)}
+      data-cue={state}
+      data-testid={`list-cue-${state}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] leading-none font-semibold ${look.box}`}
+    >
+      <look.Icon aria-hidden="true" className={`size-3 ${look.glyph}`} />
+      {t(state)}
+    </span>
+  );
+}
+
 /** A proposal row, memoised for the same reason as `PlanItemNode` (MOTIR-8575). */
 const ProposalRow = memo(function ProposalRow({
   item,
   outcome,
   onOpen,
   motion,
+  cue = null,
 }: {
   item: PlanReviewItemDto;
   outcome: PlanItemOutcome | null;
   onOpen: (item: PlanReviewItemDto, trigger: HTMLButtonElement) => void;
   /** The live list's entrance / exit (MOTIR-6300, §23.9) — absent on a still list. */
   motion?: 'enter' | 'exit';
+  /** What the planner is doing to this row right now (MOTIR-11254, §31.6). */
+  cue?: CardCueState | null;
 }) {
   const t = useTranslations('planReview');
   // The facts line is NODES joined by `·`, not one string (story MOTIR-6095 ·
@@ -467,6 +514,9 @@ const ProposalRow = memo(function ProposalRow({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {/* THE ROW CUE CHIP (MOTIR-11254, §31.6) — FIRST in the cluster, before
+            the Revised / Stale pills, the status pill and the op chip. */}
+        {cue ? <RowCue state={cue} /> : null}
         {/* MOVED in the plan's latest revision (Part XII §E). The SHIPPED `Pill`
             in the SHIPPED slot, in front of the op chip — the same cluster the
             stale pill uses, which is also a "something happened to this row"
@@ -525,6 +575,13 @@ export interface PlanProposalListProps {
    */
   liveDrafts?: LiveDrafts | null;
   /**
+   * What the planner is doing to each row right now (Task MOTIR-11254; design
+   * Part XXXI §31.6) — `thinking` · `drafting` · `checking` by `planItemId`, the
+   * canvas's derivation after its two-read hold, the container review left out.
+   * Read on every host, the plan page included. Absent ⇒ no row carries a cue.
+   */
+  rowCues?: ReadonlyMap<string, CardCueState> | null;
+  /**
    * The plan was DISCARDED before it finished (§23.12): the empty statement keeps
    * the shipped title and drops the body, whose *"Declining ends it"* is false of
    * a plan already declined.
@@ -537,6 +594,7 @@ export function PlanProposalList({
   outcome,
   live = false,
   liveDrafts = null,
+  rowCues = null,
   discarded = false,
 }: PlanProposalListProps) {
   const t = useTranslations('planReview');
@@ -663,6 +721,7 @@ export function PlanProposalList({
                   item={item}
                   outcome={outcome}
                   onOpen={openPeek}
+                  cue={rowCues?.get(item.planItemId) ?? null}
                   {...(entering.has(item.planItemId) ? { motion: 'enter' as const } : {})}
                 />
               ))}

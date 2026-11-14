@@ -214,7 +214,7 @@ export function PlanDetail({
   // into its own state, exactly as `refetch` does. Not `immediate`: the island is
   // seeded from the server read, so the first re-read waits a full interval.
   // Its `failing` feeds the progress line's dropped-read row (MOTIR-7829, §26.10).
-  const { failing: liveFailing } = useGeneratingPlanPoll(
+  const { failing: liveFailing, reads: liveReads } = useGeneratingPlanPoll(
     review.status === 'generating' ? planId : null,
     {
       immediate: false,
@@ -511,6 +511,11 @@ export function PlanDetail({
             // this page passes no `live` and still shows the plan being written.
             progress={review.progress ?? null}
             progressFailing={liveFailing}
+            // The cards' cue state (MOTIR-11254, §31.5): Thinking until a draft
+            // exists, Drafting once it does. The same polled read already carries
+            // them; this page still shows no partial text (`live` is off).
+            inFlightDrafts={review.inFlightDrafts ?? null}
+            cueReads={liveReads}
             band={
               establishSet && setHasEstablishWork(establishSet.view.set.rows) ? (
                 <div

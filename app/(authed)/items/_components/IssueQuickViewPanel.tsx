@@ -14,8 +14,10 @@ import {
   ChevronRight,
   Clock,
   Component as ComponentIcon,
+  Brain,
   Goal,
   PenLine,
+  SearchCheck,
   SearchX,
   User,
 } from 'lucide-react';
@@ -32,14 +34,17 @@ import { useFollowWriting } from '@/components/planning/useFollowWriting';
 import { ProposalRef } from '@/components/planning/ProposalRef';
 import {
   IDLE_CUE,
+  cueLineState,
   grewLast,
   nextLiveCue,
   partialMarkdown,
   storedKey,
+  type CueLineState,
   type LiveCue,
   type LiveField,
   type PeekLiveDraft,
 } from '@/lib/planning/liveDraft';
+import type { CardCueState } from '@/lib/planning/cueState';
 import { TodoRowReadOnly } from '@/app/(authed)/items/[key]/_components/TodoListSection';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
@@ -205,7 +210,16 @@ type IssueQuickViewPanelProps = {
        * host (`ProposalPeek`); this panel only renders it. Ignored without
        * `proposal`, so no committed host can ever show a partial.
        */
-      live?: { draft: PeekLiveDraft | null } | null;
+      live?: {
+        draft: PeekLiveDraft | null;
+        /**
+         * What the planner is doing to this card (MOTIR-11254, Part XXXI §31.7) —
+         * the canvas's derivation after its two-read hold. `thinking` relabels
+         * the writing cue while nothing is written yet; `checking` is the final
+         * check reviewing the card. Absent ⇒ the cue reads as it shipped.
+         */
+        cue?: CardCueState | null;
+      } | null;
     }
 );
 
@@ -228,10 +242,31 @@ function sameFields(a: PeekLiveDraft['fields'] | null, b: PeekLiveDraft['fields'
  * written_ while the card is written; `sr-only` _Written_ once the stored card
  * landed; mounted and EMPTY after a refused write, so nothing is announced. Its
  * group (`LiveGroup`) wraps it under the per-op header when the PEEK (not the
- * viewport) is narrow.
+ * viewport) is narrow. MOTIR-11254 (§31.7) adds `brain` + _Thinking_ before any
+ * text exists and `search-check` + _Checking_ while the final check reviews the
+ * card — the same `<p role="status">`, so each change is announced once.
  */
-function LiveCueLine({ state }: { state: LiveCue['state'] }) {
+function LiveCueLine({ state }: { state: CueLineState }) {
   const tPlan = useTranslations('planReview');
+  if (state === 'thinking' || state === 'checking') {
+    const Icon = state === 'thinking' ? Brain : SearchCheck;
+    return (
+      <p
+        role="status"
+        data-testid="quick-view-live-cue"
+        data-live-cue={state}
+        className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-(--el-text-secondary)"
+      >
+        <Icon
+          aria-hidden="true"
+          className={`size-3.5 shrink-0 ${
+            state === 'thinking' ? 'text-(--el-thinking)' : 'text-(--el-checking)'
+          }`}
+        />
+        {tPlan(state === 'thinking' ? 'peekLive.thinking' : 'peekLive.checking')}
+      </p>
+    );
+  }
   if (state === 'writing') {
     return (
       <p
@@ -262,10 +297,13 @@ function LiveCueLine({ state }: { state: LiveCue['state'] }) {
  */
 function LiveGroup({
   state,
+  shown = state,
   following,
   onToggleFollow,
 }: {
   state: LiveCue['state'];
+  /** What the cue line shows (§31.7); defaults to `state`. */
+  shown?: CueLineState;
   following: boolean;
   onToggleFollow: () => void;
 }) {
@@ -279,7 +317,7 @@ function LiveGroup({
           : 'contents'
       }
     >
-      <LiveCueLine state={state} />
+      <LiveCueLine state={shown} />
       {writing ? <FollowWritingControl following={following} onToggle={onToggleFollow} /> : null}
     </div>
   );
@@ -871,6 +909,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         {proposal && (liveOn || cue.state === 'written') ? (
           <LiveGroup
             state={cue.state}
+            shown={cueLineState(cue.state, liveOn?.cue)}
             following={follow.following}
             onToggleFollow={follow.toggle}
           />

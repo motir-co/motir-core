@@ -1289,6 +1289,8 @@ function PlanWorkspaceHost({
                 // The cards being written (MOTIR-11201): the open proposal's quick
                 // view shows their partial text while the plan is `generating`.
                 inFlightDrafts={paneReview.inFlightDrafts ?? null}
+                // Counts ARRIVED reads for the cues' two-read hold (MOTIR-11254).
+                cueReads={state.liveReads}
               />
             ) : openingNamedSession ? (
               <div className="h-full w-full" data-testid="planning-pane-opening" aria-busy>

@@ -256,6 +256,12 @@ export interface PlanChangeConversationState {
   /** The live poll has failed several reads in a row (the last snapshot stands). */
   liveFailing: boolean;
   /**
+   * How many live reads have been ANSWERED (the poll's `reads`, MOTIR-11254) — the
+   * token the planner cue's two-read hold counts arrived reads by. Optional only
+   * so a state built by hand (a test seed) need not name it; the hook always sets it.
+   */
+  liveReads?: number;
+  /**
    * The plan this session WATCHED being written, when it ended DISCARDED rather
    * than proposed (MOTIR-6300; design Part XXIII §23.12): `generating → declined`
    * with `decisionReason: 'discarded'` — a plan closed holding zero proposals,
@@ -584,6 +590,7 @@ const INITIAL: PlanChangeConversationState = {
   liveReview: null,
   liveVersion: 0,
   liveFailing: false,
+  liveReads: 0,
   discardedReview: null,
   decided: null,
   jobId: null,
@@ -1297,7 +1304,11 @@ export function usePlanChangeConversation({
     }));
   };
 
-  const { failing: liveFailing, review: polledReview } = useGeneratingPlanPoll(livePlanId, {
+  const {
+    failing: liveFailing,
+    reads: liveReads,
+    review: polledReview,
+  } = useGeneratingPlanPoll(livePlanId, {
     // The snapshot arrives MERGED (MOTIR-8575): a proposal that did not change keeps
     // its object, and the live pane's version moves only when the proposals did.
     onSnapshot: (snap, change) => {
@@ -3729,10 +3740,13 @@ export function usePlanChangeConversation({
     await raiseStop(stateRef.current.session?.id ?? '', jobId);
   }, [raiseStop]);
 
-  // `failing` is the poll's own, so it rides on the state it describes.
+  // `failing` and `reads` are the poll's own, so they ride on the state they describe.
   const exposed = useMemo(
-    () => (state.liveFailing === liveFailing ? state : { ...state, liveFailing }),
-    [state, liveFailing],
+    () =>
+      state.liveFailing === liveFailing && state.liveReads === liveReads
+        ? state
+        : { ...state, liveFailing, liveReads },
+    [state, liveFailing, liveReads],
   );
 
   /**

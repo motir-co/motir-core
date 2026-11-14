@@ -364,7 +364,14 @@
       "draftingName": "Wird gerade entworfen",
       "laying": "Untergeordnete Elemente werden angelegt",
       "layingName": "Seine untergeordneten Elemente werden gerade angelegt",
-      "layingHere": "Diese Ebene wird angelegt"
+      "layingHere": "Diese Ebene wird angelegt",
+      "thinking": "Wird durchdacht",
+      "thinkingName": "Wird durchdacht — noch nichts geschrieben",
+      "checking": "Wird geprüft",
+      "checkingName": "Wird in der Abschlussprüfung geprüft",
+      "checkingAll": "Untergeordnete Elemente werden geprüft",
+      "checkingAllName": "Seine untergeordneten Elemente werden in der Abschlussprüfung gemeinsam geprüft",
+      "checkingHere": "Diese Ebene wird geprüft"
     },
     "listWritingTitle": "Noch nichts vorgeschlagen",
     "listWritingBody": "Elemente erscheinen hier, während der Plan geschrieben wird.",
@@ -429,7 +436,9 @@
       "beingWritten": "Wird geschrieben",
       "written": "Geschrieben",
       "follow": "Dem Schreiben folgen",
-      "followHint": "Hält den Text, der gerade geschrieben wird, im Blick. Zum Beenden scrollen."
+      "followHint": "Hält den Text, der gerade geschrieben wird, im Blick. Zum Beenden scrollen.",
+      "thinking": "Wird durchdacht",
+      "checking": "Wird geprüft"
     }
   },
   "projectAccess": {

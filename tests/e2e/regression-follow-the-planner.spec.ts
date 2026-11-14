@@ -472,8 +472,9 @@ test('the canvas follows the planner while a plan is written, stops when the rea
       async () => {
         await openQuickView(page, A1);
         // The planner's author step targets this card: the in-progress cue says so.
-        await expect(liveCue(page)).toHaveAttribute('data-live-cue', 'writing');
-        await expect(liveCue(page)).toHaveText(en.planReview.peekLive.beingWritten);
+        // The MCP door streams no partial, so it reads THINKING (MOTIR-11254, §31.7).
+        await expect(liveCue(page)).toHaveAttribute('data-live-cue', 'thinking');
+        await expect(liveCue(page)).toHaveText(en.planReview.peekLive.thinking);
         await recordQuickView(page);
         const arrived = polled(page, planId, (b) => itemOf(b, a1!)?.descriptionMd === BODY);
         await tool(agent, UPDATE_PLAN_ITEM_TOOL_NAME, {

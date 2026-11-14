@@ -840,7 +840,8 @@ describe('seam 2 · snapshot → the quick view’s live field (MOTIR-11201, Par
     const { planId, a } = await drivenToS();
     await viewOnCanvas(await nodeIdOf(planId, a));
     // The author step targets the card before any partial: the cue, no live field.
-    await until(() => expect(cueState()).toBe('writing'));
+    // Since MOTIR-11254 (Part XXXI §31.7) that cue reads THINKING until text exists.
+    await until(() => expect(cueState()).toBe('thinking'));
     expect(liveText('descriptionMd')).toBeNull();
 
     await drafting(planId, 'sess_a', a, 1, { descriptionMd: 'The planner wrote' });
@@ -1005,10 +1006,18 @@ describe('guards · never driven, never a partial off the overlay', () => {
     fireEvent.click(screen.getByRole('button', { name: /List/ }));
     await settle();
     const list = screen.getByTestId('plan-proposal-list');
-    const rows = list.textContent;
+    // The ROW CUE CHIP (MOTIR-11254, Part XXXI §31.6) follows the planner's step
+    // from row to row by design — that is the step's STATE, not a drive. Every
+    // other part of every row must stay as it was.
+    const rowsText = () => {
+      const copy = screen.getByTestId('plan-proposal-list').cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('[data-testid^="list-cue-"]').forEach((chip) => chip.remove());
+      return copy.textContent;
+    };
+    const rows = rowsText();
     await plannerMovesToS2(planId, b);
     await settle();
-    expect(screen.getByTestId('plan-proposal-list').textContent).toBe(rows);
+    expect(rowsText()).toBe(rows);
     expect(list.querySelector('[data-follow]')).toBeNull();
     expect(list.querySelector('[data-testid="canvas-bar-trips"]')).toBeNull();
   });

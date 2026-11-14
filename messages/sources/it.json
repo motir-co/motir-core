@@ -13621,5 +13621,14 @@
   "previewGate.notFound.pill": "Not available",
   "previewGate.notFound.title": "There is no preview here",
   "previewGate.notFound.body": "This address doesn't belong to a running preview. It may have been shut down, or the link may be mistyped.",
-  "previewGate.notFound.home": "Go to Motir"
+  "previewGate.notFound.home": "Go to Motir",
+  "planReview.cue.thinking": "Thinking",
+  "planReview.cue.thinkingName": "Being thought through — nothing written yet",
+  "planReview.cue.checking": "Checking",
+  "planReview.cue.checkingName": "Being reviewed in the final check",
+  "planReview.cue.checkingAll": "Checking its items",
+  "planReview.cue.checkingAllName": "Its items are being reviewed together in the final check",
+  "planReview.cue.checkingHere": "Checking this level",
+  "planReview.peekLive.thinking": "Thinking",
+  "planReview.peekLive.checking": "Checking"
 }

@@ -87,6 +87,8 @@ const STORY_KEYFRAMES = [
   'canvas-cue-glow',
   'canvas-cue-settle',
   'canvas-cue-wash-out',
+  // MOTIR-11254 (§31.4 T4): the wash lifting off a card that falls back to Thinking.
+  'canvas-cue-wash-lift',
 ];
 function keyframeBody(name: string): string {
   const at = css.indexOf(`@keyframes ${name} {`);
