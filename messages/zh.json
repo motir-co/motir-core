@@ -3673,7 +3673,10 @@
         "explanationsHint": "每个提议的工作项都会附带一段简短的“为何重要”，无需查看代码即可读懂。",
         "dataPracticeCommitment": "Motir 及其网关都不会使用本项目的内容训练模型。",
         "dataPracticeReport": "请求到达服务商之后，该服务商如何处理，取决于其自行公布的政策。",
-        "dataPracticeLink": "查看各服务商的公开说明"
+        "dataPracticeLink": "查看各服务商的公开说明",
+        "finalCheckLabel": "运行最终检查",
+        "finalCheckHint": "在提议计划之前，Motir AI 会按构建顺序重新阅读其工作项，检查每个工作项都能基于前面工作项交付的内容来构建，并修复所发现的缺陷。对于大型计划，这可能需要很多分钟。",
+        "finalCheckOff": "此项目的计划会在没有最终检查的情况下提议。每个计划的摘要都会说明它未经检查。"
       },
       "lessonCapture": {
         "title": "规划失误",

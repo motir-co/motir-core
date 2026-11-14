@@ -3673,7 +3673,10 @@
         "explanationsHint": "Every proposed work item gets a short “why this matters” you can read without opening the code.",
         "dataPracticeCommitment": "Neither Motir nor its gateway trains on this project's content.",
         "dataPracticeReport": "What a provider does with a request once it reaches them is that provider's own published position.",
-        "dataPracticeLink": "What each provider states"
+        "dataPracticeLink": "What each provider states",
+        "finalCheckLabel": "Run the final check",
+        "finalCheckHint": "Before a plan is proposed, Motir AI reads its work items again in build order, checks that each can be built on what the items before it deliver, and fixes what it finds. On a large plan this can take many minutes.",
+        "finalCheckOff": "Plans for this project are proposed without the final check. Each plan’s summary says it was not checked."
       },
       "lessonCapture": {
         "title": "Planning mistakes",

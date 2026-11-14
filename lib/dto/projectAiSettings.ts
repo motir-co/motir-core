@@ -22,6 +22,9 @@
  *   never null: the column is nullable ("never written") and the mapper resolves
  *   an unset value to `true` through `resolveRecordPlanningMistakes`, so no
  *   consumer of this DTO has to know the default or repeat it.
+ * - `aiFinalCheck` — whether this project's plans run the planner's final check
+ *   before they are proposed (Story MOTIR-11262 · MOTIR-11264). Resolved the
+ *   same way: the nullable column reads as `true` until a project turns it off.
  */
 export interface ProjectAiSettingsDto {
   aiAutoPlanEnabled: boolean;
@@ -30,6 +33,7 @@ export interface ProjectAiSettingsDto {
   aiSprintLengthDays: number;
   aiGenerateExplanations: boolean;
   aiRecordPlanningMistakes: boolean;
+  aiFinalCheck: boolean;
 }
 
 /**
@@ -48,4 +52,5 @@ export interface UpdateProjectAiSettingsInput {
   aiSprintLengthDays?: number;
   aiGenerateExplanations?: boolean;
   aiRecordPlanningMistakes?: boolean;
+  aiFinalCheck?: boolean;
 }

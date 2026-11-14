@@ -3673,7 +3673,10 @@
         "explanationsHint": "Jedes vorgeschlagene Arbeitselement erhält ein kurzes „Warum das wichtig ist“, das Sie lesen können, ohne den Code zu öffnen.",
         "dataPracticeCommitment": "Weder Motir noch sein Gateway trainiert mit den Inhalten dieses Projekts.",
         "dataPracticeReport": "Was ein Anbieter mit einer Anfrage macht, sobald sie bei ihm eingeht, richtet sich nach dessen eigenen veröffentlichten Angaben.",
-        "dataPracticeLink": "Was jeder Anbieter angibt"
+        "dataPracticeLink": "Was jeder Anbieter angibt",
+        "finalCheckLabel": "Abschließende Prüfung ausführen",
+        "finalCheckHint": "Bevor ein Plan vorgeschlagen wird, liest Motir AI seine Arbeitselemente noch einmal in Baureihenfolge, prüft, dass jedes auf dem aufbauen kann, was die Elemente davor liefern, und behebt, was es findet. Bei einem großen Plan kann das viele Minuten dauern.",
+        "finalCheckOff": "Pläne für dieses Projekt werden ohne abschließende Prüfung vorgeschlagen. Die Zusammenfassung jedes Plans sagt, dass er nicht geprüft wurde."
       },
       "lessonCapture": {
         "title": "Planungsfehler",

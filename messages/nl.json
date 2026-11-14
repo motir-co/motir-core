@@ -3673,7 +3673,10 @@
         "explanationsHint": "Elk voorgesteld werkitem krijgt een korte ‘waarom dit belangrijk is’ die je kunt lezen zonder de code te openen.",
         "dataPracticeCommitment": "Motir en zijn gateway trainen niet op de inhoud van dit project.",
         "dataPracticeReport": "Wat een provider doet met een verzoek zodra het bij hem aankomt, is het eigen gepubliceerde standpunt van die provider.",
-        "dataPracticeLink": "Wat elke provider verklaart"
+        "dataPracticeLink": "Wat elke provider verklaart",
+        "finalCheckLabel": "De eindcontrole uitvoeren",
+        "finalCheckHint": "Voordat een plan wordt voorgesteld, leest Motir AI de werkitems opnieuw in bouwvolgorde, controleert dat elk item kan voortbouwen op wat de items ervoor opleveren, en herstelt wat het vindt. Bij een groot plan kan dit vele minuten duren.",
+        "finalCheckOff": "Plannen voor dit project worden voorgesteld zonder de eindcontrole. De samenvatting van elk plan vermeldt dat het niet is gecontroleerd."
       },
       "lessonCapture": {
         "title": "Planningsfouten",

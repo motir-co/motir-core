@@ -188,6 +188,7 @@ describe('POST /api/ai/plan/generate', () => {
       prompt: 'build me a tracker',
       generateExplanations: false,
       recordPlanningMistakes: true,
+      finalCheck: true,
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
@@ -232,6 +233,7 @@ describe('POST /api/ai/plan/generate', () => {
       prompt: 'with explanations',
       generateExplanations: true,
       recordPlanningMistakes: true,
+      finalCheck: true,
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,

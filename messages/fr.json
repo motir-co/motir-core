@@ -3673,7 +3673,10 @@
         "explanationsHint": "Chaque élément de travail proposé reçoit un court « pourquoi c’est important » lisible sans ouvrir le code.",
         "dataPracticeCommitment": "Ni Motir ni sa passerelle ne s’entraînent sur le contenu de ce projet.",
         "dataPracticeReport": "Ce qu’un fournisseur fait d’une requête une fois qu’elle lui parvient relève de la position publiée par ce fournisseur.",
-        "dataPracticeLink": "Ce que déclare chaque fournisseur"
+        "dataPracticeLink": "Ce que déclare chaque fournisseur",
+        "finalCheckLabel": "Exécuter la vérification finale",
+        "finalCheckHint": "Avant qu’un plan soit proposé, Motir AI relit ses éléments de travail dans l’ordre de construction, vérifie que chacun peut être construit sur ce que livrent les éléments qui le précèdent, et corrige ce qu’il trouve. Sur un grand plan, cela peut prendre de nombreuses minutes.",
+        "finalCheckOff": "Les plans de ce projet sont proposés sans la vérification finale. Le résumé de chaque plan indique qu’il n’a pas été vérifié."
       },
       "lessonCapture": {
         "title": "Erreurs de planification",

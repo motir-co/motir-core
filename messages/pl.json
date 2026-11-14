@@ -3673,7 +3673,10 @@
         "explanationsHint": "Każdy proponowany element roboczy otrzymuje krótkie „dlaczego to ważne”, które można przeczytać bez otwierania kodu.",
         "dataPracticeCommitment": "Ani Motir, ani jego brama nie trenują modeli na treściach tego projektu.",
         "dataPracticeReport": "To, co dostawca robi z żądaniem po jego otrzymaniu, określa jego własne opublikowane stanowisko.",
-        "dataPracticeLink": "Co deklaruje każdy dostawca"
+        "dataPracticeLink": "Co deklaruje każdy dostawca",
+        "finalCheckLabel": "Uruchamiaj kontrolę końcową",
+        "finalCheckHint": "Zanim plan zostanie zaproponowany, Motir AI ponownie czyta jego elementy robocze w kolejności budowania, sprawdza, czy każdy można zbudować na tym, co dostarczają elementy przed nim, i poprawia to, co znajdzie. Przy dużym planie może to potrwać wiele minut.",
+        "finalCheckOff": "Plany dla tego projektu są proponowane bez kontroli końcowej. Podsumowanie każdego planu informuje, że nie został sprawdzony."
       },
       "lessonCapture": {
         "title": "Błędy planowania",

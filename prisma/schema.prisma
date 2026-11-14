@@ -2202,6 +2202,19 @@ model Project {
   /// silently off because nobody ever wrote its row. Only an explicit `false`
   /// disables capture.
   aiRecordPlanningMistakes         Boolean?              @map("ai_record_planning_mistakes")
+  /// THE FINAL CHECK — whether this project's plans run the planner's final
+  /// check (the code's "dry run": one review session per card in build order,
+  /// then a repair of what it finds) before they are proposed (Story MOTIR-11262 ·
+  /// MOTIR-11264). The flag reaches motir-ai on the job envelope's context as
+  /// `finalCheck` — core config is never read across the repository boundary.
+  ///
+  /// NULLABLE WITH NO `@default`, for exactly the reasons
+  /// `aiRecordPlanningMistakes` directly above gives: NULL means "never written",
+  /// every reader resolves it through {@link resolveFinalCheck} to **true**, so
+  /// every project that predates the column reads as ON with no backfill, and the
+  /// "predates the field" state is constructible in a test. Only an explicit
+  /// `false` turns the final check off.
+  aiFinalCheck                     Boolean?              @map("ai_final_check")
   /// WHO OWNS the project's repository set (`docs/decisions/project-repository-set.md`
   /// §3, MOTIR-1780) — `user` (created in the user's own account/org, theirs from
   /// the first commit) or `motir` (created under Motir's org, recorded as

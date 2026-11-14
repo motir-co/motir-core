@@ -3673,7 +3673,10 @@
         "explanationsHint": "Cada elemento de trabajo propuesto recibe un breve “por qué importa” que puedes leer sin abrir el código.",
         "dataPracticeCommitment": "Ni Motir ni su pasarela entrenan con el contenido de este proyecto.",
         "dataPracticeReport": "Lo que hace un proveedor con una solicitud una vez que le llega es la postura que ese proveedor publica.",
-        "dataPracticeLink": "Lo que declara cada proveedor"
+        "dataPracticeLink": "Lo que declara cada proveedor",
+        "finalCheckLabel": "Ejecutar la comprobación final",
+        "finalCheckHint": "Antes de proponer un plan, Motir AI vuelve a leer sus elementos de trabajo en orden de construcción, comprueba que cada uno se puede construir sobre lo que entregan los elementos anteriores y corrige lo que encuentra. En un plan grande puede tardar muchos minutos.",
+        "finalCheckOff": "Los planes de este proyecto se proponen sin la comprobación final. El resumen de cada plan indica que no se comprobó."
       },
       "lessonCapture": {
         "title": "Errores de planificación",

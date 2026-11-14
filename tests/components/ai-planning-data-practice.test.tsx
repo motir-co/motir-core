@@ -32,6 +32,7 @@ function dto(over: Partial<ProjectAiSettingsDto> = {}): ProjectAiSettingsDto {
     aiSprintLengthDays: 2,
     aiGenerateExplanations: false,
     aiRecordPlanningMistakes: true,
+    aiFinalCheck: true,
     ...over,
   };
 }

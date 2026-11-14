@@ -19,8 +19,8 @@ import type {
 // business logic over the AI configuration COLUMNS on `project`
 // (`aiAutoPlanEnabled` / `aiAutoPlanThreshold` / `aiSprintPlanningEnabled` /
 // `aiSprintLengthDays`, plus the Story-7.4
-// `aiGenerateExplanations` and the MOTIR-3331 `aiRecordPlanningMistakes` the
-// same panel surfaces).
+// `aiGenerateExplanations`, the MOTIR-3331 `aiRecordPlanningMistakes` and the
+// MOTIR-11264 `aiFinalCheck` the same panel surfaces).
 //
 // Open-core by construction: these are ordinary project-settings columns the PM
 // core owns and reads (the cadence engine MOTIR-916, the sprint-packing persist
@@ -143,6 +143,7 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
   aiSprintLengthDays?: number;
   aiGenerateExplanations?: boolean;
   aiRecordPlanningMistakes?: boolean;
+  aiFinalCheck?: boolean;
 } {
   const data: {
     aiAutoPlanEnabled?: boolean;
@@ -151,6 +152,7 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
     aiSprintLengthDays?: number;
     aiGenerateExplanations?: boolean;
     aiRecordPlanningMistakes?: boolean;
+    aiFinalCheck?: boolean;
   } = {};
 
   if (patch.aiAutoPlanEnabled !== undefined) data.aiAutoPlanEnabled = patch.aiAutoPlanEnabled;
@@ -168,6 +170,12 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
   // first time some other field in this group is saved (MOTIR-3349).
   if (patch.aiRecordPlanningMistakes !== undefined) {
     data.aiRecordPlanningMistakes = patch.aiRecordPlanningMistakes;
+  }
+  // The same rule for the final check (MOTIR-11264): absent leaves the column
+  // alone (a never-written project keeps its NULL, which reads as ON), and only an
+  // explicit `false` turns the check off.
+  if (patch.aiFinalCheck !== undefined) {
+    data.aiFinalCheck = patch.aiFinalCheck;
   }
 
   if (patch.aiAutoPlanThreshold !== undefined) {

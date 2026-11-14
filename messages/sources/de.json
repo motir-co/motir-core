@@ -13613,5 +13613,8 @@
   "workbench.planningSession.stop.amend": "Reconciling the items under {title}",
   "workbench.planningSession.stop.amendTop": "Reconciling the items at the top level",
   "workbench.planningSession.stop.check": "Running the final check",
-  "workbench.planningSession.stop.repair": "Fixing what the final check found"
+  "workbench.planningSession.stop.repair": "Fixing what the final check found",
+  "settings.aiPlanning.planner.finalCheckLabel": "Run the final check",
+  "settings.aiPlanning.planner.finalCheckHint": "Before a plan is proposed, Motir AI reads its work items again in build order, checks that each can be built on what the items before it deliver, and fixes what it finds. On a large plan this can take many minutes.",
+  "settings.aiPlanning.planner.finalCheckOff": "Plans for this project are proposed without the final check. Each plan’s summary says it was not checked."
 }

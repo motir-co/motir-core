@@ -227,6 +227,56 @@ describe('a project that switched capture OFF sends `false` on BOTH bypassing en
 // 1b. THE SHARED BUILDER — three submits, one set of always-present fields (MOTIR-7916)
 // ════════════════════════════════════════════════════════════════════════════
 
+// The final check (MOTIR-11264) crosses the same way and fails the same way: an
+// ABSENT `finalCheck` reads on the far side as ON. So the VALUE is asserted on
+// the three entrances that resolve it outside the shared plan-edit context —
+// the routing run, a generation and a revision — for a project that turned it off.
+describe('a project that turned the final check OFF sends `finalCheck: false` on the bypassing entrances', () => {
+  it('the routing run, a generation and a revision each send `finalCheck: false`, and `true` once it is back on', async () => {
+    const fx = await makeFixture();
+    const c = projectCtx(fx);
+    const settingsCtx = { userId: fx.ownerId, workspaceId: fx.workspaceId };
+
+    // A fresh plan per round: a revision holds its plan until it lands.
+    async function driveAll(): Promise<Record<string, Record<string, unknown>>> {
+      bodies.length = 0;
+      await aiGenerationService.startRoutingRun(c);
+      const routing = bodies[0]!;
+      bodies.length = 0;
+      await aiGenerationService.startGeneration(c, { prompt: 'build a thing' });
+      const generation = bodies[0]!;
+      const planId = await plannedPlan(fx);
+      bodies.length = 0;
+      await aiPlanEditsService.submitRevise(planId, 'split the second story', c);
+      const revise = bodies[0]!;
+      return { routing, generation, revise };
+    }
+
+    await projectAiSettingsService.updateAiSettings(
+      fx.project.identifier,
+      { aiFinalCheck: false },
+      settingsCtx,
+    );
+    for (const [name, body] of Object.entries(await driveAll())) {
+      const context = ctxOf(body);
+      expect(
+        Object.prototype.hasOwnProperty.call(context, 'finalCheck'),
+        `${name} did not send finalCheck at all — the far side reads that as ON`,
+      ).toBe(true);
+      expect(context['finalCheck'], `${name} sent the wrong value`).toBe(false);
+    }
+
+    await projectAiSettingsService.updateAiSettings(
+      fx.project.identifier,
+      { aiFinalCheck: true },
+      settingsCtx,
+    );
+    for (const [name, body] of Object.entries(await driveAll())) {
+      expect(ctxOf(body)['finalCheck'], `${name} sent the wrong value`).toBe(true);
+    }
+  });
+});
+
 describe('submitPlanEditJob, submitRevise and submitResume each send the always-present fields', () => {
   it('generateExplanations, the consent flag and the onboarding marker, on every one', async () => {
     const fx = await makeFixture();
