@@ -5,12 +5,13 @@ The control for a workspace's one name under the tenant base domain
 settings, and the read-only echo that replaces the subdomain card in project
 settings.
 
-| Surface                                          | Mock                                                                                                                                                                                   |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workspace settings › Public address              | [`workspace-address.mock.html`](workspace-address.mock.html) — panels 0–12                                                                                                             |
-| Project settings › the workspace echo            | [`../projects/public-address--workspace-echo.mock.html`](../projects/public-address--workspace-echo.mock.html) — panels A–C (a delta; see `design/projects/design-notes.md`)           |
-| Workspace settings › Custom domains              | [`custom-domains.mock.html`](custom-domains.mock.html) — panels 0–12 (see [Custom domains](#custom-domains) below)                                                                     |
-| Custom domains › the application a domain serves | [`custom-domains--application.mock.html`](custom-domains--application.mock.html) — panels A–F, a delta (see [The application a domain serves](#the-application-a-domain-serves) below) |
+| Surface                                               | Mock                                                                                                                                                                                                                   |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workspace settings › Public address                   | [`workspace-address.mock.html`](workspace-address.mock.html) — panels 0–12                                                                                                                                             |
+| Project settings › the workspace echo                 | [`../projects/public-address--workspace-echo.mock.html`](../projects/public-address--workspace-echo.mock.html) — panels A–C (a delta; see `design/projects/design-notes.md`)                                           |
+| Workspace settings › Custom domains                   | [`custom-domains.mock.html`](custom-domains.mock.html) — panels 0–12 (see [Custom domains](#custom-domains) below)                                                                                                     |
+| Custom domains › the application a domain serves      | [`custom-domains--application.mock.html`](custom-domains--application.mock.html) — panels A–F, a delta (see [The application a domain serves](#the-application-a-domain-serves) below)                                 |
+| Public address › a workspace with no Motir repository | [`workspace-address--no-motir-repository.mock.html`](workspace-address--no-motir-repository.mock.html) — panels A–I, a delta (see [A workspace with no Motir repository](#a-workspace-with-no-motir-repository) below) |
 
 Context: Story MOTIR-4528 · Subtask MOTIR-9513; the rules are
 `docs/decisions/public-tenant-addresses.md` §8 Amendment 3; the address decision
@@ -464,3 +465,144 @@ As the rest of this area: secondary copy on `--el-text-secondary`; no text on
 `--el-text-muted` or `--el-text-faint`; refusal text on
 `--el-danger-on-surface`; `--el-danger-text` only on the danger Button's fill. A
 failure's hue lives in the banner's border and tint, never in its words.
+
+## A workspace with no Motir repository
+
+**Design system.** Read `package.json` (depends on `@motir/design-system`
+`workspace:*`) and `app/globals.css` (imports `@motir/design-system/theme.css`):
+both hold, so this delta is ON MOTIR DESIGN. Installed version 0.22.4
+(`packages/design-system/package.json`, linked at
+`node_modules/@motir/design-system`), which exports `@motir/design-system/mock`,
+so the mock is built with `renderMock` from the real parts at the axes
+`warm-editorial` / `motir` / `motir` (the app's root layout stamps the viewer's
+own appearance, and these are the registry defaults it falls back to), on a
+`boardWidth: 'full'` board. No part is missing from the package; the one new
+element (the **Reason callout**) is a product-local component, because it is a
+sentence about this pane's rule built from a tint the area already uses.
+
+**Amends** [The pane (panels 1–12)](#the-pane-panels-112) and
+`workspace-address.mock.html` (a record, not edited) by two new states of the
+same pane and one stale-tab refusal, drawn in the delta
+`workspace-address--no-motir-repository.mock.html`, panels A–I. Story
+MOTIR-11283 · Subtask MOTIR-11286; the rule is
+`docs/decisions/public-tenant-addresses.md` §8 AMENDMENT 5.
+
+Every panel is rendered from the shipped parts: `PublicAddressControl` itself
+for each "as shipped" comparison, `AddressRow`, `PublicAddressDoorCard`,
+`DatedConfirmDialog`, `Card`, `Input`, `Button` and `Pill`. The new states are
+composed in `PublicAddressControl`'s own markup, class for class. Two things
+cannot render on a server and are drawn in place: the dated confirm (a Radix
+portal, drawn with the shipped `Modal` panel classes around the real dialog
+body) and the error toast (the shipped `Toast` root's classes). Panel I is one
+inner document in a 504px frame, a real 390px content box under the 640px
+`sm` breakpoint, so the shipped narrow rules resolve as they do on a phone.
+
+### The fact that picks the state
+
+The service's eligibility read, `publicSubdomainService.getClaimEligibility`
+(`{ eligible }`, MOTIR-11285). With the subdomain read it gives three cases:
+
+| eligible | name held | state                                                    |
+| -------- | --------- | -------------------------------------------------------- |
+| yes      | either    | as shipped, every panel of the asset of record unchanged |
+| no       | no        | **no-motir-repository** (panels B, C, D)                 |
+| no       | yes       | **held-without-motir-repository** (panels E, F, G)       |
+
+The read answers the same for a Manager and for a member who cannot manage: the
+reason is a fact about the workspace, not about the viewer's role.
+
+### Elements
+
+- **Access path (panel A)** — unchanged. The rail row and the organisation door
+  card are the asset of record's panel 0; panel A renders the shipped
+  `PublicAddressDoorCard` for a workspace with no name, whose link opens panel B.
+- **Reason callout (new; panels B–I)** — the one new element. The address row's
+  surface: `border-(--el-border)`, `bg-(--el-surface-soft)`,
+  `rounded-(--radius-control)`, with the released notice's padding
+  (`px-(--spacing-control-x-16) py-(--spacing-card-padding-12)`). A decorative
+  `Info` glyph (`aria-hidden`, `--el-text-secondary`), a heading line
+  (13px semibold, `--el-text`) and a body (13px, leading 1.6,
+  `--el-text-secondary`). A plain note, not a live region: it is the pane's
+  resting state, not an announcement. Two wordings, one per state (see
+  Strings).
+- **State no-motir-repository · Manager (panel B)** — the page's title and
+  subtitle, then the card holding only the Reason callout. The name field and
+  the Claim button are ABSENT, with no disabled stand-in for either.
+- **State no-motir-repository · member who cannot manage (panel C)** — the
+  shipped **Read-only line** stays first, and the Reason callout follows it:
+  the two STACK. The callout takes the place of the shipped `No name claimed
+yet.` line, which it already says.
+- **Released notice, after a release here (panel D)** — when the held state is
+  released, the pane re-reads into no-motir-repository. The shipped released
+  notice keeps its first line (`released.held` or `released.free`) and DROPS
+  its second line (`released.lock`, "You can claim a name now…"), which is
+  false for this workspace. The Reason callout follows it.
+- **State held-without-motir-repository · Manager (panel E)** — the shipped
+  **Address row** (host, Live pill, Copy, open) and the **Custom-domains link**,
+  exactly as drawn; then the Reason callout, held wording, directly above the
+  actions; then the actions row with **Release** only. **Rename is ABSENT**, not
+  disabled: a disabled control promises it will come back, and it only does if a
+  Motir repository appears. Release keeps its shipped behaviour: enabled, or
+  disabled (never hidden) with the shipped **Lock line** while the 30-day lock
+  runs.
+- **Dated confirm, opened from the held state (panel F)** — the shipped
+  `DatedConfirmDialog` for a release: title, danger callout with the return
+  date, the no-redirect line and the actions unchanged. Its last line is the ONE
+  change: in this state it reads the **no-repository lock line** in place of the
+  shipped `confirm.lockAfterRelease` ("You can claim a new name right away…"),
+  which is false here.
+- **State held-without-motir-repository · member who cannot manage (panel G)**
+  — the Read-only line, the Address row, the Custom-domains link and the Reason
+  callout (held wording); no actions, as today.
+- **Stale-tab refusal (panel H)** — a page drawn before the workspace lost its
+  last Motir repository still shows the shipped controls, and the server
+  refuses with 409 `SUBDOMAIN_REQUIRES_MOTIR_REPOSITORY`:
+  - a **claim** is refused in the name field's shipped error state, the
+    **Refusal message** in place of the hint, the typed name kept;
+  - a **rename** is refused after its confirm: the dialog closes, the shipped
+    error toast carries the Refusal message under the shipped `Name not
+changed` title, and the editor stays as it was.
+
+  Either way the pane then re-reads (the shipped `router.refresh()`), so the
+  next paint is panel B or panel E. In panel E the client must not keep the
+  rename editor open from before the re-read: the held state has no Rename, so
+  it has no editor either.
+
+- **390 wide (panel I)** — both new states for both roles. The shipped narrow
+  rules apply unchanged: the host wraps and the pill drops under it, Copy and
+  open stay on the row, Release takes the full width. The callout's text wraps
+  beside its glyph.
+
+Release is not gated by the rule (§8 AMENDMENT 5), so nothing about the release
+refusals, the 24-hour grace, the 90-day hold or the 30-day lock changes. Whether
+a workspace with no Motir repository may keep customer domains is outside this
+delta: the Custom-domains link stays as drawn.
+
+### Strings (en)
+
+New strings only, under `settings.workspaceAddress`. The pane's code card picks
+the keys; `{base}` is the configured base domain (`motir.site` on the board),
+`{host}` the held hostname.
+
+| Element                                 | English                                                                                                                                                                                            |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reason callout · heading, no name held  | This workspace can’t claim a name                                                                                                                                                                  |
+| Reason callout · body, no name held     | A name under {base} serves applications Motir hosts, and Motir hosts only the repositories it creates. This workspace has none: repositories you import or connect run on your own infrastructure. |
+| Reason callout · heading, name held     | This name can’t be renamed                                                                                                                                                                         |
+| Reason callout · body, name held        | This workspace no longer has a repository Motir created. {host} keeps answering until you release it, but it can’t be renamed, and once it is released the workspace can’t claim another name.     |
+| Refusal message · field error and toast | This workspace has no repository Motir created, so it can’t claim or change a {base} name.                                                                                                         |
+| Dated confirm · no-repository lock line | The workspace can’t claim another name until it has a repository Motir created.                                                                                                                    |
+
+Reused unchanged: `readOnly`, `row.*`, `release`, `lock`, `customDomainsLink`,
+`released.held`, `released.free`, `confirm.*` (all but the line above, which
+it replaces in this state), `toast.refusedTitle`, `field.*`, `claim`, `cancel`,
+`review`. No existing string changes.
+
+### Ink
+
+As the rest of this area: secondary copy on `--el-text-secondary` (6.51:1 on
+`--el-surface-soft`, the callout's surface); no text on `--el-text-muted` or
+`--el-text-faint`. The callout's heading is `--el-text`; the field refusal is
+the shipped Input's own error ink and border, unchanged from the asset of
+record's refusal panel (panel 2). The board draws the
+toast's description in `--el-text-secondary` under this area's rule.
