@@ -195,7 +195,9 @@ async function recordQuickView(page: Page): Promise<void> {
     const read = () => {
       document.querySelectorAll('[data-testid^="quick-view-live-"]').forEach((box) => {
         const id = box.getAttribute('data-testid')!.slice('quick-view-live-'.length);
-        if (id !== 'cue') w.__qv.live.push(id);
+        // Only the three live FIELDS — not the cue, nor the header group and its
+        // Follow control (MOTIR-11248), which share the prefix.
+        if (['title', 'descriptionMd', 'explanationMd'].includes(id)) w.__qv.live.push(id);
       });
       document.querySelectorAll('[aria-live]').forEach((region) => {
         const text = region.textContent ?? '';
