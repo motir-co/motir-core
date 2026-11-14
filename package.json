@@ -203,7 +203,7 @@
     "@axe-core/playwright": "^4.11.3",
     "@changesets/cli": "^3.0.1",
     "@formatjs/icu-messageformat-parser": "3.5.11",
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.65.0",
     "@seriousme/openapi-schema-validator": "^2.9.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
