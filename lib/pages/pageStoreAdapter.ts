@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
-import type { PageStore } from '@motir/pages';
+import type { DerivedPageLink, PageStore } from '@motir/pages';
+import { canonicalWorkItemKey } from '@/lib/mentions/workItemRefs';
 import {
   toLockedPageRow,
   toPageCommentRow,
@@ -19,6 +20,18 @@ import { diffDerivedLinks } from '@/lib/pages/derivedLinks';
 // open transaction over `pageRepository`. It maps and nothing else — every
 // query is the repository's, every rule is the package's, and the transaction
 // is the page service's.
+
+/** The ids of the page's own project cards that key-shaped mention ids name. */
+async function resolveKeyMentions(
+  projectId: string,
+  links: readonly DerivedPageLink[],
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, string>> {
+  const keys = [...new Set(links.flatMap((link) => canonicalWorkItemKey(link.workItemId) ?? []))];
+  if (keys.length === 0) return new Map();
+  const rows = await workItemRepository.findByIdentifiers(projectId, keys, tx);
+  return new Map(rows.map((row) => [row.identifier.toUpperCase(), row.id]));
+}
 
 /** A `PageStore` whose every call runs inside `tx`. */
 export function createPageStore(tx: Prisma.TransactionClient): PageStore {
@@ -174,18 +187,28 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
     // The derived link rows (§8.1, MOTIR-7571), rewritten as a DIFF under the
     // save's page lock: only work items of the page's own project are kept — a
     // cross-project or unknown id is dropped silently, archived items stay —
-    // and a `manual` row is never read or written.
+    // and a `manual` row is never read or written. A mention whose id is a KEY
+    // (`motir:MOTIR-9730`, bug MOTIR-11281) links the card that key names: the
+    // markdown door rewrites such a link before it stores it, but an editor save
+    // of a pasted `motir:` anchor still carries the key.
     async replaceDerivedLinks(pageId, links, actorId) {
       const page = await pageRepository.findById(pageId, tx);
       if (!page) return;
+      const idByKey = await resolveKeyMentions(page.projectId, links, tx);
+      const resolved = links.flatMap((link) => {
+        const key = canonicalWorkItemKey(link.workItemId);
+        if (key === null) return [link];
+        const id = idByKey.get(key);
+        return id ? [{ ...link, workItemId: id }] : [];
+      });
       const inProject = new Set(
         await workItemRepository.findIdsInProject(
           page.projectId,
-          [...new Set(links.map((link) => link.workItemId))],
+          [...new Set(resolved.map((link) => link.workItemId))],
           tx,
         ),
       );
-      const named = links.filter((link) => inProject.has(link.workItemId));
+      const named = resolved.filter((link) => inProject.has(link.workItemId));
       const stored = await pageWorkItemLinkRepository.findDerivedByPage(pageId, tx);
       const diff = diffDerivedLinks(stored, named);
       await pageWorkItemLinkRepository.deleteDerivedByIds(pageId, diff.deleteIds, tx);

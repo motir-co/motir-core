@@ -1365,6 +1365,26 @@ export const workItemRepository = {
   },
 
   /**
+   * {@link findByIdentifiers} across a WHOLE workspace, archived items included —
+   * resolving a `motir:` link written with a card's KEY where its id belongs
+   * (bug MOTIR-11281). A project identifier is workspace-unique
+   * (`@@unique([workspaceId, identifier])` on `project`), so an identifier names at
+   * most one work item in a workspace. Unresolved identifiers simply don't come
+   * back; empty input short-circuits to `[]`.
+   */
+  async findByIdentifiersInWorkspace(
+    identifiers: readonly string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    if (identifiers.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.workItem.findMany({
+      where: { workspaceId, identifier: { in: [...identifiers] } },
+    });
+  },
+
+  /**
    * Re-derive every work item's denormalized `identifier` for a project after a
    * key change (Story 6.8 · `changeKey`). The identifier is derived data —
    * `<project key>-<key number>` — so a rename is a single in-place bulk UPDATE,

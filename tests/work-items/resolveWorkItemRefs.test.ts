@@ -12,6 +12,7 @@ import type { VisitorReadContext } from '@/lib/visitor/context';
 const m = vi.hoisted(() => ({
   findByIdentifiers: vi.fn(),
   findByIdsInWorkspace: vi.fn(),
+  findByIdentifiersInWorkspace: vi.fn(),
   findByWorkspace: vi.fn(),
   filterBrowsable: vi.fn(),
   getStatusMetaByProjects: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('@/lib/repositories/workItemRepository', () => ({
   workItemRepository: {
     findByIdentifiers: m.findByIdentifiers,
     findByIdsInWorkspace: m.findByIdsInWorkspace,
+    findByIdentifiersInWorkspace: m.findByIdentifiersInWorkspace,
   },
 }));
 vi.mock('@/lib/repositories/projectRepository', () => ({
@@ -40,7 +42,8 @@ vi.mock('@/lib/workspaces/context', () => ({
   withWorkspaceServiceContext: (_ws: string, fn: (tx: unknown) => unknown) => fn({}),
 }));
 
-const { resolveWorkItemRefSummaries } = await import('@/lib/workItems/resolveWorkItemRefs');
+const { resolveMarkdownWorkItemRefs, resolveWorkItemRefSummaries, splitKeyTokens } =
+  await import('@/lib/workItems/resolveWorkItemRefs');
 
 const ctx = { workspaceId: 'ws1', userId: 'u1' } as ServiceContext;
 
@@ -66,6 +69,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.findByIdentifiers.mockResolvedValue([]);
   m.findByIdsInWorkspace.mockResolvedValue([]);
+  m.findByIdentifiersInWorkspace.mockResolvedValue([]);
   m.findByWorkspace.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
   m.filterBrowsable.mockImplementation(async (projects: { id: string }[]) =>
     projects.filter((p) => p.id === 'p1'),
@@ -156,5 +160,73 @@ describe('resolveWorkItemRefSummaries — the Visitor arm', () => {
     });
     expect(m.findByIds).toHaveBeenCalledTimes(1);
     expect(m.findByIds).toHaveBeenCalledWith(['u9']);
+  });
+});
+
+// Bug MOTIR-11281: a token written with a card's KEY where its id belongs —
+// `[MOTIR-9730](motir:MOTIR-9730)` — is resolved as that key across the workspace
+// and keyed by the href as written, so a stored body (a sealed decision version
+// among them) draws live chips without being rewritten.
+describe('resolveWorkItemRefSummaries — key-shaped tokens (MOTIR-11281)', () => {
+  it('splits key-shaped tokens from ids, canonicalising each key', () => {
+    expect(splitKeyTokens(['cid', 'MOTIR-7', 'motir-7', 'X-2'])).toEqual({
+      ids: ['cid'],
+      keys: ['MOTIR-7', 'X-2'],
+      aliases: new Map([
+        ['MOTIR-7', ['MOTIR-7', 'motir-7']],
+        ['X-2', ['X-2']],
+      ]),
+    });
+  });
+
+  it('resolves a stored body’s key tokens by identifier, keyed as written, beside id tokens', async () => {
+    m.findByIdsInWorkspace.mockResolvedValue([row('a')]);
+    m.findByIdentifiersInWorkspace.mockResolvedValue([
+      row('7'),
+      row('n', { projectId: 'p2', identifier: 'OTHER-1' }),
+    ]);
+
+    const map = await resolveMarkdownWorkItemRefs(
+      '[a](motir:a) [K](motir:MOTIR-7) [k](motir:motir-7) [O](motir:OTHER-1) [G](motir:MOTIR-99)',
+      ctx,
+    );
+
+    expect(m.findByIdsInWorkspace).toHaveBeenCalledWith(['a'], 'ws1', {});
+    expect(m.findByIdentifiersInWorkspace).toHaveBeenCalledWith(
+      ['MOTIR-7', 'OTHER-1', 'MOTIR-99'],
+      'ws1',
+      {},
+    );
+    expect(map['a']).toMatchObject({ accessible: true, id: 'a' });
+    expect(map['MOTIR-7']).toMatchObject({ accessible: true, id: '7', title: 'Title 7' });
+    expect(map['motir-7']).toBe(map['MOTIR-7']);
+    // A project the reader cannot browse: the no-access chip, under the token too.
+    expect(map['OTHER-1']).toEqual({ accessible: false, id: 'n' });
+    // A key naming no card stays absent: the deleted state.
+    expect(map['MOTIR-99']).toBeUndefined();
+  });
+
+  it('asks for no identifier read when no token is key-shaped', async () => {
+    m.findByIdsInWorkspace.mockResolvedValue([row('a')]);
+    await resolveMarkdownWorkItemRefs('[a](motir:a)', ctx);
+    expect(m.findByIdentifiersInWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('keys a Visitor’s visible key token as written, and drops a hidden one', async () => {
+    const visitor = {
+      kind: 'visitor',
+      project: { id: 'p1', workspaceId: 'ws1' },
+      hiddenIds: new Set(['6']),
+    } as unknown as VisitorReadContext;
+    m.findByIdentifiersInWorkspace.mockResolvedValue([row('5'), row('6')]);
+
+    const map = await resolveWorkItemRefSummaries(
+      { ids: ['motir-5', 'MOTIR-6'], keys: [] },
+      'p1',
+      visitor,
+    );
+
+    expect(Object.keys(map).sort()).toEqual(['5', 'MOTIR-5', 'motir-5']);
+    expect(map['motir-5']).toMatchObject({ id: '5' });
   });
 });

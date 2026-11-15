@@ -76,6 +76,24 @@ export function parseWorkItemLinks(text: string): WorkItemLink[] {
 export const WORKITEM_HREF_RE = /^motir:[A-Za-z0-9_-]+$/;
 
 /**
+ * A `motir:` payload written as a work item's KEY instead of its id —
+ * `[MOTIR-9730](motir:MOTIR-9730)` (bug MOTIR-11281). It fits
+ * {@link WORKITEM_HREF_RE}, so it renders as a chip, but no row has that id. A
+ * work-item id is a cuid (`@default(cuid())`), which never holds a `-`, so a
+ * payload of a project key, one dash and a number cannot be a real id. The
+ * prefix is matched in either case; {@link canonicalWorkItemKey} upper-cases it.
+ */
+export const WORKITEM_KEY_TARGET_RE = /^([A-Za-z][A-Za-z0-9]*)-(\d+)$/;
+
+/** The canonical `KEY-N` a key-shaped `motir:` payload names, or `null` for an id. */
+export function canonicalWorkItemKey(target: string): string | null {
+  const match = WORKITEM_KEY_TARGET_RE.exec(target);
+  if (!match) return null;
+  // The stored identifier carries the key number as written by `"key"::text`, so no zero pad.
+  return `${(match[1] as string).toUpperCase()}-${(match[2] as string).replace(/^0+(?=\d)/, '')}`;
+}
+
+/**
  * Build the bare-key matcher for a project. A work item's identifier is
  * `${project.identifier}-${number}` (lib/issues/aliasRedirect.ts), so a bare
  * reference is the project's prefix + `-` + digits, word-boundaried. The
