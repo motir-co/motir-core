@@ -17,6 +17,7 @@ import {
   LARGE_GRANT_THRESHOLD_CREDITS,
   platformCreditOpsService,
 } from '@/lib/services/platformCreditOpsService';
+import { _resetAiPlanCache } from '@/lib/services/aiPlanGateService';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -413,6 +414,45 @@ describe('setPlan', () => {
       platformCreditOpsService.setPlan(currentPrincipal!, orgId, { tierKey: ' ', reason: 'x' }),
     ).rejects.toBeInstanceOf(PlatformCreditRejectedError);
     expect(fetchStub).not.toHaveBeenCalled();
+  });
+});
+
+describe('paidAiPlanAnswer — what the plan dialog warns from (MOTIR-8985)', () => {
+  /** motir-ai's subscription read for an org with no Stripe subscription — the
+   *  EMPTY shape, whatever tier staff assigned. */
+  function stubNoSubscription(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json({ status: null, currentPeriodEnd: null, priceId: null, planTier: null }),
+      ),
+    );
+  }
+
+  beforeEach(() => {
+    _resetAiPlanCache();
+    vi.stubEnv('MOTIR_CLOUD', 'true');
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('is the gate’s own answer: no subscription is not paid, whatever the tier', async () => {
+    stubNoSubscription();
+    expect(await platformCreditOpsService.paidAiPlanAnswer(orgId)).toBe(false);
+  });
+
+  it('an internal-billing org is paid, without asking motir-ai', async () => {
+    await adminDb.organization.update({ where: { id: orgId }, data: { internalBilling: true } });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    expect(await platformCreditOpsService.paidAiPlanAnswer(orgId)).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('is staff-only, like every read on the page', async () => {
+    currentPrincipal = null;
+    await expect(platformCreditOpsService.paidAiPlanAnswer(orgId)).rejects.toBeInstanceOf(
+      NotPlatformStaffError,
+    );
   });
 });
 

@@ -10183,6 +10183,9 @@
     "goToBacklog": "前往待办",
     "setupFailed": "Motir未能完成代码准备",
     "setupFailedDetail": "计划已安全保存在待办中，没有任何内容丢失。如果某个任务需要尚未就绪的代码，Motir会提醒你。",
+    "planRequiredDetail": "你的组织拥有付费 AI 套餐后，Motir 即可托管你的代码。你的计划已安全保存在待办列表中。",
+    "planRequiredDoor": "选择 AI 方案",
+    "planUnknownDetail": "Motir 暂时无法检查你组织的 AI 套餐，因此没有进行任何设置。你的计划已安全保存在待办列表中，请稍后再试。",
     "tryAgain": "重试",
     "outcomeReady": "代码已准备就绪",
     "finishSetupLink": "继续完成代码仓库设置",
@@ -12863,6 +12866,7 @@
         "allotmentOnce": "{name} · 一次性 {credits} 积分",
         "allotmentCustom": "{name} · 定制额度",
         "stripe": "{org} 通过 Stripe 支付套餐费用。此操作只更改 Motir 读取的套餐等级；不会更改或取消 Stripe 订阅，并且订阅的下一个事件会再次按 Stripe 设置套餐等级。",
+        "notPaid": "更改套餐等级不会让 {org} 拥有付费 AI 套餐。在 {org} 通过 Stripe 支付套餐费用之前，Motir 托管的代码仓库、Motir 的 CI 运行器和智能体仍会被拒绝。对于免费赠送或测试用的组织，请改用“标记为内部计费”。",
         "confirm": "将套餐更改为 {tier}"
       },
       "ledger": {

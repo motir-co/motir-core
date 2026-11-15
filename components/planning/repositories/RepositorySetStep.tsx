@@ -19,7 +19,9 @@ import {
   establishRepositorySet,
   fetchRepositorySet,
   refreshRepositoryAccess,
+  RepositorySetRequestError,
 } from '@/lib/planning/repositorySetClient';
+import { BILLING_PLANS_PATH } from '@/components/ai/AiPaywall';
 import type { ProjectRepoDto, ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 import {
   isSettledRow,
@@ -67,7 +69,22 @@ const CODE_ACCESS_HREF = '/settings/project/code-access';
  *  the MODEL; this path shows only what the user can act on, and `proposed` /
  *  `connected` / `skipped` cannot occur on it at all — nothing is proposed for
  *  approval, nothing is adopted, and there is nothing to decline. */
-type DefaultState = 'idle' | 'working' | 'ready' | 'failed';
+type DefaultState = 'idle' | 'working' | 'ready' | 'failed' | 'refused';
+
+/**
+ * Why the paid-AI-plan gate refused the LAST Continue (MOTIR-6909's gate, bug
+ * MOTIR-8985). The establish route answers it before any row is attempted —
+ * `ai_plan_required` (402) or `plan_unknown` (503) — so the set it leaves behind
+ * is exactly the set the user started from, and a step derived from the set
+ * alone would read `idle` again: Continue pressed, nothing happened, nothing
+ * said. The refusal is therefore the one fact this step keeps beside the set.
+ */
+type PlanRefusal = 'ai_plan_required' | 'plan_unknown';
+
+function planRefusalOf(err: unknown): PlanRefusal | null {
+  if (!(err instanceof RepositorySetRequestError)) return null;
+  return err.code === 'ai_plan_required' || err.code === 'plan_unknown' ? err.code : null;
+}
 
 /**
  * ⚠️ THE STEP HAS ONE SURFACE NOW — the three that left are recorded here rather
@@ -118,6 +135,7 @@ export function RepositorySetStep({
 }: RepositorySetStepProps) {
   const [view, setView] = useState(initialView);
   const [establishing, setEstablishing] = useState(false);
+  const [refusal, setRefusal] = useState<PlanRefusal | null>(null);
 
   const rows = view.set.rows;
   const anyCreating = rows.some((r) => r.state === 'creating');
@@ -173,13 +191,20 @@ export function RepositorySetStep({
   const establish = useCallback(
     async (rowId?: string) => {
       setEstablishing(true);
+      setRefusal(null);
       try {
         await establishRepositorySet(projectKey, rowId);
-      } catch {
+      } catch (err) {
         // The set's own state is the report: `establish` persists PER ROW, so a
         // request that failed part-way has committed real outcomes, and the
         // authoritative re-read below renders them as the `failed` panel. The
         // technical path's separate `actionError` line went with it (MOTIR-5014).
+        //
+        // ⚠️ EXCEPT the paid-AI-plan refusal (bug MOTIR-8985), which lands before
+        // any row is touched and so leaves NOTHING in the set to report it. It is
+        // kept here and drawn as its own state; every other failure still reads
+        // from the set.
+        setRefusal(planRefusalOf(err));
       } finally {
         setEstablishing(false);
         // The authoritative read, always — the run persists per row, so even a
@@ -225,7 +250,8 @@ export function RepositorySetStep({
   return (
     <StepShell>
       <DefaultPath
-        state={defaultStateOf(rows, running)}
+        state={defaultStateOf(rows, running, refusal)}
+        refusal={refusal}
         busy={running}
         backlogHref={backlogHref}
         connectHref={connectHref}
@@ -241,6 +267,7 @@ export function RepositorySetStep({
 /** The default path's three states, plus the pre-Continue hero. */
 function DefaultPath({
   state,
+  refusal,
   busy,
   backlogHref,
   connectHref,
@@ -250,6 +277,8 @@ function DefaultPath({
   onContinue,
 }: {
   state: DefaultState;
+  /** Which refusal the `refused` state draws; null in every other state. */
+  refusal: PlanRefusal | null;
   busy: boolean;
   backlogHref: string;
   /** The shipped 7.10 connect pane — reached only from the report's **Use a
@@ -329,6 +358,8 @@ function DefaultPath({
         </>
       ) : null}
 
+      {state === 'refused' && refusal ? <PlanRefusalNote refusal={refusal} /> : null}
+
       {/* The ownership promise — a STANDING GUARANTEE on the main line, not a
           footnote and not a severity tint: it is a fact about the arrangement,
           which is why it sits on `--el-surface-soft` rather than a hue. */}
@@ -365,7 +396,18 @@ function DefaultPath({
             {t('goToBacklog')}
           </Link>
         ) : null}
-        {state === 'failed' ? (
+        {state === 'refused' && refusal === 'ai_plan_required' ? (
+          /* Nothing about the request is wrong and a retry would be refused the
+             same way: the one thing that changes the answer is a plan, so the
+             action is the door to one rather than Try again. */
+          <Link
+            href={BILLING_PLANS_PATH}
+            className="inline-flex h-(--height-btn-md) items-center gap-2 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) font-sans text-sm font-medium text-(--el-accent-text) hover:opacity-90"
+          >
+            {t('planRequiredDoor')}
+          </Link>
+        ) : null}
+        {state === 'failed' || (state === 'refused' && refusal === 'plan_unknown') ? (
           /* The SECOND site the door appeared on, and the one a deletion that
              reads only the first leaves behind — a dead escape hatch on the error
              path, which is the state a user is most likely to be looking at when
@@ -604,6 +646,31 @@ function AccessNote({ detail, doorLabel }: { detail: string; doorLabel: string }
   );
 }
 
+/**
+ * THE PAID-AI-PLAN REFUSAL (bug MOTIR-8985) — the `failed` panel's own shape
+ * (the danger glyph on the status line, the consequence in the user's terms as
+ * an alert), with the gate's sentence as the consequence. `plan_unknown` is a
+ * read that did not answer, so its sentence says to try again; the action
+ * under it is the step's own **Try again**.
+ */
+function PlanRefusalNote({ refusal }: { refusal: PlanRefusal }) {
+  const t = useTranslations('repositorySet');
+  return (
+    <>
+      <p
+        data-testid="repo-setup-status"
+        className="flex items-center gap-2 text-base font-semibold text-(--el-text)"
+      >
+        <TriangleAlert className="size-5 shrink-0 text-(--el-danger)" aria-hidden="true" />
+        {t('setupFailed')}
+      </p>
+      <p role="alert" className="text-sm text-(--el-text-helper)">
+        {t(refusal === 'ai_plan_required' ? 'planRequiredDetail' : 'planUnknownDetail')}
+      </p>
+    </>
+  );
+}
+
 function OwnershipPromise({ mixed }: { mixed: boolean }) {
   const t = useTranslations('repositorySet');
   return (
@@ -658,8 +725,15 @@ function StepShell({ children }: { children: ReactNode }) {
  * the run has stopped, which is what keeps the one status line honest while
  * siblings are still being created.
  */
-function defaultStateOf(rows: readonly ProjectRepoDto[], running: boolean): DefaultState {
+function defaultStateOf(
+  rows: readonly ProjectRepoDto[],
+  running: boolean,
+  refusal: PlanRefusal | null,
+): DefaultState {
   if (running) return 'working';
+  // The plan gate refused before any row moved, so the set alone would read
+  // `idle` — the silent reset this state exists to replace (MOTIR-8985).
+  if (refusal) return 'refused';
   if (rows.length === 0) return 'idle';
   if (rows.every(isSettledRow)) return 'ready';
   if (rows.some((r) => r.state === 'failed')) return 'failed';

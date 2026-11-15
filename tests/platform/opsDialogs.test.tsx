@@ -29,7 +29,7 @@ vi.mock('@/app/(admin)/admin/tenants/[orgId]/lifecycleActions', () => ({
 
 const { ReasonConfirmDialog } =
   await import('@/app/(admin)/admin/tenants/[orgId]/_components/ops/ReasonConfirmDialog');
-const { GrantCreditsDialog } =
+const { GrantCreditsDialog, ChangePlanDialog } =
   await import('@/app/(admin)/admin/tenants/[orgId]/_components/ops/CreditDialogs');
 const { OrgLifecycleControl } =
   await import('@/app/(admin)/admin/tenants/[orgId]/_components/ops/OrgLifecycleControl');
@@ -183,6 +183,47 @@ describe('GrantCreditsDialog', () => {
     });
     expect(onClose).not.toHaveBeenCalled();
     expect(await screen.findByText(/Couldn’t reach the credit service/)).toBeTruthy();
+  });
+});
+
+describe('ChangePlanDialog — a tier is not a paid plan (MOTIR-8985)', () => {
+  const NOT_PAID =
+    'Changing the tier does not give Acme a paid AI plan. Motir-hosted repositories, Motir’s CI runners and agents stay refused until Acme pays for a plan through Stripe. For a comped or test organization, use Classify as internal billing instead.';
+
+  function renderPlan(over: { countsAsPaid: boolean; paysThroughStripe?: boolean }) {
+    return wrap(
+      <ChangePlanDialog
+        orgId="org-1"
+        orgName="Acme"
+        currentTier={null}
+        paysThroughStripe={over.paysThroughStripe ?? false}
+        countsAsPaid={over.countsAsPaid}
+        onClose={() => {}}
+        onDone={() => {}}
+      />,
+    );
+  }
+
+  it('says the org will still not count as paid, before anything is confirmed', () => {
+    renderPlan({ countsAsPaid: false });
+
+    expect(screen.getByTestId('ops-plan-not-paid').textContent).toBe(NOT_PAID);
+    // It is said BEFORE the admin confirms: the dialog is still waiting on a
+    // tier and a reason, and nothing has been sent.
+    expect(confirmButton().disabled).toBe(true);
+  });
+
+  it('says nothing of the kind for an org the gate already counts as paid', () => {
+    renderPlan({ countsAsPaid: true });
+
+    expect(screen.queryByTestId('ops-plan-not-paid')).toBeNull();
+  });
+
+  it('keeps the Stripe caution beside it — the two say different things', () => {
+    renderPlan({ countsAsPaid: false, paysThroughStripe: true });
+
+    expect(screen.getByText(/pays for its plan through Stripe/)).toBeTruthy();
+    expect(screen.getByTestId('ops-plan-not-paid')).toBeTruthy();
   });
 });
 

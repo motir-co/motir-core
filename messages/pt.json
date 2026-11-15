@@ -10192,6 +10192,9 @@
     "goToBacklog": "Ir para meu Backlog",
     "setupFailed": "O Motir não conseguiu concluir a configuração do seu código",
     "setupFailedDetail": "Seu plano está seguro no seu Backlog. Nada foi perdido — o Motir vai avisar se uma tarefa precisar de um código que ainda não está pronto.",
+    "planRequiredDetail": "O Motir pode hospedar o seu código assim que a sua organização tiver um plano de IA pago. O seu plano está seguro no seu backlog.",
+    "planRequiredDoor": "Escolher um plano de IA",
+    "planUnknownDetail": "O Motir não conseguiu verificar o plano de IA da sua organização agora, por isso nada foi configurado. O seu plano está seguro no seu backlog — tente novamente daqui a pouco.",
     "tryAgain": "Tentar novamente",
     "outcomeReady": "Seu código está pronto",
     "finishSetupLink": "Concluir a configuração dos repositórios",
@@ -12872,6 +12875,7 @@
         "allotmentOnce": "{name} · {credits} créditos uma única vez",
         "allotmentCustom": "{name} · cota personalizada",
         "stripe": "{org} paga pelo plano pelo Stripe. Isto altera o nível que o Motir lê; não altera nem cancela a assinatura do Stripe, e o próximo evento da assinatura define o nível a partir do Stripe novamente.",
+        "notPaid": "Alterar o nível não dá a {org} um plano de IA pago. Os repositórios hospedados pelo Motir, os runners de CI do Motir e os agentes continuam recusados até que {org} pague um plano pelo Stripe. Para uma organização cortesia ou de teste, use «Classificar como cobrança interna».",
         "confirm": "Alterar o plano para {tier}"
       },
       "ledger": {

@@ -10192,6 +10192,9 @@
     "goToBacklog": "Naar mijn Backlog",
     "setupFailed": "Motir kon het inrichten van je code niet afronden",
     "setupFailedDetail": "Je plan staat veilig in je Backlog. Er is niets verloren — Motir laat het je weten als een taak code nodig heeft die nog niet klaar is.",
+    "planRequiredDetail": "Motir kan je code hosten zodra je organisatie een betaald AI-abonnement heeft. Je plan staat veilig in je backlog.",
+    "planRequiredDoor": "Een AI-abonnement kiezen",
+    "planUnknownDetail": "Motir kon het AI-abonnement van je organisatie nu niet controleren, dus er is niets ingericht. Je plan staat veilig in je backlog — probeer het zo opnieuw.",
     "tryAgain": "Opnieuw proberen",
     "outcomeReady": "Je code is klaar",
     "finishSetupLink": "Het inrichten van repository's afronden",
@@ -12872,6 +12875,7 @@
         "allotmentOnce": "{name} · eenmalig {credits} credits",
         "allotmentCustom": "{name} · tegoed op maat",
         "stripe": "{org} betaalt het abonnement via Stripe. Dit wijzigt het niveau dat Motir leest; het wijzigt of annuleert het Stripe-abonnement niet, en de volgende gebeurtenis van dat abonnement zet het niveau weer volgens Stripe.",
+        "notPaid": "Het niveau wijzigen geeft {org} geen betaald AI-abonnement. Door Motir gehoste repository's, de CI-runners van Motir en agents blijven geweigerd totdat {org} een abonnement via Stripe betaalt. Gebruik voor een gratis verstrekte of test-organisatie in plaats daarvan 'Indelen als interne facturering'.",
         "confirm": "Abonnement wijzigen naar {tier}"
       },
       "ledger": {

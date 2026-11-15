@@ -22,6 +22,9 @@ import { ReasonConfirmDialog } from './ReasonConfirmDialog';
  * Panel 2 (a) grant with the balance-after preview, (b) a large grant's typed
  * slug, (c) adjust with a signed amount that may not go below zero, (d) change
  * plan with the Stripe warning, (e) the reason gate, (f) the outcome toasts.
+ * The plan dialog also says, before the admin confirms, when the org does not
+ * count as a paid AI plan (bug MOTIR-8985): the tier it sets is never the
+ * classification the fleet's paid-plan gate reads (`aiPlanGateService`).
  *
  * ⚠️ ONE `requestId` PER OPENING. It is minted when the dialog mounts and sent
  * again on a retry, so a retry after an unreachable answer can never grant
@@ -212,9 +215,18 @@ export function ChangePlanDialog({
   orgName,
   currentTier,
   paysThroughStripe,
+  countsAsPaid,
   onClose,
   onDone,
-}: DialogBase & { currentTier: PlatformCreditTierDTO | null; paysThroughStripe: boolean }) {
+}: DialogBase & {
+  currentTier: PlatformCreditTierDTO | null;
+  paysThroughStripe: boolean;
+  /** The paid-AI-plan gate answered a definite yes for this org (a paying
+   *  subscription, or Motir's own / internal billing). Anything else — no, or a
+   *  read that did not answer — and the dialog warns that the tier alone will not
+   *  make it paid. */
+  countsAsPaid: boolean;
+}) {
   const t = useTranslations('platformAdmin.ops');
   const format = useFormatter();
   const { toast } = useToast();
@@ -280,6 +292,11 @@ export function ChangePlanDialog({
         onChange={setTierKey}
       />
       {paysThroughStripe ? <Caution>{t('plan.stripe', { org: orgName })}</Caution> : null}
+      {countsAsPaid ? null : (
+        <Caution>
+          <span data-testid="ops-plan-not-paid">{t('plan.notPaid', { org: orgName })}</span>
+        </Caution>
+      )}
     </ReasonConfirmDialog>
   );
 }
