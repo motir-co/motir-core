@@ -8887,6 +8887,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, other {{repos} のコードグラフは前回のターン以降に更新されました。それまでの回答は以前のグラフに基づいています。}}"
+        },
+        "author": {
+          "typed": "{ref} にはタイプがなかったため、書く前にタイプ「{type}」を設定しました。",
+          "madeStory": "{ref} にはタイプがなく、その作業に合う単一のタイプもないため、ストーリーに変更してストーリーとして書いています。"
+        },
+        "edge": {
+          "explained": "{ref} は {blocker} を待っています — {reason}"
         }
       },
       "openerFollowUp": "{label} を選択しました。Motir AI がそれによって決まる作業を計画しています。",

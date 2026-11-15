@@ -8881,6 +8881,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, other {{repos} 的代码图自上一轮以来已刷新。之前的回答基于之前的代码图。}}"
+        },
+        "author": {
+          "typed": "{ref} 没有类型，所以在编写之前我给它设置了类型“{type}”。",
+          "madeStory": "{ref} 没有类型，也没有单一类型适合它的工作，所以我把它改为故事并按故事来编写。"
+        },
+        "edge": {
+          "explained": "{ref} 等待 {blocker} — {reason}"
         }
       },
       "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。",

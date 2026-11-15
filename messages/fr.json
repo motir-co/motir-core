@@ -8890,6 +8890,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Votre graphe de code pour {repos} a été actualisé depuis le dernier tour. Les réponses précédentes utilisaient l’ancien graphe.} other {Les graphes de code pour {repos} ont été actualisés depuis le dernier tour. Les réponses précédentes utilisaient les anciens graphes.}}"
+        },
+        "author": {
+          "typed": "{ref} n’avait pas de type, je lui ai donc donné le type « {type} » avant de le rédiger.",
+          "madeStory": "{ref} n’avait pas de type et aucun type unique ne correspond à son travail, j’en fais donc une story et je la rédige comme telle."
+        },
+        "edge": {
+          "explained": "{ref} attend {blocker} — {reason}"
         }
       },
       "openerFollowUp": "Vous venez de choisir {label}. Motir AI planifie ce que ce choix conditionne.",

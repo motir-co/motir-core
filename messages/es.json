@@ -8890,6 +8890,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Tu grafo de código de {repos} se actualizó desde el último turno. Las respuestas anteriores usaron el grafo anterior.} other {Los grafos de código de {repos} se actualizaron desde el último turno. Las respuestas anteriores usaron los grafos anteriores.}}"
+        },
+        "author": {
+          "typed": "{ref} no tenía tipo, así que le asigné el tipo “{type}” antes de escribirlo.",
+          "madeStory": "{ref} no tenía tipo y ningún tipo por sí solo encaja con su trabajo, así que lo convierto en una historia y lo escribo como tal."
+        },
+        "edge": {
+          "explained": "{ref} espera a {blocker} — {reason}"
         }
       },
       "openerFollowUp": "Acabas de elegir {label}. Motir AI está planificando lo que condiciona.",

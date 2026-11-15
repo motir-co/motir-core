@@ -8887,6 +8887,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Your code graph for {repos} was refreshed since the last turn. Earlier answers used the previous graph.} other {Code graphs for {repos} were refreshed since the last turn. Earlier answers used the previous graphs.}}"
+        },
+        "author": {
+          "typed": "{ref} had no type, so I gave it the type “{type}” before writing it.",
+          "madeStory": "{ref} had no type and no single type fits its work, so I am making it a story and writing it as one."
+        },
+        "edge": {
+          "explained": "{ref} waits on {blocker} — {reason}"
         }
       },
       "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates.",

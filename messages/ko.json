@@ -8884,6 +8884,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, other {{repos}의 코드 그래프가 지난 턴 이후 새로 고쳐졌습니다. 이전 답변은 이전 그래프를 기준으로 했습니다.}}"
+        },
+        "author": {
+          "typed": "{ref}에 유형이 없어서 작성하기 전에 “{type}” 유형을 지정했습니다.",
+          "madeStory": "{ref}에 유형이 없고 그 작업에 맞는 단일 유형도 없어서 스토리로 바꾸고 스토리로 작성하고 있습니다."
+        },
+        "edge": {
+          "explained": "{ref}은(는) {blocker}을(를) 기다립니다 — {reason}"
         }
       },
       "openerFollowUp": "방금 {label}을(를) 선택했습니다. Motir AI가 이 선택에 달린 작업을 계획하고 있습니다.",

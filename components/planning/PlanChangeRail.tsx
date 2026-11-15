@@ -44,7 +44,7 @@ import {
   type OfferHold,
 } from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
-import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
+import { PlanActRecord, runningBarLine, useTypeLabel } from '@/components/planning/PlanActRecord';
 import {
   ConversationNotes,
   notesOfJob,
@@ -502,6 +502,7 @@ export function PlanChangeRail({
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
   const locale = useLocale();
+  const typeLabel = useTypeLabel();
   const tcs = useTranslations('planningWorkspace.codeUnsearchable');
   const ts = useTranslations('planningWorkspace.session');
   // The Planning tab's own copy (§ 36.13) — its reopened line, nothing else.
@@ -2168,7 +2169,7 @@ export function PlanChangeRail({
                   // An ADOPTED run has no act yet until its stream replays one
                   // (MOTIR-10428): nothing was sent from this screen, so the bar
                   // says the plan is being written rather than "Sending…".
-                  line: runningBarLine(acts, tc, locale) ?? tc('progress.watching'),
+                  line: runningBarLine(acts, tc, locale, typeLabel) ?? tc('progress.watching'),
                   stopping: state.stopping,
                   onStop,
                   ...(paused && runPause ? { paused: { kind: runPause.kind } } : {}),
