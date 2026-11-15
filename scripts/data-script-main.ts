@@ -1,7 +1,8 @@
 /**
  * The data-script ENTRY (MOTIR-10465) — what `pnpm db:backfill:boards`,
  * `pnpm db:backfill:ci-state`, `pnpm db:backfill:fix-reason`,
- * `pnpm db:backfill:author-finished` and `pnpm db:converge:unlanded-cards` run
+ * `pnpm db:backfill:author-finished`, `pnpm db:converge:unlanded-cards` and
+ * `pnpm db:backfill:run-discrepancy` run
  * from a checkout, and what the bundle `node /app/data/data-script.mjs <script>
  * [flags]` runs inside a task of the core image.
  * docs/runbooks/production-data-scripts.md is how to run one against production.
@@ -67,6 +68,7 @@ export const DATA_SCRIPTS = {
   'backfill-fix-reason': () => import('./backfill-fix-reason'),
   'backfill-author-finished': () => import('./backfill-plan-author-finished'),
   'converge-unlanded-cards': () => import('./converge-ejected-cards'),
+  'backfill-run-discrepancy': () => import('./backfill-run-discrepancy-records'),
 } satisfies Record<string, () => Promise<DataScript>>;
 
 export type DataScriptName = keyof typeof DATA_SCRIPTS;

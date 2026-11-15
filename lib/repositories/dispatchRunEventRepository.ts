@@ -12,6 +12,15 @@ import type { DispatchRunEvent, Prisma } from '@/generated/prisma/client';
 // occasionally disagrees with itself would show a reader an agent exiting before
 // it started, intermittently, on a fast machine.
 
+/** One `discrepancy_recorded` finding as the MOTIR-11361 backfill reads it. */
+export type DiscrepancyFindingForBackfill = Pick<
+  DispatchRunEvent,
+  'id' | 'dispatchRunId' | 'dispatchRunCardId' | 'data' | 'createdAt'
+> & {
+  card: { workItemId: string | null } | null;
+  dispatchRun: { projectId: string };
+};
+
 export const dispatchRunEventRepository = {
   /**
    * Append a batch. `tx` required — a write.
@@ -123,19 +132,27 @@ export const dispatchRunEventRepository = {
   },
 
   /**
-   * Every `discrepancy_recorded` finding on a run, oldest first (MOTIR-10240) —
-   * the leg it belongs to and its `data` POINTER (`{ commentId, pointCount,
-   * decisionCount?, dispatchRunCardId }`). The text lives in the comment the
-   * pointer names; `runRecordReadService` reads it from there.
+   * Every `discrepancy_recorded` finding the BOUND workspace holds, oldest first, with its
+   * leg's card and its run's project — the MOTIR-11361 backfill's population. The `data`
+   * is the finding's POINTER (`{ commentId, pointCount, decisionCount?, dispatchRunCardId }`);
+   * since MOTIR-11361 the record itself is `run_discrepancy_record`, which the reads use.
    */
-  async listDiscrepancyFindings(
-    dispatchRunId: string,
+  async listDiscrepancyFindingsForBackfill(
+    workspaceId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<Pick<DispatchRunEvent, 'dispatchRunCardId' | 'data'>[]> {
+  ): Promise<DiscrepancyFindingForBackfill[]> {
     return tx.dispatchRunEvent.findMany({
-      where: { dispatchRunId, kind: 'discrepancy_recorded' },
-      orderBy: { seq: 'asc' },
-      select: { dispatchRunCardId: true, data: true },
+      where: { workspaceId, kind: 'discrepancy_recorded' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        dispatchRunId: true,
+        dispatchRunCardId: true,
+        data: true,
+        createdAt: true,
+        card: { select: { workItemId: true } },
+        dispatchRun: { select: { projectId: true } },
+      },
     });
   },
 

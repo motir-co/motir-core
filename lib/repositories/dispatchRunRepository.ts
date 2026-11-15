@@ -132,6 +132,35 @@ export interface DispatchRunPage {
    * shortened after the read. Omit for a member.
    */
   withheldWorkItemIds?: readonly string[] | undefined;
+  /**
+   * Only runs whose legs hold a discrepancy record (MOTIR-11361) — with at least one
+   * point, at least one decision, or either. Applied by the QUERY, like the rest.
+   */
+  discrepancy?: RunDiscrepancyFilter | undefined;
+}
+
+/** Which discrepancy records a run search narrows to (MOTIR-11361). */
+export type RunDiscrepancyFilter = 'any' | 'points' | 'decisions';
+
+/** The values {@link RunDiscrepancyFilter} takes, for the doors that parse it. */
+export const RUN_DISCREPANCY_FILTERS: readonly RunDiscrepancyFilter[] = [
+  'any',
+  'points',
+  'decisions',
+];
+
+/** The {@link DispatchRunPage.discrepancy} clause, or `{}`. */
+function recordedDiscrepancy(
+  filter: RunDiscrepancyFilter | undefined,
+): Prisma.DispatchRunWhereInput {
+  if (!filter) return {};
+  const some: Prisma.RunDiscrepancyRecordWhereInput =
+    filter === 'points'
+      ? { pointCount: { gt: 0 } }
+      : filter === 'decisions'
+        ? { decisionCount: { gt: 0 } }
+        : {};
+  return { discrepancyRecords: { some } };
 }
 
 /** A row the active-run read matched — its `agentInstanceId` is non-null by the filter. */
@@ -871,11 +900,13 @@ export const dispatchRunRepository = {
       cursor,
       statuses,
       createdById,
+      discrepancy,
     }: {
       take: number;
       cursor?: string | undefined;
       statuses?: DispatchRunStatus[] | undefined;
       createdById?: string | undefined;
+      discrepancy?: RunDiscrepancyFilter | undefined;
     },
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunWithCards[]> {
@@ -884,6 +915,7 @@ export const dispatchRunRepository = {
         cards: { some: { workItemId } },
         ...(statuses && statuses.length > 0 ? { status: { in: statuses } } : {}),
         ...startedBy(createdById),
+        ...recordedDiscrepancy(discrepancy),
       },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
@@ -901,7 +933,7 @@ export const dispatchRunRepository = {
    */
   async listByScope(
     scopeWorkItemId: string,
-    { take, cursor, statuses, createdById, withheldWorkItemIds }: DispatchRunPage,
+    { take, cursor, statuses, createdById, withheldWorkItemIds, discrepancy }: DispatchRunPage,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunListRow[]> {
     return tx.dispatchRun.findMany({
@@ -910,6 +942,7 @@ export const dispatchRunRepository = {
         ...(statuses ? { status: { in: statuses } } : {}),
         ...startedBy(createdById),
         ...notTouching(withheldWorkItemIds),
+        ...recordedDiscrepancy(discrepancy),
       },
       include: WITH_CARDS_AND_SCOPE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
@@ -928,7 +961,7 @@ export const dispatchRunRepository = {
    */
   async listByProject(
     projectId: string,
-    { take, cursor, statuses, createdById, withheldWorkItemIds }: DispatchRunPage,
+    { take, cursor, statuses, createdById, withheldWorkItemIds, discrepancy }: DispatchRunPage,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunListRow[]> {
     return tx.dispatchRun.findMany({
@@ -937,6 +970,7 @@ export const dispatchRunRepository = {
         ...(statuses ? { status: { in: statuses } } : {}),
         ...startedBy(createdById),
         ...notTouching(withheldWorkItemIds),
+        ...recordedDiscrepancy(discrepancy),
       },
       include: WITH_CARDS_AND_SCOPE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],

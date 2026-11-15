@@ -4,10 +4,15 @@ import {
   type RunRecordSearchFilters,
 } from '@/lib/services/runRecordReadService';
 import { DISPATCH_RUN_LIST_MAX_TAKE } from '@/lib/services/dispatchRunService';
+import {
+  RUN_DISCREPANCY_FILTERS,
+  type RunDiscrepancyFilter,
+} from '@/lib/repositories/dispatchRunRepository';
 
 // The run-record SEARCH's input rules (MOTIR-10240), in one place so the internal
 // route and the MCP tool refuse the same requests with the same words: a string
-// or absent for each key, a known status list, a page size the run list allows,
+// or absent for each key, a known status list, a discrepancy filter (`any` ·
+// `points` · `decisions`, MOTIR-11361), a page size the run list allows,
 // and ONE of `workItemKey` / `scopeWorkItemKey` — they are two different
 // questions (a leg for that card, or the scope of a container run).
 
@@ -52,6 +57,21 @@ export function parseRunRecordQuery(input: Record<string, unknown>): RunRecordQu
     statuses = raw as DispatchRunStatus[];
   }
 
+  let discrepancy: RunDiscrepancyFilter | undefined;
+  const rawDiscrepancy = input['discrepancy'];
+  if (rawDiscrepancy !== undefined && rawDiscrepancy !== null) {
+    if (
+      typeof rawDiscrepancy !== 'string' ||
+      !(RUN_DISCREPANCY_FILTERS as readonly string[]).includes(rawDiscrepancy)
+    ) {
+      return {
+        ok: false,
+        error: `\`discrepancy\` must be one of: ${RUN_DISCREPANCY_FILTERS.join(', ')}.`,
+      };
+    }
+    discrepancy = rawDiscrepancy as RunDiscrepancyFilter;
+  }
+
   let limit: number | undefined;
   const rawLimit = input['limit'];
   if (rawLimit !== undefined && rawLimit !== null) {
@@ -75,6 +95,7 @@ export function parseRunRecordQuery(input: Record<string, unknown>): RunRecordQu
       ...(workItemKey ? { workItemKey } : {}),
       ...(scopeWorkItemKey ? { scopeWorkItemKey } : {}),
       ...(statuses ? { statuses } : {}),
+      ...(discrepancy ? { discrepancy } : {}),
       ...(cursor ? { cursor } : {}),
       ...(limit !== undefined ? { limit } : {}),
     },

@@ -410,9 +410,9 @@ export const pl: McpSummaryTranslations = {
   },
   search_run_records: {
     summary:
-      'Uruchomienia projektu, od najnowszego – zawężone kartą, zakresem lub statusem, etapy jako liczby, brak dopasowań to nazwany wynik.',
+      'Uruchomienia projektu, od najnowszego – zawężone kartą, zakresem, statusem lub zapisaną rozbieżnością, etapy jako liczby, brak dopasowań to nazwany wynik.',
     source:
-      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+      'The runs of a project, newest first — narrowed by a card, a scope, a status or a recorded discrepancy, legs as counts, no match a named outcome.',
   },
   get_run_record: {
     summary:

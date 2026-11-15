@@ -413,9 +413,9 @@ export const fr: McpSummaryTranslations = {
   },
   search_run_records: {
     summary:
-      'Les exécutions d’un projet, la plus récente d’abord – filtrées par carte, périmètre ou statut, étapes en décomptes, aucune correspondance un résultat nommé.',
+      'Les exécutions d’un projet, la plus récente d’abord – filtrées par carte, périmètre, statut ou écart consigné, étapes en décomptes, aucune correspondance un résultat nommé.',
     source:
-      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+      'The runs of a project, newest first — narrowed by a card, a scope, a status or a recorded discrepancy, legs as counts, no match a named outcome.',
   },
   get_run_record: {
     summary:

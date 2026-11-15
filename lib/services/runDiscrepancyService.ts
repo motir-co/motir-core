@@ -12,11 +12,13 @@ import {
   type RunDecisionPoint,
   type RunDiscrepancyPoint,
 } from '@/lib/dispatchRuns/discrepancyComment';
+import { toEntryInputs } from '@/lib/dispatchRuns/discrepancyRecord';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { runDiscrepancyRecordRepository } from '@/lib/repositories/runDiscrepancyRecordRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { assertRunTokenScope, DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -61,6 +63,16 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // counts every entry (so the run's strip never reads _0 points_ on a decisions-only record)
 // while `decisionCount` says how many of them were decisions. Points-only calls are unchanged
 // byte for byte, so a build-through, and the planning-bug path that reads it, behave as they did.
+//
+// ⚠️ THE RECORD IS DATA, AND THE COMMENT IS ITS VIEW (MOTIR-11361). Every accepted call also
+// writes ONE `run_discrepancy_record` with its points and decisions as entry rows, field by
+// field as validated here, in the SAME transaction as the comment — the no-open-leg arm
+// included (no run, no leg; still tied to the card and project). Editing or deleting the
+// comment changes nothing in it: the record's `comment_id` is `SET NULL` on a delete, and
+// nothing reads the comment back. The record's `dispatch_run_card_id` is UNIQUE, so the
+// one-record-per-leg rule holds in the database as well as under the run lock; the dedupe
+// reads it beside the finding, because a leg on a run that has hit its event cap gets a
+// record and no finding.
 //
 // Permission: `work_item:edit` on the card's project — the key `CLI_TOKEN_GRANT` already holds.
 //
@@ -222,6 +234,9 @@ export const runDiscrepancyService = {
           tx,
         );
         if (already) throw new DiscrepancyAlreadyRecordedError(key);
+        if (await runDiscrepancyRecordRepository.findByLeg(leg.id, tx)) {
+          throw new DiscrepancyAlreadyRecordedError(key);
+        }
         run = await dispatchRunRepository.findById(leg.dispatchRunId, tx);
       }
 
@@ -232,6 +247,23 @@ export const runDiscrepancyService = {
           authorId: ctx.userId,
           parentCommentId: null,
           bodyMd: composeDiscrepancyComment(points, decisions),
+        },
+        tx,
+      );
+
+      await runDiscrepancyRecordRepository.create(
+        {
+          workspaceId: ctx.workspaceId,
+          projectId: project.id,
+          workItemId: item.id,
+          dispatchRunId: leg?.dispatchRunId ?? null,
+          dispatchRunCardId: leg?.id ?? null,
+          commentId: comment.id,
+          recordedById: ctx.userId,
+          source: 'recorded',
+          pointCount: points.length,
+          decisionCount: decisions.length,
+          entries: toEntryInputs(points, decisions),
         },
         tx,
       );

@@ -120,6 +120,7 @@ export type PersonalDataDelegate =
   | 'acceptanceEvidence'
   | 'designEvidence'
   | 'testInstructions'
+  | 'runDiscrepancyRecord'
   | 'import'
   | 'plan'
   | 'planChangeSession'
@@ -671,6 +672,19 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     // is exported rather than excluded (MOTIR-5328).
     basis: 'How-to-test instructions the reader published.',
     where: (userId) => ({ publishedById: userId }),
+  },
+  {
+    // Task MOTIR-11361 — the structured copy of a `record_run_discrepancy` call.
+    // `recorded_by_id` attributes it to the person whose token the run held, the
+    // same SetNull-preserved attribution as `test_instructions.publishedById`, so it
+    // is exported rather than excluded. Its ENTRIES are not a separate section:
+    // they carry no User foreign key and belong to the record (as a run's legs
+    // belong to the run); the same text is also in the exported `comment`.
+    table: 'run_discrepancy_record',
+    model: 'runDiscrepancyRecord',
+    tier: 'tenant',
+    basis: 'Run discrepancy records made with the reader’s token.',
+    where: (userId) => ({ recordedById: userId }),
   },
   {
     table: 'import',

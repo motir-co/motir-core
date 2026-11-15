@@ -380,9 +380,9 @@ export const zh: McpSummaryTranslations = {
   },
   search_run_records: {
     summary:
-      '项目的运行记录，最新优先——可按卡片、范围或状态筛选，各环节以计数呈现，无匹配为具名结果。',
+      '项目的运行记录，最新优先——可按卡片、范围、状态或已记录的偏差筛选，各环节以计数呈现，无匹配为具名结果。',
     source:
-      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+      'The runs of a project, newest first — narrowed by a card, a scope, a status or a recorded discrepancy, legs as counts, no match a named outcome.',
   },
   get_run_record: {
     summary: '项目的一次运行——如何结束，以及每个环节原样记录的差异；未知运行为具名结果。',

@@ -6406,7 +6406,7 @@ as a plain not-found.
 #### `search_run_records` and `get_run_record`
 
 **What a run of the project did** (MOTIR-10240): which runs match a card, a
-scope or a status, and for one run how it ended and what it recorded as
+scope, a status or a recorded discrepancy, and for one run how it ended and what it recorded as
 different. Both read through `runRecordReadService`, the service the hosted
 planner reads through `app/api/internal/ai/search-run-records` and
 `app/api/internal/ai/get-run-record`. They answer their own NARROW shapes, not
@@ -6420,21 +6420,32 @@ the v1 `DispatchRun` resource: no event stream, cost, deliveries or machine time
 | `workItemKey`      | string   | no       | Runs that carried a LEG for this card.                                    |
 | `scopeWorkItemKey` | string   | no       | Runs whose SCOPE is this container. Give this or `workItemKey`, not both. |
 | `statuses`         | string[] | no       | `running`, `succeeded`, `failed`, `cancelled`, `timed_out`.               |
+| `discrepancy`      | string   | no       | `any`, `points` or `decisions`: only runs with at least one such record.  |
 | `cursor`           | string   | no       | The `nextCursor` a previous call returned.                                |
 | `limit`            | integer  | no       | 1 to 100 (the run list's own maximum); default 25.                        |
 
 Each row is `{ id, command, origin, status, stopReason, startedAt, endedAt,
-cardCount, legs }`, `legs` being COUNTS by disposition. `outcome` is `found`, or
+cardCount, legs, discrepancies }`, `legs` being COUNTS by disposition and
+`discrepancies` the run's `{ records, points, decisions }` (MOTIR-11361). `outcome` is `found`, or
 `nothing_matched` with an empty `runs` — a card or scope of another project, or
-one the caller cannot see, matches nothing. Both and a bad status or limit are
-refused `RUN_RECORD_QUERY_INVALID`.
+one the caller cannot see, matches nothing. Both, and a bad status, limit or
+`discrepancy` value, are refused `RUN_RECORD_QUERY_INVALID`.
 
 **`get_run_record` input:** `projectKey` and `runId`. `outcome: found` carries
 `run`: `status`, `stopReason`, `startedAt`, `endedAt`, `hostedEnd` (`outcome`,
 `detail`, `exitCode`, for a hosted or in-agent run; else null) and `legs`, each
 `{ key, disposition, skipReason, exitCode, discrepancy }`. `discrepancy` is the
-leg's `record_run_discrepancy` record — `{ commentId, pointCount, decisionCount,
-bodyMd, bodyTruncated }`, the comment body verbatim and bounded — or null.
+leg's `record_run_discrepancy` record, read from its STRUCTURED row
+(`run_discrepancy_record`, MOTIR-11361), never from the card comment — `{ recordId,
+source, commentId, pointCount, decisionCount, points, decisions, bodyMd,
+bodyTruncated }` — or null. `points` are `{ planAsked, built, why }` and
+`decisions` `{ planSaid, chose, why, alternatives? }`, field by field as the run
+sent them; `pointCount` counts both kinds. `source` is `recorded`, `backfilled`
+(read back from a comment written before the row existed) or
+`backfill_unreadable` (only the counts survived: no entries, `bodyMd` null).
+`commentId` is the card comment that shows the record, null once that comment is
+deleted, which leaves the record itself untouched. `bodyMd` is the comment's
+markdown composed from the row, bounded.
 `outcome: not_found` is one answer for an unknown id, a run of another project or
 workspace, and a run the caller may not see.
 

@@ -26,6 +26,8 @@ import { truncateAuthTables } from '../helpers/db';
 // driven through `buildMcpServer` + an in-memory client: registered and
 // declared, the project key resolved inside the token's workspace, every
 // absence a NON-error outcome, and the agent-written text quoted verbatim.
+// Since MOTIR-11361 the discrepancy is read from the STRUCTURED record, so it
+// survives its comment being edited or deleted, and the search filters on it.
 
 let fx: WorkItemFixture;
 
@@ -202,6 +204,49 @@ describe('search_run_records', () => {
     expect(textOf(both)).toContain('RUN_RECORD_QUERY_INVALID');
   });
 
+  it('filters to runs holding a discrepancy record, and the row line counts it', async () => {
+    const a = await card('A');
+    const b = await card('B');
+    const plain = await openRun([b]);
+    const withPoint = await openRun([a]);
+    await runDiscrepancyService.recordDiscrepancy(
+      { key: a, points: [{ planAsked: 'p', built: 'b', why: 'w' }] },
+      fx.ctx,
+    );
+    const ids = async (discrepancy?: string) => {
+      const res = await call(fx.ctx, SEARCH_RUN_RECORDS_TOOL_NAME, {
+        projectKey: fx.projectIdentifier,
+        ...(discrepancy ? { discrepancy } : {}),
+      });
+      const out = structured(res);
+      return out['outcome'] === 'found' ? (out['runs'] as { id: string }[]).map((r) => r.id) : [];
+    };
+    expect(await ids()).toEqual([withPoint, plain]);
+    expect(await ids('any')).toEqual([withPoint]);
+    expect(await ids('points')).toEqual([withPoint]);
+    expect(await ids('decisions')).toEqual([]);
+
+    const res = await call(fx.ctx, SEARCH_RUN_RECORDS_TOOL_NAME, {
+      projectKey: fx.projectIdentifier,
+    });
+    const rows = structured(res)['runs'] as { id: string; discrepancies: unknown }[];
+    expect(rows[0]).toMatchObject({
+      id: withPoint,
+      discrepancies: { records: 1, points: 1, decisions: 0 },
+    });
+    expect(rows[1]).toMatchObject({
+      id: plain,
+      discrepancies: { records: 0, points: 0, decisions: 0 },
+    });
+    expect(textOf(res)).toContain('1 discrepancy record (1 point, 0 decisions)');
+
+    const bad = await call(fx.ctx, SEARCH_RUN_RECORDS_TOOL_NAME, {
+      projectKey: fx.projectIdentifier,
+      discrepancy: 'some',
+    });
+    expect(bad.isError).toBe(true);
+  });
+
   it('a key from another workspace is the same PROJECT_NOT_FOUND as search_pages', async () => {
     const rival = await makeWorkItemFixture({ name: 'Rival', identifier: 'RIVL' });
     for (const [name, extra] of [
@@ -221,14 +266,17 @@ describe('search_run_records', () => {
 });
 
 describe('get_run_record', () => {
-  it('reads how a run ended and the discrepancy body, quoted verbatim', async () => {
+  it('reads how a run ended and the structured record, which outlives its comment', async () => {
     const a = await card('A');
     const b = await card('B');
     const runId = await openRun([a, b]);
-    await runDiscrepancyService.recordDiscrepancy(
+    const { commentId } = await runDiscrepancyService.recordDiscrepancy(
       {
         key: a,
         points: [{ planAsked: 'SENT-ASKED', built: 'SENT-BUILT', why: 'SENT-WHY' }],
+        decisions: [
+          { planSaid: 'nothing', chose: 'SENT-CHOSE', why: 'SENT-DWHY', alternatives: 'SENT-ALT' },
+        ],
       },
       fx.ctx,
     );
@@ -239,15 +287,43 @@ describe('get_run_record', () => {
     const out = structured(res);
     expect(out['outcome']).toBe('found');
     const run = out['run'] as { legs: { key: string; discrepancy: unknown }[] };
-    expect(run.legs[0]).toMatchObject({ key: a, discrepancy: { pointCount: 1, decisionCount: 0 } });
+    expect(run.legs[0]).toMatchObject({
+      key: a,
+      discrepancy: {
+        source: 'recorded',
+        commentId,
+        pointCount: 2,
+        decisionCount: 1,
+        points: [{ planAsked: 'SENT-ASKED', built: 'SENT-BUILT', why: 'SENT-WHY' }],
+        decisions: [
+          { planSaid: 'nothing', chose: 'SENT-CHOSE', why: 'SENT-DWHY', alternatives: 'SENT-ALT' },
+        ],
+      },
+    });
     expect(run.legs[1]).toMatchObject({ key: b, discrepancy: null });
     const text = textOf(res);
     expect(text).toContain(`Run ${runId} in ${fx.projectIdentifier}: run (local), running`);
     expect(text).toContain('not ended');
-    expect(text).toContain('recorded 1 difference (0 decisions)');
-    expect(text).toContain('Record (recorded by the run, verbatim):');
-    expect(text).toContain('SENT-BUILT');
+    expect(text).toContain('recorded 2 differences (1 decision)');
+    expect(text).toContain(`Comment: ${commentId}.`);
+    expect(text).toContain('Point 1 (recorded by the run, verbatim):');
+    expect(text).toContain('Built: SENT-BUILT');
+    expect(text).toContain('Decision 1 (recorded by the run, verbatim):');
+    expect(text).toContain('Alternatives considered: SENT-ALT');
     expect(text).toContain(`${b} · running · exit none · no discrepancy record`);
+
+    // Edit, then delete, the comment: the record is unchanged and still read.
+    await adminDb.comment.update({ where: { id: commentId }, data: { bodyMd: 'edited away' } });
+    await adminDb.comment.delete({ where: { id: commentId } });
+    const after = structured(
+      await call(fx.ctx, GET_RUN_RECORD_TOOL_NAME, { projectKey: fx.projectIdentifier, runId }),
+    );
+    const leg = (after['run'] as { legs: { discrepancy: Record<string, unknown> }[] }).legs[0]!;
+    expect(leg.discrepancy).toMatchObject({
+      commentId: null,
+      points: [{ planAsked: 'SENT-ASKED', built: 'SENT-BUILT', why: 'SENT-WHY' }],
+    });
+    expect(leg.discrepancy['bodyMd']).toContain('**Plan asked:** SENT-ASKED');
   });
 
   it('an unknown run is a non-error not_found', async () => {
@@ -276,9 +352,13 @@ describe('get_run_record', () => {
           skipReason: 'needs_human',
           exitCode: 3,
           discrepancy: {
-            commentId: 'c',
+            recordId: 'r',
+            source: 'backfill_unreadable',
+            commentId: null,
             pointCount: 2,
             decisionCount: 1,
+            points: [],
+            decisions: [],
             bodyMd: null,
             bodyTruncated: false,
           },
@@ -289,9 +369,13 @@ describe('get_run_record', () => {
           skipReason: null,
           exitCode: 1,
           discrepancy: {
+            recordId: 's',
+            source: 'recorded',
             commentId: 'd',
             pointCount: 1,
             decisionCount: 1,
+            points: [],
+            decisions: [{ planSaid: 'nothing', chose: 'X', why: 'Y' }],
             bodyMd: 'body',
             bodyTruncated: true,
           },
@@ -304,8 +388,11 @@ describe('get_run_record', () => {
     expect(text).toContain(
       '(deleted card) · skipped (needs_human) · exit 3 · recorded 2 differences (1 decision)',
     );
-    expect(text).toContain('The record’s comment no longer exists.');
-    expect(text).toContain('Record (recorded by the run, verbatim, cut):\nbody');
+    expect(text).toContain('could not be read back from its comment');
+    expect(text).toContain('Its comment no longer exists; the record below does not depend on it.');
+    expect(text).toContain('Comment: d.');
+    expect(text).toContain('Decision 1 (recorded by the run, verbatim):\n    Plan said: nothing');
+    expect(text).not.toContain('Alternatives considered');
     const noDetail = renderRunRecord('ACME', {
       id: 'r2',
       command: 'run',

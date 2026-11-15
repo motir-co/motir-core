@@ -409,9 +409,9 @@ export const ja: McpSummaryTranslations = {
   },
   search_run_records: {
     summary:
-      'プロジェクトの実行一覧（新しい順）— カード・スコープ・ステータスで絞り込み、レッグは件数、該当なしは名前付きの結果。',
+      'プロジェクトの実行一覧（新しい順）— カード・スコープ・ステータス・記録された相違で絞り込み、レッグは件数、該当なしは名前付きの結果。',
     source:
-      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+      'The runs of a project, newest first — narrowed by a card, a scope, a status or a recorded discrepancy, legs as counts, no match a named outcome.',
   },
   get_run_record: {
     summary:

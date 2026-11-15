@@ -1,4 +1,5 @@
 import type {
+  RunDiscrepancySource,
   DispatchCardDisposition,
   DispatchCommand,
   DispatchRunOrigin,
@@ -9,8 +10,17 @@ import type {
 import { DispatchRunNotFoundError, RUN_DISCREPANCY_FIELD_MAX } from '@/lib/dispatchRuns/errors';
 import type { DispatchRunLegCountsDto } from '@/lib/dto/dispatchRuns';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
-import { commentRepository } from '@/lib/repositories/commentRepository';
-import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
+import {
+  composeDiscrepancyComment,
+  type RunDecisionPoint,
+  type RunDiscrepancyPoint,
+} from '@/lib/dispatchRuns/discrepancyComment';
+import { fromEntries } from '@/lib/dispatchRuns/discrepancyRecord';
+import type { RunDiscrepancyFilter } from '@/lib/repositories/dispatchRunRepository';
+import {
+  runDiscrepancyRecordRepository,
+  type RunDiscrepancyRecordWithEntries,
+} from '@/lib/repositories/runDiscrepancyRecordRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -75,8 +85,21 @@ export interface RunRecordSearchFilters {
   /** Runs whose SCOPE is this container. */
   scopeWorkItemKey?: string | undefined;
   statuses?: DispatchRunStatus[] | undefined;
+  /**
+   * Only runs with at least one discrepancy record (MOTIR-11361): one holding a point
+   * (`points`), a decision (`decisions`), or either (`any`).
+   */
+  discrepancy?: RunDiscrepancyFilter | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
+}
+
+/** What a run's legs recorded as different, as counts — a search row's (MOTIR-11361). */
+export interface RunRecordRowDiscrepancies {
+  /** Legs holding a record. */
+  records: number;
+  points: number;
+  decisions: number;
 }
 
 /** One run as a search row: the header and its set as COUNTS, never as legs. */
@@ -90,6 +113,7 @@ export interface RunRecordRow {
   endedAt: string | null;
   cardCount: number;
   legs: DispatchRunLegCountsDto;
+  discrepancies: RunRecordRowDiscrepancies;
 }
 
 export type RunRecordSearchResult =
@@ -97,12 +121,28 @@ export type RunRecordSearchResult =
   /** A page that matched nothing is the end of the list: there is never a cursor to follow. */
   | { outcome: 'nothing_matched'; runs: []; nextCursor: null };
 
-/** What a run recorded as different on one leg — the comment the finding points to. */
+/**
+ * What a run recorded as different on one leg — read from the STRUCTURED record
+ * (MOTIR-11361), never from the comment, which may have been edited or deleted.
+ */
 export interface RunRecordDiscrepancy {
-  commentId: string;
+  recordId: string;
+  /** `recorded` by the door, `backfilled` from an old comment, or `backfill_unreadable`. */
+  source: RunDiscrepancySource;
+  /** The comment written beside the record — its link; null once it was deleted. */
+  commentId: string | null;
+  /** Every entry, points and decisions together (the finding's `pointCount`, as before). */
   pointCount: number;
   decisionCount: number;
-  /** The comment body verbatim, bounded; null when the comment no longer exists. */
+  /** The build-through points, field by field as the run sent them. */
+  points: RunDiscrepancyPoint[];
+  /** The decisions, field by field as the run sent them. */
+  decisions: RunDecisionPoint[];
+  /**
+   * The record rendered as the comment renders it — composed from `points` and
+   * `decisions`, so it no longer depends on the comment existing. Bounded; null for a
+   * `backfill_unreadable` record, which has no entries to render.
+   */
   bodyMd: string | null;
   bodyTruncated: boolean;
 }
@@ -155,21 +195,23 @@ function legCounts(dispositions: DispatchCardDisposition[]): DispatchRunLegCount
   return counts;
 }
 
-function isNumber(v: unknown): v is number {
-  return typeof v === 'number' && Number.isFinite(v);
-}
-
-/** The finding's POINTER, read defensively: `data` is JSON the writer shaped. */
-function pointerOf(
-  data: unknown,
-): { commentId: string; pointCount: number; decisionCount: number } | null {
-  if (data === null || typeof data !== 'object' || Array.isArray(data)) return null;
-  const d = data as Record<string, unknown>;
-  if (typeof d['commentId'] !== 'string') return null;
+/** One stored record as the leg's discrepancy. */
+function discrepancyOf(record: RunDiscrepancyRecordWithEntries): RunRecordDiscrepancy {
+  const { points, decisions } = fromEntries(record.entries);
+  const readable = points.length + decisions.length > 0;
+  const body = readable
+    ? bound(composeDiscrepancyComment(points, decisions), RUN_RECORD_DISCREPANCY_BODY_MAX)
+    : null;
   return {
-    commentId: d['commentId'],
-    pointCount: isNumber(d['pointCount']) ? d['pointCount'] : 0,
-    decisionCount: isNumber(d['decisionCount']) ? d['decisionCount'] : 0,
+    recordId: record.id,
+    source: record.source,
+    commentId: record.commentId,
+    pointCount: record.pointCount + record.decisionCount,
+    decisionCount: record.decisionCount,
+    points,
+    decisions,
+    bodyMd: body?.text ?? null,
+    bodyTruncated: body?.truncated ?? false,
   };
 }
 
@@ -205,7 +247,7 @@ export const runRecordReadService = {
     );
     const statuses = filters.statuses && filters.statuses.length > 0 ? filters.statuses : null;
 
-    let rows: RunRecordRow[];
+    let rows: Omit<RunRecordRow, 'discrepancies'>[];
     let nextCursor: string | null;
     if (filters.workItemKey) {
       const key = filters.workItemKey.trim().toUpperCase();
@@ -228,6 +270,7 @@ export const runRecordReadService = {
             take,
             ...(filters.cursor ? { cursor: filters.cursor } : {}),
             ...(statuses ? { statuses } : {}),
+            ...(filters.discrepancy ? { discrepancy: filters.discrepancy } : {}),
           },
           ctx,
         );
@@ -261,6 +304,7 @@ export const runRecordReadService = {
             ...(filters.cursor ? { cursor: filters.cursor } : {}),
             ...(statuses ? { statuses } : {}),
             ...(filters.scopeWorkItemKey ? { scopeWorkItemKey: filters.scopeWorkItemKey } : {}),
+            ...(filters.discrepancy ? { discrepancy: filters.discrepancy } : {}),
           },
           ctx,
         );
@@ -285,7 +329,30 @@ export const runRecordReadService = {
     }
     // Every narrowing is applied by the query, so an empty page is short and has no cursor.
     if (rows.length === 0) return { outcome: 'nothing_matched', runs: [], nextCursor: null };
-    return { outcome: 'found', runs: rows, nextCursor };
+    const counts = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+      (tx) =>
+        runDiscrepancyRecordRepository.countsByRuns(
+          rows.map((r) => r.id),
+          tx,
+        ),
+    );
+    const byRun = new Map(counts.map((c) => [c.dispatchRunId, c]));
+    return {
+      outcome: 'found',
+      runs: rows.map((row) => {
+        const c = byRun.get(row.id);
+        return {
+          ...row,
+          discrepancies: {
+            records: c?.records ?? 0,
+            points: c?.points ?? 0,
+            decisions: c?.decisions ?? 0,
+          },
+        };
+      }),
+      nextCursor,
+    };
   },
 
   /**
@@ -310,29 +377,14 @@ export const runRecordReadService = {
     const discrepancies = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
       async (tx) => {
-        const findings = await dispatchRunEventRepository.listDiscrepancyFindings(runId, tx);
-        const pointers = new Map<string, NonNullable<ReturnType<typeof pointerOf>>>();
-        for (const finding of findings) {
-          const pointer = pointerOf(finding.data);
-          // One record per leg; the first stands, as the writer refuses a second.
-          if (finding.dispatchRunCardId && pointer && !pointers.has(finding.dispatchRunCardId)) {
-            pointers.set(finding.dispatchRunCardId, pointer);
-          }
-        }
-        const comments = await commentRepository.findManyByIds(
-          [...pointers.values()].map((p) => p.commentId),
-          tx,
-        );
-        const bodies = new Map(comments.map((c) => [c.id, c.bodyMd]));
+        const records = await runDiscrepancyRecordRepository.listByRun(runId, tx);
         const byLeg = new Map<string, RunRecordDiscrepancy>();
-        for (const [legId, pointer] of pointers) {
-          const body = bodies.get(pointer.commentId);
-          const bounded = body === undefined ? null : bound(body, RUN_RECORD_DISCREPANCY_BODY_MAX);
-          byLeg.set(legId, {
-            ...pointer,
-            bodyMd: bounded?.text ?? null,
-            bodyTruncated: bounded?.truncated ?? false,
-          });
+        // One record per leg (the column is unique); a record no leg holds any more is
+        // the card's, not this run's.
+        for (const record of records) {
+          if (record.dispatchRunCardId) {
+            byLeg.set(record.dispatchRunCardId, discrepancyOf(record));
+          }
         }
         return byLeg;
       },
