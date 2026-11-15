@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ReviewMarker } from '@/components/approvals/ReviewMarker';
 import { ReviewCommand } from '@/components/approvals/ReviewCommand';
-import { ReviewedBadge } from '@/components/approvals/ReviewedBadge';
+import { REVIEWED_CARD_CLOSE_DELAY_MS, ReviewedBadge } from '@/components/approvals/ReviewedBadge';
 import { ReaderRoutesProvider } from '@/lib/visitor/useReaderRoutes';
 import type { CardReviewDTO, ReviewMarkerDTO } from '@/lib/dto/reviewState';
 import zhMessages from '@/messages/zh.json';
@@ -192,7 +192,7 @@ const REVIEWED: CardReviewDTO = {
 const NOW = new Date('2026-11-05T10:00:00.000Z');
 
 describe('ReviewedBadge — reviewed', () => {
-  it('the label form is a success pill that opens its card on hover and closes on leave', () => {
+  it('the label form is a success pill that opens its card on hover and closes on leave', async () => {
     render(<ReviewedBadge review={REVIEWED} />, { now: NOW });
     const badge = screen.getByRole('note', { name: 'Reviewed by an agent at the current commits' });
     expect(badge.textContent).toBe('Reviewed');
@@ -214,7 +214,7 @@ describe('ReviewedBadge — reviewed', () => {
     );
 
     fireEvent.mouseLeave(badge.parentElement!);
-    expect(screen.queryByTestId('reviewed-card')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('reviewed-card')).toBeNull());
   });
 
   it('on the Visitor tree its Findings and checklist keeps the reader’s own route, on the All tab', () => {
@@ -314,6 +314,150 @@ describe('ReviewedBadge — reviewed', () => {
     expect(glyph.className).toContain('--el-tint-mint');
     act(() => glyph.focus());
     expect(screen.getByTestId('reviewed-card')).toBeTruthy();
+  });
+
+  it('an interactive badge has no browser tooltip: the card is its description', () => {
+    render(<ReviewedBadge review={REVIEWED} />, { now: NOW });
+    expect(screen.getByRole('note').hasAttribute('title')).toBe(false);
+    cleanup();
+    render(<ReviewedBadge review={REVIEWED} form="glyph" />, { now: NOW });
+    expect(screen.getByRole('img').hasAttribute('title')).toBe(false);
+  });
+
+  it('draws the card outside the row, so a clipping list or the next row cannot cover it', () => {
+    // The To approve list's shape: an `overflow-hidden` list of rows, each badge in a
+    // `relative z-10` wrapper above the row's stretched door (MOTIR-11327).
+    render(
+      <div data-testid="list" className="overflow-hidden">
+        {['ACME-1', 'ACME-2'].map((identifier) => (
+          <div key={identifier} data-testid={`row-${identifier}`}>
+            <span className="relative z-10 inline-flex shrink-0">
+              <ReviewedBadge review={{ ...REVIEWED, identifier }} />
+            </span>
+          </div>
+        ))}
+      </div>,
+      { now: NOW },
+    );
+    const first = screen.getAllByRole('note')[0]!;
+    fireEvent.mouseEnter(first.parentElement!);
+    const card = screen.getByTestId('reviewed-card');
+    expect(screen.getByTestId('row-ACME-1').contains(card)).toBe(false);
+    expect(screen.getByTestId('list').contains(card)).toBe(false);
+    expect(document.body.contains(card)).toBe(true);
+    // Portalled, it is still the badge's description, and not a dialog.
+    expect(first.getAttribute('aria-describedby')).toBe(card.id);
+    expect(card.hasAttribute('role')).toBe(false);
+  });
+
+  it('stays open while the pointer crosses onto the card, and closes once it leaves both', () => {
+    vi.useFakeTimers();
+    render(<ReviewedBadge review={REVIEWED} />, { now: NOW });
+    const host = screen.getByRole('note').parentElement!;
+    fireEvent.mouseEnter(host);
+    fireEvent.mouseLeave(host);
+    fireEvent.mouseEnter(screen.getByTestId('reviewed-card'));
+    act(() => {
+      vi.advanceTimersByTime(REVIEWED_CARD_CLOSE_DELAY_MS * 2);
+    });
+    const card = screen.getByTestId('reviewed-card');
+    fireEvent.mouseLeave(card);
+    act(() => {
+      vi.advanceTimersByTime(REVIEWED_CARD_CLOSE_DELAY_MS - 1);
+    });
+    expect(screen.getByTestId('reviewed-card')).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.queryByTestId('reviewed-card')).toBeNull();
+  });
+
+  it('Tab moves from the badge into the card and on past the badge; Shift+Tab comes back', () => {
+    render(
+      <>
+        <ReviewedBadge review={REVIEWED} />
+        <button type="button" disabled>
+          disabled
+        </button>
+        <span tabIndex={-1}>not tabbable</span>
+        <button type="button">after</button>
+      </>,
+      { now: NOW },
+    );
+    const badge = screen.getByRole('note');
+    act(() => badge.focus());
+    // Shift+Tab from the badge is the page's.
+    expect(fireEvent.keyDown(badge, { key: 'Tab', shiftKey: true })).toBe(true);
+
+    const link = screen.getByRole('link', { name: 'Findings and checklist' });
+    expect(fireEvent.keyDown(badge, { key: 'Tab' })).toBe(false);
+    expect(document.activeElement).toBe(link);
+    expect(screen.getByTestId('reviewed-card')).toBeTruthy();
+
+    // Back to the badge: the card stays open, as the badge is not outside it.
+    expect(fireEvent.keyDown(link, { key: 'Tab', shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(badge);
+    expect(screen.getByTestId('reviewed-card')).toBeTruthy();
+
+    fireEvent.keyDown(badge, { key: 'Tab' });
+    expect(document.activeElement).toBe(link);
+    // On past the badge, to what follows it in the page; the card closes behind it.
+    expect(fireEvent.keyDown(link, { key: 'Tab' })).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'after' }));
+    expect(screen.queryByTestId('reviewed-card')).toBeNull();
+  });
+
+  it('Tab out of the card with nothing after the badge stays in the card, as the Popover loops', () => {
+    render(<ReviewedBadge review={REVIEWED} />, { now: NOW });
+    const badge = screen.getByRole('note');
+    act(() => badge.focus());
+    fireEvent.keyDown(badge, { key: 'Tab' });
+    const link = screen.getByRole('link', { name: 'Findings and checklist' });
+    fireEvent.keyDown(link, { key: 'Tab' });
+    expect(document.activeElement).toBe(link);
+    expect(screen.getByTestId('reviewed-card')).toBeTruthy();
+    // A key other than Tab or Escape is not the card's.
+    expect(fireEvent.keyDown(link, { key: 'Enter' })).toBe(true);
+  });
+
+  it('a card with no link lets Tab from the badge go to the page', () => {
+    render(<ReviewedBadge review={{ ...REVIEWED, recordRef: null }} />, { now: NOW });
+    const badge = screen.getByRole('note');
+    act(() => badge.focus());
+    expect(screen.getByTestId('reviewed-card')).toBeTruthy();
+    expect(fireEvent.keyDown(badge, { key: 'Tab' })).toBe(true);
+  });
+
+  it('Escape in the card closes it and hands focus back to the badge', () => {
+    render(<ReviewedBadge review={REVIEWED} />, { now: NOW });
+    const badge = screen.getByRole('note');
+    act(() => badge.focus());
+    fireEvent.keyDown(badge, { key: 'Tab' });
+    const link = screen.getByRole('link', { name: 'Findings and checklist' });
+    expect(document.activeElement).toBe(link);
+    fireEvent.keyDown(link, { key: 'Escape' });
+    expect(screen.queryByTestId('reviewed-card')).toBeNull();
+    expect(document.activeElement).toBe(badge);
+  });
+
+  it('a press outside the badge closes the card; a press on the badge keeps it', async () => {
+    render(
+      <>
+        <ReviewedBadge review={REVIEWED} />
+        <button type="button">elsewhere</button>
+      </>,
+      { now: NOW },
+    );
+    const badge = screen.getByRole('note');
+    fireEvent.mouseEnter(badge.parentElement!);
+    // The layer starts listening for outside presses a tick after it opens.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    fireEvent.pointerDown(badge);
+    expect(screen.getByTestId('reviewed-card')).toBeTruthy();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'elsewhere' }));
+    expect(screen.queryByTestId('reviewed-card')).toBeNull();
   });
 
   it('draws nothing when the read model handed it no Reviewed state (a push, a Done card)', () => {
