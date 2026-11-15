@@ -53,7 +53,35 @@ export const platformOrganizationRepository = {
           { slug: { contains: query, mode: 'insensitive' } },
         ],
       },
-      orderBy: { createdAt: 'desc' },
+      // `id` breaks a `createdAt` tie, so the order is total — the Tenants list's
+      // zero-spend tail keysets over it (MOTIR-8978).
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take,
+    });
+  },
+
+  /**
+   * Every organization, newest first, keyset-paged after `after` — the Tenants
+   * list's ZERO-SPEND TAIL (MOTIR-8978): the organizations motir-ai's spend rollup
+   * has no row for are reachable only from this table. The order is
+   * `(createdAt desc, id desc)`, the same total order `searchOrganizations`
+   * answers in, so the filtered and unfiltered tails page alike.
+   */
+  async listOrganizationsAfter(
+    after: { createdAt: Date; id: string } | null,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization[]> {
+    return tx.organization.findMany({
+      where: after
+        ? {
+            OR: [
+              { createdAt: { lt: after.createdAt } },
+              { createdAt: after.createdAt, id: { lt: after.id } },
+            ],
+          }
+        : {},
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
     });
   },
