@@ -25,6 +25,7 @@ import {
   Sparkles,
   UserSearch,
   Workflow,
+  Route,
 } from 'lucide-react';
 import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
 import type { PlatformOperatorDTO } from '@/lib/dto/platform';
@@ -83,6 +84,7 @@ export interface AdminShellLabels {
   navStarters: string;
   /** Operations → Hosted-run models (MOTIR-7528), visible to every staff role. */
   navRunModels: string;
+  navModelServing: string;
   /** Operations → Audit log (MOTIR-752), superadmin only. */
   navAuditLog: string;
   staffMarkTitle: string;
@@ -249,6 +251,14 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           label: labels.navRunModels,
           href: '/admin/run-models',
           active: pathname === '/admin/run-models',
+        },
+        // Which provider serves a model several providers sell (MOTIR-11280,
+        // design MOTIR-11279), directly after Motir agent models.
+        {
+          icon: <Route />,
+          label: labels.navModelServing,
+          href: '/admin/model-serving',
+          active: pathname === '/admin/model-serving',
         },
         // The planner's captured lessons across every organisation (MOTIR-1411,
         // design MOTIR-1409). `startsWith` so a lesson's detail keeps it lit.

@@ -10828,6 +10828,7 @@
       "navPlannerFindings": "规划器发现",
       "navIdeas": "创意",
       "navRunModels": "Motir 智能体模型",
+      "navModelServing": "模型服务",
       "navFleetSettings": "集群设置",
       "navServices": "服务",
       "navCapacity": "服务商容量",
@@ -11081,6 +11082,9 @@
           },
           "planner_finding": {
             "triage": "已分诊一条规划器发现"
+          },
+          "model_serving": {
+            "set": "更改了模型的服务供应商"
           }
         }
       }
@@ -13190,6 +13194,83 @@
           "body": "规划服务（motir-ai）没有响应，因此不显示任何默认值。没有任何更改，也不会猜测任何值。",
           "retry": "重试"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "平台 · 模型服务",
+      "title": "模型服务",
+      "subtitle": "部分模型由不止一家供应商提供。请为每个模型选择由哪一家提供服务。用户始终按原始供应商的价格计费。",
+      "lineCharge": "用户支付的费用与渠道无关：计费价格是原始供应商的官方价格，再加上 Motir 的利润率。",
+      "card": {
+        "title": "有多家供应商的模型",
+        "subtitle": "{count, plural, other {# 个模型}} · 读取自网关的渠道和价格记录"
+      },
+      "col": {
+        "model": "模型",
+        "original": "原始供应商",
+        "charged": "计费价格",
+        "servedBy": "服务渠道",
+        "cost": "Motir 成本",
+        "action": "操作"
+      },
+      "perMTok": "每百万 token {input} / {output}",
+      "plusMargin": "用户支付此价格加利润率",
+      "source": {
+        "read": "读取于 {date}"
+      },
+      "default": "默认",
+      "chosen": "由 {who} 于 {date} 选择",
+      "channelEnabled": "渠道 {name} 已启用",
+      "channelDisabled": "渠道 {name} 已停用",
+      "fallingBack": "正在回退到 {provider}",
+      "fallingBackBody": "{selected} 的渠道已停用，因此由 {provider} 提供服务。计费价格不变。",
+      "diff": {
+        "same": "与官方价格相同",
+        "below": "输入低 {input}% · 输出低 {output}%（相对官方价格）",
+        "above": "输入高 {input}% · 输出高 {output}%（相对官方价格）",
+        "inputBelowOutputAbove": "输入低 {input}% · 输出高 {output}%（相对官方价格）",
+        "inputAboveOutputBelow": "输入高 {input}% · 输出低 {output}%（相对官方价格）"
+      },
+      "change": "更改",
+      "changeAria": "更改 {model} 的服务供应商",
+      "readOnly": "只有超级管理员可以更改模型的服务供应商。",
+      "dialog": {
+        "title": "选择 {model} 的服务供应商",
+        "body": "{model} 的请求将发送到你选择的供应商。这只改变 Motir 的成本，不改变用户的计费。",
+        "original": "原始供应商",
+        "current": "当前服务",
+        "channel": "网关渠道 {name}",
+        "enabled": "已启用",
+        "disabled": "已停用",
+        "cost": "Motir 成本 {price}",
+        "priceSource": "价格来自 {host}，读取于 {date}",
+        "resetDefault": "使用默认设置",
+        "useDefault": "只要原始供应商的渠道启用，就由其提供服务。",
+        "disabledWarning": {
+          "title": "{provider} 的渠道已停用",
+          "body": "渠道 {channel} 停用期间，{model} 的请求将回退到 {fallback}。渠道重新启用后，请求将发送到 {provider}。"
+        },
+        "footer": "用户仍按每百万 token {input} / {output} 计费。",
+        "cancel": "取消",
+        "save": "保存",
+        "saveAnyway": "仍然保存",
+        "saving": "正在保存…"
+      },
+      "error": {
+        "save": "网关未接受此更改，{model} 仍由 {provider} 提供服务。请重试。",
+        "unreachable": {
+          "title": "无法读取模型服务",
+          "body": "网关没有响应，或无法读取其渠道。读取成功前不显示任何内容。"
+        },
+        "retry": "重试"
+      },
+      "toast": {
+        "saved": "{model} 现在由 {provider} 提供服务",
+        "savedBody": "已记入审计日志。计费价格未改变。"
+      },
+      "empty": {
+        "title": "没有由多家供应商提供的模型",
+        "body": "网关提供的每个模型都只来自一家供应商，因此无需选择。当第二家供应商的渠道也提供某个模型时，它会出现在这里。"
       }
     },
     "ideas": {

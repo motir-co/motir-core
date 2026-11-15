@@ -780,3 +780,38 @@ export class PlannerFindingLessonNotLinkedError extends Error {
     this.name = 'PlannerFindingLessonNotLinkedError';
   }
 }
+
+/** A Model serving change named a model the gateway does not list as sold by two or more providers (MOTIR-11280). */
+export class ModelServingUnknownModelError extends Error {
+  readonly code = 'MODEL_SERVING_UNKNOWN_MODEL';
+
+  constructor(readonly model: string) {
+    super(`"${model}" is not a model more than one provider serves`);
+    this.name = 'ModelServingUnknownModelError';
+  }
+}
+
+/** A Model serving change named a provider none of the model's channels belongs to (MOTIR-11280). */
+export class ModelServingUnknownProviderError extends Error {
+  readonly code = 'MODEL_SERVING_UNKNOWN_PROVIDER';
+
+  constructor(
+    readonly model: string,
+    readonly provider: string,
+    /** The providers that do serve the model. */
+    readonly offerings: readonly string[],
+  ) {
+    super(`"${provider}" does not serve "${model}"; ${offerings.join(', ')} do`);
+    this.name = 'ModelServingUnknownProviderError';
+  }
+}
+
+/** The gateway's Model serving API could not be read (MOTIR-11280). */
+export class ModelServingUnavailableError extends Error {
+  readonly code = 'MODEL_SERVING_UNAVAILABLE';
+
+  constructor(readonly reason: string) {
+    super(`the gateway's model serving list could not be read: ${reason}`);
+    this.name = 'ModelServingUnavailableError';
+  }
+}

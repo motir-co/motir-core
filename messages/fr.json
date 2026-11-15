@@ -10837,6 +10837,7 @@
       "navPlannerFindings": "Constats du planificateur",
       "navIdeas": "Idées",
       "navRunModels": "Modèles de l'agent Motir",
+      "navModelServing": "Service des modèles",
       "navFleetSettings": "Paramètres de la flotte",
       "navServices": "Services",
       "navCapacity": "Capacité des fournisseurs",
@@ -11090,6 +11091,9 @@
           },
           "planner_finding": {
             "triage": "A trié un constat du planificateur"
+          },
+          "model_serving": {
+            "set": "A changé le fournisseur qui sert un modèle"
           }
         }
       }
@@ -13199,6 +13203,83 @@
           "body": "Le service de planification (motir-ai) n'a pas répondu, aucune valeur par défaut n'est donc affichée. Rien n'a changé, et aucune valeur n'est devinée.",
           "retry": "Réessayer"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "Plateforme · Service des modèles",
+      "title": "Service des modèles",
+      "subtitle": "Certains modèles sont vendus par plusieurs fournisseurs. Choisissez celui qui sert chaque modèle. C’est toujours le prix du fournisseur d’origine qui est facturé.",
+      "lineCharge": "Ce que paie une personne ne dépend jamais du canal : le prix facturé est le prix officiel du fournisseur d’origine, plus la marge de Motir.",
+      "card": {
+        "title": "Modèles proposés par plusieurs vendeurs",
+        "subtitle": "{count, plural, one {# modèle} other {# modèles}} · lus dans les canaux et les lignes de prix de la passerelle"
+      },
+      "col": {
+        "model": "Modèle",
+        "original": "Fournisseur d’origine",
+        "charged": "Prix facturé",
+        "servedBy": "Servi par",
+        "cost": "Coût pour Motir",
+        "action": "Action"
+      },
+      "perMTok": "{input} / {output} par million de jetons",
+      "plusMargin": "Facturé à ce prix, plus la marge",
+      "source": {
+        "read": "Lu le {date}"
+      },
+      "default": "Par défaut",
+      "chosen": "Choisi par {who} · {date}",
+      "channelEnabled": "Canal {name} activé",
+      "channelDisabled": "Canal {name} désactivé",
+      "fallingBack": "Repli sur {provider}",
+      "fallingBackBody": "Le canal de {selected} est désactivé, c’est donc {provider} qui le sert. Le prix facturé ne change pas.",
+      "diff": {
+        "same": "Identique au prix officiel",
+        "below": "Entrée {input} % · sortie {output} % sous le prix officiel",
+        "above": "Entrée {input} % · sortie {output} % au-dessus du prix officiel",
+        "inputBelowOutputAbove": "Entrée {input} % en dessous · sortie {output} % au-dessus du prix officiel",
+        "inputAboveOutputBelow": "Entrée {input} % au-dessus · sortie {output} % en dessous du prix officiel"
+      },
+      "change": "Modifier",
+      "changeAria": "Modifier le fournisseur qui sert {model}",
+      "readOnly": "Seul un superadministrateur peut modifier le fournisseur qui sert un modèle.",
+      "dialog": {
+        "title": "Choisir qui sert {model}",
+        "body": "Les requêtes pour {model} vont au fournisseur que vous choisissez. Cela change ce que paie Motir, jamais ce qui est facturé aux personnes.",
+        "original": "Fournisseur d’origine",
+        "current": "Sert actuellement",
+        "channel": "Canal de passerelle {name}",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "cost": "Coûte à Motir {price}",
+        "priceSource": "Prix de {host}, lu le {date}",
+        "resetDefault": "Utiliser le choix par défaut",
+        "useDefault": "Le fournisseur d’origine le sert dès que son canal est activé.",
+        "disabledWarning": {
+          "title": "Le canal de {provider} est désactivé",
+          "body": "Tant que le canal {channel} est désactivé, les requêtes pour {model} se replient sur {fallback}. Elles iront à {provider} dès que le canal sera réactivé."
+        },
+        "footer": "Le prix facturé reste {input} / {output} par million de jetons.",
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saveAnyway": "Enregistrer quand même",
+        "saving": "Enregistrement…"
+      },
+      "error": {
+        "save": "La passerelle n’a pas accepté la modification, {model} est donc toujours servi par {provider}. Réessayez.",
+        "unreachable": {
+          "title": "Le service des modèles n’a pas pu être lu",
+          "body": "La passerelle n’a pas répondu ou n’a pas pu lire ses canaux. Rien n’est affiché tant qu’une lecture n’a pas réussi."
+        },
+        "retry": "Réessayer"
+      },
+      "toast": {
+        "saved": "{provider} sert désormais {model}",
+        "savedBody": "Consigné dans le journal d’audit. Le prix facturé n’a pas changé."
+      },
+      "empty": {
+        "title": "Aucun modèle n’a plusieurs vendeurs",
+        "body": "Chaque modèle servi par la passerelle vient d’un seul fournisseur, il n’y a donc rien à choisir. Un modèle apparaît ici dès que le canal d’un deuxième fournisseur le sert aussi."
       }
     },
     "ideas": {
