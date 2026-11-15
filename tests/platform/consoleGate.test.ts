@@ -127,6 +127,13 @@ function fakeMotirAi(input: string | URL): Response {
         nextCursor: null,
         allTime: { period: 'all', categories: {}, spend },
       });
+    case '/v1/platform/usage/provider-reconciliation':
+      return json({
+        period: url.searchParams.get('period'),
+        providers: [],
+        findings: [],
+        unreconciledProviders: [],
+      });
     case '/v1/usage':
       return json({
         balance: 0,
@@ -214,6 +221,9 @@ function storyReads(e: Estate, userId: string) {
       platformReadService.getOrganizationEstate(p, e.orgId),
     'platformReadService.getOverview': () => platformReadService.getOverview(p, { period: '7d' }),
     'platformReadService.getEstateUsage': () => platformReadService.getEstateUsage(p, 'all'),
+    // A month adds the provider-bill reconciliation read (MOTIR-11376) to the same view.
+    'platformReadService.getEstateUsage (month, provider bills)': () =>
+      platformReadService.getEstateUsage(p, '2026-09'),
     'platformUsageService.listTenants': () =>
       platformUsageService.listTenants(p, { period: 'all', sort: 'cost' }),
     'platformUsageService.listTenants (filtered)': () =>
@@ -247,6 +257,7 @@ async function storyRoutes(e: Estate) {
   return {
     '/admin': page(overview, sp({})),
     '/admin/usage': page(usage, sp({ period: 'all' })),
+    '/admin/usage?period=2026-09 (provider bills)': page(usage, sp({ period: '2026-09' })),
     '/admin/tenants': page(tenants, sp({})),
     '/admin/tenants/[orgId] (Overview)': page(org, sp({})),
     '/admin/tenants/[orgId]?tab=usage': page(org, sp({ tab: 'usage' })),
@@ -346,6 +357,18 @@ describe('2 · one audit row per cross-tenant read; none for a read that throws'
     expect(rows.every((r) => r.action === 'estate.read' && r.actorUserId === estate.staffId)).toBe(
       true,
     );
+  });
+
+  it('a month of Usage & cost reads the estate usage AND the provider bills under one row', async () => {
+    currentSession = { user: { id: estate.staffId } };
+    await platformReadService.getEstateUsage(asPrincipal(estate.staffId), '2026-09');
+    expect([...remoteCalls].sort()).toEqual([
+      '/v1/platform/usage',
+      '/v1/platform/usage/provider-reconciliation',
+    ]);
+    const rows = await adminDb.platformAuditLog.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ action: 'estate.read', actorUserId: estate.staffId });
   });
 
   it('each read that throws — an unknown org, a foreign workspace — writes none', async () => {
