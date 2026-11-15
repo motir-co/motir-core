@@ -9516,7 +9516,7 @@
     "skipFinalCheck": {
       "title": "Ignorar a verificação final?",
       "body": "A verificação final lê novamente cada item de trabalho deste plano por ordem de construção, verifica que cada um pode ser construído sobre o que os itens anteriores entregam e corrige o que encontrar.",
-      "consequence": "Se a ignorar, o plano é proposto agora sem essa verificação. O que encontrou até agora é listado no resumo do plano, mas nada é corrigido.",
+      "consequence": "Se você a ignorar, o plano é proposto agora sem essa verificação. O que encontrou até agora é listado no resumo do plano, mas nada é corrigido. Muitas vezes o agente Motir ainda consegue contornar esses pontos ao trabalhar nos itens, e registra qualquer discrepância que encontrar. Esse tempo passa então a ser gasto na execução do agente em vez de aqui, no planejamento.",
       "confirm": "Ignorar a verificação final",
       "keep": "Continuar a verificar",
       "error": "Não foi possível ignorar a verificação final. Ainda está a decorrer: tente novamente ou continue a verificar.",

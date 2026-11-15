@@ -9516,7 +9516,7 @@
     "skipFinalCheck": {
       "title": "Saltare la verifica finale?",
       "body": "La verifica finale rilegge ogni elemento di lavoro di questo piano in ordine di costruzione, verifica che ciascuno possa essere costruito su ciò che consegnano gli elementi precedenti e corregge ciò che trova.",
-      "consequence": "Se la salti, il piano viene proposto ora senza quella verifica. Ciò che ha trovato finora è elencato nel riepilogo del piano, ma nulla viene corretto.",
+      "consequence": "Se la salti, il piano viene proposto ora senza quella verifica. Ciò che ha trovato finora è elencato nel riepilogo del piano, ma nulla viene corretto. Spesso l’agente Motir riesce comunque a superare quei punti mentre lavora sugli elementi, e registra ogni discrepanza che incontra. Quel tempo viene quindi speso nell’esecuzione dell’agente invece che qui, nella pianificazione.",
       "confirm": "Salta la verifica finale",
       "keep": "Continua la verifica",
       "error": "Non è stato possibile saltare la verifica finale. È ancora in corso: riprova, oppure continua la verifica.",

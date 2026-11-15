@@ -7592,7 +7592,7 @@
   "planningWorkspace.requirementPane.notice": "No requirement was composed for this offer. Planning will compose it when you confirm.",
   "planningWorkspace.skipFinalCheck.title": "Skip the final check?",
   "planningWorkspace.skipFinalCheck.body": "The final check reads every work item of this plan again in build order, checks that each can be built on what the items before it deliver, and fixes what it finds.",
-  "planningWorkspace.skipFinalCheck.consequence": "If you skip it, the plan is proposed now without that check. What it has found so far is listed in the plan’s summary, but nothing is fixed.",
+  "planningWorkspace.skipFinalCheck.consequence": "If you skip it, the plan is proposed now without that check. What it has found so far is listed in the plan’s summary, but nothing is fixed. The Motir agent can often still build through those points when it works on the items, and records any discrepancy it meets. That time is then spent in the agent’s run instead of here in planning.",
   "planningWorkspace.skipFinalCheck.confirm": "Skip the final check",
   "planningWorkspace.skipFinalCheck.keep": "Keep checking",
   "planningWorkspace.skipFinalCheck.error": "The final check could not be skipped. It is still running: try again, or keep checking.",

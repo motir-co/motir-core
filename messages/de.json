@@ -9516,7 +9516,7 @@
     "skipFinalCheck": {
       "title": "Abschlussprüfung überspringen?",
       "body": "Die Abschlussprüfung liest jedes Arbeitselement dieses Plans noch einmal in Baureihenfolge, prüft, dass jedes auf dem aufbauen kann, was die Elemente davor liefern, und behebt, was sie findet.",
-      "consequence": "Wenn Sie sie überspringen, wird der Plan jetzt ohne diese Prüfung vorgeschlagen. Was sie bisher gefunden hat, steht in der Zusammenfassung des Plans, aber nichts wird behoben.",
+      "consequence": "Wenn Sie sie überspringen, wird der Plan jetzt ohne diese Prüfung vorgeschlagen. Was sie bisher gefunden hat, steht in der Zusammenfassung des Plans, aber nichts wird behoben. Der Motir-Agent kann diese Punkte oft trotzdem umsetzen, wenn er an den Elementen arbeitet, und hält jede Abweichung fest, auf die er stößt. Diese Zeit fällt dann im Lauf des Agenten an statt hier in der Planung.",
       "confirm": "Abschlussprüfung überspringen",
       "keep": "Weiter prüfen",
       "error": "Die Abschlussprüfung konnte nicht übersprungen werden. Sie läuft noch: Versuchen Sie es erneut oder prüfen Sie weiter.",

@@ -9516,7 +9516,7 @@
     "skipFinalCheck": {
       "title": "¿Omitir la revisión final?",
       "body": "La revisión final vuelve a leer cada elemento de trabajo de este plan en orden de construcción, comprueba que cada uno se puede construir sobre lo que entregan los elementos anteriores y corrige lo que encuentra.",
-      "consequence": "Si la omite, el plan se propone ahora sin esa revisión. Lo que ha encontrado hasta ahora aparece en el resumen del plan, pero no se corrige nada.",
+      "consequence": "Si la omites, el plan se propone ahora sin esa revisión. Lo que ha encontrado hasta ahora aparece en el resumen del plan, pero no se corrige nada. A menudo el agente Motir aún puede resolver esos puntos sobre la marcha cuando trabaja en los elementos, y registra cualquier discrepancia que encuentre. Ese tiempo se dedica entonces a la ejecución del agente en lugar de aquí, en la planificación.",
       "confirm": "Omitir la revisión final",
       "keep": "Seguir revisando",
       "error": "No se pudo omitir la revisión final. Sigue en curso: inténtelo de nuevo o siga revisando.",
