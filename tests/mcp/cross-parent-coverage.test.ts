@@ -97,6 +97,7 @@ describe('validate_work_item — invalidEdges', () => {
         blockedBy: t.y.identifier,
         itemParent: t.b.identifier,
         blockerParent: t.a.identifier,
+        blockerDone: false,
       },
     ]);
     expect(text(before)).toContain(`${t.b.identifier} is not blocked_by ${t.a.identifier}`);
@@ -120,6 +121,7 @@ describe('validate_work_item — invalidEdges', () => {
         blockedBy: t.c.identifier,
         itemParent: t.e1.identifier,
         blockerParent: t.e2.identifier,
+        blockerDone: false,
       },
     ]);
 
@@ -158,6 +160,68 @@ describe('validate_work_item — invalidEdges', () => {
   });
 });
 
+// Bug MOTIR-10860: the blocker's STATE decides. An uncovered edge onto a DONE
+// (or CANCELLED) blocker holds nothing — readiness already calls the card ready —
+// so it is LISTED with `blockerDone: true` and does not make the verdict invalid.
+describe('validate_work_item — an uncovered edge onto a TERMINAL blocker (MOTIR-10860)', () => {
+  for (const status of ['done', 'cancelled'] as const) {
+    it(`X blocked_by a ${status.toUpperCase()} Y without B→A is VALID and still lists the edge`, async () => {
+      const fx = await makeWorkItemFixture();
+      const t = await tree(fx);
+      await link(fx, t.x.id, t.y.id);
+      await adminDb.workItem.update({ where: { id: t.y.id }, data: { status } });
+      const client = await connectClient(fx.ctx);
+
+      const r = await call(client, 'validate_work_item', { key: t.e1.identifier });
+      expect(r.isError, text(r)).toBeFalsy();
+      expect(verdictOf(r)).toMatchObject({ valid: true, blockers: [] });
+      expect(verdictOf(r).invalidEdges).toEqual([
+        {
+          item: t.x.identifier,
+          blockedBy: t.y.identifier,
+          itemParent: t.b.identifier,
+          blockerParent: t.a.identifier,
+          blockerDone: true,
+        },
+      ]);
+      expect(text(r)).toContain(`Work item ${t.e1.identifier} is VALID`);
+      expect(text(r)).toContain('their blocker is DONE');
+      expect(text(r)).toContain(`${t.x.identifier} is blocked by ${t.y.identifier} (done)`);
+      await client.close();
+    });
+  }
+
+  it('an OPEN uncovered edge beside a DONE one keeps the verdict INVALID and names both', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await tree(fx);
+    const y2 = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', title: 'Subtask Y2', parentId: t.a.id },
+      fx.ctx,
+    );
+    await link(fx, t.x.id, t.y.id);
+    await link(fx, t.x.id, y2.id);
+    await adminDb.workItem.update({ where: { id: t.y.id }, data: { status: 'done' } });
+    const client = await connectClient(fx.ctx);
+
+    const r = await call(client, 'validate_work_item', { key: t.e1.identifier });
+    expect(verdictOf(r).valid).toBe(false);
+    expect(
+      verdictOf(r)
+        .invalidEdges.map((e) => [e.blockedBy, e.blockerDone])
+        .sort(),
+    ).toEqual(
+      [
+        [t.y.identifier, true],
+        [y2.identifier, false],
+      ].sort(),
+    );
+    expect(text(r)).toContain('1 cross-parent edge(s) are not carried by their parents — a');
+    expect(text(r)).toContain(`${t.x.identifier} is blocked by ${y2.identifier}, but`);
+    expect(text(r)).toContain(`${t.x.identifier} is blocked by ${t.y.identifier} (done)`);
+    await client.close();
+  });
+});
+
 describe('validate_plan — invalidEdges over the PROJECTION', () => {
   it('reports X→Y without B→A; a modify adding B→A clears it; removing a committed B→A brings it back', async () => {
     const fx = await makeWorkItemFixture();
@@ -189,6 +253,7 @@ describe('validate_plan — invalidEdges over the PROJECTION', () => {
         blockedBy: t.y.identifier,
         itemParent: t.b.identifier,
         blockerParent: t.a.identifier,
+        blockerDone: false,
       },
     ]);
 
@@ -200,6 +265,49 @@ describe('validate_plan — invalidEdges over the PROJECTION', () => {
     expect(covered.isError, text(covered)).toBeFalsy();
     const second = verdictOf(await call(client, 'validate_plan', { planId }));
     expect(second.invalidEdges).toEqual([]);
+    await client.close();
+  });
+
+  it('a committed uncovered edge the plan owns onto a DONE blocker: listed, blockerDone, VALID (MOTIR-10860)', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await tree(fx);
+    await link(fx, t.b.id, t.a.id);
+    await link(fx, t.x.id, t.y.id);
+    await adminDb.workItem.update({ where: { id: t.y.id }, data: { status: 'done' } });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    // Removing B→A makes the committed X→Y edge the plan's, and uncovered.
+    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: t.b.id, patch: { blockedByRemove: [t.a.id] } }],
+    });
+    const row = {
+      item: t.x.identifier,
+      blockedBy: t.y.identifier,
+      itemParent: t.b.identifier,
+      blockerParent: t.a.identifier,
+      blockerDone: true,
+    };
+    const plan = await call(client, 'validate_plan', { planId });
+    expect(verdictOf(plan).invalidEdges).toEqual([row]);
+    expect(verdictOf(plan).valid).toBe(true);
+    expect(text(plan)).toContain('their blocker is DONE');
+
+    const projected = await call(client, 'validate_work_item', {
+      key: t.e1.identifier,
+      planId,
+    });
+    expect(verdictOf(projected)).toMatchObject({ valid: true, blockers: [] });
+    expect(verdictOf(projected).invalidEdges).toEqual([row]);
+
+    // The same plan onto an OPEN blocker still answers INVALID.
+    await adminDb.workItem.update({ where: { id: t.y.id }, data: { status: 'todo' } });
+    const open = verdictOf(
+      await call(client, 'validate_work_item', { key: t.e1.identifier, planId }),
+    );
+    expect(open.valid).toBe(false);
+    expect(open.invalidEdges).toEqual([{ ...row, blockerDone: false }]);
     await client.close();
   });
 
@@ -222,6 +330,7 @@ describe('validate_plan — invalidEdges over the PROJECTION', () => {
         blockedBy: t.y.identifier,
         itemParent: t.b.identifier,
         blockerParent: t.a.identifier,
+        blockerDone: false,
       },
     ]);
     await client.close();
@@ -241,11 +350,12 @@ describe('the scope claim gates on FINISHABILITY, not on invalidEdges', () => {
     );
     expect(refused.outcome).toBe('not_finishable');
 
-    // The blocker done: B is finishable, the edge still uncovered (valid: false).
+    // The blocker done: B is finishable, and the uncovered edge is still LISTED
+    // but satisfied, so it no longer counts against `valid` (MOTIR-10860).
     await adminDb.workItem.update({ where: { id: t.y.id }, data: { status: 'done' } });
     const validity = await workItemsService.validateWorkItem(fx.projectId, t.b.identifier, fx.ctx);
-    expect(validity).toMatchObject({ valid: false, blockers: [] });
-    expect(validity.invalidEdges).toHaveLength(1);
+    expect(validity).toMatchObject({ valid: true, blockers: [] });
+    expect(validity.invalidEdges).toEqual([expect.objectContaining({ blockerDone: true })]);
 
     const claimed = await scopeClaimService.claimScope(
       { kind: 'work_item', projectId: fx.projectId, identifier: t.b.identifier },

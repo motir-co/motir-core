@@ -39,7 +39,7 @@ import type {
   WorkItemSoftBlockDto,
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
-import { isMislabelledLinkAdvisory } from '@/lib/dto/workItems';
+import { isMislabelledLinkAdvisory, isOpenInvalidEdge } from '@/lib/dto/workItems';
 import type { NotYetWrittenDto, PlanValidityDto, ProposalRescopeWarningDto } from '@/lib/dto/plans';
 import { proposalRescopeWarningsService } from '@/lib/services/proposalRescopeWarningsService';
 import type { SectionFindingDto } from '@/lib/dto/workItems';
@@ -705,6 +705,10 @@ function projectedInvalidEdges(
       blockedBy: node(e.blockerId)!.identifier,
       itemParent: node(node(e.blockedId)!.parentId!)?.identifier ?? node(e.blockedId)!.parentId!,
       blockerParent: node(node(e.blockerId)!.parentId!)?.identifier ?? node(e.blockerId)!.parentId!,
+      // A committed blocker the projection reads as terminal holds nothing (bug
+      // MOTIR-10860) — the committed walk marks it the same way. A proposal's
+      // blocker is judged as proposed, so an `add` is never done here.
+      blockerDone: isDone(proj, node(e.blockerId)!),
     }))
     .sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
 }
@@ -861,7 +865,10 @@ export const planValidityService = {
     const crossLevelEdges = projectedCrossLevelEdges(proj, memberIds, owns);
     return {
       key: root.identifier,
-      valid: blockers.length === 0 && invalidEdges.length === 0 && crossLevelEdges.length === 0,
+      valid:
+        blockers.length === 0 &&
+        !invalidEdges.some(isOpenInvalidEdge) &&
+        crossLevelEdges.length === 0,
       blockers,
       ...(waits.length > 0 ? { waits } : {}),
       invalidEdges,
@@ -992,7 +999,7 @@ export const planValidityService = {
       valid:
         blockers.length === 0 &&
         rejections.length === 0 &&
-        invalidEdges.length === 0 &&
+        !invalidEdges.some(isOpenInvalidEdge) &&
         crossLevelEdges.length === 0,
       blockers,
       ...(waits.length > 0 ? { waits } : {}),

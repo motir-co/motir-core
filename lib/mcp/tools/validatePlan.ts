@@ -86,6 +86,7 @@ function summarize(
       `Plan ${result.planId} is VALID — it would be ACCEPTED by approve, and every item in ` +
         'the projected forest can be finished once it materializes. No work item was created: ' +
         'approving the plan in Motir is still the only path from a proposal to a work item.',
+      ...invalidEdgeLines(result.invalidEdges),
       ...notYetWrittenLines(result.notYetWritten),
       ...sectionFindingLines(result.sectionFindings, 'valid'),
       ...linkLines,
@@ -213,8 +214,10 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'malformed, a blocker means it reaches outside itself. (3) COVERED — every same-level ' +
         'blocked_by between items under DIFFERENT parents that this plan introduces is carried ' +
         'by their parents too (the parents directly blocked_by each other); an uncovered one ' +
-        'arrives in `invalidEdges` as `{ item, blockedBy, itemParent, blockerParent }` — a ' +
-        'verdict only, the append and approve do not refuse it. (4) SAME-LEVEL — a COMMITTED ' +
+        'arrives in `invalidEdges` as `{ item, blockedBy, itemParent, blockerParent, ' +
+        'blockerDone }` — a verdict only, the append and approve do not refuse it; a row whose ' +
+        'committed blocker is DONE carries `blockerDone: true`, is still listed and does not ' +
+        'count against `valid`. (4) SAME-LEVEL — a COMMITTED ' +
         'blocked_by this plan introduces into its findings that joins two levels (the link door ' +
         'writes one; a PROPOSED one is a `cross_level` rejection) arrives in `crossLevelEdges` ' +
         'as `{ item, blockedBy, itemDepth, blockedByDepth, reason: "blocked_elsewhere", ' +

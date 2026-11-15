@@ -1839,6 +1839,19 @@ export interface InvalidEdgeDto {
   blockedBy: string;
   itemParent: string;
   blockerParent: string;
+  /**
+   * Whether `blockedBy` is already TERMINAL — `done` / `cancelled` in its own
+   * project's workflow, the predicate readiness judges a blocker by (bug
+   * MOTIR-10860). A done blocker holds nothing: the row is still LISTED, because
+   * how the tree was wired is a fact a reader should see, but it does not count
+   * toward `valid`, and the roadmap draws the edge neutral and unflagged.
+   */
+  blockerDone: boolean;
+}
+
+/** Does this cross-parent finding still count against `valid`? Only while its blocker is open (MOTIR-10860). */
+export function isOpenInvalidEdge(edge: Pick<InvalidEdgeDto, 'blockerDone'>): boolean {
+  return !edge.blockerDone;
 }
 
 /**
@@ -1870,8 +1883,9 @@ export interface WorkItemValidityDto {
   key: string;
   /**
    * True ⟺ every in-subtree item's blocked_by closure is satisfied AND no
-   * cross-parent edge is uncovered (`invalidEdges` empty, MOTIR-6370) AND no
-   * edge crosses levels (`crossLevelEdges` empty, MOTIR-6509). A gate that asks
+   * cross-parent edge onto an OPEN blocker is uncovered (every `invalidEdges`
+   * row carries `blockerDone: true`, MOTIR-6370 · MOTIR-10860) AND no edge
+   * crosses levels (`crossLevelEdges` empty, MOTIR-6509). A gate that asks
    * only "can this be finished?" reads `blockers`, never this.
    */
   valid: boolean;
@@ -1891,7 +1905,9 @@ export interface WorkItemValidityDto {
   /**
    * Every same-level `blocked_by` FROM a not-done subtree member whose two ends
    * sit under different parents that carry no matching edge (MOTIR-6370).
-   * Empty when every cross-parent edge is covered.
+   * Empty when every cross-parent edge is covered. A row whose blocker is done
+   * (`blockerDone: true`, MOTIR-10860) is listed but satisfied: it does not make
+   * `valid` false.
    */
   invalidEdges: InvalidEdgeDto[];
   /**

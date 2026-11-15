@@ -202,6 +202,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
           blockedBy: outside.identifier,
           itemParent: story.identifier,
           blockerParent: elsewhere.identifier,
+          blockerDone: false,
         },
       ],
       crossLevelEdges: [],
