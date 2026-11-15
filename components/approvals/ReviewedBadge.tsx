@@ -1,10 +1,23 @@
 'use client';
 
-import { useId, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Bot, Check } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
+import { Popover } from '@/components/ui/Popover';
 import { useInPlaceFindings } from '@/components/approvals/ReviewFindingsInPlace';
 import { findingsHrefOf } from '@/lib/agentReview/verdictActivity';
 import { cn } from '@/lib/utils/cn';
@@ -28,9 +41,11 @@ import type { CardReviewDTO, ReviewReviewerDTO } from '@/lib/dto/reviewState';
 // nothing.
 //
 // ⚠️ THE CARD OPENS ON POINTER HOVER **OR KEYBOARD FOCUS** (§ 32.3), closes on Escape or
-// when focus leaves it, and is the badge's `aria-describedby`. On the board card the badge
-// is NOT interactive — the whole card is one button — so it carries a `title` and the
-// card's own `aria-describedby` names it.
+// when focus leaves it, and is the badge's `aria-describedby`. It is portalled, so no list
+// that clips its rows can cut it off (MOTIR-11327). An interactive badge carries NO `title`:
+// the card is its description, and a browser tooltip on top of it said the same thing twice.
+// On the board card the badge is NOT interactive — the whole card is one button — so it
+// carries a `title` and the card's own `aria-describedby` names it.
 
 /** The icon pair every form wears: `Bot` with a small check disc at its lower right. */
 export function ReviewedGlyph({ className }: { className?: string }) {
@@ -66,6 +81,7 @@ function ReviewedCardBody({
   // ON THE WORKBENCH the card's link opens the review IN PLACE (MOTIR-10460; § 42.3, F8). The
   // card closes as focus leaves it, so focus returns to the badge that opened it.
   const inPlace = useInPlaceFindings();
+  const host = useContext(ReviewedHostContext);
   const recordRef = review.recordRef;
   const findingsHref = findingsHrefOf(routes.item(review.identifier), review.recordRef);
   return (
@@ -106,9 +122,7 @@ function ReviewedCardBody({
                   inPlace(
                     e,
                     { identifier: review.identifier, title: null, ref: recordRef, earlier: false },
-                    e.currentTarget
-                      .closest('[data-reviewed-host]')
-                      ?.querySelector<HTMLElement>('[data-reviewed-badge]') ?? null,
+                    badgeIn(host?.current),
                   )
               : undefined
           }
@@ -121,7 +135,153 @@ function ReviewedCardBody({
   );
 }
 
-/** The badge plus its hover / focus card, for an interactive surface. */
+/**
+ * THE BADGE'S HOST, for the card's *Findings and checklist* link: the in-place view hands focus
+ * back to the badge when it closes, and the card is portalled, so the link cannot find the
+ * badge by walking up its own DOM.
+ */
+const ReviewedHostContext = createContext<RefObject<HTMLSpanElement | null> | null>(null);
+
+/** The badge inside a host — the element focus returns to. */
+function badgeIn(host: HTMLElement | null | undefined): HTMLElement | null {
+  return host?.querySelector<HTMLElement>('[data-reviewed-badge]') ?? null;
+}
+
+/** How long the card stays open after the pointer leaves, so it can cross onto the card. */
+export const REVIEWED_CARD_CLOSE_DELAY_MS = 120;
+
+const TABBABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]';
+
+function tabbablesIn(root: ParentNode): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(TABBABLE)).filter(
+    // Radix's focus guards bracket the page while a layer is open; they are not a stop.
+    (el) => el.tabIndex >= 0 && !el.hasAttribute('data-radix-focus-guard'),
+  );
+}
+
+/** The first tabbable AFTER the host in document order, outside the host and the card. */
+function nextTabbableAfter(host: HTMLElement, card: HTMLElement | null): HTMLElement | null {
+  return (
+    tabbablesIn(host.ownerDocument).find(
+      (el) =>
+        !host.contains(el) &&
+        !card?.contains(el) &&
+        (host.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+    ) ?? null
+  );
+}
+
+/** Open state with a short, cancellable close, so the pointer can cross the gap onto the card. */
+function useHoverIntent() {
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current !== null) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }, []);
+  const show = useCallback(() => {
+    cancelClose();
+    setOpen(true);
+  }, [cancelClose]);
+  const hide = useCallback(() => {
+    cancelClose();
+    setOpen(false);
+  }, [cancelClose]);
+  const hideSoon = useCallback(() => {
+    cancelClose();
+    closeTimer.current = setTimeout(hide, REVIEWED_CARD_CLOSE_DELAY_MS);
+  }, [cancelClose, hide]);
+  useEffect(() => cancelClose, [cancelClose]);
+  return { open, show, hide, hideSoon };
+}
+
+/**
+ * Tab across a portalled card in the order the in-place card had: from the badge forward into
+ * the card, from the card's first stop back to the badge, from its last stop on to whatever
+ * follows the badge in the page. Answers the element to focus, or null to leave Tab alone.
+ */
+function tabTarget(
+  host: HTMLElement,
+  cardEl: HTMLElement,
+  target: HTMLElement,
+  backwards: boolean,
+): { next: HTMLElement | null; leaves: boolean } {
+  const inCard = tabbablesIn(cardEl);
+  const from = inCard.indexOf(target);
+  if (from === -1) return { next: backwards ? null : (inCard[0] ?? null), leaves: false };
+  if (backwards && from === 0) return { next: badgeIn(host), leaves: false };
+  if (!backwards && from === inCard.length - 1) {
+    return { next: nextTabbableAfter(host, cardEl), leaves: true };
+  }
+  return { next: null, leaves: false };
+}
+
+/** The host's focus, blur and key handling, and the layer's outside-interaction guard. */
+function useCardInteractions(
+  hostRef: RefObject<HTMLSpanElement | null>,
+  cardRef: RefObject<HTMLDivElement | null>,
+  { open, show, hide }: { open: boolean; show: () => void; hide: () => void },
+) {
+  // Escape hands focus back to the badge; that focus must not open the card again.
+  const refocusing = useRef(false);
+  const within = (node: EventTarget | null) =>
+    node instanceof Node &&
+    (hostRef.current?.contains(node) === true || cardRef.current?.contains(node) === true);
+
+  const onFocus = () => {
+    if (!refocusing.current) show();
+  };
+  const onBlur = (e: FocusEvent<HTMLSpanElement>) => {
+    // Focus moving INTO the card (its link) keeps it open.
+    if (!within(e.relatedTarget)) hide();
+  };
+  const onEscape = (e: KeyboardEvent<HTMLSpanElement>) => {
+    e.stopPropagation();
+    const fromCard = cardRef.current?.contains(e.target as Node) === true;
+    hide();
+    if (!fromCard) return;
+    refocusing.current = true;
+    badgeIn(hostRef.current)?.focus();
+    refocusing.current = false;
+  };
+  const onTab = (e: KeyboardEvent<HTMLSpanElement>) => {
+    if (!hostRef.current || !cardRef.current) return;
+    const { next, leaves } = tabTarget(
+      hostRef.current,
+      cardRef.current,
+      e.target as HTMLElement,
+      e.shiftKey,
+    );
+    if (!next) return;
+    e.preventDefault();
+    if (leaves) hide();
+    next.focus();
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
+    if (!open) return; // Escape and Tab on a closed card are left for the page.
+    if (e.key === 'Escape') onEscape(e);
+    else if (e.key === 'Tab') onTab(e);
+  };
+  // The badge itself is not outside the card's layer: focusing or pressing it keeps it open.
+  const keepIfOnHost = (e: { target: EventTarget | null; preventDefault: () => void }) => {
+    if (within(e.target)) e.preventDefault();
+  };
+  return { onFocus, onBlur, onKeyDown, keepIfOnHost };
+}
+
+/**
+ * The badge plus its hover / focus card, for an interactive surface.
+ *
+ * ⚠️ THE CARD IS PORTALLED (MOTIR-11327) through the design system's `Popover`, anchored on the
+ * badge. Drawn in place it was clipped by every `overflow-hidden` list that holds a row (the
+ * Workbench's To approve list, `/approvals`) and painted UNDER the next row's badge, whose
+ * `relative z-10` wrapper starts a stacking context the card's own z-index could not leave.
+ * A portal reproduces the in-place card's behaviour by hand: React carries focus and pointer
+ * events from the card up to the host, so the host still sees focus move INTO the link; the
+ * pointer gets {@link REVIEWED_CARD_CLOSE_DELAY_MS} to cross onto the card; and Tab from the
+ * badge moves into the card and on past the badge, in the order the in-place card had.
+ */
 function WithReviewedCard({
   trigger,
   card,
@@ -130,39 +290,57 @@ function WithReviewedCard({
   card: ReactNode;
 }) {
   const cardId = useId();
-  const [open, setOpen] = useState(false);
-  const onBlur = (e: FocusEvent<HTMLSpanElement>) => {
-    // Focus moving INTO the card (its link) keeps it open.
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
-  };
-  const onKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
-    if (e.key === 'Escape' && open) {
-      e.stopPropagation();
-      setOpen(false);
-    }
-  };
+  const hostRef = useRef<HTMLSpanElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const intent = useHoverIntent();
+  const { open, show, hide, hideSoon } = intent;
+  const { onFocus, onBlur, onKeyDown, keepIfOnHost } = useCardInteractions(
+    hostRef,
+    cardRef,
+    intent,
+  );
+
   return (
-    <span
-      data-reviewed-host=""
-      className="relative inline-flex min-w-0 shrink-0"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={onBlur}
-      onKeyDown={onKeyDown}
-    >
-      {trigger({ 'aria-describedby': open ? cardId : undefined })}
-      {open ? (
-        <span
-          id={cardId}
-          data-surface="popover"
-          data-testid="reviewed-card"
-          className="absolute top-full left-0 z-30 mt-1 flex w-max max-w-[18rem] flex-col gap-0.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding-12) text-left text-xs whitespace-normal shadow-(--shadow-elevated)"
-        >
-          {card}
-        </span>
-      ) : null}
-    </span>
+    <ReviewedHostContext.Provider value={hostRef}>
+      <Popover open={open} onOpenChange={(next) => (next ? show() : hide())} modal={false}>
+        <Popover.Anchor asChild>
+          <span
+            ref={hostRef}
+            data-reviewed-host=""
+            className="relative inline-flex min-w-0 shrink-0"
+            onMouseEnter={show}
+            onMouseLeave={hideSoon}
+            onFocus={onFocus}
+            onBlur={onBlur}
+            onKeyDown={onKeyDown}
+          >
+            {trigger({ 'aria-describedby': open ? cardId : undefined })}
+            {open ? (
+              <Popover.Content
+                ref={cardRef}
+                id={cardId}
+                // A description of the badge, not a dialog (Radix's default role).
+                role={undefined}
+                data-testid="reviewed-card"
+                align="start"
+                sideOffset={4}
+                collisionPadding={8}
+                width="max-content"
+                onMouseEnter={show}
+                onMouseLeave={hideSoon}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                onCloseAutoFocus={(e) => e.preventDefault()}
+                onFocusOutside={keepIfOnHost}
+                onPointerDownOutside={keepIfOnHost}
+                className="flex max-w-[18rem] flex-col gap-0.5 p-(--spacing-card-padding-12) text-left text-xs whitespace-normal"
+              >
+                {card}
+              </Popover.Content>
+            ) : null}
+          </span>
+        </Popover.Anchor>
+      </Popover>
+    </ReviewedHostContext.Provider>
   );
 }
 
@@ -197,7 +375,6 @@ export function ReviewedBadge({
             role="img"
             tabIndex={0}
             aria-label={name}
-            title={name}
             data-reviewed-badge="reviewed"
             className="relative z-10 inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-(--el-tint-mint) text-(--el-text-strong) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             {...described}
@@ -213,7 +390,9 @@ export function ReviewedBadge({
     <Pill
       id={id}
       severity="success"
-      title={name}
+      // The card replaces the browser tooltip on an interactive badge (MOTIR-11327): both
+      // opened at once. The board card's badge has no card, so it keeps its title.
+      title={interactive ? undefined : name}
       className={cn(
         'shrink-0',
         interactive &&
