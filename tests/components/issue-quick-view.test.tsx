@@ -194,21 +194,40 @@ describe('IssueQuickViewPanel — populated (ready)', () => {
     expect(screen.getByText('Marco Ortiz')).toBeTruthy();
   });
 
-  it('"Open full page" + the header identifier both link to /items/[key]', () => {
+  it('"Open full page" links to /items/[key]; the header key is a copy button, not a link (MOTIR-11351)', () => {
     render(<IssueQuickViewPanel state="ready" data={DATA} />);
     expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe('/items/PROD-7');
-    expect(screen.getByRole('link', { name: 'PROD-7' }).getAttribute('href')).toBe('/items/PROD-7');
+    expect(screen.queryByRole('link', { name: 'PROD-7' })).toBeNull();
+    const key = screen.getByRole('button', { name: 'Copy PROD-7' });
+    expect(key.getAttribute('data-testid')).toBe('quick-view-key-copy');
+    expect(key.textContent).toBe('PROD-7');
+  });
+
+  it('clicking the header key copies it and navigates nowhere (MOTIR-11351)', async () => {
+    const writeText = vi.fn(async (_text: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy PROD-7' }));
+    });
+    expect(writeText).toHaveBeenCalledWith('PROD-7');
+    expect(open).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(historyPush).not.toHaveBeenCalled();
+    open.mockRestore();
   });
 
   it('opens every detail-page link in a NEW TAB — target=_blank + rel=noopener (8.8.31)', () => {
     render(<IssueQuickViewPanel state="ready" data={DATA} />);
-    // The four links that navigate to a work-item DETAIL page (`/items/<KEY>`):
-    // the header identifier, "Open full page →", the description-footer "more"
-    // link (all → /items/PROD-7), and the rail Parent link (→ /items/PROD-1).
+    // The three links that navigate to a work-item DETAIL page (`/items/<KEY>`):
+    // "Open full page →", the description-footer "more" link (both →
+    // /items/PROD-7), and the rail Parent link (→ /items/PROD-1). The header key
+    // copies instead of linking (MOTIR-11351).
     const detailLinks = screen
       .getAllByRole('link')
       .filter((a) => /^\/items\/[A-Z]/.test(a.getAttribute('href') ?? ''));
-    expect(detailLinks).toHaveLength(4);
+    expect(detailLinks).toHaveLength(3);
     for (const a of detailLinks) {
       expect(a.getAttribute('target')).toBe('_blank');
       expect(a.getAttribute('rel')).toContain('noopener');
