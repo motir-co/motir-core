@@ -32,6 +32,8 @@ import { declaredIn, loadTokenLayer, resolveValue, type ThemeContext } from './p
 // the same way.
 // And the `--el-thinking` / `--el-checking` pair (the planner's Thinking and
 // Checking cues, MOTIR-11254), the same way.
+// And the `--el-editing` / `--el-fixing` pair (the planner's Editing and Fixing
+// cues, MOTIR-11362), the same way.
 // The four palettes MOTIR-10550 added (lagoon, olive, contrast, midnight) joined
 // the fixture at their resolved values when they were registered: a palette born
 // after the warm touches has no pre-change layer, so its row pins it from birth.

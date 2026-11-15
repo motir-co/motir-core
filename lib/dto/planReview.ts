@@ -932,6 +932,16 @@ export interface PlanReviewItemDto {
    * sets it.
    */
   lastEditedAt?: string | null;
+  /**
+   * WHEN THIS PROPOSAL WAS LAST WRITTEN (MOTIR-11362) — the later of its append and
+   * {@link lastEditedAt}, as an ISO instant: the same per-proposal last write the
+   * progress read's quiet drop takes (`PlanProgressWriteRow`). The live cues
+   * compare it with a step's `startedAt`: a card an `amend` writes on its level, or
+   * the fix after the final check writes anywhere, reads *Editing* / *Fixing* from
+   * that write until the step closes. OPTIONAL on the type only so hand-built
+   * review fixtures stay valid; `getPlanReview` always sets it.
+   */
+  lastWrittenAt?: string;
 
   stale: boolean;
   staleReasons: StaleReason[];

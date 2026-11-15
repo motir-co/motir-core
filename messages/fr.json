@@ -371,7 +371,11 @@
       "checkingName": "En cours de vérification finale",
       "checkingAll": "Vérification de ses éléments enfants",
       "checkingAllName": "Ses éléments enfants sont vérifiés ensemble lors de la vérification finale",
-      "checkingHere": "Vérification de ce niveau"
+      "checkingHere": "Vérification de ce niveau",
+      "editing": "Modification",
+      "editingName": "En cours de modification — son niveau est en cours de rapprochement",
+      "fixing": "Correction",
+      "fixingName": "En cours de correction après la vérification finale"
     },
     "listWritingTitle": "Rien de proposé pour l’instant",
     "listWritingBody": "Les éléments apparaissent ici au fur et à mesure de la rédaction du plan.",
@@ -439,7 +443,9 @@
       "follow": "Suivre la rédaction",
       "followHint": "Garde le texte en cours de rédaction visible. Faites défiler pour arrêter.",
       "thinking": "Réflexion en cours",
-      "checking": "Vérification en cours"
+      "checking": "Vérification en cours",
+      "editing": "Modification",
+      "fixing": "Correction"
     }
   },
   "projectAccess": {

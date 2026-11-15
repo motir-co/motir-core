@@ -431,6 +431,8 @@ body {
 .canvas-node--thinking > .canvas-cue-ring,
 .canvas-node--drafting > .canvas-cue-ring,
 .canvas-node--checking > .canvas-cue-ring,
+.canvas-node--editing > .canvas-cue-ring,
+.canvas-node--fixing > .canvas-cue-ring,
 .canvas-node--laying > .canvas-cue-ring {
   pointer-events: none;
   position: absolute;
@@ -441,6 +443,8 @@ body {
 .canvas-node--thinking > .canvas-cue-chip,
 .canvas-node--drafting > .canvas-cue-chip,
 .canvas-node--checking > .canvas-cue-chip,
+.canvas-node--editing > .canvas-cue-chip,
+.canvas-node--fixing > .canvas-cue-chip,
 .canvas-node--laying > .canvas-cue-chip {
   pointer-events: none;
   position: absolute;
@@ -461,11 +465,13 @@ body {
 .canvas-cue-chip > svg {
   color: var(--el-status-in-progress);
 }
-/* Thinking, Drafting and Checking: the chip on the TOP edge. Laying: on the
+/* Thinking, Drafting, Editing, Checking and Fixing: the chip on the TOP edge. Laying: on the
    BOTTOM — where its children will hang (§26.7). */
 .canvas-node--thinking > .canvas-cue-chip,
 .canvas-node--drafting > .canvas-cue-chip,
-.canvas-node--checking > .canvas-cue-chip {
+.canvas-node--checking > .canvas-cue-chip,
+.canvas-node--editing > .canvas-cue-chip,
+.canvas-node--fixing > .canvas-cue-chip {
   top: -18px;
 }
 .canvas-node--laying > .canvas-cue-chip {
@@ -483,12 +489,16 @@ body {
   .canvas-node--thinking > .canvas-cue-ring,
   .canvas-node--drafting > .canvas-cue-ring,
   .canvas-node--checking > .canvas-cue-ring,
+  .canvas-node--editing > .canvas-cue-ring,
+  .canvas-node--fixing > .canvas-cue-ring,
   .canvas-node--laying > .canvas-cue-ring {
     animation: canvas-cue-ring-enter var(--transition-slow) var(--canvas-ease-enter) both;
   }
   .canvas-node--thinking > .canvas-cue-chip,
   .canvas-node--drafting > .canvas-cue-chip,
   .canvas-node--checking > .canvas-cue-chip,
+  .canvas-node--editing > .canvas-cue-chip,
+  .canvas-node--fixing > .canvas-cue-chip,
   .canvas-node--laying > .canvas-cue-chip {
     animation: canvas-fade-in var(--transition-slow) var(--canvas-ease-enter) both;
   }
@@ -517,6 +527,31 @@ body {
 }
 .canvas-node--checking > .canvas-cue-chip > svg {
   color: var(--el-checking);
+}
+/* EDITING and FIXING (Task MOTIR-11362) — the amend rewriting a card or its level,
+   and the fix after the final check writing a card. The same ring box and top-edge
+   chip, each in its own role token, stroke and glyph so neither rests on colour
+   alone: EDITING is a 2px SOLID `--el-editing` ring with a `file-pen` chip —
+   solid like Drafting, but with no wash, because no text is streamed into the
+   card; FIXING a 3px SOLID `--el-fixing` ring — heavier than every other cue,
+   the last stage — with a `wrench` chip. Neither moves: only the C1 arrival plays. */
+.canvas-node--editing > .canvas-cue-ring {
+  border: 2px solid var(--el-editing);
+}
+.canvas-node--editing > .canvas-cue-chip {
+  border-color: var(--el-editing);
+}
+.canvas-node--editing > .canvas-cue-chip > svg {
+  color: var(--el-editing);
+}
+.canvas-node--fixing > .canvas-cue-ring {
+  border: 3px solid var(--el-fixing);
+}
+.canvas-node--fixing > .canvas-cue-chip {
+  border-color: var(--el-fixing);
+}
+.canvas-node--fixing > .canvas-cue-chip > svg {
+  color: var(--el-fixing);
 }
 /* AT WORK (Story MOTIR-8413 · MOTIR-8416; design `design/ai-chat/design-notes.md`
    § _Motir at work_, `planning-workspace--at-work.mock.html`). The DRAFTING cue takes

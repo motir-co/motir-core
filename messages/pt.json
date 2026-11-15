@@ -371,7 +371,11 @@
       "checkingName": "Sendo revisado na verificação final",
       "checkingAll": "Verificando os itens filhos",
       "checkingAllName": "Os itens filhos estão sendo revisados juntos na verificação final",
-      "checkingHere": "Verificando este nível"
+      "checkingHere": "Verificando este nível",
+      "editing": "Editando",
+      "editingName": "Sendo editado — o nível está sendo conciliado",
+      "fixing": "Corrigindo",
+      "fixingName": "Sendo corrigido após a verificação final"
     },
     "listWritingTitle": "Nada proposto ainda",
     "listWritingBody": "Os itens aparecem aqui conforme o plano é escrito.",
@@ -439,7 +443,9 @@
       "follow": "Seguir a escrita",
       "followHint": "Mantém o texto que está sendo escrito à vista. Role para parar.",
       "thinking": "Pensando",
-      "checking": "Verificando"
+      "checking": "Verificando",
+      "editing": "Editando",
+      "fixing": "Corrigindo"
     }
   },
   "projectAccess": {

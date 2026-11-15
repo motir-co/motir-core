@@ -4715,6 +4715,15 @@
      over the status hues measured clean in all 28 palette × theme contexts. */
   --el-thinking: var(--el-status-in-review);
   --el-checking: var(--el-status-implemented);
+  /* THE EDITING AND FIXING CUES (MOTIR-11362) — the card the amend is rewriting
+     (`--el-editing`: its solid ring, chip edge and file-pen) and the card the fix
+     after the final check is writing (`--el-fixing`: its heavy ring, chip edge and
+     wrench). The high-priority orange and the readable danger hue: at least
+     ΔE2000 5.5 from every other planner cue and 3:1 on the card and the canvas in
+     all 28 palette × theme contexts, pinned by tests/theme/plannerCueHues.test.ts
+     (the warning hue itself falls to 2.96:1 on spectrum's light canvas). */
+  --el-editing: var(--el-priority-high);
+  --el-fixing: var(--el-danger-on-surface);
   /* THE CHANGED HIGHLIGHT (MOTIR-11185) — a card the planner changed AFTER it was
      drawn: the ring and the one glow pulse on the planning canvas. Mapped to the
      palette's RE-PLANNING hue, which every palette keeps distinct from the

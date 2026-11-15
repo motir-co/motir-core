@@ -9,7 +9,18 @@ import {
   type PointerEvent as RPointerEvent,
   type ReactNode,
 } from 'react';
-import { Brain, Flag, ListTree, Maximize2, Minus, PenLine, Plus, SearchCheck } from 'lucide-react';
+import {
+  Brain,
+  FilePen,
+  Flag,
+  ListTree,
+  Maximize2,
+  Minus,
+  PenLine,
+  Plus,
+  SearchCheck,
+  Wrench,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   type Rect,
@@ -224,9 +235,11 @@ export interface NodeHighlight {
  *  accessible name (*Being drafted now*); `text` is the chip's visible word
  *  (*Drafting*). THINKING (an author session with nothing written yet) and
  *  CHECKING (the final check reviewing the card) are static, like LAYING; only
- *  DRAFTING moves (MOTIR-11254). */
+ *  DRAFTING moves (MOTIR-11254). EDITING (the amend rewriting the card or its
+ *  level) and FIXING (the fix after the final check writing the card) are static
+ *  too (MOTIR-11362). */
 export interface NodeCue {
-  kind: 'thinking' | 'drafting' | 'checking' | 'laying';
+  kind: 'thinking' | 'drafting' | 'editing' | 'checking' | 'fixing' | 'laying';
   label: string;
   text: string;
   /** Motir is writing this card RIGHT NOW (`readPlanAtWork(...).steps` names it).
@@ -261,6 +274,10 @@ function CueGlyph({ kind }: { kind: NodeCue['kind'] }) {
       return <PenLine aria-hidden="true" className="size-3" />;
     case 'checking':
       return <SearchCheck aria-hidden="true" className="size-3" />;
+    case 'editing':
+      return <FilePen aria-hidden="true" className="size-3" />;
+    case 'fixing':
+      return <Wrench aria-hidden="true" className="size-3" />;
     default:
       return <ListTree aria-hidden="true" className="size-3" />;
   }
@@ -1213,9 +1230,10 @@ export function PlanningCanvas({
                           : undefined
                       }
                     />
-                    {/* The labelled CHIP — the cue's name; thinking, drafting and
-                        checking on the top edge, laying on the bottom, where the
-                        children will hang. Each state has its own glyph (§31.2). */}
+                    {/* The labelled CHIP — the cue's name; thinking, drafting,
+                        editing, checking and fixing on the top edge, laying on the
+                        bottom, where the children will hang. Each state has its
+                        own glyph (§31.2). */}
                     <span
                       id={cueId}
                       role="img"

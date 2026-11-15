@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { lastEditedAtByItem, PLAN_ITEM_EDITED_KIND } from '@/lib/plans/planItemEdits';
+import {
+  lastEditedAtByItem,
+  lastWrittenAtOf,
+  PLAN_ITEM_EDITED_KIND,
+} from '@/lib/plans/planItemEdits';
 
 // The per-proposal edit time the live plan read carries (MOTIR-11185): the newest
 // `edited` trail row per item, and nothing else.
@@ -32,5 +36,22 @@ describe('lastEditedAtByItem', () => {
       },
     ]);
     expect(out.size).toBe(0);
+  });
+});
+
+describe('lastWrittenAtOf (MOTIR-11362)', () => {
+  it('is the append when the proposal was never edited', () => {
+    expect(lastWrittenAtOf('2026-11-15T10:00:00Z', null)).toBe('2026-11-15T10:00:00.000Z');
+    expect(lastWrittenAtOf(at('2026-11-15T10:00:00Z'), null)).toBe('2026-11-15T10:00:00.000Z');
+  });
+
+  it('is the later of the append and the newest edit', () => {
+    expect(lastWrittenAtOf('2026-11-15T10:00:00Z', '2026-11-15T10:05:00.000Z')).toBe(
+      '2026-11-15T10:05:00.000Z',
+    );
+    // An edit stamped before the append (clock skew) never moves the write back.
+    expect(lastWrittenAtOf('2026-11-15T10:00:00Z', '2026-11-15T09:00:00.000Z')).toBe(
+      '2026-11-15T10:00:00.000Z',
+    );
   });
 });

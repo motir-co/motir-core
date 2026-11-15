@@ -36,3 +36,18 @@ export function lastEditedAtByItem(rows: readonly PlanItemEditRow[]): Map<string
   }
   return new Map([...newest].map(([id, at]) => [id, at.toISOString()] as const));
 }
+
+/**
+ * A proposal's LAST WRITE (MOTIR-11362) — the later of its append (`createdAt`)
+ * and its newest `edited` row, as an ISO string: the same "last write" the
+ * progress read's quiet drop takes per proposal (`PlanProgressWriteRow.writtenAt`).
+ * The live cue derivation compares it with a step's start, so a card the amend or
+ * the fix after the final check writes is known by the write itself — the fix
+ * names no card, and the amend names only the parent of the level it rewrites.
+ */
+export function lastWrittenAtOf(createdAt: string | Date, editedAt: string | null): string {
+  const created = new Date(createdAt);
+  if (editedAt === null) return created.toISOString();
+  const edited = new Date(editedAt);
+  return (edited > created ? edited : created).toISOString();
+}

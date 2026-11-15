@@ -655,8 +655,15 @@ export function PlanReviewCanvas({
       }
     }
     // CHECKING (§31.1, §31.5) — the final check's card, or the story whose cards it
-    // reviews together. It wins over any other cue on the node: the latest stage.
+    // reviews together — and EDITING / FIXING (MOTIR-11362): the amend's target and
+    // the cards it rewrites, the cards the fix after the check writes. Each wins
+    // over any other cue on the node, so an amended card never reads Thinking or
+    // Drafting: the derivation already picked the latest stage.
     for (const [nodeId, state] of cardCues?.states ?? []) {
+      if (state === 'editing' || state === 'fixing') {
+        out.set(nodeId, { kind: state, label: tCue(`${state}Name`), text: tCue(state) });
+        continue;
+      }
       if (state !== 'checking') continue;
       out.set(
         nodeId,

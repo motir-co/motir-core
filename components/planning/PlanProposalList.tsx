@@ -2,7 +2,16 @@
 
 import { Fragment, memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, Brain, FolderX, PenLine, RotateCw, SearchCheck } from 'lucide-react';
+import {
+  AlertTriangle,
+  Brain,
+  FilePen,
+  FolderX,
+  PenLine,
+  RotateCw,
+  SearchCheck,
+  Wrench,
+} from 'lucide-react';
 
 import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -325,16 +334,27 @@ const ROW_CUE = {
     glyph: 'text-(--el-drafting)',
     Icon: PenLine,
   },
+  editing: {
+    box: 'border-(--el-editing) bg-(--el-card) text-(--el-text-secondary)',
+    glyph: 'text-(--el-editing)',
+    Icon: FilePen,
+  },
   checking: {
     box: 'border-(--el-checking) bg-(--el-card) text-(--el-text-secondary)',
     glyph: 'text-(--el-checking)',
     Icon: SearchCheck,
   },
-} as const;
+  fixing: {
+    box: 'border-(--el-fixing) bg-(--el-card) text-(--el-text-secondary)',
+    glyph: 'text-(--el-fixing)',
+    Icon: Wrench,
+  },
+} as const satisfies Record<CardCueState, unknown>;
 
 /**
  * WHAT THE PLANNER IS DOING TO THIS ROW (Task MOTIR-11254; design Part XXXI §31.6,
- * amending §26.18) — Thinking · Drafting · Checking, the canvas chip's state at the
+ * amending §26.18) — Thinking · Drafting · Editing · Checking · Fixing (the last
+ * two and Editing since MOTIR-11362), the canvas chip's state at the
  * list's density. Static in every state: the list is a reading surface, so the
  * chip appears, swaps and leaves with the read. Not a live region (§31.9).
  */

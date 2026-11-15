@@ -371,7 +371,11 @@
       "checkingName": "Wird in der Abschlussprüfung geprüft",
       "checkingAll": "Untergeordnete Elemente werden geprüft",
       "checkingAllName": "Seine untergeordneten Elemente werden in der Abschlussprüfung gemeinsam geprüft",
-      "checkingHere": "Diese Ebene wird geprüft"
+      "checkingHere": "Diese Ebene wird geprüft",
+      "editing": "Wird bearbeitet",
+      "editingName": "Wird bearbeitet — seine Ebene wird abgeglichen",
+      "fixing": "Wird korrigiert",
+      "fixingName": "Wird nach der Abschlussprüfung korrigiert"
     },
     "listWritingTitle": "Noch nichts vorgeschlagen",
     "listWritingBody": "Elemente erscheinen hier, während der Plan geschrieben wird.",
@@ -439,7 +443,9 @@
       "follow": "Dem Schreiben folgen",
       "followHint": "Hält den Text, der gerade geschrieben wird, im Blick. Zum Beenden scrollen.",
       "thinking": "Wird durchdacht",
-      "checking": "Wird geprüft"
+      "checking": "Wird geprüft",
+      "editing": "Wird bearbeitet",
+      "fixing": "Wird korrigiert"
     }
   },
   "projectAccess": {

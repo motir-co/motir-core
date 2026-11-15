@@ -371,7 +371,11 @@
       "checkingName": "In fase di verifica finale",
       "checkingAll": "Verifica degli elementi figli",
       "checkingAllName": "I suoi elementi figli sono in verifica insieme nella verifica finale",
-      "checkingHere": "Verifica di questo livello"
+      "checkingHere": "Verifica di questo livello",
+      "editing": "In modifica",
+      "editingName": "In modifica: il suo livello viene riconciliato",
+      "fixing": "In correzione",
+      "fixingName": "In correzione dopo il controllo finale"
     },
     "listWritingTitle": "Ancora nessuna proposta",
     "listWritingBody": "Gli elementi compaiono qui man mano che il piano viene scritto.",
@@ -439,7 +443,9 @@
       "follow": "Segui la stesura",
       "followHint": "Mantiene in vista il testo in fase di stesura. Scorri per interrompere.",
       "thinking": "Riflessione in corso",
-      "checking": "Verifica in corso"
+      "checking": "Verifica in corso",
+      "editing": "In modifica",
+      "fixing": "In correzione"
     }
   },
   "projectAccess": {

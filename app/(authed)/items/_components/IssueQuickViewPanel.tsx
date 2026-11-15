@@ -15,11 +15,13 @@ import {
   Clock,
   Component as ComponentIcon,
   Brain,
+  FilePen,
   Goal,
   PenLine,
   SearchCheck,
   SearchX,
   User,
+  Wrench,
 } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -217,7 +219,9 @@ type IssueQuickViewPanelProps = {
          * What the planner is doing to this card (MOTIR-11254, Part XXXI §31.7) —
          * the canvas's derivation after its two-read hold. `thinking` relabels
          * the writing cue while nothing is written yet; `checking` is the final
-         * check reviewing the card. Absent ⇒ the cue reads as it shipped.
+         * check reviewing the card; `editing` the amend rewriting it and `fixing`
+         * the fix after the check writing it (MOTIR-11362). Absent ⇒ the cue reads
+         * as it shipped.
          */
         cue?: CardCueState | null;
       } | null;
@@ -238,6 +242,14 @@ function sameFields(a: PeekLiveDraft['fields'] | null, b: PeekLiveDraft['fields'
   return (['title', 'descriptionMd', 'explanationMd'] as const).every((f) => a[f] === b[f]);
 }
 
+/** The planner's own stages on the cue line — glyph and token per state. */
+const PLANNER_CUE_LINE = {
+  thinking: { Icon: Brain, glyph: 'text-(--el-thinking)' },
+  editing: { Icon: FilePen, glyph: 'text-(--el-editing)' },
+  checking: { Icon: SearchCheck, glyph: 'text-(--el-checking)' },
+  fixing: { Icon: Wrench, glyph: 'text-(--el-fixing)' },
+} as const;
+
 /**
  * The in-progress cue's line (Part XXIX §29.4, §29.6): `pen-line` + _Being
  * written_ while the card is written; `sr-only` _Written_ once the stored card
@@ -246,11 +258,13 @@ function sameFields(a: PeekLiveDraft['fields'] | null, b: PeekLiveDraft['fields'
  * viewport) is narrow. MOTIR-11254 (§31.7) adds `brain` + _Thinking_ before any
  * text exists and `search-check` + _Checking_ while the final check reviews the
  * card — the same `<p role="status">`, so each change is announced once.
+ * MOTIR-11362 adds `file-pen` + _Editing_ while the amend rewrites the card or
+ * its level and `wrench` + _Fixing_ once the fix after the check has written it.
  */
 function LiveCueLine({ state }: { state: CueLineState }) {
   const tPlan = useTranslations('planReview');
-  if (state === 'thinking' || state === 'checking') {
-    const Icon = state === 'thinking' ? Brain : SearchCheck;
+  if (state in PLANNER_CUE_LINE) {
+    const look = PLANNER_CUE_LINE[state as keyof typeof PLANNER_CUE_LINE];
     return (
       <p
         role="status"
@@ -258,13 +272,8 @@ function LiveCueLine({ state }: { state: CueLineState }) {
         data-live-cue={state}
         className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-(--el-text-secondary)"
       >
-        <Icon
-          aria-hidden="true"
-          className={`size-3.5 shrink-0 ${
-            state === 'thinking' ? 'text-(--el-thinking)' : 'text-(--el-checking)'
-          }`}
-        />
-        {tPlan(state === 'thinking' ? 'peekLive.thinking' : 'peekLive.checking')}
+        <look.Icon aria-hidden="true" className={`size-3.5 shrink-0 ${look.glyph}`} />
+        {tPlan(`peekLive.${state as keyof typeof PLANNER_CUE_LINE}`)}
       </p>
     );
   }

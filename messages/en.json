@@ -371,7 +371,11 @@
       "checkingName": "Being reviewed in the final check",
       "checkingAll": "Checking its items",
       "checkingAllName": "Its items are being reviewed together in the final check",
-      "checkingHere": "Checking this level"
+      "checkingHere": "Checking this level",
+      "editing": "Editing",
+      "editingName": "Being edited — its level is being reconciled",
+      "fixing": "Fixing",
+      "fixingName": "Being fixed after the final check"
     },
     "listWritingTitle": "Nothing proposed yet",
     "listWritingBody": "Items appear here as the plan is written.",
@@ -439,7 +443,9 @@
       "follow": "Follow the writing",
       "followHint": "Keep the text being written in view. Scroll to stop.",
       "thinking": "Thinking",
-      "checking": "Checking"
+      "checking": "Checking",
+      "editing": "Editing",
+      "fixing": "Fixing"
     }
   },
   "projectAccess": {
