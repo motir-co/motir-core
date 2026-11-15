@@ -8843,6 +8843,55 @@
         "checkingCardLine": "Vérification de {title}",
         "repairingLine": "Correction de ce que la vérification finale a trouvé"
       },
+      "fact": {
+        "unknown": "Travail sur le plan…",
+        "claimCheck": {
+          "started": "{count, plural, one {Vérification des références au code de # élément} other {Vérification des références au code de # éléments}}",
+          "held": "Les références au code de tous les éléments tiennent",
+          "sentBack": "{count, plural, one {Les références au code de # élément ne tiennent pas ; il est renvoyé pour être réécrit} other {Les références au code de # éléments ne tiennent pas ; ils sont renvoyés pour être réécrits}}",
+          "settleStarted": "{count, plural, one {Nouvelle vérification des références au code de # élément par rapport à tout le plan} other {Nouvelle vérification des références au code de # éléments par rapport à tout le plan}}",
+          "settleHeld": "Les références au code de tous les éléments tiennent par rapport à tout le plan",
+          "settleUnresolved": "{count, plural, one {Les références au code de # élément ne tiennent toujours pas ; il est signalé dans le plan} other {Les références au code de # éléments ne tiennent toujours pas ; ils sont signalés dans le plan}}"
+        },
+        "dryRun": {
+          "started": "Début de la vérification finale du plan",
+          "skippedNoTenant": "Vérification finale du plan ignorée : il n’a aucun projet par rapport auquel être vérifié",
+          "skippedNoPlanId": "Vérification finale du plan ignorée : aucun plan n’a été enregistré pour être vérifié",
+          "skippedQuestion": "Vérification finale du plan ignorée tant qu’une question attend une réponse",
+          "skippedUserStop": "Vérification finale du plan ignorée, car la planification a été arrêtée",
+          "skippedTurnedOff": "Vérification finale du plan ignorée : elle est désactivée pour ce projet",
+          "skippedNoContainers": "Vérification finale du plan ignorée : aucune story, tâche ou bug n’était prêt à être vérifié",
+          "skippedByPerson": "Vérification finale du plan arrêtée plus tôt, car elle a été ignorée : rien de ce qu’elle a trouvé n’a été corrigé",
+          "selectionFailed": "La vérification finale du plan n’a pas abouti : ses éléments n’ont pas pu être lus",
+          "checking": "Vérification de « {title} »",
+          "notFinished": "Impossible de terminer la vérification de « {title} »",
+          "containerClean": "Aucun problème trouvé dans « {title} »",
+          "containerFound": "{count, plural, one {# problème trouvé dans « {title} »} other {# problèmes trouvés dans « {title} »}}",
+          "finding": "Problème : {summary}"
+        },
+        "repair": {
+          "started": "Correction des résultats…",
+          "retrying": "Les corrections se sont arrêtées en cours de route, nouvel essai…",
+          "failed": "Les corrections n’ont pas abouti",
+          "findingFixed": "Corrigé : {summary}",
+          "notFixedOpenWhat": "Non corrigé : {summary} (il faut décider ce que l’élément doit faire)",
+          "notFixedWholeWhatDisproved": "Non corrigé : {summary} (le code montre que l’objectif de l’élément ne tient pas)",
+          "notFixedExtensionContradicted": "Non corrigé : {summary} (le code contredit ce sur quoi l’élément s’appuie)",
+          "notFixedCommittedInProgress": "Non corrigé : {summary} (l’élément est déjà en cours de travail)",
+          "notFixedSizing": "Non corrigé : {summary} (cela concerne la taille du travail)",
+          "notFixedFixFailed": "Non corrigé : {summary} (la correction n’a pas pu être faite)",
+          "notFixedSkipped": "Non corrigé : {summary} (la vérification finale a été ignorée avant la correction)"
+        },
+        "reopen": {
+          "started": "Nouvelle vérification des liens et de l’ordre du plan",
+          "startedAgain": "Nouvelle vérification, une fois de plus, des liens et de l’ordre du plan",
+          "cardRemoved": "« {title} » retiré",
+          "cardAdded": "« {title} » ajouté"
+        },
+        "codeGraph": {
+          "refreshed": "{count, plural, one {Votre graphe de code pour {repos} a été actualisé depuis le dernier tour. Les réponses précédentes utilisaient l’ancien graphe.} other {Les graphes de code pour {repos} ont été actualisés depuis le dernier tour. Les réponses précédentes utilisaient les anciens graphes.}}"
+        }
+      },
       "openerFollowUp": "Vous venez de choisir {label}. Motir AI planifie ce que ce choix conditionne.",
       "composerPlaceholderGuide": "Dites à Motir AI comment s'est passée l'étape…",
       "narration": {

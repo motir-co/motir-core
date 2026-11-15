@@ -8843,6 +8843,55 @@
         "checkingCardLine": "{title} wordt gecontroleerd",
         "repairingLine": "Wat de eindcontrole vond wordt hersteld"
       },
+      "fact": {
+        "unknown": "Bezig met het plan…",
+        "claimCheck": {
+          "started": "{count, plural, one {Codeverwijzingen van # item worden gecontroleerd} other {Codeverwijzingen van # items worden gecontroleerd}}",
+          "held": "De codeverwijzingen van alle items kloppen",
+          "sentBack": "{count, plural, one {De codeverwijzingen van # item kloppen niet; het gaat terug om opnieuw te worden geschreven} other {De codeverwijzingen van # items kloppen niet; ze gaan terug om opnieuw te worden geschreven}}",
+          "settleStarted": "{count, plural, one {Codeverwijzingen van # item worden opnieuw tegen het hele plan gecontroleerd} other {Codeverwijzingen van # items worden opnieuw tegen het hele plan gecontroleerd}}",
+          "settleHeld": "De codeverwijzingen van alle items kloppen tegen het hele plan",
+          "settleUnresolved": "{count, plural, one {De codeverwijzingen van # item kloppen nog steeds niet; het wordt in het plan gemeld} other {De codeverwijzingen van # items kloppen nog steeds niet; ze worden in het plan gemeld}}"
+        },
+        "dryRun": {
+          "started": "De eindcontrole van het plan begint",
+          "skippedNoTenant": "Eindcontrole van het plan overgeslagen: er is geen project om het tegen te controleren",
+          "skippedNoPlanId": "Eindcontrole van het plan overgeslagen: er is geen plan opgeslagen om te controleren",
+          "skippedQuestion": "Eindcontrole van het plan overgeslagen zolang een vraag op een antwoord wacht",
+          "skippedUserStop": "Eindcontrole van het plan overgeslagen omdat het plannen is gestopt",
+          "skippedTurnedOff": "Eindcontrole van het plan overgeslagen: die staat uit voor dit project",
+          "skippedNoContainers": "Eindcontrole van het plan overgeslagen: geen story, taak of bug erin was klaar om te controleren",
+          "skippedByPerson": "Eindcontrole van het plan vroeg beëindigd omdat die is overgeslagen: niets van wat ze vond is hersteld",
+          "selectionFailed": "De eindcontrole van het plan is niet afgerond: de items ervan konden niet worden gelezen",
+          "checking": "‘{title}’ wordt gecontroleerd",
+          "notFinished": "Controle van ‘{title}’ kon niet worden afgerond",
+          "containerClean": "Geen problemen gevonden in ‘{title}’",
+          "containerFound": "{count, plural, one {# probleem gevonden in ‘{title}’} other {# problemen gevonden in ‘{title}’}}",
+          "finding": "Probleem: {summary}"
+        },
+        "repair": {
+          "started": "De bevindingen worden hersteld…",
+          "retrying": "De herstellingen stopten halverwege, ze worden nog één keer geprobeerd…",
+          "failed": "De herstellingen zijn niet afgerond",
+          "findingFixed": "Hersteld: {summary}",
+          "notFixedOpenWhat": "Niet hersteld: {summary} (er is een beslissing nodig over wat het item moet doen)",
+          "notFixedWholeWhatDisproved": "Niet hersteld: {summary} (de code laat zien dat het doel van het item niet klopt)",
+          "notFixedExtensionContradicted": "Niet hersteld: {summary} (de code spreekt tegen waar het item op voortbouwt)",
+          "notFixedCommittedInProgress": "Niet hersteld: {summary} (er wordt al aan het item gewerkt)",
+          "notFixedSizing": "Niet hersteld: {summary} (het gaat over de omvang van het werk)",
+          "notFixedFixFailed": "Niet hersteld: {summary} (de herstelling kon niet worden gemaakt)",
+          "notFixedSkipped": "Niet hersteld: {summary} (de eindcontrole werd overgeslagen vóór de herstelling)"
+        },
+        "reopen": {
+          "started": "De koppelingen en volgorde van het plan worden opnieuw gecontroleerd",
+          "startedAgain": "De koppelingen en volgorde van het plan worden nog een keer gecontroleerd",
+          "cardRemoved": "‘{title}’ verwijderd",
+          "cardAdded": "‘{title}’ toegevoegd"
+        },
+        "codeGraph": {
+          "refreshed": "{count, plural, one {Je codegraaf voor {repos} is sinds de vorige beurt vernieuwd. Eerdere antwoorden gebruikten de vorige graaf.} other {De codegrafen voor {repos} zijn sinds de vorige beurt vernieuwd. Eerdere antwoorden gebruikten de vorige grafen.}}"
+        }
+      },
       "openerFollowUp": "Je hebt net {label} gekozen. Motir AI plant wat daarop wacht.",
       "composerPlaceholderGuide": "Vertel Motir AI hoe de stap ging…",
       "narration": {

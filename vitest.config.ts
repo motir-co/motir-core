@@ -1944,6 +1944,10 @@ export default defineConfig({
         // launcher it derives its href from is already gated above.
         'lib/planning/aiCallout.ts',
         'components/planning/AiCalloutMenu.tsx',
+        // MOTIR-11296 — the code-written rail lines, worded from motir-ai's facts.
+        // MEASURED on this branch against `plan-change-progress-facts.test.tsx`:
+        // 100 / 100 / 100 / 100, pinned at the floor below.
+        'lib/planning/progressFacts.ts',
         // MOTIR-3208, corrected by MOTIR-3214 — the orb's drag + throw.
         // `orbPhysics.ts` is pure and is GATED below (measured at 100 statements /
         // branches / functions / lines on this branch, against a 90 floor).
@@ -7367,6 +7371,7 @@ export default defineConfig({
         // rather than asking for catch-up tests — the point of the gate is that
         // the NEXT action entry cannot quietly ship an unexercised row.
         'lib/planning/aiCallout.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/progressFacts.ts': { statements: 90, branches: 90, functions: 90, lines: 90 },
         'components/planning/AiCalloutMenu.tsx': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-3208 — measured at 100/100/100/100 on this branch before pinning.
         'lib/planning/orbPhysics.ts': { branches: 90, functions: 90, lines: 90 },

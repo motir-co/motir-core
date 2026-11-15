@@ -8843,6 +8843,55 @@
         "checkingCardLine": "Revisando {title}",
         "repairingLine": "Corrigiendo lo que encontró la revisión final"
       },
+      "fact": {
+        "unknown": "Trabajando en el plan…",
+        "claimCheck": {
+          "started": "{count, plural, one {Comprobando las referencias al código de # elemento} other {Comprobando las referencias al código de # elementos}}",
+          "held": "Las referencias al código de todos los elementos se sostienen",
+          "sentBack": "{count, plural, one {Las referencias al código de # elemento no se sostienen; se devuelve para reescribirlo} other {Las referencias al código de # elementos no se sostienen; se devuelven para reescribirlos}}",
+          "settleStarted": "{count, plural, one {Comprobando de nuevo las referencias al código de # elemento frente a todo el plan} other {Comprobando de nuevo las referencias al código de # elementos frente a todo el plan}}",
+          "settleHeld": "Las referencias al código de todos los elementos se sostienen frente a todo el plan",
+          "settleUnresolved": "{count, plural, one {Las referencias al código de # elemento siguen sin sostenerse; se indica en el plan} other {Las referencias al código de # elementos siguen sin sostenerse; se indican en el plan}}"
+        },
+        "dryRun": {
+          "started": "Empezando la revisión final del plan",
+          "skippedNoTenant": "Se omitió la revisión final del plan: no tiene un proyecto con el que comprobarse",
+          "skippedNoPlanId": "Se omitió la revisión final del plan: no se guardó ningún plan que revisar",
+          "skippedQuestion": "Se omitió la revisión final del plan mientras una pregunta espera respuesta",
+          "skippedUserStop": "Se omitió la revisión final del plan porque se detuvo la planificación",
+          "skippedTurnedOff": "Se omitió la revisión final del plan: está desactivada para este proyecto",
+          "skippedNoContainers": "Se omitió la revisión final del plan: ninguna historia, tarea ni error estaba listo para revisarse",
+          "skippedByPerson": "La revisión final del plan terminó antes porque se omitió: no se corrigió nada de lo que encontró",
+          "selectionFailed": "La revisión final del plan no terminó: no se pudieron leer sus elementos",
+          "checking": "Revisando “{title}”",
+          "notFinished": "No se pudo terminar de revisar “{title}”",
+          "containerClean": "No se encontraron problemas en “{title}”",
+          "containerFound": "{count, plural, one {Se encontró # problema en “{title}”} other {Se encontraron # problemas en “{title}”}}",
+          "finding": "Problema: {summary}"
+        },
+        "repair": {
+          "started": "Corrigiendo lo encontrado…",
+          "retrying": "Las correcciones se detuvieron a medias; se intentan una vez más…",
+          "failed": "Las correcciones no terminaron",
+          "findingFixed": "Corregido: {summary}",
+          "notFixedOpenWhat": "Sin corregir: {summary} (hace falta decidir qué debe hacer el elemento)",
+          "notFixedWholeWhatDisproved": "Sin corregir: {summary} (el código muestra que el objetivo del elemento no se sostiene)",
+          "notFixedExtensionContradicted": "Sin corregir: {summary} (el código contradice aquello en lo que se basa el elemento)",
+          "notFixedCommittedInProgress": "Sin corregir: {summary} (ya se está trabajando en el elemento)",
+          "notFixedSizing": "Sin corregir: {summary} (trata sobre el tamaño del trabajo)",
+          "notFixedFixFailed": "Sin corregir: {summary} (no se pudo hacer la corrección)",
+          "notFixedSkipped": "Sin corregir: {summary} (la revisión final se omitió antes de la corrección)"
+        },
+        "reopen": {
+          "started": "Volviendo a comprobar los vínculos y el orden del plan",
+          "startedAgain": "Volviendo a comprobar una vez más los vínculos y el orden del plan",
+          "cardRemoved": "Se quitó “{title}”",
+          "cardAdded": "Se añadió “{title}”"
+        },
+        "codeGraph": {
+          "refreshed": "{count, plural, one {Tu grafo de código de {repos} se actualizó desde el último turno. Las respuestas anteriores usaron el grafo anterior.} other {Los grafos de código de {repos} se actualizaron desde el último turno. Las respuestas anteriores usaron los grafos anteriores.}}"
+        }
+      },
       "openerFollowUp": "Acabas de elegir {label}. Motir AI está planificando lo que condiciona.",
       "composerPlaceholderGuide": "Cuéntale a Motir AI cómo fue el paso…",
       "narration": {

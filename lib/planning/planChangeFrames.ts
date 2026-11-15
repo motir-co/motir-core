@@ -148,6 +148,7 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'planning_record_not_filed',
   'post_merge_move_refused',
   'post_merge_moved',
+  'progress_fact',
   'provenance',
   'read',
   'reauthor_target',
@@ -228,6 +229,12 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
    *  text is blank (`signalNote` returns early), so "its absence is not an empty
    *  row" is guaranteed upstream as well as here. */
   note: { show: 'note' },
+  /** A line motir-ai's CODE reported as a FACT, with no words (MOTIR-11296): the
+   *  claim check and its settle, the final check and its repair, the validity
+   *  re-open and the turn-boundary code-graph refresh. They used to be `note`
+   *  frames carrying English; `lib/planning/progressFacts.ts` words them in the
+   *  reader's locale, and draws a generic line for a fact it does not know. */
+  progress_fact: { show: 'fact' },
 
   // ── THE OUTCOMES (narrated before this card; unchanged by it) ─────────────
   pass: { show: 'proposed' },

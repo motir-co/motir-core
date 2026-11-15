@@ -8843,6 +8843,55 @@
         "checkingCardLine": "Verificando {title}",
         "repairingLine": "Corrigindo o que a verificação final encontrou"
       },
+      "fact": {
+        "unknown": "Trabalhando no plano…",
+        "claimCheck": {
+          "started": "{count, plural, one {Verificando as referências ao código de # item} other {Verificando as referências ao código de # itens}}",
+          "held": "As referências ao código de cada item se confirmam",
+          "sentBack": "{count, plural, one {As referências ao código de # item não se confirmaram; ele volta para ser reescrito} other {As referências ao código de # itens não se confirmaram; eles voltam para ser reescritos}}",
+          "settleStarted": "{count, plural, one {Verificando de novo as referências ao código de # item em relação ao plano inteiro} other {Verificando de novo as referências ao código de # itens em relação ao plano inteiro}}",
+          "settleHeld": "As referências ao código de cada item se confirmam em relação ao plano inteiro",
+          "settleUnresolved": "{count, plural, one {As referências ao código de # item ainda não se confirmam; ele é relatado no plano} other {As referências ao código de # itens ainda não se confirmam; eles são relatados no plano}}"
+        },
+        "dryRun": {
+          "started": "Iniciando a verificação final do plano",
+          "skippedNoTenant": "A verificação final do plano foi pulada: ele não tem um projeto para ser verificado",
+          "skippedNoPlanId": "A verificação final do plano foi pulada: nenhum plano foi salvo para verificar",
+          "skippedQuestion": "A verificação final do plano foi pulada enquanto uma pergunta aguarda resposta",
+          "skippedUserStop": "A verificação final do plano foi pulada porque o planejamento foi interrompido",
+          "skippedTurnedOff": "A verificação final do plano foi pulada: ela está desativada para este projeto",
+          "skippedNoContainers": "A verificação final do plano foi pulada: nenhuma história, tarefa ou bug estava pronto para ser verificado",
+          "skippedByPerson": "A verificação final do plano terminou antes porque foi pulada: nada do que ela encontrou foi corrigido",
+          "selectionFailed": "A verificação final do plano não terminou: não foi possível ler os itens dele",
+          "checking": "Verificando “{title}”",
+          "notFinished": "Não foi possível terminar de verificar “{title}”",
+          "containerClean": "Nenhum problema encontrado em “{title}”",
+          "containerFound": "{count, plural, one {# problema encontrado em “{title}”} other {# problemas encontrados em “{title}”}}",
+          "finding": "Problema: {summary}"
+        },
+        "repair": {
+          "started": "Corrigindo o que foi encontrado…",
+          "retrying": "As correções pararam no meio, tentando mais uma vez…",
+          "failed": "As correções não terminaram",
+          "findingFixed": "Corrigido: {summary}",
+          "notFixedOpenWhat": "Não corrigido: {summary} (é preciso decidir o que o item deve fazer)",
+          "notFixedWholeWhatDisproved": "Não corrigido: {summary} (o código mostra que o objetivo do item não se confirma)",
+          "notFixedExtensionContradicted": "Não corrigido: {summary} (o código contradiz aquilo em que o item se baseia)",
+          "notFixedCommittedInProgress": "Não corrigido: {summary} (o item já está sendo trabalhado)",
+          "notFixedSizing": "Não corrigido: {summary} (trata do tamanho do trabalho)",
+          "notFixedFixFailed": "Não corrigido: {summary} (não foi possível fazer a correção)",
+          "notFixedSkipped": "Não corrigido: {summary} (a verificação final foi pulada antes da correção)"
+        },
+        "reopen": {
+          "started": "Verificando de novo os vínculos e a ordem do plano",
+          "startedAgain": "Verificando mais uma vez os vínculos e a ordem do plano",
+          "cardRemoved": "“{title}” removido",
+          "cardAdded": "“{title}” adicionado"
+        },
+        "codeGraph": {
+          "refreshed": "{count, plural, one {Seu grafo de código de {repos} foi atualizado desde o último turno. As respostas anteriores usaram o grafo anterior.} other {Os grafos de código de {repos} foram atualizados desde o último turno. As respostas anteriores usaram os grafos anteriores.}}"
+        }
+      },
       "openerFollowUp": "Você acabou de escolher {label}. O Motir AI está planejando o que isso condiciona.",
       "composerPlaceholderGuide": "Conte ao Motir AI como foi a etapa…",
       "narration": {

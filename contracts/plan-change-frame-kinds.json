@@ -53,6 +53,7 @@
     "planning_record_not_filed",
     "post_merge_move_refused",
     "post_merge_moved",
+    "progress_fact",
     "provenance",
     "read",
     "reauthor_target",

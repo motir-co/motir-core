@@ -248,6 +248,7 @@ describe('the enumeration is a SNAPSHOT, and says so', () => {
         'note',
         'pass',
         'planned',
+        'progress_fact',
         'repair',
         'validated',
         'validation_skipped',

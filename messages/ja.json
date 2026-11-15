@@ -8840,6 +8840,55 @@
         "checkingCardLine": "{title} を確認しています",
         "repairingLine": "最終確認で見つかった点を修正しています"
       },
+      "fact": {
+        "unknown": "計画を作業しています…",
+        "claimCheck": {
+          "started": "{count, plural, other {# 件の項目のコード参照を確認しています}}",
+          "held": "すべての項目のコード参照が成り立っています",
+          "sentBack": "{count, plural, other {# 件の項目のコード参照が成り立たなかったため、書き直しに戻しています}}",
+          "settleStarted": "{count, plural, other {# 件の項目のコード参照を計画全体に照らして再確認しています}}",
+          "settleHeld": "すべての項目のコード参照が計画全体に照らして成り立っています",
+          "settleUnresolved": "{count, plural, other {# 件の項目のコード参照がまだ成り立たないため、計画で報告します}}"
+        },
+        "dryRun": {
+          "started": "計画の最終確認を開始しています",
+          "skippedNoTenant": "計画の最終確認をスキップしました。照らし合わせるプロジェクトがありません",
+          "skippedNoPlanId": "計画の最終確認をスキップしました。確認する計画が保存されていません",
+          "skippedQuestion": "質問への回答を待っている間、計画の最終確認をスキップしました",
+          "skippedUserStop": "計画作成が停止されたため、計画の最終確認をスキップしました",
+          "skippedTurnedOff": "計画の最終確認をスキップしました。このプロジェクトではオフになっています",
+          "skippedNoContainers": "計画の最終確認をスキップしました。確認できる状態のストーリー、タスク、バグがありませんでした",
+          "skippedByPerson": "スキップされたため、計画の最終確認を早めに終了しました。見つかった点は修正されていません",
+          "selectionFailed": "計画の最終確認が完了しませんでした。項目を読み込めませんでした",
+          "checking": "「{title}」を確認しています",
+          "notFinished": "「{title}」の確認を完了できませんでした",
+          "containerClean": "「{title}」に問題は見つかりませんでした",
+          "containerFound": "{count, plural, other {「{title}」で # 件の問題が見つかりました}}",
+          "finding": "問題：{summary}"
+        },
+        "repair": {
+          "started": "見つかった点を修正しています…",
+          "retrying": "修正が途中で止まったため、もう一度試しています…",
+          "failed": "修正が完了しませんでした",
+          "findingFixed": "修正済み：{summary}",
+          "notFixedOpenWhat": "未修正：{summary}（項目が何をすべきかの判断が必要です）",
+          "notFixedWholeWhatDisproved": "未修正：{summary}（項目の目的が成り立たないことをコードが示しています）",
+          "notFixedExtensionContradicted": "未修正：{summary}（項目が前提とするものとコードが矛盾しています）",
+          "notFixedCommittedInProgress": "未修正：{summary}（項目はすでに作業中です）",
+          "notFixedSizing": "未修正：{summary}（作業の規模に関するものです）",
+          "notFixedFixFailed": "未修正：{summary}（修正できませんでした）",
+          "notFixedSkipped": "未修正：{summary}（修正の前に最終確認がスキップされました）"
+        },
+        "reopen": {
+          "started": "計画のリンクと順序を再確認しています",
+          "startedAgain": "計画のリンクと順序をもう一度再確認しています",
+          "cardRemoved": "「{title}」を削除しました",
+          "cardAdded": "「{title}」を追加しました"
+        },
+        "codeGraph": {
+          "refreshed": "{count, plural, other {{repos} のコードグラフは前回のターン以降に更新されました。それまでの回答は以前のグラフに基づいています。}}"
+        }
+      },
       "openerFollowUp": "{label} を選択しました。Motir AI がそれによって決まる作業を計画しています。",
       "composerPlaceholderGuide": "ステップがどうだったか Motir AI に伝えてください…",
       "narration": {

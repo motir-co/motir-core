@@ -8843,6 +8843,55 @@
         "checkingCardLine": "{title} wird geprüft",
         "repairingLine": "Ergebnisse der Abschlussprüfung werden behoben"
       },
+      "fact": {
+        "unknown": "Am Plan wird gearbeitet…",
+        "claimCheck": {
+          "started": "{count, plural, one {Code-Verweise von # Element werden geprüft} other {Code-Verweise von # Elementen werden geprüft}}",
+          "held": "Die Code-Verweise aller Elemente sind stichhaltig",
+          "sentBack": "{count, plural, one {Die Code-Verweise von # Element sind nicht stichhaltig; es wird neu geschrieben} other {Die Code-Verweise von # Elementen sind nicht stichhaltig; sie werden neu geschrieben}}",
+          "settleStarted": "{count, plural, one {Code-Verweise von # Element werden erneut gegen den ganzen Plan geprüft} other {Code-Verweise von # Elementen werden erneut gegen den ganzen Plan geprüft}}",
+          "settleHeld": "Die Code-Verweise aller Elemente sind gegen den ganzen Plan stichhaltig",
+          "settleUnresolved": "{count, plural, one {Die Code-Verweise von # Element sind weiterhin nicht stichhaltig; es wird im Plan gemeldet} other {Die Code-Verweise von # Elementen sind weiterhin nicht stichhaltig; sie werden im Plan gemeldet}}"
+        },
+        "dryRun": {
+          "started": "Die Abschlussprüfung des Plans beginnt",
+          "skippedNoTenant": "Abschlussprüfung des Plans übersprungen: Es gibt kein Projekt, gegen das geprüft werden kann",
+          "skippedNoPlanId": "Abschlussprüfung des Plans übersprungen: Es wurde kein Plan zum Prüfen gespeichert",
+          "skippedQuestion": "Abschlussprüfung des Plans übersprungen, solange eine Frage auf eine Antwort wartet",
+          "skippedUserStop": "Abschlussprüfung des Plans übersprungen, weil die Planung angehalten wurde",
+          "skippedTurnedOff": "Abschlussprüfung des Plans übersprungen: Sie ist für dieses Projekt ausgeschaltet",
+          "skippedNoContainers": "Abschlussprüfung des Plans übersprungen: Keine Story, Aufgabe und kein Bug darin war bereit zur Prüfung",
+          "skippedByPerson": "Abschlussprüfung des Plans vorzeitig beendet, weil sie übersprungen wurde: Nichts, was sie gefunden hat, wurde behoben",
+          "selectionFailed": "Die Abschlussprüfung des Plans wurde nicht abgeschlossen: Seine Elemente konnten nicht gelesen werden",
+          "checking": "„{title}“ wird geprüft",
+          "notFinished": "Die Prüfung von „{title}“ konnte nicht abgeschlossen werden",
+          "containerClean": "Keine Probleme in „{title}“ gefunden",
+          "containerFound": "{count, plural, one {# Problem in „{title}“ gefunden} other {# Probleme in „{title}“ gefunden}}",
+          "finding": "Problem: {summary}"
+        },
+        "repair": {
+          "started": "Die Ergebnisse werden behoben…",
+          "retrying": "Die Korrekturen wurden unterbrochen, sie werden noch einmal versucht…",
+          "failed": "Die Korrekturen wurden nicht abgeschlossen",
+          "findingFixed": "Behoben: {summary}",
+          "notFixedOpenWhat": "Nicht behoben: {summary} (es braucht eine Entscheidung darüber, was das Element tun soll)",
+          "notFixedWholeWhatDisproved": "Nicht behoben: {summary} (der Code zeigt, dass das Ziel des Elements nicht zutrifft)",
+          "notFixedExtensionContradicted": "Nicht behoben: {summary} (der Code widerspricht dem, worauf das Element aufbaut)",
+          "notFixedCommittedInProgress": "Nicht behoben: {summary} (an dem Element wird bereits gearbeitet)",
+          "notFixedSizing": "Nicht behoben: {summary} (es betrifft den Umfang der Arbeit)",
+          "notFixedFixFailed": "Nicht behoben: {summary} (die Korrektur konnte nicht vorgenommen werden)",
+          "notFixedSkipped": "Nicht behoben: {summary} (die Abschlussprüfung wurde vor der Korrektur übersprungen)"
+        },
+        "reopen": {
+          "started": "Verknüpfungen und Reihenfolge des Plans werden erneut geprüft",
+          "startedAgain": "Verknüpfungen und Reihenfolge des Plans werden noch einmal geprüft",
+          "cardRemoved": "„{title}“ entfernt",
+          "cardAdded": "„{title}“ hinzugefügt"
+        },
+        "codeGraph": {
+          "refreshed": "{count, plural, one {Ihr Code-Graph für {repos} wurde seit der letzten Runde aktualisiert. Frühere Antworten beruhten auf dem vorherigen Graphen.} other {Die Code-Graphen für {repos} wurden seit der letzten Runde aktualisiert. Frühere Antworten beruhten auf den vorherigen Graphen.}}"
+        }
+      },
       "openerFollowUp": "Sie haben gerade {label} gewählt. Motir AI plant, was davon abhängt.",
       "composerPlaceholderGuide": "Sagen Sie Motir AI, wie der Schritt gelaufen ist…",
       "narration": {
