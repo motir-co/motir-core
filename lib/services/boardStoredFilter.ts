@@ -80,7 +80,7 @@ export async function resolveStoredBoardFilter(
   } catch (err) {
     /* v8 ignore next -- defensive: resolveFilterAst throws only FilterValidationError */
     if (!(err instanceof FilterValidationError)) throw err;
-    const located = firstInvalidCondition(ast, referents);
+    const located = locateInvalidCondition(ast, referents);
     return {
       predicate: { matchNothing: true },
       dto: {
@@ -93,8 +93,9 @@ export async function resolveStoredBoardFilter(
 
 /** The first condition of `ast` that fails validation on its own, by index and
  * field — or both `null` when none fails alone (the failure is the whole
- * filter's). */
-function firstInvalidCondition(
+ * filter's). Shared by the read (the stale entry) and the write (the 422's
+ * `conditionIndex`, `boardsService`). */
+export function locateInvalidCondition(
   ast: FilterAst,
   referents: ProjectFilterReferents | undefined,
 ): { index: number | null; field: string | null } {

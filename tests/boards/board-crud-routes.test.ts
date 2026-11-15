@@ -291,6 +291,33 @@ describe('POST /api/boards — stored filter', () => {
     expect(await adminDb.board.count({ where: { projectId: fx.projectId } })).toBe(1);
   });
 
+  it('→ 422 names the refused condition by its 0-based index', async () => {
+    await makeFixture('sf-post-422-index');
+    const res = await postReq({
+      name: 'Refused',
+      filter: {
+        v: 'v1',
+        c: 'and',
+        f: [
+          ['kind', 'is_any_of', ['bug']],
+          ['kind', 'gt', 1],
+        ],
+      },
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ code: 'UNKNOWN_FILTER_OPERATOR', conditionIndex: 1 });
+    // A whole-filter refusal names no condition.
+    const tooMany = await postReq({
+      name: 'Refused',
+      filter: {
+        v: 'v1',
+        c: 'and',
+        f: Array.from({ length: 21 }, () => ['kind', 'is_any_of', ['bug']]),
+      },
+    });
+    expect(Object.keys((await tooMany.json()) as object)).not.toContain('conditionIndex');
+  });
+
   it('→ 403 for a plain member, with no board created', async () => {
     const fx = await makeFixture('sf-post-member');
     asMember(fx);
@@ -342,6 +369,10 @@ describe('PATCH /api/boards/[id] — stored filter', () => {
     });
     expect(res.status).toBe(422);
     expect(((await res.json()) as { code: string }).code).toBe('FILTER_TOO_LARGE');
+    const invalid = await patchReq(fx.defaultBoardId, {
+      filter: { v: 'v1', c: 'or', f: [['kind', 'is_any_of', ['dragon']]] },
+    });
+    expect(await invalid.json()).toMatchObject({ code: 'INVALID_FILTER_VALUE', conditionIndex: 0 });
     const malformed = await patchReq(fx.defaultBoardId, { filter: 'v1:abc' });
     expect(malformed.status).toBe(422);
     expect(((await malformed.json()) as { code: string }).code).toBe('MALFORMED_FILTER');

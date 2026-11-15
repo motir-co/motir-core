@@ -25,6 +25,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import {
+  locateInvalidCondition,
   resolveStoredBoardFilter,
   type ResolvedStoredBoardFilter,
 } from '@/lib/services/boardStoredFilter';
@@ -36,7 +37,11 @@ import {
   type FilterAst,
   type FilterEnvelope,
 } from '@/lib/filters/ast';
-import { FilterTooLargeError, MalformedFilterError } from '@/lib/filters/errors';
+import {
+  FilterTooLargeError,
+  FilterValidationError,
+  MalformedFilterError,
+} from '@/lib/filters/errors';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { isReadyToStart } from '@/lib/workItems/statusSlot';
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -2243,7 +2248,17 @@ async function normalizeStoredBoardFilter(
   const ast = decoded.ast;
   if (ast.conditions.length === 0) return null;
   const referents = await loadFilterReferents(projectId, workspaceId, ast);
-  resolveFilterAst(ast, referents);
+  try {
+    resolveFilterAst(ast, referents);
+  } catch (err) {
+    // Name the condition the refusal is about (the 422 carries it as
+    // `conditionIndex`), so the dialog and the editor can say "Condition n".
+    if (err instanceof FilterValidationError) {
+      const { index } = locateInvalidCondition(ast, referents);
+      if (index !== null) err.conditionIndex = index;
+    }
+    throw err;
+  }
   return encodeFilterEnvelope(ast);
 }
 

@@ -205,6 +205,11 @@ export interface FilterConditionBuilderProps {
   /** Hide the combinator sentence when a single-or-empty group makes it noise
    * (the host may always show it; defaults to shown). */
   showCombinator?: boolean;
+  /** Where the builder's edits take effect. `'live'` (default) — the `/items`
+   * and board-toolbar popovers, where every edit applies at once; `'form'` — a
+   * host that applies nothing until its own Create / Save (the create-board
+   * dialog, MOTIR-11333), whose foot line must not say "applied live". */
+  host?: 'live' | 'form';
 }
 
 /**
@@ -227,6 +232,7 @@ export function FilterConditionBuilder({
   referencedLabels,
   projectKey,
   showCombinator = true,
+  host = 'live',
 }: FilterConditionBuilderProps) {
   const t = useTranslations('issueViews');
   const { menuFields, dynamicLabels, stale } = model;
@@ -430,7 +436,10 @@ export function FilterConditionBuilder({
         <span className="text-xs text-(--el-text-muted) tabular-nums">
           {atCap
             ? t('advancedCapReached', { cap: FILTER_ROW_CAP })
-            : t('advancedFootHint', { count: working.rows.length, cap: FILTER_ROW_CAP })}
+            : t(host === 'form' ? 'advancedFootHintForm' : 'advancedFootHint', {
+                count: working.rows.length,
+                cap: FILTER_ROW_CAP,
+              })}
         </span>
       </div>
     </div>

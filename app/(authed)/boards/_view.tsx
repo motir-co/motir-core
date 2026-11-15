@@ -196,7 +196,20 @@ export default async function BoardView({
                     affordances + [+ New issue]. Owns its own board-list fetch +
                     the `?board=` selection, so it stays present across the
                     board's loading / error / empty states. */}
-                <BoardSwitcher />
+                {/* `filterLookups` — the create dialog's Board filter section
+                    (MOTIR-11333) hosts the same builder as the toolbar filter,
+                    so it takes the same lookups this page already read. */}
+                <BoardSwitcher
+                  filterLookups={{
+                    statuses: workflow.statuses,
+                    members,
+                    sprints,
+                    customFields,
+                    components,
+                    referencedLabels,
+                    projectKey: ctx.project.identifier,
+                  }}
+                />
                 {/* Group-by slot — BoardContainer portals its GroupByControl here
                     so the control sits in this header row, while its state stays
                     with the board projection. `display:contents` so the portaled

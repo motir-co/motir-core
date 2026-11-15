@@ -65,6 +65,7 @@ export async function GET(req?: Request): Promise<Response> {
 // Typed errors → status codes:
 //   InvalidBoardNameError / InvalidBoardTypeError → 400
 //   FilterValidationError (stored filter refused; no board created) → 422
+//     `{ code, error, conditionIndex? }` — the 0-based refused condition
 //   PermissionDeniedError (board:configure)                     → 403
 //   ProjectNotFoundError (cannot browse the project)             → 404
 //   ProjectNotFoundError                          → 404
@@ -116,7 +117,16 @@ export async function POST(req: Request): Promise<Response> {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }
     if (err instanceof FilterValidationError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+      // `conditionIndex` (0-based) names the refused condition when the write
+      // located it, so the UI can say "Condition n".
+      return NextResponse.json(
+        {
+          code: err.code,
+          error: err.message,
+          ...(err.conditionIndex !== undefined ? { conditionIndex: err.conditionIndex } : {}),
+        },
+        { status: 422 },
+      );
     }
     const gate = boardGateErrorResponse(err);
     if (gate) return gate;

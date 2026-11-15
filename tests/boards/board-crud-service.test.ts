@@ -437,6 +437,35 @@ describe('boardsService.createBoard — stored filter (MOTIR-11331)', () => {
     expect(await adminDb.board.count({ where: { projectId: fx.projectId } })).toBe(before);
   });
 
+  it('names the refused condition by its 0-based index, and none for a whole-filter refusal', async () => {
+    const fx = await makeFixture('sf-refuse-index');
+    const refusal = await boardsService
+      .createBoard(
+        fx.projectId,
+        {
+          name: 'Refused',
+          filter: {
+            v: 'v1',
+            c: 'and',
+            f: [
+              ['kind', 'is_any_of', ['bug']],
+              ['priority', 'is_any_of', ['high']],
+              ['kind', 'is_any_of', ['dragon']],
+            ],
+          },
+        },
+        fx.ownerCtx,
+      )
+      .catch((err: unknown) => err);
+    expect(refusal).toBeInstanceOf(InvalidFilterValueError);
+    expect((refusal as InvalidFilterValueError).conditionIndex).toBe(2);
+
+    const whole = await boardsService
+      .createBoard(fx.projectId, { name: 'Refused', filter: tooMany(21) }, fx.ownerCtx)
+      .catch((err: unknown) => err);
+    expect((whole as FilterTooLargeError).conditionIndex).toBeUndefined();
+  });
+
   it('reports the condition count and the cap on the over-cap refusal', async () => {
     const fx = await makeFixture('sf-cap');
     const err = await boardsService
