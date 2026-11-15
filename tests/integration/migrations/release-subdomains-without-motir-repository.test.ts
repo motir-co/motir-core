@@ -14,10 +14,8 @@ import { createTestWorkspace } from '../../fixtures';
 // MOTIR-11289 (Story MOTIR-11283) — the forward, data-only migration that releases
 // every motir.site claim held by a workspace with no Motir repository (§8
 // Amendment 5). Real Postgres; the SQL is replayed verbatim, as the deploy
-// applies it: `prisma migrate deploy` runs as the OWNER, so that is the only
-// role it is replayed as. (A replay through the `@/lib/db` runtime role would be
-// a raw statement on the singleton, which `test-singleton-statement-guard`
-// ratchets down, and it is not a role any deploy runs migrations as.)
+// applies it, as the OWNER and as the non-bypass RUNTIME role — the second is
+// the case where a subquery blinded by RLS would delete every claim.
 
 const MIGRATION_SQL = readFileSync(
   join(
@@ -32,6 +30,16 @@ const DAY = 24 * 60 * 60 * 1000;
 
 /** Replay the migration as the database OWNER — the deploy's role. */
 const runAsOwner = () => adminDb.$executeRawUnsafe(MIGRATION_SQL);
+/**
+ * Replay it as the NON-BYPASS runtime role, so the policies bite. Inside an
+ * interactive transaction: the statement runs as the same role either way, and
+ * the `app.system_admin` binding the migration sets with `is_local = true` is
+ * scoped to that transaction, exactly as `prisma migrate deploy` scopes it.
+ */
+const runAsAppRole = (sql = MIGRATION_SQL) => db.$transaction((tx) => tx.$executeRawUnsafe(sql));
+
+/** The same migration with its RLS binding removed — the negative control. */
+const UNBOUND_SQL = MIGRATION_SQL.replace(/^\s*PERFORM set_config\('app\.system_admin'.*$/gm, '');
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -148,6 +156,34 @@ describe('20261114220000_release_subdomains_without_motir_repository', () => {
     expect(dto.hostname).toBe(stray.hostname);
   });
 
+  it('deletes exactly the same rows under the non-bypass runtime role', async () => {
+    await tenantHolding('stray-a', []);
+    await tenantHolding('stray-b', [{ seedSource: 'organization', state: 'connected' }]);
+    await tenantHolding('kept-a', [{}]);
+    await tenantHolding('kept-b', [{ takeoverState: 'requested' }]);
+
+    await runAsAppRole();
+
+    expect(await subdomainHosts()).toEqual([`kept-a.${BASE}`, `kept-b.${BASE}`]);
+  });
+
+  it('owes that agreement to its system-admin binding: unbound, the runtime role releases nothing', async () => {
+    expect(UNBOUND_SQL).not.toContain("set_config('app.system_admin'");
+    expect(UNBOUND_SQL).not.toBe(MIGRATION_SQL);
+    await tenantHolding('stray-a', []);
+    await tenantHolding('kept-a', [{}]);
+
+    await runAsAppRole(UNBOUND_SQL);
+
+    // Under FORCE RLS with no binding, the runtime role sees neither
+    // `public_address` nor `project_repository`: the DELETE matches nothing and
+    // the stray claim SURVIVES — a silent no-op, not the owner's answer. (Were
+    // `public_address` visible and `project_repository` not, the same blindness
+    // would delete the eligible claim too.) The binding is what makes the
+    // runtime role select exactly the owner's set.
+    expect(await subdomainHosts()).toEqual([`kept-a.${BASE}`, `stray-a.${BASE}`]);
+  });
+
   it('leaves legacy alias rows and custom domains alone, whatever the repositories', async () => {
     const stray = await tenantHolding('stray', []);
     await adminDb.publicAddress.createMany({
@@ -183,6 +219,7 @@ describe('20261114220000_release_subdomains_without_motir_repository', () => {
     const before = await adminDb.publicAddress.findMany();
 
     await runAsOwner();
+    await runAsAppRole();
 
     expect(await adminDb.publicAddress.findMany()).toEqual(before);
   });

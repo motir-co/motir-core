@@ -279,7 +279,9 @@ test('only a workspace with a Motir repository may claim or rename its motir.sit
     await expect(dialog(page)).toBeVisible();
     await expect(dialog(page).getByText(`stark.${BASE} stops answering now.`)).toBeVisible();
     await expect(dialog(page).getByText(copy.confirm.lockAfterReleaseIneligible)).toBeVisible();
-    await expect(dialog(page).getByText(copy.confirm.lockAfterRelease)).toHaveCount(0);
+    // The shipped line's stable head — its `{date}` tail is filled at render.
+    const shippedLock = copy.confirm.lockAfterRelease.split('{')[0]!.trim();
+    await expect(dialog(page).getByText(shippedLock, { exact: false })).toHaveCount(0);
     await beat();
 
     const released = subdomainWrite(page, 'DELETE');
