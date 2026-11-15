@@ -515,6 +515,12 @@ export const DATABASE_BOUND_GUARDS: Readonly<Record<string, string>> = {
     'prove `context.starterLibrary` rides each submit, then walks lib/ through ' +
     'the shared submitJobSites walker so no planning submit drops it (MOTIR-11041). ' +
     'Same hybrid shape as its onboarding-flag sibling above.',
+  'tests/integration/ai/planningSubmitCarriesPlanSessionId.test.ts':
+    'imports @/lib/db, ../../helpers/adminDb and ../../fixtures — it drives every ' +
+    'planning entrance against real Postgres to prove `context.planSessionId` names ' +
+    'the session each plan opens, then walks lib/ through the shared submitJobSites ' +
+    'walker so no planning submit drops it (MOTIR-11294). Same hybrid shape as its ' +
+    'starter-library sibling above.',
 };
 
 /**

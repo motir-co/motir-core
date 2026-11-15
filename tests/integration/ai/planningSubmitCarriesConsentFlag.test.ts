@@ -295,7 +295,7 @@ describe('submitPlanEditJob, submitRevise and submitResume each send the always-
     await aiPlanEditsService.submitRevise(planId, 'split it', c);
     const revise = bodies[0]!;
     bodies.length = 0;
-    await aiPlanEditsService.submitResume(planId, 'job-failed', c, c.userId);
+    await aiPlanEditsService.submitResume(planId, 'job-failed', c, c.userId, 'session-resumed');
     const resume = bodies[0]!;
 
     for (const [name, body] of Object.entries({ edit, revise, resume })) {
@@ -317,7 +317,7 @@ describe('submitPlanEditJob, submitRevise and submitResume each send the always-
     await aiPlanEditsService.submitAugment('add a thing', c);
     const edit = bodies[0]!;
     bodies.length = 0;
-    await aiPlanEditsService.submitResume(planId, 'job-failed', c, c.userId);
+    await aiPlanEditsService.submitResume(planId, 'job-failed', c, c.userId, 'session-resumed');
     const resume = bodies[0]!;
 
     expect(edit).not.toHaveProperty('resume');

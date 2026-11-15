@@ -293,7 +293,13 @@ describe('every writing job sends both languages', () => {
     await aiGenerationService.startGeneration(pctxFor(userA), { prompt: 'build it' });
     const aPlan = await plannedPlanBy(userA);
     await aiPlanEditsService.submitRevise(aPlan, 'split it', pctxFor(userA));
-    await aiPlanEditsService.submitResume(aPlan, 'job-before', pctxFor(userA), userA);
+    await aiPlanEditsService.submitResume(
+      aPlan,
+      'job-before',
+      pctxFor(userA),
+      userA,
+      'session-resumed',
+    );
     expect(languagesSent('plan')).toEqual([A_IN_ZH, A_IN_ZH, A_IN_ZH, A_IN_ZH]);
     submitJobMock.mockClear();
     await aiPlanEditsService.submitAugment('weekly', pctxFor(userA), undefined, {

@@ -221,7 +221,13 @@ describe('a revision or resume sends the plan STARTER’s language, not the revi
   it('submitResume sends the starter’s language', async () => {
     const starter = await teammate('fr');
     const planId = await plannedPlanBy(starter);
-    await aiPlanEditsService.submitResume(planId, 'job-before', pctxFor(fx.ownerId), starter);
+    await aiPlanEditsService.submitResume(
+      planId,
+      'job-before',
+      pctxFor(fx.ownerId),
+      starter,
+      'session-resumed',
+    );
     expect(languagesOf(sentTenant())).toEqual({ contentLanguage: 'zh', personLanguage: 'fr' });
   });
 });

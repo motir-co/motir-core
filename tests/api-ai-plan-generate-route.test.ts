@@ -189,6 +189,8 @@ describe('POST /api/ai/plan/generate', () => {
       generateExplanations: false,
       recordPlanningMistakes: true,
       finalCheck: true,
+      // The generation's NEW session, allocated before the submit (MOTIR-11294).
+      planSessionId: expect.any(String),
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
@@ -234,6 +236,8 @@ describe('POST /api/ai/plan/generate', () => {
       generateExplanations: true,
       recordPlanningMistakes: true,
       finalCheck: true,
+      // The generation's NEW session, allocated before the submit (MOTIR-11294).
+      planSessionId: expect.any(String),
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
