@@ -85,9 +85,11 @@ function encodeTailCursor(after: OrgKey | null): string {
 
 function decodeTailKey(raw: string): OrgKey | null | undefined {
   if (raw === '') return null;
-  const [iso, id, extra] = Buffer.from(raw, 'base64url').toString('utf8').split('|');
-  const createdAt = new Date(iso ?? '');
-  if (!id || extra !== undefined || Number.isNaN(createdAt.getTime())) return undefined;
+  const parts = Buffer.from(raw, 'base64url').toString('utf8').split('|');
+  if (parts.length !== 2) return undefined;
+  const [iso, id] = parts as [string, string];
+  const createdAt = new Date(iso);
+  if (!id || Number.isNaN(createdAt.getTime())) return undefined;
   return { createdAt, id };
 }
 

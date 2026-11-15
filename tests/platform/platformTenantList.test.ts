@@ -503,6 +503,42 @@ describe('platformUsageService.listTenants — organizations that spent nothing 
   });
 });
 
+describe("platformUsageService.listTenants — the tail's edges (MOTIR-8978)", () => {
+  it('a tail view with no candidate left still reads motir-ai once, for the estate total', async () => {
+    const orgs = await seedOrgs(['Acme']);
+    stubRoute([spendRow(orgs[0]!.id, 3)]);
+    const list = await platformUsageService.listTenants(currentPrincipal!, {
+      period: 'all',
+      sort: 'cost',
+      filter: 'zzz',
+      cursor: 'z.',
+    });
+    expect(orgsMock.mock.calls.at(-1)![0]['coreOrganizationIds']).toEqual([]);
+    expect(list).toMatchObject({ unavailable: false, rows: [], nextCursor: null });
+    expect(list.estate!.chargedCredits).toBe(spendRow(orgs[0]!.id, 3).chargedCredits);
+  });
+
+  it('a spend row for an id motir-core does not hold is still listed, named by its id', async () => {
+    stubRoute([spendRow('org_gone', 4)]);
+    const list = await platformUsageService.listTenants(currentPrincipal!, {
+      period: 'all',
+      sort: 'cost',
+    });
+    expect(list.rows).toEqual([
+      expect.objectContaining({
+        organization: {
+          id: 'org_gone',
+          name: 'org_gone',
+          slug: null,
+          isMeta: false,
+          internalBilling: false,
+        },
+      }),
+    ]);
+    expect(list.nextCursor).toBeNull();
+  });
+});
+
 describe('decodeTenantCursor', () => {
   it('reads both runs, a pre-tail motir-ai cursor as the spend run, and an undecodable tail key as the start', () => {
     expect(decodeTenantCursor(null)).toEqual({ phase: 'spend', remote: null });
@@ -519,7 +555,12 @@ describe('decodeTenantCursor', () => {
       phase: 'zero',
       after: { createdAt: new Date('2026-10-19T09:06:36.098Z'), id: 'org_1' },
     });
-    for (const bad of ['not a date|org_1', '2026-10-19T09:06:36.098Z', 'a|b|c']) {
+    for (const bad of [
+      'not a date|org_1',
+      '2026-10-19T09:06:36.098Z|',
+      '2026-10-19T09:06:36.098Z',
+      'a|b|c',
+    ]) {
       const raw = `z.${Buffer.from(bad).toString('base64url')}`;
       expect(decodeTenantCursor(raw)).toEqual({ phase: 'spend', remote: null });
     }
