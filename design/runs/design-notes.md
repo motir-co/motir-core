@@ -2424,3 +2424,12 @@ model — each on a leaf and on a parent whose unfinished leaves are all design 
 override still reads as today. The copy table is in
 [`../org-admin/design-notes.md`](../org-admin/design-notes.md) § _Settings › Organisation › AI
 models_, sub-section _The Run hosted picker — the preselect reason line_.
+
+## Run hosted — the picker lists a model under its original provider (MOTIR-11279, 2026-11-15)
+
+The hosted model picker's provider label is the model's **original provider** (its maker: GLM → Z.ai,
+Qwen → Alibaba (Qwen), DeepSeek → DeepSeek), never the provider whose gateway channel serves it — so
+GLM-5.3 reads under Z.ai even while Alibaba Cloud serves it. The rule, and the platform admin's
+Model serving page that chooses the serving channel, are in
+[`../platform-admin/design-notes.md`](../platform-admin/design-notes.md) § _AMENDMENT 2026-11-15 —
+Model serving_.

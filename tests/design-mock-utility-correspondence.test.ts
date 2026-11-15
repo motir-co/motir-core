@@ -838,6 +838,9 @@ const BARE_VAR = /^var\(\s*(--[a-z0-9-]+)\s*\)$/;
 export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
   bg: ['background-color'],
   border: ['border-color'],
+  // `border-l` arrived with MOTIR-11279's Model serving mock: the shipped Monitoring
+  // `Td rail="warning"` paints its 3px leading rail with `border-l-(--el-warning)`.
+  'border-l': ['border-left-color'],
   decoration: ['text-decoration-color'],
   divide: ['border-color'],
   duration: ['transition-duration', '--tw-duration'],

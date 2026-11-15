@@ -255,6 +255,20 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
+  // ── FORWARD-LOOKING: the platform admin's Model serving page (design MOTIR-11279) ──
+  //  The design draws `/admin/model-serving` before MOTIR-11280 builds it. These rows
+  //  stop applying when `app/(admin)/admin/model-serving/page.tsx` lands, and the
+  //  stopped-applying arm below then asks MOTIR-11280 to delete them.
+  {
+    file: 'design/platform-admin/console--model-serving.mock.html',
+    address: '/admin/model-serving',
+    why: 'The Model serving page MOTIR-11279 designs and MOTIR-11280 builds; drawn before its route exists.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/admin/model-serving',
+    why: 'The notes section (AMENDMENT 2026-11-15) specifying the Model serving page MOTIR-11280 builds; written before its route exists.',
+  },
   // ── ✅ RETIRED 2026-10-30 (MOTIR-9529) — the workspace Custom domains room's
   //  forward-looking row stopped applying when its page landed, and was deleted.
   // ── ✅ RETIRED 2026-10-28 (MOTIR-9514) — the workspace address room's
@@ -1602,6 +1616,15 @@ const reconcilablePath = (finding: PathFinding): Reconcilable => ({
 // inherited: the run that finds a class is not the run that clears it.
 // MOTIR-2369 cleared all six, so the table holds no STALE row today.
 const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
+  // ── A PUBLISHED-ONLY MOCK (design MOTIR-10885) ──
+  //  The Fleet status mock was published to its design card and never committed
+  //  (design-result.md AMENDMENT 5 Q1: the published result is the source of truth),
+  //  so the platform-admin notes that index it cite a path this tree does not hold.
+  {
+    file: 'design/platform-admin/design-notes.md',
+    path: 'design/platform-admin/console--fleet-status.mock.html',
+    why: 'Published on MOTIR-10885 and never committed; the published result is the design of record (design-result.md AMENDMENT 5 Q1).',
+  },
   // ── A RETIRED FILE THE NOTES RECORD RETIRING (Story MOTIR-11190 · MOTIR-11201) ──
   //  Part XXIX's hand-off names the replay module MOTIR-11201 DELETES. The path is the
   //  record of what was removed, not a file to mirror, so it is meant not to exist.
