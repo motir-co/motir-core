@@ -244,14 +244,33 @@ describe('get_work_item — inFlightCode', () => {
     }
   });
 
-  it('the projected answer (planId) carries no in-flight fields — a proposal has no pull request', async () => {
+  it('the projected answer for a PROPOSAL carries no in-flight fields — a proposal has no pull request', async () => {
     const fx = await makeWorkItemFixture();
-    const { child } = await storyWithChild(fx);
     const plan = await plansService.createPlan(fx.projectId, { title: 'Plan' }, fx.ctx);
-    const res = await runGetWorkItem({ key: child.identifier, planId: plan.id }, fx.ctx);
+    const withAdd = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Proposed', kind: 'task' } }],
+      fx.ctx,
+    );
+    const res = await runGetWorkItem(
+      { key: `planItem:${withAdd.items[0]!.id}`, planId: plan.id },
+      fx.ctx,
+    );
     const out = structuredOf(res);
     expect(out).not.toHaveProperty('inFlightCode');
     expect(out).not.toHaveProperty('mergedRepos');
+  });
+
+  it('a COMMITTED key read through a plan keeps its in-flight fields (MOTIR-11340)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { child } = await storyWithChild(fx);
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Plan' }, fx.ctx);
+    const out = structuredOf(
+      await runGetWorkItem({ key: child.identifier, planId: plan.id }, fx.ctx),
+    );
+    expect(out).toHaveProperty('inFlightCode');
+    expect(out).toHaveProperty('mergedRepos');
+    expect(out).toHaveProperty('projection');
   });
 });
 

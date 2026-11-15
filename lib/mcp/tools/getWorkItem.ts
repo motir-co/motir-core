@@ -13,7 +13,8 @@ import { projectedBodyOf, projectedWorkItem } from '@/lib/services/planProjectio
 import type { ProjectedDetailDto, ProjectedRowDto } from '@/lib/services/planProjectionService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { IssueDetailDto } from '@/lib/dto/workItems';
-import type { AiInFlightCodeFields } from '@/lib/dto/ai';
+import type { AiInFlightCodeFields, AiPlanProposalOverlay } from '@/lib/dto/ai';
+import { aiPlanOverlayService } from '@/lib/services/aiPlanOverlayService';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
@@ -241,22 +242,30 @@ export async function runGetWorkItem(
     // PROJECTED. No project lookup: `buildProjection` resolves the project FROM
     // the plan and asserts browse on it, and a `planItem:<id>` target has no
     // project-key prefix to derive one from anyway.
-    const projected = await projectedWorkItem(args.planId, normalizeProjectedTarget(key), ctx);
-    // ⚠️ The whole projected answer rides ONE clearly-named key, and `children`
+    const target = normalizeProjectedTarget(key);
+    const projected = await projectedWorkItem(args.planId, target, ctx);
+    // The sections view of the card AS THE PLAN WOULD LEAVE IT (MOTIR-9033) —
+    // parsed only when asked, from the projected body, kind and type.
+    const body = args.includeSections ? await projectedBodyOf(args.planId, target, ctx) : null;
+    const parsed = body
+      ? parseSections(body.descriptionMd, body.kind as IssueType, body.type as SectionType)
+      : undefined;
+    if (!isTempRef(target)) {
+      // A COMMITTED card read through a plan (MOTIR-11340): the full committed
+      // aggregate — body, children, in-flight code, pages — with the plan's
+      // `modify` laid over `item`, a `planProposal` saying so, and the projection
+      // beside it. A planning session that passes its plan on every read is then
+      // handed the text its plan leaves, never the text the plan is replacing, and
+      // loses nothing the plain read would have told it.
+      return committedAnswer(key, ctx, { planId: args.planId, projected, parsed });
+    }
+    // ⚠️ A PROPOSAL's projected answer rides ONE clearly-named key, and `children`
     // — the committed aggregate's array, which the payload seam derives from the
     // shared v1 child schema — is EMPTY. That is not a gap: a keyless proposal
     // cannot satisfy that schema, and quietly widening it would put rows with no
     // key in the array every existing consumer reads committed children from.
     // A caller branches on `projection` being present, exactly as it does on
     // `search_work_items`.
-    // The sections view of the card AS THE PLAN WOULD LEAVE IT (MOTIR-9033) —
-    // parsed only when asked, from the projected body, kind and type.
-    const body = args.includeSections
-      ? await projectedBodyOf(args.planId, normalizeProjectedTarget(key), ctx)
-      : null;
-    const parsed = body
-      ? parseSections(body.descriptionMd, body.kind as IssueType, body.type as SectionType)
-      : undefined;
     return toolOk(
       summarizeProjected(projected, parsed),
       derived(getWorkItemPayload, {
@@ -266,9 +275,37 @@ export async function runGetWorkItem(
       }),
     );
   }
+  return committedAnswer(key, ctx, { includeSections: args.includeSections });
+}
+
+/**
+ * The committed aggregate for one key. With `plan`, the plan's proposal for the card
+ * is laid over `item` (MOTIR-11340) and the projection rides beside it; the sections
+ * view is then the one already parsed from the projected body.
+ */
+async function committedAnswer(
+  key: string,
+  ctx: ServiceContext,
+  opts: {
+    includeSections?: boolean;
+    planId?: string;
+    projected?: ProjectedDetailDto;
+    parsed?: ParsedBody;
+  },
+): Promise<CallToolResult> {
   const identifier = key.trim().toUpperCase();
   const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
-  const detail = await workItemsService.getIssueDetail(project.id, identifier, ctx);
+  const committedDetail = await workItemsService.getIssueDetail(project.id, identifier, ctx);
+  const overlay =
+    opts.planId === undefined
+      ? null
+      : await aiPlanOverlayService.overlayItemForPlan(
+          opts.planId,
+          project.id,
+          committedDetail.item,
+          ctx,
+        );
+  const detail = overlay ? { ...committedDetail, item: overlay.item } : committedDetail;
   // The children's dependency edges in TWO batched queries (MOTIR-1842's reader),
   // never one read per child — a 43-child story must stay a single round-trip.
   // `getIssueDetail` has already run the browse gate on the whole aggregate, so
@@ -348,13 +385,16 @@ export async function runGetWorkItem(
   // The parsed sections view (MOTIR-9033): one pure call on the body this read
   // already holds, attached at the transport like the comment counts, so
   // `IssueDetailDto` and the web page do not change. Absent unless asked for.
-  const parsed = args.includeSections
-    ? parseSections(
-        detail.item.descriptionMd,
-        detail.item.kind as IssueType,
-        (detail.item.type ?? null) as SectionType,
-      )
-    : undefined;
+  const parsed =
+    opts.planId !== undefined
+      ? opts.parsed
+      : opts.includeSections
+        ? parseSections(
+            detail.item.descriptionMd,
+            detail.item.kind as IssueType,
+            (detail.item.type ?? null) as SectionType,
+          )
+        : undefined;
   const structured = {
     ...publishedDetail,
     folderId: detail.folderId,
@@ -370,11 +410,48 @@ export async function runGetWorkItem(
     latestRefusal,
     pages,
     ...(parsed ? { parsedSections: parsed } : {}),
+    ...(overlay ? { planProposal: overlay.planProposal } : {}),
+    ...(opts.projected ? { projection: opts.projected } : {}),
   };
+  const text = summarize(detail, item.commentCount, folderPath, inFlight, pages, parsed);
   return toolOk(
-    summarize(detail, item.commentCount, folderPath, inFlight, pages, parsed),
+    opts.projected
+      ? [...planProposalLines(overlay?.planProposal ?? null, opts.projected.planId), text].join(
+          '\n',
+        )
+      : text,
     derived(getWorkItemPayload, structured),
   );
+}
+
+/**
+ * The head lines of a committed card read through a plan (MOTIR-11340): whether the
+ * plan modifies or removes it, and which fields the text below already shows AS THE
+ * PLAN LEAVES THEM. The stored values ride `planProposal.committed`, never the text.
+ */
+export function planProposalLines(
+  proposal: AiPlanProposalOverlay | null,
+  planId: string,
+): string[] {
+  if (proposal === null) {
+    return [`Plan ${planId}: proposes no change to this card — it is shown as stored.`];
+  }
+  if (proposal.op === 'remove') {
+    return [`⚠️ Plan ${planId} REMOVES this card (proposed, not approved). It is shown as stored.`];
+  }
+  const fields = Object.keys(proposal.committed);
+  return [
+    `⚠️ Plan ${planId} MODIFIES this card (proposed, not approved).` +
+      (fields.length > 0
+        ? ` Shown as the plan leaves it: ${fields.join(', ')}; the stored values are in \`planProposal.committed\`.`
+        : ' Its text is unchanged.'),
+    ...(proposal.projectedBlockedBy
+      ? [`Blocked by, as the plan leaves it: ${proposal.projectedBlockedBy.join(', ') || 'none'}`]
+      : []),
+    ...(proposal.projectedParent !== undefined
+      ? [`Parent, as the plan leaves it: ${proposal.projectedParent ?? 'none (top level)'}`]
+      : []),
+  ];
 }
 
 export function registerGetWorkItem(server: McpServer, resolveContext: McpContextResolver): void {
@@ -442,9 +519,17 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         '`get_plan` against this call yourself. ' +
         TEMP_REF_HELP +
         ' The projected answer rides a `projection` key — `{ planId, target, parent, ' +
-        'committedChildren, proposedChildren, blockedBy }` — and the ordinary `children` array ' +
-        'is EMPTY, because a proposal has no key and cannot sit in the array committed children ' +
-        'use. Every projected row carries `proposal` and a null `key` when it is one; no key is ' +
+        'committedChildren, proposedChildren, blockedBy }`. For a `planItem:` target the ordinary ' +
+        '`children` array is EMPTY, because a proposal has no key and cannot sit in the array ' +
+        'committed children use. For a COMMITTED key the answer is the full committed read — ' +
+        'children, in-flight code, pages and the rest — with `item` AS THE PLAN LEAVES IT: while ' +
+        'the plan is undecided, a `modify` of the card replaces the fields its patch sets ' +
+        '(title, description, explanation, priority, type, kind, estimates, obsolescence), and ' +
+        '`planProposal` is `{ planId, planStatus, planItemId, op, approved: false, patch, ' +
+        'committed, committedRevision, projectedBlockedBy?, projectedParent? }` — `committed` ' +
+        'holds the STORED value of every replaced field. A `remove` leaves `item` as stored and ' +
+        'says so in `planProposal`; a card the plan does not touch carries no `planProposal`. ' +
+        'Every projected row carries `proposal` and a null `key` when it is one; no key is ' +
         'ever invented for a proposal. Read-only: it creates nothing and persists nothing.' +
         PARSED_SECTIONS_DESCRIPTION,
       inputSchema,

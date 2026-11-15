@@ -11,6 +11,7 @@ import { foldersService } from '@/lib/services/foldersService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { inFlightCodeService } from '@/lib/services/inFlightCodeService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
+import { aiPlanOverlayService } from '@/lib/services/aiPlanOverlayService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { aiDecisionBlockOf } from '@/lib/approvalGates/decisionRecord';
 import {
@@ -321,6 +322,8 @@ export const aiBoundaryService = {
       withHistory?: boolean;
       commentsCursor?: string;
       historyCursor?: string;
+      /** The planning job whose own plan the read answers over (MOTIR-11340). */
+      jobId?: string;
     } = {},
   ): Promise<GetItemResponse> {
     // `key` may be the card's id as well as its key (MOTIR-8940): a plan names
@@ -357,9 +360,14 @@ export const aiBoundaryService = {
     // already ticked. `getWorkItemByRef` above is still the gate: a key outside the
     // token's project 404s before this read runs.
     const todoList = await workItemTodosService.listTodos(item.id, ctx);
+    // The JOB'S OWN PLAN (MOTIR-11340): a card that plan modifies is answered as
+    // the plan leaves it, marked as proposed, with the committed values beside it.
+    // No jobId, no undecided plan or no proposal for the card → the committed card.
+    const overlay = await aiPlanOverlayService.overlayItem(opts.jobId, projectId, item, ctx);
     const response: GetItemResponse = {
+      ...(overlay ? { planProposal: overlay.planProposal } : {}),
       item: {
-        ...item,
+        ...(overlay ? overlay.item : item),
         ...links,
         decision: decisions.get(item.id) ?? null,
         ...inFlight,
@@ -392,6 +400,8 @@ export const aiBoundaryService = {
     rootKey: string,
     depth: number | undefined,
     ctx: ServiceContext,
+    /** The planning job whose own plan the rows are answered over (MOTIR-11340). */
+    jobId?: string,
   ): Promise<SubtreeResponse> {
     const root = await workItemsService.getWorkItemByIdentifier(projectId, rootKey, ctx);
     const project = await readProject(projectId, ctx);
@@ -411,7 +421,12 @@ export const aiBoundaryService = {
       project: { projectId, projectKey: project.identifier },
       root: root.identifier,
       depth: effectiveDepth,
-      nodes: toSkeletonRows(nodes, revisionByItemId, folderIdByItemId, decisionByItemId),
+      nodes: await aiPlanOverlayService.overlayRows(
+        jobId,
+        projectId,
+        toSkeletonRows(nodes, revisionByItemId, folderIdByItemId, decisionByItemId),
+        ctx,
+      ),
     };
   },
 

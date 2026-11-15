@@ -6,7 +6,7 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 
 // GET /api/internal/ai/get-item?key=MOTIR-7[&withComments=1][&withHistory=1]
-//   [&commentsCursor=…][&historyCursor=…]  (Subtask 7.5.1)
+//   [&commentsCursor=…][&historyCursor=…][&jobId=…]  (Subtask 7.5.1)
 //
 // One work item by key — or by its work-item id, the form a plan stores for a
 // committed card (MOTIR-8940) — plus (on request) the DEPTH context 7.1.6 deferred: the
@@ -46,6 +46,17 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 //   - EMPTY IS THE ORDINARY ANSWER: an array on every item, never null or absent.
 //     `[]` means the card has no steps.
 //
+// `jobId` (MOTIR-11340) — a PLANNING read. When that job's own UNDECIDED plan
+// (found by `sourceJobId` in the token's workspace, exactly as `plan-proposals`
+// finds it) holds a `modify` of this card, `item` answers the card AS THE PLAN
+// LEAVES IT — the patched title, bodies, sizing, kind and mark — and a top-level
+// `planProposal` says so: `{ planId, planStatus, planItemId, op, approved: false,
+// patch, committed, committedRevision, projectedBlockedBy?, projectedParent? }`,
+// `committed` holding the stored value of every field the overlay replaced. A
+// `remove` leaves `item` committed and carries `op: 'remove'`. With no jobId, or a
+// job with no undecided plan in this project, or no proposal for the card, the
+// answer is exactly the committed card — a planning session never 404s on it.
+//
 // Typed errors → status:
 //   JobAuthError                       → 401
 //   WorkItemNotFoundError              → 404 (absent / cross-tenant — no leak)
@@ -74,6 +85,7 @@ export async function GET(req: Request): Promise<Response> {
   }
   const commentsCursor = url.searchParams.get('commentsCursor');
   const historyCursor = url.searchParams.get('historyCursor');
+  const jobId = url.searchParams.get('jobId');
 
   try {
     const result = await aiBoundaryService.getItem(auth.projectId, key, auth.ctx, {
@@ -81,6 +93,7 @@ export async function GET(req: Request): Promise<Response> {
       withHistory: parseBool(url.searchParams.get('withHistory')),
       ...(commentsCursor ? { commentsCursor } : {}),
       ...(historyCursor ? { historyCursor } : {}),
+      ...(jobId ? { jobId } : {}),
     });
     return NextResponse.json(result);
   } catch (err) {
