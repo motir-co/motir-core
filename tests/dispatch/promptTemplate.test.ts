@@ -31,6 +31,7 @@ import { MOTIR_DESIGN_DIR_ENV as CLI_MOTIR_DESIGN_DIR_ENV } from '../../packages
 import { splitPlanBody } from '@/lib/markdown/planBody';
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type { WorkItemTypeDto } from '@/lib/dto/workItems';
+import { INIT_SUBJECT } from '@/lib/workItems/initCard';
 import {
   AI_REQUIREMENT_FIELDS,
   AI_REQUIREMENT_REQUIRED_NON_EMPTY,
@@ -3805,5 +3806,93 @@ describe('a SCOPED run’s card never opens or edits the session pull request (M
     expect(workflowMode).toBe('per_item_pr');
     expect(prompt).toContain('This item has no session lineage, so it ships as ONE pull request');
     expect(prompt).toContain('PUSHED, and its pull request is open:');
+  });
+});
+
+// ── A NAME A CARD TAKES FROM AN IN-FLIGHT BLOCKER IS A REFERENCE (MOTIR-11408) ──
+//
+// A plan written while its blocker was still building cites the blocker's planned names. The run
+// builds on what the blocker actually shipped, and a difference is no discrepancy — but the WHAT
+// test still decides a card the shipped blocker makes unreachable. `prompts/run.md` § *BUILD
+// THROUGH OR STOP* carries the same rule in the same words.
+
+describe('THE CARD IS WRONG — a name taken from an in-flight blocker is a reference (MOTIR-11408)', () => {
+  const flat = (text: string) => text.replace(/\s+/g, ' ');
+  const HEADING =
+    'A NAME YOUR CARD TAKES FROM AN IN-FLIGHT BLOCKER IS A REFERENCE, NOT A STATEMENT OF SHIPPED CODE.';
+
+  /** Every lane that renders BUILD THROUGH — the run prompt's three outcome protocols. */
+  const LANES = [
+    { lane: 'code', over: {} },
+    { lane: 'code on a session branch', over: { sessionBranch: 'motir/auto-1' } },
+    { lane: 'decision', over: { type: 'decision', executor: 'coding_agent' } },
+    { lane: 'init', over: { subject: INIT_SUBJECT, targetRepo: null } },
+  ] as { lane: string; over: Partial<DispatchPromptSource> }[];
+
+  const POLICIES = [
+    { logBug: true, replan: true, autoApproveReplan: false },
+    { logBug: true, replan: false, autoApproveReplan: false },
+    { logBug: true, replan: true, autoApproveReplan: true },
+    { logBug: false, replan: false, autoApproveReplan: false },
+  ];
+
+  /** The rule's own text: its heading up to the BUILD THROUGH heading. */
+  function rule(prompt: string): string {
+    const text = flat(prompt);
+    const at = text.indexOf(HEADING);
+    const through = text.indexOf('BUILD THROUGH — the WHAT holds');
+    expect(at, 'the rule renders').toBeGreaterThan(-1);
+    expect(through, 'it sits before BUILD THROUGH').toBeGreaterThan(at);
+    return text.slice(at, through);
+  }
+
+  it.each(LANES)(
+    'the $lane lane renders it once, after the WHAT test and before BUILD THROUGH',
+    ({ over }) => {
+      const prompt = assembleDispatchPrompt(source({ key: 'PROD-7', ...over })).prompt;
+      const text = flat(prompt);
+      expect(text.split(HEADING)).toHaveLength(2);
+      expect(text.indexOf(HEADING)).toBeGreaterThan(text.indexOf('reachable by this run alone?'));
+      expect(text.indexOf(HEADING)).toBeGreaterThan(text.indexOf('THE CARD IS WRONG —'));
+      expect(text.indexOf(HEADING)).toBeLessThan(text.indexOf('STOP — the WHAT itself breaks'));
+      rule(prompt);
+    },
+  );
+
+  it.each(LANES)('the $lane lane states every limb of the rule', ({ over }) => {
+    const text = rule(assembleDispatchPrompt(source({ key: 'PROD-7', ...over })).prompt);
+    // WHEN: attributed to a not-done-at-planning blocked_by item, or marked in flight / provisional.
+    expect(text).toContain('to a work item it depends on (directly or through its parent)');
+    expect(text).toContain("or says it is in flight, on that item's branch or provisional");
+    expect(text).toContain('was not done when the plan was approved');
+    // A reference; build on what shipped, keeping the WHAT.
+    expect(text).toContain(
+      "the name is a reference to that blocker's contract, not a statement of what shipped",
+    );
+    expect(text).toContain('build on what the blocker ACTUALLY SHIPPED');
+    expect(text).toContain("keeping the card's WHAT");
+    // No discrepancy, by the registered tool's name.
+    expect(text).toContain(
+      `is NOT a discrepancy: record no point for it with ${RECORD_RUN_DISCREPANCY_TOOL_NAME} and list no deviation for it`,
+    );
+    // The WHAT test still decides an unreachable or contradictory WHAT.
+    expect(text).toContain(
+      'the ONE question above still decides when what the blocker shipped makes the WHAT unreachable or contradictory',
+    );
+    expect(text).toContain('or the blocker shipped the very thing this card was to build');
+    // And a name stated as shipped is judged as before.
+    expect(text).toContain(
+      'A name the card states as already shipped, with no blocker attribution, is judged by the question above as before.',
+    );
+  });
+
+  it('renders identically on every lane and under every findings policy, and classifies nothing', () => {
+    const texts = LANES.flatMap(({ over }) =>
+      POLICIES.map((findingsPolicy) =>
+        rule(assembleDispatchPrompt(source({ key: 'PROD-7', ...over, findingsPolicy })).prompt),
+      ),
+    );
+    for (const text of texts) expect(text).toBe(texts[0]);
+    expect(texts[0]).not.toMatch(/verdict|planning bug|classif|submit_plan_session/i);
   });
 });

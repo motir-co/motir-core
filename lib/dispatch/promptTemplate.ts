@@ -2488,6 +2488,7 @@ function decisionOutcomeProtocol(src: DispatchPromptSource): string[] {
     '',
     ...cardIsWrongHeader(),
     ...whatTest(src),
+    ...inFlightReference(),
     ...buildThroughSteps(src, { lane: 'decision' }),
     '',
     'STOP — the WHAT itself breaks. In order:',
@@ -2531,6 +2532,7 @@ function initCardOutcomeProtocol(src: DispatchPromptSource): string[] {
     '',
     ...cardIsWrongHeader(),
     ...whatTest(src),
+    ...inFlightReference(),
     ...buildThroughSteps(src, { lane: 'init' }),
     '',
     'STOP — the WHAT itself breaks. In order:',
@@ -2626,6 +2628,7 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '',
     ...cardIsWrongHeader(),
     ...whatTest(src),
+    ...inFlightReference(),
     ...buildThroughSteps(src, { lane: 'code', sessionBranch }),
     '',
     'STOP — the WHAT itself breaks. In order:',
@@ -2904,6 +2907,50 @@ function whatTest(src: DispatchPromptSource): string[] {
     '  NO means STOP. The WHAT must change; its criteria contradict each other,',
     "  shipped reality or another card's scope; it needs a person's decision, a",
     "  credential, or another card's unbuilt work; or it cannot ship as one piece.",
+    '',
+  ];
+}
+
+/**
+ * A NAME A CARD TAKES FROM AN IN-FLIGHT BLOCKER IS A REFERENCE (MOTIR-11408).
+ *
+ * A plan is often written while a card it waits on is still being built, and the planner then
+ * cites that blocker's names from its planned contract or its branch — correctly, by the core rule
+ * *AN IN-FLIGHT NEIGHBOUR'S CODE IS ON ITS BRANCH*. By the time the run starts the blocker has
+ * merged, and may have shipped those names differently. Without this paragraph every such
+ * difference became a {@link buildThroughSteps} point, and on plan `cmwi2vlqn00ho01adin89ek6e`
+ * (MOTIR-11009) 11 of 12 leaves carried points that were only this, burying the ones that were
+ * planning mistakes.
+ *
+ * ⚠️ IT NARROWS WHAT IS RECORDED, NEVER THE TEST. {@link whatTest} still decides a card whose WHAT
+ * the shipped blocker makes unreachable or contradictory. `prompts/run.md` § *BUILD THROUGH OR
+ * STOP* carries the same rule in the same words (`docs/decisions/run-findings-protocol.md`,
+ * AMENDMENT MOTIR-11408). Rendered on every lane that renders BUILD THROUGH, and not switched by
+ * {@link FindingsPolicy}, for the same reason the build-through block is not.
+ */
+function inFlightReference(): string[] {
+  return [
+    'A NAME YOUR CARD TAKES FROM AN IN-FLIGHT BLOCKER IS A REFERENCE, NOT A',
+    'STATEMENT OF SHIPPED CODE. When the card attributes a name or a fact — a file,',
+    "a symbol, a signature, a migration number, a registry's contents, a doc",
+    'sentence — to a work item it depends on (directly or through its parent),',
+    "or says it is in flight, on that item's branch or provisional, and that item",
+    'was not done when the plan was approved:',
+    '',
+    "  - the name is a reference to that blocker's contract, not a statement of",
+    '    what shipped;',
+    '  - build on what the blocker ACTUALLY SHIPPED — its real name, signature,',
+    "    file, number, registry contents or doc text — keeping the card's WHAT;",
+    "  - a difference between the card's reference and what shipped is NOT a",
+    `    discrepancy: record no point for it with ${RECORD_DISCREPANCY_TOOL_NAME}`,
+    '    and list no deviation for it where the work is reviewed;',
+    '  - the ONE question above still decides when what the blocker shipped makes',
+    '    the WHAT unreachable or contradictory: the capability the card builds on',
+    '    does not exist at all, or the blocker shipped the very thing this card',
+    '    was to build.',
+    '',
+    '  A name the card states as already shipped, with no blocker attribution, is',
+    '  judged by the question above as before.',
     '',
   ];
 }
