@@ -54,6 +54,16 @@ function translatorFor(locale: string) {
   }) as unknown as Parameters<typeof actLine>[1];
 }
 
+/** Names a work type in one locale, as the rail's `useTypeLabel` does. */
+function typeLabelFor(locale: string) {
+  const tt = createTranslator({
+    locale,
+    messages: catalogue(locale),
+    namespace: 'labels.workItemType',
+  });
+  return (type: string) => (tt.has(type as never) ? tt(type as never) : type);
+}
+
 /** A fact frame's data, as motir-ai sends it. */
 const wire = (fact: string, code: string, params: Record<string, unknown> = {}) => ({
   fact,
@@ -68,6 +78,9 @@ const PARAMS = {
   title: 'Publish the export layer',
   summary: 'Names src/gone.ts, which does not exist.',
   refreshes: [A, B, C].map((ref) => ({ ref, previousSha: 'f'.repeat(64), currentSha: HASH })),
+  type: 'design',
+  blocker: 'planItem:a',
+  reason: 'reads the token the first card stores',
 };
 
 /** Every (fact, code) pair the closed set lists. */
@@ -95,10 +108,14 @@ describe('the frame', () => {
       fact: {
         fact: 'code_graph_refreshed',
         code: 'refreshed',
+        ref: 'planItem:x',
         count: 3,
         title: 'Publish the export layer',
         summary: 'Names src/gone.ts, which does not exist.',
         repos: [A, B, C],
+        type: 'design',
+        blocker: 'planItem:a',
+        reason: 'reads the token the first card stores',
       },
     });
     expect(JSON.stringify(asAct(wire('code_graph_refreshed', 'refreshed', PARAMS)))).not.toContain(
@@ -110,10 +127,14 @@ describe('the frame', () => {
     expect(readProgressFact(undefined)).toEqual({
       fact: '',
       code: '',
+      ref: null,
       count: null,
       title: null,
       summary: null,
       repos: [],
+      type: null,
+      blocker: null,
+      reason: null,
     });
     expect(
       readProgressFact({
@@ -128,10 +149,14 @@ describe('the frame', () => {
     ).toEqual({
       fact: 'dry_run',
       code: 'checking',
+      ref: null,
       count: null,
       title: null,
       summary: null,
       repos: [A],
+      type: null,
+      blocker: null,
+      reason: null,
     });
     expect(readProgressFact({ fact: 'x', code: 'y', params: 'not an object' }).repos).toEqual([]);
     expect(readProgressFact({ params: { refreshes: 'motir-co/motir-ai' } }).repos).toEqual([]);
@@ -240,6 +265,65 @@ describe('the line, in English: what the rail said before the words moved', () =
   });
 });
 
+describe('the walk-written lines (MOTIR-11338): a typeless card settled, an edge explained', () => {
+  const tc = translatorFor('en');
+  const line = (fact: string, code: string, params: Record<string, unknown> = {}) =>
+    actLine(asAct({ fact, code, ref: 'ACME-7', params }), tc, 'en', typeLabelFor('en'));
+
+  it('says in English what the rail said as a note before, with the type named', () => {
+    expect(line('author', 'typed', { type: 'code' })).toBe(
+      'ACME-7 had no type, so I gave it the type “Code” before writing it.',
+    );
+    expect(line('author', 'made_story')).toBe(
+      'ACME-7 had no type and no single type fits its work, so I am making it a story and writing it as one.',
+    );
+    expect(line('edge', 'explained', { blocker: 'ACME-6', reason: 'reads the stored token' })).toBe(
+      'ACME-7 waits on ACME-6 — reads the stored token',
+    );
+  });
+
+  it('names the type in the reader’s language, and an id no catalogue lists as sent', () => {
+    const de = actLine(
+      asAct({ fact: 'author', code: 'typed', ref: 'ACME-7', params: { type: 'decision' } }),
+      translatorFor('de'),
+      'de',
+      typeLabelFor('de'),
+    );
+    expect(de).toContain('„Entscheidung“');
+    expect(line('author', 'typed', { type: 'a_new_type' })).toContain('“a_new_type”');
+    // With no namer the id is drawn rather than nothing.
+    expect(
+      actLine(
+        asAct({ fact: 'author', code: 'typed', ref: 'ACME-7', params: { type: 'code' } }),
+        tc,
+        'en',
+      ),
+    ).toContain('“code”');
+  });
+
+  it('a line missing its card, type, blocker or reason is the generic line', () => {
+    const generic = 'Working on the plan…';
+    expect(actLine(asAct({ fact: 'author', code: 'made_story', params: {} }), tc, 'en')).toBe(
+      generic,
+    );
+    expect(line('author', 'typed')).toBe(generic);
+    expect(line('edge', 'explained', { blocker: 'ACME-6' })).toBe(generic);
+    expect(line('edge', 'explained', { reason: 'x' })).toBe(generic);
+  });
+
+  it('the rail row names the type through the catalogue', () => {
+    renderWithIntl(
+      <PlanActRecord
+        acts={[asAct({ fact: 'author', code: 'typed', ref: 'ACME-7', params: { type: 'design' } })]}
+        streaming={false}
+      />,
+    );
+    expect(screen.getByTestId('plan-change-act-fact').textContent).toContain(
+      'ACME-7 had no type, so I gave it the type “Design” before writing it.',
+    );
+  });
+});
+
 describe('every fact and code, in every locale', () => {
   for (const locale of locales) {
     it(`${locale}: each line is a real, interpolated translation — data kept as sent`, () => {
@@ -247,7 +331,7 @@ describe('every fact and code, in every locale', () => {
       const en = translatorFor('en');
       for (const [fact, code] of ALL) {
         const act = asAct(wire(fact, code, PARAMS));
-        const said = actLine(act, tc, locale);
+        const said = actLine(act, tc, locale, typeLabelFor(locale));
         expect(said, `${locale} ${fact}.${code}`).not.toMatch(/[{}]|undefined|fact\./);
         expect(said, `${locale} ${fact}.${code} is the generic line`).not.toBe(
           tc(`fact.${UNKNOWN_FACT_KEY}`),
@@ -255,6 +339,13 @@ describe('every fact and code, in every locale', () => {
         const needs = FACT_KEYS[fact]![code]!.needs;
         if (needs.includes('title')) expect(said).toContain(PARAMS.title);
         if (needs.includes('summary')) expect(said).toContain(PARAMS.summary);
+        if (needs.includes('ref')) expect(said).toContain('planItem:x');
+        if (needs.includes('blocker')) expect(said).toContain(PARAMS.blocker);
+        if (needs.includes('reason')) expect(said).toContain(PARAMS.reason);
+        if (needs.includes('type'))
+          expect(said, `${locale} names the type in its own language`).toContain(
+            typeLabelFor(locale)('design'),
+          );
         if (needs.includes('repos'))
           expect(said).toContain(
             new Intl.ListFormat(locale, { type: 'conjunction' }).format([A, B, C]),

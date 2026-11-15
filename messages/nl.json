@@ -8901,6 +8901,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Je codegraaf voor {repos} is sinds de vorige beurt vernieuwd. Eerdere antwoorden gebruikten de vorige graaf.} other {De codegrafen voor {repos} zijn sinds de vorige beurt vernieuwd. Eerdere antwoorden gebruikten de vorige grafen.}}"
+        },
+        "author": {
+          "typed": "{ref} had geen type, dus heb ik het vóór het schrijven het type ‘{type}’ gegeven.",
+          "madeStory": "{ref} had geen type en geen enkel type past bij het werk, dus maak ik er een story van en schrijf ik het als story."
+        },
+        "edge": {
+          "explained": "{ref} wacht op {blocker} — {reason}"
         }
       },
       "openerFollowUp": "Je hebt net {label} gekozen. Motir AI plant wat daarop wacht.",

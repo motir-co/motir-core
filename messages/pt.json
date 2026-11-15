@@ -8901,6 +8901,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Seu grafo de código de {repos} foi atualizado desde o último turno. As respostas anteriores usaram o grafo anterior.} other {Os grafos de código de {repos} foram atualizados desde o último turno. As respostas anteriores usaram os grafos anteriores.}}"
+        },
+        "author": {
+          "typed": "{ref} não tinha tipo, então atribuí a ele o tipo “{type}” antes de escrevê-lo.",
+          "madeStory": "{ref} não tinha tipo e nenhum tipo único se encaixa no seu trabalho, então estou transformando-o em uma história e escrevendo-o como tal."
+        },
+        "edge": {
+          "explained": "{ref} aguarda {blocker} — {reason}"
         }
       },
       "openerFollowUp": "Você acabou de escolher {label}. O Motir AI está planejando o que isso condiciona.",

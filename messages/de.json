@@ -8901,6 +8901,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Ihr Code-Graph für {repos} wurde seit der letzten Runde aktualisiert. Frühere Antworten beruhten auf dem vorherigen Graphen.} other {Die Code-Graphen für {repos} wurden seit der letzten Runde aktualisiert. Frühere Antworten beruhten auf den vorherigen Graphen.}}"
+        },
+        "author": {
+          "typed": "{ref} hatte keinen Typ, daher habe ich ihm vor dem Schreiben den Typ „{type}“ gegeben.",
+          "madeStory": "{ref} hatte keinen Typ, und kein einzelner Typ passt zu seiner Arbeit, daher mache ich es zu einer Story und schreibe es als solche."
+        },
+        "edge": {
+          "explained": "{ref} wartet auf {blocker} — {reason}"
         }
       },
       "openerFollowUp": "Sie haben gerade {label} gewählt. Motir AI plant, was davon abhängt.",

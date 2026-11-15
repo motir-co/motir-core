@@ -16,12 +16,21 @@
 //     params: { count?: number,     // cards checked or sent back, issues found
 //               title?: string,     // a card's title (or its ref), never translated
 //               summary?: string,   // a finding's one-line summary, never translated
-//               refreshes?: [{ ref, previousSha, currentSha }] } }
+//               refreshes?: [{ ref, previousSha, currentSha }],
+//               type?: string,      // a work type id, named in the reader's language
+//               blocker?: string,   // the card an edge waits on, as the plan spells it
+//               reason?: string } } // an edge's reason, the planner's words, never translated
 //
 // and the line is this catalogue's, under `planningWorkspace.conversation.fact`, in
 // the reader's locale. A repository list is joined by the reader's own list rules
 // (`Intl.ListFormat`); the content hashes a refresh carries are never kept, so they
 // are never drawn (MOTIR-7181).
+//
+// Two lines the walk itself wrote joined them (MOTIR-11338): the type given to a
+// committed card that had none before it was written (`author`, MOTIR-8193) — the type
+// arrives as its id and is named in the reader's language from `labels.workItemType` —
+// and the reason an edge was drawn with (`edge`), the planner's own words kept as sent
+// inside a catalogued frame. Both name the card they are about by its `ref`.
 //
 // ⚠️ AN UNKNOWN FACT OR CODE IS A VISIBLE GAP, NEVER A HOLE. motir-ai can add a code
 // before this file learns it, and the rail must not go quiet while a stage runs —
@@ -34,15 +43,23 @@
 export interface ProgressFact {
   fact: string;
   code: string;
+  /** The card the line is about, as the plan spells it. Never translated. */
+  ref: string | null;
   count: number | null;
   title: string | null;
   summary: string | null;
   /** The refreshed repositories, in the order sent. */
   repos: string[];
+  /** The work type a typeless card was given, as its id (`code`, `design`…). */
+  type: string | null;
+  /** The card an edge waits on. Never translated. */
+  blocker: string | null;
+  /** Why an edge was drawn — the planner's own one line. Never translated. */
+  reason: string | null;
 }
 
 /** What a catalogue line interpolates. */
-type Param = 'count' | 'title' | 'summary' | 'repos';
+type Param = 'count' | 'title' | 'summary' | 'repos' | 'ref' | 'type' | 'blocker' | 'reason';
 
 /** One known code: its catalogue key under `fact.`, and the parameters its line needs. */
 interface FactLine {
@@ -104,6 +121,13 @@ export const FACT_KEYS: Readonly<Record<string, Readonly<Record<string, FactLine
   code_graph_refreshed: {
     refreshed: line('codeGraph.refreshed', 'repos', 'count'),
   },
+  author: {
+    typed: line('author.typed', 'ref', 'type'),
+    made_story: line('author.madeStory', 'ref'),
+  },
+  edge: {
+    explained: line('edge.explained', 'ref', 'blocker', 'reason'),
+  },
 };
 
 /** The generic line for a fact this file cannot word. */
@@ -134,10 +158,14 @@ export function readProgressFact(data: unknown): ProgressFact {
   return {
     fact: text(d['fact']) ?? '',
     code: text(d['code']) ?? '',
+    ref: text(d['ref']),
     count: typeof count === 'number' && Number.isFinite(count) ? count : null,
     title: text(p['title']),
     summary: text(p['summary']),
     repos: reposOf(p['refreshes']),
+    type: text(p['type']),
+    blocker: text(p['blocker']),
+    reason: text(p['reason']),
   };
 }
 
@@ -150,6 +178,10 @@ function knownLine(fact: ProgressFact): FactLine | null {
     title: fact.title !== null,
     summary: fact.summary !== null,
     repos: fact.repos.length > 0,
+    ref: fact.ref !== null,
+    type: fact.type !== null,
+    blocker: fact.blocker !== null,
+    reason: fact.reason !== null,
   };
   return line.needs.every((n) => has[n]) ? line : null;
 }
@@ -157,13 +189,29 @@ function knownLine(fact: ProgressFact): FactLine | null {
 /** A translator over the `planningWorkspace.conversation` namespace. */
 type Tc = (key: string, values?: Record<string, string | number>) => string;
 
-/** The line one fact reads as, in the reader's locale. */
-export function factLine(fact: ProgressFact, tc: Tc, locale: string): string {
+/** Names a work type id in the reader's language. */
+export type TypeLabel = (type: string) => string;
+
+/** The type id as sent — the fallback when no catalogue names it. */
+const typeId: TypeLabel = (type) => type;
+
+/** The line one fact reads as, in the reader's locale. `typeLabel` names a work type
+ *  in the reader's language (`labels.workItemType`); without it the id is drawn. */
+export function factLine(
+  fact: ProgressFact,
+  tc: Tc,
+  locale: string,
+  typeLabel: TypeLabel = typeId,
+): string {
   const known = knownLine(fact);
   if (known === null) return tc(`fact.${UNKNOWN_FACT_KEY}`);
   const values: Record<string, string | number> = {};
   if (fact.title !== null) values['title'] = fact.title;
   if (fact.summary !== null) values['summary'] = fact.summary;
+  if (fact.ref !== null) values['ref'] = fact.ref;
+  if (fact.type !== null) values['type'] = typeLabel(fact.type);
+  if (fact.blocker !== null) values['blocker'] = fact.blocker;
+  if (fact.reason !== null) values['reason'] = fact.reason;
   if (fact.repos.length > 0) {
     values['repos'] = new Intl.ListFormat(locale, { type: 'conjunction' }).format(fact.repos);
     values['count'] = fact.repos.length;
