@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Deze status kan niet direct worden ingesteld — het item heeft een open pull request, en het mergen daarvan zorgt voor deze stap. Alle andere stappen zijn nog mogelijk.",
       "PLAN_TARGET_HELD": "De status kan niet worden gewijzigd zolang er een plan open staat — een plan herschrijft dit item. Keur het plan goed of wijs het af, of trek het voorstel in dat dit item noemt.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Alleen een afgerond item kan worden gemarkeerd — archiveer het in plaats daarvan.",
-      "MARKED_CARD_CANNOT_REOPEN": "Dit item is gemarkeerd als verouderd of afgeschaft. Verwijder de markering om dit item te heropenen."
+      "MARKED_CARD_CANNOT_REOPEN": "Dit item is gemarkeerd als verouderd of afgeschaft. Verwijder de markering om dit item te heropenen.",
+      "WORK_ITEM_IN_TRIAGE": "Een item dat nog in Triage staat, kan niet in een map worden opgeborgen, onder een ander item worden geplaatst of onderliggende items krijgen. Accepteer het eerst in Triage."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Alleen een projectbeheerder kan de workflow bewerken.",

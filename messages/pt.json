@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Este status não pode ser definido diretamente — o item tem um pull request aberto, e é o merge dele que faz essa mudança. Todas as outras mudanças continuam disponíveis.",
       "PLAN_TARGET_HELD": "O status não pode ser alterado enquanto um plano estiver aberto — um plano está reescrevendo este item. Aprove ou recuse o plano, ou retire a proposta que menciona este item.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Somente um item finalizado pode ser marcado — arquive-o em vez disso.",
-      "MARKED_CARD_CANNOT_REOPEN": "Este item está marcado como desatualizado ou obsoleto. Remova a marcação para reabrir este item."
+      "MARKED_CARD_CANNOT_REOPEN": "Este item está marcado como desatualizado ou obsoleto. Remova a marcação para reabrir este item.",
+      "WORK_ITEM_IN_TRIAGE": "Um item que ainda está na Triagem não pode ser arquivado em uma pasta, colocado sob outro item nem receber itens filhos. Aceite-o primeiro na Triagem."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Somente um administrador do projeto pode editar o fluxo de trabalho.",

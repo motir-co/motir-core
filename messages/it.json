@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Questo stato non può essere impostato direttamente: l’elemento ha una pull request aperta, ed è il suo merge che produce questo spostamento. Tutti gli altri spostamenti restano possibili.",
       "PLAN_TARGET_HELD": "Non puoi cambiare lo stato mentre un piano è aperto: un piano sta riscrivendo questo elemento. Approva o rifiuta il piano, oppure ritira la proposta che riguarda questo elemento.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Solo un elemento terminato può essere contrassegnato: archivialo invece.",
-      "MARKED_CARD_CANNOT_REOPEN": "Questo elemento è contrassegnato come obsoleto o deprecato. Rimuovi il contrassegno per riaprirlo."
+      "MARKED_CARD_CANNOT_REOPEN": "Questo elemento è contrassegnato come obsoleto o deprecato. Rimuovi il contrassegno per riaprirlo.",
+      "WORK_ITEM_IN_TRIAGE": "Un elemento ancora in Smistamento non può essere archiviato in una cartella, posto sotto un altro elemento né ricevere elementi figli. Accettalo prima in Smistamento."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Solo un amministratore del progetto può modificare il flusso di lavoro.",

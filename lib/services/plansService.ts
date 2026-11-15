@@ -113,6 +113,7 @@ import {
   folderRefId,
   isFolderRef,
   isTempRef,
+  isWorkItemRef,
   SUPERSEDES_PATCH_SITES,
   tempRefsOf,
   type ProposalRefCarrier,
@@ -132,6 +133,7 @@ import {
   projectedKindOverrides,
   proposedParentAnchorIds,
   validatePlanProposals,
+  assertNoTriagedPlacement,
   withProjectedKinds,
   type KindChangeContext,
   type LiveFolderState,
@@ -1530,6 +1532,9 @@ async function runPersistGate(
         kind: r.kind,
         status: r.status,
         projectId: r.projectId,
+        // A card still in TRIAGE is neither modified nor parented by a plan
+        // (MOTIR-11339) — the marker is on the row this read already returns.
+        triaged: r.triagedAt !== null,
       },
     ]),
   );
@@ -1672,6 +1677,36 @@ async function assertKindChangesLegalAtAppend(
 }
 
 /**
+ * The TRIAGE gate at the APPEND and at a correction (bug MOTIR-11339) — the
+ * close's `assertNoTriagedPlacement`, asked where the proposal is written so the
+ * author hears it while the plan is still theirs and no planning is spent on a
+ * card that cannot land. A triage marker is a property of a row that ALREADY
+ * exists and is never set later, so nothing a later call does can turn a refused
+ * proposal into a legal one — the re-parent gate's own argument for asking at the
+ * append. Skipped, with no read, when no proposal names a live card it would
+ * modify or place under. The project narrowing is lifted for the reason
+ * `assertReparentsLegalAtAppend` lifts it.
+ */
+async function assertNoTriagedPlacementAtAppend(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const ids = new Set<string>();
+  for (const n of nodes) {
+    if (n.op === 'modify' && n.workItemId) ids.add(n.workItemId);
+    const parentRef = n.op === 'add' ? n.parentRef : n.op === 'modify' ? n.patch?.parentRef : null;
+    if (parentRef && isWorkItemRef(parentRef)) ids.add(parentRef);
+  }
+  if (ids.size === 0) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const rows = await workItemRepository.findByIdsInWorkspace([...ids], ctx.workspaceId, tx);
+    assertNoTriagedPlacement(nodes, new Map(rows.map((r) => [r.id, toLiveState(r)])));
+  });
+}
+
+/**
  * Hold an `add` whose KIND an edit just changed to the rules a new kind owes
  * (bug MOTIR-8192 · AMENDMENT 25 §4) — at the correction and at every
  * `editAddProposal` mode, the doors that can re-kind a proposed card:
@@ -1716,6 +1751,7 @@ function toLiveState(r: WorkItem): LiveWorkItemState {
     kind: r.kind,
     status: r.status,
     projectId: r.projectId,
+    triaged: r.triagedAt !== null,
   };
 }
 
@@ -2600,6 +2636,9 @@ async function assertCorrectedShapesLegal(
   if (corrected.some((n) => n.op === 'modify' && n.patch?.kind !== undefined)) {
     await assertKindChangesLegalAtAppend(projected, ctx, planProjectId, tx);
   }
+  // …and the TRIAGE gate (bug MOTIR-11339): a correction that moves an `add` under
+  // a card still in Triage is refused where it is written, as the append is.
+  await assertNoTriagedPlacementAtAppend(corrected, ctx, planProjectId, tx);
   // A `blocked_by` CYCLE the correction closes on a GENERATING plan
   // (MOTIR-9267) — refused where the edge is written, as the append does, and
   // before the write. A `planned` plan is held by the before/after gate.
@@ -7112,6 +7151,11 @@ export const plansService = {
           // illegal one while the plan is still theirs. Skipped, with no read,
           // when no proposal on the plan carries `patch.kind`.
           await assertKindChangesLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
+
+          // ⚠️ THE TRIAGE GATE, AT THE APPEND (bug MOTIR-11339) — a `modify` of a
+          // card still in Triage, or an item placed under one, is refused here,
+          // before the append parks a target or anybody plans under it.
+          await assertNoTriagedPlacementAtAppend(withIncoming, ctx, fresh.projectId, tx);
 
           // ⚠️ THE FOLDER GATE, AT THE APPEND (MOTIR-5414) — the second check on
           // this path that costs a read, and skipped entirely unless some

@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Este estado no se puede establecer directamente: el elemento tiene una pull request abierta y fusionarla es lo que realiza este cambio. Todos los demás cambios siguen disponibles.",
       "PLAN_TARGET_HELD": "No se puede cambiar el estado mientras haya un plan abierto: un plan está reescribiendo este elemento. Aprueba o rechaza el plan, o retira la propuesta que nombra este elemento.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Solo se puede marcar un elemento terminado; archívalo en su lugar.",
-      "MARKED_CARD_CANNOT_REOPEN": "Este elemento está marcado como desactualizado u obsoleto. Quita la marca para reabrirlo."
+      "MARKED_CARD_CANNOT_REOPEN": "Este elemento está marcado como desactualizado u obsoleto. Quita la marca para reabrirlo.",
+      "WORK_ITEM_IN_TRIAGE": "Un elemento que sigue en Clasificación no se puede archivar en una carpeta, colocar bajo otro elemento ni recibir elementos hijos. Acéptalo primero en Clasificación."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Solo un administrador del proyecto puede editar el flujo de trabajo.",

@@ -415,6 +415,12 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // same status as the plan hold, for the same reason: the edge is legal and the
   // fix is a person's (clear the mark). Its payload rides as `mark`.
   MARKED_CARD_CANNOT_REOPEN: 422,
+  // MOTIR-11339 — a card still in TRIAGE takes no place in the planned tree: it is
+  // not filed into a folder or moved under a card (`parentKey`), and no item is
+  // created or moved under it. 409, the status the triage doors give their own
+  // state refusal (`NOT_IN_TRIAGE`): the body is valid and the card's STATE is
+  // what conflicts — a person accepting it in Triage is the fix.
+  WORK_ITEM_IN_TRIAGE: 409,
 
   // 11.2.9 (MOTIR-2051) — the link edges.
   SELF_LINK: 422,

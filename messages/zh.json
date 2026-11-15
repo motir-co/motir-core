@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "该状态无法直接设置——此工作项有未合并的拉取请求，合并它才会完成这一移动。其他移动仍然可以进行。",
       "PLAN_TARGET_HELD": "计划未决定前无法更改状态——一个计划正在改写此工作项。请批准或拒绝该计划，或撤回指向此工作项的提案。",
       "OBSOLESCENCE_REQUIRES_FINISHED": "只有已完成的工作项才能标记——请改为归档。",
-      "MARKED_CARD_CANNOT_REOPEN": "此工作项已标记为过时或已弃用。清除标记后才能重新打开此工作项。"
+      "MARKED_CARD_CANNOT_REOPEN": "此工作项已标记为过时或已弃用。清除标记后才能重新打开此工作项。",
+      "WORK_ITEM_IN_TRIAGE": "仍在分诊中的条目无法归入文件夹、放到其他条目之下或添加子条目。请先在分诊中接受它。"
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "只有项目管理员才能编辑工作流。",

@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Ce statut ne peut pas être défini directement : l’élément a une pull request ouverte, et c’est sa fusion qui effectue ce changement. Tous les autres changements restent possibles.",
       "PLAN_TARGET_HELD": "Le statut ne peut pas être modifié tant qu’un plan est ouvert : un plan est en train de réécrire cet élément. Approuvez ou refusez le plan, ou retirez la proposition qui cite cet élément.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Seul un élément terminé peut être marqué : archivez-le plutôt.",
-      "MARKED_CARD_CANNOT_REOPEN": "Cet élément est marqué comme obsolète ou déprécié. Retirez la marque pour le rouvrir."
+      "MARKED_CARD_CANNOT_REOPEN": "Cet élément est marqué comme obsolète ou déprécié. Retirez la marque pour le rouvrir.",
+      "WORK_ITEM_IN_TRIAGE": "Un élément encore en Tri ne peut pas être classé dans un dossier, placé sous un autre élément ni recevoir d’éléments enfants. Acceptez-le d’abord dans Tri."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Seul un administrateur du projet peut modifier le workflow.",
