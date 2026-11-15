@@ -144,6 +144,7 @@ const projection: BoardProjectionDto = {
   swimlanes: [],
   unmappedStatuses: [],
   sprint: null,
+  storedFilter: null,
   planHolds: {
     pln_a: {
       kind: 'plan',

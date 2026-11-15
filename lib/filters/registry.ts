@@ -488,6 +488,10 @@ export interface ProjectFilterCustomField {
 export interface ProjectFilterReferents {
   customFields: ReadonlyMap<string, ProjectFilterCustomField>;
   labelIds: ReadonlySet<string>;
+  /** The names of the labels in `labelIds`, by id — for a read-only readout of
+   * the filter (the board's stored-filter indicator, MOTIR-11335). Optional: a
+   * referent set built without names (a test, the empty set) leaves it out. */
+  labelNames?: ReadonlyMap<string, string>;
   componentIds: ReadonlySet<string>;
   /** The project's folders the filter names that still exist (MOTIR-5376). */
   folderIds: ReadonlySet<string>;

@@ -33,6 +33,13 @@ import {
   upsertBoard,
 } from './multiBoardState';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
+import {
+  BoardFilterSection,
+  useBoardFilterDraft,
+  type BoardFilterLookups,
+  type BoardFilterRefusal,
+} from './BoardFilterSection';
+import type { FilterAst, FilterEnvelope } from '@/lib/filters/ast';
 
 // BoardSwitcher (Subtask 3.7.4) — the multi-board switcher + create / rename /
 // set-default / delete UI on `/boards`, per `design/boards/multi-board.mock.html`
@@ -69,8 +76,18 @@ import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 // sees the switcher to SWITCH, with New and the per-board manage menu — rename,
 // set default, Board settings, delete — HIDDEN: they are entry points (the
 // permission-gated UI rule, rows 1 and 5). The server re-gates every write.
+//
+// Board filter (Story MOTIR-10560 · Subtask MOTIR-11333): given `filterLookups`
+// (the builder's lookups, from the `/boards` page), the create dialog carries the
+// optional Board filter section (`BoardFilterSection`) and posts its committed
+// envelope as `filter`. A 422 refusal comes back to the dialog, which shows it in
+// the section and stays open; every other failure keeps the generic toast.
 
 type BoardType = 'kanban' | 'scrum';
+
+/** A board-create result the dialog acts on: created, or a typed 422 refusal of
+ * the stored filter (any other failure throws, for the generic toast). */
+type CreateOutcome = { ok: true } | { ok: false; refusal: BoardFilterRefusal };
 
 const NAME_MAX = 80;
 
@@ -87,9 +104,13 @@ export function BoardSwitcher({
   // It hides New + the per-board manage menu (creating / renaming / deleting a
   // board stays the `/boards` switcher's job, per the 3.7.7 design notes).
   variant = 'board',
+  // The Board filter section's lookups (MOTIR-11333). Absent — the settings
+  // variant, which has no New — the create dialog has no Filter section.
+  filterLookups,
 }: {
   canManage?: boolean;
   variant?: 'board' | 'settings';
+  filterLookups?: BoardFilterLookups;
 }) {
   const t = useTranslations('boards');
   // In the settings variant the switcher only SWITCHES which board is configured
@@ -172,18 +193,38 @@ export function BoardSwitcher({
   const isLastBoard = (boards?.length ?? 0) <= 1;
 
   // ── Create ────────────────────────────────────────────────────────────────
-  const createBoard = async (name: string, type: BoardType) => {
+  const createBoard = async (
+    name: string,
+    type: BoardType,
+    filter?: FilterEnvelope,
+  ): Promise<CreateOutcome> => {
     const res = await fetch('/api/boards', {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ name, type }),
+      // No `filter` key at all when the section holds no complete condition: the
+      // board is created with no stored filter, exactly as before.
+      body: JSON.stringify(filter ? { name, type, filter } : { name, type }),
     });
+    if (res.status === 422) {
+      const body = (await res.json().catch(() => ({}))) as Partial<BoardFilterRefusal>;
+      return {
+        ok: false,
+        refusal: {
+          code: body.code ?? 'UNKNOWN',
+          error: body.error ?? '',
+          ...(typeof body.conditionIndex === 'number'
+            ? { conditionIndex: body.conditionIndex }
+            : {}),
+        },
+      };
+    }
     if (!res.ok) throw new Error(`create ${res.status}`);
     const created = (await res.json()) as BoardSummaryDto;
     setBoards((prev) => upsertBoard(prev ?? [], created));
     setNewOpen(false);
     announce(t('boardCreatedAnnounce', { name: created.name }));
     selectBoard(created.id);
+    return { ok: true };
   };
 
   // ── Rename ──────────────────────────────────────────────────────────────── (optimistic + reconcile)
@@ -489,16 +530,18 @@ export function BoardSwitcher({
       {newOpen ? (
         <BoardFormModal
           mode="create"
+          filterLookups={filterLookups}
           onClose={() => setNewOpen(false)}
-          onSubmit={async (name, type) => {
+          onSubmit={async (name, type, filter) => {
             try {
-              await createBoard(name, type);
+              return await createBoard(name, type, filter);
             } catch {
               toast({
                 variant: 'error',
                 title: t('boardWriteErrorTitle'),
                 description: t('boardCreateErrorDescription'),
               });
+              return undefined;
             }
           }}
         />
@@ -588,19 +631,31 @@ function ManageItem({
 // type picker. Both types are real, selectable options (the Scrum board view
 // landed in Story 4.5, so the old "Epic 4" disabled seam is gone); Kanban stays
 // the default. Submitting hands the trimmed name (+ chosen type) up; an empty
-// name is blocked client-side (mirrors the service guard).
+// name is blocked client-side (mirrors the service guard). In create mode with
+// `filterLookups`, it also carries the optional Board filter section
+// (MOTIR-11333): the dialog widens to `xl` once a filter is added, posts the
+// section's committed envelope, and on a 422 refusal shows it in the section and
+// stays open with every field as typed.
 function BoardFormModal({
   mode,
   initialName = '',
+  filterLookups,
   onClose,
   onSubmit,
 }: {
   mode: 'create' | 'rename';
   initialName?: string;
+  filterLookups?: BoardFilterLookups;
   onClose: () => void;
-  onSubmit: (name: string, type: BoardType) => void | Promise<void>;
+  onSubmit: (
+    name: string,
+    type: BoardType,
+    filter?: FilterEnvelope,
+  ) => void | CreateOutcome | undefined | Promise<void | CreateOutcome | undefined>;
 }) {
   const t = useTranslations('boards');
+  const showFilter = mode === 'create' && filterLookups !== undefined;
+  const filterDraft = useBoardFilterDraft(filterLookups ?? NO_LOOKUPS);
   const [name, setName] = useState(initialName);
   const [type, setType] = useState<BoardType>('kanban');
   const [error, setError] = useState<string | null>(null);
@@ -638,9 +693,15 @@ function BoardFormModal({
       setError(t('boardNameRequired'));
       return;
     }
+    const committed: { ast: FilterAst; envelope: FilterEnvelope } | null = showFilter
+      ? filterDraft.committedFilter()
+      : null;
     setSaving(true);
     try {
-      await onSubmit(trimmed, type);
+      const outcome = await onSubmit(trimmed, type, committed?.envelope);
+      if (outcome && !outcome.ok && committed) {
+        filterDraft.setRefusal(outcome.refusal, committed.ast);
+      }
     } finally {
       setSaving(false);
     }
@@ -652,11 +713,13 @@ function BoardFormModal({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      size="sm"
+      size={showFilter && filterDraft.open ? 'xl' : 'sm'}
       title={mode === 'create' ? t('newBoardTitle') : t('renameBoardTitle')}
     >
-      {/* modal-scroll-container: measured 1280x700, tallest = create mode (name, the two board-type tiles, the seed hint), panel 347px */}
-      <div className="flex flex-col gap-4">
+      {/* Modal.Body owns the scroll: with the Board filter section's builder
+          (up to 20 conditions, MOTIR-11333) the create dialog has no bounded
+          height, so its footer must stay reachable on a short viewport. */}
+      <Modal.Body className="flex flex-col gap-4">
         <Input
           label={t('boardNameLabel')}
           autoFocus
@@ -721,7 +784,11 @@ function BoardFormModal({
             </p>
           </fieldset>
         ) : null}
-      </div>
+
+        {showFilter && filterLookups ? (
+          <BoardFilterSection draft={filterDraft} lookups={filterLookups} />
+        ) : null}
+      </Modal.Body>
 
       <Modal.Footer>
         <Button variant="ghost" onClick={onClose}>
@@ -739,6 +806,18 @@ function BoardFormModal({
     </Modal>
   );
 }
+
+/** Empty lookups for a dialog with no Filter section (the hook still runs, so
+ * the hook order never depends on the mode). */
+const NO_LOOKUPS: BoardFilterLookups = {
+  statuses: [],
+  members: [],
+  sprints: [],
+  customFields: [],
+  components: [],
+  referencedLabels: [],
+  projectKey: '',
+};
 
 // The destructive delete confirm — a danger title + an info callout making the
 // board-≠-issue-owner contract explicit (issues survive on the project), then a

@@ -4,10 +4,12 @@ import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
 import { BoardNotFoundError, InvalidBoardNameError, LastBoardError } from '@/lib/boards/errors';
 import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
+import { FilterValidationError } from '@/lib/filters/errors';
 
 // /api/boards/[id] (Subtask 3.7.3) — per-board lifecycle mutations:
 //   PATCH  { name }            → renameBoard      (3.6.2, reused)
 //   PATCH  { isDefault: true } → setDefaultBoard
+//   PATCH  { filter }          → setBoardFilter   (MOTIR-10560; `null` clears)
 //   DELETE                     → deleteBoard      (guards: last-board, promote-default)
 // Thin HTTP layer over boardsService; session-required; workspace from the
 // active-project context (NEVER the client). The board id is the path param;
@@ -18,9 +20,15 @@ import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 // service method (one service call per happy-path branch):
 //   { name }            → renameBoard
 //   { isDefault: true } → setDefaultBoard
+//   { filter }          → setBoardFilter — the board's stored filter, a
+//                         `FilterEnvelope` `{ v, c, f }`; a PRESENT `null`
+//                         clears it (detected with `'filter' in body`, so an
+//                         absent key never reaches this branch)
 //
 // Typed errors → status codes:
 //   InvalidBoardNameError → 400
+//   FilterValidationError (stored filter refused; unchanged) → 422
+//     `{ code, error, conditionIndex? }` — the 0-based refused condition
 //   PermissionDeniedError (board:configure)                     → 403
 //   ProjectNotFoundError (cannot browse the project)             → 404
 //   BoardNotFoundError    → 404
@@ -51,7 +59,8 @@ export async function PATCH(
     );
   }
 
-  const { name, isDefault } = (body ?? {}) as Record<string, unknown>;
+  const fields = (body ?? {}) as Record<string, unknown>;
+  const { name, isDefault } = fields;
   const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 
   try {
@@ -77,13 +86,30 @@ export async function PATCH(
       return NextResponse.json(board);
     }
 
+    if (typeof fields === 'object' && 'filter' in fields) {
+      const board = await boardsService.setBoardFilter(id, fields.filter, serviceCtx);
+      return NextResponse.json(board);
+    }
+
     return NextResponse.json(
-      { code: 'BAD_REQUEST', error: 'Expected one of `name` or `isDefault`.' },
+      { code: 'BAD_REQUEST', error: 'Expected one of `name`, `isDefault` or `filter`.' },
       { status: 400 },
     );
   } catch (err) {
     if (err instanceof InvalidBoardNameError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+    }
+    if (err instanceof FilterValidationError) {
+      // `conditionIndex` (0-based) names the refused condition when the write
+      // located it, so the UI can say "Condition n".
+      return NextResponse.json(
+        {
+          code: err.code,
+          error: err.message,
+          ...(err.conditionIndex !== undefined ? { conditionIndex: err.conditionIndex } : {}),
+        },
+        { status: 422 },
+      );
     }
     const gate = boardGateErrorResponse(err);
     if (gate) return gate;

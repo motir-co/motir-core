@@ -119,6 +119,7 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
     unmappedStatuses: [],
     sprint: null,
     planHolds: {},
+    storedFilter: null,
     columns: cols(),
     ...over,
   };
