@@ -30,6 +30,7 @@ import {
 import { proposalLevelKey } from '@/lib/planning/planShape';
 import { folderChangeCounts } from '@/lib/planning/planChangeDiff';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
+import { currentPeekedProposal } from '@/lib/planning/peekedProposal';
 import type { LiveDrafts } from '@/lib/planning/liveDraft';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -276,14 +277,11 @@ export function PlanReviewCanvas({
     proposal: null,
     key: null,
   });
-  // WHILE THE PLAN IS WRITTEN the open peek follows the live item by its
-  // `planItemId` (MOTIR-8595), so a field that arrives mid-view reaches it. A
-  // proposal withdrawn mid-view keeps its last copy: closing is the reader's act.
-  // Off `live` it is the copy taken at open, as shipped.
-  const peekedProposal =
-    live && peeked.proposal
-      ? (items.find((i) => i.planItemId === peeked.proposal?.planItemId) ?? peeked.proposal)
-      : peeked.proposal;
+  // The open peek follows its proposal's NEWEST copy in `items` by `planItemId`,
+  // live or not (MOTIR-8595; bug MOTIR-11320): a body written mid-view must survive
+  // the plan leaving `generating`. A proposal withdrawn mid-view keeps its last
+  // copy: closing is the reader's act.
+  const peekedProposal = currentPeekedProposal(items, peeked.proposal);
   const byNodeId = useMemo(() => new Map(items.map((i) => [i.nodeId, i])), [items]);
   // node id → its identifier, accumulated as levels load. A ref, not state: it is
   // a lookup the View handler reads, never something a render depends on.

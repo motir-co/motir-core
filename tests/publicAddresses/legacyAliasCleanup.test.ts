@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // THE LEGACY ALIAS CLEANUP — Story MOTIR-4528 · Subtask MOTIR-9520.
 //
@@ -43,7 +44,9 @@ beforeEach(async () => {
   process.env['MOTIR_CLOUD'] = 'true';
   process.env['MOTIR_PUBLIC_TENANT_DOMAIN'] = BASE;
   const first = await createTestWorkspace({ name: 'Holder' });
+  await seedMotirRepository({ workspaceId: first.workspace.id });
   const second = await createTestWorkspace({ name: 'Claimant' });
+  await seedMotirRepository({ workspaceId: second.workspace.id });
   workspaceId = first.workspace.id;
   otherWorkspaceId = second.workspace.id;
   otherOwnerId = second.owner.id;

@@ -4704,7 +4704,8 @@
         "claimed": "{host} — one name for the workspace.",
         "none": "No name claimed yet.",
         "manage": "Manage →",
-        "claim": "Claim a name →"
+        "claim": "Claim a name →",
+        "whyNone": "Why there’s no name →"
       },
       "title": "Public address",
       "subtitle": "The one name your workspace answers at.",
@@ -4757,7 +4758,8 @@
         "rename": "Rename",
         "renaming": "Renaming…",
         "release": "Release name",
-        "releasing": "Releasing…"
+        "releasing": "Releasing…",
+        "lockAfterReleaseIneligible": "The workspace can’t claim another name until it has a repository Motir created."
       },
       "toast": {
         "claimed": "{host} is yours",
@@ -4782,7 +4784,15 @@
         "noneSub": "Your workspace has no name yet.",
         "projectPage": "This project's public page is at {url}.",
         "change": "Change in workspace settings →",
-        "claim": "Claim a name for the workspace →"
+        "claim": "Claim a name for the workspace →",
+        "whyNone": "Why the workspace has no name →"
+      },
+      "ineligible": {
+        "title": "This workspace can’t claim a name",
+        "body": "A name under {base} serves applications Motir hosts, and Motir hosts only the repositories it creates. This workspace has none: repositories you import or connect run on your own infrastructure.",
+        "heldTitle": "This name can’t be renamed",
+        "heldBody": "This workspace no longer has a repository Motir created. {host} keeps answering until you release it, but it can’t be renamed, and once it is released the workspace can’t claim another name.",
+        "reason": "This workspace has no repository Motir created, so it can’t claim or change a {base} name."
       }
     },
     "customDomains": {

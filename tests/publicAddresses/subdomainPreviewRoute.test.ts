@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // THE DATED PREVIEW ROUTE — Story MOTIR-4528 · Subtask MOTIR-9510.
 //
@@ -36,6 +37,7 @@ beforeEach(async () => {
   process.env['MOTIR_CLOUD'] = 'true';
   process.env['MOTIR_PUBLIC_TENANT_DOMAIN'] = BASE;
   const { workspace, owner } = await createTestWorkspace({ name: 'Acme' });
+  await seedMotirRepository({ workspaceId: workspace.id });
   workspaceId = workspace.id;
   ownerId = owner.id;
   ctxRef.current = { userId: ownerId, workspaceId };

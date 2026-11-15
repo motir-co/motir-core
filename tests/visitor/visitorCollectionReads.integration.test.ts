@@ -221,6 +221,55 @@ describe('the board', () => {
         ?.hasChildren,
     ).toBe(true);
   });
+
+  // MOTIR-11325 — the "No epic" lane is DERIVED (total − Σ epic lanes), so its
+  // total must drop the hidden set exactly as the epic aggregate does, or the
+  // private epic's descendants reappear there for a Visitor.
+  it('grouped by epic, no lane counts a hidden card — the "No epic" lane included', async () => {
+    const t = await publicFixture();
+    await adminDb.board.updateMany({
+      where: { projectId: t.fx.projectId },
+      data: { swimlaneGroupBy: 'epic' },
+    });
+    const counts = (lanes: Array<{ key: string; label: string; count: number }>) =>
+      Object.fromEntries(
+        lanes.map((l) => [
+          l.key === t.privateEpic.id || l.key === t.openEpic.id ? l.key : l.label,
+          l.count,
+        ]),
+      );
+
+    // Every card sits under an epic (an epic card is its own lane), so neither
+    // reader has a "No epic" lane. The Visitor's private-epic lane holds only
+    // the epic's own card.
+    const board = await boardsService.getBoard(t.fx.projectId, t.visitor);
+    expect(board.swimlaneGroupBy).toBe('epic');
+    expect(counts(board.swimlanes)).toEqual({ [t.privateEpic.id]: 1, [t.openEpic.id]: 2 });
+    const cards = board.columns.flatMap((c) => c.cards);
+    expect(board.swimlanes.reduce((sum, l) => sum + l.count, 0)).toBe(cards.length);
+
+    // A member's lanes are unchanged: the hidden descendants count in their epic.
+    const memberBoard = await boardsService.getBoard(t.fx.projectId, t.fx.ctx);
+    expect(counts(memberBoard.swimlanes)).toEqual({ [t.privateEpic.id]: 4, [t.openEpic.id]: 2 });
+  });
+
+  it('grouped by epic, a visible card with no epic still counts in the "No epic" lane', async () => {
+    const t = await publicFixture();
+    const orphan = await createTestWorkItem(t.fx, { kind: 'task', title: 'No-epic task' });
+    await adminDb.workItem.update({ where: { id: orphan.id }, data: { status: 'todo' } });
+    await adminDb.board.updateMany({
+      where: { projectId: t.fx.projectId },
+      data: { swimlaneGroupBy: 'epic' },
+    });
+    const noEpic = (lanes: Array<{ label: string; count: number }>) =>
+      lanes.find((l) => l.label === 'No epic')?.count;
+
+    const board = await boardsService.getBoard(t.fx.projectId, t.visitor);
+    expect(noEpic(board.swimlanes)).toBe(1);
+    expect(board.swimlanes.at(-1)?.label).toBe('No epic');
+    const memberBoard = await boardsService.getBoard(t.fx.projectId, t.fx.ctx);
+    expect(noEpic(memberBoard.swimlanes)).toBe(1);
+  });
 });
 
 describe('the quick view', () => {

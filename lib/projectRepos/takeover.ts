@@ -25,6 +25,19 @@ export const PROJECT_REPO_TAKEOVER_STATES = [
 ] as const satisfies readonly ProjectRepoTakeoverState[];
 
 /**
+ * The takeover states in which the repository has been TRANSFERRED out of
+ * Motir's organisation — `awaiting_reinstall` onwards to `done`. Before them
+ * (NULL, `requested`, `transfer_pending`, or a `failed` attempt) the repository
+ * is still Motir's: the same line `runGitAppFor` (`lib/github/runGitCredential.ts`)
+ * draws for which App reaches it, and the one the tenant-subdomain eligibility
+ * test reads (§8 Amendment 5, `projectRepoRepository.hasMotirRepositoryInWorkspace`).
+ */
+export const TRANSFERRED_TAKEOVER_STATES = [
+  'awaiting_reinstall',
+  'done',
+] as const satisfies readonly ProjectRepoTakeoverState[];
+
+/**
  * The legal outgoing edges of every takeover state.
  *
  * `Record<ProjectRepoTakeoverState, …>` makes this TOTAL: adding a state to the

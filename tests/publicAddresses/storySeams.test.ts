@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // THE STORY'S SEAMS (Story MOTIR-3878 · MOTIR-4223) — the writer → consumer
 // paths that every unit test on either side mocks away.
@@ -69,6 +70,7 @@ async function seedTenant(name: string, identifier: string): Promise<Tenant> {
       ...projectAccessData('public'),
     },
   });
+  await seedMotirRepository({ workspaceId: workspace.id, projectId: project.id });
   return { workspaceId: workspace.id, ownerId: owner.id, projectId: project.id, identifier };
 }
 

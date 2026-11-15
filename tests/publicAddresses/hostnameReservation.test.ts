@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } from '../helpers/db';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // THE §8 RESERVATION SURVIVES A WORKSPACE DELETE — Bug MOTIR-4366.
 //
@@ -81,6 +82,7 @@ async function soleOwnerWithRenamedSubdomain(label = 'acme', renamedTo = 'acme-i
     name: 'Personal',
     ownerUserId: user.id,
   });
+  await seedMotirRepository({ workspaceId: workspace.id });
   await publicSubdomainService.claim(workspace.id, renamedTo, user.id);
   await ageLiveSubdomain(workspace.id);
   await giveLegacyAlias(workspace.id, `${label}.${BASE}`);
@@ -120,6 +122,7 @@ async function squatter() {
     name: 'Squatter',
     ownerUserId: user.id,
   });
+  await seedMotirRepository({ workspaceId: workspace.id });
   return { userId: user.id, workspaceId: workspace.id };
 }
 
@@ -240,6 +243,7 @@ describe('the workspace delete holds the workspace’s subdomain out of the name
       name: 'Serial renamer',
       ownerUserId: user.id,
     });
+    await seedMotirRepository({ workspaceId: workspace.id });
     await publicSubdomainService.claim(workspace.id, 'third', user.id);
     await ageLiveSubdomain(workspace.id);
     await giveLegacyAlias(workspace.id, `first.${BASE}`);

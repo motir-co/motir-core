@@ -158,7 +158,9 @@ describe('every planning entrance sends the active starter library', () => {
       ['revise', await submitted(() => aiPlanEditsService.submitRevise(planId, 'split it', c))],
       [
         'resume',
-        await submitted(() => aiPlanEditsService.submitResume(planId, 'job-before', c, fx.ownerId)),
+        await submitted(() =>
+          aiPlanEditsService.submitResume(planId, 'job-before', c, fx.ownerId, 'session-resumed'),
+        ),
       ],
     ];
     for (const [name, context] of contexts) {

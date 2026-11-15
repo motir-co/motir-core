@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // The workspace-subdomain service — Story MOTIR-3878 · Subtask MOTIR-4215.
 // Real Postgres throughout (the no-mocks rule); the only toggles are the
@@ -77,6 +78,7 @@ beforeEach(async () => {
   process.env['MOTIR_CLOUD'] = 'true';
   process.env['MOTIR_PUBLIC_TENANT_DOMAIN'] = BASE;
   const { workspace, owner } = await createTestWorkspace({ name: 'Acme' });
+  await seedMotirRepository({ workspaceId: workspace.id });
   fx = { workspaceId: workspace.id, ownerId: owner.id };
 });
 
@@ -146,6 +148,7 @@ describe('claim', () => {
 
   it('refuses a label another WORKSPACE already holds', async () => {
     const other = await createTestWorkspace({ name: 'Other' });
+    await seedMotirRepository({ workspaceId: other.workspace.id });
     await publicSubdomainService.claim(other.workspace.id, 'acme', other.owner.id);
     await expect(
       publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId),
@@ -214,6 +217,7 @@ describe('rename', () => {
 
     expect(await adminDb.publicHostnameReservation.count()).toBe(0);
     const other = await createTestWorkspace({ name: 'Taker' });
+    await seedMotirRepository({ workspaceId: other.workspace.id });
     await expect(
       publicSubdomainService.claim(other.workspace.id, 'acme', other.owner.id, now),
     ).resolves.toMatchObject({ hostname: `acme.${BASE}` });
@@ -230,6 +234,7 @@ describe('rename', () => {
     ]);
 
     const other = await createTestWorkspace({ name: 'Squatter' });
+    await seedMotirRepository({ workspaceId: other.workspace.id });
     await expect(
       publicSubdomainService.claim(other.workspace.id, 'acme', other.owner.id, now),
     ).rejects.toBeInstanceOf(NameQuarantinedError);
@@ -451,6 +456,7 @@ describe('concurrency', () => {
     // unique is the only thing standing between them. That is the harder case
     // and the one worth pinning.
     const other = await createTestWorkspace({ name: 'Rival' });
+    await seedMotirRepository({ workspaceId: other.workspace.id });
     const results = await Promise.allSettled([
       publicSubdomainService.claim(fx.workspaceId, 'contended', fx.ownerId),
       publicSubdomainService.claim(other.workspace.id, 'contended', other.owner.id),
@@ -601,6 +607,7 @@ describe('release', () => {
     await publicSubdomainService.release(fx.workspaceId, fx.ownerId, now);
 
     const other = await createTestWorkspace({ name: 'Rival' });
+    await seedMotirRepository({ workspaceId: other.workspace.id });
     await expect(
       publicSubdomainService.claim(other.workspace.id, 'acme', other.owner.id, now),
     ).rejects.toBeInstanceOf(NameQuarantinedError);
@@ -613,6 +620,7 @@ describe('release', () => {
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
     await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
     const other = await createTestWorkspace({ name: 'Rival' });
+    await seedMotirRepository({ workspaceId: other.workspace.id });
     await expect(
       publicSubdomainService.claim(other.workspace.id, 'acme-two', other.owner.id),
     ).resolves.toMatchObject({ hostname: `acme-two.${BASE}` });

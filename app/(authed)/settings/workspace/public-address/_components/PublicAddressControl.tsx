@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
+import { Info } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import type {
@@ -51,6 +52,7 @@ export function PublicAddressControl({
   baseDomain,
   subdomain,
   canManage,
+  eligible = true,
   loadFailed = false,
 }: {
   workspaceId: string;
@@ -59,6 +61,13 @@ export function PublicAddressControl({
   subdomain: PublicSubdomainDto | null;
   /** The WORKSPACE role's answer (`roleMayManageAddress`). `false` → every control absent. */
   canManage: boolean;
+  /**
+   * `getClaimEligibility`'s answer (ADR §8 AMENDMENT 5, MOTIR-11287): may this
+   * workspace claim or rename a name? `false` draws the two no-Motir-repository
+   * states of `design/workspace-address/workspace-address--no-motir-repository.mock.html`.
+   * Defaults to `true`, today's control.
+   */
+  eligible?: boolean;
   /** The server read failed — render the load error with a retry. */
   loadFailed?: boolean;
 }) {
@@ -98,8 +107,8 @@ export function PublicAddressControl({
 
   function render(message: RefusalMessage): string {
     const values = message.date
-      ? { ...message.values, date: formatDate(message.date) }
-      : message.values;
+      ? { base: baseDomain, ...message.values, date: formatDate(message.date) }
+      : { base: baseDomain, ...message.values };
     return t(message.key, values);
   }
 
@@ -129,6 +138,9 @@ export function PublicAddressControl({
         setFieldError(
           refusalFromResponse(body, { act: 'claim', label: trimmed, host: hostOf(trimmed) }),
         );
+        // A stale tab: the workspace lost its last Motir repository since this
+        // page was drawn. Re-read, so the pane redraws in its ineligible state.
+        if (body.code === INELIGIBLE_CODE) router.refresh();
         return;
       }
       const dto = (await res.json()) as PublicSubdomainDto;
@@ -211,6 +223,7 @@ export function PublicAddressControl({
           return;
         }
         refuse(body, act);
+        if (body.code === INELIGIBLE_CODE) router.refresh();
         return;
       }
       const old = subdomain.hostname;
@@ -253,6 +266,9 @@ export function PublicAddressControl({
   }
 
   const locked = subdomain?.nextChangeAllowedAt ?? null;
+  // Rename needs eligibility; an ineligible workspace has no editor at all, so a
+  // rename editor left open by a stale tab closes on the re-read.
+  const renaming = editing && eligible && canManage;
 
   return (
     <Card className="flex flex-col gap-4 p-(--spacing-card-padding)">
@@ -262,7 +278,7 @@ export function PublicAddressControl({
         <p className="font-sans text-[13px] text-(--el-text-secondary)">{t('readOnly')}</p>
       )}
 
-      {subdomain && !editing ? (
+      {subdomain && !renaming ? (
         <div className="flex flex-col gap-3">
           <AddressRow
             host={subdomain.hostname}
@@ -276,23 +292,33 @@ export function PublicAddressControl({
           >
             {t('customDomainsLink')}
           </Link>
+          {/* held-without-motir-repository: the reason sits directly above the
+              actions, and Rename is ABSENT — not a lock that will lift. */}
+          {eligible ? null : (
+            <ReasonCallout
+              title={t('ineligible.heldTitle')}
+              body={t('ineligible.heldBody', { host: subdomain.hostname })}
+            />
+          )}
           {canManage ? (
             <>
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  disabled={locked !== null}
-                  onClick={() => {
-                    setLabel(subdomain.label);
-                    setFieldError(null);
-                    setPreviewFailed(null);
-                    setEditing(true);
-                  }}
-                >
-                  {t('rename')}
-                </Button>
+                {eligible ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    disabled={locked !== null}
+                    onClick={() => {
+                      setLabel(subdomain.label);
+                      setFieldError(null);
+                      setPreviewFailed(null);
+                      setEditing(true);
+                    }}
+                  >
+                    {t('rename')}
+                  </Button>
+                ) : null}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -313,7 +339,7 @@ export function PublicAddressControl({
         </div>
       ) : null}
 
-      {subdomain && editing && canManage ? (
+      {subdomain && renaming ? (
         <div className="flex flex-col gap-4">
           <NameField
             label={t('field.renameLabel')}
@@ -371,13 +397,23 @@ export function PublicAddressControl({
                     })
                   : t('released.free', { host: released.host })}
               </span>
-              <span className="font-sans text-[13px] text-(--el-text-strong)">
-                {t('released.lock', { date: formatDate(released.lockUntil) })}
-              </span>
+              {/* No Motir repository: "you can claim a name now" would be false. */}
+              {eligible ? (
+                <span className="font-sans text-[13px] text-(--el-text-strong)">
+                  {t('released.lock', { date: formatDate(released.lockUntil) })}
+                </span>
+              ) : null}
             </div>
           ) : null}
 
-          {canManage ? (
+          {!eligible ? (
+            // no-motir-repository: the reason, and NO field and NO Claim — not
+            // even disabled. A member reads it under the read-only line.
+            <ReasonCallout
+              title={t('ineligible.title')}
+              body={t('ineligible.body', { base: baseDomain })}
+            />
+          ) : canManage ? (
             <>
               <NameField
                 label={t('field.label')}
@@ -414,6 +450,7 @@ export function PublicAddressControl({
         lockUntil={lockUntil}
         submitting={saving}
         formatDate={formatDate}
+        eligible={eligible}
         onConfirm={() => void confirmChange()}
         onCancel={closeConfirm}
       />
@@ -422,6 +459,29 @@ export function PublicAddressControl({
 }
 
 const hintValues = { min: MIN_SUBDOMAIN_LENGTH, max: FIELD_MAX_LABEL_LENGTH };
+
+/** The refusal code a claim or rename meets when the workspace has no Motir repository. */
+const INELIGIBLE_CODE = 'SUBDOMAIN_REQUIRES_MOTIR_REPOSITORY';
+
+/**
+ * THE REASON CALLOUT (MOTIR-11287; delta mock panels B–I). The address row's own
+ * surface with the released notice's padding — a note, not a live region: it is
+ * the pane's resting state, not an announcement.
+ */
+function ReasonCallout({ title, body }: { title: string; body: string }) {
+  return (
+    <div
+      data-testid="address-reason"
+      className="flex gap-3 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x-16) py-(--spacing-card-padding-12)"
+    >
+      <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-secondary)" />
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="font-sans text-[13px] font-semibold text-(--el-text)">{title}</p>
+        <p className="font-sans text-[13px] leading-[1.6] text-(--el-text-secondary)">{body}</p>
+      </div>
+    </div>
+  );
+}
 
 /** The name field — the `.motir.site` suffix, the hint or the live preview, the refusal. */
 function NameField({

@@ -9,6 +9,7 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { StatusPill } from '@/components/issues/StatusPill';
 import { DifficultyIndicator } from '@/components/issues/DifficultyPicker';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
+import { currentPeekedProposal } from '@/lib/planning/peekedProposal';
 import type { LiveDrafts } from '@/lib/planning/liveDraft';
 import type { CardCueState } from '@/lib/planning/cueState';
 import { changeCellText } from '@/components/planning/changeCellText';
@@ -620,14 +621,11 @@ export function PlanProposalList({
     proposal: null,
     key: null,
   });
-  // WHILE THE PLAN IS WRITTEN the open peek follows the live item by its
-  // `planItemId` (MOTIR-8595), so a field that arrives mid-view reaches it. A
-  // proposal withdrawn mid-view keeps its last copy: closing is the reader's act.
-  // Off `live` it is the copy taken at open, as shipped.
-  const peekedProposal =
-    live && peeked.proposal
-      ? (items.find((i) => i.planItemId === peeked.proposal?.planItemId) ?? peeked.proposal)
-      : peeked.proposal;
+  // The open peek follows its proposal's NEWEST copy in `items` by `planItemId`,
+  // live or not (MOTIR-8595; bug MOTIR-11320): a body written mid-view must survive
+  // the plan leaving `generating`. A proposal withdrawn mid-view keeps its last
+  // copy: closing is the reader's act.
+  const peekedProposal = currentPeekedProposal(items, peeked.proposal);
   // ⚠️ FOCUS RETURN IS EXPLICIT HERE, and it is not redundant with the modal's own
   // (MOTIR-4022). The dialog is mounted INSIDE this list, so closing it unmounts
   // the dialog in the same commit that re-renders the rows — and the restore the

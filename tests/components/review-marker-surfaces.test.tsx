@@ -300,11 +300,13 @@ describe('the List row — glyphs in the STATUS cell', () => {
     expect(row3.querySelector('[data-reviewed-badge]')).toBeNull();
   });
 
-  it('the Reviewed glyph opens its card on focus, inside the row', () => {
+  it('the Reviewed glyph opens its card on focus, drawn outside the row (MOTIR-11327)', () => {
     renderList([node({ id: 'a', key: 1 })], { a: REVIEWED });
     const glyph = screen.getByRole('img', { name: 'Reviewed by an agent at the current commits' });
     fireEvent.focus(glyph);
-    expect(screen.getByTestId('reviewed-card').textContent).toContain('acme/web#88 @ 3f2a9c1');
+    const card = screen.getByTestId('reviewed-card');
+    expect(card.textContent).toContain('acme/web#88 @ 3f2a9c1');
+    expect(screen.getByTestId('issue-row-PROD-1').contains(card)).toBe(false);
   });
 });
 

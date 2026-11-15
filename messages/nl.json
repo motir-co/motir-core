@@ -4704,7 +4704,8 @@
         "claimed": "{host} — één naam voor de werkruimte.",
         "none": "Nog geen naam geclaimd.",
         "manage": "Beheren →",
-        "claim": "Een naam claimen →"
+        "claim": "Een naam claimen →",
+        "whyNone": "Waarom er geen naam is →"
       },
       "title": "Openbaar adres",
       "subtitle": "De ene naam waarop je werkruimte antwoordt.",
@@ -4757,7 +4758,8 @@
         "rename": "Hernoemen",
         "renaming": "Hernoemen…",
         "release": "Naam vrijgeven",
-        "releasing": "Vrijgeven…"
+        "releasing": "Vrijgeven…",
+        "lockAfterReleaseIneligible": "De werkruimte kan pas weer een naam claimen als ze een repository heeft die Motir heeft gemaakt."
       },
       "toast": {
         "claimed": "{host} is van jou",
@@ -4782,7 +4784,15 @@
         "noneSub": "Je werkruimte heeft nog geen naam.",
         "projectPage": "De openbare pagina van dit project staat op {url}.",
         "change": "Wijzigen in de werkruimte-instellingen →",
-        "claim": "Een naam claimen voor de werkruimte →"
+        "claim": "Een naam claimen voor de werkruimte →",
+        "whyNone": "Waarom de werkruimte geen naam heeft →"
+      },
+      "ineligible": {
+        "title": "Deze werkruimte kan geen naam claimen",
+        "body": "Een naam onder {base} dient applicaties die Motir host, en Motir host alleen de repository's die het zelf maakt. Deze werkruimte heeft er geen: repository's die je importeert of koppelt, draaien op je eigen infrastructuur.",
+        "heldTitle": "Deze naam kan niet worden hernoemd",
+        "heldBody": "Deze werkruimte heeft geen repository meer die Motir heeft gemaakt. {host} blijft antwoorden tot je de naam vrijgeeft, maar kan niet worden hernoemd, en na het vrijgeven kan de werkruimte geen andere naam claimen.",
+        "reason": "Deze werkruimte heeft geen repository die Motir heeft gemaakt, dus kan ze geen naam onder {base} claimen of wijzigen."
       }
     },
     "customDomains": {
