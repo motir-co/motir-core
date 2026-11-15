@@ -20,6 +20,7 @@ import type {
 import type { SprintStateDto } from '@/lib/dto/sprints';
 import type { PendingDecisionDTO } from '@/lib/dto/approvalGate';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { FilterEnvelope } from '@/lib/filters/ast';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
 
 // Prisma → DTO converters for the board domain. The service calls these just
@@ -37,6 +38,9 @@ export function toBoardDto(row: Board): BoardDto {
     name: row.name,
     type: row.type as BoardTypeDto,
     swimlaneGroupBy: row.swimlaneGroupBy as BoardSwimlaneGroupByDto,
+    // Only ever written as `encodeFilterEnvelope(ast)` by the boards service
+    // (MOTIR-10560), so the JSONB is the envelope shape; SQL NULL → `null`.
+    filter: (row.filter ?? null) as FilterEnvelope | null,
   };
 }
 

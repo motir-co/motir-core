@@ -7,6 +7,7 @@ import { boardsService } from '@/lib/services/boardsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { InvalidBoardNameError, InvalidBoardTypeError } from '@/lib/boards/errors';
 import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
+import { FilterValidationError } from '@/lib/filters/errors';
 
 // /api/boards (Subtask 3.7.3) — the multi-board CRUD collection for the ACTIVE
 // project (the board lifecycle: list + create; per-board rename/set-default/
@@ -56,11 +57,14 @@ export async function GET(req?: Request): Promise<Response> {
 }
 
 // POST /api/boards — create a board on the active project (seeds default
-// columns off the workflow; non-default). Body: { name, type? } (type defaults
-// to kanban). Returns 201 with the new board's switcher DTO.
+// columns off the workflow; non-default). Body: { name, type?, filter? } (type
+// defaults to kanban; `filter` is the board's optional stored filter, a
+// `FilterEnvelope` `{ v, c, f }` — MOTIR-10560). Returns 201 with the new
+// board's switcher DTO.
 //
 // Typed errors → status codes:
 //   InvalidBoardNameError / InvalidBoardTypeError → 400
+//   FilterValidationError (stored filter refused; no board created) → 422
 //   PermissionDeniedError (board:configure)                     → 403
 //   ProjectNotFoundError (cannot browse the project)             → 404
 //   ProjectNotFoundError                          → 404
@@ -86,7 +90,7 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const { name, type } = (body ?? {}) as Record<string, unknown>;
+  const { name, type, filter } = (body ?? {}) as Record<string, unknown>;
   if (typeof name !== 'string') {
     return NextResponse.json(
       { code: 'BAD_REQUEST', error: '`name` is required.' },
@@ -103,13 +107,16 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const board = await boardsService.createBoard(
       ctx.projectId,
-      { name, type },
+      { name, type, filter },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );
     return NextResponse.json(board, { status: 201 });
   } catch (err) {
     if (err instanceof InvalidBoardNameError || err instanceof InvalidBoardTypeError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+    }
+    if (err instanceof FilterValidationError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
     }
     const gate = boardGateErrorResponse(err);
     if (gate) return gate;

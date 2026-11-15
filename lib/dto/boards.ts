@@ -23,7 +23,7 @@ import type {
 import type { StatusCategoryDto, WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
 import type { SprintStateDto } from '@/lib/dto/sprints';
-import type { FilterAst } from '@/lib/filters/ast';
+import type { FilterAst, FilterEnvelope } from '@/lib/filters/ast';
 import type { PendingDecisionDTO } from '@/lib/dto/approvalGate';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
 
@@ -89,6 +89,12 @@ export interface BoardDto {
   name: string;
   type: BoardTypeDto;
   swimlaneGroupBy: BoardSwimlaneGroupByDto;
+  /**
+   * The board's OWN stored filter (MOTIR-10560), as the stored `FilterEnvelope`
+   * (`{ v, c, f }`, `lib/filters/ast.ts`) it was validated and normalised into
+   * on write; `null` when the board has none and shows its whole scope.
+   */
+  filter: FilterEnvelope | null;
 }
 
 /**

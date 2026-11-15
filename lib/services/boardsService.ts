@@ -22,7 +22,14 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/registry';
-import type { FilterAst } from '@/lib/filters/ast';
+import {
+  decodeFilterEnvelope,
+  encodeFilterEnvelope,
+  FILTER_ROW_CAP,
+  type FilterAst,
+  type FilterEnvelope,
+} from '@/lib/filters/ast';
+import { FilterTooLargeError, MalformedFilterError } from '@/lib/filters/errors';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { isReadyToStart } from '@/lib/workItems/statusSlot';
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -1141,6 +1148,42 @@ export const boardsService = {
     return toBoardDto(row);
   },
 
+  /**
+   * Set, replace or clear a board's STORED filter (MOTIR-10560) — the board
+   * settings editor's Save. Same gate + order as `renameBoard`: resolve +
+   * tenant-gate (404) → `board:configure` (403) → validate (422) → write. The
+   * stored value is the validated, normalised `encodeFilterEnvelope` of the
+   * conditions — a COPY, never a reference to a saved filter. `null` (or an
+   * envelope with zero conditions) clears it to SQL NULL, and the board shows
+   * its whole scope again. A refusal leaves the stored filter unchanged.
+   *
+   * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403), a
+   * `FilterValidationError` subclass (422).
+   */
+  async setBoardFilter(boardId: string, filter: unknown, ctx: ServiceContext): Promise<BoardDto> {
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(boardId, ctx.workspaceId, tx),
+    );
+    if (!board) throw new BoardNotFoundError(boardId);
+    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+
+    const envelope = await normalizeStoredBoardFilter(board.projectId, ctx.workspaceId, filter);
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) =>
+        boardRepository.update(
+          boardId,
+          // A `Json?` column is cleared with `Prisma.DbNull` (SQL NULL); a
+          // JavaScript `null` does not type, and `Prisma.JsonNull` would store
+          // the JSON value `null`, which a read would see as a stored filter.
+          { filter: envelope ? toStoredJson(envelope) : Prisma.DbNull },
+          tx,
+        ),
+    );
+    return toBoardDto(row);
+  },
+
   // ── Board LIFECYCLE writes (Subtask 3.7.3) — the multi-board CRUD path:
   // create (seed columns) / set-default / delete (rename is 3.6.2's
   // `renameBoard` above, reused as-is). Same admin gate + write convention as
@@ -1186,13 +1229,19 @@ export const boardsService = {
    * the Scrum board, Story 4.5) but is validated against the SHIPPED `BoardType`
    * enum (rung 2) so the check stays total. Returns the new board's switcher DTO.
    *
+   * `input.filter` (MOTIR-10560) is the board's optional STORED filter, a
+   * `FilterEnvelope` (`{ v, c, f }`). It is validated exactly as a stored filter
+   * is on every write (see `normalizeStoredBoardFilter`) BEFORE the transaction,
+   * so a refused filter creates no board. Absent, `null` or zero conditions →
+   * the board stores no filter.
+   *
    * Throws: `ProjectNotFoundError` (404 — unknown / cross-workspace project),
    * `NotBoardAdminError` (403), `InvalidBoardNameError` (400),
-   * `InvalidBoardTypeError` (400).
+   * `InvalidBoardTypeError` (400), a `FilterValidationError` subclass (422).
    */
   async createBoard(
     projectId: string,
-    input: { name: string; type?: string },
+    input: CreateBoardInput,
     ctx: ServiceContext,
   ): Promise<BoardSummaryDto> {
     // Resolve + tenant-gate the project AND owner-authorize in one call (the
@@ -2087,13 +2136,16 @@ async function buildSwimlanes(
  */
 async function createBoardUnchecked(
   projectId: string,
-  input: { name: string; type?: string },
+  input: CreateBoardInput,
   ctx: ServiceContext,
 ): Promise<BoardSummaryDto> {
   const name = input.name?.trim();
   if (!name) throw new InvalidBoardNameError();
   const type = input.type ?? BoardType.kanban;
   if (!isBoardType(type)) throw new InvalidBoardTypeError(String(type));
+  // Validated before the transaction opens, so a refused filter creates no
+  // board (MOTIR-10560). `ensureScrumBoard` passes none → no stored filter.
+  const filter = await normalizeStoredBoardFilter(projectId, ctx.workspaceId, input.filter);
 
   const row = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
@@ -2109,6 +2161,7 @@ async function createBoardUnchecked(
           type,
           isDefault: false,
           position: keyForAppend(last),
+          ...(filter ? { filter: toStoredJson(filter) } : {}),
         },
         tx,
       );
@@ -2117,4 +2170,55 @@ async function createBoardUnchecked(
     },
   );
   return toBoardSummaryDto(row);
+}
+
+/** What creating a board takes: the switcher's name and type, plus the board's
+ * optional stored filter (MOTIR-10560), an unvalidated `FilterEnvelope` from
+ * the wire. */
+type CreateBoardInput = { name: string; type?: string; filter?: unknown };
+
+/**
+ * Validate and normalise a board's STORED filter for a write (MOTIR-10560) —
+ * the one path both `createBoard` and `setBoardFilter` take, and the same
+ * checks the toolbar's inline filter goes through (`resolveBoardFilter`):
+ *
+ *   1. `decodeFilterEnvelope` — structure + version. A `too-large` result is
+ *      `FilterTooLargeError` (the 20-condition cap); any other failure is
+ *      `MalformedFilterError`.
+ *   2. `loadFilterReferents` + `resolveFilterAst` — every field, operator and
+ *      value against the registry, a `cf:<id>` row against that field's real
+ *      type. An unknown field / operator or a bad value throws its typed
+ *      `FilterValidationError`. A STALE referent (a deleted label, component or
+ *      custom-field option) is a result there, not an error, so it is accepted
+ *      exactly as the toolbar accepts it; the board read reports it.
+ *
+ * Returns the envelope to store — re-encoded from the decoded AST, so it is
+ * normalised — or `null` when there is nothing to store (absent, `null`, or
+ * zero conditions: "show everything", `resolveBoardFilter`'s empty-AST rule).
+ */
+async function normalizeStoredBoardFilter(
+  projectId: string,
+  workspaceId: string,
+  raw: unknown,
+): Promise<FilterEnvelope | null> {
+  if (raw === undefined || raw === null) return null;
+  const decoded = decodeFilterEnvelope(raw);
+  if (!decoded.ok) {
+    if (decoded.reason === 'too-large') {
+      // The codec reports `too-large` only after it has checked `f` is an array.
+      const rows = (raw as { f: unknown[] }).f;
+      throw new FilterTooLargeError(rows.length, FILTER_ROW_CAP);
+    }
+    throw new MalformedFilterError(`${decoded.reason}: ${decoded.detail}`);
+  }
+  const ast = decoded.ast;
+  if (ast.conditions.length === 0) return null;
+  const referents = await loadFilterReferents(projectId, workspaceId, ast);
+  resolveFilterAst(ast, referents);
+  return encodeFilterEnvelope(ast);
+}
+
+/** A stored envelope as the Prisma JSON input the `board.filter` column takes. */
+function toStoredJson(envelope: FilterEnvelope): Prisma.InputJsonValue {
+  return envelope as unknown as Prisma.InputJsonValue;
 }
