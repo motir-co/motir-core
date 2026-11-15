@@ -109,7 +109,9 @@ describe('the populated month', () => {
     const billed = qa(dayRow(dom, 'moonshotai', '2026-09-01'), 'td')[2]!;
     expect(billed.textContent).toBe('—');
     expect(billed.querySelector('[aria-label]')!.getAttribute('aria-label')).toBe(r.none);
-    expect(q(dom, '[data-provider="moonshotai"]:not(li)')!.textContent).toContain(r.summary.noneRead);
+    expect(q(dom, '[data-provider="moonshotai"]:not(li)')!.textContent).toContain(
+      r.summary.noneRead,
+    );
   });
 
   it('shows the estimated-row count beside a gap and the per-model expander only where a breakdown exists', async () => {
