@@ -78,6 +78,33 @@ export const planItemRepository = {
   },
 
   /**
+   * ONE plan's `modify` / `remove` proposals that target any of `workItemIds`
+   * (MOTIR-11340) — what a planning read of committed cards needs to answer them
+   * as the job's own plan leaves them. Served by `@@unique([planId, workItemId])`
+   * (leftmost `planId`), so a subtree's whole id set is one indexed read.
+   * `workspaceId` is an explicit filter, not merely an RLS matter (finding #26).
+   */
+  async findTargetingWorkItems(
+    planId: string,
+    workItemIds: readonly string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<Pick<PlanItem, 'id' | 'op' | 'workItemId' | 'patch'>>> {
+    if (workItemIds.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.planItem.findMany({
+      where: {
+        planId,
+        workspaceId,
+        op: { in: ['modify', 'remove'] },
+        workItemId: { in: [...workItemIds] },
+      },
+      select: { id: true, op: true, workItemId: true, patch: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * The proposals that TARGET a given work item — the reverse lookup
    * (MOTIR-3579). `modify` / `remove` only: an `add` has a null `workItemId` by
    * construction, so it can never be the target of one.

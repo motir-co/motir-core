@@ -1289,8 +1289,9 @@ What each part guarantees:
   have already had every user-identifying key removed (`user`, `user.*`, `ip`,
   `ip_address`, `client_ip`, `email`, `username`), and the request is a method
   and a PATH — no query string, header, cookie or body is ever stored.
-- **`[]` means the card has no monitor link.** On the projected answer
-  (`planId`) the key is absent: a proposal has no link.
+- **`[]` means the card has no monitor link.** On the projected answer for a
+  proposal (`planId` with a `planItem:` key) the key is absent: a proposal has no
+  link. A committed key read with `planId` keeps it (MOTIR-11340).
 
 #### `get_work_item_activity`
 
@@ -5891,9 +5892,18 @@ additionally carries `proposal: true` and `key: null`, because a proposal has no
 key until the plan is approved and **none is ever invented for it**. Two locks,
 so a caller that flattens the arrays still cannot confuse the two.
 
-**`get_work_item({ key, planId })`** answers under a `projection` key, and the
-ordinary `children` array comes back EMPTY — a keyless proposal cannot sit in the
-array committed children use, and nothing about that array is widened:
+**`get_work_item({ key, planId })`** answers under a `projection` key. For a
+`planItem:<id>` target the ordinary `children` array comes back EMPTY — a keyless
+proposal cannot sit in the array committed children use, and nothing about that
+array is widened. For a **committed** key (MOTIR-11340) the answer is the full
+committed read — `children`, `inFlightCode`, `pages`, `errors` and the rest — with
+`item` **as the plan leaves it**: while the plan is undecided, a `modify` of the card
+replaces the fields its patch sets, and `planProposal` (`{ planId, planStatus,
+planItemId, op, approved: false, patch, committed, committedRevision,
+projectedBlockedBy?, projectedParent? }`) says so, `committed` holding the stored
+value of every replaced field. A `remove` leaves `item` as stored and says so in
+`planProposal`; a card the plan does not touch carries none. The text block opens
+with one line saying which. `projection` rides beside it either way:
 
 | `projection.…`      | What it holds                                                                  |
 | ------------------- | ------------------------------------------------------------------------------ |

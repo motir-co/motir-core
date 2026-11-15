@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { buildMcpServer } from '@/lib/mcp/registry';
+import { planProposalLines } from '@/lib/mcp/tools/getWorkItem';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { FILTER_PARAM_VERSION } from '@/lib/filters/ast';
 import type { PlanWithItemsDto, ProposalInput } from '@/lib/dto/plans';
@@ -128,9 +129,12 @@ describe('get_work_item — the projected detail', () => {
     const proj = struct(res).projection as Record<string, unknown>;
     const children = proj.committedChildren as Row[];
     const proposed = proj.proposedChildren as Row[];
-    // The seam's own array is empty in projected mode — a keyless proposal
-    // cannot sit in the array committed children use, and nothing is widened.
-    expect(struct(res).children).toEqual([]);
+    // A COMMITTED target answers the full committed read (MOTIR-11340), so the
+    // seam's own array holds the committed children exactly as the plain read
+    // does; the plan's proposals still never enter it — they ride the projection.
+    expect((struct(res).children as Array<{ key: string }>).map((c) => c.key)).toEqual([
+      committedChild.identifier,
+    ]);
     expect(children.map((c) => c.key)).toEqual([committedChild.identifier]);
     expect(children.every((c) => c.proposal === false)).toBe(true);
     expect(proposed).toHaveLength(1);
@@ -195,6 +199,124 @@ describe('get_work_item — the projected detail', () => {
     // The row's own fields are TODAY's; the patch is what the plan would change.
     expect(target.title).toBe('Original title');
     expect(target.pendingPatch).toMatchObject({ title: 'Re-scoped title', storyPoints: 5 });
+  });
+
+  // MOTIR-11340 — a COMMITTED key read through a plan is the full committed answer
+  // with the plan's `modify` laid over `item`, so `prompts/plan.py`'s guard can pass
+  // the walk's plan on every card read without the session losing the body, the
+  // children or the in-flight code the plain read carries.
+  it('a COMMITTED key read through a plan answers in full, with `item` as the plan leaves it', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Stored title', 'story');
+    await workItemsService.updateWorkItem(story.id, { descriptionMd: 'The stored body.' }, fx.ctx);
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+    const planId = await freshPlan(fx);
+    await addProposals(fx, planId, [
+      {
+        op: 'modify',
+        workItemId: story.id,
+        patch: { title: 'Planned title', descriptionMd: 'The planned body.' },
+      },
+    ]);
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'get_work_item', { key: story.identifier, planId });
+    expect(res.isError).toBeFalsy();
+    const body = struct(res);
+    const item = body.item as { title: string; descriptionMd: string; identifier: string };
+    expect(item.identifier).toBe(story.identifier);
+    expect(item.title).toBe('Planned title');
+    expect(item.descriptionMd).toBe('The planned body.');
+    expect(body.planProposal).toMatchObject({
+      planId,
+      op: 'modify',
+      approved: false,
+      committed: { title: 'Stored title', descriptionMd: 'The stored body.' },
+    });
+    // Everything the plain read carries is still here.
+    expect((body.children as Array<{ key: string }>).map((c) => c.key)).toEqual([child.identifier]);
+    expect(body.inFlightCode).toEqual([]);
+    expect(body.projection).toBeDefined();
+    // The text shows the plan's body and never the stored one.
+    expect(text(res)).toContain('MODIFIES this card');
+    expect(text(res)).toContain('The planned body.');
+    expect(text(res)).not.toContain('The stored body.');
+
+    // Once the plan is no longer undecided, the read is the stored card.
+    await adminDb.plan.update({ where: { id: planId }, data: { status: 'declined' } });
+    const after = await call(client, 'get_work_item', { key: story.identifier, planId });
+    expect((struct(after).item as { title: string }).title).toBe('Stored title');
+    expect(struct(after).planProposal).toBeUndefined();
+    expect(text(after)).toContain('proposes no change to this card');
+  });
+
+  it('a committed key the plan does not touch reads as stored and says so', async () => {
+    const fx = await makeWorkItemFixture();
+    const task = await mk(fx, 'Untouched', 'task');
+    const planId = await freshPlan(fx);
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'get_work_item', {
+      key: task.identifier,
+      planId,
+      includeSections: true,
+    });
+    expect((struct(res).item as { title: string }).title).toBe('Untouched');
+    expect(struct(res).planProposal).toBeUndefined();
+    expect(struct(res).parsedSections).toBeDefined();
+    expect(text(res)).toContain('proposes no change to this card');
+  });
+
+  it('a modify that only moves edges names the projected blockers in the text', async () => {
+    const fx = await makeWorkItemFixture();
+    const gated = await mk(fx, 'Gated', 'task');
+    const blocker = await mk(fx, 'Blocker', 'task');
+    const planId = await freshPlan(fx);
+    await addProposals(fx, planId, [
+      { op: 'modify', workItemId: gated.id, patch: { blockedByAdd: [blocker.id] } },
+    ]);
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'get_work_item', { key: gated.identifier, planId });
+    expect(text(res)).toContain('Its text is unchanged.');
+    expect(text(res)).toContain(`Blocked by, as the plan leaves it: ${blocker.identifier}`);
+  });
+
+  it('a modify that re-parents and clears every blocker says so in the head lines', () => {
+    const lines = planProposalLines(
+      {
+        planId: 'p1',
+        planStatus: 'planned',
+        planItemId: 'pi1',
+        op: 'modify',
+        approved: false,
+        patch: { parentRef: null, blockedByRemove: ['w2'] },
+        committed: {},
+        committedRevision: null,
+        projectedBlockedBy: [],
+        projectedParent: null,
+      },
+      'p1',
+    );
+    expect(lines).toEqual([
+      '⚠️ Plan p1 MODIFIES this card (proposed, not approved). Its text is unchanged.',
+      'Blocked by, as the plan leaves it: none',
+      'Parent, as the plan leaves it: none (top level)',
+    ]);
+    expect(
+      planProposalLines(
+        {
+          planId: 'p1',
+          planStatus: 'planned',
+          planItemId: 'pi1',
+          op: 'modify',
+          approved: false,
+          patch: { parentRef: 'w9' },
+          committed: {},
+          committedRevision: null,
+          projectedParent: 'PROD-9',
+        },
+        'p1',
+      )[1],
+    ).toBe('Parent, as the plan leaves it: PROD-9');
   });
 
   it('a card the plan REMOVES reads as removed, not as a not-found', async () => {
