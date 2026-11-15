@@ -57,15 +57,23 @@ export async function resolveStoredBoardFilter(
   if (!decoded.ok) {
     return {
       predicate: { matchNothing: true },
-      dto: { envelope: null, staleConditions: [{ index: null, field: null, reason: 'invalid' }] },
+      dto: {
+        envelope: null,
+        staleConditions: [{ index: null, field: null, reason: 'invalid' }],
+        labels: [],
+      },
     };
   }
   const ast = decoded.ast;
   const envelope = encodeFilterEnvelope(ast);
   if (ast.conditions.length === 0) {
-    return { predicate: undefined, dto: { envelope, staleConditions: [] } };
+    return { predicate: undefined, dto: { envelope, staleConditions: [], labels: [] } };
   }
   const referents = await loadFilterReferents(projectId, workspaceId, ast);
+  const labels = [...(referents?.labelNames ?? new Map<string, string>())].map(([id, name]) => ({
+    id,
+    name,
+  }));
   try {
     const resolved = resolveFilterAst(ast, referents);
     return {
@@ -75,6 +83,7 @@ export async function resolveStoredBoardFilter(
         staleConditions: resolved.conditions.flatMap((rc, index) =>
           rc.stale ? [{ index, field: rc.condition.field, reason: rc.stale }] : [],
         ),
+        labels,
       },
     };
   } catch (err) {
@@ -86,6 +95,7 @@ export async function resolveStoredBoardFilter(
       dto: {
         envelope,
         staleConditions: [{ ...located, reason: 'invalid' }],
+        labels,
       },
     };
   }

@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "Le Tableau n’a pas été créé",
     "filterRefusedInvalid": "La condition {n} ne peut pas être utilisée : {reason}. Corrigez-la ou retirez-la, puis créez à nouveau le Tableau.",
     "filterRefusedGeneric": "Ce filtre ne peut pas être utilisé : {reason}. Corrigez ou retirez ses conditions, puis créez à nouveau le Tableau.",
-    "filterRefusedTooMany": "Un filtre de Tableau contient au plus {cap} conditions, et celui-ci en a {count}. Retirez {extra, plural, one {# condition} other {# conditions}} pour continuer."
+    "filterRefusedTooMany": "Un filtre de Tableau contient au plus {cap} conditions, et celui-ci en a {count}. Retirez {extra, plural, one {# condition} other {# conditions}} pour continuer.",
+    "storedFilterIndicatorLabel": "Filtre du Tableau",
+    "storedFilterIndicatorAria": "Ce Tableau n’affiche que les éléments de travail qui correspondent à son filtre : {summary}",
+    "storedFilterIndicatorMore": "+{count} de plus",
+    "storedFilterIndicatorAny": "l’une de : {conditions}",
+    "storedFilterIndicatorEdit": "Modifier",
+    "storedFilterIndicatorEditAria": "Modifier le filtre du Tableau dans les paramètres du Tableau",
+    "storedFilterIndicatorStale": "ne correspond à rien",
+    "boardFilterEmptyTitle": "Aucun élément de travail ne correspond au filtre de ce Tableau",
+    "boardFilterEmptyDescription": "Le filtre du Tableau ne laisse rien à afficher pour l’instant. Un administrateur du Tableau peut le modifier dans les paramètres du Tableau.",
+    "boardFilterEmptyEdit": "Modifier le filtre du Tableau"
   },
   "ready": {
     "heading": "Prêts à démarrer",

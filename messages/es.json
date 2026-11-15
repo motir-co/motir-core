@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "No se creó el Tablero",
     "filterRefusedInvalid": "La condición {n} no se puede usar: {reason}. Corrígela o quítala y vuelve a crear el Tablero.",
     "filterRefusedGeneric": "Este filtro no se puede usar: {reason}. Corrige o quita sus condiciones y vuelve a crear el Tablero.",
-    "filterRefusedTooMany": "Un filtro de Tablero admite como máximo {cap} condiciones y este tiene {count}. Quita {extra, plural, one {# condición} other {# condiciones}} para continuar."
+    "filterRefusedTooMany": "Un filtro de Tablero admite como máximo {cap} condiciones y este tiene {count}. Quita {extra, plural, one {# condición} other {# condiciones}} para continuar.",
+    "storedFilterIndicatorLabel": "Filtro del Tablero",
+    "storedFilterIndicatorAria": "Este Tablero muestra solo los elementos de trabajo que coinciden con su filtro: {summary}",
+    "storedFilterIndicatorMore": "+{count} más",
+    "storedFilterIndicatorAny": "cualquiera de: {conditions}",
+    "storedFilterIndicatorEdit": "Editar",
+    "storedFilterIndicatorEditAria": "Editar el filtro del Tablero en la configuración del Tablero",
+    "storedFilterIndicatorStale": "no coincide con nada",
+    "boardFilterEmptyTitle": "Ningún elemento de trabajo coincide con el filtro de este Tablero",
+    "boardFilterEmptyDescription": "El filtro del Tablero no deja nada que mostrar por ahora. Un administrador del Tablero puede cambiarlo en la configuración del Tablero.",
+    "boardFilterEmptyEdit": "Editar el filtro del Tablero"
   },
   "ready": {
     "heading": "Listo para empezar",

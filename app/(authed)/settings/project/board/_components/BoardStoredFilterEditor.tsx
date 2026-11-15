@@ -33,7 +33,6 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
-import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 
 // The per-board settings page's STORED FILTER editor (Story MOTIR-10560 ·
@@ -58,7 +57,6 @@ export interface BoardStoredFilterLookups {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
-  folders: ProjectFoldersDto;
   /** The labels the stored filter names, resolved by the page. */
   referencedLabels: LabelDto[];
   projectKey: string;
@@ -137,7 +135,6 @@ export function BoardStoredFilterEditor({
     ast: saved.ast,
     customFields: lookups.customFields,
     components: lookups.components,
-    folders: lookups.folders,
     referencedLabels: lookups.referencedLabels,
   });
 
@@ -276,7 +273,6 @@ export function BoardStoredFilterEditor({
             sprints={lookups.sprints}
             customFields={lookups.customFields}
             components={lookups.components}
-            folders={lookups.folders}
             referencedLabels={lookups.referencedLabels}
             projectKey={lookups.projectKey}
             host="form"

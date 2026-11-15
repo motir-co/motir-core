@@ -494,6 +494,14 @@ export interface StoredBoardFilterDto {
   /** The stored `{ v, c, f }` envelope as read; `null` when it cannot be read. */
   envelope: FilterEnvelope | null;
   staleConditions: StoredFilterStaleConditionDto[];
+  /**
+   * The labels the envelope names that still exist, by id and name
+   * (MOTIR-11335) — read with the referents the filter is resolved against, so
+   * every reader of the board (a Visitor included) can name a Label condition's
+   * values without a second read. A deleted label is absent (and its condition
+   * is in `staleConditions`).
+   */
+  labels: Array<{ id: string; name: string }>;
 }
 
 /**

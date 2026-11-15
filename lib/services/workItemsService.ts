@@ -1101,6 +1101,7 @@ export async function loadFilterReferents(
   return {
     customFields,
     labelIds: new Set(labels.map((l) => l.id)),
+    labelNames: new Map(labels.map((l) => [l.id, l.name] as const)),
     componentIds: new Set(
       components
         .filter((c) => c.projectId === projectId && c.workspaceId === workspaceId)

@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "Das Board wurde nicht erstellt",
     "filterRefusedInvalid": "Bedingung {n} kann nicht verwendet werden: {reason}. Korrigieren oder entfernen Sie sie und erstellen Sie das Board dann erneut.",
     "filterRefusedGeneric": "Dieser Filter kann nicht verwendet werden: {reason}. Korrigieren oder entfernen Sie seine Bedingungen und erstellen Sie das Board dann erneut.",
-    "filterRefusedTooMany": "Ein Board-Filter umfasst höchstens {cap} Bedingungen, dieser hat {count}. Entfernen Sie {extra, plural, one {# Bedingung} other {# Bedingungen}}, um fortzufahren."
+    "filterRefusedTooMany": "Ein Board-Filter umfasst höchstens {cap} Bedingungen, dieser hat {count}. Entfernen Sie {extra, plural, one {# Bedingung} other {# Bedingungen}}, um fortzufahren.",
+    "storedFilterIndicatorLabel": "Board-Filter",
+    "storedFilterIndicatorAria": "Dieses Board zeigt nur die Arbeitselemente, die zu seinem Filter passen: {summary}",
+    "storedFilterIndicatorMore": "+{count} weitere",
+    "storedFilterIndicatorAny": "eine davon: {conditions}",
+    "storedFilterIndicatorEdit": "Bearbeiten",
+    "storedFilterIndicatorEditAria": "Board-Filter in den Board-Einstellungen bearbeiten",
+    "storedFilterIndicatorStale": "trifft auf nichts zu",
+    "boardFilterEmptyTitle": "Kein Arbeitselement passt zum Filter dieses Boards",
+    "boardFilterEmptyDescription": "Der Board-Filter lässt derzeit nichts übrig. Ein Board-Admin kann ihn in den Board-Einstellungen ändern.",
+    "boardFilterEmptyEdit": "Board-Filter bearbeiten"
   },
   "ready": {
     "heading": "Startbereit",

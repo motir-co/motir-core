@@ -32,6 +32,7 @@ import { BoardContainer } from './_components/BoardContainer';
 import { BoardSwitcher } from './_components/BoardSwitcher';
 import { BoardFilterControls } from './_components/BoardFilterControls';
 import { BoardAppliedFilterBar } from './_components/BoardAppliedFilterBar';
+import { BOARD_STORED_FILTER_SLOT_ID } from '@/lib/boards/boardSlots';
 
 // The Kanban board surface (Story 3.2 · Subtask 3.2.2) — the surface the sidebar
 // "Boards" link + the Cmd-K "Go to Boards" entry open (Story 1.5; no nav wiring
@@ -242,19 +243,30 @@ export default async function BoardView({
             {/* The applied-filter summary row (Subtask 6.15.3) — the saved-filter
                 name chip + the condition chips + Clear, between the toolbar and
                 the board. Renders nothing when no filter is applied. */}
-            <BoardAppliedFilterBar
-              selectedBoardId={selectedBoardId}
-              projectKey={ctx.project.identifier}
-              viewer={viewer}
-              filter={filter}
-              ast={ast}
-              statuses={workflow.statuses}
-              members={members}
-              sprints={sprints}
-              customFields={customFields}
-              components={components}
-              referencedLabels={referencedLabels}
-            />
+            {/* The board's stored-filter indicator (MOTIR-11335) opens this row:
+                BoardContainer portals it into the slot, because the stored
+                filter is known only from the board fetch. The row is hidden
+                until either the indicator or the applied bar puts something in
+                it, so an unfiltered board's layout is unchanged. */}
+            <div
+              data-testid="board-filter-row"
+              className="hidden flex-wrap items-center gap-2 has-[>#board-stored-filter-slot>*]:flex has-[>:not(#board-stored-filter-slot)]:flex"
+            >
+              <div id={BOARD_STORED_FILTER_SLOT_ID} className="contents" />
+              <BoardAppliedFilterBar
+                selectedBoardId={selectedBoardId}
+                projectKey={ctx.project.identifier}
+                viewer={viewer}
+                filter={filter}
+                ast={ast}
+                statuses={workflow.statuses}
+                members={members}
+                sprints={sprints}
+                customFields={customFields}
+                components={components}
+                referencedLabels={referencedLabels}
+              />
+            </div>
 
             <BoardContainer
               members={members}
@@ -265,6 +277,9 @@ export default async function BoardView({
               workflow={workflow}
               filterParam={filterParam}
               filterActive={filterActive}
+              sprints={sprints}
+              customFields={customFields}
+              components={components}
             />
 
             {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that

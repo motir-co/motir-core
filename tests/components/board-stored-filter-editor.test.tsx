@@ -43,7 +43,6 @@ const LOOKUPS: BoardStoredFilterLookups = {
     },
   ],
   components: [],
-  folders: { folders: [], truncated: false },
   referencedLabels: [{ id: 'lab-mobile', name: 'mobile' } as never],
   projectKey: 'ACME',
 };
@@ -60,7 +59,7 @@ function stored(
   ast: FilterAst | null,
   staleConditions: StoredBoardFilterDto['staleConditions'] = [],
 ): StoredBoardFilterDto {
-  return { envelope: ast ? encodeFilterEnvelope(ast) : null, staleConditions };
+  return { envelope: ast ? encodeFilterEnvelope(ast) : null, staleConditions, labels: [] };
 }
 
 function render(over: Partial<BoardStoredFilterEditorProps> = {}) {
@@ -372,6 +371,7 @@ describe('BoardStoredFilterEditor — stale and unreadable stored filters', () =
       storedFilter: {
         envelope: null,
         staleConditions: [{ index: null, field: null, reason: 'invalid' }],
+        labels: [],
       },
     });
     const callout = screen.getByTestId('board-stored-filter-stale');

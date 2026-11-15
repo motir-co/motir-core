@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "面板未创建",
     "filterRefusedInvalid": "无法使用条件 {n}：{reason}。请修正或移除该条件，然后重新创建面板。",
     "filterRefusedGeneric": "无法使用此筛选器：{reason}。请修正或移除其中的条件，然后重新创建面板。",
-    "filterRefusedTooMany": "面板筛选器最多包含 {cap} 个条件，而此筛选器有 {count} 个。请移除{extra, plural, other {#个条件}}后继续。"
+    "filterRefusedTooMany": "面板筛选器最多包含 {cap} 个条件，而此筛选器有 {count} 个。请移除{extra, plural, other {#个条件}}后继续。",
+    "storedFilterIndicatorLabel": "面板筛选器",
+    "storedFilterIndicatorAria": "此面板只显示与其筛选器匹配的工作项：{summary}",
+    "storedFilterIndicatorMore": "另外 {count} 个",
+    "storedFilterIndicatorAny": "任一：{conditions}",
+    "storedFilterIndicatorEdit": "编辑",
+    "storedFilterIndicatorEditAria": "在面板设置中编辑面板筛选器",
+    "storedFilterIndicatorStale": "不匹配任何内容",
+    "boardFilterEmptyTitle": "没有工作项与此面板的筛选器匹配",
+    "boardFilterEmptyDescription": "面板筛选器目前没有留下可显示的内容。面板管理员可以在面板设置中更改它。",
+    "boardFilterEmptyEdit": "编辑面板筛选器"
   },
   "ready": {
     "heading": "可开始",

@@ -11,11 +11,6 @@ import { assignableMembersService } from '@/lib/services/assignableMembersServic
 import { sprintsService } from '@/lib/services/sprintsService';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { componentsService } from '@/lib/services/componentsService';
-import { foldersService } from '@/lib/services/foldersService';
-import { labelsService } from '@/lib/services/labelsService';
-import { collectFilterReferentIds } from '@/lib/filters/registry';
-import { decodeFilterEnvelope } from '@/lib/filters/ast';
-import type { StoredBoardFilterDto } from '@/lib/dto/boards';
 import { BoardNotFoundError } from '@/lib/boards/errors';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
@@ -66,18 +61,6 @@ import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
  */
 export function resolveSelectedBoardId(raw: string | undefined): string | undefined {
   return raw?.trim() || undefined;
-}
-
-/**
- * The label ids a board's stored filter names (MOTIR-10560 · MOTIR-11334), so the
- * page can resolve them to names for the stored-filter editor in one bounded
- * read. None for a board with no stored filter or one that no longer reads.
- * Exported so the extraction is unit-testable.
- */
-export function storedFilterLabelIds(storedFilter: StoredBoardFilterDto | null): string[] {
-  if (!storedFilter?.envelope) return [];
-  const decoded = decodeFilterEnvelope(storedFilter.envelope);
-  return decoded.ok ? collectFilterReferentIds(decoded.ast).labelIds : [];
 }
 
 export default async function ProjectBoardSettingsPage({
@@ -149,9 +132,9 @@ export default async function ProjectBoardSettingsPage({
   );
   const statusesPromise = workflowsService.listStatusesByProject(ctx.projectId, ctx.workspaceId);
   // The stored-filter editor's builder lookups (MOTIR-10560 · MOTIR-11334) —
-  // the reads the automation rule editor makes for the same builder. None of
-  // them needs the board, so they start here and join the board read's wave;
-  // only the labels the stored filter names wait for it.
+  // the reads the board toolbar makes for the same builder (no Folder field: no
+  // board surface offers one). None of them needs the board, so they start here
+  // and join the board read's wave.
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const lookupsPromise = allSettledOrThrow([
     assignableMembersService.list({
@@ -166,7 +149,6 @@ export default async function ProjectBoardSettingsPage({
       ctx: wsCtx,
     }),
     componentsService.listComponents(ctx.project.identifier, wsCtx),
-    foldersService.listProjectFolders({ projectId: ctx.projectId }, wsCtx),
   ]);
 
   return (
@@ -181,7 +163,6 @@ export default async function ProjectBoardSettingsPage({
           statusesPromise={statusesPromise}
           lookupsPromise={lookupsPromise}
           projectKey={ctx.project.identifier}
-          wsCtx={wsCtx}
           selectedBoardId={selectedBoardId}
           isAdmin={isAdmin}
         />
@@ -204,7 +185,6 @@ async function BoardPaneBody({
   statusesPromise,
   lookupsPromise,
   projectKey,
-  wsCtx,
   selectedBoardId,
   isAdmin,
 }: {
@@ -216,11 +196,9 @@ async function BoardPaneBody({
       Awaited<ReturnType<typeof sprintsService.listByProject>>,
       Awaited<ReturnType<typeof customFieldsService.listFields>>,
       Awaited<ReturnType<typeof componentsService.listComponents>>,
-      Awaited<ReturnType<typeof foldersService.listProjectFolders>>,
     ]
   >;
   projectKey: string;
-  wsCtx: { userId: string; workspaceId: string };
   selectedBoardId: string | undefined;
   isAdmin: boolean;
 }) {
@@ -278,12 +256,11 @@ async function BoardPaneBody({
     unmapped: projection.unmappedStatuses.map((s) => ({ id: s.id, label: s.label })),
   };
 
-  // The labels the stored filter names, resolved by id in one bounded read (never
-  // load-all, finding #57) — the one read that needs the board.
-  const [members, sprints, customFields, components, folders] = lookups;
-  const labelIds = storedFilterLabelIds(projection.storedFilter);
-  const referencedLabels =
-    labelIds.length > 0 ? await labelsService.resolveByIds(projectKey, labelIds, wsCtx) : [];
+  // The labels the stored filter names come with the board read itself
+  // (`storedFilter.labels`, resolved with the filter's referents), so no read
+  // here waits for the board.
+  const [members, sprints, customFields, components] = lookups;
+  const referencedLabels = projection.storedFilter?.labels ?? [];
 
   // Key by boardId so switching the configured board (the `?board=` change)
   // REMOUNTS each editor with the new board's model, rather than leaving its
@@ -302,7 +279,6 @@ async function BoardPaneBody({
           sprints,
           customFields,
           components,
-          folders,
           referencedLabels,
           projectKey,
         }}

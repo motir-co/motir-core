@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "O Quadro não foi criado",
     "filterRefusedInvalid": "A condição {n} não pode ser usada: {reason}. Corrija-a ou remova-a e crie o Quadro novamente.",
     "filterRefusedGeneric": "Este filtro não pode ser usado: {reason}. Corrija ou remova as condições dele e crie o Quadro novamente.",
-    "filterRefusedTooMany": "Um filtro de Quadro comporta no máximo {cap} condições, e este tem {count}. Remova {extra, plural, one {# condição} other {# condições}} para continuar."
+    "filterRefusedTooMany": "Um filtro de Quadro comporta no máximo {cap} condições, e este tem {count}. Remova {extra, plural, one {# condição} other {# condições}} para continuar.",
+    "storedFilterIndicatorLabel": "Filtro do Quadro",
+    "storedFilterIndicatorAria": "Este Quadro mostra apenas cada item de trabalho que corresponde ao seu filtro: {summary}",
+    "storedFilterIndicatorMore": "+{count} mais",
+    "storedFilterIndicatorAny": "qualquer um de: {conditions}",
+    "storedFilterIndicatorEdit": "Editar",
+    "storedFilterIndicatorEditAria": "Editar o filtro do Quadro nas configurações do Quadro",
+    "storedFilterIndicatorStale": "não corresponde a nada",
+    "boardFilterEmptyTitle": "Nenhum item de trabalho corresponde ao filtro deste Quadro",
+    "boardFilterEmptyDescription": "O filtro do Quadro não deixa nada para mostrar no momento. Um administrador do Quadro pode alterá-lo nas configurações do Quadro.",
+    "boardFilterEmptyEdit": "Editar o filtro do Quadro"
   },
   "ready": {
     "heading": "Prontos para começar",

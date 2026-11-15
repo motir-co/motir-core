@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "The board wasn’t created",
     "filterRefusedInvalid": "Condition {n} can’t be used: {reason}. Fix or remove it, then create the board again.",
     "filterRefusedGeneric": "This filter can’t be used: {reason}. Fix or remove its conditions, then create the board again.",
-    "filterRefusedTooMany": "A board filter holds at most {cap} conditions, and this one has {count}. Remove {extra, plural, one {# condition} other {# conditions}} to continue."
+    "filterRefusedTooMany": "A board filter holds at most {cap} conditions, and this one has {count}. Remove {extra, plural, one {# condition} other {# conditions}} to continue.",
+    "storedFilterIndicatorLabel": "Board filter",
+    "storedFilterIndicatorAria": "This board shows only the work items that match its filter: {summary}",
+    "storedFilterIndicatorMore": "+{count} more",
+    "storedFilterIndicatorAny": "any of: {conditions}",
+    "storedFilterIndicatorEdit": "Edit",
+    "storedFilterIndicatorEditAria": "Edit the board filter in board settings",
+    "storedFilterIndicatorStale": "matches nothing",
+    "boardFilterEmptyTitle": "No work items match this board’s filter",
+    "boardFilterEmptyDescription": "The board filter leaves nothing to show right now. A board admin can change it in board settings.",
+    "boardFilterEmptyEdit": "Edit board filter"
   },
   "ready": {
     "heading": "Ready to start",

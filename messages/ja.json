@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "ボードは作成されませんでした",
     "filterRefusedInvalid": "条件 {n} は使用できません: {reason}。修正または削除してから、もう一度ボードを作成してください。",
     "filterRefusedGeneric": "このフィルターは使用できません: {reason}。条件を修正または削除してから、もう一度ボードを作成してください。",
-    "filterRefusedTooMany": "ボードのフィルターに含められる条件は最大 {cap} 個ですが、このフィルターには {count} 個あります。続けるには {extra, plural, other {# 個の条件}}を削除してください。"
+    "filterRefusedTooMany": "ボードのフィルターに含められる条件は最大 {cap} 個ですが、このフィルターには {count} 個あります。続けるには {extra, plural, other {# 個の条件}}を削除してください。",
+    "storedFilterIndicatorLabel": "ボードのフィルター",
+    "storedFilterIndicatorAria": "このボードには、フィルターに一致する作業項目だけが表示されます: {summary}",
+    "storedFilterIndicatorMore": "他 {count} 件",
+    "storedFilterIndicatorAny": "いずれか: {conditions}",
+    "storedFilterIndicatorEdit": "編集",
+    "storedFilterIndicatorEditAria": "ボードの設定でボードのフィルターを編集",
+    "storedFilterIndicatorStale": "何にも一致しません",
+    "boardFilterEmptyTitle": "このボードのフィルターに一致する作業項目はありません",
+    "boardFilterEmptyDescription": "現在、ボードのフィルターで表示されるものはありません。ボードの管理者はボードの設定でフィルターを変更できます。",
+    "boardFilterEmptyEdit": "ボードのフィルターを編集"
   },
   "ready": {
     "heading": "着手可能",

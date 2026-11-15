@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "Tablica nie została utworzona",
     "filterRefusedInvalid": "Nie można użyć warunku {n}: {reason}. Popraw go lub usuń, a potem utwórz Tablicę ponownie.",
     "filterRefusedGeneric": "Nie można użyć tego filtra: {reason}. Popraw lub usuń jego warunki, a potem utwórz Tablicę ponownie.",
-    "filterRefusedTooMany": "Filtr Tablicy może mieć najwyżej {cap} warunków, a ten ma {count}. Usuń {extra, plural, one {# warunek} few {# warunki} many {# warunków} other {# warunku}}, aby kontynuować."
+    "filterRefusedTooMany": "Filtr Tablicy może mieć najwyżej {cap} warunków, a ten ma {count}. Usuń {extra, plural, one {# warunek} few {# warunki} many {# warunków} other {# warunku}}, aby kontynuować.",
+    "storedFilterIndicatorLabel": "Filtr Tablicy",
+    "storedFilterIndicatorAria": "Ta Tablica pokazuje tylko elementy robocze pasujące do jej filtra: {summary}",
+    "storedFilterIndicatorMore": "+{count} więcej",
+    "storedFilterIndicatorAny": "dowolny z: {conditions}",
+    "storedFilterIndicatorEdit": "Edytuj",
+    "storedFilterIndicatorEditAria": "Edytuj filtr Tablicy w ustawieniach Tablicy",
+    "storedFilterIndicatorStale": "nie pasuje do niczego",
+    "boardFilterEmptyTitle": "Żaden element roboczy nie pasuje do filtra tej Tablicy",
+    "boardFilterEmptyDescription": "Filtr Tablicy nie zostawia teraz nic do pokazania. Administrator Tablicy może go zmienić w ustawieniach Tablicy.",
+    "boardFilterEmptyEdit": "Edytuj filtr Tablicy"
   },
   "ready": {
     "heading": "Gotowe do rozpoczęcia",

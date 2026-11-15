@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "보드가 만들어지지 않았습니다",
     "filterRefusedInvalid": "조건 {n}을(를) 사용할 수 없습니다: {reason}. 수정하거나 제거한 다음 보드를 다시 만드세요.",
     "filterRefusedGeneric": "이 필터를 사용할 수 없습니다: {reason}. 조건을 수정하거나 제거한 다음 보드를 다시 만드세요.",
-    "filterRefusedTooMany": "보드 필터에는 조건을 최대 {cap}개까지 넣을 수 있는데 이 필터에는 {count}개가 있습니다. 계속하려면 {extra, plural, other {조건 #개}}를 제거하세요."
+    "filterRefusedTooMany": "보드 필터에는 조건을 최대 {cap}개까지 넣을 수 있는데 이 필터에는 {count}개가 있습니다. 계속하려면 {extra, plural, other {조건 #개}}를 제거하세요.",
+    "storedFilterIndicatorLabel": "보드 필터",
+    "storedFilterIndicatorAria": "이 보드에는 필터와 일치하는 작업 항목만 표시됩니다: {summary}",
+    "storedFilterIndicatorMore": "외 {count}개",
+    "storedFilterIndicatorAny": "다음 중 하나: {conditions}",
+    "storedFilterIndicatorEdit": "편집",
+    "storedFilterIndicatorEditAria": "보드 설정에서 보드 필터 편집",
+    "storedFilterIndicatorStale": "일치하는 항목 없음",
+    "boardFilterEmptyTitle": "이 보드의 필터와 일치하는 작업 항목이 없습니다",
+    "boardFilterEmptyDescription": "지금은 보드 필터로 표시할 항목이 없습니다. 보드 관리자는 보드 설정에서 필터를 변경할 수 있습니다.",
+    "boardFilterEmptyEdit": "보드 필터 편집"
   },
   "ready": {
     "heading": "시작 준비됨",

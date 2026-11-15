@@ -191,7 +191,7 @@ describe('resolveStoredBoardFilter', () => {
     const resolved = await resolveStoredBoardFilter(fx.projectId, fx.workspaceId, env('or'));
     expect(resolved).toEqual({
       predicate: undefined,
-      dto: { envelope: env('or'), staleConditions: [] },
+      dto: { envelope: env('or'), staleConditions: [], labels: [] },
     });
   });
 
@@ -203,6 +203,7 @@ describe('resolveStoredBoardFilter', () => {
         dto: {
           envelope: null,
           staleConditions: [{ index: null, field: null, reason: 'invalid' }],
+          labels: [],
         },
       });
     }
@@ -213,7 +214,11 @@ describe('resolveStoredBoardFilter', () => {
     const stored = env('and', ['kind', 'is_any_of', ['bug']], ['kind', 'gt', 3]);
     expect(await resolveStoredBoardFilter(fx.projectId, fx.workspaceId, stored)).toEqual({
       predicate: { matchNothing: true },
-      dto: { envelope: stored, staleConditions: [{ index: 1, field: 'kind', reason: 'invalid' }] },
+      dto: {
+        envelope: stored,
+        staleConditions: [{ index: 1, field: 'kind', reason: 'invalid' }],
+        labels: [],
+      },
     });
   });
 
@@ -248,6 +253,8 @@ describe('resolveStoredBoardFilter', () => {
         { index: 3, field: `cf:${severity.id}`, reason: 'unknown-value' },
         { index: 4, field: 'cf:deleted-field', reason: 'unknown-field' },
       ],
+      // The labels it names that still exist, by name — a deleted one is absent.
+      labels: [{ id: live, name: 'live' }],
     });
   });
 });
@@ -267,7 +274,7 @@ describe('getBoard — a kanban board with a stored filter', () => {
     expect(col(board, 'todo').totalCount).toBe(1);
     expect(col(board, 'in_progress').totalCount).toBe(1);
     expect(col(board, 'done').totalCount).toBe(0);
-    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [] });
+    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [], labels: [] });
   });
 
   it('pages a lane through the stored-filtered set only', async () => {
@@ -484,7 +491,7 @@ describe('getBoard — a scrum board with a stored filter', () => {
     });
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
     expect(board.sprint).toBeNull();
-    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [] });
+    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [], labels: [] });
   });
 });
 
@@ -515,6 +522,7 @@ describe('getBoard — stale, unreadable and empty stored filters', () => {
     expect(board.storedFilter).toEqual({
       envelope: null,
       staleConditions: [{ index: null, field: null, reason: 'invalid' }],
+      labels: [],
     });
   });
 
@@ -602,7 +610,7 @@ describe('the stored filter for a Visitor and on the public preview', () => {
     expect(total(board)).toBe(1);
     // The Visitor's lanes count the same stored-filtered set.
     expect(board.swimlanes.reduce((sum, l) => sum + l.count, 0)).toBe(1);
-    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [] });
+    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [], labels: [] });
   });
 
   it('applies the default board’s stored filter to the public preview', async () => {

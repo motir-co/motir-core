@@ -280,7 +280,7 @@ describe('stored filter — kanban round trip (write → read)', () => {
     expect(col(board, 'in_progress').totalCount).toBe(1);
     expect(col(board, 'done').cards.map((c) => c.id)).toEqual([bugDone]);
     expect(col(board, 'done').totalCount).toBe(1);
-    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [] });
+    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [], labels: [] });
 
     const project = await boardsService.getBoard(fx.projectId, fx.admin, fx.defaultBoardId);
     expect(ids(project)).toEqual(sorted(bugTodo, bugWip, bugDone, taskTodo, taskWip, taskDone));
@@ -458,7 +458,7 @@ describe('stored filter — replace and clear through the settings write', () =>
     await boardsService.setBoardFilter(boardId, TASKS, fx.admin);
     const replaced = await boardsService.getBoard(fx.projectId, fx.admin, boardId);
     expect(ids(replaced)).toEqual([task]);
-    expect(replaced.storedFilter).toEqual({ envelope: TASKS, staleConditions: [] });
+    expect(replaced.storedFilter).toEqual({ envelope: TASKS, staleConditions: [], labels: [] });
 
     await boardsService.setBoardFilter(boardId, null, fx.admin);
     expect(await storedColumn(boardId)).toBeNull();
@@ -540,6 +540,7 @@ describe('stored filter — write refusals leave Board.filter unchanged', () => 
     expect((await boardsService.getBoard(fx.projectId, fx.member, boardId)).storedFilter).toEqual({
       envelope: BUGS,
       staleConditions: [],
+      labels: [],
     });
   });
 
@@ -662,7 +663,7 @@ describe('stored filter — stale referents, empty results and other projects', 
     const board = await boardsService.getBoard(fx.projectId, fx.admin, boardId);
     expect(board.columns.length).toBeGreaterThan(0);
     expect(board.columns.every((c) => c.cards.length === 0 && c.totalCount === 0)).toBe(true);
-    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [] });
+    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [], labels: [] });
   });
 
   it('a stored filter naming another project’s referents shows none of that project’s cards', async () => {

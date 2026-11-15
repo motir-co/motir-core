@@ -5079,7 +5079,17 @@
     "filterRefusedTitle": "Het Bord is niet aangemaakt",
     "filterRefusedInvalid": "Voorwaarde {n} kan niet worden gebruikt: {reason}. Pas deze aan of verwijder deze en maak het Bord daarna opnieuw aan.",
     "filterRefusedGeneric": "Dit filter kan niet worden gebruikt: {reason}. Pas de voorwaarden aan of verwijder ze en maak het Bord daarna opnieuw aan.",
-    "filterRefusedTooMany": "Een bordfilter bevat maximaal {cap} voorwaarden en dit filter heeft er {count}. Verwijder {extra, plural, one {# voorwaarde} other {# voorwaarden}} om door te gaan."
+    "filterRefusedTooMany": "Een bordfilter bevat maximaal {cap} voorwaarden en dit filter heeft er {count}. Verwijder {extra, plural, one {# voorwaarde} other {# voorwaarden}} om door te gaan.",
+    "storedFilterIndicatorLabel": "Bordfilter",
+    "storedFilterIndicatorAria": "Dit Bord toont alleen de werkitems die overeenkomen met zijn filter: {summary}",
+    "storedFilterIndicatorMore": "+{count} meer",
+    "storedFilterIndicatorAny": "een van: {conditions}",
+    "storedFilterIndicatorEdit": "Bewerken",
+    "storedFilterIndicatorEditAria": "Het bordfilter bewerken in de instellingen van het Bord",
+    "storedFilterIndicatorStale": "komt nergens mee overeen",
+    "boardFilterEmptyTitle": "Geen werkitem komt overeen met het filter van dit Bord",
+    "boardFilterEmptyDescription": "Het bordfilter laat op dit moment niets over om te tonen. Een beheerder van het Bord kan het wijzigen in de instellingen van het Bord.",
+    "boardFilterEmptyEdit": "Bordfilter bewerken"
   },
   "ready": {
     "heading": "Klaar om te starten",
