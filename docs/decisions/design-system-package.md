@@ -74,9 +74,10 @@ Every decision below optimizes for those three, in that order.
 
 `@motir/design-system` is a new workspace package at
 `motir-core/packages/design-system` (a sibling of `packages/cli`). Its **name**
-is `@motir/design-system`; its **license is `GPL-3.0-only`** (identical to
-`@motir/cli` and `motir-core` — the open half of the open-core split, Principle
-#19).
+is `@motir/design-system`; its **license is MIT** from the relicensing on
+(MOTIR-11318, which relicensed it from `GPL-3.0-only` so the closed gateway can
+consume it; versions published before that release keep their `GPL-3.0-only`
+terms).
 
 **The boundary rule (what makes a file shareable):** a file moves into the
 package **iff** its only imports are (a) other package files, (b) framework peers

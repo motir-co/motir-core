@@ -408,3 +408,12 @@ this `package.json` satisfies its requirement).
 > interactive OTP), because OIDC cannot bootstrap a package that does not yet exist
 > — the Trusted Publisher config lives on the package's settings page. Every release
 > from `0.1.1` on flows through the workflow token-free.
+
+## License
+
+`@motir/design-system` is licensed under the [MIT License](LICENSE); the
+`LICENSE` file in this package holds the full text and ships in the published
+tarball. The package was relicensed from GPL-3.0-only to MIT by MOTIR-11318, so
+the first MIT version is the first release after 0.22.4. Every version published
+before the relicensing (0.22.4 and earlier) remains under its original
+GPL-3.0-only terms.
