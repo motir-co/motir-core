@@ -7,12 +7,22 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { sprintsService } from '@/lib/services/sprintsService';
+import { customFieldsService } from '@/lib/services/customFieldsService';
+import { componentsService } from '@/lib/services/componentsService';
+import { foldersService } from '@/lib/services/foldersService';
+import { labelsService } from '@/lib/services/labelsService';
+import { collectFilterReferentIds } from '@/lib/filters/registry';
+import { decodeFilterEnvelope } from '@/lib/filters/ast';
+import type { StoredBoardFilterDto } from '@/lib/dto/boards';
 import { BoardNotFoundError } from '@/lib/boards/errors';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { BoardSwitcher } from '../../../boards/_components/BoardSwitcher';
 import { BoardConfigEditor, type BoardConfigModel } from './_components/BoardConfigEditor';
+import { BoardStoredFilterEditor } from './_components/BoardStoredFilterEditor';
 import { guardSettingsPage } from '../_guard';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
@@ -56,6 +66,18 @@ import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
  */
 export function resolveSelectedBoardId(raw: string | undefined): string | undefined {
   return raw?.trim() || undefined;
+}
+
+/**
+ * The label ids a board's stored filter names (MOTIR-10560 · MOTIR-11334), so the
+ * page can resolve them to names for the stored-filter editor in one bounded
+ * read. None for a board with no stored filter or one that no longer reads.
+ * Exported so the extraction is unit-testable.
+ */
+export function storedFilterLabelIds(storedFilter: StoredBoardFilterDto | null): string[] {
+  if (!storedFilter?.envelope) return [];
+  const decoded = decodeFilterEnvelope(storedFilter.envelope);
+  return decoded.ok ? collectFilterReferentIds(decoded.ast).labelIds : [];
 }
 
 export default async function ProjectBoardSettingsPage({
@@ -126,6 +148,26 @@ export default async function ProjectBoardSettingsPage({
     selectedBoardId,
   );
   const statusesPromise = workflowsService.listStatusesByProject(ctx.projectId, ctx.workspaceId);
+  // The stored-filter editor's builder lookups (MOTIR-10560 · MOTIR-11334) —
+  // the reads the automation rule editor makes for the same builder. None of
+  // them needs the board, so they start here and join the board read's wave;
+  // only the labels the stored filter names wait for it.
+  const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const lookupsPromise = allSettledOrThrow([
+    assignableMembersService.list({
+      projectId: ctx.projectId,
+      accessMode: ctx.project.accessMode,
+      ctx: wsCtx,
+    }),
+    sprintsService.listByProject(ctx.projectId, wsCtx),
+    customFieldsService.listFields({
+      key: ctx.project.identifier,
+      actorUserId: ctx.userId,
+      ctx: wsCtx,
+    }),
+    componentsService.listComponents(ctx.project.identifier, wsCtx),
+    foldersService.listProjectFolders({ projectId: ctx.projectId }, wsCtx),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-[52rem] flex-col gap-6">
@@ -137,6 +179,9 @@ export default async function ProjectBoardSettingsPage({
         <BoardPaneBody
           boardPromise={boardPromise}
           statusesPromise={statusesPromise}
+          lookupsPromise={lookupsPromise}
+          projectKey={ctx.project.identifier}
+          wsCtx={wsCtx}
           selectedBoardId={selectedBoardId}
           isAdmin={isAdmin}
         />
@@ -157,11 +202,25 @@ export default async function ProjectBoardSettingsPage({
 async function BoardPaneBody({
   boardPromise,
   statusesPromise,
+  lookupsPromise,
+  projectKey,
+  wsCtx,
   selectedBoardId,
   isAdmin,
 }: {
   boardPromise: ReturnType<typeof boardsService.getBoard>;
   statusesPromise: ReturnType<typeof workflowsService.listStatusesByProject>;
+  lookupsPromise: Promise<
+    [
+      Awaited<ReturnType<typeof assignableMembersService.list>>,
+      Awaited<ReturnType<typeof sprintsService.listByProject>>,
+      Awaited<ReturnType<typeof customFieldsService.listFields>>,
+      Awaited<ReturnType<typeof componentsService.listComponents>>,
+      Awaited<ReturnType<typeof foldersService.listProjectFolders>>,
+    ]
+  >;
+  projectKey: string;
+  wsCtx: { userId: string; workspaceId: string };
   selectedBoardId: string | undefined;
   isAdmin: boolean;
 }) {
@@ -169,8 +228,13 @@ async function BoardPaneBody({
 
   let projection;
   let statuses;
+  let lookups;
   try {
-    [projection, statuses] = await allSettledOrThrow([boardPromise, statusesPromise]);
+    [projection, statuses, lookups] = await allSettledOrThrow([
+      boardPromise,
+      statusesPromise,
+      lookupsPromise,
+    ]);
   } catch (err) {
     if (err instanceof BoardNotFoundError) {
       // A stale / cross-project / cross-workspace `?board=` id → a tenant-safe
@@ -214,10 +278,38 @@ async function BoardPaneBody({
     unmapped: projection.unmappedStatuses.map((s) => ({ id: s.id, label: s.label })),
   };
 
+  // The labels the stored filter names, resolved by id in one bounded read (never
+  // load-all, finding #57) — the one read that needs the board.
+  const [members, sprints, customFields, components, folders] = lookups;
+  const labelIds = storedFilterLabelIds(projection.storedFilter);
+  const referencedLabels =
+    labelIds.length > 0 ? await labelsService.resolveByIds(projectKey, labelIds, wsCtx) : [];
+
   // Key by boardId so switching the configured board (the `?board=` change)
-  // REMOUNTS the editor with the new board's model, rather than leaving its
-  // mount-seeded column state on the previous board.
-  return <BoardConfigEditor key={model.boardId} model={model} isAdmin={isAdmin} />;
+  // REMOUNTS each editor with the new board's model, rather than leaving its
+  // mount-seeded state on the previous board. The stored-filter editor sits at
+  // the top of the page, above the column editor (the approved design, panel 5).
+  return (
+    <div className="flex flex-col gap-6">
+      <BoardStoredFilterEditor
+        key={`filter-${model.boardId}`}
+        boardId={model.boardId}
+        boardType={projection.type}
+        storedFilter={projection.storedFilter}
+        lookups={{
+          statuses,
+          members,
+          sprints,
+          customFields,
+          components,
+          folders,
+          referencedLabels,
+          projectKey,
+        }}
+      />
+      <BoardConfigEditor key={model.boardId} model={model} isAdmin={isAdmin} />
+    </div>
+  );
 }
 
 // The board-scoped settings header (Subtask 3.7.8, re-cut by MOTIR-3558) — the

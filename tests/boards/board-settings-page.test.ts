@@ -5,7 +5,11 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { boardRepository } from '@/lib/repositories/boardRepository';
 import { BoardNotFoundError } from '@/lib/boards/errors';
-import { resolveSelectedBoardId } from '@/app/(authed)/settings/project/board/page';
+import {
+  resolveSelectedBoardId,
+  storedFilterLabelIds,
+} from '@/app/(authed)/settings/project/board/page';
+import { encodeFilterEnvelope } from '@/lib/filters/ast';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -69,6 +73,32 @@ function loadSettingsBoard(fx: Fixture, boardParam: string | undefined) {
   const selectedBoardId = resolveSelectedBoardId(boardParam);
   return boardsService.getBoard(fx.projectId, fx.ctx, selectedBoardId);
 }
+
+describe('storedFilterLabelIds (MOTIR-11334 — the stored-filter editor’s label read)', () => {
+  it('names no labels for a board with no stored filter, or one that no longer reads', () => {
+    expect(storedFilterLabelIds(null)).toEqual([]);
+    expect(storedFilterLabelIds({ envelope: null, staleConditions: [] })).toEqual([]);
+    expect(
+      storedFilterLabelIds({
+        envelope: { v: 'nope', c: 'and', f: [] },
+        staleConditions: [],
+      }),
+    ).toEqual([]);
+  });
+  it('collects the label ids the stored conditions name', () => {
+    const envelope = encodeFilterEnvelope({
+      combinator: 'or',
+      conditions: [
+        { field: 'kind', operator: 'is_any_of', value: ['bug'] },
+        { field: 'lbl', operator: 'is_any_of', value: ['lab-a', 'lab-b'] },
+      ],
+    });
+    expect(storedFilterLabelIds({ envelope, staleConditions: [] }).sort()).toEqual([
+      'lab-a',
+      'lab-b',
+    ]);
+  });
+});
 
 describe('resolveSelectedBoardId (3.7.8 param parsing)', () => {
   it('treats undefined / blank / whitespace as absent (→ default board)', () => {
