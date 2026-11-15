@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // THE STORY-LEVEL RELEASE GATE — Story MOTIR-4451 · Subtask MOTIR-4456.
 //
@@ -84,6 +85,7 @@ beforeEach(async () => {
       ...projectAccessData('public'),
     },
   });
+  await seedMotirRepository({ workspaceId: workspace.id, projectId: project.id });
   fx = {
     workspaceId: workspace.id,
     ownerId: owner.id,
@@ -260,6 +262,7 @@ describe('the reservation doing its job, through PUT', () => {
     expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
     const other = await createTestWorkspace({ name: 'Rival' });
+    await seedMotirRepository({ workspaceId: other.workspace.id });
     ctxRef.current = { userId: other.owner.id, workspaceId: other.workspace.id };
     const res = await PUT(req('PUT', { label: 'acme' }), params(other.workspace.id));
     expect(res.status, 'a held name stays unclaimable until its hold ends').toBe(409);
@@ -272,6 +275,7 @@ describe('the reservation doing its job, through PUT', () => {
     await claimAndRename('acme');
     expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
     const other = await createTestWorkspace({ name: 'Rival' });
+    await seedMotirRepository({ workspaceId: other.workspace.id });
     ctxRef.current = { userId: other.owner.id, workspaceId: other.workspace.id };
     expect((await PUT(req('PUT', { label: 'acme-two' }), params(other.workspace.id))).status).toBe(
       201,

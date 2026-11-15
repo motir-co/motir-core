@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getWorkspaceContext: vi.fn(async () => ({ workspaceId: 'ws_1', userId: 'u_1' })),
   isTenantDomainConfigured: vi.fn(() => true),
   getForWorkspace: vi.fn(),
+  getClaimEligibility: vi.fn(),
   getMemberRole: vi.fn(),
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
@@ -38,7 +39,10 @@ vi.mock('@/lib/services/workspacesService', () => ({
   workspacesService: { getMemberRole: mocks.getMemberRole },
 }));
 vi.mock('@/lib/services/publicSubdomainService', () => ({
-  publicSubdomainService: { getForWorkspace: mocks.getForWorkspace },
+  publicSubdomainService: {
+    getForWorkspace: mocks.getForWorkspace,
+    getClaimEligibility: mocks.getClaimEligibility,
+  },
   roleMayManageAddress: (role: string | null) => role === 'owner' || role === 'admin',
 }));
 
@@ -48,6 +52,7 @@ import { PublicAddressBody } from '@/app/(authed)/settings/workspace/public-addr
 type ControlProps = {
   subdomain: unknown;
   canManage: boolean;
+  eligible: boolean;
   loadFailed: boolean;
   baseDomain: string;
   workspaceId: string;
@@ -65,6 +70,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.isCloud.mockReturnValue(true);
   mocks.isTenantDomainConfigured.mockReturnValue(true);
+  mocks.getClaimEligibility.mockResolvedValue({ eligible: true });
 });
 
 describe('the page gates', () => {
@@ -108,5 +114,25 @@ describe('the body', () => {
     const props = await body();
     expect(props.loadFailed).toBe(true);
     expect(props.canManage).toBe(false);
+  });
+
+  // ADR §8 AMENDMENT 5 (MOTIR-11287) — the service's eligibility answer, passed
+  // through, never restated.
+  it('passes the eligibility answer to the control', async () => {
+    mocks.getForWorkspace.mockResolvedValue(null);
+    mocks.getMemberRole.mockResolvedValue('owner');
+    expect((await body()).eligible).toBe(true);
+    mocks.getClaimEligibility.mockResolvedValue({ eligible: false });
+    expect((await body()).eligible).toBe(false);
+    expect(mocks.getClaimEligibility).toHaveBeenCalledWith('ws_1', 'u_1');
+  });
+
+  it('renders the load-error state when the eligibility read fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.getForWorkspace.mockResolvedValue(null);
+    mocks.getMemberRole.mockResolvedValue('owner');
+    mocks.getClaimEligibility.mockRejectedValue(new Error('db down'));
+    const props = await body();
+    expect(props.loadFailed).toBe(true);
   });
 });

@@ -6,6 +6,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 import type { PublicAddressDto } from '@/lib/dto/publicAddresses';
 import en from '@/messages/en.json';
 
@@ -230,6 +231,10 @@ test.beforeAll(async () => {
   workspaceId = a.workspace.id;
   apps.shop = await seedApplication(a.workspace.id, a.project.id, 'shop', 'a0');
   apps.blog = await seedApplication(a.workspace.id, a.project.id, 'blog', 'a1');
+  // A repository Motir created, so the workspace may hold the motir.site name
+  // seeded below at all (§8 Amendment 5, MOTIR-11285). Appended after the two
+  // application rows' fixed positions.
+  await seedMotirRepository({ workspaceId: a.workspace.id, projectId: a.project.id });
   const { organizationId } = await adminDb.workspace.findUniqueOrThrow({
     where: { id: a.workspace.id },
     select: { organizationId: true },

@@ -24,8 +24,14 @@ export async function PublicAddressEcho({
   subdomain,
   projectAddress,
   projectUrl,
+  eligible = true,
 }: {
   subdomain: PublicSubdomainDto | null;
+  /**
+   * `getClaimEligibility`'s answer (MOTIR-11287). With no name and no Motir
+   * repository the link names the reason page rather than inviting a claim.
+   */
+  eligible?: boolean;
   /** `motir.co/p/ROADMAP` — the project's own public address, read not followed. */
   projectAddress: string;
   projectUrl: string;
@@ -56,7 +62,7 @@ export async function PublicAddressEcho({
         href={WORKSPACE_ADDRESS_PATH}
         className="self-start font-sans text-sm font-medium text-(--el-link) hover:underline"
       >
-        {subdomain ? t('echo.change') : t('echo.claim')}
+        {subdomain ? t('echo.change') : eligible ? t('echo.claim') : t('echo.whyNone')}
       </Link>
     </Card>
   );

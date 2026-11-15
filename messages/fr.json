@@ -4704,7 +4704,8 @@
         "claimed": "{host} — un seul nom pour l’espace de travail.",
         "none": "Aucun nom revendiqué pour l’instant.",
         "manage": "Gérer →",
-        "claim": "Revendiquer un nom →"
+        "claim": "Revendiquer un nom →",
+        "whyNone": "Pourquoi il n’y a pas de nom →"
       },
       "title": "Adresse publique",
       "subtitle": "Le seul nom sous lequel votre espace de travail répond.",
@@ -4757,7 +4758,8 @@
         "rename": "Renommer",
         "renaming": "Renommage…",
         "release": "Libérer le nom",
-        "releasing": "Libération…"
+        "releasing": "Libération…",
+        "lockAfterReleaseIneligible": "L’espace de travail ne pourra pas revendiquer un autre nom tant qu’il n’aura pas de dépôt créé par Motir."
       },
       "toast": {
         "claimed": "{host} est à vous",
@@ -4782,7 +4784,15 @@
         "noneSub": "Votre espace de travail n’a pas encore de nom.",
         "projectPage": "La page publique de ce projet se trouve à {url}.",
         "change": "Modifier dans les paramètres de l’espace de travail →",
-        "claim": "Revendiquer un nom pour l’espace de travail →"
+        "claim": "Revendiquer un nom pour l’espace de travail →",
+        "whyNone": "Pourquoi l’espace de travail n’a pas de nom →"
+      },
+      "ineligible": {
+        "title": "Cet espace de travail ne peut pas revendiquer de nom",
+        "body": "Un nom sous {base} sert les applications que Motir héberge, et Motir n’héberge que les dépôts qu’il crée. Cet espace de travail n’en a aucun : les dépôts que vous importez ou connectez s’exécutent sur votre propre infrastructure.",
+        "heldTitle": "Ce nom ne peut pas être renommé",
+        "heldBody": "Cet espace de travail n’a plus de dépôt créé par Motir. {host} continue de répondre jusqu’à ce que vous le libériez, mais il ne peut pas être renommé et, une fois libéré, l’espace de travail ne pourra pas revendiquer d’autre nom.",
+        "reason": "Cet espace de travail n’a pas de dépôt créé par Motir : il ne peut donc pas revendiquer ni modifier de nom sous {base}."
       }
     },
     "customDomains": {

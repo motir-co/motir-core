@@ -349,3 +349,176 @@ describe('load error (panel 11)', () => {
     expect(refreshMock).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── A workspace with no Motir repository (ADR §8 AMENDMENT 5 · MOTIR-11287) ──
+// `design/workspace-address/workspace-address--no-motir-repository.mock.html`:
+// `getClaimEligibility` answering `{ eligible: false }` picks two new states, and
+// a stale tab's claim or rename is refused 409 SUBDOMAIN_REQUIRES_MOTIR_REPOSITORY.
+
+const NONE_TITLE = 'This workspace can’t claim a name';
+const HELD_TITLE = 'This name can’t be renamed';
+const REASON =
+  'This workspace has no repository Motir created, so it can’t claim or change a motir.site name.';
+
+function renderEligibility(opts: {
+  subdomain?: PublicSubdomainDto | null;
+  canManage?: boolean;
+  eligible: boolean;
+}) {
+  return renderWithIntl(
+    <PublicAddressControl
+      workspaceId="ws_1"
+      baseDomain="motir.site"
+      subdomain={opts.subdomain ?? null}
+      canManage={opts.canManage ?? true}
+      eligible={opts.eligible}
+    />,
+  );
+}
+
+describe('eligible: true — today’s control', () => {
+  it('draws the field and Claim, and Rename beside Release, with no reason callout', () => {
+    renderEligibility({ eligible: true });
+    expect(screen.getByLabelText('Name')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Claim name' })).toBeTruthy();
+    expect(screen.queryByTestId('address-reason')).toBeNull();
+    cleanup();
+
+    renderEligibility({ subdomain: claimed, eligible: true });
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Release' })).toBeTruthy();
+    expect(screen.queryByTestId('address-reason')).toBeNull();
+  });
+});
+
+describe('no-motir-repository — no name held (delta panels B, C)', () => {
+  it('a Manager reads the reason, with NO field and NO Claim — not even disabled', () => {
+    renderEligibility({ eligible: false });
+    const reason = screen.getByTestId('address-reason');
+    expect(reason.textContent).toContain(NONE_TITLE);
+    expect(reason.textContent).toContain('A name under motir.site serves applications Motir hosts');
+    expect(reason.textContent).toContain('run on your own infrastructure');
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Claim name' })).toBeNull();
+    expect(screen.queryByText('Only workspace owners and admins can change this.')).toBeNull();
+  });
+
+  it('a member reads the read-only line, then the same reason in place of “No name claimed yet.”', () => {
+    renderEligibility({ eligible: false, canManage: false });
+    expect(screen.getByText('Only workspace owners and admins can change this.')).toBeTruthy();
+    expect(screen.getByTestId('address-reason').textContent).toContain(NONE_TITLE);
+    expect(screen.queryByText('No name claimed yet.')).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('held-without-motir-repository — a name held (delta panels E–G)', () => {
+  it('keeps the row, the custom-domains link and Release; Rename is ABSENT; the held reason names the host', () => {
+    renderEligibility({ subdomain: claimed, eligible: false });
+    expect(screen.getByText('acme.motir.site')).toBeTruthy();
+    expect(screen.getByText('Live')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Use your own domain instead →' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Release' })).toHaveProperty('disabled', false);
+    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull();
+    const reason = screen.getByTestId('address-reason');
+    expect(reason.textContent).toContain(HELD_TITLE);
+    expect(reason.textContent).toContain('acme.motir.site keeps answering until you release it');
+  });
+
+  it('disables Release under the 30-day lock and keeps the lock line', () => {
+    renderEligibility({
+      subdomain: { ...claimed, nextChangeAllowedAt: '2026-11-27T00:00:00.000Z' },
+      eligible: false,
+    });
+    expect(screen.getByRole('button', { name: 'Release' })).toHaveProperty('disabled', true);
+    expect(screen.getByTestId('address-lock').textContent).toContain('November 27, 2026');
+  });
+
+  it('a member sees the row, the read-only line and the reason, and no actions', () => {
+    renderEligibility({ subdomain: claimed, eligible: false, canManage: false });
+    expect(screen.getByText('Only workspace owners and admins can change this.')).toBeTruthy();
+    expect(screen.getByTestId('address-reason').textContent).toContain(HELD_TITLE);
+    expect(screen.queryByRole('button', { name: /Rename|Release/ })).toBeNull();
+  });
+
+  it('the release confirm says no other name can be claimed, and the released notice drops its lock line', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(200, quarantinePreview))
+      .mockResolvedValueOnce(json(200, { returnsAt: '2027-01-26T09:00:00.000Z' }));
+    const view = renderEligibility({ subdomain: claimed, eligible: false });
+    fireEvent.click(screen.getByRole('button', { name: 'Release' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog.textContent).toContain(
+      'The workspace can’t claim another name until it has a repository Motir created.',
+    );
+    expect(dialog.textContent).not.toContain('You can claim a new name right away');
+    fireEvent.click(screen.getByRole('button', { name: 'Release name' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <PublicAddressControl
+        workspaceId="ws_1"
+        baseDomain="motir.site"
+        subdomain={null}
+        canManage
+        eligible={false}
+      />,
+    );
+    expect(screen.getByText(/acme\.motir\.site was released\. It is held until/)).toBeTruthy();
+    expect(screen.queryByText(/the next change is allowed on/)).toBeNull();
+    expect(screen.getByTestId('address-reason').textContent).toContain(NONE_TITLE);
+  });
+});
+
+describe('the stale tab — 409 SUBDOMAIN_REQUIRES_MOTIR_REPOSITORY (delta panel H)', () => {
+  const refusal = { code: 'SUBDOMAIN_REQUIRES_MOTIR_REPOSITORY', error: 'server english' };
+
+  it('a refused CLAIM shows the reason on the field, never the generic copy, and re-reads', async () => {
+    fetchMock.mockResolvedValueOnce(json(409, refusal));
+    render();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'acme' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Claim name' }));
+
+    expect(await screen.findByText(REASON)).toBeTruthy();
+    expect(screen.queryByText('The name couldn’t be saved. Try again.')).toBeNull();
+    expect(screen.queryByText('server english')).toBeNull();
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(toastMock).not.toHaveBeenCalled();
+  });
+
+  it('a refused RENAME closes the dialog, toasts the reason and re-reads; the editor then closes', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(200, quarantinePreview))
+      .mockResolvedValueOnce(json(409, refusal));
+    const view = render({ subdomain: claimed });
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    fireEvent.change(screen.getByLabelText('New name'), { target: { value: 'acme-labs' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    await screen.findByRole('alertdialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    expect(toastMock).toHaveBeenCalledWith({
+      variant: 'error',
+      title: 'Name not changed',
+      description: REASON,
+    });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    // The control as it was: the editor still holds the typed name.
+    expect((screen.getByLabelText('New name') as HTMLInputElement).value).toBe('acme-labs');
+
+    // The re-read answers not eligible: the held state, with no editor.
+    view.rerender(
+      <PublicAddressControl
+        workspaceId="ws_1"
+        baseDomain="motir.site"
+        subdomain={claimed}
+        canManage
+        eligible={false}
+      />,
+    );
+    expect(screen.queryByLabelText('New name')).toBeNull();
+    expect(screen.getByTestId('address-reason').textContent).toContain(HELD_TITLE);
+  });
+});

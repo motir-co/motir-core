@@ -4,6 +4,7 @@ import { isCloud } from '@/lib/billing/availability';
 import type {
   PublicSubdomainDto,
   SubdomainChangePreviewDto,
+  SubdomainClaimEligibilityDto,
   SubdomainReleaseDto,
 } from '@/lib/dto/publicAddresses';
 import {
@@ -15,6 +16,7 @@ import {
   SubdomainChangeLimitError,
   SubdomainForbiddenError,
   SubdomainNotFoundError,
+  SubdomainRequiresMotirRepositoryError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
 import {
@@ -29,6 +31,7 @@ import {
 } from '@/lib/publicAddresses/nameHold';
 import { refuseLabel } from '@/lib/publicAddresses/reservedNames';
 import { tenantBaseDomain, tenantHostname } from '@/lib/publicAddresses/tenantDomain';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
 import { publicHostnameReservationRepository } from '@/lib/repositories/publicHostnameReservationRepository';
 import { publicSubdomainChangeRepository } from '@/lib/repositories/publicSubdomainChangeRepository';
@@ -65,9 +68,21 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //      ledger, so claim-after-release stays possible while the rename or
 //      release after it still obeys the limit.
 //
+// ── WHO MAY CLAIM OR RENAME (§8 Amendment 5, Story MOTIR-11283) ────────────
+//
+//   5. Only a workspace with a MOTIR REPOSITORY may CLAIM or RENAME — a row
+//      Motir created (seed source not `organization`, state `created`) that a
+//      takeover has not transferred. A name serves applications Motir hosts,
+//      and Motir hosts nothing else. The test is defined ONCE, in
+//      `projectRepoRepository.hasMotirRepositoryInWorkspace`; the writes refuse
+//      on it and `getClaimEligibility` answers it to the pane. RELEASE is never
+//      gated, and a workspace that loses its last Motir repository KEEPS the
+//      name it holds — nothing here deletes one for that reason.
+//
 // ── THE WRITE ORDER, and why each step is where it is ──────────────────────
 //
-//   lock the workspace row → read the live row → read the ledger and refuse on
+//   lock the workspace row → (claim, rename) read the eligibility and refuse →
+//   check the label → read the live row → read the ledger and refuse on
 //   the limit → decide the hold → RESERVE (quarantine only) → DELETE the old row
 //   → (rename) CREATE the new row, then check the reservation table → record the
 //   change in the ledger.
@@ -76,6 +91,14 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //     decisions about a state; taken before the lock they decide about a state
 //     that may already be gone. Two admins renaming at once serialize on it, and
 //     the second one meets the first one's ledger row and is refused.
+//   * ELIGIBILITY UNDER THE LOCK, before the label. It is a fact the write
+//     depends on, as the ledger is, so a repository deleted or transferred
+//     mid-request is read in the state the write commits against. It comes
+//     before the label check so an ineligible workspace gets this one refusal
+//     whatever label it sends, and after the membership and Manager gates so a
+//     non-member still reads 404 and a member 403. A Motir repository being
+//     CREATED concurrently is not locked; that race only ever refuses, and the
+//     Manager can retry.
 //   * RESERVE BEFORE DELETE. The reservation is what keeps a released name out of
 //     the pool while it is held. A transaction that committed the delete and lost
 //     the reserve would hand the name straight back — and unrepairably, because
@@ -151,6 +174,25 @@ export const publicSubdomainService = {
   },
 
   /**
+   * Whether the workspace may claim or rename a subdomain (rule 5) — the read
+   * the settings pane renders its no-Motir-repository state from.
+   *
+   * Readable by any member, like {@link getForWorkspace}, and it writes nothing.
+   * It asks the very predicate `claim` and `rename` refuse on, so the pane never
+   * restates the rule and the two cannot disagree.
+   */
+  async getClaimEligibility(
+    workspaceId: string,
+    actorUserId: string,
+  ): Promise<SubdomainClaimEligibilityDto> {
+    assertAvailable();
+    await assertAddressMember(workspaceId, actorUserId);
+    return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => ({
+      eligible: await projectRepoRepository.hasMotirRepositoryInWorkspace(workspaceId, tx),
+    }));
+  },
+
+  /**
    * What a rename or release would do right now, without doing it — the confirm
    * dialog's dated preview (story rule 5).
    *
@@ -184,8 +226,9 @@ export const publicSubdomainService = {
   /**
    * Claim a label for a workspace that has none.
    *
-   * ONE transaction: lock, re-read under the lock, validate, write. A claim is
-   * not a change (rule 4), so the ledger is neither read nor written.
+   * ONE transaction: lock, read the eligibility (rule 5), validate the label,
+   * re-read under the lock, write. A claim is not a change (rule 4), so the
+   * ledger is neither read nor written.
    */
   async claim(
     workspaceId: string,
@@ -195,10 +238,11 @@ export const publicSubdomainService = {
   ): Promise<PublicSubdomainDto> {
     assertAvailable();
     await assertAddressAdmin(workspaceId, actorUserId);
-    assertLabelClaimable(label);
 
     return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
       await lockWorkspaceOrRefuse(workspaceId, tx);
+      await assertHasMotirRepository(workspaceId, tx);
+      assertLabelClaimable(label);
       const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
       if (live) {
         // Already claimed — a claim is not a rename, and quietly turning one
@@ -226,10 +270,11 @@ export const publicSubdomainService = {
   ): Promise<PublicSubdomainDto> {
     assertAvailable();
     await assertAddressAdmin(workspaceId, actorUserId);
-    assertLabelClaimable(newLabel);
 
     return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
       await lockWorkspaceOrRefuse(workspaceId, tx);
+      await assertHasMotirRepository(workspaceId, tx);
+      assertLabelClaimable(newLabel);
       const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
       if (!live) throw new NoSubdomainClaimedError();
 
@@ -254,6 +299,9 @@ export const publicSubdomainService = {
    * RELEASE the workspace's subdomain (§8 Amendments 2 and 3). It stops being
    * served in this transaction, its name is held or freed by rule 3, and the
    * release counts against the 30-day limit exactly as a rename does.
+   *
+   * NOT gated on rule 5: a workspace that has lost its last Motir repository
+   * may still let its name go.
    *
    * Returns when the name returns to the pool — `null` when it already has — so
    * the caller can state the date.
@@ -394,6 +442,20 @@ export async function assertAddressAdmin(workspaceId: string, actorUserId: strin
 function assertLabelClaimable(label: string): void {
   const refusal = refuseLabel(label);
   if (refusal) throw new ReservedLabelError(label, refusal);
+}
+
+/**
+ * Refuse a claim or rename for a workspace with no Motir repository (rule 5, §8
+ * Amendment 5). Called UNDER the workspace lock and before the label is read, so
+ * the refusal does not depend on the label and nothing has been written.
+ */
+async function assertHasMotirRepository(
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (!(await projectRepoRepository.hasMotirRepositoryInWorkspace(workspaceId, tx))) {
+    throw new SubdomainRequiresMotirRepositoryError();
+  }
 }
 
 /**

@@ -5,7 +5,9 @@
   Subtask MOTIR-4206
 - **Supersedes / superseded by:** none. **§8 is AMENDED 2026-10-29 by its AMENDMENT 4**
   (the address of each hosted application, MOTIR-9790), which also supersedes §3's
-  second paragraph and §4's one-project rule for an application host. **§6 (Q5) is AMENDED 2026-10-28 — see
+  second paragraph and §4's one-project rule for an application host. **§8 is AMENDED
+  2026-11-14 by its AMENDMENT 5** (only a workspace with a Motir repository may claim or
+  rename its `motir.site` name, Story MOTIR-11283), which amends Amendment 3's claim rule. **§6 (Q5) is AMENDED 2026-10-28 — see
   its AMENDMENT 1:** the `motir-marketing` Fly app it names no longer exists. It **closes** `public-surface-hosts.md`
   §4's reversal condition (AMENDMENT 6 of that record, written by this card) and
   is the record `public-surface-hosts.md` §9 named as owning per-tenant and
@@ -1171,6 +1173,72 @@ serving an application at takeover (MOTIR-9802, MOTIR-9800); who may open an
 application (MOTIR-9817); the preview host (MOTIR-9791); where an application runs
 (MOTIR-9797, MOTIR-9791); and the application-slug derivation itself, which reuses the
 preview's.
+
+### ⚠️ AMENDMENT 5 (2026-11-14, Epic MOTIR-4527 · Story MOTIR-11283) — only a workspace with a Motir repository may claim or rename its motir.site name
+
+**Source.** Decision D1 of Epic MOTIR-4527 (_Motir repos run in production on Motir's
+accounts; customer repos are planned on their own infrastructure_) and Story
+MOTIR-11283. Built by MOTIR-11285 (`lib/services/publicSubdomainService.ts`).
+
+**What it amends.** Amendment 3's claim rule, which let any workspace Manager claim any
+free label. **Not dropped:** Amendment 3's six rules, which otherwise read unchanged;
+Amendment 4's application host; §8's label grammar and reserved set. This amendment adds
+no reserved label and no grammar rule.
+
+#### The rule
+
+A workspace may **CLAIM** or **RENAME** its `motir.site` name only when it has a **Motir
+repository**: a `project_repository` row of the workspace that meets all three of
+
+| condition                                                          | the line shipped code already draws                                                                                                                                         |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| seed source is not `organization`                                  | `isOrganizationSeedSource` (`lib/projectRepos/vocabulary.ts`): an imported repository runs on the customer's own infrastructure                                             |
+| state is `created`                                                 | reachable only through the creation primitive, so a proposed, creating, failed, skipped or `connected` row has nothing Motir hosts                                          |
+| takeover state is NULL, or neither `awaiting_reinstall` nor `done` | `runGitAppFor` (`lib/github/runGitCredential.ts`): a created row stays Motir's until its takeover transfers it; NULL (no takeover ever requested) counts as not transferred |
+
+The test lives ONCE, in `projectRepoRepository.hasMotirRepositoryInWorkspace`, read under
+the workspace lock claim and rename already take. The settings pane reads the same
+predicate through `publicSubdomainService.getClaimEligibility`, so the pane and the
+refusal cannot disagree.
+
+**The reason.** A `motir.site` name serves applications Motir hosts (Amendment 4), and
+under D1 Motir hosts only repositories it created in its own organisation. A workspace
+whose repositories are all imported or connected would hold an address Motir never
+serves.
+
+#### The refusal
+
+Any other workspace's claim or rename is refused with **`SUBDOMAIN_REQUIRES_MOTIR_REPOSITORY`**,
+answered **409** — a conflict with the workspace's state, like the other 409s — whatever
+label it names. It comes after the membership and Manager gates (a non-member still reads
+404, a member 403) and before the label is checked, so nothing is written. The settings
+pane shows the reason in place of the claim field.
+
+#### Release, and a held name
+
+- **Release stays allowed**, under Amendment 3 rule 4's one change per 30 days, and is never
+  refused on this rule.
+- **A held name is kept.** A workspace that loses its last Motir repository — it is deleted,
+  or a takeover transfers it — KEEPS a name it already holds and may release it, but cannot
+  rename it. Nothing releases a name because the last Motir repository went.
+
+#### Stray claims are released once, with no quarantine
+
+Claims held when this amendment lands by a workspace with no Motir repository — in
+production, `verify-20261114.motir.site`, claimed 2026-11-14 — are released once at deploy
+by a forward, data-only migration of Story MOTIR-11283. It writes **no hold reservation, no
+90-day quarantine and no change-ledger entry**: the name is claimable at once and the
+workspace's 30-day limit is untouched. A quarantine protects the readers of a name that
+served someone (Amendment 3 rule 3); a stray claim never served anyone, which is the same
+reasoning as rule 3's under-24-hours case. Legacy alias rows are not touched.
+
+#### What this amendment does NOT decide
+
+Serving `*.motir.site` — the edge, the wildcard certificate and its placement (§6), the
+registrar records, the host contract's `motir.site` arm (the sibling story on motir-edge);
+what a held name of an ineligible workspace serves (that is the host contract's, unchanged
+here); a member gate on a built app; any customer-domain rule; creating a Motir repository;
+and the pane's exact wording, which is the pane's.
 
 ---
 

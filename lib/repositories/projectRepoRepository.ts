@@ -10,6 +10,7 @@ import {
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
+import { TRANSFERRED_TAKEOVER_STATES } from '@/lib/projectRepos/takeover';
 import {
   ESTABLISHED_PROJECT_REPO_STATES,
   SEED_SOURCE_ORGANIZATION,
@@ -754,6 +755,55 @@ export const projectRepoRepository = {
   async deleteById(id: string, tx: Prisma.TransactionClient): Promise<number> {
     const result = await tx.projectRepo.deleteMany({ where: { id } });
     return result.count;
+  },
+
+  // ── A workspace's Motir repository (MOTIR-11285, §8 Amendment 5) ──────────
+
+  /**
+   * Whether the workspace holds a repository MOTIR created and still owns — the
+   * one test that decides whether it may claim or rename a tenant subdomain
+   * (`docs/decisions/public-tenant-addresses.md` §8 Amendment 5).
+   *
+   * Three conditions, each the line shipped code already draws:
+   *
+   *   - `seedSource` is not `organization` — `isOrganizationSeedSource`
+   *     (`lib/projectRepos/vocabulary.ts`): an imported repository runs on the
+   *     customer's own infrastructure, and Motir hosts none of it.
+   *   - `state` is `created` — reachable only through the creation primitive, so
+   *     a proposed, failed, skipped or `connected` row has nothing Motir hosts.
+   *     It is also what keeps a legacy mislabelled `connected` row with a
+   *     starter seed source from counting.
+   *   - the takeover has not TRANSFERRED it — `takeoverState` is neither
+   *     `awaiting_reinstall` nor `done`, the line `runGitAppFor`
+   *     (`lib/github/runGitCredential.ts`) draws for "still Motir's".
+   *
+   * ⚠️ THE NULL ARM IS THE RULE, NOT A DETAIL. `takeover_state` is nullable and
+   * NULL is the ordinary case — no takeover ever requested. SQL's `NOT IN` yields
+   * NULL (not true) for a NULL column, so a bare `notIn` would drop every
+   * untransferred repository and refuse every workspace. The OR keeps it.
+   *
+   * Runs inside the caller's workspace context: `project_repository_active_workspace`
+   * gates on the row's OWN `workspace_id`, not on project membership, so a
+   * Manager outside some project still reads every row of the workspace and the
+   * answer cannot come back falsely `false`.
+   */
+  async hasMotirRepositoryInWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const row = await tx.projectRepo.findFirst({
+      where: {
+        workspaceId,
+        seedSource: { not: SEED_SOURCE_ORGANIZATION },
+        state: 'created',
+        OR: [
+          { takeoverState: null },
+          { takeoverState: { notIn: [...TRANSFERRED_TAKEOVER_STATES] } },
+        ],
+      },
+      select: { id: true },
+    });
+    return row !== null;
   },
 
   // ── The CI-Actions intent (MOTIR-1907) ────────────────────────────────────

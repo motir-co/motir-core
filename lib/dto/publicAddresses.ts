@@ -42,6 +42,17 @@ export interface SubdomainChangePreviewDto {
   readonly nextChangeAllowedAt: string | null;
 }
 
+/**
+ * Whether the workspace may CLAIM or RENAME a tenant subdomain (§8 Amendment 5)
+ * — answered by the same predicate the writes refuse on, so the settings pane
+ * and the refusal cannot disagree. A workspace that is not eligible may still
+ * hold, and release, a name it already has.
+ */
+export interface SubdomainClaimEligibilityDto {
+  /** True when the workspace holds a repository Motir created and has not transferred. */
+  readonly eligible: boolean;
+}
+
 /** What a release returns: when the released name returns to the pool, or `null` if it already has. */
 export interface SubdomainReleaseDto {
   readonly returnsAt: string | null;

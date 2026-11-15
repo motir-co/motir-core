@@ -4704,7 +4704,8 @@
         "claimed": "{host} — jedna nazwa obszaru roboczego.",
         "none": "Nie zajęto jeszcze żadnej nazwy.",
         "manage": "Zarządzaj →",
-        "claim": "Zajmij nazwę →"
+        "claim": "Zajmij nazwę →",
+        "whyNone": "Dlaczego nie ma nazwy →"
       },
       "title": "Adres publiczny",
       "subtitle": "Jedyna nazwa, pod którą odpowiada obszar roboczy.",
@@ -4757,7 +4758,8 @@
         "rename": "Zmień nazwę",
         "renaming": "Zmienianie nazwy…",
         "release": "Zwolnij nazwę",
-        "releasing": "Zwalnianie…"
+        "releasing": "Zwalnianie…",
+        "lockAfterReleaseIneligible": "Obszar roboczy nie może zająć innej nazwy, dopóki nie będzie mieć repozytorium utworzonego przez Motir."
       },
       "toast": {
         "claimed": "{host} jest twój",
@@ -4782,7 +4784,15 @@
         "noneSub": "Obszar roboczy nie ma jeszcze nazwy.",
         "projectPage": "Publiczna strona tego projektu jest pod adresem {url}.",
         "change": "Zmień w ustawieniach obszaru roboczego →",
-        "claim": "Zajmij nazwę dla obszaru roboczego →"
+        "claim": "Zajmij nazwę dla obszaru roboczego →",
+        "whyNone": "Dlaczego obszar roboczy nie ma nazwy →"
+      },
+      "ineligible": {
+        "title": "Ten obszar roboczy nie może zająć nazwy",
+        "body": "Nazwa w {base} obsługuje aplikacje hostowane przez Motir, a Motir hostuje tylko repozytoria, które sam tworzy. Ten obszar roboczy nie ma żadnego: repozytoria, które importujesz lub łączysz, działają na Twojej własnej infrastrukturze.",
+        "heldTitle": "Tej nazwy nie można zmienić",
+        "heldBody": "Ten obszar roboczy nie ma już repozytorium utworzonego przez Motir. {host} odpowiada, dopóki go nie zwolnisz, ale nie można zmienić tej nazwy, a po zwolnieniu obszar roboczy nie zajmie innej nazwy.",
+        "reason": "Ten obszar roboczy nie ma repozytorium utworzonego przez Motir, więc nie może zająć ani zmienić nazwy w {base}."
       }
     },
     "customDomains": {

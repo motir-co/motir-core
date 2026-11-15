@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } from '../helpers/db';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // THE SUBDOMAIN RULES GATE — Story MOTIR-4528 · Subtask MOTIR-9516.
 //
@@ -95,6 +96,7 @@ afterAll(async () => {
 
 async function workspace(name: string): Promise<Ws> {
   const { workspace: ws, owner } = await createTestWorkspace({ name });
+  await seedMotirRepository({ workspaceId: ws.id });
   return { workspaceId: ws.id, ownerId: owner.id };
 }
 
@@ -496,6 +498,7 @@ describe('erasure — a workspace delete holds names by the same rule', () => {
       name: `Holder ${label}`,
       ownerUserId: user.id,
     });
+    await seedMotirRepository({ workspaceId: ws.id });
     await publicSubdomainService.claim(ws.id, label, user.id);
     // The delete reads the real clock, so the hold's START is moved instead.
     await adminDb.publicAddress.updateMany({

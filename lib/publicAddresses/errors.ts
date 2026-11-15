@@ -199,6 +199,28 @@ export class SubdomainForbiddenError extends Error {
   }
 }
 
+/**
+ * The workspace holds no repository Motir created, so it cannot hold a tenant
+ * subdomain (§8 Amendment 5).
+ *
+ * A `motir.site` name serves applications Motir HOSTS, and Motir hosts only
+ * repositories it created in its own organisation; an imported repository runs
+ * on the customer's own infrastructure. Refused on CLAIM and RENAME whatever
+ * label is sent — the label is never read — and only after the membership and
+ * Manager gates, so eligibility is never disclosed to someone who could not
+ * change the address anyway. RELEASE is never refused for it: a workspace that
+ * lost its last Motir repository keeps the name it holds and may let it go.
+ */
+export class SubdomainRequiresMotirRepositoryError extends Error {
+  readonly code = 'SUBDOMAIN_REQUIRES_MOTIR_REPOSITORY' as const;
+  constructor() {
+    super(
+      'This workspace has no repository Motir created, so it cannot hold a motir.site subdomain.',
+    );
+    this.name = 'SubdomainRequiresMotirRepositoryError';
+  }
+}
+
 /** The actor is not a member of this workspace — answered as a 404. */
 export class WorkspaceNotVisibleError extends Error {
   readonly code = 'NOT_FOUND' as const;

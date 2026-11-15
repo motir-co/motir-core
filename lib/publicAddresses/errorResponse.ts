@@ -22,6 +22,7 @@ import {
   SubdomainForbiddenError,
   SubdomainChangeLimitError,
   SubdomainNotFoundError,
+  SubdomainRequiresMotirRepositoryError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
 import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDomain';
@@ -48,6 +49,10 @@ import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDoma
 //       Amendment 3) — both are conflicts with state that END on a known date,
 //       so each body carries that date as ISO 8601 (`returnsAt`,
 //       `nextAllowedAt`) and the pane can say when rather than just no.
+//   409 for a workspace with NO MOTIR REPOSITORY on claim or rename (§8
+//       Amendment 5) — a conflict with the workspace's state, like the other
+//       409s: the request is well formed and the label is never read, and it
+//       would succeed once the workspace holds a repository Motir created.
 //   422 for a REFUSED LABEL — a well-formed request that fails a domain rule,
 //       which is exactly what 422 is for.
 //   404 for a RELEASE of a workspace with no subdomain (§8 Amendment 2) — a
@@ -95,6 +100,9 @@ export function mapPublicAddressError(err: unknown): NextResponse | null {
       { code: err.code, error: err.message, nextAllowedAt: err.nextAllowedAt.toISOString() },
       { status: 409 },
     );
+  }
+  if (err instanceof SubdomainRequiresMotirRepositoryError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
   if (err instanceof NoSubdomainClaimedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });

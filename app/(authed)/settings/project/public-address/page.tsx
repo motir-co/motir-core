@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { getActiveProject } from '@/lib/projects';
 import { isCloud } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -91,7 +92,13 @@ export default async function ProjectPublicAddressPage() {
     );
   }
 
-  const subdomain = await publicSubdomainService.getForWorkspace(ctx.workspaceId, ctx.userId);
+  // `allSettledOrThrow`, never a bare `Promise.all`: both arms open a
+  // transaction (MOTIR-3066). The eligibility read (ADR §8 AMENDMENT 5,
+  // MOTIR-11287) decides the echo's link text when no name is held.
+  const [subdomain, eligibility] = await allSettledOrThrow([
+    publicSubdomainService.getForWorkspace(ctx.workspaceId, ctx.userId),
+    publicSubdomainService.getClaimEligibility(ctx.workspaceId, ctx.userId),
+  ]);
 
   // `MOTIR_PUBLIC_SITE_URL` is server configuration, so the project's own
   // address is resolved here and shown as text (scheme stripped: read, not
@@ -105,6 +112,7 @@ export default async function ProjectPublicAddressPage() {
         subdomain={subdomain}
         projectAddress={projectUrl.replace(/^https?:\/\//, '')}
         projectUrl={projectUrl}
+        eligible={eligibility.eligible}
       />
     </div>
   );

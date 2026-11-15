@@ -4704,7 +4704,8 @@
         "claimed": "{host} — 工作区唯一的名称。",
         "none": "尚未认领名称。",
         "manage": "管理 →",
-        "claim": "认领名称 →"
+        "claim": "认领名称 →",
+        "whyNone": "为什么没有名称 →"
       },
       "title": "公开地址",
       "subtitle": "工作区对外使用的唯一名称。",
@@ -4757,7 +4758,8 @@
         "rename": "重命名",
         "renaming": "正在重命名…",
         "release": "释放名称",
-        "releasing": "正在释放…"
+        "releasing": "正在释放…",
+        "lockAfterReleaseIneligible": "在拥有 Motir 创建的仓库之前，工作区无法认领其他名称。"
       },
       "toast": {
         "claimed": "{host} 归你了",
@@ -4782,7 +4784,15 @@
         "noneSub": "你的工作区还没有名称。",
         "projectPage": "此项目的公开页面位于 {url}。",
         "change": "在工作区设置中更改 →",
-        "claim": "为工作区认领名称 →"
+        "claim": "为工作区认领名称 →",
+        "whyNone": "为什么工作区没有名称 →"
+      },
+      "ineligible": {
+        "title": "此工作区无法认领名称",
+        "body": "{base} 下的名称用于 Motir 托管的应用，而 Motir 只托管它自己创建的仓库。此工作区没有这样的仓库：你导入或连接的仓库运行在你自己的基础设施上。",
+        "heldTitle": "此名称无法重命名",
+        "heldBody": "此工作区已不再有 Motir 创建的仓库。{host} 会一直响应，直到你释放它，但它无法重命名，释放后工作区也无法认领其他名称。",
+        "reason": "此工作区没有 Motir 创建的仓库，因此无法认领或更改 {base} 下的名称。"
       }
     },
     "customDomains": {

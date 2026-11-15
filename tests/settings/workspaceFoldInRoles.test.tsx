@@ -38,6 +38,8 @@ const svc = vi.hoisted(() => ({
   tenantDomain: false,
   subdomain: null as { hostname: string } | null,
   subdomainReads: 0,
+  eligible: true,
+  eligibilityReads: 0,
 }));
 const props = vi.hoisted(() => ({
   danger: null as Record<string, unknown> | null,
@@ -65,6 +67,10 @@ vi.mock('@/lib/services/publicSubdomainService', () => ({
     getForWorkspace: async () => {
       svc.subdomainReads += 1;
       return svc.subdomain;
+    },
+    getClaimEligibility: async () => {
+      svc.eligibilityReads += 1;
+      return { eligible: svc.eligible };
     },
   },
 }));
@@ -156,6 +162,8 @@ beforeEach(() => {
   svc.tenantDomain = false;
   svc.subdomain = null;
   svc.subdomainReads = 0;
+  svc.eligible = true;
+  svc.eligibilityReads = 0;
   props.danger = props.twoFactor = props.door = props.members = props.addressDoor = null;
 });
 afterEach(() => cleanup());
@@ -241,19 +249,28 @@ describe('the fold-in’s role branches', () => {
     render(<>{await section()}</>);
     expect(screen.queryByTestId('address-door')).toBeNull();
     expect(svc.subdomainReads).toBe(0);
+    expect(svc.eligibilityReads).toBe(0);
     cleanup();
 
     svc.tenantDomain = true;
     render(<>{await section()}</>);
     expect(screen.getByTestId('address-door')).toBeTruthy();
-    expect(props.addressDoor).toEqual({ hostname: null });
+    expect(props.addressDoor).toEqual({ hostname: null, eligible: true });
     expect(svc.subdomainReads).toBe(1);
+    expect(svc.eligibilityReads).toBe(1);
   });
 
   it('the Public address door names the workspace’s host once one is claimed', async () => {
     svc.cloud = svc.tenantDomain = true;
     svc.subdomain = { hostname: 'acme.motir.site' };
     render(<>{await section()}</>);
-    expect(props.addressDoor).toEqual({ hostname: 'acme.motir.site' });
+    expect(props.addressDoor).toEqual({ hostname: 'acme.motir.site', eligible: true });
+  });
+
+  it('the Public address door carries the eligibility answer (ADR §8 AMENDMENT 5, MOTIR-11287)', async () => {
+    svc.cloud = svc.tenantDomain = true;
+    svc.eligible = false;
+    render(<>{await section()}</>);
+    expect(props.addressDoor).toEqual({ hostname: null, eligible: false });
   });
 });

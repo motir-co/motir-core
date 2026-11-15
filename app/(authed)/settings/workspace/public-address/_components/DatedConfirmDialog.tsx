@@ -26,6 +26,7 @@ export function DatedConfirmDialog({
   lockUntil,
   submitting,
   formatDate,
+  eligible = true,
   onConfirm,
   onCancel,
 }: {
@@ -36,6 +37,12 @@ export function DatedConfirmDialog({
   lockUntil: string | null;
   submitting: boolean;
   formatDate: (iso: string) => string;
+  /**
+   * `false` when the workspace has no Motir repository (MOTIR-11287): after the
+   * release it cannot claim another name, so the release lock line says that
+   * instead of "you can claim a new name right away" (delta mock panel F).
+   */
+  eligible?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -89,7 +96,9 @@ export function DatedConfirmDialog({
             <p className="font-sans text-[13px] text-(--el-text-secondary)">
               {isRename
                 ? t('confirm.lockAfterRename', { date: formatDate(lockUntil) })
-                : t('confirm.lockAfterRelease', { date: formatDate(lockUntil) })}
+                : eligible
+                  ? t('confirm.lockAfterRelease', { date: formatDate(lockUntil) })
+                  : t('confirm.lockAfterReleaseIneligible')}
             </p>
           ) : null}
 
