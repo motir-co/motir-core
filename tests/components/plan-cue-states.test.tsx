@@ -263,6 +263,7 @@ function mount(
     view?: 'canvas' | 'list';
     trail?: CanvasCrumb[];
     locale?: 'zh';
+    items?: PlanReviewItemDto[];
   } = {},
 ) {
   // The host's poll: answered reads counted, an equal drafts array kept by reference.
@@ -276,7 +277,7 @@ function mount(
   };
   const el = (r: Read, progress: PlanProgressSnapshot | null = snap(r.steps)) => (
     <PlanProposalViews
-      items={ITEMS}
+      items={opts.items ?? ITEMS}
       outcome={null}
       projectKey="ARP"
       version={0}
@@ -440,7 +441,7 @@ describe('the canvas node box — three states (§31.1, §31.2)', () => {
     next({ steps: [step('check', 'pi_b')] });
     expect(cueOf('pi_a')).toBeNull();
     expect(cueOf('pi_b')).toBe('checking');
-    // The check ends and the fix names no card: no tag anywhere.
+    // The check ends; the fix names no card and has written none yet: no tag anywhere.
     next({ steps: [step('repair', null)] });
     expect(document.querySelectorAll('[data-cue]')).toHaveLength(0);
   });
@@ -508,6 +509,77 @@ describe('the canvas node box — three states (§31.1, §31.2)', () => {
   });
 });
 
+// EDITING and FIXING (MOTIR-11362). Every step above started 30 s before T0; a
+// card whose last write is 10 s before T0 was written since, 60 s before was not.
+const WRITTEN = iso(T0 - 10_000);
+const EARLIER = iso(T0 - 60_000);
+const withWrites = (writes: Record<string, string>) =>
+  ITEMS.map((i) => ({ ...i, lastWrittenAt: writes[i.planItemId] ?? EARLIER }));
+
+describe('the canvas node box — Editing and Fixing (MOTIR-11362)', () => {
+  it('an amend with no write yet: its target reads EDITING at once — solid ring class, file-pen chip, own name, static', async () => {
+    mount({ steps: [step('amend', LOGIN_ID)] }, { items: withWrites({}) });
+    await screen.findByText('Login UI');
+    expect(cueOf(LOGIN_ID)).toBe('editing');
+    expect(box(LOGIN_ID)!.className).toContain('canvas-node--editing');
+    const chip = chipOf(LOGIN_ID)!;
+    expect(chip.textContent).toBe('Editing');
+    expect(chip.querySelector('svg')!.getAttribute('class')).toContain('lucide-file-pen');
+    expect(screen.getByRole('img', { name: 'Being edited — its level is being reconciled' })).toBe(
+      chip,
+    );
+    expect(motionOf(LOGIN_ID)).toBeNull();
+    // No other card reads anything.
+    expect(document.querySelectorAll('[data-cue]')).toHaveLength(1);
+  });
+
+  it('the cards on the amended level read Editing from their first write — never Thinking or Drafting', async () => {
+    const { next } = mount({ steps: [step('amend', EPIC_ID)] }, { items: withWrites({}) });
+    await loaded();
+    expect(document.querySelectorAll('[data-cue]')).toHaveLength(0);
+    // An author session on pi_a and the amend's write to pi_b, read by read.
+    next({ steps: [step('amend', EPIC_ID), step('author', 'pi_b')], drafts: [draft('pi_b')] });
+    expect(cueOf('pi_b')).toBe('drafting');
+    cleanup();
+    stubRoadmap();
+    mount(
+      { steps: [step('amend', EPIC_ID), step('author', 'pi_b')], drafts: [draft('pi_b')] },
+      { items: withWrites({ pi_b: WRITTEN }) },
+    );
+    await loaded();
+    expect(cueOf('pi_b')).toBe('editing');
+    expect(cueOf('pi_a')).toBeNull();
+  });
+
+  it('the fix after the check marks each card it has written FIXING — heavy ring class, wrench chip', async () => {
+    const { next } = mount(
+      { steps: [step('repair', null)] },
+      { items: withWrites({ pi_a: WRITTEN }) },
+    );
+    await loaded();
+    expect(cueOf('pi_a')).toBe('fixing');
+    expect(cueOf('pi_b')).toBeNull();
+    expect(box('pi_a')!.className).toContain('canvas-node--fixing');
+    const chip = chipOf('pi_a')!;
+    expect(chip.textContent).toBe('Fixing');
+    expect(chip.querySelector('svg')!.getAttribute('class')).toContain('lucide-wrench');
+    expect(screen.getByRole('img', { name: 'Being fixed after the final check' })).toBe(chip);
+    // The fix closes: the tag leaves.
+    next({ steps: [] });
+    expect(cueOf('pi_a')).toBeNull();
+  });
+
+  it('Chinese: 编辑中 / 修复中 on the chips', async () => {
+    mount(
+      { steps: [step('amend', LOGIN_ID), step('repair', null)] },
+      { items: withWrites({ pi_a: WRITTEN }), locale: 'zh' },
+    );
+    await screen.findByText('Login UI');
+    expect(chipOf(LOGIN_ID)!.textContent).toBe('编辑中');
+    expect(chipOf('pi_a')!.textContent).toBe('修复中');
+  });
+});
+
 describe('the list view — the row cue chip (§31.6)', () => {
   const row = (title: string) => screen.getByText(title).closest('li')!;
 
@@ -529,6 +601,27 @@ describe('the list view — the row cue chip (§31.6)', () => {
     const d = within(row('Reset email')).getByTestId('list-cue-checking');
     expect(d.getAttribute('aria-label')).toBe('Being reviewed in the final check');
     expect(within(row('Remember me')).queryByRole('img', { name: /Being/ })).toBeNull();
+  });
+
+  it('Editing and Fixing rows carry their own chip and name (MOTIR-11362)', () => {
+    mount(
+      { steps: [step('amend', EPIC_ID), step('repair', null)] },
+      { view: 'list', items: withWrites({ pi_a: WRITTEN }) },
+    );
+    // pi_a: written since both began — the fix, the later stage, shows.
+    const a = within(row('Account recovery')).getByTestId('list-cue-fixing');
+    expect(a.getAttribute('aria-label')).toBe('Being fixed after the final check');
+    expect(a.textContent).toBe('Fixing');
+    cleanup();
+    stubRoadmap();
+    mount(
+      { steps: [step('amend', EPIC_ID)] },
+      { view: 'list', items: withWrites({ pi_b: WRITTEN }) },
+    );
+    const b = within(row('Session timeout')).getByTestId('list-cue-editing');
+    expect(b.getAttribute('aria-label')).toBe('Being edited — its level is being reconciled');
+    expect(b.textContent).toBe('Editing');
+    expect(within(row('Account recovery')).queryByRole('img', { name: /Being/ })).toBeNull();
   });
 
   it('the container review marks no row', () => {
@@ -603,6 +696,19 @@ describe('the quick view — the header cue (§31.7)', () => {
     view.rerender(peek(live({})));
     expect(cueLine().getAttribute('data-live-cue')).toBe('idle');
     expect(cueLine().textContent).toBe('');
+  });
+
+  it('the amend on the card → file-pen + Editing; the fix → wrench + Fixing (MOTIR-11362)', () => {
+    const view = render(
+      peek(live({ authoring: new Set(['pi_a']), cues: new Map([['pi_a', 'editing']]) })),
+    );
+    expect(cueLine().getAttribute('data-live-cue')).toBe('editing');
+    expect(cueLine().textContent).toBe('Editing');
+    expect(cueLine().querySelector('svg')!.getAttribute('class')).toContain('lucide-file-pen');
+    view.rerender(peek(live({ cues: new Map([['pi_a', 'fixing']]) })));
+    expect(cueLine().getAttribute('data-live-cue')).toBe('fixing');
+    expect(cueLine().textContent).toBe('Fixing');
+    expect(cueLine().querySelector('svg')!.getAttribute('class')).toContain('lucide-wrench');
   });
 
   it('without a planner cue the line reads as it shipped', () => {

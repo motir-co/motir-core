@@ -9,7 +9,7 @@ import { fullestContainer } from '@/lib/planning/planShape';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
-import { lastEditedAtByItem } from '@/lib/plans/planItemEdits';
+import { lastEditedAtByItem, lastWrittenAtOf } from '@/lib/plans/planItemEdits';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planProgressService } from '@/lib/services/planProgressService';
 import {
@@ -2002,6 +2002,9 @@ export const planReviewService = {
         // The newest `edited` row naming this proposal (MOTIR-11185) — what the
         // live canvas diffs between two polls to highlight a changed card.
         lastEditedAt: lastEditedAt.get(item.id) ?? null,
+        // …and its LAST WRITE, append or edit (MOTIR-11362) — what the live cues
+        // read to know which cards an amend or the fix has written since it began.
+        lastWrittenAt: lastWrittenAtOf(item.createdAt, lastEditedAt.get(item.id) ?? null),
         stale: reasons.length > 0,
         staleReasons: reasons,
         targetMissing,

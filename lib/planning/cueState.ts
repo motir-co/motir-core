@@ -13,9 +13,22 @@ import { proposalLevelKey } from '@/lib/planning/planShape';
 //   - **Drafting** — an `author` step targets it AND the live read's
 //     `inFlightDrafts` holds an entry for it with at least one of its three fields
 //     not null (an empty string counts);
-//   - **Thinking** — an `author` step targets it and there is no such draft.
+//   - **Thinking** — an `author` step targets it and there is no such draft;
+//   - **Editing** (MOTIR-11362) — an `amend` step is live and the card is its
+//     TARGET (the parent of the level it rewrites), from the moment the step opens
+//     — through the long think before its first write — or the card sits on the
+//     amended level and was WRITTEN since the step began;
+//   - **Fixing** (MOTIR-11362) — the fix after the final check (`repair`) is live
+//     and the card was WRITTEN since it began. The fix names no card, so its
+//     writes are how the card is known.
 //
-// Checking wins over Drafting, Drafting over Thinking (the latest stage shows). A
+// "Written since the step began" reads the proposal's `lastWrittenAt` (its append
+// or its newest edit) against the step's `startedAt`, both the server's instants.
+// A step with no `startedAt` marks only its target.
+//
+// The latest stage shows: Fixing over Checking over Editing over Drafting over
+// Thinking — so no card an amend works on reads Thinking or Drafting while the
+// amend is live. A
 // draft with no `author` step targeting its card draws nothing. A `check` step
 // whose target holds other proposals on its own children level is the CONTAINER
 // review (§31.5): the story's node and the bar read it, the list does not.
@@ -31,8 +44,17 @@ import { proposalLevelKey } from '@/lib/planning/planShape';
 //
 // PURE: no React, no I/O.
 
-/** The three states of the planner's cue on a card. */
-export type CardCueState = 'thinking' | 'drafting' | 'checking';
+/** The five states of the planner's cue on a card. */
+export type CardCueState = 'thinking' | 'drafting' | 'editing' | 'checking' | 'fixing';
+
+/**
+ * A live step as the derivation reads it: its kind, the node it names and — for
+ * the amend and the fix, which are known by their WRITES — when it began (server
+ * ISO). `PlanProgressStep` carries all three.
+ */
+export interface CueStep extends InFlightStep {
+  startedAt?: string;
+}
 
 /** One read's derived cues, keyed by canvas node id (`PlanReviewItemDto.nodeId`). */
 export interface CardCues {
@@ -49,7 +71,27 @@ function hasText(draft: PlanItemDraftDto): boolean {
   return draft.title !== null || draft.descriptionMd !== null || draft.explanationMd !== null;
 }
 
-const RANK: Record<CardCueState, number> = { thinking: 0, drafting: 1, checking: 2 };
+const RANK: Record<CardCueState, number> = {
+  thinking: 0,
+  drafting: 1,
+  editing: 2,
+  checking: 3,
+  fixing: 4,
+};
+
+/** Instant of an ISO string, or null when it does not parse. */
+function instant(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const at = Date.parse(iso);
+  return Number.isNaN(at) ? null : at;
+}
+
+/** Was this proposal written at or after the step began? */
+function writtenSince(item: PlanReviewItemDto, startedAt: number | null): boolean {
+  if (startedAt === null) return false;
+  const at = instant(item.lastWrittenAt);
+  return at !== null && at >= startedAt;
+}
 
 /**
  * One read's cues, before the hold — from the live steps and the read's drafts.
@@ -58,7 +100,7 @@ const RANK: Record<CardCueState, number> = { thinking: 0, drafting: 1, checking:
  */
 export function deriveCardCues(
   items: readonly PlanReviewItemDto[],
-  steps: readonly InFlightStep[] | null | undefined,
+  steps: readonly CueStep[] | null | undefined,
   drafts?: readonly PlanItemDraftDto[] | null,
 ): CardCues {
   if (!steps || steps.length === 0) return NO_CARD_CUES;
@@ -70,19 +112,43 @@ export function deriveCardCues(
   }
   const states = new Map<string, CardCueState>();
   const containers = new Set<string>();
+  const mark = (nodeId: string, state: CardCueState) => {
+    const prev = states.get(nodeId);
+    if (prev === undefined || RANK[state] > RANK[prev]) states.set(nodeId, state);
+  };
   for (const step of steps) {
     const nodeId = step.targetNodeId;
+    if (step.kind === 'amend') {
+      // EDITING: the target from the step's first instant; the cards on the level
+      // it rewrites (the target's own children, or the top level for a null
+      // target) once it has written them.
+      if (nodeId !== null) mark(nodeId, 'editing');
+      const since = instant(step.startedAt);
+      for (const item of items) {
+        if (proposalLevelKey(item) === nodeId && writtenSince(item, since)) {
+          mark(item.nodeId, 'editing');
+        }
+      }
+      continue;
+    }
+    if (step.kind === 'repair') {
+      // FIXING: the fix names no card, so every card it has written, anywhere.
+      const since = instant(step.startedAt);
+      for (const item of items) if (writtenSince(item, since)) mark(item.nodeId, 'fixing');
+      continue;
+    }
     if (nodeId === null) continue;
     let state: CardCueState;
     if (step.kind === 'check') state = 'checking';
     else if (step.kind === 'author') state = drafted.has(nodeId) ? 'drafting' : 'thinking';
     else continue;
-    const prev = states.get(nodeId);
-    if (prev === undefined || RANK[state] > RANK[prev]) states.set(nodeId, state);
+    mark(nodeId, state);
     if (state === 'checking' && items.some((i) => proposalLevelKey(i) === nodeId)) {
       containers.add(nodeId);
     }
   }
+  // A container review is a CHECKING state; a node a later stage took over is not one.
+  for (const nodeId of containers) if (states.get(nodeId) !== 'checking') containers.delete(nodeId);
   if (states.size === 0) return NO_CARD_CUES;
   return { states, containers };
 }

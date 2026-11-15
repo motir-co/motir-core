@@ -371,7 +371,11 @@
       "checkingName": "最終確認で確認中",
       "checkingAll": "子項目を確認中",
       "checkingAllName": "子項目を最終確認でまとめて確認中",
-      "checkingHere": "この階層を確認中"
+      "checkingHere": "この階層を確認中",
+      "editing": "編集中",
+      "editingName": "編集中 — この階層を整合しています",
+      "fixing": "修正中",
+      "fixingName": "最終確認のあとで修正中"
     },
     "listWritingTitle": "まだ提案はありません",
     "listWritingBody": "計画の作成が進むと、ここに項目が表示されます。",
@@ -439,7 +443,9 @@
       "follow": "作成を追従",
       "followHint": "作成中のテキストを表示し続けます。スクロールすると停止します。",
       "thinking": "思考中",
-      "checking": "確認中"
+      "checking": "確認中",
+      "editing": "編集中",
+      "fixing": "修正中"
     }
   },
   "projectAccess": {

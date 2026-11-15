@@ -371,7 +371,11 @@
       "checkingName": "正在最终检查中审阅",
       "checkingAll": "检查其子项",
       "checkingAllName": "其子项正在最终检查中一并审阅",
-      "checkingHere": "检查此层级"
+      "checkingHere": "检查此层级",
+      "editing": "编辑中",
+      "editingName": "正在编辑 — 正在协调它所在的层级",
+      "fixing": "修复中",
+      "fixingName": "正在最终检查后修复"
     },
     "listWritingTitle": "尚无提案",
     "listWritingBody": "计划编写过程中，工作项会出现在这里。",
@@ -439,7 +443,9 @@
       "follow": "跟随撰写",
       "followHint": "让正在撰写的文字保持在视野内。滚动即可停止。",
       "thinking": "思考中",
-      "checking": "检查中"
+      "checking": "检查中",
+      "editing": "编辑中",
+      "fixing": "修复中"
     }
   },
   "projectAccess": {

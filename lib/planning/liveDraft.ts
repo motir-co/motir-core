@@ -200,20 +200,22 @@ export function nextLiveCue(
 
 /** What the quick view's cue line shows (Part XXXI §31.7, MOTIR-11254): the
  *  shipped three, plus THINKING (authored, nothing written yet) and CHECKING (the
- *  final check is reviewing the card). */
-export type CueLineState = LiveCueState | 'thinking' | 'checking';
+ *  final check is reviewing the card) — and, since MOTIR-11362, EDITING (the amend
+ *  is rewriting the card or its level) and FIXING (the fix after the final check
+ *  wrote the card). */
+export type CueLineState = LiveCueState | 'thinking' | 'editing' | 'checking' | 'fixing';
 
 /**
  * The cue line's state from the read's fold (`nextLiveCue`) and the planner's cue
- * on the card (`cueState.ts`, after its two-read hold): Checking first — the
- * latest stage — then Thinking while the writing cue has no text yet, then the
+ * on the card (`cueState.ts`, after its two-read hold): Checking, Editing or Fixing
+ * first — a later stage than writing — then Thinking while the writing cue has no text yet, then the
  * shipped state. Without a planner cue the line reads as it shipped.
  */
 export function cueLineState(
   state: LiveCueState,
   planner: CardCueState | null | undefined,
 ): CueLineState {
-  if (planner === 'checking') return 'checking';
+  if (planner === 'checking' || planner === 'editing' || planner === 'fixing') return planner;
   if (state === 'writing' && planner === 'thinking') return 'thinking';
   return state;
 }

@@ -371,7 +371,11 @@
       "checkingName": "Wordt gecontroleerd in de eindcontrole",
       "checkingAll": "Onderliggende items controleren",
       "checkingAllName": "De onderliggende items worden samen gecontroleerd in de eindcontrole",
-      "checkingHere": "Dit niveau controleren"
+      "checkingHere": "Dit niveau controleren",
+      "editing": "Wordt bewerkt",
+      "editingName": "Wordt bewerkt — het niveau wordt in lijn gebracht",
+      "fixing": "Wordt hersteld",
+      "fixingName": "Wordt hersteld na de eindcontrole"
     },
     "listWritingTitle": "Nog niets voorgesteld",
     "listWritingBody": "Items verschijnen hier terwijl het plan wordt geschreven.",
@@ -439,7 +443,9 @@
       "follow": "Het schrijven volgen",
       "followHint": "Houdt de tekst die wordt geschreven in beeld. Scroll om te stoppen.",
       "thinking": "Wordt overdacht",
-      "checking": "Wordt gecontroleerd"
+      "checking": "Wordt gecontroleerd",
+      "editing": "Wordt bewerkt",
+      "fixing": "Wordt hersteld"
     }
   },
   "projectAccess": {
