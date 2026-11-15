@@ -298,16 +298,24 @@ table with these rows. Every row not named here is unchanged.
     pass after the update settles.
   - The 30-minute roll of the interval DOES include `updating`, because the machine is running and
     charged.
-- **An agent left `updating`** (a process died mid-update) is settled by the sweep once its
-  `stateChangedAt` is over **10 minutes** old. The settle reads where the machine actually is:
+- **An update outlives the request, and its own job settles it** (amended by MOTIR-8954,
+  2026-11-15 — see _How an update is settled_ below). Update, and the wake that applies a pinned
+  update, answer at once with the agent `updating`, and hand the settle to the
+  `agent-instance/update-settle` job. Each pass of that job reads where the machine actually is:
   - **gone** → `failed`, `lost` (the row above);
-  - **on the target digest and not yet verified** → run Q3's liveness now, then `running` or a
-    rollback;
+  - **on the target digest and not yet verified** → once started, run Q3's liveness now, then
+    `running` or a rollback; not started within Q3's 5 minutes → the rollback begins;
   - **on the record's digest** → a rollback was under way: `running` with the reason once started,
     `failed` (Q4) if it does not start.
 
-  The settle is idempotent and guarded, like `settleBoot`, so the inline settle and the sweep cannot
-  both win.
+  While nothing can be decided yet (the new image is still pulling or starting), the pass defers
+  `AGENT_UPDATE_POLL_MS` (2 seconds), so the update lands within one poll of the machine allowing it.
+  **The sweep is the net under the job, not the normal path:** it settles an update only once its
+  `stateChangedAt` is over **10 minutes** old (`UPDATE_SWEEP_AFTER_MS`) — the job's event was lost,
+  its worker died, or the provider could not be read for the whole window — and the job stops
+  deferring at that same mark. The settle is idempotent and guarded, like `settleBoot`, so the job
+  and the sweep cannot both win: the move out of `updating` is one compare-and-set, and a rollback is
+  recorded only while no failure is recorded yet, so it moves the machine back once.
 
 - **Hibernate and Delete refuse an `updating` agent** with the existing state-conflict words. The
   owner waits for it to settle, which takes minutes at most.
@@ -333,6 +341,34 @@ The settle reads the machine to tell which (above).
 - None of them can say "rolling back".
 - The run start's refusal, and Hibernate's and Delete's, would each have to tell an update's
   `waking` from an ordinary one by reading other fields. That is a state the table no longer names.
+
+#### How an update is settled — AMENDMENT (MOTIR-8954, 2026-11-15)
+
+**What this record said.** _"An agent left `updating` (a process died mid-update) is settled by the
+sweep once its `stateChangedAt` is over 10 minutes old."_ The premise was that the request's own
+20-second inline settle (`INSTANCE_INLINE_UPDATE_WAIT_MS`) finishes an ordinary update and the
+sweep only catches a dead process.
+
+**What production showed (MOTIR-6956, 2026-10-18).** A real update's machine was `started` 29 s
+after the press. The inline wait had given up at 20 s, the sweep skips an update younger than ten
+minutes, and so the record sat `updating` for 10 minutes with nothing left to wait for — Hibernate
+and Delete refused, the idle timer off, the panel saying "updating" on an agent already on the new
+version. Pulling a new image takes longer than 20 s as a rule, so the fallback was the normal path,
+with a worst case near 15 minutes.
+
+**Decided.** The update takes the shape create and wake already took in
+[`agent-instances.md`](agent-instances.md) AMENDMENT 6: the request answers at once and a job owns
+the wait. `INSTANCE_INLINE_UPDATE_WAIT_MS` is removed; the Q6 bullet above says how the job and the
+sweep share an update. The deadlines are unchanged: Q3's 5-minute start deadline still begins the
+rollback, and Q4's 5-minute rollback deadline still fails the agent.
+
+**Rejected: keeping the request's 20-second wait and only settling in the sweep sooner** (every
+pass once 20 s have passed). It still leaves an ordinary update `updating` for up to one sweep
+pass — five minutes — and keeps an HTTP request open for 20 seconds that a job can wait out instead.
+
+**What the owner sees.** The Update dialog closes at once on an agent in `updating`; the page
+already polls an agent in motion (`AGENT_STATES_IN_MOTION`) and shows it running on the new version
+within a couple of seconds of its liveness check passing.
 
 ### Q7 · Slot, interval and credits — a running update keeps all three, and runs no admission
 

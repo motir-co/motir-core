@@ -3,6 +3,7 @@ import type { AgentInstance } from '@/generated/prisma/client';
 import {
   INSTANCE_IDLE_WINDOW_MS,
   INSTANCE_INTERVAL_BACKSTOP_MS,
+  UPDATE_SWEEP_AFTER_MS,
 } from '@/lib/agentInstances/config';
 import { AgentInstanceRunActiveError } from '@/lib/agentInstances/errors';
 import { checkAgentRunCredits } from '@/lib/ai/motirAiClient';
@@ -65,9 +66,6 @@ const ORPHAN_MIN_AGE_MS = 15 * 60 * 1000;
 
 /** How many rows one pass reads per state — a sweep is bounded, the next one continues. */
 const SWEEP_BATCH = 200;
-
-/** `agent-image-update.md` Q6: the sweep settles an update left in motion this long. */
-export const UPDATE_SWEEP_AFTER_MS = 10 * 60_000;
 
 export interface AgentInstanceSweepSummary {
   settled: number;
@@ -234,8 +232,9 @@ export const agentInstanceSweepService = {
       }
       const sweepNow = agentInstanceClock.now().getTime();
       for (const row of moving) {
-        // `agent-image-update.md` Q6: an update is the inline settle's while it is
-        // fresh; the sweep takes one left `updating` longer than ten minutes.
+        // `agent-image-update.md` Q6 (MOTIR-8954): an update is its DRIVER's
+        // (`agent-instance/update-settle`) for the driver's window; the sweep
+        // takes one left `updating` past it — a driver lost or out of window.
         if (
           row.state === 'updating' &&
           sweepNow - row.stateChangedAt.getTime() < UPDATE_SWEEP_AFTER_MS

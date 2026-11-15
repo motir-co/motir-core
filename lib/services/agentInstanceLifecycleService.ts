@@ -16,15 +16,16 @@ import {
   type PersistentContainerStatus,
 } from '@motir/orchestrator';
 import {
+  AGENT_UPDATE_POLL_MS,
   CLONE_EXEC_TIMEOUT_SECONDS,
   INSTANCE_BOOT_DEADLINE_MS,
   INSTANCE_BOOT_EXIT_GRACE_MS,
   INSTANCE_HOME_PATH,
-  INSTANCE_INLINE_UPDATE_WAIT_MS,
   INSTANCE_INLINE_STOP_WAIT_MS,
   INSTANCE_NAME_PATTERN,
   INSTANCE_SLOT_TTL_SECONDS,
   INSTANCE_VOLUME_SIZE_GB,
+  UPDATE_SWEEP_AFTER_MS,
   isUnlimitedAgentOrg,
   parseWaitingReason,
 } from '@/lib/agentInstances/config';
@@ -1026,6 +1027,33 @@ async function handOverWaitingBoot(
 }
 
 /**
+ * The idempotency key of one update's driver (MOTIR-8954): the agent and the
+ * instant it entered `updating`. A second send for the SAME update is swallowed;
+ * the next update enters `updating` at a later instant and gets its own driver.
+ */
+export function agentUpdateEventKey(instanceId: string, enteredUpdatingAt: Date): string {
+  return `agent-instance-update:${instanceId}:${enteredUpdatingAt.toISOString()}`;
+}
+
+/**
+ * Hand an update's settle to its driver (`agent-image-update.md` Q6,
+ * MOTIR-8954): the `agent-instance/update-settle` event, sent AFTER the move's
+ * transaction committed and the machine was asked to move, so the request
+ * answers at once with the agent `updating`. A lost send leaves the update to
+ * the sweep, past {@link UPDATE_SWEEP_AFTER_MS}.
+ */
+async function handOverUpdate(row: AgentInstance): Promise<void> {
+  const fresh = await reload(row);
+  // A settle that already landed (or a delete) has nothing left to drive.
+  if (fresh.state !== 'updating') return;
+  await sendEvent('agent-instance/update-settle', {
+    workspaceId: fresh.workspaceId,
+    instanceId: fresh.id,
+    idempotencyKey: agentUpdateEventKey(fresh.id, fresh.stateChangedAt),
+  });
+}
+
+/**
  * CREATE A NEW INSTANCE'S MACHINE (MOTIR-9472, MOTIR-9474) — the create's
  * provider call after commit, and the waiting boot's retry of it. Placement reads
  * the agent hoster's switch, once: Fly is today's path; an AWS account records
@@ -1218,12 +1246,16 @@ async function beginRollback(row: AgentInstance, detail: string): Promise<void> 
   const reason =
     `The update to ${row.targetImageVersion ?? 'the newer version'} didn’t work: ${detail}. ` +
     `Your agent is back on ${versionWords(row.imageVersion)}.`;
+  // Recorded ONCE (MOTIR-8954): guarded on no failure recorded yet, so of two
+  // settles that both found the new image failing — the driver and the sweep —
+  // only one begins the rollback and moves the machine back.
   const recorded = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
     agentInstanceRepository.patchImage(
       row.id,
       ['updating'],
       { updateFailureReason: reason, updateFailedAt: agentInstanceClock.now() },
       tx,
+      { noUpdateFailure: true },
     ),
   );
   if (recorded !== 1) return;
@@ -1627,10 +1659,9 @@ export const agentInstanceLifecycleService = {
       return await toDtoWithImage(await reload(row));
     }
     if (target) {
-      await waitFor(
-        INSTANCE_INLINE_UPDATE_WAIT_MS,
-        async () => (await this.settleUpdate(instanceId)) !== 'pending',
-      );
+      // Q6 (MOTIR-8954): the update's settle is its driver's from here; the
+      // answer is `updating`, exactly as a plain wake answers `waking`.
+      await handOverUpdate(row);
     } else {
       // AMENDMENT 6 §5: the boot is the driver's from here; the answer is `waking`.
       await handOverBoot(row, boot);
@@ -2011,16 +2042,46 @@ export const agentInstanceLifecycleService = {
         );
       }
     }
-    await waitFor(
-      INSTANCE_INLINE_UPDATE_WAIT_MS,
-      async () => (await this.settleUpdate(instanceId)) !== 'pending',
-    );
+    // Q6 (MOTIR-8954): answer at `updating` and let the driver settle it — the
+    // new image may take far longer to pull and start than a request should wait.
+    await handOverUpdate(fresh);
     return await toDtoWithImage(await reload(row));
   },
 
   /**
-   * SETTLE AN UPDATE (`updating`), idempotently — inline after Update and the
-   * wake that applies one, and by the sweep for one left in motion (Q6). It
+   * ONE PASS OF THE UPDATE DRIVER (`agent-instance/update-settle`, Q6,
+   * MOTIR-8954): settle the update, and say whether the job should come back.
+   *
+   * - settled (`running` / `failed`) or nothing to settle (`noop`) → `done`;
+   * - still `pending` → `defer` for {@link AGENT_UPDATE_POLL_MS};
+   * - still `pending` past {@link UPDATE_SWEEP_AFTER_MS} since the agent entered
+   *   `updating` → `done` as `swept`: the driver's window is over and the sweep,
+   *   which takes exactly such an update, settles it from here.
+   *
+   * Reads nothing it remembers: every pass starts from the agent row and its machine.
+   */
+  async driveUpdate(
+    instanceId: string,
+  ): Promise<
+    | { next: 'done'; result: 'running' | 'failed' | 'noop' | 'swept' }
+    | { next: 'defer'; result: 'pending'; deferUntil: Date }
+  > {
+    const result = await this.settleUpdate(instanceId);
+    if (result !== 'pending') return { next: 'done', result };
+    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
+    const now = agentInstanceClock.now().getTime();
+    /* v8 ignore next -- `pending` is answered only for a live `updating` row. */
+    if (!row) return { next: 'done', result: 'noop' };
+    if (now - row.stateChangedAt.getTime() >= UPDATE_SWEEP_AFTER_MS) {
+      return { next: 'done', result: 'swept' };
+    }
+    return { next: 'defer', result: 'pending', deferUntil: new Date(now + AGENT_UPDATE_POLL_MS) };
+  },
+
+  /**
+   * SETTLE AN UPDATE (`updating`), idempotently — by the update's driver after
+   * Update and the wake that applies one, and by the sweep for one the driver
+   * left (Q6). It
    * reads WHERE THE MACHINE IS rather than remembering what it did:
    *
    * - gone / failed → `failed`, the interval closed `lost`;

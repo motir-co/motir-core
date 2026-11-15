@@ -48,13 +48,25 @@ export const INSTANCE_STORAGE_CREDITS_PER_DAY = 10;
 export const AGENT_LIST_LIMIT = 100;
 
 /**
- * How long an UPDATE (and a wake that applies a pinned one) waits in the REQUEST
- * for its liveness settle before leaving the rest to the sweep
- * (`agent-image-update.md` Q6). A create or wake no longer waits at all: it
- * answers at `starting` / `waking` and the boot driver takes it from there
- * (`agent-instances.md` AMENDMENT 6 §5).
+ * THE UPDATE DRIVER'S POLL (`agent-image-update.md` Q6, MOTIR-8954): an Update,
+ * and a wake that applies a pinned one, answers at `updating` and hands the
+ * settle to the `agent-instance/update-settle` job, which re-reads the machine
+ * this often while the settle is pending — so an update lands within two seconds
+ * of its liveness passing, however long the new image takes to pull and start.
  */
-export const INSTANCE_INLINE_UPDATE_WAIT_MS = 20_000;
+export const AGENT_UPDATE_POLL_MS = 2_000;
+
+/**
+ * THE UPDATE DRIVER'S WINDOW, and the moment the SWEEP takes an update over
+ * (`agent-image-update.md` Q6). The driver keeps deferring while the settle is
+ * pending for at most this long after the agent entered `updating` — the start
+ * deadline plus the rollback deadline (5 + 5 minutes), by which every settle
+ * has decided unless the provider could not be read. The sweep settles only an
+ * update older than this: one whose driver was lost (its event never enqueued,
+ * its worker died) or ran out of window. So the two meet at one instant and do
+ * not overlap in the ordinary case; where they do, the guarded settle lets one win.
+ */
+export const UPDATE_SWEEP_AFTER_MS = 10 * 60_000;
 
 /**
  * THE BOOT DEADLINE (MOTIR-7336): a create or wake that has not reported running

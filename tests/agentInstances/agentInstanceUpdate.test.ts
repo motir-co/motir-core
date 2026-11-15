@@ -410,8 +410,8 @@ describe('real concurrency — every move is a guarded compare-and-set', () => {
   });
 });
 
-describe('the sweep resolves an agent left mid-update (Q6)', () => {
-  it('a machine that came up on the new image after the inline wait: liveness, then running on it', async () => {
+describe('the sweep resolves an agent its update driver left (Q6, MOTIR-8954)', () => {
+  it('a machine that came up on the new image after the driver’s window: liveness, then running on it', async () => {
     const a = await agent();
     imageCatalogSeam.setFakeNewest('claude', NEW);
     fleet.setBootBehaviour('never_start');
@@ -419,7 +419,8 @@ describe('the sweep resolves an agent left mid-update (Q6)', () => {
     expect(dto.state).toBe('updating');
     fleet.completeBoot(a.machineId!);
 
-    // Fresh: the inline settle's, not the sweep's.
+    // Fresh: the update driver's, not the sweep's (the in-process driver gave up
+    // after its 20 s window here, as a lost job would).
     await sweeper.sweep();
     expect((await row(a.id)).state).toBe('updating');
 
