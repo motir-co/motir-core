@@ -312,4 +312,26 @@ describe('the sweep and the driver racing one update (AC3)', () => {
     expect(rolling.updateFailureReason).toContain('did not start within 5 minutes');
     expect(fleet.machineImage(a.machineId!)).toBe(ref(BASE_DIGEST));
   });
+
+  it('a settle that read the row before a racing settle began the rollback does not fail the agent', async () => {
+    const a = await slowUpdate();
+    await lifecycle.update(fx.projectIdentifier, a.id, fx.ctx);
+    clock.advance(UPDATE_SWEEP_AFTER_MS);
+    // The stale pass reads the row, then — before it reads the machine — the
+    // racing pass records the failure and moves the machine back. Without the
+    // re-read, the stale pass saw the record's digest past the rollback deadline
+    // (measured from its stale `updating` entry) and failed the agent.
+    const real = fleet.describePersistent.bind(fleet);
+    vi.spyOn(fleet, 'describePersistent').mockImplementationOnce(async (handle) => {
+      expect(await lifecycle.settleUpdate(a.id)).toBe('pending');
+      return real(handle);
+    });
+
+    expect(await lifecycle.settleUpdate(a.id)).toBe('pending');
+
+    const rolling = await row(a.id);
+    expect(rolling.state).toBe('updating');
+    expect(rolling.updateFailureReason).toContain('did not start within 5 minutes');
+    expect(fleet.operations.filter((o) => o.startsWith('machine:move:'))).toHaveLength(2);
+  });
 });

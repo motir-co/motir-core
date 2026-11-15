@@ -2197,6 +2197,16 @@ export const agentInstanceLifecycleService = {
       }
       return 'pending';
     }
+    // A racing settle may have begun the rollback after this pass read the row
+    // (MOTIR-8954): it records the failure BEFORE it moves the machine back, so a
+    // machine found on the record's digest with a failure this row does not show
+    // is that rollback in flight — its deadline runs from the fresh record.
+    if (!rollingBack) {
+      const fresh = await reload(row);
+      /* v8 ignore next -- a racing settle that already ended the update. */
+      if (fresh.state !== 'updating') return 'noop';
+      if (fresh.updateFailedAt !== null) return 'pending';
+    }
     await failInstance(
       row,
       `The update to ${row.targetImageVersion ?? 'the newer version'} didn’t work, and your agent ` +
