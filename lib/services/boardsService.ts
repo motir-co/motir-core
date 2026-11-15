@@ -12,7 +12,10 @@ import { boardRepository } from '@/lib/repositories/boardRepository';
 import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';
 import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatusRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  workItemRepository,
+  type StoredFilterPredicate,
+} from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -21,6 +24,10 @@ import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsS
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import {
+  resolveStoredBoardFilter,
+  type ResolvedStoredBoardFilter,
+} from '@/lib/services/boardStoredFilter';
 import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/registry';
 import {
   decodeFilterEnvelope,
@@ -335,6 +342,7 @@ export const boardsService = {
         unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
         sprint: null,
         planHolds: {},
+        storedFilter: frame.storedFilter?.dto ?? null,
       };
     }
 
@@ -367,6 +375,7 @@ export const boardsService = {
       frame.boardFilter,
       frame.excludeIds,
       !frame.member,
+      frame.storedFilter?.predicate,
     );
 
     // The active-sprint summary that drives the 4.5.3 sprint header (Subtask
@@ -381,6 +390,7 @@ export const boardsService = {
         built.map((b) => ({ id: b.col.id, statusKeys: b.statusKeys })),
         readCtx,
         frame.excludeIds,
+        frame.storedFilter?.predicate,
       );
       sprint = toSprintSummaryDto(frame.activeSprint, points, columnPoints, new Date());
     }
@@ -404,6 +414,7 @@ export const boardsService = {
       unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
       sprint,
       planHolds: decorated.planHolds,
+      storedFilter: frame.storedFilter?.dto ?? null,
     };
   },
 
@@ -1617,6 +1628,10 @@ type BoardFrame = {
   readCtx: { workspaceId: string; userId: string | null };
   board: Board;
   boardFilter: ResolvedBoardFilter | undefined;
+  /** The board's OWN stored filter (MOTIR-10560) — the same for every reader,
+   *  ANDed beside `boardFilter` in every card read; `undefined` when the board
+   *  has none. */
+  storedFilter: ResolvedStoredBoardFilter | undefined;
   columns: BoardColumn[];
   liveByColumn: Map<string, WorkflowStatusDto[]>;
   mappedStatusIds: Set<string>;
@@ -1675,6 +1690,10 @@ async function loadBoardFrame(
     : filter && !filter.savedFilterId
       ? await resolveBoardFilter(projectId, filter, readCtx)
       : undefined;
+  // The board's OWN stored filter (MOTIR-10560): part of the board, not of the
+  // reader, so a member and a Visitor read it alike. Never throws — a stale or
+  // unreadable condition narrows the board instead of breaking it.
+  const storedFilter = await resolveStoredBoardFilter(projectId, readCtx.workspaceId, board.filter);
 
   // The board's own two reads share ONE bound transaction; the workflow LIST is
   // a service call and opens its own (the call-into-another-service clause in
@@ -1721,6 +1740,7 @@ async function loadBoardFrame(
     readCtx,
     board,
     boardFilter,
+    storedFilter,
     columns,
     liveByColumn,
     mappedStatusIds,
@@ -1767,6 +1787,7 @@ async function buildColumnPage(
   const { workspaceId } = frame.readCtx;
   const sprintId = frame.activeSprint?.id;
   const filter = frame.boardFilter;
+  const stored = frame.storedFilter?.predicate;
   const excludeIds = frame.excludeIds;
   // The lane's cards and its own denominator, in ONE bound transaction: two
   // reads of the same predicate rendered as one column header, so a write
@@ -1779,6 +1800,7 @@ async function buildColumnPage(
         statuses: statusKeys,
         ...(sprintId ? { sprintId } : {}),
         ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+        ...(stored ? { storedFilter: stored } : {}),
         ...(excludeIds ? { excludeIds } : {}),
       },
       tx,
@@ -1793,6 +1815,7 @@ async function buildColumnPage(
         ...(after ? { after } : {}),
         sprintId,
         ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
+        ...(stored ? { storedFilter: stored } : {}),
         ...(excludeIds ? { excludeIds } : {}),
       },
       tx,
@@ -1987,6 +2010,9 @@ async function buildSwimlanes(
   excludeIds?: readonly string[],
   // A Visitor's lanes name people by display name only (MOTIR-6646).
   nameOnly = false,
+  // The board's stored filter (MOTIR-10560) — the lanes AND the "No epic"
+  // total count the same stored-filtered set the columns show.
+  storedFilter?: StoredFilterPredicate,
 ): Promise<BoardSwimlaneDto[]> {
   if (groupBy === 'none' || statusKeys.length === 0) return [];
 
@@ -1995,9 +2021,10 @@ async function buildSwimlanes(
   // (a lane whose cards all fail the filter disappears). `undefined` → the
   // byte-for-byte unfiltered 3.3.4 aggregate.
   const laneFilter =
-    filter || excludeIds
+    filter || excludeIds || storedFilter
       ? {
           ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
+          ...(storedFilter ? { storedFilter } : {}),
           ...(excludeIds ? { excludeIds } : {}),
         }
       : undefined;
@@ -2109,8 +2136,10 @@ async function buildSwimlanes(
         // The "No epic" catch-all is DERIVED (filtered total − Σ epic-lane counts),
         // so this denominator must use the SAME predicate as the epic aggregate:
         // the 6.15.2 filter AND a Visitor's hidden set (MOTIR-11325), or a
-        // private epic's descendants land in the catch-all.
+        // private epic's descendants land in the catch-all. The board's stored
+        // filter (MOTIR-10560) likewise.
         ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+        ...(storedFilter ? { storedFilter } : {}),
         ...(excludeIds ? { excludeIds } : {}),
       },
       tx,

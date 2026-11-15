@@ -3,6 +3,7 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { publicAddressesService } from '@/lib/services/publicAddressesService';
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { resolveStoredBoardFilter } from '@/lib/services/boardStoredFilter';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { publicRequestVoteRepository } from '@/lib/repositories/publicRequestVoteRepository';
@@ -607,6 +608,12 @@ export const publicProjectsService = {
       return { boardId: '', name: '', columns: [], cap: PUBLIC_BOARD_CAP, truncated: false };
     }
     const { board, columns, mappings, statuses } = loaded;
+    // The default board's OWN stored filter (MOTIR-10560): the preview shows the
+    // same cards and counts the board does, with the same never-throwing
+    // resolution (a stale condition matches nothing, an unreadable filter
+    // narrows the board to nothing). `undefined` ⇒ today's reads exactly.
+    const storedFilter = (await resolveStoredBoardFilter(projectId, workspaceId, board.filter))
+      ?.predicate;
 
     const statusById = new Map(statuses.map((s) => [s.id, s]));
     const categoryByKey = new Map(statuses.map((s) => [s.key, s.category]));
@@ -649,11 +656,16 @@ export const publicProjectsService = {
             workspaceId,
             statusKeys,
             terminal ? 'recent' : 'position',
-            { limit: PUBLIC_BOARD_CAP, excludeIds: hiddenIds },
+            {
+              limit: PUBLIC_BOARD_CAP,
+              excludeIds: hiddenIds,
+              ...(storedFilter ? { storedFilter } : {}),
+            },
           ),
           workItemRepository.countProjectIssues(projectId, workspaceId, {
             statuses: statusKeys,
             excludeIds: hiddenIds,
+            ...(storedFilter ? { storedFilter } : {}),
           }),
         ]);
         boardTotal += totalCount;

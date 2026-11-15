@@ -111,6 +111,7 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
     unmappedStatuses: [],
     sprint: null,
     planHolds: {},
+    storedFilter: null,
     columns: [column({ id: 'c1', name: 'To Do' }), column({ id: 'c2', name: 'In Progress' })],
     ...over,
   };

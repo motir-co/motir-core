@@ -98,6 +98,7 @@ const projection: BoardProjectionDto = {
   unmappedStatuses: [],
   sprint: null,
   planHolds: {},
+  storedFilter: null,
   columns: [
     column({
       id: 'c1',

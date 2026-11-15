@@ -456,6 +456,44 @@ export interface BoardProjectionDto {
    * when no loaded card is held.
    */
   planHolds: Record<string, BoardPlanHoldSummaryDto>;
+  /**
+   * The board's OWN stored filter (MOTIR-10560), applied to every column,
+   * count, lane page, swimlane and sprint point above, ANDed with the toolbar
+   * filter. `null` when the board has none, so it shows its whole scope (the
+   * project, or the active sprint on a scrum board).
+   */
+  storedFilter: StoredBoardFilterDto | null;
+}
+
+/**
+ * Why a stored-filter condition matches nothing (MOTIR-10560): its custom
+ * field is gone (`unknown-field`), a label / component / folder / option it
+ * names is gone (`unknown-value`), or the condition — or, with `index: null`,
+ * the whole stored envelope — no longer reads or validates (`invalid`).
+ */
+export type StoredFilterStaleReason = 'unknown-field' | 'unknown-value' | 'invalid';
+
+/** One stored-filter condition that matches nothing (MOTIR-10560). */
+export interface StoredFilterStaleConditionDto {
+  /** The condition's 0-based position in `envelope.f`; `null` only when the
+   * stored envelope itself cannot be read. */
+  index: number | null;
+  /** The condition's field id (`lbl`, `cmp`, `cf:<id>`, …); `null` with `index`. */
+  field: string | null;
+  reason: StoredFilterStaleReason;
+}
+
+/**
+ * A board's stored filter as the board read reports it (MOTIR-10560): the
+ * stored v1 envelope, plus every condition that matches nothing. A stale
+ * condition never fails the read — the board loads, and that condition
+ * matches no card. An envelope that no longer reads narrows the board to
+ * nothing (never to everything) and is reported as one `invalid` entry.
+ */
+export interface StoredBoardFilterDto {
+  /** The stored `{ v, c, f }` envelope as read; `null` when it cannot be read. */
+  envelope: FilterEnvelope | null;
+  staleConditions: StoredFilterStaleConditionDto[];
 }
 
 /**
