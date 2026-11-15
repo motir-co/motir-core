@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   CornerDownRight,
   GitMerge,
@@ -28,6 +28,7 @@ import {
   openSteps,
 } from '@/components/planning/planCallLines';
 import { nextHeadAnnouncement, type NarrationHeadLine } from '@/components/planning/planNarration';
+import { factLine } from '@/lib/planning/progressFacts';
 
 type Tc = ReturnType<typeof useTranslations>;
 
@@ -48,6 +49,9 @@ const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
   checking: SearchCheck,
   repairing: Wrench,
   note: MessageSquareText,
+  // MOTIR-11296: a code-written line keeps the row it had as a `note` frame before
+  // its words moved to the catalogue — only its text changed, into the reader's language.
+  fact: MessageSquareText,
   proposed: Sparkles,
   validating: ShieldCheck,
 };
@@ -59,12 +63,14 @@ function ActGlyph({ act }: { act: PlanChangeProgress }) {
 
 /** The mono LABEL column's catalog key. */
 function actLabelKey(act: PlanChangeProgress): string {
-  return `act.${act.kind}`;
+  // A code-written fact keeps the `note` label it had as a `note` frame (MOTIR-11296).
+  return act.kind === 'fact' ? 'act.note' : `act.${act.kind}`;
 }
 
 /** The line one act reads as. Every string is a catalog key; the only values
- *  interpolated are the frame's own data. */
-export function actLine(act: PlanChangeProgress, tc: Tc): string {
+ *  interpolated are the frame's own data. `locale` joins a list the way the
+ *  reader's language does. */
+export function actLine(act: PlanChangeProgress, tc: Tc, locale: string): string {
   switch (act.kind) {
     case 'laying':
       return tc('act.layingLine', { target: act.target ?? '' });
@@ -83,6 +89,11 @@ export function actLine(act: PlanChangeProgress, tc: Tc): string {
     // and there is nothing to translate.
     case 'note':
       return act.text;
+    // MOTIR-11296: a line motir-ai's code reported as a fact, worded from the
+    // catalogue in the reader's locale. Titles, summaries and repository names are
+    // the frame's own data and are never translated.
+    case 'fact':
+      return factLine(act.fact, tc, locale);
     case 'proposed':
       return tc('progress.proposed', { count: act.count });
     default:
@@ -92,9 +103,13 @@ export function actLine(act: PlanChangeProgress, tc: Tc): string {
 
 /** The text the running bar repeats while a run streams: the newest act the
  *  record draws, or null when there is none. */
-export function runningBarLine(acts: readonly PlanChangeProgress[], tc: Tc): string | null {
+export function runningBarLine(
+  acts: readonly PlanChangeProgress[],
+  tc: Tc,
+  locale: string,
+): string | null {
   const last = acts[acts.length - 1];
-  return last ? actLine(last, tc) : null;
+  return last ? actLine(last, tc, locale) : null;
 }
 
 /**
@@ -146,8 +161,9 @@ export function PlanActRecord({
   autoResume?: { count: number } | null;
 }) {
   const tc = useTranslations('planningWorkspace.conversation');
+  const locale = useLocale();
   const acts = allActs;
-  const said = useAnnouncer(acts, heads, tc);
+  const said = useAnnouncer(acts, heads, tc, locale);
   const open = openSteps(acts, streaming);
   const lastIndex = acts.length - 1;
   // The newest act that is not a step (a note, a lookup row, a debug turn's
@@ -179,7 +195,9 @@ export function PlanActRecord({
             const live =
               streaming &&
               (isStep(act) ? open.has(index) && index > lastPlainRow : index === lastIndex);
-            return <ActRow key={`${act.kind}-${index}`} act={act} live={live} tc={tc} />;
+            return (
+              <ActRow key={`${act.kind}-${index}`} act={act} live={live} tc={tc} locale={locale} />
+            );
           })}
         </ol>
       ) : null}
@@ -208,7 +226,17 @@ function ResumedRow({ second, tc }: { second: boolean; tc: Tc }) {
   );
 }
 
-function ActRow({ act, live, tc }: { act: PlanChangeProgress; live: boolean; tc: Tc }) {
+function ActRow({
+  act,
+  live,
+  tc,
+  locale,
+}: {
+  act: PlanChangeProgress;
+  live: boolean;
+  tc: Tc;
+  locale: string;
+}) {
   return (
     <li
       data-testid={`plan-change-act-${act.kind}`}
@@ -226,7 +254,7 @@ function ActRow({ act, live, tc }: { act: PlanChangeProgress; live: boolean; tc:
       <span className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {tc(actLabelKey(act))}
       </span>
-      <span className="min-w-0 flex-1">{actLine(act, tc)}</span>
+      <span className="min-w-0 flex-1">{actLine(act, tc, locale)}</span>
     </li>
   );
 }
@@ -241,10 +269,11 @@ function useAnnouncer(
   acts: readonly PlanChangeProgress[],
   heads: readonly NarrationHeadLine[],
   tc: Tc,
+  locale: string,
 ): string {
   const [said, setSaid] = useState(() => {
     const index = latestRowAnnouncement(acts);
-    return { acts, heads, text: index === null ? '' : actLine(acts[index]!, tc) };
+    return { acts, heads, text: index === null ? '' : actLine(acts[index]!, tc, locale) };
   });
   const actsChanged =
     said.acts.length !== acts.length || said.acts.some((act, i) => act !== acts[i]);
@@ -255,7 +284,7 @@ function useAnnouncer(
     const row = actsChanged ? nextAnnouncement(said.acts, acts) : null;
     const head = headsChanged ? nextHeadAnnouncement(said.heads, heads) : null;
     let text = continuesRecord(said.acts, acts) ? said.text : '';
-    if (row !== null) text = actLine(acts[row]!, tc);
+    if (row !== null) text = actLine(acts[row]!, tc, locale);
     if (head !== null) {
       text = head.finished ? tc('narration.groupFinished', { step: head.line }) : head.line;
     }

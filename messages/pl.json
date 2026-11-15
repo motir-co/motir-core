@@ -8853,6 +8853,55 @@
         "checkingCardLine": "Sprawdzanie: {title}",
         "repairingLine": "Poprawianie tego, co wykazało końcowe sprawdzenie"
       },
+      "fact": {
+        "unknown": "Trwa praca nad planem…",
+        "claimCheck": {
+          "started": "{count, plural, one {Sprawdzanie odwołań do kodu w # elemencie} few {Sprawdzanie odwołań do kodu w # elementach} many {Sprawdzanie odwołań do kodu w # elementach} other {Sprawdzanie odwołań do kodu w # elementach}}",
+          "held": "Odwołania do kodu we wszystkich elementach są poprawne",
+          "sentBack": "{count, plural, one {Odwołania do kodu w # elemencie są niepoprawne; wraca do ponownego napisania} few {Odwołania do kodu w # elementach są niepoprawne; wracają do ponownego napisania} many {Odwołania do kodu w # elementach są niepoprawne; wracają do ponownego napisania} other {Odwołania do kodu w # elementach są niepoprawne; wracają do ponownego napisania}}",
+          "settleStarted": "{count, plural, one {Ponowne sprawdzanie odwołań do kodu w # elemencie względem całego planu} few {Ponowne sprawdzanie odwołań do kodu w # elementach względem całego planu} many {Ponowne sprawdzanie odwołań do kodu w # elementach względem całego planu} other {Ponowne sprawdzanie odwołań do kodu w # elementach względem całego planu}}",
+          "settleHeld": "Odwołania do kodu we wszystkich elementach są poprawne względem całego planu",
+          "settleUnresolved": "{count, plural, one {Odwołania do kodu w # elemencie nadal są niepoprawne; zostaje zgłoszony w planie} few {Odwołania do kodu w # elementach nadal są niepoprawne; zostają zgłoszone w planie} many {Odwołania do kodu w # elementach nadal są niepoprawne; zostają zgłoszone w planie} other {Odwołania do kodu w # elementach nadal są niepoprawne; zostają zgłoszone w planie}}"
+        },
+        "dryRun": {
+          "started": "Rozpoczynanie końcowego sprawdzenia planu",
+          "skippedNoTenant": "Pominięto końcowe sprawdzenie planu: nie ma projektu, względem którego można go sprawdzić",
+          "skippedNoPlanId": "Pominięto końcowe sprawdzenie planu: nie zapisano planu do sprawdzenia",
+          "skippedQuestion": "Pominięto końcowe sprawdzenie planu, dopóki pytanie czeka na odpowiedź",
+          "skippedUserStop": "Pominięto końcowe sprawdzenie planu, ponieważ planowanie zostało zatrzymane",
+          "skippedTurnedOff": "Pominięto końcowe sprawdzenie planu: jest wyłączone dla tego projektu",
+          "skippedNoContainers": "Pominięto końcowe sprawdzenie planu: żadna historia, zadanie ani błąd nie były gotowe do sprawdzenia",
+          "skippedByPerson": "Końcowe sprawdzenie planu zakończono wcześniej, ponieważ zostało pominięte: nic z tego, co znalazło, nie zostało poprawione",
+          "selectionFailed": "Końcowe sprawdzenie planu nie zostało ukończone: nie udało się odczytać jego elementów",
+          "checking": "Sprawdzanie „{title}”",
+          "notFinished": "Nie udało się dokończyć sprawdzania „{title}”",
+          "containerClean": "Nie znaleziono problemów w „{title}”",
+          "containerFound": "{count, plural, one {Znaleziono # problem w „{title}”} few {Znaleziono # problemy w „{title}”} many {Znaleziono # problemów w „{title}”} other {Znaleziono # problemy w „{title}”}}",
+          "finding": "Problem: {summary}"
+        },
+        "repair": {
+          "started": "Poprawianie znalezionych problemów…",
+          "retrying": "Poprawki zatrzymały się w połowie, ponowna próba…",
+          "failed": "Poprawki nie zostały ukończone",
+          "findingFixed": "Poprawiono: {summary}",
+          "notFixedOpenWhat": "Nie poprawiono: {summary} (potrzebna jest decyzja, co element ma robić)",
+          "notFixedWholeWhatDisproved": "Nie poprawiono: {summary} (kod pokazuje, że cel elementu się nie sprawdza)",
+          "notFixedExtensionContradicted": "Nie poprawiono: {summary} (kod przeczy temu, na czym opiera się element)",
+          "notFixedCommittedInProgress": "Nie poprawiono: {summary} (nad elementem już trwa praca)",
+          "notFixedSizing": "Nie poprawiono: {summary} (dotyczy rozmiaru pracy)",
+          "notFixedFixFailed": "Nie poprawiono: {summary} (nie udało się wprowadzić poprawki)",
+          "notFixedSkipped": "Nie poprawiono: {summary} (końcowe sprawdzenie pominięto przed poprawką)"
+        },
+        "reopen": {
+          "started": "Ponowne sprawdzanie powiązań i kolejności planu",
+          "startedAgain": "Jeszcze jedno sprawdzenie powiązań i kolejności planu",
+          "cardRemoved": "Usunięto „{title}”",
+          "cardAdded": "Dodano „{title}”"
+        },
+        "codeGraph": {
+          "refreshed": "{count, plural, one {Graf kodu dla {repos} został odświeżony od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzedniego grafu.} few {Grafy kodu dla {repos} zostały odświeżone od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzednich grafów.} many {Grafy kodu dla {repos} zostały odświeżone od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzednich grafów.} other {Grafy kodu dla {repos} zostały odświeżone od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzednich grafów.}}"
+        }
+      },
       "openerFollowUp": "Wybrano właśnie {label}. Motir AI planuje to, co ten wybór blokuje.",
       "composerPlaceholderGuide": "Powiedz Motir AI, jak poszedł ten krok…",
       "narration": {

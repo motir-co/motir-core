@@ -8844,6 +8844,55 @@
         "checkingCardLine": "正在检查 {title}",
         "repairingLine": "正在修复最终检查发现的内容"
       },
+      "fact": {
+        "unknown": "正在处理计划…",
+        "claimCheck": {
+          "started": "{count, plural, other {正在检查 # 个工作项的代码引用}}",
+          "held": "所有工作项的代码引用均成立",
+          "sentBack": "{count, plural, other {# 个工作项的代码引用不成立，正在退回重写}}",
+          "settleStarted": "{count, plural, other {正在对照整个计划再次检查 # 个工作项的代码引用}}",
+          "settleHeld": "对照整个计划，所有工作项的代码引用均成立",
+          "settleUnresolved": "{count, plural, other {# 个工作项的代码引用仍不成立，已在计划中报告}}"
+        },
+        "dryRun": {
+          "started": "正在开始计划的最终检查",
+          "skippedNoTenant": "已跳过计划的最终检查：没有可对照检查的项目",
+          "skippedNoPlanId": "已跳过计划的最终检查：没有保存可检查的计划",
+          "skippedQuestion": "有提问在等待回答，已跳过计划的最终检查",
+          "skippedUserStop": "规划已停止，已跳过计划的最终检查",
+          "skippedTurnedOff": "已跳过计划的最终检查：此项目已关闭该检查",
+          "skippedNoContainers": "已跳过计划的最终检查：其中没有可检查的故事、任务或缺陷",
+          "skippedByPerson": "最终检查被跳过，已提前结束：其发现的内容均未修复",
+          "selectionFailed": "计划的最终检查未完成：无法读取其工作项",
+          "checking": "正在检查“{title}”",
+          "notFinished": "无法完成对“{title}”的检查",
+          "containerClean": "“{title}”中没有发现",
+          "containerFound": "{count, plural, other {在“{title}”中有 # 项发现}}",
+          "finding": "发现：{summary}"
+        },
+        "repair": {
+          "started": "正在修复发现的内容…",
+          "retrying": "修复中途停止，正在再试一次…",
+          "failed": "修复未完成",
+          "findingFixed": "已修复：{summary}",
+          "notFixedOpenWhat": "未修复：{summary}（需要决定该工作项应做什么）",
+          "notFixedWholeWhatDisproved": "未修复：{summary}（代码表明该工作项的目标不成立）",
+          "notFixedExtensionContradicted": "未修复：{summary}（代码与该工作项所依据的内容相矛盾）",
+          "notFixedCommittedInProgress": "未修复：{summary}（该工作项已在进行中）",
+          "notFixedSizing": "未修复：{summary}（涉及工作的规模）",
+          "notFixedFixFailed": "未修复：{summary}（无法进行修复）",
+          "notFixedSkipped": "未修复：{summary}（修复前已跳过最终检查）"
+        },
+        "reopen": {
+          "started": "正在重新检查计划的关联和顺序",
+          "startedAgain": "正在再次重新检查计划的关联和顺序",
+          "cardRemoved": "已移除“{title}”",
+          "cardAdded": "已添加“{title}”"
+        },
+        "codeGraph": {
+          "refreshed": "{count, plural, other {{repos} 的代码图自上一轮以来已刷新。之前的回答基于之前的代码图。}}"
+        }
+      },
       "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。",
       "composerPlaceholderGuide": "告诉 Motir AI 这一步进展如何…",
       "narration": {

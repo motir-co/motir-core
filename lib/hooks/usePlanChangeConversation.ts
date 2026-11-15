@@ -11,6 +11,7 @@ import type {
 } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { mergePlanReview } from '@/lib/planning/mergePlanReview';
+import { readProgressFact, type ProgressFact } from '@/lib/planning/progressFacts';
 import type { PlanNarrationDto, PlanNarrationReadDto } from '@/lib/dto/plans';
 import {
   liveNarrationSessions,
@@ -182,6 +183,10 @@ export type PlanChangeProgress =
   /** The planner's OWN prose line for the act it just took. The producer emits
    *  nothing when the text is blank, so this is never an empty row. */
   | { kind: 'note'; text: string }
+  /** A line motir-ai's CODE reported as a fact — the claim check, the final check
+   *  and its repair, the validity re-open, a code-graph refresh (MOTIR-11296). The
+   *  words are this app's catalogue, in the reader's locale (`progressFacts.ts`). */
+  | { kind: 'fact'; fact: ProgressFact }
   | { kind: 'proposed'; count: number }
   | { kind: 'validating' };
 
@@ -820,6 +825,9 @@ export function narrateFrame(event: string, data: unknown): PlanChangeProgress |
       const trimmed = typeof text === 'string' ? text.trim() : '';
       return trimmed.length === 0 ? null : { kind: 'note', text: trimmed };
     }
+    case 'fact':
+      // Never null: a fact this app cannot word still draws the generic line.
+      return { kind: 'fact', fact: readProgressFact(data) };
     case 'proposed': {
       const raw = d['proposed'];
       return { kind: 'proposed', count: typeof raw === 'number' ? raw : 0 };

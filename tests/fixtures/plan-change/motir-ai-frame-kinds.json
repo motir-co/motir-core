@@ -1,5 +1,5 @@
 {
-  "_comment": "Every progress-event kind motir-ai emits, swept from motir-ai 4c0cf86 (MOTIR-11256's branch, origin/main 6f0aea4 plus the amend, check and repair frames) on 2026-11-14. tests/planning/frameKindParity.test.ts requires a disposition in lib/planning/planChangeFrames.ts for each. Refresh: in a motir-ai checkout, run `git grep -ohE \"<pattern>\" origin/main -- src | grep -oE \"'[a-z_]+'\" | tr -d \"'\" | sort -u`, where <pattern> is `sweep.pattern` in contracts/plan-change-frame-kinds.json, then drop the names that file lists under `sweepFalseMatches`.",
+  "_comment": "Every progress-event kind motir-ai emits, swept from motir-ai 4c0cf86 (MOTIR-11256's branch, origin/main 6f0aea4 plus the amend, check and repair frames) on 2026-11-14, plus MOTIR-11296's progress_fact. tests/planning/frameKindParity.test.ts requires a disposition in lib/planning/planChangeFrames.ts for each. Refresh: in a motir-ai checkout, run `git grep -ohE \"<pattern>\" origin/main -- src | grep -oE \"'[a-z_]+'\" | tr -d \"'\" | sort -u`, where <pattern> is `sweep.pattern` in contracts/plan-change-frame-kinds.json, then drop the names that file lists under `sweepFalseMatches`.",
   "kinds": [
     "amend",
     "assistant",
@@ -48,6 +48,7 @@
     "planning_record_not_filed",
     "post_merge_move_refused",
     "post_merge_moved",
+    "progress_fact",
     "provenance",
     "read",
     "reauthor_target",
