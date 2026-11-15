@@ -608,7 +608,16 @@ export type PlanGrammarViolation =
    * container after the append. Approve writes the rows directly, so without it
    * a story would carry the to-do list every other door refuses it.
    */
-  | 'todos_on_container';
+  | 'todos_on_container'
+  /**
+   * A `modify` of a card still in TRIAGE, or an `add` / re-parent naming one as
+   * its parent (bug MOTIR-11339). A triage submission is outside the planned tree
+   * until a person accepts it, and every normal read hides it, so the work would
+   * land where nobody can see it. Plan-internal: the marker is only ever CLEARED
+   * after a card is created (Accept), so a plan the close admitted cannot turn
+   * into one approve refuses for this reason.
+   */
+  | 'target_in_triage';
 
 /*
  * ⚠️ `subject_on_container` WAS A MEMBER AND IS RETIRED (MOTIR-5607).
@@ -650,6 +659,7 @@ const PLAN_GRAMMAR_VIOLATION_MEMBERS: Record<PlanGrammarViolation, true> = {
   difficulty_on_container: true,
   type_on_container: true,
   todos_on_container: true,
+  target_in_triage: true,
 };
 
 /** {@link PlanGrammarViolation}'s members as an array — see the record above. */

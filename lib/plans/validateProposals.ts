@@ -199,6 +199,14 @@ export interface LiveWorkItemState {
    * dependency edge is supported (MOTIR-3581).
    */
   projectId: string;
+  /**
+   * The row is still a TRIAGE submission (`triagedAt` set) — outside the planned
+   * tree until a person accepts it (bug MOTIR-11339). Read by the triage step
+   * only: a plan may neither `modify` such a card nor place an item under it.
+   * Optional, and absent reads as NOT in triage; every service builder of this
+   * state sets it from the row (`plansService`'s `toLiveState`).
+   */
+  triaged?: boolean;
 }
 
 /**
@@ -1447,6 +1455,55 @@ export function assertAddKindPlacementLegal(
   }
 }
 
+// ── A CARD STILL IN TRIAGE (bug MOTIR-11339) ─────────────────────────────────
+//
+// A triage submission is outside the planned tree until a person accepts it
+// (MOTIR-399), and every normal read hides it. A plan that rewrites one, or hangs
+// a card under one, approves into work nobody can see: MOTIR-10560 was planned
+// into a story with nine subtasks while still in the inbox, and the whole subtree
+// stayed off the canvas until somebody pressed Accept. So the plan refuses it, at
+// the append and at the close (`validate_plan`) as well as at approve, before a
+// planning pass is spent on a card that cannot land. A `remove` is not refused:
+// it places nothing.
+
+/**
+ * Refuse a proposal that `modify`s a live card still in triage, or places an item
+ * (an `add`'s `parentRef`, a `modify`'s `patch.parentRef`) under one. Runs over
+ * resolved refs only — a ref absent from `liveById` is left to the resolution
+ * step, which names it as dangling.
+ */
+export function assertNoTriagedPlacement(
+  items: readonly ProposalNode[],
+  liveById: ValidatePlanProposalsInput['liveById'],
+): void {
+  for (const item of items) {
+    if (item.op === 'modify' && item.workItemId) {
+      const target = liveById.get(item.workItemId);
+      if (target?.triaged) {
+        throw new PlanGrammarError(
+          'target_in_triage',
+          item.id,
+          `${describeSubject(item, liveById)} modifies ${target.key}, which is still in Triage. ` +
+            `A card in Triage is outside the planned tree: accept it in Triage first, then plan it.`,
+        );
+      }
+    }
+    const parentRef =
+      item.op === 'add' ? item.parentRef : item.op === 'modify' ? item.patch?.parentRef : null;
+    if (!parentRef || !isWorkItemRef(parentRef)) continue;
+    const parent = liveById.get(parentRef);
+    if (parent?.triaged) {
+      const site = item.op === 'add' ? 'parentRef' : 'patch.parentRef';
+      throw new PlanGrammarError(
+        'target_in_triage',
+        item.id,
+        `${describeSubject(item, liveById)}'s ${site} "${parentRef}"${refSuffix(parentRef, liveById)} names a card that is still in Triage. ` +
+          `Nothing can be placed under a card in Triage: accept ${parent.key} in Triage first, then plan under it.`,
+      );
+    }
+  }
+}
+
 // ── NAMING THE WORK ITEM A REFUSAL IS ABOUT (MOTIR-3936) ─────────────────────
 //
 // Every message below used to identify its subject as `Proposal <cuid>`. That is
@@ -1980,6 +2037,12 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
       assertRefsResolvable(item, refs, liveById, addIds, where, folderById);
     }
   }
+
+  // 2-bis. No card still in TRIAGE is rewritten or given a child (bug
+  //     MOTIR-11339). After resolution, so a dangling ref is reported as
+  //     dangling; before everything else, because a plan about a card outside
+  //     the planned tree is not a plan whose shape is worth judging.
+  assertNoTriagedPlacement(items, liveById);
 
   // 2b. The `blocked_by` EDGE graph the plan would leave behind — its own
   //     proposed edges joined onto the committed ones (MOTIR-3936). Runs AFTER

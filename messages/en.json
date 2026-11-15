@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "This status can't be set directly — the item has an open pull request, and merging it is what makes this move. Every other move is still open.",
       "PLAN_TARGET_HELD": "Status can't be changed while a plan is open — a plan is rewriting this item. Approve or decline the plan, or withdraw the proposal that names this item.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Only a finished item can be marked — archive it instead.",
-      "MARKED_CARD_CANNOT_REOPEN": "This item is marked outdated or deprecated. Clear the mark to reopen this item."
+      "MARKED_CARD_CANNOT_REOPEN": "This item is marked outdated or deprecated. Clear the mark to reopen this item.",
+      "WORK_ITEM_IN_TRIAGE": "An item still in Triage can't be filed into a folder, placed under another item or given child items. Accept it in Triage first."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",

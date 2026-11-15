@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Tego statusu nie można ustawić bezpośrednio — element ma otwarty pull request i to jego scalenie wykonuje tę zmianę. Wszystkie inne zmiany są nadal dostępne.",
       "PLAN_TARGET_HELD": "Nie można zmienić statusu, dopóki plan jest otwarty — plan przepisuje ten element. Zatwierdź lub odrzuć plan albo wycofaj propozycję, która dotyczy tego elementu.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Oznaczyć można tylko ukończony element — zamiast tego go zarchiwizuj.",
-      "MARKED_CARD_CANNOT_REOPEN": "Ten element jest oznaczony jako nieaktualny lub przestarzały. Usuń oznaczenie, aby ponownie go otworzyć."
+      "MARKED_CARD_CANNOT_REOPEN": "Ten element jest oznaczony jako nieaktualny lub przestarzały. Usuń oznaczenie, aby ponownie go otworzyć.",
+      "WORK_ITEM_IN_TRIAGE": "Elementu, który jest wciąż w Selekcji, nie można umieścić w folderze, pod innym elementem ani dodać do niego elementów podrzędnych. Najpierw zaakceptuj go w Selekcji."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Tylko administrator projektu może edytować przepływ pracy.",

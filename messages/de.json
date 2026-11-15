@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Dieser Status kann nicht direkt gesetzt werden – das Element hat einen offenen Pull Request, und erst dessen Merge führt diesen Wechsel herbei. Alle anderen Wechsel sind weiterhin möglich.",
       "PLAN_TARGET_HELD": "Der Status kann nicht geändert werden, solange ein Plan offen ist – ein Plan schreibt dieses Element gerade um. Genehmigen oder lehnen Sie den Plan ab, oder ziehen Sie den Vorschlag zurück, der dieses Element nennt.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Nur ein abgeschlossenes Element kann markiert werden – archivieren Sie es stattdessen.",
-      "MARKED_CARD_CANNOT_REOPEN": "Dieses Element ist als veraltet oder abgekündigt markiert. Entfernen Sie die Markierung, um es wieder zu öffnen."
+      "MARKED_CARD_CANNOT_REOPEN": "Dieses Element ist als veraltet oder abgekündigt markiert. Entfernen Sie die Markierung, um es wieder zu öffnen.",
+      "WORK_ITEM_IN_TRIAGE": "Ein Element, das noch in der Triage liegt, kann nicht in einen Ordner abgelegt, unter ein anderes Element gestellt oder mit untergeordneten Elementen versehen werden. Nehmen Sie es zuerst in der Triage an."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Nur ein Projektadministrator kann den Workflow bearbeiten.",

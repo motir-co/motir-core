@@ -1250,5 +1250,15 @@
  *   allowed list).
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.85.0` after `1.84.0` above.
+ *
+ * - `1.86.0` — MOTIR-11339 adds the code `WORK_ITEM_IN_TRIAGE` (409) to `createWorkItem`
+ *   and `updateWorkItem`: an item still in Triage is not filed into a folder
+ *   (`folderId`) or re-parented (`parentKey`), and no item is created or re-parented
+ *   under one, until a person accepts it in Triage. Taking a triaged item OUT of a
+ *   folder is unchanged.
+ *
+ *   Additive: a new code for a new condition (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.86.0` after `1.85.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.85.0';
+export const V1_CONTRACT_VERSION = '1.86.0';

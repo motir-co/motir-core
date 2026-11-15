@@ -16,6 +16,7 @@ import {
   DifficultyNotAllowedOnKindError,
   InvalidObsolescenceError,
   MarkedCardCannotReopenError,
+  WorkItemInTriageError,
   ObsolescenceRequiresFinishedError,
   UnknownStatusError,
   ContainerRepoSetNotWritableError,
@@ -362,6 +363,11 @@ export function toToolError(err: unknown): CallToolResult {
     // and on `create_work_item` / `update_work_item` / `move_to_parent` for a child
     // under a marked parent — so an agent reports it rather than retrying.
     err instanceof MarkedCardCannotReopenError ||
+    // A card still in TRIAGE (MOTIR-11339): `update_work_item { folderId |
+    // parentKey }`, `move_to_parent` and `create_work_item` under it are refused,
+    // and the message says to accept it in Triage first — so an agent reports it
+    // rather than retrying the placement.
+    err instanceof WorkItemInTriageError ||
     err instanceof IllegalParentTypeError ||
     err instanceof DepthLimitExceededError ||
     // Re-parent cycle (move_to_parent, MOTIR-1017): the DB cycle trigger's
