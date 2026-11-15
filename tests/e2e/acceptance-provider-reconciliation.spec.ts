@@ -291,10 +291,13 @@ test('a platform admin reads a month of provider bills beside what Motir recorde
       await row
         .getByRole('button', { name: fill(rc.perModel.aria, { day: dayLabel(D1) }) })
         .click();
-      const breakdown = days('Anthropic').getByRole('row', { name: /claude-opus-4-6/ });
+      // The breakdown is its own table inside one expanded day row, so its model rows are
+      // read inside it: the day row's own name also carries every model it holds.
+      const perModel = days('Anthropic').getByTestId('per-model');
+      const breakdown = perModel.getByRole('row', { name: /claude-opus-4-6/ });
       await expect(breakdown).toBeVisible();
       await expect(breakdown).toContainText('$11.50');
-      await expect(days('Anthropic').getByRole('row', { name: /claude-sonnet-4-6/ })).toBeVisible();
+      await expect(perModel.getByRole('row', { name: /claude-sonnet-4-6/ })).toBeVisible();
       await beat();
     },
   );
