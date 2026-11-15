@@ -111,9 +111,14 @@ describe('the five panes mount the shared frame, below their gate (MOTIR-3443)',
 });
 
 describe('the reads (MOTIR-3443)', () => {
-  it('row 2 · board reads the board and the statuses in ONE wave', () => {
+  it('row 2 · board reads the board, the statuses and the filter lookups in ONE wave', () => {
     const src = code(`${DIR}/board/page.tsx`);
-    expect(src).toMatch(/allSettledOrThrow\(\[boardPromise, statusesPromise\]\)/);
+    // MOTIR-11334 added the stored-filter editor's builder lookups as a third
+    // arm. They need no board, so they start at the page too and join the wave.
+    expect(src).toMatch(
+      /allSettledOrThrow\(\[\s*boardPromise,\s*statusesPromise,\s*lookupsPromise,?\s*\]\)/,
+    );
+    expect(src).toMatch(/const lookupsPromise = allSettledOrThrow\(\[/);
     // The promise is STARTED at the page and awaited nowhere on that line, so the
     // crumb boundary and the body boundary share one `getBoard`.
     expect(src).toMatch(/const boardPromise = boardsService\.getBoard\(/);

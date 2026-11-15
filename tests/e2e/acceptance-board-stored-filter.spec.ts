@@ -408,11 +408,14 @@ const titlesOf = (board: BoardProjectionDto) =>
   board.columns.flatMap((c) => c.cards.map((card) => card.title)).sort();
 
 // ── Locators ────────────────────────────────────────────────────────────────
+// Scoped to the live subtree (the page's `main`, or the open dialog): a
+// page-rooted test id can also match a streamed or outgoing copy.
+const main = (page: Page) => page.getByRole('main');
 
-const indicator = (page: Page) => page.getByTestId('board-stored-filter-indicator');
-const boardRegion = (page: Page) => page.getByTestId('board');
+const indicator = (page: Page) => main(page).getByTestId('board-stored-filter-indicator');
+const boardRegion = (page: Page) => main(page).getByTestId('board');
 const dialogOf = (page: Page) => page.getByRole('dialog', { name: TB.newBoardTitle });
-const editorOf = (page: Page) => page.getByTestId('board-stored-filter-editor');
+const editorOf = (page: Page) => main(page).getByTestId('board-stored-filter-editor');
 const advancedDialog = (page: Page) => page.getByRole('dialog', { name: TIV.advancedDialogLabel });
 
 // ── Actions ─────────────────────────────────────────────────────────────────
@@ -429,17 +432,17 @@ async function openBoard(page: Page, boardId: string): Promise<BoardProjectionDt
   await page.goto(`/boards?board=${boardId}`);
   const board = await frame(read);
   await expect(
-    boardRegion(page).or(page.getByTestId('board-filtered-empty')).first(),
+    boardRegion(page).or(main(page).getByTestId('board-filtered-empty')).first(),
   ).toBeVisible();
   return board;
 }
 
 /** Open the board switcher's New board dialog and name the board. */
 async function startNewBoard(page: Page, name: string): Promise<void> {
-  await page.getByTestId('board-switcher-trigger').click();
-  await page.getByTestId('board-switcher-new').click();
+  await main(page).getByTestId('board-switcher-trigger').click();
+  await page.getByRole('menuitem', { name: TB.newBoard }).click();
   await expect(dialogOf(page)).toBeVisible();
-  await page.getByTestId('board-new-name').fill(name);
+  await dialogOf(page).getByTestId('board-new-name').fill(name);
 }
 
 /** Create the board in the open dialog, and return the write's request body,
@@ -520,7 +523,7 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       await as(page, ADA);
       await openBoard(page, s.defaultBoardId);
       await startNewBoard(page, BUGS_BOARD);
-      const section = page.getByTestId('board-filter-section');
+      const section = dialogOf(page).getByTestId('board-filter-section');
       await expect(section).toContainText(TB.filterSectionEmptyHint);
       await section.getByTestId('board-filter-add').click();
       await expect(section).toContainText(TB.filterSectionIntro);
@@ -567,7 +570,7 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       // Read-only: the indicator holds no control for a reader who cannot
       // configure the board.
       await expect(indicator(page).getByRole('button')).toHaveCount(0);
-      await expect(page.getByTestId('board-stored-filter-indicator-edit')).toHaveCount(0);
+      await expect(main(page).getByTestId('board-stored-filter-indicator-edit')).toHaveCount(0);
       await beat();
     },
   );
@@ -593,7 +596,7 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       const chips = page.locator(APPLIED_BAR);
       await expect(chips).toBeVisible();
       await expect(chips).toContainText(TESS.name);
-      const row2 = page.getByTestId('board-filter-row');
+      const row2 = main(page).getByTestId('board-filter-row');
       await expect(row2.getByTestId('board-stored-filter-indicator')).toBeVisible();
       await expect(row2.locator(APPLIED_BAR)).toBeVisible();
       await beat();
@@ -624,8 +627,8 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       await as(page, ADA);
       await openBoard(page, bugsId);
       await startNewBoard(page, MOBILE_BOARD);
-      await page.getByTestId('board-type-scrum').click();
-      const section = page.getByTestId('board-filter-section');
+      await main(page).getByTestId('board-type-scrum').click();
+      const section = dialogOf(page).getByTestId('board-filter-section');
       await section.getByTestId('board-filter-add').click();
       await section.getByRole('combobox', { name: TB.filterStartFromSaved }).click();
       await page.getByRole('option', { name: new RegExp(SAVED_FILTER) }).click();
@@ -770,12 +773,12 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       ]);
       // The board renders (no error page): the filtered-empty state, with the
       // board filter still saying what it applies.
-      await expect(page.getByTestId('board-filtered-empty')).toBeVisible();
-      await expect(page.getByTestId('board-filtered-empty')).toContainText(
+      await expect(main(page).getByTestId('board-filtered-empty')).toBeVisible();
+      await expect(main(page).getByTestId('board-filtered-empty')).toContainText(
         TB.boardFilterEmptyTitle,
       );
       await expect(indicator(page)).toBeVisible();
-      await expect(page.getByTestId('board-stored-filter-indicator-stale')).toBeVisible();
+      await expect(main(page).getByTestId('board-stored-filter-indicator-stale')).toBeVisible();
       await beat();
 
       await page.goto(`/settings/project/board?board=${mobileId}`);
@@ -810,7 +813,7 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       }
       await expect(indicator(page)).toBeVisible();
       await expect(indicator(page)).toContainText(KIND_BUG_TEXT);
-      await expect(page.getByTestId('board-stored-filter-indicator-edit')).toHaveCount(0);
+      await expect(main(page).getByTestId('board-stored-filter-indicator-edit')).toHaveCount(0);
       await expect(indicator(page).getByRole('link')).toHaveCount(0);
       await beat();
     },
