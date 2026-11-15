@@ -11,7 +11,19 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // resolved within the actor's workspace — a cross-tenant key reads as 404
 // (no existence leak), as does a non-browsable project.
 //
+// `?ids=<id>,<id>` (Story MOTIR-10560 · Subtask MOTIR-11333) instead RESOLVES
+// those label ids (`labelsService.resolveByIds`, the read `/boards` and `/items`
+// make for a URL filter) — how the create-board dialog names the labels a copied
+// saved filter references. An id that is not a label of the project is simply
+// absent from the answer (the caller shows it as deleted). At most
+// `LABEL_IDS_LIMIT` distinct ids; more is a 400. When `ids` is present, `q` is
+// ignored.
+//
 // GET → 200 { labels: LabelDto[] }
+
+/** The most label ids one `?ids=` read resolves (a filter holds at most 20
+ * conditions; this bounds the read, finding #57). */
+const LABEL_IDS_LIMIT = 100;
 
 export async function GET(
   req: Request,
@@ -22,10 +34,24 @@ export async function GET(
   const { ctx } = gate;
 
   const { key } = await params;
-  const q = new URL(req.url).searchParams.get('q') ?? '';
+  const search = new URL(req.url).searchParams;
+  const idsParam = search.get('ids');
+  const ids =
+    idsParam === null
+      ? null
+      : [...new Set(idsParam.split(',').map((id) => id.trim()))].filter(Boolean);
+  if (ids && ids.length > LABEL_IDS_LIMIT) {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: `At most ${LABEL_IDS_LIMIT} label ids per request.` },
+      { status: 400 },
+    );
+  }
+  const q = search.get('q') ?? '';
 
   try {
-    const labels = await labelsService.searchLabels(key, q, ctx);
+    const labels = ids
+      ? await labelsService.resolveByIds(key, ids, ctx)
+      : await labelsService.searchLabels(key, q, ctx);
     return NextResponse.json({ labels });
   } catch (err) {
     const mapped = mapLabelError(err);

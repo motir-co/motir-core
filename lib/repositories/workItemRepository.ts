@@ -4286,7 +4286,8 @@ export const workItemRepository = {
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
           AND ${notExcludedSql('w', filter.excludeIds)}
-          AND (${matched})`;
+          AND (${matched})
+          ${andStoredFilterSql(filter.storedFilter)}`;
     return rows[0]?.count ?? 0;
   },
 
@@ -4671,11 +4672,16 @@ export const workItemRepository = {
       // `findPublicHiddenDescendantIds`). Absent/empty ⇒ no clause (the internal
       // board + the no-private-epic case read the unchanged projection).
       excludeIds?: readonly string[];
+      // The board's STORED filter (MOTIR-10560) — a second predicate, compiled
+      // on its own and AND-ed beside `ast`, never merged into it. Absent ⇒ no
+      // clause.
+      storedFilter?: StoredFilterPredicate;
     },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (statusKeys.length === 0) return [];
     const client = tx ?? dbRead;
+    const hasAst = !!opts.ast && opts.ast.conditions.length > 0;
 
     // Advanced filter active (Story 6.15.2): AND the compiled FilterAST (alias
     // `w`) into the column read. The AST can't be expressed through the Prisma
@@ -4686,7 +4692,7 @@ export const workItemRepository = {
     // `WorkItem` rows through the builder (keeping the row type exact for the
     // board mapper) and restore the raw query's order. No AST → the existing
     // builder read, byte-for-byte the 3.8.2 projection (no regression).
-    if (opts.ast && opts.ast.conditions.length > 0) {
+    if (hasAst || opts.storedFilter) {
       const orderSql =
         order === 'recent'
           ? Prisma.sql`w."updatedAt" DESC, w."key" ASC`
@@ -4713,7 +4719,8 @@ export const workItemRepository = {
             ${afterSql}
             ${sprintScope}
             AND ${notExcludedSql('w', opts.excludeIds)}
-            AND (${compileFilterConditionsSql(opts.ast, opts.referents)})
+            AND (${hasAst ? compileFilterConditionsSql(opts.ast!, opts.referents) : Prisma.sql`TRUE`})
+            ${andStoredFilterSql(opts.storedFilter)}
           ORDER BY ${orderSql}
           LIMIT ${opts.limit}`;
       const ids = idRows.map((r) => r.id);
@@ -5843,6 +5850,9 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
     /** A Visitor's private-epic exclusion (MOTIR-6644). Absent ⇒ no clause. */
     excludeIds?: readonly string[],
+    /** The board's STORED filter (MOTIR-10560): the scrum header sums only the
+     *  cards the board shows. Absent ⇒ no clause (sprint reports pass none). */
+    storedFilter?: StoredFilterPredicate,
   ): Promise<{ committed: number; completed: number }> {
     const client = tx ?? dbRead;
     const committed = pointsAggExpr(statistic, 'w', false);
@@ -5856,7 +5866,8 @@ export const workItemRepository = {
        WHERE w."sprintId" = ${sprintId}
          AND w."workspaceId" = ${workspaceId}
          AND w."archivedAt" IS NULL
-         AND ${notExcludedSql('w', excludeIds)}`;
+         AND ${notExcludedSql('w', excludeIds)}
+         ${andStoredFilterSql(storedFilter)}`;
     return rows[0] ?? { committed: 0, completed: 0 };
   },
 
@@ -5915,6 +5926,8 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
     /** A Visitor's private-epic exclusion (MOTIR-6644). Absent ⇒ no clause. */
     excludeIds?: readonly string[],
+    /** The board's STORED filter (MOTIR-10560) — see `sumPointsForSprint`. */
+    storedFilter?: StoredFilterPredicate,
   ): Promise<Array<{ status: string; points: number }>> {
     const client = tx ?? dbRead;
     const points = pointsAggExpr(statistic, 'w', false);
@@ -5926,6 +5939,7 @@ export const workItemRepository = {
          AND w."workspaceId" = ${workspaceId}
          AND w."archivedAt" IS NULL
          AND ${notExcludedSql('w', excludeIds)}
+         ${andStoredFilterSql(storedFilter)}
        GROUP BY w."status"`;
   },
 
@@ -6481,6 +6495,13 @@ export interface RepoIssueFilter {
    * unchanged projection).
    */
   excludeIds?: readonly string[];
+  /**
+   * The board's STORED filter (MOTIR-10560) — honoured by
+   * {@link workItemRepository.countProjectIssues} only, as its own AND-ed WHERE
+   * clause beside `ast` (never through {@link buildIssueFilterSql}, whose output
+   * is also the forest read's `matched` flag). Absent ⇒ no clause.
+   */
+  storedFilter?: StoredFilterPredicate;
 }
 
 /**
@@ -6500,6 +6521,30 @@ export interface BoardCardFilter {
   /** The epic-privacy exclusion (MOTIR-6644) — a Visitor's board lanes never
    *  count a private epic's descendant. Absent/empty ⇒ no clause. */
   excludeIds?: readonly string[];
+  /** The board's STORED filter (MOTIR-10560), AND-ed beside `ast`. */
+  storedFilter?: StoredFilterPredicate;
+}
+
+/**
+ * A board's STORED filter as the board reads take it (MOTIR-10560): a SECOND
+ * predicate beside the toolbar's `ast`, compiled on its own and AND-ed, never
+ * merged into one AST (the AST is flat, so `stored(or) ∧ toolbar(or)` is not one
+ * AST). Either the validated stored AST with the referents its Epic-5
+ * conditions resolve against (a stale referent compiles to `FALSE`, the
+ * compiler's shipped rule), or `matchNothing` for a stored envelope that no
+ * longer decodes or validates: a board's filter is its scope, so an unreadable
+ * one narrows the board to nothing rather than widening it to everything.
+ */
+export type StoredFilterPredicate =
+  | { ast: FilterAst; referents?: ProjectFilterReferents }
+  | { matchNothing: true };
+
+/** `AND (<stored predicate>)` over alias `w`, or nothing at all when the board
+ * has no stored filter, so a filterless board's SQL is byte-for-byte today's. */
+function andStoredFilterSql(stored?: StoredFilterPredicate): Prisma.Sql {
+  if (!stored) return Prisma.empty;
+  if ('matchNothing' in stored) return Prisma.sql`AND FALSE`;
+  return Prisma.sql`AND (${compileFilterConditionsSql(stored.ast, stored.referents)})`;
 }
 
 /** The board filter as a `Prisma.Sql` predicate over alias `w`: the compiled
@@ -6511,8 +6556,11 @@ function boardCardFilterSql(filter?: BoardCardFilter): Prisma.Sql {
     filter?.ast && filter.ast.conditions.length > 0
       ? Prisma.sql`(${compileFilterConditionsSql(filter.ast, filter.referents)})`
       : Prisma.sql`TRUE`;
-  if (!filter?.excludeIds || filter.excludeIds.length === 0) return ast;
-  return Prisma.sql`${ast} AND ${notExcludedSql('w', filter.excludeIds)}`;
+  const withStored = filter?.storedFilter
+    ? Prisma.sql`${ast} ${andStoredFilterSql(filter.storedFilter)}`
+    : ast;
+  if (!filter?.excludeIds || filter.excludeIds.length === 0) return withStored;
+  return Prisma.sql`${withStored} AND ${notExcludedSql('w', filter.excludeIds)}`;
 }
 
 // ---------------------------------------------------------------------------

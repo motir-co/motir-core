@@ -19,6 +19,14 @@ export abstract class FilterValidationError extends Error {
   get code(): FilterErrorTag {
     return this.tag;
   }
+  /**
+   * The 0-based index of the condition the refusal is about, when a caller that
+   * validated a whole STORED filter located it (MOTIR-10560: a board's stored
+   * filter write, so the create dialog and the settings editor can name
+   * "Condition n"). Unset when the failure is the whole filter's, or when no
+   * caller looked.
+   */
+  conditionIndex?: number;
 }
 
 /** A condition names a field the registry does not know. */

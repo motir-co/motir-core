@@ -1,5 +1,8 @@
 import type { EstimationStatistic, PointScale, Prisma } from '@/generated/prisma/client';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  workItemRepository,
+  type StoredFilterPredicate,
+} from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
@@ -254,6 +257,9 @@ export const estimationService = {
     ctx: Pick<ServiceContext, 'workspaceId'>,
     // A Visitor's private-epic exclusion (MOTIR-6644): the sums count visible items.
     excludeIds?: readonly string[],
+    // The board's STORED filter (MOTIR-10560): the header and column points sum
+    // only the cards the board shows. Absent ⇒ the whole sprint, as before.
+    storedFilter?: StoredFilterPredicate,
   ): Promise<{ points: SprintPointsDto; columnPoints: Record<string, number> }> {
     const { committed, completed, perStatus } = await withWorkspaceServiceContext(
       ctx.workspaceId,
@@ -267,6 +273,7 @@ export const estimationService = {
           statistic,
           tx,
           excludeIds,
+          storedFilter,
         );
         return {
           ...sums,
@@ -276,6 +283,7 @@ export const estimationService = {
             statistic,
             tx,
             excludeIds,
+            storedFilter,
           ),
         };
       },

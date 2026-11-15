@@ -12,7 +12,10 @@ import { boardRepository } from '@/lib/repositories/boardRepository';
 import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';
 import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatusRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  workItemRepository,
+  type StoredFilterPredicate,
+} from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -21,8 +24,24 @@ import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsS
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import {
+  locateInvalidCondition,
+  resolveStoredBoardFilter,
+  type ResolvedStoredBoardFilter,
+} from '@/lib/services/boardStoredFilter';
 import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/registry';
-import type { FilterAst } from '@/lib/filters/ast';
+import {
+  decodeFilterEnvelope,
+  encodeFilterEnvelope,
+  FILTER_ROW_CAP,
+  type FilterAst,
+  type FilterEnvelope,
+} from '@/lib/filters/ast';
+import {
+  FilterTooLargeError,
+  FilterValidationError,
+  MalformedFilterError,
+} from '@/lib/filters/errors';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { isReadyToStart } from '@/lib/workItems/statusSlot';
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -328,6 +347,7 @@ export const boardsService = {
         unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
         sprint: null,
         planHolds: {},
+        storedFilter: frame.storedFilter?.dto ?? null,
       };
     }
 
@@ -360,6 +380,7 @@ export const boardsService = {
       frame.boardFilter,
       frame.excludeIds,
       !frame.member,
+      frame.storedFilter?.predicate,
     );
 
     // The active-sprint summary that drives the 4.5.3 sprint header (Subtask
@@ -374,6 +395,7 @@ export const boardsService = {
         built.map((b) => ({ id: b.col.id, statusKeys: b.statusKeys })),
         readCtx,
         frame.excludeIds,
+        frame.storedFilter?.predicate,
       );
       sprint = toSprintSummaryDto(frame.activeSprint, points, columnPoints, new Date());
     }
@@ -397,6 +419,7 @@ export const boardsService = {
       unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
       sprint,
       planHolds: decorated.planHolds,
+      storedFilter: frame.storedFilter?.dto ?? null,
     };
   },
 
@@ -1141,6 +1164,42 @@ export const boardsService = {
     return toBoardDto(row);
   },
 
+  /**
+   * Set, replace or clear a board's STORED filter (MOTIR-10560) — the board
+   * settings editor's Save. Same gate + order as `renameBoard`: resolve +
+   * tenant-gate (404) → `board:configure` (403) → validate (422) → write. The
+   * stored value is the validated, normalised `encodeFilterEnvelope` of the
+   * conditions — a COPY, never a reference to a saved filter. `null` (or an
+   * envelope with zero conditions) clears it to SQL NULL, and the board shows
+   * its whole scope again. A refusal leaves the stored filter unchanged.
+   *
+   * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403), a
+   * `FilterValidationError` subclass (422).
+   */
+  async setBoardFilter(boardId: string, filter: unknown, ctx: ServiceContext): Promise<BoardDto> {
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(boardId, ctx.workspaceId, tx),
+    );
+    if (!board) throw new BoardNotFoundError(boardId);
+    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+
+    const envelope = await normalizeStoredBoardFilter(board.projectId, ctx.workspaceId, filter);
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) =>
+        boardRepository.update(
+          boardId,
+          // A `Json?` column is cleared with `Prisma.DbNull` (SQL NULL); a
+          // JavaScript `null` does not type, and `Prisma.JsonNull` would store
+          // the JSON value `null`, which a read would see as a stored filter.
+          { filter: envelope ? toStoredJson(envelope) : Prisma.DbNull },
+          tx,
+        ),
+    );
+    return toBoardDto(row);
+  },
+
   // ── Board LIFECYCLE writes (Subtask 3.7.3) — the multi-board CRUD path:
   // create (seed columns) / set-default / delete (rename is 3.6.2's
   // `renameBoard` above, reused as-is). Same admin gate + write convention as
@@ -1186,13 +1245,19 @@ export const boardsService = {
    * the Scrum board, Story 4.5) but is validated against the SHIPPED `BoardType`
    * enum (rung 2) so the check stays total. Returns the new board's switcher DTO.
    *
+   * `input.filter` (MOTIR-10560) is the board's optional STORED filter, a
+   * `FilterEnvelope` (`{ v, c, f }`). It is validated exactly as a stored filter
+   * is on every write (see `normalizeStoredBoardFilter`) BEFORE the transaction,
+   * so a refused filter creates no board. Absent, `null` or zero conditions →
+   * the board stores no filter.
+   *
    * Throws: `ProjectNotFoundError` (404 — unknown / cross-workspace project),
    * `NotBoardAdminError` (403), `InvalidBoardNameError` (400),
-   * `InvalidBoardTypeError` (400).
+   * `InvalidBoardTypeError` (400), a `FilterValidationError` subclass (422).
    */
   async createBoard(
     projectId: string,
-    input: { name: string; type?: string },
+    input: CreateBoardInput,
     ctx: ServiceContext,
   ): Promise<BoardSummaryDto> {
     // Resolve + tenant-gate the project AND owner-authorize in one call (the
@@ -1568,6 +1633,10 @@ type BoardFrame = {
   readCtx: { workspaceId: string; userId: string | null };
   board: Board;
   boardFilter: ResolvedBoardFilter | undefined;
+  /** The board's OWN stored filter (MOTIR-10560) — the same for every reader,
+   *  ANDed beside `boardFilter` in every card read; `undefined` when the board
+   *  has none. */
+  storedFilter: ResolvedStoredBoardFilter | undefined;
   columns: BoardColumn[];
   liveByColumn: Map<string, WorkflowStatusDto[]>;
   mappedStatusIds: Set<string>;
@@ -1626,6 +1695,10 @@ async function loadBoardFrame(
     : filter && !filter.savedFilterId
       ? await resolveBoardFilter(projectId, filter, readCtx)
       : undefined;
+  // The board's OWN stored filter (MOTIR-10560): part of the board, not of the
+  // reader, so a member and a Visitor read it alike. Never throws — a stale or
+  // unreadable condition narrows the board instead of breaking it.
+  const storedFilter = await resolveStoredBoardFilter(projectId, readCtx.workspaceId, board.filter);
 
   // The board's own two reads share ONE bound transaction; the workflow LIST is
   // a service call and opens its own (the call-into-another-service clause in
@@ -1672,6 +1745,7 @@ async function loadBoardFrame(
     readCtx,
     board,
     boardFilter,
+    storedFilter,
     columns,
     liveByColumn,
     mappedStatusIds,
@@ -1718,6 +1792,7 @@ async function buildColumnPage(
   const { workspaceId } = frame.readCtx;
   const sprintId = frame.activeSprint?.id;
   const filter = frame.boardFilter;
+  const stored = frame.storedFilter?.predicate;
   const excludeIds = frame.excludeIds;
   // The lane's cards and its own denominator, in ONE bound transaction: two
   // reads of the same predicate rendered as one column header, so a write
@@ -1730,6 +1805,7 @@ async function buildColumnPage(
         statuses: statusKeys,
         ...(sprintId ? { sprintId } : {}),
         ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+        ...(stored ? { storedFilter: stored } : {}),
         ...(excludeIds ? { excludeIds } : {}),
       },
       tx,
@@ -1744,6 +1820,7 @@ async function buildColumnPage(
         ...(after ? { after } : {}),
         sprintId,
         ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
+        ...(stored ? { storedFilter: stored } : {}),
         ...(excludeIds ? { excludeIds } : {}),
       },
       tx,
@@ -1938,6 +2015,9 @@ async function buildSwimlanes(
   excludeIds?: readonly string[],
   // A Visitor's lanes name people by display name only (MOTIR-6646).
   nameOnly = false,
+  // The board's stored filter (MOTIR-10560) — the lanes AND the "No epic"
+  // total count the same stored-filtered set the columns show.
+  storedFilter?: StoredFilterPredicate,
 ): Promise<BoardSwimlaneDto[]> {
   if (groupBy === 'none' || statusKeys.length === 0) return [];
 
@@ -1946,9 +2026,10 @@ async function buildSwimlanes(
   // (a lane whose cards all fail the filter disappears). `undefined` → the
   // byte-for-byte unfiltered 3.3.4 aggregate.
   const laneFilter =
-    filter || excludeIds
+    filter || excludeIds || storedFilter
       ? {
           ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
+          ...(storedFilter ? { storedFilter } : {}),
           ...(excludeIds ? { excludeIds } : {}),
         }
       : undefined;
@@ -2060,8 +2141,10 @@ async function buildSwimlanes(
         // The "No epic" catch-all is DERIVED (filtered total − Σ epic-lane counts),
         // so this denominator must use the SAME predicate as the epic aggregate:
         // the 6.15.2 filter AND a Visitor's hidden set (MOTIR-11325), or a
-        // private epic's descendants land in the catch-all.
+        // private epic's descendants land in the catch-all. The board's stored
+        // filter (MOTIR-10560) likewise.
         ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+        ...(storedFilter ? { storedFilter } : {}),
         ...(excludeIds ? { excludeIds } : {}),
       },
       tx,
@@ -2087,13 +2170,16 @@ async function buildSwimlanes(
  */
 async function createBoardUnchecked(
   projectId: string,
-  input: { name: string; type?: string },
+  input: CreateBoardInput,
   ctx: ServiceContext,
 ): Promise<BoardSummaryDto> {
   const name = input.name?.trim();
   if (!name) throw new InvalidBoardNameError();
   const type = input.type ?? BoardType.kanban;
   if (!isBoardType(type)) throw new InvalidBoardTypeError(String(type));
+  // Validated before the transaction opens, so a refused filter creates no
+  // board (MOTIR-10560). `ensureScrumBoard` passes none → no stored filter.
+  const filter = await normalizeStoredBoardFilter(projectId, ctx.workspaceId, input.filter);
 
   const row = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
@@ -2109,6 +2195,7 @@ async function createBoardUnchecked(
           type,
           isDefault: false,
           position: keyForAppend(last),
+          ...(filter ? { filter: toStoredJson(filter) } : {}),
         },
         tx,
       );
@@ -2117,4 +2204,65 @@ async function createBoardUnchecked(
     },
   );
   return toBoardSummaryDto(row);
+}
+
+/** What creating a board takes: the switcher's name and type, plus the board's
+ * optional stored filter (MOTIR-10560), an unvalidated `FilterEnvelope` from
+ * the wire. */
+type CreateBoardInput = { name: string; type?: string; filter?: unknown };
+
+/**
+ * Validate and normalise a board's STORED filter for a write (MOTIR-10560) —
+ * the one path both `createBoard` and `setBoardFilter` take, and the same
+ * checks the toolbar's inline filter goes through (`resolveBoardFilter`):
+ *
+ *   1. `decodeFilterEnvelope` — structure + version. A `too-large` result is
+ *      `FilterTooLargeError` (the 20-condition cap); any other failure is
+ *      `MalformedFilterError`.
+ *   2. `loadFilterReferents` + `resolveFilterAst` — every field, operator and
+ *      value against the registry, a `cf:<id>` row against that field's real
+ *      type. An unknown field / operator or a bad value throws its typed
+ *      `FilterValidationError`. A STALE referent (a deleted label, component or
+ *      custom-field option) is a result there, not an error, so it is accepted
+ *      exactly as the toolbar accepts it; the board read reports it.
+ *
+ * Returns the envelope to store — re-encoded from the decoded AST, so it is
+ * normalised — or `null` when there is nothing to store (absent, `null`, or
+ * zero conditions: "show everything", `resolveBoardFilter`'s empty-AST rule).
+ */
+async function normalizeStoredBoardFilter(
+  projectId: string,
+  workspaceId: string,
+  raw: unknown,
+): Promise<FilterEnvelope | null> {
+  if (raw === undefined || raw === null) return null;
+  const decoded = decodeFilterEnvelope(raw);
+  if (!decoded.ok) {
+    if (decoded.reason === 'too-large') {
+      // The codec reports `too-large` only after it has checked `f` is an array.
+      const rows = (raw as { f: unknown[] }).f;
+      throw new FilterTooLargeError(rows.length, FILTER_ROW_CAP);
+    }
+    throw new MalformedFilterError(`${decoded.reason}: ${decoded.detail}`);
+  }
+  const ast = decoded.ast;
+  if (ast.conditions.length === 0) return null;
+  const referents = await loadFilterReferents(projectId, workspaceId, ast);
+  try {
+    resolveFilterAst(ast, referents);
+  } catch (err) {
+    // Name the condition the refusal is about (the 422 carries it as
+    // `conditionIndex`), so the dialog and the editor can say "Condition n".
+    if (err instanceof FilterValidationError) {
+      const { index } = locateInvalidCondition(ast, referents);
+      if (index !== null) err.conditionIndex = index;
+    }
+    throw err;
+  }
+  return encodeFilterEnvelope(ast);
+}
+
+/** A stored envelope as the Prisma JSON input the `board.filter` column takes. */
+function toStoredJson(envelope: FilterEnvelope): Prisma.InputJsonValue {
+  return envelope as unknown as Prisma.InputJsonValue;
 }

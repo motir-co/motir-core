@@ -4256,6 +4256,14 @@ model Board {
   // so every existing/seeded board is unchanged). The 3.3.4 projection resolves
   // each card's lane server-side from this value (epic groups by ANCESTOR epic).
   swimlaneGroupBy BoardSwimlaneGroupBy @default(none) @map("swimlane_group_by")
+  // The board's OWN stored filter (MOTIR-10560). Holds the same stored
+  // `FilterEnvelope` (`{ v, c, f }`) a saved filter's `astEnvelope` does,
+  // written by `encodeFilterEnvelope` and read by `decodeFilterEnvelope`
+  // (`lib/filters/ast.ts`). `null` means NO stored filter: the board shows its
+  // whole scope, exactly as before the column existed. It is a COPY of
+  // conditions, never a reference to a `saved_filter` row, so editing or
+  // deleting a saved filter never changes a board.
+  filter          Json?                @map("filter")
   createdAt       DateTime             @default(now()) @map("created_at")
   updatedAt       DateTime             @updatedAt @map("updated_at")
 

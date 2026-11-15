@@ -15,6 +15,20 @@ import {
 } from '@/lib/boards/errors';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import {
+  encodeFilterEnvelope,
+  encodeFilterParam,
+  type FilterAst,
+  type FilterEnvelope,
+} from '@/lib/filters/ast';
+import {
+  FilterTooLargeError,
+  InvalidFilterValueError,
+  MalformedFilterError,
+  UnknownFilterFieldError,
+  UnknownFilterOperatorError,
+} from '@/lib/filters/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -281,5 +295,341 @@ describe('boardsService.deleteBoard (Subtask 3.7.3)', () => {
     await expect(
       boardsService.deleteBoard(other.defaultBoardId, fx.ownerCtx),
     ).rejects.toBeInstanceOf(BoardNotFoundError);
+  });
+});
+
+// ── The board's STORED filter (MOTIR-10560 · MOTIR-11331) — every write of
+// `board.filter`: at create, and set / replace / clear in settings. Validated
+// the way the toolbar's inline filter is (decode → referents → resolve); the
+// stored value is the normalised envelope, a COPY of conditions.
+
+const BUGS: FilterEnvelope = { v: 'v1', c: 'and', f: [['kind', 'is_any_of', ['bug']]] };
+const URGENT_OR_TASK: FilterEnvelope = {
+  v: 'v1',
+  c: 'or',
+  f: [
+    ['priority', 'is_any_of', ['highest']],
+    ['kind', 'is_any_of', ['task']],
+  ],
+};
+
+async function storedFilter(boardId: string): Promise<unknown> {
+  const row = await adminDb.board.findUniqueOrThrow({ where: { id: boardId } });
+  return row.filter;
+}
+
+/** The SQL-level truth: NULL, never a JSON `null` value. */
+async function filterIsSqlNull(boardId: string): Promise<boolean> {
+  const rows = await adminDb.$queryRaw<Array<{ isnull: boolean }>>`
+    SELECT filter IS NULL AS isnull FROM board WHERE id = ${boardId}`;
+  return rows[0]!.isnull;
+}
+
+function tooMany(n: number): FilterEnvelope {
+  return {
+    v: 'v1',
+    c: 'and',
+    f: Array.from(
+      { length: n },
+      () => ['kind', 'is_any_of', ['bug']] as [string, string, string[]],
+    ),
+  };
+}
+
+describe('boardsService.createBoard — stored filter (MOTIR-11331)', () => {
+  it('stores the normalised envelope of a valid filter', async () => {
+    const fx = await makeFixture('sf-create');
+    const created = await boardsService.createBoard(
+      fx.projectId,
+      { name: 'Urgent or task', filter: URGENT_OR_TASK },
+      fx.ownerCtx,
+    );
+    const ast: FilterAst = {
+      combinator: 'or',
+      conditions: [
+        { field: 'priority', operator: 'is_any_of', value: ['highest'] },
+        { field: 'kind', operator: 'is_any_of', value: ['task'] },
+      ],
+    };
+    expect(await storedFilter(created.id)).toEqual(encodeFilterEnvelope(ast));
+  });
+
+  it('normalises on write: unknown envelope keys are dropped', async () => {
+    const fx = await makeFixture('sf-normalise');
+    const created = await boardsService.createBoard(
+      fx.projectId,
+      { name: 'Bugs', filter: { ...BUGS, extra: 'ignored' } },
+      fx.ownerCtx,
+    );
+    expect(await storedFilter(created.id)).toEqual(BUGS);
+  });
+
+  it('stores SQL NULL with no filter, a null filter, or zero conditions', async () => {
+    const fx = await makeFixture('sf-null');
+    const none = await boardsService.createBoard(fx.projectId, { name: 'None' }, fx.ownerCtx);
+    const nul = await boardsService.createBoard(
+      fx.projectId,
+      { name: 'Null', filter: null },
+      fx.ownerCtx,
+    );
+    const empty = await boardsService.createBoard(
+      fx.projectId,
+      { name: 'Empty', filter: { v: 'v1', c: 'and', f: [] } },
+      fx.ownerCtx,
+    );
+    for (const b of [none, nul, empty]) expect(await filterIsSqlNull(b.id)).toBe(true);
+  });
+
+  it('keeps the copy byte-identical after the saved filter it came from is edited and deleted', async () => {
+    const fx = await makeFixture('sf-copy');
+    const bugAst: FilterAst = {
+      combinator: 'and',
+      conditions: [{ field: 'kind', operator: 'is_any_of', value: ['bug'] }],
+    };
+    const saved = await savedFiltersService.create(
+      'PROD',
+      { name: 'Bugs', visibility: 'private', filterParam: encodeFilterParam(bugAst) },
+      fx.ownerCtx,
+    );
+    // "Start from a saved filter" resolves client-side into conditions.
+    const resolved = await savedFiltersService.resolve('PROD', saved.id, fx.ownerCtx);
+    const created = await boardsService.createBoard(
+      fx.projectId,
+      { name: 'From saved', filter: encodeFilterEnvelope(resolved.ast!) },
+      fx.ownerCtx,
+    );
+    const before = JSON.stringify(await storedFilter(created.id));
+
+    await savedFiltersService.delete('PROD', saved.id, fx.ownerCtx);
+
+    expect(JSON.stringify(await storedFilter(created.id))).toBe(before);
+    expect(await storedFilter(created.id)).toEqual(BUGS);
+  });
+
+  it.each([
+    ['a non-object envelope', 'v1:abc', MalformedFilterError],
+    ['a missing version', { c: 'and', f: [] }, MalformedFilterError],
+    ['an unsupported version', { v: 'v9', c: 'and', f: [] }, MalformedFilterError],
+    ['a bad combinator', { v: 'v1', c: 'xor', f: [] }, MalformedFilterError],
+    ['a bad row shape', { v: 'v1', c: 'and', f: [['kind']] }, MalformedFilterError],
+    [
+      'an unknown field',
+      { v: 'v1', c: 'and', f: [['nope', 'is_any_of', ['x']]] },
+      UnknownFilterFieldError,
+    ],
+    [
+      'an unknown operator',
+      { v: 'v1', c: 'and', f: [['kind', 'gt', 3]] },
+      UnknownFilterOperatorError,
+    ],
+    [
+      'an invalid value',
+      { v: 'v1', c: 'and', f: [['kind', 'is_any_of', ['dragon']]] },
+      InvalidFilterValueError,
+    ],
+    ['21 conditions', tooMany(21), FilterTooLargeError],
+  ])('refuses %s and creates no board', async (_label, filter, ErrorClass) => {
+    const fx = await makeFixture(`sf-refuse-${String(_label).replace(/\W+/g, '-')}`);
+    const before = await adminDb.board.count({ where: { projectId: fx.projectId } });
+    await expect(
+      boardsService.createBoard(fx.projectId, { name: 'Refused', filter }, fx.ownerCtx),
+    ).rejects.toBeInstanceOf(ErrorClass);
+    expect(await adminDb.board.count({ where: { projectId: fx.projectId } })).toBe(before);
+  });
+
+  it('names the refused condition by its 0-based index, and none for a whole-filter refusal', async () => {
+    const fx = await makeFixture('sf-refuse-index');
+    const refusal = await boardsService
+      .createBoard(
+        fx.projectId,
+        {
+          name: 'Refused',
+          filter: {
+            v: 'v1',
+            c: 'and',
+            f: [
+              ['kind', 'is_any_of', ['bug']],
+              ['priority', 'is_any_of', ['high']],
+              ['kind', 'is_any_of', ['dragon']],
+            ],
+          },
+        },
+        fx.ownerCtx,
+      )
+      .catch((err: unknown) => err);
+    expect(refusal).toBeInstanceOf(InvalidFilterValueError);
+    expect((refusal as InvalidFilterValueError).conditionIndex).toBe(2);
+
+    const whole = await boardsService
+      .createBoard(fx.projectId, { name: 'Refused', filter: tooMany(21) }, fx.ownerCtx)
+      .catch((err: unknown) => err);
+    expect((whole as FilterTooLargeError).conditionIndex).toBeUndefined();
+  });
+
+  it('reports the condition count and the cap on the over-cap refusal', async () => {
+    const fx = await makeFixture('sf-cap');
+    const err = await boardsService
+      .createBoard(fx.projectId, { name: 'Cap', filter: tooMany(23) }, fx.ownerCtx)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FilterTooLargeError);
+    expect(err).toMatchObject({ code: 'FILTER_TOO_LARGE', rowCount: 23, cap: 20 });
+  });
+
+  it('accepts exactly 20 conditions', async () => {
+    const fx = await makeFixture('sf-twenty');
+    const created = await boardsService.createBoard(
+      fx.projectId,
+      { name: 'Twenty', filter: tooMany(20) },
+      fx.ownerCtx,
+    );
+    expect(((await storedFilter(created.id)) as FilterEnvelope).f).toHaveLength(20);
+  });
+
+  it('accepts a stale label / component / option referent, stored as sent', async () => {
+    const fx = await makeFixture('sf-stale');
+    const stale: FilterEnvelope = {
+      v: 'v1',
+      c: 'and',
+      f: [
+        ['lbl', 'is_any_of', ['deleted-label-id']],
+        ['cmp', 'is_any_of', ['deleted-component-id']],
+      ],
+    };
+    const created = await boardsService.createBoard(
+      fx.projectId,
+      { name: 'Stale', filter: stale },
+      fx.ownerCtx,
+    );
+    expect(await storedFilter(created.id)).toEqual(stale);
+  });
+
+  it("validates a cf:<id> condition against the field's real type", async () => {
+    const fx = await makeFixture('sf-cf');
+    const effort = await adminDb.customFieldDefinition.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        key: 'effort',
+        label: 'Effort',
+        fieldType: 'number',
+        position: 'a0',
+      },
+    });
+    // A number field takes comparisons, not the enum list operators.
+    await expect(
+      boardsService.createBoard(
+        fx.projectId,
+        {
+          name: 'Bad cf',
+          filter: { v: 'v1', c: 'and', f: [[`cf:${effort.id}`, 'is_any_of', ['x']]] },
+        },
+        fx.ownerCtx,
+      ),
+    ).rejects.toBeInstanceOf(UnknownFilterOperatorError);
+    const ok: FilterEnvelope = { v: 'v1', c: 'and', f: [[`cf:${effort.id}`, 'gt', 3]] };
+    const created = await boardsService.createBoard(
+      fx.projectId,
+      { name: 'Good cf', filter: ok },
+      fx.ownerCtx,
+    );
+    expect(await storedFilter(created.id)).toEqual(ok);
+  });
+
+  it('runs the gate before the filter: a member is refused 403 even with an invalid filter', async () => {
+    const fx = await makeFixture('sf-gate');
+    await expect(
+      boardsService.createBoard(fx.projectId, { name: 'Nope', filter: { v: 'v9' } }, fx.memberCtx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it('ensureScrumBoard creates its board with no stored filter', async () => {
+    const fx = await makeFixture('sf-scrum');
+    await boardsService.ensureScrumBoard(fx.projectId, fx.ownerCtx);
+    const scrum = await adminDb.board.findFirstOrThrow({
+      where: { projectId: fx.projectId, type: 'scrum' },
+    });
+    expect(await filterIsSqlNull(scrum.id)).toBe(true);
+  });
+});
+
+describe('boardsService.setBoardFilter (MOTIR-11331)', () => {
+  it('sets, replaces and clears the stored filter, returning the BoardDto', async () => {
+    const fx = await makeFixture('sf-set');
+    expect(await filterIsSqlNull(fx.defaultBoardId)).toBe(true);
+
+    const set = await boardsService.setBoardFilter(fx.defaultBoardId, BUGS, fx.ownerCtx);
+    expect(set).toMatchObject({ id: fx.defaultBoardId, filter: BUGS });
+    expect(await storedFilter(fx.defaultBoardId)).toEqual(BUGS);
+
+    const replaced = await boardsService.setBoardFilter(
+      fx.defaultBoardId,
+      URGENT_OR_TASK,
+      fx.ownerCtx,
+    );
+    expect(replaced.filter).toEqual(URGENT_OR_TASK);
+    expect(await storedFilter(fx.defaultBoardId)).toEqual(URGENT_OR_TASK);
+
+    const cleared = await boardsService.setBoardFilter(fx.defaultBoardId, null, fx.ownerCtx);
+    expect(cleared.filter).toBeNull();
+    expect(await filterIsSqlNull(fx.defaultBoardId)).toBe(true);
+  });
+
+  it('clears to SQL NULL on an envelope with zero conditions', async () => {
+    const fx = await makeFixture('sf-set-empty');
+    await boardsService.setBoardFilter(fx.defaultBoardId, BUGS, fx.ownerCtx);
+    const cleared = await boardsService.setBoardFilter(
+      fx.defaultBoardId,
+      { v: 'v1', c: 'or', f: [] },
+      fx.ownerCtx,
+    );
+    expect(cleared.filter).toBeNull();
+    expect(await filterIsSqlNull(fx.defaultBoardId)).toBe(true);
+  });
+
+  it('refuses an invalid or over-cap filter and leaves the stored filter unchanged', async () => {
+    const fx = await makeFixture('sf-set-refuse');
+    await boardsService.setBoardFilter(fx.defaultBoardId, BUGS, fx.ownerCtx);
+    await expect(
+      boardsService.setBoardFilter(
+        fx.defaultBoardId,
+        { v: 'v1', c: 'and', f: [['nope', 'is_any_of', []]] },
+        fx.ownerCtx,
+      ),
+    ).rejects.toBeInstanceOf(UnknownFilterFieldError);
+    await expect(
+      boardsService.setBoardFilter(fx.defaultBoardId, tooMany(21), fx.ownerCtx),
+    ).rejects.toBeInstanceOf(FilterTooLargeError);
+    await expect(
+      boardsService.setBoardFilter(fx.defaultBoardId, 'not-an-envelope', fx.ownerCtx),
+    ).rejects.toBeInstanceOf(MalformedFilterError);
+    expect(await storedFilter(fx.defaultBoardId)).toEqual(BUGS);
+  });
+
+  it('denies a member (403) and 404s a cross-workspace board, leaving the filter unchanged', async () => {
+    const fx = await makeFixture('sf-set-authz');
+    await expect(
+      boardsService.setBoardFilter(fx.defaultBoardId, BUGS, fx.memberCtx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    const other = await makeFixture('sf-set-authz-other');
+    await expect(
+      boardsService.setBoardFilter(other.defaultBoardId, BUGS, fx.ownerCtx),
+    ).rejects.toBeInstanceOf(BoardNotFoundError);
+    expect(await filterIsSqlNull(fx.defaultBoardId)).toBe(true);
+    expect(await filterIsSqlNull(other.defaultBoardId)).toBe(true);
+  });
+
+  it('carries the stored filter on renameBoard and setSwimlaneGroupBy responses', async () => {
+    const fx = await makeFixture('sf-dto');
+    const renamedBare = await boardsService.renameBoard(fx.defaultBoardId, 'Plain', fx.ownerCtx);
+    expect(renamedBare.filter).toBeNull();
+    await boardsService.setBoardFilter(fx.defaultBoardId, BUGS, fx.ownerCtx);
+    const renamed = await boardsService.renameBoard(fx.defaultBoardId, 'Bugs', fx.ownerCtx);
+    expect(renamed.filter).toEqual(BUGS);
+    const grouped = await boardsService.setSwimlaneGroupBy(
+      fx.defaultBoardId,
+      'priority',
+      fx.ownerCtx,
+    );
+    expect(grouped.filter).toEqual(BUGS);
   });
 });

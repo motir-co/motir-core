@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import enMessages from '@/messages/en.json';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { BoardSummaryDto } from '@/lib/dto/boards';
@@ -13,6 +14,8 @@ import {
   upsertBoard,
 } from '@/app/(authed)/boards/_components/multiBoardState';
 import { BoardSwitcher } from '@/app/(authed)/boards/_components/BoardSwitcher';
+import type { BoardFilterLookups } from '@/app/(authed)/boards/_components/BoardFilterSection';
+import { encodeFilterEnvelope, type FilterAst } from '@/lib/filters/ast';
 
 // BoardSwitcher (Subtask 3.7.4) — driven under happy-dom (DB-free): the switcher
 // is a pure client consumer of the 3.7.3 board REST endpoints, so we stub global
@@ -376,5 +379,385 @@ describe('boardSwitcher helpers (3.7.4)', () => {
     expect(sortBoards(unsorted).map((b) => b.id)).toEqual(['b1', 'b2']);
     const added = upsertBoard(TWO_BOARDS, board({ id: 'b3', position: 'a05', isDefault: false }));
     expect(added.map((b) => b.id)).toEqual(['b1', 'b3', 'b2']);
+  });
+});
+
+// ── The create dialog's Board filter section (Story MOTIR-10560 · MOTIR-11333) ──
+// The section hosts the shared `FilterConditionBuilder` as form state; "Start
+// from a saved filter" COPIES the resolved saved filter's conditions in (and
+// resolves the labels they name through `/labels?ids=`); the POST carries the
+// committed envelope as `filter`, or no `filter` key at all; a 422 stays in the
+// dialog, every other failure keeps the toast.
+
+const tb = enMessages.boards;
+const tiv = enMessages.issueViews;
+
+const LOOKUPS: BoardFilterLookups = {
+  statuses: [],
+  members: [],
+  sprints: [],
+  customFields: [],
+  components: [],
+  referencedLabels: [],
+  projectKey: 'ACME',
+};
+
+const BUG_OR_MOBILE: FilterAst = {
+  combinator: 'or',
+  conditions: [
+    { field: 'kind', operator: 'is_any_of', value: ['bug'] },
+    { field: 'lbl', operator: 'is_any_of', value: ['lab-mobile'] },
+  ],
+};
+const GONE_LABEL: FilterAst = {
+  combinator: 'and',
+  conditions: [{ field: 'lbl', operator: 'is_any_of', value: ['lab-gone'] }],
+};
+// Two complete conditions; the server (stubbed) refuses the second by index.
+const BAD_SECOND: FilterAst = {
+  combinator: 'and',
+  conditions: [
+    { field: 'kind', operator: 'is_any_of', value: ['bug'] },
+    { field: 'priority', operator: 'is_any_of', value: ['high'] },
+  ],
+};
+
+function savedFilter(id: string, name: string) {
+  return {
+    id,
+    name,
+    description: null,
+    visibility: 'project' as const,
+    owner: { id: 'u1', name: 'Dana' },
+    starCount: 0,
+    starredByMe: false,
+    builtin: false as const,
+    updatedAt: '2026-11-01T00:00:00.000Z',
+  };
+}
+
+const SAVED = {
+  'sf-mobile': { summary: savedFilter('sf-mobile', 'Mobile work'), ast: BUG_OR_MOBILE },
+  'sf-gone': { summary: savedFilter('sf-gone', 'Old labels'), ast: GONE_LABEL },
+  'sf-bad': { summary: savedFilter('sf-bad', 'Odd kinds'), ast: BAD_SECOND },
+  'sf-broken': { summary: savedFilter('sf-broken', 'Broken'), ast: null },
+} as const;
+
+type PostReply = { status: number; body: unknown };
+
+function stubFilterFetch(post: PostReply = { status: 201, body: null }) {
+  const posts: unknown[] = [];
+  fetchMock = vi.fn(async (url: string, opts?: { method?: string; body?: string }) => {
+    const u = String(url);
+    const method = opts?.method ?? 'GET';
+    if (u === '/api/boards' && method === 'GET') return ok({ boards: TWO_BOARDS });
+    if (u === '/api/boards' && method === 'POST') {
+      const body = JSON.parse(opts!.body!);
+      posts.push(body);
+      if (post.status === 201) {
+        return ok(
+          { id: 'b-new', name: body.name, type: body.type, isDefault: false, position: 'a9' },
+          201,
+        );
+      }
+      return { ok: false, status: post.status, json: async () => post.body };
+    }
+    if (u.startsWith('/api/projects/ACME/saved-filters?')) {
+      return ok({
+        items: Object.values(SAVED).map((f) => f.summary),
+        nextCursor: null,
+        total: 4,
+        builtins: [],
+      });
+    }
+    const resolved = u.match(/^\/api\/projects\/ACME\/saved-filters\/([^/?]+)$/);
+    if (resolved) {
+      const f = SAVED[resolved[1] as keyof typeof SAVED];
+      return ok({
+        filter: f.summary,
+        ast: f.ast,
+        astError: f.ast ? null : { kind: 'malformed', message: 'bad envelope' },
+        capabilities: {},
+      });
+    }
+    if (u.startsWith('/api/projects/ACME/labels?')) {
+      const ids = new URL(`http://x${u}`).searchParams.get('ids')!.split(',');
+      const known = [{ id: 'lab-mobile', name: 'mobile' }];
+      return ok({ labels: known.filter((l) => ids.includes(l.id)) });
+    }
+    return { ok: false, status: 404, json: async () => ({ code: 'NOT_FOUND' }) };
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return posts;
+}
+
+/** Open New board; `null` mounts the switcher with no lookups at all. */
+async function openCreateDialog(lookups: BoardFilterLookups | null = LOOKUPS) {
+  render(<BoardSwitcher canManage filterLookups={lookups ?? undefined} />);
+  fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+  fireEvent.click(await screen.findByTestId('board-switcher-new'));
+  fireEvent.change(await screen.findByTestId('board-new-name'), { target: { value: 'Bugs' } });
+}
+
+async function copySaved(name: string) {
+  fireEvent.click(await screen.findByRole('combobox', { name: tb.filterStartFromSaved }));
+  fireEvent.click(await screen.findByRole('option', { name: new RegExp(name) }));
+}
+
+describe('BoardSwitcher — the create dialog’s Board filter section (MOTIR-11333)', () => {
+  it('shows the optional section collapsed below the board type, and opens the shared builder', async () => {
+    stubFilterFetch();
+    await openCreateDialog();
+    const section = screen.getByTestId('board-filter-section');
+    expect(section.textContent).toContain(tb.filterSectionLabel);
+    expect(section.textContent).toContain(tb.filterSectionOptional);
+    expect(section.textContent).toContain(tb.filterSectionEmptyHint);
+    // Below the board-type radio group.
+    const radios = screen.getByRole('radiogroup');
+    expect(radios.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    expect(await screen.findByText(tb.filterSectionIntro)).toBeTruthy();
+    expect(screen.getByRole('button', { name: new RegExp(tiv.advancedAddCondition) })).toBeTruthy();
+    // The form host's foot line: nothing applies until Create.
+    expect(screen.getByText('0 of 20 conditions')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('board-filter-remove'));
+    expect(screen.getByTestId('board-filter-add')).toBeTruthy();
+  });
+
+  it('posts { name, type } with no filter key when the section holds no complete condition', async () => {
+    const posts = stubFilterFetch();
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    // A pending row (no value yet) is dropped from the committed filter.
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(tiv.advancedAddCondition) }));
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toEqual({ name: 'Bugs', type: 'kanban' });
+    expect(Object.keys(posts[0] as object)).not.toContain('filter');
+  });
+
+  it('copies a saved filter’s conditions, names its labels, and posts only the copy as the envelope', async () => {
+    const posts = stubFilterFetch();
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Mobile work');
+
+    const copied = await screen.findByTestId('board-filter-copied');
+    expect(copied.textContent).toContain('Mobile work');
+    // The copied label resolves by name; nothing is flagged as deleted.
+    expect(await screen.findByText('mobile')).toBeTruthy();
+    expect(screen.queryByText(tiv.advancedStaleNote)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/projects/ACME/labels?ids=lab-mobile',
+      expect.anything(),
+    );
+    // The conditions are the builder's own, editable: two condition groups.
+    expect(screen.getAllByRole('group', { name: /Condition \d/ })).toHaveLength(2);
+
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toEqual({
+      name: 'Bugs',
+      type: 'kanban',
+      filter: encodeFilterEnvelope(BUG_OR_MOBILE),
+    });
+    expect(JSON.stringify(posts[0])).not.toContain('sf-mobile');
+  });
+
+  it('flags a copied label that no longer exists as stale', async () => {
+    stubFilterFetch();
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Old labels');
+    await screen.findByTestId('board-filter-copied');
+    expect(await screen.findByText(tiv.advancedStaleNote)).toBeTruthy();
+  });
+
+  it('copies nothing from a saved filter whose conditions no longer read, and says so', async () => {
+    stubFilterFetch();
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Mobile work');
+    await screen.findByTestId('board-filter-copied');
+    await copySaved('Broken');
+
+    const error = await screen.findByTestId('board-filter-copy-error');
+    expect(error.textContent).toContain('“Broken” can’t be used');
+    // The builder keeps what it held.
+    expect(screen.getAllByRole('group', { name: /Condition \d/ })).toHaveLength(2);
+    expect(screen.queryByTestId('board-filter-copied')).toBeNull();
+  });
+
+  it('says so when copying fails, and copies nothing', async () => {
+    stubFilterFetch();
+    const base = fetchMock.getMockImplementation() as (url: string, opts?: unknown) => unknown;
+    fetchMock.mockImplementation(async (url: string, opts?: { method?: string }) =>
+      String(url).includes('/labels?')
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : base(url, opts),
+    );
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Mobile work');
+    const error = await screen.findByTestId('board-filter-copy-error');
+    expect(error.textContent).toContain(tb.filterStartFromSavedFailed);
+    expect(screen.queryAllByRole('group', { name: /Condition \d/ })).toHaveLength(0);
+  });
+
+  it('keeps the dialog open on a 422 and names the failing condition inside the section', async () => {
+    stubFilterFetch({
+      status: 422,
+      body: { code: 'INVALID_FILTER_VALUE', error: 'that kind is unknown', conditionIndex: 1 },
+    });
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Odd kinds');
+    await screen.findByTestId('board-filter-copied');
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+
+    const refusal = await screen.findByTestId('board-filter-refusal');
+    expect(refusal.getAttribute('role')).toBe('alert');
+    expect(within(refusal).getByText(tb.filterRefusedTitle)).toBeTruthy();
+    expect(refusal.textContent).toContain('Condition 2 can’t be used: that kind is unknown.');
+    // Open, unchanged, and no generic toast.
+    expect((screen.getByTestId('board-new-name') as HTMLInputElement).value).toBe('Bugs');
+    expect(screen.getAllByRole('group', { name: /Condition \d/ })).toHaveLength(2);
+    expect(screen.queryByText(tb.boardCreateErrorDescription)).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+
+    // An edit clears the refusal.
+    fireEvent.click(screen.getAllByRole('button', { name: /Remove condition/ })[1]!);
+    expect(screen.queryByTestId('board-filter-refusal')).toBeNull();
+  });
+
+  it('renders a whole-filter refusal and the over-cap refusal', async () => {
+    stubFilterFetch({ status: 422, body: { code: 'MALFORMED_FILTER', error: 'unreadable' } });
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Mobile work');
+    await screen.findByTestId('board-filter-copied');
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+    expect((await screen.findByTestId('board-filter-refusal')).textContent).toContain(
+      'This filter can’t be used: unreadable.',
+    );
+
+    cleanup();
+    stubFilterFetch({
+      status: 422,
+      body: { code: 'FILTER_TOO_LARGE', error: 'Filter has 21 conditions; the cap is 20' },
+    });
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Mobile work');
+    await screen.findByTestId('board-filter-copied');
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+    expect((await screen.findByTestId('board-filter-refusal')).textContent).toContain(
+      'A board filter holds at most 20 conditions, and this one has 2. Remove 1 condition to continue.',
+    );
+  });
+
+  it('searches the saved filters as the person types', async () => {
+    stubFilterFetch();
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    fireEvent.click(await screen.findByRole('combobox', { name: tb.filterStartFromSaved }));
+    fireEvent.change(await screen.findByPlaceholderText(tb.filterStartFromSavedSearch), {
+      target: { value: 'Mob' },
+    });
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([url]) =>
+            String(url).startsWith('/api/projects/ACME/saved-filters?') &&
+            String(url).includes('q=Mob'),
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it('shows the empty picker when the saved filters cannot be listed', async () => {
+    stubFilterFetch();
+    const base = fetchMock.getMockImplementation() as (url: string, opts?: unknown) => unknown;
+    fetchMock.mockImplementation(async (url: string, opts?: { method?: string }) =>
+      String(url).includes('/saved-filters?')
+        ? { ok: false, status: 500, json: async () => ({ code: 'INTERNAL' }) }
+        : base(url, opts),
+    );
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    fireEvent.click(await screen.findByRole('combobox', { name: tb.filterStartFromSaved }));
+    expect(await screen.findByText(tb.filterStartFromSavedEmpty)).toBeTruthy();
+  });
+
+  it('does not repeat a label the page already resolved', async () => {
+    stubFilterFetch();
+    await openCreateDialog({
+      ...LOOKUPS,
+      referencedLabels: [{ id: 'lab-mobile', name: 'mobile' }],
+    });
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Mobile work');
+    await screen.findByTestId('board-filter-copied');
+    expect(await screen.findAllByText('mobile')).toHaveLength(1);
+  });
+
+  it('still shows a refusal inside the section when the 422 body cannot be read', async () => {
+    stubFilterFetch();
+    const base = fetchMock.getMockImplementation() as (url: string, opts?: unknown) => unknown;
+    fetchMock.mockImplementation(async (url: string, opts?: { method?: string }) =>
+      String(url) === '/api/boards' && opts?.method === 'POST'
+        ? {
+            ok: false,
+            status: 422,
+            json: async () => {
+              throw new SyntaxError('not json');
+            },
+          }
+        : base(url, opts),
+    );
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Mobile work');
+    await screen.findByTestId('board-filter-copied');
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+    expect((await screen.findByTestId('board-filter-refusal')).textContent).toContain(
+      'This filter can’t be used',
+    );
+  });
+
+  it('keeps the generic toast for a failure that is not a 422', async () => {
+    stubFilterFetch({ status: 500, body: { code: 'INTERNAL' } });
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+    expect(await screen.findByText(tb.boardCreateErrorDescription)).toBeTruthy();
+    expect(screen.queryByTestId('board-filter-refusal')).toBeNull();
+  });
+
+  it('a successful create closes the dialog, selects and announces the new board', async () => {
+    stubFilterFetch();
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith('/boards?board=b-new', { scroll: false }),
+    );
+    expect(screen.queryByTestId('board-filter-section')).toBeNull();
+    expect(screen.getByTestId('board-switcher-live').textContent).toContain('Bugs');
+  });
+
+  it('the rename dialog, and a switcher without lookups, show no Filter section', async () => {
+    stubFilterFetch();
+    render(<BoardSwitcher canManage filterLookups={LOOKUPS} />);
+    fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+    fireEvent.click(await screen.findByTestId('board-switcher-manage-b1'));
+    fireEvent.click(await screen.findByTestId('board-switcher-rename-b1'));
+    await screen.findByTestId('board-rename-name');
+    expect(screen.queryByTestId('board-filter-section')).toBeNull();
+    cleanup();
+
+    stubFilterFetch();
+    await openCreateDialog(null);
+    expect(screen.queryByTestId('board-filter-section')).toBeNull();
   });
 });
