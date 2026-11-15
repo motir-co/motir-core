@@ -10894,6 +10894,7 @@
       "navPlannerFindings": "Achados do planejador",
       "navIdeas": "Ideias",
       "navRunModels": "Modelos do agente Motir",
+      "navModelServing": "Fornecimento de modelos",
       "navFleetSettings": "Configurações da frota",
       "navServices": "Serviços",
       "navCapacity": "Capacidade dos provedores",
@@ -11147,6 +11148,9 @@
           },
           "planner_finding": {
             "triage": "Fez a triagem de um achado do planejador"
+          },
+          "model_serving": {
+            "set": "Alterou qual provedor fornece um modelo"
           }
         }
       }
@@ -13256,6 +13260,83 @@
           "body": "O serviço de planejamento (motir-ai) não respondeu, então nenhum padrão é exibido. Nada mudou e nenhum valor é adivinhado.",
           "retry": "Tentar novamente"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "Plataforma · Fornecimento de modelos",
+      "title": "Fornecimento de modelos",
+      "subtitle": "Alguns modelos são vendidos por mais de um provedor. Escolha qual fornece cada modelo. Sempre é cobrado o preço do provedor original.",
+      "lineCharge": "O que uma pessoa paga nunca depende do canal: o preço cobrado é o preço oficial do provedor original, mais a margem da Motir.",
+      "card": {
+        "title": "Modelos com mais de um vendedor",
+        "subtitle": "{count, plural, one {# modelo} other {# modelos}} · lidos dos canais e das linhas de preço do gateway"
+      },
+      "col": {
+        "model": "Modelo",
+        "original": "Provedor original",
+        "charged": "Preço cobrado",
+        "servedBy": "Fornecido por",
+        "cost": "Custo para a Motir",
+        "action": "Ação"
+      },
+      "perMTok": "{input} / {output} por milhão de tokens",
+      "plusMargin": "É cobrado este preço mais a margem",
+      "source": {
+        "read": "Lido em {date}"
+      },
+      "default": "Padrão",
+      "chosen": "Escolhido por {who} · {date}",
+      "channelEnabled": "Canal {name} ativado",
+      "channelDisabled": "Canal {name} desativado",
+      "fallingBack": "Recorrendo a {provider}",
+      "fallingBackBody": "O canal de {selected} está desativado, então {provider} está fornecendo. O preço cobrado não muda.",
+      "diff": {
+        "same": "Igual ao preço oficial",
+        "below": "Entrada {input}% · saída {output}% abaixo do preço oficial",
+        "above": "Entrada {input}% · saída {output}% acima do preço oficial",
+        "inputBelowOutputAbove": "Entrada {input}% abaixo · saída {output}% acima do preço oficial",
+        "inputAboveOutputBelow": "Entrada {input}% acima · saída {output}% abaixo do preço oficial"
+      },
+      "change": "Alterar",
+      "changeAria": "Alterar qual provedor fornece {model}",
+      "readOnly": "Somente um superadministrador pode alterar qual provedor fornece um modelo.",
+      "dialog": {
+        "title": "Escolha quem fornece {model}",
+        "body": "As solicitações para {model} vão para o provedor que você escolher. Isso muda o que a Motir paga, nunca o que é cobrado das pessoas.",
+        "original": "Provedor original",
+        "current": "Fornecendo agora",
+        "channel": "Canal do gateway {name}",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "cost": "Custa à Motir {price}",
+        "priceSource": "Preço de {host}, lido em {date}",
+        "resetDefault": "Usar o padrão",
+        "useDefault": "O provedor original o fornece sempre que o canal dele estiver ativado.",
+        "disabledWarning": {
+          "title": "O canal de {provider} está desativado",
+          "body": "Enquanto o canal {channel} estiver desativado, as solicitações para {model} recorrem a {fallback}. Elas vão para {provider} quando o canal for reativado."
+        },
+        "footer": "Continua sendo cobrado {input} / {output} por milhão de tokens.",
+        "cancel": "Cancelar",
+        "save": "Salvar",
+        "saveAnyway": "Salvar mesmo assim",
+        "saving": "Salvando…"
+      },
+      "error": {
+        "save": "O gateway não aceitou a alteração, então {model} continua sendo fornecido por {provider}. Tente novamente.",
+        "unreachable": {
+          "title": "Não foi possível ler o fornecimento de modelos",
+          "body": "O gateway não respondeu ou não conseguiu ler seus canais. Nada é exibido até que uma leitura tenha sucesso."
+        },
+        "retry": "Tentar novamente"
+      },
+      "toast": {
+        "saved": "{provider} agora fornece {model}",
+        "savedBody": "Registrado no log de auditoria. O preço cobrado não mudou."
+      },
+      "empty": {
+        "title": "Nenhum modelo tem mais de um vendedor",
+        "body": "Cada modelo fornecido pelo gateway vem de um único provedor, então não há o que escolher. Um modelo aparece aqui assim que o canal de um segundo provedor também o fornece."
       }
     },
     "ideas": {

@@ -10891,6 +10891,7 @@
       "navPlannerFindings": "プランナーの指摘",
       "navIdeas": "アイデア",
       "navRunModels": "Motir エージェントのモデル",
+      "navModelServing": "モデルの提供元",
       "navFleetSettings": "フリート設定",
       "navServices": "サービス",
       "navCapacity": "プロバイダーの容量",
@@ -11144,6 +11145,9 @@
           },
           "planner_finding": {
             "triage": "プランナーの指摘をトリアージしました"
+          },
+          "model_serving": {
+            "set": "モデルの提供元プロバイダーを変更しました"
           }
         }
       }
@@ -13253,6 +13257,83 @@
           "body": "計画サービス（motir-ai）が応答しなかったため、既定値は表示されません。何も変更されておらず、値の推測もしていません。",
           "retry": "再試行"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "プラットフォーム · モデルの提供元",
+      "title": "モデルの提供元",
+      "subtitle": "一部のモデルは複数のプロバイダーが販売しています。各モデルをどのプロバイダーが提供するかを選択してください。料金は常に元のプロバイダーの価格で請求されます。",
+      "lineCharge": "支払う金額はチャネルによって変わりません。請求価格は元のプロバイダーの公式価格に Motir のマージンを加えたものです。",
+      "card": {
+        "title": "複数の販売元があるモデル",
+        "subtitle": "{count, plural, other {# 件のモデル}} · ゲートウェイのチャネルと価格行から読み取り"
+      },
+      "col": {
+        "model": "モデル",
+        "original": "元のプロバイダー",
+        "charged": "請求価格",
+        "servedBy": "提供元",
+        "cost": "Motir のコスト",
+        "action": "操作"
+      },
+      "perMTok": "100 万トークンあたり {input} / {output}",
+      "plusMargin": "この価格にマージンを加えて請求",
+      "source": {
+        "read": "{date}に読み取り"
+      },
+      "default": "デフォルト",
+      "chosen": "{who} が選択 · {date}",
+      "channelEnabled": "チャネル {name} オン",
+      "channelDisabled": "チャネル {name} オフ",
+      "fallingBack": "{provider} にフォールバック中",
+      "fallingBackBody": "{selected} のチャネルがオフのため、{provider} が提供しています。請求価格は変わりません。",
+      "diff": {
+        "same": "公式価格と同じ",
+        "below": "入力 {input}% · 出力 {output}% 公式価格より安い",
+        "above": "入力 {input}% · 出力 {output}% 公式価格より高い",
+        "inputBelowOutputAbove": "入力 {input}% 安い · 出力 {output}% 高い（公式価格比）",
+        "inputAboveOutputBelow": "入力 {input}% 高い · 出力 {output}% 安い（公式価格比）"
+      },
+      "change": "変更",
+      "changeAria": "{model} の提供元プロバイダーを変更",
+      "readOnly": "モデルの提供元プロバイダーを変更できるのはスーパー管理者のみです。",
+      "dialog": {
+        "title": "{model} の提供元を選択",
+        "body": "{model} へのリクエストは選択したプロバイダーに送られます。変わるのは Motir の支払額であり、請求額は変わりません。",
+        "original": "元のプロバイダー",
+        "current": "現在提供中",
+        "channel": "ゲートウェイチャネル {name}",
+        "enabled": "有効",
+        "disabled": "無効",
+        "cost": "Motir のコスト {price}",
+        "priceSource": "{host} の価格、{date}に読み取り",
+        "resetDefault": "デフォルトを使用",
+        "useDefault": "元のプロバイダーのチャネルがオンであれば、そのプロバイダーが提供します。",
+        "disabledWarning": {
+          "title": "{provider} のチャネルがオフです",
+          "body": "チャネル {channel} がオフの間、{model} へのリクエストは {fallback} にフォールバックします。チャネルが再びオンになると {provider} に送られます。"
+        },
+        "footer": "請求額は引き続き 100 万トークンあたり {input} / {output} です。",
+        "cancel": "キャンセル",
+        "save": "保存",
+        "saveAnyway": "このまま保存",
+        "saving": "保存中…"
+      },
+      "error": {
+        "save": "ゲートウェイが変更を受け付けなかったため、{model} は引き続き {provider} が提供しています。もう一度お試しください。",
+        "unreachable": {
+          "title": "モデルの提供元を読み取れませんでした",
+          "body": "ゲートウェイが応答しなかったか、チャネルを読み取れませんでした。読み取りに成功するまで何も表示されません。"
+        },
+        "retry": "再試行"
+      },
+      "toast": {
+        "saved": "{provider} が {model} を提供するようになりました",
+        "savedBody": "監査ログに記録しました。請求価格は変わっていません。"
+      },
+      "empty": {
+        "title": "複数の販売元があるモデルはありません",
+        "body": "ゲートウェイが提供するモデルはすべて 1 つのプロバイダーのものなので、選択する必要はありません。2 つ目のプロバイダーのチャネルが提供を始めると、ここにモデルが表示されます。"
       }
     },
     "ideas": {

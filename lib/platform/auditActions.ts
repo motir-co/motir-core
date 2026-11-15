@@ -477,6 +477,16 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'capacity.limits.edit': { kind: 'write', reason: 'inherited' },
   /**
+   * The provider whose gateway channel SERVES a model several providers sell
+   * was chosen or cleared at /admin/model-serving (MOTIR-11280), by a
+   * `superadmin`. `targetKind: 'platform'`, `targetId` the model id, `metadata`
+   * `{ model, fromProvider, toProvider, originProvider }` (`null` is "the
+   * default": the original provider). The gateway write runs inside the audited
+   * transaction, so a refused write leaves no row. `inherited`: the screen has
+   * no reason field, so the service writes its default.
+   */
+  'model_serving.set': { kind: 'write', reason: 'inherited' },
+  /**
    * A DEAD LETTER was replayed from the platform job ledger at /admin/jobs
    * (Story MOTIR-9980 · MOTIR-9985), by an `operator` or above — a workspace's
    * row or a workspace-less one. `targetKind: 'platform'`, `targetId` the

@@ -10894,6 +10894,7 @@
       "navPlannerFindings": "Planer-Befunde",
       "navIdeas": "Ideen",
       "navRunModels": "Motir-Agent-Modelle",
+      "navModelServing": "Modellbereitstellung",
       "navFleetSettings": "Flotteneinstellungen",
       "navServices": "Dienste",
       "navCapacity": "Anbieterkapazität",
@@ -11147,6 +11148,9 @@
           },
           "planner_finding": {
             "triage": "Planer-Befund triagiert"
+          },
+          "model_serving": {
+            "set": "Hat geändert, welcher Anbieter ein Modell bereitstellt"
           }
         }
       }
@@ -13256,6 +13260,83 @@
           "body": "Der Planungsdienst (motir-ai) hat nicht geantwortet, daher wird kein Standard angezeigt. Nichts wurde geändert, und kein Wert wird geraten.",
           "retry": "Erneut versuchen"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "Plattform · Modellbereitstellung",
+      "title": "Modellbereitstellung",
+      "subtitle": "Manche Modelle werden von mehr als einem Anbieter verkauft. Wählen Sie, welcher Anbieter jedes Modell bereitstellt. Berechnet wird immer der Preis des ursprünglichen Anbieters.",
+      "lineCharge": "Was eine Person zahlt, hängt nie vom Kanal ab: Der berechnete Preis ist der offizielle Preis des ursprünglichen Anbieters plus die Marge von Motir.",
+      "card": {
+        "title": "Modelle mit mehr als einem Anbieter",
+        "subtitle": "{count, plural, one {# Modell} other {# Modelle}} · gelesen aus den Kanälen und Preiszeilen des Gateways"
+      },
+      "col": {
+        "model": "Modell",
+        "original": "Ursprünglicher Anbieter",
+        "charged": "Berechneter Preis",
+        "servedBy": "Bereitgestellt von",
+        "cost": "Kosten für Motir",
+        "action": "Aktion"
+      },
+      "perMTok": "{input} / {output} pro Mio. Token",
+      "plusMargin": "Berechnet wird dieser Preis plus Marge",
+      "source": {
+        "read": "Gelesen am {date}"
+      },
+      "default": "Standard",
+      "chosen": "Gewählt von {who} · {date}",
+      "channelEnabled": "Kanal {name} aktiv",
+      "channelDisabled": "Kanal {name} aus",
+      "fallingBack": "Ausweichen auf {provider}",
+      "fallingBackBody": "Der Kanal von {selected} ist aus, daher stellt {provider} das Modell bereit. Der berechnete Preis ändert sich nicht.",
+      "diff": {
+        "same": "Gleich dem offiziellen Preis",
+        "below": "Eingabe {input} % · Ausgabe {output} % unter dem offiziellen Preis",
+        "above": "Eingabe {input} % · Ausgabe {output} % über dem offiziellen Preis",
+        "inputBelowOutputAbove": "Eingabe {input} % darunter · Ausgabe {output} % über dem offiziellen Preis",
+        "inputAboveOutputBelow": "Eingabe {input} % darüber · Ausgabe {output} % unter dem offiziellen Preis"
+      },
+      "change": "Ändern",
+      "changeAria": "Ändern, welcher Anbieter {model} bereitstellt",
+      "readOnly": "Nur ein Superadmin kann ändern, welcher Anbieter ein Modell bereitstellt.",
+      "dialog": {
+        "title": "Anbieter für {model} wählen",
+        "body": "Anfragen für {model} gehen an den Anbieter, den Sie wählen. Das ändert, was Motir zahlt, nie, was Personen berechnet wird.",
+        "original": "Ursprünglicher Anbieter",
+        "current": "Stellt jetzt bereit",
+        "channel": "Gateway-Kanal {name}",
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert",
+        "cost": "Kostet Motir {price}",
+        "priceSource": "Preis von {host}, gelesen am {date}",
+        "resetDefault": "Standard verwenden",
+        "useDefault": "Der ursprüngliche Anbieter stellt das Modell bereit, sobald sein Kanal aktiv ist.",
+        "disabledWarning": {
+          "title": "Der Kanal von {provider} ist aus",
+          "body": "Solange Kanal {channel} aus ist, gehen Anfragen für {model} an {fallback}. Sobald der Kanal wieder aktiv ist, gehen sie an {provider}."
+        },
+        "footer": "Berechnet werden weiterhin {input} / {output} pro Mio. Token.",
+        "cancel": "Abbrechen",
+        "save": "Speichern",
+        "saveAnyway": "Trotzdem speichern",
+        "saving": "Wird gespeichert…"
+      },
+      "error": {
+        "save": "Das Gateway hat die Änderung nicht angenommen, daher stellt weiterhin {provider} {model} bereit. Versuchen Sie es erneut.",
+        "unreachable": {
+          "title": "Die Modellbereitstellung konnte nicht gelesen werden",
+          "body": "Das Gateway hat nicht geantwortet oder konnte seine Kanäle nicht lesen. Bis ein Lesen gelingt, wird nichts angezeigt."
+        },
+        "retry": "Erneut versuchen"
+      },
+      "toast": {
+        "saved": "{provider} stellt jetzt {model} bereit",
+        "savedBody": "Im Audit-Log festgehalten. Der berechnete Preis hat sich nicht geändert."
+      },
+      "empty": {
+        "title": "Kein Modell hat mehr als einen Anbieter",
+        "body": "Jedes Modell, das das Gateway bereitstellt, stammt von einem Anbieter, es gibt also nichts zu wählen. Ein Modell erscheint hier, sobald es auch der Kanal eines zweiten Anbieters bereitstellt."
       }
     },
     "ideas": {
