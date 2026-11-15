@@ -1,5 +1,6 @@
 import { readFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
+import type { RawProviderReconciliation } from '@/lib/ai/motirAiClient';
 
 /**
  * The motir-ai PLATFORM USAGE boundary, faked for the E2E lanes (Story MOTIR-727 ·
@@ -10,6 +11,13 @@ import type { MockAgent } from 'undici';
  *   - GET /v1/platform/usage/orgs      → the Tenants list + the estate total
  *   - GET /v1/platform/usage/children  → an org's workspaces (+ remainder) / a workspace's projects
  *   - GET /v1/platform/usage/months    → month by month + the all-time row
+ *
+ * and the Provider bills section's read (Story MOTIR-11350 · MOTIR-11387):
+ *
+ *   - GET /v1/platform/usage/provider-reconciliation → one month's provider bills
+ *     beside Motir's recorded cost, answered VERBATIM from the fixture's
+ *     `providerReconciliation[period]` (an empty month when the period has none),
+ *     or a 503 problem+json while `providerReconciliationError` is set
  *
  * Answered from a JSON fixture the spec writes (`MOTIR_AI_PLATFORM_FIXTURE_PATH`):
  * the estate as orgs → workspaces → projects, each with a SCALE every figure is
@@ -44,6 +52,13 @@ export interface PlatformFixtureRun {
 export interface PlatformUsageFixture {
   orgs: PlatformFixtureOrg[];
   runs?: PlatformFixtureRun[];
+  /**
+   * The provider-bill reconciliation body per `YYYY-MM` period, exactly as motir-ai's
+   * contract documents the route. A period with no entry answers an empty month.
+   */
+  providerReconciliation?: Record<string, RawProviderReconciliation>;
+  /** When true, the reconciliation route answers a 503 problem+json instead. */
+  providerReconciliationError?: boolean;
 }
 
 const CHARGED = [
@@ -350,6 +365,41 @@ export function installPlatformUsageBoundaryMock(agent: MockAgent): void {
           orgsWithSpend:
             level === 'platform' ? fixture.orgs.filter((o) => o.scale > 0).length : null,
         },
+        responseOptions: json,
+      };
+    })
+    .persist();
+
+  pool
+    .intercept({
+      path: (p) => pathOnly(p) === '/v1/platform/usage/provider-reconciliation',
+      method: 'GET',
+    })
+    .reply<object>((req) => {
+      const period = query(req.path).get('period') ?? '';
+      const fixture = readFixture();
+      if (fixture.providerReconciliationError) {
+        return {
+          statusCode: 503,
+          data: {
+            type: 'about:blank',
+            title: 'Service unavailable',
+            status: 503,
+            code: 'upstream_unavailable',
+            detail: 'The provider-bill reconciliation could not be read.',
+          },
+          responseOptions: { headers: { 'content-type': 'application/problem+json' } },
+        };
+      }
+      const empty: RawProviderReconciliation = {
+        period,
+        providers: [],
+        findings: [],
+        unreconciledProviders: [],
+      };
+      return {
+        statusCode: 200,
+        data: fixture.providerReconciliation?.[period] ?? empty,
         responseOptions: json,
       };
     })
