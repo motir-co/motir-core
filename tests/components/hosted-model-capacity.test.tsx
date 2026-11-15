@@ -394,3 +394,17 @@ describe('the copy', () => {
     }
   });
 });
+
+// MOTIR-11280: a model several providers sell is listed under its ORIGINAL
+// provider. motir-ai answers glm-5.3 under `z-ai` (its maker) even while
+// Alibaba's channel serves it, and the picker shows exactly that provider.
+describe('a model several providers sell', () => {
+  it('is shown under the provider motir-ai lists it under, its maker', async () => {
+    list = [...models(), { id: 'glm-5.3', provider: 'z-ai', capacity: AVAILABLE }];
+    await mountDoor();
+    await openMenu();
+    const glm = optionFor('glm-5.3');
+    expect(glm.textContent).toContain('z-ai');
+    expect(glm.textContent).not.toContain('qwen');
+  });
+});

@@ -294,6 +294,9 @@ describe('the reason rule', () => {
     // The capacity limits edit (Story MOTIR-9539 · MOTIR-9613): a gateway write
     // audited in core, with a default reason when the screen gives none.
     'capacity.limits.edit': 'inherited',
+    // Who serves a model several providers sell (MOTIR-11280): a gateway write
+    // audited in core, with the service's default reason.
+    'model_serving.set': 'inherited',
     // A dead letter replayed from /admin/jobs (Story MOTIR-9980 · MOTIR-9985):
     // the screen has no reason field, so the service writes its default.
     'jobs.dlq_replay': 'inherited',

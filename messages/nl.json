@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Deze status kan niet direct worden ingesteld — het item heeft een open pull request, en het mergen daarvan zorgt voor deze stap. Alle andere stappen zijn nog mogelijk.",
       "PLAN_TARGET_HELD": "De status kan niet worden gewijzigd zolang er een plan open staat — een plan herschrijft dit item. Keur het plan goed of wijs het af, of trek het voorstel in dat dit item noemt.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Alleen een afgerond item kan worden gemarkeerd — archiveer het in plaats daarvan.",
-      "MARKED_CARD_CANNOT_REOPEN": "Dit item is gemarkeerd als verouderd of afgeschaft. Verwijder de markering om dit item te heropenen."
+      "MARKED_CARD_CANNOT_REOPEN": "Dit item is gemarkeerd als verouderd of afgeschaft. Verwijder de markering om dit item te heropenen.",
+      "WORK_ITEM_IN_TRIAGE": "Een item dat nog in Triage staat, kan niet in een map worden opgeborgen, onder een ander item worden geplaatst of onderliggende items krijgen. Accepteer het eerst in Triage."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Alleen een projectbeheerder kan de workflow bewerken.",
@@ -1468,6 +1469,10 @@
     "openFullPage": "Volledige pagina openen",
     "quickViewLoadingAria": "Werkitem laden",
     "quickViewMore": "Toelichting, relaties, bijlagen en de activiteitenfeed staan op de <link>volledige pagina</link>.",
+    "quickViewCopyKeyAria": "{key} kopiëren",
+    "quickViewCopyKeyTooltip": "Sleutel kopiëren",
+    "quickViewKeyCopied": "{key} gekopieerd",
+    "quickViewKeyCopyFailed": "Kon {key} niet naar het klembord kopiëren",
     "quickViewUnavailableTitle": "Dit werkitem is niet beschikbaar",
     "quickViewUnavailableDescription": "{key} is mogelijk verplaatst of verwijderd, of staat in een werkruimte waartoe je geen toegang hebt.",
     "colTitle": "Titel",
@@ -8958,6 +8963,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Je codegraaf voor {repos} is sinds de vorige beurt vernieuwd. Eerdere antwoorden gebruikten de vorige graaf.} other {De codegrafen voor {repos} zijn sinds de vorige beurt vernieuwd. Eerdere antwoorden gebruikten de vorige grafen.}}"
+        },
+        "author": {
+          "typed": "{ref} had geen type, dus heb ik het vóór het schrijven het type ‘{type}’ gegeven.",
+          "madeStory": "{ref} had geen type en geen enkel type past bij het werk, dus maak ik er een story van en schrijf ik het als story."
+        },
+        "edge": {
+          "explained": "{ref} wacht op {blocker} — {reason}"
         }
       },
       "openerFollowUp": "Je hebt net {label} gekozen. Motir AI plant wat daarop wacht.",
@@ -10944,6 +10956,7 @@
       "navPlannerFindings": "Plannerbevindingen",
       "navIdeas": "Ideeën",
       "navRunModels": "Motir-agentmodellen",
+      "navModelServing": "Modellevering",
       "navFleetSettings": "Vlootinstellingen",
       "navServices": "Services",
       "navCapacity": "Providercapaciteit",
@@ -11197,6 +11210,9 @@
           },
           "planner_finding": {
             "triage": "Heeft een plannerbevinding beoordeeld"
+          },
+          "model_serving": {
+            "set": "Heeft gewijzigd welke aanbieder een model levert"
           }
         }
       }
@@ -13306,6 +13322,83 @@
           "body": "De planningsservice (motir-ai) reageerde niet, dus er wordt geen standaard getoond. Er is niets gewijzigd en er wordt geen waarde geraden.",
           "retry": "Opnieuw proberen"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "Platform · Modellevering",
+      "title": "Modellevering",
+      "subtitle": "Sommige modellen worden door meer dan één aanbieder verkocht. Kies welke aanbieder elk model levert. Er wordt altijd de prijs van de oorspronkelijke aanbieder in rekening gebracht.",
+      "lineCharge": "Wat iemand betaalt, hangt nooit af van het kanaal: de berekende prijs is de officiële prijs van de oorspronkelijke aanbieder, plus de marge van Motir.",
+      "card": {
+        "title": "Modellen met meer dan één verkoper",
+        "subtitle": "{count, plural, one {# model} other {# modellen}} · gelezen uit de kanalen en prijsregels van de gateway"
+      },
+      "col": {
+        "model": "Model",
+        "original": "Oorspronkelijke aanbieder",
+        "charged": "Berekende prijs",
+        "servedBy": "Geleverd door",
+        "cost": "Kosten voor Motir",
+        "action": "Actie"
+      },
+      "perMTok": "{input} / {output} per miljoen tokens",
+      "plusMargin": "Er wordt deze prijs plus marge betaald",
+      "source": {
+        "read": "Gelezen op {date}"
+      },
+      "default": "Standaard",
+      "chosen": "Gekozen door {who} · {date}",
+      "channelEnabled": "Kanaal {name} aan",
+      "channelDisabled": "Kanaal {name} uit",
+      "fallingBack": "Terugvallen op {provider}",
+      "fallingBackBody": "Het kanaal van {selected} staat uit, dus {provider} levert het. De berekende prijs verandert niet.",
+      "diff": {
+        "same": "Gelijk aan de officiële prijs",
+        "below": "Invoer {input}% · uitvoer {output}% onder de officiële prijs",
+        "above": "Invoer {input}% · uitvoer {output}% boven de officiële prijs",
+        "inputBelowOutputAbove": "Invoer {input}% lager · uitvoer {output}% boven de officiële prijs",
+        "inputAboveOutputBelow": "Invoer {input}% hoger · uitvoer {output}% onder de officiële prijs"
+      },
+      "change": "Wijzigen",
+      "changeAria": "Wijzigen welke aanbieder {model} levert",
+      "readOnly": "Alleen een superadmin kan wijzigen welke aanbieder een model levert.",
+      "dialog": {
+        "title": "Kies wie {model} levert",
+        "body": "Verzoeken voor {model} gaan naar de aanbieder die u kiest. Dat verandert wat Motir betaalt, nooit wat mensen in rekening wordt gebracht.",
+        "original": "Oorspronkelijke aanbieder",
+        "current": "Levert nu",
+        "channel": "Gatewaykanaal {name}",
+        "enabled": "Ingeschakeld",
+        "disabled": "Uitgeschakeld",
+        "cost": "Kost Motir {price}",
+        "priceSource": "Prijs van {host}, gelezen op {date}",
+        "resetDefault": "Standaard gebruiken",
+        "useDefault": "De oorspronkelijke aanbieder levert het zodra zijn kanaal aan staat.",
+        "disabledWarning": {
+          "title": "Het kanaal van {provider} staat uit",
+          "body": "Zolang kanaal {channel} uit staat, vallen verzoeken voor {model} terug op {fallback}. Ze gaan naar {provider} zodra het kanaal weer aan staat."
+        },
+        "footer": "Er wordt nog steeds {input} / {output} per miljoen tokens betaald.",
+        "cancel": "Annuleren",
+        "save": "Opslaan",
+        "saveAnyway": "Toch opslaan",
+        "saving": "Opslaan…"
+      },
+      "error": {
+        "save": "De gateway heeft de wijziging niet geaccepteerd, dus {model} wordt nog steeds door {provider} geleverd. Probeer het opnieuw.",
+        "unreachable": {
+          "title": "De modellevering kon niet worden gelezen",
+          "body": "De gateway antwoordde niet of kon zijn kanalen niet lezen. Er wordt niets getoond tot een leesactie slaagt."
+        },
+        "retry": "Opnieuw proberen"
+      },
+      "toast": {
+        "saved": "{provider} levert nu {model}",
+        "savedBody": "Vastgelegd in het auditlogboek. De berekende prijs is niet veranderd."
+      },
+      "empty": {
+        "title": "Geen enkel model heeft meer dan één verkoper",
+        "body": "Elk model dat de gateway levert, komt van één aanbieder, dus er valt niets te kiezen. Een model verschijnt hier zodra ook het kanaal van een tweede aanbieder het levert."
       }
     },
     "ideas": {

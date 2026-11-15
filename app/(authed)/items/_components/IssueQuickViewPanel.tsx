@@ -52,6 +52,7 @@ import { Pill } from '@/components/ui/Pill';
 import { MultiSelectPicker, ValueChip } from '@/components/ui/MultiSelectPicker';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
+import { QuickViewKeyCopy } from './QuickViewKeyCopy';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { ToFixTag } from '@/components/workItems/ToFixTag';
 import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
@@ -882,14 +883,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             {tPlan('newItem')}
           </span>
         ) : (
-          <Link
-            href={routes.item(data.identifier)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[13px] font-medium text-(--el-link) hover:underline focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-          >
-            {data.identifier}
-          </Link>
+          // The key COPIES (MOTIR-11351) — Open full page is the way to the
+          // detail page, so the header no longer duplicates it as a link.
+          <QuickViewKeyCopy identifier={data.identifier} />
         )}
         {/* THE OBSOLESCENCE BADGE (MOTIR-6674) right after the key — a pointer to
             the rail's field (panel 2). Nothing on an unmarked item or a proposal. */}

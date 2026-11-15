@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Tego statusu nie można ustawić bezpośrednio — element ma otwarty pull request i to jego scalenie wykonuje tę zmianę. Wszystkie inne zmiany są nadal dostępne.",
       "PLAN_TARGET_HELD": "Nie można zmienić statusu, dopóki plan jest otwarty — plan przepisuje ten element. Zatwierdź lub odrzuć plan albo wycofaj propozycję, która dotyczy tego elementu.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Oznaczyć można tylko ukończony element — zamiast tego go zarchiwizuj.",
-      "MARKED_CARD_CANNOT_REOPEN": "Ten element jest oznaczony jako nieaktualny lub przestarzały. Usuń oznaczenie, aby ponownie go otworzyć."
+      "MARKED_CARD_CANNOT_REOPEN": "Ten element jest oznaczony jako nieaktualny lub przestarzały. Usuń oznaczenie, aby ponownie go otworzyć.",
+      "WORK_ITEM_IN_TRIAGE": "Elementu, który jest wciąż w Selekcji, nie można umieścić w folderze, pod innym elementem ani dodać do niego elementów podrzędnych. Najpierw zaakceptuj go w Selekcji."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Tylko administrator projektu może edytować przepływ pracy.",
@@ -1468,6 +1469,10 @@
     "openFullPage": "Otwórz pełną stronę",
     "quickViewLoadingAria": "Ładowanie elementu roboczego",
     "quickViewMore": "Wyjaśnienie, relacje, załączniki i kanał aktywności znajdują się na <link>pełnej stronie</link>.",
+    "quickViewCopyKeyAria": "Kopiuj {key}",
+    "quickViewCopyKeyTooltip": "Kopiuj klucz",
+    "quickViewKeyCopied": "Skopiowano {key}",
+    "quickViewKeyCopyFailed": "Nie udało się skopiować {key} do schowka",
     "quickViewUnavailableTitle": "Ten element roboczy jest niedostępny",
     "quickViewUnavailableDescription": "{key} mógł zostać przeniesiony lub usunięty albo znajduje się w obszarze roboczym, do którego nie masz dostępu.",
     "colTitle": "Tytuł",
@@ -8958,6 +8963,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Graf kodu dla {repos} został odświeżony od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzedniego grafu.} few {Grafy kodu dla {repos} zostały odświeżone od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzednich grafów.} many {Grafy kodu dla {repos} zostały odświeżone od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzednich grafów.} other {Grafy kodu dla {repos} zostały odświeżone od ostatniej tury. Wcześniejsze odpowiedzi korzystały z poprzednich grafów.}}"
+        },
+        "author": {
+          "typed": "{ref} nie miał typu, więc przed napisaniem nadałem mu typ „{type}”.",
+          "madeStory": "{ref} nie miał typu i żaden pojedynczy typ nie pasuje do jego pracy, więc zmieniam go w historię i piszę jako historię."
+        },
+        "edge": {
+          "explained": "{ref} czeka na {blocker} — {reason}"
         }
       },
       "openerFollowUp": "Wybrano właśnie {label}. Motir AI planuje to, co ten wybór blokuje.",
@@ -10944,6 +10956,7 @@
       "navPlannerFindings": "Ustalenia planisty",
       "navIdeas": "Pomysły",
       "navRunModels": "Modele agenta Motir",
+      "navModelServing": "Dostarczanie modeli",
       "navFleetSettings": "Ustawienia floty",
       "navServices": "Usługi",
       "navCapacity": "Pojemność dostawców",
@@ -11197,6 +11210,9 @@
           },
           "planner_finding": {
             "triage": "Przeprowadził triaż ustalenia planisty"
+          },
+          "model_serving": {
+            "set": "Zmieniono dostawcę obsługującego model"
           }
         }
       }
@@ -13306,6 +13322,83 @@
           "body": "Usługa planowania (motir-ai) nie odpowiedziała, więc nie pokazano żadnej wartości domyślnej. Nic się nie zmieniło i żadna wartość nie jest zgadywana.",
           "retry": "Ponów"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "Platforma · Dostarczanie modeli",
+      "title": "Dostarczanie modeli",
+      "subtitle": "Niektóre modele sprzedaje więcej niż jeden dostawca. Wybierz, który obsługuje każdy model. Zawsze naliczana jest cena pierwotnego dostawcy.",
+      "lineCharge": "Kwota płacona przez użytkownika nigdy nie zależy od kanału: naliczana cena to oficjalna cena pierwotnego dostawcy plus marża Motir.",
+      "card": {
+        "title": "Modele z więcej niż jednym sprzedawcą",
+        "subtitle": "{count, plural, one {# model} few {# modele} many {# modeli} other {# modelu}} · odczytane z kanałów i wierszy cen bramy"
+      },
+      "col": {
+        "model": "Model",
+        "original": "Pierwotny dostawca",
+        "charged": "Naliczana cena",
+        "servedBy": "Obsługiwany przez",
+        "cost": "Koszt dla Motir",
+        "action": "Akcja"
+      },
+      "perMTok": "{input} / {output} za milion tokenów",
+      "plusMargin": "Płaci się tę cenę plus marżę",
+      "source": {
+        "read": "Odczytano {date}"
+      },
+      "default": "Domyślny",
+      "chosen": "Wybrane przez {who} · {date}",
+      "channelEnabled": "Kanał {name} włączony",
+      "channelDisabled": "Kanał {name} wyłączony",
+      "fallingBack": "Przełączono awaryjnie na {provider}",
+      "fallingBackBody": "Kanał {selected} jest wyłączony, więc model obsługuje {provider}. Naliczana cena się nie zmienia.",
+      "diff": {
+        "same": "Tak samo jak cena oficjalna",
+        "below": "Wejście {input}% · wyjście {output}% poniżej ceny oficjalnej",
+        "above": "Wejście {input}% · wyjście {output}% powyżej ceny oficjalnej",
+        "inputBelowOutputAbove": "Wejście {input}% poniżej · wyjście {output}% powyżej ceny oficjalnej",
+        "inputAboveOutputBelow": "Wejście {input}% powyżej · wyjście {output}% poniżej ceny oficjalnej"
+      },
+      "change": "Zmień",
+      "changeAria": "Zmień dostawcę obsługującego {model}",
+      "readOnly": "Tylko superadministrator może zmienić dostawcę obsługującego model.",
+      "dialog": {
+        "title": "Wybierz, kto obsługuje {model}",
+        "body": "Żądania do {model} trafiają do wybranego dostawcy. Zmienia to koszt dla Motir, nigdy kwotę naliczaną użytkownikom.",
+        "original": "Pierwotny dostawca",
+        "current": "Obsługuje teraz",
+        "channel": "Kanał bramy {name}",
+        "enabled": "Włączony",
+        "disabled": "Wyłączony",
+        "cost": "Kosztuje Motir {price}",
+        "priceSource": "Cena z {host}, odczytano {date}",
+        "resetDefault": "Użyj domyślnego",
+        "useDefault": "Pierwotny dostawca obsługuje model, gdy tylko jego kanał jest włączony.",
+        "disabledWarning": {
+          "title": "Kanał dostawcy {provider} jest wyłączony",
+          "body": "Dopóki kanał {channel} jest wyłączony, żądania do {model} trafiają awaryjnie do {fallback}. Trafią do {provider}, gdy kanał zostanie ponownie włączony."
+        },
+        "footer": "Nadal naliczane jest {input} / {output} za milion tokenów.",
+        "cancel": "Anuluj",
+        "save": "Zapisz",
+        "saveAnyway": "Zapisz mimo to",
+        "saving": "Zapisywanie…"
+      },
+      "error": {
+        "save": "Brama nie przyjęła zmiany, więc {model} nadal obsługuje {provider}. Spróbuj ponownie.",
+        "unreachable": {
+          "title": "Nie udało się odczytać dostarczania modeli",
+          "body": "Brama nie odpowiedziała lub nie mogła odczytać swoich kanałów. Nic nie jest wyświetlane, dopóki odczyt się nie powiedzie."
+        },
+        "retry": "Ponów"
+      },
+      "toast": {
+        "saved": "{provider} obsługuje teraz {model}",
+        "savedBody": "Zapisano w dzienniku audytu. Naliczana cena się nie zmieniła."
+      },
+      "empty": {
+        "title": "Żaden model nie ma więcej niż jednego sprzedawcy",
+        "body": "Każdy model obsługiwany przez bramę pochodzi od jednego dostawcy, więc nie ma czego wybierać. Model pojawi się tutaj, gdy obsłuży go również kanał drugiego dostawcy."
       }
     },
     "ideas": {

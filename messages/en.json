@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "This status can't be set directly — the item has an open pull request, and merging it is what makes this move. Every other move is still open.",
       "PLAN_TARGET_HELD": "Status can't be changed while a plan is open — a plan is rewriting this item. Approve or decline the plan, or withdraw the proposal that names this item.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Only a finished item can be marked — archive it instead.",
-      "MARKED_CARD_CANNOT_REOPEN": "This item is marked outdated or deprecated. Clear the mark to reopen this item."
+      "MARKED_CARD_CANNOT_REOPEN": "This item is marked outdated or deprecated. Clear the mark to reopen this item.",
+      "WORK_ITEM_IN_TRIAGE": "An item still in Triage can't be filed into a folder, placed under another item or given child items. Accept it in Triage first."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",
@@ -1468,6 +1469,10 @@
     "openFullPage": "Open full page",
     "quickViewLoadingAria": "Loading work item",
     "quickViewMore": "Explanation, relationships, attachments, and the activity feed live on the <link>full page</link>.",
+    "quickViewCopyKeyAria": "Copy {key}",
+    "quickViewCopyKeyTooltip": "Copy key",
+    "quickViewKeyCopied": "Copied {key}",
+    "quickViewKeyCopyFailed": "Couldn't copy {key} to the clipboard",
     "quickViewUnavailableTitle": "This work item isn’t available",
     "quickViewUnavailableDescription": "{key} may have been moved, deleted, or it’s in a workspace you don’t have access to.",
     "colTitle": "Title",
@@ -8955,6 +8960,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Your code graph for {repos} was refreshed since the last turn. Earlier answers used the previous graph.} other {Code graphs for {repos} were refreshed since the last turn. Earlier answers used the previous graphs.}}"
+        },
+        "author": {
+          "typed": "{ref} had no type, so I gave it the type “{type}” before writing it.",
+          "madeStory": "{ref} had no type and no single type fits its work, so I am making it a story and writing it as one."
+        },
+        "edge": {
+          "explained": "{ref} waits on {blocker} — {reason}"
         }
       },
       "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates.",
@@ -10941,6 +10953,7 @@
       "navPlannerFindings": "Planner findings",
       "navIdeas": "Ideas",
       "navRunModels": "Motir agent models",
+      "navModelServing": "Model serving",
       "navFleetSettings": "Fleet settings",
       "navServices": "Services",
       "navCapacity": "Provider capacity",
@@ -11194,6 +11207,9 @@
           },
           "planner_finding": {
             "triage": "Triaged a planner finding"
+          },
+          "model_serving": {
+            "set": "Changed which provider serves a model"
           }
         }
       }
@@ -13303,6 +13319,83 @@
           "body": "The planning service (motir-ai) didn’t respond, so no default is shown. Nothing has changed, and no value is guessed.",
           "retry": "Retry"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "Platform · Model serving",
+      "title": "Model serving",
+      "subtitle": "Some models are sold by more than one provider. Choose which one serves each model. People are always charged the original provider’s price.",
+      "lineCharge": "What a person pays never depends on the channel: the charged price is the original provider’s official price, plus Motir’s margin.",
+      "card": {
+        "title": "Models with more than one seller",
+        "subtitle": "{count, plural, one {# model} other {# models}} · read from the gateway’s channels and price rows"
+      },
+      "col": {
+        "model": "Model",
+        "original": "Original provider",
+        "charged": "Charged price",
+        "servedBy": "Served by",
+        "cost": "Cost to Motir",
+        "action": "Action"
+      },
+      "perMTok": "{input} / {output} per MTok",
+      "plusMargin": "People pay this plus margin",
+      "source": {
+        "read": "Read {date}"
+      },
+      "default": "Default",
+      "chosen": "Chosen by {who} · {date}",
+      "channelEnabled": "Channel {name} on",
+      "channelDisabled": "Channel {name} off",
+      "fallingBack": "Falling back to {provider}",
+      "fallingBackBody": "{selected}’s channel is off, so {provider} is serving it. The charged price does not change.",
+      "diff": {
+        "same": "Same as the official price",
+        "below": "Input {input}% · output {output}% below the official price",
+        "above": "Input {input}% · output {output}% above the official price",
+        "inputBelowOutputAbove": "Input {input}% below · output {output}% above the official price",
+        "inputAboveOutputBelow": "Input {input}% above · output {output}% below the official price"
+      },
+      "change": "Change",
+      "changeAria": "Change which provider serves {model}",
+      "readOnly": "Only a superadmin can change which provider serves a model.",
+      "dialog": {
+        "title": "Choose who serves {model}",
+        "body": "Requests for {model} go to the provider you choose. It changes what Motir pays, never what people are charged.",
+        "original": "Original provider",
+        "current": "Serving now",
+        "channel": "Gateway channel {name}",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "cost": "Costs Motir {price}",
+        "priceSource": "Price from {host}, read {date}",
+        "resetDefault": "Use the default",
+        "useDefault": "The original provider serves it whenever its channel is on.",
+        "disabledWarning": {
+          "title": "{provider}’s channel is off",
+          "body": "While channel {channel} is off, requests for {model} fall back to {fallback}. They go to {provider} once the channel is turned back on."
+        },
+        "footer": "People keep paying {input} / {output} per MTok.",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saveAnyway": "Save anyway",
+        "saving": "Saving…"
+      },
+      "error": {
+        "save": "The gateway did not accept the change, so {model} is still served by {provider}. Try again.",
+        "unreachable": {
+          "title": "Model serving could not be read",
+          "body": "The gateway did not answer, or it could not read its channels. Nothing is shown until a read succeeds."
+        },
+        "retry": "Retry"
+      },
+      "toast": {
+        "saved": "{provider} now serves {model}",
+        "savedBody": "Recorded in the audit log. The charged price did not change."
+      },
+      "empty": {
+        "title": "No model has more than one seller",
+        "body": "Every model the gateway serves comes from one provider, so there is nothing to choose. A model appears here once a second provider’s channel serves it."
       }
     },
     "ideas": {

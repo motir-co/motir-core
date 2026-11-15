@@ -28,7 +28,7 @@ import {
   openSteps,
 } from '@/components/planning/planCallLines';
 import { nextHeadAnnouncement, type NarrationHeadLine } from '@/components/planning/planNarration';
-import { factLine } from '@/lib/planning/progressFacts';
+import { factLine, type TypeLabel } from '@/lib/planning/progressFacts';
 
 type Tc = ReturnType<typeof useTranslations>;
 
@@ -69,8 +69,13 @@ function actLabelKey(act: PlanChangeProgress): string {
 
 /** The line one act reads as. Every string is a catalog key; the only values
  *  interpolated are the frame's own data. `locale` joins a list the way the
- *  reader's language does. */
-export function actLine(act: PlanChangeProgress, tc: Tc, locale: string): string {
+ *  reader's language does, and `typeLabel` names a work type in it (MOTIR-11338). */
+export function actLine(
+  act: PlanChangeProgress,
+  tc: Tc,
+  locale: string,
+  typeLabel?: TypeLabel,
+): string {
   switch (act.kind) {
     case 'laying':
       return tc('act.layingLine', { target: act.target ?? '' });
@@ -93,12 +98,20 @@ export function actLine(act: PlanChangeProgress, tc: Tc, locale: string): string
     // catalogue in the reader's locale. Titles, summaries and repository names are
     // the frame's own data and are never translated.
     case 'fact':
-      return factLine(act.fact, tc, locale);
+      return factLine(act.fact, tc, locale, typeLabel);
     case 'proposed':
       return tc('progress.proposed', { count: act.count });
     default:
       return tc(`progress.${act.kind}`, { count: 0 });
   }
+}
+
+/** Names a work type id in the reader's language, from `labels.workItemType` — the
+ *  same names the type pickers use. An id the catalogue does not list is drawn as sent
+ *  (MOTIR-11338). */
+export function useTypeLabel(): TypeLabel {
+  const tt = useTranslations('labels.workItemType');
+  return (type) => (tt.has(type) ? tt(type) : type);
 }
 
 /** The text the running bar repeats while a run streams: the newest act the
@@ -107,9 +120,10 @@ export function runningBarLine(
   acts: readonly PlanChangeProgress[],
   tc: Tc,
   locale: string,
+  typeLabel?: TypeLabel,
 ): string | null {
   const last = acts[acts.length - 1];
-  return last ? actLine(last, tc, locale) : null;
+  return last ? actLine(last, tc, locale, typeLabel) : null;
 }
 
 /**
@@ -162,8 +176,9 @@ export function PlanActRecord({
 }) {
   const tc = useTranslations('planningWorkspace.conversation');
   const locale = useLocale();
+  const typeLabel = useTypeLabel();
   const acts = allActs;
-  const said = useAnnouncer(acts, heads, tc, locale);
+  const said = useAnnouncer(acts, heads, tc, locale, typeLabel);
   const open = openSteps(acts, streaming);
   const lastIndex = acts.length - 1;
   // The newest act that is not a step (a note, a lookup row, a debug turn's
@@ -196,7 +211,14 @@ export function PlanActRecord({
               streaming &&
               (isStep(act) ? open.has(index) && index > lastPlainRow : index === lastIndex);
             return (
-              <ActRow key={`${act.kind}-${index}`} act={act} live={live} tc={tc} locale={locale} />
+              <ActRow
+                key={`${act.kind}-${index}`}
+                act={act}
+                live={live}
+                tc={tc}
+                locale={locale}
+                typeLabel={typeLabel}
+              />
             );
           })}
         </ol>
@@ -231,11 +253,13 @@ function ActRow({
   live,
   tc,
   locale,
+  typeLabel,
 }: {
   act: PlanChangeProgress;
   live: boolean;
   tc: Tc;
   locale: string;
+  typeLabel: TypeLabel;
 }) {
   return (
     <li
@@ -254,7 +278,7 @@ function ActRow({
       <span className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {tc(actLabelKey(act))}
       </span>
-      <span className="min-w-0 flex-1">{actLine(act, tc, locale)}</span>
+      <span className="min-w-0 flex-1">{actLine(act, tc, locale, typeLabel)}</span>
     </li>
   );
 }
@@ -270,10 +294,15 @@ function useAnnouncer(
   heads: readonly NarrationHeadLine[],
   tc: Tc,
   locale: string,
+  typeLabel: TypeLabel,
 ): string {
   const [said, setSaid] = useState(() => {
     const index = latestRowAnnouncement(acts);
-    return { acts, heads, text: index === null ? '' : actLine(acts[index]!, tc, locale) };
+    return {
+      acts,
+      heads,
+      text: index === null ? '' : actLine(acts[index]!, tc, locale, typeLabel),
+    };
   });
   const actsChanged =
     said.acts.length !== acts.length || said.acts.some((act, i) => act !== acts[i]);
@@ -284,7 +313,7 @@ function useAnnouncer(
     const row = actsChanged ? nextAnnouncement(said.acts, acts) : null;
     const head = headsChanged ? nextHeadAnnouncement(said.heads, heads) : null;
     let text = continuesRecord(said.acts, acts) ? said.text : '';
-    if (row !== null) text = actLine(acts[row]!, tc, locale);
+    if (row !== null) text = actLine(acts[row]!, tc, locale, typeLabel);
     if (head !== null) {
       text = head.finished ? tc('narration.groupFinished', { step: head.line }) : head.line;
     }

@@ -581,7 +581,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // question the tool answers (is this decision already settled?), so the line names it.
     // Re-pinned for MOTIR-10315's review, summary UNCHANGED: the description adds the
     // decision page's `state` and that a token without `page:view` gets `pages: null`.
-    descriptionFingerprint: '6529412bc202',
+    // Re-pinned for MOTIR-11340, summary UNCHANGED: with `planId` a COMMITTED key now
+    // answers the full read with `item` as the plan leaves it plus `planProposal` — the
+    // same question ("one item in full"), over the plan's tree.
+    descriptionFingerprint: '94a660a6f0ec',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.

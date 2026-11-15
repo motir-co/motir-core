@@ -43,7 +43,8 @@ export type WorkItemErrorTag =
   | 'MISSING_ARTIFACT_EVIDENCE'
   | 'CONTAINER_HAS_OPEN_CHILDREN'
   | 'APPROVAL_GATE_PENDING'
-  | 'PLAN_TARGET_HELD';
+  | 'PLAN_TARGET_HELD'
+  | 'WORK_ITEM_IN_TRIAGE';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -371,6 +372,42 @@ export class MarkedCardCannotReopenError extends WorkItemError {
     this.key = args.key;
     this.obsolescence = args.obsolescence;
     this.toStatusKey = args.toStatusKey;
+  }
+}
+
+/**
+ * A work item still in TRIAGE (`triagedAt` set) would be placed into the planned
+ * tree — bug MOTIR-11339. A triage submission lives OUTSIDE the planned tree until
+ * a person accepts it (the triage-model decision, MOTIR-399), and every normal
+ * read hides it (`triagedAt IS NULL`). So filing it into a folder, re-parenting it
+ * under a card, or hanging a new child under it would put work where nobody can
+ * see it: the card, and everything under it, stays invisible on the canvas and in
+ * every list until somebody happens to press Accept.
+ *
+ * `role` says which end of the write is in triage: `item` — the card being filed
+ * or moved; `parent` — the card a child would be created or moved under. Accept in
+ * Triage is the one way out (`triageService`), and it clears the marker, after
+ * which the same write succeeds. A state conflict the person resolves → 409 on
+ * `/api/v1`; the blanket `WorkItemError` mapping everywhere else.
+ */
+export class WorkItemInTriageError extends WorkItemError {
+  readonly tag = 'WORK_ITEM_IN_TRIAGE' as const;
+  readonly code = 'WORK_ITEM_IN_TRIAGE' as const;
+  /** The `KEY-n` of the card that is still in triage. */
+  readonly key: string;
+  /** Which end of the refused write is in triage. */
+  readonly role: 'item' | 'parent';
+  constructor(args: { key: string; role: 'item' | 'parent' }) {
+    super(
+      args.role === 'item'
+        ? `${args.key} is still in Triage, so it cannot be filed into a folder or placed under ` +
+            'another work item. Accept it in Triage first.'
+        : `${args.key} is still in Triage, so no work item can be created or placed under it. ` +
+            'Accept it in Triage first.',
+    );
+    this.name = 'WorkItemInTriageError';
+    this.key = args.key;
+    this.role = args.role;
   }
 }
 

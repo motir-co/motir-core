@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Ce statut ne peut pas être défini directement : l’élément a une pull request ouverte, et c’est sa fusion qui effectue ce changement. Tous les autres changements restent possibles.",
       "PLAN_TARGET_HELD": "Le statut ne peut pas être modifié tant qu’un plan est ouvert : un plan est en train de réécrire cet élément. Approuvez ou refusez le plan, ou retirez la proposition qui cite cet élément.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Seul un élément terminé peut être marqué : archivez-le plutôt.",
-      "MARKED_CARD_CANNOT_REOPEN": "Cet élément est marqué comme obsolète ou déprécié. Retirez la marque pour le rouvrir."
+      "MARKED_CARD_CANNOT_REOPEN": "Cet élément est marqué comme obsolète ou déprécié. Retirez la marque pour le rouvrir.",
+      "WORK_ITEM_IN_TRIAGE": "Un élément encore en Tri ne peut pas être classé dans un dossier, placé sous un autre élément ni recevoir d’éléments enfants. Acceptez-le d’abord dans Tri."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Seul un administrateur du projet peut modifier le workflow.",
@@ -1468,6 +1469,10 @@
     "openFullPage": "Ouvrir la page complète",
     "quickViewLoadingAria": "Chargement de l’élément de travail",
     "quickViewMore": "L’explication, les relations, les pièces jointes et le fil d’activité se trouvent sur la <link>page complète</link>.",
+    "quickViewCopyKeyAria": "Copier {key}",
+    "quickViewCopyKeyTooltip": "Copier la clé",
+    "quickViewKeyCopied": "{key} copié",
+    "quickViewKeyCopyFailed": "Impossible de copier {key} dans le presse-papiers",
     "quickViewUnavailableTitle": "Cet élément de travail n’est pas disponible",
     "quickViewUnavailableDescription": "{key} a peut-être été déplacé ou supprimé, ou il se trouve dans un espace de travail auquel vous n’avez pas accès.",
     "colTitle": "Titre",
@@ -8958,6 +8963,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Votre graphe de code pour {repos} a été actualisé depuis le dernier tour. Les réponses précédentes utilisaient l’ancien graphe.} other {Les graphes de code pour {repos} ont été actualisés depuis le dernier tour. Les réponses précédentes utilisaient les anciens graphes.}}"
+        },
+        "author": {
+          "typed": "{ref} n’avait pas de type, je lui ai donc donné le type « {type} » avant de le rédiger.",
+          "madeStory": "{ref} n’avait pas de type et aucun type unique ne correspond à son travail, j’en fais donc une story et je la rédige comme telle."
+        },
+        "edge": {
+          "explained": "{ref} attend {blocker} — {reason}"
         }
       },
       "openerFollowUp": "Vous venez de choisir {label}. Motir AI planifie ce que ce choix conditionne.",
@@ -10944,6 +10956,7 @@
       "navPlannerFindings": "Constats du planificateur",
       "navIdeas": "Idées",
       "navRunModels": "Modèles de l'agent Motir",
+      "navModelServing": "Service des modèles",
       "navFleetSettings": "Paramètres de la flotte",
       "navServices": "Services",
       "navCapacity": "Capacité des fournisseurs",
@@ -11197,6 +11210,9 @@
           },
           "planner_finding": {
             "triage": "A trié un constat du planificateur"
+          },
+          "model_serving": {
+            "set": "A changé le fournisseur qui sert un modèle"
           }
         }
       }
@@ -13306,6 +13322,83 @@
           "body": "Le service de planification (motir-ai) n'a pas répondu, aucune valeur par défaut n'est donc affichée. Rien n'a changé, et aucune valeur n'est devinée.",
           "retry": "Réessayer"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "Plateforme · Service des modèles",
+      "title": "Service des modèles",
+      "subtitle": "Certains modèles sont vendus par plusieurs fournisseurs. Choisissez celui qui sert chaque modèle. C’est toujours le prix du fournisseur d’origine qui est facturé.",
+      "lineCharge": "Ce que paie une personne ne dépend jamais du canal : le prix facturé est le prix officiel du fournisseur d’origine, plus la marge de Motir.",
+      "card": {
+        "title": "Modèles proposés par plusieurs vendeurs",
+        "subtitle": "{count, plural, one {# modèle} other {# modèles}} · lus dans les canaux et les lignes de prix de la passerelle"
+      },
+      "col": {
+        "model": "Modèle",
+        "original": "Fournisseur d’origine",
+        "charged": "Prix facturé",
+        "servedBy": "Servi par",
+        "cost": "Coût pour Motir",
+        "action": "Action"
+      },
+      "perMTok": "{input} / {output} par million de jetons",
+      "plusMargin": "Facturé à ce prix, plus la marge",
+      "source": {
+        "read": "Lu le {date}"
+      },
+      "default": "Par défaut",
+      "chosen": "Choisi par {who} · {date}",
+      "channelEnabled": "Canal {name} activé",
+      "channelDisabled": "Canal {name} désactivé",
+      "fallingBack": "Repli sur {provider}",
+      "fallingBackBody": "Le canal de {selected} est désactivé, c’est donc {provider} qui le sert. Le prix facturé ne change pas.",
+      "diff": {
+        "same": "Identique au prix officiel",
+        "below": "Entrée {input} % · sortie {output} % sous le prix officiel",
+        "above": "Entrée {input} % · sortie {output} % au-dessus du prix officiel",
+        "inputBelowOutputAbove": "Entrée {input} % en dessous · sortie {output} % au-dessus du prix officiel",
+        "inputAboveOutputBelow": "Entrée {input} % au-dessus · sortie {output} % en dessous du prix officiel"
+      },
+      "change": "Modifier",
+      "changeAria": "Modifier le fournisseur qui sert {model}",
+      "readOnly": "Seul un superadministrateur peut modifier le fournisseur qui sert un modèle.",
+      "dialog": {
+        "title": "Choisir qui sert {model}",
+        "body": "Les requêtes pour {model} vont au fournisseur que vous choisissez. Cela change ce que paie Motir, jamais ce qui est facturé aux personnes.",
+        "original": "Fournisseur d’origine",
+        "current": "Sert actuellement",
+        "channel": "Canal de passerelle {name}",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "cost": "Coûte à Motir {price}",
+        "priceSource": "Prix de {host}, lu le {date}",
+        "resetDefault": "Utiliser le choix par défaut",
+        "useDefault": "Le fournisseur d’origine le sert dès que son canal est activé.",
+        "disabledWarning": {
+          "title": "Le canal de {provider} est désactivé",
+          "body": "Tant que le canal {channel} est désactivé, les requêtes pour {model} se replient sur {fallback}. Elles iront à {provider} dès que le canal sera réactivé."
+        },
+        "footer": "Le prix facturé reste {input} / {output} par million de jetons.",
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saveAnyway": "Enregistrer quand même",
+        "saving": "Enregistrement…"
+      },
+      "error": {
+        "save": "La passerelle n’a pas accepté la modification, {model} est donc toujours servi par {provider}. Réessayez.",
+        "unreachable": {
+          "title": "Le service des modèles n’a pas pu être lu",
+          "body": "La passerelle n’a pas répondu ou n’a pas pu lire ses canaux. Rien n’est affiché tant qu’une lecture n’a pas réussi."
+        },
+        "retry": "Réessayer"
+      },
+      "toast": {
+        "saved": "{provider} sert désormais {model}",
+        "savedBody": "Consigné dans le journal d’audit. Le prix facturé n’a pas changé."
+      },
+      "empty": {
+        "title": "Aucun modèle n’a plusieurs vendeurs",
+        "body": "Chaque modèle servi par la passerelle vient d’un seul fournisseur, il n’y a donc rien à choisir. Un modèle apparaît ici dès que le canal d’un deuxième fournisseur le sert aussi."
       }
     },
     "ideas": {

@@ -144,6 +144,7 @@ import {
 import {
   AssigneeNotInWorkspaceError,
   CrossProjectParentError,
+  WorkItemInTriageError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
@@ -679,6 +680,23 @@ function assertNotMarkedParent(
   });
 }
 
+/**
+ * A card still in TRIAGE takes no place in the planned tree (bug MOTIR-11339) —
+ * neither as the card being filed or moved (`role: 'item'`) nor as the parent a
+ * child would be created or moved under (`role: 'parent'`). Every normal read
+ * hides a triaged row (`triagedAt IS NULL`), so a placement written onto one is
+ * work nobody can reach until somebody presses Accept. Accept in Triage clears the
+ * marker and is the one way into the tree (`triageService.graduate`, which writes
+ * the row itself and never comes through here).
+ */
+function assertNotInTriage(
+  row: Pick<WorkItem, 'identifier' | 'triagedAt'>,
+  role: 'item' | 'parent',
+): void {
+  if (row.triagedAt === null) return;
+  throw new WorkItemInTriageError({ key: row.identifier, role });
+}
+
 /** Stable, deterministic ordering for summary lists resolved via findByIds. */
 function byKeyAsc(a: WorkItem, b: WorkItem): number {
   return a.key - b.key;
@@ -961,6 +979,10 @@ async function planFolderFiling(
     if (!folder) throw new FolderNotFoundError(target);
     if (folder.projectId !== current.projectId) throw new CrossProjectFolderError();
     if (current.folderId === target && current.parentId === null) return null;
+    // Filing PLACES the card in the planned tree, which a triaged card is not in
+    // yet (MOTIR-11339). Taking one OUT of a folder (`target === null`) stays
+    // open: it moves the card away from the tree, never into it.
+    assertNotInTriage(current, 'item');
   }
 
   const position = keyForAppend(
@@ -2028,6 +2050,10 @@ export const workItemsService = {
       if (!parent) throw new WorkItemNotFoundError(input.parentId);
       if (parent.projectId !== input.projectId) throw new CrossProjectParentError();
       assertValidParent(parent.kind, input.kind);
+      // A parent still in TRIAGE takes no child (MOTIR-11339): the child would
+      // hang under a card every read hides. Before the key-allocation
+      // transaction, so a refused create never burns a key.
+      assertNotInTriage(parent, 'parent');
       // A MARKED parent takes no new work (Story MOTIR-6575 · MOTIR-6672): a new
       // child re-opens its parent through status derivation, and a marked card
       // stays finished. Before the key-allocation transaction, so a refused
@@ -3065,6 +3091,13 @@ export const workItemsService = {
           // Only a real move is refused: a kind change beneath the parent the
           // card already has adds no child.
           if (parentChanged) assertNotMarkedParent(parent, current.identifier);
+          // A move into the planned tree, at either end (MOTIR-11339): a triaged
+          // card is not placed under a card, and nothing is placed under one.
+          // Only a real move — a kind change under the same parent places nothing.
+          if (parentChanged) {
+            assertNotInTriage(current, 'item');
+            assertNotInTriage(parent, 'parent');
+          }
         }
       }
 
@@ -5057,6 +5090,10 @@ export const workItemsService = {
           // New work under a MARKED card is refused (MOTIR-6672). A reorder
           // beneath the same parent is not new work and never reaches here.
           assertNotMarkedParent(parent, current.identifier);
+          // …and a move into the planned tree at either end, while a card is
+          // still in TRIAGE (MOTIR-11339). A move to the root places nothing.
+          assertNotInTriage(current, 'item');
+          assertNotInTriage(parent, 'parent');
         }
       }
 

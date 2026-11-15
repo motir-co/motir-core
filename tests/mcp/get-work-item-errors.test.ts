@@ -133,7 +133,28 @@ describe('get_work_item — errors', () => {
     expect((result.structuredContent as { errors: unknown[] }).errors).toEqual([]);
   });
 
-  it('the PROJECTED answer (planId) carries no errors key and is otherwise unchanged', async () => {
+  it('the PROJECTED answer for a PROPOSAL carries no errors key and is otherwise unchanged', async () => {
+    const { s } = await linkedCard();
+    const plan = await plansService.createPlan(s.fx.projectId, { title: 'Plan' }, s.fx.ctx);
+    const withAdd = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Proposed', kind: 'task' } }],
+      s.fx.ctx,
+    );
+
+    const result = await runGetWorkItem(
+      { key: `planItem:${withAdd.items[0]!.id}`, planId: plan.id },
+      s.fx.ctx,
+    );
+
+    expect(result.isError).toBeFalsy();
+    const structured = result.structuredContent as Record<string, unknown>;
+    expect(structured).not.toHaveProperty('errors');
+    expect(structured).toHaveProperty('projection');
+    expect(structured['children']).toEqual([]);
+  });
+
+  it('a COMMITTED key read through a plan keeps its errors (MOTIR-11340)', async () => {
     const { s, item } = await linkedCard();
     const plan = await plansService.createPlan(s.fx.projectId, { title: 'Plan' }, s.fx.ctx);
 
@@ -141,9 +162,8 @@ describe('get_work_item — errors', () => {
 
     expect(result.isError).toBeFalsy();
     const structured = result.structuredContent as Record<string, unknown>;
-    expect(structured).not.toHaveProperty('errors');
+    expect(structured).toHaveProperty('errors');
     expect(structured).toHaveProperty('projection');
-    expect(structured['children']).toEqual([]);
   });
 });
 

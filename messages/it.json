@@ -836,7 +836,8 @@
       "APPROVAL_GATE_PENDING_MERGE": "Questo stato non può essere impostato direttamente: l’elemento ha una pull request aperta, ed è il suo merge che produce questo spostamento. Tutti gli altri spostamenti restano possibili.",
       "PLAN_TARGET_HELD": "Non puoi cambiare lo stato mentre un piano è aperto: un piano sta riscrivendo questo elemento. Approva o rifiuta il piano, oppure ritira la proposta che riguarda questo elemento.",
       "OBSOLESCENCE_REQUIRES_FINISHED": "Solo un elemento terminato può essere contrassegnato: archivialo invece.",
-      "MARKED_CARD_CANNOT_REOPEN": "Questo elemento è contrassegnato come obsoleto o deprecato. Rimuovi il contrassegno per riaprirlo."
+      "MARKED_CARD_CANNOT_REOPEN": "Questo elemento è contrassegnato come obsoleto o deprecato. Rimuovi il contrassegno per riaprirlo.",
+      "WORK_ITEM_IN_TRIAGE": "Un elemento ancora in Smistamento non può essere archiviato in una cartella, posto sotto un altro elemento né ricevere elementi figli. Accettalo prima in Smistamento."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Solo un amministratore del progetto può modificare il flusso di lavoro.",
@@ -1468,6 +1469,10 @@
     "openFullPage": "Apri la pagina completa",
     "quickViewLoadingAria": "Caricamento dell’elemento di lavoro",
     "quickViewMore": "Spiegazione, relazioni, allegati e feed delle attività si trovano nella <link>pagina completa</link>.",
+    "quickViewCopyKeyAria": "Copia {key}",
+    "quickViewCopyKeyTooltip": "Copia chiave",
+    "quickViewKeyCopied": "{key} copiato",
+    "quickViewKeyCopyFailed": "Impossibile copiare {key} negli appunti",
     "quickViewUnavailableTitle": "Questo elemento di lavoro non è disponibile",
     "quickViewUnavailableDescription": "{key} potrebbe essere stato spostato o eliminato, oppure si trova in un’area di lavoro a cui non hai accesso.",
     "colTitle": "Titolo",
@@ -8958,6 +8963,13 @@
         },
         "codeGraph": {
           "refreshed": "{count, plural, one {Il tuo grafo del codice per {repos} è stato aggiornato dall’ultimo turno. Le risposte precedenti usavano il grafo precedente.} other {I grafi del codice per {repos} sono stati aggiornati dall’ultimo turno. Le risposte precedenti usavano i grafi precedenti.}}"
+        },
+        "author": {
+          "typed": "{ref} non aveva un tipo, quindi gli ho assegnato il tipo «{type}» prima di scriverlo.",
+          "madeStory": "{ref} non aveva un tipo e nessun tipo da solo si adatta al suo lavoro, quindi lo trasformo in una storia e lo scrivo come tale."
+        },
+        "edge": {
+          "explained": "{ref} attende {blocker} — {reason}"
         }
       },
       "openerFollowUp": "Hai appena scelto {label}. Motir AI sta pianificando ciò che questa scelta sblocca.",
@@ -10944,6 +10956,7 @@
       "navPlannerFindings": "Rilievi del pianificatore",
       "navIdeas": "Idee",
       "navRunModels": "Modelli dell’agente Motir",
+      "navModelServing": "Erogazione dei modelli",
       "navFleetSettings": "Impostazioni della flotta",
       "navServices": "Servizi",
       "navCapacity": "Capacità dei fornitori",
@@ -11197,6 +11210,9 @@
           },
           "planner_finding": {
             "triage": "Ha classificato un rilievo del pianificatore"
+          },
+          "model_serving": {
+            "set": "Ha cambiato quale fornitore eroga un modello"
           }
         }
       }
@@ -13306,6 +13322,83 @@
           "body": "Il servizio di pianificazione (motir-ai) non ha risposto, quindi non viene mostrato alcun predefinito. Non è cambiato nulla e nessun valore viene indovinato.",
           "retry": "Riprova"
         }
+      }
+    },
+    "modelServing": {
+      "breadcrumb": "Piattaforma · Erogazione dei modelli",
+      "title": "Erogazione dei modelli",
+      "subtitle": "Alcuni modelli sono venduti da più di un fornitore. Scegli quale eroga ciascun modello. Viene sempre addebitato il prezzo del fornitore originale.",
+      "lineCharge": "Quanto paga una persona non dipende mai dal canale: il prezzo addebitato è il prezzo ufficiale del fornitore originale, più il margine di Motir.",
+      "card": {
+        "title": "Modelli con più di un venditore",
+        "subtitle": "{count, plural, one {# modello} other {# modelli}} · letti dai canali e dalle righe di prezzo del gateway"
+      },
+      "col": {
+        "model": "Modello",
+        "original": "Fornitore originale",
+        "charged": "Prezzo addebitato",
+        "servedBy": "Erogato da",
+        "cost": "Costo per Motir",
+        "action": "Azione"
+      },
+      "perMTok": "{input} / {output} per milione di token",
+      "plusMargin": "Si paga questo prezzo più il margine",
+      "source": {
+        "read": "Letto il {date}"
+      },
+      "default": "Predefinito",
+      "chosen": "Scelto da {who} · {date}",
+      "channelEnabled": "Canale {name} attivo",
+      "channelDisabled": "Canale {name} disattivato",
+      "fallingBack": "Ripiego su {provider}",
+      "fallingBackBody": "Il canale di {selected} è disattivato, quindi lo eroga {provider}. Il prezzo addebitato non cambia.",
+      "diff": {
+        "same": "Uguale al prezzo ufficiale",
+        "below": "Input {input}% · output {output}% sotto il prezzo ufficiale",
+        "above": "Input {input}% · output {output}% sopra il prezzo ufficiale",
+        "inputBelowOutputAbove": "Input {input}% sotto · output {output}% sopra il prezzo ufficiale",
+        "inputAboveOutputBelow": "Input {input}% sopra · output {output}% sotto il prezzo ufficiale"
+      },
+      "change": "Cambia",
+      "changeAria": "Cambia quale fornitore eroga {model}",
+      "readOnly": "Solo un superadmin può cambiare quale fornitore eroga un modello.",
+      "dialog": {
+        "title": "Scegli chi eroga {model}",
+        "body": "Le richieste per {model} vanno al fornitore che scegli. Cambia quanto paga Motir, mai quanto viene addebitato alle persone.",
+        "original": "Fornitore originale",
+        "current": "In erogazione ora",
+        "channel": "Canale del gateway {name}",
+        "enabled": "Attivo",
+        "disabled": "Disattivato",
+        "cost": "Costa a Motir {price}",
+        "priceSource": "Prezzo da {host}, letto il {date}",
+        "resetDefault": "Usa il predefinito",
+        "useDefault": "Il fornitore originale lo eroga ogni volta che il suo canale è attivo.",
+        "disabledWarning": {
+          "title": "Il canale di {provider} è disattivato",
+          "body": "Finché il canale {channel} è disattivato, le richieste per {model} ripiegano su {fallback}. Andranno a {provider} appena il canale verrà riattivato."
+        },
+        "footer": "Si continua a pagare {input} / {output} per milione di token.",
+        "cancel": "Annulla",
+        "save": "Salva",
+        "saveAnyway": "Salva comunque",
+        "saving": "Salvataggio…"
+      },
+      "error": {
+        "save": "Il gateway non ha accettato la modifica, quindi {model} è ancora erogato da {provider}. Riprova.",
+        "unreachable": {
+          "title": "Impossibile leggere l’erogazione dei modelli",
+          "body": "Il gateway non ha risposto o non è riuscito a leggere i suoi canali. Non viene mostrato nulla finché una lettura non riesce."
+        },
+        "retry": "Riprova"
+      },
+      "toast": {
+        "saved": "{provider} ora eroga {model}",
+        "savedBody": "Registrato nel log di audit. Il prezzo addebitato non è cambiato."
+      },
+      "empty": {
+        "title": "Nessun modello ha più di un venditore",
+        "body": "Ogni modello erogato dal gateway proviene da un solo fornitore, quindi non c’è nulla da scegliere. Un modello compare qui non appena lo eroga anche il canale di un secondo fornitore."
       }
     },
     "ideas": {

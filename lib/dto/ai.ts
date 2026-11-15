@@ -13,7 +13,7 @@ import type {
 } from '@/lib/dto/workItems';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
-import type { PlanStatusDto } from '@/lib/dto/plans';
+import type { PlanItemPatch, PlanStatusDto } from '@/lib/dto/plans';
 
 /**
  * A DECISION's deciding gate, as the planner reads it (Story MOTIR-5871 · MOTIR-5958;
@@ -82,6 +82,9 @@ export interface PlanTreeSkeletonItem {
   // the card carries none, never that the read skipped the column (the member is
   // required on every source, `SkeletonSourceRow`).
   subject: string | null;
+  // The job's own plan's proposal for this row (MOTIR-11340) — only on a
+  // `get-subtree` read that passed `jobId`, and only on a row that plan targets.
+  planProposal?: AiPlanRowProposal;
 }
 
 // One folder of the project, as the tree read carries it (MOTIR-5410). `path` is
@@ -225,6 +228,78 @@ export interface GetItemResponse {
     AiTodoFields;
   comments?: CommentsPageDTO;
   history?: WorkItemHistoryPage;
+  /**
+   * The JOB'S OWN PLAN's proposal for this card (MOTIR-11340) — present only on a
+   * read that passed `jobId`, when that job's undecided plan holds a `modify` or a
+   * `remove` of the card. On a `modify`, `item` already carries the patched fields
+   * (the plan's PROPOSED text, never approved) and `committed` keeps what they
+   * replaced; absent means `item` is the committed card, exactly as before.
+   */
+  planProposal?: AiPlanProposalOverlay;
+}
+
+/**
+ * The card fields a `modify` overlays onto a planning read (MOTIR-11340) — what a
+ * card SAYS and how it is sized and marked. Edges travel on
+ * {@link AiPlanProposalOverlay.projectedBlockedBy}, the parent on `projectedParent`;
+ * the repository pin and the to-do list stay committed on `item` and are read off
+ * `patch`.
+ */
+export const PLAN_OVERLAY_FIELDS = [
+  'title',
+  'descriptionMd',
+  'explanationMd',
+  'priority',
+  'type',
+  'kind',
+  'storyPoints',
+  'estimateMinutes',
+  'difficulty',
+  'obsolescence',
+  'obsolescenceNoteMd',
+] as const;
+
+export type PlanOverlayField = (typeof PLAN_OVERLAY_FIELDS)[number];
+
+/** The committed value of each overlaid field, as `item` carried it before the overlay. */
+export type PlanOverlayCommitted = Partial<Pick<WorkItemDto, PlanOverlayField>>;
+
+/**
+ * What the job's plan proposes for one committed card (MOTIR-11340). `approved` is
+ * always `false`: this is the plan's text, and only a person's approval writes it.
+ */
+export interface AiPlanProposalOverlay {
+  planId: string;
+  planStatus: PlanStatusDto;
+  planItemId: string;
+  op: 'modify' | 'remove';
+  approved: false;
+  /** The `modify`'s sparse patch, verbatim; `null` on a `remove`. */
+  patch: PlanItemPatch | null;
+  /** The committed value of every field the overlay replaced on `item` — `{}` on a remove
+   *  and on a patch that sets no {@link PLAN_OVERLAY_FIELDS} (edges or a parent only). */
+  committed: PlanOverlayCommitted;
+  /** The card's latest committed `work_item_revision` id — the anchor the patch was written
+   *  against, unchanged by the overlay (null when the card has none). */
+  committedRevision: string | null;
+  /** The card's `blocked_by` set as the plan leaves it — each a committed key or a
+   *  `planItem:<id>` temp-ref. Present only when the patch adds or removes an edge. */
+  projectedBlockedBy?: string[];
+  /** The card's parent as the plan leaves it (a key, a temp-ref, or null for the project
+   *  root). Present only when the patch re-parents the card. */
+  projectedParent?: string | null;
+}
+
+/**
+ * The marker a get-subtree row carries when the job's plan targets it (MOTIR-11340).
+ * The row's `title` / `kind` / `obsolescence` are already the plan's; `committedTitle`
+ * keeps the stored title when the patch changed it.
+ */
+export interface AiPlanRowProposal {
+  planItemId: string;
+  op: 'modify' | 'remove';
+  approved: false;
+  committedTitle?: string;
 }
 
 // GET /api/internal/ai/get-subtree — an epic/story + its descendants, bounded by
