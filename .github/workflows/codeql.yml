@@ -33,7 +33,14 @@ jobs:
     # 33218107241). The spread is the point: CodeQL's extract-and-query time
     # tracks the size of the codebase and has already quadrupled between runs
     # on record, so this is sized on the slowest, not the median.
-    timeout-minutes: 40
+    #
+    # ⚠️ 40 WAS OUTGROWN (MOTIR-11400). On main, 2026-11-13..15, the 17 analyses
+    # that finished took 26–38 min, and 12 more were killed at exactly 40 —
+    # each a cancelled main baseline, the zero-result case the header above
+    # warns about. 90 is ~2.4x the worst finished run: lower than the 3.2x
+    # above because main analyses queue one behind another in the concurrency
+    # group, so every extra minute here can delay the next merge's baseline.
+    timeout-minutes: 90
     permissions:
       security-events: write
       contents: read
