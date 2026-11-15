@@ -10192,6 +10192,9 @@
     "goToBacklog": "Zu meinem Backlog",
     "setupFailed": "Motir konnte die Einrichtung Ihres Codes nicht abschließen",
     "setupFailedDetail": "Ihr Plan ist sicher in Ihrem Backlog. Nichts ist verloren – Motir sagt Ihnen Bescheid, wenn eine Aufgabe Code benötigt, der noch nicht bereit ist.",
+    "planRequiredDetail": "Motir kann Ihren Code hosten, sobald Ihre Organisation einen kostenpflichtigen AI-Plan hat. Ihr Plan ist sicher in Ihrem Backlog.",
+    "planRequiredDoor": "AI-Plan wählen",
+    "planUnknownDetail": "Motir konnte den AI-Plan Ihrer Organisation gerade nicht prüfen, daher wurde nichts eingerichtet. Ihr Plan ist sicher in Ihrem Backlog – versuchen Sie es gleich noch einmal.",
     "tryAgain": "Erneut versuchen",
     "outcomeReady": "Ihr Code ist bereit",
     "finishSetupLink": "Einrichtung der Repositorys abschließen",
@@ -12872,6 +12875,7 @@
         "allotmentOnce": "{name} · {credits} Credits einmalig",
         "allotmentCustom": "{name} · individuelles Kontingent",
         "stripe": "{org} bezahlt seinen Plan über Stripe. Dies ändert den Tarif, den Motir liest; das Stripe-Abonnement wird weder geändert noch gekündigt, und das nächste Ereignis des Abonnements setzt den Tarif wieder aus Stripe.",
+        "notPaid": "Eine Änderung des Tarifs gibt {org} keinen kostenpflichtigen AI-Plan. Von Motir gehostete Repositorys, Motirs CI-Runner und Agenten bleiben abgelehnt, bis {org} einen Plan über Stripe bezahlt. Für eine kostenlos gestellte oder Test-Organisation verwenden Sie stattdessen „Als interne Abrechnung einstufen“.",
         "confirm": "Plan zu {tier} ändern"
       },
       "ledger": {

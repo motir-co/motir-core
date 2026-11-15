@@ -38,6 +38,9 @@ export interface CreditsCardProps {
   slug: string;
   /** The org pays for its AI plan through Stripe — the plan dialog warns (Panel 2d). */
   paysThroughStripe: boolean;
+  /** The paid-AI-plan gate counts this org as paid — when not, the plan dialog
+   *  says a tier will not change that (MOTIR-8985). */
+  countsAsPaid: boolean;
   canWrite: boolean;
   /** The newest ledger page, or null when the credit service did not answer. */
   initial: PlatformCreditLedgerPageDTO | null;
@@ -50,6 +53,7 @@ export function CreditsCard({
   orgName,
   slug,
   paysThroughStripe,
+  countsAsPaid,
   canWrite,
   initial,
 }: CreditsCardProps) {
@@ -234,6 +238,7 @@ export function CreditsCard({
           orgName={orgName}
           currentTier={tier}
           paysThroughStripe={paysThroughStripe}
+          countsAsPaid={countsAsPaid}
           onClose={() => setDialog(null)}
           onDone={refreshNewest}
         />

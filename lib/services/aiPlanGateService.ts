@@ -29,6 +29,17 @@ import { _resetOrgPlanCache, readOrgPlan } from '@/lib/services/orgPlanReader';
 // here: `isMeta` is already exempt from the AI paywall (`hasAiEntitlement`), and
 // `internalBilling` orgs are charged like customers and offset
 // (`internal-billing-classification.md`). This gate only reads them.
+//
+// ⚠️ A TIER A PLATFORM ADMIN ASSIGNS IS NOT A PAID PLAN (bug MOTIR-8985). The
+// admin console's **Change plan** (`platformCreditOpsService.setPlan`) sets the
+// tier motir-ai reads the credit allotment from, and touches no Stripe object —
+// so an org it moves to Pro still has no subscription, and every door here
+// answers `false` for it. That is the decided meaning, not an oversight: the
+// fleet spends real money, and "paid" is a fact about who pays it. An org Motir
+// comps or tests with is classified `internalBilling` (the switch beside Change
+// plan on the same page), which is exactly the exemption above. The Change plan
+// dialog says so before the admin confirms, so the tier is never mistaken for
+// the classification.
 
 /**
  * A paid Motir AI plan = a live Stripe subscription that grants the monthly

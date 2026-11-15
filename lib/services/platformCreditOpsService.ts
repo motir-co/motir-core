@@ -40,6 +40,7 @@ import {
 import { platformOrganizationRepository } from '@/lib/repositories/platformOrganizationRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { assertReasonSatisfied } from '@/lib/services/platformAuditService';
+import { aiPlanGateService, type PaidAiPlanAnswer } from '@/lib/services/aiPlanGateService';
 
 /**
  * CREDIT & PLAN OPS — MOTIR-747 · 10.3.2, the operator side of motir-ai's credit
@@ -335,6 +336,20 @@ export const platformCreditOpsService = {
    *   the card renders design Panel 8b ("Couldn't load credits"), never zeros.
    * @throws PlatformCreditRejectedError for a cursor motir-ai did not hand out.
    */
+  /**
+   * Does the paid-AI-plan gate count this org as paid? The plan dialog's
+   * warning reads it (bug MOTIR-8985): Change plan sets a tier, never the
+   * classification the fleet, hosted repositories and agents are gated on, so an
+   * admin about to move an unpaid org onto Pro is told it will still be refused.
+   * The answer is the gate's own ({@link aiPlanGateService.hasPaidAiPlan}) — never
+   * re-derived here — so the dialog and the doors cannot disagree. Never throws
+   * past the staff check: an unreadable plan is `'unknown'`.
+   */
+  async paidAiPlanAnswer(organizationId: string): Promise<PaidAiPlanAnswer> {
+    await requirePlatformStaff('support');
+    return aiPlanGateService.hasPaidAiPlan(organizationId);
+  },
+
   async getLedger(
     principal: PlatformPrincipal,
     organizationId: string,

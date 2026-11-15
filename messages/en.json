@@ -10189,6 +10189,9 @@
     "goToBacklog": "Go to my backlog",
     "setupFailed": "Motir couldn't finish setting up your code",
     "setupFailedDetail": "Your plan is safe in your backlog. Nothing is lost — Motir will tell you if a task needs code that isn't ready yet.",
+    "planRequiredDetail": "Motir can host your code once your organization has a paid AI plan. Your plan is safe in your backlog.",
+    "planRequiredDoor": "Choose an AI plan",
+    "planUnknownDetail": "Motir couldn’t check your organization’s AI plan just now, so nothing was set up. Your plan is safe in your backlog — try again in a moment.",
     "tryAgain": "Try again",
     "outcomeReady": "Your code is ready",
     "finishSetupLink": "Finish setting up repositories",
@@ -12869,6 +12872,7 @@
         "allotmentOnce": "{name} · {credits} credits once",
         "allotmentCustom": "{name} · custom allotment",
         "stripe": "{org} pays for its plan through Stripe. This changes the tier Motir reads; it does not change or cancel the Stripe subscription, and the subscription’s next event sets the tier from Stripe again.",
+        "notPaid": "Changing the tier does not give {org} a paid AI plan. Motir-hosted repositories, Motir’s CI runners and agents stay refused until {org} pays for a plan through Stripe. For a comped or test organization, use Classify as internal billing instead.",
         "confirm": "Change plan to {tier}"
       },
       "ledger": {

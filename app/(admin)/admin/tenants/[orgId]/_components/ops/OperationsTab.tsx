@@ -222,6 +222,21 @@ async function StatusCard({
   );
 }
 
+/** The newest ledger page, or null when the credit service did not answer. */
+async function readLedger(
+  principal: PlatformPrincipal,
+  orgId: string,
+): Promise<PlatformCreditLedgerPageDTO | null> {
+  try {
+    return await platformCreditOpsService.getLedger(principal, orgId, null);
+  } catch (err) {
+    // Panel 8b: the credit service did not answer — a state of this card, never
+    // a zero and never a page error. Anything else is a real fault.
+    if (!(err instanceof PlatformCreditServiceUnavailableError)) throw err;
+    return null;
+  }
+}
+
 async function CreditsSection({
   data,
   principal,
@@ -232,21 +247,19 @@ async function CreditsSection({
   canWrite: boolean;
 }) {
   const org = data.organization;
-  let initial: PlatformCreditLedgerPageDTO | null;
-  try {
-    initial = await platformCreditOpsService.getLedger(principal, org.id, null);
-  } catch (err) {
-    // Panel 8b: the credit service did not answer — a state of this card, never
-    // a zero and never a page error. Anything else is a real fault.
-    if (!(err instanceof PlatformCreditServiceUnavailableError)) throw err;
-    initial = null;
-  }
+  // The gate's answer is read beside the ledger, in parallel: the plan dialog
+  // warns when the org does not count as paid (MOTIR-8985).
+  const [initial, paidAnswer] = await Promise.all([
+    readLedger(principal, org.id),
+    platformCreditOpsService.paidAiPlanAnswer(org.id),
+  ]);
   return (
     <CreditsCard
       orgId={org.id}
       orgName={org.name}
       slug={org.slug}
       paysThroughStripe={org.aiIncludedSeat}
+      countsAsPaid={paidAnswer === true}
       canWrite={canWrite}
       initial={initial}
     />

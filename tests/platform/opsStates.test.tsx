@@ -174,6 +174,7 @@ const cardProps = {
   orgName: 'Acme Corp',
   slug: 'acme-corp',
   paysThroughStripe: false,
+  countsAsPaid: true,
 };
 
 describe('CreditsCard', () => {

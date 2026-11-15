@@ -10192,6 +10192,9 @@
     "goToBacklog": "Aller à mon Backlog",
     "setupFailed": "Motir n'a pas pu terminer la configuration de votre code",
     "setupFailedDetail": "Votre plan est en sécurité dans votre Backlog. Rien n'est perdu — Motir vous préviendra si une tâche nécessite du code qui n'est pas encore prêt.",
+    "planRequiredDetail": "Motir peut héberger votre code dès que votre organisation dispose d'un forfait IA payant. Votre plan est en sécurité dans votre backlog.",
+    "planRequiredDoor": "Choisir un forfait IA",
+    "planUnknownDetail": "Motir n'a pas pu vérifier le forfait IA de votre organisation pour le moment, rien n'a donc été configuré. Votre plan est en sécurité dans votre backlog — réessayez dans un instant.",
     "tryAgain": "Réessayer",
     "outcomeReady": "Votre code est prêt",
     "finishSetupLink": "Terminer la configuration des dépôts",
@@ -12872,6 +12875,7 @@
         "allotmentOnce": "{name} · {credits} crédits une seule fois",
         "allotmentCustom": "{name} · allocation sur mesure",
         "stripe": "{org} paie son forfait via Stripe. Cette action change le niveau lu par Motir ; elle ne modifie ni ne résilie l'abonnement Stripe, et le prochain événement de l'abonnement redéfinira le niveau depuis Stripe.",
+        "notPaid": "Changer de niveau ne donne pas à {org} un forfait IA payant. Les dépôts hébergés par Motir, les runners CI de Motir et les agents restent refusés tant que {org} ne paie pas un forfait via Stripe. Pour une organisation offerte ou de test, utilisez plutôt « Classer en facturation interne ».",
         "confirm": "Passer au forfait {tier}"
       },
       "ledger": {

@@ -84,6 +84,11 @@ function stubFetch(): void {
       }
       if (url.startsWith(`${AI}/v1/stripe/subscription?`)) {
         if (plan === 'unanswerable') return json(503, { code: 'internal_error' });
+        // An org a platform admin put on a paid tier with Change plan (MOTIR-8985):
+        // motir-ai holds the tier and no subscription row, so it answers EMPTY.
+        if (plan === 'admin_assigned') {
+          return json(200, { status: null, currentPeriodEnd: null, priceId: null, planTier: null });
+        }
         return json(200, {
           status: plan,
           currentPeriodEnd: null,
@@ -540,6 +545,22 @@ describe('a paid AI plan comes first (MOTIR-6918, agent-instance-storage.md §1)
     expect(await slots()).toEqual([]);
     expect(await intervals()).toHaveLength(1);
     expect(fleet.operations).toHaveLength(opsBefore);
+  });
+
+  it('an admin-assigned paid tier with no subscription is refused `ai_plan_required` at create AND wake (MOTIR-8985)', async () => {
+    const dto = await create('assigned-one');
+    await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+    _resetAiPlanCache();
+    plan = 'admin_assigned';
+    calls = [];
+
+    await expect(create('assigned-two')).rejects.toMatchObject({ reason: 'ai_plan_required' });
+    await expect(lifecycle.wake(KEY(), dto.id, fx.ctx)).rejects.toMatchObject({
+      reason: 'ai_plan_required',
+    });
+    expect(asked('agent-run-check')).toEqual([]);
+    expect((await instances()).map((i) => i.state)).toEqual(['hibernated']);
+    expect(await slots()).toEqual([]);
   });
 
   it('a paid org (active or past_due) proceeds to the credit check and boots', async () => {

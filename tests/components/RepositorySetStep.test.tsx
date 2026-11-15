@@ -635,3 +635,190 @@ describe('the MIXED set scopes the two set-wide sentences (MOTIR-5049)', () => {
     }
   });
 });
+
+// ── THE PAID-AI-PLAN REFUSAL (bug MOTIR-8985) ───────────────────────────────
+// The establish route refuses an org without a paid AI plan BEFORE any row is
+// touched (402 `ai_plan_required`, or 503 `plan_unknown` when the plan cannot be
+// read), so the set the step re-reads is exactly the set it started from. Derived
+// from the set alone, the step went straight back to idle: Continue pressed,
+// nothing created, nothing said. These pin the refusal as a visible state.
+describe('Continue refused by the paid-AI-plan gate', () => {
+  const RESPONSE_STATUS = { ai_plan_required: 402, plan_unknown: 503 } as const;
+
+  /** The set never moves; `/establish` answers the refusal the route maps. */
+  function stubRefusal(code: keyof typeof RESPONSE_STATUS) {
+    const establishCalls: string[] = [];
+    const spy = vi.fn(async (url: string) => {
+      if (String(url).endsWith('/establish')) {
+        establishCalls.push(String(url));
+        return {
+          ok: false,
+          status: RESPONSE_STATUS[code],
+          json: async () => ({ code, error: 'the server’s English sentence' }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => view([row({ id: 'r1', role: 'web', name: 'acme-booking-web' })]),
+      };
+    });
+    vi.stubGlobal('fetch', spy);
+    return establishCalls;
+  }
+
+  async function pressContinue() {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    });
+  }
+
+  it('ai_plan_required — says why in the step, and offers a plan instead of a retry', async () => {
+    stubRefusal('ai_plan_required');
+    const { container } = renderStep(
+      view([row({ id: 'r1', role: 'web', name: 'acme-booking-web' })]),
+    );
+
+    await pressContinue();
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe(
+        'Motir can host your code once your organization has a paid AI plan. Your plan is safe in your backlog.',
+      );
+    });
+    expect(screen.getByTestId('repo-setup-status').textContent).toContain(
+      "Motir couldn't finish setting up your code",
+    );
+    const door = screen.getByRole('link', { name: 'Choose an AI plan' });
+    expect(door.getAttribute('href')).toBe('/settings/organization/billing');
+    // NOT back to idle: the Continue that was refused is gone, and so is a retry
+    // that could only be refused the same way.
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    // The server's English sentence is not rendered: the step speaks its own,
+    // translated words, and still names no repository.
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('the server’s English sentence');
+    expect(text.toLowerCase()).not.toContain('repositor');
+    expect(text).not.toContain('acme-booking-web');
+  });
+
+  it('plan_unknown — says the plan could not be checked, and Try again asks once more', async () => {
+    const establishCalls = stubRefusal('plan_unknown');
+    renderStep(view([row({ id: 'r1', role: 'web', name: 'acme-booking-web' })]));
+
+    await pressContinue();
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Motir couldn’t check your organization’s AI plan just now',
+      );
+    });
+    expect(screen.queryByRole('link', { name: 'Choose an AI plan' })).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    });
+    await waitFor(() => expect(establishCalls).toHaveLength(2));
+    // Refused again, so the refusal is drawn again rather than an idle step.
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+  });
+
+  it('a refusal clears when the next Continue goes through', async () => {
+    let refuse = true;
+    let phase: ProjectRepoStateDto = 'proposed';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.endsWith('/establish')) {
+          if (refuse) {
+            return {
+              ok: false,
+              status: 503,
+              json: async () => ({ code: 'plan_unknown' }),
+            };
+          }
+          phase = 'created';
+          return { ok: true, status: 200, json: async () => ({ projectId: 'proj-1', rows: [] }) };
+        }
+        const v = view([row({ id: 'r1', role: 'web', name: 'acme-booking-web', state: phase })]);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => (u.endsWith('/access') ? v.set.rows : v),
+        };
+      }),
+    );
+    renderStep(view([row({ id: 'r1', role: 'web', name: 'acme-booking-web' })]));
+
+    await pressContinue();
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+
+    refuse = false;
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('repo-setup-status').textContent).toContain('Your code is ready');
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('any other establish failure still reads from the set — no refusal is invented', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        String(url).endsWith('/establish')
+          ? { ok: false, status: 500, json: async () => ({ code: 'internal_error' }) }
+          : {
+              ok: true,
+              status: 200,
+              json: async () => view([row({ id: 'r1', role: 'web', name: 'acme-booking-web' })]),
+            },
+      ),
+    );
+    renderStep(view([row({ id: 'r1', role: 'web', name: 'acme-booking-web' })]));
+
+    await pressContinue();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy());
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a request that never reached the route (network down) invents no refusal either', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).endsWith('/establish')) throw new TypeError('Failed to fetch');
+        return {
+          ok: true,
+          status: 200,
+          json: async () => view([row({ id: 'r1', role: 'web', name: 'acme-booking-web' })]),
+        };
+      }),
+    );
+    renderStep(view([row({ id: 'r1', role: 'web', name: 'acme-booking-web' })]));
+
+    await pressContinue();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy());
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('has no axe violations in either refusal', async () => {
+    for (const code of ['ai_plan_required', 'plan_unknown'] as const) {
+      stubRefusal(code);
+      const { container } = renderStep(
+        view([row({ id: 'r1', role: 'web', name: 'acme-booking-web' })]),
+      );
+      await pressContinue();
+      await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+      const results = await axe.run(container, {
+        rules: { 'color-contrast': { enabled: false } },
+      });
+      expect(results.violations.map((v) => v.id)).toEqual([]);
+      cleanup();
+    }
+  });
+});
