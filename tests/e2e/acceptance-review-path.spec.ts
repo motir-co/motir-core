@@ -671,7 +671,10 @@ test.describe('the review path', () => {
       const badge = main(page).locator('[data-reviewed-badge="reviewed"]').first();
       await expect(badge).toBeVisible({ timeout: FIRST_PAINT_MS });
       await badge.focus();
-      const card = main(page).getByTestId('reviewed-card');
+      // The card is portaled to the body (MOTIR-11327), outside `main`, and has
+      // no role to find it by. It mounts only while open and one is open at a
+      // time, so `.first()` names the one card on the page.
+      const card = page.getByTestId('reviewed-card').first();
       await expect(card).toBeVisible();
       await expect(card).toContainText(fill(rp.badge.card.own, { name: s.owner.name }));
       await expect(card).toContainText(
@@ -1030,7 +1033,7 @@ test.describe('the review path', () => {
       const badge = main(page).locator('[data-reviewed-badge="reviewed"]').first();
       await expect(badge).toContainText(zrp.badge.reviewed, { timeout: FIRST_PAINT_MS });
       await badge.focus();
-      await expect(main(page).getByTestId('reviewed-card')).toContainText(
+      await expect(page.getByTestId('reviewed-card').first()).toContainText(
         fill(zrp.badge.card.own, { name: s.owner.name }),
       );
       await page.keyboard.press('Escape');

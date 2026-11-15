@@ -6,6 +6,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
+import { seedMotirRepository } from '@/tests/helpers/motirRepository';
 
 // ⚠️ THE ACCEPTANCE WALK FOR CUSTOMER-OWNED ADDRESSES (Story MOTIR-3878 ·
 // Subtask MOTIR-4225) — the APPLICATION half of the verification recipe, paced
@@ -89,6 +90,10 @@ test.beforeAll(async () => {
     actorUserId: owner.id,
   });
   identifier = project.identifier;
+  // A repository Motir created, so the echo offers the claim link at all: a
+  // workspace with none reads "Why there's no name" (§8 Amendment 5,
+  // MOTIR-11285).
+  await seedMotirRepository({ workspaceId: workspace.id, projectId: project.id });
   // Public, because a private project has no address to give.
   await adminDb.project.update({
     where: { id: project.id },
