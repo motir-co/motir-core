@@ -78,7 +78,7 @@ afterAll(async () => {
 beforeEach(async () => {
   bodies.length = 0;
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "plan_revision", "plan_item", "plan", "plan_change_session", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "plan_change_session", "plan_revision", "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateJobRuns();
   await truncateAuthTables();
