@@ -17,7 +17,12 @@ import { Button } from '@/components/ui/Button';
  *
  * ⚠️ PRIMARY, NOT DANGER. Skipping deletes nothing a person made: the plan is still
  * proposed and everything written stays. The loss is a check that did not finish,
- * which the peach line names in words (the MOTIR-11260 call).
+ * which the peach line names in words (the MOTIR-11260 call), and says the Motir
+ * agent can still build through what the check would have fixed (MOTIR-11359).
+ *
+ * `lg` (32rem), not `md`: the longer peach line made the 28rem panel tall and
+ * cramped. Below 32rem the Modal is full-width minus its gutter, so phones are
+ * unchanged.
  */
 export type SkipFinalCheckPhase = 'open' | 'skipping' | 'failed' | 'finished';
 
@@ -53,7 +58,7 @@ export function SkipFinalCheckDialog({
         if (!next && !skipping) onKeep();
       }}
       role="alertdialog"
-      size="md"
+      size="lg"
       title={t('title')}
       description={t('body')}
       describedBy={lineId}

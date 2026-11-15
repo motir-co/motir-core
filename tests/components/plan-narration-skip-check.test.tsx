@@ -160,6 +160,15 @@ describe('the confirm', () => {
     expect(screen.getByTestId('planning-skip-check-dialog-consequence')?.textContent).toContain(
       SK.consequence,
     );
+    // MOTIR-11359: the line also says the Motir agent can still build through what
+    // the check would have fixed, so skipping moves that time into the run.
+    expect(SK.consequence).toContain('Motir agent can often still build through');
+    expect(SK.consequence).toContain('records any discrepancy');
+    // MOTIR-11359: the shipped `lg` panel (32rem), wide enough for the longer line;
+    // the shipped 90vw cap keeps it inside a phone.
+    expect(dialog.className).toContain('max-w-[32rem]');
+    expect(dialog.className).not.toContain('max-w-[28rem]');
+    expect(dialog.className).toContain('w-[90vw]');
     // The consequence line is part of the description.
     const lineId = screen.getByTestId('planning-skip-check-dialog-consequence').id;
     expect(dialog.getAttribute('aria-describedby')).toContain(lineId);

@@ -9458,7 +9458,7 @@
     "skipFinalCheck": {
       "title": "Passer la vérification finale ?",
       "body": "La vérification finale relit chaque élément de travail de ce plan dans l’ordre de construction, vérifie que chacun peut être construit sur ce que livrent les éléments qui le précèdent, et corrige ce qu’elle trouve.",
-      "consequence": "Si vous la passez, le plan est proposé maintenant sans cette vérification. Ce qu’elle a trouvé jusqu’ici figure dans le résumé du plan, mais rien n’est corrigé.",
+      "consequence": "Si vous la passez, le plan est proposé maintenant sans cette vérification. Ce qu’elle a trouvé jusqu’ici figure dans le résumé du plan, mais rien n’est corrigé. L’agent Motir peut souvent tout de même surmonter ces points en travaillant sur les éléments, et consigne chaque écart qu’il rencontre. Ce temps est alors passé dans l’exécution de l’agent plutôt qu’ici, dans la planification.",
       "confirm": "Passer la vérification finale",
       "keep": "Continuer la vérification",
       "error": "La vérification finale n’a pas pu être passée. Elle est toujours en cours : réessayez, ou continuez la vérification.",

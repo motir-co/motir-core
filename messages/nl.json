@@ -9458,7 +9458,7 @@
     "skipFinalCheck": {
       "title": "Eindcontrole overslaan?",
       "body": "De eindcontrole leest elk werkitem van dit plan opnieuw in bouwvolgorde, controleert dat elk item kan voortbouwen op wat de items ervoor opleveren, en herstelt wat ze vindt.",
-      "consequence": "Als u haar overslaat, wordt het plan nu voorgesteld zonder die controle. Wat ze tot nu toe heeft gevonden, staat in de samenvatting van het plan, maar er wordt niets hersteld.",
+      "consequence": "Als u haar overslaat, wordt het plan nu voorgesteld zonder die controle. Wat ze tot nu toe heeft gevonden, staat in de samenvatting van het plan, maar er wordt niets hersteld. De Motir-agent kan die punten vaak toch nog oplossen terwijl hij aan de items werkt, en legt elke afwijking vast die hij tegenkomt. Die tijd gaat dan naar de run van de agent in plaats van naar de planning hier.",
       "confirm": "Eindcontrole overslaan",
       "keep": "Blijven controleren",
       "error": "De eindcontrole kon niet worden overgeslagen. Ze loopt nog: probeer het opnieuw, of blijf controleren.",

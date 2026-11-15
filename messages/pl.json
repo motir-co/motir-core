@@ -9458,7 +9458,7 @@
     "skipFinalCheck": {
       "title": "Pominąć końcowe sprawdzenie?",
       "body": "Końcowe sprawdzenie ponownie czyta każdy element roboczy tego planu w kolejności budowania, sprawdza, czy każdy można zbudować na tym, co dostarczają elementy przed nim, i poprawia to, co znajdzie.",
-      "consequence": "Jeśli je pominiesz, plan zostanie zaproponowany teraz bez tego sprawdzenia. To, co dotąd znalazło, jest wymienione w podsumowaniu planu, ale nic nie zostanie poprawione.",
+      "consequence": "Jeśli je pominiesz, plan zostanie zaproponowany teraz bez tego sprawdzenia. To, co dotąd znalazło, jest wymienione w podsumowaniu planu, ale nic nie zostanie poprawione. Agent Motir często i tak poradzi sobie z tymi punktami, gdy będzie pracować nad elementami, i zapisze każdą napotkaną rozbieżność. Ten czas zostanie wtedy poświęcony na uruchomienie agenta zamiast tutaj, na planowanie.",
       "confirm": "Pomiń końcowe sprawdzenie",
       "keep": "Sprawdzaj dalej",
       "error": "Nie udało się pominąć końcowego sprawdzenia. Nadal trwa: spróbuj ponownie albo sprawdzaj dalej.",
