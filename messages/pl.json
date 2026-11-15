@@ -12475,6 +12475,78 @@
       "unavailable": {
         "title": "Nie można teraz wyświetlić użycia",
         "description": "Usługa AI, która prowadzi zestawienie użycia, nie odpowiedziała. Z danymi wszystko w porządku — spróbuj ponownie za chwilę."
+      },
+      "reconciliation": {
+        "title": "Rachunki dostawców",
+        "intro": "To, co zarejestrował Motir, obok tego, co naliczył każdy dostawca, dla każdego dnia UTC. Różnica powyżej tolerancji dostawcy jest ustaleniem: koryguje stawkę od tej chwili, nigdy wcześniejszej opłaty.",
+        "col": {
+          "day": "Dzień (UTC)",
+          "recorded": "Zarejestrowane przez Motir",
+          "billed": "Naliczone",
+          "gap": "Różnica",
+          "source": "Źródło",
+          "status": "Status",
+          "provider": "Dostawca",
+          "models": "Modele",
+          "estimated": "Szacowane wiersze",
+          "side": "Strona z rozbieżnością"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "Migawka salda",
+          "export": "Eksport",
+          "none": "Brak"
+        },
+        "status": {
+          "reconciled": "Uzgodniono",
+          "failed": "Odczyt nieudany",
+          "failedAt": "Próba {time} UTC",
+          "notRecorded": "Nie zarejestrowano",
+          "unreconciled": "Brak źródła"
+        },
+        "pastTolerance": "Powyżej tolerancji",
+        "estimated": "{count, plural, one {# wiersz szacowany} few {# wiersze szacowane} many {# wierszy szacowanych} other {# wiersza szacowanego}}",
+        "perModel": {
+          "aria": "Pokaż rachunek z {day} według modelu",
+          "model": "Model"
+        },
+        "summary": {
+          "recorded": "Zarejestrowane",
+          "billed": "Naliczone",
+          "gap": "Różnica",
+          "over": "z {read} z {days} odczytanych dni",
+          "onRead": "{amount} w odczytanych dniach",
+          "daysPast": "{count, plural, one {# dzień powyżej tolerancji} few {# dni powyżej tolerancji} many {# dni powyżej tolerancji} other {# dnia powyżej tolerancji}}",
+          "noneRead": "Nie odczytano rachunku",
+          "tolerance": "Powyżej tolerancji, gdy różnica przekracza {relative} rachunku i {absolute}",
+          "noTolerance": "Nie ustawiono tolerancji",
+          "days": "Dni · {provider}"
+        },
+        "findings": {
+          "title": "Ustalenia",
+          "none": "Brak różnic powyżej tolerancji w miesiącu {month}.",
+          "noModels": "Brak podziału"
+        },
+        "side": {
+          "gateway": "Bramka",
+          "motir-ai": "Motir AI",
+          "both": "Obie",
+          "unnamed": "Jeszcze nie wskazano"
+        },
+        "unreconciled": {
+          "title": "Brak źródła rachunków",
+          "body": "Motir nie może odczytać rachunku tych dostawców, więc ich dni są rejestrowane, ale nigdy porównywane."
+        },
+        "empty": {
+          "title": "Dla {month} nic jeszcze nie zarejestrowano",
+          "body": "Uzgadnianie uruchamia się po zamknięciu każdego dnia UTC. Dzień pojawia się tu po pierwszym uruchomieniu."
+        },
+        "allTime": "Rachunki dostawców są uzgadniane dla każdego dnia UTC, po jednym miesiącu. Wybierz miesiąc, aby je zobaczyć.",
+        "error": {
+          "title": "Nie można teraz pokazać rachunków dostawców",
+          "description": "Usługa AI, która przechowuje uzgodnienia, nie odpowiedziała. Reszta tej strony działa normalnie — spróbuj ponownie za chwilę."
+        },
+        "none": "Brak kwoty"
       }
     },
     "tenants": {

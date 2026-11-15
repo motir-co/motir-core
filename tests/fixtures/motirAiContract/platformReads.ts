@@ -1,5 +1,6 @@
 import type {
   RawPlatformRunsPage,
+  RawProviderReconciliation,
   RawPlatformUsage,
   RawPlatformUsageChildren,
   RawPlatformUsageMonths,
@@ -261,6 +262,153 @@ export function withIds<T>(body: T, ids: { org: string; ws: string; project: str
       .replaceAll(PROJECT, ids.project),
   ) as T;
 }
+
+/**
+ * `GET /v1/platform/usage/provider-reconciliation?period=2026-09` — the contract's
+ * own example (§ provider-reconciliation, MOTIR-11374), extended so every source,
+ * status and differing side appears once: a reconciled API day past tolerance and
+ * broken down by model, a closed day with no record, a failed read, a balance
+ * snapshot, an export, a provider with no tolerance row, and a provider with no
+ * bill source.
+ */
+export const PROVIDER_RECONCILIATION: RawProviderReconciliation = {
+  period: '2026-09',
+  providers: [
+    {
+      provider: 'anthropic',
+      relativeTolerance: 0.05,
+      absoluteToleranceMicroUsd: 500_000,
+      days: [
+        {
+          day: '2026-09-01',
+          recordedMicroUsd: 2_000_000,
+          billedMicroUsd: 3_000_000,
+          source: 'api',
+          status: 'reconciled',
+          readAt: '2026-09-02T03:00:00.000Z',
+          gapMicroUsd: 1_000_000,
+          pastTolerance: true,
+          perModel: [
+            { model: 'claude-a', recordedMicroUsd: 1_500_000, billedMicroUsd: 2_500_000 },
+            { model: 'claude-b', recordedMicroUsd: 500_000, billedMicroUsd: 500_000 },
+          ],
+          estimatedRowCount: 3,
+        },
+        {
+          day: '2026-09-02',
+          recordedMicroUsd: null,
+          billedMicroUsd: null,
+          source: 'none',
+          status: 'failed',
+          readAt: null,
+          gapMicroUsd: null,
+          pastTolerance: false,
+          perModel: [],
+          estimatedRowCount: null,
+        },
+      ],
+    },
+    {
+      provider: 'deepseek',
+      relativeTolerance: 0.1,
+      absoluteToleranceMicroUsd: 500_000,
+      days: [
+        {
+          day: '2026-09-01',
+          recordedMicroUsd: 900_000,
+          billedMicroUsd: 910_000,
+          source: 'balance_snapshot',
+          status: 'reconciled',
+          readAt: '2026-09-02T00:05:00.000Z',
+          gapMicroUsd: 10_000,
+          pastTolerance: false,
+          perModel: [],
+          estimatedRowCount: null,
+        },
+        {
+          day: '2026-09-02',
+          recordedMicroUsd: 800_000,
+          billedMicroUsd: null,
+          source: 'none',
+          status: 'failed',
+          readAt: '2026-09-03T03:00:00.000Z',
+          gapMicroUsd: null,
+          pastTolerance: false,
+          perModel: [],
+          estimatedRowCount: null,
+        },
+      ],
+    },
+    {
+      provider: 'igate-export',
+      relativeTolerance: null,
+      absoluteToleranceMicroUsd: null,
+      days: [
+        {
+          day: '2026-09-01',
+          recordedMicroUsd: 100_000,
+          billedMicroUsd: 100_000,
+          source: 'export',
+          status: 'reconciled',
+          readAt: '2026-09-05T10:00:00.000Z',
+          gapMicroUsd: 0,
+          pastTolerance: false,
+          perModel: [],
+          estimatedRowCount: null,
+        },
+      ],
+    },
+    {
+      provider: 'moonshotai',
+      relativeTolerance: 0.05,
+      absoluteToleranceMicroUsd: 500_000,
+      days: [
+        {
+          day: '2026-09-01',
+          recordedMicroUsd: 300_000,
+          billedMicroUsd: null,
+          source: 'none',
+          status: 'unreconciled',
+          readAt: null,
+          gapMicroUsd: null,
+          pastTolerance: false,
+          perModel: [],
+          estimatedRowCount: null,
+        },
+      ],
+    },
+  ],
+  findings: [
+    {
+      provider: 'anthropic',
+      day: '2026-09-01',
+      recordedMicroUsd: 2_000_000,
+      billedMicroUsd: 3_000_000,
+      gapMicroUsd: 1_000_000,
+      models: [
+        {
+          model: 'claude-a',
+          recordedMicroUsd: 1_500_000,
+          billedMicroUsd: 2_500_000,
+          gapMicroUsd: 1_000_000,
+        },
+      ],
+      estimatedRowCount: 3,
+      differingSide: 'motir-ai',
+    },
+    {
+      provider: 'openai',
+      day: '2026-09-01',
+      recordedMicroUsd: 1_000_000,
+      billedMicroUsd: 2_000_000,
+      gapMicroUsd: 1_000_000,
+      models: [],
+      estimatedRowCount: null,
+      differingSide: null,
+    },
+  ],
+  unreconciledProviders: ['moonshotai'],
+};
 
 /**
  * motir-core's OUTGOING bodies, as motir-ai's contract documents each request — the

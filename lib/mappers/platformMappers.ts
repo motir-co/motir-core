@@ -13,9 +13,9 @@ import type {
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import type { PlatformWorkspaceRow } from '@/lib/repositories/platformEstateRepository';
 import type { PlatformAuditLogWithActor } from '@/lib/repositories/platformAuditLogRepository';
-import type { RawPlatformRun } from '@/lib/ai/motirAiClient';
+import type { RawPlatformRun, RawProviderReconciliation } from '@/lib/ai/motirAiClient';
 import type { PlatformTenantEventRow } from '@/lib/repositories/platformEstateRepository';
-import type { PlatformActivityItemDTO } from '@/lib/dto/platform';
+import type { PlatformActivityItemDTO, ProviderReconciliationDTO } from '@/lib/dto/platform';
 
 /** A `platform_audit_log` row → the DTO. */
 export function toPlatformAuditLogDTO(row: PlatformAuditLog): PlatformAuditLogDTO {
@@ -212,5 +212,56 @@ export function toPlatformRunActivityDTO(
     detail: null,
     model: run.model,
     credits: run.credits,
+  };
+}
+
+/**
+ * motir-ai's provider-bill reconciliation → Usage & cost's DTO (MOTIR-11376).
+ * Field for field and nothing else: the gap, `pastTolerance`, the status and the
+ * source are the route's answers, so none is recomputed or defaulted here — a
+ * missing bill stays `null` all the way to the page.
+ */
+export function toProviderReconciliationDTO(
+  raw: RawProviderReconciliation,
+): ProviderReconciliationDTO {
+  return {
+    period: raw.period,
+    providers: raw.providers.map((p) => ({
+      provider: p.provider,
+      relativeTolerance: p.relativeTolerance,
+      absoluteToleranceMicroUsd: p.absoluteToleranceMicroUsd,
+      days: p.days.map((d) => ({
+        day: d.day,
+        recordedMicroUsd: d.recordedMicroUsd,
+        billedMicroUsd: d.billedMicroUsd,
+        source: d.source,
+        status: d.status,
+        readAt: d.readAt,
+        gapMicroUsd: d.gapMicroUsd,
+        pastTolerance: d.pastTolerance,
+        perModel: d.perModel.map((m) => ({
+          model: m.model,
+          recordedMicroUsd: m.recordedMicroUsd,
+          billedMicroUsd: m.billedMicroUsd,
+        })),
+        estimatedRowCount: d.estimatedRowCount,
+      })),
+    })),
+    findings: raw.findings.map((f) => ({
+      provider: f.provider,
+      day: f.day,
+      recordedMicroUsd: f.recordedMicroUsd,
+      billedMicroUsd: f.billedMicroUsd,
+      gapMicroUsd: f.gapMicroUsd,
+      models: f.models.map((m) => ({
+        model: m.model,
+        recordedMicroUsd: m.recordedMicroUsd,
+        billedMicroUsd: m.billedMicroUsd,
+        gapMicroUsd: m.gapMicroUsd,
+      })),
+      estimatedRowCount: f.estimatedRowCount,
+      differingSide: f.differingSide,
+    })),
+    unreconciledProviders: [...raw.unreconciledProviders],
   };
 }

@@ -1,5 +1,8 @@
 import type { CategoryFigures } from '@/lib/platform/spend';
 import type {
+  ReconciliationDifferingSide,
+  ReconciliationSource,
+  ReconciliationStatus,
   RawPlatformUsage as RawPlatformUsageForDto,
   RawPlatformUsageMonths,
   RawSpendRow,
@@ -527,3 +530,68 @@ export interface PlatformWorkspacePageDTO {
   };
   jobs: { items: PlatformActivityItemDTO[]; nextCursor: string | null; unavailable: boolean };
 }
+
+// ── Provider-bill reconciliation (Story MOTIR-11350 · MOTIR-11376) ─────────────
+
+/** One model's line of a day's bill, where the provider broke it down. */
+export interface ProviderReconciliationModelDayDTO {
+  model: string;
+  recordedMicroUsd: number;
+  billedMicroUsd: number;
+}
+
+/** One closed UTC day of one provider, as motir-ai recorded it. */
+export interface ProviderReconciliationDayDTO {
+  day: string;
+  recordedMicroUsd: number | null;
+  /** null when nothing was read — the page shows an em dash, never 0. */
+  billedMicroUsd: number | null;
+  source: ReconciliationSource;
+  status: ReconciliationStatus;
+  readAt: string | null;
+  gapMicroUsd: number | null;
+  pastTolerance: boolean;
+  perModel: ProviderReconciliationModelDayDTO[];
+  estimatedRowCount: number | null;
+}
+
+export interface ProviderReconciliationProviderDTO {
+  provider: string;
+  relativeTolerance: number | null;
+  absoluteToleranceMicroUsd: number | null;
+  days: ProviderReconciliationDayDTO[];
+}
+
+export interface ProviderReconciliationFindingDTO {
+  provider: string;
+  day: string;
+  recordedMicroUsd: number;
+  billedMicroUsd: number;
+  gapMicroUsd: number;
+  models: {
+    model: string;
+    recordedMicroUsd: number;
+    billedMicroUsd: number;
+    gapMicroUsd: number;
+  }[];
+  estimatedRowCount: number | null;
+  differingSide: ReconciliationDifferingSide | null;
+}
+
+/**
+ * One month's provider-bill reconciliation for Usage & cost. Every figure, status
+ * and verdict is motir-ai's, carried through unchanged.
+ */
+export interface ProviderReconciliationDTO {
+  period: string;
+  providers: ProviderReconciliationProviderDTO[];
+  findings: ProviderReconciliationFindingDTO[];
+  unreconciledProviders: string[];
+}
+
+/**
+ * What Usage & cost has for its reconciliation section: the month's DTO, `null`
+ * when motir-ai did not answer, or `'month_required'` on All time — the route
+ * answers one month only, so nothing was asked.
+ */
+export type EstateReconciliationResult = ProviderReconciliationDTO | 'month_required' | null;

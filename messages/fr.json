@@ -12475,6 +12475,78 @@
       "unavailable": {
         "title": "L'utilisation ne peut pas être affichée pour le moment",
         "description": "Le service d'IA qui tient le cumul d'utilisation n'a pas répondu. Les chiffres ne posent aucun problème — réessayez dans un instant."
+      },
+      "reconciliation": {
+        "title": "Factures des fournisseurs",
+        "intro": "Ce que Motir a enregistré à côté de ce que chaque fournisseur a facturé, par jour UTC. Un écart au-delà de la tolérance du fournisseur est un constat : il corrige le tarif à partir de là, jamais un débit passé.",
+        "col": {
+          "day": "Jour (UTC)",
+          "recorded": "Enregistré par Motir",
+          "billed": "Facturé",
+          "gap": "Écart",
+          "source": "Source",
+          "status": "Statut",
+          "provider": "Fournisseur",
+          "models": "Modèles",
+          "estimated": "Lignes estimées",
+          "side": "Côté divergent"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "Instantané du solde",
+          "export": "Export",
+          "none": "Aucune"
+        },
+        "status": {
+          "reconciled": "Rapproché",
+          "failed": "Lecture échouée",
+          "failedAt": "Tenté le {time} UTC",
+          "notRecorded": "Non enregistré",
+          "unreconciled": "Aucune source"
+        },
+        "pastTolerance": "Hors tolérance",
+        "estimated": "{count, plural, one {# ligne estimée} other {# lignes estimées}}",
+        "perModel": {
+          "aria": "Afficher la facture du {day} par modèle",
+          "model": "Modèle"
+        },
+        "summary": {
+          "recorded": "Enregistré",
+          "billed": "Facturé",
+          "gap": "Écart",
+          "over": "sur {read} des {days} jours lus",
+          "onRead": "{amount} sur les jours lus",
+          "daysPast": "{count, plural, one {# jour hors tolérance} other {# jours hors tolérance}}",
+          "noneRead": "Aucune facture lue",
+          "tolerance": "Hors tolérance quand l’écart dépasse {relative} de la facture et {absolute}",
+          "noTolerance": "Aucune tolérance définie",
+          "days": "Jours · {provider}"
+        },
+        "findings": {
+          "title": "Constats",
+          "none": "Aucun écart hors tolérance en {month}.",
+          "noModels": "Pas de détail"
+        },
+        "side": {
+          "gateway": "Gateway",
+          "motir-ai": "Motir AI",
+          "both": "Les deux",
+          "unnamed": "Pas encore déterminé"
+        },
+        "unreconciled": {
+          "title": "Aucune source de facturation",
+          "body": "Motir ne peut lire aucune facture pour ces fournisseurs : leurs jours sont enregistrés mais jamais comparés."
+        },
+        "empty": {
+          "title": "Rien n’est encore enregistré pour {month}",
+          "body": "Le rapprochement s’exécute une fois chaque jour UTC clos. Un jour apparaît ici après sa première exécution."
+        },
+        "allTime": "Les factures des fournisseurs sont rapprochées par jour UTC, un mois à la fois. Choisissez un mois pour les voir.",
+        "error": {
+          "title": "Les factures des fournisseurs ne peuvent pas être affichées pour le moment",
+          "description": "Le service d’IA qui conserve le rapprochement n’a pas répondu. Le reste de cette page n’est pas concerné — réessayez dans un instant."
+        },
+        "none": "Aucun montant"
       }
     },
     "tenants": {

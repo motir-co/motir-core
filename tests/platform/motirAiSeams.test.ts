@@ -6,6 +6,7 @@ import {
   MONTHS,
   ORGS,
   OUTGOING,
+  PROVIDER_RECONCILIATION,
   RUNS,
   USAGE,
   withIds,
@@ -67,6 +68,8 @@ function recorded(path: string): unknown {
       return withIds(ORGS, ids);
     case '/v1/platform/usage/months':
       return withIds(MONTHS, ids);
+    case '/v1/platform/usage/provider-reconciliation':
+      return PROVIDER_RECONCILIATION;
     case '/v1/platform/runs':
       return withIds(RUNS, ids);
     case '/v1/usage':
@@ -157,8 +160,10 @@ afterAll(async () => {
 describe('1 · client seams: recorded motir-ai reads into their DTOs', () => {
   it('/v1/platform/usage → the Usage & cost sheet: all eight categories, indexing out of the charged total', async () => {
     const { usage } = await platformReadService.getEstateUsage(principal, '2026-09');
-    expect(seen.at(-1)!.query.get('level')).toBe('platform');
-    expect(seen.at(-1)!.query.get('period')).toBe('2026-09');
+    // The view also reads the reconciliation, in parallel, so find the usage call by path.
+    const call = seen.find((s) => s.path === '/v1/platform/usage')!;
+    expect(call.query.get('level')).toBe('platform');
+    expect(call.query.get('period')).toBe('2026-09');
     const sheet = buildSpendSheet(usage!.categories);
     expect(sheet.rows).toHaveLength(8);
     expect(sheet.chargedCredits).toBe(USAGE.spend.chargedCredits);
@@ -189,6 +194,13 @@ describe('1 · client seams: recorded motir-ai reads into their DTOs', () => {
       }),
     ]);
     expect(list.nextCursor).toBe(ORGS.nextCursor);
+  });
+
+  it('/usage/provider-reconciliation → the Provider bills section, read in the same audited view', async () => {
+    const { reconciliation } = await platformReadService.getEstateUsage(principal, '2026-09');
+    const call = seen.find((s) => s.path === '/v1/platform/usage/provider-reconciliation')!;
+    expect(call.query.get('period')).toBe('2026-09');
+    expect(reconciliation).toStrictEqual(PROVIDER_RECONCILIATION);
   });
 
   it('/usage/children + /usage/months → the org Usage tab: workspace named, both remainder rows, the all-time row', async () => {
