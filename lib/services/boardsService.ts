@@ -2058,9 +2058,11 @@ async function buildSwimlanes(
         statuses: statusKeys,
         ...(sprintId ? { sprintId } : {}),
         // The "No epic" catch-all is DERIVED (filtered total − Σ epic-lane counts),
-        // so this denominator must use the SAME 6.15.2 filter as the epic
-        // aggregate.
+        // so this denominator must use the SAME predicate as the epic aggregate:
+        // the 6.15.2 filter AND a Visitor's hidden set (MOTIR-11325), or a
+        // private epic's descendants land in the catch-all.
         ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+        ...(excludeIds ? { excludeIds } : {}),
       },
       tx,
     ),
