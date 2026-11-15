@@ -677,6 +677,12 @@ export interface JobContextBag {
   // the planner's own and keep it fixed. It replaced `requirementPage`, which the run no
   // longer waits for: the page is saved in the background after the start.
   requirementConfirmed?: RequirementConfirmation;
+  // THE PLANNING CONVERSATION (MOTIR-11294 producer ↔ motir-ai `readPlanSessionId`
+  // consumer) — this core's `PlanChangeSession` id, on EVERY `plan` submit that has a
+  // session. motir-ai reads it as the turn's conversation at the code-graph turn
+  // boundary, so a new session never inherits an earlier one's pointers. Spelled once,
+  // as `PLAN_SESSION_ID_CONTEXT_FIELD` (`lib/ai/planSessionContext.ts`).
+  planSessionId?: string;
   // THE RUN MARKER (MOTIR-10233 producer ↔ motir-ai `readRunReplan` consumer) — this
   // submit is a RUN's re-plan: the run stopped on a card and exited, so nobody is there
   // to answer a question. Set ONLY by `submit_plan_session { fromRun: true }`, never by a

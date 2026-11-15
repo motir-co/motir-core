@@ -7,6 +7,7 @@ import {
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
 import { FINAL_CHECK_CONTEXT_FIELD, resolveFinalCheckForJob } from '@/lib/ai/finalCheck';
+import { PLAN_SESSION_ID_CONTEXT_FIELD, allocatePlanSessionId } from '@/lib/ai/planSessionContext';
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import {
@@ -119,8 +120,9 @@ export interface PlanEditSubmitResult {
 }
 
 /**
- * Per-submit knobs that describe the SUBMIT, not the planning request itself
- * (nothing here reaches motir-ai — the job envelope is unchanged).
+ * Per-submit knobs that describe the SUBMIT, not the planning request itself.
+ * Only `sessionId` reaches motir-ai, as `context.planSessionId` (MOTIR-11294); the
+ * rest shape the plan core opens.
  *
  * `origin` (MOTIR-916) stamps the opened Plan's provenance. Every request-path
  * caller omits it and gets `user`; the auto-plan cadence watcher passes
@@ -134,6 +136,8 @@ export interface PlanEditSubmitOptions {
    * the plan joins that session. Absent ⇒ no conversation: the plan gets a new
    * session of the door's origin — `cadence` for the watcher, `expand` for an
    * expand, else `generation` (a one-shot augment has no conversation either).
+   * Either way the session's id rides the envelope as `context.planSessionId`
+   * (MOTIR-11294); a new session's is allocated before the submit.
    */
   sessionId?: string;
   /**
@@ -223,6 +227,11 @@ async function buildPlanningJobContext(
   // WHOSE language the planner replies in (MOTIR-8741) — the person who STARTED the
   // plan, not whoever pressed Send: required, so no planning submit can forget it.
   personUserId: string | null,
+  // WHICH CONVERSATION the turn belongs to (MOTIR-11294) — the plan session's id, sent
+  // as `context.planSessionId`: required for the same reason, so no planning submit
+  // can leave motir-ai comparing a new session against an earlier one's code graph.
+  // Null only for a plan a pre-session build wrote, which has none to name.
+  planSessionId: string | null,
 ) {
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
@@ -275,6 +284,7 @@ async function buildPlanningJobContext(
       ...(code ? { code } : {}),
       ...(repositories ? { repositories } : {}),
       [STARTER_LIBRARY_CONTEXT_FIELD]: starterLibrary,
+      ...(planSessionId ? { [PLAN_SESSION_ID_CONTEXT_FIELD]: planSessionId } : {}),
     },
   };
 }
@@ -304,12 +314,17 @@ async function submitPlanEditJob(
 ): Promise<PlanEditSubmitResult> {
   const origin = opts.origin ?? 'user';
   const personUserId = personUserIdFor(origin, ctx);
+  // THE SESSION THIS TURN BELONGS TO, known BEFORE the submit (MOTIR-11294): a
+  // conversation's own, or — for a door with none — the id of the session
+  // `createPlan` opens below, allocated now so it can ride the envelope.
+  const sessionId = opts.sessionId ?? allocatePlanSessionId();
   // A caller that supplies its own requirement keeps it; otherwise the plan it
   // writes (when it names one) supplies the stored one.
   const { tenant, planningFields } = await buildPlanningJobContext(
     ctx,
     context.requirement ? null : (context.planId ?? null),
     personUserId,
+    sessionId,
   );
   const { jobId } = await submitJob(
     // ONE planning kind (ADR `session-model.md` §6 step 2). Every planning submit
@@ -342,6 +357,8 @@ async function submitPlanEditJob(
       session: opts.sessionId
         ? { sessionId: opts.sessionId }
         : {
+            // The id the envelope already named (MOTIR-11294).
+            id: sessionId,
             origin: origin === 'cadence' ? 'cadence' : rootItemKey ? 'expand' : 'generation',
             // An expand is ABOUT its root item, so its session is anchored there
             // and the Plans page can say what it was for.
@@ -655,9 +672,17 @@ export const aiPlanEditsService = {
     // The plan's `createdById` (MOTIR-8741): a resume speaks the plan STARTER's language,
     // not the resumer's. The caller already read the plan to pre-check the resume.
     starterUserId: string | null,
+    // The session the resumed plan belongs to (MOTIR-11294), which the caller resumes
+    // by id: the resume is a turn of that conversation and names it on the envelope.
+    sessionId: string,
   ): Promise<{ jobId: string }> {
     await assertCanPlan(ctx);
-    const { tenant, planningFields } = await buildPlanningJobContext(ctx, planId, starterUserId);
+    const { tenant, planningFields } = await buildPlanningJobContext(
+      ctx,
+      planId,
+      starterUserId,
+      sessionId,
+    );
     return submitJob(
       'plan',
       tenant,
@@ -727,7 +752,13 @@ async function dispatchRevision(
   // plan exactly as it found it.
   // The plan STARTER's language (MOTIR-8741): a reviewer revising someone else's plan
   // must not flip its replies and explanations into their own.
-  const { tenant, planningFields } = await buildPlanningJobContext(ctx, planId, plan.createdById);
+  // A revision is a turn of the plan's own conversation (MOTIR-11294).
+  const { tenant, planningFields } = await buildPlanningJobContext(
+    ctx,
+    planId,
+    plan.createdById,
+    plan.sessionId,
+  );
   const { jobId } = await submitJob(
     // ONE planning kind (ADR §6 step 2). `context.planId` below is what makes this a REVISION
     // on the far side — `readerForPlan`'s first arm — so its silent loss would route every

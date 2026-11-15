@@ -1357,7 +1357,16 @@ export interface PlanListPageDto {
  */
 export type PlanSessionRef =
   | { sessionId: string }
-  | { origin: PlanSessionOriginDto; targetKeys?: readonly string[] };
+  | {
+      origin: PlanSessionOriginDto;
+      targetKeys?: readonly string[];
+      /**
+       * The id the NEW session is created with (MOTIR-11294) — allocated by a submit
+       * that put it on the job envelope as `context.planSessionId` before the session
+       * existed (`allocatePlanSessionId`). Absent ⇒ the column default.
+       */
+      id?: string;
+    };
 
 /** Input to `plansService.createPlan`. */
 export interface CreatePlanInput {

@@ -47,6 +47,12 @@ vi.mock('@/lib/ai/finalCheck', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/finalCheck')>()),
   resolveFinalCheckForJob: vi.fn(),
 }));
+// The session-id allocator (MOTIR-11294), pinned so a NEW session's id is a value the
+// assertions can name; the wire key stays the real constant.
+vi.mock('@/lib/ai/planSessionContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/planSessionContext')>()),
+  allocatePlanSessionId: vi.fn(() => 'session_new'),
+}));
 vi.mock('@/lib/services/plansService');
 vi.mock('@/lib/repositories/workItemRepository');
 // …and the project gate (MOTIR-2357). These cases drive a SYNTHETIC ProjectContext
@@ -307,17 +313,18 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
     {
       name: 'submitAugment',
       run: () => aiPlanEditsService.submitAugment('add a login flow', ctx),
-      session: { origin: 'generation' },
+      session: { id: 'session_new', origin: 'generation' },
     },
     {
       name: 'submitContextual',
       run: () => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], ctx),
-      session: { origin: 'generation' },
+      session: { id: 'session_new', origin: 'generation' },
     },
     {
       name: 'submitExpand',
       run: () => aiPlanEditsService.submitExpand('MOTIR-100', ctx),
-      session: { origin: 'expand', targetKeys: ['MOTIR-100'] },
+      // `id` (MOTIR-11294): the session is created with the id the envelope named.
+      session: { id: 'session_new', origin: 'expand', targetKeys: ['MOTIR-100'] },
     },
   ];
 
@@ -854,7 +861,8 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
     // that says so is not what this guard forbids; a field that vanishes from a
     // refactor still is. `recordPlanningMistakes` was the first such amendment
     // (MOTIR-4343), `onboarding` the second (MOTIR-4736), `starterLibrary` the
-    // third (MOTIR-11041) and `finalCheck` the fourth (MOTIR-11264). Amending the pin
+    // third (MOTIR-11041), `finalCheck` the fourth (MOTIR-11264) and `planSessionId`
+    // the fifth (MOTIR-11294). Amending the pin
     // and silently loosening it to `toMatchObject` look similar and are opposite
     // in kind: the exact equality is the whole instrument, and it stays.
     expect(context).toEqual({
@@ -867,6 +875,8 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
       code: { repos: ['owner/repo'] },
       repositories: { repositories: [] },
       starterLibrary: [{ key: 'a-starter' }],
+      // The NEW expand session's id, allocated before the submit (MOTIR-11294).
+      planSessionId: 'session_new',
     });
   });
 
@@ -897,6 +907,82 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
       // Not conditional either (MOTIR-11041): `[]` is an answer, and a project with
       // no repositories is the case it is for.
       starterLibrary: [{ key: 'a-starter' }],
+      planSessionId: 'session_new',
     });
+  });
+});
+
+// ─── Every planning submit names its conversation (Bug MOTIR-11294) ─────────
+// motir-ai keys a conversation's code-graph pointers by a concurrency key every later
+// session with the same anchors shares, and resets the key only for a turn that NAMES
+// its conversation. So every submit sends the plan session's id as
+// `context.planSessionId` — a NEW session's id allocated before the submit, since the
+// session row is opened after it.
+describe('aiPlanEditsService — `context.planSessionId` rides every planning submit', () => {
+  const sentContext = () => vi.mocked(submitJob).mock.calls[0]![2] as JobContextBag;
+
+  beforeEach(() => {
+    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
+      mockWorkItem({ identifier: 'MOTIR-100', kind: 'story' }),
+    );
+  });
+
+  it('a submit with no conversation sends the id its NEW session is then created with', async () => {
+    mockSubmitJob();
+    await aiPlanEditsService.submitExpand('MOTIR-100', ctx, { origin: 'cadence' });
+    expect(sentContext().planSessionId).toBe('session_new');
+    const input = vi.mocked(plansService.createPlan).mock.calls[0]![1];
+    expect(input.session).toEqual({
+      id: 'session_new',
+      origin: 'cadence',
+      targetKeys: ['MOTIR-100'],
+    });
+  });
+
+  it("a conversation's submit sends ITS session id and opens no new session", async () => {
+    mockSubmitJob();
+    await aiPlanEditsService.submitAugment('add a login flow', ctx, undefined, {
+      sessionId: 'session_conv',
+    });
+    expect(sentContext().planSessionId).toBe('session_conv');
+    expect(vi.mocked(plansService.createPlan).mock.calls[0]![1].session).toEqual({
+      sessionId: 'session_conv',
+    });
+  });
+
+  it("a revision sends the revised plan's own session", async () => {
+    mockSubmitJob();
+    vi.mocked(plansService.getPlan).mockResolvedValue({
+      id: 'plan_1',
+      projectId: 'pj_1',
+      status: 'planned',
+      sessionId: 'session_of_plan',
+      items: [],
+    } as unknown as Awaited<ReturnType<typeof plansService.getPlan>>);
+    vi.mocked(plansService.readRevisionLease).mockResolvedValue(null as never);
+    vi.mocked(plansService.acquireRevisionLease).mockResolvedValue(undefined as never);
+    await aiPlanEditsService.submitSessionRevision('plan_1', 'tighten it', ctx);
+    expect(sentContext().planSessionId).toBe('session_of_plan');
+  });
+
+  it('a revision of a plan with NO session (a pre-session row) sends no key at all', async () => {
+    mockSubmitJob();
+    vi.mocked(plansService.getPlan).mockResolvedValue({
+      id: 'plan_1',
+      projectId: 'pj_1',
+      status: 'planned',
+      sessionId: null,
+      items: [],
+    } as unknown as Awaited<ReturnType<typeof plansService.getPlan>>);
+    vi.mocked(plansService.readRevisionLease).mockResolvedValue(null as never);
+    vi.mocked(plansService.acquireRevisionLease).mockResolvedValue(undefined as never);
+    await aiPlanEditsService.submitRevise('plan_1', 'tighten it', ctx);
+    expect(Object.prototype.hasOwnProperty.call(sentContext(), 'planSessionId')).toBe(false);
+  });
+
+  it('a resume sends the session it resumes', async () => {
+    mockSubmitJob();
+    await aiPlanEditsService.submitResume('plan_1', 'job_before', ctx, 'user_1', 'session_resumed');
+    expect(sentContext().planSessionId).toBe('session_resumed');
   });
 });

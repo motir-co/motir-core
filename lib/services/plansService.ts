@@ -6416,6 +6416,8 @@ async function attachPlanSessionWithin(
   const now = new Date();
   const created = await planChangeSessionRepository.create(
     {
+      // The id a submit already sent motir-ai as `context.planSessionId` (MOTIR-11294).
+      ...(ref?.id ? { id: ref.id } : {}),
       workspaceId: ctx.workspaceId,
       projectId,
       createdById: input.createdById ?? null,

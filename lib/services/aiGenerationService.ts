@@ -11,6 +11,7 @@ import {
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
 import { FINAL_CHECK_CONTEXT_FIELD, resolveFinalCheckForJob } from '@/lib/ai/finalCheck';
+import { PLAN_SESSION_ID_CONTEXT_FIELD, allocatePlanSessionId } from '@/lib/ai/planSessionContext';
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { routeOnboardingContextFor } from '@/lib/ai/routeOnboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
@@ -231,6 +232,8 @@ export const aiGenerationService = {
       {
         // No prompt: nothing has been asked for yet. That is what makes this a
         // routing question rather than a planning one.
+        // And no `planSessionId` (MOTIR-11294): a routing run opens no plan and no
+        // session, so there is no conversation for it to name.
         prompt: null,
         [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
         [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
@@ -328,6 +331,11 @@ export const aiGenerationService = {
       projectKey: ctx.project.identifier,
       ...languages,
     };
+    // The id of the session `createPlan` opens below, allocated BEFORE the submit so
+    // the job names its conversation (MOTIR-11294): a generation is a new session, and
+    // without it motir-ai would compare this one against an earlier session's code
+    // graph under the shared key.
+    const sessionId = allocatePlanSessionId();
     const { jobId } = await submitJob(
       // ONE planning kind (ADR `session-model.md` §6 step 2). This submit names no
       // target at all, which is exactly how motir-ai reads it as *plan the
@@ -367,6 +375,7 @@ export const aiGenerationService = {
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),
         [STARTER_LIBRARY_CONTEXT_FIELD]: starterLibrary,
+        [PLAN_SESSION_ID_CONTEXT_FIELD]: sessionId,
       },
       { userId: ctx.userId },
     );
@@ -378,7 +387,7 @@ export const aiGenerationService = {
         sourceJobId: jobId,
         // Its own session, of origin `generation` (AMENDMENT 17 §4–§5; MOTIR-6022):
         // a generation has no conversation, and every plan belongs to one.
-        session: { origin: 'generation' },
+        session: { origin: 'generation', id: sessionId },
         // WHO ASKED (MOTIR-2986). This seam is reached ONLY from a request path
         // — somebody clicked Generate — so the acting user IS the requester and
         // recording them is honest. Passed explicitly rather than defaulted in

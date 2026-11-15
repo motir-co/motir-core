@@ -135,7 +135,7 @@ describe('a plan-writing submit carries the plan’s sharpened requirement', () 
     const planId = await plannedPlan(fx);
     await sharpen(planId);
 
-    await aiPlanEditsService.submitResume(planId, 'job-before', ctx, ctx.userId);
+    await aiPlanEditsService.submitResume(planId, 'job-before', ctx, ctx.userId, 'session-resumed');
     expect(bodies).toHaveLength(1);
     expect(contextOf(bodies[0]!)['requirement']).toEqual(SIX);
     expect(contextOf(bodies[0]!)).not.toHaveProperty('planId');
@@ -150,7 +150,7 @@ describe('a plan-writing submit carries the plan’s sharpened requirement', () 
     await aiPlanEditsService.submitRevise(planId, 'split it', ctx);
     expect(Object.prototype.hasOwnProperty.call(contextOf(bodies[0]!), 'requirement')).toBe(false);
     bodies.length = 0;
-    await aiPlanEditsService.submitResume(planId, 'job-before', ctx, ctx.userId);
+    await aiPlanEditsService.submitResume(planId, 'job-before', ctx, ctx.userId, 'session-resumed');
     expect(Object.prototype.hasOwnProperty.call(contextOf(bodies[0]!), 'requirement')).toBe(false);
   });
 

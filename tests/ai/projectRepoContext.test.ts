@@ -376,6 +376,8 @@ describe('the planning-job ENVELOPE', () => {
       // included — ON here because this fixture never touches the setting.
       recordPlanningMistakes: true,
       finalCheck: true,
+      // The generation's NEW session, allocated before the submit (MOTIR-11294).
+      planSessionId: expect.any(String),
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
@@ -444,6 +446,8 @@ describe('the planning-job ENVELOPE', () => {
       generateExplanations: false,
       recordPlanningMistakes: true,
       finalCheck: true,
+      // The generation's NEW session, allocated before the submit (MOTIR-11294).
+      planSessionId: expect.any(String),
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,

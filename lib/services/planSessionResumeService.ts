@@ -361,6 +361,7 @@ async function attemptAutomatic(
       target.failedJobId,
       starterCtx,
       target.starterUserId,
+      target.sessionId,
     ));
   } catch (err) {
     const code = (err as { code?: unknown } | null)?.code;
@@ -421,6 +422,7 @@ export const planSessionResumeService = {
         target.failedJobId,
         pctx,
         target.starterUserId,
+        target.sessionId,
       ));
     } catch (err) {
       // NOTHING TO CONTINUE FROM (MOTIR-9121): motir-ai refuses a resume of a job that failed
