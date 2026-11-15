@@ -627,7 +627,7 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       await as(page, ADA);
       await openBoard(page, bugsId);
       await startNewBoard(page, MOBILE_BOARD);
-      await main(page).getByTestId('board-type-scrum').click();
+      await dialogOf(page).getByTestId('board-type-scrum').click();
       const section = dialogOf(page).getByTestId('board-filter-section');
       await section.getByTestId('board-filter-add').click();
       await section.getByRole('combobox', { name: TB.filterStartFromSaved }).click();
@@ -813,7 +813,7 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       }
       await expect(indicator(page)).toBeVisible();
       await expect(indicator(page)).toContainText(KIND_BUG_TEXT);
-      await expect(main(page).getByTestId('board-stored-filter-indicator-edit')).toHaveCount(0);
+      await expect(page.getByTestId('board-stored-filter-indicator-edit')).toHaveCount(0);
       await expect(indicator(page).getByRole('link')).toHaveCount(0);
       await beat();
     },
