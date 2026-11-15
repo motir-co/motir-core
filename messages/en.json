@@ -405,6 +405,7 @@
     "searchLabel": "Search this plan",
     "showChangesAll": "Every item on this level is this plan's",
     "locateChange": "Locate the next of this plan's items",
+    "locateActive": "Locate the item being worked on",
     "rowOpenAria": "Open {name}",
     "openTargetAsItStands": "Open the work item as it stands",
     "railChangedMark": "changed",

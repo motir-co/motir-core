@@ -405,6 +405,7 @@
     "searchLabel": "Dit plan doorzoeken",
     "showChangesAll": "Elk item op dit niveau komt uit dit plan",
     "locateChange": "Het volgende item van dit plan zoeken",
+    "locateActive": "Het item zoeken waaraan nu wordt gewerkt",
     "rowOpenAria": "{name} openen",
     "openTargetAsItStands": "Het werkitem openen zoals het nu is",
     "railChangedMark": "gewijzigd",

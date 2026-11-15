@@ -405,6 +405,7 @@
     "searchLabel": "Cerca in questo piano",
     "showChangesAll": "Ogni elemento di questo livello appartiene a questo piano",
     "locateChange": "Trova il prossimo elemento di questo piano",
+    "locateActive": "Trova l’elemento su cui si sta lavorando",
     "rowOpenAria": "Apri {name}",
     "openTargetAsItStands": "Apri l’elemento di lavoro nello stato attuale",
     "railChangedMark": "modificato",

@@ -405,6 +405,7 @@
     "searchLabel": "この計画を検索",
     "showChangesAll": "この階層のすべての項目がこの計画によるものです",
     "locateChange": "この計画の次の項目を表示",
+    "locateActive": "作業中の項目を表示",
     "rowOpenAria": "{name} を開く",
     "openTargetAsItStands": "現在の作業項目を開く",
     "railChangedMark": "変更あり",

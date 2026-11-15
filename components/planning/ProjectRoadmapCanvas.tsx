@@ -45,6 +45,13 @@ import {
   type LiveArrival,
   type LiveEdit,
 } from '@/lib/planning/livePane';
+import {
+  LOCATE_START,
+  locateHint,
+  nextLocateStop,
+  type LocateCursor,
+  type LocateStop,
+} from '@/lib/planning/locateWalk';
 import type { NodeCue, NodeHighlight } from '@/components/planning/PlanningCanvas';
 import {
   NODE_H,
@@ -198,6 +205,19 @@ interface ProjectRoadmapCanvasBaseProps {
      * `here` / `ready` wording names a frontier a proposal never is.
      */
     locateLabel: string;
+    /**
+     * THE CARDS BEING WORKED ON (MOTIR-11298) — what Locate goes to FIRST while a
+     * plan is written: each card a live step targets, with the trail to the level
+     * it is drawn on (`null` when that level cannot be placed). The ones on the
+     * shown level are walked in layout order, then the ones elsewhere — opening
+     * their level and centring the card — and only then the emphasised set.
+     * `label` is the control's name while its next click goes to one of them.
+     * Absent, empty or `null` → the walk is the emphasised set alone, as shipped.
+     */
+    active?: {
+      targets: readonly LocateStop[];
+      label: string;
+    } | null;
   };
   /** The breadcrumb root label. */
   rootLabel?: string;
@@ -361,7 +381,9 @@ interface ProjectRoadmapCanvasBaseProps {
    * *Go there*). Never for the canvas's own moves — a `followTo` grant, an
    * auto-descend, a `controlledTrail` adoption, a `resolveHeldNode` re-key — and
    * never for an act that leaves the level as it is: selecting a card, View, the
-   * Locate control, pan, zoom, full screen, dragging or Reset layout.
+   * Locate control, pan, zoom, full screen, dragging or Reset layout. A Locate
+   * click that OPENS another level to reach a card being worked on (MOTIR-11298)
+   * does move the level, and is reported as `'pick'`, like *Go there*.
    */
   onReaderNavigated?: (via: 'crumb' | 'back' | 'drill' | 'search' | 'pick') => void;
   /**
@@ -1532,7 +1554,10 @@ export function ProjectRoadmapCanvas({
   // CHOSE, so it is the one thing an arrival may move the canvas by. It drills by
   // the arriving card's own trail, and it is the reader's act: every later
   // `followTo` is declined, and the level is reported like any other move.
-  const goToArrivals = useCallback((trail: readonly CanvasCrumb[]) => {
+  //
+  // A Locate that reaches a card being worked on on ANOTHER level (MOTIR-11298)
+  // takes the same trip, so it is the same reader's act.
+  const travelTo = useCallback((trail: readonly CanvasCrumb[]) => {
     const next = [...trail];
     const levelId = next[next.length - 1]?.id ?? null;
     setNavigated(true);
@@ -1581,12 +1606,34 @@ export function ProjectRoadmapCanvas({
     () => (emphasisWalk ? null : (nodes.find((n) => n.here)?.id ?? null)),
     [emphasisWalk, nodes],
   );
-  const readyIds = useMemo(
-    () => emphasisWalk ?? nodes.filter((n) => n.ready).map((n) => n.id),
-    [emphasisWalk, nodes],
-  );
-  const readySig = readyIds.join('|');
-  const canLocate = hereId !== null || readyIds.length > 0;
+  // THE CARDS BEING WORKED ON GO FIRST (MOTIR-11298). While a plan is written the
+  // reader's question is *where is the planner now?*, so the walk opens on every
+  // card a live step targets: the ones on this level in LAYOUT order, then the
+  // ones on other levels the consumer can place (a click opens that level and
+  // centres the card). Only then does it move on to the emphasised set, less the
+  // cards already walked. With no active card the walk is exactly the shipped one.
+  const activeTargets = emphasis?.active?.targets;
+  const activeWalk = useMemo<LocateStop[]>(() => {
+    if (!emphasisWalk || !activeTargets || activeTargets.length === 0) return [];
+    const wanted = new Set(activeTargets.map((a) => a.nodeId));
+    const drawn = new Set(nodes.map((n) => n.id));
+    const here: LocateStop[] = nodes
+      .filter((n) => wanted.has(n.id) && !n.decorative)
+      .map((n) => ({ nodeId: n.id, trail: null }));
+    const elsewhere = activeTargets.filter(
+      (a) =>
+        !drawn.has(a.nodeId) &&
+        a.trail !== null &&
+        (a.trail[a.trail.length - 1]?.id ?? null) !== focusId,
+    );
+    return [...here, ...elsewhere];
+  }, [emphasisWalk, activeTargets, nodes, focusId]);
+  const restWalk = useMemo<LocateStop[]>(() => {
+    const walked = new Set((activeTargets ?? []).map((a) => a.nodeId));
+    const ids = emphasisWalk ?? nodes.filter((n) => n.ready).map((n) => n.id);
+    return ids.filter((id) => !walked.has(id)).map((id) => ({ nodeId: id, trail: null }));
+  }, [emphasisWalk, activeTargets, nodes]);
+  const canLocate = hereId !== null || activeWalk.length > 0 || restWalk.length > 0;
   // THE FOCAL CARD of this level (MOTIR-3837) — the node an arrival centres on when
   // the level cannot be shown legibly whole. The ladder is LOCATE's own, one line
   // up, so "where the canvas opens" and "where Locate takes you" cannot disagree:
@@ -1594,18 +1641,42 @@ export function ProjectRoadmapCanvas({
   // layout order. A `decorative` node — the pinned planning-origin cluster — is
   // never it, for the same reason it is not a level's WORK (MOTIR-1824).
   const focalNodeId = useMemo(() => focalNode(nodes), [nodes]);
-  // The index of the ready node centred by the LAST locate click (-1 = none yet).
-  const [locateIndex, setLocateIndex] = useState(-1);
-  // Reset the cycle cursor when the level's targets change (a drill / re-plan) so the
-  // cycle restarts cleanly — the React-sanctioned "adjust state during render when an
+  // Where the walk stands (`lib/planning/locateWalk.ts`): the active cards visited
+  // this round, by id, and the index of the last REST card located (-1 = none).
+  const [locateCursor, setLocateCursor] = useState<LocateCursor>(LOCATE_START);
+  // Reset the cursor when its targets change (a drill / re-plan) so the cycle
+  // restarts cleanly — the React-sanctioned "adjust state during render when an
   // input changes" pattern (NOT a setState-in-effect, which the lint rule forbids).
-  const targetSig = `${hereId ?? ''}|${readySig}`;
-  const [prevTargetSig, setPrevTargetSig] = useState(targetSig);
-  if (targetSig !== prevTargetSig) {
-    setPrevTargetSig(targetSig);
-    setLocateIndex(-1);
+  // The REST position resets on any change to the rest; the active round resets
+  // only when the SET of active cards changes, so opening another level to reach
+  // one of them does not send the next click back to the first.
+  const restSig = `${hereId ?? ''}|${restWalk.map((r) => r.nodeId).join('|')}`;
+  const activeSig = (activeTargets ?? []).map((a) => a.nodeId).join('|');
+  const [prevRestSig, setPrevRestSig] = useState(restSig);
+  const [prevActiveSig, setPrevActiveSig] = useState(activeSig);
+  if (activeSig !== prevActiveSig) {
+    setPrevActiveSig(activeSig);
+    setPrevRestSig(restSig);
+    setLocateCursor(LOCATE_START);
+  } else if (restSig !== prevRestSig) {
+    setPrevRestSig(restSig);
+    setLocateCursor((c) => ({ ...c, index: -1 }));
+  }
+  // A Locate that opened ANOTHER level: the card to centre once that level is drawn.
+  const [pendingLocate, setPendingLocate] = useState<{
+    levelId: string | null;
+    nodeId: string;
+  } | null>(null);
+  if (pendingLocate !== null && level !== null && level.focusId === pendingLocate.levelId) {
+    setPendingLocate(null);
+    if (nodes.some((n) => n.id === pendingLocate.nodeId)) {
+      setHighlightId(pendingLocate.nodeId);
+      setSelectedId(pendingLocate.nodeId);
+      setFocusNonce((n) => n + 1);
+    }
   }
 
+  const nextLocate = nextLocateStop(activeWalk, restWalk, locateCursor);
   const locateActionable = useCallback(() => {
     // Locate snaps to a readable default zoom (so a node found while zoomed far
     // out/in lands at a comfortable size), then centres AND SELECTS the node — so its
@@ -1618,32 +1689,41 @@ export function ProjectRoadmapCanvas({
       setFocusNonce((n) => n + 1);
       return;
     }
-    if (readyIds.length === 0) return;
-    // Advance to the next ready node, wrapping after the last.
-    const next = (locateIndex + 1) % readyIds.length;
-    setLocateIndex(next);
-    const targetId = readyIds[next] ?? null;
-    setHighlightId(targetId);
-    setSelectedId(targetId);
+    if (nextLocate === null) return;
+    setLocateCursor(nextLocate.cursor);
+    const { stop } = nextLocate;
+    if (stop.trail !== null) {
+      // On another level: open it, and centre the card once it is drawn.
+      travelTo(stop.trail);
+      setPendingLocate({
+        levelId: stop.trail[stop.trail.length - 1]?.id ?? null,
+        nodeId: stop.nodeId,
+      });
+      return;
+    }
+    setHighlightId(stop.nodeId);
+    setSelectedId(stop.nodeId);
     setFocusNonce((n) => n + 1);
-  }, [hereId, readyIds, locateIndex]);
+  }, [hereId, nextLocate, travelTo]);
 
-  // The "n of m" cycling hint — shown only while cycling MULTIPLE ready nodes (no
-  // frontier) and after the first locate, so it reflects the current position.
-  const cyclingHint =
-    hereId === null && readyIds.length > 1 && locateIndex >= 0
-      ? `${locateIndex + 1} / ${readyIds.length}`
-      : null;
+  // The "n / m" cycling hint — shown only while cycling MULTIPLE cards (no
+  // frontier) and after the first locate, so it reflects the current position. It
+  // counts the cards being cycled through: the active ones while the walk is on
+  // them, the rest once it has moved on.
+  const cyclingHint = hereId === null ? locateHint(activeWalk, restWalk, locateCursor) : null;
   // The consumer's word when it supplied the set, for the same reason
   // `searchLabel` is (MOTIR-4021): the shipped strings name a READY frontier, and
-  // a proposal is not one. The disabled reason is the emphasis control's own
-  // (`emptyLabel`) — one sentence per situation, said once, rather than a second
-  // wording for "the plan does not reach this level".
+  // a proposal is not one. While the next click goes to a card being worked on,
+  // the control says so (MOTIR-11298). The disabled reason is the emphasis
+  // control's own (`emptyLabel`) — one sentence per situation, said once, rather
+  // than a second wording for "the plan does not reach this level".
   const locateLabel = emphasis
-    ? emphasis.locateLabel
+    ? nextLocate?.active && emphasis.active
+      ? emphasis.active.label
+      : emphasis.locateLabel
     : hereId !== null
       ? t('locateCurrent')
-      : readyIds.length > 1
+      : restWalk.length > 1
         ? t('locateNextReady')
         : t('locateReady');
   const locateDisabledReason = emphasis ? emphasis.emptyLabel : t('locateNothing');
@@ -1899,7 +1979,7 @@ export function ProjectRoadmapCanvas({
           data-testid="canvas-arrivals-offer"
           aria-label={slotLabel ?? undefined}
           title={slotLabel ?? undefined}
-          onClick={() => goToArrivals(slot.trail)}
+          onClick={() => travelTo(slot.trail)}
           className={`${tripPush}${SLOT_PILL_CLASS}`}
         >
           <span
