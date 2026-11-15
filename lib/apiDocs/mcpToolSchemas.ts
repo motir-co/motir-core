@@ -3658,6 +3658,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         },
         description: 'OPTIONAL. Only runs in these statuses.',
       },
+      discrepancy: {
+        type: 'string',
+        enum: ['any', 'points', 'decisions'],
+        description:
+          'OPTIONAL. Only runs with at least one discrepancy record: `points` (a leg recorded a build-through point), `decisions` (a leg recorded a decision) or `any` (either).',
+      },
       cursor: {
         type: 'string',
         minLength: 1,

@@ -487,3 +487,148 @@ describe('decisions — the same record, its own section', () => {
     expect(new RunDiscrepancyInvalidError('points_empty').message).toContain('one decision');
   });
 });
+
+// ── MOTIR-11361 — the record is DATA, written beside the comment ──────────────
+
+const records = (workItemId: string) =>
+  adminDb.runDiscrepancyRecord.findMany({
+    where: { workItemId },
+    include: { entries: { orderBy: [{ kind: 'asc' }, { position: 'asc' }] } },
+  });
+
+describe('the structured record (MOTIR-11361)', () => {
+  it('stores every point and decision field by field, tied to the leg, run and comment', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+    const runId = await openLegs(fx, [c.key], fx.ctx);
+    const decision = { planSaid: 'nothing', chose: 'CHOSE', why: 'WHY', alternatives: 'ALT' };
+
+    const result = await runDiscrepancyService.recordDiscrepancy(
+      {
+        key: c.key,
+        points: [POINT, { planAsked: '  padded  ', built: 'b', why: 'w' }],
+        decisions: [decision, { planSaid: 's', chose: 'c', why: 'w', alternatives: '  ' }],
+      },
+      fx.ctx,
+    );
+
+    const [row] = await records(c.id);
+    const leg = await adminDb.dispatchRunCard.findFirstOrThrow({ where: { workItemId: c.id } });
+    expect(row).toMatchObject({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      dispatchRunId: runId,
+      dispatchRunCardId: leg.id,
+      commentId: result.commentId,
+      recordedById: fx.ctx.userId,
+      source: 'recorded',
+      pointCount: 2,
+      decisionCount: 2,
+    });
+    expect(
+      row!.entries.map(({ kind, position, planText, outcomeText, why, alternatives }) => ({
+        kind,
+        position,
+        planText,
+        outcomeText,
+        why,
+        alternatives,
+      })),
+    ).toEqual([
+      {
+        kind: 'point',
+        position: 1,
+        planText: POINT.planAsked,
+        outcomeText: POINT.built,
+        why: POINT.why,
+        alternatives: null,
+      },
+      {
+        kind: 'point',
+        position: 2,
+        planText: 'padded',
+        outcomeText: 'b',
+        why: 'w',
+        alternatives: null,
+      },
+      {
+        kind: 'decision',
+        position: 1,
+        planText: 'nothing',
+        outcomeText: 'CHOSE',
+        why: 'WHY',
+        alternatives: 'ALT',
+      },
+      {
+        kind: 'decision',
+        position: 2,
+        planText: 's',
+        outcomeText: 'c',
+        why: 'w',
+        alternatives: null,
+      },
+    ]);
+    expect(row!.entries.every((e) => e.workspaceId === fx.workspaceId)).toBe(true);
+  });
+
+  it('editing or deleting the comment leaves the record as the run sent it', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+    await openLegs(fx, [c.key], fx.ctx);
+    const { commentId } = await record(c.key, [POINT], fx.ctx);
+
+    await adminDb.comment.update({ where: { id: commentId }, data: { bodyMd: 'rewritten' } });
+    expect((await records(c.id))[0]!.entries[0]!.outcomeText).toBe(POINT.built);
+
+    await adminDb.comment.delete({ where: { id: commentId } });
+    const [row] = await records(c.id);
+    expect(row!.commentId).toBeNull();
+    expect(row!.entries.map((e) => e.planText)).toEqual([POINT.planAsked]);
+  });
+
+  it('no open leg: still stored, tied to the card and project with no run', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+    const result = await record(c.key, [POINT], fx.ctx);
+    expect(result.recorded).toBe(false);
+    expect(await records(c.id)).toEqual([
+      expect.objectContaining({
+        projectId: fx.projectId,
+        workItemId: c.id,
+        dispatchRunId: null,
+        dispatchRunCardId: null,
+        commentId: result.commentId,
+        pointCount: 1,
+        decisionCount: 0,
+      }),
+    ]);
+  });
+
+  it('a refused call writes no record; a second call on a leg is refused by the record too', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+    const runId = await openLegs(fx, [c.key], fx.ctx);
+    // At the event cap the first call writes a record and NO finding…
+    await adminDb.dispatchRunEvent.createMany({
+      data: Array.from({ length: DISPATCH_RUN_EVENT_LIMIT }, (_, i) => ({
+        workspaceId: fx.workspaceId,
+        dispatchRunId: runId,
+        seq: 100_000 + i,
+        kind: 'card_claimed' as const,
+        reportedBy: 'cli' as const,
+        data: {},
+      })),
+    });
+    expect((await record(c.key, [POINT], fx.ctx)).recorded).toBe(false);
+    expect(await records(c.id)).toHaveLength(1);
+    // …so the record, not the finding, is what refuses the second.
+    await expect(record(c.key, [POINT], fx.ctx)).rejects.toBeInstanceOf(
+      DiscrepancyAlreadyRecordedError,
+    );
+    expect(await records(c.id)).toHaveLength(1);
+    expect(await adminDb.comment.count({ where: { workItemId: c.id } })).toBe(1);
+
+    await expect(record(c.key, [], fx.ctx)).rejects.toBeInstanceOf(RunDiscrepancyInvalidError);
+    expect(await records(c.id)).toHaveLength(1);
+  });
+});

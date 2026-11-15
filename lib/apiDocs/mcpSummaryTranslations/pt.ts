@@ -410,9 +410,9 @@ export const pt: McpSummaryTranslations = {
   },
   search_run_records: {
     summary:
-      'As execuções de um projeto, a mais recente primeiro – filtradas por cartão, escopo ou status, etapas como contagens, nenhuma correspondência um resultado nomeado.',
+      'As execuções de um projeto, a mais recente primeiro – filtradas por cartão, escopo, status ou uma discrepância registrada, etapas como contagens, nenhuma correspondência um resultado nomeado.',
     source:
-      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+      'The runs of a project, newest first — narrowed by a card, a scope, a status or a recorded discrepancy, legs as counts, no match a named outcome.',
   },
   get_run_record: {
     summary:

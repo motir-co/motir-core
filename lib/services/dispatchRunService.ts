@@ -76,7 +76,10 @@ import { reportedModelOf } from '@/lib/dispatchRuns/reportedModel';
 import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
-import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import {
+  dispatchRunRepository,
+  type RunDiscrepancyFilter,
+} from '@/lib/repositories/dispatchRunRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
@@ -2256,6 +2259,8 @@ export const dispatchRunService = {
       view?: DispatchRunView | undefined;
       /** Narrows the query, never the page (MOTIR-10286). Omitted: every status. */
       statuses?: DispatchRunStatus[] | undefined;
+      /** Only runs holding a discrepancy record (MOTIR-11361). Omitted: every run. */
+      discrepancy?: RunDiscrepancyFilter | undefined;
     },
     ctx: ServiceContext,
   ): Promise<DispatchRunDto[]> {
@@ -2272,7 +2277,13 @@ export const dispatchRunService = {
         const { createdById } = await resolveRunScope(project.id, ctx, page.view, tx);
         const runs = await dispatchRunRepository.listByWorkItem(
           item.id,
-          { take: page.take, cursor: page.cursor, statuses: page.statuses, createdById },
+          {
+            take: page.take,
+            cursor: page.cursor,
+            statuses: page.statuses,
+            createdById,
+            discrepancy: page.discrepancy,
+          },
           tx,
         );
         // Each manual leg's gate (MOTIR-7477), one read for the page — the Run
@@ -2324,6 +2335,8 @@ export const dispatchRunService = {
       cursor?: string | undefined;
       statuses?: DispatchRunStatus[] | undefined;
       scopeWorkItemKey?: string | undefined;
+      /** Only runs holding a discrepancy record (MOTIR-11361). Omitted: every run. */
+      discrepancy?: RunDiscrepancyFilter | undefined;
       /** WHOSE runs — asked for; the service serves (MOTIR-6331). */
       view?: DispatchRunView | undefined;
     },
@@ -2350,6 +2363,7 @@ export const dispatchRunService = {
           ...(page.statuses && page.statuses.length > 0 ? { statuses: page.statuses } : {}),
           ...(createdById ? { createdById } : {}),
           ...(hidden ? { withheldWorkItemIds: hidden } : {}),
+          ...(page.discrepancy ? { discrepancy: page.discrepancy } : {}),
         };
 
         // A SCOPE narrowing resolves its key inside the same transaction, so the

@@ -406,9 +406,9 @@ export const ko: McpSummaryTranslations = {
   },
   search_run_records: {
     summary:
-      '프로젝트의 실행 목록(최신순) — 카드, 범위 또는 상태로 좁히고 레그는 개수로, 일치 없음은 이름 있는 결과.',
+      '프로젝트의 실행 목록(최신순) — 카드, 범위, 상태 또는 기록된 불일치로 좁히고 레그는 개수로, 일치 없음은 이름 있는 결과.',
     source:
-      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+      'The runs of a project, newest first — narrowed by a card, a scope, a status or a recorded discrepancy, legs as counts, no match a named outcome.',
   },
   get_run_record: {
     summary:

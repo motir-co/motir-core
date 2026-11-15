@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { parseRunRecordQuery } from '@/lib/runs/runRecordQuery';
+import { RUN_DISCREPANCY_FILTERS } from '@/lib/repositories/dispatchRunRepository';
 import { DISPATCH_RUN_LIST_MAX_TAKE } from '@/lib/services/dispatchRunService';
 import { projectsService } from '@/lib/services/projectsService';
 import {
@@ -26,7 +27,7 @@ import { projectKeyField } from './sprintRef';
 //
 // Every absence is a NON-error result naming itself in `structuredContent.outcome`
 // (`nothing_matched`, `not_found`). Run text — the hosted end line, a leg's
-// discrepancy comment — is agent-written: it is returned in its own named fields
+// discrepancy record (MOTIR-11361) — is agent-written: it is returned in its own named fields
 // and quoted below a marker, never folded into this tool's sentences.
 
 export const SEARCH_RUN_RECORDS_TOOL_NAME = 'search_run_records';
@@ -51,6 +52,13 @@ const searchInputSchema = {
     .array(z.enum(RUN_RECORD_STATUSES as [string, ...string[]]))
     .optional()
     .describe('OPTIONAL. Only runs in these statuses.'),
+  discrepancy: z
+    .enum(RUN_DISCREPANCY_FILTERS as [string, ...string[]])
+    .optional()
+    .describe(
+      'OPTIONAL. Only runs with at least one discrepancy record: `points` (a leg recorded a ' +
+        'build-through point), `decisions` (a leg recorded a decision) or `any` (either).',
+    ),
   cursor: z
     .string()
     .min(1)
@@ -79,8 +87,46 @@ function rowLine(run: RunRecordRow): string {
     `- ${run.id} · ${run.command} (${run.origin}) · ${run.status}` +
     `${run.stopReason ? ` / ${run.stopReason}` : ''} · started ${run.startedAt}` +
     `${run.endedAt ? `, ended ${run.endedAt}` : ''} · ${run.cardCount} card${run.cardCount === 1 ? '' : 's'}` +
-    `${legs ? ` (${legs})` : ''}`
+    `${legs ? ` (${legs})` : ''}` +
+    (run.discrepancies.records > 0
+      ? ` · ${run.discrepancies.records} discrepancy record${run.discrepancies.records === 1 ? '' : 's'}` +
+        ` (${run.discrepancies.points} point${run.discrepancies.points === 1 ? '' : 's'}, ` +
+        `${run.discrepancies.decisions} decision${run.discrepancies.decisions === 1 ? '' : 's'})`
+      : '')
   );
+}
+
+/** One leg's record, field by field. Every value is the run's own text, quoted. */
+function discrepancyLines(d: NonNullable<RunRecord['legs'][number]['discrepancy']>): string[] {
+  const lines: string[] = [];
+  if (d.source === 'backfill_unreadable') {
+    lines.push(
+      '  The record was found but could not be read back from its comment (deleted or edited); only its counts survive.',
+    );
+  }
+  lines.push(
+    d.commentId === null
+      ? '  Its comment no longer exists; the record below does not depend on it.'
+      : `  Comment: ${d.commentId}.`,
+  );
+  d.points.forEach((p, i) => {
+    lines.push(
+      `  Point ${i + 1} (recorded by the run, verbatim):`,
+      `    Plan asked: ${p.planAsked}`,
+      `    Built: ${p.built}`,
+      `    Why: ${p.why}`,
+    );
+  });
+  d.decisions.forEach((x, i) => {
+    lines.push(
+      `  Decision ${i + 1} (recorded by the run, verbatim):`,
+      `    Plan said: ${x.planSaid}`,
+      `    Chose: ${x.chose}`,
+      `    Why: ${x.why}`,
+    );
+    if (x.alternatives) lines.push(`    Alternatives considered: ${x.alternatives}`);
+  });
+  return lines;
 }
 
 /** The text of one run's record. Agent-written text is quoted, never paraphrased. */
@@ -108,13 +154,7 @@ export function renderRunRecord(projectKey: string, run: RunRecord): string {
         `${leg.skipReason ? ` (${leg.skipReason})` : ''} · exit ${leg.exitCode ?? 'none'}` +
         ` · ${leg.discrepancy ? `recorded ${leg.discrepancy.pointCount} difference${leg.discrepancy.pointCount === 1 ? '' : 's'} (${leg.discrepancy.decisionCount} decision${leg.discrepancy.decisionCount === 1 ? '' : 's'})` : 'no discrepancy record'}`,
     );
-    if (leg.discrepancy) {
-      lines.push(
-        leg.discrepancy.bodyMd === null
-          ? '  The record’s comment no longer exists.'
-          : `  Record (recorded by the run, verbatim${leg.discrepancy.bodyTruncated ? ', cut' : ''}):\n${leg.discrepancy.bodyMd}`,
-      );
-    }
+    if (leg.discrepancy) lines.push(...discrepancyLines(leg.discrepancy));
   }
   return lines.join('\n');
 }
@@ -175,10 +215,12 @@ export function registerRunRecords(server: McpServer, resolveContext: McpContext
       title: 'Search run records',
       description:
         'The runs of a project, newest first: one row per run — `id`, `command`, `origin`, ' +
-        '`status`, `stopReason`, `startedAt`, `endedAt`, `cardCount` and its legs as counts by ' +
-        'disposition. Narrow by `workItemKey` (runs that carried a leg for that card) OR ' +
-        '`scopeWorkItemKey` (runs scoped to that container), and by `statuses`; page with ' +
-        '`cursor`. A search that matches no run answers `outcome: nothing_matched`, not an ' +
+        '`status`, `stopReason`, `startedAt`, `endedAt`, `cardCount`, its legs as counts by ' +
+        'disposition, and `discrepancies` — how many legs recorded a discrepancy and how many ' +
+        'points and decisions they hold. Narrow by `workItemKey` (runs that carried a leg for ' +
+        'that card) OR `scopeWorkItemKey` (runs scoped to that container), by `statuses`, and ' +
+        'by `discrepancy` (`points` · `decisions` · `any`: only runs with such a record); page ' +
+        'with `cursor`. A search that matches no run answers `outcome: nothing_matched`, not an ' +
         'error. Read one run with `get_run_record`. Read-only. The project key resolves inside ' +
         'the token’s own workspace.',
       inputSchema: searchInputSchema,
@@ -192,9 +234,12 @@ export function registerRunRecords(server: McpServer, resolveContext: McpContext
       description:
         'One run of a project: how it ended — `status`, `stopReason`, `endedAt`, and for a ' +
         'hosted run its end line (`hostedEnd`) — and per leg the card `key`, `disposition`, ' +
-        '`skipReason`, `exitCode` and what the run recorded as different (`discrepancy`: ' +
-        '`commentId`, `pointCount`, `decisionCount` and the comment `bodyMd`, or null). Text ' +
-        'the run recorded is returned verbatim in its own fields. A run that is unknown or of ' +
+        '`skipReason`, `exitCode` and what the run recorded as different (`discrepancy`, or ' +
+        'null): the stored record — `points` (`planAsked` · `built` · `why`) and `decisions` ' +
+        '(`planSaid` · `chose` · `why` · `alternatives`) field by field, `pointCount`, ' +
+        '`decisionCount`, `source`, the `commentId` it was posted as (null once deleted) and ' +
+        '`bodyMd`, the record rendered as that comment reads. It never depends on the comment ' +
+        'still existing. Text the run recorded is returned verbatim in its own fields. A run that is unknown or of ' +
         'another project answers `outcome: not_found`, not an error. No event stream, cost or ' +
         'logs. Read-only. The project key resolves inside the token’s own workspace.',
       inputSchema: getInputSchema,

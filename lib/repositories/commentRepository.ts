@@ -33,6 +33,12 @@ export type CommentWithReplies = Prisma.CommentGetPayload<{ include: { replies: 
  */
 export const PUBLIC_REQUEST_COMMENT_CAP = 100;
 
+/** A discrepancy comment the MOTIR-11361 backfill has not recorded yet. */
+export type UnrecordedDiscrepancyComment = Pick<
+  Comment,
+  'id' | 'workItemId' | 'authorId' | 'bodyMd' | 'createdAt'
+> & { workItem: { projectId: string } };
+
 export const commentRepository = {
   /**
    * Insert one comment. Required `tx` — the mention rows the service parses
@@ -98,13 +104,32 @@ export const commentRepository = {
   },
 
   /**
-   * Comments by id, in one read (MOTIR-10240) — the run-record read resolves a
-   * run's discrepancy pointers to their bodies with it. An id with no row is
-   * simply absent from the answer.
+   * The bound workspace's comments that read as a run's discrepancy record and that no
+   * `run_discrepancy_record` points to yet — the MOTIR-11361 backfill's comment-side
+   * population (a record from a card with no open leg left no finding to find it by).
+   * Matched on the composer's two header lines, which every such comment starts with.
    */
-  async findManyByIds(ids: string[], tx: Prisma.TransactionClient): Promise<Comment[]> {
-    if (ids.length === 0) return [];
-    return tx.comment.findMany({ where: { id: { in: ids } } });
+  async listUnrecordedDiscrepancyComments(
+    workspaceId: string,
+    headers: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<UnrecordedDiscrepancyComment[]> {
+    return tx.comment.findMany({
+      where: {
+        workspaceId,
+        OR: headers.map((header) => ({ bodyMd: { startsWith: header } })),
+        runDiscrepancyRecord: { is: null },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        workItemId: true,
+        authorId: true,
+        bodyMd: true,
+        createdAt: true,
+        workItem: { select: { projectId: true } },
+      },
+    });
   },
 
   /**

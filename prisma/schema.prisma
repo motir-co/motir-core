@@ -257,6 +257,7 @@ model User {
   // run is a record of what happened to the PROJECT's work, so deleting the
   // operator must not destroy it — only the attribution.
   dispatchRuns                     DispatchRun[]
+  recordedRunDiscrepancies         RunDiscrepancyRecord[]              @relation("RunDiscrepancyRecordedBy")
   // The agent instances this user OWNS (MOTIR-6870). Cascade — an instance is
   // one developer's machine, and nobody else may open it.
   agentInstances                   AgentInstance[]
@@ -1891,6 +1892,8 @@ model Workspace {
   dispatchRuns                DispatchRun[]
   dispatchRunCards            DispatchRunCard[]
   dispatchRunEvents           DispatchRunEvent[]
+  runDiscrepancyRecords       RunDiscrepancyRecord[]
+  runDiscrepancyEntries       RunDiscrepancyEntry[]
   dispatchRunGitCredentials   DispatchRunGitCredential[]
   /// Folders in this workspace's projects (Story MOTIR-5308). Cascade.
   folders                     Folder[]
@@ -2412,6 +2415,7 @@ model Project {
   /// Every CLI run reported against this project (Story MOTIR-1789). Cascade —
   /// a run's whole meaning is the cards it worked, which go with the project.
   dispatchRuns                DispatchRun[]
+  runDiscrepancyRecords       RunDiscrepancyRecord[]
   /// Developers' agent instances on this project (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   /// How-to-test records for this project's cards (MOTIR-5328). Cascade.
@@ -3500,6 +3504,8 @@ model WorkItem {
   /// MOTIR-1789). `SetNull` on the leg, not cascade: a run's history outlives a
   /// deleted card, and the leg still says which key it was.
   dispatchRunCards         DispatchRunCard[]
+  /// What runs recorded as different while building this card (MOTIR-11361).
+  runDiscrepancyRecords    RunDiscrepancyRecord[]
   /// Runs that were pointed AT this card as their scope. Also `SetNull`.
   dispatchRunScopes        DispatchRun[]             @relation("DispatchRunScope")
 
@@ -6206,17 +6212,19 @@ model Comment {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  workspace     Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workItem      WorkItem                  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  author        User                      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
-  parent        Comment?                  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
-  replies       Comment[]                 @relation("CommentReplies")
-  mentions      CommentMention[]
+  workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem             WorkItem                  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  author               User                      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  parent               Comment?                  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies              Comment[]                 @relation("CommentReplies")
+  mentions             CommentMention[]
   // The (change request, head commit, card) THIS comment is the CI feedback for
   // — MOTIR-3770. CASCADE, deliberately: deleting the comment must leave no
   // dangling id for the next delivery to edit, which is the property that keeps
   // a webhook retry loop from forming.
-  ciFeedbackFor GithubCiFeedbackComment[]
+  ciFeedbackFor        GithubCiFeedbackComment[]
+  /// The run discrepancy record this comment is the human-readable view of (MOTIR-11361).
+  runDiscrepancyRecord RunDiscrepancyRecord?
 
   // The paged list read (newest-first cursor walk, 5.1.2) + the thread read.
   @@index([workItemId, createdAt])
@@ -13792,26 +13800,28 @@ model DispatchRun {
   agentInstance AgentInstance? @relation(fields: [agentInstanceId], references: [id], onDelete: SetNull)
   fleetShard    FleetShard?    @relation(fields: [fleetShardId], references: [id], onDelete: SetNull)
 
-  cards            DispatchRunCard[]
-  events           DispatchRunEvent[]
+  cards              DispatchRunCard[]
+  events             DispatchRunEvent[]
+  /// The discrepancy records its legs made (MOTIR-11361). `SetNull`: a record outlives its run.
+  discrepancyRecords RunDiscrepancyRecord[]
   /// How-to-test records this run wrote (MOTIR-5328). SetNull on the FK.
-  testInstructions TestInstructions[]
+  testInstructions   TestInstructions[]
   /// The fleet meter rows for this run's container (MOTIR-6448). SetNull on the FK.
-  containerUsage   CiContainerUsage[]
+  containerUsage     CiContainerUsage[]
   /// The run-bound Motir credential a hosted run holds (MOTIR-688). Cascade on the FK.
-  runTokens        ApiToken[]
+  runTokens          ApiToken[]
   /// The GitHub installation tokens handed to this hosted run (MOTIR-6449), recorded
   /// so the end path can revoke every one. Cascade on the FK.
-  gitCredentials   DispatchRunGitCredential[]
+  gitCredentials     DispatchRunGitCredential[]
   /// The design refusal that started this run automatically, if one did (MOTIR-700).
-  designAutoReruns DesignAutoRerun[]
+  designAutoReruns   DesignAutoRerun[]
   /// The approval gates this run stopped at, when it closed `gated` (MOTIR-7703).
-  heldGates        DispatchRunHeldGate[]
-  resumingItems    WorkItem[]                 @relation("WorkItemResumeRun")
+  heldGates          DispatchRunHeldGate[]
+  resumingItems      WorkItem[]                 @relation("WorkItemResumeRun")
   /// The automatic resumes an approval attempted for this gated run (MOTIR-7710).
-  gateResumes      GateResume[]               @relation("GateResumeRun")
+  gateResumes        GateResume[]               @relation("GateResumeRun")
   /// The approval whose automatic resume started this run, if one did (MOTIR-7710).
-  resumedByGate    GateResume[]               @relation("GateResumeResumedRun")
+  resumedByGate      GateResume[]               @relation("GateResumeResumedRun")
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.
@@ -14032,10 +14042,12 @@ model DispatchRunCard {
   dispatchRun DispatchRun @relation(fields: [dispatchRunId], references: [id], onDelete: Cascade)
   workItem    WorkItem?   @relation(fields: [workItemId], references: [id], onDelete: SetNull)
 
-  events         DispatchRunEvent[]
+  events            DispatchRunEvent[]
   /// The run-found report made on this leg, when its runner stopped on an
   /// unbuildable target (MOTIR-6282). At most one — the row is unique on the leg.
-  runFoundReport RunFoundReport?
+  runFoundReport    RunFoundReport?
+  /// The discrepancy record made on this leg, when its runner recorded one (MOTIR-11361).
+  discrepancyRecord RunDiscrepancyRecord?
 
   /// One leg per card per run.
   @@unique([dispatchRunId, workItemId])
@@ -14337,6 +14349,127 @@ model RunFoundReport {
   dispatchRunCard DispatchRunCard @relation(fields: [dispatchRunCardId], references: [id], onDelete: Cascade)
 
   @@map("run_found_report")
+}
+
+/// ═══════════════════════════════════════════════════════════════════════════
+/// A RUN'S DISCREPANCY RECORD, AS DATA — Task MOTIR-11361
+///
+/// `record_run_discrepancy` (MOTIR-8655, decisions MOTIR-10000) used to leave its
+/// content in ONE place: the card comment `composeDiscrepancyComment` writes. A
+/// comment is editable and deletable, so the record could change or vanish, and
+/// the fields existed only as markdown. This is the record itself, written by the
+/// server in the SAME transaction as that comment, field by field as the run sent
+/// them. The comment stays the human-readable view; nothing here reads it back.
+///
+/// TENANCY is the card's: `workspace_id` + the `_active_workspace` policy on both
+/// tables, and no public-read arm, so the record is never wider than the comment
+/// it mirrors (which has none either).
+/// ═══════════════════════════════════════════════════════════════════════════
+
+/// Where a record came from — the live door, or the MOTIR-11361 backfill of a
+/// comment written before the table existed.
+enum RunDiscrepancySource {
+  /// Written by `runDiscrepancyService.recordDiscrepancy`, from the run's own input.
+  recorded
+  /// Parsed back out of an existing discrepancy comment by the backfill.
+  backfilled
+  /// A record the backfill found but could not read: the comment was deleted, or
+  /// no longer parses. Kept with the counts its finding carried, no entries, so
+  /// the record is REPORTED rather than silently lost.
+  backfill_unreadable
+
+  @@map("run_discrepancy_source")
+}
+
+/// The two kinds of entry one record holds (MOTIR-10000): a POINT is the plan
+/// being wrong about the HOW; a DECISION is the plan being silent.
+enum RunDiscrepancyEntryKind {
+  point
+  decision
+
+  @@map("run_discrepancy_entry_kind")
+}
+
+/// ONE `record_run_discrepancy` call. At most one per run leg (the writer refuses
+/// a second); a call on a card with NO open leg is still a record, tied to the
+/// card and project with `dispatchRunId` / `dispatchRunCardId` null.
+model RunDiscrepancyRecord {
+  id          String @id @default(cuid())
+  workspaceId String @map("workspace_id")
+  projectId   String @map("project_id")
+  workItemId  String @map("work_item_id")
+
+  /// The run and leg that held the record; null for the no-open-leg arm, and
+  /// `SET NULL` so a record outlives its run's history.
+  dispatchRunId     String? @map("dispatch_run_id")
+  /// UNIQUE: one record per leg — the database half of the writer's dedupe.
+  dispatchRunCardId String? @unique @map("dispatch_run_card_id")
+
+  /// The comment written beside the record, `SET NULL` when someone deletes it:
+  /// the record does not depend on the comment surviving.
+  commentId    String? @unique @map("comment_id")
+  /// Who recorded it — the caller of the door. `SET NULL` with the user.
+  recordedById String? @map("recorded_by_id")
+
+  source        RunDiscrepancySource @default(recorded)
+  /// How many entries of each kind. Stored beside the entries so a
+  /// `backfill_unreadable` record still says what was lost, and the run search
+  /// filters without counting rows.
+  pointCount    Int                  @map("point_count")
+  decisionCount Int                  @map("decision_count")
+
+  /// When the record was MADE — the comment's time for a backfilled one.
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem        WorkItem         @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  dispatchRun     DispatchRun?     @relation(fields: [dispatchRunId], references: [id], onDelete: SetNull)
+  dispatchRunCard DispatchRunCard? @relation(fields: [dispatchRunCardId], references: [id], onDelete: SetNull)
+  comment         Comment?         @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  recordedBy      User?            @relation("RunDiscrepancyRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  entries RunDiscrepancyEntry[]
+
+  /// The cross-run analysis read: a project's records, newest first.
+  @@index([projectId, recordedAt(sort: Desc)])
+  /// A card's records.
+  @@index([workItemId])
+  /// The run read and the run search's filter.
+  @@index([dispatchRunId])
+  @@index([workspaceId])
+  @@map("run_discrepancy_record")
+}
+
+/// One point or decision of a record, its fields as the run sent them. The
+/// columns are shared by both kinds and named for what they hold:
+///
+/// | column         | point        | decision      |
+/// | -------------- | ------------ | ------------- |
+/// | `plan_text`    | `planAsked`  | `planSaid`    |
+/// | `outcome_text` | `built`      | `chose`       |
+/// | `why`          | `why`        | `why`         |
+/// | `alternatives` | null         | `alternatives`|
+model RunDiscrepancyEntry {
+  id           String                  @id @default(cuid())
+  workspaceId  String                  @map("workspace_id")
+  recordId     String                  @map("record_id")
+  kind         RunDiscrepancyEntryKind
+  /// 1-based, in the order the run sent them, within its kind.
+  position     Int
+  planText     String                  @map("plan_text") @db.Text
+  outcomeText  String                  @map("outcome_text") @db.Text
+  why          String                  @db.Text
+  /// A decision's options considered and not taken; null on a point.
+  alternatives String?                 @db.Text
+
+  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  record    RunDiscrepancyRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@unique([recordId, kind, position])
+  @@index([workspaceId])
+  @@map("run_discrepancy_entry")
 }
 
 /// ═══════════════════════════════════════════════════════════════════════════

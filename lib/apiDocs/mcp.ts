@@ -692,16 +692,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   search_run_records: {
     // MOTIR-10240 — the project's runs, on the MCP.
     summary:
-      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+      'The runs of a project, newest first — narrowed by a card, a scope, a status or a recorded discrepancy, legs as counts, no match a named outcome.',
     // Pinned from the LIVE handshake, never hand-computed.
-    descriptionFingerprint: '56b94b327a59',
+    descriptionFingerprint: '9354a92c80d3',
   },
   get_run_record: {
     // MOTIR-10240 — one run's record, on the MCP.
     summary:
       'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
     // Pinned from the LIVE handshake, never hand-computed.
-    descriptionFingerprint: '95889dcd4e65',
+    descriptionFingerprint: '34df6eb7f11d',
   },
   list_dependency_versions: {
     // MOTIR-10242 — a package's versions, on the MCP.

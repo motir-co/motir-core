@@ -4,13 +4,14 @@ motir-core has five data scripts that change production rows. Each is an
 explicit operator action, idempotent and safe to re-run, and each defaults to a
 rehearsal where it has one:
 
-| script                     | `pnpm` command (from a checkout)   | what it does                                                                    | flags                           |
-| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- | ------------------------------- |
-| `backfill-boards`          | `pnpm db:backfill:boards`          | seeds the default board on every project that has none                          | none (no dry run: it only adds) |
-| `backfill-ci-state`        | `pnpm db:backfill:ci-state`        | recomputes `WorkItem.ciState` on every card with pull requests                  | `--dry-run`, `--workspace=<id>` |
-| `backfill-fix-reason`      | `pnpm db:backfill:fix-reason`      | recomputes `WorkItem.fixReason` on every live card                              | `--dry-run`, `--workspace=<id>` |
-| `backfill-author-finished` | `pnpm db:backfill:author-finished` | records `authorFinished` on the finished cards of every open plan (MOTIR-10491) | `--dry-run`, `--workspace=<id>` |
-| `converge-unlanded-cards`  | `pnpm db:converge:unlanded-cards`  | puts cards the old merge rules stranded where the current rules put them        | `--dry-run`                     |
+| script                     | `pnpm` command (from a checkout)   | what it does                                                                                                    | flags                           |
+| -------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `backfill-boards`          | `pnpm db:backfill:boards`          | seeds the default board on every project that has none                                                          | none (no dry run: it only adds) |
+| `backfill-ci-state`        | `pnpm db:backfill:ci-state`        | recomputes `WorkItem.ciState` on every card with pull requests                                                  | `--dry-run`, `--workspace=<id>` |
+| `backfill-fix-reason`      | `pnpm db:backfill:fix-reason`      | recomputes `WorkItem.fixReason` on every live card                                                              | `--dry-run`, `--workspace=<id>` |
+| `backfill-author-finished` | `pnpm db:backfill:author-finished` | records `authorFinished` on the finished cards of every open plan (MOTIR-10491)                                 | `--dry-run`, `--workspace=<id>` |
+| `converge-unlanded-cards`  | `pnpm db:converge:unlanded-cards`  | puts cards the old merge rules stranded where the current rules put them                                        | `--dry-run`                     |
+| `backfill-run-discrepancy` | `pnpm db:backfill:run-discrepancy` | stores each run discrepancy record written before MOTIR-11361 as data, from its comment; reports the unreadable | `--dry-run`, `--workspace=<id>` |
 
 Each `pnpm` command runs `scripts/data-script-main.ts <script>`. The same entry
 ships in the core image as `/app/data/data-script.mjs` (MOTIR-10465).

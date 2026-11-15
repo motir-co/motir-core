@@ -2,7 +2,8 @@
 //
 // `node /app/data/data-script.mjs <script> [flags]` runs the data scripts that
 // change production rows (`backfill-boards`, `backfill-ci-state`,
-// `backfill-fix-reason`, `backfill-author-finished`, `converge-unlanded-cards`)
+// `backfill-fix-reason`, `backfill-author-finished`, `converge-unlanded-cards`,
+// `backfill-run-discrepancy`)
 // inside a core worker task over ECS Exec — the one place on AWS that reaches
 // production's database (docs/runbooks/production-data-scripts.md). The runtime
 // image carries no `scripts/` and no `lib/`, so — exactly as the worker, the relay

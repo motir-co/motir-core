@@ -415,9 +415,9 @@ export const it: McpSummaryTranslations = {
   },
   search_run_records: {
     summary:
-      'Le esecuzioni di un progetto, dalla più recente – filtrate per scheda, ambito o stato, tratti come conteggi, nessuna corrispondenza un esito con nome.',
+      'Le esecuzioni di un progetto, dalla più recente – filtrate per scheda, ambito, stato o una discrepanza registrata, tratti come conteggi, nessuna corrispondenza un esito con nome.',
     source:
-      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+      'The runs of a project, newest first — narrowed by a card, a scope, a status or a recorded discrepancy, legs as counts, no match a named outcome.',
   },
   get_run_record: {
     summary:

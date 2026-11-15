@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { runDiscrepancyService } from '@/lib/services/runDiscrepancyService';
+import { RUN_DISCREPANCY_FIELD_MAX } from '@/lib/dispatchRuns/errors';
 import {
   RUN_RECORD_DISCREPANCY_BODY_MAX,
   RUN_RECORD_END_DETAIL_MAX,
@@ -22,7 +23,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // MOTIR-10240 — the RUN-RECORD door end to end on a real Postgres: the service,
 // both internal routes through their REAL handlers, the token's OWN project as the
 // only scope (two projects, two workspaces), every absence a NAMED outcome at
-// 200, the discrepancy record resolved to its comment body, and nothing written.
+// 200, the discrepancy read from its structured record (MOTIR-11361), and nothing written.
 
 const SERVICE_SECRET = 'core-callback-secret-test';
 const POINT = {
@@ -139,6 +140,8 @@ describe('the run-record routes — auth and validation', () => {
       [search, { workItemKey: 7 }],
       [search, { scopeWorkItemKey: 7 }],
       [search, { cursor: 7 }],
+      [search, { discrepancy: 'some' }],
+      [search, { discrepancy: 1 }],
       [getOne, null, 'not json'],
       [getOne, {}],
       [getOne, { runId: '  ' }],
@@ -160,6 +163,10 @@ describe('the run-record routes — auth and validation', () => {
     ).toEqual({
       ok: true,
       filters: { workItemKey: 'a-1', statuses: ['failed'], cursor: 'c', limit: 3 },
+    });
+    expect(parseRunRecordQuery({ discrepancy: 'decisions' })).toEqual({
+      ok: true,
+      filters: { discrepancy: 'decisions' },
     });
   });
 });
@@ -314,6 +321,80 @@ describe('POST /api/internal/ai/search-run-records', () => {
   });
 });
 
+describe('POST /api/internal/ai/search-run-records — the discrepancy filter (MOTIR-11361)', () => {
+  it('narrows the project, card and scope searches by the QUERY, and counts each row', async () => {
+    const a = await card(fx, 'A');
+    const b = await card(fx, 'B');
+    const decided = await openRun(fx, [a.key]);
+    await runDiscrepancyService.recordDiscrepancy(
+      { key: a.key, decisions: [{ planSaid: 'nothing', chose: 'c', why: 'w' }] },
+      fx.ctx,
+    );
+    const pointed = await openRun(fx, [b.key]);
+    await runDiscrepancyService.recordDiscrepancy({ key: b.key, points: [POINT] }, fx.ctx);
+    const plain = await openRun(fx, [a.key]);
+
+    const ids = async (body: Record<string, unknown>) => {
+      const result = await resultOf(await search(body));
+      return result.outcome === 'found' ? result.runs.map((r: { id: string }) => r.id) : [];
+    };
+    expect(await ids({})).toEqual([plain, pointed, decided]);
+    expect(await ids({ discrepancy: 'any' })).toEqual([pointed, decided]);
+    expect(await ids({ discrepancy: 'points' })).toEqual([pointed]);
+    expect(await ids({ discrepancy: 'decisions' })).toEqual([decided]);
+    expect(await ids({ workItemKey: a.key, discrepancy: 'any' })).toEqual([decided]);
+    expect(await ids({ workItemKey: a.key, discrepancy: 'points' })).toEqual([]);
+    // The filter applies before the page, so a first page of one still finds the old run.
+    const page = await resultOf(await search({ discrepancy: 'decisions', limit: 1 }));
+    expect(page.runs.map((r: { id: string }) => r.id)).toEqual([decided]);
+
+    const all = await resultOf(await search({}));
+    const row = (id: string) => all.runs.find((r: { id: string }) => r.id === id);
+    expect(row(decided).discrepancies).toEqual({ records: 1, points: 0, decisions: 1 });
+    expect(row(pointed).discrepancies).toEqual({ records: 1, points: 1, decisions: 0 });
+    expect(row(plain).discrepancies).toEqual({ records: 0, points: 0, decisions: 0 });
+  });
+
+  it('a scope search takes the filter too', async () => {
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'S' },
+      fx.ctx,
+    );
+    const scopedRun = (scope: string) =>
+      adminDb.dispatchRun.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          command: 'run_scope',
+          scopeLabel: story.identifier,
+          scopeWorkItemId: scope,
+          createdById: fx.ownerId,
+        },
+      });
+    const quiet = await scopedRun(story.id);
+    const loud = await scopedRun(story.id);
+    await adminDb.runDiscrepancyRecord.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: story.id,
+        dispatchRunId: loud.id,
+        pointCount: 0,
+        decisionCount: 1,
+      },
+    });
+    const scoped = (d?: string) =>
+      search({ scopeWorkItemKey: story.identifier, ...(d ? { discrepancy: d } : {}) }).then(
+        resultOf,
+      );
+    expect(new Set((await scoped()).runs.map((r: { id: string }) => r.id))).toEqual(
+      new Set([quiet.id, loud.id]),
+    );
+    expect((await scoped('decisions')).runs.map((r: { id: string }) => r.id)).toEqual([loud.id]);
+    expect((await scoped('points')).outcome).toBe('nothing_matched');
+  });
+});
+
 describe('POST /api/internal/ai/get-run-record', () => {
   it('answers how the run ended and, per leg, what it recorded as different', async () => {
     const a = await card(fx, 'A');
@@ -349,21 +430,25 @@ describe('POST /api/internal/ai/get-run-record', () => {
     expect(legA.discrepancy.commentId).toEqual(expect.any(String));
     expect(legA.discrepancy.bodyMd).toContain('SENTINEL-BUILT');
     expect(legA.discrepancy.bodyMd).toContain('SENTINEL-CHOSE');
+    // MOTIR-11361: the fields themselves, from the structured record.
+    expect(legA.discrepancy.points).toEqual([POINT]);
+    expect(legA.discrepancy.decisions).toEqual([
+      { planSaid: 'nothing', chose: 'SENTINEL-CHOSE', why: 'convention' },
+    ]);
+    expect(legA.discrepancy.source).toBe('recorded');
     expect(legB).toMatchObject({ key: b.key, discrepancy: null });
   });
 
   it('a hosted end line is carried verbatim and bounded; a long record body is cut and says so', async () => {
     const a = await card(fx, 'A');
     const runId = await openRun(fx, [a.key]);
-    await runDiscrepancyService.recordDiscrepancy({ key: a.key, points: [POINT] }, fx.ctx);
-    const finding = await adminDb.dispatchRunEvent.findFirstOrThrow({
-      where: { dispatchRunId: runId, kind: 'discrepancy_recorded' },
-    });
-    const commentId = (finding.data as { commentId: string }).commentId;
-    await adminDb.comment.update({
-      where: { id: commentId },
-      data: { bodyMd: 'x'.repeat(RUN_RECORD_DISCREPANCY_BODY_MAX + 5) },
-    });
+    // Long enough that the rendered record passes the body bound.
+    const long = 'x'.repeat(RUN_DISCREPANCY_FIELD_MAX);
+    const points = Array.from({ length: 10 }, () => ({ planAsked: long, built: long, why: long }));
+    const { commentId } = await runDiscrepancyService.recordDiscrepancy(
+      { key: a.key, points },
+      fx.ctx,
+    );
     await adminDb.dispatchRun.update({ where: { id: runId }, data: { origin: 'instance' } });
     const seq = (await adminDb.dispatchRunEvent.count({ where: { dispatchRunId: runId } })) + 10;
     await adminDb.dispatchRunEvent.create({
@@ -384,12 +469,16 @@ describe('POST /api/internal/ai/get-run-record', () => {
     expect(result.run.legs[0].discrepancy.bodyTruncated).toBe(true);
     expect(result.run.legs[0].discrepancy.bodyMd).toHaveLength(RUN_RECORD_DISCREPANCY_BODY_MAX);
 
+    expect(result.run.legs[0].discrepancy.points).toEqual(points);
+
+    // MOTIR-11361: a deleted comment loses the link, not the record.
     await adminDb.comment.delete({ where: { id: commentId } });
     const gone = await resultOf(await getOne({ runId }));
-    expect(gone.run.legs[0].discrepancy).toMatchObject({ commentId, bodyMd: null });
+    expect(gone.run.legs[0].discrepancy).toMatchObject({ commentId: null, points });
+    expect(gone.run.legs[0].discrepancy.bodyMd).toHaveLength(RUN_RECORD_DISCREPANCY_BODY_MAX);
   });
 
-  it('a malformed finding pointer is no record', async () => {
+  it('a finding alone is no record — the read is the structured record, not the pointer', async () => {
     const a = await card(fx, 'A');
     const runId = await openRun(fx, [a.key]);
     const leg = await adminDb.dispatchRunCard.findFirstOrThrow({ where: { dispatchRunId: runId } });
