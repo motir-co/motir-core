@@ -145,15 +145,16 @@ what the picker + init-script + agent read. Neither subsumes the other. The pack
 
 The crux. Options weighed:
 
-| Option                        | Verdict                                                                                                                                                                                                                                                                                            |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Public npm, versioned dep** | **CHOSEN.**                                                                                                                                                                                                                                                                                        |
-| Private npm registry          | Rejected — the package is GPL-3.0 (open by design); a private registry adds scaffold-time **auth friction** (the agent + every scaffolded product would need registry creds) for zero benefit. Directly violates the "zero credential friction for the scaffold agent" optimization (mistake #22). |
-| Git dependency                | Rejected — the package lives in a **subdirectory** of `motir-core`; git deps handle subpaths poorly, pin to a commit/tag (no semver ranges), and pull the whole repo. Awkward updates.                                                                                                             |
-| Vendored / sync-script copy   | Rejected — reintroduces the drift the `-with-design` prototype already demonstrated; "two design systems" (mistake #18). This is the anti-pattern the whole story exists to kill.                                                                                                                  |
+| Option                        | Verdict                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Public npm, versioned dep** | **CHOSEN.**                                                                                                                                                                                                                                                                                                                                                     |
+| Private npm registry          | Rejected — the package is open source by design (MIT from 0.23.0, MOTIR-11318; earlier versions `GPL-3.0-only`); a private registry adds scaffold-time **auth friction** (the agent + every scaffolded product would need registry creds) for zero benefit. Directly violates the "zero credential friction for the scaffold agent" optimization (mistake #22). |
+| Git dependency                | Rejected — the package lives in a **subdirectory** of `motir-core`; git deps handle subpaths poorly, pin to a commit/tag (no semver ranges), and pull the whole repo. Awkward updates.                                                                                                                                                                          |
+| Vendored / sync-script copy   | Rejected — reintroduces the drift the `-with-design` prototype already demonstrated; "two design systems" (mistake #18). This is the anti-pattern the whole story exists to kill.                                                                                                                                                                               |
 
 **The mechanism:** `motir-core/packages/design-system` is the single source. It is
-**published to the public npm registry as `@motir/design-system`** (GPL-3.0). Because
+**published to the public npm registry as `@motir/design-system`** (MIT from 0.23.0,
+MOTIR-11318; earlier versions `GPL-3.0-only`). Because
 it is open-source, the public registry costs nothing and imposes **no auth at install
 time** — the scaffold agent and any scaffolded product `pnpm add @motir/design-system`
 like any public package.
@@ -262,7 +263,7 @@ root layout `<head>`. That is the entire seam — no bespoke per-product theming
 - **The agent-applies-choice work** builds on the frozen §4 seam.
 - **One design system, one source.** No vendored second copy; drift is structurally
   impossible (mistake #18 avoided). The open-core boundary is honored — the package is
-  GPL-3.0, same as motir-core.
+  open source (MIT from 0.23.0, MOTIR-11318; earlier versions `GPL-3.0-only`).
 
 ---
 
