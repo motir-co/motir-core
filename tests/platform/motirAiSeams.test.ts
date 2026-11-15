@@ -188,7 +188,8 @@ describe('1 · client seams: recorded motir-ai reads into their DTOs', () => {
         chargedCredits: 495,
       }),
     ]);
-    expect(list.nextCursor).toBe(ORGS.nextCursor);
+    // The spend run's cursor, wrapped so the next view knows which run it resumes (MOTIR-8978).
+    expect(list.nextCursor).toBe(`s.${ORGS.nextCursor}`);
   });
 
   it('/usage/children + /usage/months → the org Usage tab: workspace named, both remainder rows, the all-time row', async () => {
