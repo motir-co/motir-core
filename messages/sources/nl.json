@@ -8940,6 +8940,8 @@
   "platformAdmin.users.log.action.seed_registry.promote": "Promoted a repository to a starter",
   "platformAdmin.users.log.action.seed_registry.retire": "Retired a starter",
   "platformAdmin.users.log.action.planner_finding.triage": "Triaged a planner finding",
+  "platformAdmin.users.log.action.planner_finding.record": "Recorded a planner finding record",
+  "platformAdmin.users.log.action.planner_finding.verdict": "Gave a planner finding record its verdict",
   "platformAdmin.users.log.action.model_serving.set": "Changed which provider serves a model",
   "platformAdmin.monitoring.breadcrumb": "Platform · Monitoring",
   "platformAdmin.monitoring.title": "System health",
