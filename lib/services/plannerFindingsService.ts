@@ -1,4 +1,5 @@
 import {
+  addPlannerFindingRecordLink,
   createPlannerFindingRecord,
   getJob,
   getPlannerFinding,
@@ -6,11 +7,13 @@ import {
   listPlannerFindingGroups,
   listPlannerFindingRecords,
   listPlannerFindings,
+  removePlannerFindingRecordLink,
   submitPlannerFindingRecordVerdict,
   type PlannerFindingListQuery,
   type PlannerFindingRecordContextRequest,
   type PlannerFindingRecordFindingRequest,
   type RawPlannerFinding,
+  type RawPlannerFindingRecordLinkResult,
   type RawPlannerFindingRecordPage,
   type RawPlannerFindingRecordWithFindings,
   type RawPlannerFindingVerdictResult,
@@ -43,10 +46,16 @@ import {
   type PlatformPrincipal,
 } from '@/lib/platform/auth';
 import { withPlatformRead, withPlatformWrite } from '@/lib/platform/context';
-import { NotPlatformStaffError, PlannerFindingInvalidError } from '@/lib/platform/errors';
+import { MotirAiConflictError } from '@/lib/ai/errors';
+import {
+  NotPlatformStaffError,
+  PlannerFindingInvalidError,
+  PlannerFindingLinkRefusedError,
+} from '@/lib/platform/errors';
 import type { PlannerFindingActor } from '@/lib/plannerFindings/types';
 import type {
   CreatePlannerFindingRecordBody,
+  PlannerFindingRecordLinkBody,
   PlannerFindingRecordQuery,
   PlannerFindingRecordVerdictBody,
 } from '@/lib/plannerFindings/schemas';
@@ -311,19 +320,52 @@ export const plannerFindingsService = {
 /**
  * The records level, written once (MOTIR-11458). A route's level is a per-route
  * fact: each handler passes a named constant to the gate and the method behind it
- * re-asserts the same one, so the two layers cannot disagree. Every route reads
- * this one today; both writes require `operator`.
+ * re-asserts the same one, so the two layers cannot disagree. Every WRITE reads
+ * this one and requires `operator`; the three record reads take
+ * `PLANNER_FINDING_RECORDS_READ_LEVEL`.
  * `tests/platform/plannerFindingsRouteLevels.test.ts` fails a literal.
  */
 export const PLANNER_FINDING_RECORDS_LEVEL = 'operator' as const;
+
+/**
+ * The level the three record READS ask for (MOTIR-11504): every staff role the
+ * console admits, as `app/(admin)/admin/planner-findings/page.tsx` gates itself.
+ * Widening a read is a level change, not a new door (ADR §2, 2026-11-16).
+ */
+export const PLANNER_FINDING_RECORDS_READ_LEVEL = 'support' as const;
 
 /** The reason each write records; the `inherited` policy needs one and the skill sends none. */
 const RECORD_REASON = 'Recorded a plan check through /api/platform/planner-findings.';
 const VERDICT_REASON =
   'Gave a planner finding record its verdict through /api/platform/planner-findings.';
+const LINK_REASON = 'Linked a planning bug to a planner finding record.';
+const UNLINK_REASON = 'Unlinked a planning bug from a planner finding record.';
+
+/**
+ * A typed work-item key, normalised once: trimmed and upper-cased, as
+ * `projectsService.getByKey` treats a project key. Identifiers are upper-case by
+ * construction, so a lower-case paste is a typo, not another work item.
+ */
+function normalizeLinkKey(key: string): string {
+  return key.trim().toUpperCase();
+}
+
+/**
+ * Thrown inside an unlink's write when the key left the set between the record
+ * read and the write (two admins on one record): nothing changed, so nothing is
+ * recorded, and the transaction rolls back on purpose rather than tripping
+ * `withPlatformWrite`'s no-audit refusal. Never leaves this module.
+ */
+class UnlinkFoundNothing extends Error {}
 
 function assertRecordsLevel(actor: PlannerFindingActor): void {
   if (!platformRoleAtLeast(actor.role, PLANNER_FINDING_RECORDS_LEVEL)) {
+    throw new NotPlatformStaffError();
+  }
+}
+
+function assertRecordsReadLevel(actor: PlannerFindingActor): void {
+  if (!platformRoleAtLeast(actor.role, PLANNER_FINDING_RECORDS_READ_LEVEL)) {
     throw new NotPlatformStaffError();
   }
 }
@@ -431,7 +473,7 @@ export const plannerFindingRecordsService = {
    * @throws PlannerFindingNotFoundError for an unknown id.
    */
   async getFinding(actor: PlannerFindingActor, findingId: string): Promise<RawPlannerFinding> {
-    assertRecordsLevel(actor);
+    assertRecordsReadLevel(actor);
     return withPlatformRead(
       actor,
       {
@@ -449,7 +491,7 @@ export const plannerFindingRecordsService = {
     actor: PlannerFindingActor,
     query: PlannerFindingRecordQuery,
   ): Promise<RawPlannerFindingRecordPage> {
-    assertRecordsLevel(actor);
+    assertRecordsReadLevel(actor);
     return withPlatformRead(
       actor,
       {
@@ -474,7 +516,7 @@ export const plannerFindingRecordsService = {
     actor: PlannerFindingActor,
     recordId: string,
   ): Promise<RawPlannerFindingRecordWithFindings> {
-    assertRecordsLevel(actor);
+    assertRecordsReadLevel(actor);
     return withPlatformRead(
       actor,
       {
@@ -595,4 +637,121 @@ export const plannerFindingRecordsService = {
       return result;
     });
   },
+
+  /**
+   * Link one work-item key to an attributed record (MOTIR-11504), resolved in the
+   * record's OWN project, and append one `planner_finding.link` row.
+   *
+   * @throws PlannerFindingLinkRefusedError `record_open` before anything is resolved,
+   *   `already_linked` for a key in the set, `not_a_work_item` for a key naming no
+   *   work item in the record's project — each with nothing written.
+   * @throws PlannerFindingRecordNotFoundError for an unknown record.
+   */
+  async linkKey(
+    actor: PlannerFindingActor,
+    recordId: string,
+    body: PlannerFindingRecordLinkBody,
+  ): Promise<RawPlannerFindingRecordLinkResult> {
+    assertRecordsLevel(actor);
+    const key = normalizeLinkKey(body.key);
+    const current = await readRecordForLink(actor, recordId);
+    if (current.verdictState !== 'attributed') {
+      throw new PlannerFindingLinkRefusedError('record_open');
+    }
+    if (current.linkedBugKeys.includes(key)) {
+      throw new PlannerFindingLinkRefusedError('already_linked');
+    }
+    // A second platform context, after the read's has closed — never nested
+    // (`lib/platform/context.ts`: a nested one waits on the chain lock forever).
+    return withPlatformWrite(actor, async (tx, record) => {
+      const item = await platformPlanRepository.findWorkItemByIdentifier(
+        key,
+        current.coreProjectId,
+        tx,
+      );
+      if (!item) throw new PlannerFindingLinkRefusedError('not_a_work_item');
+      let result: RawPlannerFindingRecordLinkResult;
+      try {
+        result = await addPlannerFindingRecordLink(recordId, item.identifier);
+      } catch (err) {
+        // The record was just read as attributed, so the store's conflict here is
+        // the key landing first from another admin, not an open record.
+        if (err instanceof MotirAiConflictError) {
+          throw new PlannerFindingLinkRefusedError('already_linked');
+        }
+        throw err;
+      }
+      if (!result.changed) throw new PlannerFindingLinkRefusedError('already_linked');
+      await record(linkAuditEntry('planner_finding.link', actor, result, item.identifier));
+      return result;
+    });
+  },
+
+  /**
+   * Take one key out of an attributed record's set (MOTIR-11504), appending one
+   * `planner_finding.unlink` row when the set changed. A key the record no longer
+   * carries answers the record as it stands with `changed: false` and writes
+   * nothing, including when another admin removed it first.
+   *
+   * @throws PlannerFindingLinkRefusedError `record_open` for a record with no verdict.
+   * @throws PlannerFindingRecordNotFoundError for an unknown record.
+   */
+  async unlinkKey(
+    actor: PlannerFindingActor,
+    recordId: string,
+    body: PlannerFindingRecordLinkBody,
+  ): Promise<RawPlannerFindingRecordLinkResult> {
+    assertRecordsLevel(actor);
+    const key = normalizeLinkKey(body.key);
+    const current = await readRecordForLink(actor, recordId);
+    if (current.verdictState !== 'attributed') {
+      throw new PlannerFindingLinkRefusedError('record_open');
+    }
+    // Decided from the read, so a no-op opens no write: `withPlatformWrite`
+    // refuses to commit a transaction that recorded nothing.
+    if (!current.linkedBugKeys.includes(key)) return { record: current, changed: false };
+    try {
+      return await withPlatformWrite(actor, async (_tx, record) => {
+        const result = await removePlannerFindingRecordLink(recordId, key);
+        if (!result.changed) throw new UnlinkFoundNothing();
+        await record(linkAuditEntry('planner_finding.unlink', actor, result, key));
+        return result;
+      });
+    } catch (err) {
+      if (!(err instanceof UnlinkFoundNothing)) throw err;
+      return { record: await readRecordForLink(actor, recordId), changed: false };
+    }
+  },
 };
+
+/** The audited record read a link or unlink decides from (an `estate.read`). */
+async function readRecordForLink(actor: PlannerFindingActor, recordId: string) {
+  const { record } = await withPlatformRead(
+    actor,
+    {
+      action: 'estate.read',
+      targetKind: 'platform',
+      targetId: recordId,
+      metadata: { surface: 'planner_finding_record', credential: credentialMetadata(actor) },
+    },
+    () => getPlannerFindingRecord(recordId),
+  );
+  return record;
+}
+
+function linkAuditEntry(
+  action: 'planner_finding.link' | 'planner_finding.unlink',
+  actor: PlannerFindingActor,
+  result: RawPlannerFindingRecordLinkResult,
+  key: string,
+) {
+  return {
+    action,
+    targetKind: 'platform' as const,
+    targetId: result.record.id,
+    targetLabel: result.record.planTitle ?? result.record.planId,
+    organizationId: result.record.coreOrganizationId,
+    reason: action === 'planner_finding.link' ? LINK_REASON : UNLINK_REASON,
+    metadata: { recordId: result.record.id, key, credential: credentialMetadata(actor) },
+  };
+}

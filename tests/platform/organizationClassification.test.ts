@@ -153,7 +153,9 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // platform-only, written and read solely from this tier.
     // `plan` carries MOTIR-11458's SELECT-only arm, for the one cross-tenant read
     // the planner-findings platform route makes to resolve a record's plan
-    // (`20261116120000_plan_platform_staff_read`).
+    // (`20261116120000_plan_platform_staff_read`). `work_item` carries
+    // MOTIR-11504's SELECT-only arm, for the one lookup that resolves a typed key
+    // in a record's own project (`20261117090000_work_item_platform_staff_read`).
     expect(rows.map((r) => r.tablename)).toEqual([
       'capacity_alert_setting',
       'capacity_raised_alert',
@@ -180,6 +182,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'project',
       'project_repository',
       'seed_registry_entry',
+      'work_item',
       'workspace',
       'workspace_membership',
     ]);

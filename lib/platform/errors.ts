@@ -815,3 +815,21 @@ export class ModelServingUnavailableError extends Error {
     this.name = 'ModelServingUnavailableError';
   }
 }
+
+/** Why a planner finding record link or unlink was refused (MOTIR-11504). */
+export type PlannerFindingLinkRefusal = 'not_a_work_item' | 'already_linked' | 'record_open';
+
+/**
+ * A link or unlink on a planner finding record was refused, with nothing written
+ * (MOTIR-11504): the key names no work item in the record's own project, the key
+ * is already linked, or the record has no verdict yet. A principal below the
+ * route's level never sees this — it gets `NotPlatformStaffError`'s 404.
+ */
+export class PlannerFindingLinkRefusedError extends Error {
+  readonly code = 'LINK_REFUSED';
+
+  constructor(readonly reason: PlannerFindingLinkRefusal) {
+    super(`planner finding record link refused: ${reason}`);
+    this.name = 'PlannerFindingLinkRefusedError';
+  }
+}

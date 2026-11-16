@@ -11222,7 +11222,9 @@
           "planner_finding": {
             "triage": "Planer-Befund triagiert",
             "record": "Planer-Befundbericht erfasst",
-            "verdict": "Planer-Befundbericht bewertet"
+            "verdict": "Planer-Befundbericht bewertet",
+            "link": "Planungsfehler mit Planer-Befundbericht verknüpft",
+            "unlink": "Planungsfehler von Planer-Befundbericht gelöst"
           },
           "model_serving": {
             "set": "Hat geändert, welcher Anbieter ein Modell bereitstellt"

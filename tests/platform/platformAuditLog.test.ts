@@ -228,6 +228,8 @@ describe('the reason rule', () => {
     // skill types no reason per record, so the service supplies a default one.
     'planner_finding.record': 'inherited',
     'planner_finding.verdict': 'inherited',
+    'planner_finding.link': 'inherited',
+    'planner_finding.unlink': 'inherited',
     // Story 10.3's credit & plan ops (MOTIR-747) — `superadmin`, `required`: they
     // change what an organization holds and is charged.
     'org.credit_grant': 'required',

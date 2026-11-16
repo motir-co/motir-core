@@ -11219,7 +11219,9 @@
           "planner_finding": {
             "triage": "Triaged a planner finding",
             "record": "Recorded a planner finding record",
-            "verdict": "Gave a planner finding record its verdict"
+            "verdict": "Gave a planner finding record its verdict",
+            "link": "Linked a planning bug to a planner finding record",
+            "unlink": "Unlinked a planning bug from a planner finding record"
           },
           "model_serving": {
             "set": "Changed which provider serves a model"

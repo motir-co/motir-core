@@ -11,6 +11,7 @@ import {
 import { requirePlatformStaffForPlannerFindings } from '@/lib/platform/plannerFindingsGate';
 import {
   PLANNER_FINDING_RECORDS_LEVEL,
+  PLANNER_FINDING_RECORDS_READ_LEVEL,
   plannerFindingRecordsService,
 } from '@/lib/services/plannerFindingsService';
 
@@ -19,10 +20,13 @@ import {
 // a staff personal access token or the console session (ADR §2, the 2026-11-16
 // amendment). Transport only: gate FIRST, parse, one service call, map errors.
 
-/** One page of records, newest first; motir-ai's filters passed through. Operator. */
+/** One page of records, newest first; motir-ai's filters passed through. Support and above. */
 export async function GET(req: Request) {
   try {
-    const actor = await requirePlatformStaffForPlannerFindings(req, PLANNER_FINDING_RECORDS_LEVEL);
+    const actor = await requirePlatformStaffForPlannerFindings(
+      req,
+      PLANNER_FINDING_RECORDS_READ_LEVEL,
+    );
     const query = parsePlannerFindingsQuery(req, plannerFindingRecordQuerySchema);
     return plannerFindingsJson(await plannerFindingRecordsService.listRecords(actor, query));
   } catch (err) {

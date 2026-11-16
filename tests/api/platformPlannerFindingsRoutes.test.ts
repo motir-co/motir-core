@@ -147,6 +147,7 @@ function rawRecord(over: Partial<RawPlannerFindingRecord> = {}): RawPlannerFindi
     verdictAt: null,
     runThroughAnswer: null,
     runThroughStopCards: [],
+    linkedBugKeys: [],
     createdAt: NOW,
     updatedAt: NOW,
     ...over,
@@ -281,17 +282,7 @@ const REFUSALS: { name: string; arrange: () => Promise<string | null> }[] = [
       return null;
     },
   },
-  {
-    name: 'a support session (below operator)',
-    arrange: async () => {
-      const user = await createTestUser();
-      await adminDb.user.update({ where: { id: user.id }, data: { platformRole: 'support' } });
-      currentSession = { user: { id: user.id } };
-      return null;
-    },
-  },
   { name: 'a non-staff token', arrange: async () => (await staff(null)).token },
-  { name: 'a support token (below operator)', arrange: async () => (await staff('support')).token },
   { name: 'an unknown token', arrange: async () => 'motir_pat_not-a-real-token' },
   { name: 'a bearer that is not a PAT', arrange: async () => 'some-other-credential' },
   {
@@ -355,6 +346,53 @@ const REFUSALS: { name: string; arrange: () => Promise<string | null> }[] = [
     },
   },
 ];
+
+/**
+ * A SUPPORT principal (MOTIR-11504): admitted to the three reads, which ask for
+ * `PLANNER_FINDING_RECORDS_READ_LEVEL`, and refused by every write, which asks
+ * for `operator`.
+ */
+const SUPPORT: { name: string; arrange: () => Promise<string | null> }[] = [
+  {
+    name: 'a support session',
+    arrange: async () => {
+      const user = await createTestUser();
+      await adminDb.user.update({ where: { id: user.id }, data: { platformRole: 'support' } });
+      currentSession = { user: { id: user.id } };
+      return null;
+    },
+  },
+  { name: 'a support token', arrange: async () => (await staff('support')).token },
+];
+const READ_ROUTES = ROUTES.filter((route) => route.name.startsWith('GET '));
+const WRITE_ROUTES = ROUTES.filter((route) => !route.name.startsWith('GET '));
+
+describe('the gate — a support principal reads records and writes nothing', () => {
+  describe.each(SUPPORT)('$name', ({ arrange }) => {
+    it.each(WRITE_ROUTES)(
+      '$name answers 404 with no motir-ai call and no audit row',
+      async (route) => {
+        answerEveryCall('org_1');
+        const bearer = await arrange();
+        const r = await routes();
+        const res = await json(await route.run(r, bearer));
+        expect(res).toEqual({ status: 404, body: { code: 'NOT_FOUND' }, cache: 'no-store' });
+        for (const fn of Object.values(client)) expect(fn).not.toHaveBeenCalled();
+        expect(await auditRows()).toEqual([]);
+      },
+    );
+
+    it.each(READ_ROUTES)('$name answers 200, audited as estate.read', async (route) => {
+      answerEveryCall('org_1');
+      const bearer = await arrange();
+      const r = await routes();
+      const res = await json(await route.run(r, bearer));
+      expect(res.status).toBe(200);
+      expect(res.cache).toBe('no-store');
+      expect((await auditRows()).map((row) => row.action)).toEqual(['estate.read']);
+    });
+  });
+});
 
 describe('the gate — every route, every refusal, the same 404', () => {
   describe.each(REFUSALS)('$name', ({ arrange }) => {
@@ -1152,7 +1190,29 @@ describe('POST /records/:id/verdict', () => {
 });
 
 describe('the records service re-checks the level the gate resolved', () => {
-  it('refuses a support actor that reached it without the gate, before any motir-ai call', async () => {
+  it('admits a support actor to the three reads, which ask for the read level', async () => {
+    const { plannerFindingRecordsService } = await import('@/lib/services/plannerFindingsService');
+    answerEveryCall('org_1');
+    // A real user: the audited read appends a row naming its actor.
+    const { owner } = await staff('support');
+    const actor = {
+      userId: owner.id,
+      email: owner.email,
+      role: 'support' as const,
+      credential: { kind: 'session' as const },
+    };
+    await expect(plannerFindingRecordsService.getFinding(actor, 'pf_1')).resolves.toMatchObject({
+      id: 'pf_1',
+    });
+    await expect(plannerFindingRecordsService.listRecords(actor, {})).resolves.toMatchObject({
+      records: [expect.objectContaining({ id: 'rec_1' })],
+    });
+    await expect(plannerFindingRecordsService.getRecord(actor, 'rec_1')).resolves.toMatchObject({
+      record: { id: 'rec_1' },
+    });
+  });
+
+  it('refuses a support actor every write, before any motir-ai call', async () => {
     const { plannerFindingRecordsService } = await import('@/lib/services/plannerFindingsService');
     const { NotPlatformStaffError } = await import('@/lib/platform/errors');
     const actor = {
@@ -1161,11 +1221,21 @@ describe('the records service re-checks the level the gate resolved', () => {
       role: 'support' as const,
       credential: { kind: 'session' as const },
     };
-    await expect(plannerFindingRecordsService.getFinding(actor, 'pf_1')).rejects.toBeInstanceOf(
-      NotPlatformStaffError,
-    );
+    await expect(
+      plannerFindingRecordsService.createRecord(actor, {
+        planner: 'hosted',
+        projectKey: 'PROD',
+        findings: [FINDING_INPUT],
+      } as never),
+    ).rejects.toBeInstanceOf(NotPlatformStaffError);
     await expect(
       plannerFindingRecordsService.submitVerdict(actor, 'rec_1', VERDICT as never),
+    ).rejects.toBeInstanceOf(NotPlatformStaffError);
+    await expect(
+      plannerFindingRecordsService.linkKey(actor, 'rec_1', { key: 'PROD-1' }),
+    ).rejects.toBeInstanceOf(NotPlatformStaffError);
+    await expect(
+      plannerFindingRecordsService.unlinkKey(actor, 'rec_1', { key: 'PROD-1' }),
     ).rejects.toBeInstanceOf(NotPlatformStaffError);
     for (const fn of Object.values(client)) expect(fn).not.toHaveBeenCalled();
     expect(await auditRows()).toEqual([]);

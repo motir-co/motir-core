@@ -16,7 +16,9 @@ Every route is gated by `requirePlatformStaffForPlannerFindings`
 level is set per route**, in the routes table's Level column: each handler passes
 its level to the gate as a named constant from `lib/services/plannerFindingsService.ts`,
 and the records service re-asserts the same constant, so a route's level is one
-argument and one constant. `tests/platform/plannerFindingsRouteLevels.test.ts`
+argument and one constant. The three reads are **`support`** level, the
+console's own read level; every write is **`operator`**.
+`tests/platform/plannerFindingsRouteLevels.test.ts`
 fails a handler that passes a literal, and a write route below `operator`. A
 request is admitted with either:
 
@@ -32,19 +34,23 @@ motir-ai call, naming the credential in `metadata.credential`
 (`{ "kind": "token", "apiTokenId": "…" }` or `{ "kind": "session" }`): reads as
 `estate.read`, a create as `planner_finding.record`, a verdict as one
 `planner_finding.verdict` per finding it changed (one on the record when it
-changed none). A motir-ai error leaves no row.
+changed none), a link as `planner_finding.link` and an unlink as
+`planner_finding.unlink`, one per change of the record's key set. A motir-ai
+error, and a refused or no-op link or unlink, leaves no write row.
 
 Every response carries `Cache-Control: no-store`.
 
 ## Routes
 
-| Method & path                                              | Body / query                                                                                                   | Success                                                   | Level                                        |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------- |
-| `GET /api/platform/planner-findings/{findingId}`           | —                                                                                                              | `200 Finding` (with its `recordId`)                       | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
-| `GET /api/platform/planner-findings/records`               | `?verdictState=open\|attributed&planner=&source=&planId=&createdFrom=&createdTo=&cursor=&limit=` (limit 1–100) | `200 { records: RecordSummary[], nextCursor, retention }` | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
-| `GET /api/platform/planner-findings/records/{id}`          | —                                                                                                              | `200 { record: Record, findings: Finding[] }`             | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
-| `POST /api/platform/planner-findings/records`              | `CreateRecord`                                                                                                 | `201 { record: Record, findings: Finding[] }`             | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
-| `POST /api/platform/planner-findings/records/{id}/verdict` | `{ verdicts: Verdict[], replace? }`                                                                            | `200 { record, findings, audit: VerdictAudit[] }`         | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
+| Method & path                                                   | Body / query                                                                                                   | Success                                                   | Level                                            |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------ |
+| `GET /api/platform/planner-findings/{findingId}`                | —                                                                                                              | `200 Finding` (with its `recordId`)                       | `support` (`PLANNER_FINDING_RECORDS_READ_LEVEL`) |
+| `GET /api/platform/planner-findings/records`                    | `?verdictState=open\|attributed&planner=&source=&planId=&createdFrom=&createdTo=&cursor=&limit=` (limit 1–100) | `200 { records: RecordSummary[], nextCursor, retention }` | `support` (`PLANNER_FINDING_RECORDS_READ_LEVEL`) |
+| `GET /api/platform/planner-findings/records/{id}`               | —                                                                                                              | `200 { record: Record, findings: Finding[] }`             | `support` (`PLANNER_FINDING_RECORDS_READ_LEVEL`) |
+| `POST /api/platform/planner-findings/records`                   | `CreateRecord`                                                                                                 | `201 { record: Record, findings: Finding[] }`             | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
+| `POST /api/platform/planner-findings/records/{id}/verdict`      | `{ verdicts: Verdict[], replace? }`                                                                            | `200 { record, findings, audit: VerdictAudit[] }`         | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
+| `POST /api/platform/planner-findings/records/{id}/links`        | `{ key }`                                                                                                      | `200 { record: Record, changed: true }`                   | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
+| `POST /api/platform/planner-findings/records/{id}/links/remove` | `{ key }`                                                                                                      | `200 { record: Record, changed }`                         | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
 
 The answers are motir-ai's own shapes, unchanged: `Record`, `RecordSummary`
 (`Record` + `findingCount` + `attributedCount`), `Finding` and `VerdictAudit` are
@@ -113,6 +119,17 @@ answers `runThroughAnswer: null` (and `runThroughStopCards: []`) rather than
 raising; `null` is the only reading of "no answer recorded". What the two fields
 mean is motir-ai's: see the record DTO in its `docs/contract.md`.
 
+### Links — a record's planning bugs
+
+`{ key }` is one work-item key, 1–64 characters, trimmed and upper-cased. A link
+or unlink is refused unless the record already has its verdict. Core resolves the
+key to a work item in the RECORD's own project (never the caller's), so a key from
+another project or tenant reads as no work item, and motir-ai stores it as text in
+the record's `linkedBugKeys`. An unlink of a key the record no longer carries
+answers the record as it stands with `changed: false` and writes nothing, so two
+staff members removing one key never collide. Linking creates, edits or moves no
+work item, and is independent of a finding's own triage bug key.
+
 ### `Verdict`
 
 `{ findingId, attribution: "code | corpus | model | unattributed", why, hostedCell?, planpyCell?, fixDirection? }`
@@ -129,5 +146,8 @@ record that already has a verdict.
 | 404    | `{ code: "PROJECT_NOT_FOUND" }`                            | a `projectKey` the staff member cannot record in                         |
 | 404    | `{ code: "PLANNER_FINDING_NOT_FOUND", findingId }`         | an unknown finding                                                       |
 | 404    | `{ code: "PLANNER_FINDING_RECORD_NOT_FOUND", recordId }`   | an unknown record                                                        |
+| 400    | `{ code: "LINK_REFUSED", reason: "not_a_work_item" }`      | a link key naming no work item in the record's project                   |
 | 409    | `{ code: "CONFLICT", detail }`                             | the record already has a verdict and `replace` is not `true`             |
+| 409    | `{ code: "LINK_REFUSED", reason: "already_linked" }`       | a link key already in the record's set                                   |
+| 409    | `{ code: "LINK_REFUSED", reason: "record_open" }`          | a link or unlink on a record with no verdict yet                         |
 | 503    | `{ code: "UPSTREAM_UNAVAILABLE" }`                         | motir-ai cannot answer                                                   |

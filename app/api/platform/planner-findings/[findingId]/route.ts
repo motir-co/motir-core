@@ -4,7 +4,7 @@ import {
 } from '@/lib/plannerFindings/routeErrors';
 import { requirePlatformStaffForPlannerFindings } from '@/lib/platform/plannerFindingsGate';
 import {
-  PLANNER_FINDING_RECORDS_LEVEL,
+  PLANNER_FINDING_RECORDS_READ_LEVEL,
   plannerFindingRecordsService,
 } from '@/lib/services/plannerFindingsService';
 
@@ -17,10 +17,13 @@ import {
 
 type Ctx = { params: Promise<{ findingId: string }> };
 
-/** One finding. Operator. */
+/** One finding. Support and above. */
 export async function GET(req: Request, { params }: Ctx) {
   try {
-    const actor = await requirePlatformStaffForPlannerFindings(req, PLANNER_FINDING_RECORDS_LEVEL);
+    const actor = await requirePlatformStaffForPlannerFindings(
+      req,
+      PLANNER_FINDING_RECORDS_READ_LEVEL,
+    );
     const { findingId } = await params;
     return plannerFindingsJson(await plannerFindingRecordsService.getFinding(actor, findingId));
   } catch (err) {

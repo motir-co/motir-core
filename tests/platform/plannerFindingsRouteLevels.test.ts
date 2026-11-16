@@ -44,7 +44,9 @@ function handlerGates(file: string): HandlerGate[] {
   return handlers.map((match, i) => {
     const body = source.slice(match.index, handlers[i + 1]?.index ?? source.length);
     const calls = [
-      ...body.matchAll(/requirePlatformStaffForPlannerFindings\(\s*req\s*,\s*([^)]+?)\s*\)/g),
+      ...body.matchAll(
+        /requirePlatformStaffForPlannerFindings\(\s*req\s*,\s*([^,)\s]+)\s*,?\s*\)/g,
+      ),
     ];
     expect(
       calls,
@@ -81,9 +83,9 @@ describe('the planner-findings records level', () => {
 
   it('the records level is written once: no level literal in the service checks', () => {
     const source = readFileSync(SERVICE, 'utf8');
-    const checks = [...source.matchAll(/platformRoleAtLeast\(\s*[^,]+,\s*([^)]+?)\s*\)/g)].map(
-      (m) => m[1],
-    );
+    const checks = [
+      ...source.matchAll(/platformRoleAtLeast\(\s*[^,]+,\s*([^,)\s]+)\s*,?\s*\)/g),
+    ].map((m) => m[1]);
     expect(checks.length).toBeGreaterThan(0);
     for (const level of checks) expect(LEVEL_CONSTANTS).toContain(level);
     expect(plannerFindingsService.PLANNER_FINDING_RECORDS_LEVEL).toBe('operator');

@@ -118,3 +118,14 @@ export const plannerFindingRecordQuerySchema = z
   .strict();
 
 export type PlannerFindingRecordQuery = z.infer<typeof plannerFindingRecordQuerySchema>;
+
+/**
+ * `POST /api/platform/planner-findings/records/:id/links` and `.../links/remove`
+ * (MOTIR-11504): one work-item key. Trimmed here; the service upper-cases it
+ * before resolving it in the record's own project.
+ */
+export const plannerFindingRecordLinkBodySchema = z
+  .object({ key: z.string().trim().min(1).max(64) })
+  .strict();
+
+export type PlannerFindingRecordLinkBody = z.infer<typeof plannerFindingRecordLinkBodySchema>;

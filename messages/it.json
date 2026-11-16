@@ -11222,7 +11222,9 @@
           "planner_finding": {
             "triage": "Ha classificato un rilievo del pianificatore",
             "record": "Ha registrato un rapporto di rilievi del pianificatore",
-            "verdict": "Ha dato il verdetto su un rapporto di rilievi del pianificatore"
+            "verdict": "Ha dato il verdetto su un rapporto di rilievi del pianificatore",
+            "link": "Ha collegato un bug di pianificazione a un registro di rilievi del pianificatore",
+            "unlink": "Ha scollegato un bug di pianificazione da un registro di rilievi del pianificatore"
           },
           "model_serving": {
             "set": "Ha cambiato quale fornitore eroga un modello"

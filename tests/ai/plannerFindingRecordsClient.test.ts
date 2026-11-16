@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  addPlannerFindingRecordLink,
   createPlannerFindingRecord,
   getPlannerFindingRecord,
   listPlannerFindingRecords,
+  removePlannerFindingRecordLink,
   PLANNER_FINDING_RUN_THROUGH_ANSWERS,
   PLANNER_FINDING_VERDICT_STATES,
   submitPlannerFindingRecordVerdict,
@@ -39,6 +41,7 @@ const RECORD: RawPlannerFindingRecord = {
   verdictAt: null,
   runThroughAnswer: null,
   runThroughStopCards: [],
+  linkedBugKeys: [],
   createdAt: '2026-11-16T12:00:00.000Z',
   updatedAt: '2026-11-16T12:00:00.000Z',
 };
@@ -296,6 +299,52 @@ describe('submitPlannerFindingRecordVerdict', () => {
   ])('reads a 200 with %s as an outage', async (_n, res) => {
     stub(res);
     await expect(submitPlannerFindingRecordVerdict('rec_1', verdict, 'u_1')).rejects.toBeInstanceOf(
+      MotirAiUnavailableError,
+    );
+  });
+});
+
+describe('addPlannerFindingRecordLink / removePlannerFindingRecordLink (MOTIR-11504)', () => {
+  const linked = { record: { ...RECORD, linkedBugKeys: ['PROD-1'] }, changed: true };
+
+  it.each([
+    ['add', addPlannerFindingRecordLink, '/links'],
+    ['remove', removePlannerFindingRecordLink, '/links/remove'],
+  ] as const)(
+    '%s POSTs { key } to the record and answers { record, changed }',
+    async (_n, fn, suffix) => {
+      const fetchMock = stub(json(linked));
+      expect(await fn('rec/1', 'PROD-1')).toEqual(linked);
+      const [url, init] = call(fetchMock);
+      expect(url).toBe(`https://ai.test/v1/admin/planner-finding-records/rec%2F1${suffix}`);
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(String(init.body))).toEqual({ key: 'PROD-1' });
+      expect(new Headers(init.headers).get('authorization')).toBe('Bearer svc-token');
+    },
+  );
+
+  it("maps motir-ai's conflict and not_found, and reads a malformed 200 as an outage", async () => {
+    stub(problem('conflict', 409));
+    await expect(addPlannerFindingRecordLink('rec_1', 'PROD-1')).rejects.toBeInstanceOf(
+      MotirAiConflictError,
+    );
+    stub(problem('not_found', 404));
+    await expect(removePlannerFindingRecordLink('rec_1', 'PROD-1')).rejects.toBeInstanceOf(
+      PlannerFindingRecordNotFoundError,
+    );
+    for (const bad of [
+      { record: RECORD },
+      { changed: true },
+      { record: { ...RECORD, linkedBugKeys: undefined }, changed: true },
+      { record: null, changed: false },
+    ]) {
+      stub(json(bad));
+      await expect(addPlannerFindingRecordLink('rec_1', 'PROD-1')).rejects.toBeInstanceOf(
+        MotirAiUnavailableError,
+      );
+    }
+    stub(new Response('<html>', { status: 200 }));
+    await expect(removePlannerFindingRecordLink('rec_1', 'PROD-1')).rejects.toBeInstanceOf(
       MotirAiUnavailableError,
     );
   });

@@ -1,7 +1,7 @@
 import { Prisma } from '@/generated/prisma/client';
 
 /**
- * Cross-tenant PLAN reads for the platform tier (Story MOTIR-11455 · MOTIR-11458)
+ * Cross-tenant PLAN and WORK-ITEM reads for the platform tier (Story MOTIR-11455 · MOTIR-11458)
  * — the sibling of `platformEstateRepository`, under its rules:
  *
  * ⚠️ EVERY METHOD TAKES `tx` AS A REQUIRED PARAMETER. Only `withPlatformRead`
@@ -41,5 +41,23 @@ export const platformPlanRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<PlatformPlanRecordContext | null> {
     return tx.plan.findUnique({ where: { id }, select: RECORD_CONTEXT_SELECT });
+  },
+
+  /**
+   * The work item `identifier` names in `projectId`, or null (MOTIR-11504): ONE
+   * lookup on the `(projectId, identifier)` unique. `work_item` runs FORCE row
+   * level security, and `20261117090000_work_item_platform_staff_read` is what
+   * makes this answer for a private project; keyed on the project the CALLER
+   * resolved, so a key cannot reach another project or tenant.
+   */
+  async findWorkItemByIdentifier(
+    identifier: string,
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; identifier: string } | null> {
+    return tx.workItem.findUnique({
+      where: { projectId_identifier: { projectId, identifier } },
+      select: { id: true, identifier: true },
+    });
   },
 };
