@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 import acceptance from './playwright.acceptance.config';
 
 // The REGRESSION lane (MOTIR-9411) — the done stories' acceptance specs, kept
@@ -34,6 +34,13 @@ import acceptance from './playwright.acceptance.config';
 //     second clip. Nothing is recorded here, so a CI retry is allowed, as in
 //     the main lane.
 //
+// ⚠️ THE VIEWPORT IS NOT THE ACCEPTANCE LANE'S. The acceptance lane opens every
+// page at its recording frame (`ACCEPTANCE_FRAME`, 1920×1080, MOTIR-11471), which
+// exists for the video. Nothing is recorded here, and these specs were written
+// and pinned at Playwright's Desktop Chrome viewport (1280×720): a row's
+// stretched link, for one, only reaches the columns that fit that width. So the
+// `projects` below restate the browser without the frame.
+//
 // ⚠️ THE PORT IS THE ACCEPTANCE LANE'S (3200). The two lanes run on separate CI
 // runners, and the server they would boot is the same build with the same env,
 // so a local run of both at once reuses one server. Set `PORT` to keep them
@@ -52,4 +59,5 @@ export default defineConfig({
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
   },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });
