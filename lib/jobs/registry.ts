@@ -112,6 +112,7 @@ import { organizationRetentionPurge } from './definitions/organizationRetentionP
 import { dlqStandingDepthSweep } from './definitions/dlqStandingDepthSweep';
 import { agentInstanceIdleCheck } from './definitions/agentInstanceIdleCheck';
 import { agentInstanceBoot } from './definitions/agentInstanceBoot';
+import { agentInstanceUpdateSettle } from './definitions/agentInstanceUpdateSettle';
 import { agentInstanceRunLaunch } from './definitions/agentInstanceRunLaunch';
 import { agentInstanceRunSupervise } from './definitions/agentInstanceRunSupervise';
 import { agentInstanceSweep } from './definitions/agentInstanceSweep';
@@ -257,6 +258,8 @@ export const jobDefinitions = [
   // and the 30-minute sweep beneath it.
   agentInstanceIdleCheck,
   agentInstanceBoot,
+  // An agent's image update, settled the moment its machine allows (MOTIR-8954).
+  agentInstanceUpdateSettle,
   agentInstanceRunLaunch,
   agentInstanceRunSupervise,
   agentInstanceSweep,

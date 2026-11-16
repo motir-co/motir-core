@@ -219,9 +219,16 @@ export const agentInstanceRepository = {
     inStates: readonly AgentInstanceState[],
     patch: AgentInstanceTransitionPatch,
     tx: Prisma.TransactionClient,
+    expected: { noUpdateFailure?: boolean } = {},
   ): Promise<number> {
     const result = await tx.agentInstance.updateMany({
-      where: { id, state: { in: [...inStates] }, ...LIVE },
+      where: {
+        id,
+        state: { in: [...inStates] },
+        // A rollback is begun once: only while no failure is recorded (MOTIR-8954).
+        ...(expected.noUpdateFailure ? { updateFailureReason: null } : {}),
+        ...LIVE,
+      },
       data: imagePatch(patch),
     });
     return result.count;

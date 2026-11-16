@@ -610,6 +610,23 @@ export interface AgentInstanceBootData {
 }
 
 /**
+ * The `agent-instance/update-settle` payload (MOTIR-8954,
+ * `docs/decisions/agent-image-update.md` Q6) — one image update of one agent,
+ * settled to `running` or `failed`. Sent by the Update, or the wake that applies
+ * a pinned update, once the machine has been asked to move.
+ */
+export interface AgentInstanceUpdateSettleData {
+  workspaceId: string;
+  instanceId: string;
+  /**
+   * `agent-instance-update:<instanceId>:<stateChangedAt>` — one driver per entry
+   * into `updating` (`agentUpdateEventKey`), so a second send for the same
+   * update is swallowed and the next update is never mistaken for it.
+   */
+  idempotencyKey: string;
+}
+
+/**
  * Map of event-name → payload. Each key is a job id and the event name that
  * triggers it; for an event's FIRST consumer the two are the same string (the
  * 1:1 convention). An event with MULTIPLE consumers (e.g.
@@ -810,6 +827,8 @@ export interface JobEventDataMap {
   'agent-instance/idle-check': AgentInstanceIdleCheckData;
   /** One boot attempt of an agent, driven step by step (Story MOTIR-7393 · MOTIR-7398). */
   'agent-instance/boot': AgentInstanceBootData;
+  /** One image update of an agent, settled by re-reading its machine (MOTIR-8954). */
+  'agent-instance/update-settle': AgentInstanceUpdateSettleData;
   /** The launch of a card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7026). */
   'agent-instance-run/launch': AgentInstanceRunLaunchData;
   /** The supervision of a card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7027). */

@@ -99,6 +99,8 @@ const MEASURED = [
   'lib/services/agentInstanceBootService.ts',
   'lib/repositories/agentInstanceBootRepository.ts',
   'lib/jobs/definitions/agentInstanceBoot.ts',
+  // MOTIR-8954 — the update driver: the job that settles an image update.
+  'lib/jobs/definitions/agentInstanceUpdateSettle.ts',
 ];
 
 export default defineConfig({
