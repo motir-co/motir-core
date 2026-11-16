@@ -121,8 +121,11 @@ export const ARRIVAL_MIN_SCALE = 0.8;
  * while only the vertical follows the frontier; centring the focal card on both
  * axes would park a first-column card in the middle and leave a third of the
  * canvas empty. A full 5-column loose band (MOTIR-10537) is 1720 px of world, 1376
- * px at the floor, so it overflows that canvas and the frontier is followed on
- * both axes.
+ * px at the floor, so it overflows that canvas ACROSS and the frontier is followed
+ * horizontally. Whether it is followed vertically too depends on the band's ROW
+ * count, not its width: four rows are 570 px at the floor and fit a ~739 px canvas,
+ * so their bounds are centred on Y; six rows are 883 px and overflow, so the
+ * frontier is followed on both axes (MOTIR-11473).
  *
  * `focal` absent → the bounds' centre is used on both axes, which is what a level
  * with no actionable card should do.
