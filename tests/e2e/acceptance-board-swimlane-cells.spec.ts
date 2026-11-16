@@ -946,7 +946,11 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
           r.request().method() === 'POST' && r.request().headers()['next-action'] !== undefined,
       ),
     ]);
-    await dragCardOntoCell(page, `board-card-${moved.identifier}`, target);
+    // Ten loaded cards make the target taller than the screen: drop on its
+    // visible middle, not its off-screen centre.
+    await dragCardOntoCell(page, `board-card-${moved.identifier}`, target, {
+      dropInViewportMiddle: true,
+    });
     const [move, reassign] = await wrote;
     expect(move.ok(), 'POST /api/board/move').toBe(true);
     expect(reassign.ok(), 'the reassign').toBe(true);

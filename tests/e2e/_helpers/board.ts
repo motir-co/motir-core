@@ -479,6 +479,7 @@ export async function dragCardOntoCell(
   page: Page,
   cardTestId: string,
   target: Locator,
+  options: { dropInViewportMiddle?: boolean } = {},
 ): Promise<void> {
   const card = page.getByTestId(cardTestId);
   // Settle BOTH into view BEFORE measuring — capturing the source box and THEN
@@ -515,7 +516,22 @@ export async function dragCardOntoCell(
     }
   }
   const tx = to.x + to.width / 2;
-  const ty = to.y + to.height / 2;
+  let ty = to.y + to.height / 2;
+  // A cell taller than the screen has its centre off it, and a pointer near the
+  // viewport's edge makes dnd-kit auto-scroll the page under it, so the drop
+  // lands in the lane that scrolled in. `dropInViewportMiddle` keeps the drop on
+  // the part of the cell inside the screen's middle half (pointerWithin resolves
+  // a drop over one of the cell's cards to that cell).
+  if (options.dropInViewportMiddle && viewport) {
+    const lo = Math.max(to.y + 8, viewport.height * 0.25);
+    const hi = Math.min(to.y + to.height - 8, viewport.height * 0.75);
+    if (lo > hi) {
+      throw new Error(
+        `the target cell (y ${to.y}, height ${to.height}) has no part in the middle of the viewport (height ${viewport.height})`,
+      );
+    }
+    ty = Math.min(Math.max(ty, lo), hi);
+  }
   await page.mouse.move(fx, fy);
   await page.mouse.down();
   await page.mouse.move(fx + 24, fy, { steps: 6 });
