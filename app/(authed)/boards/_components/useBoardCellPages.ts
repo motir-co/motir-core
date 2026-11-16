@@ -187,8 +187,11 @@ export function useBoardCellPages({
       if (filterParam) params.set('filter', filterParam);
       const url = `/api/board/columns/${columnId}/cards?${params.toString()}`;
       // `after` only orders the read; its own outcome is its caller's to handle.
-      void Promise.allSettled(after ? [after] : [])
-        .then(() => readJson<BoardCellPageDto>(url))
+      // Without it the request starts now, in the same tick as the click.
+      const read = after
+        ? Promise.allSettled([after]).then(() => readJson<BoardCellPageDto>(url))
+        : readJson<BoardCellPageDto>(url);
+      void read
         .then((next) => {
           setPages((prev) => appendCellPage(prev, readKey, next));
           onPlanHoldsRef.current(next.planHolds);
