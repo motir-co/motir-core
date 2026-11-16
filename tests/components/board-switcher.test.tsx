@@ -134,6 +134,54 @@ describe('BoardSwitcher (3.7.4) — render + select', () => {
   });
 });
 
+// The board-type glyph (MOTIR-11323): the trigger draws the ACTIVE board's type —
+// it used to hard-code the kanban glyph — and each menu row draws its own board's,
+// both from the one shared map the create dialog's tiles read.
+describe('BoardSwitcher — the board type glyph (MOTIR-11323)', () => {
+  const MIXED: BoardSummaryDto[] = [
+    board({ id: 'b1', name: 'Team board', type: 'kanban', isDefault: true, position: 'a0' }),
+    board({ id: 'b2', name: 'Sprint board', type: 'scrum', isDefault: false, position: 'a1' }),
+  ];
+
+  it('the trigger shows the kanban glyph on a kanban board', async () => {
+    stubFetch(MIXED);
+    render(<BoardSwitcher />);
+    const icon = await screen.findByTestId('board-switcher-trigger-icon');
+    expect(icon.getAttribute('data-board-type')).toBe('kanban');
+    expect(icon.getAttribute('class')).toContain('lucide-columns-3');
+  });
+
+  it('the trigger shows the scrum glyph on a scrum board', async () => {
+    searchParamsValue = new URLSearchParams('board=b2');
+    stubFetch(MIXED);
+    render(<BoardSwitcher />);
+    const icon = await screen.findByTestId('board-switcher-trigger-icon');
+    expect(icon.getAttribute('data-board-type')).toBe('scrum');
+    expect(icon.getAttribute('class')).toContain('lucide-rows-3');
+  });
+
+  it('each menu row shows its own board type glyph', async () => {
+    stubFetch(MIXED);
+    render(<BoardSwitcher />);
+    fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+    const kanban = await screen.findByTestId('board-switcher-type-icon-b1');
+    const scrum = screen.getByTestId('board-switcher-type-icon-b2');
+    expect(kanban.getAttribute('class')).toContain('lucide-columns-3');
+    expect(scrum.getAttribute('class')).toContain('lucide-rows-3');
+    expect(scrum.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('the create dialog tiles draw the same glyphs from the shared map', async () => {
+    stubFetch(MIXED);
+    render(<BoardSwitcher />);
+    fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+    fireEvent.click(await screen.findByTestId('board-switcher-new'));
+    await screen.findByTestId('board-new-name');
+    expect(screen.getByTestId('board-type-kanban').querySelector('.lucide-columns-3')).toBeTruthy();
+    expect(screen.getByTestId('board-type-scrum').querySelector('.lucide-rows-3')).toBeTruthy();
+  });
+});
+
 describe('BoardSwitcher (3.7.4) — create', () => {
   it('creates a board (POST /api/boards) and switches to it', async () => {
     stubFetch(TWO_BOARDS);

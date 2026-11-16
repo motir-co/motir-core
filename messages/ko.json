@@ -4966,6 +4966,8 @@
     "assignedTo": "담당자: {name}",
     "unassigned": "미배정",
     "boardLabel": "보드 열",
+    "columnArrowPrevious": "이전 열",
+    "columnArrowNext": "다음 열",
     "dndInstructions": "작업 항목을 집으려면 Space 키를 누르세요. 끄는 동안 화살표 키로 항목을 이동합니다. Space 키를 다시 누르면 놓고, Escape 키를 누르면 취소합니다.",
     "announcementPickedUp": "{key}을(를) 집었습니다. {col} 열, {count}개 중 {index}번째 위치입니다.",
     "announcementMoved": "{key}을(를) {col}의 {count}개 중 {index}번째 위치로 이동했습니다. 놓으려면 Space, 취소하려면 Escape 키를 누르세요.",

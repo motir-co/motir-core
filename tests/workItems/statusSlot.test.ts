@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isReadyToStart, isToPlanItem, statusSlotOf } from '@/lib/workItems/statusSlot';
+import {
+  isBlockedNotStarted,
+  isReadyToStart,
+  isToPlanItem,
+  statusSlotOf,
+} from '@/lib/workItems/statusSlot';
 
 // The status slot's precedence (MOTIR-10534; design MOTIR-10508): Done › To plan ›
 // Ready › the status chip — the one rule the canvas, the board, the quick view and
@@ -112,5 +117,35 @@ describe('isReadyToStart', () => {
     expect(isReadyToStart('in_progress', true)).toBe(false);
     expect(isReadyToStart(null, true)).toBe(false);
     expect(isReadyToStart(undefined, true)).toBe(false);
+  });
+});
+
+// MOTIR-11323 — the Blocked flag rule: a todo-CATEGORY item with an open blocker.
+describe('isBlockedNotStarted', () => {
+  it('flags a built-in todo-category status (To Do, Blocked) with an open blocker', () => {
+    expect(isBlockedNotStarted('todo', false)).toBe(true);
+  });
+
+  it('flags a custom todo-category status exactly like the built-in ones', () => {
+    // The helper takes the CATEGORY, so a custom "Ready for dev" in the todo
+    // category reaches it as 'todo' and flags the same way.
+    const customReadyForDev = { key: 'ready_for_dev', category: 'todo' as const };
+    expect(isBlockedNotStarted(customReadyForDev.category, false)).toBe(true);
+  });
+
+  it('never flags an in-progress-category status, built-in or custom', () => {
+    expect(isBlockedNotStarted('in_progress', false)).toBe(false);
+    const customQaReview = { key: 'qa_review', category: 'in_progress' as const };
+    expect(isBlockedNotStarted(customQaReview.category, false)).toBe(false);
+  });
+
+  it('never flags a done-category status, nor an unknown category', () => {
+    expect(isBlockedNotStarted('done', false)).toBe(false);
+    expect(isBlockedNotStarted(null, false)).toBe(false);
+    expect(isBlockedNotStarted(undefined, false)).toBe(false);
+  });
+
+  it('never flags an unblocked item', () => {
+    expect(isBlockedNotStarted('todo', true)).toBe(false);
   });
 });

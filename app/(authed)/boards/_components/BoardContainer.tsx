@@ -44,6 +44,8 @@ import { updateIssueAction } from '../../items/[key]/edit/actions';
 import { BoardCardOverlay } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
 import { BoardColumnPager, useActiveColumnIndex } from './BoardColumnPager';
+import { BoardColumnArrows } from './BoardColumnArrows';
+import { BOARD_SCROLL_NAV_CLASS } from './boardHorizontalNav';
 import { BoardEmptyState } from './BoardEmptyState';
 import { BoardFilteredEmptyState } from './BoardFilteredEmptyState';
 import { BoardStoredFilterIndicator } from './BoardStoredFilterIndicator';
@@ -1360,42 +1362,60 @@ function BoardDnd({
             onLoadMore={loadMore}
           />
         ) : (
-          <div className="flex min-w-0 flex-col gap-2">
-            {/* The horizontally-scrolling column row. Scroll-snap (proximity, so it
+          // The board area runs to the viewport's bottom edge at `sm`+ (MOTIR-11323,
+          // the `/ready` pattern, MOTIR-10974): the shell's bottom padding
+          // (`--shell-bottom-clearance`) is cancelled by an equal negative margin, so
+          // the columns reach the bottom of the screen and the Plan-with-AI orb
+          // floats OVER the board; each column's card list carries the clearance as
+          // its own bottom padding instead. Below `sm` the pager sits under the
+          // row, so the phone layout keeps the shell's band (design MOTIR-11326
+          // § *Below `sm` — unchanged*).
+          <div className="flex min-w-0 flex-col gap-2 sm:-mb-(--shell-bottom-clearance)">
+            <BoardColumnArrows rowRef={scrollRef} contentKey={columns.length} settle>
+              {/* The horizontally-scrolling column row. Scroll-snap (proximity, so it
               never fights a deliberate scroll) makes narrow viewports read as a
               single-column pager (3.2.6, panel 7); each column is wrapped with
               `data-board-column` so the pager hook can locate it. The wrapper is
               the snap target — BoardColumn keeps its own droppable ref + width. */}
-            <div
-              ref={scrollRef}
-              role="group"
-              aria-label={t('boardLabel')}
-              tabIndex={0}
-              // `data-board-scroll`: under the 3D / Immersive style this row widens
-              // its gap and adds bottom room so each column's float shadow shows
-              // (the `overflow-x-auto` here forces overflow-y to clip — see
-              // globals.css). Inert under every other style.
-              data-board-scroll=""
-              className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-              data-testid="board"
-            >
-              {columns.map((column) => (
-                <div key={column.id} data-board-column className="flex shrink-0 snap-start">
-                  <BoardColumn
-                    column={column}
-                    boardId={board.boardId}
-                    assigneeNameById={assigneeNameById}
-                    onOpenQuickView={openPeek}
-                    activeCardId={activeCard?.id ?? null}
-                    onSetWipLimit={setColumnWip}
-                    points={columnPoints?.[column.id] ?? null}
-                    loadState={loadStates[column.id] ?? 'idle'}
-                    onLoadMore={loadMore}
-                  />
-                </div>
-              ))}
-            </div>
-            <BoardColumnPager columns={columns} activeIndex={activeColumn} />
+              <div
+                ref={scrollRef}
+                role="group"
+                aria-label={t('boardLabel')}
+                tabIndex={0}
+                // `data-board-scroll`: under the 3D / Immersive style this row widens
+                // its gap and adds bottom room so each column's float shadow shows
+                // (the `overflow-x-auto` here forces overflow-y to clip — see
+                // globals.css). Inert under every other style.
+                data-board-scroll=""
+                // No native scrollbar, and the pan cursor (MOTIR-11323, design
+                // MOTIR-11326): the row moves by the column arrows, drag-to-pan,
+                // trackpad, wheel, touch and the keyboard on the focused row.
+                className={`flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none ${BOARD_SCROLL_NAV_CLASS}`}
+                data-testid="board"
+              >
+                {columns.map((column) => (
+                  <div
+                    key={column.id}
+                    data-board-column
+                    data-board-column-edge=""
+                    className="flex shrink-0 snap-start"
+                  >
+                    <BoardColumn
+                      column={column}
+                      boardId={board.boardId}
+                      assigneeNameById={assigneeNameById}
+                      onOpenQuickView={openPeek}
+                      activeCardId={activeCard?.id ?? null}
+                      onSetWipLimit={setColumnWip}
+                      points={columnPoints?.[column.id] ?? null}
+                      loadState={loadStates[column.id] ?? 'idle'}
+                      onLoadMore={loadMore}
+                    />
+                  </div>
+                ))}
+              </div>
+              <BoardColumnPager columns={columns} activeIndex={activeColumn} />
+            </BoardColumnArrows>
           </div>
         )}
         <DragOverlay>

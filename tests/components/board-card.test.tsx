@@ -331,6 +331,49 @@ describe('BoardCard', () => {
     expect(screen.queryByText('High')).toBeNull();
   });
 
+  // MOTIR-11323 — readiness stays false while a blocker is open whatever the
+  // status, so the flag is gated on the status CATEGORY: a started card never
+  // wears it, and its exclusive slot falls through to the next marker.
+  it.each([
+    ['the built-in In Progress', 'in_progress', 'in_progress'],
+    ['the built-in Implemented', 'implemented', 'in_progress'],
+    ['a custom in-progress-category status', 'qa_review', 'in_progress'],
+    ['the built-in Done', 'done', 'done'],
+  ] as const)('a card in %s with an open blocker shows no Blocked flag', (_n, status, category) => {
+    render(
+      <BoardCard
+        card={card({
+          id: `w-${status}`,
+          key: 21,
+          status,
+          statusCategory: category,
+          priority: 'high',
+          ready: false,
+        })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('img', { name: 'Blocked' })).toBeNull();
+    // The slot falls through to the priority chip.
+    expect(screen.getByText('High')).toBeTruthy();
+  });
+
+  it.each([
+    ['the built-in To Do', 'todo'],
+    ['the built-in Blocked', 'blocked'],
+    ['a custom todo-category status', 'ready_for_dev'],
+  ] as const)('a card in %s with an open blocker shows the Blocked flag', (_n, status) => {
+    render(
+      <BoardCard
+        card={card({ id: `w-${status}`, key: 22, status, statusCategory: 'todo', ready: false })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(screen.getAllByRole('img', { name: 'Blocked' }).length).toBeGreaterThan(0);
+  });
+
   it('calls onOpenQuickView with the identifier on click', () => {
     const onOpen = vi.fn();
     render(
@@ -542,7 +585,9 @@ describe('BoardCard — the obsolescence badge (MOTIR-6677)', () => {
           key: 3,
           ready: false,
           ciState: 'failing',
-          statusCategory: 'in_progress',
+          // A todo-category row: only an item that has not started wears the
+          // Blocked flag (MOTIR-11323).
+          statusCategory: 'todo',
           obsolescence: 'deprecated',
         })}
         assigneeName={null}

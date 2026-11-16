@@ -4966,6 +4966,8 @@
     "assignedTo": "Atribuído a {name}",
     "unassigned": "Sem responsável",
     "boardLabel": "Colunas do Quadro",
+    "columnArrowPrevious": "Coluna anterior",
+    "columnArrowNext": "Próxima coluna",
     "dndInstructions": "Para pegar um item de trabalho, pressione Espaço. Enquanto arrasta, use as setas para mover o item. Pressione Espaço novamente para soltar ou Esc para cancelar.",
     "announcementPickedUp": "{key} pego. Sobre a coluna {col}, posição {index} de {count}.",
     "announcementMoved": "{key} movido para {col}, posição {index} de {count}. Pressione Espaço para soltar ou Esc para cancelar.",

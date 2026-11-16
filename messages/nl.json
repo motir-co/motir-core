@@ -4966,6 +4966,8 @@
     "assignedTo": "Toegewezen aan {name}",
     "unassigned": "Niet toegewezen",
     "boardLabel": "Bordkolommen",
+    "columnArrowPrevious": "Vorige kolom",
+    "columnArrowNext": "Volgende kolom",
     "dndInstructions": "Druk op Spatie om een werkitem op te pakken. Gebruik tijdens het slepen de pijltjestoetsen om het item te verplaatsen. Druk nogmaals op Spatie om het neer te zetten, of op Escape om te annuleren.",
     "announcementPickedUp": "{key} opgepakt. Boven kolom {col}, positie {index} van {count}.",
     "announcementMoved": "{key} verplaatst naar {col}, positie {index} van {count}. Druk op Spatie om neer te zetten, Escape om te annuleren.",

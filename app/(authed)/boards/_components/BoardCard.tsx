@@ -39,6 +39,7 @@ import {
   useBoardHeldRefusal,
 } from './BoardHeldRefusal';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { isBlockedNotStarted } from '@/lib/workItems/statusSlot';
 
 // BoardCard (Subtask 3.2.3 · drag wired in 3.2.4) — the compact issue card per
 // `design/boards/board.mock.html` (`.bcard`). It REUSES the shipped issue
@@ -98,10 +99,20 @@ function slotOf(
 ): 'decisionYours' | 'blocked' | 'review' | 'decision' | 'priority' {
   const pending = decisionBesideReview(card.pendingDecision, card.review);
   if (pending?.state === 'yours') return 'decisionYours';
-  if (!card.ready) return 'blocked';
+  if (cardBlocked(card)) return 'blocked';
   if (card.review?.marker) return 'review';
   if (pending) return 'decision';
   return 'priority';
+}
+
+/**
+ * Does the card wear the Blocked flag (MOTIR-11323)? Only while it has not started:
+ * a todo-category card with an open blocker. A card in any in-progress or done
+ * category status, custom ones included, never does — readiness stays false there,
+ * but an item that has started cannot be blocked from starting.
+ */
+function cardBlocked(card: BoardCardDto): boolean {
+  return isBlockedNotStarted(card.statusCategory, card.ready);
 }
 
 /** Does the card wear a Reviewed badge? */
@@ -189,7 +200,7 @@ export function BoardCardView({
             row, shared: Done › To plan › Ready › the status chip, then Manual. They
             come FIRST, so the row reads *what state it is in* before *what waits on
             it*. A blocked card never wears the Done stamp; its flag is louder. */}
-        <WorkItemStateTags item={card} ready={card.readyToStart} blocked={!card.ready} />
+        <WorkItemStateTags item={card} ready={card.readyToStart} blocked={cardBlocked(card)} />
         {/* THE EXCLUSIVE SLOT, in the design's precedence (MOTIR-5875 § *The board
             card's exclusive slot*): a decision waiting on YOU › `Blocked` › a
             decision waiting on someone else › the priority chip. Yours beats
@@ -206,7 +217,7 @@ export function BoardCardView({
             kind={pending.kind}
             routedToName={routedToName}
           />
-        ) : !card.ready ? (
+        ) : cardBlocked(card) ? (
           // The canvas card's blocked flag (MOTIR-10534), in the slot the warning
           // `Blocked` pill held: one flag for one fact on every surface.
           <WorkItemBlockedTag />

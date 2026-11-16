@@ -4966,6 +4966,8 @@
     "assignedTo": "Assigné à {name}",
     "unassigned": "Non assigné",
     "boardLabel": "Colonnes du Tableau",
+    "columnArrowPrevious": "Colonne précédente",
+    "columnArrowNext": "Colonne suivante",
     "dndInstructions": "Pour saisir un élément de travail, appuyez sur Espace. Pendant le glissement, utilisez les flèches pour déplacer l’élément. Appuyez de nouveau sur Espace pour le déposer, ou sur Échap pour annuler.",
     "announcementPickedUp": "{key} saisi. Au-dessus de la colonne {col}, position {index} sur {count}.",
     "announcementMoved": "{key} déplacé vers {col}, position {index} sur {count}. Appuyez sur Espace pour déposer, sur Échap pour annuler.",

@@ -4966,6 +4966,8 @@
     "assignedTo": "Asignado a {name}",
     "unassigned": "Sin asignar",
     "boardLabel": "Columnas del Tablero",
+    "columnArrowPrevious": "Columna anterior",
+    "columnArrowNext": "Columna siguiente",
     "dndInstructions": "Para coger un elemento de trabajo, pulsa Espacio. Mientras lo arrastras, usa las flechas para moverlo. Pulsa Espacio de nuevo para soltarlo o Escape para cancelar.",
     "announcementPickedUp": "Has cogido {key}. Sobre la columna {col}, posición {index} de {count}.",
     "announcementMoved": "{key} movido a {col}, posición {index} de {count}. Pulsa Espacio para soltarlo o Escape para cancelar.",

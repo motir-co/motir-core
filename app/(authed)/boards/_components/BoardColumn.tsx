@@ -157,13 +157,15 @@ export function BoardColumn({
       // columns occlude on the sides, making the board read as one backing slab).
       // The cards INSIDE still tilt individually. Inert under every other style.
       data-board-col-panel=""
-      // 10.5rem of chrome ABOVE (top nav + the shell's pt-6 + the board header),
-      // then whatever the shell reserves BELOW. That second term used to be baked
-      // into a flat 12rem, which silently encoded the shell's old 1.5rem bottom
-      // padding — so the orb clearance (MOTIR-2763) would have pushed the column
-      // past the fold by exactly the amount it added. Spending the variable keeps
-      // the column exactly as tall as it is today when no orb mounts.
-      className={`flex h-[calc(100dvh_-_10.5rem_-_var(--shell-bottom-clearance,1.5rem))] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
+      // 10.5rem of chrome ABOVE (top nav + the shell's pt-6 + the board header).
+      // At `sm`+ the column runs to the viewport's bottom edge (MOTIR-11323): the
+      // board area cancels the shell's bottom padding (`BoardContainer`, the
+      // `/ready` pattern, MOTIR-10974), the Plan-with-AI orb floats over the
+      // board, and the card list below carries `--shell-bottom-clearance` as its
+      // own bottom padding so its last card still scrolls clear of the orb. Below
+      // `sm` the dot pager sits under the row, so the phone column keeps spending
+      // the clearance the shell reserves (design MOTIR-11326 § *Below `sm`*).
+      className={`flex h-[calc(100dvh_-_10.5rem_-_var(--shell-bottom-clearance,1.5rem))] sm:h-[calc(100dvh_-_10.5rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
         isOver
           ? 'border-(--el-board-column-accent) bg-(--el-droptarget-bg) inset-ring-2 inset-ring-(--el-board-column-accent)'
           : 'border-(--el-border)'
@@ -206,7 +208,7 @@ export function BoardColumn({
         // to this column.
         // A lane whose LOADED cards were all dragged away can still hold unloaded
         // ones (MOTIR-10535): its footer keeps paging, so they arrive here too.
-        <div className="min-h-0 flex-1 p-2.5">
+        <div className="min-h-0 flex-1 p-2.5 sm:pb-(--shell-bottom-clearance)">
           <p className="flex min-h-[120px] w-full items-center justify-center rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-card-padding-8) py-(--spacing-card-padding-16) text-center text-xs text-(--el-text-secondary)">
             {t('emptyColumn')}
           </p>
@@ -219,7 +221,10 @@ export function BoardColumn({
           />
         </div>
       ) : (
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto p-2.5">
+        <div
+          ref={bodyRef}
+          className="min-h-0 flex-1 overflow-y-auto p-2.5 sm:pb-(--shell-bottom-clearance)"
+        >
           <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
             <div
               ref={containerRef}

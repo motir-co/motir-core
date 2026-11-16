@@ -4966,6 +4966,8 @@
     "assignedTo": "负责人：{name}",
     "unassigned": "未分配",
     "boardLabel": "面板列",
+    "columnArrowPrevious": "上一列",
+    "columnArrowNext": "下一列",
     "dndInstructions": "按空格键拿起工作项。拖动时，使用方向键移动工作项。再次按空格键放下，或按Esc取消。",
     "announcementPickedUp": "已拿起 {key}。位于 {col} 列，第 {index} / {count} 个位置。",
     "announcementMoved": "{key} 已移动到 {col} 列，第 {index} / {count} 个位置。按空格键放下，按Esc取消。",

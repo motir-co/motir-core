@@ -231,6 +231,26 @@ describe('BoardColumn', () => {
     expect(section.className).toContain('var(--shell-bottom-clearance,1.5rem)');
     expect(section.className).not.toMatch(/max-h-\[calc\(100dvh/);
   });
+
+  it('runs to the viewport bottom at sm+ under the orb, its card list carrying the clearance (MOTIR-11323)', () => {
+    renderColumn(
+      column({ id: 'c1', name: 'To Do', totalCount: 1, cards: [card({ id: 'w1', key: 1 })] }),
+    );
+    const section = screen.getByTestId('board-column-c1');
+    // At sm+ the height drops the clearance term (the board cancels the shell's
+    // bottom padding, the /ready pattern); below sm the pager keeps the band.
+    expect(section.className).toContain('sm:h-[calc(100dvh_-_10.5rem)]');
+    // The scrolling card list pads its bottom by the clearance, so its last card
+    // still scrolls clear of the floating orb.
+    const body = section.querySelector('.overflow-y-auto')!;
+    expect(body.className).toContain('sm:pb-(--shell-bottom-clearance)');
+  });
+
+  it('the empty column body carries the clearance too (MOTIR-11323)', () => {
+    renderColumn(column({ id: 'c2', name: 'Done', totalCount: 0, cards: [] }));
+    const placeholder = screen.getByText('No work items');
+    expect(placeholder.parentElement!.className).toContain('sm:pb-(--shell-bottom-clearance)');
+  });
 });
 
 // The WIP chip — under / at / over (strictly-greater) + the no-limit plain

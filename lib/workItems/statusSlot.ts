@@ -81,3 +81,20 @@ export function isReadyToStart(
 ): boolean {
   return statusCategory === 'todo' && unblocked;
 }
+
+/**
+ * The BLOCKED FLAG (MOTIR-11323): in a startable (`todo`-category) status AND NOT
+ * fully unblocked. Readiness answers *may this item START?*, so it stays false while
+ * any blocker is open whatever the item's status; an item that has already started
+ * (any `in_progress`- or `done`-category status, built-in or custom) cannot be
+ * blocked from starting, so it never wears the flag. Keyed on the status CATEGORY,
+ * never the status key, so a project's custom todo-category status flags exactly
+ * like the built-in To Do and Blocked. `isReadyToStart`'s complement within the
+ * todo category; readiness itself is unchanged.
+ */
+export function isBlockedNotStarted(
+  statusCategory: StatusCategoryDto | null | undefined,
+  unblocked: boolean,
+): boolean {
+  return statusCategory === 'todo' && !unblocked;
+}
