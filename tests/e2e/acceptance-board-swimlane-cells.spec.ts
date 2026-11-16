@@ -60,7 +60,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { Page, Response } from '@playwright/test';
+import type { Locator, Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
@@ -591,6 +591,37 @@ function cellSnapshot(page: Page, except: string): Promise<Record<string, string
   }, except);
 }
 
+/** Every card a cell LISTS, top to bottom. A cell windows its cards to the
+ *  viewport, so a cell taller than the screen never mounts them all at once: this
+ *  scrolls the cell through its own scroll container half a screen at a time and
+ *  keys each mounted card by its offset inside the cell. A card listed twice sits
+ *  at two offsets, so it comes back twice. */
+function walkCellCards(cell: Locator): Promise<string[]> {
+  return cell.evaluate(async (el) => {
+    let scroller: Element | null = el.parentElement;
+    while (scroller) {
+      const { overflowY } = getComputedStyle(scroller);
+      if (/(auto|scroll)/.test(overflowY) && scroller.scrollHeight > scroller.clientHeight) break;
+      scroller = scroller.parentElement;
+    }
+    const byOffset = new Map<number, string>();
+    const settle = () =>
+      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+    el.scrollIntoView({ block: 'start' });
+    for (let step = 0; step < 50; step++) {
+      await settle();
+      const cellTop = el.getBoundingClientRect().top;
+      for (const card of el.querySelectorAll<HTMLElement>('[data-testid^="board-card-"]')) {
+        const offset = Math.round(card.getBoundingClientRect().top - cellTop);
+        byOffset.set(offset, card.dataset.testid!);
+      }
+      if (el.getBoundingClientRect().bottom <= window.innerHeight) break;
+      (scroller ?? document.scrollingElement!).scrollBy(0, window.innerHeight / 2);
+    }
+    return [...byOffset.entries()].sort((a, b) => a[0] - b[0]).map(([, id]) => id);
+  });
+}
+
 const scrollLefts = (page: Page, keys: string[]) =>
   Promise.all(keys.map((k) => scrollerOf(page, k).evaluate((el) => Math.round(el.scrollLeft))));
 
@@ -968,11 +999,10 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     } while (page2.cursor !== null);
     await expect(cellCount(page, inProgress, cal)).toHaveText(countText(13, 13));
     await expect(loadMore(page, inProgress, cal)).toHaveCount(0);
-    const mounted = await target
-      .locator('[data-testid^="board-card-"]')
-      .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
-    expect(mounted.filter((t) => t === `board-card-${moved.identifier}`)).toHaveLength(1);
-    expect(new Set(mounted).size, 'no card is listed twice').toBe(mounted.length);
+    const listed = await walkCellCards(target);
+    expect(listed, 'every loaded card is listed').toHaveLength(13);
+    expect(listed.filter((t) => t === `board-card-${moved.identifier}`)).toHaveLength(1);
+    expect(new Set(listed).size, 'no card is listed twice').toBe(listed.length);
 
     // The shipped read agrees: the card is In Progress, Cal's, and listed once.
     await expect
