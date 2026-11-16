@@ -605,6 +605,24 @@ model PlatformAwsRead {
   @@map("platform_aws_read")
 }
 
+/// THE CI FLEET'S BLIND SPOTS, as the provision sweep's last reconcile computed
+/// them (MOTIR-11439; design MOTIR-11467). ONE row (`id = 'latest'`), replaced on
+/// every tick whose reconcile ran, so the console's Fleet status page reads the
+/// latest outcome and the time it was computed without ever calling GitHub.
+/// `outcome` holds only what the page draws: per org its login, its
+/// `undeliveredRepos`, its `unreadableRepos` and its read `error`, and the
+/// reconcile's own `error` when it threw. A write never moves `computed_at`
+/// backwards, so a late resumed run cannot replace a newer tick's outcome.
+/// Written by the sweep (`app.system_admin`); read by platform staff only
+/// (`app.platform_staff`), inside the page read's audited transaction.
+model CiFleetBlindSpots {
+  id         String   @id @default("latest")
+  outcome    Json
+  computedAt DateTime @map("computed_at")
+
+  @@map("ci_fleet_blind_spots")
+}
+
 model PlatformRunModel {
   id        String   @id @default(cuid())
   model     String   @unique

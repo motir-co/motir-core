@@ -14800,6 +14800,63 @@
         },
         "pausedUntil": "fino alle {time}, tra {left}",
         "readOnly": "Sola lettura. Per chiedere più quota ad AWS, esegui <cmd>{command}</cmd> in un terminale; la sostituzione del limite di un account resta al suo posto di sempre."
+      },
+      "blindSpots": {
+        "title": "Punti ciechi della flotta CI",
+        "subtitle": "I repository che la flotta CI non vede, per ogni organizzazione GitHub che serve: repository con job della flotta in coda ma senza consegne workflow_job, e repository collegati che motir-studio non riesce a leggere. Calcolato dalla riconciliazione in ogni passaggio di provisioning; sola lettura.",
+        "card": {
+          "title": "Per organizzazione GitHub",
+          "subtitle": "Una riga per ogni organizzazione servita dalla flotta CI negli ultimi 3 giorni."
+        },
+        "pill": {
+          "orgs": "{count, plural, one {# organizzazione con punti ciechi} other {# organizzazioni con punti ciechi}}",
+          "orgsNotRead": "{count, plural, one {# organizzazione non letta} other {# organizzazioni non lette}}",
+          "allSeen": "Tutti i repository visibili",
+          "notRead": "Non letta"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, one {# repository senza consegne} other {# repository senza consegne}}",
+          "unreadableCount": "{count, plural, one {# repository illeggibile} other {# repository illeggibili}}",
+          "seen": "Ogni repository con job della flotta ha ricevuto le sue consegne workflow_job, e nessun job è rimasto bloccato."
+        },
+        "undelivered": {
+          "title": "Job della flotta in coda, nessuna consegna workflow_job in 3 giorni",
+          "hint": "Job motir-runner ma nessuna consegna workflow_job: motir-studio è installato su questo repository?"
+        },
+        "unreadable": {
+          "title": "Collegati, ma motir-studio non riesce a leggere la loro coda Actions",
+          "body": "All’ultimo passaggio alcuni job sono rimasti bloccati in questa organizzazione, e la credenziale motir-studio della flotta non è riuscita a elencare i job in coda di questi repository, quindi non è stato avviato alcun runner per loro."
+        },
+        "repo": {
+          "link": "{repo} su GitHub"
+        },
+        "orgError": {
+          "title": "Impossibile leggere questa organizzazione all’ultimo passaggio.",
+          "body": "I suoi repository non sono stati controllati, quindi nulla qui significa che siano visibili. Le altre organizzazioni non sono interessate, e il prossimo passaggio riprova. Risposta di GitHub:"
+        },
+        "empty": {
+          "title": "Nessun punto cieco",
+          "body": "La flotta CI vede ogni repository {count, plural, one {dell’# organizzazione servita} other {delle # organizzazioni servite}} negli ultimi 3 giorni: ogni repository con job della flotta ha ricevuto le sue consegne workflow_job, e nessun job è rimasto bloccato.",
+          "noOrgs": "Nessuna organizzazione ha eseguito un job sulla flotta CI negli ultimi 3 giorni, quindi non c’è alcun repository da controllare."
+        },
+        "error": {
+          "title": "Impossibile leggere i punti ciechi della flotta CI",
+          "body": "Il record dei punti ciechi non è stato caricato, quindi nulla qui significa che ogni repository sia visibile. Le immagini e i pool non sono interessati. Ricarica per riprovare."
+        },
+        "reconcileError": {
+          "title": "La riconciliazione dell’ultimo passaggio non è terminata",
+          "body": "Si è fermata con questo errore, quindi nessuna organizzazione è stata controllata e nulla qui significa che ogni repository sia visibile. Il prossimo passaggio riprova."
+        },
+        "notComputed": {
+          "title": "Non ancora calcolato",
+          "body": "Nessun passaggio di provisioning ha calcolato i punti ciechi da questo deploy. Il passaggio viene eseguito ogni 5 minuti; ricarica dopo il prossimo."
+        },
+        "notConfigured": {
+          "title": "La flotta CI non è configurata",
+          "body": "Questo deploy non esegue job CI sulla flotta, quindi la riconciliazione non serve alcuna organizzazione e non c’è alcun repository da controllare. L’interruttore si trova in <link>Impostazioni della flotta</link>."
+        },
+        "computed": "Calcolato dal passaggio di provisioning delle {time} ({age}). Sola lettura: motir-studio si installa su un repository in GitHub, non qui.",
+        "loading": "Caricamento dei punti ciechi della flotta CI"
       }
     }
   },
