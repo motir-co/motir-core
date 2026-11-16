@@ -3358,6 +3358,85 @@ export function usePlanChangeConversation({
   );
 
   /**
+   * SETTLE a plan somebody DECIDED ELSEWHERE (Bug MOTIR-11464) — another tab's overlay,
+   * `/plans/[id]`, a To-approve row. A fresh read of the plan answering `approved` or
+   * `declined` is the decision, whoever made it: the overlay takes it exactly as a press
+   * made here would (the review stays as the record, `decided` turns it into the
+   * accepted or declined treatment, and the plan's handle goes), so the bar's verbs are
+   * gone and the close-with-pending guard has nothing left to lose. Without this the
+   * overlay's own `decided` was the only thing the guard and the bar read, and only a
+   * press made HERE ever wrote it.
+   *
+   * The ONE settle every re-read uses — the gate watch, a refused press's re-read and
+   * the approving watch (MOTIR-9006). Answers whether the read was a decision; any other
+   * status is left to the caller.
+   */
+  const settleDecided = useCallback((fresh: PlanReviewDto): boolean => {
+    if (fresh.status !== 'approved' && fresh.status !== 'declined') return false;
+    // The ROW under the overlay settles too: the review in hand still carries the gate as
+    // it was asked, and an announce of a gate already decided elsewhere is idempotent.
+    announcePlanGateDecided(stateRef.current.review, fresh.status);
+    if (fresh.status === 'approved') {
+      const approved = summarizeReviewApproval(fresh);
+      setState((s) => ({
+        ...s,
+        phase: 'idle',
+        review: fileReview(s.review, fresh),
+        decided: 'accepted',
+        jobId: null,
+        planId: null,
+        approved,
+        progress: null,
+        errorCode: null,
+        decisionRefusal: null,
+      }));
+      approvedCbRef.current?.(approved);
+      return true;
+    }
+    setState((s) => ({
+      ...s,
+      phase: 'idle',
+      review: fileReview(s.review, fresh),
+      decided: 'declined',
+      jobId: null,
+      planId: null,
+      progress: null,
+      errorCode: null,
+      decisionRefusal: null,
+    }));
+    return true;
+  }, []);
+
+  /**
+   * A press refused because the plan is ALREADY DECIDED (Bug MOTIR-11464) — approved or
+   * declined somewhere else while this overlay still offered the verbs. Not an error to
+   * show: the server refused before writing anything (`claimApprovalWithin` re-reads the
+   * plan under its row lock), so re-read it and settle to the decision it actually took.
+   * Answers whether it took the refusal over; a read that is not a decision (or fails)
+   * leaves the refusal to be shown as before.
+   */
+  const adoptDecidedElsewhere = useCallback(
+    async (planId: string, err: unknown) => {
+      if (!(err instanceof PlanRequestError)) return false;
+      if (
+        err.code !== 'PLAN_NOT_IN_EXPECTED_STATUS' &&
+        err.code !== 'APPROVAL_GATE_ALREADY_DECIDED'
+      ) {
+        return false;
+      }
+      let fresh: PlanReviewDto;
+      try {
+        fresh = await fetchPlanReview(planId);
+      } catch {
+        return false;
+      }
+      if (!mountedRef.current || stateRef.current.planId !== planId) return false;
+      return settleDecided(fresh);
+    },
+    [settleDecided],
+  );
+
+  /**
    * After a refused decision, re-read the review when the refusal is a fact about the
    * PLAN (MOTIR-6038): a stale stamp means the proposals moved under the reader, so the
    * next press must carry the stamp of what they are now shown. Best-effort — a failed
@@ -3468,6 +3547,7 @@ export function usePlanChangeConversation({
       if (gateId) clearGatePressPending(gateId);
       if (!mountedRef.current) return;
       if (await adoptApprovalInProgress(planId, err)) return;
+      if (await adoptDecidedElsewhere(planId, err)) return;
       setState((s) => ({
         ...s,
         phase: 'review',
@@ -3476,7 +3556,7 @@ export function usePlanChangeConversation({
       }));
       await rereadAfterRefusal(planId, err);
     }
-  }, [rereadAfterRefusal, adoptApprovalInProgress]);
+  }, [rereadAfterRefusal, adoptApprovalInProgress, adoptDecidedElsewhere]);
 
   // AN APPROVAL IN PROGRESS, RE-ENTERED (Bug MOTIR-9006). A plan somebody approved —
   // here before the overlay was closed, or in another tab — reads `approving` while its
@@ -3498,35 +3578,7 @@ export function usePlanChangeConversation({
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | null = null;
     const settle = (fresh: PlanReviewDto) => {
-      if (fresh.status === 'approved') {
-        const approved = summarizeReviewApproval(fresh);
-        announcePlanGateDecided(stateRef.current.review, 'approved');
-        setState((s) => ({
-          ...s,
-          phase: 'idle',
-          review: fileReview(s.review, fresh),
-          decided: 'accepted',
-          jobId: null,
-          planId: null,
-          approved,
-          progress: null,
-          errorCode: null,
-        }));
-        approvedCbRef.current?.(approved);
-        return;
-      }
-      if (fresh.status === 'declined') {
-        setState((s) => ({
-          ...s,
-          phase: 'idle',
-          review: fileReview(s.review, fresh),
-          decided: 'declined',
-          jobId: null,
-          planId: null,
-          progress: null,
-        }));
-        return;
-      }
+      if (settleDecided(fresh)) return;
       setState((s) => ({ ...s, phase: 'review', review: fileReview(s.review, fresh) }));
     };
     const tick = async () => {
@@ -3548,7 +3600,7 @@ export function usePlanChangeConversation({
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [watchedApprovalId]);
+  }, [watchedApprovalId, settleDecided]);
 
   /**
    * DISCARD the proposal — `POST /api/plans/[id]/decline`, which drops the
@@ -3587,6 +3639,8 @@ export function usePlanChangeConversation({
         if (!mountedRef.current) return;
         // A decline pressed while somebody's approve is being written (Bug MOTIR-9006).
         if (planId && (await adoptApprovalInProgress(planId, err))) return;
+        // A decline pressed after somebody else decided the plan (Bug MOTIR-11464).
+        if (planId && (await adoptDecidedElsewhere(planId, err))) return;
         // The proposal is still pending — say so and leave it decidable, rather
         // than clearing a canvas the server still considers awaiting a decision.
         setState((s) => ({
@@ -3598,7 +3652,7 @@ export function usePlanChangeConversation({
         if (planId) await rereadAfterRefusal(planId, err);
       }
     },
-    [rereadAfterRefusal, adoptApprovalInProgress],
+    [rereadAfterRefusal, adoptApprovalInProgress, adoptDecidedElsewhere],
   );
 
   const dismissError = useCallback(() => {
@@ -3660,7 +3714,8 @@ export function usePlanChangeConversation({
   }, [state.phase, state.jobId, state.queued]);
 
   /**
-   * WATCH the plan's gate while it waits on a decision (bug MOTIR-6151).
+   * WATCH an undecided plan while it waits on a decision (bug MOTIR-6151; widened by
+   * bug MOTIR-11464).
    *
    * ⚠️ THIS SURFACE ONLY EVER RE-READ A PLAN IT WAS WRITING. A revision lease taken
    * anywhere else left `review.gate.held` exactly as the last read found it, so Approve
@@ -3670,27 +3725,41 @@ export function usePlanChangeConversation({
    * client-island rule: this island seeds its own state, so nothing but its own read
    * reaches it.
    *
+   * ⚠️ AND A DECISION TAKEN ELSEWHERE IS THE SAME KIND OF NEWS (bug MOTIR-11464). An
+   * approve or decline in another tab, on `/plans/[id]` or on a To-approve row reached
+   * this overlay through nothing, so it kept offering the verbs and its close guard
+   * asked to *add* items that already existed. A read answering `approved` / `declined`
+   * now SETTLES the overlay (`settleDecided`), and one answering `approving` hands it to
+   * the approving watch (MOTIR-9006). That is also why the watch is no longer limited to
+   * a plan whose gate is `awaiting`: a plan nobody was asked about — exactly the one the
+   * guard protects — can be decided elsewhere too, and gating the watch on `awaiting`
+   * meant the read that saw the gate decided was the last one.
+   *
    * ⚠️ BOUNDED BY ITS OWN CONDITION, like the mailbox watch above. It runs only while a
-   * reader could PRESS something — an undecided plan in `review` whose gate is
-   * `awaiting` — and a run of this surface's own (`streaming`) or a decision in flight
-   * (`deciding`) tears it down, aborting the read in hand, so a late answer never lands
-   * over the decision. A hidden tab skips its ticks and catches up on return.
+   * reader could PRESS something — an undecided plan in `review` — and a run of this
+   * surface's own (`streaming`) or a decision in flight (`deciding`) tears it down,
+   * aborting the read in hand, so a late answer never lands over the decision. A hidden
+   * tab skips its ticks and catches up on return.
    */
-  const gateAwaiting = state.review?.gate?.state === 'awaiting';
   useEffect(() => {
     const planId = state.planId;
-    if (state.phase !== 'review' || state.decided !== null || !planId || !gateAwaiting) return;
+    if (state.phase !== 'review' || state.decided !== null || !planId) return;
 
     const controller = new AbortController();
+    const stillWatching = () => {
+      const s = stateRef.current;
+      return s.planId === planId && s.phase === 'review' && s.decided === null;
+    };
     const reread = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void (async () => {
         try {
           const fresh = await fetchPlanReview(planId, controller.signal);
-          if (!mountedRef.current || controller.signal.aborted) return;
+          if (!mountedRef.current || controller.signal.aborted || !stillWatching()) return;
+          if (settleDecided(fresh)) return;
           setState((s) =>
             s.planId === planId && s.phase === 'review' && s.decided === null
-              ? { ...s, review: fileReview(s.review, fresh) }
+              ? { ...s, phase: phaseForPendingReview(fresh), review: fileReview(s.review, fresh) }
               : s,
           );
         } catch {
@@ -3708,7 +3777,7 @@ export function usePlanChangeConversation({
       window.removeEventListener('focus', reread);
       document.removeEventListener('visibilitychange', reread);
     };
-  }, [state.phase, state.decided, state.planId, gateAwaiting]);
+  }, [state.phase, state.decided, state.planId, settleDecided]);
 
   /**
    * END the run (Story MOTIR-4054 · MOTIR-4068).
