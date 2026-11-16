@@ -374,7 +374,10 @@ async function mintReconcileIntent(
         job.jobId,
         tx,
       );
-      const generation = max + 1;
+      // Never 0, even for a job no delivery recorded: generation 0 is what a
+      // delivery writes, and the repo set reads it as "this repo's deliveries
+      // arrive" (MOTIR-11460).
+      const generation = Math.max(max + 1, 1);
       if (generation > MAX_RECONCILE_GENERATION_CEILING) return null;
       const unserved = await ciRunnerProvisioningIntentRepository.countUnservedReconcileGenerations(
         job.runId,
