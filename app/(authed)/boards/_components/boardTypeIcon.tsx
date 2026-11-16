@@ -14,5 +14,8 @@ export const BOARD_TYPE_ICON: Readonly<Record<BoardTypeDto, LucideIcon>> = {
 
 /** A board type's glyph — the kanban one for a type the map does not know. */
 export function BoardTypeIcon({ type, ...props }: { type: BoardTypeDto } & LucideProps) {
-  return createElement(BOARD_TYPE_ICON[type] ?? Columns3, { ...props, 'data-board-type': type });
+  // `data-board-type` names the drawn type for tests and styling; a data attribute
+  // is not in LucideProps, so it rides a spread object rather than a literal.
+  const svgProps = { ...props, 'data-board-type': type };
+  return createElement(BOARD_TYPE_ICON[type] ?? Columns3, svgProps);
 }
