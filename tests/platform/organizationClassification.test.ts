@@ -151,6 +151,9 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // `platform_aws_read` is MOTIR-10890's record of WHEN each AWS figure on the
     // Services page was last read (`20261110230000_platform_aws_read`):
     // platform-only, written and read solely from this tier.
+    // `plan` carries MOTIR-11458's SELECT-only arm, for the one cross-tenant read
+    // the planner-findings platform route makes to resolve a record's plan
+    // (`20261116120000_plan_platform_staff_read`).
     expect(rows.map((r) => r.tablename)).toEqual([
       'capacity_alert_setting',
       'capacity_raised_alert',
@@ -167,6 +170,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'org_feature_flag',
       'organization',
       'organization_membership',
+      'plan',
       'platform_audit_log',
       'platform_aws_read',
       'platform_fleet_kind_switch',
