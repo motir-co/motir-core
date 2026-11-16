@@ -657,6 +657,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/board/columns`                  | POST         | `assertBoardConfigAdmin` → `assertPermission` (MOTIR-2296)     | `board:configure` | existing | R9  |
 | `/api/board/columns/[columnId]`       | DELETE/PATCH | `assertBoardConfigAdmin` → `assertPermission` (MOTIR-2296)     | `board:configure` | existing | R9  |
 | `/api/board/columns/[columnId]/cards` | GET          | `assertCanBrowse` (`boardsService.getColumnPage`, MOTIR-10535) | `project:browse`  | new      | R9  |
+| `/api/board/lanes/[laneKey]/cells`    | GET          | `assertCanBrowse` (`boardsService.getLanePage`, MOTIR-11446)   | `project:browse`  | new      | R9  |
 | `/api/board/move`                     | POST         | `assertCanEdit`                                                | `work_item:edit`  | existing | R9  |
 | `/api/boards`                         | GET          | `boardsService.listBoards` → `assertCanBrowse` (MOTIR-2296)    | `project:browse`  | existing | R9  |
 | `/api/boards`                         | POST         | `assertBoardConfigAdmin` → `assertPermission` (MOTIR-2296)     | `board:configure` | existing | R9  |
