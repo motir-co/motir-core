@@ -65,6 +65,11 @@ export interface PlanChangeCanvasProps {
    *  its target ring would be drawn on a level nobody is looking at. Empty /
    *  omitted → the root, unchanged. */
   initialTrail?: readonly CanvasCrumb[];
+  /** The card the canvas OPENS centred on, at a readable zoom (MOTIR-11472) — the
+   *  host passes the `?item=` target, so a busy level does not shrink the card it
+   *  was opened for. A mount-time seed for the arrival level only; a target the
+   *  canvas opened INSIDE is the crumb, not a card, and changes nothing. */
+  initialCentreId?: string | null;
   /** FOLLOW a target that became known after the surface opened (MOTIR-6161) — a
    *  keyed, one-shot request the canvas may DECLINE if the reader has already
    *  navigated. Forwarded verbatim; this canvas adds nothing to the contract. */
@@ -94,6 +99,7 @@ export function PlanChangeCanvas({
   onToggleTarget,
   canAddTarget = true,
   initialTrail,
+  initialCentreId = null,
   followTo = null,
   onFollowDeclined,
   onLevelChange,
@@ -370,6 +376,9 @@ export function PlanChangeCanvas({
         // reloads above re-run the CURRENT level, wherever the user has since
         // navigated to, and never drag them back here.
         initialTrail={initialTrail}
+        // …and the opening VIEW on that level (MOTIR-11472): the target card at
+        // the readable zoom, not the whole level fitted. Also read once.
+        initialCentreId={initialCentreId}
         onView={onView}
         targetAction={targetAction}
         searchable

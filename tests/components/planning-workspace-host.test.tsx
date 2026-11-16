@@ -65,6 +65,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     diffKey,
     targetIds,
     initialTrail,
+    initialCentreId,
     followTo,
     loadingFallback,
     emptyRoot,
@@ -76,6 +77,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     diffKey: string | number;
     targetIds?: readonly string[];
     initialTrail?: readonly { id: string; label: string }[];
+    initialCentreId?: string | null;
     followTo?: { key: string; trail: readonly { id: string; label: string }[] } | null;
     loadingFallback?: ReactNode;
     emptyRoot?: ReactNode;
@@ -91,6 +93,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
       data-diff-key={String(diffKey)}
       data-targets={(targetIds ?? []).join(',')}
       data-trail={(initialTrail ?? []).map((c) => c.id).join(',')}
+      data-centre={initialCentreId ?? ''}
       // THE FOLLOW-MOVE's request (MOTIR-6161) — the host DERIVES it; the canvas
       // decides whether to honour it, and has its own suite for that.
       data-follow-key={followTo?.key ?? ''}
@@ -795,6 +798,8 @@ describe('PlanningWorkspaceHost — the TARGET set is shared by both panes (MOTI
     );
     // The same set reaches the canvas, which rings it.
     expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('wi-812');
+    // …and the canvas OPENS centred on that card (MOTIR-11472).
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-centre')).toBe('wi-812');
   });
 
   it('the pre-filled target is INITIAL, not locked — it can be removed', () => {
@@ -829,6 +834,8 @@ describe('PlanningWorkspaceHost — the TARGET set is shared by both panes (MOTI
 
     expect(screen.queryByTestId('planning-target-tray')).toBeNull();
     expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('');
+    // No target, no opening centre: the canvas keeps its plain fit (MOTIR-11472).
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-centre')).toBe('');
   });
 });
 
