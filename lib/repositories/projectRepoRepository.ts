@@ -1066,6 +1066,40 @@ export const projectRepoRepository = {
   },
 
   /**
+   * WHICH PROJECTS hold an ESTABLISHED row realizing this GitHub repository — the
+   * discovery a `repository` `privatized` / `publicized` delivery runs before it
+   * re-syncs those projects' runner groups (MOTIR-11426).
+   *
+   * Keyed on the provider's numeric id, which survives a rename and a transfer,
+   * and narrowed to GitHub installations because `github_repo.repo_id` is shared
+   * with the GitLab provider, whose ids are not GitHub's. One repository can be
+   * mirrored under more than one installation and linked by more than one
+   * project, so the answer is a SET of `(projectId, workspaceId)`, de-duplicated.
+   *
+   * ⚠️ IT MUST RUN UNDER `withSystemContext`. A webhook has no workspace to bind,
+   * and the rows it reads are what name the workspaces. `project_repository`'s
+   * `project_repository_system_read` arm (FOR SELECT, MOTIR-10010) and
+   * `github_repo`'s system arm are what admit the read; no write is reachable.
+   */
+  async listProjectsByRealizedProviderRepoId(
+    providerRepoId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ projectId: string; workspaceId: string }>> {
+    const rows = await tx.projectRepo.findMany({
+      where: {
+        state: { in: [...ESTABLISHED_PROJECT_REPO_STATES] },
+        githubRepo: {
+          is: { repoId: providerRepoId, installation: { is: { provider: 'github' } } },
+        },
+      },
+      select: { projectId: true, workspaceId: true },
+      distinct: ['projectId'],
+      orderBy: { projectId: 'asc' },
+    });
+    return rows.map((row) => ({ projectId: row.projectId, workspaceId: row.workspaceId }));
+  },
+
+  /**
    * The facts a PRODUCTION home is decided from (Story MOTIR-9797 · MOTIR-10026):
    * tenancy, name, seed source, establish state and hosting target. A read by id
    * alone, like {@link findHostingIdentityInTx} — the caller holds a

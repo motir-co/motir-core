@@ -2,6 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import {
   projectRunnerGroupService,
   RunnerGroupNotProvisionedError,
@@ -349,6 +350,152 @@ describe('the reads', () => {
       null,
     );
     expect(calls).toHaveLength(0);
+  });
+});
+
+// A repository's VISIBILITY changing on GitHub (MOTIR-11426). The connected
+// org's access list is judged private-only at sync time, and the establish,
+// removal and transfer paths were the only syncs — so a repository established
+// while PUBLIC stayed off its group after it went private, and its fleet jobs
+// queued forever (motir-codegraph, 2026-11-15). The `repository` delivery's
+// `privatized` / `publicized` actions now re-sync every project holding it.
+describe('a visibility change on GitHub (MOTIR-11426)', () => {
+  function deliver(action: 'privatized' | 'publicized', repoId: number | string) {
+    return githubWebhookService.handleEvent('repository', {
+      action,
+      repository: { id: repoId, name: 'motir-codegraph', owner: { login: CONNECTED_ORG } },
+    });
+  }
+
+  it('`privatized` adds a repository established while public to the group', async () => {
+    const fx = await makeWorkItemFixture();
+    const ids = await connectRepos(fx, ['motir-core', 'motir-codegraph']);
+    visibility.set('motir-core', true);
+    visibility.set('motir-codegraph', false);
+    await projectRunnerGroupService.syncForProject(targetOf(fx));
+    expect(connectedGroups.onlyGroup().repositoryIds).toEqual([ids.get('motir-core')]);
+
+    visibility.set('motir-codegraph', true);
+    expect(await deliver('privatized', ids.get('motir-codegraph')!)).toEqual({
+      event: 'repository',
+      outcome: 'runner_groups_resynced',
+    });
+
+    expect(connectedGroups.onlyGroup().repositoryIds).toEqual([
+      ids.get('motir-core'),
+      ids.get('motir-codegraph'),
+    ]);
+    const row = await adminDb.projectRunnerGroup.findFirstOrThrow();
+    expect(row.syncPending).toBe(false);
+  });
+
+  it('`privatized` creates the group when the org held no private repository before', async () => {
+    const fx = await makeWorkItemFixture();
+    const ids = await connectRepos(fx, ['motir-codegraph']);
+    visibility.set('motir-codegraph', false);
+    await projectRunnerGroupService.syncForProject(targetOf(fx));
+    expect(connectedGroups.groups.size).toBe(0);
+
+    visibility.set('motir-codegraph', true);
+    await deliver('privatized', ids.get('motir-codegraph')!);
+
+    expect(connectedGroups.onlyGroup().repositoryIds).toEqual([ids.get('motir-codegraph')]);
+  });
+
+  it('`publicized` removes the repository from the group', async () => {
+    const fx = await makeWorkItemFixture();
+    const ids = await connectRepos(fx, ['motir-core', 'motir-codegraph']);
+    visibility.set('motir-core', true);
+    visibility.set('motir-codegraph', true);
+    await projectRunnerGroupService.syncForProject(targetOf(fx));
+    expect(connectedGroups.onlyGroup().repositoryIds).toHaveLength(2);
+
+    visibility.set('motir-codegraph', false);
+    expect(await deliver('publicized', ids.get('motir-codegraph')!)).toEqual({
+      event: 'repository',
+      outcome: 'runner_groups_resynced',
+    });
+
+    expect(connectedGroups.onlyGroup().repositoryIds).toEqual([ids.get('motir-core')]);
+  });
+
+  it('`publicized` of the org’s last private repository deletes the group', async () => {
+    const fx = await makeWorkItemFixture();
+    const ids = await connectRepos(fx, ['motir-codegraph']);
+    visibility.set('motir-codegraph', true);
+    await projectRunnerGroupService.syncForProject(targetOf(fx));
+    expect(connectedGroups.groups.size).toBe(1);
+
+    visibility.set('motir-codegraph', false);
+    await deliver('publicized', ids.get('motir-codegraph')!);
+
+    expect(connectedGroups.groups.size).toBe(0);
+    expect(await adminDb.projectRunnerGroup.count()).toBe(0);
+  });
+
+  it('re-syncs EVERY project that holds the repository', async () => {
+    const fx = await makeWorkItemFixture();
+    const ids = await connectRepos(fx, ['motir-codegraph']);
+    const mirror = await adminDb.githubRepo.findFirstOrThrow({
+      where: { repoId: String(ids.get('motir-codegraph')) },
+    });
+    const second = await adminDb.project.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        name: 'Second project',
+        slug: 'second',
+        identifier: 'TWO',
+      },
+    });
+    await adminDb.projectRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: second.id,
+        role: 'web',
+        name: 'motir-codegraph',
+        seedSource: SEED_SOURCE_PLATFORM_STARTER,
+        position: 'a0',
+        githubRepoId: mirror.id,
+        state: 'connected',
+      },
+    });
+    visibility.set('motir-codegraph', true);
+
+    await deliver('privatized', ids.get('motir-codegraph')!);
+
+    const names = [...connectedGroups.groups.values()].map((g) => g.name).sort();
+    expect(names).toEqual([runnerGroupNameFor(fx.projectId), runnerGroupNameFor(second.id)].sort());
+  });
+
+  it('a repository no project has established is `unknown_repo`, with no GitHub call', async () => {
+    expect(await deliver('privatized', 999_999)).toEqual({
+      event: 'repository',
+      outcome: 'unknown_repo',
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('a delivery with no repository id is `malformed`', async () => {
+    expect(await githubWebhookService.handleEvent('repository', { action: 'publicized' })).toEqual({
+      event: 'repository',
+      outcome: 'malformed',
+    });
+  });
+
+  it('a failed re-sync does not fail the delivery — that org is marked pending', async () => {
+    const fx = await makeWorkItemFixture();
+    const ids = await connectRepos(fx, ['motir-core', 'motir-codegraph']);
+    visibility.set('motir-core', true);
+    visibility.set('motir-codegraph', false);
+    await projectRunnerGroupService.syncForProject(targetOf(fx));
+    connectedGroups.failWith(500, 5);
+    visibility.set('motir-codegraph', true);
+
+    expect(await deliver('privatized', ids.get('motir-codegraph')!)).toEqual({
+      event: 'repository',
+      outcome: 'runner_groups_resynced',
+    });
+    expect((await adminDb.projectRunnerGroup.findFirstOrThrow()).syncPending).toBe(true);
   });
 });
 
