@@ -1,10 +1,18 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { DndContext } from '@dnd-kit/core';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { SwimlaneBoard } from '@/app/(authed)/boards/_components/SwimlaneBoard';
 import { COLLAPSED_LANES_STORAGE_PREFIX } from '@/lib/hooks/useCollapsedLanes';
+import {
+  applyLanePage,
+  cellPageOf,
+  cellSummary,
+  emptyCellPages,
+} from '@/app/(authed)/boards/_components/boardCellPages';
+import type { BoardCellPagesApi } from '@/app/(authed)/boards/_components/useBoardCellPages';
+import { createLaneScrollStore } from '@/app/(authed)/boards/_components/laneScrollStore';
 import {
   BOARD_SWIMLANE_NO_VALUE,
   type BoardCardDto,
@@ -91,7 +99,23 @@ const SWIMLANES: BoardSwimlaneDto[] = [
 
 const noop = () => {};
 
-function renderBoard(boardId: string) {
+/** A per-cell API over a fixed map, as `useBoardCellPages` hands the grid one. */
+function cellsApi(cells: Parameters<typeof applyLanePage>[2]): BoardCellPagesApi {
+  const pages = applyLanePage(emptyCellPages('k'), 'k', cells);
+  return {
+    readKey: 'k',
+    pages,
+    cellState: (c, l) => cellPageOf(pages, 'k', c, l),
+    cellSummary: (c, l) => cellSummary(cellPageOf(pages, 'k', c, l)),
+    loadCell: noop,
+    retryCell: noop,
+    loadedLane: noop,
+    laneRef: () => noop,
+    applyCells: noop,
+  };
+}
+
+function renderBoard(boardId: string, cells?: BoardCellPagesApi) {
   return render(
     <DndContext>
       <SwimlaneBoard
@@ -108,6 +132,7 @@ function renderBoard(boardId: string) {
         onSetWipLimit={noop}
         activeCardId={null}
         overLaneKey={null}
+        cells={cells}
       />
     </DndContext>,
   );
@@ -145,6 +170,48 @@ describe('SwimlaneBoard', () => {
         'board-card-PROD-3',
       ),
     ).toBeTruthy();
+  });
+
+  it('with the per-cell API supplied, each cell shows its own page and the header sums them', () => {
+    // The cell pages, not the column's page, decide what each cell holds: lane u1
+    // holds w9 in c1 (a card the column's page does not carry), lane u2 nothing.
+    const cell = (
+      columnId: string,
+      laneKey: string,
+      cards: BoardCardDto[],
+      totalCount: number,
+    ) => ({
+      columnId,
+      laneKey,
+      cards,
+      totalCount,
+      cursor: cards.length < totalCount ? 'CUR' : null,
+      planHolds: {},
+    });
+    renderBoard(
+      'b-cells',
+      cellsApi([
+        cell('c1', 'u1', [card({ id: 'w9', key: 9, swimlaneKey: 'u1' })], 2),
+        cell('c2', 'u1', [card({ id: 'w4', key: 4, swimlaneKey: 'u1' })], 1),
+        cell('c1', 'u2', [], 0),
+      ]),
+    );
+    expect(
+      within(screen.getByTestId('lane-cell-c1-u1')).getByTestId('board-card-PROD-9'),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId('lane-cell-c1-u1')).queryByTestId('board-card-PROD-1'),
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId('lane-cell-c2-u1')).getByTestId('board-card-PROD-4'),
+    ).toBeTruthy();
+    // A cell no page has reached is empty, whatever the column's page holds.
+    expect(
+      within(screen.getByTestId('lane-cell-c1-u2')).queryByTestId('board-card-PROD-2'),
+    ).toBeNull();
+    // The header: loaded = the sum over the column's cells, over the column's total.
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('1 of 3');
+    expect(screen.getByTestId('board-count-c2').textContent).toBe('1');
   });
 
   it('shows the per-lane aggregate count from the projection', () => {
@@ -194,37 +261,32 @@ describe('SwimlaneBoard', () => {
   });
 
   // Regression: `bug-swimlane-lane-header-not-spanning-scrolled-columns`
-  // (epics.ts, Epic 3). The lane wrapper MUST carry `min-w-max` so the lane
-  // grows to the column-track width; otherwise the lane-header band collapses
-  // to the scroller's clientWidth and stops at the viewport edge, leaving
-  // scrolled-into-view columns (e.g. Cancelled) un-banded. The sticky-left
-  // behaviour must live on the INNER chevron/label/count wrapper, NOT on the
-  // band — sticky on the band itself re-introduces the bug because a
-  // `sticky left-0 w-full` child of an overflow-x scroller pins to the
-  // scroller's clientWidth, not its scrollWidth. We assert the structural
-  // shape here because happy-dom does not compute layout
-  // (`getBoundingClientRect()` returns zeros), so a width-measurement check
-  // is a no-op in this test environment.
-  it('the lane wrapper grows to the column track so the band spans all columns', () => {
+  // (epics.ts, Epic 3), re-scoped per lane by MOTIR-11449. The band once sat
+  // inside the board's single scroller and stopped at the viewport edge; now each
+  // lane is its own scroller and the band sits ABOVE it (design MOTIR-11443 § *The
+  // lane header*: "spans the board and never scrolls"). So the guarantees are
+  // structural: the band is never sticky and never inside the lane's scroller (it
+  // cannot scroll away), its label rail + count live inside it (pinned at the left
+  // at any lane offset), and the lane's own track inside the scroller grows to the
+  // column track (`min-w-max`). happy-dom does not compute layout, so the
+  // measurement itself is the browser's (the e2e suites).
+  it('the band sits above the lane scroller, never sticky, its label rail pinned', () => {
     renderBoard('b-band-spans');
     for (const key of ['u1', 'u2', BOARD_SWIMLANE_NO_VALUE]) {
       const lane = screen.getByTestId(`swimlane-${key}`);
-      expect(lane.className).toContain('min-w-max');
-      // The band (lane head) itself must NOT be sticky — pinning the band
-      // collapses it to clientWidth. Only its inner content sticks.
+      const scroller = screen.getByTestId(`swimlane-scroller-${key}`);
+      expect(lane.contains(scroller)).toBe(true);
       const head = screen.getByTestId(`swimlane-head-${key}`);
       expect(head.className).not.toMatch(/(^|\s)sticky(\s|$)/);
-      // Inner sticky element carries the chevron + label + count.
-      // (Testid deliberately drops the hyphen between "head" and "content" so
-      // the inner doesn't collide with `^swimlane-head-` queries used by other
-      // tests in this file to enumerate lane heads 1:1.)
+      expect(scroller.contains(head)).toBe(false);
       const inner = screen.getByTestId(`swimlane-headcontent-${key}`);
-      expect(inner.className).toContain('sticky');
-      expect(inner.className).toMatch(/(^|\s)left-6(\s|$)/);
-      // The count chip lives inside the sticky inner element (so the chip
-      // travels with the label as the user scrolls horizontally).
-      const count = within(inner).getByTestId(`swimlane-count-${key}`);
-      expect(count).toBeTruthy();
+      expect(head.contains(inner)).toBe(true);
+      expect(scroller.contains(inner)).toBe(false);
+      // The count chip travels with the label, in the rail.
+      expect(within(inner).getByTestId(`swimlane-count-${key}`)).toBeTruthy();
+      // The lane's own track grows to the column track inside its scroller.
+      expect(scroller.contains(screen.getByTestId(`swimlane-track-${key}`))).toBe(true);
+      expect(screen.getByTestId(`swimlane-track-${key}`).className).toContain('min-w-max');
     }
   });
 
@@ -265,5 +327,165 @@ describe('SwimlaneBoard', () => {
     const expandedTrack = screen.getByTestId('swimlane-track-u2');
     expect(expandedTrack.className).toContain('min-w-max');
     expect(expandedTrack.children).toHaveLength(COLUMNS.length);
+  });
+});
+
+describe('SwimlaneBoard lanes scroll on their own (MOTIR-11449)', () => {
+  it('gives each lane its own scroller; the board root does not scroll sideways', () => {
+    renderBoard('b-scrollers');
+    const root = screen.getByTestId('swimlane-board');
+    expect(root.className).not.toContain('overflow-x-auto');
+    const s1 = screen.getByTestId('swimlane-scroller-u1');
+    const s2 = screen.getByTestId('swimlane-scroller-u2');
+    expect(s1.className).toContain('overflow-x-auto');
+    expect(s1.className).toContain('[scrollbar-width:none]');
+    s1.scrollLeft = 304;
+    fireEvent.scroll(s1);
+    expect(s1.scrollLeft).toBe(304);
+    expect(s2.scrollLeft).toBe(0);
+    expect(root.scrollLeft).toBe(0);
+  });
+
+  it('drives the column-header track from the active lane; others draw a column-name strip', () => {
+    renderBoard('b-follow');
+    const header = screen.getByTestId('swimlane-header-track');
+    // Clipped, not scrollable; at 0 before any lane was acted on, no strips.
+    expect(header.parentElement!.className).toContain('overflow-x-hidden');
+    expect(header.style.transform).toBe('');
+    expect(screen.queryByTestId(/^swimlane-strip-/)).toBeNull();
+
+    const s1 = screen.getByTestId('swimlane-scroller-u1');
+    act(() => {
+      s1.scrollLeft = 304;
+      fireEvent.scroll(s1);
+    });
+    expect(header.style.transform).toBe('translateX(-304px)');
+    // The active lane draws no strip; the lanes still at 0 now differ and do.
+    expect(screen.queryByTestId('swimlane-strip-u1')).toBeNull();
+    const strip = screen.getByTestId('swimlane-strip-u2');
+    expect(strip.getAttribute('aria-hidden')).toBe('true');
+    expect(strip.textContent).toContain('To Do');
+
+    // Focusing another lane hands the header to it, and the first lane keeps its
+    // offset and gains its strip.
+    act(() => {
+      fireEvent.focus(screen.getByTestId('swimlane-scroller-u2'));
+    });
+    expect(header.style.transform).toBe('');
+    expect(screen.getByTestId('swimlane-strip-u1')).toBeTruthy();
+    expect(screen.queryByTestId('swimlane-strip-u2')).toBeNull();
+    expect(s1.scrollLeft).toBe(304);
+  });
+
+  it('names each cell by its column for assistive tech and marks its column edge', () => {
+    renderBoard('b-names');
+    const cell = screen.getByTestId('lane-cell-c2-u1');
+    const wrapper = cell.parentElement!;
+    expect(wrapper.getAttribute('role')).toBe('group');
+    expect(wrapper.getAttribute('aria-label')).toBe('Done');
+    expect(wrapper.hasAttribute('data-board-column-edge')).toBe(true);
+  });
+
+  it('observes only expanded lanes through the hook’s laneRef, once each', () => {
+    window.localStorage.setItem(
+      COLLAPSED_LANES_STORAGE_PREFIX + 'b-observe',
+      JSON.stringify(['u1']),
+    );
+    const attached: string[] = [];
+    const api: BoardCellPagesApi = {
+      ...cellsApi([]),
+      laneRef: (laneKey) => (el) => {
+        if (el) attached.push(laneKey);
+      },
+    };
+    renderBoard('b-observe', api);
+    // u1 is collapsed: no cells and nothing observed. The others, once.
+    expect(screen.queryByTestId('swimlane-cells-u1')).toBeNull();
+    expect(attached.sort()).toEqual([BOARD_SWIMLANE_NO_VALUE, 'u2'].sort());
+    // A collapsed lane draws no arrows (nor does any lane whose cells fit).
+    expect(screen.queryByTestId('swimlane-arrow-left-u1')).toBeNull();
+  });
+
+  it('draws an empty lane as one line, with no cells and nothing observed', () => {
+    const attached: string[] = [];
+    render(
+      <DndContext>
+        <SwimlaneBoard
+          boardId="b-empty"
+          columns={COLUMNS}
+          swimlanes={[{ key: 'u9', label: 'Cara Diaz', kind: 'assignee', count: 0 }]}
+          assigneeNameById={new Map()}
+          onOpenQuickView={noop}
+          onSetWipLimit={noop}
+          activeCardId={null}
+          overLaneKey={null}
+          cells={{
+            ...cellsApi([]),
+            laneRef: (laneKey) => (el) => {
+              if (el) attached.push(laneKey);
+            },
+          }}
+        />
+      </DndContext>,
+    );
+    expect(screen.getByTestId('swimlane-empty-u9').textContent).toBe('No work items in this lane');
+    expect(screen.queryByTestId('lane-cell-c1-u9')).toBeNull();
+    expect(screen.getByTestId('swimlane-count-u9').textContent).toBe('0');
+    expect(attached).toEqual([]);
+  });
+
+  it('labels each dimension’s lane and toggles collapse from the keyboard', () => {
+    render(
+      <DndContext>
+        <SwimlaneBoard
+          boardId="b-dims"
+          columns={COLUMNS}
+          swimlanes={[
+            { key: 'high', label: 'High', kind: 'priority', count: 1 },
+            { key: 'e1', label: 'PROD-7 Billing', kind: 'epic', count: 1 },
+          ]}
+          assigneeNameById={new Map()}
+          onOpenQuickView={noop}
+          onSetWipLimit={noop}
+          activeCardId={null}
+          overLaneKey={null}
+        />
+      </DndContext>,
+    );
+    expect(screen.getByTestId('swimlane-headcontent-high').textContent).toContain('High');
+    expect(screen.getByTestId('swimlane-headcontent-e1').textContent).toContain('PROD-7 Billing');
+    const head = screen.getByTestId('swimlane-head-e1');
+    fireEvent.keyDown(head, { key: 'Enter' });
+    expect(head.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('swimlane-cells-e1')).toBeNull();
+    fireEvent.keyDown(head, { key: ' ' });
+    expect(head.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.keyDown(head, { key: 'Tab' });
+    expect(head.getAttribute('aria-expanded')).toBe('true');
+  });
+});
+
+describe('laneScrollStore', () => {
+  it('follows the last lane acted on and tells each lane whether it is off the header', () => {
+    const store = createLaneScrollStore();
+    const seen = vi.fn();
+    const off = store.subscribe(seen);
+    expect(store.activeLane()).toBeNull();
+    expect(store.headerOffset()).toBe(0);
+    store.follow('u1', 304);
+    expect(store.activeLane()).toBe('u1');
+    expect(store.headerOffset()).toBe(304);
+    expect(store.offsetOf('u1')).toBe(304);
+    expect(store.showsStrip('u1')).toBe(false);
+    expect(store.showsStrip('u2')).toBe(true);
+    // The same lane at the same offset notifies nobody.
+    store.follow('u1', 304);
+    expect(seen).toHaveBeenCalledTimes(1);
+    // Within the tolerance a lane reads as aligned.
+    store.follow('u2', 305);
+    expect(store.showsStrip('u1')).toBe(false);
+    off();
+    store.follow('u1', 0);
+    expect(seen).toHaveBeenCalledTimes(2);
   });
 });

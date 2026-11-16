@@ -21,9 +21,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { Flag, LayoutGrid, User, Zap } from 'lucide-react';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { Segmented } from '@/components/ui/Segmented';
 import { useToast } from '@/components/ui/Toast';
 import type {
   BoardCardDto,
@@ -51,9 +49,11 @@ import { BoardFilteredEmptyState } from './BoardFilteredEmptyState';
 import { BoardStoredFilterIndicator } from './BoardStoredFilterIndicator';
 import { BOARD_STORED_FILTER_SLOT_ID } from '@/lib/boards/boardSlots';
 import { BoardSkeleton } from './BoardSkeleton';
+import { GroupByControl } from './GroupByControl';
 import { NoActiveSprintState } from './NoActiveSprintState';
 import { SprintHeader } from './SprintHeader';
 import { SwimlaneBoard } from './SwimlaneBoard';
+import { useBoardCellPages } from './useBoardCellPages';
 import { BoardHeldRefusalProvider, planHoldName, type BoardHeldRefusal } from './BoardHeldRefusal';
 import { heldLineFromRefusal, readHeldRefusal } from '@/components/issues/heldRefusal';
 import { heldSentence, sessionHolderSentence } from '@/components/issues/StatusHeldNotice';
@@ -74,15 +74,20 @@ import {
   transferCount,
 } from './boardMove';
 import {
+  cardsInCells,
   cellOfOverId,
-  laneKeyOfCard,
-  moveCardToColumn,
+  cellId,
+  findCardCell,
+  findCardInCells,
+  moveCardBetweenCells,
+  overCardIdOf,
   reassignPatchForLane,
+  reconcileCellCard,
   resolveSwimlaneDrop,
-  setCardSwimlaneKey,
+  type CellAddress,
 } from './boardSwimlanes';
+import type { CellPages } from './boardCellPages';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
-import { Tooltip } from '@/components/ui/Tooltip';
 
 // The board client container (Subtask 3.2.2 · drag-drop 3.2.4 · scale 3.2.5 ·
 // swimlanes + WIP 3.3). A PURE CONSUMER of the Story-3.1/3.3 board API: it
@@ -473,47 +478,6 @@ export function BoardContainer({
   );
 }
 
-// The board-header group-by control (3.3.5) — the shipped Segmented primitive in
-// the 3.2.1-reserved 3.3-controls slot. None = the flat 3.2 board.
-function GroupByControl({
-  value,
-  onChange,
-  disabled,
-  readOnlyReason,
-}: {
-  value: BoardSwimlaneGroupByDto;
-  onChange: (v: BoardSwimlaneGroupByDto) => void;
-  disabled: boolean;
-  /** MOTIR-6174 — the group-by is stored on the BOARD (`setSwimlaneGroupBy`
-   *  asserts `board:configure`). An actor without the key sees the grouping,
-   *  DISABLED, with this reason — it is an in-place control on a surface they can
-   *  see (the permission-gated UI rule, row 7's grammar). */
-  readOnlyReason?: string;
-}) {
-  const t = useTranslations('boards');
-  const control = (
-    <div className="flex items-center gap-2" data-read-only={readOnlyReason ? '' : undefined}>
-      <span className="text-xs font-medium whitespace-nowrap text-(--el-text-muted)">
-        {t('groupByLabel')}
-      </span>
-      <Segmented<BoardSwimlaneGroupByDto>
-        label={t('groupByAria')}
-        value={value}
-        onChange={onChange}
-        disabled={disabled || readOnlyReason !== undefined}
-        options={[
-          { value: 'none', label: t('groupByNone'), icon: <LayoutGrid /> },
-          { value: 'assignee', label: t('groupByAssignee'), icon: <User /> },
-          { value: 'epic', label: t('groupByEpic'), icon: <Zap /> },
-          { value: 'priority', label: t('groupByPriority'), icon: <Flag /> },
-        ]}
-      />
-    </div>
-  );
-  // A disabled button swallows the pointer, so the reason hangs off the wrapper.
-  return readOnlyReason ? <Tooltip content={readOnlyReason}>{control}</Tooltip> : control;
-}
-
 // The interactive board (Subtask 3.2.4 · swimlanes 3.3.5) — a dnd-kit
 // `DndContext` over EITHER the flat 3.2 column row (group-by `none`) or the
 // `SwimlaneBoard` grid (group-by ≠ `none`). It owns the mutable `columns` state
@@ -568,6 +532,20 @@ function BoardDnd({
   // Each lane's paging state (MOTIR-10535) — `loading` while its next page is in
   // flight, `error` when the last one failed (the lane then offers a retry).
   const [loadStates, setLoadStates] = useState<Record<string, LaneLoadState>>({});
+  // A GROUPED board pages each (lane × column) cell on its own (MOTIR-11448); the
+  // flat board keeps the per-column paging above. Inert while group-by is `none`.
+  const mergePlanHolds = useCallback(
+    (holds: BoardProjectionDto['planHolds']) => setPlanHolds((prev) => ({ ...prev, ...holds })),
+    [],
+  );
+  const columnIds = useMemo(() => columns.map((c) => c.id), [columns]);
+  const cellPages = useBoardCellPages({
+    boardId: board.boardId,
+    groupBy,
+    filterParam,
+    columnIds,
+    onPlanHolds: mergePlanHolds,
+  });
   const [activeCard, setActiveCard] = useState<BoardCardDto | null>(null);
   // The lane currently under the drag (swimlane mode) — drives the target-lane
   // ring/tint (paired with the cell `isOver` outline; never colour-alone, #35).
@@ -613,14 +591,12 @@ function BoardDnd({
   // the projection's server-side one; a plan the projection did not name (the
   // board was read before the hold) falls back to the loaded cards.
   const showPlanHeld = useCallback(
-    (card: BoardCardDto, plan: PlanHoldDTO, loaded: BoardColumnDto[]) => {
+    (card: BoardCardDto, plan: PlanHoldDTO, loaded: readonly BoardCardDto[]) => {
       const key = planHoldKey(plan);
       const summary = planHolds[key];
       const siblings = summary
         ? Math.max(summary.heldCount - 1, 0)
-        : loaded
-            .flatMap((col) => col.cards)
-            .filter((c) => c.id !== card.id && c.planHold && planHoldKey(c.planHold) === key)
+        : loaded.filter((c) => c.id !== card.id && c.planHold && planHoldKey(c.planHold) === key)
             .length;
       setHeld({ kind: 'plan', workItemId: card.id, itemKey: plan.itemKey, plan, siblings });
       const { name } = planHoldName(plan, planHolds, projectName);
@@ -684,6 +660,48 @@ function BoardDnd({
     columnsRef.current = columns;
   }, [columns]);
   const snapshotRef = useRef<BoardColumnDto[] | null>(null);
+  // The GROUPED board's drag reads and writes the per-cell store (MOTIR-11452) —
+  // the one the pager merges into; a grouped projection's columns hold no cards.
+  // Its committed value is mirrored for the handlers exactly as `columnsRef` is,
+  // and the pre-drag value is recorded on drag start (the swimlane drop is
+  // resolved ONCE, against it — see handleDragOver).
+  const cellPagesRef = useRef(cellPages.pages);
+  useLayoutEffect(() => {
+    cellPagesRef.current = cellPages.pages;
+  }, [cellPages.pages]);
+  const cellSnapshotRef = useRef<CellPages | null>(null);
+  const { applyCells: applyCellPages, loadCell: loadCellPage } = cellPages;
+  // Only the LATEST move of a card applies its responses: a slow refusal must not
+  // pull the card out of the cell a later drag put it in.
+  const moveSeqRef = useRef(new Map<string, number>());
+  const nextMoveSeq = useCallback((cardId: string) => {
+    const seq = (moveSeqRef.current.get(cardId) ?? 0) + 1;
+    moveSeqRef.current.set(cardId, seq);
+    return seq;
+  }, []);
+  const isLatestMove = useCallback(
+    (cardId: string, seq: number) => moveSeqRef.current.get(cardId) === seq,
+    [],
+  );
+  // Each lane's aggregate count, moved by the lane axis of a move: nothing
+  // re-reads the board after a move, so these are the header's only record.
+  const [laneDeltas, setLaneDeltas] = useState<Readonly<Record<string, number>>>({});
+  // Called only for a move whose lane changed, so the two keys always differ.
+  const shiftLaneCount = useCallback((fromLaneKey: string, toLaneKey: string) => {
+    setLaneDeltas((prev) => ({
+      ...prev,
+      [fromLaneKey]: (prev[fromLaneKey] ?? 0) - 1,
+      [toLaneKey]: (prev[toLaneKey] ?? 0) + 1,
+    }));
+  }, []);
+  const swimlanes = useMemo(
+    () =>
+      board.swimlanes.map((lane) => {
+        const delta = laneDeltas[lane.key] ?? 0;
+        return delta === 0 ? lane : { ...lane, count: Math.max(0, lane.count + delta) };
+      }),
+    [board.swimlanes, laneDeltas],
+  );
 
   // A lane's NEXT PAGE (MOTIR-10535) — asked for by the lane's scroll-to-load
   // sentinel. One page in flight per lane (the ref, read synchronously, so a
@@ -867,7 +885,11 @@ function BoardDnd({
         if (heldRefusal) {
           setColumns(args.snapshot);
           if (heldRefusal.code === 'PLAN_TARGET_HELD')
-            showPlanHeld(args.card, heldRefusal.plan, columnsRef.current);
+            showPlanHeld(
+              args.card,
+              heldRefusal.plan,
+              columnsRef.current.flatMap((col) => col.cards),
+            );
           else if (heldRefusal.code === 'MARKED_CARD_CANNOT_REOPEN')
             showMarkHeld(args.card, heldRefusal.mark);
           else showHeld(args.card, args.toColName, heldRefusal.gate);
@@ -890,28 +912,51 @@ function BoardDnd({
     [board.boardId, snapBack, showHeld, showMarkHeld, showPlanHeld, t],
   );
 
+  // Move a card from whichever cell holds it NOW into the cell `toward` names —
+  // one axis of a revert. Reading the current cell (not the drop's target) is what
+  // keeps the other axis' outcome: a refused transition returns the card to its
+  // origin column in the lane the reassign left it in, and the mirror.
+  const moveCardBackInCells = useCallback(
+    (workItemId: string, toward: (at: CellAddress) => CellAddress, originNextId: string | null) => {
+      applyCellPages((current) => {
+        const at = findCardCell(current, workItemId);
+        if (!at) return current;
+        return moveCardBetweenCells(current, {
+          cardId: workItemId,
+          from: at,
+          to: toward(at),
+          overCardId: originNextId,
+        });
+      });
+    },
+    [applyCellPages],
+  );
+
   // SWIMLANE transition (column axis) — INDEPENDENT revert: on rejection, move
-  // the card back to its origin column (keeping any accepted lane reassign) and
-  // undo the optimistic count, rather than restoring the whole snapshot.
+  // the card back to its origin column (keeping any accepted lane reassign), back
+  // before the card it followed, and move the two cells' and two columns' counts
+  // back — never a whole-board restore. Only the card's latest move applies.
   const runTransition = useCallback(
     async (args: {
       workItemId: string;
+      seq: number;
       originColId: string;
       targetColId: string;
+      originNextId: string | null;
       beforeId?: string;
       afterId?: string;
       card: BoardCardDto;
       fromColName: string;
       toColName: string;
     }) => {
+      const latest = () => isLatestMove(args.workItemId, args.seq);
       const revert = () => {
-        setColumns((prev) =>
-          transferCount(
-            moveCardToColumn(prev, args.workItemId, args.originColId),
-            args.targetColId,
-            args.originColId,
-          ),
+        moveCardBackInCells(
+          args.workItemId,
+          (at) => ({ columnId: args.originColId, laneKey: at.laneKey }),
+          args.originNextId,
         );
+        setColumns((prev) => transferCount(prev, args.targetColId, args.originColId));
       };
       try {
         const res = await fetch('/api/board/move', {
@@ -927,19 +972,18 @@ function BoardDnd({
         });
         if (res.ok) {
           const result = (await res.json()) as MoveCardResultDto;
-          // Keep the optimistic swimlaneKey (the reassign axis owns it); take the
-          // server's confirmed status / position / ready.
-          setColumns((prev) =>
-            reconcileCard(prev, { ...result.card, swimlaneKey: laneKeyOfCard(args.card) }),
-          );
+          // Keep the lane the reassign axis owns; take the server's confirmed
+          // status / position / ready into whichever cell holds the card.
+          if (latest()) applyCellPages((current) => reconcileCellCard(current, result.card));
           return;
         }
+        if (!latest()) return;
         const key = args.card.identifier;
         revert();
         const heldRefusal = await readHeldRefusal(res);
         if (heldRefusal) {
           if (heldRefusal.code === 'PLAN_TARGET_HELD')
-            showPlanHeld(args.card, heldRefusal.plan, columnsRef.current);
+            showPlanHeld(args.card, heldRefusal.plan, cardsInCells(cellPagesRef.current));
           else if (heldRefusal.code === 'MARKED_CARD_CANNOT_REOPEN')
             showMarkHeld(args.card, heldRefusal.mark);
           else showHeld(args.card, args.toColName, heldRefusal.gate);
@@ -953,6 +997,7 @@ function BoardDnd({
               : t('moveErrorDescription', { key });
         toast({ variant: 'error', title: t('moveRejectedTitle'), description });
       } catch {
+        if (!latest()) return;
         revert();
         toast({
           variant: 'error',
@@ -961,25 +1006,43 @@ function BoardDnd({
         });
       }
     },
-    [board.boardId, showHeld, showMarkHeld, showPlanHeld, t, toast],
+    [
+      applyCellPages,
+      board.boardId,
+      isLatestMove,
+      moveCardBackInCells,
+      showHeld,
+      showMarkHeld,
+      showPlanHeld,
+      t,
+      toast,
+    ],
   );
 
   // SWIMLANE reassign (lane axis) — reuses the EXISTING 2.5 field-update action.
-  // INDEPENDENT revert: on rejection, restore only the card's `swimlaneKey` to
-  // its origin lane (any accepted transition stays).
+  // INDEPENDENT revert: on rejection, the card returns to its origin LANE in the
+  // column it now sits in (any accepted transition stays), and the two cells' and
+  // two lanes' counts move back. Only the card's latest move applies.
   const runReassign = useCallback(
     async (args: {
       workItemId: string;
+      seq: number;
       originLaneKey: string;
       targetLaneKey: string;
+      originNextId: string | null;
       card: BoardCardDto;
     }) => {
       const result = await updateIssueAction({
         id: args.workItemId,
         ...reassignPatchForLane(groupBy, args.targetLaneKey),
       });
-      if (!result.ok) {
-        setColumns((prev) => setCardSwimlaneKey(prev, args.workItemId, args.originLaneKey));
+      if (!result.ok && isLatestMove(args.workItemId, args.seq)) {
+        moveCardBackInCells(
+          args.workItemId,
+          (at) => ({ columnId: at.columnId, laneKey: args.originLaneKey }),
+          args.originNextId,
+        );
+        shiftLaneCount(args.targetLaneKey, args.originLaneKey);
         toast({
           variant: 'error',
           title: t('reassignRejectedTitle'),
@@ -987,7 +1050,7 @@ function BoardDnd({
         });
       }
     },
-    [groupBy, t, toast],
+    [groupBy, isLatestMove, moveCardBackInCells, shiftLaneCount, t, toast],
   );
 
   // Set or clear a column's WIP limit (Subtask 3.3.6) — the optimistic config
@@ -1033,12 +1096,22 @@ function BoardDnd({
     [colName, t, toast],
   );
 
-  const handleDragStart = useCallback((e: DragStartEvent) => {
-    // The start of the next drag closes a held line (design panel 2b).
-    setHeld(null);
-    snapshotRef.current = columnsRef.current;
-    setActiveCard(findCard(columnsRef.current, String(e.active.id)));
-  }, []);
+  const handleDragStart = useCallback(
+    (e: DragStartEvent) => {
+      // The start of the next drag closes a held line (design panel 2b).
+      setHeld(null);
+      if (swimlaned) {
+        // Nothing is applied until the drop, so the pre-drag CELL state is what
+        // the drop resolves against — never the columns, which hold no cards.
+        cellSnapshotRef.current = cellPagesRef.current;
+        setActiveCard(findCardInCells(cellPagesRef.current, String(e.active.id)));
+        return;
+      }
+      snapshotRef.current = columnsRef.current;
+      setActiveCard(findCard(columnsRef.current, String(e.active.id)));
+    },
+    [swimlaned],
+  );
 
   // Drive the flat board's horizontal edge auto-scroll from the live pointer, so
   // trailing off-screen columns become reachable mid-drag (see the auto-scroll
@@ -1097,7 +1170,9 @@ function BoardDnd({
       // lane for the drop highlight; the actual move is resolved ONCE on drop
       // (handleDragEnd → resolveSwimlaneDrop), and the DragOverlay provides the
       // in-flight visual feedback.
-      const targetCell = cellOfOverId(cols, overId);
+      // The hovered cell resolves through the per-cell state, so the lane lights
+      // while the pointer is over a card, not only over empty cell space.
+      const targetCell = cellOfOverId(cellPagesRef.current, overId);
       if (!targetCell) return;
       setOverLaneKey(targetCell.laneKey);
     },
@@ -1116,7 +1191,8 @@ function BoardDnd({
       const activeId = String(active.id);
 
       if (!over) {
-        setColumns(snapshot);
+        cellSnapshotRef.current = null;
+        if (!swimlaned) setColumns(snapshot);
         return;
       }
 
@@ -1155,65 +1231,97 @@ function BoardDnd({
         return;
       }
 
-      // SWIMLANE (3.3.5 + 3.3.8) — resolve the move from the drop's `over` target.
-      // The card was NOT relocated live on dragOver (it looped — see
-      // handleDragOver), so move it into the target cell ONCE here and derive the
-      // structured move from snapshot → relocated.
-      const resolved = resolveSwimlaneDrop(snapshot, String(over.id), activeId);
-      if (!resolved) {
-        setColumns(snapshot);
-        return;
-      }
-      const { move, relocated } = resolved;
+      // SWIMLANE (3.3.5 + 3.3.8, MOTIR-11452) — resolve the move from the drop's
+      // `over` target against the pre-drag CELL state. Nothing was applied while
+      // dragging (it looped — see handleDragOver), so a drop that changes nothing
+      // writes nothing, and the whole move lands here, once.
+      const cellSnapshot = cellSnapshotRef.current ?? cellPagesRef.current;
+      cellSnapshotRef.current = null;
+      const resolved = resolveSwimlaneDrop(cellSnapshot, String(over.id), activeId);
+      if (!resolved) return;
+      const { move } = resolved;
       const { columnChanged, laneChanged } = move;
       const rankChanged =
         !columnChanged && !laneChanged && move.originIndexInCell !== move.finalIndexInCell;
-      if (!columnChanged && !laneChanged && !rankChanged) {
-        // Dropped back where it started — restore the canonical snapshot.
-        setColumns(snapshot);
-        return;
-      }
+      if (!columnChanged && !laneChanged && !rankChanged) return;
+      // The drop resolved, so the reconciled cells hold the card.
+      const card = findCardInCells(resolved.cells, activeId)!;
 
-      // Apply the optimistic move (+ count transfer for a column change), then
-      // read the settled card.
-      const optimistic = columnChanged
-        ? transferCount(relocated, move.originColId, move.targetColId)
-        : relocated;
-      setColumns(optimistic);
-      const card = findCard(optimistic, activeId);
-      if (!card) {
-        setColumns(snapshot);
-        return;
-      }
+      const seq = nextMoveSeq(activeId);
+      const from = { columnId: move.originColId, laneKey: move.originLaneKey };
+      const to = { columnId: move.targetColId, laneKey: move.targetLaneKey };
+      const overCardId = overCardIdOf(String(over.id));
+      // Applied to the LATEST cells (not the snapshot), so a page that merged into
+      // any cell while the drag was in flight is kept.
+      applyCellPages((current) =>
+        moveCardBetweenCells(current, { cardId: activeId, from, to, overCardId }),
+      );
+      if (columnChanged) setColumns((prev) => transferCount(prev, from.columnId, to.columnId));
+      if (laneChanged) shiftLaneCount(from.laneKey, to.laneKey);
+      const target = cellSnapshot.cells[cellId(to.columnId, to.laneKey)];
+      const neverLoaded = (target?.totalCount ?? null) === null && target?.state !== 'loading';
 
+      const writes: Promise<unknown>[] = [];
+      const fromColName = colName(columnsRef.current, move.originColId);
       if (columnChanged || rankChanged) {
-        void runTransition({
-          workItemId: activeId,
-          originColId: move.originColId,
-          targetColId: move.targetColId,
-          beforeId: move.beforeId,
-          afterId: move.afterId,
-          card,
-          fromColName: colName(snapshot, move.originColId),
-          toColName: colName(optimistic, move.targetColId),
-        });
+        writes.push(
+          runTransition({
+            workItemId: activeId,
+            seq,
+            originColId: move.originColId,
+            targetColId: move.targetColId,
+            originNextId: move.originNextId,
+            beforeId: move.beforeId,
+            afterId: move.afterId,
+            card,
+            fromColName,
+            toColName: colName(columnsRef.current, move.targetColId),
+          }),
+        );
       }
       if (laneChanged) {
-        void runReassign({
-          workItemId: activeId,
-          originLaneKey: move.originLaneKey,
-          targetLaneKey: move.targetLaneKey,
-          card,
-        });
+        writes.push(
+          runReassign({
+            workItemId: activeId,
+            seq,
+            originLaneKey: move.originLaneKey,
+            targetLaneKey: move.targetLaneKey,
+            originNextId: move.originNextId,
+            card,
+          }),
+        );
+      }
+      // A cell no page has reached yet asks for its FIRST page once — that cell
+      // alone. It reads as loading at once, but the page is read only after the
+      // drop's own writes settle: read before them, it would leave the card out
+      // and total N while the landed card made N + 1. Read after, its total
+      // counts the card (or, on a refused write, the card has reverted out), and
+      // the merge skips the landed card rather than showing it twice.
+      if ((columnChanged || laneChanged) && neverLoaded) {
+        loadCellPage(to.columnId, to.laneKey, Promise.allSettled(writes));
       }
     },
-    [swimlaned, colName, runMove, runTransition, runReassign, stopAutoScroll],
+    [
+      swimlaned,
+      applyCellPages,
+      colName,
+      loadCellPage,
+      nextMoveSeq,
+      runMove,
+      runTransition,
+      runReassign,
+      shiftLaneCount,
+      stopAutoScroll,
+    ],
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveCard(null);
     setOverLaneKey(null);
     stopAutoScroll();
+    // A grouped drag applied nothing before the drop, so a cancel undoes nothing —
+    // restoring the snapshot would also undo a page that merged mid-drag.
+    cellSnapshotRef.current = null;
     if (snapshotRef.current) {
       setColumns(snapshotRef.current);
       snapshotRef.current = null;
@@ -1224,10 +1332,22 @@ function BoardDnd({
   // reassign (lane only) / transition (column only) / diagonal (both) per the
   // 3.3.1 copy; pick-up + move reuse the flat copy.
   const announcements = useMemo<Announcements>(() => {
-    const keyOf = (id: string) => findCard(columnsRef.current, id)?.identifier ?? id;
+    const keyOf = (id: string) =>
+      (swimlaned ? findCardInCells(cellPagesRef.current, id) : findCard(columnsRef.current, id))
+        ?.identifier ?? id;
+    // A grouped board narrates a position inside the CELL the per-cell state holds.
+    const atCell = (overId: string) => {
+      const cell = cellOfOverId(cellPagesRef.current, overId);
+      const col = cell ? columnsRef.current.find((c) => c.id === cell.columnId) : undefined;
+      if (!cell || !col) return null;
+      const cards = cellPagesRef.current.cells[cellId(cell.columnId, cell.laneKey)]?.cards ?? [];
+      const idx = cards.findIndex((c) => c.id === overId);
+      return { col: col.name, index: (idx < 0 ? cards.length : idx) + 1, count: cards.length };
+    };
     const at = (overId: string) => {
+      if (swimlaned) return atCell(overId);
       const cols = columnsRef.current;
-      const colId = swimlaned ? cellOfOverId(cols, overId)?.columnId : columnOfOverId(cols, overId);
+      const colId = columnOfOverId(cols, overId);
       const col = cols.find((c) => c.id === colId);
       if (!col) return null;
       const idx = overId === colId ? col.cards.length : cardIndex(cols, col.id, overId);
@@ -1261,10 +1381,12 @@ function BoardDnd({
         }
         // Resolve from the drop's `over` (the card isn't relocated live in
         // swimlane mode anymore — 3.3.8), against the pre-drag snapshot.
-        const move = snapshotRef.current
-          ? (resolveSwimlaneDrop(snapshotRef.current, String(over.id), String(active.id))?.move ??
-            null)
-          : null;
+        const move =
+          resolveSwimlaneDrop(
+            cellSnapshotRef.current ?? cellPagesRef.current,
+            String(over.id),
+            String(active.id),
+          )?.move ?? null;
         if (!move) return undefined;
         const col = colName(cols, move.targetColId);
         const group = laneLabel(move.targetLaneKey);
@@ -1275,7 +1397,10 @@ function BoardDnd({
       },
       onDragCancel({ active }) {
         const snap = snapshotRef.current ?? columnsRef.current;
-        const colId = findCardColumnId(snap, String(active.id));
+        const colId = swimlaned
+          ? (findCardCell(cellSnapshotRef.current ?? cellPagesRef.current, String(active.id))
+              ?.columnId ?? null)
+          : findCardColumnId(snap, String(active.id));
         return t('announcementCancelled', {
           key: keyOf(String(active.id)),
           col: colName(snap, colId),
@@ -1351,15 +1476,14 @@ function BoardDnd({
           <SwimlaneBoard
             boardId={board.boardId}
             columns={columns}
-            swimlanes={board.swimlanes}
+            swimlanes={swimlanes}
             assigneeNameById={assigneeNameById}
             onOpenQuickView={openPeek}
             onSetWipLimit={setColumnWip}
             activeCardId={activeCard?.id ?? null}
             overLaneKey={overLaneKey}
             columnPoints={columnPoints}
-            loadStates={loadStates}
-            onLoadMore={loadMore}
+            cells={cellPages}
           />
         ) : (
           // The board area runs to the viewport's bottom edge at `sm`+ (MOTIR-11323,

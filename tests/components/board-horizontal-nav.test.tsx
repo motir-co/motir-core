@@ -47,7 +47,7 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
 import { BoardContainer } from '@/app/(authed)/boards/_components/BoardContainer';
 
 const PITCH = 304;
-const ROW_SELECTOR = '[data-test-row], [data-board-scroll], [data-testid="swimlane-board"]';
+const ROW_SELECTOR = '[data-test-row], [data-board-scroll], [data-lane-scroller]';
 const dims = { content: 1216, row: 600, nav: 680 };
 
 /** Is `el` a board scroll row? */
@@ -507,13 +507,14 @@ describe('the flat board', () => {
 });
 
 describe('the swimlane board', () => {
-  it('pans on a background drag, never from a card, and carries the arrows', () => {
-    renderWithIntl(
+  function renderSwimlanes(boardId: string) {
+    return renderWithIntl(
       <DndContext>
         <SwimlaneBoard
-          boardId="b-pan"
+          boardId={boardId}
           columns={COLUMNS}
           swimlanes={[
+            { key: 'u1', label: 'Ana Ruiz', kind: 'assignee', count: 1 },
             { key: BOARD_SWIMLANE_NO_VALUE, label: 'No assignee', kind: 'assignee', count: 1 },
           ]}
           assigneeNameById={new Map()}
@@ -524,23 +525,66 @@ describe('the swimlane board', () => {
         />
       </DndContext>,
     );
-    const row = screen.getByTestId('swimlane-board');
-    expect(row.className).toContain('[scrollbar-width:none]');
-    expect(row.querySelectorAll('[data-board-column-edge]')).toHaveLength(4);
+  }
 
-    // The pinned header's empty space is background.
-    const header = row.querySelector('[data-board-column-edge]')!;
-    drag(header, 400, 330);
-    expect(row.scrollLeft).toBe(70);
+  // MOTIR-11449: each lane is its own scroll row, carrying the base navigation's
+  // hidden scrollbar, pan and arrow pair; the board renders no pair of its own.
+  it('pans ONE lane on a background drag, never from a card', () => {
+    renderSwimlanes('b-pan');
+    const lane = screen.getByTestId(`swimlane-scroller-${BOARD_SWIMLANE_NO_VALUE}`);
+    const other = screen.getByTestId('swimlane-scroller-u1');
+    expect(lane.className).toContain('[scrollbar-width:none]');
+    expect(lane.querySelectorAll('[data-board-column-edge]')).toHaveLength(4);
+
+    // The lane's cell area between cards is background.
+    drag(screen.getByTestId(`swimlane-cells-${BOARD_SWIMLANE_NO_VALUE}`), 400, 330);
+    expect(lane.scrollLeft).toBe(70);
     release(330);
-    // No snap here: the pan stays where it was released.
-    expect(row.scrollLeft).toBe(70);
+    // No snap here: the pan stays where it was released, and no other lane moved.
+    expect(lane.scrollLeft).toBe(70);
+    expect(other.scrollLeft).toBe(0);
 
     drag(screen.getByTestId('board-card-PROD-1'), 400, 100);
-    expect(row.scrollLeft).toBe(70);
+    expect(lane.scrollLeft).toBe(70);
     release(100);
+    // The lane header band is a control, so a press on it never pans either.
+    drag(screen.getByTestId('swimlane-head-u1'), 400, 100);
+    expect(other.scrollLeft).toBe(0);
+    release(100);
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next column' }));
-    expect(row.scrollLeft).toBe(304);
+  it('steps one lane a column with its own arrows, disabled at its ends', () => {
+    renderSwimlanes('b-arrows');
+    expect(screen.queryByTestId('board-column-arrow-next')).toBeNull();
+    const lane = screen.getByTestId('swimlane-scroller-u1');
+    const other = screen.getByTestId(`swimlane-scroller-${BOARD_SWIMLANE_NO_VALUE}`);
+    const left = screen.getByRole('button', { name: 'Scroll Ana Ruiz lane left' });
+    const right = screen.getByRole('button', { name: 'Scroll Ana Ruiz lane right' });
+    expect((left as HTMLButtonElement).disabled).toBe(true);
+    expect((right as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(right);
+    expect(lane.scrollLeft).toBe(PITCH);
+    expect(other.scrollLeft).toBe(0);
+    expect((left as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(right);
+    fireEvent.click(right);
+    // 1216 − 600 = 616 is the end; the last edge clamps to it.
+    expect(lane.scrollLeft).toBe(616);
+    expect((right as HTMLButtonElement).disabled).toBe(true);
+    // Back one column from the clamped end lands on the third column's edge.
+    fireEvent.click(left);
+    expect(lane.scrollLeft).toBe(2 * PITCH);
+  });
+
+  it('draws no lane arrows when the lane’s cells fit', () => {
+    dims.content = 600;
+    renderSwimlanes('b-fit');
+    expect(screen.queryByTestId('swimlane-arrow-left-u1')).toBeNull();
+    expect(screen.queryByTestId('swimlane-arrow-right-u1')).toBeNull();
+    // The gutters stay, empty, so the tracks still line up.
+    expect(
+      screen.getByTestId('swimlane-u1').querySelectorAll('[data-lane-arrow-gutter]'),
+    ).toHaveLength(2);
   });
 });

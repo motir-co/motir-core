@@ -2,10 +2,10 @@ import {
   BOARD_SWIMLANE_NO_VALUE,
   type BoardCardDto,
   type BoardColumnDto,
-  type BoardSwimlaneDto,
   type BoardSwimlaneGroupByDto,
 } from '@/lib/dto/boards';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type { CellPage, CellPages } from './boardCellPages';
 
 // Pure swimlane reducers + helpers (Subtask 3.3.5) — the bucketing + cross-lane
 // move core the dnd-kit wiring in BoardContainer drives in swimlane mode. Kept
@@ -60,118 +60,138 @@ export function cardsInCell(
   return col.cards.filter((c) => laneKeyOfCard(c) === laneKey);
 }
 
-/**
- * Resolve a dnd-kit `over` id (in swimlane mode) to its target cell. The id may
- * be a CELL droppable (`columnId::laneKey` — dropping on the cell body / an empty
- * cell) or a CARD sortable (dropping on a card — resolve to the card's current
- * column + lane). Returns null if it matches neither.
- */
-export function cellOfOverId(
-  columns: BoardColumnDto[],
-  overId: string,
-): { columnId: string; laneKey: string } | null {
-  const parsed = parseCellId(overId);
-  if (parsed) return parsed;
-  for (const col of columns) {
-    const card = col.cards.find((c) => c.id === overId);
-    if (card) return { columnId: col.id, laneKey: laneKeyOfCard(card) };
+/** A `(column × lane)` cell's address. */
+export interface CellAddress {
+  columnId: string;
+  laneKey: string;
+}
+
+/** The cell whose loaded cards hold `cardId`, or null when no cell does. */
+export function findCardCell(pages: CellPages, cardId: string): CellAddress | null {
+  for (const [id, page] of Object.entries(pages.cells)) {
+    if (page.cards.some((c) => c.id === cardId)) return parseCellId(id);
   }
   return null;
 }
 
+/** The loaded card `cardId`, from whichever cell holds it. */
+export function findCardInCells(pages: CellPages, cardId: string): BoardCardDto | null {
+  for (const page of Object.values(pages.cells)) {
+    const card = page.cards.find((c) => c.id === cardId);
+    if (card) return card;
+  }
+  return null;
+}
+
+/** Every loaded card of a grouped board, cell by cell. */
+export function cardsInCells(pages: CellPages): BoardCardDto[] {
+  return Object.values(pages.cells).flatMap((page) => page.cards);
+}
+
 /**
- * Move `cardId` into the `(toColumnId, toLaneKey)` cell — the swimlane analogue
- * of `relocateCard`. Stamps the card's `swimlaneKey` to the target lane (so it
- * re-buckets there) AND relocates it into the target column, inserting just
- * before `overCardId` when given (else appending to the column). Pure; the
- * `totalCount` denominator is untouched (see `transferCount` for the column
- * count). No-op shape if the card or target column can't be found.
+ * Resolve a dnd-kit `over` id (in swimlane mode) to its target cell, from the
+ * per-cell state (MOTIR-11452 — a grouped projection's columns hold no cards).
+ * The id may be a CELL droppable (`columnId::laneKey` — the cell body or an empty
+ * cell) or a CARD sortable (resolve to the cell whose loaded cards hold it).
+ * Returns null if it matches neither.
  */
-export function relocateCardToCell(
-  columns: BoardColumnDto[],
-  cardId: string,
-  toColumnId: string,
-  toLaneKey: string,
+export function cellOfOverId(pages: CellPages, overId: string): CellAddress | null {
+  return parseCellId(overId) ?? findCardCell(pages, overId);
+}
+
+const NO_CARDS: BoardCardDto[] = [];
+
+function pageAt(pages: CellPages, id: string): CellPage {
+  return pages.cells[id] ?? { cards: NO_CARDS, totalCount: null, cursor: null, state: 'idle' };
+}
+
+function insertBefore(
+  cards: BoardCardDto[],
+  card: BoardCardDto,
   overCardId: string | null,
-): BoardColumnDto[] {
-  let moving: BoardCardDto | null = null;
-  for (const col of columns) {
-    const found = col.cards.find((c) => c.id === cardId);
-    if (found) {
-      moving = found;
-      break;
-    }
-  }
-  if (!moving) return columns;
-  if (!columns.some((c) => c.id === toColumnId)) return columns;
-
-  const stamped: BoardCardDto = { ...moving, swimlaneKey: toLaneKey };
-
-  return columns.map((col) => {
-    const without = col.cards.filter((c) => c.id !== cardId);
-    if (col.id !== toColumnId) {
-      return without.length === col.cards.length ? col : { ...col, cards: without };
-    }
-    const overIndex = overCardId ? without.findIndex((c) => c.id === overCardId) : -1;
-    const index = overIndex === -1 ? without.length : overIndex;
-    return { ...col, cards: [...without.slice(0, index), stamped, ...without.slice(index)] };
-  });
+): BoardCardDto[] {
+  const at = overCardId ? cards.findIndex((c) => c.id === overCardId) : -1;
+  const index = at === -1 ? cards.length : at;
+  return [...cards.slice(0, index), card, ...cards.slice(index)];
 }
 
 /**
- * Re-stamp `cardId`'s `swimlaneKey` to `laneKey` in place (no column move) — the
- * independent LANE-axis revert: after a rejected reassign, the card's column
- * stays where the (separately-confirmed) transition left it, only its lane
- * snaps back. No-op if the card isn't present.
+ * Move `cardId` out of the `from` cell into the `to` cell — the whole of a
+ * swimlane move on the per-cell state, and (with the cells swapped) each axis'
+ * revert. Inserts it just before `overCardId` when that card is in the target
+ * (a drop on a card), else appends (a drop on the cell body); a drop on itself
+ * changes nothing. Each cell's
+ * `totalCount` moves by one in each direction (a total no page has named yet
+ * stays null); the card is stamped with the target lane's key; every CURSOR is
+ * left as the read put it — a keyset cursor is a value, not a row, so a card
+ * leaving from behind it skips nothing. A same-cell call reorders with no count
+ * change. Only the two cells change; a missing card returns `pages` itself.
  */
-export function setCardSwimlaneKey(
-  columns: BoardColumnDto[],
-  cardId: string,
-  laneKey: string,
-): BoardColumnDto[] {
-  return columns.map((col) => {
-    if (!col.cards.some((c) => c.id === cardId)) return col;
-    return {
-      ...col,
-      cards: col.cards.map((c) => (c.id === cardId ? { ...c, swimlaneKey: laneKey } : c)),
-    };
-  });
+export function moveCardBetweenCells(
+  pages: CellPages,
+  move: { cardId: string; from: CellAddress; to: CellAddress; overCardId: string | null },
+): CellPages {
+  const fromId = cellId(move.from.columnId, move.from.laneKey);
+  const toId = cellId(move.to.columnId, move.to.laneKey);
+  const source = pageAt(pages, fromId);
+  const card = source.cards.find((c) => c.id === move.cardId);
+  if (!card) return pages;
+  // Dropped on itself: it stays exactly where it is.
+  if (fromId === toId && move.overCardId === move.cardId) return pages;
+  const without = source.cards.filter((c) => c.id !== move.cardId);
+  const overCardId = move.overCardId === move.cardId ? null : move.overCardId;
+
+  if (fromId === toId) {
+    const cards = insertBefore(without, card, overCardId);
+    if (cards.every((c, i) => c === source.cards[i])) return pages;
+    return { readKey: pages.readKey, cells: { ...pages.cells, [fromId]: { ...source, cards } } };
+  }
+
+  const target = pageAt(pages, toId);
+  const stamped: BoardCardDto =
+    card.swimlaneKey === move.to.laneKey ? card : { ...card, swimlaneKey: move.to.laneKey };
+  return {
+    readKey: pages.readKey,
+    cells: {
+      ...pages.cells,
+      [fromId]: {
+        ...source,
+        cards: without,
+        totalCount: source.totalCount === null ? null : Math.max(0, source.totalCount - 1),
+      },
+      [toId]: {
+        ...target,
+        cards: insertBefore(
+          target.cards.filter((c) => c.id !== move.cardId),
+          stamped,
+          overCardId,
+        ),
+        totalCount: target.totalCount === null ? null : target.totalCount + 1,
+      },
+    },
+  };
 }
 
 /**
- * Move `cardId` back into `toColumnId` (appending) — the independent COLUMN-axis
- * revert: after a rejected transition, the card returns to its origin column
- * while its (separately-confirmed) lane reassign stays. Leaves the
- * `swimlaneKey` untouched. No-op shape if the card / column is missing.
+ * Take the server's confirmed card (status, position, ready …) into whichever
+ * cell holds it, keeping the lane key the reassign axis owns. No-op when no cell
+ * holds it.
  */
-export function moveCardToColumn(
-  columns: BoardColumnDto[],
-  cardId: string,
-  toColumnId: string,
-): BoardColumnDto[] {
-  let moving: BoardCardDto | null = null;
-  for (const col of columns) {
-    const found = col.cards.find((c) => c.id === cardId);
-    if (found) {
-      moving = found;
-      break;
-    }
-  }
-  if (!moving) return columns;
-  if (findCardColumnIdLocal(columns, cardId) === toColumnId) return columns;
-  if (!columns.some((c) => c.id === toColumnId)) return columns;
-  return columns.map((col) => {
-    const without = col.cards.filter((c) => c.id !== cardId);
-    if (col.id !== toColumnId) {
-      return without.length === col.cards.length ? col : { ...col, cards: without };
-    }
-    return { ...col, cards: [...without, moving!] };
-  });
-}
-
-function findCardColumnIdLocal(columns: BoardColumnDto[], cardId: string): string | null {
-  for (const col of columns) if (col.cards.some((c) => c.id === cardId)) return col.id;
-  return null;
+export function reconcileCellCard(pages: CellPages, card: BoardCardDto): CellPages {
+  const at = findCardCell(pages, card.id);
+  if (!at) return pages;
+  const id = cellId(at.columnId, at.laneKey);
+  const page = pageAt(pages, id);
+  return {
+    readKey: pages.readKey,
+    cells: {
+      ...pages.cells,
+      [id]: {
+        ...page,
+        cards: page.cards.map((c) => (c.id === card.id ? { ...card, swimlaneKey: at.laneKey } : c)),
+      },
+    },
+  };
 }
 
 /**
@@ -203,14 +223,14 @@ export function reassignPatchForLane(
 
 /**
  * The (column, lane) axes a finished swimlane drag changed — resolved from the
- * pre-drag `snapshot` (origin) and the post-over-move `current` columns (the
- * dragged card already sits in its target cell after `handleDragOver`). Drives
+ * pre-drag cell state (origin) and the reconciled one (target). Drives
  * BoardContainer's drop handling: a `columnChanged` fires the workflow
  * transition (`/board/move`), a `laneChanged` fires the field reassign
  * (`updateIssueAction`), a diagonal fires BOTH, and each reverts INDEPENDENTLY.
- * `beforeId`/`afterId` are the rank neighbours WITHIN the target cell (same lane)
- * so a transition / in-cell reorder ranks against what the user sees, not across
- * lanes. Returns null if the card is missing from either side.
+ * `beforeId`/`afterId` are the rank neighbours WITHIN the target cell so a
+ * transition / in-cell reorder ranks against what the user sees, not across
+ * lanes; `originNextId` is the card that followed it in the origin cell, which a
+ * revert re-inserts it before. Returns null if the card is missing from either side.
  */
 export interface CellMove {
   originColId: string;
@@ -221,129 +241,75 @@ export interface CellMove {
   laneChanged: boolean;
   beforeId?: string;
   afterId?: string;
+  originNextId: string | null;
   originIndexInCell: number;
   finalIndexInCell: number;
 }
 
 export function resolveCellMove(
-  snapshot: BoardColumnDto[],
-  current: BoardColumnDto[],
+  snapshot: CellPages,
+  current: CellPages,
   cardId: string,
 ): CellMove | null {
-  let originColId: string | null = null;
-  let originCard: BoardCardDto | null = null;
-  for (const col of snapshot) {
-    const c = col.cards.find((x) => x.id === cardId);
-    if (c) {
-      originColId = col.id;
-      originCard = c;
-      break;
-    }
-  }
-  let targetColId: string | null = null;
-  let targetCard: BoardCardDto | null = null;
-  for (const col of current) {
-    const c = col.cards.find((x) => x.id === cardId);
-    if (c) {
-      targetColId = col.id;
-      targetCard = c;
-      break;
-    }
-  }
-  if (!originColId || !originCard || !targetColId || !targetCard) return null;
-
-  const originLaneKey = laneKeyOfCard(originCard);
-  const targetLaneKey = laneKeyOfCard(targetCard);
-
-  const originCell = (snapshot.find((c) => c.id === originColId)?.cards ?? []).filter(
-    (c) => laneKeyOfCard(c) === originLaneKey,
-  );
-  const targetCell = (current.find((c) => c.id === targetColId)?.cards ?? []).filter(
-    (c) => laneKeyOfCard(c) === targetLaneKey,
-  );
+  const origin = findCardCell(snapshot, cardId);
+  const target = findCardCell(current, cardId);
+  if (!origin || !target) return null;
+  const originCell = pageAt(snapshot, cellId(origin.columnId, origin.laneKey)).cards;
+  const targetCell = pageAt(current, cellId(target.columnId, target.laneKey)).cards;
+  const originIndexInCell = originCell.findIndex((c) => c.id === cardId);
   const finalIndexInCell = targetCell.findIndex((c) => c.id === cardId);
-
   return {
-    originColId,
-    originLaneKey,
-    targetColId,
-    targetLaneKey,
-    columnChanged: originColId !== targetColId,
-    laneChanged: originLaneKey !== targetLaneKey,
+    originColId: origin.columnId,
+    originLaneKey: origin.laneKey,
+    targetColId: target.columnId,
+    targetLaneKey: target.laneKey,
+    columnChanged: origin.columnId !== target.columnId,
+    laneChanged: origin.laneKey !== target.laneKey,
     beforeId: targetCell[finalIndexInCell - 1]?.id,
     afterId: targetCell[finalIndexInCell + 1]?.id,
-    originIndexInCell: originCell.findIndex((c) => c.id === cardId),
+    originNextId: originCell[originIndexInCell + 1]?.id ?? null,
+    originIndexInCell,
     finalIndexInCell,
   };
 }
 
+/** The card a drop on `overId` inserts before: the card it hovered, else null —
+ *  an append on the cell body. The dragged card itself is returned as itself,
+ *  which `moveCardBetweenCells` reads as "stays where it is". */
+export function overCardIdOf(overId: string): string | null {
+  return parseCellId(overId) !== null ? null : overId;
+}
+
 /**
- * Resolve a swimlane drag from the dnd-kit `over` id at DROP time (Subtask 3.3.8).
+ * Resolve a swimlane drag from the dnd-kit `over` id at DROP time (Subtask 3.3.8,
+ * re-pointed at the per-cell state by MOTIR-11452).
  *
  * The swimlane board does NOT relocate the card live on `onDragOver` — doing so
  * looped: a `(column × lane)` cell has no fixed height, so moving the card in/out
  * resizes the source + target cells, dnd-kit re-measures, the closest-corners
  * `over` flips to the resized neighbour, `onDragOver` fires again, and the
  * relocate → resize → re-measure cycle never settles, throwing React's "Maximum
- * update depth exceeded" mid-drag (PRODECT_FINDINGS #61; the flat board escapes
- * this only because its columns are fixed-height internal scrollers with stable
- * rects). Instead the move is resolved ONCE here, on drop: move the card into the
- * `over`'s target cell against the pre-drag `snapshot`, then derive the structured
- * `CellMove` from `snapshot → relocated`. Returns `{ move, relocated }` (the move
- * descriptor + the optimistic board state to apply), or null when `over` resolves
- * to neither a cell nor a card.
+ * update depth exceeded" mid-drag (PRODECT_FINDINGS #61). Instead the move is
+ * resolved ONCE here, on drop: move the card into the `over`'s target cell
+ * against the pre-drag `snapshot`, then derive the structured `CellMove` from
+ * `snapshot → cells`. Returns `{ move, cells }` (the move descriptor + the
+ * reconciled cell state to apply), or null when `over` resolves to neither a cell
+ * nor a loaded card, or the dragged card is in no cell.
  */
 export function resolveSwimlaneDrop(
-  snapshot: BoardColumnDto[],
+  snapshot: CellPages,
   overId: string,
   cardId: string,
-): { move: CellMove; relocated: BoardColumnDto[] } | null {
-  const targetCell = cellOfOverId(snapshot, overId);
-  if (!targetCell) return null;
-  // Hovering a CARD (not the cell body / itself) inserts before it; a cell
-  // droppable id resolves to an append.
-  const overCardId = parseCellId(overId) !== null || overId === cardId ? null : overId;
-  const relocated = relocateCardToCell(
-    snapshot,
+): { move: CellMove; cells: CellPages } | null {
+  const from = findCardCell(snapshot, cardId);
+  const to = cellOfOverId(snapshot, overId);
+  if (!from || !to) return null;
+  const cells = moveCardBetweenCells(snapshot, {
     cardId,
-    targetCell.columnId,
-    targetCell.laneKey,
-    overCardId,
-  );
-  const move = resolveCellMove(snapshot, relocated, cardId);
-  return move ? { move, relocated } : null;
-}
-
-/** A rendered lane = the projection's lane meta + its per-column loaded cards. */
-export interface RenderedLane {
-  lane: BoardSwimlaneDto;
-  /** Loaded cards for this lane, keyed by column id (column order is the caller's). */
-  cellsByColumnId: Map<string, BoardCardDto[]>;
-}
-
-/**
- * Bucket the loaded board into render-ready lanes: for each lane in the
- * projection's order (which already sorts catch-all LAST — assignee alpha /
- * priority rank / epic position), collect each column's cards that fall in it.
- * Lane ORDER + per-lane aggregate COUNT come from the projection (`swimlanes`);
- * the cards here are only the loaded page (the column's "load more" pulls the
- * rest, which re-buckets through this same function). Defensive: a card whose
- * `swimlaneKey` matches no lane (a just-reassigned card mid-reconcile) is
- * dropped from the buckets rather than crashing — the next projection refresh
- * settles it.
- */
-export function bucketLanes(
-  columns: BoardColumnDto[],
-  swimlanes: BoardSwimlaneDto[],
-): RenderedLane[] {
-  return swimlanes.map((lane) => {
-    const cellsByColumnId = new Map<string, BoardCardDto[]>();
-    for (const col of columns) {
-      cellsByColumnId.set(
-        col.id,
-        col.cards.filter((c) => laneKeyOfCard(c) === lane.key),
-      );
-    }
-    return { lane, cellsByColumnId };
+    from,
+    to,
+    overCardId: overCardIdOf(overId),
   });
+  const move = resolveCellMove(snapshot, cells, cardId);
+  return move ? { move, cells } : null;
 }

@@ -229,6 +229,26 @@ function ids(board: Pick<BoardProjectionDto, 'columns'>): string[] {
   return board.columns.flatMap((c) => c.cards.map((x) => x.id)).sort();
 }
 
+/**
+ * Every card id on a GROUPED board, sorted. A grouped projection's columns are
+ * meta only (MOTIR-11445) — they carry no card — so a grouped board's cards are
+ * read where the grid reads them: each lane's cell pages, under the same toolbar
+ * filter. Also asserts the projection itself carries no card.
+ */
+async function laneIds(
+  fx: { projectId: string; admin: Parameters<typeof boardsService.getBoard>[1] },
+  board: Board,
+  filter?: Parameters<typeof boardsService.getBoard>[3],
+): Promise<string[]> {
+  expect(ids(board)).toEqual([]);
+  const pages = await Promise.all(
+    board.swimlanes.map((lane) =>
+      boardsService.getLanePage(fx.projectId, fx.admin, board.boardId, lane.key, filter),
+    ),
+  );
+  return pages.flatMap((p) => p.cells.flatMap((c) => c.cards.map((x) => x.id))).sort();
+}
+
 function total(board: Pick<BoardProjectionDto, 'columns'>): number {
   return board.columns.reduce((sum, c) => sum + c.totalCount, 0);
 }
@@ -394,7 +414,7 @@ describe('stored filter — kanban round trip (write → read)', () => {
       ['high', 2],
       ['low', 1],
     ]);
-    expect(ids(stored)).toEqual(sorted(myBugHigh, bugHigh, myBugLow));
+    expect(await laneIds(fx, stored)).toEqual(sorted(myBugHigh, bugHigh, myBugLow));
 
     const both = await boardsService.getBoard(fx.projectId, fx.admin, boardId, {
       ast: assignedTo(me),
@@ -403,7 +423,7 @@ describe('stored filter — kanban round trip (write → read)', () => {
       ['high', 1],
       ['low', 1],
     ]);
-    expect(ids(both)).toEqual(sorted(myBugHigh, myBugLow));
+    expect(await laneIds(fx, both, { ast: assignedTo(me) })).toEqual(sorted(myBugHigh, myBugLow));
   });
 });
 
@@ -453,11 +473,13 @@ describe('stored filter — replace and clear through the settings write', () =>
     await groupBy(boardId, 'priority');
     await groupBy(never, 'priority');
 
-    expect(ids(await boardsService.getBoard(fx.projectId, fx.admin, boardId))).toEqual([bug]);
+    expect(
+      await laneIds(fx, await boardsService.getBoard(fx.projectId, fx.admin, boardId)),
+    ).toEqual([bug]);
 
     await boardsService.setBoardFilter(boardId, TASKS, fx.admin);
     const replaced = await boardsService.getBoard(fx.projectId, fx.admin, boardId);
-    expect(ids(replaced)).toEqual([task]);
+    expect(await laneIds(fx, replaced)).toEqual([task]);
     expect(replaced.storedFilter).toEqual({ envelope: TASKS, staleConditions: [], labels: [] });
 
     await boardsService.setBoardFilter(boardId, null, fx.admin);
@@ -465,7 +487,7 @@ describe('stored filter — replace and clear through the settings write', () =>
     const cleared = await boardsService.getBoard(fx.projectId, fx.admin, boardId);
     const neverFrame = await boardsService.getBoard(fx.projectId, fx.admin, never);
     expect(cleared.storedFilter).toBeNull();
-    expect(ids(cleared)).toEqual(sorted(bug, task, story));
+    expect(await laneIds(fx, cleared)).toEqual(sorted(bug, task, story));
     expect(frameShape(cleared)).toEqual(frameShape(neverFrame));
   });
 });
@@ -613,6 +635,16 @@ describe('stored filter — every reader sees the same board', () => {
     expect(ids(visiting)).toEqual(sorted(bugTodo, bugDone));
     expect(total(visiting)).toBe(2);
     expect(visiting.storedFilter).toEqual(creator.storedFilter);
+
+    // Grouped (MOTIR-11445): the column meta's full totals narrow under the same
+    // set — the Visitor's grouped board counts no private-epic descendant.
+    await groupBy(boardId, 'priority');
+    const creatorGrouped = await boardsService.getBoard(fx.projectId, fx.admin, boardId);
+    const visitingGrouped = await boardsService.getBoard(fx.projectId, visitor, boardId);
+    expect(total(creatorGrouped)).toBe(3);
+    expect(total(visitingGrouped)).toBe(2);
+    expect(ids(visitingGrouped)).toEqual([]);
+    expect(col(visitingGrouped, 'todo').totalCount).toBe(1);
   });
 });
 
@@ -694,7 +726,7 @@ describe('stored filter — stale referents, empty results and other projects', 
     const scrumId = await createBoard(fx, stored, { type: 'scrum', name: 'A scrum' });
 
     const kanban = await boardsService.getBoard(fx.projectId, fx.admin, kanbanId);
-    expect(ids(kanban)).toEqual([bugA]);
+    expect(await laneIds(fx, kanban)).toEqual([bugA]);
     expect(total(kanban)).toBe(1);
     expect(kanban.swimlanes.reduce((sum, l) => sum + l.count, 0)).toBe(1);
     expect(kanban.swimlanes.some((l) => l.key === epicB)).toBe(false);

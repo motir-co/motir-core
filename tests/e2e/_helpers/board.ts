@@ -10,8 +10,10 @@ import { signIn } from './shell-session';
 import { SEED_LARGE_OWNER_EMAIL, SEED_LARGE_OWNER_PASSWORD } from '../../../scripts/seedLargeBoard';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
+  BoardCellPageDto,
   BoardColumnDto,
   BoardColumnPageDto,
+  BoardLanePageDto,
   BoardProjectionDto,
   MoveCardTarget,
 } from '@/lib/dto/boards';
@@ -42,6 +44,7 @@ export async function getBoard(ctx: APIRequestContext): Promise<BoardProjectionD
  */
 export async function getFullBoard(ctx: APIRequestContext): Promise<BoardProjectionDto> {
   const board = await getBoard(ctx);
+  if (board.swimlaneGroupBy !== 'none') return fillColumnsFromCells(ctx, board);
   for (const col of board.columns) {
     while (col.cursor) {
       const qs = new URLSearchParams({ boardId: board.boardId, cursor: col.cursor });
@@ -52,6 +55,49 @@ export async function getFullBoard(ctx: APIRequestContext): Promise<BoardProject
       col.cursor = page.cursor;
       col.totalCount = page.totalCount;
       Object.assign(board.planHolds, page.planHolds);
+    }
+  }
+  return board;
+}
+
+/**
+ * A GROUPED board's cards, read the way the grid reads them (MOTIR-11452): each
+ * lane's first page of every cell (`GET /api/board/lanes/[laneKey]/cells`), then
+ * each cell's remaining pages (`GET /api/board/columns/[id]/cards?lane=`). The
+ * grouped projection's own `columns[].cards` are not read — the grid never shows
+ * them — so every column here carries exactly what its cells hold, lane by lane,
+ * with a null cursor.
+ */
+async function fillColumnsFromCells(
+  ctx: APIRequestContext,
+  board: BoardProjectionDto,
+): Promise<BoardProjectionDto> {
+  const byId = new Map(board.columns.map((col) => [col.id, col]));
+  for (const col of board.columns) {
+    col.cards = [];
+    col.cursor = null;
+  }
+  for (const lane of board.swimlanes) {
+    const laneQs = new URLSearchParams({ boardId: board.boardId });
+    const res = await ctx.get(
+      `/api/board/lanes/${encodeURIComponent(lane.key)}/cells?${laneQs.toString()}`,
+    );
+    expect(res.status(), `GET lane ${lane.key} cells`).toBe(200);
+    for (const cell of ((await res.json()) as BoardLanePageDto).cells) {
+      const col = byId.get(cell.columnId);
+      if (!col) continue;
+      col.cards.push(...cell.cards);
+      Object.assign(board.planHolds, cell.planHolds);
+      let cursor = cell.cursor;
+      while (cursor) {
+        const qs = new URLSearchParams({ boardId: board.boardId, lane: lane.key, cursor });
+        const next = await ctx.get(`/api/board/columns/${col.id}/cards?${qs.toString()}`);
+        expect(next.status(), `GET cell ${col.id} × ${lane.key} page`).toBe(200);
+        const page = (await next.json()) as BoardCellPageDto;
+        col.cards.push(...page.cards);
+        Object.assign(board.planHolds, page.planHolds);
+        cursor = page.cursor;
+      }
     }
   }
   return board;
@@ -174,38 +220,22 @@ export async function scrollLaneToEnd(page: Page, columnId: string, total: numbe
     .toBe(total.toLocaleString('en-US'));
 }
 
-/** The swimlane board's twin of {@link scrollLaneToEnd} (MOTIR-10655): bring one
- *  column's sentinel in the board's footer row into view, again and again, until
- *  the column's pinned badge reads the bare total. The swimlane grid scrolls as
- *  one, against the page, so the sentinel itself is the scroll target.
- *
- *  The scroll is a plain `scrollIntoView` on whatever sentinel is there, NEVER a
- *  Locator action on it: the sentinel exists only while its column has more
- *  (`LaneLoadFooter` renders nothing once the cursor is spent), so it unmounts the
- *  moment the LAST page lands. A `scrollIntoViewIfNeeded()` issued after that
- *  waits for an element that will never come back, the poll times out holding the
- *  badge it read one page earlier, and a lane that loaded in full reads
- *  "60 of 64". */
-export async function scrollSwimlaneColumnToEnd(
-  page: Page,
-  columnId: string,
-  total: number,
-): Promise<void> {
+/** Page ONE grouped-board cell through its own Load more (MOTIR-11450): press the
+ *  first cell control on the board and wait for that cell's own count to grow —
+ *  the cell pages itself; no column footer or sentinel is involved. */
+export async function pageFirstCellThroughLoadMore(page: Page): Promise<void> {
   const main = page.getByRole('main');
-  const badge = main.getByTestId(`board-count-${columnId}`);
+  const more = main.locator('[data-testid^="cell-load-more-"]').first();
+  await expect(more, 'a cell with more offers Load more').toBeVisible({ timeout: 30_000 });
+  const cellKey = ((await more.getAttribute('data-testid')) ?? '').slice('cell-load-more-'.length);
+  const count = main.getByTestId(`cell-count-${cellKey}`);
+  const loadedOf = async () =>
+    Number(((await count.textContent()) ?? '').match(/[\d,]+/)?.[0]?.replace(/,/g, '') ?? 0);
+  const before = await loadedOf();
+  await more.click();
   await expect
-    .poll(
-      async () => {
-        await main.evaluate((el, id) => {
-          el.querySelector(`[data-testid="board-lane-sentinel-${id}"]`)?.scrollIntoView({
-            block: 'end',
-          });
-        }, columnId);
-        return (await badge.textContent())?.trim();
-      },
-      { message: `swimlane column ${columnId} pages to its full ${total}`, timeout: 60_000 },
-    )
-    .toBe(total.toLocaleString('en-US'));
+    .poll(loadedOf, { message: `cell ${cellKey} loaded its next page` })
+    .toBeGreaterThan(before);
 }
 
 /** Assert a column is DOM-bounded: its mounted card-node count is > 0 but well
@@ -230,6 +260,17 @@ export async function expectColumnVirtualized(
 export async function expectNoLoadMore(page: Page): Promise<void> {
   await expect(page.getByText(/load more/i)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /load more/i })).toHaveCount(0);
+}
+
+/** A GROUPED board's twin of {@link expectNoLoadMore} (MOTIR-11450): a grouped
+ *  board pages each cell through its own Load more, so a cell control is allowed
+ *  — what must never come back is a COLUMN-level page affordance: no footer row,
+ *  no column sentinel or footer, and no column "Load more". */
+export async function expectNoColumnLoadMore(page: Page): Promise<void> {
+  const main = page.getByRole('main');
+  await expect(main.getByTestId('swimlane-load-row')).toHaveCount(0);
+  await expect(main.locator('[data-testid^="board-lane-footer-"]')).toHaveCount(0);
+  await expect(main.locator('[data-testid^="board-load-more-"]')).toHaveCount(0);
 }
 
 // ── At-scale SCRUM helpers (Subtask 4.7.1) ──────────────────────────────────
@@ -316,7 +357,9 @@ export function expectActiveSprintScope(
 // copied into the 3.5.3 spec, and lifted HERE for the third consumer — the
 // at-scale Scrum interaction journey (4.7.3) — per the module's lift pattern.
 
-/** Resolve a card id → its board identifier (the `board-card-<identifier>` testid). */
+/** Resolve a card id → its board identifier (the `board-card-<identifier>` testid).
+ *  On a grouped board, pass the board {@link getFullBoard} reads — its columns are
+ *  built from the lane and cell pages, which is where a grouped board's cards are. */
 export function identifierOf(board: BoardProjectionDto, id: string): string {
   for (const col of board.columns) {
     const card = col.cards.find((c) => c.id === id);
@@ -436,6 +479,7 @@ export async function dragCardOntoCell(
   page: Page,
   cardTestId: string,
   target: Locator,
+  options: { dropInViewportMiddle?: boolean } = {},
 ): Promise<void> {
   const card = page.getByTestId(cardTestId);
   // Settle BOTH into view BEFORE measuring — capturing the source box and THEN
@@ -472,7 +516,22 @@ export async function dragCardOntoCell(
     }
   }
   const tx = to.x + to.width / 2;
-  const ty = to.y + to.height / 2;
+  let ty = to.y + to.height / 2;
+  // A cell taller than the screen has its centre off it, and a pointer near the
+  // viewport's edge makes dnd-kit auto-scroll the page under it, so the drop
+  // lands in the lane that scrolled in. `dropInViewportMiddle` keeps the drop on
+  // the part of the cell inside the screen's middle half (pointerWithin resolves
+  // a drop over one of the cell's cards to that cell).
+  if (options.dropInViewportMiddle && viewport) {
+    const lo = Math.max(to.y + 8, viewport.height * 0.25);
+    const hi = Math.min(to.y + to.height - 8, viewport.height * 0.75);
+    if (lo > hi) {
+      throw new Error(
+        `the target cell (y ${to.y}, height ${to.height}) has no part in the middle of the viewport (height ${viewport.height})`,
+      );
+    }
+    ty = Math.min(Math.max(ty, lo), hi);
+  }
   await page.mouse.move(fx, fy);
   await page.mouse.down();
   await page.mouse.move(fx + 24, fy, { steps: 6 });
@@ -496,16 +555,35 @@ export async function dragIntoCellUntil(
   attempts = 4,
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
+    // Nothing re-reads the board after a move (MOTIR-11452): what a drop is
+    // waited on is its own writes — the board move and the reassign's server
+    // action — and the committed state is then read from the cells.
+    const wrote = waitForMoveWrite(page);
     await dragCardOntoCell(page, `board-card-${srcCardKey}`, target);
+    await wrote;
     for (let poll = 0; poll < 10; poll++) {
-      if (predicate(await getBoard(page.request))) return true;
+      if (predicate(await getFullBoard(page.request))) return true;
       await page.waitForTimeout(100);
     }
   }
   return false;
 }
 
-/** Pick the active group-by dimension via the board-header Segmented control,
+/** The first of a drop's two writes to answer — `POST /api/board/move` (the
+ *  transition) or the reassign's server action — or null when the drop wrote
+ *  nothing within `timeout` (a drop that missed its cell). */
+export function waitForMoveWrite(page: Page, timeout = 5_000): Promise<unknown> {
+  return page
+    .waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        (r.url().endsWith('/api/board/move') || r.request().headers()['next-action'] !== undefined),
+      { timeout },
+    )
+    .catch(() => null);
+}
+
+/** Pick the active group-by dimension via the board-header group-by menu,
  *  awaiting the PATCH so the server-side persistence has landed. From
  *  board-swimlanes.spec.ts (3.3.7). */
 export async function setGroupBy(
@@ -516,7 +594,10 @@ export async function setGroupBy(
   const patch = page.waitForResponse(
     (r) => r.url().endsWith('/api/board') && r.request().method() === 'PATCH',
   );
-  await control.getByRole('button', { name: label, exact: true }).click();
+  // The group-by trigger opens the group-by menu (MOTIR-11451); the dimensions
+  // are its menuitemradio rows, portaled out of the group.
+  await control.getByRole('button').click();
+  await page.getByRole('menuitemradio', { name: label, exact: true }).click();
   expect((await patch).ok(), `group-by → ${label} persisted`).toBeTruthy();
 }
 
