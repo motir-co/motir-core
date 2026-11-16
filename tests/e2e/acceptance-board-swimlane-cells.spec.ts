@@ -884,9 +884,11 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
       .toBe(true);
     expect(await scrollLefts(page, others), 'the other lanes stayed put').toEqual(othersBefore);
     expect((await label.boundingBox())!.x, 'the lane label stays pinned').toBeCloseTo(labelX, 0);
-    // Off the header's offset, the lane names its columns itself, and every cell
-    // still names its column.
-    const strip = main(page).getByTestId(`swimlane-strip-${ana}`);
+    // The pinned header follows the lane just scrolled, so Ana's lane sits AT its
+    // offset and draws no strip; a lane left behind is now OFF it, and names its
+    // columns itself. Every cell of the scrolled lane still names its column.
+    await expect(main(page).getByTestId(`swimlane-strip-${ana}`)).toHaveCount(0);
+    const strip = main(page).getByTestId(`swimlane-strip-${bo}`);
     await expect(strip).toBeVisible();
     for (const name of columnNames) await expect(strip).toContainText(name);
     for (const name of columnNames) {
