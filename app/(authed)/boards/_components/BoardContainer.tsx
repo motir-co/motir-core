@@ -1258,37 +1258,47 @@ function BoardDnd({
       );
       if (columnChanged) setColumns((prev) => transferCount(prev, from.columnId, to.columnId));
       if (laneChanged) shiftLaneCount(from.laneKey, to.laneKey);
-      // A cell no page has reached yet asks for its FIRST page once — that cell
-      // alone; the page's total then replaces the local one, and the landed card is
-      // skipped by the merge rather than shown twice.
       const target = cellSnapshot.cells[cellId(to.columnId, to.laneKey)];
       const neverLoaded = (target?.totalCount ?? null) === null && target?.state !== 'loading';
-      if ((columnChanged || laneChanged) && neverLoaded) loadCellPage(to.columnId, to.laneKey);
 
+      const writes: Promise<unknown>[] = [];
       const fromColName = colName(columnsRef.current, move.originColId);
       if (columnChanged || rankChanged) {
-        void runTransition({
-          workItemId: activeId,
-          seq,
-          originColId: move.originColId,
-          targetColId: move.targetColId,
-          originNextId: move.originNextId,
-          beforeId: move.beforeId,
-          afterId: move.afterId,
-          card,
-          fromColName,
-          toColName: colName(columnsRef.current, move.targetColId),
-        });
+        writes.push(
+          runTransition({
+            workItemId: activeId,
+            seq,
+            originColId: move.originColId,
+            targetColId: move.targetColId,
+            originNextId: move.originNextId,
+            beforeId: move.beforeId,
+            afterId: move.afterId,
+            card,
+            fromColName,
+            toColName: colName(columnsRef.current, move.targetColId),
+          }),
+        );
       }
       if (laneChanged) {
-        void runReassign({
-          workItemId: activeId,
-          seq,
-          originLaneKey: move.originLaneKey,
-          targetLaneKey: move.targetLaneKey,
-          originNextId: move.originNextId,
-          card,
-        });
+        writes.push(
+          runReassign({
+            workItemId: activeId,
+            seq,
+            originLaneKey: move.originLaneKey,
+            targetLaneKey: move.targetLaneKey,
+            originNextId: move.originNextId,
+            card,
+          }),
+        );
+      }
+      // A cell no page has reached yet asks for its FIRST page once — that cell
+      // alone. It reads as loading at once, but the page is read only after the
+      // drop's own writes settle: read before them, it would leave the card out
+      // and total N while the landed card made N + 1. Read after, its total
+      // counts the card (or, on a refused write, the card has reverted out), and
+      // the merge skips the landed card rather than showing it twice.
+      if ((columnChanged || laneChanged) && neverLoaded) {
+        loadCellPage(to.columnId, to.laneKey, Promise.allSettled(writes));
       }
     },
     [

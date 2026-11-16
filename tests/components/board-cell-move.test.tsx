@@ -461,8 +461,8 @@ describe('a drag across cells on a grouped board', () => {
     expect(cardsIn('c2', 'u2')).toEqual(['PROD-1']);
     expect(cellOf('c2', 'u2').getAttribute('data-cell-phase')).toBe('first-load');
     expect(screen.queryByTestId('cell-count-c2-u2')).toBeNull();
+    await waitFor(() => expect(pageCalls(fetchSpy)).toHaveLength(1));
     const pages = pageCalls(fetchSpy);
-    expect(pages).toHaveLength(1);
     expect(String(pages[0]![0])).toBe('/api/board/columns/c2/cards?boardId=b1&lane=u2');
 
     await act(async () =>
@@ -474,6 +474,40 @@ describe('a drag across cells on a grouped board', () => {
     await waitFor(() => expect(count('cell-count-c2-u2')).toBe('2'));
     expect(cardsIn('c2', 'u2')).toEqual(['PROD-1', 'PROD-7']);
     expect(pageCalls(fetchSpy)).toHaveLength(1);
+  });
+
+  it('a drop into a cell no page has reached reads its first page only after the drop’s writes settle', async () => {
+    let answerMove!: (r: { status: number; body: unknown }) => void;
+    let answerReassign!: () => void;
+    updateIssueAction.mockImplementationOnce(
+      () => new Promise((resolve) => (answerReassign = () => resolve({ ok: true }))),
+    );
+    const fetchSpy = stubFetch({
+      failLane: 'u2',
+      move: () => new Promise((resolve) => (answerMove = resolve)),
+      cellPage: () => ({
+        status: 200,
+        body: cell('c2', 'u2', [card('w1', 1, 'u2'), card('w7', 7, 'u2')], 2),
+      }),
+    });
+    render(<BoardContainer projectName="Motir" />);
+    await waitFor(() => expect(screen.getByTestId('cell-count-c1-u1')).toBeTruthy());
+    await waitFor(() => expect(cellOf('c2', 'u2').getAttribute('data-cell-phase')).toBe('failed'));
+
+    await drag('w1', 'c2::u2');
+
+    // Both writes are in flight: the cell reads as loading and asks nothing yet,
+    // so its page cannot answer from before the card arrived.
+    expect(cellOf('c2', 'u2').getAttribute('data-cell-phase')).toBe('first-load');
+    expect(pageCalls(fetchSpy)).toHaveLength(0);
+
+    await act(async () => answerMove({ status: 200, body: { card: card('w1', 1, 'u2') } }));
+    expect(pageCalls(fetchSpy)).toHaveLength(0);
+
+    await act(async () => answerReassign());
+    await waitFor(() => expect(pageCalls(fetchSpy)).toHaveLength(1));
+    await waitFor(() => expect(count('cell-count-c2-u2')).toBe('2'));
+    expect(cardsIn('c2', 'u2')).toEqual(['PROD-1', 'PROD-7']);
   });
 
   it('the move response takes the confirmed card into its cell', async () => {

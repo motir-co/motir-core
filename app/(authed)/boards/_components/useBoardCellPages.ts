@@ -58,8 +58,13 @@ export interface BoardCellPagesApi {
   pages: CellPages;
   cellState: (columnId: string, laneKey: string) => CellPage;
   cellSummary: (columnId: string, laneKey: string) => CellSummary;
-  /** Ask for this cell's next page (its first, when it holds no cursor). */
-  loadCell: (columnId: string, laneKey: string) => void;
+  /**
+   * Ask for this cell's next page (its first, when it holds no cursor). With
+   * `after`, the cell reads as loading and holds its one in-flight slot at once,
+   * but the read is sent only once `after` settles — so a page asked for by a
+   * drop is read after the drop's own writes, never racing them.
+   */
+  loadCell: (columnId: string, laneKey: string, after?: Promise<unknown>) => void;
   /** Re-ask a failed cell's page — that cell alone, never its whole lane. */
   retryCell: (columnId: string, laneKey: string) => void;
   /** Ask for an expanded lane's first pages (once; re-asks a failed lane). */
@@ -166,7 +171,7 @@ export function useBoardCellPages({
   );
 
   const loadCell = useCallback(
-    (columnId: string, laneKey: string) => {
+    (columnId: string, laneKey: string, after?: Promise<unknown>) => {
       if (!grouped) return;
       const page = cellPageOf(pagesRef.current, readKey, columnId, laneKey);
       // Exhausted: a page landed and named no next one.
@@ -180,7 +185,10 @@ export function useBoardCellPages({
       const params = new URLSearchParams({ boardId, lane: laneKey });
       if (page.cursor) params.set('cursor', page.cursor);
       if (filterParam) params.set('filter', filterParam);
-      void readJson<BoardCellPageDto>(`/api/board/columns/${columnId}/cards?${params.toString()}`)
+      const url = `/api/board/columns/${columnId}/cards?${params.toString()}`;
+      // `after` only orders the read; its own outcome is its caller's to handle.
+      void Promise.allSettled(after ? [after] : [])
+        .then(() => readJson<BoardCellPageDto>(url))
         .then((next) => {
           setPages((prev) => appendCellPage(prev, readKey, next));
           onPlanHoldsRef.current(next.planHolds);
