@@ -538,6 +538,8 @@ export interface ProviderReconciliationModelDayDTO {
   model: string;
   recordedMicroUsd: number;
   billedMicroUsd: number;
+  /** billed − recorded, carried from motir-ai unchanged (MOTIR-11376). */
+  gapMicroUsd: number;
 }
 
 /** One closed UTC day of one provider, as motir-ai recorded it. */

@@ -289,8 +289,18 @@ export const PROVIDER_RECONCILIATION: RawProviderReconciliation = {
           gapMicroUsd: 1_000_000,
           pastTolerance: true,
           perModel: [
-            { model: 'claude-a', recordedMicroUsd: 1_500_000, billedMicroUsd: 2_500_000 },
-            { model: 'claude-b', recordedMicroUsd: 500_000, billedMicroUsd: 500_000 },
+            {
+              model: 'claude-a',
+              recordedMicroUsd: 1_500_000,
+              billedMicroUsd: 2_500_000,
+              gapMicroUsd: 1_000_000,
+            },
+            {
+              model: 'claude-b',
+              recordedMicroUsd: 500_000,
+              billedMicroUsd: 500_000,
+              gapMicroUsd: 0,
+            },
           ],
           estimatedRowCount: 3,
         },

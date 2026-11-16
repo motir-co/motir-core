@@ -307,7 +307,7 @@ function PerModelTable({ v, d }: { v: View; d: ProviderReconciliationDayDTO }) {
               {v.money(pm.billedMicroUsd)}
             </td>
             <td className="py-(--spacing-control-y-4) text-right tabular-nums text-(--el-text)">
-              {v.signed(pm.billedMicroUsd - pm.recordedMicroUsd)}
+              {v.signed(pm.gapMicroUsd)}
             </td>
           </tr>
         ))}

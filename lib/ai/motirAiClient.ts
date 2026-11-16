@@ -4171,6 +4171,8 @@ export interface RawReconciliationModelDay {
   model: string;
   recordedMicroUsd: number;
   billedMicroUsd: number;
+  /** billed − recorded, as motir-ai stored it — never computed here. */
+  gapMicroUsd: number;
 }
 
 /** One closed UTC day of one provider. */

@@ -95,8 +95,18 @@ const RECONCILIATION: RawProviderReconciliation = {
           gapMicroUsd: 2_500_000,
           pastTolerance: true,
           perModel: [
-            { model: 'claude-opus-4-6', recordedMicroUsd: 9_000_000, billedMicroUsd: 11_500_000 },
-            { model: 'claude-sonnet-4-6', recordedMicroUsd: 3_000_000, billedMicroUsd: 3_000_000 },
+            {
+              model: 'claude-opus-4-6',
+              recordedMicroUsd: 9_000_000,
+              billedMicroUsd: 11_500_000,
+              gapMicroUsd: 2_500_000,
+            },
+            {
+              model: 'claude-sonnet-4-6',
+              recordedMicroUsd: 3_000_000,
+              billedMicroUsd: 3_000_000,
+              gapMicroUsd: 0,
+            },
           ],
           estimatedRowCount: 4,
         },

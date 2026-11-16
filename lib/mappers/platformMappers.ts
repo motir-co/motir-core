@@ -243,6 +243,7 @@ export function toProviderReconciliationDTO(
           model: m.model,
           recordedMicroUsd: m.recordedMicroUsd,
           billedMicroUsd: m.billedMicroUsd,
+          gapMicroUsd: m.gapMicroUsd,
         })),
         estimatedRowCount: d.estimatedRowCount,
       })),
