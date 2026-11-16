@@ -2293,6 +2293,9 @@ export function usePlanChangeConversation({
       // Remembered before the hop, so a retry after a failure re-sends to the
       // thread this turn actually landed in.
       lastAnchorRef.current = anchor;
+      // A plan run is not an ask: a retry after it must not re-run an earlier ask turn
+      // (one an anchored thread sent against its waiting plan, MOTIR-11488).
+      lastAskTurnRef.current = null;
       const submit =
         submitter ??
         (anchor
@@ -2471,6 +2474,10 @@ export function usePlanChangeConversation({
       submitter: (signal: AbortSignal) => Promise<AskSubmitResponse | AskRedirectResponse>,
       /** The work item this turn is anchored on (MOTIR-7050), or null. */
       anchorKey: string | null = null,
+      /** The ANCHORED thread the ask was sent on (MOTIR-11488), or null on the project
+       *  thread: a plan run the ask hands over to streams through that item's relay,
+       *  as the anchored door's own runs do, and a retry re-aims at it. */
+      runAnchor: RunAnchor | null = null,
     ) => {
       const controller = new AbortController();
       abortRef.current = controller;
@@ -2482,9 +2489,9 @@ export function usePlanChangeConversation({
       let livePlan: string | null = null;
       // A plan run this ask handed over to, resumed by itself after a lost machine (MOTIR-8336).
       let resumedBy: PlanChangeSessionDto | null = null;
-      // An ask is project-wide by construction, so a retry after one must not
-      // re-aim at an anchor an earlier plan-change run happened to use.
-      lastAnchorRef.current = null;
+      // An ask on the project thread must not re-aim a retry at an anchor an earlier
+      // plan-change run happened to use; one on an anchored thread keeps its own.
+      lastAnchorRef.current = runAnchor;
       lastAskAnchorRef.current = anchorKey;
 
       /** The run ENDED on a settle — answered, landed or silent. */
@@ -2547,7 +2554,7 @@ export function usePlanChangeConversation({
           stoppingRef.current = carried;
           if (carried) void raiseStop(submitted.session.id, submitted.jobId);
           resumedBy =
-            (await finishPlanRun(submitted.jobId, submitted.planId, null, controller)) ?? null;
+            (await finishPlanRun(submitted.jobId, submitted.planId, runAnchor, controller)) ?? null;
           return;
         }
 
@@ -2648,7 +2655,7 @@ export function usePlanChangeConversation({
           }));
           if (carried) void raiseStop(redirect.session.id, redirect.jobId);
           resumedBy =
-            (await finishPlanRun(redirect.jobId, redirect.planId, null, controller)) ?? null;
+            (await finishPlanRun(redirect.jobId, redirect.planId, runAnchor, controller)) ?? null;
           return;
         }
 
@@ -3061,6 +3068,44 @@ export function usePlanChangeConversation({
       // view-gates the anchors first, so the contract fuses them) — `run` does
       // the whole hop, and there is no separate append to fail on its own.
       const anchor = resolveAnchor(targets, anchorRef.current);
+
+      // ⚠️ A PROPOSED PLAN WAITS → THE ASK DOOR, ON THE ANCHORED THREAD TOO (Bug
+      // MOTIR-11488). A follow-up to a plan that waits for a decision is not a rewrite
+      // of it: the turn goes to `ask_project` with the plan, and the PLANNER decides —
+      // a question is answered and the plan stays decidable; a change comes back with
+      // a reply naming it and the revision starts (a `redirected` settle, which
+      // `runAsk` streams). The server re-reads the plan: one decided meanwhile sends the
+      // turn down the shipped contextual submit instead. A seeded first send has no
+      // session and so no plan; an answer to the planner's question keeps its door.
+      const heldForAsk = stateRef.current.session?.id ?? null;
+      const waitingReview = stateRef.current.review;
+      if (
+        anchor &&
+        heldForAsk &&
+        !isAnswer &&
+        waitingReview?.status === 'planned' &&
+        !stateRef.current.decided
+      ) {
+        setState((s) => ({
+          ...s,
+          phase: 'streaming',
+          jobId: null,
+          ...firstAct('submitted'),
+          errorCode: null,
+          outOfCredits: false,
+          stopping: false,
+          stopped: false,
+          queued: [],
+        }));
+        stoppingRef.current = false;
+        await runAsk(
+          (signal) => submitAskTurn(body, signal, false, heldForAsk, null, null),
+          null,
+          anchor,
+        );
+        return;
+      }
+
       if (anchor) {
         // Busy from the click, not from the response: the composer must lock
         // immediately or a second Enter fires a second turn (the project branch
@@ -3283,7 +3328,9 @@ export function usePlanChangeConversation({
     // accumulated intent. No second `user` turn is appended either way — the
     // person said one thing once — but naming the turn is what keeps the retry
     // pointed at what actually failed.
-    if (!anchor && lastAskTurnRef.current) {
+    // An ANCHORED thread's ask against its waiting plan (MOTIR-11488) retries the same
+    // way: `lastAskTurnRef` is set only by an ask and cleared by every plan run.
+    if (lastAskTurnRef.current) {
       const turnId = lastAskTurnRef.current;
       // …and with the ANCHOR it was sent with (MOTIR-7050), so the re-read is
       // about the same work item the first one was.
@@ -3301,6 +3348,7 @@ export function usePlanChangeConversation({
             signal,
           ),
         anchorKey,
+        anchor,
       );
       return;
     }

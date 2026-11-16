@@ -4,7 +4,12 @@ import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
-import { planRunContextService, type RunContext } from '@/lib/services/planRunContextService';
+import {
+  planRunContextService,
+  type RunContext,
+  type WaitingPlanContext,
+} from '@/lib/services/planRunContextService';
+import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { planChangeMailboxService } from '@/lib/services/planChangeMailboxService';
 import { planChangeLateChangeService } from '@/lib/services/planChangeLateChangeService';
 import { plansService } from '@/lib/services/plansService';
@@ -99,6 +104,14 @@ import { guideLandingService, type GuideSettleResult } from '@/lib/services/guid
 // CLASSIFIED, and said nothing about anchoring an ask at a work-item set, so
 // widening this to anchored threads would be deciding that here rather than
 // where it belongs. An anchored ask is a follow-up, not an omission.
+//
+// ⚠️ EXCEPT ONCE A PLAN WAITS (Bug MOTIR-11488). A turn on a conversation whose plan is
+// PROPOSED and waits for a decision — on the project thread AND on an anchored one — is
+// an ask against that plan: it carries `context.waitingPlan`, and the PLANNER decides
+// whether it needs a revision. A question is answered and the plan is untouched; a
+// change comes back `plan_change` with a reply and the planner's restatement, and the
+// settle lands the reply and starts the revision from the restatement. Core does not
+// pre-classify, and it no longer rewrites a waiting plan from the accumulated turns.
 //
 // ── THE ANCHOR (MOTIR-7047 · the ADR's AMENDMENT 1, A1.2) ────────────────────
 // A turn MAY name ONE work item it is about (`anchorKey`) — usually the triage
@@ -246,6 +259,9 @@ async function submitAsk(
   pendingPlanOffer?: PendingPlanOfferStatement,
   /** The earlier turns, and the Grill me answers on a no-run turn (MOTIR-9442). */
   conversation?: AskConversation,
+  /** NO RUN only (MOTIR-11488): the plan the conversation waits on, for the planner to
+   *  decide whether this turn needs it revised. */
+  waitingPlan?: WaitingPlanContext,
 ): Promise<{ jobId: string }> {
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
@@ -269,6 +285,8 @@ async function submitAsk(
     prompt,
     ...(anchorKey ? { anchorKey } : {}),
     ...(run ? { run } : {}),
+    // A live run wins: a plan still being written is never stated as a waiting one.
+    ...(!run && waitingPlan ? { waitingPlan } : {}),
     // One carrier per fact: with a run, the snapshot's own `pendingOffer` states it.
     ...(!run && pendingPlanOffer ? { pendingPlanOffer } : {}),
     ...(code ? { code } : {}),
@@ -615,6 +633,55 @@ async function settleMidRun(args: {
   return { outcome: 'answered', session: updated };
 }
 
+/**
+ * The settle of a turn the PLANNER decided needs the waiting plan revised (Bug
+ * MOTIR-11488). In this order, each step replay-safe:
+ *
+ *  1. the reply naming the change lands as the `assistant` turn (keyed on the job);
+ *  2. the revision starts from the planner's restatement through the shipped revise
+ *     route — no confirmation, the person was told in step 1;
+ *  3. the person's turn is recorded `plan_change`, which is what a replay reads to
+ *     start nothing a second time.
+ *
+ * A plan that no longer waits (decided, stale or superseded since the turn was read)
+ * starts nothing: the reply still lands and the settle is `answered`.
+ */
+async function settleRevision(args: {
+  jobId: string;
+  turn: PlanChangeTurnDto;
+  answer: string | null;
+  citations: string[];
+  requirement: string;
+  session: PlanChangeSessionDto;
+  ctx: ProjectContext;
+  address: { sessionId: string };
+  result: unknown;
+}): Promise<AskSettleResult> {
+  const { jobId, turn, ctx, address } = args;
+  if (!args.answer) return { outcome: 'silent', session: args.session };
+  const answered = await planChangeSessionsService.appendAnswerTurn(
+    {
+      jobId,
+      body: args.answer,
+      citations: args.citations,
+      codeUnreadable: readCodeUnreadable(args.result) === 'answered' ? 'answered' : null,
+    },
+    ctx,
+    address,
+  );
+  if (turn.intent === 'plan_change') return { outcome: 'answered', session: answered };
+  const revised = await planChangeSessionsService.reviseWaitingPlan(ctx, address, args.requirement);
+  if (!revised) return { outcome: 'answered', session: answered };
+  const session = await planChangeSessionsService.recordTurnIntent(
+    turn.id,
+    'plan_change',
+    ctx,
+    {},
+    address,
+  );
+  return { outcome: 'redirected', jobId: revised.jobId, planId: revised.planId, session };
+}
+
 export const aiAskService = {
   /**
    * The composer's door: append what the person typed, then run it.
@@ -752,6 +819,29 @@ export const aiAskService = {
       };
     }
 
+    // ── A PLAN WAITS → THE PLANNER DECIDES (MOTIR-11488) ──────────────────────
+    // The conversation's plan is proposed and waits: this turn is asked AGAINST it, and
+    // the settle revises it only when the planner says it must change.
+    const waitingPlanId = await planChangeSessionsService.waitingPlanIdOf(ctx, address);
+    // An ANCHORED conversation whose plan does NOT wait (none yet, still generating,
+    // stale) has no ask door: its turn takes the shipped contextual submit — the
+    // targets re-taken, the turn appended, the accumulated intent planned — exactly as
+    // the anchored door runs it. Reached when the client thought a plan waited and it
+    // had been decided or superseded meanwhile.
+    if (!waitingPlanId && current.targetKeys.length > 0) {
+      await planTargetLockService.acquireForScope(current.id, current.targetKeys, ctx);
+      await planChangeSessionsService.appendTurn(trimmed, ctx, address, {
+        isAnswer: opts.isAnswer === true,
+      });
+      const submitted = await planChangeSessionsService.submit(ctx, address);
+      return {
+        outcome: 'redirected',
+        jobId: submitted.jobId,
+        planId: submitted.planId,
+        session: submitted.session,
+      };
+    }
+
     // Read BEFORE the append, so it is the offer standing when the person spoke
     // (MOTIR-9290) — the shape `submitMidRunTurn` uses for its forward offer.
     const pendingPlanOffer = planOfferService.statingPending(current.turns);
@@ -774,6 +864,10 @@ export const aiAskService = {
     const turn = appended.turns.at(-1);
     if (!turn) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
 
+    // The snapshot never throws: an unreadable plan is `readable: false`.
+    const waitingPlan = waitingPlanId
+      ? await planRunContextService.buildWaitingPlanContext(waitingPlanId, ctx)
+      : undefined;
     const { jobId } = await submitAsk(
       trimmed,
       anchor,
@@ -782,6 +876,7 @@ export const aiAskService = {
       attemptOf(turn),
       pendingPlanOffer,
       conversation,
+      waitingPlan,
     );
     const session = await planChangeSessionsService.recordTurnIntent(
       turn.id,
@@ -928,7 +1023,11 @@ export const aiAskService = {
     }
 
     // A RETRY re-sends the attempt that did not come back (MOTIR-9255); a flip is a
-    // new reading of the turn, so it runs fresh and unkeyed.
+    // new reading of the turn, so it runs fresh and unkeyed. A turn typed with no run
+    // is re-asked against the plan that waits NOW, as a first send is (MOTIR-11488).
+    const waitingPlanId = turn.runJobId
+      ? null
+      : await planChangeSessionsService.waitingPlanIdOf(ctx, address);
     const { jobId } = await submitAsk(
       turn.body,
       anchor,
@@ -941,6 +1040,9 @@ export const aiAskService = {
         turns: conversationTurnsOf(current.turns.filter((t) => t.seq < turn.seq)),
         ...(turn.runJobId ? {} : await carriedAnswersOrNone(current, ctx)),
       },
+      waitingPlanId
+        ? await planRunContextService.buildWaitingPlanContext(waitingPlanId, ctx)
+        : undefined,
     );
     const session = await planChangeSessionsService.recordTurnIntent(
       turnId,
@@ -991,6 +1093,22 @@ export const aiAskService = {
     // and open a SECOND planning job on a thread that already has one.
     if (turn.runJobId && (outcome.intent === 'plan_change' || outcome.intent === 'ask')) {
       return settleMidRun({ jobId, turn, outcome, session, ctx, address, result: job.result });
+    }
+
+    // ⚠️ THE WAITING-PLAN REVISION (MOTIR-11488) — BEFORE the legacy redirect below,
+    // which would rewrite the plan from the accumulated turns.
+    if (outcome.intent === 'plan_change' && outcome.revision) {
+      return settleRevision({
+        jobId,
+        turn,
+        answer: outcome.answer,
+        citations: outcome.citations,
+        requirement: outcome.revision.requirement,
+        session,
+        ctx,
+        address,
+        result: job.result,
+      });
     }
 
     if (outcome.intent === 'plan_change') {
