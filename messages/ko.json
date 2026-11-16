@@ -12474,6 +12474,78 @@
       "unavailable": {
         "title": "지금은 사용량을 표시할 수 없습니다",
         "description": "사용량 집계를 관리하는 AI 서비스가 응답하지 않았습니다. 수치에는 문제가 없으니 잠시 후 다시 시도하세요."
+      },
+      "reconciliation": {
+        "title": "공급업체 청구서",
+        "intro": "UTC 일 기준으로 Motir가 기록한 금액과 각 공급업체가 청구한 금액을 나란히 보여 줍니다. 공급업체의 허용 범위를 넘는 차액은 발견 사항이 되며, 그 이후의 요율을 바로잡을 뿐 지난 청구는 바꾸지 않습니다.",
+        "col": {
+          "day": "날짜(UTC)",
+          "recorded": "Motir 기록",
+          "billed": "청구액",
+          "gap": "차액",
+          "source": "출처",
+          "status": "상태",
+          "provider": "공급업체",
+          "models": "모델",
+          "estimated": "추정 행",
+          "side": "차이가 있는 쪽"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "잔액 스냅샷",
+          "export": "내보내기",
+          "none": "없음"
+        },
+        "status": {
+          "reconciled": "대조 완료",
+          "failed": "읽기 실패",
+          "failedAt": "{time} UTC에 시도",
+          "notRecorded": "기록 없음",
+          "unreconciled": "출처 없음"
+        },
+        "pastTolerance": "허용 범위 초과",
+        "estimated": "{count, plural, other {#개 행 추정}}",
+        "perModel": {
+          "aria": "{day} 청구서를 모델별로 보기",
+          "model": "모델"
+        },
+        "summary": {
+          "recorded": "기록",
+          "billed": "청구",
+          "gap": "차액",
+          "over": "읽은 날 {read}/{days}일",
+          "onRead": "읽은 날 합계 {amount}",
+          "daysPast": "{count, plural, other {#일 허용 범위 초과}}",
+          "noneRead": "읽은 청구서 없음",
+          "tolerance": "차액이 청구액의 {relative}와 {absolute}를 모두 넘으면 허용 범위 초과",
+          "noTolerance": "허용 범위 미설정",
+          "days": "일별 · {provider}"
+        },
+        "findings": {
+          "title": "발견 사항",
+          "none": "{month}에는 허용 범위를 넘는 차액이 없습니다.",
+          "noModels": "세부 내역 없음"
+        },
+        "side": {
+          "gateway": "게이트웨이",
+          "motir-ai": "Motir AI",
+          "both": "양쪽",
+          "unnamed": "아직 판정 안 됨"
+        },
+        "unreconciled": {
+          "title": "청구 출처 없음",
+          "body": "Motir가 이 공급업체들의 청구서를 읽을 수 없어 날짜별 금액은 기록되지만 비교되지 않습니다."
+        },
+        "empty": {
+          "title": "{month}에 아직 기록된 내용이 없습니다",
+          "body": "대조는 UTC 하루가 끝날 때마다 실행됩니다. 첫 실행 후에 해당 날짜가 여기에 표시됩니다."
+        },
+        "allTime": "공급업체 청구서는 UTC 일 기준으로 한 달씩 대조됩니다. 보려면 월을 선택하세요.",
+        "error": {
+          "title": "지금은 공급업체 청구서를 표시할 수 없습니다",
+          "description": "대조 내역을 보관하는 AI 서비스가 응답하지 않았습니다. 이 페이지의 나머지 부분은 영향을 받지 않습니다. 잠시 후 다시 시도하세요."
+        },
+        "none": "금액 없음"
       }
     },
     "tenants": {
@@ -14722,6 +14794,63 @@
         },
         "pausedUntil": "{time}까지, {left} 후",
         "readOnly": "읽기 전용입니다. AWS에 할당량 추가를 요청하려면 터미널에서 <cmd>{command}</cmd> 명령을 실행하십시오. 계정의 상한 재정의는 기존 위치 그대로입니다."
+      },
+      "blindSpots": {
+        "title": "CI 플릿 사각지대",
+        "subtitle": "CI 플릿이 서비스하는 각 GitHub 조직에서 플릿이 보지 못하는 저장소: 플릿 작업이 대기 중이지만 workflow_job 전달이 없는 저장소와, motir-studio가 읽을 수 없는 연결된 저장소입니다. 매 프로비저닝 스윕의 조정에서 계산되며 읽기 전용입니다.",
+        "card": {
+          "title": "GitHub 조직별",
+          "subtitle": "지난 3일 동안 CI 플릿이 서비스한 조직마다 한 행."
+        },
+        "pill": {
+          "orgs": "{count, plural, other {사각지대가 있는 조직 #개}}",
+          "orgsNotRead": "{count, plural, other {읽지 못한 조직 #개}}",
+          "allSeen": "모든 저장소 확인됨",
+          "notRead": "읽지 못함"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, other {전달이 없는 저장소 #개}}",
+          "unreadableCount": "{count, plural, other {읽을 수 없는 저장소 #개}}",
+          "seen": "플릿 작업이 있는 모든 저장소에 workflow_job 전달이 있었고, 멈춘 작업은 없습니다."
+        },
+        "undelivered": {
+          "title": "플릿 작업 대기 중, 3일 동안 workflow_job 전달 없음",
+          "hint": "motir-runner 작업은 있지만 workflow_job 전달이 없습니다 — 이 저장소에 motir-studio가 설치되어 있나요?"
+        },
+        "unreadable": {
+          "title": "연결되었지만 motir-studio가 Actions 대기열을 읽을 수 없음",
+          "body": "지난 스윕에서 이 조직에 작업이 멈춰 있었고, 플릿의 motir-studio 자격 증명으로 이 저장소들의 대기 중인 작업을 나열할 수 없어 러너를 부팅하지 않았습니다."
+        },
+        "repo": {
+          "link": "GitHub의 {repo}"
+        },
+        "orgError": {
+          "title": "지난 스윕에서 이 조직을 읽지 못했습니다.",
+          "body": "저장소를 확인하지 않았으므로 여기에 아무것도 없다고 해서 보인다는 뜻은 아닙니다. 다른 조직은 영향을 받지 않으며, 다음 스윕에서 다시 시도합니다. GitHub의 응답:"
+        },
+        "empty": {
+          "title": "사각지대 없음",
+          "body": "CI 플릿은 지난 3일 동안 서비스한 {count, plural, other {#개 조직}}의 모든 저장소를 보고 있습니다. 플릿 작업이 있는 모든 저장소에 workflow_job 전달이 있었고, 멈춘 작업은 없습니다.",
+          "noOrgs": "지난 3일 동안 CI 플릿에서 작업을 실행한 조직이 없으므로 확인할 저장소가 없습니다."
+        },
+        "error": {
+          "title": "CI 플릿 사각지대를 읽지 못했습니다",
+          "body": "사각지대 기록을 불러오지 못했으므로 여기에 아무것도 없다고 해서 모든 저장소가 보인다는 뜻은 아닙니다. 이미지와 풀은 영향을 받지 않습니다. 다시 불러와서 시도하세요."
+        },
+        "reconcileError": {
+          "title": "지난 스윕의 조정이 끝나지 않았습니다",
+          "body": "이 오류로 중단되어 어떤 조직도 확인하지 않았으며, 여기에 아무것도 없다고 해서 모든 저장소가 보인다는 뜻은 아닙니다. 다음 스윕에서 다시 시도합니다."
+        },
+        "notComputed": {
+          "title": "아직 계산되지 않음",
+          "body": "이 배포 이후 사각지대를 계산한 프로비저닝 스윕이 없습니다. 스윕은 5분마다 실행되니 다음 스윕 후에 다시 불러오세요."
+        },
+        "notConfigured": {
+          "title": "CI 플릿이 구성되지 않음",
+          "body": "이 배포는 플릿에서 CI 작업을 실행하지 않으므로 조정이 어떤 조직도 서비스하지 않고 확인할 저장소도 없습니다. 스위치는 <link>플릿 설정</link>에 있습니다."
+        },
+        "computed": "{time} 프로비저닝 스윕에서 계산됨({age}). 읽기 전용: motir-studio는 여기가 아니라 GitHub에서 저장소에 설치합니다.",
+        "loading": "CI 플릿 사각지대를 불러오는 중"
       }
     }
   },

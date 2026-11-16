@@ -12480,6 +12480,78 @@
       "unavailable": {
         "title": "Die Nutzung kann gerade nicht angezeigt werden",
         "description": "Der AI-Dienst, der die Nutzungsaggregation führt, hat nicht geantwortet. Mit den Zahlen ist nichts falsch – versuchen Sie es gleich noch einmal."
+      },
+      "reconciliation": {
+        "title": "Anbieterrechnungen",
+        "intro": "Was Motir erfasst hat neben dem, was jeder Anbieter berechnet hat, pro UTC-Tag. Eine Differenz über der Toleranz des Anbieters ist ein Befund: Sie korrigiert den Tarif ab dann, nie eine frühere Abbuchung.",
+        "col": {
+          "day": "Tag (UTC)",
+          "recorded": "Von Motir erfasst",
+          "billed": "Berechnet",
+          "gap": "Differenz",
+          "source": "Quelle",
+          "status": "Status",
+          "provider": "Anbieter",
+          "models": "Modelle",
+          "estimated": "Geschätzte Zeilen",
+          "side": "Abweichende Seite"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "Guthaben-Snapshot",
+          "export": "Export",
+          "none": "Keine"
+        },
+        "status": {
+          "reconciled": "Abgeglichen",
+          "failed": "Lesen fehlgeschlagen",
+          "failedAt": "Versucht {time} UTC",
+          "notRecorded": "Nicht erfasst",
+          "unreconciled": "Keine Quelle"
+        },
+        "pastTolerance": "Über der Toleranz",
+        "estimated": "{count, plural, one {# Zeile geschätzt} other {# Zeilen geschätzt}}",
+        "perModel": {
+          "aria": "Rechnung für {day} nach Modell anzeigen",
+          "model": "Modell"
+        },
+        "summary": {
+          "recorded": "Erfasst",
+          "billed": "Berechnet",
+          "gap": "Differenz",
+          "over": "über {read} von {days} gelesenen Tagen",
+          "onRead": "{amount} an den gelesenen Tagen",
+          "daysPast": "{count, plural, one {# Tag über der Toleranz} other {# Tage über der Toleranz}}",
+          "noneRead": "Keine Rechnung gelesen",
+          "tolerance": "Über der Toleranz, wenn die Differenz {relative} der Rechnung und {absolute} übersteigt",
+          "noTolerance": "Keine Toleranz festgelegt",
+          "days": "Tage · {provider}"
+        },
+        "findings": {
+          "title": "Befunde",
+          "none": "Keine Differenzen über der Toleranz im {month}.",
+          "noModels": "Keine Aufschlüsselung"
+        },
+        "side": {
+          "gateway": "Gateway",
+          "motir-ai": "Motir AI",
+          "both": "Beide",
+          "unnamed": "Noch nicht benannt"
+        },
+        "unreconciled": {
+          "title": "Keine Rechnungsquelle",
+          "body": "Motir kann für diese Anbieter keine Rechnung lesen, daher werden ihre Tage erfasst, aber nie verglichen."
+        },
+        "empty": {
+          "title": "Für {month} ist noch nichts erfasst",
+          "body": "Der Abgleich läuft, sobald ein UTC-Tag abgeschlossen ist. Ein Tag erscheint hier nach seinem ersten Lauf."
+        },
+        "allTime": "Anbieterrechnungen werden pro UTC-Tag abgeglichen, jeweils für einen Monat. Wählen Sie einen Monat, um sie zu sehen.",
+        "error": {
+          "title": "Anbieterrechnungen können gerade nicht angezeigt werden",
+          "description": "Der KI-Dienst, der den Abgleich führt, hat nicht geantwortet. Der Rest dieser Seite ist nicht betroffen – versuchen Sie es gleich noch einmal."
+        },
+        "none": "Kein Wert"
       }
     },
     "tenants": {
@@ -14728,6 +14800,63 @@
         },
         "pausedUntil": "bis {time}, in {left}",
         "readOnly": "Nur lesen. Um bei AWS mehr Kontingent zu beantragen, führen Sie <cmd>{command}</cmd> in einem Terminal aus; die Obergrenzen-Überschreibung eines Kontos bleibt an ihrer bisherigen Stelle."
+      },
+      "blindSpots": {
+        "title": "Blinde Flecken der CI-Flotte",
+        "subtitle": "Die Repositorys, die die CI-Flotte nicht sieht, für jede GitHub-Organisation, die sie bedient: Repositorys mit wartenden Flottenjobs, aber ohne workflow_job-Zustellungen, und verknüpfte Repositorys, die motir-studio nicht lesen kann. Vom Abgleich in jedem Bereitstellungsdurchlauf berechnet; schreibgeschützt.",
+        "card": {
+          "title": "Nach GitHub-Organisation",
+          "subtitle": "Eine Zeile pro Organisation, die die CI-Flotte in den letzten 3 Tagen bedient hat."
+        },
+        "pill": {
+          "orgs": "{count, plural, one {# Organisation mit blinden Flecken} other {# Organisationen mit blinden Flecken}}",
+          "orgsNotRead": "{count, plural, one {# Organisation nicht gelesen} other {# Organisationen nicht gelesen}}",
+          "allSeen": "Jedes Repository sichtbar",
+          "notRead": "Nicht gelesen"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, one {# Repository ohne Zustellungen} other {# Repositorys ohne Zustellungen}}",
+          "unreadableCount": "{count, plural, one {# Repository nicht lesbar} other {# Repositorys nicht lesbar}}",
+          "seen": "Jedes Repository mit Flottenjobs hatte seine workflow_job-Zustellungen, und kein Job blieb hängen."
+        },
+        "undelivered": {
+          "title": "Wartende Flottenjobs, keine workflow_job-Zustellungen in 3 Tagen",
+          "hint": "motir-runner-Jobs, aber keine workflow_job-Zustellungen – ist motir-studio in diesem Repository installiert?"
+        },
+        "unreadable": {
+          "title": "Verknüpft, aber motir-studio kann ihre Actions-Warteschlange nicht lesen",
+          "body": "Beim letzten Durchlauf blieben in dieser Organisation Jobs hängen, und die motir-studio-Anmeldedaten der Flotte konnten die wartenden Jobs dieser Repositorys nicht auflisten, daher wurde für sie kein Runner gestartet."
+        },
+        "repo": {
+          "link": "{repo} auf GitHub"
+        },
+        "orgError": {
+          "title": "Diese Organisation konnte beim letzten Durchlauf nicht gelesen werden.",
+          "body": "Ihre Repositorys wurden nicht geprüft, daher bedeutet nichts hier, dass sie sichtbar sind. Die anderen Organisationen sind nicht betroffen, und der nächste Durchlauf versucht es erneut. Antwort von GitHub:"
+        },
+        "empty": {
+          "title": "Keine blinden Flecken",
+          "body": "Die CI-Flotte sieht jedes Repository der {count, plural, one {# Organisation} other {# Organisationen}}, die sie in den letzten 3 Tagen bedient hat: Jedes Repository mit Flottenjobs hatte seine workflow_job-Zustellungen, und kein Job blieb hängen.",
+          "noOrgs": "Keine Organisation hat in den letzten 3 Tagen einen Job auf der CI-Flotte ausgeführt, daher gibt es kein Repository zu prüfen."
+        },
+        "error": {
+          "title": "Die blinden Flecken der CI-Flotte konnten nicht gelesen werden",
+          "body": "Der Datensatz der blinden Flecken wurde nicht geladen, daher bedeutet nichts hier, dass jedes Repository sichtbar ist. Die Images und die Pools sind nicht betroffen. Laden Sie die Seite neu, um es erneut zu versuchen."
+        },
+        "reconcileError": {
+          "title": "Der Abgleich des letzten Durchlaufs wurde nicht abgeschlossen",
+          "body": "Er wurde mit diesem Fehler beendet, daher wurde keine Organisation geprüft, und nichts hier bedeutet, dass jedes Repository sichtbar ist. Der nächste Durchlauf versucht es erneut."
+        },
+        "notComputed": {
+          "title": "Noch nicht berechnet",
+          "body": "Seit dieser Bereitstellung hat kein Bereitstellungsdurchlauf die blinden Flecken berechnet. Der Durchlauf läuft alle 5 Minuten; laden Sie die Seite nach dem nächsten neu."
+        },
+        "notConfigured": {
+          "title": "Die CI-Flotte ist nicht konfiguriert",
+          "body": "Diese Bereitstellung führt keine CI-Jobs auf der Flotte aus, daher bedient der Abgleich keine Organisation, und es gibt kein Repository zu prüfen. Der Schalter befindet sich unter <link>Flotteneinstellungen</link>."
+        },
+        "computed": "Berechnet vom Bereitstellungsdurchlauf um {time} ({age}). Schreibgeschützt: motir-studio wird in GitHub auf einem Repository installiert, nicht hier.",
+        "loading": "Blinde Flecken der CI-Flotte werden geladen"
       }
     }
   },
