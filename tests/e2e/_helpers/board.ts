@@ -500,7 +500,7 @@ export async function dragIntoCellUntil(
   return false;
 }
 
-/** Pick the active group-by dimension via the board-header Segmented control,
+/** Pick the active group-by dimension via the board-header group-by menu,
  *  awaiting the PATCH so the server-side persistence has landed. From
  *  board-swimlanes.spec.ts (3.3.7). */
 export async function setGroupBy(
@@ -511,7 +511,10 @@ export async function setGroupBy(
   const patch = page.waitForResponse(
     (r) => r.url().endsWith('/api/board') && r.request().method() === 'PATCH',
   );
-  await control.getByRole('button', { name: label, exact: true }).click();
+  // The group-by trigger opens the group-by menu (MOTIR-11451); the dimensions
+  // are its menuitemradio rows, portaled out of the group.
+  await control.getByRole('button').click();
+  await page.getByRole('menuitemradio', { name: label, exact: true }).click();
   expect((await patch).ok(), `group-by → ${label} persisted`).toBeTruthy();
 }
 

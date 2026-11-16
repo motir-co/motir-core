@@ -21,9 +21,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { Flag, LayoutGrid, User, Zap } from 'lucide-react';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { Segmented } from '@/components/ui/Segmented';
 import { useToast } from '@/components/ui/Toast';
 import type {
   BoardCardDto,
@@ -51,6 +49,7 @@ import { BoardFilteredEmptyState } from './BoardFilteredEmptyState';
 import { BoardStoredFilterIndicator } from './BoardStoredFilterIndicator';
 import { BOARD_STORED_FILTER_SLOT_ID } from '@/lib/boards/boardSlots';
 import { BoardSkeleton } from './BoardSkeleton';
+import { GroupByControl } from './GroupByControl';
 import { NoActiveSprintState } from './NoActiveSprintState';
 import { SprintHeader } from './SprintHeader';
 import { SwimlaneBoard } from './SwimlaneBoard';
@@ -83,7 +82,6 @@ import {
   setCardSwimlaneKey,
 } from './boardSwimlanes';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
-import { Tooltip } from '@/components/ui/Tooltip';
 
 // The board client container (Subtask 3.2.2 · drag-drop 3.2.4 · scale 3.2.5 ·
 // swimlanes + WIP 3.3). A PURE CONSUMER of the Story-3.1/3.3 board API: it
@@ -472,47 +470,6 @@ export function BoardContainer({
       )}
     </div>
   );
-}
-
-// The board-header group-by control (3.3.5) — the shipped Segmented primitive in
-// the 3.2.1-reserved 3.3-controls slot. None = the flat 3.2 board.
-function GroupByControl({
-  value,
-  onChange,
-  disabled,
-  readOnlyReason,
-}: {
-  value: BoardSwimlaneGroupByDto;
-  onChange: (v: BoardSwimlaneGroupByDto) => void;
-  disabled: boolean;
-  /** MOTIR-6174 — the group-by is stored on the BOARD (`setSwimlaneGroupBy`
-   *  asserts `board:configure`). An actor without the key sees the grouping,
-   *  DISABLED, with this reason — it is an in-place control on a surface they can
-   *  see (the permission-gated UI rule, row 7's grammar). */
-  readOnlyReason?: string;
-}) {
-  const t = useTranslations('boards');
-  const control = (
-    <div className="flex items-center gap-2" data-read-only={readOnlyReason ? '' : undefined}>
-      <span className="text-xs font-medium whitespace-nowrap text-(--el-text-muted)">
-        {t('groupByLabel')}
-      </span>
-      <Segmented<BoardSwimlaneGroupByDto>
-        label={t('groupByAria')}
-        value={value}
-        onChange={onChange}
-        disabled={disabled || readOnlyReason !== undefined}
-        options={[
-          { value: 'none', label: t('groupByNone'), icon: <LayoutGrid /> },
-          { value: 'assignee', label: t('groupByAssignee'), icon: <User /> },
-          { value: 'epic', label: t('groupByEpic'), icon: <Zap /> },
-          { value: 'priority', label: t('groupByPriority'), icon: <Flag /> },
-        ]}
-      />
-    </div>
-  );
-  // A disabled button swallows the pointer, so the reason hangs off the wrapper.
-  return readOnlyReason ? <Tooltip content={readOnlyReason}>{control}</Tooltip> : control;
 }
 
 // The interactive board (Subtask 3.2.4 · swimlanes 3.3.5) — a dnd-kit
