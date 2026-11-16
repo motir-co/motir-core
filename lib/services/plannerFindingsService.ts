@@ -501,7 +501,16 @@ export const plannerFindingRecordsService = {
     body: CreatePlannerFindingRecordBody,
   ): Promise<RawPlannerFindingRecordWithFindings> {
     assertRecordsLevel(actor);
-    const context = await resolveRecordContext(actor, body);
+    // The run-through answer is the CHECK's, not the plan's, so it is attached
+    // here rather than resolved: passed through as sent, a key the body did not
+    // name left off rather than posted as `undefined` (MOTIR-11511).
+    const context: PlannerFindingRecordContextRequest = {
+      ...(await resolveRecordContext(actor, body)),
+      ...defined({
+        runThroughAnswer: body.runThroughAnswer,
+        runThroughStopCards: body.runThroughStopCards,
+      }),
+    };
     const findings = body.findings.map(
       (f) => defined(f) as unknown as PlannerFindingRecordFindingRequest,
     );

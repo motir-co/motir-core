@@ -4,6 +4,7 @@ import {
   PLANNER_FINDING_OUTCOMES,
   PLANNER_FINDING_PLANNERS,
   PLANNER_FINDING_PREDICTIONS,
+  PLANNER_FINDING_RUN_THROUGH_ANSWERS,
   PLANNER_FINDING_SOURCES,
   PLANNER_FINDING_VERDICT_STATES,
 } from '@/lib/ai/motirAiClient';
@@ -66,6 +67,11 @@ export const createPlannerFindingRecordBodySchema = z
     authorModel: text.optional(),
     baseline: z.object({ branch: text.optional(), commit: text.optional() }).strict().optional(),
     findings: z.array(findingSchema).min(1).max(PLANNER_FINDING_RECORD_MAX_FINDINGS),
+    // The check's run-through answer (MOTIR-11511): `THRU` or `STOPS` only, and
+    // the cards it would stop on — opaque refs (a work-item key or a plan-item
+    // ref), so no key format is checked.
+    runThroughAnswer: z.enum(PLANNER_FINDING_RUN_THROUGH_ANSWERS).optional(),
+    runThroughStopCards: z.array(id).max(PLANNER_FINDING_RECORD_MAX_FINDINGS).optional(),
   })
   .strict();
 

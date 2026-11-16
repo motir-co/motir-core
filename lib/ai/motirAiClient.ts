@@ -2637,6 +2637,15 @@ export const PLANNER_FINDING_PREDICTIONS = [
   'SETTLES',
   'THRU',
 ] as const satisfies readonly PlannerFindingPrediction[];
+/**
+ * The values a record's RUN-THROUGH answer may take (MOTIR-11511): whether a run
+ * would build the checked plan through (`THRU`) or stop (`STOPS`). `SETTLES`
+ * describes one finding, never a whole plan, so it is not an answer.
+ */
+export const PLANNER_FINDING_RUN_THROUGH_ANSWERS = [
+  'STOPS',
+  'THRU',
+] as const satisfies readonly PlannerFindingPrediction[];
 export const PLANNER_FINDING_OUTCOMES = [
   'fixed',
   'reported',
@@ -4589,6 +4598,14 @@ export interface RawPlannerFindingRecord {
   verdictState: PlannerFindingVerdictState;
   verdictBy: string | null;
   verdictAt: string | null;
+  /**
+   * The check's answer to whether a run would build the plan through
+   * (MOTIR-11511). `null` is the one reading of "no answer recorded"; core
+   * passes it through and never derives or defaults it.
+   */
+  runThroughAnswer: PlannerFindingPrediction | null;
+  /** The card refs the run would stop on, in report order; `[]` when there are none. */
+  runThroughStopCards: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -4653,6 +4670,9 @@ export interface PlannerFindingRecordContextRequest {
   authorModel?: string;
   baselineBranch?: string;
   baselineCommit?: string;
+  /** The check's run-through answer, when it sent one — never derived by core. */
+  runThroughAnswer?: (typeof PLANNER_FINDING_RUN_THROUGH_ANSWERS)[number];
+  runThroughStopCards?: string[];
 }
 
 /** One finding of a record, as the record create carries it. */

@@ -81,7 +81,9 @@ the ones motir-ai's contract documents.
       "planpyCell": "…",
       "fixDirection": "…"
     }
-  ]
+  ],
+  "runThroughAnswer": "THRU | STOPS (optional)",
+  "runThroughStopCards": ["MOTIR-12", "planItem:…"]
 }
 ```
 
@@ -96,6 +98,20 @@ the ones motir-ai's contract documents.
   send `workspaceId`. Without a `planId` the record is stored under the text
   `(no plan id given)`.
 - `source` is always `check_plan`; 1–100 findings, all stored or none.
+- **The check's run-through answer** (MOTIR-11511) is optional and passed through
+  as sent: `runThroughAnswer` is `THRU` or `STOPS` only
+  (`PLANNER_FINDING_RUN_THROUGH_ANSWERS`; `SETTLES` is refused), and
+  `runThroughStopCards` is 0–100 non-empty card refs, a work-item key or a
+  plan-item ref, whose format core does not check. Core never derives, defaults
+  or repairs the answer, and a verdict cannot change it.
+
+### The record's run-through fields
+
+Every `Record` — on the create, the list rows, the read and the verdict — carries
+`runThroughAnswer` and `runThroughStopCards`. A record stored without an answer
+answers `runThroughAnswer: null` (and `runThroughStopCards: []`) rather than
+raising; `null` is the only reading of "no answer recorded". What the two fields
+mean is motir-ai's: see the record DTO in its `docs/contract.md`.
 
 ### `Verdict`
 

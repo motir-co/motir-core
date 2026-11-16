@@ -145,6 +145,8 @@ function rawRecord(over: Partial<RawPlannerFindingRecord> = {}): RawPlannerFindi
     verdictState: 'open',
     verdictBy: null,
     verdictAt: null,
+    runThroughAnswer: null,
+    runThroughStopCards: [],
     createdAt: NOW,
     updatedAt: NOW,
     ...over,
@@ -832,6 +834,146 @@ describe('POST /records — the record is stored under the tenant core resolves'
       cache: 'no-store',
     });
     expect((await auditRows()).map((row) => row.action)).toEqual(['estate.read']);
+  });
+});
+
+describe("POST /records — the check's run-through answer is carried, never derived", () => {
+  it('posts the answer and its cards on the record and writes the one record row as before', async () => {
+    const { token } = await staff('operator');
+    const { plan } = await foreignPlan();
+    client.createPlannerFindingRecord.mockImplementation(async (req) => ({
+      record: rawRecord({
+        id: 'rec_ans',
+        planId: req.record.planId,
+        runThroughAnswer: req.record.runThroughAnswer ?? null,
+        runThroughStopCards: req.record.runThroughStopCards ?? [],
+      }),
+      findings: [rawFinding({ recordId: 'rec_ans' })],
+    }));
+    const r = await routes();
+    const res = await json(
+      await r.records.POST(
+        call('/records', token, {
+          method: 'POST',
+          body: {
+            planId: plan.id,
+            planner: 'plan_py',
+            findings: [FINDING_INPUT],
+            runThroughAnswer: 'STOPS',
+            runThroughStopCards: ['MOTIR-7', 'planItem:abc'],
+          },
+        }),
+      ),
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.record).toMatchObject({
+      runThroughAnswer: 'STOPS',
+      runThroughStopCards: ['MOTIR-7', 'planItem:abc'],
+    });
+    const sent = client.createPlannerFindingRecord.mock.calls[0]![0];
+    expect(sent.record).toMatchObject({
+      planId: plan.id,
+      runThroughAnswer: 'STOPS',
+      runThroughStopCards: ['MOTIR-7', 'planItem:abc'],
+    });
+    expect(sent.findings).toEqual([FINDING_INPUT]);
+    const rows = (await auditRows()).filter((row) => row.action === 'planner_finding.record');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.metadata).toEqual(
+      expect.objectContaining({ recordId: 'rec_ans', planId: plan.id, findingCount: 1 }),
+    );
+  });
+
+  it('posts neither key when the body names neither, and passes a null answer back as null', async () => {
+    const { token } = await staff('operator');
+    const { plan } = await foreignPlan();
+    client.createPlannerFindingRecord.mockResolvedValue({
+      record: rawRecord({ planId: plan.id }),
+      findings: [rawFinding()],
+    });
+    const r = await routes();
+    const res = await json(
+      await r.records.POST(
+        call('/records', token, {
+          method: 'POST',
+          body: { planId: plan.id, planner: 'hosted', findings: [FINDING_INPUT] },
+        }),
+      ),
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.record).toMatchObject({ runThroughAnswer: null, runThroughStopCards: [] });
+    const sent = client.createPlannerFindingRecord.mock.calls[0]![0].record;
+    expect(Object.keys(sent)).not.toContain('runThroughAnswer');
+    expect(Object.keys(sent)).not.toContain('runThroughStopCards');
+  });
+
+  it.each([
+    ['SETTLES as the answer', { runThroughAnswer: 'SETTLES' }, 'runThroughAnswer'],
+    ['an unknown answer', { runThroughAnswer: 'maybe' }, 'runThroughAnswer'],
+    ['a card list that is not an array', { runThroughStopCards: 'MOTIR-7' }, 'runThroughStopCards'],
+    ['an empty card ref', { runThroughStopCards: ['MOTIR-7', '  '] }, 'runThroughStopCards.1'],
+    ['a non-string card ref', { runThroughStopCards: [7] }, 'runThroughStopCards.0'],
+    [
+      'more cards than findings a record may hold',
+      { runThroughStopCards: Array.from({ length: 101 }, (_, i) => `MOTIR-${i}`) },
+      'runThroughStopCards',
+    ],
+  ])(
+    'refuses %s with a 400 naming its path, no client call and no row',
+    async (_n, extra, path) => {
+      const { token } = await staff('operator');
+      const r = await routes();
+      const res = await json(
+        await r.records.POST(
+          call('/records', token, {
+            method: 'POST',
+            body: { planId: 'plan_x', planner: 'hosted', findings: [FINDING_INPUT], ...extra },
+          }),
+        ),
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_REQUEST');
+      expect(res.body.issues.map((i: { path: string }) => i.path)).toContain(path);
+      expect(client.createPlannerFindingRecord).not.toHaveBeenCalled();
+      expect(await auditRows()).toEqual([]);
+    },
+  );
+
+  it('answers the stored pair on the list and the read, and the verdict posts neither key', async () => {
+    const { token } = await staff('operator');
+    const record = rawRecord({ runThroughAnswer: 'THRU', runThroughStopCards: [] });
+    client.listPlannerFindingRecords.mockResolvedValue({
+      records: [{ ...record, findingCount: 1, attributedCount: 0 }],
+      nextCursor: null,
+      retention: { days: 90, cutoff: NOW },
+    });
+    client.getPlannerFindingRecord.mockResolvedValue({ record, findings: [rawFinding()] });
+    client.submitPlannerFindingRecordVerdict.mockResolvedValue({
+      record: { ...record, verdictState: 'attributed' },
+      findings: [rawFinding({ attribution: 'code' })],
+      audit: [],
+    });
+    const r = await routes();
+    const ctx = { params: Promise.resolve({ id: 'rec_1' }) };
+
+    const list = await json(await r.records.GET(call('/records', token)));
+    expect(list.body.records[0]).toMatchObject({
+      runThroughAnswer: 'THRU',
+      runThroughStopCards: [],
+    });
+    const read = await json(await r.record.GET(call('/records/rec_1', token), ctx));
+    expect(read.body.record).toMatchObject({ runThroughAnswer: 'THRU', runThroughStopCards: [] });
+    const verdict = await json(
+      await r.verdict.POST(
+        call('/records/rec_1/verdict', token, { method: 'POST', body: VERDICT }),
+        {
+          params: Promise.resolve({ id: 'rec_1' }),
+        },
+      ),
+    );
+    expect(verdict.body.record.runThroughAnswer).toBe('THRU');
+    const posted = JSON.stringify(client.submitPlannerFindingRecordVerdict.mock.calls[0]);
+    expect(posted).not.toContain('runThrough');
   });
 });
 

@@ -3,6 +3,7 @@ import {
   createPlannerFindingRecord,
   getPlannerFindingRecord,
   listPlannerFindingRecords,
+  PLANNER_FINDING_RUN_THROUGH_ANSWERS,
   PLANNER_FINDING_VERDICT_STATES,
   submitPlannerFindingRecordVerdict,
   type RawPlannerFindingRecord,
@@ -36,6 +37,8 @@ const RECORD: RawPlannerFindingRecord = {
   verdictState: 'open',
   verdictBy: null,
   verdictAt: null,
+  runThroughAnswer: null,
+  runThroughStopCards: [],
   createdAt: '2026-11-16T12:00:00.000Z',
   updatedAt: '2026-11-16T12:00:00.000Z',
 };
@@ -72,6 +75,10 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+
+it('holds exactly the two values a run-through answer may take', () => {
+  expect(PLANNER_FINDING_RUN_THROUGH_ANSWERS).toEqual(['STOPS', 'THRU']);
 });
 
 it('holds exactly the members of the verdict-state enum', () => {
@@ -128,6 +135,17 @@ describe('listPlannerFindingRecords', () => {
 });
 
 describe('getPlannerFindingRecord', () => {
+  it('answers the run-through pair exactly as motir-ai stored it, null included', async () => {
+    const answered = { ...RECORD, runThroughAnswer: 'THRU' as const, runThroughStopCards: [] };
+    stub(json({ record: answered, findings: [] }));
+    expect((await getPlannerFindingRecord('rec_1')).record).toMatchObject({
+      runThroughAnswer: 'THRU',
+      runThroughStopCards: [],
+    });
+    stub(json({ record: RECORD, findings: [] }));
+    expect((await getPlannerFindingRecord('rec_1')).record.runThroughAnswer).toBeNull();
+  });
+
   it('GETs one record by its encoded id', async () => {
     const fetchMock = stub(json({ record: RECORD, findings: [] }));
     expect(await getPlannerFindingRecord('rec/1')).toEqual({ record: RECORD, findings: [] });
@@ -185,6 +203,37 @@ describe('createPlannerFindingRecord', () => {
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual(request);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('POSTs a run-through answer on the record, and answers the stored pair unchanged', async () => {
+    const stored = {
+      ...RECORD,
+      runThroughAnswer: 'STOPS' as const,
+      runThroughStopCards: ['MOTIR-7'],
+    };
+    const fetchMock = stub(json({ record: stored, findings: [] }, 201));
+    const answered = {
+      ...request,
+      record: {
+        ...request.record,
+        runThroughAnswer: 'STOPS' as const,
+        runThroughStopCards: ['MOTIR-7'],
+      },
+    };
+    expect(await createPlannerFindingRecord(answered)).toEqual({ record: stored, findings: [] });
+    const sent = JSON.parse(String(call(fetchMock)[1].body));
+    expect(sent.record).toMatchObject({
+      runThroughAnswer: 'STOPS',
+      runThroughStopCards: ['MOTIR-7'],
+    });
+  });
+
+  it('POSTs no answer key when the record carries none', async () => {
+    const fetchMock = stub(json({ record: RECORD, findings: [] }, 201));
+    await createPlannerFindingRecord(request);
+    const sent = JSON.parse(String(call(fetchMock)[1].body));
+    expect(sent.record).not.toHaveProperty('runThroughAnswer');
+    expect(sent.record).not.toHaveProperty('runThroughStopCards');
   });
 
   it("maps motir-ai's refusal, and reads a 2xx without a record as an outage", async () => {
