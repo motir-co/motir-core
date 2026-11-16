@@ -825,3 +825,52 @@ prompt.
 > exactly as above, and only that branch can file a planning bug. Q5's list of server-written
 > findings gains a fifth member, `discrepancy_recorded`, and `dispatchEventKindSchema` does
 > **not** gain it.
+
+## AMENDMENT — a name a card takes from an in-flight blocker is a reference, not a discrepancy (MOTIR-11408, 2026-11-15)
+
+> **Amended 2026-11-15 by [MOTIR-11408](motir:cmwics0wl01wz01adg5p5zp23).** The amendment above
+> records every place a plan was wrong about the code as a BUILD THROUGH point. One kind of
+> difference is **not** that, and it is now excluded.
+
+**Why.** A plan is often written while a card it waits on is still being built. The planner then
+cites that blocker's names — files, symbols, migration numbers, a registry's contents, a doc
+sentence — from the blocker card's planned contract or from its branch as it stood at planning
+time, correctly: the planning core rule _AN IN-FLIGHT NEIGHBOUR'S CODE IS ON ITS BRANCH_
+(`motir-meta` `prompts/plan-rules/core.md`, mirrored in `motir-ai`
+`src/llm/planningRulePacks.ts`) says such code is not written yet and its work item is all there
+is. By the time the run starts the blocker has merged, and may have shipped those names
+differently. Recording each difference as a point buried the points that were planning mistakes:
+on plan `cmwi2vlqn00ho01adin89ek6e` (MOTIR-11009, written while MOTIR-11008 was building) 11 of 12
+leaves got build-through points, most of them only this (`READ_ROUTES` "empty" after search had
+registered `SEARCH_ROUTE`; "migrations end at 0012" after search added 0013).
+
+**Decision.** When the card attributes a name or a fact to a work item it is `blocked_by`
+(directly or through its container), or says it is in flight / on that item's branch /
+provisional, and that item was **not done when the plan was approved**:
+
+- the name is a **reference to that blocker's contract, not a statement of shipped truth**;
+- the run **builds on what the blocker actually shipped** — its real name, signature, file,
+  number, registry contents or doc text — keeping the card's WHAT;
+- a difference between the card's reference and what shipped is **not a discrepancy**: no
+  `record_run_discrepancy` point, no deviation in the pull request (or the FINISHED report) for
+  it, and therefore no planning-bug signal;
+- the ONE question of the amendment above **still decides** when what the blocker shipped makes
+  the card's WHAT **unreachable or contradictory** — the capability the card builds on does not
+  exist at all, or the blocker shipped the very thing this card was to build — exactly as before.
+
+A name the card states as already shipped on the default branch, with no blocker attribution, is
+judged as before. The stop-site table gains one row:
+
+| stop site                                                                                                                                      | side                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| a name the card takes from a `blocked_by` item not done at planning (or marks in flight / provisional) differs from what that item **shipped** | **neither** — build on what shipped, record nothing; **STOP** only when what shipped makes the WHAT unreachable or contradictory |
+
+**Where it is carried — one rule, the same words.** The dispatched prompt
+(`lib/dispatch/promptTemplate.ts`, `inFlightReference`, rendered after the WHAT test and before
+BUILD THROUGH on every lane that renders BUILD THROUGH — code, code on a session branch, decision
+page, init card — and switched by no findings policy; pinned in
+`tests/dispatch/promptTemplate.test.ts`), `motir-meta` `prompts/run.md` § _BUILD THROUGH OR STOP_
+and its stop-site table (the runbook and the `motir-run` skill), and `motir-meta`
+`prompts/check-plan.md` STEP 2, which stops reporting such a difference as a BUILD THROUGH
+finding. The planner-side twin — the claim check crediting a name a not-done blocker declares — is
+[MOTIR-11407](motir:cmwicrhbj01vd01adovjg148n).
