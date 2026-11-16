@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Design mock · Platform admin console — Planner findings · Records</title>
     <!--
-      DELTA MOCK — AMENDS the approved Planner findings console design (the page frame at
+      DELTA MOCK — AMENDS the approved Planner findings console design,
+      `design/platform-admin/console--planner-findings.mock.html` (the page frame at
       /admin/planner-findings with its two-option view switch, Grouped and All findings, and the
-      finding detail page). Neither base asset is in the tree, so this mock stands alone.
+      finding detail page). That base is published, not committed, and is read through the
+      design-result door; it is not in the tree, so this mock stands alone.
       It adds the RECORDS surfaces: a third view option, Records (?view=records), its table,
       filters, pager and states; the record page at /admin/planner-findings/records/[id]; and one
       Record link in the finding detail header. Display only: nothing on either surface writes.
@@ -2886,6 +2888,11 @@
         color: var(--el-text-identifier);
         overflow-wrap: anywhere;
       }
+      .rec-pred {
+        display: block;
+        max-width: 18ch;
+        color: var(--el-text);
+      }
       .rec-why {
         display: block;
         max-width: 38ch;
@@ -3277,7 +3284,7 @@
                               ><svg viewBox="0 0 24 24" aria-hidden="true">
                                 <use href="#i-circlecheck" /></svg
                               >Attributed</span
-                            ><span class="rec-by">by Sam · 16 Nov 2026, 12:40</span>
+                            >
                           </td>
                           <td class="num"><span class="rec-count">3</span></td>
                           <td class="num"><span class="rec-count">3</span></td>
@@ -3293,9 +3300,7 @@
                           <td>Hosted planner</td>
                           <td>Check plan</td>
                           <td>
-                            <span class="rec-title"
-                              ><span class="rec-none" aria-hidden="true">—</span
-                              ><span class="rec-sr">No title</span></span
+                            <span class="rec-title">Untitled plan</span
                             ><span class="rec-id">cmwplan2c7r0007ad4kw1</span>
                           </td>
                           <td>
@@ -3330,7 +3335,7 @@
                               ><svg viewBox="0 0 24 24" aria-hidden="true">
                                 <use href="#i-circlecheck" /></svg
                               >Attributed</span
-                            ><span class="rec-by">by Sam · 15 Nov 2026, 16:02</span>
+                            >
                           </td>
                           <td class="num"><span class="rec-count">6</span></td>
                           <td class="num"><span class="rec-count">6</span></td>
@@ -3380,7 +3385,7 @@
                               ><svg viewBox="0 0 24 24" aria-hidden="true">
                                 <use href="#i-circlecheck" /></svg
                               >Attributed</span
-                            ><span class="rec-by">by Sam · 14 Nov 2026, 13:25</span>
+                            >
                           </td>
                           <td class="num"><span class="rec-count">2</span></td>
                           <td class="num"><span class="rec-count">2</span></td>
@@ -3538,7 +3543,7 @@
                             ><svg viewBox="0 0 24 24" aria-hidden="true">
                               <use href="#i-circlecheck" /></svg
                             >Attributed</span
-                          ><span class="rec-by">by Sam · 16 Nov 2026, 12:40</span>
+                          >
                         </td>
                         <td class="num"><span class="rec-count">3</span></td>
                         <td class="num"><span class="rec-count">3</span></td>
@@ -3554,9 +3559,7 @@
                         <td>Hosted planner</td>
                         <td>Check plan</td>
                         <td>
-                          <span class="rec-title"
-                            ><span class="rec-none" aria-hidden="true">—</span
-                            ><span class="rec-sr">No title</span></span
+                          <span class="rec-title">Untitled plan</span
                           ><span class="rec-id">cmwplan2c7r0007ad4kw1</span>
                         </td>
                         <td>
@@ -3591,7 +3594,7 @@
                             ><svg viewBox="0 0 24 24" aria-hidden="true">
                               <use href="#i-circlecheck" /></svg
                             >Attributed</span
-                          ><span class="rec-by">by Sam · 15 Nov 2026, 16:02</span>
+                          >
                         </td>
                         <td class="num"><span class="rec-count">6</span></td>
                         <td class="num"><span class="rec-count">6</span></td>
@@ -3641,7 +3644,7 @@
                             ><svg viewBox="0 0 24 24" aria-hidden="true">
                               <use href="#i-circlecheck" /></svg
                             >Attributed</span
-                          ><span class="rec-by">by Sam · 14 Nov 2026, 13:25</span>
+                          >
                         </td>
                         <td class="num"><span class="rec-count">2</span></td>
                         <td class="num"><span class="rec-count">2</span></td>
@@ -3676,11 +3679,13 @@
     <div class="panel-label">
       3 · The <strong>Records table</strong> in detail, on <strong>page 2</strong> of the walk
       (Previous present, the page number reads 2). Rows, top to bottom: an
-      <strong>Open</strong> record with 0 attributed; an <strong>Attributed</strong> record with its
-      verdict by and at; a record whose plan title is null, a quiet em dash and never a blank cell;
-      a title long enough to truncate (the full title is its tooltip); a source value the console
-      does not know, shown as it came in the neutral chip. The <strong>Verdict chip</strong>'s two
-      values each carry a word, a glyph and a tone.
+      <strong>Open</strong> record with 0 attributed; an <strong>Attributed</strong> record whose
+      Attributed count is filled; a record whose plan title is null, drawn with the shipped
+      <em>Untitled plan</em> copy and never a blank cell; a title long enough to truncate (the full
+      title is its tooltip); a source value the console does not know, shown as it came in the
+      neutral chip. The <strong>Verdict chip</strong>'s two values each carry a word, a glyph and a
+      tone. No column carries the verdict's by and at: the record page's plan-context header does
+      (panels 9 and 10).
     </div>
     <div class="panel">
       <div class="stage">
@@ -3755,7 +3760,7 @@
                           ><svg viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-circlecheck" /></svg
                           >Attributed</span
-                        ><span class="rec-by">by Sam · 16 Nov 2026, 12:40</span>
+                        >
                       </td>
                       <td class="num"><span class="rec-count">3</span></td>
                       <td class="num"><span class="rec-count">3</span></td>
@@ -3771,9 +3776,7 @@
                       <td>Hosted planner</td>
                       <td>Check plan</td>
                       <td>
-                        <span class="rec-title"
-                          ><span class="rec-none" aria-hidden="true">—</span
-                          ><span class="rec-sr">No title</span></span
+                        <span class="rec-title">Untitled plan</span
                         ><span class="rec-id">cmwplan2c7r0007ad4kw1</span>
                       </td>
                       <td>
@@ -3809,7 +3812,7 @@
                           ><svg viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-circlecheck" /></svg
                           >Attributed</span
-                        ><span class="rec-by">by Sam · 15 Nov 2026, 16:02</span>
+                        >
                       </td>
                       <td class="num"><span class="rec-count">6</span></td>
                       <td class="num"><span class="rec-count">6</span></td>
@@ -4282,9 +4285,7 @@
                     <li class="drillable">
                       <div class="rec-block-top">
                         <span
-                          ><span class="rec-title"
-                            ><span class="rec-none" aria-hidden="true">—</span
-                            ><span class="rec-sr">No title</span></span
+                          ><span class="rec-title">Untitled plan</span
                           ><span class="rec-id">cmwplan2c7r0007ad4kw1</span></span
                         ><span class="pill pill-rec-open"
                           ><svg viewBox="0 0 24 24" aria-hidden="true">
@@ -4330,8 +4331,9 @@
       <code>/admin/planner-findings/records/[id]</code>. A back link to the Records view, then the
       <strong>Plan-context header</strong> (plan title with the plan id beneath in mono · plan
       session · job · model · code baseline branch and commit · the verdict chip), then the
-      <strong>Record findings table</strong> (site · attribution · why · both cells; each row opens
-      that finding), then <strong>The command</strong>, copyable, drawn on an open record only.
+      <strong>Record findings table</strong> (site · prediction · attribution · why · both cells;
+      each row opens that finding), then <strong>The command</strong>, copyable, drawn on an open
+      record only.
     </div>
     <div class="panel">
       <div class="stage">
@@ -4489,6 +4491,7 @@
                     <thead>
                       <tr>
                         <th>Site</th>
+                        <th>Prediction</th>
                         <th>Attribution</th>
                         <th>Why</th>
                         <th>Hosted planner</th>
@@ -4499,6 +4502,7 @@
                     <tbody>
                       <tr class="drillable">
                         <td><code class="rec-site">lay.story.children</code></td>
+                        <td><span class="rec-pred">A run would stop here</span></td>
                         <td>Corpus</td>
                         <td>
                           <span class="rec-why"
@@ -4517,6 +4521,9 @@
                       </tr>
                       <tr class="drillable">
                         <td><code class="rec-site">author.subtask.acceptance</code></td>
+                        <td>
+                          <span class="rec-pred">A run would settle it with a deviation</span>
+                        </td>
                         <td>Model</td>
                         <td>
                           <span class="rec-why"
@@ -4535,6 +4542,7 @@
                       </tr>
                       <tr class="drillable">
                         <td><code class="rec-site">final_check.blocked_by</code></td>
+                        <td><span class="rec-pred">A run would build through it</span></td>
                         <td>Unattributed</td>
                         <td>
                           <span class="rec-why"
@@ -4645,6 +4653,7 @@
                 <thead>
                   <tr>
                     <th>Site</th>
+                    <th>Prediction</th>
                     <th>Attribution</th>
                     <th>Why</th>
                     <th>Hosted planner</th>
@@ -4655,6 +4664,7 @@
                 <tbody>
                   <tr class="drillable">
                     <td><code class="rec-site">lay.story.children</code></td>
+                    <td><span class="rec-pred">A run would stop here</span></td>
                     <td>Corpus</td>
                     <td>
                       <span class="rec-why"
@@ -4673,6 +4683,7 @@
                   </tr>
                   <tr class="drillable">
                     <td><code class="rec-site">author.subtask.acceptance</code></td>
+                    <td><span class="rec-pred">A run would settle it with a deviation</span></td>
                     <td>Model</td>
                     <td>
                       <span class="rec-why"
@@ -4691,6 +4702,7 @@
                   </tr>
                   <tr class="drillable">
                     <td><code class="rec-site">final_check.blocked_by</code></td>
+                    <td><span class="rec-pred">A run would build through it</span></td>
                     <td>Code</td>
                     <td>
                       <span class="rec-why"

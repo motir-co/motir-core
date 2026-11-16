@@ -2300,6 +2300,22 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'design/my-agents/my-agents.mock.html',
     why: "MOTIR-6868's published (never committed) list mock, which the panel delta amends and cites by path — resolved through the design-result read door, not the tree.",
   },
+  // ── The Planner findings console mock is PUBLISHED, not committed (MOTIR-10362) ──
+  //  MOTIR-10362's design result was published and its files never landed on main.
+  //  MOTIR-11470's Records delta amends it and cites it BY PATH, exactly as the
+  //  MOTIR-6868 pair above does, and `get_design MOTIR-10362` resolves that path.
+  //  DELETE-ME: if the base mock is ever committed, `carries no KNOWN_PATHS entry
+  //  that has stopped applying` turns red and these two rows go.
+  {
+    file: 'design/platform-admin/console--planner-findings--records.mock.html',
+    path: 'design/platform-admin/console--planner-findings.mock.html',
+    why: "MOTIR-10362's published (never committed) Planner findings console mock, which the Records delta amends and cites by path — resolved through the design-result read door, not the tree.",
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    path: 'design/platform-admin/console--planner-findings.mock.html',
+    why: "MOTIR-10362's published (never committed) Planner findings console mock, which the Records delta amends and cites by path — resolved through the design-result read door, not the tree.",
+  },
 ];
 
 describe('a design asset — and the sources it mirrors — cite source paths that still exist', () => {
