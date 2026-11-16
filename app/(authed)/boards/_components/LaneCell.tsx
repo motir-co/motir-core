@@ -61,12 +61,12 @@ export type CellPhase =
 export function cellPhase(page: LaneCellPage | undefined, cardCount: number): CellPhase {
   if (!page) return 'placeholder';
   if (page.state === 'error') return 'failed';
-  if (cardCount === 0) {
-    // No page has arrived yet: the skeleton, at rest or in flight.
-    if (page.totalCount === null) return page.state === 'loading' ? 'first-load' : 'not-loaded';
-    // A page arrived and this cell holds nothing.
-    if (page.totalCount === 0 && page.cursor === null) return 'empty';
-  }
+  // No page has arrived yet: at rest or in flight. With no cards that is the
+  // skeleton; with cards it is a card dropped into the cell before its first page
+  // (MOTIR-11452), which shows that card and reads as loading — never complete.
+  if (page.totalCount === null) return page.state === 'loading' ? 'first-load' : 'not-loaded';
+  // A page arrived and this cell holds nothing.
+  if (cardCount === 0 && page.totalCount === 0 && page.cursor === null) return 'empty';
   return page.cursor !== null ? 'loaded' : 'complete';
 }
 
@@ -91,6 +91,8 @@ export function resolveCellScrollViewport(el: HTMLElement | null): HTMLElement |
 /** The foot's control for a phase that shows one. */
 function controlOf(phase: CellPhase, page: LaneCellPage | undefined): CellControl {
   if (phase === 'failed') return 'failed';
+  // A card landed before the cell's first page: that page is the one in flight.
+  if (phase === 'first-load') return 'loading';
   if (phase !== 'loaded') return 'none';
   return page?.state === 'loading' ? 'loading' : 'more';
 }
@@ -176,7 +178,7 @@ export function LaneCell({
 
   // Nothing has arrived yet: the shipped board skeleton card, twice — static,
   // or pulsing as a status while the first page is in flight. No count, no control.
-  if (phase === 'not-loaded' || phase === 'first-load') {
+  if (cards.length === 0 && (phase === 'not-loaded' || phase === 'first-load')) {
     const inFlight = phase === 'first-load';
     return (
       <div
@@ -220,7 +222,7 @@ export function LaneCell({
         columnId={columnId}
         laneKey={laneKey}
         loaded={cards.length}
-        total={page?.totalCount ?? cards.length}
+        total={page ? page.totalCount : cards.length}
         hasMore={page?.cursor != null}
         control={control}
         names={names}
@@ -322,7 +324,8 @@ function CellFoot({
   columnId: string;
   laneKey: string;
   loaded: number;
-  total: number;
+  /** Null before the cell's first page has named its total: no count yet. */
+  total: number | null;
   hasMore: boolean;
   control: CellControl;
   names: { column: string; lane: string };
@@ -334,13 +337,17 @@ function CellFoot({
       className="flex min-h-(--height-btn-sm) items-center justify-between gap-2"
       data-testid={`cell-foot-${columnId}-${laneKey}`}
     >
-      <LaneCountBadge
-        columnId={columnId}
-        testId={`cell-count-${columnId}-${laneKey}`}
-        loaded={loaded}
-        total={total}
-        hasMore={hasMore}
-      />
+      {total === null ? (
+        <span />
+      ) : (
+        <LaneCountBadge
+          columnId={columnId}
+          testId={`cell-count-${columnId}-${laneKey}`}
+          loaded={loaded}
+          total={total}
+          hasMore={hasMore}
+        />
+      )}
       <CellLoadMore
         columnId={columnId}
         laneKey={laneKey}

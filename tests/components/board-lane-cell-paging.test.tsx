@@ -87,6 +87,9 @@ describe('cellPhase', () => {
     expect(cellPhase({ state: 'loading', totalCount: 40, cursor: 'C' }, 10)).toBe('loaded');
     expect(cellPhase({ state: 'complete', totalCount: 3, cursor: null }, 3)).toBe('complete');
     expect(cellPhase({ state: 'complete', totalCount: 0, cursor: null }, 0)).toBe('empty');
+    // A card dropped into a cell before its first page (MOTIR-11452).
+    expect(cellPhase({ state: 'loading', totalCount: null, cursor: null }, 1)).toBe('first-load');
+    expect(cellPhase({ state: 'idle', totalCount: null, cursor: null }, 1)).toBe('not-loaded');
   });
 });
 
@@ -182,6 +185,15 @@ describe('LaneCell paging', () => {
     expect(cell().getAttribute('aria-label')).toBe('Loading work items in To Do, Ana Ruiz lane');
     expect(cell().className).toContain('animate-pulse');
     expect(screen.queryByTestId('cell-count-c1-u1')).toBeNull();
+  });
+
+  it('shows a card dropped in before the first page, reading as loading with no count', () => {
+    renderCell({ state: 'loading', totalCount: null, cursor: null }, cards(1));
+    expect(cell().getAttribute('data-cell-phase')).toBe('first-load');
+    expect(within(cell()).getAllByTestId(/^board-card-PROD-/)).toHaveLength(1);
+    expect(screen.queryByTestId('cell-count-c1-u1')).toBeNull();
+    expect(screen.getByTestId('cell-loading-c1-u1').getAttribute('role')).toBe('status');
+    expect((screen.getByTestId('cell-load-more-c1-u1') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('draws the empty cell only for a page that arrived holding nothing', () => {

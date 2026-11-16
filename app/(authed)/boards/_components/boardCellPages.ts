@@ -223,3 +223,13 @@ export function appendCellPage(
     },
   });
 }
+
+/**
+ * Replace the whole map with `next` — the one write door a drag's reconciliation
+ * lands through (MOTIR-11452), so a move is applied as one value and no reader
+ * ever sees half of it. Guarded like every other reducer: a `next` built for
+ * another read identity is dropped and `pages` returned unchanged.
+ */
+export function applyCells(pages: CellPages, next: CellPages): CellPages {
+  return next.readKey === pages.readKey ? next : pages;
+}

@@ -10,8 +10,10 @@ import { signIn } from './shell-session';
 import { SEED_LARGE_OWNER_EMAIL, SEED_LARGE_OWNER_PASSWORD } from '../../../scripts/seedLargeBoard';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
+  BoardCellPageDto,
   BoardColumnDto,
   BoardColumnPageDto,
+  BoardLanePageDto,
   BoardProjectionDto,
   MoveCardTarget,
 } from '@/lib/dto/boards';
@@ -42,6 +44,7 @@ export async function getBoard(ctx: APIRequestContext): Promise<BoardProjectionD
  */
 export async function getFullBoard(ctx: APIRequestContext): Promise<BoardProjectionDto> {
   const board = await getBoard(ctx);
+  if (board.swimlaneGroupBy !== 'none') return fillColumnsFromCells(ctx, board);
   for (const col of board.columns) {
     while (col.cursor) {
       const qs = new URLSearchParams({ boardId: board.boardId, cursor: col.cursor });
@@ -52,6 +55,49 @@ export async function getFullBoard(ctx: APIRequestContext): Promise<BoardProject
       col.cursor = page.cursor;
       col.totalCount = page.totalCount;
       Object.assign(board.planHolds, page.planHolds);
+    }
+  }
+  return board;
+}
+
+/**
+ * A GROUPED board's cards, read the way the grid reads them (MOTIR-11452): each
+ * lane's first page of every cell (`GET /api/board/lanes/[laneKey]/cells`), then
+ * each cell's remaining pages (`GET /api/board/columns/[id]/cards?lane=`). The
+ * grouped projection's own `columns[].cards` are not read — the grid never shows
+ * them — so every column here carries exactly what its cells hold, lane by lane,
+ * with a null cursor.
+ */
+async function fillColumnsFromCells(
+  ctx: APIRequestContext,
+  board: BoardProjectionDto,
+): Promise<BoardProjectionDto> {
+  const byId = new Map(board.columns.map((col) => [col.id, col]));
+  for (const col of board.columns) {
+    col.cards = [];
+    col.cursor = null;
+  }
+  for (const lane of board.swimlanes) {
+    const laneQs = new URLSearchParams({ boardId: board.boardId });
+    const res = await ctx.get(
+      `/api/board/lanes/${encodeURIComponent(lane.key)}/cells?${laneQs.toString()}`,
+    );
+    expect(res.status(), `GET lane ${lane.key} cells`).toBe(200);
+    for (const cell of ((await res.json()) as BoardLanePageDto).cells) {
+      const col = byId.get(cell.columnId);
+      if (!col) continue;
+      col.cards.push(...cell.cards);
+      Object.assign(board.planHolds, cell.planHolds);
+      let cursor = cell.cursor;
+      while (cursor) {
+        const qs = new URLSearchParams({ boardId: board.boardId, lane: lane.key, cursor });
+        const next = await ctx.get(`/api/board/columns/${col.id}/cards?${qs.toString()}`);
+        expect(next.status(), `GET cell ${col.id} × ${lane.key} page`).toBe(200);
+        const page = (await next.json()) as BoardCellPageDto;
+        col.cards.push(...page.cards);
+        Object.assign(board.planHolds, page.planHolds);
+        cursor = page.cursor;
+      }
     }
   }
   return board;
@@ -311,7 +357,9 @@ export function expectActiveSprintScope(
 // copied into the 3.5.3 spec, and lifted HERE for the third consumer — the
 // at-scale Scrum interaction journey (4.7.3) — per the module's lift pattern.
 
-/** Resolve a card id → its board identifier (the `board-card-<identifier>` testid). */
+/** Resolve a card id → its board identifier (the `board-card-<identifier>` testid).
+ *  On a grouped board, pass the board {@link getFullBoard} reads — its columns are
+ *  built from the lane and cell pages, which is where a grouped board's cards are. */
 export function identifierOf(board: BoardProjectionDto, id: string): string {
   for (const col of board.columns) {
     const card = col.cards.find((c) => c.id === id);
@@ -491,13 +539,32 @@ export async function dragIntoCellUntil(
   attempts = 4,
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
+    // Nothing re-reads the board after a move (MOTIR-11452): what a drop is
+    // waited on is its own writes — the board move and the reassign's server
+    // action — and the committed state is then read from the cells.
+    const wrote = waitForMoveWrite(page);
     await dragCardOntoCell(page, `board-card-${srcCardKey}`, target);
+    await wrote;
     for (let poll = 0; poll < 10; poll++) {
-      if (predicate(await getBoard(page.request))) return true;
+      if (predicate(await getFullBoard(page.request))) return true;
       await page.waitForTimeout(100);
     }
   }
   return false;
+}
+
+/** The first of a drop's two writes to answer — `POST /api/board/move` (the
+ *  transition) or the reassign's server action — or null when the drop wrote
+ *  nothing within `timeout` (a drop that missed its cell). */
+export function waitForMoveWrite(page: Page, timeout = 5_000): Promise<unknown> {
+  return page
+    .waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        (r.url().endsWith('/api/board/move') || r.request().headers()['next-action'] !== undefined),
+      { timeout },
+    )
+    .catch(() => null);
 }
 
 /** Pick the active group-by dimension via the board-header group-by menu,

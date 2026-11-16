@@ -33,7 +33,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, SHELL_PASSWORD } from './_helpers/shell-session';
-import { getBoard, columnByStatus } from './_helpers/board';
+import { getBoard, getFullBoard, columnByStatus, waitForMoveWrite } from './_helpers/board';
 import { createItem, transition } from './_helpers/workflow';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
@@ -108,7 +108,9 @@ async function assign(page: Page, id: string, assigneeId: string): Promise<void>
   expect(res.ok(), `assign ${id} → ${assigneeId}`).toBeTruthy();
 }
 
-/** Resolve a card id → its board identifier (the `board-card-<identifier>` testid). */
+/** Resolve a card id → its board identifier (the `board-card-<identifier>` testid).
+ *  On a grouped board the board passed is {@link getFullBoard}'s: its columns are
+ *  built from the lane and cell pages the grid reads (MOTIR-11452). */
 function identifierOf(board: BoardProjectionDto, id: string): string {
   for (const col of board.columns) {
     const card = col.cards.find((c) => c.id === id);
@@ -298,7 +300,7 @@ test.describe('board-swimlanes @smoke', () => {
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
 
-    const board0 = await getBoard(page.request);
+    const board0 = await getFullBoard(page.request);
     const todoColId = columnByStatus(board0, 'todo').id;
     const looseKey = identifierOf(board0, loose);
     const ownedKey = identifierOf(board0, owned);
@@ -311,16 +313,19 @@ test.describe('board-swimlanes @smoke', () => {
     ).toBe(CATCH_ALL);
 
     // Drag the unassigned card from the catch-all into the OWNER lane's To Do
-    // cell → reassign to the owner, status unchanged (same To Do column).
+    // cell → reassign to the owner, status unchanged (same To Do column). The
+    // drop is waited on through its own write — nothing re-reads the board.
+    const reassigned = waitForMoveWrite(page);
     await dragCardOnto(
       page,
       `board-card-${looseKey}`,
       page.getByTestId(`lane-cell-${todoColId}-${ownerId}`),
     );
+    await reassigned;
     await expect
       .poll(
         async () => {
-          const b = await getBoard(page.request);
+          const b = await getFullBoard(page.request);
           const card = b.columns.flatMap((c) => c.cards).find((c) => c.id === loose);
           return card?.assigneeId ?? null;
         },
@@ -328,19 +333,21 @@ test.describe('board-swimlanes @smoke', () => {
       )
       .toBe(ownerId);
     // Status (column membership) unchanged — still in To Do.
-    const afterReassign = await getBoard(page.request);
+    const afterReassign = await getFullBoard(page.request);
     expect(columnByStatus(afterReassign, 'todo').cards.map((c) => c.id)).toContain(loose);
 
     // Drag the owned card into the catch-all "No assignee" lane → it is unassigned.
+    const unassigned = waitForMoveWrite(page);
     await dragCardOnto(
       page,
       `board-card-${ownedKey}`,
       page.getByTestId(`lane-cell-${todoColId}-${CATCH_ALL}`),
     );
+    await unassigned;
     await expect
       .poll(
         async () => {
-          const b = await getBoard(page.request);
+          const b = await getFullBoard(page.request);
           const card = b.columns.flatMap((c) => c.cards).find((c) => c.id === owned);
           // Distinguish "card missing" from "assigneeId === null"; a bare
           // `card?.assigneeId ?? 'X'` would turn a correct null into 'X' and make

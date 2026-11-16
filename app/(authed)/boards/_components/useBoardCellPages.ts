@@ -10,6 +10,7 @@ import type {
 } from '@/lib/dto/boards';
 import {
   appendCellPage,
+  applyCells as applyCellsTo,
   applyLanePage,
   cellPageOf,
   cellReadKey,
@@ -65,8 +66,12 @@ export interface BoardCellPagesApi {
   loadedLane: (laneKey: string) => void;
   /** Callback ref for the element whose coming into view loads the lane. */
   laneRef: (laneKey: string) => (el: HTMLElement | null) => (() => void) | void;
-  /** Replace the whole per-cell map; dropped when built for another identity. */
-  applyCells: (next: CellPages) => void;
+  /**
+   * Replace the whole per-cell map; dropped when built for another identity.
+   * An updater is handed the LATEST map, so a reconciliation built from it never
+   * discards a page that merged after the caller last rendered.
+   */
+  applyCells: (next: CellPages | ((current: CellPages) => CellPages)) => void;
 }
 
 type PlanHolds = Record<string, BoardPlanHoldSummaryDto>;
@@ -265,10 +270,12 @@ export function useBoardCellPages({
   );
 
   const applyCells = useCallback(
-    (next: CellPages) => {
-      if (next.readKey !== readKey) return;
-      setPages(next);
-    },
+    (next: CellPages | ((current: CellPages) => CellPages)) =>
+      setPages((prev) => {
+        const value = typeof next === 'function' ? next(prev) : next;
+        // Neither another identity's map, nor a map built against a stale one.
+        return value.readKey === readKey ? applyCellsTo(prev, value) : prev;
+      }),
     [readKey],
   );
 
