@@ -98,7 +98,7 @@ jobs:
     name: Build, prove, publish
     # A Publish latest dispatch pins an image that is already published: nothing
     # is built.
-    if: ${{ (github.event_name != 'workflow_dispatch') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ github.event_name != 'workflow_dispatch' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No run on record yet — this lane is new (MOTIR-687). The floor is set from
     # its nearest neighbour, `sandbox-images.yml`'s base job (observed 2.8–8.3
