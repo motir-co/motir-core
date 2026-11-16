@@ -37,6 +37,7 @@ import {
   MotirAiUnavailableError,
   PlatformLessonNotFoundError,
   PlannerFindingNotFoundError,
+  PlannerFindingRecordNotFoundError,
   PlannerModelListEntryInUseError,
   PlannerModelListFallbackError,
   PlannerModelListRefusedError,
@@ -2642,6 +2643,8 @@ export type PlannerFindingOutcome = 'fixed' | 'reported' | 'fix_failed';
 export type PlannerFindingAttribution = 'code' | 'corpus' | 'model' | 'unattributed';
 export type PlannerFindingSource = 'in_loop' | 'check_plan';
 export type PlannerFindingStatus = 'new' | 'promoted_to_lesson' | 'filed_as_bug' | 'dismissed';
+/** A finding RECORD's verdict state (MOTIR-11456): `attributed` once every finding has one. */
+export type PlannerFindingVerdictState = 'open' | 'attributed';
 
 // The same vocabularies as runtime value sets (MOTIR-10516), member for member
 // motir-ai's `prisma/schema.prisma` enums, so a filter or a triage control can
@@ -2676,6 +2679,10 @@ export const PLANNER_FINDING_STATUSES = [
   'filed_as_bug',
   'dismissed',
 ] as const satisfies readonly PlannerFindingStatus[];
+export const PLANNER_FINDING_VERDICT_STATES = [
+  'open',
+  'attributed',
+] as const satisfies readonly PlannerFindingVerdictState[];
 
 export interface CreatePlannerFindingRequest {
   coreOrganizationId: string;
@@ -2717,6 +2724,11 @@ export interface CreatePlannerFindingRequest {
  */
 export interface RawPlannerFinding {
   id: string;
+  /**
+   * The RECORD — the one plan check — the finding belongs to (MOTIR-11456).
+   * Optional only because a motir-ai deployed before records answers none.
+   */
+  recordId?: string;
   coreOrganizationId: string;
   coreWorkspaceId: string;
   coreProjectId: string;
@@ -4655,6 +4667,281 @@ export async function triagePlannerFinding(
     throw new MotirAiUnavailableError('planner finding triage answered no `{ finding, audit }`');
   }
   return body;
+}
+
+// ── Planner finding RECORDS (Story MOTIR-11455 · MOTIR-11458) ─────────────────
+//
+// `/v1/admin/planner-finding-records`: one plan check stored as a RECORD with
+// its findings, and the verdict that attributes every finding in one motir-ai
+// transaction. What `/api/platform/planner-findings/records/**` forwards to.
+// Same `config()` / `aiFetch` / problem mapping as the finding calls above.
+//
+// ⚠️ A 200 THAT IS NOT THE EXPECTED SHAPE IS AN UNAVAILABLE UPSTREAM, never an
+// empty list or an unattributed record.
+//
+// ⚠️ THE CREATE IS ONE ATTEMPT, NEVER RETRIED, like `createPlannerFinding`: the
+// route has no idempotency key, so a re-send could store a second record.
+//
+// ⚠️ motir-ai WRITES NO AUDIT ROW: the verdict answers one from → to entry per
+// changed finding and core appends them to its own platform log.
+
+/** One stored record — motir-ai's `PlannerFindingRecord` row. Dates are ISO strings. */
+export interface RawPlannerFindingRecord {
+  id: string;
+  source: PlannerFindingSource;
+  planner: PlannerFindingPlanner;
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  aiProjectId: string;
+  planId: string;
+  planSessionId: string | null;
+  jobId: string | null;
+  planTitle: string | null;
+  authorModel: string | null;
+  baselineBranch: string | null;
+  baselineCommit: string | null;
+  verdictState: PlannerFindingVerdictState;
+  verdictBy: string | null;
+  verdictAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A record as the list answers it: with how many findings it holds and how many are attributed. */
+export interface RawPlannerFindingRecordSummary extends RawPlannerFindingRecord {
+  findingCount: number;
+  attributedCount: number;
+}
+
+export interface RawPlannerFindingRecordPage {
+  records: RawPlannerFindingRecordSummary[];
+  nextCursor: string | null;
+  retention: RawPlannerFindingRetention;
+}
+
+/** A record with every finding, in stored order — the read, the create and the verdict answer it. */
+export interface RawPlannerFindingRecordWithFindings {
+  record: RawPlannerFindingRecord;
+  findings: RawPlannerFinding[];
+}
+
+/** One verdict's from → to for one finding — `before` / `after` carry only the changed fields. */
+export interface RawPlannerFindingVerdictAudit {
+  action: 'ai.planner_finding.verdict';
+  findingId: string;
+  actorCoreUserId: string;
+  at: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+}
+
+export interface RawPlannerFindingVerdictResult extends RawPlannerFindingRecordWithFindings {
+  /** One entry per finding the verdict changed, in verdict order; `[]` when none changed. */
+  audit: RawPlannerFindingVerdictAudit[];
+}
+
+/** The record list's filters, field for field motir-ai's `ListRecordsInput`. */
+export interface PlannerFindingRecordListQuery {
+  verdictState?: PlannerFindingVerdictState;
+  planner?: PlannerFindingPlanner;
+  source?: PlannerFindingSource;
+  planId?: string;
+  /** ISO 8601. Either date replaces the retention window. */
+  createdFrom?: string;
+  createdTo?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+/** One plan check's context, as the record create carries it. */
+export interface PlannerFindingRecordContextRequest {
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  planId: string;
+  source: PlannerFindingSource;
+  planner: PlannerFindingPlanner;
+  planSessionId?: string;
+  jobId?: string;
+  planTitle?: string;
+  authorModel?: string;
+  baselineBranch?: string;
+  baselineCommit?: string;
+}
+
+/** One finding of a record, as the record create carries it. */
+export interface PlannerFindingRecordFindingRequest {
+  site: string;
+  prediction: PlannerFindingPrediction;
+  whatHappened: string;
+  evidence: string;
+  outcome: PlannerFindingOutcome;
+  cardRef?: string;
+  authorSessionKey?: string;
+  correction?: string;
+  rule?: string;
+  defectClass?: string;
+  attribution?: PlannerFindingAttribution;
+  why?: string;
+  hostedCell?: string;
+  planpyCell?: string;
+  fixDirection?: string;
+}
+
+export interface CreatePlannerFindingRecordRequest {
+  record: PlannerFindingRecordContextRequest;
+  findings: PlannerFindingRecordFindingRequest[];
+  /** The acting core user; motir-ai requires it when every finding is attributed. */
+  actorCoreUserId: string;
+}
+
+/** One finding's verdict. motir-ai owns the rules (every finding once, a known attribution, a why). */
+export interface PlannerFindingVerdictEntry {
+  findingId: string;
+  attribution: PlannerFindingAttribution;
+  why: string;
+  hostedCell?: string;
+  planpyCell?: string;
+  fixDirection?: string;
+}
+
+export interface PlannerFindingRecordVerdictRequest {
+  verdicts: PlannerFindingVerdictEntry[];
+  /** Overwrite the verdict of a record that already has one. */
+  replace?: boolean;
+}
+
+const PLANNER_FINDING_RECORD_QUERY_KEYS = [
+  'verdictState',
+  'planner',
+  'source',
+  'planId',
+  'createdFrom',
+  'createdTo',
+  'cursor',
+  'limit',
+] as const satisfies readonly (keyof PlannerFindingRecordListQuery)[];
+
+function plannerFindingRecordQueryString(query: PlannerFindingRecordListQuery): string {
+  const params = new URLSearchParams();
+  for (const key of PLANNER_FINDING_RECORD_QUERY_KEYS) {
+    const value = query[key];
+    if (value !== undefined && value !== '') params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+/**
+ * A non-2xx from an id-addressed record route: `not_found` and `conflict` (a
+ * record already attributed, asked without `replace`) get their own classes.
+ */
+async function plannerFindingRecordError(res: Response, recordId: string): Promise<Error> {
+  const problem = await readProblem(res);
+  if (problem.code === 'not_found') return new PlannerFindingRecordNotFoundError(recordId);
+  if (problem.code === 'conflict') return new MotirAiConflictError(problem.detail ?? problem.title);
+  return errorFromProblem(problem);
+}
+
+function isRecordWithFindings(body: unknown): body is RawPlannerFindingRecordWithFindings {
+  const b = body as Partial<RawPlannerFindingRecordWithFindings> | null;
+  return (
+    !!b &&
+    typeof b.record === 'object' &&
+    b.record !== null &&
+    typeof b.record.id === 'string' &&
+    Array.isArray(b.findings)
+  );
+}
+
+const PLANNER_FINDING_RECORDS_PATH = '/v1/admin/planner-finding-records';
+
+// GET /v1/admin/planner-finding-records — one cursor page, newest first, windowed.
+export async function listPlannerFindingRecords(
+  query: PlannerFindingRecordListQuery = {},
+): Promise<RawPlannerFindingRecordPage> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(
+    `${url}${PLANNER_FINDING_RECORDS_PATH}${plannerFindingRecordQueryString(query)}`,
+    { headers: authHeaders(serviceToken) },
+  );
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json().catch(() => null)) as Partial<RawPlannerFindingRecordPage> | null;
+  if (!body || !Array.isArray(body.records)) {
+    throw new MotirAiUnavailableError('planner finding records response missing `records`');
+  }
+  return {
+    records: body.records,
+    nextCursor: body.nextCursor ?? null,
+    retention: plannerFindingRetention(body.retention),
+  };
+}
+
+// GET /v1/admin/planner-finding-records/:id — the record with every finding.
+export async function getPlannerFindingRecord(
+  recordId: string,
+): Promise<RawPlannerFindingRecordWithFindings> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(
+    `${url}${PLANNER_FINDING_RECORDS_PATH}/${encodeURIComponent(recordId)}`,
+    { headers: authHeaders(serviceToken) },
+  );
+  if (!res.ok) throw await plannerFindingRecordError(res, recordId);
+  const body: unknown = await res.json().catch(() => null);
+  if (!isRecordWithFindings(body)) {
+    throw new MotirAiUnavailableError('planner finding record response is not a record');
+  }
+  return body;
+}
+
+// POST /v1/admin/planner-finding-records — one record and its findings, all or none.
+export async function createPlannerFindingRecord(
+  request: CreatePlannerFindingRecordRequest,
+): Promise<RawPlannerFindingRecordWithFindings> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}${PLANNER_FINDING_RECORDS_PATH}`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body: unknown = await res.json().catch(() => null);
+  if (!isRecordWithFindings(body)) {
+    throw new MotirAiUnavailableError(
+      'planner finding record create answered no `{ record, findings }`',
+    );
+  }
+  return body;
+}
+
+// POST /v1/admin/planner-finding-records/:id/verdict — every finding's verdict in
+// one motir-ai transaction, by the acting core user.
+export async function submitPlannerFindingRecordVerdict(
+  recordId: string,
+  request: PlannerFindingRecordVerdictRequest,
+  actorCoreUserId: string,
+): Promise<RawPlannerFindingVerdictResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(
+    `${url}${PLANNER_FINDING_RECORDS_PATH}/${encodeURIComponent(recordId)}/verdict`,
+    {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify({ ...request, actorCoreUserId }),
+    },
+  );
+  if (!res.ok) throw await plannerFindingRecordError(res, recordId);
+  const body: unknown = await res.json().catch(() => null);
+  if (
+    !isRecordWithFindings(body) ||
+    !Array.isArray((body as RawPlannerFindingVerdictResult).audit)
+  ) {
+    throw new MotirAiUnavailableError(
+      'planner finding verdict answered no `{ record, findings, audit }`',
+    );
+  }
+  return body as RawPlannerFindingVerdictResult;
 }
 
 // ── The lesson-retirement window N (MOTIR-1463) ────────────────────────────────

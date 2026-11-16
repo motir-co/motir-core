@@ -299,6 +299,17 @@ export class PlannerFindingNotFoundError extends MotirAiError {
   }
 }
 
+// `GET` / `POST …/verdict` on `/v1/admin/planner-finding-records/:id` answered
+// `not_found` — no record with that id (MOTIR-11458). Its own class, as a
+// finding's is, so a route answers 404 rather than an outage.
+export class PlannerFindingRecordNotFoundError extends MotirAiError {
+  readonly code = 'PLANNER_FINDING_RECORD_NOT_FOUND' as const;
+  constructor(readonly recordId: string) {
+    super(`no planner finding record "${recordId}"`);
+    this.name = 'PlannerFindingRecordNotFoundError';
+  }
+}
+
 // A staff credit ADJUSTMENT would take the org's balance below zero
 // (`POST /v1/admin/credits` → 409 `conflict` with a detail starting
 // `insufficient_balance:`; MOTIR-747). A detail PREFIX, not a code — the §5 union

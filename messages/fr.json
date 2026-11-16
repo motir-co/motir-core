@@ -11220,7 +11220,9 @@
             "retire": "A retiré un modèle de départ"
           },
           "planner_finding": {
-            "triage": "A trié un constat du planificateur"
+            "triage": "A trié un constat du planificateur",
+            "record": "A enregistré un rapport de constats du planificateur",
+            "verdict": "A rendu le verdict d'un rapport de constats du planificateur"
           },
           "model_serving": {
             "set": "A changé le fournisseur qui sert un modèle"

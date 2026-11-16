@@ -11220,7 +11220,9 @@
             "retire": "Startvorlage ausgemustert"
           },
           "planner_finding": {
-            "triage": "Planer-Befund triagiert"
+            "triage": "Planer-Befund triagiert",
+            "record": "Planer-Befundbericht erfasst",
+            "verdict": "Planer-Befundbericht bewertet"
           },
           "model_serving": {
             "set": "Hat geändert, welcher Anbieter ein Modell bereitstellt"

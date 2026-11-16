@@ -11217,7 +11217,9 @@
             "retire": "Retired a starter"
           },
           "planner_finding": {
-            "triage": "Triaged a planner finding"
+            "triage": "Triaged a planner finding",
+            "record": "Recorded a planner finding record",
+            "verdict": "Gave a planner finding record its verdict"
           },
           "model_serving": {
             "set": "Changed which provider serves a model"

@@ -11220,7 +11220,9 @@
             "retire": "Retirou um modelo inicial"
           },
           "planner_finding": {
-            "triage": "Fez a triagem de um achado do planejador"
+            "triage": "Fez a triagem de um achado do planejador",
+            "record": "Registrou um relatório de achados do planejador",
+            "verdict": "Deu o veredito de um relatório de achados do planejador"
           },
           "model_serving": {
             "set": "Alterou qual provedor fornece um modelo"

@@ -1,18 +1,9 @@
 import 'server-only';
 
 import type { PlatformRole } from '@/generated/prisma/client';
-import {
-  ApiTokenExpiredError,
-  ApiTokenRevokedError,
-  InvalidApiTokenError,
-} from '@/lib/apiTokens/errors';
-import { TOKEN_PREFIX } from '@/lib/apiTokens/token';
 import type { IdeaActor } from '@/lib/ideas/types';
-import { OrganizationSuspendedError } from '@/lib/organizations/errors';
-import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
-import { apiTokensService } from '@/lib/services/apiTokensService';
-import { platformRoleAtLeast, requirePlatformStaff } from './auth';
-import { NotPlatformStaffError } from './errors';
+import { requirePlatformStaff } from './auth';
+import { bearerFromRequest, staffPrincipalFromBearer } from './staffTokenPrincipal';
 
 /**
  * The IDEAS gate — the one door where a platform-staff member's personal access
@@ -46,46 +37,13 @@ export async function requirePlatformStaffForIdeas(
   req: Request,
   minimum: PlatformRole,
 ): Promise<IdeaActor> {
-  const bearer = bearerFromHeader(req.headers.get('authorization'));
+  const bearer = bearerFromRequest(req);
   if (bearer === undefined) {
     const principal = await requirePlatformStaff(minimum);
     return { ...principal, credential: { kind: 'session' } };
   }
-  if (!bearer.startsWith(TOKEN_PREFIX)) throw new NotPlatformStaffError();
-
-  let verified: Awaited<ReturnType<typeof apiTokensService.verify>>;
-  try {
-    verified = await apiTokensService.verify(bearer);
-  } catch (err) {
-    if (
-      err instanceof InvalidApiTokenError ||
-      err instanceof ApiTokenRevokedError ||
-      err instanceof ApiTokenExpiredError ||
-      err instanceof OrganizationSuspendedError
-    ) {
-      throw new NotPlatformStaffError();
-    }
-    throw err;
-  }
-  if (verified.dispatchRunId !== null) throw new NotPlatformStaffError();
-
-  const standing = await platformStaffRepository.findStandingByUserId(verified.user.id);
-  if (!standing?.platformRole) throw new NotPlatformStaffError();
-  if (!platformRoleAtLeast(standing.platformRole, minimum)) throw new NotPlatformStaffError();
-
-  return {
-    userId: standing.id,
-    email: standing.email,
-    role: standing.platformRole,
-    credential: { kind: 'token', apiTokenId: verified.tokenId },
-  };
-}
-
-/** The `Bearer` credential, or undefined when the header is absent or another scheme. */
-function bearerFromHeader(header: string | null): string | undefined {
-  if (!header) return undefined;
-  const [scheme, ...rest] = header.trim().split(/\s+/);
-  if (scheme?.toLowerCase() !== 'bearer') return undefined;
-  const token = rest.join(' ').trim();
-  return token.length > 0 ? token : undefined;
+  // The token half is shared with the planner-findings gate
+  // (`./staffTokenPrincipal`), so the two cannot drift.
+  const { principal, apiTokenId } = await staffPrincipalFromBearer(bearer, minimum);
+  return { ...principal, credential: { kind: 'token', apiTokenId } };
 }

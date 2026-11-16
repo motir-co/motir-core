@@ -11220,7 +11220,9 @@
             "retire": "Retiró una plantilla inicial"
           },
           "planner_finding": {
-            "triage": "Clasificó un hallazgo del planificador"
+            "triage": "Clasificó un hallazgo del planificador",
+            "record": "Registró un informe de hallazgos del planificador",
+            "verdict": "Dio su veredicto a un informe de hallazgos del planificador"
           },
           "model_serving": {
             "set": "Cambió qué proveedor sirve un modelo"

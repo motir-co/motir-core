@@ -11211,7 +11211,9 @@
             "retire": "下架了一个起始模板"
           },
           "planner_finding": {
-            "triage": "已分诊一条规划器发现"
+            "triage": "已分诊一条规划器发现",
+            "record": "已记录一份规划器发现记录",
+            "verdict": "已为一份规划器发现记录给出判定"
           },
           "model_serving": {
             "set": "更改了模型的服务供应商"

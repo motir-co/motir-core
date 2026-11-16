@@ -11220,7 +11220,9 @@
             "retire": "Starter uit gebruik genomen"
           },
           "planner_finding": {
-            "triage": "Heeft een plannerbevinding beoordeeld"
+            "triage": "Heeft een plannerbevinding beoordeeld",
+            "record": "Heeft een plannerbevindingenrapport vastgelegd",
+            "verdict": "Heeft een oordeel gegeven over een plannerbevindingenrapport"
           },
           "model_serving": {
             "set": "Heeft gewijzigd welke aanbieder een model levert"

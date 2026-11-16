@@ -250,6 +250,47 @@ that reaches the platform tier without passing through a layout.
 > test), **MOTIR-7671** (the audit metadata), **MOTIR-7675** (the routes), **MOTIR-7677** (the
 > platform-wide boundary tests).
 
+> **⚠️ AMENDED 2026-11-16 (Story MOTIR-11455 · MOTIR-11458) — the planner-findings endpoints accept
+> a staff member's personal access token.** Decided by the owner on 2026-11-16, as the second token
+> door the 2026-10-07 amendment said would need its own decision. It amends the **Input** row above
+> at ONE more door; every other clause of this section, and of the 2026-10-07 amendment, stands.
+>
+> - **Why.** Planner findings are platform-admin data, and `motir check plan` is a private staff
+>   skill. It must read a finding record, store one record per plan check and give a record its
+>   verdict **as the staff member** running it, from their own agent, where no console session
+>   exists.
+> - **What is allowed.** On `/api/platform/planner-findings/**` — the finding read, the record list,
+>   the record read, the record create and the record verdict — the gate also accepts
+>   `Authorization: Bearer motir_pat_…`, **on the same terms as the ideas door**: the token's OWNER
+>   must currently hold `operator` or above, read fresh on every request; **no token scope or
+>   permission is consulted and none is introduced**; a request with no bearer header falls back to
+>   the console session, unchanged.
+> - **What stays forbidden.** A RUN token, a revoked, expired or unknown token, a token of a
+>   suspended organization, an OAuth connection and a token whose owner is below `operator` are
+>   all refused, with **the same 404** as the Failure row and the ideas routes. Every `/admin`
+>   page, console server action and other platform route keeps `getSession()` as its only input.
+> - **Where it is enforced.** Its OWN gate, `requirePlatformStaffForPlannerFindings(req, minimum)`
+>   in `lib/platform/plannerFindingsGate.ts`, importable only from
+>   `app/api/platform/planner-findings/**`. The token half both gates apply — the bearer parse, the
+>   `motir_pat_` prefix, `apiTokensService.verify`, the run-token refusal, the fresh standing read
+>   and the level check — moved into `lib/platform/staffTokenPrincipal.ts`, importable only from
+>   the two gates, so the doors cannot drift apart; the ideas gate's behaviour is unchanged.
+>   `tests/platform/platformTokenBoundary.test.ts` names exactly `app/api/platform/ideas/**` and
+>   `app/api/platform/planner-findings/**` as the allowed importers of their own gate, and fails on
+>   any other importer of either gate or of the shared helper.
+> - **The service-level check and the audit (§3).** As for ideas, the records service re-checks the
+>   principal the gate produced. Every read runs inside `withPlatformRead` (`estate.read`) and every
+>   write inside `withPlatformWrite` — `planner_finding.record` for a stored record, one
+>   `planner_finding.verdict` per finding a verdict changed — and each row's `metadata` names the
+>   credential: `{ kind: 'session' }` or `{ kind: 'token', apiTokenId }`, never the secret. A record
+>   create resolves its tenant from a core plan id, so `plan` gains a `platform_staff` SELECT arm
+>   (`20261116120000_plan_platform_staff_read`), read-only as §3a requires.
+> - **Still not a precedent.** A further platform route that needs a token is, again, a new
+>   decision — not an extension of this one or of the 2026-10-07 one.
+>
+> Consumed by Story **MOTIR-11455**: **MOTIR-11458** (the gate, the shared token helper, the routes,
+> the audit actions and the boundary test).
+
 ### 3. Cross-tenant reads — an explicit platform tier, and an audit row written in the same transaction
 
 The bypass is a **tier**, not a flag threaded through the existing services. A tenant-scoped

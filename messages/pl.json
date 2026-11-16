@@ -11220,7 +11220,9 @@
             "retire": "Wycofano szablon startowy"
           },
           "planner_finding": {
-            "triage": "Przeprowadził triaż ustalenia planisty"
+            "triage": "Przeprowadził triaż ustalenia planisty",
+            "record": "Zapisał raport ustaleń planisty",
+            "verdict": "Wydał werdykt w sprawie raportu ustaleń planisty"
           },
           "model_serving": {
             "set": "Zmieniono dostawcę obsługującego model"
