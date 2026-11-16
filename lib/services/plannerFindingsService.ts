@@ -308,7 +308,13 @@ export const plannerFindingsService = {
 // `/v1/admin/planner-finding-records` block): the skill reads the same fields
 // motir-ai documents, and re-mapping them here would be a second copy to keep.
 
-/** The level every records route asks for, as the ideas routes' HTTP door does. */
+/**
+ * The records level, written once (MOTIR-11458). A route's level is a per-route
+ * fact: each handler passes a named constant to the gate and the method behind it
+ * re-asserts the same one, so the two layers cannot disagree. Every route reads
+ * this one today; both writes require `operator`.
+ * `tests/platform/plannerFindingsRouteLevels.test.ts` fails a literal.
+ */
 export const PLANNER_FINDING_RECORDS_LEVEL = 'operator' as const;
 
 /** The reason each write records; the `inherited` policy needs one and the skill sends none. */

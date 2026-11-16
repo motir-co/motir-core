@@ -262,13 +262,22 @@ that reaches the platform tier without passing through a layout.
 > - **What is allowed.** On `/api/platform/planner-findings/**` — the finding read, the record list,
 >   the record read, the record create and the record verdict — the gate also accepts
 >   `Authorization: Bearer motir_pat_…`, **on the same terms as the ideas door**: the token's OWNER
->   must currently hold `operator` or above, read fresh on every request; **no token scope or
+>   must currently hold the ROUTE's level or above, read fresh on every request; **no token scope or
 >   permission is consulted and none is introduced**; a request with no bearer header falls back to
 >   the console session, unchanged.
 > - **What stays forbidden.** A RUN token, a revoked, expired or unknown token, a token of a
->   suspended organization, an OAuth connection and a token whose owner is below `operator` are
->   all refused, with **the same 404** as the Failure row and the ideas routes. Every `/admin`
+>   suspended organization, an OAuth connection and a token whose owner is below the route's level
+>   are all refused, with **the same 404** as the Failure row and the ideas routes. Every `/admin`
 >   page, console server action and other platform route keeps `getSession()` as its only input.
+> - **The level is a per-route fact, not the door's.** Each handler passes its level to the gate
+>   as a named constant exported by `lib/services/plannerFindingsService.ts`, and the records
+>   service re-asserts that same constant, so a route's level is one argument and one constant.
+>   Today every route reads `PLANNER_FINDING_RECORDS_LEVEL`, which is `operator`; the two writes
+>   (the record create and the verdict) require `operator` at both layers. The route table in
+>   `docs/platform-planner-findings-api.md` names each route's level, and
+>   `tests/platform/plannerFindingsRouteLevels.test.ts` fails a handler that passes a level
+>   literal and a write below `operator`. Moving a READ route's level is a level change, not a new
+>   door, and owes no further amendment; a write below `operator`, or a new route, does.
 > - **Where it is enforced.** Its OWN gate, `requirePlatformStaffForPlannerFindings(req, minimum)`
 >   in `lib/platform/plannerFindingsGate.ts`, importable only from
 >   `app/api/platform/planner-findings/**`. The token half both gates apply — the bearer parse, the

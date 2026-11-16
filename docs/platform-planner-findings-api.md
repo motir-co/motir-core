@@ -12,11 +12,16 @@ Behind it, core forwards to motir-ai's `/v1/admin/planner-finding-records` and
 
 Every route is gated by `requirePlatformStaffForPlannerFindings`
 (`lib/platform/plannerFindingsGate.ts`), recorded in
-`docs/decisions/platform-staff-auth.md` §2 (the 2026-11-16 amendment). Every
-route is **operator** level. A request is admitted with either:
+`docs/decisions/platform-staff-auth.md` §2 (the 2026-11-16 amendment). **The
+level is set per route**, in the routes table's Level column: each handler passes
+its level to the gate as a named constant from `lib/services/plannerFindingsService.ts`,
+and the records service re-asserts the same constant, so a route's level is one
+argument and one constant. `tests/platform/plannerFindingsRouteLevels.test.ts`
+fails a handler that passes a literal, and a write route below `operator`. A
+request is admitted with either:
 
 - **a personal access token** in `Authorization: Bearer motir_pat_…`, whose
-  OWNER currently holds `operator` or above. No token permission is consulted. A
+  OWNER currently holds the route's level or above. No token permission is consulted. A
   run token, a revoked, expired or unknown token, and a token of a suspended
   organization are all refused; or
 - **the staff member's console session** (no `Authorization` header).
@@ -33,13 +38,13 @@ Every response carries `Cache-Control: no-store`.
 
 ## Routes
 
-| Method & path                                              | Body / query                                                                                                   | Success                                                   |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `GET /api/platform/planner-findings/{findingId}`           | —                                                                                                              | `200 Finding` (with its `recordId`)                       |
-| `GET /api/platform/planner-findings/records`               | `?verdictState=open\|attributed&planner=&source=&planId=&createdFrom=&createdTo=&cursor=&limit=` (limit 1–100) | `200 { records: RecordSummary[], nextCursor, retention }` |
-| `GET /api/platform/planner-findings/records/{id}`          | —                                                                                                              | `200 { record: Record, findings: Finding[] }`             |
-| `POST /api/platform/planner-findings/records`              | `CreateRecord`                                                                                                 | `201 { record: Record, findings: Finding[] }`             |
-| `POST /api/platform/planner-findings/records/{id}/verdict` | `{ verdicts: Verdict[], replace? }`                                                                            | `200 { record, findings, audit: VerdictAudit[] }`         |
+| Method & path                                              | Body / query                                                                                                   | Success                                                   | Level                                        |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------- |
+| `GET /api/platform/planner-findings/{findingId}`           | —                                                                                                              | `200 Finding` (with its `recordId`)                       | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
+| `GET /api/platform/planner-findings/records`               | `?verdictState=open\|attributed&planner=&source=&planId=&createdFrom=&createdTo=&cursor=&limit=` (limit 1–100) | `200 { records: RecordSummary[], nextCursor, retention }` | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
+| `GET /api/platform/planner-findings/records/{id}`          | —                                                                                                              | `200 { record: Record, findings: Finding[] }`             | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
+| `POST /api/platform/planner-findings/records`              | `CreateRecord`                                                                                                 | `201 { record: Record, findings: Finding[] }`             | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
+| `POST /api/platform/planner-findings/records/{id}/verdict` | `{ verdicts: Verdict[], replace? }`                                                                            | `200 { record, findings, audit: VerdictAudit[] }`         | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`) |
 
 The answers are motir-ai's own shapes, unchanged: `Record`, `RecordSummary`
 (`Record` + `findingCount` + `attributedCount`), `Finding` and `VerdictAudit` are
