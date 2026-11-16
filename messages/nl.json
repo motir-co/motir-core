@@ -12480,6 +12480,78 @@
       "unavailable": {
         "title": "Gebruik kan nu niet worden getoond",
         "description": "De AI-service die het gebruiksoverzicht bijhoudt, antwoordde niet. Er is niets mis met de cijfers — probeer het zo opnieuw."
+      },
+      "reconciliation": {
+        "title": "Facturen van providers",
+        "intro": "Wat Motir heeft vastgelegd naast wat elke provider in rekening bracht, per UTC-dag. Een verschil boven de tolerantie van de provider is een bevinding: het corrigeert het tarief vanaf dat moment, nooit een eerdere afschrijving.",
+        "col": {
+          "day": "Dag (UTC)",
+          "recorded": "Vastgelegd door Motir",
+          "billed": "Gefactureerd",
+          "gap": "Verschil",
+          "source": "Bron",
+          "status": "Status",
+          "provider": "Provider",
+          "models": "Modellen",
+          "estimated": "Geschatte rijen",
+          "side": "Afwijkende kant"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "Saldomomentopname",
+          "export": "Export",
+          "none": "Geen"
+        },
+        "status": {
+          "reconciled": "Afgestemd",
+          "failed": "Lezen mislukt",
+          "failedAt": "Geprobeerd {time} UTC",
+          "notRecorded": "Niet vastgelegd",
+          "unreconciled": "Geen bron"
+        },
+        "pastTolerance": "Boven tolerantie",
+        "estimated": "{count, plural, one {# rij geschat} other {# rijen geschat}}",
+        "perModel": {
+          "aria": "De factuur van {day} per model tonen",
+          "model": "Model"
+        },
+        "summary": {
+          "recorded": "Vastgelegd",
+          "billed": "Gefactureerd",
+          "gap": "Verschil",
+          "over": "over {read} van {days} gelezen dagen",
+          "onRead": "{amount} op de gelezen dagen",
+          "daysPast": "{count, plural, one {# dag boven tolerantie} other {# dagen boven tolerantie}}",
+          "noneRead": "Geen factuur gelezen",
+          "tolerance": "Boven tolerantie wanneer het verschil meer is dan {relative} van de factuur en meer dan {absolute}",
+          "noTolerance": "Geen tolerantie ingesteld",
+          "days": "Dagen · {provider}"
+        },
+        "findings": {
+          "title": "Bevindingen",
+          "none": "Geen verschillen boven tolerantie in {month}.",
+          "noModels": "Geen uitsplitsing"
+        },
+        "side": {
+          "gateway": "Gateway",
+          "motir-ai": "Motir AI",
+          "both": "Beide",
+          "unnamed": "Nog niet bepaald"
+        },
+        "unreconciled": {
+          "title": "Geen factuurbron",
+          "body": "Motir kan voor deze providers geen factuur lezen, dus hun dagen worden vastgelegd maar nooit vergeleken."
+        },
+        "empty": {
+          "title": "Nog niets vastgelegd voor {month}",
+          "body": "De afstemming draait zodra elke UTC-dag is afgesloten. Een dag verschijnt hier na de eerste run."
+        },
+        "allTime": "Facturen van providers worden per UTC-dag afgestemd, één maand tegelijk. Kies een maand om ze te zien.",
+        "error": {
+          "title": "Facturen van providers kunnen nu niet worden getoond",
+          "description": "De AI-dienst die de afstemming bijhoudt, heeft niet geantwoord. De rest van deze pagina werkt gewoon — probeer het zo opnieuw."
+        },
+        "none": "Geen bedrag"
       }
     },
     "tenants": {

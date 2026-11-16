@@ -12477,6 +12477,78 @@
       "unavailable": {
         "title": "現在使用量を表示できません",
         "description": "使用量の集計を管理する AI サービスが応答しませんでした。数値に問題はありません。しばらくしてからもう一度お試しください。"
+      },
+      "reconciliation": {
+        "title": "プロバイダーの請求",
+        "intro": "UTC の日ごとに、Motir が記録した額と各プロバイダーの請求額を並べて表示します。プロバイダーの許容範囲を超える差額は検出事項となり、その時点以降の料金を補正します。過去の請求は変更しません。",
+        "col": {
+          "day": "日付 (UTC)",
+          "recorded": "Motir の記録",
+          "billed": "請求額",
+          "gap": "差額",
+          "source": "ソース",
+          "status": "ステータス",
+          "provider": "プロバイダー",
+          "models": "モデル",
+          "estimated": "推定行数",
+          "side": "差異のある側"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "残高スナップショット",
+          "export": "エクスポート",
+          "none": "なし"
+        },
+        "status": {
+          "reconciled": "照合済み",
+          "failed": "読み取り失敗",
+          "failedAt": "{time} UTC に試行",
+          "notRecorded": "未記録",
+          "unreconciled": "ソースなし"
+        },
+        "pastTolerance": "許容範囲超過",
+        "estimated": "{count, plural, other {# 行が推定}}",
+        "perModel": {
+          "aria": "{day} の請求をモデル別に表示",
+          "model": "モデル"
+        },
+        "summary": {
+          "recorded": "記録",
+          "billed": "請求",
+          "gap": "差額",
+          "over": "読み取った {read} / {days} 日",
+          "onRead": "読み取った日の合計 {amount}",
+          "daysPast": "{count, plural, other {# 日が許容範囲超過}}",
+          "noneRead": "請求を読み取っていません",
+          "tolerance": "差額が請求額の {relative} と {absolute} の両方を超えると許容範囲超過",
+          "noTolerance": "許容範囲が未設定",
+          "days": "日別 · {provider}"
+        },
+        "findings": {
+          "title": "検出事項",
+          "none": "{month} に許容範囲を超える差額はありません。",
+          "noModels": "内訳なし"
+        },
+        "side": {
+          "gateway": "ゲートウェイ",
+          "motir-ai": "Motir AI",
+          "both": "両方",
+          "unnamed": "未判定"
+        },
+        "unreconciled": {
+          "title": "請求ソースなし",
+          "body": "Motir はこれらのプロバイダーの請求を読み取れないため、日ごとの額は記録されますが照合されません。"
+        },
+        "empty": {
+          "title": "{month} の記録はまだありません",
+          "body": "照合は UTC の各日が終わるたびに実行されます。初回の実行後にその日がここに表示されます。"
+        },
+        "allTime": "プロバイダーの請求は UTC の日ごと、1 か月単位で照合されます。表示するには月を選択してください。",
+        "error": {
+          "title": "プロバイダーの請求を現在表示できません",
+          "description": "照合を保持している AI サービスが応答しませんでした。このページの他の部分には影響ありません。しばらくしてから再試行してください。"
+        },
+        "none": "金額なし"
       }
     },
     "tenants": {

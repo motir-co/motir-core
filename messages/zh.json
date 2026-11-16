@@ -12471,6 +12471,78 @@
       "unavailable": {
         "title": "暂时无法显示用量",
         "description": "保存用量汇总的 AI 服务没有响应。数据本身没有问题——请稍后再试。"
+      },
+      "reconciliation": {
+        "title": "供应商账单",
+        "intro": "按 UTC 日对比 Motir 记录的成本与各供应商的账单金额。超出该供应商容差的差额会记为一条发现：它只修正此后的费率，绝不改动过去的扣费。",
+        "col": {
+          "day": "日期 (UTC)",
+          "recorded": "Motir 记录",
+          "billed": "账单金额",
+          "gap": "差额",
+          "source": "来源",
+          "status": "状态",
+          "provider": "供应商",
+          "models": "模型",
+          "estimated": "估算行数",
+          "side": "差异方"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "余额快照",
+          "export": "导出文件",
+          "none": "无"
+        },
+        "status": {
+          "reconciled": "已对账",
+          "failed": "读取失败",
+          "failedAt": "尝试于 {time} UTC",
+          "notRecorded": "未记录",
+          "unreconciled": "无来源"
+        },
+        "pastTolerance": "超出容差",
+        "estimated": "{count, plural, other {# 行为估算}}",
+        "perModel": {
+          "aria": "按模型显示 {day} 的账单",
+          "model": "模型"
+        },
+        "summary": {
+          "recorded": "已记录",
+          "billed": "账单",
+          "gap": "差额",
+          "over": "已读取 {days} 天中的 {read} 天",
+          "onRead": "已读取日期合计 {amount}",
+          "daysPast": "{count, plural, other {# 天超出容差}}",
+          "noneRead": "未读取账单",
+          "tolerance": "差额同时超过账单的 {relative} 和 {absolute} 时计为超出容差",
+          "noTolerance": "未设置容差",
+          "days": "每日明细 · {provider}"
+        },
+        "findings": {
+          "title": "发现",
+          "none": "{month} 没有超出容差的差额。",
+          "noModels": "无明细"
+        },
+        "side": {
+          "gateway": "网关",
+          "motir-ai": "Motir AI",
+          "both": "双方",
+          "unnamed": "尚未判定"
+        },
+        "unreconciled": {
+          "title": "无账单来源",
+          "body": "Motir 无法读取这些供应商的账单，因此它们的每日成本只记录、不对比。"
+        },
+        "empty": {
+          "title": "{month} 尚无对账记录",
+          "body": "对账在每个 UTC 日结束后运行。某一天在首次运行后才会出现在这里。"
+        },
+        "allTime": "供应商账单按 UTC 日、逐月对账。请选择一个月份查看。",
+        "error": {
+          "title": "暂时无法显示供应商账单",
+          "description": "保存对账记录的 AI 服务没有响应。本页其他内容不受影响，请稍后重试。"
+        },
+        "none": "无金额"
       }
     },
     "tenants": {

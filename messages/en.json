@@ -12477,6 +12477,78 @@
       "unavailable": {
         "title": "Usage can't be shown right now",
         "description": "The AI service that keeps the usage rollup did not answer. Nothing is wrong with the figures — try again in a moment."
+      },
+      "reconciliation": {
+        "title": "Provider bills",
+        "intro": "What Motir recorded beside what each provider billed, per UTC day. A gap past the provider’s tolerance is a finding: it corrects the rate from then on, never a past charge.",
+        "col": {
+          "day": "Day (UTC)",
+          "recorded": "Recorded by Motir",
+          "billed": "Billed",
+          "gap": "Gap",
+          "source": "Source",
+          "status": "Status",
+          "provider": "Provider",
+          "models": "Models",
+          "estimated": "Estimated rows",
+          "side": "Differing side"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "Balance snapshot",
+          "export": "Export",
+          "none": "None"
+        },
+        "status": {
+          "reconciled": "Reconciled",
+          "failed": "Read failed",
+          "failedAt": "Tried {time} UTC",
+          "notRecorded": "Not recorded",
+          "unreconciled": "No source"
+        },
+        "pastTolerance": "Past tolerance",
+        "estimated": "{count, plural, one {# row estimated} other {# rows estimated}}",
+        "perModel": {
+          "aria": "Show the bill for {day} by model",
+          "model": "Model"
+        },
+        "summary": {
+          "recorded": "Recorded",
+          "billed": "Billed",
+          "gap": "Gap",
+          "over": "over {read} of {days} days read",
+          "onRead": "{amount} on the days read",
+          "daysPast": "{count, plural, one {# day past tolerance} other {# days past tolerance}}",
+          "noneRead": "No bill read",
+          "tolerance": "Past tolerance when the gap is over {relative} of the bill and over {absolute}",
+          "noTolerance": "No tolerance set",
+          "days": "Days · {provider}"
+        },
+        "findings": {
+          "title": "Findings",
+          "none": "No gaps past tolerance in {month}.",
+          "noModels": "No breakdown"
+        },
+        "side": {
+          "gateway": "Gateway",
+          "motir-ai": "Motir AI",
+          "both": "Both",
+          "unnamed": "Not named yet"
+        },
+        "unreconciled": {
+          "title": "No billing source",
+          "body": "Motir cannot read a bill for these providers, so their days are recorded but never compared."
+        },
+        "empty": {
+          "title": "Nothing recorded for {month} yet",
+          "body": "The reconciliation runs once each UTC day has closed. A day appears here after its first run."
+        },
+        "allTime": "Provider bills are reconciled per UTC day, one month at a time. Choose a month to see them.",
+        "error": {
+          "title": "Provider bills can’t be shown right now",
+          "description": "The AI service that keeps the reconciliation did not answer. The rest of this page is unaffected — try again in a moment."
+        },
+        "none": "No figure"
       }
     },
     "tenants": {

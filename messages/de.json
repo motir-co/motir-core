@@ -12480,6 +12480,78 @@
       "unavailable": {
         "title": "Die Nutzung kann gerade nicht angezeigt werden",
         "description": "Der AI-Dienst, der die Nutzungsaggregation führt, hat nicht geantwortet. Mit den Zahlen ist nichts falsch – versuchen Sie es gleich noch einmal."
+      },
+      "reconciliation": {
+        "title": "Anbieterrechnungen",
+        "intro": "Was Motir erfasst hat neben dem, was jeder Anbieter berechnet hat, pro UTC-Tag. Eine Differenz über der Toleranz des Anbieters ist ein Befund: Sie korrigiert den Tarif ab dann, nie eine frühere Abbuchung.",
+        "col": {
+          "day": "Tag (UTC)",
+          "recorded": "Von Motir erfasst",
+          "billed": "Berechnet",
+          "gap": "Differenz",
+          "source": "Quelle",
+          "status": "Status",
+          "provider": "Anbieter",
+          "models": "Modelle",
+          "estimated": "Geschätzte Zeilen",
+          "side": "Abweichende Seite"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "Guthaben-Snapshot",
+          "export": "Export",
+          "none": "Keine"
+        },
+        "status": {
+          "reconciled": "Abgeglichen",
+          "failed": "Lesen fehlgeschlagen",
+          "failedAt": "Versucht {time} UTC",
+          "notRecorded": "Nicht erfasst",
+          "unreconciled": "Keine Quelle"
+        },
+        "pastTolerance": "Über der Toleranz",
+        "estimated": "{count, plural, one {# Zeile geschätzt} other {# Zeilen geschätzt}}",
+        "perModel": {
+          "aria": "Rechnung für {day} nach Modell anzeigen",
+          "model": "Modell"
+        },
+        "summary": {
+          "recorded": "Erfasst",
+          "billed": "Berechnet",
+          "gap": "Differenz",
+          "over": "über {read} von {days} gelesenen Tagen",
+          "onRead": "{amount} an den gelesenen Tagen",
+          "daysPast": "{count, plural, one {# Tag über der Toleranz} other {# Tage über der Toleranz}}",
+          "noneRead": "Keine Rechnung gelesen",
+          "tolerance": "Über der Toleranz, wenn die Differenz {relative} der Rechnung und {absolute} übersteigt",
+          "noTolerance": "Keine Toleranz festgelegt",
+          "days": "Tage · {provider}"
+        },
+        "findings": {
+          "title": "Befunde",
+          "none": "Keine Differenzen über der Toleranz im {month}.",
+          "noModels": "Keine Aufschlüsselung"
+        },
+        "side": {
+          "gateway": "Gateway",
+          "motir-ai": "Motir AI",
+          "both": "Beide",
+          "unnamed": "Noch nicht benannt"
+        },
+        "unreconciled": {
+          "title": "Keine Rechnungsquelle",
+          "body": "Motir kann für diese Anbieter keine Rechnung lesen, daher werden ihre Tage erfasst, aber nie verglichen."
+        },
+        "empty": {
+          "title": "Für {month} ist noch nichts erfasst",
+          "body": "Der Abgleich läuft, sobald ein UTC-Tag abgeschlossen ist. Ein Tag erscheint hier nach seinem ersten Lauf."
+        },
+        "allTime": "Anbieterrechnungen werden pro UTC-Tag abgeglichen, jeweils für einen Monat. Wählen Sie einen Monat, um sie zu sehen.",
+        "error": {
+          "title": "Anbieterrechnungen können gerade nicht angezeigt werden",
+          "description": "Der KI-Dienst, der den Abgleich führt, hat nicht geantwortet. Der Rest dieser Seite ist nicht betroffen – versuchen Sie es gleich noch einmal."
+        },
+        "none": "Kein Wert"
       }
     },
     "tenants": {

@@ -12480,6 +12480,78 @@
       "unavailable": {
         "title": "Al momento non è possibile mostrare l’utilizzo",
         "description": "Il servizio AI che gestisce il riepilogo dell’utilizzo non ha risposto. Non c’è nessun problema con i valori: riprova tra un momento."
+      },
+      "reconciliation": {
+        "title": "Fatture dei fornitori",
+        "intro": "Ciò che Motir ha registrato accanto a ciò che ogni fornitore ha fatturato, per giorno UTC. Una differenza oltre la tolleranza del fornitore è una rilevazione: corregge la tariffa da quel momento, mai un addebito passato.",
+        "col": {
+          "day": "Giorno (UTC)",
+          "recorded": "Registrato da Motir",
+          "billed": "Fatturato",
+          "gap": "Differenza",
+          "source": "Origine",
+          "status": "Stato",
+          "provider": "Fornitore",
+          "models": "Modelli",
+          "estimated": "Righe stimate",
+          "side": "Lato divergente"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "Istantanea del saldo",
+          "export": "Esportazione",
+          "none": "Nessuna"
+        },
+        "status": {
+          "reconciled": "Riconciliato",
+          "failed": "Lettura non riuscita",
+          "failedAt": "Tentato {time} UTC",
+          "notRecorded": "Non registrato",
+          "unreconciled": "Nessuna origine"
+        },
+        "pastTolerance": "Oltre la tolleranza",
+        "estimated": "{count, plural, one {# riga stimata} other {# righe stimate}}",
+        "perModel": {
+          "aria": "Mostra la fattura del {day} per modello",
+          "model": "Modello"
+        },
+        "summary": {
+          "recorded": "Registrato",
+          "billed": "Fatturato",
+          "gap": "Differenza",
+          "over": "su {read} di {days} giorni letti",
+          "onRead": "{amount} nei giorni letti",
+          "daysPast": "{count, plural, one {# giorno oltre la tolleranza} other {# giorni oltre la tolleranza}}",
+          "noneRead": "Nessuna fattura letta",
+          "tolerance": "Oltre la tolleranza quando la differenza supera il {relative} della fattura e {absolute}",
+          "noTolerance": "Nessuna tolleranza impostata",
+          "days": "Giorni · {provider}"
+        },
+        "findings": {
+          "title": "Rilevazioni",
+          "none": "Nessuna differenza oltre la tolleranza a {month}.",
+          "noModels": "Nessun dettaglio"
+        },
+        "side": {
+          "gateway": "Gateway",
+          "motir-ai": "Motir AI",
+          "both": "Entrambi",
+          "unnamed": "Non ancora indicato"
+        },
+        "unreconciled": {
+          "title": "Nessuna origine di fatturazione",
+          "body": "Motir non può leggere una fattura per questi fornitori, quindi i loro giorni vengono registrati ma mai confrontati."
+        },
+        "empty": {
+          "title": "Ancora nulla registrato per {month}",
+          "body": "La riconciliazione viene eseguita alla chiusura di ogni giorno UTC. Un giorno compare qui dopo la sua prima esecuzione."
+        },
+        "allTime": "Le fatture dei fornitori si riconciliano per giorno UTC, un mese alla volta. Scegli un mese per vederle.",
+        "error": {
+          "title": "Al momento non è possibile mostrare le fatture dei fornitori",
+          "description": "Il servizio di IA che conserva la riconciliazione non ha risposto. Il resto della pagina non è interessato: riprova tra un momento."
+        },
+        "none": "Nessun importo"
       }
     },
     "tenants": {

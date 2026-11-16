@@ -8,6 +8,7 @@ import { buildSpendSheet, parseSpendPeriod, recentMonths } from '@/lib/platform/
 import { platformReadService } from '@/lib/services/platformReadService';
 import { SpendPeriodSwitch } from '../_components/SpendPeriodSwitch';
 import { formatMicroUsd, formatUsage } from '../_components/spendFormat';
+import { ProviderReconciliationSection } from './_components/ProviderReconciliationSection';
 
 /**
  * Usage & cost — design `platform-admin/console--estate-usage-drilldown.mock.html`
@@ -17,6 +18,11 @@ import { formatMicroUsd, formatUsage } from '../_components/spendFormat';
  * usage, credits and Motir cost (indexing *not charged*), and planning and
  * agent-run tokens by model. The per-organization list is Tenants (D10). Every
  * number is motir-ai's platform rollup, read through one audited `estate.read`.
+ *
+ * Below the sheets, the month's PROVIDER BILLS (MOTIR-11376, design MOTIR-11375's
+ * delta mock `…--provider-bills.mock.html`): what each provider billed beside what
+ * Motir recorded, per UTC day. Read by the same `getEstateUsage` call, so the view
+ * stays one audited read; it renders even when the sheets' read failed.
  */
 
 export const metadata: Metadata = {
@@ -36,7 +42,7 @@ export default async function AdminUsagePage({
   const t = await getTranslations('platformAdmin.usage');
   const format = await getFormatter();
   const period = parseSpendPeriod((await searchParams).period);
-  const { usage } = await platformReadService.getEstateUsage(principal, period);
+  const { usage, reconciliation } = await platformReadService.getEstateUsage(principal, period);
 
   const monthLabel = (ym: string) =>
     format.dateTime(new Date(`${ym}-01T00:00:00Z`), {
@@ -85,6 +91,8 @@ export default async function AdminUsagePage({
           num={(n) => format.number(n)}
         />
       )}
+
+      <ProviderReconciliationSection reconciliation={reconciliation} period={period} />
     </div>
   );
 }

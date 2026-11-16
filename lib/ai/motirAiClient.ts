@@ -4150,6 +4150,108 @@ export async function getPlatformUsageMonths(query: {
   return (await res.json()) as RawPlatformUsageMonths;
 }
 
+// ── Provider-bill reconciliation (Story MOTIR-11350 · MOTIR-11376) ─────────────
+//
+// `GET /v1/platform/usage/provider-reconciliation` — motir-ai's daily comparison of
+// what Motir recorded against what each provider billed, for ONE month. Field
+// names are exactly the route's (`docs/contract.md`); every figure is the stored
+// record's, so nothing here (or above it) recomputes a gap, a tolerance or a status.
+
+/** Where a day's billed figure came from. `none` — nothing was read. */
+export type ReconciliationSource = 'api' | 'balance_snapshot' | 'export' | 'none';
+
+/** A day's state: compared, a read that failed (or never ran), or no bill source at all. */
+export type ReconciliationStatus = 'reconciled' | 'failed' | 'unreconciled';
+
+/** Which side of the gateway comparison differs from the provider's bill. */
+export type ReconciliationDifferingSide = 'gateway' | 'motir-ai' | 'both';
+
+/** One model's line of a day's bill, where the provider breaks it down. */
+export interface RawReconciliationModelDay {
+  model: string;
+  recordedMicroUsd: number;
+  billedMicroUsd: number;
+  /** billed − recorded, as motir-ai stored it — never computed here. */
+  gapMicroUsd: number;
+}
+
+/** One closed UTC day of one provider. */
+export interface RawReconciliationDay {
+  /** `YYYY-MM-DD`, UTC. */
+  day: string;
+  /** null on a closed day with no record at all. */
+  recordedMicroUsd: number | null;
+  /** null when nothing was read — never 0 for a missing bill. */
+  billedMicroUsd: number | null;
+  source: ReconciliationSource;
+  status: ReconciliationStatus;
+  /** When the bill was read (or the read was tried); ISO 8601. */
+  readAt: string | null;
+  /** `billed − recorded`, signed; null when billed is null. */
+  gapMicroUsd: number | null;
+  /** True exactly when a finding exists for this provider and day. */
+  pastTolerance: boolean;
+  /** `[]` where the provider gives no breakdown. */
+  perModel: RawReconciliationModelDay[];
+  /** The finding's estimated gateway-row count; null without one. */
+  estimatedRowCount: number | null;
+}
+
+export interface RawReconciliationProvider {
+  provider: string;
+  /** Null for a provider with no tolerance row. */
+  relativeTolerance: number | null;
+  absoluteToleranceMicroUsd: number | null;
+  days: RawReconciliationDay[];
+}
+
+export interface RawReconciliationFindingModel {
+  model: string;
+  recordedMicroUsd: number;
+  billedMicroUsd: number;
+  gapMicroUsd: number;
+}
+
+export interface RawReconciliationFinding {
+  provider: string;
+  day: string;
+  recordedMicroUsd: number;
+  billedMicroUsd: number;
+  gapMicroUsd: number;
+  /** The per-model rows past tolerance; `[]` with no breakdown. */
+  models: RawReconciliationFindingModel[];
+  estimatedRowCount: number | null;
+  /** Null until the gateway comparison names a side. */
+  differingSide: ReconciliationDifferingSide | null;
+}
+
+/** `GET /v1/platform/usage/provider-reconciliation` — one month's reconciliation. */
+export interface RawProviderReconciliation {
+  period: string;
+  providers: RawReconciliationProvider[];
+  findings: RawReconciliationFinding[];
+  unreconciledProviders: string[];
+}
+
+/**
+ * GET /v1/platform/usage/provider-reconciliation — the provider-bill reconciliation
+ * for one month (`YYYY-MM`; the route has no all-time form and answers 400 to
+ * one). Read-through: the caller is a `platform*Service` method that has already
+ * passed the platform-staff gate.
+ */
+export async function getPlatformProviderReconciliation(query: {
+  period: string;
+}): Promise<RawProviderReconciliation> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ period: query.period });
+  const res = await aiFetch(
+    `${url}/v1/platform/usage/provider-reconciliation?${params.toString()}`,
+    { method: 'GET', headers: authHeaders(serviceToken) },
+  );
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawProviderReconciliation;
+}
+
 // ── The PLATFORM lessons console (MOTIR-1411 over motir-ai MOTIR-1410) ─────────
 //
 // `/v1/admin/lessons` — every tenant's lessons and the global corpus in one list,

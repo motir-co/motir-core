@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type {
+  EstateReconciliationResult,
   PlatformActivityItemDTO,
   PlatformEstateCountsDTO,
   PlatformOrganizationEstateDTO,
@@ -8,13 +9,18 @@ import type {
   PlatformOverviewPeriod,
 } from '@/lib/dto/platform';
 import {
+  getPlatformProviderReconciliation,
   getPlatformRuns,
   getPlatformUsage,
   platformRunsCursorAt,
   type RawPlatformRun,
   type RawPlatformUsage,
 } from '@/lib/ai/motirAiClient';
-import { toPlatformRunActivityDTO, toPlatformTenantEventDTO } from '@/lib/mappers/platformMappers';
+import {
+  toPlatformRunActivityDTO,
+  toPlatformTenantEventDTO,
+  toProviderReconciliationDTO,
+} from '@/lib/mappers/platformMappers';
 import {
   toPlatformOrganizationSummaryDTO,
   toPlatformWorkspaceSummaryDTO,
@@ -176,24 +182,41 @@ export const platformReadService = {
    * ONE audited `estate.read` per view, written whether or not motir-ai answered:
    * the operator looked at the estate's spend either way. motir-ai unreachable is
    * `usage: null` — the page's error state — never a throw.
+   *
+   * The same view reads the month's PROVIDER-BILL RECONCILIATION (MOTIR-11376)
+   * beside it, so the page still makes one call and writes one row.
+   * `reconciliation` is the DTO, `null` when motir-ai did not answer that read, or
+   * `'month_required'` on All time, which the route has no form for.
    */
   async getEstateUsage(
     principal: PlatformPrincipal,
     period: string,
-  ): Promise<{ period: string; usage: RawPlatformUsage | null }> {
+  ): Promise<{
+    period: string;
+    usage: RawPlatformUsage | null;
+    reconciliation: EstateReconciliationResult;
+  }> {
     await requirePlatformStaff('support');
 
-    let usage: RawPlatformUsage | null = null;
-    try {
-      usage = await getPlatformUsage({ period, level: 'platform' });
-    } catch {
-      usage = null;
-    }
+    // Both motir-ai reads run outside the transaction, side by side, and each is
+    // settled on its own: either failing leaves the other's part of the page
+    // rendering. The reconciliation route answers one month only, so All time
+    // asks it nothing (MOTIR-11376).
+    const [usageRead, reconciliationRead] = await Promise.allSettled([
+      getPlatformUsage({ period, level: 'platform' }),
+      period === 'all'
+        ? Promise.resolve('month_required' as const)
+        : getPlatformProviderReconciliation({ period }).then(toProviderReconciliationDTO),
+    ]);
+    const usage = usageRead.status === 'fulfilled' ? usageRead.value : null;
+    const reconciliation =
+      reconciliationRead.status === 'fulfilled' ? reconciliationRead.value : null;
 
+    // ONE audit row for the page view, whatever motir-ai answered.
     return withPlatformRead(
       principal,
       { action: 'estate.read', targetKind: 'platform', targetLabel: `estate usage ${period}` },
-      async () => ({ period, usage }),
+      async () => ({ period, usage, reconciliation }),
     );
   },
 
