@@ -340,6 +340,38 @@ describe('arrivalView', () => {
     expect(cy * v.scale + v.ty).toBeCloseTo(viewport.h / 2, 6);
   });
 
+  // The roadmap arrival acceptance walk's fixture (`seedWideRoadmap`) in the
+  // shipped 5-column loose band (MOTIR-10537), in the canvas frame a 1440×900
+  // window gives it. MOTIR-11473: 18 epics are only FOUR rows, which fit at the
+  // floor on Y, so the band's bounds — not the frontier — were centred there.
+  describe('the 5-column loose band (MOTIR-11473)', () => {
+    const frame = { w: 1136, h: 739 };
+    // The frontier is the band's first card: row 1, column 1.
+    const frontier: Rect = { x: 40, y: 40, w: 280, h: 124 };
+    const band = (rows: number): Bounds => ({
+      minX: 40,
+      minY: 40,
+      maxX: 40 + 5 * 280 + 4 * 80,
+      maxY: 40 + rows * 124 + (rows - 1) * 72,
+    });
+
+    it('four rows fit on Y at the floor, so the BOUNDS are centred there and the frontier sits 235.2 px high', () => {
+      const v = arrivalView(band(4), frame, ARRIVAL_MIN_SCALE, frontier);
+      expect(v.scale).toBe(ARRIVAL_MIN_SCALE);
+      const cy = (frontier.y + frontier.h / 2) * v.scale + v.ty;
+      expect(frame.h / 2 - cy).toBeCloseTo(235.2, 6);
+      // Width overflows (1376 px at the floor), so X still follows the frontier.
+      expect((frontier.x + frontier.w / 2) * v.scale + v.tx).toBeCloseTo(frame.w / 2, 6);
+    });
+
+    it('six rows overflow BOTH axes at the floor, so the frontier is centred on both', () => {
+      const v = arrivalView(band(6), frame, ARRIVAL_MIN_SCALE, frontier);
+      expect(v.scale).toBe(ARRIVAL_MIN_SCALE);
+      expect((frontier.x + frontier.w / 2) * v.scale + v.tx).toBeCloseTo(frame.w / 2, 6);
+      expect((frontier.y + frontier.h / 2) * v.scale + v.ty).toBeCloseTo(frame.h / 2, 6);
+    });
+  });
+
   it('fits a SINGLE-node level exactly as fitView does — well above the floor', () => {
     const one: Bounds = { minX: 0, minY: 0, maxX: 280, maxY: 124 };
     expect(arrivalView(one, viewport, ARRIVAL_MIN_SCALE)).toEqual(fitView(one, viewport));
