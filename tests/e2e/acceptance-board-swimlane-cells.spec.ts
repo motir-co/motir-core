@@ -664,10 +664,8 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     page.evaluate(() => [...(window as unknown as { __cellPhases: Set<string> }).__cellPhases]);
   const c = collect(page);
 
-  // A tall viewport, so a lane's ten-card cell and the lane beneath it fit on
-  // screen together for the drag of chapter 7; wide enough to show five columns,
-  // so every lane overflows sideways and draws its arrows.
-  await page.setViewportSize({ width: 1600, height: 1600 });
+  // The lane's own 1920×1080 frame (MOTIR-11471): the board's columns are wider
+  // than it, so every lane overflows sideways and draws its arrows.
   await signIn(page, ANA.email, PASSWORD);
 
   let todo = '';
@@ -946,10 +944,10 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
           r.request().method() === 'POST' && r.request().headers()['next-action'] !== undefined,
       ),
     ]);
-    // Ten loaded cards make the target taller than the screen: drop on its
-    // visible middle, not its off-screen centre.
+    // Ten loaded cards make the target taller than the screen: drop just inside
+    // its top, not at its off-screen centre.
     await dragCardOntoCell(page, `board-card-${moved.identifier}`, target, {
-      dropInViewportMiddle: true,
+      dropNearTargetTop: true,
     });
     const [move, reassign] = await wrote;
     expect(move.ok(), 'POST /api/board/move').toBe(true);
