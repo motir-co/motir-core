@@ -107,12 +107,13 @@ export const ciRunnerProvisionSweep = defineJob(
     // A step of its own so an outage on the GitHub side cannot fail the fan-out.
     //
     // Its whole outcome — per org: queued, idle runners, awaiting, added, skipped
-    // runs, error — rides the sweep's OUTPUT (MOTIR-10790), so a reconcile that
-    // keeps failing for an org shows on the `job_run` row, not only in the logs.
-    // `-v2` because the memo's shape changed; re-executing it on a resumed run is
-    // safe, since the reconcile counts coverage before it mints anything.
+    // runs, the repos the fleet is blind to (MOTIR-11437), error — rides the
+    // sweep's OUTPUT (MOTIR-10790), so a reconcile that keeps failing for an org
+    // shows on the `job_run` row, not only in the logs. `-v3` because the memo's
+    // shape changed again; re-executing it on a resumed run is safe, since the
+    // reconcile counts coverage before it mints anything.
     const reconcile = await ctx.step.run(
-      'reconcile-github-queue-v2',
+      'reconcile-github-queue-v3',
       async (): Promise<ReconcileOutcome> => {
         try {
           return await services.ciRunnerReconcile.reconcile();
