@@ -572,20 +572,20 @@ async function pressLoadMore(
   return found()!.cells[0]!;
 }
 
-/** What every mounted cell renders, by cell id — its card ids, its count text and
- *  whether it offers Load more — for a "nothing else changed" comparison. */
+/** What every mounted cell's PAGING says, by cell id — its count text, whether it
+ *  offers Load more and its phase — for a "nothing else changed" comparison. The
+ *  cards a cell has MOUNTED are left out: a cell windows its cards to the
+ *  viewport, so a Load more that scrolls the page mounts cards in a cell whose
+ *  pages never changed. A page landing in the wrong cell moves its count. */
 function cellSnapshot(page: Page, except: string): Promise<Record<string, string>> {
   return main(page).evaluate((root, skip) => {
     const out: Record<string, string> = {};
     for (const el of root.querySelectorAll<HTMLElement>('[data-testid^="lane-cell-"]')) {
       const id = el.dataset.testid!;
       if (id === skip) continue;
-      const cards = [...el.querySelectorAll<HTMLElement>('[data-testid^="board-card-"]')].map(
-        (n) => n.dataset.testid,
-      );
       const count = el.querySelector('[data-testid^="cell-count-"]')?.textContent ?? '';
       const more = el.querySelector('[data-testid^="cell-load-more-"]') ? 'more' : '';
-      out[id] = `${cards.join(',')}|${count}|${more}|${el.dataset.cellPhase ?? ''}`;
+      out[id] = `${count}|${more}|${el.dataset.cellPhase ?? ''}`;
     }
     return out;
   }, except);
