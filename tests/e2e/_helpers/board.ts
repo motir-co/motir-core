@@ -479,7 +479,7 @@ export async function dragCardOntoCell(
   page: Page,
   cardTestId: string,
   target: Locator,
-  options: { dropInViewportMiddle?: boolean } = {},
+  options: { dropNearTargetTop?: boolean } = {},
 ): Promise<void> {
   const card = page.getByTestId(cardTestId);
   // Settle BOTH into view BEFORE measuring — capturing the source box and THEN
@@ -496,8 +496,26 @@ export async function dragCardOntoCell(
   // byte-identical attempts.) Pressing the wrong element is the failure that
   // cannot recover, so the PICKUP gets the last scroll and the drop tolerates
   // the drift.
-  await target.scrollIntoViewIfNeeded();
-  await card.scrollIntoViewIfNeeded();
+  if (options.dropNearTargetTop) {
+    // A target cell taller than the screen: put its TOP at 65% of the viewport
+    // through its own scroll container, so the source card in the lane above it
+    // sits on screen too, and the drop below lands on the cell's top rather than
+    // its off-screen centre. Nothing scrolls after this, so both boxes hold.
+    await target.evaluate((el, frac) => {
+      el.scrollIntoView({ block: 'start' });
+      let scroller: Element | null = el.parentElement;
+      while (scroller) {
+        const { overflowY } = getComputedStyle(scroller);
+        if (/(auto|scroll)/.test(overflowY) && scroller.scrollHeight > scroller.clientHeight) break;
+        scroller = scroller.parentElement;
+      }
+      const top = el.getBoundingClientRect().top;
+      (scroller ?? document.scrollingElement!).scrollBy(0, top - window.innerHeight * frac);
+    }, 0.65);
+  } else {
+    await target.scrollIntoViewIfNeeded();
+    await card.scrollIntoViewIfNeeded();
+  }
   const from = (await card.boundingBox())!;
   const to = (await target.boundingBox())!;
   const fx = from.x + from.width / 2;
@@ -517,20 +535,16 @@ export async function dragCardOntoCell(
   }
   const tx = to.x + to.width / 2;
   let ty = to.y + to.height / 2;
-  // A cell taller than the screen has its centre off it, and a pointer near the
-  // viewport's edge makes dnd-kit auto-scroll the page under it, so the drop
-  // lands in the lane that scrolled in. `dropInViewportMiddle` keeps the drop on
-  // the part of the cell inside the screen's middle half (pointerWithin resolves
-  // a drop over one of the cell's cards to that cell).
-  if (options.dropInViewportMiddle && viewport) {
-    const lo = Math.max(to.y + 8, viewport.height * 0.25);
-    const hi = Math.min(to.y + to.height - 8, viewport.height * 0.75);
-    if (lo > hi) {
+  if (options.dropNearTargetTop && viewport) {
+    // Just inside the cell's top. dnd-kit auto-scrolls the page while the pointer
+    // is near the viewport's bottom edge, and a page that moves under a held
+    // pointer drops the card in whichever lane scrolled in.
+    ty = to.y + Math.min(32, to.height / 2);
+    if (ty > viewport.height * 0.8) {
       throw new Error(
-        `the target cell (y ${to.y}, height ${to.height}) has no part in the middle of the viewport (height ${viewport.height})`,
+        `the drop point (${tx}, ${ty}) is in the bottom fifth of the viewport (height ${viewport.height}), where dnd-kit auto-scrolls`,
       );
     }
-    ty = Math.min(Math.max(ty, lo), hi);
   }
   await page.mouse.move(fx, fy);
   await page.mouse.down();

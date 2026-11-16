@@ -60,7 +60,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { Page, Response } from '@playwright/test';
+import type { Locator, Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
@@ -572,23 +572,54 @@ async function pressLoadMore(
   return found()!.cells[0]!;
 }
 
-/** What every mounted cell renders, by cell id — its card ids, its count text and
- *  whether it offers Load more — for a "nothing else changed" comparison. */
+/** What every mounted cell's PAGING says, by cell id — its count text, whether it
+ *  offers Load more and its phase — for a "nothing else changed" comparison. The
+ *  cards a cell has MOUNTED are left out: a cell windows its cards to the
+ *  viewport, so a Load more that scrolls the page mounts cards in a cell whose
+ *  pages never changed. A page landing in the wrong cell moves its count. */
 function cellSnapshot(page: Page, except: string): Promise<Record<string, string>> {
   return main(page).evaluate((root, skip) => {
     const out: Record<string, string> = {};
     for (const el of root.querySelectorAll<HTMLElement>('[data-testid^="lane-cell-"]')) {
       const id = el.dataset.testid!;
       if (id === skip) continue;
-      const cards = [...el.querySelectorAll<HTMLElement>('[data-testid^="board-card-"]')].map(
-        (n) => n.dataset.testid,
-      );
       const count = el.querySelector('[data-testid^="cell-count-"]')?.textContent ?? '';
       const more = el.querySelector('[data-testid^="cell-load-more-"]') ? 'more' : '';
-      out[id] = `${cards.join(',')}|${count}|${more}|${el.dataset.cellPhase ?? ''}`;
+      out[id] = `${count}|${more}|${el.dataset.cellPhase ?? ''}`;
     }
     return out;
   }, except);
+}
+
+/** Every card a cell LISTS, top to bottom. A cell windows its cards to the
+ *  viewport, so a cell taller than the screen never mounts them all at once: this
+ *  scrolls the cell through its own scroll container half a screen at a time and
+ *  keys each mounted card by its offset inside the cell. A card listed twice sits
+ *  at two offsets, so it comes back twice. */
+function walkCellCards(cell: Locator): Promise<string[]> {
+  return cell.evaluate(async (el) => {
+    let scroller: Element | null = el.parentElement;
+    while (scroller) {
+      const { overflowY } = getComputedStyle(scroller);
+      if (/(auto|scroll)/.test(overflowY) && scroller.scrollHeight > scroller.clientHeight) break;
+      scroller = scroller.parentElement;
+    }
+    const byOffset = new Map<number, string>();
+    const settle = () =>
+      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+    el.scrollIntoView({ block: 'start' });
+    for (let step = 0; step < 50; step++) {
+      await settle();
+      const cellTop = el.getBoundingClientRect().top;
+      for (const card of el.querySelectorAll<HTMLElement>('[data-testid^="board-card-"]')) {
+        const offset = Math.round(card.getBoundingClientRect().top - cellTop);
+        byOffset.set(offset, card.dataset.testid!);
+      }
+      if (el.getBoundingClientRect().bottom <= window.innerHeight) break;
+      (scroller ?? document.scrollingElement!).scrollBy(0, window.innerHeight / 2);
+    }
+    return [...byOffset.entries()].sort((a, b) => a[0] - b[0]).map(([, id]) => id);
+  });
 }
 
 const scrollLefts = (page: Page, keys: string[]) =>
@@ -664,10 +695,8 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     page.evaluate(() => [...(window as unknown as { __cellPhases: Set<string> }).__cellPhases]);
   const c = collect(page);
 
-  // A tall viewport, so a lane's ten-card cell and the lane beneath it fit on
-  // screen together for the drag of chapter 7; wide enough to show five columns,
-  // so every lane overflows sideways and draws its arrows.
-  await page.setViewportSize({ width: 1600, height: 1600 });
+  // The lane's own 1920×1080 frame (MOTIR-11471): the board's columns are wider
+  // than it, so every lane overflows sideways and draws its arrows.
   await signIn(page, ANA.email, PASSWORD);
 
   let todo = '';
@@ -946,10 +975,10 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
           r.request().method() === 'POST' && r.request().headers()['next-action'] !== undefined,
       ),
     ]);
-    // Ten loaded cards make the target taller than the screen: drop on its
-    // visible middle, not its off-screen centre.
+    // Ten loaded cards make the target taller than the screen: drop just inside
+    // its top, not at its off-screen centre.
     await dragCardOntoCell(page, `board-card-${moved.identifier}`, target, {
-      dropInViewportMiddle: true,
+      dropNearTargetTop: true,
     });
     const [move, reassign] = await wrote;
     expect(move.ok(), 'POST /api/board/move').toBe(true);
@@ -970,11 +999,10 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     } while (page2.cursor !== null);
     await expect(cellCount(page, inProgress, cal)).toHaveText(countText(13, 13));
     await expect(loadMore(page, inProgress, cal)).toHaveCount(0);
-    const mounted = await target
-      .locator('[data-testid^="board-card-"]')
-      .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
-    expect(mounted.filter((t) => t === `board-card-${moved.identifier}`)).toHaveLength(1);
-    expect(new Set(mounted).size, 'no card is listed twice').toBe(mounted.length);
+    const listed = await walkCellCards(target);
+    expect(listed, 'every loaded card is listed').toHaveLength(13);
+    expect(listed.filter((t) => t === `board-card-${moved.identifier}`)).toHaveLength(1);
+    expect(new Set(listed).size, 'no card is listed twice').toBe(listed.length);
 
     // The shipped read agrees: the card is In Progress, Cal's, and listed once.
     await expect
