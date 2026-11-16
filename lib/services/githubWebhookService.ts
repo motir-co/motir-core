@@ -42,6 +42,7 @@ import { dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
 import { ciAllowanceService } from './ciAllowanceService';
 import { ciActionsGateService } from './ciActionsGateService';
 import { projectRepoTakeoverService } from './projectRepoTakeoverService';
+import { projectRunnerGroupService } from './projectRunnerGroupService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { repoDeploymentService } from './repoDeploymentService';
@@ -260,7 +261,11 @@ export type GithubWebhookResult =
         // MOTIR-1959 — the `archived` / `unarchived` actions. `archived_applied`
         // means a mirror row's liveness was re-stamped; `unknown_repo` covers the
         // repository Motir does not mirror, exactly as it does for `transferred`.
-        | 'archived_applied';
+        | 'archived_applied'
+        // MOTIR-11426 — the `privatized` / `publicized` actions. The visibility a
+        // connected org's runner-group access list is derived from changed, so
+        // every project that holds the repository was re-synced.
+        | 'runner_groups_resynced';
     }
   | {
       // Preview deployments (Story MOTIR-4906 · MOTIR-5329). `stale` is an older
@@ -397,6 +402,13 @@ export const githubWebhookService = {
    * moment a Motir-owned repository has ACTUALLY moved to the user's account,
    * which is the one thing the saga must never assume from its own `202`.
    *
+   * **`privatized` / `publicized`** is the repository's VISIBILITY (MOTIR-11426).
+   * A connected org's runner group access-lists the project's PRIVATE
+   * repositories, judged when the group is synced, so a visibility change
+   * re-syncs every project holding the repository: a repository made private
+   * joins its group and one made public leaves it. Without this a repository
+   * that started public never reaches the fleet.
+   *
    * **`archived` / `unarchived`** is the repository's LIVENESS (MOTIR-1959).
    * Archiving makes a repo read-only, so every card resolving to it becomes
    * undispatchable — and it happens long after the row was established, which is
@@ -427,6 +439,18 @@ export const githubWebhookService = {
       // transfer path gives, and not an error: the shared provisioning
       // installation sees deliveries for repositories that belong to no project.
       return { event: 'repository', outcome: applied ? 'archived_applied' : 'unknown_repo' };
+    }
+    if (action === 'privatized' || action === 'publicized') {
+      const providerRepoId = readId(asRecord(body['repository'])?.['id']);
+      if (!providerRepoId) return { event: 'repository', outcome: 'malformed' };
+      const { projects } =
+        await projectRunnerGroupService.syncForRepositoryVisibilityChange(providerRepoId);
+      // `unknown_repo` for a repository no project has established — the shared
+      // provisioning installation sees deliveries for repositories of no project.
+      return {
+        event: 'repository',
+        outcome: projects > 0 ? 'runner_groups_resynced' : 'unknown_repo',
+      };
     }
     if (action !== 'transferred') {
       return { event: 'ignored', reason: `unhandled_repository_action:${String(body['action'])}` };

@@ -1,5 +1,5 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { projectRunnerGroupRepository } from '@/lib/repositories/projectRunnerGroupRepository';
@@ -300,6 +300,35 @@ export const projectRunnerGroupService = {
         err,
       });
     }
+  },
+
+  /**
+   * Re-sync every project that holds this repository, after GitHub reports its
+   * VISIBILITY changed — the `repository` webhook's `privatized` / `publicized`
+   * actions (MOTIR-11426).
+   *
+   * A connected org's access list is derived from visibility AT SYNC TIME
+   * ({@link syncConnectedOrgGroups}), and nothing else re-syncs when a repository
+   * goes private after it was established. Without this a repository that started
+   * public stays off its group for good: its fleet jobs ask for the fleet label,
+   * no runner in a group that grants the repository exists, and they sit queued
+   * until GitHub expires them, with no error anywhere. The reverse matters for
+   * isolation: a repository made public must leave the group, because a fork's
+   * pull request can run code on a self-hosted runner.
+   *
+   * Each project goes through the SAME locked {@link syncForProject} the establish
+   * path uses, one after another and never nested, so it takes that project's row
+   * lock exactly as every other writer does. Best-effort per project, as every
+   * webhook-driven sync is: one project's failure is logged and the next one is
+   * still synced. `projects` is how many projects hold the repository — zero for
+   * a repository no project has established, which is not an error.
+   */
+  async syncForRepositoryVisibilityChange(providerRepoId: string): Promise<{ projects: number }> {
+    const targets = await withSystemContext((tx) =>
+      projectRepoRepository.listProjectsByRealizedProviderRepoId(providerRepoId, tx),
+    );
+    for (const target of targets) await this.syncQuietly(target);
+    return { projects: targets.length };
   },
 
   /**
