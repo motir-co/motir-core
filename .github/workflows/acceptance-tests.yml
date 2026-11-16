@@ -297,6 +297,10 @@ on:
   # red through a merge nobody checked. A tidy checks list is worth less than a
   # trunk that is green, so when the two conflict the checks list loses.
   pull_request:
+    # `ready_for_review` starts the run when a draft is marked ready: the jobs
+    # below skip while the pull request is a draft (saves CI minutes on work in
+    # progress), and without this type nothing would run at that moment.
+    types: [opened, synchronize, reopened, ready_for_review]
   # ── THE MERGE QUEUE IS WHERE THIS LANE BELONGS (MOTIR-4257) ────────────────
   #
   # ⚠️ WITHOUT THIS THE TRUNK CAN GO RED AND NOTHING PREVENTS IT, which is the
@@ -400,6 +404,7 @@ jobs:
   # it holds a spec, and an empty lane runs nothing (MOTIR-10277).
   membership:
     name: Does the lane hold a spec?
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.3–0.6 min → 10 (~17x, the short-job floor). It only reads
     # the changed-file list and decides whether the lane holds a spec.

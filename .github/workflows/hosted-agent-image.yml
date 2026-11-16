@@ -39,6 +39,10 @@ name: Hosted agent image
 
 on:
   pull_request:
+    # `ready_for_review` starts the run when a draft is marked ready: the jobs
+    # below skip while the pull request is a draft (saves CI minutes on work in
+    # progress), and without this type nothing would run at that moment.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'packages/cli/**'
       - 'package.json'
@@ -94,7 +98,7 @@ jobs:
     name: Build, prove, publish
     # A Publish latest dispatch pins an image that is already published: nothing
     # is built.
-    if: ${{ github.event_name != 'workflow_dispatch' }}
+    if: ${{ (github.event_name != 'workflow_dispatch') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No run on record yet — this lane is new (MOTIR-687). The floor is set from
     # its nearest neighbour, `sandbox-images.yml`'s base job (observed 2.8–8.3

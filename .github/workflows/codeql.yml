@@ -5,6 +5,10 @@ name: CodeQL
 # uploads this workflow produces.
 on:
   pull_request:
+    # `ready_for_review` starts the run when a draft is marked ready: the jobs
+    # below skip while the pull request is a draft (saves CI minutes on work in
+    # progress), and without this type nothing would run at that moment.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
   schedule:
@@ -28,6 +32,7 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 2.7–12.7 min across four runs → 40 (~3.2x on the worst, run
     # 33218107241). The spread is the point: CodeQL's extract-and-query time

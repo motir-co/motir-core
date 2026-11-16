@@ -24,6 +24,10 @@ name: Hosting guard image
 
 on:
   pull_request:
+    # `ready_for_review` starts the run when a draft is marked ready: the jobs
+    # below skip while the pull request is a draft (saves CI minutes on work in
+    # progress), and without this type nothing would run at that moment.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'packages/hosting-guard/**'
       - '.github/workflows/hosting-guard-image.yml'
@@ -48,6 +52,7 @@ env:
 jobs:
   hosting-guard-image:
     name: Build, prove, publish
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No run on record yet — this lane is new (MOTIR-9947). The image is one
     # alpine Node layer plus two source files, expected to build and smoke in
