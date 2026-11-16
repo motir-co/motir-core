@@ -4966,6 +4966,8 @@
     "assignedTo": "Assegnato a {name}",
     "unassigned": "Non assegnato",
     "boardLabel": "Colonne della Bacheca",
+    "columnArrowPrevious": "Colonna precedente",
+    "columnArrowNext": "Colonna successiva",
     "dndInstructions": "Per prendere un elemento di lavoro, premi Spazio. Durante il trascinamento, usa i tasti freccia per spostarlo. Premi di nuovo Spazio per rilasciarlo, oppure Esc per annullare.",
     "announcementPickedUp": "{key} preso. Sopra la colonna {col}, posizione {index} di {count}.",
     "announcementMoved": "{key} spostato in {col}, posizione {index} di {count}. Premi Spazio per rilasciarlo, Esc per annullare.",

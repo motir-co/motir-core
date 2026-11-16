@@ -3,13 +3,13 @@
 import { WorkItemBlockedTag, WorkItemStateTags } from '@/components/workItems/WorkItemStateTags';
 import type { ExecutorDto, WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
-import { isReadyToStart } from '@/lib/workItems/statusSlot';
+import { isBlockedNotStarted, isReadyToStart } from '@/lib/workItems/statusSlot';
 import { useDisplayedStatus } from './OptimisticStatusProvider';
 
 // THE ITEM PAGE'S STATE TAGS (MOTIR-10534) — the canvas card's tag row in the
 // header eyebrow, right after the identifier: the status slot (Done › To plan ›
 // Ready › the status chip), the Manual chip, and the blocked flag when readiness
-// says the item is blocked. So the page names the item's state the way the roadmap
+// says the item is blocked AND it has not started (a todo-category status). So the page names the item's state the way the roadmap
 // card, the board card and the quick view do.
 //
 // A client island because the status it draws is the PAGE's status channel
@@ -38,6 +38,8 @@ export function ItemHeaderStateTags({
   const status = useDisplayedStatus(item.status);
   const meta = statuses.find((s) => s.key === status);
   const statusCategory = meta?.category ?? null;
+  // Only an item that has not started wears the flag (MOTIR-11323).
+  const blocked = isBlockedNotStarted(statusCategory, unblocked);
   return (
     <>
       <WorkItemStateTags
@@ -51,9 +53,9 @@ export function ItemHeaderStateTags({
           executor: item.executor,
         }}
         ready={isReadyToStart(statusCategory, unblocked)}
-        blocked={!unblocked}
+        blocked={blocked}
       />
-      {unblocked ? null : <WorkItemBlockedTag />}
+      {blocked ? <WorkItemBlockedTag /> : null}
     </>
   );
 }

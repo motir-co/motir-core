@@ -4966,6 +4966,8 @@
     "assignedTo": "Zugewiesen an {name}",
     "unassigned": "Nicht zugewiesen",
     "boardLabel": "Board-Spalten",
+    "columnArrowPrevious": "Vorherige Spalte",
+    "columnArrowNext": "Nächste Spalte",
     "dndInstructions": "Drücken Sie die Leertaste, um ein Arbeitselement aufzunehmen. Verwenden Sie beim Ziehen die Pfeiltasten, um es zu bewegen. Drücken Sie erneut die Leertaste zum Ablegen oder Escape zum Abbrechen.",
     "announcementPickedUp": "{key} aufgenommen. Über Spalte {col}, Position {index} von {count}.",
     "announcementMoved": "{key} nach {col} bewegt, Position {index} von {count}. Leertaste zum Ablegen, Escape zum Abbrechen.",

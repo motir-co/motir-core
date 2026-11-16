@@ -8,15 +8,14 @@ import { useTranslations } from 'next-intl';
 import {
   Check,
   ChevronDown,
-  Columns3,
   Info,
   MoreHorizontal,
   Pencil,
   Plus,
-  Rows3,
   SlidersHorizontal,
   Star,
   Trash2,
+  type LucideIcon,
 } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Modal } from '@/components/ui/Modal';
@@ -32,6 +31,7 @@ import {
   sortBoards,
   upsertBoard,
 } from './multiBoardState';
+import { BOARD_TYPE_ICON, BoardTypeIcon } from './boardTypeIcon';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 import {
   BoardFilterSection,
@@ -355,7 +355,12 @@ export function BoardSwitcher({
           data-testid="board-switcher-trigger"
           className="inline-flex h-(--height-control) max-w-[260px] items-center gap-2 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) font-sans text-sm font-semibold text-(--el-text-strong) hover:border-(--el-border-strong) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none data-[state=open]:border-(--el-border-strong) data-[state=open]:shadow-(--shadow-subtle)"
         >
-          <Columns3 className="h-[15px] w-[15px] shrink-0 text-(--el-text-muted)" aria-hidden />
+          <BoardTypeIcon
+            type={activeBoard.type}
+            className="h-[15px] w-[15px] shrink-0 text-(--el-text-muted)"
+            aria-hidden
+            data-testid="board-switcher-trigger-icon"
+          />
           <span className="truncate">{activeBoard.name}</span>
           {activeBoard.isDefault ? (
             // The badge keeps its word on one line; a long board NAME (user
@@ -410,6 +415,12 @@ export function BoardSwitcher({
                         isActive ? '' : 'invisible'
                       }`}
                       aria-hidden
+                    />
+                    <BoardTypeIcon
+                      type={board.type}
+                      className="h-[15px] w-[15px] shrink-0 text-(--el-text-muted)"
+                      aria-hidden
+                      data-testid={`board-switcher-type-icon-${board.id}`}
                     />
                     <span className="truncate">{board.name}</span>
                     {board.isDefault ? (
@@ -662,9 +673,9 @@ function BoardFormModal({
   const [saving, setSaving] = useState(false);
 
   // The two board types as a single-selection radio group (Kanban default).
-  const typeOptions: { value: BoardType; icon: typeof Columns3; label: string }[] = [
-    { value: 'kanban', icon: Columns3, label: t('boardTypeKanban') },
-    { value: 'scrum', icon: Rows3, label: t('boardTypeScrum') },
+  const typeOptions: { value: BoardType; icon: LucideIcon; label: string }[] = [
+    { value: 'kanban', icon: BOARD_TYPE_ICON.kanban, label: t('boardTypeKanban') },
+    { value: 'scrum', icon: BOARD_TYPE_ICON.scrum, label: t('boardTypeScrum') },
   ];
   const tileRefs = useRef<(HTMLButtonElement | null)[]>([]);
 

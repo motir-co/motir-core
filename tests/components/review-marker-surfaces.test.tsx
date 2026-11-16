@@ -140,10 +140,26 @@ describe('the board card — the review marker in the exclusive slot', () => {
     expect(screen.queryByText('motir review PROD-2')).toBeNull();
   });
 
-  it('Blocked outranks it, and the priority returns when there is no marker', () => {
-    renderCard(card({ id: 'c3', key: 3, ready: false, review: { ...WAITING_YOURS } }));
+  it('Blocked outranks it on a card that has not started, and the priority returns when there is no marker', () => {
+    renderCard(
+      card({
+        id: 'c3',
+        key: 3,
+        status: 'todo',
+        statusCategory: 'todo',
+        ready: false,
+        review: { ...WAITING_YOURS },
+      }),
+    );
     expect(document.querySelector('[data-review-marker]')).toBeNull();
     expect(screen.getByRole('img', { name: 'Blocked' })).toBeTruthy();
+    cleanup();
+
+    // A started card never wears Blocked (MOTIR-11323), so its slot falls
+    // through to the review marker even with an open blocker.
+    renderCard(card({ id: 'c5', key: 5, ready: false, review: { ...WAITING_YOURS } }));
+    expect(document.querySelector('[data-review-marker]')).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Blocked' })).toBeNull();
     cleanup();
 
     renderCard(card({ id: 'c4', key: 4 }));

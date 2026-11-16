@@ -59,7 +59,7 @@ import { StatusPicker } from '@/components/issues/StatusPicker';
 import { ToFixTag } from '@/components/workItems/ToFixTag';
 import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
 import { WorkItemBlockedTag, WorkItemStateTags } from '@/components/workItems/WorkItemStateTags';
-import { isReadyToStart } from '@/lib/workItems/statusSlot';
+import { isBlockedNotStarted, isReadyToStart } from '@/lib/workItems/statusSlot';
 import { StatusHeldNotice } from '@/components/issues/StatusHeldNotice';
 import { useStatusHeld } from '@/components/issues/useStatusHeld';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
@@ -871,7 +871,12 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             );
   // The header's blocked flag (MOTIR-10534): readiness says the item is blocked.
   // Never on a proposal peek — see the status slot below.
-  const headerBlocked = !proposal && data.readiness != null && !data.readiness.ready;
+  // The blocked flag only on an item that has NOT started (MOTIR-11323): readiness
+  // stays false while a blocker is open whatever the status, so the category gates it.
+  const headerBlocked =
+    !proposal &&
+    data.readiness != null &&
+    isBlockedNotStarted(data.statusCategory, data.readiness.ready);
   const peek = (
     // MOTIR-2593 — the peek provides its OWN estimation config, from the payload.
     // Only three pages mount `EstimationConfigProvider` and none of them wraps

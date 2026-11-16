@@ -47,6 +47,24 @@ interface Fixture {
   /** What the slot must draw: a pill's test id, or `status:<key>` for the chip. */
   slot: string;
   manual: boolean;
+  /**
+   * The roadmap canvas's slot, where it differs (MOTIR-11323). The canvas's
+   * cross-level flag is its own rule and out of that card's scope, so a started
+   * item with an open blocker still reads blocked THERE — and a blocked done item
+   * keeps its chip there — while the board, the quick view and the item page,
+   * which flag only an item that has not started, draw the Done stamp.
+   */
+  canvasSlot?: string;
+}
+
+/**
+ * The Blocked flag the board card, the quick view and the item page draw
+ * (MOTIR-11323): only a todo-CATEGORY item with an open blocker. The canvas keeps
+ * its cross-level rule, `!unblocked`.
+ */
+function flagged(f: Fixture, surface: string): boolean {
+  if (surface === 'canvas') return !f.unblocked;
+  return f.category === 'todo' && !f.unblocked;
 }
 
 const FIXTURES: Fixture[] = [
@@ -117,7 +135,18 @@ const FIXTURES: Fixture[] = [
     manual: false,
   },
   {
-    name: 'a blocked In Progress item keeps its chip and gets the flag',
+    name: 'a blocked custom todo-category status keeps its chip and gets the flag',
+    kind: 'task',
+    status: 'ready_for_dev',
+    statusLabel: 'Ready for dev',
+    category: 'todo',
+    hasChildren: false,
+    unblocked: false,
+    slot: 'status:ready_for_dev',
+    manual: false,
+  },
+  {
+    name: 'a blocked In Progress item keeps its chip and, having started, loses the flag',
     kind: 'task',
     status: 'in_progress',
     statusLabel: 'In Progress',
@@ -128,14 +157,26 @@ const FIXTURES: Fixture[] = [
     manual: false,
   },
   {
-    name: 'a blocked done item does not wear the Done stamp',
+    name: 'a blocked custom in-progress-category status loses the flag',
+    kind: 'task',
+    status: 'qa_review',
+    statusLabel: 'QA review',
+    category: 'in_progress',
+    hasChildren: false,
+    unblocked: false,
+    slot: 'status:qa_review',
+    manual: false,
+  },
+  {
+    name: 'a done item with an open blocker wears the Done stamp, not the flag (the canvas keeps its chip)',
     kind: 'task',
     status: 'done',
     statusLabel: 'Done',
     category: 'done',
     hasChildren: false,
     unblocked: false,
-    slot: 'status:done',
+    slot: 'done-pill',
+    canvasSlot: 'status:done',
     manual: false,
   },
   {
@@ -360,17 +401,20 @@ describe('the work item state tags — one item reads the same on every surface 
       itemPage: itemPage(f),
     };
     for (const [surface, tags] of Object.entries(drawn)) {
-      expect({ surface, slot: tags.slot }).toEqual({ surface, slot: f.slot });
+      const slot = surface === 'canvas' ? (f.canvasSlot ?? f.slot) : f.slot;
+      expect({ surface, slot: tags.slot }).toEqual({ surface, slot });
       expect({ surface, manual: tags.manual }).toEqual({ surface, manual: f.manual });
-      expect({ surface, blocked: tags.blocked }).toEqual({ surface, blocked: !f.unblocked });
-      // The same pill: the same name, and the same tint + ink + shape classes.
-      expect({ surface, name: tags.name }).toEqual({ surface, name: drawn.canvas.name });
+      expect({ surface, blocked: tags.blocked }).toEqual({ surface, blocked: flagged(f, surface) });
+      // The same pill: the same name, and the same tint + ink + shape classes —
+      // against the board card, which every surface but a diverging canvas matches.
+      if (surface === 'canvas' && f.canvasSlot) continue;
+      expect({ surface, name: tags.name }).toEqual({ surface, name: drawn.board.name });
       expect({ surface, className: tags.className }).toEqual({
         surface,
-        className: drawn.canvas.className,
+        className: drawn.board.className,
       });
     }
-    if (f.slot.startsWith('status:')) expect(drawn.canvas.name).toBe(f.statusLabel);
+    if (f.slot.startsWith('status:')) expect(drawn.board.name).toBe(f.statusLabel);
   });
 
   it('the item page eyebrow draws a status its workflow list does not hold under the neutral chip', () => {

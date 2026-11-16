@@ -4966,6 +4966,8 @@
     "assignedTo": "担当者: {name}",
     "unassigned": "未割り当て",
     "boardLabel": "ボードの列",
+    "columnArrowPrevious": "前の列",
+    "columnArrowNext": "次の列",
     "dndInstructions": "作業項目を持ち上げるには Space キーを押します。ドラッグ中は矢印キーで項目を移動します。もう一度 Space キーを押すとドロップ、Esc キーでキャンセルします。",
     "announcementPickedUp": "{key} を持ち上げました。列 {col}、{count} 件中 {index} 番目の位置です。",
     "announcementMoved": "{key} を {col} の {count} 件中 {index} 番目に移動しました。Space キーでドロップ、Esc キーでキャンセルします。",

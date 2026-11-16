@@ -4966,6 +4966,8 @@
     "assignedTo": "Przypisano do: {name}",
     "unassigned": "Nieprzypisane",
     "boardLabel": "Kolumny tablicy",
+    "columnArrowPrevious": "Poprzednia kolumna",
+    "columnArrowNext": "Następna kolumna",
     "dndInstructions": "Aby podnieść element roboczy, naciśnij Spację. Podczas przeciągania użyj klawiszy strzałek, aby przesunąć element. Naciśnij ponownie Spację, aby upuścić, lub Escape, aby anulować.",
     "announcementPickedUp": "Podniesiono {key}. Nad kolumną {col}, pozycja {index} z {count}.",
     "announcementMoved": "Przeniesiono {key} do {col}, pozycja {index} z {count}. Naciśnij Spację, aby upuścić, lub Escape, aby anulować.",

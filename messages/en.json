@@ -4966,6 +4966,8 @@
     "assignedTo": "Assigned to {name}",
     "unassigned": "Unassigned",
     "boardLabel": "Board columns",
+    "columnArrowPrevious": "Previous column",
+    "columnArrowNext": "Next column",
     "dndInstructions": "To pick up a work item, press Space. While dragging, use the arrow keys to move the item. Press Space again to drop, or Escape to cancel.",
     "announcementPickedUp": "Picked up {key}. Over column {col}, position {index} of {count}.",
     "announcementMoved": "{key} moved to {col}, position {index} of {count}. Press Space to drop, Escape to cancel.",

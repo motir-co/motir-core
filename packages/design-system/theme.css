@@ -1600,8 +1600,9 @@
       inset 0 1px 0 0 rgba(255, 255, 255, 0.55),
       0 1px 3px rgba(15, 15, 15, 0.08),
       0 8px 18px -8px rgba(15, 15, 15, 0.22);
-    /* The column is `h-[calc(100dvh - 10.5rem - var(--shell-bottom-clearance))]` —
-       sized to fill the board area. In the `overflow-x-auto` row that
+    /* The column is `h-[calc(100dvh - 10.5rem - var(--shell-bottom-clearance))]`
+       below `sm` and `h-[calc(100dvh - 10.5rem)]` from `sm` — sized to fill the
+       board area. In the `overflow-x-auto` row that
        exactly-filling height means the column's rounded BOTTOM corner + its drop
        shadow sit at the overflow-clip boundary and get sheared flat (the reported
        "sharp bottom corner"). Trim the height by a further 2.5rem so the rounded
@@ -1610,13 +1611,19 @@
        inner surface can't square a corner — the board cards pop on hover but the
        DragOverlay clone is portaled, so nothing 3D is lost.
 
-       ⚠️ This tracks BoardColumn's height and must keep spending the same
+       ⚠️ This tracks BoardColumn's height. Below `sm` it keeps spending the same
        `--shell-bottom-clearance` the shell sets (MOTIR-2763), not a flat number:
        a stylesheet cannot read the `showPlanWithAi` prop, so the custom property
-       is the only way this stays conditional on the orb actually mounting. The
-       13rem below is 10.5rem of chrome + this style's own 2.5rem trim. */
+       is the only way this stays conditional on the orb actually mounting. From
+       `sm` the board cancels the shell's bottom padding and the column drops the
+       clearance term, so it runs under the orb like every other style
+       (MOTIR-11323). The 13rem below is 10.5rem of chrome + this style's own
+       2.5rem trim. */
     height: calc(100dvh - 13rem - var(--shell-bottom-clearance, 1.5rem));
     overflow: hidden;
+    @media (width >= 40rem) {
+      height: calc(100dvh - 13rem);
+    }
   }
 }
 @scope ([data-style='3d-immersive']) to ([data-style]) {

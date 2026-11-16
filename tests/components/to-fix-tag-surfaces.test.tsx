@@ -208,7 +208,15 @@ describe('the board card — the label in the pill row', () => {
   it('draws the tag after the exclusive slot and before the CI badge', () => {
     render(
       <BoardCard
-        card={card({ id: 'w1', key: 7, fixReason: 'ci_failed', ciState: 'failing', ready: false })}
+        card={card({
+          id: 'w1',
+          key: 7,
+          fixReason: 'ci_failed',
+          ciState: 'failing',
+          ready: false,
+          // Only a card that has not started wears Blocked (MOTIR-11323).
+          statusCategory: 'todo',
+        })}
         assigneeName={null}
         onOpenQuickView={() => {}}
       />,
