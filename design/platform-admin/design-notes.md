@@ -24,6 +24,7 @@ closest existing usage surface.
 | **FLEET SETTINGS — the rail row · the superadmin setting “Run Motir’s private repositories’ CI on the fleet” · the nine-condition readiness verdict · confirm ON / OFF with a reason · the refusals · read failed · not superadmin** (AMENDMENT 2026-10, MOTIR-8703) | **`console--fleet-settings.mock.html`** (delta, Panels 1–13) | A new Operations page at `/admin/fleet-settings` where a superadmin moves Motir’s private repositories’ CI onto the fleet once it is ready, and off at any time. **Gates the /admin setting UI card (story MOTIR-8699, `blocked_by` MOTIR-8703).** |
 | **PROVIDER CAPACITY — the rail row · usage against limits per provider and model (planning and agent lanes) · the states · the edit dialog and its refusals · the alert share · the raised-alert banner · degraded, unreachable and refused reads · support read-only · zh** (AMENDMENT 2026-10-25, MOTIR-9607) | **`console--capacity.mock.html`** (delta, Panels 1–17) | A new Operations page at `/admin/capacity` where platform staff see how close each provider model is to its limits, and operators edit limits and the alert share. **Gates the capacity screen card (story MOTIR-9539, MOTIR-9614 `blocked_by` MOTIR-9607).** |
 | **MONITORING · POOLS — one block per fleet kind on `/admin/monitoring`: provider, pool total, account rows, the Motir spare, quota raises, growth events, every state** (AMENDMENT 2026-10-25) | **`monitoring--pools.mock.html`** (delta, Panels 1–9, each light then dark) | A section added after the Fleet section of the shipped monitoring page; no new route. See § _AMENDMENT 2026-10-25 — Monitoring · Pools_. |
+| **USAGE & COST · PROVIDER BILLS — the daily provider-bill reconciliation on `/admin/usage`: per provider and UTC day, recorded beside billed, the gap, its source and status, days past tolerance, the per-model breakdown, findings with the differing side, providers with no billing source; no-records, All-time, loading, error, no-source and no-findings states** (AMENDMENT 2026-11-15, MOTIR-11375) | **`console--estate-usage-drilldown--provider-bills.mock.html`** (delta, Panels 1–8) | A new read-only section after the two model tables on Usage & cost. **Gates MOTIR-11376** (the section) and the story checks MOTIR-11387 / MOTIR-11388 (story MOTIR-11350). |
 
 ## What this area is
 
@@ -3841,3 +3842,209 @@ and why each page holds which rows — is in
 [`../org-admin/design-notes.md`](../org-admin/design-notes.md) § _Settings › Organisation › AI
 models_, sub-section _The console's per-function default rows_, because the organisation room and
 these defaults are one feature.
+
+---
+
+# AMENDMENT 2026-11-15 — Usage & cost · Provider bills (MOTIR-11375 · story MOTIR-11350)
+
+**Mock:** [`console--estate-usage-drilldown--provider-bills.mock.html`](./console--estate-usage-drilldown--provider-bills.mock.html)
+— a DELTA, Panels 1–8. **Amends** § _AMENDMENT 2026-10-01 — the estate overview, Usage & cost and the drill-down_
+(MOTIR-7237, approved for MOTIR-732), panels **D3** (a month) and **D4** (All time) of
+`console--estate-usage-drilldown.mock.html`: the page gains ONE section, **Provider bills**, after the two model
+tables. Nothing D3/D4 drew is redrawn or changed — the header, the period switch, the four figures, the category
+sheet and both model tables stay as they ship. The older mock is a record and is not edited. **Gates MOTIR-11376**
+(the card that builds the section, its read through the platform read client and its copy keys) and the story's
+checks MOTIR-11387 (acceptance video) and MOTIR-11388 (integration gate).
+
+**Design system (step 1 of the design lane).** Files read: `package.json` (depends on `@motir/design-system`
+`workspace:*`, the in-repo `packages/design-system`) and `app/globals.css` (imports
+`@motir/design-system/theme.css`). **Verdict: on Motir Design, branch (a).** Axes `warm-editorial` · `motir` ·
+`motir`, which the mock wears. The mock is rendered with `renderMock` (`boardWidth: 'full'`) from the REAL shipped
+parts: the console shell `app/(admin)/_components/AdminShell.tsx` (one board-only change, its root `h-dvh` read as
+a minimum height so a long page is not clipped), the page's own header grammar and `SpendPeriodSwitch`
+(`app/(admin)/admin/_components/SpendPeriodSwitch.tsx`), the page's money formatter `formatMicroUsd`
+(`app/(admin)/admin/_components/spendFormat.ts`), and the design system's `Card`, `Pill` and `ErrorState`. The
+loading bars are the shipped `PageSkeleton` `Block` recipe. **No part the package lacks is needed**: the provider
+card, the day row and the status mark are product-local compositions of those parts, because they are this
+section's vocabulary, not primitives.
+
+## The data — one read, one month
+
+Every figure is copied from motir-ai's `GET /v1/platform/usage/provider-reconciliation?period=YYYY-MM`
+(motir-ai's service contract, the route MOTIR-11374 added). The route answers one month only and never re-judges tolerance: a day is
+"past tolerance" exactly when the route says `pastTolerance: true`. The page computes only sums for the summary row
+(below) and formats money with the page's existing `formatMicroUsd`. The section is read by a **support** operator
+and up, like the page (`requirePlatformStaffPage('support')`); every role sees the same thing, because nothing in it
+can be changed.
+
+## Elements — each named once, mapped to the field it shows
+
+| Element                         | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Route field(s)                                                                                                                                                                |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reconciliation section**      | `<section aria-labelledby="usage-provider-bills">` after the two model tables: `h2` **Provider bills** (the page's section-heading classes) and one intro line.                                                                                                                                                                                                                                                                                                       | —                                                                                                                                                                             |
+| **Provider summary row**        | The `<summary>` of each provider's card: maker name (the catalog id under it in mono), the tolerance in words, **Recorded** (all closed days; plus "{amount} on the days read" when some day has no bill), **Billed** with "over {read} of {days} days read" (or an em dash and "No bill read"), **Gap** (billed − recorded over the days read, signed), the past-tolerance count pill, and the quiet **No source** mark when no day was read.                        | `providers[].provider`, `relativeTolerance`, `absoluteToleranceMicroUsd`; sums of `days[].recordedMicroUsd`, `billedMicroUsd`, `gapMicroUsd`; count of `days[].pastTolerance` |
+| **Day grid**                    | The card's table: one row per closed UTC day — Day (UTC), Recorded by Motir, Billed, Gap, Source, Status.                                                                                                                                                                                                                                                                                                                                                             | `providers[].days[]` (`day`, `recordedMicroUsd`, `billedMicroUsd`, `gapMicroUsd`)                                                                                             |
+| **Source tag**                  | A neutral `Pill`: **API** · **Balance snapshot** · **Export** · **None**.                                                                                                                                                                                                                                                                                                                                                                                             | `days[].source`                                                                                                                                                               |
+| **Status mark**                 | Three distinct forms — **Reconciled**: a `CircleCheck` glyph in `--el-success` and the word, quiet, no chip. **Read failed**: a warning `Pill` with `CircleAlert`, and "Tried {time} UTC" beneath; when the day has no record at all (`recordedMicroUsd` null) the pill reads **Not recorded** and no time is shown. **No source**: a dashed-circle glyph and the words, quiet, no chip. Each carries words and a distinct glyph, so colour is never the only signal. | `days[].status`, `readAt`, `recordedMicroUsd`                                                                                                                                 |
+| **Past-tolerance flag**         | On the gap cell: the gap in bold and a danger `Pill` with `TriangleAlert` + **Past tolerance**. Counted in the summary row ("1 day past tolerance").                                                                                                                                                                                                                                                                                                                  | `days[].pastTolerance`                                                                                                                                                        |
+| **Estimated-rows note**         | Under the gap of a flagged day: an `Info` glyph and "{count} rows estimated", shown when the count is 1 or more.                                                                                                                                                                                                                                                                                                                                                      | `days[].estimatedRowCount`                                                                                                                                                    |
+| **Per-model breakdown**         | A day whose bill was broken down gets a disclosure button on its day cell (`aria-expanded`, chevron); open, a following row on `--el-surface-soft` holds Model · Recorded by Motir · Billed · Gap. A day with `perModel: []` has NO expander (an aligned blank keeps the column).                                                                                                                                                                                     | `days[].perModel[]`                                                                                                                                                           |
+| **Findings list**               | A `Card` table above the provider cards, captioned **Findings** with a count: Day (UTC), Provider, Recorded by Motir, Billed, Gap (bold, signed), Models (each model past tolerance with its gap, or "No breakdown"), Estimated rows (em dash when null), Differing side (an info `Pill` **Gateway** / **Motir AI** / **Both**, or "Not named yet" in secondary text when null).                                                                                      | `findings[]` (`provider`, `day`, `recordedMicroUsd`, `billedMicroUsd`, `gapMicroUsd`, `models[]`, `estimatedRowCount`, `differingSide`)                                       |
+| **Unreconciled providers list** | A `Card` after the findings, titled **No billing source**, one sentence, then every such provider by name (id in mono), each with the dashed-circle glyph. Drawn whenever the list is non-empty; absent when empty.                                                                                                                                                                                                                                                   | `unreconciledProviders[]`                                                                                                                                                     |
+
+Provider names: `anthropic` Anthropic · `deepseek` DeepSeek · `moonshotai` Moonshot AI · `openai` OpenAI ·
+`openrouter` OpenRouter · `qwen` Alibaba Cloud (Qwen) · `z-ai` Z.ai — the maker's name as Model serving uses it,
+with the catalog id beside it. An id the page does not know is shown as the id.
+
+## The panels
+
+1. **Access path and placement** — support operator, Usage & cost active, November 2026 chosen in the period switch,
+   read on 15 Nov (1–14 Nov closed). The existing sections are drawn as their headings only. Findings, the No billing
+   source list, then one card per provider in the route's order; Anthropic and DeepSeek open (each has a day past
+   tolerance), Alibaba Cloud open (a day not recorded), the rest closed.
+2. **The day grid** — Anthropic open: all three status forms in reach, 9 Nov past tolerance with 3 estimated rows and
+   its per-model breakdown open, 12 Nov a failed read with the time it was tried. Light and dark.
+3. **A failed day with no record, an export, a balance snapshot** — Alibaba Cloud (export, broken down by model) with
+   7 Nov **Not recorded**; DeepSeek (balance snapshot, no breakdown, no expanders) with a negative gap past its 10%
+   tolerance.
+4. **A provider with no source for the whole period** — Moonshot AI opened: recorded figure each day, em dash billed
+   and gap, source None, the No source mark; its summary says "No bill read".
+5. **No findings** — the Findings card is replaced by one line ("No gaps past tolerance in November 2026."); the No
+   billing source card is absent; every card closed.
+6. **A month with nothing recorded yet** — October 2026: one card, "Nothing recorded for October 2026 yet", in place
+   of the findings, list and grid.
+7. **All time** — the section keeps its heading and draws one line asking for a month; no grid, no totals.
+8. **Loading and error** — loading: heading + three skeleton provider bars (`aria-busy`, a `role="status"`
+   sr-only label); error: the shipped `ErrorState` with Try again replaces the section's body while the rest of the
+   page renders.
+
+## Rules the drawing holds
+
+- **A missing bill is never a zero.** `billedMicroUsd` null renders an em dash (and the gap an em dash), on the day
+  row, in the summary, everywhere. A closed day with no record is listed (the route lists it) and reads **Not
+  recorded**.
+- **The summary compares like with like.** Billed and gap are summed over the days that HAVE a bill; recorded is the
+  period's total, with the read-days figure beneath it whenever the two differ, so a missing day never shows up as a
+  fake gap.
+- **Which cards open.** A provider card is open by default when any of its days is past tolerance or failed; every
+  other card (all reconciled, or no source at all) is closed and shows its summary row. Native `<details>` /
+  `<summary>`: opening one is a view change, not a write, and works without script.
+- **No-records state.** Drawn when no provider has a single day with a record — every listed day has
+  `recordedMicroUsd` null, or no provider lists any day (the 1st of the current month). Otherwise the grid is drawn,
+  and a day with no record is a Not recorded row.
+- **All time** never requests the route (it answers `400` for `all`) and draws the prompt.
+- **Loading / error are the section's alone.** The section's read is separate from the rollup and streams in its own
+  boundary; its failure never replaces the page.
+- **Read-only.** No button, form, link or menu that writes anything. The only controls are the provider disclosure
+  and the per-model disclosure, both view-only. A finding corrects rates going forward through the rate pipeline,
+  never from this page.
+- **Order.** Providers in the route's order (by id). Days oldest first. Findings by day, then provider, as the route
+  orders them.
+- **Width.** Every table sits in a `Card` with `overflow-x-auto`, as the page's existing sheets do.
+
+## Copy (en · zh; the build adds every locale)
+
+| Key (`platformAdmin.usage.reconciliation.*`) | en                                                                                                                                                                           | zh                                                                                                                                 |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `title`                                      | Provider bills                                                                                                                                                               | 供应商账单                                                                                                                         |
+| `intro`                                      | What Motir recorded beside what each provider billed, per UTC day. A gap past the provider’s tolerance is a finding: it corrects the rate from then on, never a past charge. | 按 UTC 日对比 Motir 记录的成本与各供应商的账单金额。超出该供应商容差的差额会记为一条发现：它只修正此后的费率，绝不改动过去的扣费。 |
+| `col.day`                                    | Day (UTC)                                                                                                                                                                    | 日期 (UTC)                                                                                                                         |
+| `col.recorded`                               | Recorded by Motir                                                                                                                                                            | Motir 记录                                                                                                                         |
+| `col.billed`                                 | Billed                                                                                                                                                                       | 账单金额                                                                                                                           |
+| `col.gap`                                    | Gap                                                                                                                                                                          | 差额                                                                                                                               |
+| `col.source`                                 | Source                                                                                                                                                                       | 来源                                                                                                                               |
+| `col.status`                                 | Status                                                                                                                                                                       | 状态                                                                                                                               |
+| `col.provider`                               | Provider                                                                                                                                                                     | 供应商                                                                                                                             |
+| `col.models`                                 | Models                                                                                                                                                                       | 模型                                                                                                                               |
+| `col.estimated`                              | Estimated rows                                                                                                                                                               | 估算行数                                                                                                                           |
+| `col.side`                                   | Differing side                                                                                                                                                               | 差异方                                                                                                                             |
+| `source.api`                                 | API                                                                                                                                                                          | API                                                                                                                                |
+| `source.balance_snapshot`                    | Balance snapshot                                                                                                                                                             | 余额快照                                                                                                                           |
+| `source.export`                              | Export                                                                                                                                                                       | 导出文件                                                                                                                           |
+| `source.none`                                | None                                                                                                                                                                         | 无                                                                                                                                 |
+| `status.reconciled`                          | Reconciled                                                                                                                                                                   | 已对账                                                                                                                             |
+| `status.failed`                              | Read failed                                                                                                                                                                  | 读取失败                                                                                                                           |
+| `status.failedAt`                            | Tried {time} UTC                                                                                                                                                             | 尝试于 {time} UTC                                                                                                                  |
+| `status.notRecorded`                         | Not recorded                                                                                                                                                                 | 未记录                                                                                                                             |
+| `status.unreconciled`                        | No source                                                                                                                                                                    | 无来源                                                                                                                             |
+| `pastTolerance`                              | Past tolerance                                                                                                                                                               | 超出容差                                                                                                                           |
+| `estimated`                                  | {count} rows estimated                                                                                                                                                       | {count} 行为估算                                                                                                                   |
+| `perModel.toggle`                            | By model                                                                                                                                                                     | 按模型                                                                                                                             |
+| `perModel.aria`                              | Show the bill for {day} by model                                                                                                                                             | 按模型显示 {day} 的账单                                                                                                            |
+| `perModel.model`                             | Model                                                                                                                                                                        | 模型                                                                                                                               |
+| `summary.recorded`                           | Recorded                                                                                                                                                                     | 已记录                                                                                                                             |
+| `summary.billed`                             | Billed                                                                                                                                                                       | 账单                                                                                                                               |
+| `summary.gap`                                | Gap                                                                                                                                                                          | 差额                                                                                                                               |
+| `summary.over`                               | over {read} of {days} days read                                                                                                                                              | 已读取 {days} 天中的 {read} 天                                                                                                     |
+| `summary.onRead`                             | {amount} on the days read                                                                                                                                                    | 已读取日期合计 {amount}                                                                                                            |
+| `summary.daysPast`                           | {count} days past tolerance                                                                                                                                                  | {count} 天超出容差                                                                                                                 |
+| `summary.dayPast`                            | 1 day past tolerance                                                                                                                                                         | 1 天超出容差                                                                                                                       |
+| `summary.noneRead`                           | No bill read                                                                                                                                                                 | 未读取账单                                                                                                                         |
+| `summary.tolerance`                          | Past tolerance when the gap is over {relative} of the bill and over {absolute}                                                                                               | 差额同时超过账单的 {relative} 和 {absolute} 时计为超出容差                                                                         |
+| `summary.noTolerance`                        | No tolerance set                                                                                                                                                             | 未设置容差                                                                                                                         |
+| `summary.days`                               | Days                                                                                                                                                                         | 每日明细                                                                                                                           |
+| `findings.title`                             | Findings                                                                                                                                                                     | 发现                                                                                                                               |
+| `findings.none`                              | No gaps past tolerance in {month}.                                                                                                                                           | {month} 没有超出容差的差额。                                                                                                       |
+| `findings.noModels`                          | No breakdown                                                                                                                                                                 | 无明细                                                                                                                             |
+| `side.gateway`                               | Gateway                                                                                                                                                                      | 网关                                                                                                                               |
+| `side.motir-ai`                              | Motir AI                                                                                                                                                                     | Motir AI                                                                                                                           |
+| `side.both`                                  | Both                                                                                                                                                                         | 双方                                                                                                                               |
+| `side.unnamed`                               | Not named yet                                                                                                                                                                | 尚未判定                                                                                                                           |
+| `unreconciled.title`                         | No billing source                                                                                                                                                            | 无账单来源                                                                                                                         |
+| `unreconciled.body`                          | Motir cannot read a bill for these providers, so their days are recorded but never compared.                                                                                 | Motir 无法读取这些供应商的账单，因此它们的每日成本只记录、不对比。                                                                 |
+| `empty.title`                                | Nothing recorded for {month} yet                                                                                                                                             | {month} 尚无对账记录                                                                                                               |
+| `empty.body`                                 | The reconciliation runs once each UTC day has closed. A day appears here after its first run.                                                                                | 对账在每个 UTC 日结束后运行。某一天在首次运行后才会出现在这里。                                                                    |
+| `allTime`                                    | Provider bills are reconciled per UTC day, one month at a time. Choose a month to see them.                                                                                  | 供应商账单按 UTC 日、逐月对账。请选择一个月份查看。                                                                                |
+| `loading`                                    | Loading provider bills                                                                                                                                                       | 正在加载供应商账单                                                                                                                 |
+| `error.title`                                | Provider bills can’t be shown right now                                                                                                                                      | 暂时无法显示供应商账单                                                                                                             |
+| `error.description`                          | The AI service that keeps the reconciliation did not answer. The rest of this page is unaffected — try again in a moment.                                                    | 保存对账记录的 AI 服务没有响应。本页其他内容不受影响，请稍后重试。                                                                 |
+| `retry`                                      | Try again                                                                                                                                                                    | 重试                                                                                                                               |
+
+Formatting: money through the page's `formatMicroUsd` (cents; more places below a cent); a gap carries its sign
+(`+$3.10`, `−$1.20`, U+2212); days as `Mon, Nov 9` in UTC; the failed-read time as `Nov 13, 03:00` UTC; the
+tolerance relative value as a percent (`5%`) and the absolute as money (`$0.50`).
+
+## Colour and shape roles (`--el-*` and shape tokens only)
+
+| Element                                     | Colour                                                                    | Shape                                                                                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Section heading · intro                     | `--el-text` · `--el-text-secondary`                                       | —                                                                                                                           |
+| Provider / findings / list / empty cards    | shipped `Card` (`--el-border`, page surface)                              | `--radius-card`; `p-0` for the table cards, default card padding for the list and empty cards                               |
+| Summary row labels · sub-lines · tolerance  | `--el-text-secondary`                                                     | `px-(--spacing-control-x-12) py-(--spacing-control-y-8)`                                                                    |
+| Figures                                     | `--el-text`, `tabular-nums`; em dash in `--el-text-secondary`             | —                                                                                                                           |
+| Table header cells · body cells             | `--el-text-secondary` · `--el-text`                                       | `px-(--spacing-control-x-12) py-(--spacing-control-y-8)` (the same 12/8px the page's existing sheets draw with `px-3 py-2`) |
+| Row rule                                    | `--el-border`; per-model rows `--el-border-soft`                          | —                                                                                                                           |
+| Per-model row fill                          | `--el-surface-soft` (inks on it: `--el-text`, `--el-text-secondary` only) | per-model cells `py-(--spacing-control-y-4)`                                                                                |
+| Source tag                                  | `Pill tone="neutral"` (`--el-chip-bg`, `--el-text-secondary`)             | `--radius-badge`, chip spacing                                                                                              |
+| Reconciled mark                             | glyph `--el-success`, word `--el-text-secondary`                          | —                                                                                                                           |
+| Read failed / Not recorded                  | `Pill severity="warning"`; time in `--el-text-secondary`                  | `--radius-badge`                                                                                                            |
+| No source mark                              | glyph and word `--el-text-secondary`                                      | —                                                                                                                           |
+| Past tolerance · days-past count            | `Pill severity="danger"` (hue in the tint, `--el-text-strong` ink)        | `--radius-badge`                                                                                                            |
+| Findings caption glyph                      | `--el-danger-on-surface`                                                  | —                                                                                                                           |
+| Differing side                              | `Pill severity="info"`; unnamed in `--el-text-secondary`                  | `--radius-badge`                                                                                                            |
+| Estimated-rows note · All-time prompt glyph | `Info` in `--el-info`, words `--el-text-secondary`                        | —                                                                                                                           |
+| Disclosure chevrons                         | `--el-text-secondary`                                                     | button `--radius-control`                                                                                                   |
+| Skeleton bars                               | `--el-muted`                                                              | `--radius-control`                                                                                                          |
+
+No `--el-text-muted` or `--el-text-faint` anywhere; `--el-danger-text` is not used.
+
+## Accessibility contract
+
+- Each day grid is a real `<table>` with a `sr-only` `<caption>` ("Days · Anthropic") and `scope="col"` headers;
+  the findings table's caption is visible.
+- The per-model disclosure is a `<button aria-expanded>` with the label "Show the bill for {day} by model"; the
+  provider disclosure is native `<details>/<summary>`.
+- Status, source and past tolerance are words, each with a glyph; colour is never the only signal. Glyphs are
+  `aria-hidden`.
+- Loading sets `aria-busy` on the section and announces "Loading provider bills" through a `role="status"` label.
+- Every ink is `--el-text`, `--el-text-secondary` or a `Pill` recipe, which clear AA on every surface drawn here in
+  both themes.
+
+## What this amendment does NOT draw
+
+- Any change to the figures, the category sheet, the model tables or the period switch (D3/D4 stand).
+- A rate table, the drift guard, a pricing surface, or any write: a finding changes rates going forward through the
+  rate pipeline and never a past debit.
+- Tolerance editing (the tolerance rows are seeded in motir-ai and changed there).
+- An all-time or multi-month reconciliation (the route answers one month).
+- The org page or Tenants: the reconciliation is estate-wide, provider by provider.

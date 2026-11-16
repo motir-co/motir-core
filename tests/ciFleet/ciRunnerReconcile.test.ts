@@ -649,8 +649,9 @@ describe('a linked repo the fleet has no delivery from is read too (MOTIR-11437)
       where: { jobId: '70' },
     });
     expect(minted).toMatchObject({
-      // The job's FIRST intent: no delivery ever recorded generation 0 for it.
-      reconcileGeneration: 0,
+      // The job's FIRST intent, and still generation 1: 0 is a delivery's alone,
+      // and no delivery ever recorded one for it (MOTIR-11460).
+      reconcileGeneration: 1,
       status: 'pending',
       workspaceId: fx.workspaceId,
       organizationId: fx.organizationId,
@@ -674,6 +675,51 @@ describe('a linked repo the fleet has no delivery from is read too (MOTIR-11437)
         fingerprint: ['ci-runner-reconcile', 'undelivered', CONNECTED_ORG.toLowerCase()],
       }),
     );
+  });
+
+  it('keeps reporting the repo on the next tick, after its own first mint (MOTIR-11460)', async () => {
+    const fx = await seedTenant();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await seedIntent(fx, { jobId: 7, owner: CONNECTED_ORG, repo: 'motir-ai' });
+    await seedLinkedRepo(fx, { name: 'motir-codegraph' });
+    queuedJobs[`${CONNECTED_ORG}/motir-codegraph`] = [stranded(70, 700)];
+
+    const first = await reconcile();
+    const second = await reconcile();
+
+    for (const outcome of [first, second]) {
+      expect(outcome.orgs[0]?.undeliveredRepos).toEqual([`${CONNECTED_ORG}/motir-codegraph`]);
+    }
+    const undeliveredWarnings = captureMessage.mock.calls.filter(
+      ([, context]) => (context as { fingerprint?: string[] }).fingerprint?.[1] === 'undelivered',
+    );
+    expect(undeliveredWarnings).toHaveLength(2);
+    // The first tick's runner is still on its way, so the second mints nothing.
+    expect(
+      await adminDb.ciRunnerProvisioningIntent.findMany({
+        where: { jobId: '70' },
+        select: { reconcileGeneration: true },
+      }),
+    ).toEqual([{ reconcileGeneration: 1 }]);
+  });
+
+  it('records a late delivery for a job the reconcile already minted for (MOTIR-11460)', async () => {
+    const fx = await seedTenant();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await seedIntent(fx, { jobId: 7, owner: CONNECTED_ORG, repo: 'motir-ai' });
+    await seedLinkedRepo(fx, { name: 'motir-codegraph' });
+    queuedJobs[`${CONNECTED_ORG}/motir-codegraph`] = [stranded(70, 700)];
+    await reconcile();
+
+    await seedIntent(fx, { jobId: 70, runId: 700, owner: CONNECTED_ORG, repo: 'motir-codegraph' });
+
+    expect(
+      await adminDb.ciRunnerProvisioningIntent.findMany({
+        where: { jobId: '70' },
+        orderBy: { reconcileGeneration: 'asc' },
+        select: { reconcileGeneration: true },
+      }),
+    ).toEqual([{ reconcileGeneration: 0 }, { reconcileGeneration: 1 }]);
   });
 
   it('does not report a linked repo whose only queued job is still inside the grace', async () => {

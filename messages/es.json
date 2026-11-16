@@ -12487,6 +12487,78 @@
       "unavailable": {
         "title": "El uso no se puede mostrar ahora mismo",
         "description": "El servicio de IA que mantiene el resumen de uso no respondió. Las cifras no tienen ningún problema: vuelve a intentarlo en un momento."
+      },
+      "reconciliation": {
+        "title": "Facturas de proveedores",
+        "intro": "Lo que Motir registró junto a lo que facturó cada proveedor, por día UTC. Una diferencia por encima de la tolerancia del proveedor es un hallazgo: corrige la tarifa a partir de entonces, nunca un cargo pasado.",
+        "col": {
+          "day": "Día (UTC)",
+          "recorded": "Registrado por Motir",
+          "billed": "Facturado",
+          "gap": "Diferencia",
+          "source": "Origen",
+          "status": "Estado",
+          "provider": "Proveedor",
+          "models": "Modelos",
+          "estimated": "Filas estimadas",
+          "side": "Lado que difiere"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "Instantánea de saldo",
+          "export": "Exportación",
+          "none": "Ninguno"
+        },
+        "status": {
+          "reconciled": "Conciliado",
+          "failed": "Lectura fallida",
+          "failedAt": "Intentado {time} UTC",
+          "notRecorded": "No registrado",
+          "unreconciled": "Sin origen"
+        },
+        "pastTolerance": "Fuera de tolerancia",
+        "estimated": "{count, plural, one {# fila estimada} other {# filas estimadas}}",
+        "perModel": {
+          "aria": "Mostrar la factura del {day} por modelo",
+          "model": "Modelo"
+        },
+        "summary": {
+          "recorded": "Registrado",
+          "billed": "Facturado",
+          "gap": "Diferencia",
+          "over": "en {read} de {days} días leídos",
+          "onRead": "{amount} en los días leídos",
+          "daysPast": "{count, plural, one {# día fuera de tolerancia} other {# días fuera de tolerancia}}",
+          "noneRead": "No se leyó ninguna factura",
+          "tolerance": "Fuera de tolerancia cuando la diferencia supera el {relative} de la factura y {absolute}",
+          "noTolerance": "Sin tolerancia definida",
+          "days": "Días · {provider}"
+        },
+        "findings": {
+          "title": "Hallazgos",
+          "none": "Ninguna diferencia fuera de tolerancia en {month}.",
+          "noModels": "Sin desglose"
+        },
+        "side": {
+          "gateway": "Gateway",
+          "motir-ai": "Motir AI",
+          "both": "Ambos",
+          "unnamed": "Aún sin determinar"
+        },
+        "unreconciled": {
+          "title": "Sin origen de facturación",
+          "body": "Motir no puede leer una factura de estos proveedores, así que sus días se registran pero nunca se comparan."
+        },
+        "empty": {
+          "title": "Aún no hay nada registrado para {month}",
+          "body": "La conciliación se ejecuta cuando termina cada día UTC. Un día aparece aquí tras su primera ejecución."
+        },
+        "allTime": "Las facturas de proveedores se concilian por día UTC, un mes cada vez. Elija un mes para verlas.",
+        "error": {
+          "title": "Ahora mismo no se pueden mostrar las facturas de proveedores",
+          "description": "El servicio de IA que guarda la conciliación no respondió. El resto de esta página no se ve afectado; inténtelo de nuevo en un momento."
+        },
+        "none": "Sin cifra"
       }
     },
     "tenants": {

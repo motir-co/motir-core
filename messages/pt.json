@@ -12487,6 +12487,78 @@
       "unavailable": {
         "title": "O uso não pode ser mostrado agora",
         "description": "O serviço de IA que mantém o consolidado de uso não respondeu. Não há nada de errado com os números — tente novamente em instantes."
+      },
+      "reconciliation": {
+        "title": "Faturas dos provedores",
+        "intro": "O que a Motir registrou ao lado do que cada provedor faturou, por dia UTC. Uma diferença acima da tolerância do provedor é uma constatação: corrige a tarifa a partir daí, nunca uma cobrança passada.",
+        "col": {
+          "day": "Dia (UTC)",
+          "recorded": "Registrado pela Motir",
+          "billed": "Faturado",
+          "gap": "Diferença",
+          "source": "Origem",
+          "status": "Status",
+          "provider": "Provedor",
+          "models": "Modelos",
+          "estimated": "Linhas estimadas",
+          "side": "Lado divergente"
+        },
+        "source": {
+          "api": "API",
+          "balance_snapshot": "Instantâneo do saldo",
+          "export": "Exportação",
+          "none": "Nenhuma"
+        },
+        "status": {
+          "reconciled": "Conciliado",
+          "failed": "Falha na leitura",
+          "failedAt": "Tentado {time} UTC",
+          "notRecorded": "Não registrado",
+          "unreconciled": "Sem origem"
+        },
+        "pastTolerance": "Acima da tolerância",
+        "estimated": "{count, plural, one {# linha estimada} other {# linhas estimadas}}",
+        "perModel": {
+          "aria": "Mostrar a fatura de {day} por modelo",
+          "model": "Modelo"
+        },
+        "summary": {
+          "recorded": "Registrado",
+          "billed": "Faturado",
+          "gap": "Diferença",
+          "over": "em {read} de {days} dias lidos",
+          "onRead": "{amount} nos dias lidos",
+          "daysPast": "{count, plural, one {# dia acima da tolerância} other {# dias acima da tolerância}}",
+          "noneRead": "Nenhuma fatura lida",
+          "tolerance": "Acima da tolerância quando a diferença passa de {relative} da fatura e de {absolute}",
+          "noTolerance": "Nenhuma tolerância definida",
+          "days": "Dias · {provider}"
+        },
+        "findings": {
+          "title": "Constatações",
+          "none": "Nenhuma diferença acima da tolerância em {month}.",
+          "noModels": "Sem detalhamento"
+        },
+        "side": {
+          "gateway": "Gateway",
+          "motir-ai": "Motir AI",
+          "both": "Ambos",
+          "unnamed": "Ainda não indicado"
+        },
+        "unreconciled": {
+          "title": "Sem origem de faturamento",
+          "body": "A Motir não consegue ler uma fatura desses provedores, então os dias deles são registrados, mas nunca comparados."
+        },
+        "empty": {
+          "title": "Ainda nada registrado para {month}",
+          "body": "A conciliação roda quando cada dia UTC termina. Um dia aparece aqui após a primeira execução."
+        },
+        "allTime": "As faturas dos provedores são conciliadas por dia UTC, um mês por vez. Escolha um mês para vê-las.",
+        "error": {
+          "title": "Não é possível mostrar as faturas dos provedores agora",
+          "description": "O serviço de IA que mantém a conciliação não respondeu. O resto desta página não é afetado — tente novamente em instantes."
+        },
+        "none": "Sem valor"
       }
     },
     "tenants": {
