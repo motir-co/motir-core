@@ -502,6 +502,19 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   arriveAtReadableScale?: boolean;
   /**
+   * OPEN CENTRED ON THIS CARD (MOTIR-11472) — the node id the ARRIVAL level opens
+   * centred on, at the LOCATE control's readable zoom, instead of fitting the
+   * whole level. The planning workspace opened on a target passes the target, so
+   * a busy level does not shrink the card the conversation is about.
+   *
+   * A mount-time SEED, like `initialTrail`: read once, honoured only on the level
+   * the canvas opens on, and dropped the moment the canvas stands anywhere else —
+   * a drill, a crumb, Back or a granted follow. Coming back to that level later is
+   * an ordinary arrival. A node that is not on the arrival level (an anchor the
+   * canvas opened INSIDE is the crumb, not a card) changes nothing.
+   */
+  initialCentreId?: string | null;
+  /**
    * FOLLOW a node the consumer RE-KEYS under a mounted canvas (bug MOTIR-3439).
    *
    * The canvas HOLDS two things by node id — its drilled `focusId` and every
@@ -717,6 +730,7 @@ export function ProjectRoadmapCanvas({
   onLevelChange,
   controlledTrail,
   arriveAtReadableScale = false,
+  initialCentreId = null,
   resolveHeldNode,
   levelCaption,
   motion = false,
@@ -764,6 +778,21 @@ export function ProjectRoadmapCanvas({
   // window: the engine remounts exactly when the data it will fit has arrived,
   // and the prior level stays on screen until then, unchanged.
   const [level, setLevel] = useState<{ focusId: string | null; data: RoadmapLevel } | null>(null);
+  // The OPENING CENTRE (MOTIR-11472), seeded once with the level it belongs to —
+  // the arrival level `focusId` starts on. Dropped (state adjusted during render)
+  // as soon as a level other than that one is drawn, so it shapes the first
+  // arrival only and never a later one.
+  const [openingCentre, setOpeningCentre] = useState<{
+    levelId: string | null;
+    nodeId: string;
+  } | null>(() =>
+    initialCentreId
+      ? { levelId: initialTrail?.[initialTrail.length - 1]?.id ?? null, nodeId: initialCentreId }
+      : null,
+  );
+  if (openingCentre !== null && level !== null && level.focusId !== openingCentre.levelId) {
+    setOpeningCentre(null);
+  }
   const [query, setQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -2516,6 +2545,11 @@ export function ProjectRoadmapCanvas({
             showChanges && connectedIds === null && emphasisedIds.size > 0 ? emphasisedIds : null
           }
           arrival={arriveAtReadableScale ? { floor: ARRIVAL_MIN_SCALE, focalNodeId } : undefined}
+          arrivalCentre={
+            openingCentre !== null && level.focusId === openingCentre.levelId
+              ? { nodeId: openingCentre.nodeId, scale: LOCATE_ZOOM }
+              : null
+          }
           onBackgroundClick={() => setSelectedId(null)}
           focusNodeId={highlightId ?? undefined}
           focusNonce={focusNonce}
