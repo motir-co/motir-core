@@ -246,18 +246,17 @@ describe('an ANCHORED conversation whose plan waits', () => {
   );
 
   it(
-    'with NO waiting plan (decided) the anchored turn takes the shipped contextual submit',
+    'with NO waiting plan (decided) the anchored turn is the shipped ask, with no plan stated',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const { sessionId, planId } = await anchoredConversation();
       await adminDb.plan.update({ where: { id: planId }, data: { status: 'approved' } });
-      // Deciding a plan does not end the session in this fixture; the turn plans anew.
       const out = await aiAskService.submitTurn('now plan the PDF report', me(), { sessionId });
 
-      expect(out).toMatchObject({ outcome: 'redirected' });
+      expect(out).toMatchObject({ jobId: expect.any(String) });
       expect(submitJobMock).toHaveBeenCalledTimes(1);
       const [kind, , context] = submitJobMock.mock.calls[0]!;
-      expect(kind).toBe('plan');
+      expect(kind).toBe('ask_project');
       expect(context).not.toHaveProperty('waitingPlan');
     },
   );

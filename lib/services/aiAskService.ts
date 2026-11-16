@@ -9,7 +9,6 @@ import {
   type RunContext,
   type WaitingPlanContext,
 } from '@/lib/services/planRunContextService';
-import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { planChangeMailboxService } from '@/lib/services/planChangeMailboxService';
 import { planChangeLateChangeService } from '@/lib/services/planChangeLateChangeService';
 import { plansService } from '@/lib/services/plansService';
@@ -823,24 +822,8 @@ export const aiAskService = {
     // The conversation's plan is proposed and waits: this turn is asked AGAINST it, and
     // the settle revises it only when the planner says it must change.
     const waitingPlanId = await planChangeSessionsService.waitingPlanIdOf(ctx, address);
-    // An ANCHORED conversation whose plan does NOT wait (none yet, still generating,
-    // stale) has no ask door: its turn takes the shipped contextual submit — the
-    // targets re-taken, the turn appended, the accumulated intent planned — exactly as
-    // the anchored door runs it. Reached when the client thought a plan waited and it
-    // had been decided or superseded meanwhile.
-    if (!waitingPlanId && current.targetKeys.length > 0) {
-      await planTargetLockService.acquireForScope(current.id, current.targetKeys, ctx);
-      await planChangeSessionsService.appendTurn(trimmed, ctx, address, {
-        isAnswer: opts.isAnswer === true,
-      });
-      const submitted = await planChangeSessionsService.submit(ctx, address);
-      return {
-        outcome: 'redirected',
-        jobId: submitted.jobId,
-        planId: submitted.planId,
-        session: submitted.session,
-      };
-    }
+    // A plan that does NOT wait (none yet, decided, stale) leaves the turn the shipped
+    // ask it always was, on an anchored conversation as on the project thread.
 
     // Read BEFORE the append, so it is the offer standing when the person spoke
     // (MOTIR-9290) — the shape `submitMidRunTurn` uses for its forward offer.
