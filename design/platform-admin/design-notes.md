@@ -25,6 +25,7 @@ closest existing usage surface.
 | **PROVIDER CAPACITY — the rail row · usage against limits per provider and model (planning and agent lanes) · the states · the edit dialog and its refusals · the alert share · the raised-alert banner · degraded, unreachable and refused reads · support read-only · zh** (AMENDMENT 2026-10-25, MOTIR-9607) | **`console--capacity.mock.html`** (delta, Panels 1–17) | A new Operations page at `/admin/capacity` where platform staff see how close each provider model is to its limits, and operators edit limits and the alert share. **Gates the capacity screen card (story MOTIR-9539, MOTIR-9614 `blocked_by` MOTIR-9607).** |
 | **MONITORING · POOLS — one block per fleet kind on `/admin/monitoring`: provider, pool total, account rows, the Motir spare, quota raises, growth events, every state** (AMENDMENT 2026-10-25) | **`monitoring--pools.mock.html`** (delta, Panels 1–9, each light then dark) | A section added after the Fleet section of the shipped monitoring page; no new route. See § _AMENDMENT 2026-10-25 — Monitoring · Pools_. |
 | **USAGE & COST · PROVIDER BILLS — the daily provider-bill reconciliation on `/admin/usage`: per provider and UTC day, recorded beside billed, the gap, its source and status, days past tolerance, the per-model breakdown, findings with the differing side, providers with no billing source; no-records, All-time, loading, error, no-source and no-findings states** (AMENDMENT 2026-11-15, MOTIR-11375) | **`console--estate-usage-drilldown--provider-bills.mock.html`** (delta, Panels 1–8) | A new read-only section after the two model tables on Usage & cost. **Gates MOTIR-11376** (the section) and the story checks MOTIR-11387 / MOTIR-11388 (story MOTIR-11350). |
+| **PLANNER FINDINGS · RECORDS — a third view, Records, on `/admin/planner-findings`: one row per plan check with its verdict, filters, pager and every list state; the record page with its plan context, findings and the copyable command; the Record link on the finding detail** (AMENDMENT 2026-11-16) | **`console--planner-findings--records.mock.html`** (delta, Panels 1–12) | A display-only Records view and record page added to the shipped Planner findings console. |
 
 ## What this area is
 
@@ -4048,3 +4049,204 @@ No `--el-text-muted` or `--el-text-faint` anywhere; `--el-danger-text` is not us
 - Tolerance editing (the tolerance rows are seeded in motir-ai and changed there).
 - An all-time or multi-month reconciliation (the route answers one month).
 - The org page or Tenants: the reconciliation is estate-wide, provider by provider.
+
+# AMENDMENT 2026-11-16 — Planner findings · Records
+
+**Mock:** [`console--planner-findings--records.mock.html`](./console--planner-findings--records.mock.html) — a
+DELTA, Panels 1–12.
+
+**Amends** the approved Planner findings console design of MOTIR-10362 (its recorded asset,
+`console--planner-findings.mock.html`, and its notes section are not in this tree).
+
+**Design system (step 1 of the design lane).** Files read: `package.json` (depends on `@motir/design-system`
+`workspace:*`, the in-repo `packages/design-system`) and `app/globals.css` (imports
+`@motir/design-system/theme.css`). **Verdict: on Motir Design, branch (a).** The mock wears the area's default
+axes (`warm-editorial` shape, `motir` palette, light theme with one nested dark stage). It is hand-authored, not a
+render, because the surfaces it draws do not exist in code yet: its token block and primitive CSS are spliced
+verbatim from `console--ideas.mock.html` (that mock's own additions left out), and an additions block holds only
+this page's classes and ten lucide glyphs. Shipped parts read for the drawing: the page frame and view switch
+(`app/(admin)/admin/planner-findings/page.tsx`, `_components/FindingsViewSwitch.tsx`), the filter bar, table,
+pager, skeleton and unavailable state (`_components/FindingFilters.tsx`, `FindingsTable.tsx`, `FindingsPager.tsx`,
+`FindingsSkeleton.tsx`, `FindingsUnavailable.tsx`), the finding detail page (`[id]/page.tsx`), and the console
+rail (`app/(admin)/_components/AdminShell.tsx`).
+
+**Assumed base context.** The base already draws the Planner findings page at `/admin/planner-findings`: the page
+frame (breadcrumb, title, subtitle, info line, one Card), the filter bar, the cursor pager and the list states,
+with a two-option view switch, **Grouped** (the default) and **All findings** (`?view=all`), and the finding
+detail page. This section adds the records surfaces and redraws none of that frame.
+
+The records surfaces are: a third view option, **Records** (`?view=records`), with its table, filters, pager and
+states; a **record page** at `/admin/planner-findings/records/[id]`; and one **Record link** in the finding detail
+header. Nothing on either surface writes.
+
+## Elements — each named once, mapped to the field it shows
+
+| Element                      | What it is                                                                                                                                                                                                                                      | Field it shows                                                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Records option**           | The third option of the shipped view switch, after Grouped and All findings, in the shipped radiogroup anatomy (one tab stop, arrow keys move the choice, the active option raised). Label `Records`.                                           | The view (`?view=records`)                                                                                                            |
+| **Records table**            | A real `<table>` with a hidden caption, the shipped column-header and row grammar (whole-row link, trailing chevron, soft surface on hover). Seven columns. Counts are plain numerals, no total, no ratio.                                      | Created · Planner · Source · Plan (title, plan id beneath in mono) · Verdict · Findings · Attributed                                  |
+| **Verdict chip**             | The shipped `Pill` with two values only, each with a word, a glyph and a tone: `Open` (circle-dot, peach tint) and `Attributed` (circle-check, mint tint). In a table row an attributed chip has its by and at beneath.                         | The record's verdict state, and for an attributed record who gave the verdict and when                                                |
+| **Records filters**          | Three filters in the shipped filter-bar grammar (`Combobox` triggers): Verdict state, Planner, Source. A set filter shows a removable chip beside the filter count. A value the console does not know is shown as it came, in the neutral chip. | Verdict state (default All, which sets no parameter) · Planner (`hosted`, `plan_py`) · Source (`in_loop`, `check_plan`)               |
+| **Records pager**            | The shipped cursor pager: the page-size label, the page number, Previous and Next; the cursor and trail are carried in the link; no total. Drawn only when the walk has another page.                                                           | Page position                                                                                                                         |
+| **Nothing-stored-yet state** | The shipped empty state inside the card: icon, title, body, no action. The filters stay drawn at their defaults.                                                                                                                                | That no record has been stored                                                                                                        |
+| **No-match state**           | The shipped empty state with a **Clear filters** action, which returns to the unfiltered Records view and keeps Records selected.                                                                                                               | That the set filters match nothing                                                                                                    |
+| **Loading state**            | The shipped list skeleton in the card: card title, an announced label, the Records row shapes, `aria-busy`, filters drawn but inert.                                                                                                            | —                                                                                                                                     |
+| **Unavailable state**        | The shipped `ErrorState` with Retry, reused rather than redrawn. It replaces the card body and no rows are drawn.                                                                                                                               | That the store could not be read                                                                                                      |
+| **Narrow form**              | Below `md`: one **Filters** button carrying the active count (it opens the shipped Filters sheet), the set-filter chips, and one stacked block per record (label/value pairs plus its verdict chip), each block one tap target.                 | The same fields as the Records table                                                                                                  |
+| **Record page**              | `/admin/planner-findings/records/[id]`: a back link to the Records view, then the plan-context header, then the record findings table, then the command.                                                                                        | One record                                                                                                                            |
+| **Plan-context header**      | One labelled block (`role="group"`, "Plan context") of label/value pairs in this order. A null field is a quiet em dash, so the field set never changes shape.                                                                                  | Plan title with plan id beneath in mono · plan session id · job id · model · baseline branch and commit · verdict chip with by and at |
+| **Plan cell (no live plan)** | When the plan no longer exists: the stored plan title and id as plain text, no link, and the line "This plan no longer exists. The record is kept."                                                                                             | Stored plan title and plan id                                                                                                         |
+| **Record findings table**    | The shipped findings-table shape: one row per finding, each row opening that finding's own page.                                                                                                                                                | Site · attribution · why · hosted-planner cell · plan.py cell                                                                         |
+| **Empty body**               | A record with no findings draws one line where the table would be, never a table with no rows.                                                                                                                                                  | That the record holds no findings                                                                                                     |
+| **The command**              | A copyable `motir check planner finding <id>` line, mono on the soft surface at control radius, with a **Copy** button beside it. Drawn on an open record only.                                                                                 | The record id                                                                                                                         |
+| **Record link**              | One row in the finding detail's header block reading `Record` and the record id, linking to the record page, in the shipped link grammar. It always renders.                                                                                    | The finding's record id                                                                                                               |
+
+## The panels
+
+1. **Records view, populated (light)** — the rail with Planner findings active; the switch with Records checked as
+   the third option; the Records filters at their defaults; the Records table newest first; the Records pager,
+   because the walk has a next page.
+2. **The same view in dark** — a nested dark stage that re-binds the Tier-3 tokens (its own `--el-page-bg`
+   included), so it computes dark on its own.
+3. **The table in detail, page 2** — an open record with 0 attributed; an attributed record with its by and at; a
+   null plan title as a quiet em dash; a title that truncates (the full title is its tooltip); an unknown source
+   value in the neutral chip. Previous is present and the page number reads 2.
+4. **Nothing-stored-yet state** — no filter set, no action.
+5. **No-match state** — two filters set, each a removable chip, and the Clear filters action.
+6. **Loading state** — skeleton rows, `aria-busy`, "Loading records" announced, filters inert.
+7. **Unavailable state** — the shipped `ErrorState` with Retry; no rows.
+8. **Narrow form** — the Filters button with count 2, the two chips, stacked record blocks.
+9. **Record page, open record** — back link, Plan-context header, Record findings table, The command.
+10. **Record page, attributed record** — the verdict with its by and at, and no command anywhere on the page. This
+    record has no plan session and no job, each an em dash.
+11. **Three awkward cases** — (a) Plan cell (no live plan); (b) the Empty body; (c) an unknown record id is the
+    app's 404 page, exactly as the shipped finding detail page answers an id it does not have (`notFound()`),
+    never the Unavailable state.
+12. **The finding detail's Record link** — the shipped header block with the one new row; the rest of the page as it
+    ships.
+
+States not drawn, on purpose: no loading panel on the record page (its read decides existence before anything
+streams, as the finding detail page does, so a skeleton would flash over an unknown id); no separate unreadable
+panel on the record page (it draws the same `ErrorState` with Retry as panel 7); no verdict control anywhere; no
+signed-out or forbidden panel (the console's 404 covers it, as in the base).
+
+## Rules the drawing holds
+
+- **Display only.** Nothing on either surface writes. The only controls are the filters, the pager, the Copy
+  button and links.
+- **Fields are drawn, never defined.** Each element names the field it shows and nothing about what it means, how
+  it is computed or which route answers it.
+- **Two not-found shapes stay apart.** An unknown record id is the app's 404; the Unavailable state is only for a
+  store that could not be read. An unreadable store never reads as an empty one.
+- **A null field is a quiet em dash** in `--el-text-secondary` with a hidden "None" label, in every panel that has
+  one, so the plan-context header and the table keep their shape.
+- **Composition, not addition.** No new primitive: every control is one the console ships (`Segmented` radiogroup,
+  `Combobox` trigger, `Pill`, `Card`, table, pager, `EmptyState`, `ErrorState`, `Button`, the Filters sheet), and
+  the records table and the record page's blocks are product-local compositions of them.
+- **Shape and colour.** Every control's own radius and padding comes from a shape token (`--radius-badge`,
+  `--radius-card`, `--radius-control`, `--radius-btn`; chip, control and card spacing); every ink from `--el-*`.
+  No `--el-text-muted` or `--el-text-faint` in this page's additions; `--el-danger-text` is not used.
+- **One list of states, numbered once.** The mock's header comment, its panel labels and the list above carry the
+  same twelve numbers.
+
+## Copy (en · zh; every locale carries it)
+
+Keys sit under the page's existing namespace, `platformAdmin.plannerFindings`; the key names are suggestions.
+Strings the base already ships (the page frame, Grouped, All findings, the planner and source values, the pager,
+Filters, Clear all, Remove {filter}) are reused as they are.
+
+| Key (`platformAdmin.plannerFindings.*`) | en                                                                                                                                                             | zh                                                                                                 |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `view.records`                          | Records                                                                                                                                                        | 记录                                                                                               |
+| `records.title`                         | Records                                                                                                                                                        | 记录                                                                                               |
+| `records.subtitle`                      | One row per plan check, newest first.                                                                                                                          | 每次计划检查一行，最新在前。                                                                       |
+| `records.caption`                       | Planner finding records                                                                                                                                        | 规划器发现记录                                                                                     |
+| `records.col.created`                   | Created                                                                                                                                                        | 创建时间                                                                                           |
+| `records.col.planner`                   | Planner                                                                                                                                                        | 规划器                                                                                             |
+| `records.col.source`                    | Source                                                                                                                                                         | 来源                                                                                               |
+| `records.col.plan`                      | Plan                                                                                                                                                           | 计划                                                                                               |
+| `records.col.verdict`                   | Verdict                                                                                                                                                        | 结论                                                                                               |
+| `records.col.findings`                  | Findings                                                                                                                                                       | 发现                                                                                               |
+| `records.col.attributed`                | Attributed                                                                                                                                                     | 已归因                                                                                             |
+| `records.row.open`                      | Open record {id}                                                                                                                                               | 打开记录 {id}                                                                                      |
+| `records.row.noTitle`                   | No title                                                                                                                                                       | 无标题                                                                                             |
+| `records.verdict.open`                  | Open                                                                                                                                                           | 待定                                                                                               |
+| `records.verdict.attributed`            | Attributed                                                                                                                                                     | 已归因                                                                                             |
+| `records.verdict.by`                    | by {who} · {when}                                                                                                                                              | {who} · {when}                                                                                     |
+| `records.filter.label`                  | Filter records                                                                                                                                                 | 筛选记录                                                                                           |
+| `records.filter.verdict`                | Verdict state                                                                                                                                                  | 结论状态                                                                                           |
+| `records.filter.verdictAll`             | All                                                                                                                                                            | 全部                                                                                               |
+| `records.filter.planner`                | Planner                                                                                                                                                        | 规划器                                                                                             |
+| `records.filter.plannerAny`             | Any planner                                                                                                                                                    | 任意规划器                                                                                         |
+| `records.filter.source`                 | Source                                                                                                                                                         | 来源                                                                                               |
+| `records.filter.sourceAny`              | Any source                                                                                                                                                     | 任意来源                                                                                           |
+| `records.filter.sheetTitle`             | Filter records                                                                                                                                                 | 筛选记录                                                                                           |
+| `records.empty.title`                   | No records yet                                                                                                                                                 | 还没有记录                                                                                         |
+| `records.empty.body`                    | A record is kept each time the hosted planner’s final check or the check plan skill reviews a plan. None has been kept yet.                                    | 每当托管规划器的最终检查或 check plan 技能审查一个计划，就会保留一条记录。目前还没有保留任何记录。 |
+| `records.noMatch.title`                 | No records match these filters                                                                                                                                 | 没有符合这些筛选条件的记录                                                                         |
+| `records.noMatch.body`                  | Remove a filter, or clear them all.                                                                                                                            | 移除一个筛选条件，或全部清除。                                                                     |
+| `records.noMatch.action`                | Clear filters                                                                                                                                                  | 清除筛选                                                                                           |
+| `records.loading`                       | Loading records                                                                                                                                                | 正在加载记录                                                                                       |
+| `records.unavailable.title`             | Couldn’t load the records                                                                                                                                      | 无法加载记录                                                                                       |
+| `records.unavailable.body`              | The planning service (motir-ai) didn’t respond, so no record is shown. This is a fetch error — nothing has changed, and it does not mean there are no records. | 规划服务（motir-ai）没有响应，因此不显示任何记录。这是加载错误——没有任何更改，也不表示没有记录。   |
+| `records.unavailable.retry`             | Retry                                                                                                                                                          | 重试                                                                                               |
+| `record.crumb`                          | Operations · Planner findings · Record                                                                                                                         | 运营 · 规划器发现 · 记录                                                                           |
+| `record.back`                           | Back to records                                                                                                                                                | 返回记录                                                                                           |
+| `record.title`                          | Record                                                                                                                                                         | 记录                                                                                               |
+| `record.context`                        | Plan context                                                                                                                                                   | 计划上下文                                                                                         |
+| `record.field.plan`                     | Plan                                                                                                                                                           | 计划                                                                                               |
+| `record.field.planSession`              | Plan session                                                                                                                                                   | 规划会话                                                                                           |
+| `record.field.job`                      | Job                                                                                                                                                            | 作业                                                                                               |
+| `record.field.model`                    | Model                                                                                                                                                          | 模型                                                                                               |
+| `record.field.baseline`                 | Code baseline                                                                                                                                                  | 代码基线                                                                                           |
+| `record.field.verdict`                  | Verdict                                                                                                                                                        | 结论                                                                                               |
+| `record.field.none`                     | None                                                                                                                                                           | 无                                                                                                 |
+| `record.verdictBy`                      | Attributed by {who} · {when}                                                                                                                                   | 由 {who} 归因 · {when}                                                                             |
+| `record.planGone`                       | This plan no longer exists. The record is kept.                                                                                                                | 此计划已不存在。记录仍保留。                                                                       |
+| `record.findings.title`                 | Findings in this record                                                                                                                                        | 此记录中的发现                                                                                     |
+| `record.findings.col.site`              | Site                                                                                                                                                           | 位置                                                                                               |
+| `record.findings.col.attribution`       | Attribution                                                                                                                                                    | 归因                                                                                               |
+| `record.findings.col.why`               | Why                                                                                                                                                            | 原因                                                                                               |
+| `record.findings.col.hosted`            | Hosted planner                                                                                                                                                 | 托管规划器                                                                                         |
+| `record.findings.col.planpy`            | plan.py                                                                                                                                                        | plan.py                                                                                            |
+| `record.findings.empty`                 | This record holds no findings.                                                                                                                                 | 此记录没有任何发现。                                                                               |
+| `record.command.intro`                  | Give this record its verdict from your coding agent:                                                                                                           | 在你的编码智能体中为此记录给出结论：                                                               |
+| `record.command.line`                   | motir check planner finding {id}                                                                                                                               | motir check planner finding {id}                                                                   |
+| `record.command.copy`                   | Copy                                                                                                                                                           | 复制                                                                                               |
+| `record.command.copyLabel`              | Copy the command                                                                                                                                               | 复制命令                                                                                           |
+| `detail.record`                         | Record                                                                                                                                                         | 记录                                                                                               |
+
+## Colour and shape roles (`--el-*` and shape tokens only)
+
+| Element                                   | Colour                                                                                         | Shape                                                 |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Records option                            | shipped `Segmented`: active `--el-page-bg` with `--el-text-strong`, rest `--el-text-secondary` | `--radius-btn`, `--height-control`, control x-spacing |
+| Table header · body cells                 | `--el-text-secondary` · `--el-text`; row hover `--el-surface-soft`                             | —                                                     |
+| Plan title · plan id · record id          | `--el-text` · `--el-text-identifier` (mono)                                                    | —                                                     |
+| Em dash for a null field · by-and-at line | `--el-text-secondary`                                                                          | —                                                     |
+| Verdict chip `Open` · `Attributed`        | `--el-tint-peach` · `--el-tint-mint` background, `--el-text-strong` ink                        | `--radius-badge`, chip spacing                        |
+| Unknown value                             | `pill-neutral` (`--el-surface`, `--el-text-secondary`, `--el-border`)                          | `--radius-badge`                                      |
+| Filters count                             | `--el-tint-lavender`, `--el-text-strong`                                                       | `--radius-badge`, chip x-spacing                      |
+| Site chip                                 | `--el-surface`, `--el-text-identifier`                                                         | `--radius-badge`, chip x-spacing                      |
+| The command line                          | `--el-surface-soft`, `--el-border`, `--el-text`                                                | `--radius-control`, control x/y spacing               |
+| Plan link · Record link · back link       | `--el-link`                                                                                    | —                                                     |
+| Plan-gone line · empty body               | `--el-text-secondary`                                                                          | empty body: card padding                              |
+
+## Accessibility contract
+
+- Both tables are real `<table>` elements with a hidden `<caption>`; the trailing chevron column carries a hidden
+  "Open" header, and each row is one link named "Open record {id}" (or the finding's site).
+- The view switch is a `radiogroup` with one tab stop; the arrow keys move the choice.
+- The verdict is a word and a glyph, never colour alone; glyphs are `aria-hidden`.
+- A null field's em dash is `aria-hidden` with a hidden "None" (or "No title") beside it.
+- Loading sets `aria-busy` on the table and announces "Loading records" through `role="status"`.
+- The Copy button is named "Copy the command".
+- Every ink is `--el-text`, `--el-text-secondary`, `--el-text-strong`, `--el-text-identifier`, `--el-link` or a
+  `Pill` recipe, which clear AA on every surface drawn here in both themes.
+
+## What this amendment does NOT draw
+
+- The page frame, the Grouped view, the All findings view, or the finding detail page beyond the Record link.
+- Any verdict control, or any write on either surface.
+- What a field means, how it is computed or which route answers it.
+- Any change under `/api/platform/planner-findings/**` or to the records store.
