@@ -287,6 +287,16 @@ export const boardsService = {
    * bottom. Done and Cancelled lanes page exactly like the others — no lane is
    * windowed, skipped or emptied.
    *
+   * **Two shapes, by group-by (MOTIR-11445).** A FLAT board (`swimlaneGroupBy`
+   * `none`) returns each column's first page as described here. A GROUPED board
+   * (`assignee`, `priority` or `epic`) returns column META only — `id`, `name`,
+   * `position`, `wipLimit`, `statusKeys` and the column's FULL `totalCount`
+   * across every lane, with `cards: []`, `cursor: null` and `planHolds: {}` —
+   * plus its lanes: a cell's cards arrive from the lane-scoped cell pages
+   * ({@link boardsService.getLanePage}, and {@link boardsService.getCellPage}
+   * for one cell), each carrying its own `planHolds`. A grouped read therefore
+   * costs one count per column and one lane aggregate, and no card read.
+   *
    * Every per-card batch — readiness, the pending decision marker, the review
    * state, the plan hold, the swimlane key and the To fix tag — runs over the
    * LOADED cards only, so the board's cost is bounded by lanes × page size and
@@ -355,18 +365,34 @@ export const boardsService = {
       };
     }
 
-    // Each lane's first page + its full count (one bound transaction per lane —
-    // see `buildColumnPage`). The query count is per LANE, never per card.
-    const built = await Promise.all(
-      columns.map((col) => buildColumnPage(projectId, col, frame, undefined)),
-    );
+    // A GROUPED board (MOTIR-11445) reads column META only — each column's full
+    // count across every lane, no card read — because its cells page themselves
+    // through the lane-scoped reads; the server cannot know which lanes are in
+    // view, so it pre-loads none. A FLAT board reads each column's first page +
+    // its full count (one bound transaction per column — see `buildColumnPage`)
+    // and decorates the loaded cards, as before.
+    const grouped = groupBy !== 'none';
+    const built: Array<{
+      col: BoardColumn;
+      statusKeys: string[];
+      rows: WorkItem[];
+      totalCount: number;
+      cursor: string | null;
+    }> = grouped
+      ? (await Promise.all(columns.map((col) => buildColumnMeta(projectId, col, frame)))).map(
+          (meta) => ({ ...meta, rows: [], cursor: null }),
+        )
+      : await Promise.all(columns.map((col) => buildColumnPage(projectId, col, frame, undefined)));
 
-    // Every per-card batch, over the loaded pages only (MOTIR-10535).
-    const decorated = await decorateBoardRows(
-      projectId,
-      built.flatMap((b) => b.rows),
-      frame,
-    );
+    // Every per-card batch, over the loaded pages only (MOTIR-10535) — none at
+    // all on a grouped board, which loaded no card.
+    const decorated = grouped
+      ? null
+      : await decorateBoardRows(
+          projectId,
+          built.flatMap((b) => b.rows),
+          frame,
+        );
 
     // Swimlanes (Subtask 3.3.4). The union of the board's mapped column statuses
     // IS the board's card population, so the lane list is resolved over that set
@@ -415,14 +441,14 @@ export const boardsService = {
         position: b.col.position.toString(),
         wipLimit: b.col.wipLimit,
         statusKeys: b.statusKeys,
-        cards: b.rows.map(decorated.toCard),
+        cards: decorated ? b.rows.map(decorated.toCard) : [],
         totalCount: b.totalCount,
         cursor: b.cursor,
       })),
       swimlanes,
       unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
       sprint,
-      planHolds: decorated.planHolds,
+      planHolds: decorated?.planHolds ?? {},
       storedFilter: frame.storedFilter?.dto ?? null,
     };
   },
@@ -1910,10 +1936,7 @@ async function buildColumnPage(
   }
   const order = columnOrder(statusKeys, frame.terminalKeys);
   const { workspaceId } = frame.readCtx;
-  const sprintId = frame.activeSprint?.id;
-  const filter = frame.boardFilter;
-  const stored = frame.storedFilter?.predicate;
-  const excludeIds = frame.excludeIds;
+  const scope = columnReadScope(frame, lane);
   // The lane's cards and its own denominator, in ONE bound transaction: two
   // reads of the same predicate rendered as one column header, so a write
   // landing between them cannot make "12 of 9" appear.
@@ -1921,14 +1944,7 @@ async function buildColumnPage(
     totalCount: await workItemRepository.countProjectIssues(
       projectId,
       workspaceId,
-      {
-        statuses: statusKeys,
-        ...(sprintId ? { sprintId } : {}),
-        ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
-        ...(stored ? { storedFilter: stored } : {}),
-        ...(excludeIds ? { excludeIds } : {}),
-        ...(lane ? { lane } : {}),
-      },
+      { statuses: statusKeys, ...scope.count },
       tx,
     ),
     fetched: await workItemRepository.findColumnCards(
@@ -1939,11 +1955,7 @@ async function buildColumnPage(
       {
         limit: BOARD_PAGE_SIZE + 1,
         ...(after ? { after } : {}),
-        sprintId,
-        ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
-        ...(stored ? { storedFilter: stored } : {}),
-        ...(excludeIds ? { excludeIds } : {}),
-        ...(lane ? { lane } : {}),
+        ...scope.cards,
       },
       tx,
     ),
@@ -1952,6 +1964,69 @@ async function buildColumnPage(
   const last = rows[rows.length - 1];
   const cursor = fetched.length > BOARD_PAGE_SIZE && last ? cursorAfter(order, last) : null;
   return { col, statusKeys, rows, totalCount, cursor };
+}
+
+/**
+ * The predicate set a column's count and its cards are read under — the scrum
+ * sprint scope, the toolbar filter, the board's stored filter, a Visitor's
+ * private-epic exclusion and (for a cell) the lane — assembled in ONE place so
+ * the column page, the cell page and the grouped board's column meta
+ * ({@link buildColumnMeta}) can never narrow under different sets.
+ *
+ * The two reads spell the toolbar filter's referents differently: the count
+ * takes `filterReferents`, the card read `referents`. Handing either the
+ * other's spelling silently drops the referents, so each read gets its own
+ * object rather than one shared bag.
+ */
+function columnReadScope(frame: BoardFrame, lane?: BoardLanePredicate) {
+  const sprintId = frame.activeSprint?.id;
+  const filter = frame.boardFilter;
+  const stored = frame.storedFilter?.predicate;
+  const excludeIds = frame.excludeIds;
+  const shared = {
+    ...(stored ? { storedFilter: stored } : {}),
+    ...(excludeIds ? { excludeIds } : {}),
+    ...(lane ? { lane } : {}),
+  };
+  return {
+    count: {
+      ...(sprintId ? { sprintId } : {}),
+      ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+      ...shared,
+    },
+    cards: {
+      sprintId,
+      ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
+      ...shared,
+    },
+  };
+}
+
+/**
+ * One column's META on a GROUPED board (MOTIR-11445): its mapped status keys and
+ * its FULL `totalCount` across every lane, read under exactly the predicates
+ * {@link buildColumnPage} counts under ({@link columnReadScope}), with no card
+ * read and no cursor — a grouped board's cards arrive from its cell pages. A
+ * column mapping no live status answers an empty count and issues no query.
+ */
+async function buildColumnMeta(
+  projectId: string,
+  col: BoardColumn,
+  frame: BoardFrame,
+): Promise<{ col: BoardColumn; statusKeys: string[]; totalCount: number }> {
+  const statusKeys = columnStatusKeys(frame.liveByColumn, col.id);
+  if (statusKeys.length === 0) return { col, statusKeys, totalCount: 0 };
+  const { workspaceId } = frame.readCtx;
+  const { count } = columnReadScope(frame);
+  const totalCount = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.countProjectIssues(
+      projectId,
+      workspaceId,
+      { statuses: statusKeys, ...count },
+      tx,
+    ),
+  );
+  return { col, statusKeys, totalCount };
 }
 
 /**
