@@ -26,6 +26,9 @@ export const CI_RUNNER_INTENT_FAILED = 'failed';
 
 /** The statuses that mean "a container may still exist for this intent" — the
  *  reaper's and the in-flight count's window. */
+/** The teardowns a runner reaches only after it ran a job (MOTIR-11437). */
+const RUNNER_SERVED_A_JOB_TEARDOWNS: readonly string[] = ['job_completed', 'job_timed_out'];
+
 export const CI_RUNNER_INTENT_IN_FLIGHT: readonly string[] = [
   CI_RUNNER_INTENT_PROVISIONING,
   CI_RUNNER_INTENT_RUNNING,
@@ -147,6 +150,38 @@ export const ciRunnerProvisioningIntentRepository = {
       _max: { reconcileGeneration: true },
     });
     return r._max.reconcileGeneration ?? -1;
+  },
+
+  /**
+   * How many RECONCILE generations of one job (generation ≥ 1) have not been seen
+   * serving any job (MOTIR-11437) — the count the reconcile's generation cap is
+   * judged on. A generation whose runner took a job is excluded: the job being
+   * reconciled is still queued on GitHub, so that runner served a DIFFERENT job —
+   * it was taken, not lost, and a boot plainly works. "Took a job" is either
+   * signal the fleet records: `jobPickedUpAt` (a delivery or supervision saw the
+   * runner busy), or a container that ended `job_completed` / `job_timed_out`,
+   * which it does only after running one. Every other generation — failed,
+   * retired idle, still on its way — counts.
+   */
+  async countUnservedReconcileGenerations(
+    runId: string,
+    runAttempt: number,
+    jobId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.ciRunnerProvisioningIntent.count({
+      where: {
+        runId,
+        runAttempt,
+        jobId,
+        reconcileGeneration: { gte: 1 },
+        jobPickedUpAt: null,
+        OR: [
+          { teardownReason: null },
+          { teardownReason: { notIn: [...RUNNER_SERVED_A_JOB_TEARDOWNS] } },
+        ],
+      },
+    });
   },
 
   /**

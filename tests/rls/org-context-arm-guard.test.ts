@@ -241,11 +241,13 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
     source: 'scan',
     why: 'organization_active',
   },
-  'lib/services/ciRunnerProvisioningService.ts#recordQueuedJob': {
+  'lib/services/ciRunnerProvisioningService.ts#attributeMirroredRepos': {
     tables: ['project_repository', 'workspace'],
     source: 'scan',
     why:
-      "THE EIGHTEENTH (MOTIR-4839) — the meter's twin, and it is deliberately IDENTICAL. The " +
+      "THE EIGHTEENTH (MOTIR-4839) — the meter's twin, and it is deliberately IDENTICAL. Moved " +
+      'out of `recordQueuedJob` (MOTIR-11437) so the fleet reconcile attributes a repo it has no ' +
+      'delivery from through the very same read. The ' +
       "service's own comment binds it: \"the SAME disposition as the meter's (MOTIR-4648) \u2014 the " +
       'two sites ask one question and must not answer it differently.\" Same two tables, same two ' +
       'arms, same reason; what differs is only the consequence of the zero-row read \u2014 the meter ' +
@@ -726,9 +728,9 @@ describe('the guard has been SEEN to fail', () => {
       'lib/services/ciMinutesMeterService.ts#meterWorkflowRun :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
         '(reached via projectRepoRepository.listByGithubRepoId, workspaceRepository.findByIdInTx)',
-      'lib/services/ciRunnerProvisioningService.ts#recordQueuedJob :: workspace -> "workspace" ' +
+      'lib/services/ciRunnerProvisioningService.ts#attributeMirroredRepos :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
-        '(reached via projectRepoRepository.listByGithubRepoId, workspaceRepository.findByIdInTx)',
+        '(reached via projectRepoRepository.listByGithubRepoIds, workspaceRepository.findByIdInTx)',
       'lib/services/entitlementsService.ts#assertWithinStorageCap :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
         '(reached via attachmentRepository.sumSizeByOrganization)',

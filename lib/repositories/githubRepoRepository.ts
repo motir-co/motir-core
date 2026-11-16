@@ -799,6 +799,25 @@ export const githubRepoRepository = {
     });
   },
 
+  /** The live GitHub repositories of several organisations — the CI fleet
+   *  reconcile's candidates for a repo the fleet has no delivery from
+   *  (MOTIR-11437). GitHub rows only (a GitLab job never asks for the fleet),
+   *  archived ones left out (an archived repository runs nothing).
+   *
+   *  ⚠️ `tx` must be a `withSystemContext` transaction: the read spans tenants,
+   *  and a narrower context returns a SUBSET with no error. */
+  async listLiveGithubByOrganizations(
+    organizationIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<GithubRepo, 'id' | 'workspaceId' | 'organizationId' | 'owner' | 'name'>>> {
+    if (organizationIds.length === 0) return [];
+    return tx.githubRepo.findMany({
+      where: { organizationId: { in: organizationIds }, provider: 'github', archived: false },
+      select: { id: true, workspaceId: true, organizationId: true, owner: true, name: true },
+      orderBy: [{ organizationId: 'asc' }, { owner: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   /**
    * Every repository row of `organizationId` WITH its parent installation — the
    * organization Git offboarding's work set (MOTIR-6306 · MOTIR-6397). The

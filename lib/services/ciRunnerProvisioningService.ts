@@ -191,57 +191,20 @@ export const ciRunnerProvisioningService = {
       return { outcome: 'unknown_repo' };
     }
 
-    const tenant = await withWorkspaceServiceContext(connection.workspaceId, async (tx) => {
-      // ⚠️ BIND THE ORGANISATION TOO (MOTIR-4839 · bug MOTIR-4835) — the same
-      // edit, for the same reason, as `ciMinutesMeterService`, whose block
-      // carries the full account. In short: MOTIR-4669 made a repository
-      // ORG-owned, so the link row's workspace is routinely NOT the repository's,
-      // and the workspace GUC bound above admits neither the
-      // `project_repository` row (`project_repository_org_read`, 20260906000000)
-      // nor the anchor's `workspace` row (`workspace_org_service_read`,
-      // 20260818010000 — the userless arm, which is what a service context is).
-      // Both arms are FOR SELECT, so this widens reads to the ORGANISATION and no
-      // further: a link in another org stays invisible.
-      //
-      // ⚠️ IT IS THE SAME EDIT ON PURPOSE. The note below says these two sites
-      // must not answer differently; this binding is part of the answer, so a
-      // change here that does not land there — or the reverse — recreates exactly
-      // the divergence that note exists to prevent, silently, because both sides
-      // of it are legitimate-looking null returns.
-      await bindOrganizationContext(tx, connection.organizationId);
-
-      // ⚠️ ATTRIBUTION, and the SAME disposition as the meter's (MOTIR-4648) —
-      // the two sites ask one question and must not answer it differently.
-      // `ProjectRepo.githubRepoId` is no longer `@unique`, so:
-      //   0 rows → unattributed (the job is REFUSED below, which is this path's
-      //            own posture — the money has not been spent yet).
-      //   1 row  → that project. Unchanged.
-      //   N rows → the organisation owns the fleet cost and is charged; the
-      //            project is unknown and recorded as null. `project_id` is
-      //            nullable on `ci_runner_provisioning_intent` for this.
-      // Provisioning is NOT refused on ambiguity: an org-owned repository shared
-      // by two projects is a legitimate shape, and refusing its jobs would turn a
-      // supported model into an outage.
-      const projectRepos = await projectRepoRepository.listByGithubRepoId(
-        connection.githubRepoId,
-        tx,
+    const tenant =
+      (
+        await attributeMirroredRepos({
+          workspaceId: connection.workspaceId,
+          organizationId: connection.organizationId,
+          githubRepoIds: [connection.githubRepoId],
+        })
+      ).get(connection.githubRepoId) ?? null;
+    if (tenant && tenant.projectCount > 1) {
+      console.warn(
+        '[ciRunnerProvisioningService] repository is used by several projects — provisioning for the org, project left null',
+        { githubRepoId: connection.githubRepoId, projectCount: tenant.projectCount },
       );
-      if (projectRepos.length === 0) return null;
-      const anchor = projectRepos[0]!;
-      const workspace = await workspaceRepository.findByIdInTx(anchor.workspaceId, tx);
-      if (!workspace) return null;
-      if (projectRepos.length > 1) {
-        console.warn(
-          '[ciRunnerProvisioningService] repository is used by several projects — provisioning for the org, project left null',
-          { githubRepoId: connection.githubRepoId, projectCount: projectRepos.length },
-        );
-      }
-      return {
-        workspaceId: anchor.workspaceId,
-        organizationId: workspace.organizationId,
-        projectId: projectRepos.length === 1 ? anchor.projectId : null,
-      };
-    });
+    }
 
     if (!tenant) {
       // A job asking for a Motir runner that belongs to no tenant would be
@@ -425,6 +388,86 @@ type ConnectedOrgResolution =
       kind: 'unknown_repo';
       reason: 'no_mirror_row' | 'ambiguous_mirror_rows' | 'owner_mismatch';
     };
+
+/** Whom a mirrored repository's fleet jobs are attributed to (MOTIR-11437). */
+export interface MirroredRepoAttribution {
+  workspaceId: string;
+  organizationId: string;
+  /** Null when several projects use the repository: the org is charged. */
+  projectId: string | null;
+  /** How many projects use it — 1 or more; a repository used by none is absent. */
+  projectCount: number;
+}
+
+/**
+ * The §5.2 ATTRIBUTION of mirrored repositories that share one mirror workspace
+ * and organisation, in ONE transaction — the intake's step 2 and the reconcile's
+ * attribution of a repo the fleet has no delivery from (MOTIR-11437) ask this one
+ * function, so the two cannot answer differently. A repository with no project row
+ * (or whose anchor workspace is gone) is absent from the map: unattributed.
+ */
+export async function attributeMirroredRepos(mirror: {
+  workspaceId: string;
+  organizationId: string;
+  githubRepoIds: string[];
+}): Promise<Map<string, MirroredRepoAttribution>> {
+  return withWorkspaceServiceContext(mirror.workspaceId, async (tx) => {
+    // ⚠️ BIND THE ORGANISATION TOO (MOTIR-4839 · bug MOTIR-4835) — the same
+    // edit, for the same reason, as `ciMinutesMeterService`, whose block
+    // carries the full account. In short: MOTIR-4669 made a repository
+    // ORG-owned, so the link row's workspace is routinely NOT the repository's,
+    // and the workspace GUC bound above admits neither the
+    // `project_repository` row (`project_repository_org_read`, 20260906000000)
+    // nor the anchor's `workspace` row (`workspace_org_service_read`,
+    // 20260818010000 — the userless arm, which is what a service context is).
+    // Both arms are FOR SELECT, so this widens reads to the ORGANISATION and no
+    // further: a link in another org stays invisible.
+    //
+    // ⚠️ IT IS THE SAME EDIT ON PURPOSE. The note below says these two sites
+    // must not answer differently; this binding is part of the answer, so a
+    // change here that does not land there — or the reverse — recreates exactly
+    // the divergence that note exists to prevent, silently, because both sides
+    // of it are legitimate-looking null returns.
+    await bindOrganizationContext(tx, mirror.organizationId);
+
+    // ⚠️ ATTRIBUTION, and the SAME disposition as the meter's (MOTIR-4648) —
+    // the two sites ask one question and must not answer it differently.
+    // `ProjectRepo.githubRepoId` is no longer `@unique`, so:
+    //   0 rows → unattributed (the job is REFUSED by the intake, which is this
+    //            path's own posture — the money has not been spent yet).
+    //   1 row  → that project. Unchanged.
+    //   N rows → the organisation owns the fleet cost and is charged; the
+    //            project is unknown and recorded as null. `project_id` is
+    //            nullable on `ci_runner_provisioning_intent` for this.
+    // Provisioning is NOT refused on ambiguity: an org-owned repository shared
+    // by two projects is a legitimate shape, and refusing its jobs would turn a
+    // supported model into an outage.
+    const rows = await projectRepoRepository.listByGithubRepoIds(mirror.githubRepoIds, tx);
+    const byRepo = new Map<string, typeof rows>();
+    for (const row of rows) {
+      if (row.githubRepoId === null) continue;
+      byRepo.set(row.githubRepoId, [...(byRepo.get(row.githubRepoId) ?? []), row]);
+    }
+    const workspaceOrg = new Map<string, string | null>();
+    const out = new Map<string, MirroredRepoAttribution>();
+    for (const [githubRepoId, projectRepos] of byRepo) {
+      const anchor = projectRepos[0]!;
+      if (!workspaceOrg.has(anchor.workspaceId)) {
+        const workspace = await workspaceRepository.findByIdInTx(anchor.workspaceId, tx);
+        workspaceOrg.set(anchor.workspaceId, workspace?.organizationId ?? null);
+      }
+      const organizationId = workspaceOrg.get(anchor.workspaceId);
+      if (!organizationId) continue;
+      out.set(githubRepoId, {
+        workspaceId: anchor.workspaceId,
+        organizationId,
+        projectId: projectRepos.length === 1 ? anchor.projectId : null,
+        projectCount: projectRepos.length,
+      });
+    }
+    return out;
+  });
+}
 
 /**
  * MOTIR-8720 — attribute a fleet-labelled job delivered on an installation
