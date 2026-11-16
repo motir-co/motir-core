@@ -54,9 +54,6 @@ const REFUSAL = 'You have exceeded the allowed number of AWS accounts.';
 
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
-// The account and request tables are wide; beside the admin sidebar, 1440px keeps
-// every column inside its scroll box in the video.
-const WIDE = { width: 1440, height: 810 };
 
 /** One running CI job's use: one container's vCPU. */
 const C = FLEET_CONTAINER_SIZE.cpus;
@@ -144,7 +141,6 @@ test('a platform admin reads every pool: the CI pool past 70%, an unread quota, 
   });
 
   // ── The operator: a signed-up account granted `superadmin`.
-  await page.setViewportSize(WIDE);
   await signUpToOnboarding(page, STAFF);
   await adminDb.user.update({ where: { email: STAFF }, data: { platformRole: 'superadmin' } });
 
