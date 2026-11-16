@@ -174,6 +174,24 @@ export async function scrollLaneToEnd(page: Page, columnId: string, total: numbe
     .toBe(total.toLocaleString('en-US'));
 }
 
+/** Page ONE grouped-board cell through its own Load more (MOTIR-11450): press the
+ *  first cell control on the board and wait for that cell's own count to grow —
+ *  the cell pages itself; no column footer or sentinel is involved. */
+export async function pageFirstCellThroughLoadMore(page: Page): Promise<void> {
+  const main = page.getByRole('main');
+  const more = main.locator('[data-testid^="cell-load-more-"]').first();
+  await expect(more, 'a cell with more offers Load more').toBeVisible({ timeout: 30_000 });
+  const cellKey = ((await more.getAttribute('data-testid')) ?? '').slice('cell-load-more-'.length);
+  const count = main.getByTestId(`cell-count-${cellKey}`);
+  const loadedOf = async () =>
+    Number(((await count.textContent()) ?? '').match(/[\d,]+/)?.[0]?.replace(/,/g, '') ?? 0);
+  const before = await loadedOf();
+  await more.click();
+  await expect
+    .poll(loadedOf, { message: `cell ${cellKey} loaded its next page` })
+    .toBeGreaterThan(before);
+}
+
 /** Assert a column is DOM-bounded: its mounted card-node count is > 0 but well
  *  below its full total — i.e. it virtualized rather than mounting every row.
  *  `total` is the column's full `totalCount` (from the projection / count badge). */
@@ -196,6 +214,17 @@ export async function expectColumnVirtualized(
 export async function expectNoLoadMore(page: Page): Promise<void> {
   await expect(page.getByText(/load more/i)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /load more/i })).toHaveCount(0);
+}
+
+/** A GROUPED board's twin of {@link expectNoLoadMore} (MOTIR-11450): a grouped
+ *  board pages each cell through its own Load more, so a cell control is allowed
+ *  — what must never come back is a COLUMN-level page affordance: no footer row,
+ *  no column sentinel or footer, and no column "Load more". */
+export async function expectNoColumnLoadMore(page: Page): Promise<void> {
+  const main = page.getByRole('main');
+  await expect(main.getByTestId('swimlane-load-row')).toHaveCount(0);
+  await expect(main.locator('[data-testid^="board-lane-footer-"]')).toHaveCount(0);
+  await expect(main.locator('[data-testid^="board-load-more-"]')).toHaveCount(0);
 }
 
 // ── At-scale SCRUM helpers (Subtask 4.7.1) ──────────────────────────────────

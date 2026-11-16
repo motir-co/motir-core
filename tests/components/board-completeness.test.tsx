@@ -540,9 +540,20 @@ describe('per-lane scroll-to-load paging (MOTIR-10535)', () => {
         { columnId: 'c2', laneKey: 'u1', cards: [], totalCount: 0, cursor: null, planHolds: {} },
       ],
     };
+    const cellPage = {
+      columnId: 'c1',
+      laneKey: 'u1',
+      cards: cardsFrom(11, 1, { swimlaneKey: 'u1', assigneeId: 'u1' }),
+      totalCount: 11,
+      cursor: null,
+      planHolds: {},
+    };
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).startsWith('/api/board/lanes/')) {
         return { ok: true, status: 200, json: async () => lanePage };
+      }
+      if (String(url).startsWith('/api/board/columns/')) {
+        return { ok: true, status: 200, json: async () => cellPage };
       }
       return { ok: true, status: 200, json: async () => board };
     });
@@ -574,7 +585,25 @@ describe('per-lane scroll-to-load paging (MOTIR-10535)', () => {
     expect(laneCalls.map(([u]) => String(u))).toEqual(['/api/board/lanes/u1/cells?boardId=b1']);
     // The header's loaded count is the sum over the column's cells.
     expect(screen.getByTestId('board-count-c1').textContent).toBe('10 of 12');
-    // Lane u2 was never in view, so it holds nothing and was never asked for.
-    expect(screen.getByTestId('lane-cell-c1-u2').textContent).toContain('No work items');
+    // Lane u2 was never in view: its cells sit in the not-yet-loaded skeleton,
+    // never claiming to be empty.
+    expect(screen.getByTestId('lane-cell-c1-u2').getAttribute('data-cell-phase')).toBe(
+      'not-loaded',
+    );
+    expect(screen.getByTestId('lane-cell-c1-u2').textContent).not.toContain('No work items');
+
+    // The cell pages through its own Load more: one request, that cell alone.
+    expect(screen.getByTestId('cell-count-c1-u1').textContent).toBe('10 of 11');
+    fireEvent.click(screen.getByTestId('cell-load-more-c1-u1'));
+    await waitFor(() => expect(screen.getByText('Card 11')).toBeTruthy());
+    const cellCalls = fetchMock.mock.calls.filter(([u]) =>
+      String(u).startsWith('/api/board/columns/'),
+    );
+    expect(cellCalls.map(([u]) => String(u))).toEqual([
+      '/api/board/columns/c1/cards?boardId=b1&lane=u1&cursor=CELL-1',
+    ]);
+    expect(screen.getByTestId('cell-count-c1-u1').textContent).toBe('11');
+    expect(screen.queryByTestId('cell-load-more-c1-u1')).toBeNull();
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('11 of 12');
   });
 });

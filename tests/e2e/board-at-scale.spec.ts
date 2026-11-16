@@ -25,6 +25,7 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import {
   getBoard,
   columnByStatus,
+  pageFirstCellThroughLoadMore,
   columnCardNodes,
   columnTotalBadge,
   expectColumnVirtualized,
@@ -262,6 +263,8 @@ test.describe('board-at-scale — load model (3.5.2)', () => {
       .poll(() => laneReads.length, { message: 'a lane in view read its cells' })
       .toBeGreaterThan(0);
     expect(new Set(laneReads).size, 'no lane read twice').toBe(laneReads.length);
+    // A cell pages through its own Load more control.
+    await pageFirstCellThroughLoadMore(page);
   });
 
   test('pages a Done lane in FULL — the aged-out resolved cards load too', async ({ page }) => {

@@ -123,17 +123,20 @@ export function LaneCountBadge({
   loaded,
   total,
   hasMore,
+  testId,
 }: {
   columnId: string;
   loaded: number;
   total: number;
   hasMore: boolean;
+  /** Overrides the default `board-count-<columnId>` (a cell's own badge). */
+  testId?: string;
 }) {
   const t = useTranslations('boards');
   return (
     <span
       className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-xs font-semibold whitespace-nowrap text-(--el-count-text)"
-      data-testid={`board-count-${columnId}`}
+      data-testid={testId ?? `board-count-${columnId}`}
     >
       {hasMore ? t('laneCountLoaded', { loaded, total }) : t('laneCount', { total })}
     </span>

@@ -169,6 +169,9 @@ export function SwimlaneBoard({
           onToggle={toggle}
           isDropTarget={overLaneKey === lane.key}
           cardsOf={cardsOf}
+          pageOf={cells?.cellState}
+          onLoadCell={cells?.loadCell}
+          onRetryCell={cells?.retryCell}
           laneRef={cells?.laneRef}
           store={store}
           assigneeNameById={assigneeNameById}

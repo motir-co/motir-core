@@ -17,6 +17,7 @@ import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitiv
 import { LaneCell } from './LaneCell';
 import { BOARD_SCROLL_NAV_CLASS, useColumnArrows, useDragToPan } from './boardHorizontalNav';
 import type { LaneScrollStore } from './laneScrollStore';
+import type { CellPage } from './boardCellPages';
 
 // LaneRow (MOTIR-11449) — one swimlane of the grouped board, built to design
 // MOTIR-11443 (`design/boards/swimlanes--lane-paging.mock.html` panels 3 and 5–9,
@@ -52,6 +53,9 @@ export function LaneRow({
   onToggle,
   isDropTarget,
   cardsOf,
+  pageOf,
+  onLoadCell,
+  onRetryCell,
   laneRef,
   store,
   assigneeNameById,
@@ -68,6 +72,10 @@ export function LaneRow({
   isDropTarget: boolean;
   /** The cards one cell of this lane shows. */
   cardsOf: (columnId: string, laneKey: string) => BoardCardDto[];
+  /** One cell's page (the client hook's `cellState`); absent = no paging. */
+  pageOf?: (columnId: string, laneKey: string) => CellPage;
+  onLoadCell?: (columnId: string, laneKey: string) => void;
+  onRetryCell?: (columnId: string, laneKey: string) => void;
   /** The client hook's lane observer ref; absent = this row loads nothing. */
   laneRef?: (laneKey: string) => (el: HTMLElement | null) => (() => void) | void;
   /** The board's lane-offset store (the header follows the active lane). */
@@ -253,6 +261,11 @@ export function LaneRow({
                       assigneeNameById={assigneeNameById}
                       onOpenQuickView={onOpenQuickView}
                       activeCardId={activeCardId}
+                      page={pageOf?.(column.id, lane.key)}
+                      onLoadMore={onLoadCell ? () => onLoadCell(column.id, lane.key) : undefined}
+                      onRetry={onRetryCell ? () => onRetryCell(column.id, lane.key) : undefined}
+                      laneLabel={laneLabel}
+                      columnName={column.name}
                     />
                   </div>
                 ))}

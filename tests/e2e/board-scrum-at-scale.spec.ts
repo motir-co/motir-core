@@ -43,6 +43,7 @@ import {
   getBoard,
   getFullBoard,
   columnByStatus,
+  pageFirstCellThroughLoadMore,
   columnCardNodes,
   columnTotalBadge,
   columnPointPill,
@@ -581,5 +582,7 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
       .poll(() => laneReads.length, { message: 'a lane in view read its cells' })
       .toBeGreaterThan(0);
     expect(new Set(laneReads).size, 'no lane read twice').toBe(laneReads.length);
+    // A cell pages through its own Load more control.
+    await pageFirstCellThroughLoadMore(page);
   });
 });
