@@ -19,6 +19,10 @@ name: Hosted agent pin
 
 on:
   pull_request:
+    # `ready_for_review` starts the run when a draft is marked ready: the jobs
+    # below skip while the pull request is a draft (saves CI minutes on work in
+    # progress), and without this type nothing would run at that moment.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'infra/image-pins/motir-hosted-agent-image'
       - '.github/workflows/hosted-agent-pin.yml'
@@ -30,6 +34,7 @@ concurrency:
 jobs:
   hosted-agent-pin:
     name: Prove the pinned image
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No run on record — the lane is new (MOTIR-10882). It pulls one image and
     # runs the two image tests `hosted-agent-image.yml` runs after its build, so

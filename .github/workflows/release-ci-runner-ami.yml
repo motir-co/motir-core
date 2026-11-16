@@ -39,6 +39,10 @@ on:
       - 'ci-runner-ami-v*'
   workflow_dispatch:
   pull_request:
+    # `ready_for_review` starts the run when a draft is marked ready: the jobs
+    # below skip while the pull request is a draft (saves CI minutes on work in
+    # progress), and without this type nothing would run at that moment.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'infra/ci-runner-aws/**'
       - 'infra/ci-runner/Dockerfile'
@@ -62,6 +66,7 @@ env:
 jobs:
   validate:
     name: Validate the AMI template
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No run on record yet: `packer init` (one plugin download), `packer
     # validate` and a shellcheck container take about a minute → 10 (the

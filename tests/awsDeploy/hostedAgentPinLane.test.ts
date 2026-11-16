@@ -124,7 +124,10 @@ describe("the image lane's pin job", () => {
       required: true,
     });
     expect(lane.on.workflow_dispatch?.inputs?.['source_commit']?.type).toBe('string');
-    expect(build.if).toBe("${{ github.event_name != 'workflow_dispatch' }}");
+    // A draft pull request builds nothing either; marking it ready runs it.
+    expect(build.if).toBe(
+      "${{ github.event_name != 'workflow_dispatch' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}",
+    );
     expect(pin.if).toContain("github.event_name == 'workflow_dispatch'");
     const open = step((s) => !!s.run?.includes('gh pr create'));
     expect(open.env?.BUILT_FROM).toBe('${{ inputs.source_commit || github.sha }}');
