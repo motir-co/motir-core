@@ -14800,6 +14800,63 @@
         },
         "pausedUntil": "jusqu’à {time}, dans {left}",
         "readOnly": "Lecture seule. Pour demander plus de quota à AWS, exécutez <cmd>{command}</cmd> dans un terminal ; le remplacement du plafond d’un compte reste à son emplacement habituel."
+      },
+      "blindSpots": {
+        "title": "Angles morts de la flotte CI",
+        "subtitle": "Les dépôts que la flotte CI ne voit pas, pour chaque organisation GitHub qu’elle sert : les dépôts avec des jobs de flotte en file d’attente mais sans livraisons workflow_job, et les dépôts liés que motir-studio ne peut pas lire. Calculé par le rapprochement de chaque passage de provisionnement ; lecture seule.",
+        "card": {
+          "title": "Par organisation GitHub",
+          "subtitle": "Une ligne par organisation servie par la flotte CI au cours des 3 derniers jours."
+        },
+        "pill": {
+          "orgs": "{count, plural, one {# organisation avec des angles morts} other {# organisations avec des angles morts}}",
+          "orgsNotRead": "{count, plural, one {# organisation non lue} other {# organisations non lues}}",
+          "allSeen": "Tous les dépôts visibles",
+          "notRead": "Non lue"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, one {# dépôt sans livraisons} other {# dépôts sans livraisons}}",
+          "unreadableCount": "{count, plural, one {# dépôt illisible} other {# dépôts illisibles}}",
+          "seen": "Chaque dépôt avec des jobs de flotte a reçu ses livraisons workflow_job, et aucun job n’est resté bloqué."
+        },
+        "undelivered": {
+          "title": "Jobs de flotte en file d’attente, aucune livraison workflow_job en 3 jours",
+          "hint": "Des jobs motir-runner mais aucune livraison workflow_job — motir-studio est-il installé sur ce dépôt ?"
+        },
+        "unreadable": {
+          "title": "Liés, mais motir-studio ne peut pas lire leur file Actions",
+          "body": "Des jobs sont restés bloqués dans cette organisation lors du dernier passage, et l’identifiant motir-studio de la flotte n’a pas pu lister les jobs en file d’attente de ces dépôts : aucun runner n’a donc été démarré pour eux."
+        },
+        "repo": {
+          "link": "{repo} sur GitHub"
+        },
+        "orgError": {
+          "title": "Impossible de lire cette organisation lors du dernier passage.",
+          "body": "Ses dépôts ne sont pas vérifiés : rien ici ne signifie qu’ils sont visibles. Les autres organisations ne sont pas concernées, et le prochain passage réessaiera. Réponse de GitHub :"
+        },
+        "empty": {
+          "title": "Aucun angle mort",
+          "body": "La flotte CI voit tous les dépôts {count, plural, one {de l’organisation qu’elle a servie} other {des # organisations qu’elle a servies}} au cours des 3 derniers jours : chaque dépôt avec des jobs de flotte a reçu ses livraisons workflow_job, et aucun job n’est resté bloqué.",
+          "noOrgs": "Aucune organisation n’a exécuté de job sur la flotte CI au cours des 3 derniers jours : il n’y a donc aucun dépôt à vérifier."
+        },
+        "error": {
+          "title": "Impossible de lire les angles morts de la flotte CI",
+          "body": "L’enregistrement des angles morts n’a pas été chargé : rien ici ne signifie que tous les dépôts sont visibles. Les images et les pools ne sont pas concernés. Rechargez pour réessayer."
+        },
+        "reconcileError": {
+          "title": "Le rapprochement du dernier passage n’a pas abouti",
+          "body": "Il s’est arrêté avec cette erreur : aucune organisation n’a été vérifiée et rien ici ne signifie que tous les dépôts sont visibles. Le prochain passage réessaiera."
+        },
+        "notComputed": {
+          "title": "Pas encore calculé",
+          "body": "Aucun passage de provisionnement n’a calculé les angles morts depuis ce déploiement. Le passage a lieu toutes les 5 minutes ; rechargez après le prochain."
+        },
+        "notConfigured": {
+          "title": "La flotte CI n’est pas configurée",
+          "body": "Ce déploiement n’exécute pas de jobs CI sur la flotte : le rapprochement ne sert donc aucune organisation et il n’y a aucun dépôt à vérifier. L’interrupteur se trouve dans <link>Paramètres de la flotte</link>."
+        },
+        "computed": "Calculé par le passage de provisionnement de {time} ({age}). Lecture seule : motir-studio s’installe sur un dépôt dans GitHub, pas ici.",
+        "loading": "Chargement des angles morts de la flotte CI"
       }
     }
   },
