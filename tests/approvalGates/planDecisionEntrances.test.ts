@@ -372,6 +372,47 @@ describe('DECLINE — a gate verb for an asked plan, a plain write for an unaske
   });
 });
 
+describe('A STALE WINDOW’S PRESS — the plan was decided elsewhere first (Bug MOTIR-11464)', () => {
+  // An overlay left open on a plan somebody then decided in another tab presses with the
+  // stamp it was SHOWN. The door must refuse that press before anything materializes, so
+  // the overlay can settle to the real decision instead of adding the items a second time.
+  it('approved elsewhere: the stale approve is refused as decided and creates no work item', async () => {
+    const { planId } = await askedPlan(['First', 'Second']);
+    const shown = await shownStamp(planId);
+    await planDecisionService.approve({ planId, stamp: shown, source: 'api' }, fx.ctx);
+    const after = await workItemCount();
+
+    for (const stamp of [shown, null]) {
+      const err = await planDecisionService
+        .approve({ planId, stamp, source: 'api' }, fx.ctx)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApprovalGateAlreadyDecidedError);
+    }
+    expect(await workItemCount()).toBe(after);
+    // The read the overlay settles from answers the decision.
+    expect((await planReviewService.getPlanReview(planId, fx.ctx)).status).toBe('approved');
+  });
+
+  it('declined elsewhere: the stale approve is refused as decided and creates no work item', async () => {
+    const { planId } = await askedPlan(['First', 'Second']);
+    const shown = await shownStamp(planId);
+    const before = await workItemCount();
+    await planDecisionService.decline(
+      { planId, stamp: shown, source: 'api', noteMd: null },
+      fx.ctx,
+    );
+
+    for (const stamp of [shown, null]) {
+      const err = await planDecisionService
+        .approve({ planId, stamp, source: 'api' }, fx.ctx)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApprovalGateAlreadyDecidedError);
+    }
+    expect(await workItemCount()).toBe(before);
+    expect((await planReviewService.getPlanReview(planId, fx.ctx)).status).toBe('declined');
+  });
+});
+
 describe('REFUSALS every entrance hears', () => {
   it('HELD while a revision is in flight — both verbs refused, the gate still awaiting', async () => {
     const { planId } = await askedPlan();
