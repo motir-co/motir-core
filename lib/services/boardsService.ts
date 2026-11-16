@@ -14,6 +14,7 @@ import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatu
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import {
   workItemRepository,
+  type BoardLanePredicate,
   type StoredFilterPredicate,
 } from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -65,12 +66,14 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type {
   BoardCardDto,
+  BoardCellPageDto,
   BoardColumnConfigDto,
   BoardColumnDto,
   BoardColumnPageDto,
   BoardColumnStatusDto,
   BoardDto,
   BoardFilterInput,
+  BoardLanePageDto,
   BoardPlanHoldSummaryDto,
   BoardProjectionDto,
   BoardSummaryDto,
@@ -95,6 +98,7 @@ import {
   ColumnNotEmptyError,
   IllegalBoardMoveError,
   InvalidBoardCursorError,
+  InvalidBoardLaneError,
   InvalidBoardNameError,
   InvalidBoardTypeError,
   InvalidColumnNameError,
@@ -470,6 +474,120 @@ export const boardsService = {
       totalCount: page.totalCount,
       cursor: page.cursor,
       planHolds: decorated.planHolds,
+    };
+  },
+
+  /**
+   * One page of ONE board CELL — one swimlane's cards in one column (MOTIR-11444).
+   * A grouped board pages each `(lane × column)` cell on its own, so a lane whose
+   * header counts 40 shows its first {@link BOARD_PAGE_SIZE} cards in a column
+   * rather than an empty cell because other lanes filled that column's page.
+   *
+   * `laneKey` is a key the board's ACTIVE group-by can hold (a lane's `key` from
+   * the projection's `swimlanes`). `cursor` is optional: absent answers the
+   * cell's FIRST page; present, the page strictly after it, in the column's
+   * order. Every gate of {@link getColumnPage} applies unchanged and in the same
+   * order, and the count and the cards run over the same set the column page
+   * does — the stored and toolbar filters, the scrum sprint scope and a
+   * Visitor's exclusion — narrowed by ONE lane condition shared by both, so the
+   * cell's `{loaded} of {total}` is one definition.
+   *
+   * Throws `BoardNotFoundError` / `BoardColumnNotFoundError` (404),
+   * `InvalidBoardCursorError` for a cursor this column did not mint, and
+   * `InvalidBoardLaneError` for a lane key the active group-by cannot hold.
+   */
+  async getCellPage(
+    projectId: string,
+    ctx: ServiceContext | VisitorReadContext,
+    boardId: string,
+    columnId: string,
+    laneKey: string,
+    cursor?: string,
+    filter?: BoardFilterInput,
+  ): Promise<BoardCellPageDto> {
+    const frame = await loadBoardFrame(projectId, ctx, boardId, filter);
+    const col = frame.columns.find((c) => c.id === columnId);
+    if (!col) throw new BoardColumnNotFoundError(columnId);
+    const order = columnOrder(columnStatusKeys(frame.liveByColumn, col.id), frame.terminalKeys);
+    let after: ColumnCursor | undefined;
+    if (cursor !== undefined) {
+      const decoded = decodeColumnCursor(cursor, order);
+      if (!decoded) throw new InvalidBoardCursorError();
+      after = decoded;
+    }
+    const lane = resolveBoardLane(frame.board.swimlaneGroupBy as BoardSwimlaneGroupByDto, laneKey);
+
+    // The projection's rule: a scrum board with no active sprint shows no cards.
+    if (frame.board.type === BoardType.scrum && !frame.activeSprint) {
+      return { columnId, laneKey, cards: [], totalCount: 0, cursor: null, planHolds: {} };
+    }
+
+    const page = await buildCellPage(projectId, col, frame, lane, after);
+    const decorated = await decorateBoardRows(projectId, page.rows, frame, laneKey);
+    return {
+      columnId,
+      laneKey,
+      cards: page.rows.map(decorated.toCard),
+      totalCount: page.totalCount,
+      cursor: page.cursor,
+      planHolds: decorated.planHolds,
+    };
+  },
+
+  /**
+   * One swimlane's FIRST page in every column of the board (MOTIR-11444) — what a
+   * lane entering view loads in ONE request instead of one per column. Each cell
+   * is a {@link getCellPage} first page (its own `totalCount` and `cursor`); the
+   * rows of all the cells are decorated in ONE pass, so the per-card batches run
+   * once for the response, and every cell carries that pass's merged
+   * `planHolds`. The cost is one count and one page per column — what the
+   * projection already spends to load the board's columns.
+   *
+   * Throws `BoardNotFoundError` (404) and `InvalidBoardLaneError`.
+   */
+  async getLanePage(
+    projectId: string,
+    ctx: ServiceContext | VisitorReadContext,
+    boardId: string,
+    laneKey: string,
+    filter?: BoardFilterInput,
+  ): Promise<BoardLanePageDto> {
+    const frame = await loadBoardFrame(projectId, ctx, boardId, filter);
+    const lane = resolveBoardLane(frame.board.swimlaneGroupBy as BoardSwimlaneGroupByDto, laneKey);
+
+    if (frame.board.type === BoardType.scrum && !frame.activeSprint) {
+      return {
+        laneKey,
+        cells: frame.columns.map((col) => ({
+          columnId: col.id,
+          laneKey,
+          cards: [],
+          totalCount: 0,
+          cursor: null,
+          planHolds: {},
+        })),
+      };
+    }
+
+    const built = await Promise.all(
+      frame.columns.map((col) => buildCellPage(projectId, col, frame, lane, undefined)),
+    );
+    const decorated = await decorateBoardRows(
+      projectId,
+      built.flatMap((b) => b.rows),
+      frame,
+      laneKey,
+    );
+    return {
+      laneKey,
+      cells: built.map((b) => ({
+        columnId: b.col.id,
+        laneKey,
+        cards: b.rows.map(decorated.toCard),
+        totalCount: b.totalCount,
+        cursor: b.cursor,
+        planHolds: decorated.planHolds,
+      })),
     };
   },
 
@@ -1777,6 +1895,8 @@ async function buildColumnPage(
   col: BoardColumn,
   frame: BoardFrame,
   after: ColumnCursor | undefined,
+  // ONE swimlane (MOTIR-11444) — set only by `buildCellPage`; absent ⇒ the column.
+  lane?: BoardLanePredicate,
 ): Promise<{
   col: BoardColumn;
   statusKeys: string[];
@@ -1807,6 +1927,7 @@ async function buildColumnPage(
         ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
         ...(stored ? { storedFilter: stored } : {}),
         ...(excludeIds ? { excludeIds } : {}),
+        ...(lane ? { lane } : {}),
       },
       tx,
     ),
@@ -1822,6 +1943,7 @@ async function buildColumnPage(
         ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
         ...(stored ? { storedFilter: stored } : {}),
         ...(excludeIds ? { excludeIds } : {}),
+        ...(lane ? { lane } : {}),
       },
       tx,
     ),
@@ -1830,6 +1952,48 @@ async function buildColumnPage(
   const last = rows[rows.length - 1];
   const cursor = fetched.length > BOARD_PAGE_SIZE && last ? cursorAfter(order, last) : null;
   return { col, statusKeys, rows, totalCount, cursor };
+}
+
+/**
+ * Build one page of a board CELL — one swimlane's cards in one column
+ * (MOTIR-11444): {@link buildColumnPage} with the lane condition handed to BOTH
+ * its reads, so the cell's count and its cards are the same predicate in the
+ * same bound transaction, asked for `BOARD_PAGE_SIZE + 1` rows with the cursor
+ * minted only when the extra row came back.
+ */
+function buildCellPage(
+  projectId: string,
+  col: BoardColumn,
+  frame: BoardFrame,
+  lane: BoardLanePredicate,
+  after: ColumnCursor | undefined,
+) {
+  return buildColumnPage(projectId, col, frame, after, lane);
+}
+
+/** A priority lane's value — the `WorkItemPriority` the lane condition takes. */
+type BoardLanePriority = Extract<BoardLanePredicate, { kind: 'priority' }>['priority'];
+
+/**
+ * Turn a lane key into the lane condition for the board's ACTIVE group-by
+ * (MOTIR-11444), exactly as `resolveSwimlaneKeys` keys a card: an assignee id
+ * (the catch-all an unassigned card), a priority value, or an epic id (the
+ * catch-all a card with no epic in its chain). Refuses with
+ * `InvalidBoardLaneError` a key the dimension cannot denote — any key on a
+ * `none` board, and on a `priority` board the catch-all or a non-priority. A key
+ * it CAN denote that holds no cards is not refused: its cell is simply empty.
+ */
+export function resolveBoardLane(
+  groupBy: BoardSwimlaneGroupByDto,
+  laneKey: string,
+): BoardLanePredicate {
+  const catchAll = laneKey === BOARD_SWIMLANE_NO_VALUE;
+  if (groupBy === 'assignee') return { kind: 'assignee', assigneeId: catchAll ? null : laneKey };
+  if (groupBy === 'epic') return { kind: 'epic', epicId: catchAll ? null : laneKey };
+  if (groupBy === 'priority' && PRIORITY_LANE_ORDER.includes(laneKey)) {
+    return { kind: 'priority', priority: laneKey as BoardLanePriority };
+  }
+  throw new InvalidBoardLaneError(laneKey, groupBy);
 }
 
 /**
@@ -1844,6 +2008,9 @@ async function decorateBoardRows(
   projectId: string,
   rows: WorkItem[],
   frame: BoardFrame,
+  // The ONE lane every row is in (MOTIR-11444): a cell or lane page's own
+  // predicate established it, so the key is stamped rather than re-derived.
+  laneKey?: string,
 ): Promise<{
   toCard: (row: WorkItem) => BoardCardDto;
   planHolds: Record<string, BoardPlanHoldSummaryDto>;
@@ -1895,7 +2062,10 @@ async function decorateBoardRows(
   }
 
   // Swimlane membership (Subtask 3.3.4) — per loaded card; a no-op on `none`.
-  const swimlaneKeyByCard = await resolveSwimlaneKeys(groupBy, rows, readCtx);
+  const swimlaneKeyByCard =
+    laneKey !== undefined
+      ? new Map(rows.map((r) => [r.id, laneKey]))
+      : await resolveSwimlaneKeys(groupBy, rows, readCtx);
 
   // The To fix tag's *· with {head}* (MOTIR-7589) and Fixing (MOTIR-10309): read only for
   // the cards showing a reason, and never for a Visitor — a head key names another card.

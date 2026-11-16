@@ -376,6 +376,36 @@ export interface BoardColumnPageDto {
 }
 
 /**
+ * One page of ONE swimlane in ONE column — a board CELL (MOTIR-11444). The
+ * grouped board pages each `(lane × column)` cell on its own, so a lane whose
+ * header counts 40 never shows an empty cell because other lanes filled the
+ * column's page. `cards` are up to `BOARD_PAGE_SIZE` of the lane's cards in that
+ * column, in the column's own order (the shipped `BoardCardDto`, its
+ * `swimlaneKey` the requested lane); `totalCount` is the cell's CURRENT full
+ * count over the same set; `cursor` names the page's last card when more remain
+ * (null when the cell is exhausted); `planHolds` holds the label fields of every
+ * plan holding one of the response's cards.
+ */
+export interface BoardCellPageDto {
+  columnId: string;
+  laneKey: string;
+  cards: BoardCardDto[];
+  totalCount: number;
+  cursor: string | null;
+  planHolds: Record<string, BoardPlanHoldSummaryDto>;
+}
+
+/**
+ * One lane's FIRST page in every column of the board (MOTIR-11444) — what a lane
+ * coming into view loads in one request. One cell per column, in the board's
+ * column order; every cell carries the response's single merged `planHolds`.
+ */
+export interface BoardLanePageDto {
+  laneKey: string;
+  cells: BoardCellPageDto[];
+}
+
+/**
  * The active-sprint summary a SCRUM board's projection carries (Subtask 4.5.2)
  * — the data the 4.5.3 sprint header renders. Present only on a `scrum` board
  * that has an active sprint; a kanban board, or a scrum board with no active
