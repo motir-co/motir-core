@@ -97,7 +97,11 @@ vi.mock('@/lib/planning/planReview', async (importOriginal) => {
   return { ...actual, readPendingProposal: readPendingSpy };
 });
 
-import { usePlanChangeConversation, narrateFrame } from '@/lib/hooks/usePlanChangeConversation';
+import {
+  usePlanChangeConversation,
+  narrateFrame,
+  PLAN_GATE_POLL_MS,
+} from '@/lib/hooks/usePlanChangeConversation';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import { PlanRequestError } from '@/lib/planning/planReviewClient';
 import { planReview, planReviewItem } from '../helpers/planReview';
@@ -1344,12 +1348,16 @@ describe('usePlanChangeConversation — the live review (MOTIR-6295)', () => {
     expect(result.current.state.review).toEqual(REVIEW);
     expect(readPendingSpy).toHaveBeenCalledTimes(1);
 
-    // And the poll has stopped.
+    // And the LIVE poll has stopped. The only reads left are the decision watch's, one
+    // per PLAN_GATE_POLL_MS, which re-reads an undecided plan in review so a decision
+    // taken elsewhere reaches it (MOTIR-11464) and never touches the live snapshot.
     const reads = fetchReview.mock.calls.length;
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
-    expect(fetchReview).toHaveBeenCalledTimes(reads);
+    expect(fetchReview).toHaveBeenCalledTimes(reads + Math.floor(10_000 / PLAN_GATE_POLL_MS));
+    expect(result.current.state.liveReview).toBeNull();
+    expect(result.current.state.phase).toBe('review');
   });
 
   it('an MCP-authored NAMED session: live at mount, with no turn sent', async () => {
@@ -1442,7 +1450,11 @@ describe('usePlanChangeConversation — the live review (MOTIR-6295)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
-    expect(fetchReview).toHaveBeenCalledTimes(1);
+    // No LIVE poll: the open read, then only the decision watch's reads, one per
+    // PLAN_GATE_POLL_MS (MOTIR-11464). None of them draws a live snapshot.
+    expect(fetchReview).toHaveBeenCalledTimes(1 + Math.floor(10_000 / PLAN_GATE_POLL_MS));
+    expect(result.current.state.liveReview).toBeNull();
+    expect(result.current.state.liveVersion).toBe(0);
   });
 });
 
