@@ -136,7 +136,8 @@ const countText = (loaded: number, total: number) =>
   loaded < total ? fill(TB.laneCountLoaded, { loaded, total }) : fill(TB.laneCount, { total });
 
 // ── The Atlas cards ─────────────────────────────────────────────────────────
-// Ana holds 40 in To Do (a third bugs, a quarter High). Bo holds an epic, a task
+// Ana holds 40 in To Do (a third bugs, a quarter High). Bo holds an epic in
+// In Progress (its status derives from its twelve In Progress children), a task
 // and a High bug in To Do and two Done tasks. Cal holds two To Do tasks (one
 // High) and twelve In Progress stories under Bo's epic (a quarter High). One bug
 // is unassigned, so the Assignee catch-all lane has a card. 60 cards in all.
@@ -165,7 +166,7 @@ const CARDS: CardSeed[] = [
       who: 'ana',
     }),
   ),
-  { title: EPIC_TITLE, kind: 'epic', status: 'todo', priority: 'medium', who: 'bo' },
+  { title: EPIC_TITLE, kind: 'epic', status: 'in_progress', priority: 'medium', who: 'bo' },
   { title: MOVED_TITLE, kind: 'task', status: 'todo', priority: 'medium', who: 'bo' },
   { title: 'Bo: card reader times out', kind: 'bug', status: 'todo', priority: 'high', who: 'bo' },
   { title: 'Bo: archive old receipts', kind: 'task', status: 'done', priority: 'low', who: 'bo' },
@@ -281,6 +282,12 @@ async function seed(): Promise<Seed> {
     }
     cards.push({ ...card, id: item.id, identifier: item.identifier });
   }
+  // The epic's status is DERIVED from its children (the parent status rollup,
+  // run by the job worker on each child write). Its children were moved to In
+  // Progress above, so the rollup lands it there whenever it runs; write that
+  // state last, so the board is the same whether the job ran before the seed
+  // finished or runs after it.
+  await adminDb.workItem.update({ where: { id: epicId }, data: { status: 'in_progress' } });
 
   const atlasBoards = await boardsService.listBoards(atlas.id, ctx);
   const atlasDefault = atlasBoards.find((b) => b.isDefault)!;
@@ -293,8 +300,8 @@ async function seed(): Promise<Seed> {
   );
   await boardsService.setSwimlaneGroupBy(bugs.id, 'assignee', ctx);
 
-  // Orbit: 200 epics, one story under each — an epic forms a lane only through
-  // the cards whose nearest ancestor epic it is; the epics sit in "No epic".
+  // Orbit: 200 epics, one story under each — each epic is a lane, holding the
+  // epic itself (a board card that is an epic sits in its own lane) and its story.
   await seedLargeBoard(
     {
       workspaceId: workspace.id,
@@ -746,7 +753,7 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     // The pinned header reads the column's TOTAL across every lane (its last
     // number), whatever the cells have loaded so far.
     const columnTotal = count((m) => m.status === 'todo');
-    expect(columnTotal).toBe(46);
+    expect(columnTotal).toBe(45);
     await main(page).getByTestId('swimlane-header-row').scrollIntoViewIfNeeded();
     await expect(headerCount(page, todo)).toContainText(columnTotal.toLocaleString('en-US'));
     const header = (await headerCount(page, todo).textContent()) ?? '';
@@ -815,7 +822,9 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     const since = c.next();
     const board = await groupBy(page, orbitId, 'Epic');
     const lanes = shape(board).lanes;
-    expect(lanes).toHaveLength(ORBIT_EPICS + 1); // every epic, plus "No epic"
+    // Every epic is a lane. "No epic" is listed only when a card is outside them
+    // all, and on Orbit every card is an epic or under one.
+    expect(lanes.filter((key) => key !== UNASSIGNED)).toHaveLength(ORBIT_EPICS);
 
     // The board paints with its first lane's cells in.
     await laneLoaded(page, c, orbitId, lanes[0]!, since);
@@ -830,7 +839,7 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     const far = lanes[Math.floor(lanes.length / 3)]!;
     expect(askedAtPaint.has(far), `lane ${far} was not asked for at paint`).toBe(false);
     const lane = await laneLoaded(page, c, orbitId, far, since);
-    const story = lane.cells.flatMap((cell) => cell.cards);
+    const story = lane.cells.flatMap((cell) => cell.cards).filter((m) => m.kind === 'story');
     expect(story).toHaveLength(1);
     await expect(laneOf(page, far).getByTestId(`board-card-${story[0]!.identifier}`)).toBeVisible();
     const askedAfter = new Set(
@@ -921,7 +930,8 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     const target = cellOf(page, inProgress, cal);
     await laneLoaded(page, c, atlasId, cal, atlasReopened);
     await expect(cellCount(page, inProgress, cal)).toHaveText(countText(10, 12));
-    await expect(cellCount(page, todo, bo)).toHaveText(countText(3, 3));
+    const boTodoCount = () => count(inCell('todo', 'bo'));
+    await expect(cellCount(page, todo, bo)).toHaveText(countText(boTodoCount(), boTodoCount()));
 
     // A diagonal drop makes both writes — the move and the reassign — and the
     // page reads nothing back: what the cells show is their own reconciliation.
@@ -942,7 +952,7 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     moved.who = 'cal';
 
     // Each cell's total follows the move (the loaded part is the cell's own).
-    await expect(cellCount(page, todo, bo)).toHaveText(countText(2, 2));
+    await expect(cellCount(page, todo, bo)).toHaveText(countText(boTodoCount(), boTodoCount()));
     await expect(cellCount(page, inProgress, cal)).toHaveText(/(^| of )13$/);
     await expect(target.getByTestId(`board-card-${moved.identifier}`)).toHaveCount(1);
     await beat();
@@ -1124,8 +1134,10 @@ test('A grouped board pages each lane’s cell 10 at a time with Load more and s
     since = c.next();
     const byEpic = await groupBy(page, atlasId, 'Epic');
     expect(byEpic.swimlanes.map((l) => l.key)).toEqual([s.epicId, UNASSIGNED]);
-    expect(byEpic.swimlanes[0]!.count).toBe(count((m) => !!m.underEpic));
-    expect(byEpic.swimlanes[1]!.count).toBe(count((m) => !m.underEpic));
+    // An epic on the board sits in its own lane, beside the cards under it.
+    const inEpicLane = (m: ModelCard) => !!m.underEpic || m.kind === 'epic';
+    expect(byEpic.swimlanes[0]!.count).toBe(count(inEpicLane));
+    expect(byEpic.swimlanes[1]!.count).toBe(count((m) => !inEpicLane(m)));
     await laneLoaded(page, c, atlasId, s.epicId, since);
     await expect(main(page).getByTestId(`swimlane-head-${s.epicId}`)).toContainText(EPIC_TITLE);
     await beat();
