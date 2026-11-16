@@ -22,7 +22,9 @@ function Bar({ w, className }: { w?: number; className?: string }) {
   );
 }
 
-function SkeletonCard() {
+/** One board card's loading placeholder — the board skeleton's, and a grouped board's
+ * not-yet-loaded cell (MOTIR-11450, design MOTIR-11443 panel 4). */
+export function SkeletonCard() {
   return (
     <div
       className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) shadow-(--shadow-subtle)"

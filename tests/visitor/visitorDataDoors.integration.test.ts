@@ -48,6 +48,7 @@ vi.mock('next-intl/server', async (importOriginal) => ({
 const { GET: boardGET } = await import('@/app/api/board/route');
 const { GET: boardsGET } = await import('@/app/api/boards/route');
 const { GET: lanePageGET } = await import('@/app/api/board/columns/[columnId]/cards/route');
+const { GET: laneCellsGET } = await import('@/app/api/board/lanes/[laneKey]/cells/route');
 const { GET: peekGET } = await import('@/app/api/work-items/peek/route');
 const { GET: commentsGET } = await import('@/app/api/work-items/[id]/comments/route');
 const { GET: allGET } = await import('@/app/api/work-items/[id]/activity/all/route');
@@ -266,6 +267,54 @@ describe('a consented Visitor is served the public project, withheld rows exclud
       .mockRejectedValueOnce(new Error('visitor boom'));
     await expect(pageOf({ boardId: board.boardId, cursor: 'c' })).rejects.toThrow('visitor boom');
     spy.mockRestore();
+  });
+
+  it("a lane's cells withhold private-epic rows, and a member and no session answer as today (MOTIR-11446)", async () => {
+    const t = await publicProject();
+    await adminDb.board.updateMany({
+      where: { projectId: t.fx.projectId },
+      data: { swimlaneGroupBy: 'priority' },
+    });
+    const lanePath = (boardId: string) =>
+      `/api/board/lanes/medium/cells?${new URLSearchParams({ boardId }).toString()}`;
+    const cellsOf = async (address?: string) => {
+      const board = (await (await boardGET(req('/api/board', address))).json()) as {
+        boardId: string;
+        columns: Array<{ id: string; statusKeys: string[] }>;
+      };
+      const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
+      const lane = await laneCellsGET(
+        req(lanePath(board.boardId), address),
+        params({ laneKey: 'medium' }),
+      );
+      const qs = new URLSearchParams({ boardId: board.boardId, lane: 'medium' });
+      const cell = await lanePageGET(
+        req(`/api/board/columns/${todo.id}/cards?${qs.toString()}`, address),
+        params({ columnId: todo.id }),
+      );
+      return { lane, cell };
+    };
+
+    await asVisitor(t);
+    const visitor = await cellsOf(t.identifier);
+    expect(visitor.lane.status).toBe(200);
+    expect(visitor.cell.status).toBe(200);
+    for (const body of [await text(visitor.lane), await text(visitor.cell)]) {
+      expect(body).toContain(t.V.id);
+      for (const h of t.hidden) expect(body).not.toContain(h.id);
+    }
+
+    asMember(t);
+    const member = await cellsOf(t.identifier);
+    expect(member.lane.status).toBe(200);
+    expect(await text(member.cell)).toContain(t.C.id);
+
+    session.current = null;
+    const none = await laneCellsGET(
+      req(lanePath('b'), t.identifier),
+      params({ laneKey: 'medium' }),
+    );
+    expect(none.status).toBe(401);
   });
 
   it('a hidden item answers exactly as an unknown one does', async () => {

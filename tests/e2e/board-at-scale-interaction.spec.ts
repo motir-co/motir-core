@@ -55,6 +55,7 @@ import {
   getFullBoard,
   columnByStatus,
   cardIdsIn,
+  expectNoColumnLoadMore,
   expectNoLoadMore,
   identifierOf,
   revealDeepCard,
@@ -274,7 +275,7 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
     expect(cardIdsIn(after, 'cancelled')).not.toContain(doomedId);
   });
 
-  test('group-by re-lays the board into bounded virtualized lanes + catch-all with NO "Load more"; a collapsed lane persists on reload', async ({
+  test('group-by re-lays the board into bounded virtualized lanes + catch-all with no column "Load more"; a collapsed lane persists on reload', async ({
     page,
   }) => {
     const scale = await seedBoardAtScale(page);
@@ -284,8 +285,9 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
     await expectNoLoadMore(page);
 
     // Group by Assignee → the board re-lays into one lane per assignee-with-cards
-    // plus the "No assignee" catch-all (sorted LAST), still bounded with NO "Load
-    // more" anywhere in the swimlane layout (3.8.5).
+    // plus the "No assignee" catch-all (sorted LAST), still bounded. A grouped
+    // board pages each cell through its own Load more (MOTIR-11450), so what must
+    // not appear is a COLUMN-level page affordance.
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
     for (const memberId of scale.memberIds) {
@@ -296,17 +298,17 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
       .locator('[data-testid^="swimlane-head-"]')
       .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
     expect(laneHeadIds.at(-1), 'the catch-all lane sorts last').toBe(`swimlane-head-${CATCH_ALL}`);
-    await expectNoLoadMore(page);
+    await expectNoColumnLoadMore(page);
 
-    // Epic / Priority / None all re-lay (server-side group-by) without a paging
+    // Epic / Priority / None all re-lay (server-side group-by) without a column paging
     // affordance ever appearing.
     await setGroupBy(page, 'Epic');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
     await expect(page.getByTestId(`swimlane-${CATCH_ALL}`)).toBeVisible(); // epics + root stories have no epic ancestor
-    await expectNoLoadMore(page);
+    await expectNoColumnLoadMore(page);
     await setGroupBy(page, 'Priority');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    await expectNoLoadMore(page);
+    await expectNoColumnLoadMore(page);
     await setGroupBy(page, 'None');
     await expect(page.getByTestId('board')).toBeVisible();
     await expect(page.getByTestId('swimlane-board')).toHaveCount(0);

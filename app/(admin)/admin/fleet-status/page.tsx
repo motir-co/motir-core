@@ -9,7 +9,9 @@ import {
   fleetStatusImagesService,
   type FleetPublishRecords,
 } from '@/lib/services/fleetStatusImagesService';
+import { ciFleetBlindSpotsService } from '@/lib/services/ciFleetBlindSpotsService';
 import { fleetStatusPoolsService } from '@/lib/services/fleetStatusPoolsService';
+import { BlindSpotsCard } from './_components/BlindSpotsCard';
 import {
   HostedImageCard,
   IndexerImageCard,
@@ -31,6 +33,10 @@ import { InstallFleetCard, ShardPoolsCard } from './_components/PoolCards';
  * registry, GitHub or AWS that does not answer leaves only its own card saying
  * so (Panel 9). The publish records are one audited read, shared by the four
  * image cards (the Indexer image card is MOTIR-10986).
+ *
+ * The third section, CI fleet blind spots (MOTIR-11439; design MOTIR-11467,
+ * § AMENDMENT 2026-11-16), renders the latest reconcile outcome the provision
+ * sweep kept — never a GitHub call on a page load.
  *
  * ⚠️ NO `loading.tsx`. The gate decides existence, so the reads stream behind
  * the in-page `<Suspense>` placed AFTER it.
@@ -94,13 +100,41 @@ export default async function AdminFleetStatusPage() {
           <ShardPools principal={principal} />
         </Suspense>
       </section>
+      <section aria-labelledby="blind-spots-heading" className="flex flex-col gap-4 pt-2">
+        <div className="flex flex-col gap-1">
+          <h2 id="blind-spots-heading" className="font-serif text-xl text-(--el-text)">
+            {t('blindSpots.title')}
+          </h2>
+          <p className="max-w-prose font-sans text-sm text-(--el-text-secondary)">
+            {t('blindSpots.subtitle')}
+          </p>
+        </div>
+        <Suspense
+          fallback={
+            <CardSkeleton
+              label={t('blindSpots.loading')}
+              data-element="blind-spots"
+              data-state="loading"
+            />
+          }
+        >
+          <BlindSpots principal={principal} />
+        </Suspense>
+      </section>
     </div>
   );
 }
 
-function CardSkeleton({ label }: { label: string }) {
+function CardSkeleton({
+  label,
+  ...data
+}: {
+  label: string;
+  'data-element'?: string;
+  'data-state'?: string;
+}) {
   return (
-    <Card aria-busy="true">
+    <Card aria-busy="true" {...data}>
       <span role="status" className="sr-only">
         {label}
       </span>
@@ -172,4 +206,9 @@ async function ShardPools({ principal }: { principal: PlatformPrincipal }) {
       now={now}
     />
   );
+}
+
+async function BlindSpots({ principal }: { principal: PlatformPrincipal }) {
+  const now = new Date();
+  return <BlindSpotsCard block={await ciFleetBlindSpotsService.read(principal)} now={now} />;
 }

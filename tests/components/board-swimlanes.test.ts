@@ -1,28 +1,32 @@
 import { describe, expect, it } from 'vitest';
+import { BOARD_SWIMLANE_NO_VALUE, type BoardCardDto } from '@/lib/dto/boards';
 import {
-  BOARD_SWIMLANE_NO_VALUE,
-  type BoardCardDto,
-  type BoardColumnDto,
-  type BoardSwimlaneDto,
-} from '@/lib/dto/boards';
-import {
-  bucketLanes,
+  cardsInCells,
   cellId,
   cellOfOverId,
+  findCardCell,
+  findCardInCells,
   laneKeyOfCard,
-  moveCardToColumn,
+  moveCardBetweenCells,
+  overCardIdOf,
   parseCellId,
   reassignPatchForLane,
-  relocateCardToCell,
+  reconcileCellCard,
   resolveCellMove,
   resolveSwimlaneDrop,
-  setCardSwimlaneKey,
 } from '@/app/(authed)/boards/_components/boardSwimlanes';
+import {
+  appendCellPage,
+  applyCells,
+  type CellPage,
+  type CellPages,
+} from '@/app/(authed)/boards/_components/boardCellPages';
 
-// Pure swimlane reducers (Subtask 3.3.5) — the bucketing + cross-lane move core,
-// tested in isolation (columns-in, columns-out; no DOM, no dnd-kit) per the AC's
-// "lane render + bucketing + catch-all" and "cross-lane reassign reducer (incl.
-// diagonal + independent revert)".
+// Pure swimlane reducers (Subtask 3.3.5; re-pointed at the per-cell state by
+// MOTIR-11452) — the cross-lane move core, tested in isolation (cells-in,
+// cells-out; no DOM, no dnd-kit): drop resolution, the three count dimensions a
+// move touches per axis, the same-cell reorder, both independent reverts, and a
+// page merged after a move.
 
 function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardCardDto {
   return {
@@ -54,23 +58,36 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
   };
 }
 
-function column(over: Partial<BoardColumnDto> & { id: string; name: string }): BoardColumnDto {
-  return {
-    position: 'a0',
-    wipLimit: null,
-    statusKeys: ['todo'],
-    cards: [],
-    totalCount: 0,
-    cursor: null,
-    ...over,
-  };
-}
-
-function lane(over: Partial<BoardSwimlaneDto> & { key: string }): BoardSwimlaneDto {
-  return { label: over.key, kind: 'assignee', count: 0, ...over };
-}
-
 const ids = (cards: BoardCardDto[]) => cards.map((c) => c.id);
+
+const RK = 'rk';
+function page(cards: BoardCardDto[], over: Partial<CellPage> = {}): CellPage {
+  return { cards, totalCount: cards.length, cursor: null, state: 'complete', ...over };
+}
+function pagesOf(cells: Record<string, CellPage>): CellPages {
+  return { readKey: RK, cells };
+}
+const c = (columnId: string, laneKey: string) => ({ columnId, laneKey });
+const at = (pages: CellPages, columnId: string, laneKey: string) =>
+  pages.cells[cellId(columnId, laneKey)]!;
+
+// The board every case starts from: two columns (c1, c2) × two lanes (u1, u2).
+//   (c1,u1) w1 w2 · 2 of 12, more to come   (c1,u2) w3 · 1 of 1
+//   (c2,u1) w4    · 1 of 1                  (c2,u2) w5 · 1 of 1
+function board(): CellPages {
+  return pagesOf({
+    [cellId('c1', 'u1')]: page(
+      [
+        card({ id: 'w1', key: 1, swimlaneKey: 'u1' }),
+        card({ id: 'w2', key: 2, swimlaneKey: 'u1' }),
+      ],
+      { totalCount: 12, cursor: 'CUR-c1u1', state: 'idle' },
+    ),
+    [cellId('c1', 'u2')]: page([card({ id: 'w3', key: 3, swimlaneKey: 'u2' })]),
+    [cellId('c2', 'u1')]: page([card({ id: 'w4', key: 4, swimlaneKey: 'u1' })]),
+    [cellId('c2', 'u2')]: page([card({ id: 'w5', key: 5, swimlaneKey: 'u2' })]),
+  });
+}
 
 describe('laneKeyOfCard + cell id helpers', () => {
   it('falls back to the catch-all key when a card has no swimlaneKey', () => {
@@ -84,113 +101,238 @@ describe('laneKeyOfCard + cell id helpers', () => {
     expect(parseCellId('justacardid')).toBeNull();
   });
 
-  it('cellOfOverId resolves a cell id, a card id, and rejects an unknown id', () => {
-    const cols = [
-      column({ id: 'c1', name: 'To Do', cards: [card({ id: 'w1', key: 1, swimlaneKey: 'u1' })] }),
-    ];
-    expect(cellOfOverId(cols, cellId('c2', 'u2'))).toEqual({ columnId: 'c2', laneKey: 'u2' });
-    expect(cellOfOverId(cols, 'w1')).toEqual({ columnId: 'c1', laneKey: 'u1' });
-    expect(cellOfOverId(cols, 'nope')).toBeNull();
+  it('cellOfOverId resolves a cell id, a card id from the cells, and rejects an unknown id', () => {
+    const pages = board();
+    expect(cellOfOverId(pages, cellId('c9', 'u9'))).toEqual(c('c9', 'u9'));
+    expect(cellOfOverId(pages, 'w3')).toEqual(c('c1', 'u2'));
+    expect(cellOfOverId(pages, 'nope')).toBeNull();
+  });
+
+  it('finds a card and its cell, and lists every loaded card', () => {
+    const pages = board();
+    expect(findCardCell(pages, 'w4')).toEqual(c('c2', 'u1'));
+    expect(findCardInCells(pages, 'w4')?.identifier).toBe('PROD-4');
+    expect(findCardCell(pages, 'zz')).toBeNull();
+    expect(findCardInCells(pages, 'zz')).toBeNull();
+    expect(ids(cardsInCells(pages)).sort()).toEqual(['w1', 'w2', 'w3', 'w4', 'w5']);
+  });
+
+  it('overCardIdOf inserts before a hovered card and appends on a cell body', () => {
+    expect(overCardIdOf('w2')).toBe('w2');
+    expect(overCardIdOf(cellId('c1', 'u1'))).toBeNull();
   });
 });
 
-describe('bucketLanes', () => {
-  const cols = [
-    column({
-      id: 'c1',
-      name: 'To Do',
+describe('moveCardBetweenCells', () => {
+  it('a cross-lane move: lands at the slot, both cells ±1, cursors untouched, no other cell', () => {
+    const before = board();
+    const next = moveCardBetweenCells(before, {
+      cardId: 'w1',
+      from: c('c1', 'u1'),
+      to: c('c1', 'u2'),
+      overCardId: 'w3',
+    });
+    expect(ids(at(next, 'c1', 'u1').cards)).toEqual(['w2']);
+    expect(at(next, 'c1', 'u1').totalCount).toBe(11);
+    expect(at(next, 'c1', 'u1').cursor).toBe('CUR-c1u1');
+    expect(at(next, 'c1', 'u1').state).toBe('idle');
+    expect(ids(at(next, 'c1', 'u2').cards)).toEqual(['w1', 'w3']);
+    expect(at(next, 'c1', 'u2').totalCount).toBe(2);
+    // The card is stamped with its new lane.
+    expect(at(next, 'c1', 'u2').cards[0]!.swimlaneKey).toBe('u2');
+    // No other cell changed — by reference.
+    expect(at(next, 'c2', 'u1')).toBe(at(before, 'c2', 'u1'));
+    expect(at(next, 'c2', 'u2')).toBe(at(before, 'c2', 'u2'));
+    expect(next.readKey).toBe(RK);
+  });
+
+  it('a drop on the cell body appends', () => {
+    const next = moveCardBetweenCells(board(), {
+      cardId: 'w1',
+      from: c('c1', 'u1'),
+      to: c('c2', 'u1'),
+      overCardId: null,
+    });
+    expect(ids(at(next, 'c2', 'u1').cards)).toEqual(['w4', 'w1']);
+    expect(at(next, 'c2', 'u1').cards[1]!.swimlaneKey).toBe('u1');
+  });
+
+  it('a same-cell reorder moves no count and keeps every other cell', () => {
+    const before = board();
+    const next = moveCardBetweenCells(before, {
+      cardId: 'w2',
+      from: c('c1', 'u1'),
+      to: c('c1', 'u1'),
+      overCardId: 'w1',
+    });
+    expect(ids(at(next, 'c1', 'u1').cards)).toEqual(['w2', 'w1']);
+    expect(at(next, 'c1', 'u1').totalCount).toBe(12);
+    expect(at(next, 'c1', 'u1').cursor).toBe('CUR-c1u1');
+    expect(at(next, 'c1', 'u2')).toBe(at(before, 'c1', 'u2'));
+  });
+
+  it('a same-cell move to where it already is, or onto itself, returns the state itself', () => {
+    const before = board();
+    expect(
+      moveCardBetweenCells(before, {
+        cardId: 'w1',
+        from: c('c1', 'u1'),
+        to: c('c1', 'u1'),
+        overCardId: 'w1',
+      }),
+    ).toBe(before);
+    expect(
+      moveCardBetweenCells(before, {
+        cardId: 'w2',
+        from: c('c1', 'u1'),
+        to: c('c1', 'u1'),
+        overCardId: null,
+      }),
+    ).toBe(before);
+  });
+
+  it('a missing card, or a cell that does not hold it, returns the state itself', () => {
+    const before = board();
+    expect(
+      moveCardBetweenCells(before, {
+        cardId: 'zz',
+        from: c('c1', 'u1'),
+        to: c('c2', 'u1'),
+        overCardId: null,
+      }),
+    ).toBe(before);
+    expect(
+      moveCardBetweenCells(before, {
+        cardId: 'w4',
+        from: c('c1', 'u1'),
+        to: c('c2', 'u2'),
+        overCardId: null,
+      }),
+    ).toBe(before);
+  });
+
+  it('a cell no page has reached keeps a null total; a moved-out cell never goes below 0', () => {
+    const before = pagesOf({
+      [cellId('c1', 'u1')]: page([card({ id: 'w1', key: 1, swimlaneKey: 'u1' })], {
+        totalCount: 0,
+      }),
+    });
+    const next = moveCardBetweenCells(before, {
+      cardId: 'w1',
+      from: c('c1', 'u1'),
+      to: c('c2', 'u2'),
+      overCardId: null,
+    });
+    expect(at(next, 'c1', 'u1').totalCount).toBe(0);
+    expect(at(next, 'c2', 'u2')).toEqual({
+      cards: [expect.objectContaining({ id: 'w1', swimlaneKey: 'u2' })],
+      totalCount: null,
+      cursor: null,
+      state: 'idle',
+    });
+    // From a cell with no total yet.
+    const back = moveCardBetweenCells(next, {
+      cardId: 'w1',
+      from: c('c2', 'u2'),
+      to: c('c1', 'u1'),
+      overCardId: null,
+    });
+    expect(at(back, 'c2', 'u2').totalCount).toBeNull();
+    expect(at(back, 'c1', 'u1').totalCount).toBe(1);
+  });
+
+  it('the column-axis revert returns the card to its origin column in the ACCEPTED lane', () => {
+    // A diagonal (c1,u1) → (c2,u2), then the transition is refused.
+    const moved = moveCardBetweenCells(board(), {
+      cardId: 'w1',
+      from: c('c1', 'u1'),
+      to: c('c2', 'u2'),
+      overCardId: null,
+    });
+    const reverted = moveCardBetweenCells(moved, {
+      cardId: 'w1',
+      from: c('c2', 'u2'),
+      to: c('c1', 'u2'),
+      overCardId: 'w2', // the card it followed in the origin cell — not in this one
+    });
+    expect(ids(at(reverted, 'c2', 'u2').cards)).toEqual(['w5']);
+    expect(at(reverted, 'c2', 'u2').totalCount).toBe(1);
+    expect(ids(at(reverted, 'c1', 'u2').cards)).toEqual(['w3', 'w1']);
+    expect(at(reverted, 'c1', 'u2').totalCount).toBe(2);
+    expect(at(reverted, 'c1', 'u2').cards[1]!.swimlaneKey).toBe('u2');
+    expect(at(reverted, 'c1', 'u1').totalCount).toBe(11);
+  });
+
+  it('the lane-axis revert returns the card to its origin lane in the ACCEPTED column, at its slot', () => {
+    const moved = moveCardBetweenCells(board(), {
+      cardId: 'w1',
+      from: c('c1', 'u1'),
+      to: c('c1', 'u2'),
+      overCardId: null,
+    });
+    const reverted = moveCardBetweenCells(moved, {
+      cardId: 'w1',
+      from: c('c1', 'u2'),
+      to: c('c1', 'u1'),
+      overCardId: 'w2', // back before the card it followed
+    });
+    expect(ids(at(reverted, 'c1', 'u1').cards)).toEqual(['w1', 'w2']);
+    expect(at(reverted, 'c1', 'u1').totalCount).toBe(12);
+    expect(at(reverted, 'c1', 'u1').cards[0]!.swimlaneKey).toBe('u1');
+    expect(ids(at(reverted, 'c1', 'u2').cards)).toEqual(['w3']);
+    expect(at(reverted, 'c1', 'u2').totalCount).toBe(1);
+  });
+
+  it('a page merged after a move never shows the landed card twice, in either lane order', () => {
+    // The card was appended after the cell's last loaded card — the one its
+    // cursor names — so the next page (strictly after it) can return it again.
+    const moved = moveCardBetweenCells(board(), {
+      cardId: 'w4',
+      from: c('c2', 'u1'),
+      to: c('c1', 'u1'),
+      overCardId: null,
+    });
+    expect(at(moved, 'c1', 'u1').cursor).toBe('CUR-c1u1');
+    const next = appendCellPage(moved, RK, {
+      columnId: 'c1',
+      laneKey: 'u1',
       cards: [
-        card({ id: 'w1', key: 1, swimlaneKey: 'u1' }),
-        card({ id: 'w2', key: 2, swimlaneKey: 'u2' }),
-        card({ id: 'w3', key: 3 }), // no key → catch-all
+        card({ id: 'w4', key: 4, swimlaneKey: 'u1' }),
+        card({ id: 'w6', key: 6, swimlaneKey: 'u1' }),
       ],
-    }),
-    column({ id: 'c2', name: 'Done', cards: [card({ id: 'w4', key: 4, swimlaneKey: 'u1' })] }),
-  ];
-  // Projection order already sorts the catch-all LAST.
-  const swimlanes = [
-    lane({ key: 'u1', label: 'Ana', count: 2 }),
-    lane({ key: 'u2', label: 'Bea', count: 1 }),
-    lane({ key: BOARD_SWIMLANE_NO_VALUE, label: 'No assignee', count: 1 }),
-  ];
-
-  it('buckets each column’s cards into the projection’s lanes, catch-all last', () => {
-    const lanes = bucketLanes(cols, swimlanes);
-    expect(lanes.map((l) => l.lane.key)).toEqual(['u1', 'u2', BOARD_SWIMLANE_NO_VALUE]);
-    expect(ids(lanes[0]!.cellsByColumnId.get('c1')!)).toEqual(['w1']);
-    expect(ids(lanes[0]!.cellsByColumnId.get('c2')!)).toEqual(['w4']);
-    expect(ids(lanes[1]!.cellsByColumnId.get('c1')!)).toEqual(['w2']);
-    // The keyless card lands in the catch-all lane.
-    expect(ids(lanes[2]!.cellsByColumnId.get('c1')!)).toEqual(['w3']);
-    expect(lanes[2]!.cellsByColumnId.get('c2')).toEqual([]);
-  });
-
-  it('drops a card whose swimlaneKey matches no lane (mid-reconcile) without crashing', () => {
-    const orphan = [
-      column({ id: 'c1', name: 'To Do', cards: [card({ id: 'wX', key: 9, swimlaneKey: 'gone' })] }),
-    ];
-    const lanes = bucketLanes(orphan, [lane({ key: 'u1', label: 'Ana', count: 0 })]);
-    expect(ids(lanes[0]!.cellsByColumnId.get('c1')!)).toEqual([]);
+      totalCount: 13,
+      cursor: null,
+      planHolds: {},
+    });
+    expect(ids(at(next, 'c1', 'u1').cards)).toEqual(['w1', 'w2', 'w4', 'w6']);
+    expect(at(next, 'c1', 'u1').totalCount).toBe(13);
   });
 });
 
-describe('relocateCardToCell', () => {
-  const cols = [
-    column({ id: 'c1', name: 'To Do', cards: [card({ id: 'w1', key: 1, swimlaneKey: 'u1' })] }),
-    column({
-      id: 'c2',
-      name: 'Done',
-      cards: [
-        card({ id: 'w2', key: 2, swimlaneKey: 'u2' }),
-        card({ id: 'w3', key: 3, swimlaneKey: 'u2' }),
-      ],
-    }),
-  ];
-
-  it('moves the card to the target column and stamps its swimlaneKey (append)', () => {
-    const next = relocateCardToCell(cols, 'w1', 'c2', 'u2', null);
-    const c1 = next.find((c) => c.id === 'c1')!;
-    const c2 = next.find((c) => c.id === 'c2')!;
-    expect(c1.cards).toEqual([]);
-    expect(ids(c2.cards)).toEqual(['w2', 'w3', 'w1']);
-    expect(c2.cards.find((c) => c.id === 'w1')!.swimlaneKey).toBe('u2');
-  });
-
-  it('inserts before the hovered card when an overCardId is given', () => {
-    const next = relocateCardToCell(cols, 'w1', 'c2', 'u2', 'w3');
-    const c2 = next.find((c) => c.id === 'c2')!;
-    expect(ids(c2.cards)).toEqual(['w2', 'w1', 'w3']);
-  });
-
-  it('is a no-op shape when the card or target column is missing', () => {
-    expect(relocateCardToCell(cols, 'ghost', 'c2', 'u2', null)).toBe(cols);
-    expect(relocateCardToCell(cols, 'w1', 'cZ', 'u2', null)).toBe(cols);
+describe('reconcileCellCard', () => {
+  it('takes the confirmed card into its cell, keeping the lane key the reassign owns', () => {
+    const before = board();
+    const next = reconcileCellCard(
+      before,
+      card({ id: 'w3', key: 3, status: 'done', swimlaneKey: 'other' }),
+    );
+    expect(at(next, 'c1', 'u2').cards[0]).toMatchObject({ status: 'done', swimlaneKey: 'u2' });
+    expect(at(next, 'c1', 'u1')).toBe(at(before, 'c1', 'u1'));
+    expect(reconcileCellCard(before, card({ id: 'zz', key: 99 }))).toBe(before);
   });
 });
 
-describe('independent-revert reducers', () => {
-  const cols = [
-    column({ id: 'c1', name: 'To Do', cards: [card({ id: 'w1', key: 1, swimlaneKey: 'u2' })] }),
-    column({ id: 'c2', name: 'Done', cards: [] }),
-  ];
-
-  it('setCardSwimlaneKey restores only the lane (no column move)', () => {
-    const next = setCardSwimlaneKey(cols, 'w1', 'u1');
-    expect(next.find((c) => c.id === 'c1')!.cards[0]!.swimlaneKey).toBe('u1');
-    expect(ids(next.find((c) => c.id === 'c1')!.cards)).toEqual(['w1']);
-  });
-
-  it('moveCardToColumn restores only the column, keeping the swimlaneKey', () => {
-    const moved = relocateCardToCell(cols, 'w1', 'c2', 'u3', null); // pretend a diagonal landed
-    const back = moveCardToColumn(moved, 'w1', 'c1');
-    expect(ids(back.find((c) => c.id === 'c1')!.cards)).toEqual(['w1']);
-    expect(back.find((c) => c.id === 'c2')!.cards).toEqual([]);
-    // The (separately-accepted) lane reassign survives the column revert.
-    expect(back.find((c) => c.id === 'c1')!.cards[0]!.swimlaneKey).toBe('u3');
-  });
-
-  it('moveCardToColumn is a no-op when the card is already in the target column', () => {
-    expect(moveCardToColumn(cols, 'w1', 'c1')).toBe(cols);
+describe('applyCells', () => {
+  it('replaces the whole map for the same identity and drops another identity’s', () => {
+    const before = board();
+    const next = moveCardBetweenCells(before, {
+      cardId: 'w1',
+      from: c('c1', 'u1'),
+      to: c('c1', 'u2'),
+      overCardId: null,
+    });
+    expect(applyCells(before, next)).toBe(next);
+    expect(applyCells(before, { ...next, readKey: 'another' })).toBe(before);
   });
 });
 
@@ -206,119 +348,94 @@ describe('reassignPatchForLane', () => {
 });
 
 describe('resolveCellMove', () => {
-  // snapshot: w1 in (c1, u1); build the post-over `current` per scenario.
-  const snapshot = [
-    column({
-      id: 'c1',
-      name: 'To Do',
-      cards: [
-        card({ id: 'w1', key: 1, swimlaneKey: 'u1' }),
-        card({ id: 'w2', key: 2, swimlaneKey: 'u1' }),
-      ],
-    }),
-    column({ id: 'c2', name: 'Done', cards: [card({ id: 'w3', key: 3, swimlaneKey: 'u2' })] }),
-  ];
+  const snapshot = board();
 
-  it('detects a lane-only move (reassign)', () => {
-    const current = setCardSwimlaneKey(snapshot, 'w1', 'u2');
-    const move = resolveCellMove(snapshot, current, 'w1')!;
-    expect(move.columnChanged).toBe(false);
-    expect(move.laneChanged).toBe(true);
-    expect(move.originLaneKey).toBe('u1');
-    expect(move.targetLaneKey).toBe('u2');
+  it('detects a lane-only move (reassign) and the card it followed', () => {
+    const current = moveCardBetweenCells(snapshot, {
+      cardId: 'w1',
+      from: c('c1', 'u1'),
+      to: c('c1', 'u2'),
+      overCardId: null,
+    });
+    const m = resolveCellMove(snapshot, current, 'w1')!;
+    expect(m).toMatchObject({
+      originColId: 'c1',
+      originLaneKey: 'u1',
+      targetColId: 'c1',
+      targetLaneKey: 'u2',
+      columnChanged: false,
+      laneChanged: true,
+      originNextId: 'w2',
+      beforeId: 'w3',
+      afterId: undefined,
+    });
   });
 
   it('detects a column-only move (transition) with cell-rank neighbours', () => {
-    const current = relocateCardToCell(snapshot, 'w1', 'c2', 'u2', null); // append after w3
-    const move = resolveCellMove(snapshot, current, 'w1')!;
-    expect(move.columnChanged).toBe(true);
-    // lane key changed too here (u1→u2) — to test a pure column move, keep the lane:
-    const sameLane = relocateCardToCell(snapshot, 'w1', 'c2', 'u1', null);
-    const m2 = resolveCellMove(snapshot, sameLane, 'w1')!;
-    expect(m2.columnChanged).toBe(true);
-    expect(m2.laneChanged).toBe(false);
+    const current = moveCardBetweenCells(snapshot, {
+      cardId: 'w2',
+      from: c('c1', 'u1'),
+      to: c('c2', 'u1'),
+      overCardId: 'w4',
+    });
+    const m = resolveCellMove(snapshot, current, 'w2')!;
+    expect(m.columnChanged).toBe(true);
+    expect(m.laneChanged).toBe(false);
+    expect(m.beforeId).toBeUndefined();
+    expect(m.afterId).toBe('w4');
+    expect(m.originNextId).toBeNull();
   });
 
-  it('detects a diagonal move (both axes)', () => {
-    const current = relocateCardToCell(snapshot, 'w1', 'c2', 'u2', 'w3');
-    const move = resolveCellMove(snapshot, current, 'w1')!;
-    expect(move.columnChanged).toBe(true);
-    expect(move.laneChanged).toBe(true);
-    expect(move.targetColId).toBe('c2');
-    expect(move.targetLaneKey).toBe('u2');
-    // inserted before w3 → afterId is w3, no beforeId.
-    expect(move.afterId).toBe('w3');
-    expect(move.beforeId).toBeUndefined();
-  });
-
-  it('reports an in-cell rank change (no column/lane change)', () => {
-    // w1 moved after w2 within the same (c1,u1) cell.
-    const reordered = relocateCardToCell(snapshot, 'w1', 'c1', 'u1', null); // append → after w2
-    const move = resolveCellMove(snapshot, reordered, 'w1')!;
-    expect(move.columnChanged).toBe(false);
-    expect(move.laneChanged).toBe(false);
-    expect(move.originIndexInCell).toBe(0);
-    expect(move.finalIndexInCell).toBe(1);
+  it('reports an in-cell rank change', () => {
+    const current = moveCardBetweenCells(snapshot, {
+      cardId: 'w2',
+      from: c('c1', 'u1'),
+      to: c('c1', 'u1'),
+      overCardId: 'w1',
+    });
+    const m = resolveCellMove(snapshot, current, 'w2')!;
+    expect([m.columnChanged, m.laneChanged]).toEqual([false, false]);
+    expect([m.originIndexInCell, m.finalIndexInCell]).toEqual([1, 0]);
   });
 
   it('returns null when the card is missing from a side', () => {
-    expect(resolveCellMove(snapshot, snapshot, 'ghost')).toBeNull();
+    expect(resolveCellMove(snapshot, pagesOf({}), 'w1')).toBeNull();
   });
 });
 
 describe('resolveSwimlaneDrop (3.3.8 — resolve-on-drop, the loop fix)', () => {
-  // The swimlane board no longer relocates live on dragOver (it looped — a
-  // resizing cell re-measures, the `over` flips, and the relocate cycle never
-  // settles). The move is resolved ONCE on drop from the dnd-kit `over` id. This
-  // mirrors the real cross-lane reassign E2E (un-quarantined by 3.3.8).
-  const snapshot = [
-    column({
-      id: 'c1',
-      name: 'To Do',
-      cards: [
-        card({ id: 'w1', key: 1, swimlaneKey: 'u1' }), // assignee u1
-        card({ id: 'w2', key: 2, swimlaneKey: BOARD_SWIMLANE_NO_VALUE }), // unassigned
-      ],
-    }),
-    column({ id: 'c2', name: 'Done', cards: [card({ id: 'w3', key: 3, swimlaneKey: 'u1' })] }),
-  ];
+  const snapshot = board();
 
   it('resolves a cross-lane reassign when `over` is a CELL id (append)', () => {
-    const resolved = resolveSwimlaneDrop(snapshot, cellId('c1', 'u2'), 'w2')!;
-    expect(resolved).not.toBeNull();
-    expect(resolved.move.columnChanged).toBe(false);
-    expect(resolved.move.laneChanged).toBe(true);
-    expect(resolved.move.originLaneKey).toBe(BOARD_SWIMLANE_NO_VALUE);
-    expect(resolved.move.targetLaneKey).toBe('u2');
-    // the optimistic state has the card re-stamped into the target lane
-    expect(laneKeyOfCard(resolved.relocated[0]!.cards.find((c) => c.id === 'w2')!)).toBe('u2');
+    const r = resolveSwimlaneDrop(snapshot, cellId('c1', 'u2'), 'w1')!;
+    expect(r.move).toMatchObject({ columnChanged: false, laneChanged: true, targetLaneKey: 'u2' });
+    expect(ids(at(r.cells, 'c1', 'u2').cards)).toEqual(['w3', 'w1']);
   });
 
-  it('resolves a reassign when `over` is a CARD id (insert before that card)', () => {
-    // drop w2 onto w1 (in the u1 lane) → reassign to u1, inserted before w1.
-    const resolved = resolveSwimlaneDrop(snapshot, 'w1', 'w2')!;
-    expect(resolved.move.laneChanged).toBe(true);
-    expect(resolved.move.targetLaneKey).toBe('u1');
-    expect(resolved.move.afterId).toBe('w1');
+  it('resolves a drop on a CARD to that card’s cell, inserting before it', () => {
+    const r = resolveSwimlaneDrop(snapshot, 'w5', 'w1')!;
+    expect(r.move).toMatchObject({ targetColId: 'c2', targetLaneKey: 'u2' });
+    expect(r.move.columnChanged && r.move.laneChanged).toBe(true);
+    expect(ids(at(r.cells, 'c2', 'u2').cards)).toEqual(['w1', 'w5']);
   });
 
   it('resolves a drop into the catch-all lane (the unassign case)', () => {
-    // w1 (assignee u1) dropped into the "No assignee" catch-all cell.
-    const resolved = resolveSwimlaneDrop(snapshot, cellId('c1', BOARD_SWIMLANE_NO_VALUE), 'w1')!;
-    expect(resolved.move.laneChanged).toBe(true);
-    expect(resolved.move.originLaneKey).toBe('u1');
-    expect(resolved.move.targetLaneKey).toBe(BOARD_SWIMLANE_NO_VALUE);
+    const r = resolveSwimlaneDrop(snapshot, cellId('c1', BOARD_SWIMLANE_NO_VALUE), 'w1')!;
+    expect(r.move.targetLaneKey).toBe(BOARD_SWIMLANE_NO_VALUE);
+    expect(at(r.cells, 'c1', BOARD_SWIMLANE_NO_VALUE).cards[0]!.swimlaneKey).toBe(
+      BOARD_SWIMLANE_NO_VALUE,
+    );
   });
 
-  it('resolves a diagonal drop (column AND lane change)', () => {
-    const resolved = resolveSwimlaneDrop(snapshot, cellId('c2', BOARD_SWIMLANE_NO_VALUE), 'w1')!;
-    expect(resolved.move.columnChanged).toBe(true);
-    expect(resolved.move.laneChanged).toBe(true);
-    expect(resolved.move.targetColId).toBe('c2');
-    expect(resolved.move.targetLaneKey).toBe(BOARD_SWIMLANE_NO_VALUE);
+  it('a drop back on itself changes nothing', () => {
+    const r = resolveSwimlaneDrop(snapshot, 'w2', 'w2')!;
+    expect(r.move.columnChanged || r.move.laneChanged).toBe(false);
+    expect(r.move.originIndexInCell).toBe(r.move.finalIndexInCell);
+    expect(r.cells).toBe(snapshot);
   });
 
-  it('returns null when `over` resolves to neither a cell nor a card', () => {
+  it('returns null when `over` resolves to neither a cell nor a card, or the card is in no cell', () => {
     expect(resolveSwimlaneDrop(snapshot, 'nonexistent-id', 'w1')).toBeNull();
+    expect(resolveSwimlaneDrop(snapshot, cellId('c1', 'u1'), 'zz')).toBeNull();
   });
 });

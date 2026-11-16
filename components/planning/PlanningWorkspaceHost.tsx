@@ -1314,6 +1314,10 @@ function PlanWorkspaceHost({
                 onToggleTarget={toggleCanvasTarget}
                 canAddTarget={targets.length < MAX_PLANNING_TARGETS}
                 initialTrail={initialCanvasTrail}
+                // The launch target opens CENTRED at a readable zoom (MOTIR-11472),
+                // not as one small card in a fitted level. A project-scoped launch
+                // has no initial target, so it keeps the plain fit.
+                initialCentreId={initialTarget?.id ?? null}
                 // MOTIR-6154/6161's follow-move. It stays on THIS branch of the
                 // swap and is not passed to the component above: the follow moves
                 // the roadmap canvas inside a target that settles while there is no

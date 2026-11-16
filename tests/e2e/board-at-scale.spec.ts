@@ -25,12 +25,12 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import {
   getBoard,
   columnByStatus,
+  pageFirstCellThroughLoadMore,
   columnCardNodes,
   columnTotalBadge,
   expectColumnVirtualized,
   expectNoLoadMore,
   scrollLaneToEnd,
-  scrollSwimlaneColumnToEnd,
   signInBoardSeedOwnerAndOpenBoard,
 } from './_helpers/board';
 import { BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
@@ -122,7 +122,7 @@ async function seedBigBoard(): Promise<BigSeed> {
   return { ownerId: owner.id, workspaceId: workspace.id, projectId: project.id, manifest };
 }
 
-// Switch the active swimlane group-by via the board-header Segmented control,
+// Switch the active swimlane group-by via the board-header group-by menu,
 // waiting for the PATCH /api/board that persists it. Mirrors board-swimlanes.spec.ts.
 async function setGroupBy(
   page: Page,
@@ -132,7 +132,10 @@ async function setGroupBy(
   const patch = page.waitForResponse(
     (r) => r.url().endsWith('/api/board') && r.request().method() === 'PATCH',
   );
-  await control.getByRole('button', { name: label, exact: true }).click();
+  // The group-by trigger opens the group-by menu (MOTIR-11451); the dimensions
+  // are its menuitemradio rows, portaled out of the group.
+  await control.getByRole('button').click();
+  await page.getByRole('menuitemradio', { name: label, exact: true }).click();
   expect((await patch).ok(), `group-by → ${label} persisted`).toBeTruthy();
 }
 
@@ -242,18 +245,29 @@ test.describe('board-at-scale — load model (3.5.2)', () => {
     await expectNoLoadMore(page);
   });
 
-  test('pages the swimlane board from its footer row, against the page scroll', async ({
+  test('pages the swimlane board lane by lane, with no footer row and no column Load more', async ({
     page,
   }) => {
+    const laneReads: string[] = [];
+    page.on('request', (r) => {
+      if (/\/api\/board\/lanes\/[^/?]+\/cells\?/.test(r.url())) laneReads.push(r.url());
+    });
     await signInBoardSeedOwnerAndOpenBoard(page);
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    const board = await getBoard(page.request);
-    const tall = columnByStatus(board, big.manifest.tallStatusKey);
 
-    await expect(page.getByRole('main').getByTestId('swimlane-load-row')).toBeAttached();
-    await scrollSwimlaneColumnToEnd(page, tall.id, tall.totalCount);
-    await expectNoLoadMore(page);
+    // A grouped board pages each (lane × column) cell itself (MOTIR-11448): the
+    // per-column footer row and its sentinels are gone…
+    const main = page.getByRole('main');
+    await expect(main.getByTestId('swimlane-load-row')).toHaveCount(0);
+    await expect(main.locator('[data-testid^="board-lane-footer-"]')).toHaveCount(0);
+    // …and the lanes in view fill over the lane route, one request per lane.
+    await expect
+      .poll(() => laneReads.length, { message: 'a lane in view read its cells' })
+      .toBeGreaterThan(0);
+    expect(new Set(laneReads).size, 'no lane read twice').toBe(laneReads.length);
+    // A cell pages through its own Load more control.
+    await pageFirstCellThroughLoadMore(page);
   });
 
   test('pages a Done lane in FULL — the aged-out resolved cards load too', async ({ page }) => {

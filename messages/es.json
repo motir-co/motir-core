@@ -4989,6 +4989,13 @@
     "laneCountLoaded": "{loaded, number} de {total, number}",
     "laneLoading": "Cargando…",
     "laneLoadRetry": "No se pudieron cargar más elementos de trabajo · Reintentar",
+    "cellLoadMore": "Cargar más",
+    "cellLoadMoreAria": "Cargar más elementos de trabajo en {column}, carril {lane}",
+    "cellLoadRetryAria": "No se pudieron cargar más elementos de trabajo · Reintentar, en {column}, carril {lane}",
+    "cellLoadingAria": "Cargando elementos de trabajo en {column}, carril {lane}",
+    "laneScrollLeftAria": "Desplazar el carril {lane} a la izquierda",
+    "laneScrollRightAria": "Desplazar el carril {lane} a la derecha",
+    "laneEmpty": "No hay elementos de trabajo en este carril",
     "pagerPosition": "{name} · {index} de {count}",
     "groupByLabel": "Agrupar por",
     "groupByAria": "Agrupar carriles por",
@@ -14800,6 +14807,63 @@
         },
         "pausedUntil": "hasta las {time}, en {left}",
         "readOnly": "Solo lectura. Para pedir más cuota a AWS, ejecuta <cmd>{command}</cmd> en una terminal; la anulación del límite de una cuenta sigue en su sitio de siempre."
+      },
+      "blindSpots": {
+        "title": "Puntos ciegos de la flota de CI",
+        "subtitle": "Los repositorios que la flota de CI no ve, para cada organización de GitHub a la que sirve: repositorios con trabajos de la flota en cola pero sin entregas de workflow_job, y repositorios vinculados que motir-studio no puede leer. Calculado por la conciliación en cada barrido de aprovisionamiento; solo lectura.",
+        "card": {
+          "title": "Por organización de GitHub",
+          "subtitle": "Una fila por cada organización a la que la flota de CI sirvió en los últimos 3 días."
+        },
+        "pill": {
+          "orgs": "{count, plural, one {# organización con puntos ciegos} other {# organizaciones con puntos ciegos}}",
+          "orgsNotRead": "{count, plural, one {# organización sin leer} other {# organizaciones sin leer}}",
+          "allSeen": "Todos los repositorios visibles",
+          "notRead": "Sin leer"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, one {# repositorio sin entregas} other {# repositorios sin entregas}}",
+          "unreadableCount": "{count, plural, one {# repositorio ilegible} other {# repositorios ilegibles}}",
+          "seen": "Cada repositorio con trabajos de la flota recibió sus entregas de workflow_job, y ningún trabajo quedó atascado."
+        },
+        "undelivered": {
+          "title": "Trabajos de la flota en cola, sin entregas de workflow_job en 3 días",
+          "hint": "Trabajos de motir-runner pero sin entregas de workflow_job: ¿está motir-studio instalado en este repositorio?"
+        },
+        "unreadable": {
+          "title": "Vinculados, pero motir-studio no puede leer su cola de Actions",
+          "body": "En el último barrido quedaron trabajos atascados en esta organización, y la credencial de motir-studio de la flota no pudo listar los trabajos en cola de estos repositorios, así que no se arrancó ningún runner para ellos."
+        },
+        "repo": {
+          "link": "{repo} en GitHub"
+        },
+        "orgError": {
+          "title": "No se pudo leer esta organización en el último barrido.",
+          "body": "Sus repositorios no se comprobaron, así que nada de lo que aparece aquí significa que sean visibles. Las demás organizaciones no se ven afectadas, y el próximo barrido lo vuelve a intentar. Respuesta de GitHub:"
+        },
+        "empty": {
+          "title": "Sin puntos ciegos",
+          "body": "La flota de CI ve todos los repositorios de {count, plural, one {la # organización a la que sirvió} other {las # organizaciones a las que sirvió}} en los últimos 3 días: cada repositorio con trabajos de la flota recibió sus entregas de workflow_job, y ningún trabajo quedó atascado.",
+          "noOrgs": "Ninguna organización ejecutó un trabajo en la flota de CI en los últimos 3 días, así que no hay ningún repositorio que comprobar."
+        },
+        "error": {
+          "title": "No se pudieron leer los puntos ciegos de la flota de CI",
+          "body": "El registro de puntos ciegos no se cargó, así que nada de lo que aparece aquí significa que todos los repositorios sean visibles. Las imágenes y los pools no se ven afectados. Recarga para volver a intentarlo."
+        },
+        "reconcileError": {
+          "title": "La conciliación del último barrido no terminó",
+          "body": "Se detuvo con este error, así que no se comprobó ninguna organización y nada de lo que aparece aquí significa que todos los repositorios sean visibles. El próximo barrido lo vuelve a intentar."
+        },
+        "notComputed": {
+          "title": "Aún no calculado",
+          "body": "Ningún barrido de aprovisionamiento ha calculado los puntos ciegos desde este despliegue. El barrido se ejecuta cada 5 minutos; recarga después del siguiente."
+        },
+        "notConfigured": {
+          "title": "La flota de CI no está configurada",
+          "body": "Este despliegue no ejecuta trabajos de CI en la flota, así que la conciliación no sirve a ninguna organización y no hay ningún repositorio que comprobar. El interruptor está en <link>Ajustes de la flota</link>."
+        },
+        "computed": "Calculado por el barrido de aprovisionamiento de {time} ({age}). Solo lectura: motir-studio se instala en un repositorio en GitHub, no aquí.",
+        "loading": "Cargando los puntos ciegos de la flota de CI"
       }
     }
   },

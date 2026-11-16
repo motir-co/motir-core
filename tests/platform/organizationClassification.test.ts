@@ -151,9 +151,13 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // `platform_aws_read` is MOTIR-10890's record of WHEN each AWS figure on the
     // Services page was last read (`20261110230000_platform_aws_read`):
     // platform-only, written and read solely from this tier.
+    // `ci_fleet_blind_spots` is MOTIR-11439's record of the provision sweep's last
+    // reconcile outcome (`20261116210000_ci_fleet_blind_spots`): platform-only,
+    // written by the sweep under `app.system_admin` and read from this tier.
     expect(rows.map((r) => r.tablename)).toEqual([
       'capacity_alert_setting',
       'capacity_raised_alert',
+      'ci_fleet_blind_spots',
       'github_repo',
       'idea',
       'idea_evidence',
