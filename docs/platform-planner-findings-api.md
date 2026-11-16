@@ -86,8 +86,8 @@ the ones motir-ai's contract documents.
   plan lacks; the body's title and model win).
 - **When no plan resolves** — the plan was deleted, or no `planId` was sent —
   `projectKey` names the project instead, resolved in `workspaceId`, else in the
-  workspace the token was minted in, under the same tenant rules as the
-  `record_planner_finding` tool (membership and `ai:plan`). A console session must
+  workspace the token was minted in: the staff member must be a member of that
+  project holding `ai:plan` (`PLANNER_FINDING_RECORD_PROJECT_PERMISSION`). A console session must
   send `workspaceId`. Without a `planId` the record is stored under the text
   `(no plan id given)`.
 - `source` is always `check_plan`; 1–100 findings, all stored or none.

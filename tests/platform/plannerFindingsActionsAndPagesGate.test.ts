@@ -130,7 +130,7 @@ const FIVE = [
     () => actions.setPlannerFindingAttributionAction('pf_a', { attribution: 'corpus' }),
   ],
   ['promote', () => actions.promotePlannerFindingAction('pf_b', FORM)],
-  ['bug key', () => actions.recordPlannerFindingBugKeyAction('pf_c', 'MOTIR-123')],
+  ['bug key', () => actions.setPlannerFindingBugKeyAction('pf_c', 'MOTIR-123')],
   ['dismiss', () => actions.dismissPlannerFindingAction('pf_d', 'noise')],
   ['restore', () => actions.restorePlannerFindingAction('pf_r')],
 ] as const;
@@ -301,7 +301,7 @@ describe('the result codes', () => {
   it('INVALID before any motir-ai call for bad input', async () => {
     install([finding('pf_a')]);
     for (const key of ['motir', '123', '']) {
-      expect(await actions.recordPlannerFindingBugKeyAction('pf_a', key), key).toEqual({
+      expect(await actions.setPlannerFindingBugKeyAction('pf_a', key), key).toEqual({
         ok: false,
         code: 'INVALID',
       });

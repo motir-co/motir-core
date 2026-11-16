@@ -24,7 +24,7 @@ import { useLessonTypeLabel } from '../../planning-lessons/_components/LessonBit
 import {
   dismissPlannerFindingAction,
   promotePlannerFindingAction,
-  recordPlannerFindingBugKeyAction,
+  setPlannerFindingBugKeyAction,
   restorePlannerFindingAction,
   setPlannerFindingAttributionAction,
   type PlannerFindingActionResult,
@@ -144,7 +144,7 @@ function Controls({ detail }: { detail: PlannerFindingDetailDTO }) {
       case 'promote':
         return promotePlannerFindingAction(detail.id, trimPromote(promote));
       case 'bug':
-        return recordPlannerFindingBugKeyAction(detail.id, bugKey);
+        return setPlannerFindingBugKeyAction(detail.id, bugKey);
       case 'dismiss':
         return dismissPlannerFindingAction(detail.id, note.trim() || undefined);
       case 'restore':

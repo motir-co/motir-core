@@ -128,9 +128,9 @@ const ACTS: Act[] = [
     args: ['pf_1', ATTRIBUTION],
   },
   {
-    name: 'recordPlannerFindingBugKeyAction',
+    name: 'setPlannerFindingBugKeyAction',
     method: 'recordBugKey',
-    run: () => actions.recordPlannerFindingBugKeyAction('pf_1', ' motir-42 '),
+    run: () => actions.setPlannerFindingBugKeyAction('pf_1', ' motir-42 '),
     args: ['pf_1', ' motir-42 '],
   },
   {

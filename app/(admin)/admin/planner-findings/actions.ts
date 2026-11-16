@@ -114,7 +114,7 @@ export async function setPlannerFindingAttributionAction(
   }
 }
 
-export async function recordPlannerFindingBugKeyAction(
+export async function setPlannerFindingBugKeyAction(
   findingId: string,
   bugKey: string,
 ): Promise<PlannerFindingActionResult> {
