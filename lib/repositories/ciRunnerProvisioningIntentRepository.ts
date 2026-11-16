@@ -24,11 +24,11 @@ export const CI_RUNNER_INTENT_COMPLETED = 'completed';
  *  it. `teardownReason` says which path got here. */
 export const CI_RUNNER_INTENT_FAILED = 'failed';
 
-/** The statuses that mean "a container may still exist for this intent" — the
- *  reaper's and the in-flight count's window. */
 /** The teardowns a runner reaches only after it ran a job (MOTIR-11437). */
 const RUNNER_SERVED_A_JOB_TEARDOWNS: readonly string[] = ['job_completed', 'job_timed_out'];
 
+/** The statuses that mean "a container may still exist for this intent" — the
+ *  reaper's and the in-flight count's window. */
 export const CI_RUNNER_INTENT_IN_FLIGHT: readonly string[] = [
   CI_RUNNER_INTENT_PROVISIONING,
   CI_RUNNER_INTENT_RUNNING,
@@ -137,7 +137,8 @@ export const ciRunnerProvisioningIntentRepository = {
   /**
    * The highest reconcile generation recorded for one job of one run attempt, or
    * -1 when it has no intent at all (MOTIR-8976). The next reconcile writes this
-   * plus one; two sweeps that read the same value collide on the unique index.
+   * plus one, and never less than 1: generation 0 is the delivery's (MOTIR-11460).
+   * Two sweeps that read the same value collide on the unique index.
    */
   async maxReconcileGeneration(
     runId: string,
@@ -188,13 +189,18 @@ export const ciRunnerProvisioningIntentRepository = {
    * The newest intent of each repository the fleet served since `since` — the
    * reconcile sweep's list of where to ask GitHub what is queued, and the
    * attribution (workspace, org, project) a reconcile intent copies (MOTIR-8976).
+   *
+   * DELIVERY intents only (generation 0): a repo listed here is one whose
+   * `workflow_job` deliveries arrive, and the reconcile reads it as delivered. Its
+   * own reconcile intents must not put a repo here, or a repo with no deliveries
+   * would count as delivered from the tick after its first mint (MOTIR-11460).
    */
   async listLatestPerRepoSince(
     since: Date,
     tx: Prisma.TransactionClient,
   ): Promise<CiRunnerProvisioningIntent[]> {
     return tx.ciRunnerProvisioningIntent.findMany({
-      where: { createdAt: { gte: since } },
+      where: { createdAt: { gte: since }, reconcileGeneration: 0 },
       orderBy: { createdAt: 'desc' },
       distinct: ['repoOwner', 'repoName'],
     });
