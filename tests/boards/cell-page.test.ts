@@ -312,10 +312,12 @@ describe('getCellPage — the lane predicate per dimension', () => {
     const fx = await makeFixture();
     const epic = await card(fx, { title: 'Epic', kind: 'epic' });
     const task = await card(fx, { title: 'Task', parentId: epic });
+    // The column page is the FLAT board's: a grouped read carries no cards
+    // (MOTIR-11445). The cell stamps the lane on the same card.
+    const flat = await boardsService.getBoard(fx.projectId, fx.ctx, fx.boardId);
+    const todo = column(flat, 'todo');
+    const fromColumn = { ...todo.cards.find((c) => c.id === task)!, swimlaneKey: epic };
     await groupBy(fx, 'epic');
-    const board = await boardsService.getBoard(fx.projectId, fx.ctx, fx.boardId);
-    const todo = column(board, 'todo');
-    const fromColumn = todo.cards.find((c) => c.id === task)!;
 
     const spy = vi.spyOn(workItemRepository, 'findEpicAncestors');
     onTestFinished(() => spy.mockRestore());
