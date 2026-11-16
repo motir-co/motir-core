@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { BOARD_SWIMLANE_NO_VALUE, type BoardCardDto, type BoardColumnDto } from '@/lib/dto/boards';
 import {
-  BOARD_SWIMLANE_NO_VALUE,
-  type BoardCardDto,
-  type BoardColumnDto,
-  type BoardSwimlaneDto,
-} from '@/lib/dto/boards';
-import {
-  bucketLanes,
   cellId,
   cellOfOverId,
   laneKeyOfCard,
@@ -66,10 +60,6 @@ function column(over: Partial<BoardColumnDto> & { id: string; name: string }): B
   };
 }
 
-function lane(over: Partial<BoardSwimlaneDto> & { key: string }): BoardSwimlaneDto {
-  return { label: over.key, kind: 'assignee', count: 0, ...over };
-}
-
 const ids = (cards: BoardCardDto[]) => cards.map((c) => c.id);
 
 describe('laneKeyOfCard + cell id helpers', () => {
@@ -91,46 +81,6 @@ describe('laneKeyOfCard + cell id helpers', () => {
     expect(cellOfOverId(cols, cellId('c2', 'u2'))).toEqual({ columnId: 'c2', laneKey: 'u2' });
     expect(cellOfOverId(cols, 'w1')).toEqual({ columnId: 'c1', laneKey: 'u1' });
     expect(cellOfOverId(cols, 'nope')).toBeNull();
-  });
-});
-
-describe('bucketLanes', () => {
-  const cols = [
-    column({
-      id: 'c1',
-      name: 'To Do',
-      cards: [
-        card({ id: 'w1', key: 1, swimlaneKey: 'u1' }),
-        card({ id: 'w2', key: 2, swimlaneKey: 'u2' }),
-        card({ id: 'w3', key: 3 }), // no key → catch-all
-      ],
-    }),
-    column({ id: 'c2', name: 'Done', cards: [card({ id: 'w4', key: 4, swimlaneKey: 'u1' })] }),
-  ];
-  // Projection order already sorts the catch-all LAST.
-  const swimlanes = [
-    lane({ key: 'u1', label: 'Ana', count: 2 }),
-    lane({ key: 'u2', label: 'Bea', count: 1 }),
-    lane({ key: BOARD_SWIMLANE_NO_VALUE, label: 'No assignee', count: 1 }),
-  ];
-
-  it('buckets each column’s cards into the projection’s lanes, catch-all last', () => {
-    const lanes = bucketLanes(cols, swimlanes);
-    expect(lanes.map((l) => l.lane.key)).toEqual(['u1', 'u2', BOARD_SWIMLANE_NO_VALUE]);
-    expect(ids(lanes[0]!.cellsByColumnId.get('c1')!)).toEqual(['w1']);
-    expect(ids(lanes[0]!.cellsByColumnId.get('c2')!)).toEqual(['w4']);
-    expect(ids(lanes[1]!.cellsByColumnId.get('c1')!)).toEqual(['w2']);
-    // The keyless card lands in the catch-all lane.
-    expect(ids(lanes[2]!.cellsByColumnId.get('c1')!)).toEqual(['w3']);
-    expect(lanes[2]!.cellsByColumnId.get('c2')).toEqual([]);
-  });
-
-  it('drops a card whose swimlaneKey matches no lane (mid-reconcile) without crashing', () => {
-    const orphan = [
-      column({ id: 'c1', name: 'To Do', cards: [card({ id: 'wX', key: 9, swimlaneKey: 'gone' })] }),
-    ];
-    const lanes = bucketLanes(orphan, [lane({ key: 'u1', label: 'Ana', count: 0 })]);
-    expect(ids(lanes[0]!.cellsByColumnId.get('c1')!)).toEqual([]);
   });
 });
 

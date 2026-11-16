@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronDown } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -16,8 +16,9 @@ import { ColumnActionsMenu } from './ColumnActionsMenu';
 import { ColumnPointsBadge } from './ColumnPointsBadge';
 import { ColumnWipBadge } from './ColumnWipBadge';
 import { LaneCell } from './LaneCell';
-import { LaneCountBadge, LaneLoadFooter, useLaneSentinel, type LaneLoadState } from './LanePager';
-import { bucketLanes } from './boardSwimlanes';
+import { LaneCountBadge } from './LanePager';
+import { cardsInCell } from './boardSwimlanes';
+import type { BoardCellPagesApi } from './useBoardCellPages';
 import { BoardColumnArrows } from './BoardColumnArrows';
 import { BOARD_SCROLL_NAV_CLASS } from './boardHorizontalNav';
 
@@ -30,19 +31,20 @@ import { BOARD_SCROLL_NAV_CLASS } from './boardHorizontalNav';
 // `.lane-head` (label/kind + aggregate count + collapse chevron) above its
 // `.lane-cols` row of `LaneCell`s.
 //
-// Load model (paged per lane by MOTIR-10535, reversing 3.8.5): each column holds
-// the cards LOADED so far (its first page, then each page after it), bucketed into
-// the swimlane cells. The grid scrolls as one, so the bottom of a column is the
-// bottom of the grid: a footer row under the last lane carries one scroll-to-load
-// sentinel per column (`LanePager`, the 3.2.8 grammar — no "Load more" button; a
-// Spinner + "Loading…" in flight; a focusable retry on a failed page), and the
-// pinned header reads "{loaded} of {total}" while a column has more. Each cell
-// still virtualizes via `useRowWindow` (LaneCell, kept) so the DOM stays bounded.
+// Load model (MOTIR-11448, replacing MOTIR-10535's per-column footer row): each
+// (lane × column) CELL pages on its own. Its cards come from the per-cell page
+// state (`useBoardCellPages`, handed in as `cells`): a lane's cells fill with one
+// request when its cell row first comes into view (`cells.laneRef`), and each
+// later page lands in exactly one cell. The pinned header's loaded count is the
+// sum over that column's cells, over the column's full `totalCount`, so it can
+// never disagree with the cells beneath it. Each cell still virtualizes via
+// `useRowWindow` (LaneCell, kept) so the DOM stays bounded. Without `cells` (a
+// render with no paging) a cell shows the column's loaded cards that sit in its
+// lane (`cardsInCell`).
 //
 // Lanes come from the projection's `swimlanes` (already ordered: assignee alpha
-// / priority rank / epic position, catch-all LAST) and cards are bucketed by
-// `swimlaneKey` (`bucketLanes`); per-lane aggregate counts + lane order are the
-// projection's. Collapse is per-lane and persists client-side (localStorage
+// / priority rank / epic position, catch-all LAST); per-lane aggregate counts +
+// lane order are the projection's. Collapse is per-lane and persists client-side (localStorage
 // keyed by board + lane). Columns align across the header row and every lane
 // because all share the same cell width + gutter + gap. Colour via `--el-*`,
 // shape via element tokens.
@@ -63,8 +65,7 @@ export function SwimlaneBoard({
   activeCardId,
   overLaneKey,
   columnPoints = null,
-  loadStates = {},
-  onLoadMore,
+  cells,
 }: {
   boardId: string;
   columns: BoardColumnDto[];
@@ -78,14 +79,24 @@ export function SwimlaneBoard({
    *  on a kanban board / unestimated sprint — the pinned column header renders the
    *  "N pts" pill when present (the same scrum chrome as the flat board). */
   columnPoints?: Record<string, number> | null;
-  /** Each column's paging state (MOTIR-10535), keyed by column id. */
-  loadStates?: Record<string, LaneLoadState>;
-  /** Ask for a column's next page. Absent = no paging. */
-  onLoadMore?: (columnId: string) => void;
+  /** The per-cell page state the cells read from (MOTIR-11448). Absent = each
+   *  cell shows the column's loaded cards in its lane, with no paging. */
+  cells?: BoardCellPagesApi;
 }) {
   const t = useTranslations('boards');
   const { collapsed, toggle } = useCollapsedLanes(boardId);
-  const lanes = bucketLanes(columns, swimlanes);
+  const cardsOf = (columnId: string, laneKey: string) =>
+    cells ? cells.cellState(columnId, laneKey).cards : cardsInCell(columns, columnId, laneKey);
+  // The pinned header's loaded count: on a paged grid the sum over the column's
+  // cells (its denominator is still the column's total); otherwise its page.
+  const headerCount = (column: BoardColumnDto) => {
+    if (!cells) {
+      return { loaded: column.cards.length, hasMore: column.cursor !== null };
+    }
+    let loaded = 0;
+    for (const lane of swimlanes) loaded += cells.cellSummary(column.id, lane.key).loaded;
+    return { loaded, hasMore: loaded < column.totalCount };
+  };
 
   // Shared track classes so the pinned header row and every lane's cell row line
   // up column-for-column (same 288px cells + 14px gutter).
@@ -119,9 +130,8 @@ export function SwimlaneBoard({
               <h2 className="text-[13px] font-semibold text-(--el-text-strong)">{column.name}</h2>
               <LaneCountBadge
                 columnId={column.id}
-                loaded={column.cards.length}
                 total={column.totalCount}
-                hasMore={column.cursor !== null}
+                {...headerCount(column)}
               />
               {/* Per-column sprint point total (4.5.3) — coexists with the count on
                 the left; absent on a kanban board. */}
@@ -144,7 +154,7 @@ export function SwimlaneBoard({
           ))}
         </div>
 
-        {lanes.map(({ lane, cellsByColumnId }) => {
+        {swimlanes.map((lane) => {
           const isCollapsed = collapsed.has(lane.key);
           const isDropTarget = overLaneKey === lane.key;
           const isCatchAll = lane.key === BOARD_SWIMLANE_NO_VALUE;
@@ -238,6 +248,10 @@ export function SwimlaneBoard({
 
               {!isCollapsed ? (
                 <div
+                  // The lane loads its cells when this row first comes into view
+                  // (it mounts only while the lane is expanded).
+                  ref={cells?.laneRef(lane.key)}
+                  data-testid={`swimlane-cells-${lane.key}`}
                   // Lane drop-target ring is INSET (not an `outline`): the swimlane
                   // board scrolls, and an outline outside the box gets clipped by the
                   // scroll viewport (bug 7.24, same as BoardColumn).
@@ -252,7 +266,7 @@ export function SwimlaneBoard({
                       key={column.id}
                       columnId={column.id}
                       laneKey={lane.key}
-                      cards={cellsByColumnId.get(column.id) ?? []}
+                      cards={cardsOf(column.id, lane.key)}
                       assigneeNameById={assigneeNameById}
                       onOpenQuickView={onOpenQuickView}
                       activeCardId={activeCardId}
@@ -263,53 +277,8 @@ export function SwimlaneBoard({
             </div>
           );
         })}
-
-        {/* The paging footer row (MOTIR-10535) — one cell per column, aligned to the
-          same track, under the last lane: the bottom of the grid is the bottom of
-          every column. Renders nothing in a cell whose column is fully loaded. */}
-        {onLoadMore && columns.some((c) => c.cursor !== null) ? (
-          <div className={`${track} py-(--spacing-card-padding-8)`} data-testid="swimlane-load-row">
-            {columns.map((column) => (
-              <SwimlaneColumnFooter
-                key={column.id}
-                column={column}
-                state={loadStates[column.id] ?? 'idle'}
-                onLoadMore={onLoadMore}
-              />
-            ))}
-          </div>
-        ) : null}
       </div>
     </BoardColumnArrows>
-  );
-}
-
-/** One column's cell of the swimlane paging footer: its sentinel (observed
- *  against the viewport — the grid has no vertical scroller of its own), the
- *  in-flight spinner or the retry. */
-function SwimlaneColumnFooter({
-  column,
-  state,
-  onLoadMore,
-}: {
-  column: BoardColumnDto;
-  state: LaneLoadState;
-  onLoadMore: (columnId: string) => void;
-}) {
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const hasMore = column.cursor !== null;
-  const load = useCallback(() => onLoadMore(column.id), [onLoadMore, column.id]);
-  useLaneSentinel(sentinelRef, null, hasMore && state === 'idle', column.cards.length, load);
-  return (
-    <div className="w-72 shrink-0">
-      <LaneLoadFooter
-        columnId={column.id}
-        hasMore={hasMore}
-        state={state}
-        sentinelRef={sentinelRef}
-        onRetry={load}
-      />
-    </div>
   );
 }
 

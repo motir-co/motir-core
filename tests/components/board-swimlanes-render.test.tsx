@@ -6,6 +6,13 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { SwimlaneBoard } from '@/app/(authed)/boards/_components/SwimlaneBoard';
 import { COLLAPSED_LANES_STORAGE_PREFIX } from '@/lib/hooks/useCollapsedLanes';
 import {
+  applyLanePage,
+  cellPageOf,
+  cellSummary,
+  emptyCellPages,
+} from '@/app/(authed)/boards/_components/boardCellPages';
+import type { BoardCellPagesApi } from '@/app/(authed)/boards/_components/useBoardCellPages';
+import {
   BOARD_SWIMLANE_NO_VALUE,
   type BoardCardDto,
   type BoardColumnDto,
@@ -91,7 +98,23 @@ const SWIMLANES: BoardSwimlaneDto[] = [
 
 const noop = () => {};
 
-function renderBoard(boardId: string) {
+/** A per-cell API over a fixed map, as `useBoardCellPages` hands the grid one. */
+function cellsApi(cells: Parameters<typeof applyLanePage>[2]): BoardCellPagesApi {
+  const pages = applyLanePage(emptyCellPages('k'), 'k', cells);
+  return {
+    readKey: 'k',
+    pages,
+    cellState: (c, l) => cellPageOf(pages, 'k', c, l),
+    cellSummary: (c, l) => cellSummary(cellPageOf(pages, 'k', c, l)),
+    loadCell: noop,
+    retryCell: noop,
+    loadedLane: noop,
+    laneRef: () => noop,
+    applyCells: noop,
+  };
+}
+
+function renderBoard(boardId: string, cells?: BoardCellPagesApi) {
   return render(
     <DndContext>
       <SwimlaneBoard
@@ -108,6 +131,7 @@ function renderBoard(boardId: string) {
         onSetWipLimit={noop}
         activeCardId={null}
         overLaneKey={null}
+        cells={cells}
       />
     </DndContext>,
   );
@@ -145,6 +169,48 @@ describe('SwimlaneBoard', () => {
         'board-card-PROD-3',
       ),
     ).toBeTruthy();
+  });
+
+  it('with the per-cell API supplied, each cell shows its own page and the header sums them', () => {
+    // The cell pages, not the column's page, decide what each cell holds: lane u1
+    // holds w9 in c1 (a card the column's page does not carry), lane u2 nothing.
+    const cell = (
+      columnId: string,
+      laneKey: string,
+      cards: BoardCardDto[],
+      totalCount: number,
+    ) => ({
+      columnId,
+      laneKey,
+      cards,
+      totalCount,
+      cursor: cards.length < totalCount ? 'CUR' : null,
+      planHolds: {},
+    });
+    renderBoard(
+      'b-cells',
+      cellsApi([
+        cell('c1', 'u1', [card({ id: 'w9', key: 9, swimlaneKey: 'u1' })], 2),
+        cell('c2', 'u1', [card({ id: 'w4', key: 4, swimlaneKey: 'u1' })], 1),
+        cell('c1', 'u2', [], 0),
+      ]),
+    );
+    expect(
+      within(screen.getByTestId('lane-cell-c1-u1')).getByTestId('board-card-PROD-9'),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId('lane-cell-c1-u1')).queryByTestId('board-card-PROD-1'),
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId('lane-cell-c2-u1')).getByTestId('board-card-PROD-4'),
+    ).toBeTruthy();
+    // A cell no page has reached is empty, whatever the column's page holds.
+    expect(
+      within(screen.getByTestId('lane-cell-c1-u2')).queryByTestId('board-card-PROD-2'),
+    ).toBeNull();
+    // The header: loaded = the sum over the column's cells, over the column's total.
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('1 of 3');
+    expect(screen.getByTestId('board-count-c2').textContent).toBe('1');
   });
 
   it('shows the per-lane aggregate count from the projection', () => {

@@ -30,7 +30,6 @@ import {
   expectColumnVirtualized,
   expectNoLoadMore,
   scrollLaneToEnd,
-  scrollSwimlaneColumnToEnd,
   signInBoardSeedOwnerAndOpenBoard,
 } from './_helpers/board';
 import { BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
@@ -242,18 +241,27 @@ test.describe('board-at-scale — load model (3.5.2)', () => {
     await expectNoLoadMore(page);
   });
 
-  test('pages the swimlane board from its footer row, against the page scroll', async ({
+  test('pages the swimlane board lane by lane, with no footer row and no column Load more', async ({
     page,
   }) => {
+    const laneReads: string[] = [];
+    page.on('request', (r) => {
+      if (/\/api\/board\/lanes\/[^/?]+\/cells\?/.test(r.url())) laneReads.push(r.url());
+    });
     await signInBoardSeedOwnerAndOpenBoard(page);
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    const board = await getBoard(page.request);
-    const tall = columnByStatus(board, big.manifest.tallStatusKey);
 
-    await expect(page.getByRole('main').getByTestId('swimlane-load-row')).toBeAttached();
-    await scrollSwimlaneColumnToEnd(page, tall.id, tall.totalCount);
-    await expectNoLoadMore(page);
+    // A grouped board pages each (lane × column) cell itself (MOTIR-11448): the
+    // per-column footer row and its sentinels are gone…
+    const main = page.getByRole('main');
+    await expect(main.getByTestId('swimlane-load-row')).toHaveCount(0);
+    await expect(main.locator('[data-testid^="board-lane-footer-"]')).toHaveCount(0);
+    // …and the lanes in view fill over the lane route, one request per lane.
+    await expect
+      .poll(() => laneReads.length, { message: 'a lane in view read its cells' })
+      .toBeGreaterThan(0);
+    expect(new Set(laneReads).size, 'no lane read twice').toBe(laneReads.length);
   });
 
   test('pages a Done lane in FULL — the aged-out resolved cards load too', async ({ page }) => {

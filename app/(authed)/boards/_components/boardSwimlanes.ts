@@ -2,7 +2,6 @@ import {
   BOARD_SWIMLANE_NO_VALUE,
   type BoardCardDto,
   type BoardColumnDto,
-  type BoardSwimlaneDto,
   type BoardSwimlaneGroupByDto,
 } from '@/lib/dto/boards';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
@@ -312,38 +311,4 @@ export function resolveSwimlaneDrop(
   );
   const move = resolveCellMove(snapshot, relocated, cardId);
   return move ? { move, relocated } : null;
-}
-
-/** A rendered lane = the projection's lane meta + its per-column loaded cards. */
-export interface RenderedLane {
-  lane: BoardSwimlaneDto;
-  /** Loaded cards for this lane, keyed by column id (column order is the caller's). */
-  cellsByColumnId: Map<string, BoardCardDto[]>;
-}
-
-/**
- * Bucket the loaded board into render-ready lanes: for each lane in the
- * projection's order (which already sorts catch-all LAST — assignee alpha /
- * priority rank / epic position), collect each column's cards that fall in it.
- * Lane ORDER + per-lane aggregate COUNT come from the projection (`swimlanes`);
- * the cards here are only the loaded page (the column's "load more" pulls the
- * rest, which re-buckets through this same function). Defensive: a card whose
- * `swimlaneKey` matches no lane (a just-reassigned card mid-reconcile) is
- * dropped from the buckets rather than crashing — the next projection refresh
- * settles it.
- */
-export function bucketLanes(
-  columns: BoardColumnDto[],
-  swimlanes: BoardSwimlaneDto[],
-): RenderedLane[] {
-  return swimlanes.map((lane) => {
-    const cellsByColumnId = new Map<string, BoardCardDto[]>();
-    for (const col of columns) {
-      cellsByColumnId.set(
-        col.id,
-        col.cards.filter((c) => laneKeyOfCard(c) === lane.key),
-      );
-    }
-    return { lane, cellsByColumnId };
-  });
 }

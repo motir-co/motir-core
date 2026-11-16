@@ -54,6 +54,7 @@ import { BoardSkeleton } from './BoardSkeleton';
 import { NoActiveSprintState } from './NoActiveSprintState';
 import { SprintHeader } from './SprintHeader';
 import { SwimlaneBoard } from './SwimlaneBoard';
+import { useBoardCellPages } from './useBoardCellPages';
 import { BoardHeldRefusalProvider, planHoldName, type BoardHeldRefusal } from './BoardHeldRefusal';
 import { heldLineFromRefusal, readHeldRefusal } from '@/components/issues/heldRefusal';
 import { heldSentence, sessionHolderSentence } from '@/components/issues/StatusHeldNotice';
@@ -568,6 +569,20 @@ function BoardDnd({
   // Each lane's paging state (MOTIR-10535) — `loading` while its next page is in
   // flight, `error` when the last one failed (the lane then offers a retry).
   const [loadStates, setLoadStates] = useState<Record<string, LaneLoadState>>({});
+  // A GROUPED board pages each (lane × column) cell on its own (MOTIR-11448); the
+  // flat board keeps the per-column paging above. Inert while group-by is `none`.
+  const mergePlanHolds = useCallback(
+    (holds: BoardProjectionDto['planHolds']) => setPlanHolds((prev) => ({ ...prev, ...holds })),
+    [],
+  );
+  const columnIds = useMemo(() => columns.map((c) => c.id), [columns]);
+  const cellPages = useBoardCellPages({
+    boardId: board.boardId,
+    groupBy,
+    filterParam,
+    columnIds,
+    onPlanHolds: mergePlanHolds,
+  });
   const [activeCard, setActiveCard] = useState<BoardCardDto | null>(null);
   // The lane currently under the drag (swimlane mode) — drives the target-lane
   // ring/tint (paired with the cell `isOver` outline; never colour-alone, #35).
@@ -1358,8 +1373,7 @@ function BoardDnd({
             activeCardId={activeCard?.id ?? null}
             overLaneKey={overLaneKey}
             columnPoints={columnPoints}
-            loadStates={loadStates}
-            onLoadMore={loadMore}
+            cells={cellPages}
           />
         ) : (
           // The board area runs to the viewport's bottom edge at `sm`+ (MOTIR-11323,

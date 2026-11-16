@@ -51,7 +51,6 @@ import {
   expectNoLoadMore,
   gotoLoadedBoard,
   scrollLaneToEnd,
-  scrollSwimlaneColumnToEnd,
   signInScrumSeedOwnerAndOpenScrumBoard,
 } from './_helpers/board';
 import { usersService } from '@/lib/services/usersService';
@@ -563,22 +562,24 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     expect(board.sprint).toBeNull();
   });
 
-  test('pages the swimlane sprint board from its footer row, over the lane route', async ({
-    page,
-  }) => {
-    const pageReads: string[] = [];
+  test('pages the swimlane sprint board lane by lane, with no footer row', async ({ page }) => {
+    const laneReads: string[] = [];
     page.on('request', (r) => {
-      if (/\/api\/board\/columns\/[^/?]+\/cards\?/.test(r.url())) pageReads.push(r.url());
+      if (/\/api\/board\/lanes\/[^/?]+\/cells\?/.test(r.url())) laneReads.push(r.url());
     });
     await signInScrumSeedOwnerAndOpenScrumBoard(page);
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    const board = await getBoard(page.request);
-    const tall = columnByStatus(board, big.manifest.tallStatusKey);
 
-    await expect(page.getByRole('main').getByTestId('swimlane-load-row')).toBeAttached();
-    await scrollSwimlaneColumnToEnd(page, tall.id, tall.totalCount);
-    expect(pageReads.some((u) => u.includes(`/columns/${tall.id}/cards?`))).toBe(true);
-    await expectNoLoadMore(page);
+    // A grouped sprint board pages each (lane × column) cell itself (MOTIR-11448):
+    // no footer row, no column sentinel, and the lanes in view fill over the lane
+    // route, each read once.
+    const main = page.getByRole('main');
+    await expect(main.getByTestId('swimlane-load-row')).toHaveCount(0);
+    await expect(main.locator('[data-testid^="board-lane-footer-"]')).toHaveCount(0);
+    await expect
+      .poll(() => laneReads.length, { message: 'a lane in view read its cells' })
+      .toBeGreaterThan(0);
+    expect(new Set(laneReads).size, 'no lane read twice').toBe(laneReads.length);
   });
 });
