@@ -79,6 +79,10 @@ export interface SkippedFleetRun {
 export interface QueuedFleetJobsRead {
   jobs: QueuedFleetJob[];
   skippedRuns: SkippedFleetRun[];
+  /** Set when GitHub answered the runs list `404`: the repository is gone, or the
+   *  credential the read used cannot see it — the fleet App is not installed on
+   *  it (MOTIR-11437). Either way nothing about its queue is known. */
+  unreadable?: true;
 }
 
 export const fleetQueueClient = {
@@ -86,7 +90,9 @@ export const fleetQueueClient = {
    * Every job of one repository that is `queued` AND asks for the fleet label.
    * A run that is `in_progress` can still hold queued jobs (PR #785's `CI complete`
    * sat behind finished siblings), so both active run statuses are read. A `404`
-   * answers an empty list: the repository is gone or no longer visible.
+   * answers an empty list marked `unreadable`: the repository is gone, or the
+   * credential cannot see it because the fleet App is not installed on it
+   * (MOTIR-11437).
    *
    * ⚠️ ONE UNREADABLE RUN IS SKIPPED, NOT FATAL (Bug MOTIR-10790). GitHub can
    * answer one run's jobs read with a 5xx for hours while every other run reads
@@ -108,7 +114,7 @@ export const fleetQueueClient = {
         `${repoUrl}/actions/runs?status=${status}&per_page=${PER_PAGE}`,
         token,
       );
-      if (res.status === 404) return { jobs: [], skippedRuns: [] };
+      if (res.status === 404) return { jobs: [], skippedRuns: [], unreadable: true };
       if (!res.ok) throw new FleetQueueApiError(res.status, await errorDetail(res));
       const body = asRecord(await res.json());
       for (const run of asArray(body?.['workflow_runs'])) {

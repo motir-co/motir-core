@@ -589,6 +589,23 @@ export const projectRepoRepository = {
   },
 
   /**
+   * {@link listByGithubRepoId} for several repositories in ONE read
+   * (MOTIR-11437), ordered by repository and then position so each repository's
+   * rows come in the order the single read gives them. Same posture: it must run
+   * under a transaction that has bound `app.organization_id`.
+   */
+  async listByGithubRepoIds(
+    githubRepoIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepo[]> {
+    if (githubRepoIds.length === 0) return [];
+    return tx.projectRepo.findMany({
+      where: { githubRepoId: { in: githubRepoIds } },
+      orderBy: [{ githubRepoId: 'asc' }, { position: 'asc' }],
+    });
+  },
+
+  /**
    * WHICH of these workspaces' projects have a repository SET at all — the
    * ladder's first input, for a whole organisation in ONE read (MOTIR-4802).
    *

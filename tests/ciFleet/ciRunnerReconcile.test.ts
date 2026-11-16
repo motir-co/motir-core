@@ -1,5 +1,11 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Sentry's recorder is mocked at its module (the sanctioned second mock, as the
+// fleet debit monitor's suite does): the blind-spot report is asserted on it.
+const { captureMessage } = vi.hoisted(() => ({ captureMessage: vi.fn() }));
+vi.mock('@sentry/nextjs', () => ({ captureMessage, addBreadcrumb: vi.fn() }));
+
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -14,6 +20,7 @@ import { fakeOrchestrator } from '@motir/orchestrator';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { randomToken, randomInt } from '../helpers/random';
 
 // THE GITHUB-SIDE RECONCILE against real Postgres (Bug MOTIR-8976).
@@ -60,6 +67,8 @@ let failingRunJobs: Record<number, number>;
 /** `owner/repo`s whose runs list GitHub refuses, → HTTP status. */
 let failingRunLists: Record<string, number>;
 let urls: string[];
+/** The provisioning App's installation per org login (lowercase), beyond motir-projects. */
+let orgInstallations: Record<string, number>;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -77,6 +86,11 @@ function stubGithub(): void {
       const path = new URL(url).pathname;
       if (path.endsWith(`/orgs/${MOTIR_ORG}/installation`)) {
         return json({ id: Number(PROVISIONING_INSTALLATION) });
+      }
+      const installation = path.match(/^\/orgs\/([^/]+)\/installation$/);
+      if (installation) {
+        const id = orgInstallations[installation[1]!.toLowerCase()];
+        return id ? json({ id }) : json({ message: 'Not Found' }, 404);
       }
       if (url.includes('/access_tokens')) {
         return json({ token: 'ghs_x', expires_at: new Date(Date.now() + 3_600_000).toISOString() });
@@ -201,7 +215,9 @@ beforeEach(async () => {
   orgRunners = {};
   failingRunJobs = {};
   failingRunLists = {};
+  orgInstallations = {};
   urls = [];
+  captureMessage.mockReset();
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   vi.stubEnv('GITHUB_STUDIO_APP_ID', '4242');
@@ -561,6 +577,319 @@ describe('one run GitHub cannot list does not stop the org (MOTIR-10790)', () =>
   });
 });
 
+// ── MOTIR-11437 ──────────────────────────────────────────────────────────────
+// The 2026-11-16 shape: motir-codegraph moved its CI to `motir-runner` with the
+// motir-studio App not installed on it, so no `workflow_job` delivery — and no
+// intent — ever named it, while its jobs took the runners booted for motir-ai's.
+
+let mirrorSeq = 0;
+
+/** A mirrored GitHub repo of the tenant, linked to its project unless `linked: false`. */
+async function seedLinkedRepo(
+  fx: Fixture,
+  data: { owner?: string; name: string; linked?: boolean; archived?: boolean },
+) {
+  mirrorSeq += 1;
+  const installation = await adminDb.githubInstallation.create({
+    data: {
+      installationId: String(990_000 + mirrorSeq),
+      workspaceId: fx.workspaceId,
+      accountLogin: data.owner ?? CONNECTED_ORG,
+      accountType: 'Organization',
+    },
+  });
+  const mirror = await adminDb.githubRepo.create({
+    data: {
+      installationId: installation.id,
+      workspaceId: fx.workspaceId,
+      organizationId: fx.organizationId,
+      repoId: String(660_000 + mirrorSeq),
+      owner: data.owner ?? CONNECTED_ORG,
+      name: data.name,
+      defaultBranch: 'main',
+      archived: data.archived ?? false,
+    },
+  });
+  if (data.linked !== false) {
+    await linkProjectRepo({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      githubRepoId: mirror.id,
+      name: data.name,
+    });
+  }
+  return mirror;
+}
+
+const runsListReads = (ref: string) =>
+  urls.filter((u) => u.includes(`/repos/${ref}/actions/runs?status=queued`)).length;
+
+describe('a linked repo the fleet has no delivery from is read too (MOTIR-11437)', () => {
+  it('counts its stranded jobs, mints for them with the link’s attribution, and reports the repo', async () => {
+    const fx = await seedTenant();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await seedIntent(fx, { jobId: 7, owner: CONNECTED_ORG, repo: 'motir-ai' });
+    const codegraph = await seedLinkedRepo(fx, { name: 'motir-codegraph' });
+    queuedJobs[`${CONNECTED_ORG}/motir-ai`] = [stranded(7)];
+    queuedJobs[`${CONNECTED_ORG}/motir-codegraph`] = [stranded(70, 700)];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs).toEqual([
+      {
+        org: CONNECTED_ORG,
+        queued: 2,
+        idleRunners: 0,
+        awaiting: 0,
+        added: 2,
+        undeliveredRepos: [`${CONNECTED_ORG}/motir-codegraph`],
+      },
+    ]);
+    const minted = await adminDb.ciRunnerProvisioningIntent.findFirstOrThrow({
+      where: { jobId: '70' },
+    });
+    expect(minted).toMatchObject({
+      // The job's FIRST intent: no delivery ever recorded generation 0 for it.
+      reconcileGeneration: 0,
+      status: 'pending',
+      workspaceId: fx.workspaceId,
+      organizationId: fx.organizationId,
+      projectId: fx.projectId,
+      githubRepoId: codegraph.id,
+      // The org's own installation — the one its runners are minted through.
+      installationId: CONNECTED_INSTALLATION,
+      repoOwner: CONNECTED_ORG,
+      repoName: 'motir-codegraph',
+      runId: '700',
+    });
+    expect(bootEvents()).toHaveLength(2);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('no workflow_job deliveries'), {
+      org: CONNECTED_ORG,
+      repos: [`${CONNECTED_ORG}/motir-codegraph`],
+    });
+    expect(captureMessage).toHaveBeenCalledWith(
+      expect.stringContaining('no workflow_job deliveries'),
+      expect.objectContaining({
+        level: 'warning',
+        fingerprint: ['ci-runner-reconcile', 'undelivered', CONNECTED_ORG.toLowerCase()],
+      }),
+    );
+  });
+
+  it('does not report a linked repo whose only queued job is still inside the grace', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 7, owner: CONNECTED_ORG, repo: 'motir-ai' });
+    await seedLinkedRepo(fx, { name: 'motir-codegraph' });
+    queuedJobs[`${CONNECTED_ORG}/motir-codegraph`] = [stranded(70, 700, FRESH)];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs).toEqual([
+      { org: CONNECTED_ORG, queued: 1, idleRunners: 0, awaiting: 0, added: 0 },
+    ]);
+    expect(captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('reads a repo with an intent once, and never a mirror no project uses or an archived one', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 7, owner: CONNECTED_ORG, repo: 'motir-ai' });
+    await seedLinkedRepo(fx, { name: 'motir-ai' });
+    await seedLinkedRepo(fx, { name: 'unlinked', linked: false });
+    await seedLinkedRepo(fx, { name: 'archived', archived: true });
+    queuedJobs[`${CONNECTED_ORG}/motir-ai`] = [stranded(7)];
+
+    const outcome = await reconcile();
+
+    expect(outcome.added).toBe(1);
+    expect(runsListReads(`${CONNECTED_ORG}/motir-ai`)).toBe(1);
+    expect(runsListReads(`${CONNECTED_ORG}/unlinked`)).toBe(0);
+    expect(runsListReads(`${CONNECTED_ORG}/archived`)).toBe(0);
+    // The repo with an intent keeps the intent's own attribution and installation.
+    const minted = await adminDb.ciRunnerProvisioningIntent.findFirstOrThrow({
+      where: { reconcileGeneration: 1 },
+    });
+    expect(minted).toMatchObject({ githubRepoId: null, installationId: CONNECTED_INSTALLATION });
+  });
+
+  it('reads only the organisations the fleet served: a tenant with no intent is not swept', async () => {
+    const served = await seedTenant();
+    const other = await seedTenant();
+    await seedIntent(served, { jobId: 7, owner: CONNECTED_ORG, repo: 'motir-ai' });
+    await seedLinkedRepo(other, { owner: 'someone-else', name: 'their-app' });
+
+    await reconcile();
+
+    expect(urls.some((u) => u.includes('someone-else'))).toBe(false);
+  });
+
+  it('serves a linked repo in a GitHub org the fleet has no intent in, through the App’s installation there', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 1 });
+    await seedLinkedRepo(fx, { owner: 'acme-co', name: 'acme-api' });
+    orgInstallations['acme-co'] = 88003;
+    queuedJobs['acme-co/acme-api'] = [stranded(30, 300)];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs.find((o) => o.org === 'acme-co')).toEqual({
+      org: 'acme-co',
+      queued: 1,
+      idleRunners: 0,
+      awaiting: 0,
+      added: 1,
+      undeliveredRepos: ['acme-co/acme-api'],
+    });
+    expect(
+      await adminDb.ciRunnerProvisioningIntent.findFirstOrThrow({ where: { jobId: '30' } }),
+    ).toMatchObject({ installationId: '88003', repoOwner: 'acme-co', repoName: 'acme-api' });
+    expect(urls.some((u) => u.includes('/installations/88003/access_tokens'))).toBe(true);
+  });
+
+  it('skips a GitHub org the fleet App is not installed on, without an error', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 1 });
+    await seedLinkedRepo(fx, { owner: 'acme-co', name: 'acme-api' });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(1)];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs.map((o) => o.org)).toEqual([MOTIR_ORG]);
+    expect(outcome.added).toBe(1);
+    expect(urls.some((u) => u.includes('/repos/acme-co/'))).toBe(false);
+  });
+
+  it('names a linked repo the fleet cannot read when jobs are left stranded, and only then', async () => {
+    const fx = await seedTenant();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await seedIntent(fx, { jobId: 7, owner: CONNECTED_ORG, repo: 'motir-ai' });
+    await seedLinkedRepo(fx, { name: 'motir-codegraph' });
+    failingRunLists[`${CONNECTED_ORG}/motir-codegraph`] = 404;
+
+    // Quiet tick: nothing stranded, so the unreadable repo is not news.
+    const quiet = await reconcile();
+    expect(quiet.orgs[0]).not.toHaveProperty('unreadableRepos');
+    expect(captureMessage).not.toHaveBeenCalled();
+
+    // A motir-ai job is left with no runner: now the repo nobody can see is named.
+    queuedJobs[`${CONNECTED_ORG}/motir-ai`] = [stranded(7)];
+    const stalled = await reconcile();
+
+    expect(stalled.orgs).toEqual([
+      {
+        org: CONNECTED_ORG,
+        queued: 1,
+        idleRunners: 0,
+        awaiting: 0,
+        added: 1,
+        unreadableRepos: [`${CONNECTED_ORG}/motir-codegraph`],
+      },
+    ]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('cannot read these linked repos'), {
+      org: CONNECTED_ORG,
+      repos: [`${CONNECTED_ORG}/motir-codegraph`],
+    });
+    expect(captureMessage).toHaveBeenCalledWith(
+      expect.stringContaining('unreadable linked repos'),
+      expect.objectContaining({
+        fingerprint: ['ci-runner-reconcile', 'unreadable', CONNECTED_ORG.toLowerCase()],
+      }),
+    );
+  });
+
+  it('never names a repo with an intent as unreadable', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 7, owner: CONNECTED_ORG, repo: 'motir-ai' });
+    await seedIntent(fx, { jobId: 8, owner: CONNECTED_ORG, repo: 'gone' });
+    failingRunLists[`${CONNECTED_ORG}/gone`] = 404;
+    queuedJobs[`${CONNECTED_ORG}/motir-ai`] = [stranded(7)];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).not.toHaveProperty('unreadableRepos');
+  });
+});
+
+describe('a runner that served another job does not spend a generation (MOTIR-11437)', () => {
+  async function seedGenerations(
+    fx: Fixture,
+    count: number,
+    data: { teardownReason?: string | null; jobPickedUpAt?: Date | null; status?: string },
+  ) {
+    for (let g = 1; g <= count; g++) {
+      await adminDb.ciRunnerProvisioningIntent.create({
+        data: {
+          ...(await seedIntentData(fx, 9001)),
+          reconcileGeneration: g,
+          status: data.status ?? 'completed',
+          teardownReason: data.teardownReason ?? null,
+          jobPickedUpAt: data.jobPickedUpAt ?? null,
+        },
+      });
+    }
+  }
+
+  it('keeps minting past five generations whose runners each ran a job (taken, not lost)', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9001 });
+    await seedGenerations(fx, 5, { teardownReason: 'job_completed' });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9001)];
+
+    expect((await reconcile()).added).toBe(1);
+    expect(
+      await adminDb.ciRunnerProvisioningIntent.count({
+        where: { jobId: '9001', reconcileGeneration: 6 },
+      }),
+    ).toBe(1);
+  });
+
+  it('counts a runner seen busy (`jobPickedUpAt`) or timed out on a job as served', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9001 });
+    await seedGenerations(fx, 3, { status: 'failed', jobPickedUpAt: NOW });
+    for (const g of [4, 5]) {
+      await adminDb.ciRunnerProvisioningIntent.create({
+        data: {
+          ...(await seedIntentData(fx, 9001)),
+          reconcileGeneration: g,
+          status: 'failed',
+          teardownReason: 'job_timed_out',
+        },
+      });
+    }
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9001)];
+
+    expect((await reconcile()).added).toBe(1);
+  });
+
+  it('still stops at five generations that never served a job (idle, failed boots)', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9001 });
+    await seedGenerations(fx, 2, { status: 'completed', teardownReason: 'runner_idle' });
+    for (const g of [3, 4, 5]) {
+      await adminDb.ciRunnerProvisioningIntent.create({
+        data: {
+          ...(await seedIntentData(fx, 9001)),
+          reconcileGeneration: g,
+          status: 'failed',
+          teardownReason: 'provision_failed',
+        },
+      });
+    }
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9001)];
+
+    expect((await reconcile()).added).toBe(0);
+  });
+
+  it('stops at the hard ceiling however many generations were served', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9001 });
+    await seedGenerations(fx, 25, { teardownReason: 'job_completed' });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9001)];
+
+    expect((await reconcile()).added).toBe(0);
+  });
+});
+
 describe('the new intents go through the admission gate', () => {
   it('an org at its CI figure DEFERS the reconcile intent instead of exceeding it', async () => {
     const fx = await seedTenant();
@@ -589,7 +918,7 @@ describe('the new intents go through the admission gate', () => {
 });
 
 describe('fleetQueueClient edges', () => {
-  it('answers an empty queue for a repository GitHub no longer knows (404)', async () => {
+  it('answers an empty, UNREADABLE queue for a repository GitHub will not show (404)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) => {
@@ -606,6 +935,7 @@ describe('fleetQueueClient edges', () => {
     expect(await fleetQueueClient.listQueuedFleetJobs({ owner: MOTIR_ORG, repo: 'gone' })).toEqual({
       jobs: [],
       skippedRuns: [],
+      unreadable: true,
     });
   });
 

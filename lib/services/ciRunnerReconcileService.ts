@@ -2,6 +2,9 @@ import * as Sentry from '@sentry/nextjs';
 import { Prisma, type CiRunnerProvisioningIntent } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { attributeMirroredRepos } from '@/lib/services/ciRunnerProvisioningService';
+import { findProvisioningInstallationId } from '@/lib/github/repoProvisioning';
 import { dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 import { isCiFleetConfigured } from '@/lib/orchestrator';
@@ -31,6 +34,23 @@ import {
 //     the job), dispatched through the ordinary boot, so the admission gate (pool
 //     cap, `ci_credits_exhausted`) still decides.
 //
+// ⚠️ IT ASKS GITHUB ABOUT EVERY REPO THE FLEET'S ORGANISATIONS LINK, NOT ONLY THE
+// REPOS IT HAS INTENTS FOR (Bug MOTIR-11437). The repo set used to come from the
+// intents alone, so a repo whose `workflow_job` deliveries never arrive (the
+// motir-studio App not installed on it: motir-codegraph, 2026-11-16) was invisible
+// to the hot path AND to this sweep, while its jobs took the runners booted for
+// other repos' jobs. Now every live GitHub repo linked to a project of an
+// organisation the fleet served in the lookback is read too; a repo with no
+// delivery but queued fleet jobs is minted for and REPORTED, and a linked repo the
+// fleet's credential cannot read is named whenever jobs are left stranded.
+//
+// ⚠️ A RUNNER THAT SERVED ANOTHER JOB DOES NOT SPEND A GENERATION (MOTIR-11437).
+// The cap exists for a job one more boot will not fix; a generation whose runner
+// took a job while this one stayed queued proves the opposite — the runner was
+// taken, and the job needs another. Only generations never seen serving a job
+// count toward {@link MAX_RECONCILE_GENERATION}; {@link MAX_RECONCILE_GENERATION_CEILING}
+// still bounds the total.
+//
 // ⚠️ IT NEVER BOOTS PAST THE GAP: coverage is counted before anything is minted,
 // the oldest jobs are the ones minted for, and the unique index on
 // `(run, attempt, job, reconcile_generation)` makes two racing sweeps collide
@@ -39,12 +59,21 @@ import {
 /** A queued job younger than this is the webhook's hot path's to serve. */
 export const RECONCILE_GRACE_MS = 2 * 60_000;
 
-/** How far back the fleet's own records name the repos worth asking GitHub about. */
+/** How far back the fleet's own records name the repos — and the organisations,
+ *  whose linked repos are read too (MOTIR-11437) — worth asking GitHub about. */
 const REPO_LOOKBACK_MS = 3 * 24 * 60 * 60_000;
 
-/** A job reconciled this many times and still queued is not one more boot will
- *  fix (a credits refusal settles each attempt `failed`) — stop minting for it. */
+/** A job reconciled this many times by runners that never served a job, and still
+ *  queued, is not one more boot will fix (a credits refusal settles each attempt
+ *  `failed`) — stop minting for it. A generation whose runner served another job
+ *  does not count (MOTIR-11437). */
 export const MAX_RECONCILE_GENERATION = 5;
+
+/** The hard bound on a job's reconcile generations, served or not (MOTIR-11437):
+ *  every served generation ran a real queued job, so this is reached only when a
+ *  job is passed over far longer than any queue drains — stop there rather than
+ *  boot for it without end. */
+export const MAX_RECONCILE_GENERATION_CEILING = 25;
 
 export interface ReconcileOrgOutcome {
   org: string;
@@ -55,6 +84,12 @@ export interface ReconcileOrgOutcome {
   /** Runs whose jobs GitHub would not list, left out of `queued` this tick
    *  (MOTIR-10790). Present only when there are any. */
   skippedRuns?: SkippedFleetRun[];
+  /** `owner/repo`s holding queued fleet jobs with no `workflow_job` delivery in the
+   *  lookback (MOTIR-11437). Present only when there are any. */
+  undeliveredRepos?: string[];
+  /** Linked `owner/repo`s the fleet's credential cannot read, named when jobs were
+   *  left uncovered this tick (MOTIR-11437). Present only when there are any. */
+  unreadableRepos?: string[];
   /** Set when the org could not be read; the other orgs are unaffected. */
   error?: string;
 }
@@ -72,26 +107,22 @@ export const ciRunnerReconcileService = {
     if (!(await isCiFleetConfigured())) return { orgs: [], added: 0 };
     const now = (options.now ?? (() => new Date()))();
 
+    const since = new Date(now.getTime() - REPO_LOOKBACK_MS);
     const latest = await withSystemContext((tx) =>
-      ciRunnerProvisioningIntentRepository.listLatestPerRepoSince(
-        new Date(now.getTime() - REPO_LOOKBACK_MS),
-        tx,
-      ),
+      ciRunnerProvisioningIntentRepository.listLatestPerRepoSince(since, tx),
     );
-
-    // Group the repos by org, case-insensitively. The first (newest) intent of an
-    // org supplies the installation its target is built from.
-    const byOrg = new Map<string, CiRunnerProvisioningIntent[]>();
-    for (const intent of latest) {
-      const key = intent.repoOwner.trim().toLowerCase();
-      byOrg.set(key, [...(byOrg.get(key) ?? []), intent]);
-    }
+    const linked = await listLinkedRepos([...new Set(latest.map((i) => i.organizationId))]);
+    const byOrg = groupByOrg(latest, linked);
 
     const orgs: ReconcileOrgOutcome[] = [];
-    for (const repos of byOrg.values()) {
-      const org = repos[0]!.repoOwner;
+    for (const group of byOrg.values()) {
+      const org = group.org;
       try {
-        orgs.push(await reconcileOrg(org, repos, now));
+        const installationId = group.installationId ?? (await findProvisioningInstallationId(org));
+        // No fleet App on an org the fleet has never served: no fleet runner can
+        // exist there to be taken, and none can be booted — nothing to reconcile.
+        if (installationId === null) continue;
+        orgs.push(await reconcileOrg(org, installationId, group.repos, now));
       } catch (err) {
         // One org's outage (a revoked installation, GitHub down) must not starve
         // the others — the next tick retries it.
@@ -106,22 +137,121 @@ export const ciRunnerReconcileService = {
   },
 };
 
+/** What a reconcile intent copies from — the attribution a mint needs. */
+type MintBase = Pick<
+  CiRunnerProvisioningIntent,
+  'workspaceId' | 'organizationId' | 'projectId' | 'githubRepoId' | 'repoOwner' | 'repoName'
+> & { installationId: string | null };
+
+/** One repository the sweep asks GitHub about. */
+interface FleetRepo {
+  base: MintBase;
+  /** The fleet recorded a `workflow_job` delivery for it within the lookback. */
+  delivered: boolean;
+}
+
+interface OrgGroup {
+  /** The org login as the newest intent (or the mirror) spells it. */
+  org: string;
+  /** The installation the org's newest intent arrived on; null when the fleet has
+   *  no intent in the org at all and it must be looked up. */
+  installationId: string | null;
+  repos: FleetRepo[];
+}
+
+const repoKey = (owner: string, name: string) =>
+  `${owner.trim().toLowerCase()}/${name.trim().toLowerCase()}`;
+
+/**
+ * Every live GitHub repository linked to a project of `organizationIds`, with the
+ * attribution a reconcile intent for it would carry (MOTIR-11437). The mirror rows
+ * are read under the system context (`github_repo`'s policy has the system arm);
+ * the links through {@link attributeMirroredRepos}, one transaction per mirror
+ * workspace — the intake's own read, so the two cannot attribute a repo
+ * differently. A repository no project uses is not the fleet's to serve.
+ */
+async function listLinkedRepos(organizationIds: string[]): Promise<MintBase[]> {
+  const mirrors = await withSystemContext((tx) =>
+    githubRepoRepository.listLiveGithubByOrganizations(organizationIds, tx),
+  );
+  const byMirror = new Map<string, typeof mirrors>();
+  for (const row of mirrors) {
+    const key = `${row.workspaceId}:${row.organizationId}`;
+    byMirror.set(key, [...(byMirror.get(key) ?? []), row]);
+  }
+  const linked: MintBase[] = [];
+  for (const rows of byMirror.values()) {
+    const attribution = await attributeMirroredRepos({
+      workspaceId: rows[0]!.workspaceId,
+      organizationId: rows[0]!.organizationId,
+      githubRepoIds: rows.map((r) => r.id),
+    });
+    for (const row of rows) {
+      const tenant = attribution.get(row.id);
+      if (!tenant) continue;
+      linked.push({
+        workspaceId: tenant.workspaceId,
+        organizationId: tenant.organizationId,
+        projectId: tenant.projectId,
+        githubRepoId: row.id,
+        repoOwner: row.owner,
+        repoName: row.name,
+        installationId: null,
+      });
+    }
+  }
+  return linked;
+}
+
+/**
+ * Group the repos to read by GitHub org, case-insensitively. A repo with an intent
+ * keeps that intent as its base, exactly as before; a linked repo with none is
+ * added beside it, once. The first (newest) intent of an org supplies the
+ * installation its target is built from.
+ */
+function groupByOrg(latest: CiRunnerProvisioningIntent[], linked: MintBase[]) {
+  const byOrg = new Map<string, OrgGroup>();
+  const seen = new Set<string>();
+  const add = (base: MintBase, delivered: boolean) => {
+    const key = repoKey(base.repoOwner, base.repoName);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const org = base.repoOwner.trim().toLowerCase();
+    const group = byOrg.get(org) ?? {
+      org: base.repoOwner,
+      installationId: base.installationId,
+      repos: [],
+    };
+    group.repos.push({ base, delivered });
+    byOrg.set(org, group);
+  };
+  for (const intent of latest) add(intent, true);
+  for (const base of linked) add(base, false);
+  return byOrg;
+}
+
 async function reconcileOrg(
   org: string,
-  repos: CiRunnerProvisioningIntent[],
+  installationId: string,
+  repos: FleetRepo[],
   now: Date,
 ): Promise<ReconcileOrgOutcome> {
-  const target = fleetRunnerTargetFor(repos[0]!);
+  const target = fleetRunnerTargetFor({ repoOwner: org, installationId });
 
   const queued: QueuedFleetJob[] = [];
   const skippedRuns: SkippedFleetRun[] = [];
+  const unreadable: string[] = [];
+  const undelivered = new Set<string>();
   for (const repo of repos) {
     const read = await fleetQueueClient.listQueuedFleetJobs(
-      { owner: repo.repoOwner, repo: repo.repoName },
+      { owner: repo.base.repoOwner, repo: repo.base.repoName },
       target,
     );
     queued.push(...read.jobs);
     skippedRuns.push(...read.skippedRuns);
+    const ref = `${repo.base.repoOwner}/${repo.base.repoName}`;
+    if (read.unreadable && !repo.delivered) unreadable.push(ref);
+    if (!repo.delivered && read.jobs.some((job) => pastGrace(job, now))) undelivered.add(ref);
   }
   // A run GitHub would not list is skipped, never fatal (MOTIR-10790): the org's
   // other stranded jobs are still counted below. Its own queued jobs are simply
@@ -145,18 +275,18 @@ async function reconcileOrg(
   // are the ones the available runners will serve and the uncovered are the rest.
   queued.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   const uncovered = Math.max(0, queued.length - idleRunners - awaiting);
-  const gaps = queued
-    .slice(queued.length - uncovered)
-    .filter((job) => now.getTime() - job.createdAt.getTime() > RECONCILE_GRACE_MS);
+  const gaps = queued.slice(queued.length - uncovered).filter((job) => pastGrace(job, now));
 
   let added = 0;
   for (const job of gaps) {
-    const repoIntent = repos.find(
-      (r) =>
-        r.repoOwner.toLowerCase() === job.repoOwner.toLowerCase() && r.repoName === job.repoName,
+    const repo = repos.find(
+      (r) => repoKey(r.base.repoOwner, r.base.repoName) === repoKey(job.repoOwner, job.repoName),
     );
-    if (!repoIntent) continue;
-    const intentId = await mintReconcileIntent(job, repoIntent);
+    if (!repo) continue;
+    const intentId = await mintReconcileIntent(job, {
+      ...repo.base,
+      installationId: repo.base.installationId ?? installationId,
+    });
     if (intentId === null) continue;
     added += 1;
     // The ordinary boot path: `admit` is where the pool cap and the credit refusal
@@ -164,6 +294,10 @@ async function reconcileOrg(
     await dispatchCiRunnerBoot(intentId, 'hot-path');
   }
 
+  // A linked repo nobody can read is named only when something was left stranded
+  // here: most such repos simply do not run on the fleet, and naming them on every
+  // quiet tick would bury the one that does.
+  const unreadableRepos = gaps.length > 0 ? unreadable : [];
   const outcome: ReconcileOrgOutcome = {
     org,
     queued: queued.length,
@@ -171,6 +305,8 @@ async function reconcileOrg(
     awaiting,
     added,
     ...(skippedRuns.length > 0 ? { skippedRuns } : {}),
+    ...(undelivered.size > 0 ? { undeliveredRepos: [...undelivered] } : {}),
+    ...(unreadableRepos.length > 0 ? { unreadableRepos } : {}),
   };
   if (added > 0) {
     console.warn(
@@ -184,14 +320,51 @@ async function reconcileOrg(
       data: outcome,
     });
   }
+  reportBlindSpots(org, outcome);
   return outcome;
 }
 
+const pastGrace = (job: QueuedFleetJob, now: Date) =>
+  now.getTime() - job.createdAt.getTime() > RECONCILE_GRACE_MS;
+
+/**
+ * Say so when the fleet is blind to part of an org (MOTIR-11437) — the stall this
+ * card is about was silent. Logged, and raised to Sentry as a warning grouped per
+ * org and kind, so it is one issue that keeps counting rather than a breadcrumb no
+ * one reads.
+ */
+function reportBlindSpots(org: string, outcome: ReconcileOrgOutcome): void {
+  if (outcome.undeliveredRepos) {
+    const detail = { org, repos: outcome.undeliveredRepos };
+    console.warn(
+      '[ciRunnerReconcile] motir-runner jobs are queued in repos with no workflow_job deliveries — is the motir-studio App installed on them, and are its deliveries arriving?',
+      detail,
+    );
+    Sentry.captureMessage(`CI fleet: motir-runner jobs with no workflow_job deliveries in ${org}`, {
+      level: 'warning',
+      fingerprint: ['ci-runner-reconcile', 'undelivered', org.toLowerCase()],
+      extra: detail,
+    });
+  }
+  if (outcome.unreadableRepos) {
+    const detail = { org, repos: outcome.unreadableRepos };
+    console.warn(
+      '[ciRunnerReconcile] fleet jobs are stranded and the fleet cannot read these linked repos — is the motir-studio App installed on them?',
+      detail,
+    );
+    Sentry.captureMessage(`CI fleet: stranded jobs and unreadable linked repos in ${org}`, {
+      level: 'warning',
+      fingerprint: ['ci-runner-reconcile', 'unreadable', org.toLowerCase()],
+      extra: detail,
+    });
+  }
+}
+
 /** Mint the next reconcile generation of a job, or null when it is not ours to
- *  mint (generation cap, or a racing sweep won the unique index). */
+ *  mint (a generation cap, or a racing sweep won the unique index). */
 async function mintReconcileIntent(
   job: QueuedFleetJob,
-  base: CiRunnerProvisioningIntent,
+  base: MintBase & { installationId: string },
 ): Promise<string | null> {
   try {
     return await withSystemContext(async (tx) => {
@@ -202,7 +375,14 @@ async function mintReconcileIntent(
         tx,
       );
       const generation = max + 1;
-      if (generation > MAX_RECONCILE_GENERATION) return null;
+      if (generation > MAX_RECONCILE_GENERATION_CEILING) return null;
+      const unserved = await ciRunnerProvisioningIntentRepository.countUnservedReconcileGenerations(
+        job.runId,
+        job.runAttempt,
+        job.jobId,
+        tx,
+      );
+      if (unserved >= MAX_RECONCILE_GENERATION) return null;
       const intent = await ciRunnerProvisioningIntentRepository.create(
         {
           workspaceId: base.workspaceId,
