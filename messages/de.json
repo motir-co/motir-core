@@ -8798,6 +8798,10 @@
       "approve": "Genehmigen",
       "approveChanges": "Änderungen genehmigen",
       "nothingSavedYet": "Noch nichts gespeichert",
+      "revision": {
+        "earlierVersion": "Frühere Version · unten ersetzt",
+        "earlierVersionUnkept": "Hier stand eine frühere Version dieses Plans ({count, plural, one {# Eintrag} other {# Einträge}}). Ihre Zusammenfassung wurde nicht aufbewahrt."
+      },
       "barCounts": "{added, plural, =0 {Keine Ergänzungen} one {# hinzugefügt} other {# hinzugefügt}}{changed, plural, =0 {} one {, # geändert} other {, # geändert}}{removed, plural, =0 {} one {, # entfernt} other {, # entfernt}}",
       "barNothingSaved": "Nichts wird gespeichert, bis Sie genehmigen.",
       "summary": "{added, plural, =0 {Keine neuen Arbeitselemente} one {# hinzugefügt} other {# hinzugefügt}}{changed, plural, =0 {} one {, # geändert} other {, # geändert}}{removed, plural, =0 {} one {, # entfernt} other {, # entfernt}} – es ist auf der Arbeitsfläche, noch ist nichts gespeichert.",

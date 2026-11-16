@@ -186,6 +186,14 @@ export interface PlanNarrationProps {
    * final-check head, and never while the fix after it runs.
    */
   onSkipCheck?: () => Promise<'skipped' | 'not_running'>;
+  /**
+   * ONE FOLD FOR SEVERAL BLOCKS (MOTIR-11487; design MOTIR-11486 § "The
+   * collapse-all control across run blocks"): the planning rail draws one block of
+   * notes per run, and pressing Hide or Show in any of them folds or opens every
+   * one. The rail owns the state ({@link usePlannerNotesFold}) and hands it to each
+   * block; absent, the block keeps its own.
+   */
+  fold?: PlannerNotesFold;
 }
 
 /**
@@ -207,10 +215,12 @@ export function PlanNarration({
   loadingEarlier = false,
   onShowEarlier,
   onSkipCheck,
+  fold: sharedFold,
 }: PlanNarrationProps) {
   const tc = useTranslations('planningWorkspace.conversation');
   const baseId = useId();
-  const fold = useFoldState();
+  const ownFold = usePlannerNotesFold();
+  const fold = sharedFold ?? ownFold;
   const skip = useSkipCheck(onSkipCheck);
   const skipKey = onSkipCheck ? skipCheckGroupKey(groups) : null;
   const { clearPending } = skip;
@@ -372,7 +382,15 @@ function useSkipCheck(onSkipCheck: PlanNarrationProps['onSkipCheck']) {
  * later Hide folds a group that was opened alone. Only the all-control is
  * remembered; a single group's disclosure is view state.
  */
-function useFoldState() {
+/** Which planner-note groups are folded: one press state over the remembered
+ *  choice. See {@link PlanNarrationProps.fold}. */
+export interface PlannerNotesFold {
+  isFolded: (key: string) => boolean;
+  toggle: (key: string) => void;
+  setAll: (fold: boolean) => void;
+}
+
+export function usePlannerNotesFold(): PlannerNotesFold {
   // The remembered choice is read through `useSyncExternalStore`, whose server
   // snapshot is "expanded": the server has no storage, so a render-time read
   // would hydrate one tree over another. A press in this view wins over it.

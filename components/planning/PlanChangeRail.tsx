@@ -50,7 +50,17 @@ import {
   notesOfJob,
   notesOfUnansweredJob,
 } from '@/components/planning/ConversationNotes';
-import { PlanNarration, narrationHeadLines } from '@/components/planning/PlanNarration';
+import {
+  PlanNarration,
+  narrationHeadLines,
+  usePlannerNotesFold,
+} from '@/components/planning/PlanNarration';
+import {
+  layoutRail,
+  narrationRuns,
+  type RailRun,
+  type RailSlot,
+} from '@/components/planning/planRailTimeline';
 import {
   groupNarration,
   mergeNarrationEntries,
@@ -111,6 +121,7 @@ import type {
   PlanChangeTurnDto,
   PlanChangeTurnRoleDto,
 } from '@/lib/dto/planChange';
+import type { PlanVersionDto } from '@/lib/dto/planReview';
 import type { WorkItemRefMap, WorkItemRefSummaryDto } from '@/lib/dto/workItems';
 import type {
   PlanChangeConversationState,
@@ -122,7 +133,11 @@ import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { BrandMark } from '@/components/brand/BrandMark';
-import { PLAN_AT_WORK_GLYPH_PX, PlanAtWorkMark } from '@/components/planning/PlanAtWorkMark';
+import {
+  PLAN_AT_WORK_GLYPH_PX,
+  PlanAtWorkMark,
+  PlanAtWorkMarkView,
+} from '@/components/planning/PlanAtWorkMark';
 import {
   CarryDecidedNotice,
   carriesWaitingPlan,
@@ -1146,12 +1161,63 @@ export function PlanChangeRail({
   // work on the turn before its first act lands (a plan the rail watches being
   // written, an MCP agent's included, or a job streaming), so the mark that says
   // so is on screen from the work's first moment.
+  // ONE RUN BLOCK PER PLANNER JOB, under the turn that started it (Bug MOTIR-11487;
+  // design MOTIR-11486 § "The ordering rule"). The working row holds the run on
+  // screen — the live one, else the newest — and every other run is drawn as a
+  // finished block under its own turn, so the rail reads in the order it happened.
+  const runs = narrationRuns(narrationGroups);
+  const liveJobId =
+    state.phase === 'streaming'
+      ? state.jobId
+      : state.liveReview
+        ? (state.session?.lastJobId ?? null)
+        : null;
+  // The run on screen: the live job's own run; else the run still holding a live
+  // session (plan.py, an agent over MCP, a session keyed by no job); else the newest.
+  const workRun =
+    (liveJobId !== null ? runs.find((run) => run.key === `ai:${liveJobId}`) : undefined) ??
+    runs.findLast((run) => run.groups.some((group) => group.live)) ??
+    (liveJobId === null ? (runs.at(-1) ?? null) : null);
+  const workRunKey = workRun?.key ?? null;
+  const workGroups = workRun?.groups ?? [];
   const workRowShown =
     writing ||
     acts.length > 0 ||
-    narrationGroups.length > 0 ||
+    workGroups.length > 0 ||
     Boolean(state.liveReview) ||
     state.phase === 'streaming';
+  // The fold is ONE rail-wide state across the run blocks (design § "The
+  // collapse-all control across run blocks").
+  const notesFold = usePlannerNotesFold();
+  const narrationEarlier = narrationEarlierCount(narrationEntries);
+  const narrationTotal = narration ? narration.earlierCount + narration.entries.length : 0;
+  // The notes a run's own sticky bar counts: its own sentences, and — for the
+  // first run only, which the unread earlier page belongs to — the ones not yet in hand.
+  const runTotal = (run: RailRun | null) =>
+    run === null
+      ? 0
+      : run.groups.reduce((n, group) => n + group.messages.length, 0) +
+        (run === runs[0] ? narrationTotal - narrationEntries.length : 0);
+  // EVERY VERSION'S BRIEFING where it closed (design § "The earlier version, kept as
+  // history"), drawn only while the plan in hand is undecided, as the briefing is.
+  const reviewShown = Boolean(state.review) && !state.decided && !index.isEmpty;
+  const layout = layoutRail({
+    turns,
+    runs,
+    versions: reviewShown ? (state.review?.versions ?? []) : [],
+    workRunKey,
+    workJobId: liveJobId ?? workRun?.jobId ?? null,
+    workShown: workRowShown,
+  });
+  // A revision this rail is following is writing: no decide panel at all (design
+  // § "The panel rule"). The hand-off is the revision's one word on the decision.
+  // A Visitor never gets one, in any state (design panel 7): the rail is theirs to
+  // read, and nothing on it is theirs to decide.
+  const panelShown = reviewShown && !rewritingPlan && readerRoutes.identifier === null;
+  // The revision ended without a new version (failed): its failure line goes under
+  // its run, ABOVE the old version's panel, which is decidable again.
+  const failureAbovePanel =
+    panelShown && !layout.currentTrailing && failure !== null && !awaitsResume;
   const logRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const actCount = acts.length + narrationEntries.length;
@@ -1160,6 +1226,243 @@ export function PlanChangeRail({
     if (!el || !stickRef.current || actCount === 0) return;
     el.scrollTop = el.scrollHeight;
   }, [actCount]);
+
+  // The briefing's chips: the summary's own refs (MOTIR-9697) over the session's
+  // turn map, so a link no chat turn mentions still resolves live.
+  const briefingRefs = {
+    ...state.session?.workItemRefs,
+    ...state.review?.summaryRefs,
+  };
+  // THE CURRENT VERSION'S BRIEFING (MOTIR-8149). A plan with no summary (written
+  // before the briefing existed) keeps the canned pair: its section 3 says what was
+  // left untouched and section 6 gives the counts, so the pair would only repeat it.
+  const currentBriefing = state.review?.summary?.trim() ? (
+    <Bubble role="assistant" testId="plan-change-briefing">
+      <PlanBriefing summary={state.review.summary} workItemRefs={briefingRefs} />
+    </Bubble>
+  ) : (
+    <>
+      <Bubble role="assistant">
+        {tc('summary', {
+          added: index.counts.added,
+          changed: index.counts.changed,
+          removed: index.counts.removed,
+        })}
+      </Bubble>
+      <Bubble role="assistant">{tc('lockedNote')}</Bubble>
+    </>
+  );
+  // A VERSION'S BRIEFING where it closed (MOTIR-11487; design § "The earlier version,
+  // kept as history"). The current one is drawn as it always was; an earlier one keeps
+  // its text under the bubble's label slot — not dimmed, struck or folded — or, when it
+  // closed before briefings were kept, one line in its place with its count.
+  const versionBriefing = (version: PlanVersionDto, earlier: boolean) =>
+    !earlier ? (
+      <Fragment key={`version:${version.id}`}>{currentBriefing}</Fragment>
+    ) : version.summary ? (
+      <Bubble
+        key={`version:${version.id}`}
+        role="assistant"
+        testId="plan-change-earlier-briefing"
+        label={tc('revision.earlierVersion')}
+      >
+        <PlanBriefing summary={version.summary} workItemRefs={briefingRefs} />
+      </Bubble>
+    ) : (
+      <Bubble key={`version:${version.id}`} role="assistant" testId="plan-change-earlier-unkept">
+        <span className="text-(--el-text-secondary)">
+          {tc('revision.earlierVersionUnkept', { count: version.itemCount })}
+        </span>
+      </Bubble>
+    );
+  // THE RUN ON SCREEN (MOTIR-9213's working row and what sits above it), drawn in
+  // the transcript where its run goes — under the turn that started it — and kept
+  // under one key, so moving it never remounts the act record's live region.
+  const workBlock = (
+    <Fragment key="plan-work">
+      {/* The RUN, narrated: the shipped drafting row + a polite live region fed
+            by the job's real progress frames. */}
+      {/* The HAND-OFF (ADR Consequence 3). An ask turn that resolved to a plan
+            change streams twice; naming the re-reading is what keeps the wait
+            from reading as "that failed, it is trying again". The waiting row
+            below never unmounts — only its text changes. */}
+      {state.progress?.kind === 'redirected' ? (
+        <p
+          className="text-center text-xs text-(--el-text-secondary)"
+          data-testid="plan-change-handoff"
+        >
+          {tc('handoff')}
+        </p>
+      ) : null}
+
+      {/* THE ACT RAIL (MOTIR-4069) — an accumulating record, not a replacing
+            line. Three columns: glyph · mono act label · the line
+            (`design/ai-chat/plan-change-run-live.mock.html` sheet 3).
+
+            ⚠️ THE SKIM AXIS IS THE MIDDLE COLUMN, NOT COLOUR. Every act line is
+            the same ink; what a reader runs their eye down is a fixed-width
+            column of short mono words, with the glyph as a second, non-textual
+            cue. Deliberate: the rail already carries three coloured states
+            (assistant, user, the accent review block) and a fourth hue would
+            compete with them rather than help.
+
+            It keeps the shipped `aria-live="polite"` region and its test id; since
+            the per-call lines (MOTIR-7975) the region holds an announcer and the
+            record is its sibling (`PlanActRecord`). */}
+      {/* THE HAND-OFF BEFORE GENERATION (Story MOTIR-6012 · MOTIR-6037; design
+            Part XXII §22.6, Panel 9). The moment a PLAN run starts writing, the planner
+            says so in its own turn — a KEYED bubble, like `lockedNote`, so the words
+            are the catalogue's and never the model's — and that the reader may leave:
+            the run carries on server-side and the plan will be waiting in To approve.
+            A revision of the plan in hand gets its own form. The link is a real
+            anchor to the tab (§22.9). */}
+      {/* THE CONVERSATION PHASE (MOTIR-8203): until the run settles what it is
+            planning, the planner says only what is true — it is working out the
+            ask and may still have a question. Keyed, like the hand-off it gives way
+            to at `target_settled`; a question ends the run before either is due. */}
+      {/* THE GRILLING (MOTIR-8447 routes it, MOTIR-8177 draws it): the session's
+            turns on the rail's own surfaces, its pending question carrying the
+            pending-question anchor when the run itself is not waiting on one. Gone
+            at the hand-off — except an ENDED session's summary, which stays above
+            the hand-off (design G5). */}
+      {grill.session && (conversing || (writing && grill.session.status === 'ended')) ? (
+        <SharpenThread
+          session={grill.session}
+          pending={grill.pending}
+          error={grill.error}
+          {...(question ? {} : { anchorId: PENDING_QUESTION_ID })}
+          onAct={(action, opts) => {
+            setGrillOwnWords(false);
+            grill.act(action, opts);
+          }}
+          onStop={grill.stop}
+          onSomethingElse={() => {
+            setGrillOwnWords(true);
+            railRef.current?.querySelector('textarea')?.focus();
+          }}
+          onRetry={grill.retry}
+        />
+      ) : null}
+      {grillFailedNotice ? (
+        <Bubble role="assistant" testId="grill-handoff-failed">
+          {tGrillMarkers(grill.error === 'outOfCredits' ? 'handoffNoCredit' : 'handoffFailed')}
+        </Bubble>
+      ) : null}
+      {/* PART 1's QUICK REPLY (MOTIR-10738): once the run's `conversation_ack`
+            arrives, the bubble says back what the person asked for, in their
+            language. Model output, so it is drawn as plain text. Until it arrives,
+            and when it never does, the keyed line stands. */}
+      {conversing ? (
+        <Bubble role="assistant" testId="plan-conversation-phase">
+          {conversationAck ?? tp('handoff.conversing')}
+        </Bubble>
+      ) : null}
+      {/* THE WORKING TURN IS ONE ROW (MOTIR-9213; design § _The Motir mark at
+            work_ › _Where the mark sits_, `planning-workspace--mark-at-work.mock.html`
+            panels 1–4): the turn Motir AI is working on gathers the hand-off, the
+            act record and the planner notes beside ONE avatar, the only mark in the
+            overlay that ever moves. It flows while `motirAtWork` and holds the still
+            mark otherwise. The wrapper is always mounted, so the act record's live
+            region never remounts; the avatar is drawn only while the row has content. */}
+      <div
+        className="flex items-start gap-2"
+        {...(workRowShown ? { 'data-testid': 'plan-work-row' } : {})}
+      >
+        {workRowShown ? (
+          <PlanAtWorkMark
+            progress={state.liveReview?.progress ?? null}
+            failing={state.liveFailing}
+            // A plan run in its planning phase, or any plan on screen, is read by
+            // the plan's own progress, whatever stream is still open: a stalled,
+            // failing or finished plan holds the mark still. That includes the
+            // run's own plan once it has left `generating` and been handed over.
+            turnStreaming={
+              state.phase === 'streaming' &&
+              runPhase !== 'planning' &&
+              !state.liveReview &&
+              !(state.planId !== null && state.review?.id === state.planId)
+            }
+          />
+        ) : null}
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          {/* The hand-off gives up its own avatar: it is the row's first message. */}
+          {writing ? (
+            <div
+              data-testid="plan-handoff"
+              className={`min-w-0 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm wrap-anywhere ${BUBBLE_FILL.default}`}
+            >
+              {tp.rich(rewritingPlan ? 'handoff.rewriting' : 'handoff.writing', {
+                link: (chunks) => (
+                  <Link
+                    href={workbenchTabHref('approvals')}
+                    className="font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  >
+                    {chunks}
+                  </Link>
+                ),
+              })}
+            </div>
+          ) : null}
+
+          <PlanActRecord
+            acts={acts}
+            streaming={state.phase === 'streaming'}
+            sessionHeads={narrationGroups.some((group) => group.session !== null)}
+            heads={narrationHeadLines(narrationGroups, tc)}
+            autoResume={state.liveReview?.progress?.autoResume ?? null}
+          />
+          {/* THE PLANNER'S OWN WORDS (Story MOTIR-8060 · MOTIR-8064;
+                `plan-change-run-live--narration.mock.html`): one group per session
+                under its stored step words, from the review read — so it is all
+                here again on reopen, after the plan ends, and for a Visitor. It is
+                not a turn: no thread reader sees it. */}
+          <PlanNarration
+            inset="rail"
+            groups={workGroups}
+            total={runTotal(workRun)}
+            earlierCount={workRun !== null && workRun === runs[0] ? narrationEarlier : 0}
+            fold={notesFold}
+            loadingEarlier={state.narrationKept?.loadingEarlier ?? false}
+            {...(onShowEarlierNarration ? { onShowEarlier: onShowEarlierNarration } : {})}
+            // The control rides only on a run this screen is following: a
+            // finished plan has no check left to skip.
+            {...(onSkipFinalCheck && state.phase === 'streaming'
+              ? { onSkipCheck: onSkipFinalCheck }
+              : {})}
+          />
+        </div>
+      </div>
+    </Fragment>
+  );
+  // A FINISHED run's block (design rule 3): its still avatar and its own notes, under
+  // its own sticky bar. No hand-off and no act record — those belong to a run on screen.
+  const runBlock = (run: RailRun) => (
+    <div
+      key={`run:${run.key}`}
+      className="flex items-start gap-2"
+      data-testid="plan-run-block"
+      data-run={run.key}
+    >
+      <PlanAtWorkMarkView atWork={false} />
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <PlanNarration
+          inset="rail"
+          groups={run.groups}
+          total={runTotal(run)}
+          earlierCount={run === runs[0] ? narrationEarlier : 0}
+          loadingEarlier={state.narrationKept?.loadingEarlier ?? false}
+          {...(onShowEarlierNarration ? { onShowEarlier: onShowEarlierNarration } : {})}
+          fold={notesFold}
+        />
+      </div>
+    </div>
+  );
+  const slotNode = (slot: Exclude<RailSlot, { kind: 'turn' }>) =>
+    slot.kind === 'work'
+      ? workBlock
+      : slot.kind === 'run'
+        ? runBlock(slot.run)
+        : versionBriefing(slot.version, slot.earlier);
 
   return (
     <aside
@@ -1443,281 +1746,134 @@ export function PlanChangeRail({
         ) : null}
 
         {pauseAnchor < 0 ? pauseBlock : null}
-        {turns.map((turn, i) => (
-          <Fragment key={turn.id}>
-            {/* What the answering session said while it worked (MOTIR-10235),
+        {layout.slots.map((slot) => {
+          if (slot.kind !== 'turn') return slotNode(slot);
+          const i = slot.index;
+          const turn = turns[i]!;
+          return (
+            <Fragment key={turn.id}>
+              {/* What the answering session said while it worked (MOTIR-10235),
                 stored against the conversation, above the answer it produced. */}
-            {turn.role === 'assistant' ? (
-              <ConversationNotes
-                notes={notesOfJob(state.session?.notes, turn.jobId)}
-                live={false}
-              />
-            ) : null}
-            <Turn
-              turn={turn}
-              targetKeys={
-                turnTargetKeys.length > 0 ? turnTargetKeys : anchorKeysOf(turn, turnAnchors)
-              }
-              workItemRefs={state.session?.workItemRefs ?? {}}
-              debugOutcome={debugOutcomeFor(turn, turns, turnAnchors)}
-              disposition={dispositionMarkerFor(turns, i)}
-              isPending={question?.id === turn.id}
-              // Keyed on the ASSISTANT turn that carries it — `correction.turnId`
-              // names the USER turn the re-run replays, which is a different turn.
-              correction={latest && turn.id === latest.id ? correctable : null}
-              restartConfirm={
-                confirmPending && turn.id === lastTurn?.id && onAnswerRestart
-                  ? { pending: restartBusy, onAnswer: onAnswerRestart }
-                  : null
-              }
-              afterConfirm={i > 0 && turns[i - 1]?.confirm === 'new_session'}
-              midRun={midRunPropsFor(turn, i, turns, state, onSelectProposal)}
-              outageRetry={
-                latest && turn.id === latest.id && turn.codeUnreadable === 'declined'
-                  ? { onRetry, disabled: busy || userTurns.length === 0 }
-                  : null
-              }
-              planOffer={
-                turn.role === 'assistant' &&
-                (turn.offer?.kind === 'plan' || turn.offer?.kind === 'log_bug') &&
-                turn.id !== heldOfferTurnId
-                  ? planOfferPropsFor(turn, i)
-                  : null
-              }
-            />
-            {/* An answer that settled with no reply keeps what it said (MOTIR-10235). */}
-            {turn.role === 'user' ? (
-              <ConversationNotes
-                notes={notesOfUnansweredJob(
-                  state.session?.notes,
-                  turn.jobId,
-                  answeredJobs,
-                  state.jobId,
-                )}
-                live={false}
-              />
-            ) : null}
-            {/* GRILL ME BEFORE PLANNING: the grilling over this answer's offer, and
-                the offer itself — held while it is open, shown once it ended. */}
-            {turn.id === heldOfferTurnId && convHold && turn.offer ? (
-              <ConversationGrill
-                session={convGrillSession}
-                hold={convHold}
-                pending={convGrill.pending}
-                error={convGrill.error}
-                endedBySwitch={convGrill.endedBySwitch}
-                {...(question || grillQuestion ? {} : { anchorId: PENDING_QUESTION_ID })}
-                onAct={(action, opts) => {
-                  setGrillOwnWords(false);
-                  convGrill.act(action, opts);
-                }}
-                onStop={convGrill.stop}
-                onSomethingElse={() => {
-                  setGrillOwnWords(true);
-                  railRef.current?.querySelector('textarea')?.focus();
-                }}
-                onRetry={convGrill.retry}
-                {...(onDeclinePlanOffer ? { onDecline: () => onDeclinePlanOffer(turn.id) } : {})}
-                declining={offerAnsweringTurnId === turn.id}
-                offer={
-                  <PlanOffer
-                    turnId={turn.id}
-                    offer={turn.offer}
-                    workItemRefs={state.session?.workItemRefs ?? {}}
-                    {...planOfferPropsFor(turn, i)}
-                    // An offer that carries its requirement holds the answers — the grilling's
-                    // end wrote them into it (MOTIR-10255) — and the left pane shows that
-                    // document; listing them here says it twice.
-                    settled={
-                      convGrillSession &&
-                      convGrillSession.status === 'ended' &&
-                      !turn.offer.requirement
-                        ? {
-                            settled: convGrillSession.settled,
-                            assumptions: convGrillSession.assumptions,
-                            empty:
-                              convGrillSession.endReason === 'nothing_to_ask'
-                                ? 'clearEnough'
-                                : 'nothingSettled',
-                          }
-                        : null
-                    }
-                  />
+              {turn.role === 'assistant' ? (
+                <ConversationNotes
+                  notes={notesOfJob(state.session?.notes, turn.jobId)}
+                  live={false}
+                />
+              ) : null}
+              <Turn
+                turn={turn}
+                targetKeys={
+                  turnTargetKeys.length > 0 ? turnTargetKeys : anchorKeysOf(turn, turnAnchors)
+                }
+                workItemRefs={state.session?.workItemRefs ?? {}}
+                debugOutcome={debugOutcomeFor(turn, turns, turnAnchors)}
+                disposition={dispositionMarkerFor(turns, i)}
+                isPending={question?.id === turn.id}
+                // Keyed on the ASSISTANT turn that carries it — `correction.turnId`
+                // names the USER turn the re-run replays, which is a different turn.
+                correction={latest && turn.id === latest.id ? correctable : null}
+                restartConfirm={
+                  confirmPending && turn.id === lastTurn?.id && onAnswerRestart
+                    ? { pending: restartBusy, onAnswer: onAnswerRestart }
+                    : null
+                }
+                afterConfirm={i > 0 && turns[i - 1]?.confirm === 'new_session'}
+                midRun={midRunPropsFor(turn, i, turns, state, onSelectProposal)}
+                outageRetry={
+                  latest && turn.id === latest.id && turn.codeUnreadable === 'declined'
+                    ? { onRetry, disabled: busy || userTurns.length === 0 }
+                    : null
+                }
+                planOffer={
+                  turn.role === 'assistant' &&
+                  (turn.offer?.kind === 'plan' || turn.offer?.kind === 'log_bug') &&
+                  turn.id !== heldOfferTurnId
+                    ? planOfferPropsFor(turn, i)
+                    : null
                 }
               />
-            ) : null}
-            {/* THE COPIED DIVIDER (AMENDMENT 23 §6; MOTIR-7633 sheet 3), under the
-              last turn carried over from the ended session. */}
-            {copied > 0 && i === copied - 1 && state.session?.copiedFromSessionId ? (
-              <>
-                <CopiedDivider
-                  fromSessionId={state.session.copiedFromSessionId}
-                  anchorKey={state.session.targetKeys[0] ?? null}
+              {/* An answer that settled with no reply keeps what it said (MOTIR-10235). */}
+              {turn.role === 'user' ? (
+                <ConversationNotes
+                  notes={notesOfUnansweredJob(
+                    state.session?.notes,
+                    turn.jobId,
+                    answeredJobs,
+                    state.jobId,
+                  )}
+                  live={false}
                 />
-                {planMovedHere ? <PlanMovedLine /> : null}
-              </>
-            ) : null}
-            {i === pauseAnchor ? pauseBlock : null}
-            {turn.codeUnsearchable && turn.codeUnsearchable.length > 0 ? (
-              <CodeUnsearchableBanner repos={turn.codeUnsearchable} where="conversation" />
-            ) : null}
-            {/* THE STALE ANSWER (design state 10), under the turn it answers. */}
-            {staleTurnShown && turn.id === stale?.turnId ? staleNotice : null}
-          </Fragment>
-        ))}
+              ) : null}
+              {/* GRILL ME BEFORE PLANNING: the grilling over this answer's offer, and
+                the offer itself — held while it is open, shown once it ended. */}
+              {turn.id === heldOfferTurnId && convHold && turn.offer ? (
+                <ConversationGrill
+                  session={convGrillSession}
+                  hold={convHold}
+                  pending={convGrill.pending}
+                  error={convGrill.error}
+                  endedBySwitch={convGrill.endedBySwitch}
+                  {...(question || grillQuestion ? {} : { anchorId: PENDING_QUESTION_ID })}
+                  onAct={(action, opts) => {
+                    setGrillOwnWords(false);
+                    convGrill.act(action, opts);
+                  }}
+                  onStop={convGrill.stop}
+                  onSomethingElse={() => {
+                    setGrillOwnWords(true);
+                    railRef.current?.querySelector('textarea')?.focus();
+                  }}
+                  onRetry={convGrill.retry}
+                  {...(onDeclinePlanOffer ? { onDecline: () => onDeclinePlanOffer(turn.id) } : {})}
+                  declining={offerAnsweringTurnId === turn.id}
+                  offer={
+                    <PlanOffer
+                      turnId={turn.id}
+                      offer={turn.offer}
+                      workItemRefs={state.session?.workItemRefs ?? {}}
+                      {...planOfferPropsFor(turn, i)}
+                      // An offer that carries its requirement holds the answers — the grilling's
+                      // end wrote them into it (MOTIR-10255) — and the left pane shows that
+                      // document; listing them here says it twice.
+                      settled={
+                        convGrillSession &&
+                        convGrillSession.status === 'ended' &&
+                        !turn.offer.requirement
+                          ? {
+                              settled: convGrillSession.settled,
+                              assumptions: convGrillSession.assumptions,
+                              empty:
+                                convGrillSession.endReason === 'nothing_to_ask'
+                                  ? 'clearEnough'
+                                  : 'nothingSettled',
+                            }
+                          : null
+                      }
+                    />
+                  }
+                />
+              ) : null}
+              {/* THE COPIED DIVIDER (AMENDMENT 23 §6; MOTIR-7633 sheet 3), under the
+              last turn carried over from the ended session. */}
+              {copied > 0 && i === copied - 1 && state.session?.copiedFromSessionId ? (
+                <>
+                  <CopiedDivider
+                    fromSessionId={state.session.copiedFromSessionId}
+                    anchorKey={state.session.targetKeys[0] ?? null}
+                  />
+                  {planMovedHere ? <PlanMovedLine /> : null}
+                </>
+              ) : null}
+              {i === pauseAnchor ? pauseBlock : null}
+              {turn.codeUnsearchable && turn.codeUnsearchable.length > 0 ? (
+                <CodeUnsearchableBanner repos={turn.codeUnsearchable} where="conversation" />
+              ) : null}
+              {/* THE STALE ANSWER (design state 10), under the turn it answers. */}
+              {staleTurnShown && turn.id === stale?.turnId ? staleNotice : null}
+            </Fragment>
+          );
+        })}
         {stale !== null && !staleTurnShown ? staleNotice : null}
-
-        {/* The RUN, narrated: the shipped drafting row + a polite live region fed
-            by the job's real progress frames. */}
-        {/* The HAND-OFF (ADR Consequence 3). An ask turn that resolved to a plan
-            change streams twice; naming the re-reading is what keeps the wait
-            from reading as "that failed, it is trying again". The waiting row
-            below never unmounts — only its text changes. */}
-        {state.progress?.kind === 'redirected' ? (
-          <p
-            className="text-center text-xs text-(--el-text-secondary)"
-            data-testid="plan-change-handoff"
-          >
-            {tc('handoff')}
-          </p>
-        ) : null}
-
-        {/* THE ACT RAIL (MOTIR-4069) — an accumulating record, not a replacing
-            line. Three columns: glyph · mono act label · the line
-            (`design/ai-chat/plan-change-run-live.mock.html` sheet 3).
-
-            ⚠️ THE SKIM AXIS IS THE MIDDLE COLUMN, NOT COLOUR. Every act line is
-            the same ink; what a reader runs their eye down is a fixed-width
-            column of short mono words, with the glyph as a second, non-textual
-            cue. Deliberate: the rail already carries three coloured states
-            (assistant, user, the accent review block) and a fourth hue would
-            compete with them rather than help.
-
-            It keeps the shipped `aria-live="polite"` region and its test id; since
-            the per-call lines (MOTIR-7975) the region holds an announcer and the
-            record is its sibling (`PlanActRecord`). */}
-        {/* THE HAND-OFF BEFORE GENERATION (Story MOTIR-6012 · MOTIR-6037; design
-            Part XXII §22.6, Panel 9). The moment a PLAN run starts writing, the planner
-            says so in its own turn — a KEYED bubble, like `lockedNote`, so the words
-            are the catalogue's and never the model's — and that the reader may leave:
-            the run carries on server-side and the plan will be waiting in To approve.
-            A revision of the plan in hand gets its own form. The link is a real
-            anchor to the tab (§22.9). */}
-        {/* THE CONVERSATION PHASE (MOTIR-8203): until the run settles what it is
-            planning, the planner says only what is true — it is working out the
-            ask and may still have a question. Keyed, like the hand-off it gives way
-            to at `target_settled`; a question ends the run before either is due. */}
-        {/* THE GRILLING (MOTIR-8447 routes it, MOTIR-8177 draws it): the session's
-            turns on the rail's own surfaces, its pending question carrying the
-            pending-question anchor when the run itself is not waiting on one. Gone
-            at the hand-off — except an ENDED session's summary, which stays above
-            the hand-off (design G5). */}
-        {grill.session && (conversing || (writing && grill.session.status === 'ended')) ? (
-          <SharpenThread
-            session={grill.session}
-            pending={grill.pending}
-            error={grill.error}
-            {...(question ? {} : { anchorId: PENDING_QUESTION_ID })}
-            onAct={(action, opts) => {
-              setGrillOwnWords(false);
-              grill.act(action, opts);
-            }}
-            onStop={grill.stop}
-            onSomethingElse={() => {
-              setGrillOwnWords(true);
-              railRef.current?.querySelector('textarea')?.focus();
-            }}
-            onRetry={grill.retry}
-          />
-        ) : null}
-        {grillFailedNotice ? (
-          <Bubble role="assistant" testId="grill-handoff-failed">
-            {tGrillMarkers(grill.error === 'outOfCredits' ? 'handoffNoCredit' : 'handoffFailed')}
-          </Bubble>
-        ) : null}
-        {/* PART 1's QUICK REPLY (MOTIR-10738): once the run's `conversation_ack`
-            arrives, the bubble says back what the person asked for, in their
-            language. Model output, so it is drawn as plain text. Until it arrives,
-            and when it never does, the keyed line stands. */}
-        {conversing ? (
-          <Bubble role="assistant" testId="plan-conversation-phase">
-            {conversationAck ?? tp('handoff.conversing')}
-          </Bubble>
-        ) : null}
-        {/* THE WORKING TURN IS ONE ROW (MOTIR-9213; design § _The Motir mark at
-            work_ › _Where the mark sits_, `planning-workspace--mark-at-work.mock.html`
-            panels 1–4): the turn Motir AI is working on gathers the hand-off, the
-            act record and the planner notes beside ONE avatar, the only mark in the
-            overlay that ever moves. It flows while `motirAtWork` and holds the still
-            mark otherwise. The wrapper is always mounted, so the act record's live
-            region never remounts; the avatar is drawn only while the row has content. */}
-        <div
-          className="flex items-start gap-2"
-          {...(workRowShown ? { 'data-testid': 'plan-work-row' } : {})}
-        >
-          {workRowShown ? (
-            <PlanAtWorkMark
-              progress={state.liveReview?.progress ?? null}
-              failing={state.liveFailing}
-              // A plan run in its planning phase, or any plan on screen, is read by
-              // the plan's own progress, whatever stream is still open: a stalled,
-              // failing or finished plan holds the mark still. That includes the
-              // run's own plan once it has left `generating` and been handed over.
-              turnStreaming={
-                state.phase === 'streaming' &&
-                runPhase !== 'planning' &&
-                !state.liveReview &&
-                !(state.planId !== null && state.review?.id === state.planId)
-              }
-            />
-          ) : null}
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
-            {/* The hand-off gives up its own avatar: it is the row's first message. */}
-            {writing ? (
-              <div
-                data-testid="plan-handoff"
-                className={`min-w-0 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm wrap-anywhere ${BUBBLE_FILL.default}`}
-              >
-                {tp.rich(rewritingPlan ? 'handoff.rewriting' : 'handoff.writing', {
-                  link: (chunks) => (
-                    <Link
-                      href={workbenchTabHref('approvals')}
-                      className="font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                    >
-                      {chunks}
-                    </Link>
-                  ),
-                })}
-              </div>
-            ) : null}
-
-            <PlanActRecord
-              acts={acts}
-              streaming={state.phase === 'streaming'}
-              sessionHeads={narrationGroups.some((group) => group.session !== null)}
-              heads={narrationHeadLines(narrationGroups, tc)}
-              autoResume={state.liveReview?.progress?.autoResume ?? null}
-            />
-            {/* THE PLANNER'S OWN WORDS (Story MOTIR-8060 · MOTIR-8064;
-                `plan-change-run-live--narration.mock.html`): one group per session
-                under its stored step words, from the review read — so it is all
-                here again on reopen, after the plan ends, and for a Visitor. It is
-                not a turn: no thread reader sees it. */}
-            <PlanNarration
-              inset="rail"
-              groups={narrationGroups}
-              total={narration ? narration.earlierCount + narration.entries.length : 0}
-              earlierCount={narrationEarlierCount(narrationEntries)}
-              loadingEarlier={state.narrationKept?.loadingEarlier ?? false}
-              {...(onShowEarlierNarration ? { onShowEarlier: onShowEarlierNarration } : {})}
-              // The control rides only on a run this screen is following: a
-              // finished plan has no check left to skip.
-              {...(onSkipFinalCheck && state.phase === 'streaming'
-                ? { onSkipCheck: onSkipFinalCheck }
-                : {})}
-            />
-          </div>
-        </div>
 
         {/* A MID-RUN QUESTION whose answer is still being written (MOTIR-7998;
             design state 1), below the act rail it does not touch. */}
@@ -1765,37 +1921,24 @@ export function PlanChangeRail({
             review survived its decision, this block kept a LIVE Approve /
             Discard pair (and "nothing is saved yet") on a plan that was already
             approved or declined. */}
-        {state.review && !state.decided && !index.isEmpty ? (
+        {reviewShown ? (
           <>
-            {/* The planner's briefing (MOTIR-8149) replaces the two canned lines:
-                its section 3 says what was left untouched and section 6 gives the
-                counts, so they would only repeat it. A plan with no summary
-                (written before the briefing existed) keeps the canned pair. */}
-            {state.review.summary?.trim() ? (
-              <Bubble role="assistant" testId="plan-change-briefing">
-                <PlanBriefing
-                  summary={state.review.summary}
-                  // The summary's own refs (MOTIR-9697) over the session's turn
-                  // map: a link no chat turn mentions still resolves live.
-                  workItemRefs={{
-                    ...state.session?.workItemRefs,
-                    ...state.review.summaryRefs,
-                  }}
-                />
-              </Bubble>
-            ) : (
-              <>
-                <Bubble role="assistant">
-                  {tc('summary', {
-                    added: index.counts.added,
-                    changed: index.counts.changed,
-                    removed: index.counts.removed,
-                  })}
-                </Bubble>
-                <Bubble role="assistant">{tc('lockedNote')}</Bubble>
-              </>
-            )}
-            {gated ? (
+            {/* The CURRENT version's briefing, in its shipped place when nothing
+                follows it; under its own run (in the transcript above) once a
+                follow-up has started a revision (MOTIR-11487). */}
+            {layout.currentTrailing ? currentBriefing : null}
+            {/* A FAILED revision (design panel 4): its failure line under its run,
+                then the old version's panel, decidable again. */}
+            {failureAbovePanel && failure ? (
+              <WaitingPlanFailureLine
+                failure={failure}
+                again={failedAgain}
+                planAgain={!state.session?.waitingPlan}
+              />
+            ) : null}
+            {/* NO DECIDE PANEL WHILE A REVISION WRITES (design § "The panel rule"):
+                not the held branch, not a disabled one. The hand-off says it. */}
+            {!panelShown ? null : gated ? (
               <GatedReviewBlock
                 view={gateView}
                 busy={busy}
@@ -1967,7 +2110,7 @@ export function PlanChangeRail({
             open composer, no Resume — the next turn continues the session. With NO plan waiting
             it is an attempt motir-ai cannot resume (MOTIR-9121): the same line says the next
             message plans again. */}
-        {failure && !awaitsResume ? (
+        {failure && !awaitsResume && !failureAbovePanel ? (
           <WaitingPlanFailureLine
             failure={failure}
             again={failedAgain}
