@@ -772,6 +772,12 @@ status = from`), so a move that loses a race to another staff member changes not
 > change on a read is not a new token door (§2, the 2026-11-16 amendment). The record-level link and
 > unlink writes this amendment first named were withdrawn by MOTIR-11587 before they merged: a
 > planning bug is linked to ONE finding, not to its record.
+>
+> MOTIR-11590 puts that resolution behind the two per-finding key writes,
+> `POST /api/platform/planner-findings/{findingId}/bug-key` and `…/bug-key/remove`, `operator` writes
+> on the same token door, each recorded as one `planner_finding.triage` row on the finding (the
+> console's existing triage action). The console's "Filed as bug" control resolves its key the same
+> way. The clear resolves nothing.
 
 ---
 

@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearPlannerFindingBugKey,
   createPlannerFindingRecord,
   getPlannerFindingRecord,
   listPlannerFindingRecords,
   PLANNER_FINDING_RUN_THROUGH_ANSWERS,
   PLANNER_FINDING_VERDICT_STATES,
+  setPlannerFindingBugKey,
   submitPlannerFindingRecordVerdict,
   type RawPlannerFindingRecord,
 } from '@/lib/ai/motirAiClient';
@@ -12,6 +14,7 @@ import {
   MotirAiBadRequestError,
   MotirAiConflictError,
   MotirAiUnavailableError,
+  PlannerFindingNotFoundError,
   PlannerFindingRecordNotFoundError,
 } from '@/lib/ai/errors';
 
@@ -296,6 +299,40 @@ describe('submitPlannerFindingRecordVerdict', () => {
   ])('reads a 200 with %s as an outage', async (_n, res) => {
     stub(res);
     await expect(submitPlannerFindingRecordVerdict('rec_1', verdict, 'u_1')).rejects.toBeInstanceOf(
+      MotirAiUnavailableError,
+    );
+  });
+});
+
+describe('the finding key writes (MOTIR-11590)', () => {
+  const finding = { id: 'pf/1', bugKey: 'BUGS-1' };
+  const audit = { before: { bugKey: null }, after: { bugKey: 'BUGS-1' } };
+
+  it('PATCHes the finding with the key ALONE beside the actor', async () => {
+    const fetchMock = stub(json({ finding, audit }));
+    expect(await setPlannerFindingBugKey('pf/1', 'BUGS-1', 'u_1')).toEqual({ finding, audit });
+    const [url, init] = call(fetchMock);
+    expect(url).toBe('https://ai.test/v1/admin/planner-findings/pf%2F1');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(String(init.body))).toEqual({ bugKey: 'BUGS-1', actorCoreUserId: 'u_1' });
+  });
+
+  it('clears with an explicit null key, and answers audit: null as sent', async () => {
+    const fetchMock = stub(json({ finding: { ...finding, bugKey: null }, audit: null }));
+    expect((await clearPlannerFindingBugKey('pf/1', 'u_1')).audit).toBeNull();
+    expect(JSON.parse(String(call(fetchMock)[1].body))).toEqual({
+      bugKey: null,
+      actorCoreUserId: 'u_1',
+    });
+  });
+
+  it('maps not_found to the finding class, and a 200 without a finding to an outage', async () => {
+    stub(problem('not_found', 404));
+    await expect(setPlannerFindingBugKey('pf_1', 'BUGS-1', 'u_1')).rejects.toBeInstanceOf(
+      PlannerFindingNotFoundError,
+    );
+    stub(json({ audit: null }));
+    await expect(clearPlannerFindingBugKey('pf_1', 'u_1')).rejects.toBeInstanceOf(
       MotirAiUnavailableError,
     );
   });

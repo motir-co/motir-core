@@ -60,8 +60,9 @@ const GATES = routeFiles(ROUTES_DIR).flatMap(handlerGates);
 
 describe('the planner-findings records level', () => {
   it('scans every handler of the door', () => {
-    // The five handlers MOTIR-11458 ships; a card that adds a route adds to this floor.
-    expect(GATES.length).toBeGreaterThanOrEqual(5);
+    // The five handlers MOTIR-11458 ships and the two key writes MOTIR-11590 adds;
+    // a card that adds a route adds to this floor.
+    expect(GATES.length).toBeGreaterThanOrEqual(7);
     expect(LEVEL_CONSTANTS).toContain('PLANNER_FINDING_RECORDS_LEVEL');
   });
 

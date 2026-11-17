@@ -34,19 +34,22 @@ motir-ai call, naming the credential in `metadata.credential`
 (`{ "kind": "token", "apiTokenId": "…" }` or `{ "kind": "session" }`): reads as
 `estate.read`, a create as `planner_finding.record`, a verdict as one
 `planner_finding.verdict` per finding it changed (one on the record when it
-changed none). A motir-ai error leaves no write row.
+changed none), a key write as one `planner_finding.triage` row. A motir-ai error
+leaves no write row.
 
 Every response carries `Cache-Control: no-store`.
 
 ## Routes
 
-| Method & path                                              | Body / query                                                                                                   | Success                                                   | Level                                            |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------ |
-| `GET /api/platform/planner-findings/{findingId}`           | —                                                                                                              | `200 Finding` (with its `recordId`)                       | `support` (`PLANNER_FINDING_RECORDS_READ_LEVEL`) |
-| `GET /api/platform/planner-findings/records`               | `?verdictState=open\|attributed&planner=&source=&planId=&createdFrom=&createdTo=&cursor=&limit=` (limit 1–100) | `200 { records: RecordSummary[], nextCursor, retention }` | `support` (`PLANNER_FINDING_RECORDS_READ_LEVEL`) |
-| `GET /api/platform/planner-findings/records/{id}`          | —                                                                                                              | `200 { record: Record, findings: Finding[] }`             | `support` (`PLANNER_FINDING_RECORDS_READ_LEVEL`) |
-| `POST /api/platform/planner-findings/records`              | `CreateRecord`                                                                                                 | `201 { record: Record, findings: Finding[] }`             | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
-| `POST /api/platform/planner-findings/records/{id}/verdict` | `{ verdicts: Verdict[], replace? }`                                                                            | `200 { record, findings, audit: VerdictAudit[] }`         | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
+| Method & path                                                    | Body / query                                                                                                   | Success                                                   | Level                                            |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------ |
+| `GET /api/platform/planner-findings/{findingId}`                 | —                                                                                                              | `200 Finding` (with its `recordId`)                       | `support` (`PLANNER_FINDING_RECORDS_READ_LEVEL`) |
+| `GET /api/platform/planner-findings/records`                     | `?verdictState=open\|attributed&planner=&source=&planId=&createdFrom=&createdTo=&cursor=&limit=` (limit 1–100) | `200 { records: RecordSummary[], nextCursor, retention }` | `support` (`PLANNER_FINDING_RECORDS_READ_LEVEL`) |
+| `GET /api/platform/planner-findings/records/{id}`                | —                                                                                                              | `200 { record: Record, findings: Finding[] }`             | `support` (`PLANNER_FINDING_RECORDS_READ_LEVEL`) |
+| `POST /api/platform/planner-findings/records`                    | `CreateRecord`                                                                                                 | `201 { record: Record, findings: Finding[] }`             | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
+| `POST /api/platform/planner-findings/records/{id}/verdict`       | `{ verdicts: Verdict[], replace? }`                                                                            | `200 { record, findings, audit: VerdictAudit[] }`         | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
+| `POST /api/platform/planner-findings/{findingId}/bug-key`        | `{ key }`                                                                                                      | `200 { record: Record, finding: Finding }`                | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
+| `POST /api/platform/planner-findings/{findingId}/bug-key/remove` | `{ key }`                                                                                                      | `200 { record: Record, finding: Finding }`                | `operator` (`PLANNER_FINDING_RECORDS_LEVEL`)     |
 
 The answers are motir-ai's own shapes, unchanged: `Record`, `RecordSummary`
 (`Record` + `findingCount` + `attributedCount`), `Finding` and `VerdictAudit` are
@@ -121,15 +124,42 @@ mean is motir-ai's: see the record DTO in its `docs/contract.md`.
 — one per finding of the record, each exactly once. `replace: true` overwrites a
 record that already has a verdict.
 
+### A finding's planning-bug key
+
+MOTIR-11590. Each finding carries at most one planning-bug key (`Finding.bugKey`),
+and these two routes are its only platform writes; the console's "Filed as bug"
+triage applies the same resolution rule.
+
+- **`{ key }`** is 1–64 characters, trimmed and upper-cased by core, with no other
+  member.
+- **Only a finding of an attributed record** takes a key: a record whose
+  `verdictState` is not `attributed` is refused `record_open` before anything is
+  resolved.
+- **The set resolves the key as a work item in the RECORD's own project**, never
+  the caller's, and stores that work item's identifier. A key naming no work item
+  there — including one that exists only in another project or tenant — is
+  refused `not_a_work_item`, and nothing is written.
+- **The clear resolves nothing**, so a key whose work item was deleted can still
+  be removed. Its `key` names the key the caller saw: when the finding no longer
+  carries it (or carries none), the answer is the finding as it stands.
+- **A no-op writes nothing**: a set of the key the finding already carries, in
+  any casing, and a clear of a key it no longer carries each answer
+  `{ record, finding }` with only the read's `estate.read` row.
+- A change writes ONE `planner_finding.triage` row on the finding (`targetId` the
+  finding id, `targetLabel` its site), whose metadata names `recordId`,
+  `findingId`, `key`, motir-ai's `before` / `after` and the credential.
+
 ## Errors
 
-| Status | Body                                                       | When                                                                     |
-| ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 400    | `{ code: "INVALID_REQUEST", issues: [{ path, message }] }` | malformed JSON or shape; a create naming neither a stored plan nor a key |
-| 400    | `{ code: "UPSTREAM_REJECTED", detail }`                    | motir-ai refused the content (a missing finding, an empty `why`, …)      |
-| 404    | `{ code: "NOT_FOUND" }`                                    | every gate refusal                                                       |
-| 404    | `{ code: "PROJECT_NOT_FOUND" }`                            | a `projectKey` the staff member cannot record in                         |
-| 404    | `{ code: "PLANNER_FINDING_NOT_FOUND", findingId }`         | an unknown finding                                                       |
-| 404    | `{ code: "PLANNER_FINDING_RECORD_NOT_FOUND", recordId }`   | an unknown record                                                        |
-| 409    | `{ code: "CONFLICT", detail }`                             | the record already has a verdict and `replace` is not `true`             |
-| 503    | `{ code: "UPSTREAM_UNAVAILABLE" }`                         | motir-ai cannot answer                                                   |
+| Status | Body                                                         | When                                                                     |
+| ------ | ------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| 400    | `{ code: "INVALID_REQUEST", issues: [{ path, message }] }`   | malformed JSON or shape; a create naming neither a stored plan nor a key |
+| 400    | `{ code: "UPSTREAM_REJECTED", detail }`                      | motir-ai refused the content (a missing finding, an empty `why`, …)      |
+| 404    | `{ code: "NOT_FOUND" }`                                      | every gate refusal                                                       |
+| 404    | `{ code: "PROJECT_NOT_FOUND" }`                              | a `projectKey` the staff member cannot record in                         |
+| 404    | `{ code: "PLANNER_FINDING_NOT_FOUND", findingId }`           | an unknown finding                                                       |
+| 404    | `{ code: "PLANNER_FINDING_RECORD_NOT_FOUND", recordId }`     | an unknown record                                                        |
+| 400    | `{ code: "FINDING_KEY_REFUSED", reason: "not_a_work_item" }` | a key that names no work item in the record's project                    |
+| 409    | `{ code: "CONFLICT", detail }`                               | the record already has a verdict and `replace` is not `true`             |
+| 409    | `{ code: "FINDING_KEY_REFUSED", reason: "record_open" }`     | a key write on a finding whose record has no verdict                     |
+| 503    | `{ code: "UPSTREAM_UNAVAILABLE" }`                           | motir-ai cannot answer                                                   |

@@ -1,4 +1,5 @@
 import {
+  clearPlannerFindingBugKey,
   createPlannerFindingRecord,
   getJob,
   getPlannerFinding,
@@ -6,12 +7,15 @@ import {
   listPlannerFindingGroups,
   listPlannerFindingRecords,
   listPlannerFindings,
+  setPlannerFindingBugKey,
   submitPlannerFindingRecordVerdict,
   type PlannerFindingListQuery,
   type PlannerFindingRecordContextRequest,
   type PlannerFindingRecordFindingRequest,
   type RawPlannerFinding,
+  type RawPlannerFindingRecord,
   type RawPlannerFindingRecordPage,
+  type RawPlannerFindingTriageResult,
   type RawPlannerFindingRecordWithFindings,
   type RawPlannerFindingVerdictResult,
 } from '@/lib/ai/motirAiClient';
@@ -43,10 +47,16 @@ import {
   type PlatformPrincipal,
 } from '@/lib/platform/auth';
 import { withPlatformRead, withPlatformWrite } from '@/lib/platform/context';
-import { NotPlatformStaffError, PlannerFindingInvalidError } from '@/lib/platform/errors';
+import { PlannerFindingNotFoundError } from '@/lib/ai/errors';
+import {
+  NotPlatformStaffError,
+  PlannerFindingInvalidError,
+  PlannerFindingKeyRefusedError,
+} from '@/lib/platform/errors';
 import type { PlannerFindingActor } from '@/lib/plannerFindings/types';
 import type {
   CreatePlannerFindingRecordBody,
+  PlannerFindingBugKeyBody,
   PlannerFindingRecordQuery,
   PlannerFindingRecordVerdictBody,
 } from '@/lib/plannerFindings/schemas';
@@ -327,6 +337,10 @@ export const PLANNER_FINDING_RECORDS_READ_LEVEL = 'support' as const;
 
 /** The reason each write records; the `inherited` policy needs one and the skill sends none. */
 const RECORD_REASON = 'Recorded a plan check through /api/platform/planner-findings.';
+const BUG_KEY_SET_REASON =
+  "Set a planner finding's planning-bug key through /api/platform/planner-findings.";
+const BUG_KEY_CLEAR_REASON =
+  "Cleared a planner finding's planning-bug key through /api/platform/planner-findings.";
 const VERDICT_REASON =
   'Gave a planner finding record its verdict through /api/platform/planner-findings.';
 
@@ -436,6 +450,104 @@ async function resolveRecordContext(
     planner: body.planner,
     ...defined({ planSessionId: body.planSessionId, jobId: body.jobId, ...optional }),
   };
+}
+
+/** What a key write answers: the record ROW as read before the write, and the finding as it now stands. */
+export interface PlannerFindingBugKeyResult {
+  record: RawPlannerFindingRecord;
+  finding: RawPlannerFinding;
+}
+
+/**
+ * A typed planning-bug key, normalised once (MOTIR-11590): trimmed and
+ * upper-cased, as `projectsService.getByKey` treats a project key. Identifiers
+ * are upper-case by construction, so a lower-case paste is the same key.
+ */
+function normalizeBugKey(key: string): string {
+  return key.trim().toUpperCase();
+}
+
+/**
+ * Thrown inside a key write when the store answers `audit: null` — the same
+ * change landed first from another operator between the read and the write.
+ * Nothing changed, so nothing is recorded: the transaction rolls back on purpose
+ * rather than tripping `withPlatformWrite`'s no-audit refusal, and the finding is
+ * answered as it now stands. Never leaves this module.
+ */
+class BugKeyUnchanged extends Error {
+  constructor(readonly finding: RawPlannerFinding) {
+    super('planner finding bug key unchanged');
+  }
+}
+
+/**
+ * The ONE audited read a key write decides from (an `estate.read`): the finding,
+ * which names its record and the key it carries, and that record, which carries
+ * the verdict state. Both are motir-ai HTTP reads, so one row covers the pair.
+ *
+ * @throws PlannerFindingNotFoundError for an unknown finding, and for a finding
+ *   with no `recordId` — there is no record whose state the rule can read.
+ */
+async function readFindingForKey(
+  actor: PlannerFindingActor,
+  findingId: string,
+): Promise<PlannerFindingBugKeyResult> {
+  return withPlatformRead(
+    actor,
+    {
+      action: 'estate.read',
+      targetKind: 'platform',
+      targetId: findingId,
+      metadata: { surface: 'planner_finding.bug_key', credential: credentialMetadata(actor) },
+    },
+    async () => {
+      const finding = await getPlannerFinding(findingId);
+      if (!finding.recordId) throw new PlannerFindingNotFoundError(findingId);
+      const { record } = await getPlannerFindingRecord(finding.recordId);
+      return { record, finding };
+    },
+  );
+}
+
+/**
+ * The audited key write: the remote call and its ONE `planner_finding.triage`
+ * row, shaped like the console's triage row, with the record and the key added.
+ * `resolve` runs first inside the same transaction (a set resolves its key there;
+ * a clear resolves nothing), so a refusal it throws rolls back with no row.
+ */
+async function auditedKeyWrite(
+  actor: PlannerFindingActor,
+  current: PlannerFindingBugKeyResult,
+  key: string,
+  reason: string,
+  write: (tx: Prisma.TransactionClient) => Promise<RawPlannerFindingTriageResult>,
+): Promise<PlannerFindingBugKeyResult> {
+  try {
+    return await withPlatformWrite(actor, async (tx, record) => {
+      const written = await write(tx);
+      if (!written.audit) throw new BugKeyUnchanged(written.finding);
+      await record({
+        action: 'planner_finding.triage',
+        targetKind: 'platform',
+        targetId: written.finding.id,
+        targetLabel: written.finding.site,
+        organizationId: written.finding.coreOrganizationId,
+        reason,
+        metadata: {
+          recordId: current.record.id,
+          findingId: written.finding.id,
+          key,
+          before: written.audit.before as Prisma.InputJsonObject,
+          after: written.audit.after as Prisma.InputJsonObject,
+          credential: credentialMetadata(actor),
+        },
+      });
+      return { record: current.record, finding: written.finding };
+    });
+  } catch (err) {
+    if (!(err instanceof BugKeyUnchanged)) throw err;
+    return { record: current.record, finding: err.finding };
+  }
 }
 
 export const plannerFindingRecordsService = {
@@ -608,5 +720,73 @@ export const plannerFindingRecordsService = {
       }
       return result;
     });
+  },
+
+  /**
+   * Put a planning-bug key on ONE finding of an attributed record (MOTIR-11590),
+   * resolved as a work item in the RECORD's own project, and append one
+   * `planner_finding.triage` row. A key the finding already carries (in any
+   * casing) answers the record and the finding as they stand and opens no write.
+   *
+   * @throws PlannerFindingKeyRefusedError `record_open` before anything is
+   *   resolved, `not_a_work_item` for a key naming no work item in the record's
+   *   project — each with nothing written.
+   * @throws PlannerFindingNotFoundError for an unknown finding or one with no record.
+   */
+  async setFindingBugKey(
+    actor: PlannerFindingActor,
+    findingId: string,
+    body: PlannerFindingBugKeyBody,
+  ): Promise<PlannerFindingBugKeyResult> {
+    assertRecordsLevel(actor);
+    const key = normalizeBugKey(body.key);
+    // A second platform context follows this one, never nested
+    // (`lib/platform/context.ts`: a nested one waits on the chain lock forever).
+    const current = await readFindingForKey(actor, findingId);
+    if (current.record.verdictState !== 'attributed') {
+      throw new PlannerFindingKeyRefusedError('record_open');
+    }
+    // Decided from the read, so a no-op opens no write: `withPlatformWrite`
+    // refuses to commit a transaction that recorded nothing.
+    if (current.finding.bugKey !== null && normalizeBugKey(current.finding.bugKey) === key) {
+      return current;
+    }
+    return auditedKeyWrite(actor, current, key, BUG_KEY_SET_REASON, async (tx) => {
+      const item = await platformPlanRepository.findWorkItemByIdentifier(
+        key,
+        current.record.coreProjectId,
+        tx,
+      );
+      if (!item) throw new PlannerFindingKeyRefusedError('not_a_work_item');
+      return setPlannerFindingBugKey(findingId, item.identifier, actor.userId);
+    });
+  },
+
+  /**
+   * Take the planning-bug key off ONE finding of an attributed record
+   * (MOTIR-11590), appending one `planner_finding.triage` row. Resolves nothing —
+   * a key whose work item is gone must still be removable — and takes the framed
+   * key only as a stale-tab guard: a key the finding no longer carries answers
+   * the record and the finding as they stand and opens no write.
+   *
+   * @throws PlannerFindingKeyRefusedError `record_open` for a record with no verdict.
+   * @throws PlannerFindingNotFoundError for an unknown finding or one with no record.
+   */
+  async clearFindingBugKey(
+    actor: PlannerFindingActor,
+    findingId: string,
+    body: PlannerFindingBugKeyBody,
+  ): Promise<PlannerFindingBugKeyResult> {
+    assertRecordsLevel(actor);
+    const key = normalizeBugKey(body.key);
+    const current = await readFindingForKey(actor, findingId);
+    if (current.record.verdictState !== 'attributed') {
+      throw new PlannerFindingKeyRefusedError('record_open');
+    }
+    const carried = current.finding.bugKey;
+    if (carried === null || normalizeBugKey(carried) !== key) return current;
+    return auditedKeyWrite(actor, current, carried, BUG_KEY_CLEAR_REASON, () =>
+      clearPlannerFindingBugKey(findingId, actor.userId),
+    );
   },
 };

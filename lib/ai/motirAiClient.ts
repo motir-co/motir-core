@@ -4537,13 +4537,21 @@ export async function triagePlannerFinding(
   patch: PlannerFindingTriagePatch,
   actorCoreUserId: string,
 ): Promise<RawPlannerFindingTriageResult> {
-  const { url, serviceToken } = config();
   const payload: Record<string, string> = {};
   for (const key of PLANNER_FINDING_TRIAGE_KEYS) {
     const value = patch[key];
     if (value !== undefined) payload[key] = value;
   }
   payload.actorCoreUserId = actorCoreUserId;
+  return patchPlannerFinding(findingId, payload);
+}
+
+/** One PATCH of the finding's triage route, its `{ finding, audit }` answer checked. */
+async function patchPlannerFinding(
+  findingId: string,
+  payload: Record<string, string | null>,
+): Promise<RawPlannerFindingTriageResult> {
+  const { url, serviceToken } = config();
   const res = await aiFetch(`${url}/v1/admin/planner-findings/${encodeURIComponent(findingId)}`, {
     method: 'PATCH',
     headers: authHeaders(serviceToken),
@@ -4561,6 +4569,26 @@ export async function triagePlannerFinding(
     throw new MotirAiUnavailableError('planner finding triage answered no `{ finding, audit }`');
   }
   return body;
+}
+
+// PATCH /v1/admin/planner-findings/:id with `bugKey` ALONE (MOTIR-11589 ·
+// MOTIR-11590): set or replace one finding's planning-bug key, touching nothing
+// else about it. `audit: null` means the finding already carried that key.
+export async function setPlannerFindingBugKey(
+  findingId: string,
+  bugKey: string,
+  actorCoreUserId: string,
+): Promise<RawPlannerFindingTriageResult> {
+  return patchPlannerFinding(findingId, { bugKey, actorCoreUserId });
+}
+
+// The same write with `bugKey: null`: empty one finding's key, its status left as
+// it is — a clear is not an un-triage. `audit: null` means it carried none.
+export async function clearPlannerFindingBugKey(
+  findingId: string,
+  actorCoreUserId: string,
+): Promise<RawPlannerFindingTriageResult> {
+  return patchPlannerFinding(findingId, { bugKey: null, actorCoreUserId });
 }
 
 // ── Planner finding RECORDS (Story MOTIR-11455 · MOTIR-11458) ─────────────────

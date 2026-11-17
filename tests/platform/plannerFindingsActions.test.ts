@@ -6,6 +6,7 @@ import {
   MissingAuditReasonError,
   NotPlatformStaffError,
   PlannerFindingInvalidError,
+  PlannerFindingKeyRefusedError,
   PlannerFindingLessonNotLinkedError,
   PlannerFindingUnchangedError,
 } from '@/lib/platform/errors';
@@ -220,6 +221,12 @@ describe('the refusal mapping', () => {
     [
       'PlannerFindingInvalidError',
       new PlannerFindingInvalidError('bad', 'bugKey'),
+      { code: 'INVALID' },
+      false,
+    ],
+    [
+      'PlannerFindingKeyRefusedError',
+      new PlannerFindingKeyRefusedError('not_a_work_item'),
       { code: 'INVALID' },
       false,
     ],

@@ -12,6 +12,7 @@ import { requirePlatformStaff } from '@/lib/platform/auth';
 import {
   NotPlatformStaffError,
   PlannerFindingInvalidError,
+  PlannerFindingKeyRefusedError,
   PlannerFindingLessonNotLinkedError,
   PlannerFindingUnchangedError,
 } from '@/lib/platform/errors';
@@ -72,7 +73,13 @@ function refused(err: unknown, findingId: string, act: string): PlannerFindingAc
     revalidateConsole();
     return { ok: false, code: 'UNCHANGED' };
   }
-  if (err instanceof PlannerFindingInvalidError || err instanceof MotirAiBadRequestError) {
+  // A bug key naming no work item in the finding's project (MOTIR-11590) is an
+  // input the admin must correct, drawn as the control's existing INVALID answer.
+  if (
+    err instanceof PlannerFindingInvalidError ||
+    err instanceof PlannerFindingKeyRefusedError ||
+    err instanceof MotirAiBadRequestError
+  ) {
     return { ok: false, code: 'INVALID' };
   }
   if (err instanceof PlannerFindingLessonNotLinkedError) {

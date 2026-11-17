@@ -118,3 +118,14 @@ export const plannerFindingRecordQuerySchema = z
   .strict();
 
 export type PlannerFindingRecordQuery = z.infer<typeof plannerFindingRecordQuerySchema>;
+
+/**
+ * `POST /api/platform/planner-findings/:findingId/bug-key` and `.../bug-key/remove`
+ * (MOTIR-11590): one work-item key. Trimmed here; the service upper-cases it and,
+ * on a set, resolves it in the finding's record's own project.
+ */
+export const plannerFindingBugKeyBodySchema = z
+  .object({ key: z.string().trim().min(1).max(64) })
+  .strict();
+
+export type PlannerFindingBugKeyBody = z.infer<typeof plannerFindingBugKeyBodySchema>;
