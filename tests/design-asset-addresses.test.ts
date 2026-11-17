@@ -1157,6 +1157,15 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/login',
     why: "Not an address: Claude Code's own `/login` slash command, typed in the agent's terminal to sign in (docs/decisions/agent-terminal.md Q9: the sign-in completes through the vendor's own flow). The panel's not-signed-in line quotes it verbatim. PERMANENT.",
   },
+  // ── Planner findings · Records (design MOTIR-11470) ─────────────────────
+  //    Forward-looking: the record page is drawn before MOTIR-11463 serves it.
+  //    Only the notes write the address in a syntax this sweep reads (a quoted
+  //    `/path`); the mock names it inside <code>, which the sweep does not read.
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/admin/planner-findings/records/[id]',
+    why: 'FORWARD-LOOKING: the record page of the Planner findings Records view, drawn before its route exists. MOTIR-11463 serves `app/(admin)/admin/planner-findings/records/[id]` and deletes this row in the same diff, because the row stops applying the moment the route lands.',
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };
@@ -2290,6 +2299,22 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/my-agents/my-agents--panel.mock.html',
     path: 'design/my-agents/my-agents.mock.html',
     why: "MOTIR-6868's published (never committed) list mock, which the panel delta amends and cites by path — resolved through the design-result read door, not the tree.",
+  },
+  // ── The Planner findings console mock is PUBLISHED, not committed (MOTIR-10362) ──
+  //  MOTIR-10362's design result was published and its files never landed on main.
+  //  MOTIR-11470's Records delta amends it and cites it BY PATH, exactly as the
+  //  MOTIR-6868 pair above does, and `get_design MOTIR-10362` resolves that path.
+  //  DELETE-ME: if the base mock is ever committed, `carries no KNOWN_PATHS entry
+  //  that has stopped applying` turns red and these two rows go.
+  {
+    file: 'design/platform-admin/console--planner-findings--records.mock.html',
+    path: 'design/platform-admin/console--planner-findings.mock.html',
+    why: "MOTIR-10362's published (never committed) Planner findings console mock, which the Records delta amends and cites by path — resolved through the design-result read door, not the tree.",
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    path: 'design/platform-admin/console--planner-findings.mock.html',
+    why: "MOTIR-10362's published (never committed) Planner findings console mock, which the Records delta amends and cites by path — resolved through the design-result read door, not the tree.",
   },
 ];
 
