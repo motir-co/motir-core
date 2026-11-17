@@ -78,10 +78,11 @@ const confirmBar = (page: Page) => workspace(page).getByTestId('plan-change-conf
 /** A decide verb that can be PRESSED — a held or absent one matches nothing. */
 const liveVerb = (page: Page, name: 'Approve' | 'Decline') =>
   confirmBar(page).getByRole('button', { name, exact: true, disabled: false });
-/** The plan offer panel carrying `requirement` as its request. */
+/** The plan offer panel carrying `requirement` as its request. A `has` locator is
+ *  resolved INSIDE each panel, so it names the request element relative to it. */
 const offerFor = (page: Page, requirement: string) =>
   byId(page, 'plan-offer').filter({
-    has: page.getByTestId('plan-offer-request').filter({ hasText: requirement }),
+    has: page.locator('[data-testid="plan-offer-request"]', { hasText: requirement }),
   });
 
 // ── Authoritative signals ───────────────────────────────────────────────────
@@ -336,6 +337,12 @@ test('On a waiting plan a change is revised in place, far requests are kept, and
       );
       expect((await planRow(w.planId)).summary).toBe(BRIEF_REVISED);
       await expect(byId(page, 'plan-change-briefing')).toContainText(BRIEF_REVISED);
+      // The canvas opens drilled into the anchored card, where a top-level add is not
+      // drawn; the List view names every proposal of the plan.
+      await workspace(page)
+        .getByRole('group', { name: 'Plan view' })
+        .getByRole('button', { name: 'List', exact: true })
+        .click();
       await expect(workspace(page).getByText('Digest opt-out').first()).toBeVisible();
       await beat();
     },

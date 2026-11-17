@@ -2903,7 +2903,7 @@ export const planChangeSessionsService = {
         { role: 'user', body: request, authorId: pctx.userId },
         {},
         tx,
-        async (t) => {
+        async (t: Prisma.TransactionClient) => {
           const turns = await planChangeTurnRepository.listBySessionId(
             sessionId,
             pctx.workspaceId,

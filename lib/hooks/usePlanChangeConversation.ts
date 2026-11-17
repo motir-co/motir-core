@@ -2564,11 +2564,15 @@ export function usePlanChangeConversation({
           phase: 'streaming',
           session: submitted.session,
           jobId: submitted.jobId,
-          planId: null,
           // The same supersede rule `run` applies: a DECIDED overlay stops
           // describing anything the moment a new run starts; a still-pending
           // proposal survives, because asking a question mid-review is a lookup
           // and not an abandonment.
+          //
+          // ⚠️ ITS HANDLE SURVIVES WITH IT (Story MOTIR-11515). Approve and Decline post
+          // to `planId`, so a pending proposal kept without it drew live verbs that
+          // pressed nothing after any answered question on a waiting plan.
+          planId: s.decided ? null : s.planId,
           review: s.decided ? null : s.review,
           decided: null,
           ...firstAct('reading'),
