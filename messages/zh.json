@@ -8789,6 +8789,10 @@
       "approve": "确认",
       "approveChanges": "确认变更",
       "nothingSavedYet": "尚未保存",
+      "revision": {
+        "earlierVersion": "早先的版本 · 已由下方的新版本取代",
+        "earlierVersionUnkept": "这里曾是此计划的早先版本（{count, plural, other {# 项}}）。它的说明没有保留。"
+      },
       "barCounts": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}}{removed, plural, =0 {} other {，移除 #}}",
       "barNothingSaved": "确认之前不会保存任何内容。",
       "summary": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}}{removed, plural, =0 {} other {，移除 #}} —— 已放到画布上，尚未保存。",

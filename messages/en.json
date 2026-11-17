@@ -8795,6 +8795,10 @@
       "approve": "Approve",
       "approveChanges": "Approve changes",
       "nothingSavedYet": "Nothing saved yet",
+      "revision": {
+        "earlierVersion": "Earlier version · replaced below",
+        "earlierVersionUnkept": "An earlier version of this plan was here ({count, plural, one {# item} other {# items}}). Its briefing was not kept."
+      },
       "barCounts": "{added, plural, =0 {No additions} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}{removed, plural, =0 {} one {, # removed} other {, # removed}}",
       "barNothingSaved": "Nothing is saved until you approve.",
       "summary": "{added, plural, =0 {No new work items} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}{removed, plural, =0 {} one {, # removed} other {, # removed}} — it's on the canvas, nothing is saved yet.",

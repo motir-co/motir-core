@@ -8795,6 +8795,10 @@
       "approve": "承認する",
       "approveChanges": "変更を承認する",
       "nothingSavedYet": "まだ何も保存されていません",
+      "revision": {
+        "earlierVersion": "以前のバージョン · 下で置き換え済み",
+        "earlierVersionUnkept": "ここにはこの計画の以前のバージョンがありました（{count, plural, other {# 件}}）。その説明は保存されていません。"
+      },
       "barCounts": "{added, plural, =0 {追加なし} other {# 件追加}}{changed, plural, =0 {} other {、# 件変更}}{removed, plural, =0 {} other {、# 件削除}}",
       "barNothingSaved": "承認するまで何も保存されません。",
       "summary": "{added, plural, =0 {新しい作業項目はありません} other {# 件追加}}{changed, plural, =0 {} other {、# 件変更}}{removed, plural, =0 {} other {、# 件削除}}。キャンバスに表示されていますが、まだ何も保存されていません。",
