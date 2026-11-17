@@ -174,7 +174,9 @@ export interface PlanningWorkspaceHostProps {
    *  with the permission's own name (`can('ai:configure')`), and passes the
    *  answer down. Kept as a prop because this host is presentational about
    *  access: it renders what it is told, and every gate is decided one level up
-   *  where the provider is. */
+   *  where the provider is. The same answer words the Skip the final check
+   *  confirm's settings line (MOTIR-11548): the settings page reads `ai:configure`
+   *  as `isAdmin`. */
   canManage?: boolean;
   /** May this viewer steer the plan (`ai:plan`)? Gates the Skip the final check
    *  control (MOTIR-11266), whose door asserts it. Passed explicitly for
@@ -1511,6 +1513,7 @@ function PlanWorkspaceHost({
           onDiscard={discardNow}
           onStop={stop}
           {...(canPlan ? { onSkipFinalCheck: skipFinalCheck } : {})}
+          canManageSettings={canManage}
           onStartNewSession={() => void startCopied()}
           onConfirmRestart={confirmRestart}
           onAnswerRestart={(answer) => void answerRestartConfirm(answer)}
