@@ -25,6 +25,7 @@ import {
   GitlabTokenRefreshError,
 } from '@/lib/gitlab/errors';
 import { gitlabReadCodeBlame, gitlabReadCodeLog } from './gitlabCodeHistory';
+import { gitlabBlobId } from './repoBlobId';
 import type {
   ChangeRequestLifecycle,
   CiConclusion,
@@ -35,6 +36,7 @@ import type {
   NormalizedRepo,
   NormalizedStatusEvent,
   RepoDirectoryEntry,
+  ReadFileAtRefOptions,
   RepoFileReadResult,
   RefResolution,
   CommitComparison,
@@ -550,6 +552,7 @@ export const gitlabProvider: GitProvider = {
     name: string,
     path: string,
     ref: string,
+    options: ReadFileAtRefOptions = {},
   ): Promise<RepoFileReadResult> {
     // The guard runs BEFORE the token is fetched and before a URL exists — the
     // same ordering the GitHub implementation uses, and for the same reason.
@@ -652,13 +655,22 @@ export const gitlabProvider: GitProvider = {
     if (classified.kind === 'binary') {
       return { outcome: 'binary', path: guarded.path, ref, bytes: blob.byteLength };
     }
-    return {
-      outcome: 'found',
+    const found = {
+      outcome: 'found' as const,
       path: guarded.path,
       ref,
       text: classified.text,
       bytes: blob.byteLength,
     };
+    // Asked only on a found answer and the caller's ask (MOTIR-11528). The raw
+    // response's own `X-Gitlab-Blob-Id` answers it first; the metadata HEAD on
+    // the same path and ref is asked only when that header is missing.
+    if (!options.blobSha) return found;
+    const metadataUrl =
+      `${gitlabBaseUrl()}/api/v4/projects/${project}/repository/files/${filePath}` +
+      `?ref=${encodeURIComponent(ref)}`;
+    const blobSha = await gitlabBlobId(res, metadataUrl, token);
+    return blobSha ? { ...found, blobSha } : found;
   },
 
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {

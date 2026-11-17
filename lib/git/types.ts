@@ -624,6 +624,21 @@ export interface RepoDirectoryEntry {
 }
 
 /**
+ * What a caller of {@link GitProvider.readFileAtRef} asks for beyond the text
+ * (MOTIR-11528). Absent, or every field false, is today's read exactly: the same
+ * host requests and the same answer.
+ */
+export interface ReadFileAtRefOptions {
+  /**
+   * Also answer the host's git object id of the file on a `found` read. The
+   * provider asks its host for it after the text read has produced a found
+   * answer, and only then — so every other outcome reaches the host exactly as
+   * it does without the ask.
+   */
+  blobSha?: boolean;
+}
+
+/**
  * The result of {@link GitProvider.readFileAtRef}.
  *
  * `bytes` is the BLOB's length as the host served it — never a measurement of
@@ -636,7 +651,21 @@ export interface RepoDirectoryEntry {
  * file is named, never decoded into something a model would read as source.
  */
 export type RepoFileReadResult =
-  | { outcome: 'found'; path: string; ref: string; text: string; bytes: number }
+  | {
+      outcome: 'found';
+      path: string;
+      ref: string;
+      text: string;
+      bytes: number;
+      /**
+       * The HOST's own git object id of this path's content at `ref` — the id
+       * `git rev-parse <ref>:<path>` prints (MOTIR-11528). Present only when the
+       * caller asked for it ({@link ReadFileAtRefOptions.blobSha}) and the host
+       * answered one; never a hash of `text`, and an absent id is an absence,
+       * not a different outcome. No other arm of this union carries it.
+       */
+      blobSha?: string;
+    }
   /** The path names a DIRECTORY (MOTIR-9868): its immediate children, sorted by
    *  name, and `truncated` when the host's listing stopped at
    *  `REPO_DIRECTORY_MAX_ENTRIES`. Never text — a directory is listed, not read. */
