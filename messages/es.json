@@ -9574,7 +9574,12 @@
       "keep": "Seguir revisando",
       "error": "No se pudo omitir la revisión final. Sigue en curso: inténtelo de nuevo o siga revisando.",
       "retry": "Intentar de nuevo",
-      "finished": "La revisión final ya había terminado, así que no había nada que omitir."
+      "finished": "La revisión final ya había terminado, así que no había nada que omitir.",
+      "settingLine": "Esta omisión es solo para este plan. Para desactivar la revisión final en todos los planes de este proyecto, desactiva <link>Hacer la revisión final en los ajustes de Planificación con IA</link>.",
+      "settingLineFinished": "Para desactivar la revisión final en todos los planes de este proyecto, desactiva <link>Hacer la revisión final en los ajustes de Planificación con IA</link>.",
+      "settingLineReadOnly": "Esta omisión es solo para este plan. Un administrador del proyecto puede desactivar la revisión final en todos los planes de este proyecto con <link>Hacer la revisión final en los ajustes de Planificación con IA</link>.",
+      "settingLineReadOnlyFinished": "Un administrador del proyecto puede desactivar la revisión final en todos los planes de este proyecto con <link>Hacer la revisión final en los ajustes de Planificación con IA</link>.",
+      "settingNewTab": "(se abre en una pestaña nueva)"
     }
   },
   "codeHealth": {

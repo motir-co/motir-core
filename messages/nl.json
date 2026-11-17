@@ -9574,7 +9574,12 @@
       "keep": "Blijven controleren",
       "error": "De eindcontrole kon niet worden overgeslagen. Ze loopt nog: probeer het opnieuw, of blijf controleren.",
       "retry": "Opnieuw proberen",
-      "finished": "De eindcontrole was al klaar, dus er was niets om over te slaan."
+      "finished": "De eindcontrole was al klaar, dus er was niets om over te slaan.",
+      "settingLine": "Dit overslaan geldt alleen voor dit plan. Om de eindcontrole voor elk plan in dit project uit te zetten, zet je <link>De eindcontrole uitvoeren in de instellingen voor AI-planning</link> uit.",
+      "settingLineFinished": "Om de eindcontrole voor elk plan in dit project uit te zetten, zet je <link>De eindcontrole uitvoeren in de instellingen voor AI-planning</link> uit.",
+      "settingLineReadOnly": "Dit overslaan geldt alleen voor dit plan. Een projectbeheerder kan de eindcontrole voor elk plan in dit project uitzetten met <link>De eindcontrole uitvoeren in de instellingen voor AI-planning</link>.",
+      "settingLineReadOnlyFinished": "Een projectbeheerder kan de eindcontrole voor elk plan in dit project uitzetten met <link>De eindcontrole uitvoeren in de instellingen voor AI-planning</link>.",
+      "settingNewTab": "(opent in een nieuw tabblad)"
     }
   },
   "codeHealth": {

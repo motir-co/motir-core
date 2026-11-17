@@ -9574,7 +9574,12 @@
       "keep": "Weiter prüfen",
       "error": "Die Abschlussprüfung konnte nicht übersprungen werden. Sie läuft noch: Versuchen Sie es erneut oder prüfen Sie weiter.",
       "retry": "Erneut versuchen",
-      "finished": "Die Abschlussprüfung war bereits beendet, es gab also nichts zu überspringen."
+      "finished": "Die Abschlussprüfung war bereits beendet, es gab also nichts zu überspringen.",
+      "settingLine": "Dieses Überspringen gilt nur für diesen Plan. Um die Abschlussprüfung für jeden Plan in diesem Projekt auszuschalten, deaktivieren Sie <link>Abschlussprüfung ausführen in den Einstellungen zur KI-Planung</link>.",
+      "settingLineFinished": "Um die Abschlussprüfung für jeden Plan in diesem Projekt auszuschalten, deaktivieren Sie <link>Abschlussprüfung ausführen in den Einstellungen zur KI-Planung</link>.",
+      "settingLineReadOnly": "Dieses Überspringen gilt nur für diesen Plan. Ein Projektadmin kann die Abschlussprüfung für jeden Plan in diesem Projekt mit <link>Abschlussprüfung ausführen in den Einstellungen zur KI-Planung</link> ausschalten.",
+      "settingLineReadOnlyFinished": "Ein Projektadmin kann die Abschlussprüfung für jeden Plan in diesem Projekt mit <link>Abschlussprüfung ausführen in den Einstellungen zur KI-Planung</link> ausschalten.",
+      "settingNewTab": "(öffnet sich in einem neuen Tab)"
     }
   },
   "codeHealth": {

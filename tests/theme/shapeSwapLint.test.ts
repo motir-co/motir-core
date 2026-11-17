@@ -379,6 +379,8 @@ const OWN_BOX_ALLOWED: Record<string, string> = {
     'Nested inset: the 2px inset inside the sprint-count stepper track is concentric with the track radius, and the button/input role has no padding steps.',
   'app/(authed)/settings/project/_components/ProjectDetailsCard.tsx → h-[52px]':
     'Fixed-size tile, skeleton placeholder or layout block (not a control height), so no height step fits.',
+  'app/(authed)/settings/project/ai-planning/_components/FinalCheckSettingAnchor.tsx → p-2':
+    'Not a surface box: room for the arrival ring around the Run the final check row (MOTIR-11548, design MOTIR-11547 §3b), paired with -m-2 so the row does not move. A density step would stop matching the margin.',
   'app/(authed)/settings/project/members/page.tsx → h-12':
     'Fixed-size tile, skeleton placeholder or layout block (not a control height), so no height step fits.',
   'app/(authed)/settings/project/workflow/_components/WorkflowEditor.tsx → p-0.5':
