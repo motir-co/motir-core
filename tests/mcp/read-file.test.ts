@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -46,7 +46,7 @@ const { privateKey } = generateKeyPairSync('rsa', {
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 });
 
-type Reply = (url: string) => Response | Promise<Response>;
+type Reply = (url: string, init?: RequestInit) => Response | Promise<Response>;
 let reply: Reply = () => new Response('', { status: 500 });
 // The ref is resolved to its commit first (MOTIR-10122), then the file is read AT
 // that commit — so a contents call names `HEAD_SHA`, never the branch.
@@ -65,7 +65,7 @@ let objectReply: Reply = blobReply;
 const hostCalls: string[] = [];
 
 function stubHost(): void {
-  vi.stubGlobal('fetch', async (input: string | URL | Request): Promise<Response> => {
+  vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     if (url.includes('/access_tokens')) {
       return new Response(
@@ -77,7 +77,7 @@ function stubHost(): void {
       );
     }
     hostCalls.push(url);
-    if (url.endsWith('/graphql')) return objectReply(url);
+    if (url.endsWith('/graphql')) return objectReply(url, init);
     return url.includes('/commits/') ? resolveReply(url) : reply(url);
   });
 }
@@ -711,5 +711,192 @@ describe('read_file — the blob id of a pinned found read (MOTIR-11530)', () =>
     } as never);
     expect(structured).not.toHaveProperty('blobSha');
     expect(summary).not.toContain('(blob ');
+  });
+});
+
+// MOTIR-11533 — THE STORY GATE AT THE TOOL DOOR (Story MOTIR-11495). The
+// registered tool driven as a caller drives it — the registry's server over the
+// in-memory transport, a real client, real Postgres, the real service and the
+// real GitHub provider, every host call replayed at the `fetch` stub, the
+// provider's GraphQL object read included. The cases above prove the renderer;
+// these prove what a caller of the registered tool actually receives.
+describe('read_file — the blob id at the tool door (MOTIR-11533)', () => {
+  // plan.py's shipped patterns, copied as literals from `prompts/plan.py`
+  // (`_READ_COMMIT` and the two `found` heads of `READ_FILE_OUTCOMES`), which it
+  // runs over the summary's FIRST line.
+  const READ_COMMIT = /\(commit ([0-9a-f]{7,64})\)/;
+  const FOUND_RANGED = /^".*" in \S+ at .*, lines (\d+)-(\d+) of \d+:/;
+  const FOUND_WHOLE = /^".*" in \S+ at .*\(\d+ bytes\):/;
+  const FEAT_SHA = 'feed5eed'.padEnd(40, '7');
+  const FEAT_BLOB = 'd1ce'.padEnd(40, 'b');
+  const TEXT = 'export const x = 1;\n';
+  const firstLine = (r: CallToolResult) => summaryOf(r).split('\n')[0] ?? '';
+  const gitBlobIdOf = (text: string) =>
+    createHash('sha1')
+      .update(`blob ${Buffer.byteLength(text)}\0${text}`)
+      .digest('hex');
+
+  /** The host's object id, keyed by the commit the expression names. */
+  const idByCommit: Reply = (_url, init) => {
+    const { variables } = JSON.parse(String(init?.body ?? '{}')) as {
+      variables?: { expression?: string };
+    };
+    const commit = (variables?.expression ?? '').split(':')[0];
+    const oid = commit === HEAD_SHA ? BLOB_SHA : commit === FEAT_SHA ? FEAT_BLOB : null;
+    return new Response(
+      JSON.stringify({ data: { repository: { object: oid ? { oid } : null } } }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  };
+
+  beforeEach(() => {
+    objectReply = idByCommit;
+    resolveReply = (url) =>
+      new Response(url.endsWith('/commits/feat%2Fx') ? FEAT_SHA : HEAD_SHA, { status: 200 });
+  });
+
+  it('the replayed ids are not a digest of the bytes served', () => {
+    for (const id of [BLOB_SHA, FEAT_BLOB]) {
+      expect(id).not.toBe(gitBlobIdOf(TEXT));
+      expect(id).not.toBe(createHash('sha1').update(TEXT).digest('hex'));
+    }
+  });
+
+  it.each([
+    { name: 'the default branch', extra: {}, ref: 'main', commit: HEAD_SHA, blob: BLOB_SHA },
+    {
+      name: 'an explicit ref',
+      extra: { ref: 'feat/x' },
+      ref: 'feat/x',
+      commit: FEAT_SHA,
+      blob: FEAT_BLOB,
+    },
+  ])('a found read at $name answers the replayed id of the RESOLVED commit', async (c) => {
+    const res = await callTool(fx.ctx, args(c.extra));
+    expect(outcomeOf(res)).toMatchObject({
+      outcome: 'found',
+      ref: c.ref,
+      commitSha: c.commit,
+      blobSha: c.blob,
+      text: TEXT,
+    });
+    const line = firstLine(res);
+    expect(line).toBe(
+      `"lib/x.ts" in acme/alpha at ${c.ref} (commit ${c.commit}) (blob ${c.blob}) (20 bytes):`,
+    );
+    expect(line.match(/\(commit /g)).toHaveLength(1);
+    expect(READ_COMMIT.exec(line)?.[1]).toBe(c.commit);
+    expect(FOUND_WHOLE.test(line)).toBe(true);
+  });
+
+  it('a ranged read at the same commit answers the same id, both parentheticals before lines a-b of N', async () => {
+    reply = () => new Response('one\ntwo\nthree\nfour\nfive', { status: 200 });
+    const whole = outcomeOf(await callTool(fx.ctx, args()));
+    const res = await callTool(fx.ctx, args({ startLine: 2, endLine: 4 }));
+    expect(outcomeOf(res)['blobSha']).toBe(whole['blobSha']);
+    expect(outcomeOf(res)['blobSha']).toBe(BLOB_SHA);
+    const line = firstLine(res);
+    expect(line).toBe(
+      `"lib/x.ts" in acme/alpha at main (commit ${HEAD_SHA}) (blob ${BLOB_SHA}), lines 2-4 of 5:`,
+    );
+    expect(READ_COMMIT.exec(line)?.[1]).toBe(HEAD_SHA);
+    expect(FOUND_RANGED.exec(line)?.slice(1, 3)).toEqual(['2', '4']);
+  });
+
+  const noBlob = (res: CallToolResult) => {
+    const out = outcomeOf(res);
+    expect(out['blobSha'] ?? null).toBeNull();
+    expect(summaryOf(res)).not.toContain('(blob ');
+    return out;
+  };
+
+  it('a directory, a missing path and a NUL-bearing blob carry no id', async () => {
+    reply = () =>
+      new Response(
+        JSON.stringify([{ name: 'x.ts', path: 'lib/x.ts', type: 'file', sha: BLOB_SHA }]),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    const dir = noBlob(await callTool(fx.ctx, args({ path: 'lib' })));
+    expect(dir).toMatchObject({ outcome: 'directory', entries: [{ name: 'x.ts', type: 'file' }] });
+
+    reply = () => new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 });
+    expect(noBlob(await callTool(fx.ctx, args()))).toMatchObject({ outcome: 'not_found' });
+
+    // A NUL in the text is reported as binary: no text, and no id beside it.
+    reply = () => new Response('a\u0000secret', { status: 200 });
+    const nulRes = await callTool(fx.ctx, args());
+    expect(noBlob(nulRes)).toMatchObject({ outcome: 'binary' });
+    expect(outcomeOf(nulRes)).not.toHaveProperty('text');
+    expect(JSON.stringify(nulRes)).not.toContain('secret');
+  });
+
+  it('every other non-found outcome through the tool carries no id', async () => {
+    const cases: [string, () => void, Record<string, unknown>?][] = [
+      [
+        'ref_not_found',
+        () => (resolveReply = () => new Response('{}', { status: 422 })),
+        { ref: 'nope' },
+      ],
+      [
+        'too_large',
+        () =>
+          (reply = () =>
+            new Response(JSON.stringify({ errors: [{ code: 'too_large' }] }), { status: 403 })),
+      ],
+      [
+        'unauthorized',
+        () =>
+          (reply = () =>
+            new Response(JSON.stringify({ message: 'Bad credentials' }), { status: 401 })),
+      ],
+      ['invalid_path', () => undefined, { path: '../secrets.env' }],
+      [
+        'unreachable',
+        () =>
+          (reply = () => {
+            throw new TypeError('fetch failed');
+          }),
+      ],
+    ];
+    for (const [outcome, setup, extra] of cases) {
+      setup();
+      expect(noBlob(await callTool(fx.ctx, args(extra)))).toMatchObject({ outcome });
+      resolveReply = (url) =>
+        new Response(url.endsWith('/commits/feat%2Fx') ? FEAT_SHA : HEAD_SHA, { status: 200 });
+    }
+    vi.spyOn(repoFileReadService, 'readFile').mockResolvedValueOnce({
+      outcome: 'repo_not_connected',
+      repoRef: 'acme/alpha',
+    });
+    expect(noBlob(await callTool(fx.ctx, args()))).toMatchObject({ outcome: 'repo_not_connected' });
+    vi.stubEnv('GITHUB_APP_ID', '');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', '');
+    _resetInstallationTokenCache();
+    expect(noBlob(await callTool(fx.ctx, args()))).toMatchObject({
+      outcome: 'provider_unavailable',
+    });
+  });
+
+  it('the serialized found result carries no token, no download_url and no request host', async () => {
+    objectReply = (url, init) => {
+      // A host answer padded with what GitHub's REST envelope would carry.
+      const res = idByCommit(url, init) as Response;
+      return res.json().then(
+        (b) =>
+          new Response(
+            JSON.stringify({
+              ...b,
+              download_url: `https://raw.githubusercontent.com/acme/alpha/x?token=${TOKEN}`,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      );
+    };
+    const res = await callTool(fx.ctx, args());
+    const serialized = JSON.stringify(res);
+    expect(serialized).toContain(BLOB_SHA);
+    for (const leak of [TOKEN, 'download_url', 'api.github.com', 'raw.githubusercontent.com']) {
+      expect(serialized).not.toContain(leak);
+    }
   });
 });
