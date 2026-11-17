@@ -1,5 +1,18 @@
 # @motir/design-system
 
+## 0.24.0
+
+### Minor Changes
+
+- 304f43b: The four cellular-automaton backgrounds are drawn: `cyclic` (Cyclic CA), `brian` (Brian's Brain), `daynight` (Day & Night) and `rule110` (Rule 110). Each runs on a seeded grid painted through one off-screen image scaled without smoothing, opens already formed (the reduced-motion still frame), keeps moving without dying out, draws the same under every style and recolours with the palette and mode (MOTIR-11616).
+- 304f43b: Backgrounds join the design system. A background registry lists the seven backgrounds a page area can draw (`wave`, `topography`, `aurora`, `cyclic`, `brian`, `daynight`, `rule110`), each saying whether it follows the active style, with `resolveBackground` / `resolveBackgroundChoice` falling back to the style's default (the Wave) for an unknown or missing id and keeping `none`. `<Background id focusId />` draws one inside its parent's box: a decorative canvas whose inks are the live `--el-*` tokens, re-read when `data-theme`, `data-palette` or `data-style` change, capped at ~30 fps, paused off screen and in a hidden tab, one still frame under reduced motion, and a feathered clear area behind the focus element. Aurora is the first background drawn (MOTIR-11604).
+- 304f43b: `<Background still />` and `startBackground({ still: true })` draw one still frame and never animate, whatever the motion preference, for a picker's swatch; the frame still follows resizes and theme changes. The canvas now carries `data-background-focus`, naming the element it gathers around or clears behind (MOTIR-11618, MOTIR-11608).
+- 304f43b: The Wave and Topography backgrounds are drawn, each redrawn for every registered style from one per-style table that falls back to the base style's entry. Warm Editorial's Wave is motir.co's hero wave line for line (the 47 lines gathered around the focus element, their drift, glow, touches and squares), so swapping a hand-written hero wave for `<Background id="wave">` changes nothing on screen. Topography draws contour lines over a slowly shifting height map. Every style's `docs/styles/<id>.md` gains a section for each (MOTIR-11606, MOTIR-11617).
+
+### Patch Changes
+
+- 304f43b: `AxisField` draws its help text and note in `--el-text-secondary`, which clears AA on every surface (it was `--el-text-muted`, 4.12–4.34:1 on `--el-surface`), and `StyleVignette`'s modal scrim derives from `--el-overlay-scrim` instead of a raw `bg-black/10` (MOTIR-11621, MOTIR-11622).
+
 ## 0.23.0
 
 ### Minor Changes
