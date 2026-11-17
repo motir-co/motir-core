@@ -93,6 +93,12 @@ export type RepoFileServiceResult =
        * at (MOTIR-10122) — present on every outcome whose ref resolved, absent
        * where it did not (no such ref, a refused credential, a host that did not
        * answer, a path refused before any request).
+       *
+       * Beside it, a `found` answer of the pinned read carries `blobSha` — the
+       * host's git object id of that file at this commit (MOTIR-11529), absent
+       * when the host gave none. It is declared on the provider union's `found`
+       * arm, which this intersection distributes over, so it is readable on
+       * `found` alone; re-declaring it here would put it on every arm.
        */
       commitSha?: string;
     })
@@ -176,8 +182,11 @@ export const repoFileReadService = {
    *
    * `pinCommit` (MOTIR-10122) is the PLANNER's read — the MCP `read_file` and the
    * hosted planner's internal route: the ref is resolved to its commit first and
-   * the file read AT it, and the answer carries `commitSha`. One host call more,
-   * so the other consumers (a decision page, a path advisory) keep the plain read.
+   * the file read AT it, and the answer carries `commitSha`. A `found` answer also
+   * carries `blobSha`, the host's git object id of the file at that commit
+   * (MOTIR-11529) — the whole file's, on a `ranged` read too, since the range is
+   * cut downstream. That costs host calls the other consumers (a decision page,
+   * a path advisory) do not want, so the plain read asks for neither.
    */
   async readFile(
     ctx: RepoFileReadContext,
@@ -266,8 +275,13 @@ export const repoFileReadService = {
         connected.name,
         guarded.path,
         resolved.sha,
+        // The planner's read also asks for the file's git object id
+        // (MOTIR-11528/11529); a `found` answer carries it as `blobSha`.
+        { blobSha: true },
       );
-      // The answer names the ref the caller ASKED for; the sha rides beside it.
+      // The answer names the ref the caller ASKED for; the sha rides beside it,
+      // and the provider's `blobSha` rides through the spread on `found` only —
+      // `applyWholeFileLimit` builds its `too_large` fresh, so it drops the id.
       const limited = applyWholeFileLimit(read, options);
       return limited.outcome === 'invalid_path'
         ? limited

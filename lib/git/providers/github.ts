@@ -52,6 +52,7 @@ import type {
   NormalizedWorkflowJobProgressEvent,
   NormalizedProductionImageRun,
   NormalizedWorkflowRunEvent,
+  ReadFileAtRefOptions,
   RepoFileReadResult,
   RefResolution,
   CommitComparison,
@@ -84,6 +85,7 @@ import type {
 } from '../types';
 import { DEPLOYMENT_STATES } from '../types';
 import { githubReadCodeBlame, githubReadCodeLog } from './githubCodeHistory';
+import { githubBlobId } from './repoBlobId';
 
 // The GitHub implementation of the GitProvider seam (Story 7.10 · MOTIR-891) —
 // the FIRST registered provider. It normalizes GitHub's `pull_request` and
@@ -1108,6 +1110,7 @@ export const githubProvider: GitProvider = {
     name: string,
     path: string,
     ref: string,
+    options: ReadFileAtRefOptions = {},
   ): Promise<RepoFileReadResult> {
     // THE PATH GUARD RUNS FIRST — before the token is minted, before a URL is
     // built, before anything is sent. A traversal that reaches GitHub gets a
@@ -1230,13 +1233,19 @@ export const githubProvider: GitProvider = {
     if (classified.kind === 'binary') {
       return { outcome: 'binary', path: guarded.path, ref, bytes: blob.byteLength };
     }
-    return {
-      outcome: 'found',
+    const found = {
+      outcome: 'found' as const,
       path: guarded.path,
       ref,
       text: classified.text,
       bytes: blob.byteLength,
     };
+    // The id is asked HERE, after the read produced a found answer and only on
+    // the caller's ask (MOTIR-11528): every other outcome above reached the host
+    // exactly as it does without it. Same path and ref the text was read at.
+    if (!options.blobSha) return found;
+    const blobSha = await githubBlobId(GITHUB_API, token, owner, name, ref, guarded.path);
+    return blobSha ? { ...found, blobSha } : found;
   },
 
   async resolveRef(

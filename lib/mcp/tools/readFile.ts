@@ -30,6 +30,12 @@ import { projectKeyField } from './sprintRef';
 // is a change to both: the point of the tool is that both planners see the same
 // evidence in the same shape.
 //
+// ONE DELIBERATE DIVERGENCE (MOTIR-11530): a `found` SUMMARY adds a
+// `(blob <sha>)` parenthetical — the host's git object id of the content read —
+// after the commit one, which the motir-ai twin does not print. `atRef` itself
+// stays byte-identical to the twin's, so the commit parenthetical both planners
+// parse reads exactly as it does there; the blob is appended by the found arm.
+//
 // Every outcome is a NON-error result naming itself in `structuredContent.outcome`
 // — a model must be able to tell "no such path" from "no such ref" from "the host
 // did not answer", and an `isError` would collapse them into "the call failed".
@@ -157,11 +163,20 @@ export function renderReadFile(
           },
         };
       }
+      // The CONTENT read (MOTIR-11530): the host's blob id rides in its OWN
+      // parenthetical after the commit one — never inside it, so plan.py's
+      // `\(commit ([0-9a-f]{7,64})\)` still matches — and only beside a resolved
+      // commit, since a lone blob after a bare ref would cite nothing. Composed
+      // once here, after the NUL branch above, so both heads below inherit it
+      // and a binary answer never carries it. The payload follows the same rule,
+      // so the summary and `blobSha` never disagree.
+      const blobSha = result.commitSha ? result.blobSha : undefined;
+      const read = blobSha ? `${where} (blob ${blobSha})` : where;
       const sliced = sliceLines(result.text, range.startLine, range.endLine);
       const body = sliced ? sliced.text : result.text;
       const head = sliced
-        ? `${where}, lines ${sliced.from}-${sliced.to} of ${sliced.total}:`
-        : `${where} (${result.bytes} bytes):`;
+        ? `${read}, lines ${sliced.from}-${sliced.to} of ${sliced.total}:`
+        : `${read} (${result.bytes} bytes):`;
       const truncated = body.length > READ_FILE_CONTENT_CAP;
       const shown = truncated
         ? `${body.slice(0, READ_FILE_CONTENT_CAP)}${truncationMarker(READ_FILE_CONTENT_CAP, body.length)}`
@@ -174,6 +189,7 @@ export function renderReadFile(
           path: result.path,
           ref: result.ref,
           commitSha: result.commitSha ?? null,
+          blobSha: blobSha ?? null,
           bytes: result.bytes,
           lines: sliced ? { from: sliced.from, to: sliced.to, total: sliced.total } : null,
           truncated,
