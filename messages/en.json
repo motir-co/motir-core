@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "A board must keep at least one column.",
       "toastColumnNotEmptyError": "“{name}” still holds work items — remap its statuses first.",
       "toastRenameBoardError": "Couldn’t rename the board. The previous name was restored.",
-      "errorTitle": "Couldn’t load board settings",
+      "errorTitle": "Couldn’t save the change",
       "errorDescription": "Something went wrong loading this board’s configuration. Try again.",
       "storedFilter": {
         "title": "Board filter",

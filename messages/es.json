@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Un Tablero debe conservar al menos una columna.",
       "toastColumnNotEmptyError": "“{name}” todavía contiene elementos de trabajo: reasigna antes sus estados.",
       "toastRenameBoardError": "No se pudo renombrar el Tablero. Se ha restaurado el nombre anterior.",
-      "errorTitle": "No se pudo cargar la configuración del Tablero",
+      "errorTitle": "No se pudo guardar el cambio",
       "errorDescription": "Algo falló al cargar la configuración de este Tablero. Vuelve a intentarlo.",
       "storedFilter": {
         "title": "Filtro del Tablero",

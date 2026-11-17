@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "面板必须至少保留一列。",
       "toastColumnNotEmptyError": "“{name}”仍有工作项——请先重新映射其状态。",
       "toastRenameBoardError": "无法重命名面板，已还原为之前的名称。",
-      "errorTitle": "无法加载面板设置",
+      "errorTitle": "无法保存更改",
       "errorDescription": "加载该面板的配置时出了点问题，请重试。",
       "storedFilter": {
         "title": "面板筛选器",

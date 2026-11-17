@@ -2032,7 +2032,7 @@
   "settings.board.toastLastColumnError": "A board must keep at least one column.",
   "settings.board.toastColumnNotEmptyError": "“{name}” still holds work items — remap its statuses first.",
   "settings.board.toastRenameBoardError": "Couldn’t rename the board. The previous name was restored.",
-  "settings.board.errorTitle": "Couldn’t load board settings",
+  "settings.board.errorTitle": "Couldn’t save the change",
   "settings.board.errorDescription": "Something went wrong loading this board’s configuration. Try again.",
   "settings.board.storedFilter.title": "Board filter",
   "settings.board.storedFilter.subtitle": "The work items this board shows, for everyone who opens it. The toolbar filter narrows on top of it.",

@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Een bord moet minstens één kolom houden.",
       "toastColumnNotEmptyError": "‘{name}’ bevat nog werkitems — wijs eerst de statussen ervan opnieuw toe.",
       "toastRenameBoardError": "Kan het bord niet hernoemen. De vorige naam is hersteld.",
-      "errorTitle": "Kan de bordinstellingen niet laden",
+      "errorTitle": "Kan de wijziging niet opslaan",
       "errorDescription": "Er ging iets mis bij het laden van de configuratie van dit bord. Probeer het opnieuw.",
       "storedFilter": {
         "title": "Bordfilter",

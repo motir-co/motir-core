@@ -164,6 +164,26 @@ describe('BoardConfigEditor (3.6.3) — column delete confirm + guard', () => {
     );
   });
 
+  it('a refused delete restores the column under a failed-CHANGE toast, not a failed load (MOTIR-11550)', async () => {
+    fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ code: 'COLUMN_NOT_EMPTY' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<BoardConfigEditor model={model()} isAdmin />);
+    fireEvent.click(screen.getByTestId('board-config-delete-c1'));
+    fireEvent.click(await screen.findByTestId('board-config-delete-confirm'));
+
+    expect(await screen.findByText('Couldn’t save the change')).toBeTruthy();
+    expect(
+      screen.getByText('“To Do” still holds work items — remap its statuses first.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Couldn’t load board settings')).toBeNull();
+    // The column is back.
+    expect(screen.getByTestId('board-config-delete-c1')).toBeTruthy();
+  });
+
   it('shows the guard (no delete) when a mapped status still holds work items', async () => {
     const m = model({
       columns: [
