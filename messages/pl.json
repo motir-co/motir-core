@@ -356,8 +356,8 @@
       "amendingChildrenOf": "Uzgadnianie: {title}",
       "amendingTopLevel": "Uzgadnianie najwyższego poziomu projektu",
       "checkingPlan": "Trwa końcowe sprawdzenie",
-      "checkingCard": "Sprawdzanie: {title}",
-      "repairing": "Poprawianie tego, co wykazało końcowe sprawdzenie"
+      "checkingCard": "Sprawdzanie i poprawianie: {title}",
+      "repairing": "Poprawianie powiązań i kolejności planu"
     },
     "cue": {
       "drafting": "Tworzenie szkicu",
@@ -9000,13 +9000,13 @@
         "resumedLine": "Utracono maszynę — Motir uruchomił plan ponownie i kontynuuje od miejsca, w którym się zatrzymał",
         "resumedLineSecond": "Ponownie utracono maszynę — druga automatyczna próba, kontynuacja od miejsca zatrzymania",
         "amending": "uzgodnij",
-        "checking": "sprawdź",
+        "checking": "sprawdź i popraw",
         "repairing": "popraw",
         "amendingLine": "Uzgadnianie elementów pod {target}",
         "amendingTopLine": "Uzgadnianie elementów najwyższego poziomu",
         "checkingLine": "Trwa końcowe sprawdzenie",
-        "checkingCardLine": "Sprawdzanie: {title}",
-        "repairingLine": "Poprawianie tego, co wykazało końcowe sprawdzenie"
+        "checkingCardLine": "Sprawdzanie i poprawianie: {title}",
+        "repairingLine": "Poprawianie powiązań i kolejności planu"
       },
       "fact": {
         "unknown": "Trwa praca nad planem…",
@@ -9029,11 +9029,12 @@
           "skippedNoContainers": "Pominięto końcowe sprawdzenie planu: żadna historia, zadanie ani błąd nie były gotowe do sprawdzenia",
           "skippedByPerson": "Końcowe sprawdzenie planu zakończono wcześniej, ponieważ zostało pominięte: nic z tego, co znalazło, nie zostało poprawione",
           "selectionFailed": "Końcowe sprawdzenie planu nie zostało ukończone: nie udało się odczytać jego elementów",
-          "checking": "Sprawdzanie „{title}”",
+          "checking": "Sprawdzanie i poprawianie „{title}”",
           "notFinished": "Nie udało się dokończyć sprawdzania „{title}”",
           "containerClean": "Nie znaleziono problemów w „{title}”",
           "containerFound": "{count, plural, one {Znaleziono # problem w „{title}”} few {Znaleziono # problemy w „{title}”} many {Znaleziono # problemów w „{title}”} other {Znaleziono # problemy w „{title}”}}",
-          "finding": "Problem: {summary}"
+          "finding": "Problem: {summary}",
+          "rechecking": "Ponowne sprawdzanie „{title}”: „{blocker}” zmienił to, co dostarcza"
         },
         "repair": {
           "started": "Poprawianie znalezionych problemów…",
@@ -9046,7 +9047,8 @@
           "notFixedCommittedInProgress": "Nie poprawiono: {summary} (nad elementem już trwa praca)",
           "notFixedSizing": "Nie poprawiono: {summary} (dotyczy rozmiaru pracy)",
           "notFixedFixFailed": "Nie poprawiono: {summary} (nie udało się wprowadzić poprawki)",
-          "notFixedSkipped": "Nie poprawiono: {summary} (końcowe sprawdzenie pominięto przed poprawką)"
+          "notFixedSkipped": "Nie poprawiono: {summary} (końcowe sprawdzenie pominięto przed poprawką)",
+          "notFixedOtherCard": "Nie poprawiono: {summary} (poprawka należy do innego elementu)"
         },
         "reopen": {
           "started": "Ponowne sprawdzanie powiązań i kolejności planu",
@@ -10968,7 +10970,7 @@
         "amend": "Uzgadnianie elementów pod {title}",
         "amendTop": "Uzgadnianie elementów najwyższego poziomu",
         "check": "Trwa końcowe sprawdzenie",
-        "repair": "Poprawianie tego, co wykazało końcowe sprawdzenie"
+        "repair": "Poprawianie powiązań i kolejności planu"
       },
       "reason": {
         "rate_limited": "model osiągnął limit zapytań",

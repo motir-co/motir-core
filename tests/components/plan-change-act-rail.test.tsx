@@ -226,16 +226,18 @@ describe('PlanChangeRail — the amend, check and repair acts', () => {
     expect(all.map((r) => r.querySelector('.font-mono')?.textContent)).toEqual([
       'reconcile',
       'reconcile',
-      'check',
+      'check & fix',
       'fix',
     ]);
     const text = all.map((r) => r.textContent ?? '');
     expect(text[0]).toContain('Reconciling the items under MOTIR-42');
     expect(text[1]).toContain('Reconciling the items at the top level');
     expect(text[2]).toContain('Running the final check');
-    expect(text[3]).toContain('Fixing what the final check found');
+    // The fix is the validity re-open's (MOTIR-11491): it no longer names the final check.
+    expect(text[3]).toContain("Fixing the plan's links and order");
+    expect(text[3]).not.toMatch(/final check/i);
     for (const line of text) {
-      expect(line).not.toMatch(/laying|dry.?run/i);
+      expect(line).not.toMatch(/laying|dry.?run|repair/i);
     }
     // The newest row is live and takes the spinner; the past ones carry their glyph.
     for (const row of all.slice(0, -1)) expect(row.querySelector('svg')).not.toBeNull();

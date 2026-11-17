@@ -221,7 +221,9 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
   lay: { show: 'laying' },
   author: { show: 'authoring' },
   // The three sessions that used to read as laying (MOTIR-11256): a laid level's
-  // amend, the plan's final check (the code's dry run) and the fix after it.
+  // amend, the plan's final check (the code's dry run, which checks AND fixes each
+  // card, MOTIR-11489) and a fix — the validity re-open's, or on a plan stored
+  // before MOTIR-11489 the fix that followed the final check.
   amend: { show: 'amending' },
   check: { show: 'checking' },
   repair: { show: 'repairing' },
@@ -230,7 +232,7 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
    *  row" is guaranteed upstream as well as here. */
   note: { show: 'note' },
   /** A line motir-ai's CODE reported as a FACT, with no words (MOTIR-11296): the
-   *  claim check and its settle, the final check and its repair, the validity
+   *  claim check and its settle, the final check (and on an older plan its repair), the validity
    *  re-open and the turn-boundary code-graph refresh. They used to be `note`
    *  frames carrying English; `lib/planning/progressFacts.ts` words them in the
    *  reader's locale, and draws a generic line for a fact it does not know. */

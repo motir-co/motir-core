@@ -356,8 +356,8 @@
       "amendingChildrenOf": "Afstemmen: {title}",
       "amendingTopLevel": "Hoogste niveau van het project wordt afgestemd",
       "checkingPlan": "Eindcontrole wordt uitgevoerd",
-      "checkingCard": "Controleren: {title}",
-      "repairing": "Wat de eindcontrole vond wordt hersteld"
+      "checkingCard": "Controleren en herstellen: {title}",
+      "repairing": "De koppelingen en volgorde van het plan worden hersteld"
     },
     "cue": {
       "drafting": "Wordt opgesteld",
@@ -9000,13 +9000,13 @@
         "resumedLine": "Machine verloren — Motir heeft het opnieuw gestart en het gaat verder waar het stopte",
         "resumedLineSecond": "Machine opnieuw verloren — tweede automatische poging, gaat verder waar het stopte",
         "amending": "afstemmen",
-        "checking": "controle",
+        "checking": "controle & herstel",
         "repairing": "herstel",
         "amendingLine": "Items onder {target} worden afgestemd",
         "amendingTopLine": "Items op het hoogste niveau worden afgestemd",
         "checkingLine": "Eindcontrole wordt uitgevoerd",
-        "checkingCardLine": "{title} wordt gecontroleerd",
-        "repairingLine": "Wat de eindcontrole vond wordt hersteld"
+        "checkingCardLine": "{title} wordt gecontroleerd en hersteld",
+        "repairingLine": "De koppelingen en volgorde van het plan worden hersteld"
       },
       "fact": {
         "unknown": "Bezig met het plan…",
@@ -9029,11 +9029,12 @@
           "skippedNoContainers": "Eindcontrole van het plan overgeslagen: geen story, taak of bug erin was klaar om te controleren",
           "skippedByPerson": "Eindcontrole van het plan vroeg beëindigd omdat die is overgeslagen: niets van wat ze vond is hersteld",
           "selectionFailed": "De eindcontrole van het plan is niet afgerond: de items ervan konden niet worden gelezen",
-          "checking": "‘{title}’ wordt gecontroleerd",
+          "checking": "‘{title}’ wordt gecontroleerd en hersteld",
           "notFinished": "Controle van ‘{title}’ kon niet worden afgerond",
           "containerClean": "Geen problemen gevonden in ‘{title}’",
           "containerFound": "{count, plural, one {# probleem gevonden in ‘{title}’} other {# problemen gevonden in ‘{title}’}}",
-          "finding": "Probleem: {summary}"
+          "finding": "Probleem: {summary}",
+          "rechecking": "‘{title}’ wordt opnieuw gecontroleerd: ‘{blocker}’ heeft gewijzigd wat het oplevert"
         },
         "repair": {
           "started": "De bevindingen worden hersteld…",
@@ -9046,7 +9047,8 @@
           "notFixedCommittedInProgress": "Niet hersteld: {summary} (er wordt al aan het item gewerkt)",
           "notFixedSizing": "Niet hersteld: {summary} (het gaat over de omvang van het werk)",
           "notFixedFixFailed": "Niet hersteld: {summary} (de herstelling kon niet worden gemaakt)",
-          "notFixedSkipped": "Niet hersteld: {summary} (de eindcontrole werd overgeslagen vóór de herstelling)"
+          "notFixedSkipped": "Niet hersteld: {summary} (de eindcontrole werd overgeslagen vóór de herstelling)",
+          "notFixedOtherCard": "Niet hersteld: {summary} (de correctie hoort bij een ander item)"
         },
         "reopen": {
           "started": "De koppelingen en volgorde van het plan worden opnieuw gecontroleerd",
@@ -10968,7 +10970,7 @@
         "amend": "Items onder {title} worden afgestemd",
         "amendTop": "Items op het hoogste niveau worden afgestemd",
         "check": "Eindcontrole wordt uitgevoerd",
-        "repair": "Wat de eindcontrole vond wordt hersteld"
+        "repair": "De koppelingen en volgorde van het plan worden hersteld"
       },
       "reason": {
         "rate_limited": "het model de limiet voor aanvragen bereikte",

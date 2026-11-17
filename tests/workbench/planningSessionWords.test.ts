@@ -37,7 +37,7 @@ describe('stopPhraseKeyOf — where the walk stopped, in the progress line’s s
     expect(stopPhraseKeyOf({ stopPhase: 'amend', stopTitle: 'Export' })).toBe('amend');
     expect(stopPhraseKeyOf({ stopPhase: 'amend', stopTitle: null })).toBe('amendTop');
   });
-  it('check and repair name the final check, with or without a card title', () => {
+  it('check names the final check and repair the validity re-open, with or without a card title', () => {
     for (const stopTitle of ['Export', null]) {
       expect(stopPhraseKeyOf({ stopPhase: 'check', stopTitle })).toBe('check');
       expect(stopPhraseKeyOf({ stopPhase: 'repair', stopTitle })).toBe('repair');
@@ -49,6 +49,10 @@ describe('stopPhraseKeyOf — where the walk stopped, in the progress line’s s
       expect(zh.workbench.planningSession.stop[key]).toBeTruthy();
       expect(en.workbench.planningSession.stop[key]).not.toMatch(/dry.?run/i);
     }
+  });
+  it('the repair stop is the validity re-open’s fix, not the final check (MOTIR-11491)', () => {
+    expect(en.workbench.planningSession.stop.repair).toBe("Fixing the plan's links and order");
+    expect(en.workbench.planningSession.stop.check).toBe('Running the final check');
   });
 });
 

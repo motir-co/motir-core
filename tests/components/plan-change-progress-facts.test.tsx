@@ -6,7 +6,11 @@ import { cleanup, screen } from '@testing-library/react';
 import { createTranslator } from 'next-intl';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanActRecord, actLine, runningBarLine } from '@/components/planning/PlanActRecord';
-import { narrateFrame, type PlanChangeProgress } from '@/lib/hooks/usePlanChangeConversation';
+import {
+  applyPlanFrame,
+  narrateFrame,
+  type PlanChangeProgress,
+} from '@/lib/hooks/usePlanChangeConversation';
 import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
 import {
   FACT_KEYS,
@@ -236,7 +240,7 @@ describe('the line, in English: what the rail said before the words moved', () =
     expect(line('dry_run', 'skipped_turned_off')).toBe(
       'Skipped the final check of the plan: it is turned off for this project',
     );
-    expect(line('dry_run', 'checking', { title: 'Card s1' })).toBe('Checking “Card s1”');
+    expect(line('dry_run', 'checking', { title: 'Card s1' })).toBe('Checking and fixing “Card s1”');
     expect(line('dry_run', 'container_found', { title: 'Card s1', count: 2 })).toBe(
       'Found 2 issues in “Card s1”',
     );
@@ -283,6 +287,118 @@ describe('the line, in English: what the rail said before the words moved', () =
   it('the running bar repeats the same line', () => {
     const acts = [asAct(wire('dry_run', 'started'))];
     expect(runningBarLine(acts, tc, 'en')).toBe('Starting the final check of the plan');
+  });
+});
+
+// MOTIR-11489 · MOTIR-11491 — the final check is ONE step that checks and fixes each
+// card. Its findings' outcomes ride the `dry_run` fact, a card whose upstream changed
+// is checked again as a line under the same step, and `dry_run_repair` is kept only so
+// an older stored plan reads as before.
+describe('the final check as one check & fix step', () => {
+  const tc = translatorFor('en');
+  const line = (fact: string, code: string, params: Record<string, unknown> = {}) =>
+    actLine(asAct(wire(fact, code, params)), tc, 'en');
+  const OUTCOMES = Object.keys(FACT_KEYS.dry_run_repair!).filter(
+    (c) => c === 'finding_fixed' || c.startsWith('not_fixed_'),
+  );
+
+  it('words every outcome the repair worded on the dry_run fact, and the other-card report', () => {
+    expect(OUTCOMES.length).toBeGreaterThanOrEqual(8);
+    for (const code of [...OUTCOMES, 'not_fixed_other_card']) {
+      expect(FACT_KEYS.dry_run![code], code).toBeDefined();
+      expect(FACT_KEYS.dry_run![code]!.needs).toEqual(['summary']);
+    }
+    expect(line('dry_run', 'finding_fixed', { summary: 'F.' })).toBe('Fixed: F.');
+    expect(line('dry_run', 'not_fixed_other_card', { summary: 'F.' })).toBe(
+      'Not fixed: F. (the fix belongs on another item)',
+    );
+    expect(line('dry_run', 'not_fixed_skipped', { summary: 'F.' })).toBe(
+      'Not fixed: F. (the final check was skipped before the fix)',
+    );
+  });
+
+  for (const locale of locales) {
+    it(`${locale}: each outcome on dry_run reads as the repair's own line, never the generic one`, () => {
+      const t = translatorFor(locale);
+      const said = (fact: string, code: string) =>
+        actLine(asAct(wire(fact, code, { summary: PARAMS.summary })), t, locale);
+      for (const code of OUTCOMES) {
+        expect(said('dry_run', code), `${locale} ${code}`).toBe(said('dry_run_repair', code));
+      }
+      for (const code of [...OUTCOMES, 'not_fixed_other_card']) {
+        const text = said('dry_run', code);
+        expect(text, `${locale} ${code}`).not.toBe(t(`fact.${UNKNOWN_FACT_KEY}`));
+        expect(text).toContain(PARAMS.summary);
+      }
+    });
+  }
+
+  it('a recheck names the card and the card whose change sent it back; without the upstream it is the generic line', () => {
+    expect(line('dry_run', 'rechecking', { blocker: 'Card a', title: 'Card x' })).toBe(
+      'Checking “Card x” again: “Card a” changed what it delivers',
+    );
+    expect(line('dry_run', 'rechecking', { title: 'Card x' })).toBe('Working on the plan…');
+    expect(line('dry_run', 'rechecking', { blocker: 'Card a' })).toBe('Working on the plan…');
+  });
+
+  /** The rail a run's frames draw, as the hook folds them. */
+  function railOf(frames: readonly [string, unknown][]) {
+    const acts = frames.reduce((state, [event, data]) => applyPlanFrame(state, event, data), {
+      progress: null,
+      acts: [],
+    } as Parameters<typeof applyPlanFrame>[0]).acts;
+    renderWithIntl(<PlanActRecord acts={acts} streaming={false} />);
+    const rows = Array.from(
+      screen.getByTestId('plan-change-acts').querySelectorAll('[data-testid^="plan-change-act-"]'),
+    );
+    return {
+      acts,
+      labels: rows.map((r) => r.querySelector('.font-mono')?.textContent),
+      lines: rows.map((r) => r.textContent ?? ''),
+    };
+  }
+  const fact = (fact: string, code: string, params: Record<string, unknown> = {}) =>
+    ['progress_fact', { fact, code, ref: 'planItem:b1', params }] as [string, unknown];
+
+  it('a check followed by its card, its recheck and its outcome draws ONE check & fix act, the rest as lines', () => {
+    const rail = railOf([
+      ['check', {}],
+      fact('dry_run', 'checking', { title: 'Card b1' }),
+      fact('dry_run', 'rechecking', { title: 'Card b1', blocker: 'Card a1' }),
+      fact('dry_run', 'finding_fixed', { summary: 'F.' }),
+    ]);
+    expect(rail.acts.map((a) => a.kind)).toEqual(['checking', 'fact', 'fact', 'fact']);
+    expect(rail.labels.filter((l) => l === 'check & fix')).toHaveLength(1);
+    expect(rail.labels).not.toContain('fix');
+    expect(rail.lines[0]).toContain('Running the final check');
+    expect(rail.lines[1]).toContain('Checking and fixing “Card b1”');
+    expect(rail.lines[2]).toContain('Checking “Card b1” again: “Card a1” changed what it delivers');
+    expect(rail.lines[3]).toContain('Fixed: F.');
+  });
+
+  it('the validity re-open still draws its fix act, worded as the plan’s links and order', () => {
+    const rail = railOf([fact('validity_reopen', 'started'), ['repair', {}], ['check', {}]]);
+    expect(rail.labels).toEqual(['note', 'fix', 'check & fix']);
+    expect(rail.lines[1]).toContain("Fixing the plan's links and order");
+    expect(rail.lines[1]).not.toMatch(/final check/i);
+  });
+
+  it('an older stored plan, with its repair frame and dry_run_repair facts, reads as it always did', () => {
+    const rail = railOf([
+      ['check', {}],
+      fact('dry_run', 'finding', { summary: 'F.' }),
+      ['repair', {}],
+      fact('dry_run_repair', 'started'),
+      fact('dry_run_repair', 'finding_fixed', { summary: 'F.' }),
+      fact('dry_run_repair', 'not_fixed_sizing', { summary: 'G.' }),
+    ]);
+    expect(rail.labels).toEqual(['check & fix', 'note', 'fix', 'note', 'note', 'note']);
+    expect(rail.lines.slice(3)).toEqual([
+      expect.stringContaining('Fixing the findings…'),
+      expect.stringContaining('Fixed: F.'),
+      expect.stringContaining('Not fixed: G. (it is about how the work is sized)'),
+    ]);
+    expect(rail.lines.join('\n')).not.toContain('Working on the plan…');
   });
 });
 

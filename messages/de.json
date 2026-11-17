@@ -356,8 +356,8 @@
       "amendingChildrenOf": "Wird abgeglichen: {title}",
       "amendingTopLevel": "Oberste Ebene des Projekts wird abgeglichen",
       "checkingPlan": "Abschlussprüfung läuft",
-      "checkingCard": "Wird geprüft: {title}",
-      "repairing": "Ergebnisse der Abschlussprüfung werden behoben"
+      "checkingCard": "Wird geprüft und behoben: {title}",
+      "repairing": "Verknüpfungen und Reihenfolge des Plans werden behoben"
     },
     "cue": {
       "drafting": "Wird entworfen",
@@ -9000,13 +9000,13 @@
         "resumedLine": "Maschine verloren — Motir hat neu gestartet und setzt dort fort, wo es stehen blieb",
         "resumedLineSecond": "Maschine erneut verloren — zweiter automatischer Versuch, setzt dort fort, wo es stehen blieb",
         "amending": "abgleichen",
-        "checking": "prüfen",
+        "checking": "prüfen & beheben",
         "repairing": "beheben",
         "amendingLine": "Elemente unter {target} werden abgeglichen",
         "amendingTopLine": "Elemente der obersten Ebene werden abgeglichen",
         "checkingLine": "Abschlussprüfung läuft",
-        "checkingCardLine": "{title} wird geprüft",
-        "repairingLine": "Ergebnisse der Abschlussprüfung werden behoben"
+        "checkingCardLine": "{title} wird geprüft und behoben",
+        "repairingLine": "Verknüpfungen und Reihenfolge des Plans werden behoben"
       },
       "fact": {
         "unknown": "Am Plan wird gearbeitet…",
@@ -9029,11 +9029,12 @@
           "skippedNoContainers": "Abschlussprüfung des Plans übersprungen: Keine Story, Aufgabe und kein Bug darin war bereit zur Prüfung",
           "skippedByPerson": "Abschlussprüfung des Plans vorzeitig beendet, weil sie übersprungen wurde: Nichts, was sie gefunden hat, wurde behoben",
           "selectionFailed": "Die Abschlussprüfung des Plans wurde nicht abgeschlossen: Seine Elemente konnten nicht gelesen werden",
-          "checking": "„{title}“ wird geprüft",
+          "checking": "„{title}“ wird geprüft und behoben",
           "notFinished": "Die Prüfung von „{title}“ konnte nicht abgeschlossen werden",
           "containerClean": "Keine Probleme in „{title}“ gefunden",
           "containerFound": "{count, plural, one {# Problem in „{title}“ gefunden} other {# Probleme in „{title}“ gefunden}}",
-          "finding": "Problem: {summary}"
+          "finding": "Problem: {summary}",
+          "rechecking": "„{title}“ wird erneut geprüft: „{blocker}“ hat geändert, was es liefert"
         },
         "repair": {
           "started": "Die Ergebnisse werden behoben…",
@@ -9046,7 +9047,8 @@
           "notFixedCommittedInProgress": "Nicht behoben: {summary} (an dem Element wird bereits gearbeitet)",
           "notFixedSizing": "Nicht behoben: {summary} (es betrifft den Umfang der Arbeit)",
           "notFixedFixFailed": "Nicht behoben: {summary} (die Korrektur konnte nicht vorgenommen werden)",
-          "notFixedSkipped": "Nicht behoben: {summary} (die Abschlussprüfung wurde vor der Korrektur übersprungen)"
+          "notFixedSkipped": "Nicht behoben: {summary} (die Abschlussprüfung wurde vor der Korrektur übersprungen)",
+          "notFixedOtherCard": "Nicht behoben: {summary} (die Korrektur gehört zu einem anderen Element)"
         },
         "reopen": {
           "started": "Verknüpfungen und Reihenfolge des Plans werden erneut geprüft",
@@ -10968,7 +10970,7 @@
         "amend": "Elemente unter {title} werden abgeglichen",
         "amendTop": "Elemente der obersten Ebene werden abgeglichen",
         "check": "Abschlussprüfung läuft",
-        "repair": "Ergebnisse der Abschlussprüfung werden behoben"
+        "repair": "Verknüpfungen und Reihenfolge des Plans werden behoben"
       },
       "reason": {
         "rate_limited": "das Modell das Ratenlimit erreicht hat",

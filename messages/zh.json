@@ -356,8 +356,8 @@
       "amendingChildrenOf": "正在协调：{title}",
       "amendingTopLevel": "正在协调项目的顶层",
       "checkingPlan": "正在进行最终检查",
-      "checkingCard": "正在检查：{title}",
-      "repairing": "正在修复最终检查发现的内容"
+      "checkingCard": "正在检查并修复：{title}",
+      "repairing": "正在修复计划的关联和顺序"
     },
     "cue": {
       "drafting": "起草中",
@@ -8991,13 +8991,13 @@
         "resumedLine": "机器丢失 — Motir 已重新开始，从中断处继续",
         "resumedLineSecond": "机器再次丢失 — 第二次自动尝试，从中断处继续",
         "amending": "协调",
-        "checking": "检查",
+        "checking": "检查并修复",
         "repairing": "修复",
         "amendingLine": "正在协调 {target} 下的工作项",
         "amendingTopLine": "正在协调顶层的工作项",
         "checkingLine": "正在进行最终检查",
-        "checkingCardLine": "正在检查 {title}",
-        "repairingLine": "正在修复最终检查发现的内容"
+        "checkingCardLine": "正在检查并修复 {title}",
+        "repairingLine": "正在修复计划的关联和顺序"
       },
       "fact": {
         "unknown": "正在处理计划…",
@@ -9020,11 +9020,12 @@
           "skippedNoContainers": "已跳过计划的最终检查：其中没有可检查的故事、任务或缺陷",
           "skippedByPerson": "最终检查被跳过，已提前结束：其发现的内容均未修复",
           "selectionFailed": "计划的最终检查未完成：无法读取其工作项",
-          "checking": "正在检查“{title}”",
+          "checking": "正在检查并修复“{title}”",
           "notFinished": "无法完成对“{title}”的检查",
           "containerClean": "“{title}”中没有发现",
           "containerFound": "{count, plural, other {在“{title}”中有 # 项发现}}",
-          "finding": "发现：{summary}"
+          "finding": "发现：{summary}",
+          "rechecking": "正在重新检查“{title}”：“{blocker}”更改了它交付的内容"
         },
         "repair": {
           "started": "正在修复发现的内容…",
@@ -9037,7 +9038,8 @@
           "notFixedCommittedInProgress": "未修复：{summary}（该工作项已在进行中）",
           "notFixedSizing": "未修复：{summary}（涉及工作的规模）",
           "notFixedFixFailed": "未修复：{summary}（无法进行修复）",
-          "notFixedSkipped": "未修复：{summary}（修复前已跳过最终检查）"
+          "notFixedSkipped": "未修复：{summary}（修复前已跳过最终检查）",
+          "notFixedOtherCard": "未修复：{summary}（应在另一个工作项上修复）"
         },
         "reopen": {
           "started": "正在重新检查计划的关联和顺序",
@@ -10959,7 +10961,7 @@
         "amend": "正在协调「{title}」下的工作项",
         "amendTop": "正在协调顶层的工作项",
         "check": "正在进行最终检查",
-        "repair": "正在修复最终检查发现的内容"
+        "repair": "正在修复计划的关联和顺序"
       },
       "reason": {
         "rate_limited": "请求过于频繁",

@@ -111,11 +111,14 @@ export const PLAN_PROVIDER_WAIT_GRACE_MS = 300_000;
  * | amend    | resolves            | `amendingChildrenOf`|
  * | check    | null                | `checkingPlan`      |
  * | check    | resolves            | `checkingCard`      |
- * | repair   | null or resolves    | `repairing`         |
+ * | repair   | null or resolves    | `repairing` (the validity re-open's fix) |
  * | any else | set, resolves to ∅  | — DROPPED           |
  *
  * `amend`, `check` and `repair` are MOTIR-11256's: a laid level's amend, the
- * plan's final check and the fix after it, which used to read as laying.
+ * plan's final check and a fix, which used to read as laying. The final check is
+ * ONE step that checks and fixes each card (MOTIR-11489), so a `repair` step is now
+ * the validity re-open's fix of the plan's links and order, which runs before the
+ * final check; a plan stored before then also used it for the fix after the check.
  */
 export type PlanStepPhrase =
   | 'settling'
