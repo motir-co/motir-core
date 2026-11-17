@@ -27,6 +27,7 @@ closest existing usage surface.
 | **USAGE & COST · PROVIDER BILLS — the daily provider-bill reconciliation on `/admin/usage`: per provider and UTC day, recorded beside billed, the gap, its source and status, days past tolerance, the per-model breakdown, findings with the differing side, providers with no billing source; no-records, All-time, loading, error, no-source and no-findings states** (AMENDMENT 2026-11-15, MOTIR-11375) | **`console--estate-usage-drilldown--provider-bills.mock.html`** (delta, Panels 1–8) | A new read-only section after the two model tables on Usage & cost. **Gates MOTIR-11376** (the section) and the story checks MOTIR-11387 / MOTIR-11388 (story MOTIR-11350). |
 | **PLANNER FINDINGS · RECORDS — a third view, Records, on `/admin/planner-findings`: one row per plan check with its verdict, filters, pager and every list state; the record page with its plan context, findings and the copyable command; the Record link on the finding detail** (AMENDMENT 2026-11-16) | **`console--planner-findings--records.mock.html`** (delta, Panels 1–12) | A display-only Records view and record page added to the shipped Planner findings console. |
 | **PLANNER FINDINGS · RECORDS · RUN-THROUGH — the record page's run-through block: the check's own answer to whether a run could build the plan through, in three readings (builds through; does not build through, with the cards to fix; no answer recorded), on an open and an attributed record, with no card, with eleven cards, and narrow** (AMENDMENT 2026-11-17) | **`console--planner-findings--records--run-through.mock.html`** (delta, Panels 1–7) | One display-only block on the record page, between the plan-context header and the findings table. |
+| **PLANNER FINDINGS · RECORDS · FINDING KEY — the record page's findings table gains a last Planning bug column: each finding's own planning-bug key, and for an operator on an attributed record the row's Link and Remove controls with every refusal and notice, the reader and open-record forms, a replace and a clear, one key on two findings, dark and narrow** (AMENDMENT 2026-11-17) | **`console--planner-findings--records--finding-key.mock.html`** (delta, Panels 1–10) | One column and one row-link rule on the record page's findings table: each finding's key, set, replaced and cleared from its own row. |
 
 ## What this area is
 
@@ -4377,3 +4378,170 @@ Namespace `platformAdmin.plannerFindings.recordPage.runThrough.*`.
 - A per-finding planning-bug key: that lives in the findings table and is a separate delta.
 - Any control, and any loading, error, empty or retry state for the block.
 - What the answer or the stop cards mean, how they are computed or which route answers them.
+
+# AMENDMENT 2026-11-17 — Planner findings · Records · each finding's planning-bug key
+
+**Mock:** [`console--planner-findings--records--finding-key.mock.html`](./console--planner-findings--records--finding-key.mock.html)
+— a DELTA, Panels 1–10.
+
+**Amends** § AMENDMENT 2026-11-16 — Planner findings · Records and its mock,
+[`console--planner-findings--records.mock.html`](./console--planner-findings--records.mock.html): the record
+page's findings table at `/admin/planner-findings/records/[id]`. It appends after § AMENDMENT 2026-11-17 —
+Planner findings · Records · the run-through answer, and redraws none of either delta's panels.
+
+**Design system (step 1 of the design lane).** Files read: `package.json` (depends on `@motir/design-system`
+`workspace:*`) and `app/globals.css` (imports `@motir/design-system/theme.css`). **Verdict: on Motir Design,
+branch (a)**, at the area's default axes (`warm-editorial` shape, `motir` palette, light with one nested dark
+stage). The mock is hand-authored because the record page does not exist in code yet. Its whole `<style>` block
+is spliced verbatim from the run-through delta mock (the records mock's tokens, primitives and Records additions,
+plus the `rt-*` classes, because the column is drawn inside that page). An additions block holds only the `fk-*`
+classes, and no glyph is added. The cell is a **product-local composition** of parts the console already ships:
+the `Card` and table grammar of `FindingsTable`, and the inline key form of `FindingTriageControls` (a labelled
+`Input` with a helper line, a primary `Button` with a pending word, a refusal and a quiet status line). Nothing is
+proposed for `@motir/design-system`.
+
+**Base context, one line.** The record page keeps its back link, its `Record` title row with the verdict chip, its
+plan-context card, the run-through block and its command where the records and run-through deltas drew them; this
+delta changes only _Findings in this record_, by one last column and one row-link rule.
+
+## Elements — each named once, mapped to the field it shows
+
+| Element                         | What it is                                                                                                                                                                             | The field it shows                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Planning bug column**         | The findings table's new last column, after the two planner cells, headed _Planning bug_. No other column is added, moved or redrawn.                                                  | —                                                          |
+| **Finding row**                 | One row per finding, its cells top-aligned against the planning-bug cell's height. The row itself is not a link and carries no chevron.                                                | One finding of the record.                                 |
+| **Finding link**                | The site cell's mono chip, underlined, as the link that opens the finding — the only link in the row.                                                                                  | The finding's site; its target is the finding detail page. |
+| **Planning-bug cell**           | The row's last cell: the key value, then (writer form only) the key input, the Link and Remove controls and the message slot, stacked in that order.                                   | —                                                          |
+| **Key value**                   | The stored key as mono text in the page ink — never a chip, a pill, a tint or a link. Empty when the finding carries none: no dash, no placeholder, only a visually hidden label.      | The finding's planning-bug key.                            |
+| **Key whose work item is gone** | Drawn exactly as a key value. Nothing on the row resolves a key, so a deleted work item gets no marker, no strike-through, no lock and no warning tone.                                | The finding's planning-bug key.                            |
+| **Key input**                   | A labelled `Input`, prefilled with the stored key (empty, with the shipped placeholder, when there is none), with one helper line naming the key shape.                                | The key being typed.                                       |
+| **Link button**                 | A small primary `Button`, _Link_; while its write runs it reads _Linking…_, is unavailable, and the input is held.                                                                     | —                                                          |
+| **Remove control**              | A small ghost `Button` with an × glyph, _Remove_, drawn only when the finding carries a key; its accessible name names the finding. While its write runs it reads _Removing…_.         | —                                                          |
+| **Row message slot**            | Two regions under the controls, empty at rest: an alert region for a refusal, a status region for a notice. One message at a time, in the cell, never at page level.                   | —                                                          |
+| **Wrong-shape refusal**         | The console's own shape check, before any write: the shipped _Enter a key such as MOTIR-123._                                                                                          | —                                                          |
+| **Not-a-work-item refusal**     | The write refused because the key names no work item in this record's project.                                                                                                         | —                                                          |
+| **Unexpected-failure refusal**  | The shipped _Not saved — something went wrong…_ line, with a _Try again_ ghost button.                                                                                                 | —                                                          |
+| **Linked notice**               | A quiet status line with a check glyph naming the key now carried.                                                                                                                     | The key just linked.                                       |
+| **Removed notice**              | A quiet status line with a check glyph saying the key is gone.                                                                                                                         | —                                                          |
+| **Nothing-changed notice**      | A quiet status line with an info glyph, for a link of the key the finding already carries — never drawn as a refusal.                                                                  | The key already carried.                                   |
+| **Reader form**                 | The table for a staff role below operator: every key value, no input, no Link, no Remove and no tab stop where they would be.                                                          | —                                                          |
+| **Open-record form**            | The table on an open record: every key value, no control on any row, and one quiet line with a lock glyph above the table, drawn once.                                                 | The record's verdict is not yet set.                       |
+| **Narrow form**                 | Below `md` each row stacks as a list item: the finding link, prediction and attribution, the why, the two planner cells, then the planning-bug cell full width with Remove at its end. | —                                                          |
+
+## The panels
+
+1. **Writer form, light** — an attributed record, an operator: the page with the run-through block reduced to its
+   heading, and the table drawn full. The first finding carries a key (value, prefilled input, Link, Remove); the
+   second carries none (empty value position, empty input, Link only).
+2. **Dark** — panel 1's table inside a nested dark stage that re-declares the element tokens, its page background
+   included.
+3. **The cell's parts apart** — the value with a key and with none, the input prefilled and empty, Link and Remove
+   at rest, the empty message slot, and the linked and removed notices.
+4. **A replace, then a clear** — one row carrying a key; linked to a different key it reads only the new one; then
+   Remove leaves the value empty, the input empty and no Remove, with the removed notice. Prediction, attribution
+   and why are identical in all three.
+5. **A key whose work item is gone** — drawn exactly as panel 1's live row, captioned as identical on purpose.
+6. **Each refusal, and the nothing-changed case** — wrong shape, not a work item in this project, unexpected failure
+   with Try again, and the nothing-changed notice; the value and the other rows unchanged, the typed key kept.
+7. **In flight** — Link pending with the input held and that row's Remove unavailable; then one row's Remove pending
+   while the other row stays live.
+8. **The two forms with no control** — the reader form, then the open-record form with its one line.
+9. **One key on two findings** — two rows carrying the same key, each with its own Remove; beneath, the first
+   cleared and the second untouched.
+10. **Narrow** (390 px) — the stacked rows, the input full width with Link beneath it and Remove at the cell's end,
+    and a long key wrapping rather than truncating.
+
+## Rules the drawing holds
+
+- **One key per finding, drawn as text.** The value position shows the stored key or nothing; a replace leaves one
+  key, never two, never a list, never a second field. A key is never resolved on the page, so a work item deleted
+  since it was linked looks exactly like a live one.
+- **An empty value is not a defect.** No dash, no placeholder, no warning tone: only a visually hidden label.
+- **A control that could only be refused is not rendered.** Both controls appear for a principal at operator or above
+  on an attributed record, and nowhere else. The reader form and the open-record form draw neither, and leave no
+  disabled control or dead tab stop behind. The open record says why once, above the table, not per row.
+- **The row link gives way to the row's form.** The shipped table opens a finding through a link stretched over the
+  whole row (a pseudo-element pinned to the row's edges). That overlay sits above everything in the row, so on this
+  table it would take every click aimed at the input and the two buttons. So this table puts the finding link on the
+  site cell, carries no stretched link and no trailing chevron, because a chevron would promise a row that opens as a
+  whole. The other console tables keep their row link.
+- **One message, in the cell's own slot.** A refusal goes in the alert region and a finished write or the
+  nothing-changed case in the status region, one at a time, with the typed key kept in the input on a refusal and no
+  other row changed. No message is drawn at page level, and no toast.
+- **Nothing changed is not a refusal.** Linking the key the finding already carries changes nothing and errors
+  nowhere, so it is the quiet notice, never the danger recipe.
+- **No confirmation on Remove.** It is one audited write and the same key can be linked again.
+- **One key on two findings is allowed**: uniqueness is per finding, never per record, and clearing one leaves the
+  other untouched.
+- **Fields are drawn, never defined.** What the key means, how a typed key is resolved, which route answers the write
+  and what each refusal is called on the wire belong to the cards that own that write; this section names none of it.
+- **One list of panels**, numbered 1–10 in the mock's header comment, its panel labels and the list above.
+
+## Copy (en · zh; every locale carries it)
+
+Namespace `platformAdmin.plannerFindings.recordPage.findingKey.*`. **Reused, not re-worded:** the input's label
+(`bug.label`), its placeholder (`bug.placeholder`), the wrong-shape refusal (`bug.invalid`), the unexpected failure
+(`refused.failed`) and its retry (`triage.retry`), all from the page's existing `platformAdmin.plannerFindings.*`
+namespace.
+
+| Key                    | en                                                                                                          | zh                                                             |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `column`               | Planning bug                                                                                                | 规划缺陷                                                       |
+| _(reused)_ label       | Planning bug key (`bug.label`)                                                                              | 规划缺陷编号                                                   |
+| `labelFinding`         | · {site} (visually hidden, after the label, so each row's input names its finding)                          | · {site}                                                       |
+| `hint`                 | A key such as MOTIR-123, in this record's project.                                                          | 例如 MOTIR-123，须属于这条记录所在的项目。                     |
+| _(reused)_ placeholder | MOTIR-123 (`bug.placeholder`)                                                                               | MOTIR-123                                                      |
+| `link`                 | Link                                                                                                        | 关联                                                           |
+| `linking`              | Linking…                                                                                                    | 正在关联…                                                      |
+| `remove`               | Remove                                                                                                      | 移除                                                           |
+| `removeFinding`        | Remove the planning bug key from {site}                                                                     | 移除 {site} 的规划缺陷编号                                     |
+| `removing`             | Removing…                                                                                                   | 正在移除…                                                      |
+| _(reused)_ wrong shape | Enter a key such as MOTIR-123. (`bug.invalid`)                                                              | 请输入类似 MOTIR-123 的编号。                                  |
+| `notAWorkItem`         | Not linked — {key} is not a work item in this record's project. Nothing was written.                        | 未关联——{key} 不是这条记录所在项目中的工作项。未写入任何内容。 |
+| _(reused)_ failed      | Not saved — something went wrong. Nothing was written. Your entries are kept; try again. (`refused.failed`) | 未保存——出错了。未写入任何内容。你的输入已保留，请重试。       |
+| _(reused)_ retry       | Try again (`triage.retry`)                                                                                  | 再试一次                                                       |
+| `linked`               | Linked {key}.                                                                                               | 已关联 {key}。                                                 |
+| `removed`              | Removed the planning bug key.                                                                               | 已移除规划缺陷编号。                                           |
+| `unchanged`            | Already linked to {key}. Nothing changed.                                                                   | 已关联 {key}，无需更改。                                       |
+| `openRecord`           | Planning bug keys are linked once this record has a verdict.                                                | 这条记录有了判定之后，才能关联规划缺陷编号。                   |
+| `a11y.empty`           | No planning bug key                                                                                         | 无规划缺陷编号                                                 |
+
+## Colour and shape roles (`--el-*` and shape tokens only)
+
+| Element                        | Colour                                                                                   | Shape                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Finding link                   | the `.rec-site` chip: `--el-surface` fill, `--el-text-identifier` ink, underline         | `--radius-badge`, chip x spacing                        |
+| Key value                      | `--el-text`, mono                                                                        | —                                                       |
+| Key input                      | `--el-page-bg` fill, `--el-border-strong` border, `--el-text`; held: `--el-surface-soft` | `--radius-input`, input x/y spacing, `--height-input`   |
+| Input label · helper line      | `--el-text` · `--el-text-secondary`                                                      | —                                                       |
+| Link button                    | `--el-accent` fill, `--el-accent-text`                                                   | `--radius-btn`, `--spacing-btn-x-sm`, `--height-btn-sm` |
+| Remove control · Try again     | ghost: transparent, `--el-text`                                                          | `--radius-btn`, `--spacing-btn-x-sm`, `--height-btn-sm` |
+| Refusals                       | `--el-danger-on-surface` words and glyph (the `.row-err` recipe)                         | —                                                       |
+| Notices · open-record line     | `--el-text-secondary` words and glyph                                                    | open line: `--spacing-control-y` / card padding         |
+| Pending or unavailable control | the control's own colours at reduced opacity, `disabled`                                 | —                                                       |
+
+## Accessibility contract
+
+- Each row's input has a visible label (_Planning bug key_) extended by a visually hidden suffix naming the finding,
+  and is described by its helper line and its alert region.
+- A refusal is announced through the alert region tied to the input; a finished link, a finished clear and the
+  nothing-changed case through the status region. They are the shipped triage form's own two regions.
+- Every Remove control's accessible name names the finding, not only the action.
+- An empty key position carries a visually hidden _No planning bug key_, so a screen reader is not left with a gap.
+- A pending control says what it is doing (_Linking…_, _Removing…_) and carries `aria-busy`; the held input is
+  `aria-readonly`.
+- The reader form and the open-record form render no control at all, so they add no tab stop.
+- The finding link is a real link on the site cell, reachable by Tab in reading order; refusals and notices are words
+  plus a glyph, never colour alone, and every glyph is `aria-hidden`.
+- Every text ink is `--el-text`, `--el-text-secondary`, `--el-text-identifier` or `--el-danger-on-surface`; no text
+  uses `--el-text-muted` or `--el-text-faint`.
+
+## What this amendment does NOT draw
+
+- Any part of the record page the records or run-through deltas drew, the records list, or the finding detail page and
+  its own key field, which keeps working under the same one-key rule.
+- A loading, unavailable or 404 state: the record page's own read decides those, and the records delta draws them.
+- A work-item picker, search, autocomplete, bulk entry or paste-many, and any count, pager or sort over keys.
+- A confirmation step on Remove, a marker over a key whose work item is gone, or a per-record list of keys.
+- An open-record refusal: on an open record no control is rendered, so nothing can produce one.
+- What the key means, how it is resolved or stored, or which route answers the write.
