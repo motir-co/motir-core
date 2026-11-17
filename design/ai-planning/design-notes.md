@@ -38,6 +38,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **Following the planner, and fields typing in** | **`plan-review--follow-the-planner.mock.html`**           | MOTIR-8591           | Part XXVIII |
 | **A card's text as it is written, in the peek** | **`peek-proposal-mode--being-written.mock.html`**         | MOTIR-11196          | Part XXIX   |
 | **A decided card's outcome as a top-edge tab**  | **`plans-surface--outcome-tab.mock.html`**                | MOTIR-11545          | Part XXX    |
+| **An undecided card's tag row fits the card**   | **`plans-surface--undecided-tag-row.mock.html`**          | MOTIR-11549          | Part XXXI   |
 | **The Plans page lists CONVERSATIONS**          | `plans-sessions--list.mock.html` (on the design result)   | MOTIR-6019           | by title    |
 | **The list shows only what reached planning**   | **`plans-sessions--reached-planning.mock.html`**          | MOTIR-9298           | § at end    |
 
@@ -9002,6 +9003,9 @@ An **undecided** card is unchanged, byte for byte: its row has no live status an
 `add`. (Its own overflows — a blocked `add` with a difficulty, a `modify` with a long status — are
 pre-existing and filed as bug MOTIR-11549; they are not this Part's.)
 
+**Amended by Part XXXI (MOTIR-11549):** the undecided card now takes the same tag-row forms; the
+"unchanged" rule above held only until then.
+
 A long status beside the wide `change` chip — `In Progress` on a `modify` — still truncates, as the
 slot is designed to: an ellipsis inside the row with the name on `title`, never a tag cut at the card
 edge.
@@ -9041,3 +9045,72 @@ and looked at; the generator was not committed.
 
 The level band's fused chip (unchanged); the undecided card (unchanged); the peek; the outcome
 spine; the canvas's level caption.
+
+# Part XXXI — an UNDECIDED plan card's tag row takes the decided card's forms, so it fits the card (MOTIR-11549 · bug — `plans-surface--undecided-tag-row.mock.html`, DATED 2026-11-17)
+
+**Amends Part XXX §30.3** (`plans-surface--outcome-tab.mock.html`), whose "an undecided card is
+unchanged" line kept the undecided card's own overflows. The delta mock renders the shipped
+`PlanItemNode`; its panel 1 renders the component as MOTIR-11545 shipped it, which is the reproduction.
+
+## 31.1 What was wrong
+
+The canvas card is a fixed 280 × 124 and every tag in its row is `shrink-0`. Part XXX gave a DECIDED
+card the committed card's tag-row forms and left the undecided card as it was, which overflowed on its
+own. Measured in Chromium (warm-editorial, light), the right edge of the last tag against the row's
+inner right edge:
+
+| undecided card                            | overflow | cut                             |
+| ----------------------------------------- | -------- | ------------------------------- |
+| `add` · blocked elsewhere · `Medium`      | 70.4px   | `blocked elsewhere`, `Medium`   |
+| `modify` · `In Progress` target           | 22.5px   | `In Progress` (mid-word)        |
+| `modify` · `In Progress` target · blocked | 173.5px  | `In Progress`, `blocked elsew…` |
+| `add` · ready · `Medium`                  | 0        | none                            |
+
+## 31.2 The rule — one for every plan card
+
+Part XXX §30.3's forms now apply whether the plan is decided or not:
+
+- the status pill is the TAG-ROW SLOT (`WorkItemStatusPill slot`), and the right-hand group is
+  `min-w-0`, so a long status truncates inside the row with its name on `title`;
+- the blocked flag is the SHORT tag (`CrossBlockedFlag short`): `blocked`, the sentence on `title` /
+  `aria-label`;
+- **the give-way rule**: a right-hand TEXT tag (the blocked flag, the stale badge, the
+  `Supersedes N` chip) drops the op chip and the status to their glyphs, each `role="img"` with its
+  word on `aria-label` and `title`, and takes the difficulty out of the row (the peek carries it);
+- the `Supersedes N` chip is its `Replace` glyph alone (`role="img"`, `Supersedes N` on
+  `aria-label`, the keys on `title`, the glyph in `--el-text-secondary`), and beside a blocked flag
+  or a stale badge it leaves the row for the quick view's Supersedes row, as §30.3 rules for a
+  decided card. This amends Part XXIV §24.8's words-before-the-difficulty chip on the canvas card.
+
+What stays tied to the outcome: the tab (§30.2), the spine, and "a card with a live status draws no
+difficulty in the row" (§30.3), which only a decided `add` can meet. An undecided `add` has no status,
+so an undecided `add` that is not blocked, stale or superseding keeps `+ add` and its difficulty,
+unchanged.
+
+No new colour, shape token or copy: every form above already ships on the decided and the committed
+card. The decided card is unchanged.
+
+## 31.3 Measured
+
+Chromium, the delta mock's own render, every card at its fixed 280px.
+
+| card                                     | styles × themes                | overflow | clipped                  |
+| ---------------------------------------- | ------------------------------ | -------- | ------------------------ |
+| is: undecided add · blocked · Medium     | all 19 styles × light and dark | 0        | none                     |
+| is: undecided modify · In Progress       | all 19 styles × light and dark | 0        | `In Progress` (slot `…`) |
+| is: undecided modify · In Progress · blk | all 19 styles × light and dark | 0        | none                     |
+| is: undecided add · Supersedes 2         | all 19 styles × light and dark | 0        | none                     |
+| is: undecided add · Supersedes 2 · blk   | all 19 styles × light and dark | 0        | none (in the quick view) |
+| is: undecided add · ready · Medium       | warm-editorial light and dark  | 0        | none                     |
+| is: decided add · accepted · blocked     | warm-editorial light and dark  | 0        | none (as Part XXX)       |
+
+## 31.4 How the mock was made
+
+A temporary generator rendered the shipped `PlanItemNode` (and, for panel 1, a copy of it as
+MOTIR-11545 shipped it) with `renderMock`, bundled with esbuild, as Part XXX's was. Panel 4 repeats the
+five undecided cards that overflowed under every registered `data-style`, light and dark. The
+measurements above were taken from that file in Chromium; the generator was not committed.
+
+## 31.5 What Part XXXI does NOT draw or decide
+
+The outcome tab, the spine and the level band (unchanged); the peek; the committed card.
