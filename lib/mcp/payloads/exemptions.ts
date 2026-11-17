@@ -158,6 +158,14 @@ export const EXEMPT_TOOLS = {
   code_grep:
     'Returns the hosted planner\u2019s own `code_grep` TEXT verbatim, or a named `state` \u2014 the ' +
     'same reason as `code_explore` (MOTIR-10066).',
+  record_name_occurrences:
+    'Returns `{ recorded, note, reason }` \u2014 a count of rows the organisation-wide name record ' +
+    'inserted, assembled in motir-ai. No `/api/v1` operation writes the name record, the same ' +
+    'reason as `code_explore` (MOTIR-11647).',
+  lookup_name_occurrences:
+    'Returns `{ commit, names, note, reason }` \u2014 where each asked name occurs, read from the ' +
+    'organisation-wide name record in motir-ai. No `/api/v1` operation returns it, the same ' +
+    'reason as `code_explore` (MOTIR-11647).',
   publish_design_result:
     'Returns the published RESULT\u2019s receipt \u2014 `{ id, workItemKey, assetCount, ' +
     'noteTruncated, createdAt }`. \u26a0\ufe0f `/api/v1` NOW PUBLISHES DESIGN COMPONENTS ' +

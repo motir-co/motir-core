@@ -152,6 +152,11 @@ import {
   CODE_GREP_TOOL_NAME,
   registerCodeGraphRead,
 } from './tools/codeGraphRead';
+import {
+  LOOKUP_NAME_OCCURRENCES_TOOL_NAME,
+  RECORD_NAME_OCCURRENCES_TOOL_NAME,
+  registerNameOccurrences,
+} from './tools/nameOccurrences';
 import { SKELETON_TOOL_NAME, registerSkeleton } from './tools/skeleton';
 import { LIST_FOLDERS_TOOL_NAME, registerListFolders } from './tools/listFolders';
 import { GET_SECTION_SETS_TOOL_NAME, registerGetSectionSets } from './tools/getSectionSets';
@@ -322,6 +327,9 @@ export const MCP_TOOL_NAMES = [
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
   CODE_GREP_TOOL_NAME,
+  // MOTIR-11647 — the organisation-wide name record, for plan.py over the MCP.
+  RECORD_NAME_OCCURRENCES_TOOL_NAME,
+  LOOKUP_NAME_OCCURRENCES_TOOL_NAME,
   SKELETON_TOOL_NAME,
   LIST_FOLDERS_TOOL_NAME,
   GET_SECTION_SETS_TOOL_NAME,
@@ -619,6 +627,9 @@ export function registerMcpTools(
   // planner executor's own text for `code_explore` / `code_search`, and (MOTIR-10066)
   // `code_grep` over the indexed file contents. `ai:plan`.
   registerCodeGraphRead(target, resolveContext);
+  // MOTIR-11647 — the organisation-wide name record (where code names occur), through
+  // motir-ai's forwarding routes, so plan.py shares the hosted planner's record. `ai:plan`.
+  registerNameOccurrences(target, resolveContext);
   // The ORIENTING read (MOTIR-3100) — the whole project's tree shape in one
   // call, over the same `aiBoundaryService.readPlanTree` the internal
   // `plan-tree` / `skeleton` routes serve. A third consumer, not a refactor.
