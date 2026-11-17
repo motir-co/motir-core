@@ -968,6 +968,13 @@ export interface RoadmapNodeDto {
    *  condition (the shipped own-blocker readiness). Drives the "ready" highlight.
    *  A done / in-progress / open-blocked node is `false`. */
   ready: boolean;
+  /** HELD out of planning (MOTIR-11546): a STORY with an open `blocked_by` edge
+   *  to a story that is not archived, not in a `done`-category status, and has no
+   *  live children — `lib/planning/plannability.ts`'s rule, computed with
+   *  `planBlockReasons` so the canvas and the Plan button's check never disagree.
+   *  A held childless story is not To plan (`isToPlanItem`). Always `false` on
+   *  any other kind. */
+  planHeld: boolean;
   /** Whether the node is itself a member of the ACTIVE sprint (MOTIR-1379
    *  follow-up). In SPRINT scope the root level shows only in-sprint members, but
    *  drilling into a committed root reveals its WHOLE subtree — including children

@@ -61,6 +61,10 @@ export interface RoadmapLevelItem {
    *  highlight. Optional client-side: a read that omits it degrades to "no
    *  highlight". */
   ready?: boolean;
+  /** HELD out of planning (MOTIR-11546, `RoadmapNodeDto.planHeld`): a story blocked
+   *  by an unfinished story with no subtasks yet — not To plan, drawn blocked.
+   *  Optional client-side: a read that omits it degrades to "not held". */
+  planHeld?: boolean;
   /** Member of the ACTIVE sprint (MOTIR-1379 follow-up). Only meaningful in
    *  sprint scope: a drilled-in node whose `inActiveSprint` is false is part of a
    *  committed root's subtree but was NOT itself committed to the sprint → the
@@ -167,6 +171,7 @@ interface RoadmapNode {
   childrenHidden?: boolean;
   progress?: { done: number; total: number } | null;
   ready?: boolean;
+  planHeld?: boolean;
   inActiveSprint?: boolean;
   fixReason?: string | null;
 }
@@ -241,6 +246,7 @@ export function toItem(n: RoadmapNode): RoadmapLevelItem {
     ...(n.childrenHidden ? { childrenHidden: true } : {}),
     progress: n.progress ?? null,
     ready: n.ready ?? false,
+    planHeld: n.planHeld ?? false,
     inActiveSprint: n.inActiveSprint ?? false,
     fixReason: KNOWN_FIX_REASONS.has(n.fixReason as WorkItemFixReasonDto)
       ? (n.fixReason as WorkItemFixReasonDto)

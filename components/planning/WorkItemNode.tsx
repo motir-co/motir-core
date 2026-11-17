@@ -44,7 +44,11 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import { FolderPathLabel } from '@/components/planning/FolderPlacement';
-import { BlockedTag, WorkItemStateTags } from '@/components/workItems/WorkItemStateTags';
+import {
+  BlockedTag,
+  WorkItemBlockedTag,
+  WorkItemStateTags,
+} from '@/components/workItems/WorkItemStateTags';
 import { isToPlanItem, statusSlotOf } from '@/lib/workItems/statusSlot';
 
 // The CONTENT of a WORK-ITEM node on the project roadmap (Subtask 7.20.2 /
@@ -110,10 +114,16 @@ export interface WorkItemNodeData {
    *  human-gated, so it carries the Manual chip. Optional (see `type`). */
   executor?: ExecutorDto | null;
   assigneeName?: string | null;
-  /** Has children (the level read's `hasChildren`). Together with the kind and the
-   *  status category it decides TO PLAN (MOTIR-10508): a story KNOWN to have no
-   *  children. Optional: a node built without it never claims To plan. */
+  /** Has children (the level read's `hasChildren`). Together with the kind, the
+   *  status category and `planHeld` it decides TO PLAN (MOTIR-10508): a story KNOWN
+   *  to have no children and not held out of planning. Optional: a node built
+   *  without it never claims To plan. */
   hasChildren?: boolean;
+  /** HELD out of planning (MOTIR-11546, the level read's `planHeld`): a story
+   *  blocked by an unfinished story with no subtasks yet. Not To plan — the card
+   *  shows as blocked, with no To plan pill, wash or Plan button. Optional: a node
+   *  built without it is not held. */
+  planHeld?: boolean;
   /** Why the card is stuck until something is repaired (MOTIR-6600) — a
    *  `ci_failed` / `changes_requested` card offers `motir fix` (MOTIR-10509). */
   fixReason?: WorkItemFixReasonDto | null;
@@ -318,12 +328,19 @@ export function WorkItemNode({
   const slot = statusSlotOf(item, { ready, blocked: crossBlocked });
   const showDone = slot === 'done';
   // TO PLAN (MOTIR-10508; epics since MOTIR-10861): a childless `todo` story or
-  // epic. Precedence — blocked elsewhere
+  // epic that is not HELD out of planning (MOTIR-11546). Precedence — blocked elsewhere
   // > You are here > Done > To plan > Ready > not in sprint > normal. Blocked and
   // Here win the FRAME; the status slot keeps its own pill under both (under
   // blocked as its glyph, by the give-way rule below). A `todo` story or epic is never
   // Done, so the Done arm cannot meet it; it is listed for the order's sake.
   const toPlan = isToPlanItem(item);
+  // HELD (MOTIR-11546): a story blocked by an unfinished story with no subtasks
+  // yet. `isToPlanItem` already says it is not To plan — so no To plan pill, wash or
+  // Plan button — and it shows as blocked, as a story with children would: its
+  // status chip in the slot and, when that status is not the Blocked status itself,
+  // the shared blocked flag (the board card's). The red cross-blocked flag, when
+  // the card carries it, is that signal already, so the card never wears two.
+  const showHeldFlag = item.planHeld === true && !crossBlocked && item.status !== 'blocked';
   const showToPlanPill = slot === 'to-plan';
   const showToPlanWash = showToPlanPill && !crossBlocked;
   const showReadyPill = slot === 'ready';
@@ -340,7 +357,7 @@ export function WorkItemNode({
   // TEXT tag (Not public, not in sprint, the blocked flag) drops the status slot and
   // the Manual chip to their glyphs. A fixed rule, not a measurement: with a
   // five-digit key, any status label plus any right-hand tag does not fit 254px.
-  const glyphOnly = notPublic || showNotInSprintTag || crossBlocked;
+  const glyphOnly = notPublic || showNotInSprintTag || crossBlocked || showHeldFlag;
   const nodeState = crossBlocked
     ? 'cross-blocked'
     : here
@@ -438,7 +455,7 @@ export function WorkItemNode({
               {runLeg.label}
             </RunTonePill>
           ) : null}
-          {notPublic || showNotInSprintTag || crossBlocked || drillable ? (
+          {notPublic || showNotInSprintTag || crossBlocked || showHeldFlag || drillable ? (
             <div className="ml-auto flex shrink-0 items-center gap-1.5">
               {notPublic ? <EpicNotPublicPill /> : null}
               {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,
@@ -461,6 +478,8 @@ export function WorkItemNode({
               ) : null}
               {crossBlocked ? (
                 <CrossBlockedFlag sprint={crossBlockedSprint} short />
+              ) : showHeldFlag ? (
+                <WorkItemBlockedTag />
               ) : drillable ? (
                 <ChevronRight
                   className="size-4 shrink-0 text-(--el-text-muted)"

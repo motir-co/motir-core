@@ -664,8 +664,10 @@ export function buildWorkItemLevel(
             type: item.type ?? null,
             executor: item.executor ?? null,
             // The To plan state (a childless story or epic) and the `motir fix` action read
-            // these two (MOTIR-10509).
+            // these two (MOTIR-10509); a story held out of planning is not To plan
+            // (MOTIR-11546).
             hasChildren: item.hasChildren,
+            planHeld: item.planHeld ?? false,
             fixReason: item.fixReason ?? null,
           }}
           drillable={item.hasChildren}

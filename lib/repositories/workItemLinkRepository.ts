@@ -25,6 +25,42 @@ import {
 // Postgres error codes (the 4-layer rule). Prisma P2002 on the
 // (fromId, toId, kind) unique constraint translates to DuplicateLinkError.
 
+/** What the Plan button's pre-check judges each `blocked_by` target by
+ *  (MOTIR-10544) — see {@link workItemLinkRepository.findBlockersWithLiveChildCounts}. */
+export interface PlannabilityBlockerRow {
+  id: string;
+  identifier: string;
+  key: number;
+  title: string;
+  kind: string;
+  status: string;
+  projectId: string;
+  archivedAt: Date | null;
+  liveChildCount: number;
+}
+
+/** The blocker columns both plannability reads select, with the live-child count. */
+const PLANNABILITY_BLOCKER_SELECT = {
+  id: true,
+  identifier: true,
+  key: true,
+  title: true,
+  kind: true,
+  status: true,
+  projectId: true,
+  archivedAt: true,
+  _count: { select: { children: { where: { archivedAt: null } } } },
+} satisfies Prisma.WorkItemSelect;
+
+function toPlannabilityBlockerRow({
+  _count,
+  ...item
+}: Prisma.WorkItemGetPayload<{
+  select: typeof PLANNABILITY_BLOCKER_SELECT;
+}>): PlannabilityBlockerRow {
+  return { ...item, liveChildCount: _count.children };
+}
+
 export const workItemLinkRepository = {
   /**
    * Look up a single link by id.
@@ -250,40 +286,38 @@ export const workItemLinkRepository = {
   async findBlockersWithLiveChildCounts(
     workItemId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<
-    Array<{
-      id: string;
-      identifier: string;
-      key: number;
-      title: string;
-      kind: string;
-      status: string;
-      projectId: string;
-      archivedAt: Date | null;
-      liveChildCount: number;
-    }>
-  > {
+  ): Promise<PlannabilityBlockerRow[]> {
     const rows = await tx.workItemLink.findMany({
       where: { fromId: workItemId, kind: 'is_blocked_by', toItem: { archivedAt: null } },
-      select: {
-        toItem: {
-          select: {
-            id: true,
-            identifier: true,
-            key: true,
-            title: true,
-            kind: true,
-            status: true,
-            projectId: true,
-            archivedAt: true,
-            _count: { select: { children: { where: { archivedAt: null } } } },
-          },
-        },
-      },
+      select: { toItem: { select: PLANNABILITY_BLOCKER_SELECT } },
     });
-    return rows.map(({ toItem: { _count, ...item } }) => ({
-      ...item,
-      liveChildCount: _count.children,
+    return rows.map(({ toItem }) => toPlannabilityBlockerRow(toItem));
+  },
+
+  /**
+   * {@link findBlockersWithLiveChildCounts} for a whole SET of dependents in ONE
+   * query (MOTIR-11546) — the roadmap level, the board and the peek ask whether
+   * each story they draw is held out of planning, and a read per card would be an
+   * N+1 on a level of 200. Each row carries the `dependentId` it blocks; the same
+   * archived-blocker exclusion and the same filtered live-child count. An empty
+   * id set reads nothing.
+   */
+  async findBlockersWithLiveChildCountsForItems(
+    workItemIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<PlannabilityBlockerRow & { dependentId: string }>> {
+    if (workItemIds.length === 0) return [];
+    const rows = await tx.workItemLink.findMany({
+      where: {
+        fromId: { in: [...workItemIds] },
+        kind: 'is_blocked_by',
+        toItem: { archivedAt: null },
+      },
+      select: { fromId: true, toItem: { select: PLANNABILITY_BLOCKER_SELECT } },
+    });
+    return rows.map(({ fromId, toItem }) => ({
+      dependentId: fromId,
+      ...toPlannabilityBlockerRow(toItem),
     }));
   },
 
