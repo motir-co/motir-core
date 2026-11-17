@@ -9549,7 +9549,12 @@
       "keep": "Continuar a verificar",
       "error": "Não foi possível ignorar a verificação final. Ainda está a decorrer: tente novamente ou continue a verificar.",
       "retry": "Tentar novamente",
-      "finished": "A verificação final já tinha terminado, por isso não havia nada para ignorar."
+      "finished": "A verificação final já tinha terminado, por isso não havia nada para ignorar.",
+      "settingLine": "Esta omissão vale só para este plano. Para desativar a verificação final em todos os planos deste projeto, desative <link>Executar a verificação final nas configurações de Planejamento com IA</link>.",
+      "settingLineFinished": "Para desativar a verificação final em todos os planos deste projeto, desative <link>Executar a verificação final nas configurações de Planejamento com IA</link>.",
+      "settingLineReadOnly": "Esta omissão vale só para este plano. Um administrador do projeto pode desativar a verificação final em todos os planos deste projeto com <link>Executar a verificação final nas configurações de Planejamento com IA</link>.",
+      "settingLineReadOnlyFinished": "Um administrador do projeto pode desativar a verificação final em todos os planos deste projeto com <link>Executar a verificação final nas configurações de Planejamento com IA</link>.",
+      "settingNewTab": "(abre em uma nova aba)"
     }
   },
   "codeHealth": {

@@ -26,7 +26,13 @@ import { planReviewItem } from '../helpers/planReview';
 // only `fetch`, the viewport's size and the ResizeObserver are stubbed.
 
 const VP = { w: 800, h: 600 };
-const observers: Array<(entries: unknown[]) => void> = [];
+// Only LIVE observers, each with what it observes, and `measure()` waits for the
+// canvas viewport to be observed before firing — the MOTIR-11593 fix to the
+// arrival-centre suite, ported here (MOTIR-11548's CI hit the same window: the
+// level draws inside RTL's `findBy*` poll, so `findByText` can resolve before the
+// passive effect that registers the fit observer has run).
+type Observer = { cb: (entries: unknown[]) => void; targets: Set<Element> };
+const observers = new Set<Observer>();
 
 /** The target, and the work item's status the server reports for it. */
 const TARGET = 'w5';
@@ -62,11 +68,21 @@ beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      private readonly o: Observer;
       constructor(cb: (entries: unknown[]) => void) {
-        observers.push(cb);
+        this.o = { cb, targets: new Set() };
+        observers.add(this.o);
       }
-      observe() {}
-      disconnect() {}
+      observe(el: Element) {
+        this.o.targets.add(el);
+      }
+      unobserve(el: Element) {
+        this.o.targets.delete(el);
+      }
+      disconnect() {
+        this.o.targets.clear();
+        observers.delete(this.o);
+      }
     },
   );
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -102,13 +118,19 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  observers.length = 0;
+  observers.clear();
 });
 
-/** The viewport's first measurement — the engine fits once it has a size. */
-function measure() {
+/** The viewport's first measurement — the engine fits once it has a size. Waits
+ *  until the drawn canvas's viewport is observed (its fit effect has run), then
+ *  fires every live observer once. */
+async function measure() {
+  await waitFor(() => {
+    const vp = screen.getByTestId('canvas-world').closest('[role="application"]');
+    expect([...observers].some((o) => vp !== null && o.targets.has(vp))).toBe(true);
+  });
   act(() => {
-    for (const cb of observers) cb([]);
+    for (const o of [...observers]) if (o.targets.size > 0) o.cb([]);
   });
 }
 
@@ -168,7 +190,7 @@ function Pane({ planned }: { planned: boolean }) {
 async function openOnTarget() {
   const view = render(<Pane planned={false} />);
   await screen.findByText('The target story');
-  measure();
+  await measure();
   return view;
 }
 

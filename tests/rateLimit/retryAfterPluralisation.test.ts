@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RateLimitExceededError, type RateLimitDecision } from '@/lib/api/v1/rateLimit';
 import { rateLimitedResponse } from '@/lib/rateLimit/guard';
 import { mcpRateLimitedResponse } from '@/lib/rateLimit/mcpGuard';
@@ -90,6 +90,31 @@ describe('POST /api/mcp — the JSON-RPC 429 (MOTIR-2688)', () => {
     // cannot quietly take the number with it.
     const body = await mcpRateLimitedResponse(SINGULAR).json();
     expect(body.error.data.retryAfterSeconds).toBe(1);
+  });
+});
+
+describe('POST /api/mcp — one clock read for body and header (MOTIR-11601)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps Retry-After equal to error.data.retryAfterSeconds when the second ticks mid-call', async () => {
+    const base = 1_700_000_000_000;
+    const decision: RateLimitDecision = {
+      allowed: false,
+      limit: 60,
+      remaining: 0,
+      resetAt: base / 1000 + 30,
+      degraded: false,
+    };
+    // Every read of the clock lands one second after the previous one, so a
+    // second read for the header would disagree with the body.
+    let reads = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => base + 1000 * reads++);
+
+    const response = mcpRateLimitedResponse(decision);
+    const body = await response.json();
+
+    expect(body.error.data.retryAfterSeconds).toBe(30);
+    expect(response.headers.get('Retry-After')).toBe(String(body.error.data.retryAfterSeconds));
   });
 });
 

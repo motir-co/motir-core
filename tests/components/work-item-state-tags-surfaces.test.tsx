@@ -40,6 +40,8 @@ interface Fixture {
   statusLabel: string;
   category: StatusCategoryDto;
   hasChildren: boolean;
+  /** Held out of planning (MOTIR-11546): blocked by a story with no subtasks yet. */
+  planHeld?: boolean;
   /** Readiness: own blockers done and every ancestor ready. */
   unblocked: boolean;
   type?: WorkItemTypeDto | null;
@@ -120,6 +122,33 @@ const FIXTURES: Fixture[] = [
     category: 'todo',
     hasChildren: false,
     unblocked: true,
+    slot: 'to-plan-pill',
+    manual: false,
+  },
+  {
+    // MOTIR-11546: blocked by an open story with no subtasks, so the planner holds
+    // it and the Plan button would refuse it. It shows as blocked on every surface.
+    name: 'a childless To Do story held out of planning keeps its status chip and gets the flag',
+    kind: 'story',
+    status: 'todo',
+    statusLabel: 'To Do',
+    category: 'todo',
+    hasChildren: false,
+    planHeld: true,
+    unblocked: false,
+    slot: 'status:todo',
+    manual: false,
+  },
+  {
+    // …while a story blocked only by a task (or a story with subtasks) is not held.
+    name: 'a childless To Do story blocked but not held stays To plan, with the flag',
+    kind: 'story',
+    status: 'todo',
+    statusLabel: 'To Do',
+    category: 'todo',
+    hasChildren: false,
+    planHeld: false,
+    unblocked: false,
     slot: 'to-plan-pill',
     manual: false,
   },
@@ -255,6 +284,7 @@ function canvas(f: Fixture) {
         statusLabel: f.statusLabel,
         statusCategory: f.category,
         hasChildren: f.hasChildren,
+        planHeld: f.planHeld ?? false,
         type: f.type ?? null,
         executor: f.executor ?? null,
       }}
@@ -286,6 +316,7 @@ function board(f: Fixture) {
     readyToStart: isReadyToStart(f.category, f.unblocked),
     statusLabel: f.statusLabel,
     hasChildren: f.hasChildren,
+    planHeld: f.planHeld ?? false,
     type: f.type ?? null,
     executor: f.executor ?? null,
     pendingDecision: null,
@@ -336,6 +367,7 @@ function quickView(f: Fixture) {
     repoDelivery: [],
     deliveries: [],
     hasChildren: f.hasChildren,
+    planHeld: f.planHeld ?? false,
     canPlan: true,
     id: 'cmqvitem00000000000000p7',
     status: f.status,
@@ -386,6 +418,7 @@ function itemPage(f: Fixture) {
         }}
         statuses={statusesFor(f)}
         hasChildren={f.hasChildren}
+        planHeld={f.planHeld ?? false}
         unblocked={f.unblocked}
       />
     </div>,

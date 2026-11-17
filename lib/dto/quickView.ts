@@ -91,6 +91,13 @@ export interface QuickViewData {
    */
   planHold?: PlanHoldDTO | null;
   /**
+   * HELD out of planning (MOTIR-11546): a story blocked by an unfinished story
+   * with no subtasks yet — `plannabilityService.isHeld`, the Plan button's own
+   * rule — so the header's status slot draws the status chip, not To plan, as the
+   * roadmap canvas does. Absent on a PROPOSAL, and read as not held.
+   */
+  planHeld?: boolean;
+  /**
    * The work item's INTERNAL id (cuid) — not the `identifier`. Both write paths
    * the editable rail uses are keyed by it: `updateIssueAction` and
    * `changeStatusAction` (app/(authed)/items/[key]/edit/actions.ts) take `id` as

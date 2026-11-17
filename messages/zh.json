@@ -9540,7 +9540,12 @@
       "keep": "继续检查",
       "error": "无法跳过最终检查。它仍在运行：请重试，或继续检查。",
       "retry": "重试",
-      "finished": "最终检查已经完成，因此没有可跳过的内容。"
+      "finished": "最终检查已经完成，因此没有可跳过的内容。",
+      "settingLine": "本次跳过仅适用于此计划。要为此项目中的每个计划关闭最终检查，请关闭<link>AI规划设置中的“运行最终检查”</link>。",
+      "settingLineFinished": "要为此项目中的每个计划关闭最终检查，请关闭<link>AI规划设置中的“运行最终检查”</link>。",
+      "settingLineReadOnly": "本次跳过仅适用于此计划。项目管理员可以通过<link>AI规划设置中的“运行最终检查”</link>为此项目中的每个计划关闭最终检查。",
+      "settingLineReadOnlyFinished": "项目管理员可以通过<link>AI规划设置中的“运行最终检查”</link>为此项目中的每个计划关闭最终检查。",
+      "settingNewTab": "（在新标签页中打开）"
     }
   },
   "codeHealth": {

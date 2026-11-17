@@ -12,8 +12,10 @@ export const PLAN_SPRINTS_PARAM = 'planSprints';
 /** The ⌘K door's destination — `/backlog`, with the run already asked for. */
 export const PLAN_SPRINTS_HREF = `/backlog?${PLAN_SPRINTS_PARAM}=1`;
 
-/** Where the off-state hint and the disabled failure send the user to fix it. */
-export const AI_PLANNING_SETTINGS_HREF = '/settings/project/ai-planning';
+/** Where the off-state hint and the disabled failure send the user to fix it.
+ *  Defined in `lib/settings/aiPlanningSettingsLinks.ts` beside the final-check
+ *  row's anchor (MOTIR-11548). */
+export { AI_PLANNING_SETTINGS_HREF } from '@/lib/settings/aiPlanningSettingsLinks';
 
 /** Where the out-of-credits failure sends the user (the shipped billing pane —
  *  the same target `GenerationFlow`'s credits terminal uses). */

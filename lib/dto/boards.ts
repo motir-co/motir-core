@@ -198,6 +198,11 @@ export interface BoardCardDto {
   /** Has at least one live (non-archived, non-triage) child — with the kind and
    *  the category it decides the To plan pill (MOTIR-10534). */
   hasChildren: boolean;
+  /** HELD out of planning (MOTIR-11546): a story blocked by an unfinished story
+   *  with no subtasks yet — `plannabilityService.heldStoryIds`, the Plan button's
+   *  own rule — so its slot draws the status chip, not To plan, as the canvas
+   *  does. Every board read sets it; absent (a hand-built card) reads not held. */
+  planHeld?: boolean;
   /** The work TYPE — with `executor`, decides the Manual chip (MOTIR-10534). */
   type: WorkItemTypeDto | null;
   /** WHO executes the work — `human` (or `type: 'manual'`) is Manual. */
@@ -499,10 +504,13 @@ export interface BoardProjectionDto {
    */
   planHolds: Record<string, BoardPlanHoldSummaryDto>;
   /**
-   * The board's OWN stored filter (MOTIR-10560), applied to every column,
-   * count, lane page, swimlane and sprint point above, ANDed with the toolbar
-   * filter. `null` when the board has none, so it shows its whole scope (the
-   * project, or the active sprint on a scrum board).
+   * The board's OWN stored filter (MOTIR-10560). It is applied to every column,
+   * count, lane page, swimlane and sprint point above when the request carries
+   * no header filter; a header filter REPLACES it, and `boardFilter=off` lifts
+   * it (MOTIR-11564). Reported either way — stale conditions included — so the
+   * client can show and compare the board's own filter. `null` when the board
+   * has none, so it shows its whole scope (the project, or the active sprint on
+   * a scrum board).
    */
   storedFilter: StoredBoardFilterDto | null;
 }
@@ -553,12 +561,19 @@ export interface StoredBoardFilterDto {
  * one the `/items` navigator threads) OR a **`savedFilterId`** (a row id or a
  * `builtin:<slug>`) resolved through the 6.2 saved-filter access gate — never
  * both (the service prefers `savedFilterId` when both are present). Absent (or
- * an empty AST) leaves the board unfiltered — byte-for-byte the prior
- * projection. The board read applies the predicate per column (its count and
- * every page) AND to the swimlane lane aggregates, and composes it with
- * the 4.5 Scrum sprint scope (it narrows WITHIN the sprint, never widening it).
+ * an empty AST) is NO header filter. The board read applies the predicate per
+ * column (its count and every page), to the swimlane lane aggregates and to the
+ * sprint points, and composes it with the 4.5 Scrum sprint scope (it narrows
+ * WITHIN the sprint, never widening it).
+ *
+ * A header filter REPLACES the board's own stored filter (MOTIR-11564) rather
+ * than narrowing it; with no header filter the stored filter applies, unless
+ * `storedFilterOff` — the `boardFilter=off` query param — asks for the board's
+ * whole scope. `storedFilterOff` is ignored when a header filter is present and
+ * on a board with no stored filter.
  */
 export interface BoardFilterInput {
   ast?: FilterAst;
   savedFilterId?: string;
+  storedFilterOff?: boolean;
 }

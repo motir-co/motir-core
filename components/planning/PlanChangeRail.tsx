@@ -332,6 +332,11 @@ export interface PlanChangeRailProps {
    */
   onSkipFinalCheck?: () => Promise<'skipped' | 'not_running'>;
   /**
+   * May the viewer change project AI settings (`ai:configure`)? The Skip the final
+   * check confirm words its settings line by it (MOTIR-11548). Absent → read-only.
+   */
+  canManageSettings?: boolean;
+  /**
    * THE PLAN GATE'S STATE for the plan in hand (Story MOTIR-6012 · MOTIR-6037; design
    * Part XXII §22.4–§22.5) — the SAME derivation the canvas bar reads, so the review block
    * mirrors the gate it sits beside. Absent → `ungated`: the shipped words.
@@ -467,6 +472,7 @@ export function PlanChangeRail({
   onDiscard,
   onStop,
   onSkipFinalCheck,
+  canManageSettings = false,
   gateView = { kind: 'ungated' },
   declining = false,
   onRequestDecline,
@@ -1446,6 +1452,7 @@ export function PlanChangeRail({
             {...(onSkipFinalCheck && state.phase === 'streaming'
               ? { onSkipCheck: onSkipFinalCheck }
               : {})}
+            canManageSettings={canManageSettings}
           />
         </div>
       </div>

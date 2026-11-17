@@ -1,7 +1,14 @@
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { PlannabilityDto } from '@/lib/dto/plannability';
-import { plannabilityOf } from '@/lib/planning/plannability';
-import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import {
+  isPlanHeld,
+  plannabilityOf,
+  type PlannabilityBlockerFacts,
+} from '@/lib/planning/plannability';
+import {
+  workItemLinkRepository,
+  type PlannabilityBlockerRow,
+} from '@/lib/repositories/workItemLinkRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -40,29 +47,104 @@ export const plannabilityService = {
     const blockers = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemLinkRepository.findBlockersWithLiveChildCounts(item.id, tx),
     );
-    // Each blocker is classified against ITS OWN project's workflow: a
-    // cross-project blocker's statuses are its project's, not the card's.
-    const meta =
-      blockers.length === 0
-        ? new Map<string, Map<string, { category: StatusCategoryDto }>>()
-        : await workflowsService.getStatusMetaByProjects(
-            blockers.map((b) => b.projectId),
-            ctx.workspaceId,
-          );
-
+    const meta = await statusMetaFor(blockers, ctx.workspaceId);
     return plannabilityOf(
       item,
-      blockers.map((b) => ({
-        id: b.id,
-        identifier: b.identifier,
-        key: b.key,
-        title: b.title,
-        kind: b.kind,
-        statusCategory: meta.get(b.projectId)?.get(b.status)?.category ?? null,
-        archived: b.archivedAt !== null,
-        liveChildCount: b.liveChildCount,
-        sameProject: b.projectId === item.projectId,
-      })),
+      blockers.map((b) => toFacts(b, meta, item.projectId)),
     );
   },
+
+  /**
+   * WHICH of these items are HELD out of planning (MOTIR-11546) — the stories the
+   * Plan button's check would refuse, by the SAME rule (`isPlanHeld` over
+   * `planBlockReasons`), so the To plan state a surface draws and the check can
+   * never disagree. One batched blocker read and one workflow read for the whole
+   * set, and none at all when the set holds no story: only a story is ever held.
+   *
+   * No access check of its own: every caller is a read that has already gated
+   * the items it passes. `excludeBlockerIds` drops blockers the reader may not
+   * see (a Visitor's withheld private-epic descendants), so the answer says
+   * nothing about a card that read does not show.
+   */
+  async heldStoryIds(
+    items: readonly { id: string; kind: string; projectId: string }[],
+    workspaceId: string,
+    opts: { excludeBlockerIds?: readonly string[] } = {},
+  ): Promise<Set<string>> {
+    const stories = items.filter((i) => i.kind === 'story');
+    if (stories.length === 0) return new Set();
+    const hidden = new Set(opts.excludeBlockerIds ?? []);
+    const rows = (
+      await withWorkspaceServiceContext(workspaceId, (tx) =>
+        workItemLinkRepository.findBlockersWithLiveChildCountsForItems(
+          stories.map((s) => s.id),
+          tx,
+        ),
+      )
+    ).filter((r) => !hidden.has(r.id));
+    if (rows.length === 0) return new Set();
+    const meta = await statusMetaFor(rows, workspaceId);
+    const byDependent = new Map<string, PlannabilityBlockerRow[]>();
+    for (const row of rows) {
+      const list = byDependent.get(row.dependentId);
+      if (list) list.push(row);
+      else byDependent.set(row.dependentId, [row]);
+    }
+    const held = new Set<string>();
+    for (const story of stories) {
+      const blockers = byDependent.get(story.id);
+      if (!blockers) continue;
+      if (
+        isPlanHeld(
+          story,
+          blockers.map((b) => toFacts(b, meta, story.projectId)),
+        )
+      ) {
+        held.add(story.id);
+      }
+    }
+    return held;
+  },
+
+  /** {@link heldStoryIds} for ONE item: is it held out of planning? */
+  async isHeld(
+    item: { id: string; kind: string; projectId: string },
+    workspaceId: string,
+  ): Promise<boolean> {
+    return (await plannabilityService.heldStoryIds([item], workspaceId)).has(item.id);
+  },
 };
+
+type StatusMetaByProject = Map<string, Map<string, { category: StatusCategoryDto }>>;
+
+/** Each blocker's statuses, from ITS OWN project's workflow: a cross-project
+ *  blocker's statuses are its project's, not the card's. No read for no blocker. */
+async function statusMetaFor(
+  blockers: readonly PlannabilityBlockerRow[],
+  workspaceId: string,
+): Promise<StatusMetaByProject> {
+  if (blockers.length === 0) return new Map();
+  return workflowsService.getStatusMetaByProjects(
+    blockers.map((b) => b.projectId),
+    workspaceId,
+  );
+}
+
+/** One blocker row as the rule's facts, classified against its own workflow. */
+function toFacts(
+  b: PlannabilityBlockerRow,
+  meta: StatusMetaByProject,
+  cardProjectId: string,
+): PlannabilityBlockerFacts {
+  return {
+    id: b.id,
+    identifier: b.identifier,
+    key: b.key,
+    title: b.title,
+    kind: b.kind,
+    statusCategory: meta.get(b.projectId)?.get(b.status)?.category ?? null,
+    archived: b.archivedAt !== null,
+    liveChildCount: b.liveChildCount,
+    sameProject: b.projectId === cardProjectId,
+  };
+}

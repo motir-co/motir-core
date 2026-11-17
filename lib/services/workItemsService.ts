@@ -175,6 +175,7 @@ import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sp
 import { validateStoryPoints } from '@/lib/estimation/validate';
 import { readerTranslationContextService } from '@/lib/services/readerTranslationContextService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { plannabilityService } from '@/lib/services/plannabilityService';
 import {
   toWorkItemDto,
   toWorkItemMentionCandidateDto,
@@ -5638,6 +5639,15 @@ export const workItemsService = {
     // workflow status, and `implemented` / `planning` once they were added to the
     // default one — collapsed to `todo` and rendered as "To Do".
     const statusByKey = new Map(statuses.map((s) => [s.key, s]));
+    // HELD out of planning (MOTIR-11546): which of the level's stories wait on a
+    // story with no subtasks yet — the Plan button's own rule, read once for the
+    // level, so a held story is not drawn To plan. A Visitor's withheld blockers
+    // are left out, as their edges are below.
+    const heldIds = await plannabilityService.heldStoryIds(
+      rows.map((r) => ({ id: r.id, kind: r.kind, projectId })),
+      readCtx.workspaceId,
+      { excludeBlockerIds: excludeIds ?? [] },
+    );
     const nodes = rows.map((r) => {
       const node = toRoadmapNodeDto(
         r,
@@ -5646,6 +5656,7 @@ export const workItemsService = {
         startableKeys.has(r.status) && (readyById.get(r.id) ?? true),
         sprintId != null && r.sprintId === sprintId,
         statusByKey.get(r.status) ?? null,
+        heldIds.has(r.id),
       );
       // A Visitor has no command to copy, so the fix reason that drives the card's
       // `motir fix` button (MOTIR-10509) never reaches their read.
@@ -7365,6 +7376,13 @@ export const workItemsService = {
     // — the peek's status field locks every move and says so with its Review plan
     // door, from the same read the item page makes.
     const planHold = await planTargetLockService.readPlanHold(detail.item.id, ctx);
+    // HELD out of planning (MOTIR-11546) — the header's status slot draws a held
+    // story as blocked, not To plan, by the rule the roadmap read applies. No read
+    // for anything but a story.
+    const planHeld = await plannabilityService.isHeld(
+      { id: detail.item.id, kind: detail.item.kind, projectId },
+      ctx.workspaceId,
+    );
     const view = toQuickViewData(
       detail,
       members,
@@ -7414,7 +7432,15 @@ export const workItemsService = {
           : null,
       )
       .catch(() => null);
-    return { ...view, pageRefs, heldTransitions, planHold, mergeMembers, translation };
+    return {
+      ...view,
+      pageRefs,
+      heldTransitions,
+      planHold,
+      planHeld,
+      mergeMembers,
+      translation,
+    };
   },
 
   /**

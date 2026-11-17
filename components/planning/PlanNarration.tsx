@@ -187,6 +187,11 @@ export interface PlanNarrationProps {
    */
   onSkipCheck?: () => Promise<'skipped' | 'not_running'>;
   /**
+   * May the viewer change project AI settings (`ai:configure`)? Picks the copy of
+   * the confirm's settings line (MOTIR-11548). Absent → the read-only copy.
+   */
+  canManageSettings?: boolean;
+  /**
    * ONE FOLD FOR SEVERAL BLOCKS (MOTIR-11487; design MOTIR-11486 § "The
    * collapse-all control across run blocks"): the planning rail draws one block of
    * notes per run, and pressing Hide or Show in any of them folds or opens every
@@ -215,13 +220,14 @@ export function PlanNarration({
   loadingEarlier = false,
   onShowEarlier,
   onSkipCheck,
+  canManageSettings = false,
   fold: sharedFold,
 }: PlanNarrationProps) {
   const tc = useTranslations('planningWorkspace.conversation');
   const baseId = useId();
   const ownFold = usePlannerNotesFold();
   const fold = sharedFold ?? ownFold;
-  const skip = useSkipCheck(onSkipCheck);
+  const skip = useSkipCheck(onSkipCheck, canManageSettings);
   const skipKey = onSkipCheck ? skipCheckGroupKey(groups) : null;
   const { clearPending } = skip;
   // The check ended (or its fix began): a pending skip has done its work, so the
@@ -300,7 +306,7 @@ export function PlanNarration({
  * live, when the row is not drawn at all; a later run's check starts clean because
  * the control unmounts with its run.
  */
-function useSkipCheck(onSkipCheck: PlanNarrationProps['onSkipCheck']) {
+function useSkipCheck(onSkipCheck: PlanNarrationProps['onSkipCheck'], canManageSettings: boolean) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<SkipFinalCheckPhase>('open');
   const [pending, setPending] = useState(false);
@@ -360,6 +366,7 @@ function useSkipCheck(onSkipCheck: PlanNarrationProps['onSkipCheck']) {
       phase={phase}
       onKeep={() => setOpen(false)}
       onConfirm={() => void confirm()}
+      canManageSettings={canManageSettings}
       onCloseAutoFocus={(event) => {
         // Back to the control when kept; to the pending row once accepted. When
         // neither is drawn any more (the check ended), Radix's default applies.

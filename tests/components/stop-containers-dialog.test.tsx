@@ -198,8 +198,13 @@ describe('StopContainersDialog', () => {
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'leak' } });
     fireEvent.click(confirmButton(dialog));
 
-    expect(await screen.findByText('Couldn’t finish the stop')).toBeTruthy();
-    expect(screen.getByText(/Some containers may have stopped before the error/)).toBeTruthy();
+    // Scoped to the toast itself: while Radix announces a toast, its aria-live span repeats
+    // the title and description as one text node, so a page-wide regex can match twice.
+    const title = await screen.findByText('Couldn’t finish the stop');
+    const toast = title.closest('li') ?? document.body;
+    expect(
+      within(toast).getByText(/Some containers may have stopped before the error/),
+    ).toBeTruthy();
   });
 
   it('a failed preview REPLACES the primary with Try again, which re-reads (S3 g)', async () => {

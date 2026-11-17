@@ -14,6 +14,7 @@ import { projectAccessData } from '@/tests/helpers/projectAccess';
 import { visitorRecordsService } from '@/lib/services/visitorRecordsService';
 import { VISITOR_ADDRESS_HEADER } from '@/lib/visitor/address';
 import { boardsService } from '@/lib/services/boardsService';
+import { encodeFilterParam } from '@/lib/filters/ast';
 
 // The client DATA DOORS a Visitor view calls (Story MOTIR-6170 · MOTIR-6647),
 // driven as the browser drives them: the Visitor tab's `x-motir-visitor` address
@@ -366,6 +367,41 @@ describe('a consented Visitor is served the public project, withheld rows exclud
     const hidden = await run(t.C.id);
     expect((await runGET(req('/x', address), params({ id: visible.id }))).status).toBe(200);
     expect((await runGET(req('/x', address), params({ id: hidden.id }))).status).toBe(404);
+  });
+});
+
+describe('a Visitor’s board filter replaces the board’s stored filter (MOTIR-11564)', () => {
+  it('?filter= replaces it, ?boardFilter=off lifts it, and no withheld row shows under either', async () => {
+    const t = await publicProject();
+    // A visible bug beside the visible story; the stored filter keeps bugs only.
+    const B = await createTestWorkItem(t.fx, { kind: 'bug', title: 'Visible bug B' });
+    await adminDb.workItem.update({ where: { id: B.id }, data: { status: 'todo' } });
+    await adminDb.board.updateMany({
+      where: { projectId: t.fx.projectId },
+      data: { filter: { v: 'v1', c: 'and', f: [['kind', 'is_any_of', ['bug']]] } as never },
+    });
+    await asVisitor(t);
+    const todoIds = async (query: string) => {
+      const res = await boardGET(req(`/api/board${query}`, t.identifier));
+      expect(res.status).toBe(200);
+      const board = (await res.json()) as {
+        columns: Array<{ statusKeys: string[]; cards: Array<{ id: string }> }>;
+      };
+      return board.columns
+        .find((c) => c.statusKeys[0] === 'todo')!
+        .cards.map((c) => c.id)
+        .sort();
+    };
+    const stories = encodeFilterParam({
+      combinator: 'and',
+      conditions: [{ field: 'kind', operator: 'is_any_of', value: ['story'] }],
+    });
+
+    expect(await todoIds('')).toEqual([B.id]);
+    // The header filter replaces it: the visible story, never hidden story C.
+    expect(await todoIds(`?filter=${encodeURIComponent(stories)}`)).toEqual([t.V.id]);
+    // Off: the whole visible scope, the private epic's descendants still withheld.
+    expect(await todoIds('?boardFilter=off')).toEqual([t.E.id, t.V.id, B.id].sort());
   });
 });
 

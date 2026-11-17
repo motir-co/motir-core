@@ -10,6 +10,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Archive } from 'lucide-react';
 import { pageMembers, pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { plannabilityService } from '@/lib/services/plannabilityService';
 import { pagesService } from '@/lib/services/pagesService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -345,6 +346,7 @@ export default async function ItemView({
     readerTranslation,
     todoRefs,
     cardReviews,
+    planHeld,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -474,6 +476,14 @@ export default async function ItemView({
     isVisitor
       ? null
       : reviewStateService.cardReviewsFor(item.projectId, [item.id], svc).catch(() => null),
+    // HELD OUT OF PLANNING (MOTIR-11546), for the eyebrow's status slot: a story
+    // blocked by an unfinished story with no subtasks yet draws its status chip and
+    // the blocked flag, not To plan — the rule the roadmap canvas and the Plan
+    // button's check read. No read for anything but a story; a failing read is the
+    // slot as it was before, never a failed page.
+    plannabilityService
+      .isHeld({ id: item.id, kind: item.kind, projectId: item.projectId }, svc.workspaceId)
+      .catch(() => false),
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -601,6 +611,7 @@ export default async function ItemView({
                       }}
                       statuses={detail.workflow.statuses}
                       hasChildren={detail.children.length > 0}
+                      planHeld={planHeld}
                       unblocked={detail.readiness.ready}
                     />
                     {/* bug-issue-detail-eyebrow-overflows-viewport: the breadcrumb sits in
