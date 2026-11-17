@@ -26,6 +26,12 @@ palette and mode — **Aurora, Cyclic CA, Brian's Brain, Day & Night, Rule 110**
 are already drawn by the package (MOTIR-11604, MOTIR-11616); the mock runs those
 shipped drawers.
 
+**The mock shows still frames, and that is deliberate.** Motir's design card frames a mock with
+`sandbox=""`, which runs no script, so a background drawn on a `<canvas>` by JavaScript shows nothing
+there. Every background in this mock is therefore a still frame of the shipped drawer, baked into an
+image when the mock is generated (`bake.cjs`, reduced motion, 2x). The motion each background has is
+described in words beside it; the build cards draw it live.
+
 **There are 19 registered styles, not 22.** The card counts 22; `STYLE_REGISTRY` in
 `packages/design-system/src/theme/styles.ts` holds 19 on `main` today, and the mock
 covers every one of them. A style added later gets its row when it is registered.

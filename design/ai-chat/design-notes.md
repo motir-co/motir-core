@@ -7598,6 +7598,12 @@ own pan and zoom are untouched; the header row arrives above it.
 > `components/onboarding/DesignStep.tsx`, and the delta is drawn against that file,
 > not against the older mock.
 
+**The mock shows still frames, and that is deliberate.** Motir's design card frames a mock with
+`sandbox=""`, which runs no script, so a background drawn on a `<canvas>` by JavaScript shows nothing
+there. Every background in this mock is therefore a still frame of the shipped drawer, baked into an
+image when the mock is generated (`bake.cjs`, reduced motion, 2x). The motion each background has is
+described in words beside it; the build cards draw it live.
+
 **Design system.** Files read: `package.json` (depends on `@motir/design-system`
 `workspace:*`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`).
 Verdict: **on Motir Design**, installed version **0.23.0**. The step scopes its own
