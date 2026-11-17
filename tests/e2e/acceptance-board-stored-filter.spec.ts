@@ -5,10 +5,11 @@
 //   1. an admin creates the kanban board "Bugs" from the board switcher's New
 //      board dialog, building Kind is Bug in the dialog's Board filter section;
 //   2. the project's default board still shows every card;
-//   3. a teammate who did not create "Bugs" sees the same bugs and the
-//      read-only stored-filter indicator;
-//   4. the toolbar's Advanced filter (Assignee is the teammate) narrows on top;
-//   5. the toolbar's Clear returns to every bug, never the whole project;
+//   3. a teammate who did not create "Bugs" sees the same bugs, with the board
+//      filter as the header filter (MOTIR-11565 retired the indicator);
+//   4. the teammate adds Assignee is the teammate to it in Advanced;
+//   5. Clear all shows the whole board, and Reset to board filter returns to
+//      every bug;
 //   6. a scrum board "Mobile sprint" started from a saved filter (Label is
 //      mobile) shows only the mobile cards of the active sprint;
 //   7. that saved filter is edited, then deleted, and the board keeps its copy;
@@ -119,8 +120,10 @@ const one = (template: string) =>
   template.replace(/\{count, plural, one \{([^}]*)\} other \{[^}]*\}\}/, (_, branch: string) =>
     branch.replace('#', '1'),
   );
-/** A condition as the shared condition text reads it: field, operator, values. */
-const sentence = (field: string, values: string) => `${field} ${TIV.advancedOpIsAnyOf} ${values}`;
+/** A condition as its chip on the board's header filter row reads it
+ * (MOTIR-11565): the bold field, then the operator and values — no space
+ * between the two elements' text. */
+const sentence = (field: string, values: string) => `${field}${TIV.advancedOpIsAnyOf} ${values}`;
 const BUG = en.labels.issueType.bug;
 const HIGH = en.labels.priority.high;
 const KIND_BUG_TEXT = sentence(TIV.filterKind, BUG);
@@ -412,7 +415,9 @@ const titlesOf = (board: BoardProjectionDto) =>
 // page-rooted test id can also match a streamed or outgoing copy.
 const main = (page: Page) => page.getByRole('main');
 
-const indicator = (page: Page) => main(page).getByTestId('board-stored-filter-indicator');
+/** The board's header filter row (MOTIR-11565), which replaced the stored-filter
+ * indicator: the Board filter chip and the board's own conditions. */
+const indicator = (page: Page) => main(page).getByTestId('board-header-filter');
 const boardRegion = (page: Page) => main(page).getByTestId('board');
 const dialogOf = (page: Page) => page.getByRole('dialog', { name: TB.newBoardTitle });
 const editorOf = (page: Page) => main(page).getByTestId('board-stored-filter-editor');
@@ -540,7 +545,7 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       expectOnlyBugsByColumn(board, BUGS);
 
       await expect(indicator(page)).toBeVisible();
-      await expect(indicator(page)).toContainText(TB.storedFilterIndicatorLabel);
+      await expect(indicator(page)).toContainText(TB.headerFilter.chip);
       await expect(indicator(page)).toContainText(KIND_BUG_TEXT);
       for (const title of BUGS) await expect(boardRegion(page).getByText(title)).toBeVisible();
       await expect(boardRegion(page).getByText('Write the release notes')).toHaveCount(0);
@@ -566,22 +571,27 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       expectOnlyBugsByColumn(board, BUGS);
       await expect(indicator(page)).toBeVisible();
       await expect(indicator(page)).toContainText(KIND_BUG_TEXT);
-      // Read-only: the indicator holds no control for a reader who cannot
-      // configure the board.
-      await expect(indicator(page).getByRole('button')).toHaveCount(0);
-      await expect(main(page).getByTestId('board-stored-filter-indicator-edit')).toHaveCount(0);
+      // Unedited, the row offers no action, and a reader who cannot configure
+      // the board never sees Save to board filter.
+      await expect(main(page).getByTestId('board-filter-actions')).toHaveCount(0);
+      await expect(
+        main(page).getByRole('button', { name: TB.headerFilter.saveToBoard }),
+      ).toHaveCount(0);
       await beat();
     },
   );
 
   await chapter(
-    'Step 4 · Tess’s toolbar filter Assignee is Tess narrows “Bugs” on top, and the board filter stays',
+    'Step 4 · Tess adds Assignee is Tess to the board filter in the header, which narrows “Bugs”',
     async () => {
       await page.getByRole('button', { name: /^Advanced/ }).click();
       const dialog = advancedDialog(page);
       await expect(dialog).toBeVisible();
+      // The header starts as the board filter (MOTIR-11565): Kind is Bug is
+      // already the builder's first row, so Tess's condition is the second.
+      await expect(dialog.getByRole('group', { name: 'Condition 1' })).toBeVisible();
       await dialog.getByRole('button', { name: TIV.advancedAddCondition }).click();
-      const row = dialog.getByRole('group', { name: 'Condition 1' });
+      const row = dialog.getByRole('group', { name: 'Condition 2' });
       await setField(page, row, TIV.assignee);
       const read = frameOf(page, bugsId, true);
       await pickValue(page, row, TIV.assignee, TESS.name);
@@ -591,31 +601,48 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
 
-      // The toolbar's chip and the board filter, side by side in one row.
+      // One row: the Board filter chip, Edited, both conditions, and — for a
+      // member — Save as and Reset to board filter, never Save to board filter.
       const chips = page.locator(APPLIED_BAR);
       await expect(chips).toBeVisible();
       await expect(chips).toContainText(TESS.name);
-      const row2 = main(page).getByTestId('board-filter-row');
-      await expect(row2.getByTestId('board-stored-filter-indicator')).toBeVisible();
-      await expect(row2.locator(APPLIED_BAR)).toBeVisible();
+      await expect(chips).toContainText(KIND_BUG_TEXT);
+      await expect(chips).toContainText(en.savedFilters.applied.edited);
+      const actions = main(page).getByTestId('board-filter-actions');
+      await expect(actions.getByRole('button', { name: TB.headerFilter.reset })).toBeVisible();
+      await expect(actions.getByRole('button', { name: TB.headerFilter.saveToBoard })).toHaveCount(
+        0,
+      );
       await beat();
     },
   );
 
   await chapter(
-    'Step 5 · The toolbar’s Clear returns to every bug, never to the whole project',
+    'Step 5 · Clear all shows the whole board, and Reset to board filter returns to every bug',
     async () => {
       await page.getByRole('button', { name: /^Advanced/ }).click();
       const dialog = advancedDialog(page);
-      const read = frameOf(page, bugsId, false);
+      let read = frameOf(page, bugsId, false);
       await dialog.getByRole('button', { name: TIV.advancedClearAll }).click();
-      const board = await frame(read);
-      expect(titlesOf(board)).toEqual(BUGS);
-      expectOnlyBugsByColumn(board, BUGS);
+      let board = await frame(read);
+      // Clear keeps its meaning (MOTIR-11565): every condition removed is the
+      // board's whole scope, and the URL says so (`boardFilter=off`).
+      expect(new URL(page.url()).searchParams.get('boardFilter')).toBe('off');
+      expect(titlesOf(board)).toEqual(ALL);
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
-      await expect(indicator(page)).toBeVisible();
-      await expect(page.locator(APPLIED_BAR)).toHaveCount(0);
+      await expect(indicator(page)).toContainText(TB.headerFilter.clearedNote);
+
+      read = frameOf(page, bugsId, false);
+      await main(page)
+        .getByTestId('board-filter-actions')
+        .getByRole('button', { name: TB.headerFilter.reset })
+        .click();
+      board = await frame(read);
+      expect(titlesOf(board)).toEqual(BUGS);
+      expectOnlyBugsByColumn(board, BUGS);
+      await expect(indicator(page)).toContainText(KIND_BUG_TEXT);
+      await expect(main(page).getByTestId('board-filter-actions')).toHaveCount(0);
       await beat();
     },
   );
@@ -777,7 +804,7 @@ test('A board keeps its own stored filter, set when it is created and edited in 
         TB.boardFilterEmptyTitle,
       );
       await expect(indicator(page)).toBeVisible();
-      await expect(main(page).getByTestId('board-stored-filter-indicator-stale')).toBeVisible();
+      await expect(main(page).getByTestId('board-filter-chip-stale')).toBeVisible();
       await beat();
 
       await page.goto(`/settings/project/board?board=${mobileId}`);
@@ -812,7 +839,9 @@ test('A board keeps its own stored filter, set when it is created and edited in 
       }
       await expect(indicator(page)).toBeVisible();
       await expect(indicator(page)).toContainText(KIND_BUG_TEXT);
-      await expect(page.getByTestId('board-stored-filter-indicator-edit')).toHaveCount(0);
+      await expect(
+        main(page).getByRole('button', { name: TB.headerFilter.saveToBoard }),
+      ).toHaveCount(0);
       await expect(indicator(page).getByRole('link')).toHaveCount(0);
       await beat();
     },

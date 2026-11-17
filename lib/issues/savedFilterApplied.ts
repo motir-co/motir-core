@@ -55,6 +55,19 @@ export function isAppliedFilterDirty(applied: AppliedSavedFilter, ast: FilterAst
   return currentFilterParam(ast) !== applied.envelopeParam;
 }
 
+/** Whether the board's header filter differs from the board's own stored filter
+ * (MOTIR-11565) — the SAME 6.1.1 canonical equality the saved-filter dirty check
+ * uses, with the stored envelope as the reference. `current` is the effective
+ * header filter (facets merged into the advanced AST); `stored` is the decoded
+ * stored envelope. Two empty filters compare equal. It drives the board's
+ * Edited mark, Save to board filter and Reset to board filter. */
+export function differsFromBoardFilter(
+  current: FilterAst | null,
+  stored: FilterAst | null,
+): boolean {
+  return currentFilterParam(current) !== currentFilterParam(stored);
+}
+
 /** Build the session `AppliedSavedFilter` from a resolve read. Returns null
  * when the stored envelope is degraded (`ast === null`) — a broken filter
  * can't be applied (the caller surfaces the designed error instead). */
