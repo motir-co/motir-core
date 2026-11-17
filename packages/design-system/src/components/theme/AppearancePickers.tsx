@@ -52,11 +52,11 @@ export function AxisField({
     <div className="border-b border-(--el-border-soft) py-4 last:border-b-0">
       <div className="mb-3 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         <span className="text-sm font-semibold text-(--el-text)">{name}</span>
-        <span className="text-xs text-(--el-text-muted)">{help}</span>
+        <span className="text-xs text-(--el-text-secondary)">{help}</span>
       </div>
       {children}
       {note ? (
-        <p className="mt-2.5 text-xs leading-relaxed text-(--el-text-muted)">{note}</p>
+        <p className="mt-2.5 text-xs leading-relaxed text-(--el-text-secondary)">{note}</p>
       ) : null}
     </div>
   );
