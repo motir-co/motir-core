@@ -13,6 +13,7 @@ import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import {
   READ_FILE_CONTENT_CAP,
   READ_FILE_TOOL_NAME,
+  atRef,
   renderReadFile,
 } from '@/lib/mcp/tools/readFile';
 import { REPO_FILE_FETCH_MAX_BYTES, REPO_FILE_MAX_BYTES } from '@/lib/git';
@@ -52,6 +53,15 @@ let reply: Reply = () => new Response('', { status: 500 });
 const HEAD_SHA = 'c0ffee'.padEnd(40, '0');
 const headReply: Reply = () => new Response(HEAD_SHA, { status: 200 });
 let resolveReply: Reply = headReply;
+// The pinned read also asks GitHub for the file's object id (MOTIR-11528): a
+// GraphQL `Repository.object … on Blob { oid }` answer, recorded here.
+const BLOB_SHA = '3f786850e387550fdab836ed7e6dc881de23001b';
+const blobReply: Reply = () =>
+  new Response(JSON.stringify({ data: { repository: { object: { oid: BLOB_SHA } } } }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+let objectReply: Reply = blobReply;
 const hostCalls: string[] = [];
 
 function stubHost(): void {
@@ -67,6 +77,7 @@ function stubHost(): void {
       );
     }
     hostCalls.push(url);
+    if (url.endsWith('/graphql')) return objectReply(url);
     return url.includes('/commits/') ? resolveReply(url) : reply(url);
   });
 }
@@ -146,6 +157,7 @@ beforeEach(async () => {
   hostCalls.length = 0;
   reply = () => new Response('export const x = 1;\n', { status: 200 });
   resolveReply = headReply;
+  objectReply = blobReply;
   stubHost();
   fx = await makeWorkItemFixture();
   await seedRepoSet(fx);
@@ -231,6 +243,8 @@ describe('read_file — the read', () => {
     expect(hostCalls).toEqual([
       'https://api.github.com/repos/acme/alpha/commits/main',
       `https://api.github.com/repos/acme/alpha/contents/lib/x.ts?ref=${HEAD_SHA}`,
+      // The object id of that content (MOTIR-11528), asked after the found read.
+      'https://api.github.com/graphql',
     ]);
 
     // The other repo's default branch is ITS row's, not a global `main`.
@@ -588,5 +602,114 @@ describe('read_file — every other outcome is named, non-error and distinct', (
     expect(summary).toContain('current (symlink)\nlib/');
     expect(summary).toContain('[TRUNCATED — the host listed only the first 2 entries.');
     expect(summary).toContain('do NOT conclude a file is absent');
+  });
+});
+
+// MOTIR-11530 — a pinned found read carries the host's object id of the content
+// it returned: `blobSha` in the payload, and `(blob <sha>)` in the summary AFTER
+// the commit parenthetical, so the planner's commit pattern still reads the line.
+describe('read_file — the blob id of a pinned found read (MOTIR-11530)', () => {
+  // plan.py's `_READ_COMMIT` — the line the planner records a read's commit from.
+  const READ_COMMIT = /\(commit ([0-9a-f]{7,64})\)/;
+  const SHA = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b';
+  const base = { outcome: 'found', repoRef: 'acme/alpha', path: 'lib/a.ts', ref: 'main' } as const;
+
+  it('through the tool: a whole-file read carries blobSha and names it after the commit', async () => {
+    const res = await callTool(fx.ctx, args());
+    const out = outcomeOf(res);
+    expect(out).toMatchObject({ outcome: 'found', commitSha: HEAD_SHA, blobSha: BLOB_SHA });
+    const summary = summaryOf(res);
+    expect(summary).toContain(`at main (commit ${HEAD_SHA}) (blob ${BLOB_SHA}) (20 bytes):`);
+    expect(summary.indexOf('(commit ')).toBeLessThan(summary.indexOf('(blob '));
+    expect(READ_COMMIT.exec(summary)?.[1]).toBe(HEAD_SHA);
+  });
+
+  it('through the tool: a ranged read carries the same id, headed lines a-b of N', async () => {
+    reply = () => new Response('one\ntwo\nthree\nfour\nfive', { status: 200 });
+    const res = await callTool(fx.ctx, args({ startLine: 2, endLine: 3 }));
+    expect(outcomeOf(res)).toMatchObject({
+      blobSha: BLOB_SHA,
+      lines: { from: 2, to: 3, total: 5 },
+    });
+    const summary = summaryOf(res);
+    expect(summary).toContain(`(commit ${HEAD_SHA}) (blob ${BLOB_SHA}), lines 2-3 of 5:`);
+    expect(READ_COMMIT.exec(summary)?.[1]).toBe(HEAD_SHA);
+  });
+
+  it('through the tool: a host that gives no id answers found with blobSha null', async () => {
+    objectReply = () =>
+      new Response(JSON.stringify({ message: 'Bad credentials' }), { status: 401 });
+    const res = await callTool(fx.ctx, args());
+    expect(outcomeOf(res)).toMatchObject({ outcome: 'found', commitSha: HEAD_SHA, blobSha: null });
+    expect(summaryOf(res)).not.toContain('(blob ');
+    expect(summaryOf(res)).toContain(`at main (commit ${HEAD_SHA}) (20 bytes):`);
+  });
+
+  it('renderReadFile: whole-file and ranged found answers carry blobSha', () => {
+    const whole = renderReadFile({
+      ...base,
+      text: 'one\ntwo',
+      bytes: 7,
+      commitSha: SHA,
+      blobSha: BLOB_SHA,
+    } as never);
+    expect(whole.structured).toMatchObject({ commitSha: SHA, blobSha: BLOB_SHA });
+    expect(whole.summary).toContain(`at main (commit ${SHA}) (blob ${BLOB_SHA}) (7 bytes):`);
+
+    const ranged = renderReadFile(
+      { ...base, text: 'one\ntwo\nthree', bytes: 13, commitSha: SHA, blobSha: BLOB_SHA } as never,
+      { startLine: 2, endLine: 2 } as never,
+    );
+    expect(ranged.structured).toMatchObject({ blobSha: BLOB_SHA });
+    expect(ranged.summary).toContain(`(commit ${SHA}) (blob ${BLOB_SHA}), lines 2-2 of 3:`);
+    expect(READ_COMMIT.exec(ranged.summary)?.[1]).toBe(SHA);
+  });
+
+  it.each([
+    { name: 'no blobSha', extra: { commitSha: SHA } },
+    { name: 'no commitSha', extra: { blobSha: BLOB_SHA } },
+    { name: 'neither', extra: {} },
+  ])('renderReadFile: a found answer with $name names no blob', ({ extra }) => {
+    const { summary, structured } = renderReadFile({
+      ...base,
+      text: 'x',
+      bytes: 1,
+      ...extra,
+    } as never);
+    expect(structured).toMatchObject({ outcome: 'found', blobSha: null });
+    expect(summary).not.toContain('(blob ');
+  });
+
+  it('atRef is unchanged: the commit parenthetical only, and the bare ref without one', () => {
+    expect(atRef('main', SHA)).toBe(`main (commit ${SHA})`);
+    expect(atRef('main')).toBe('main');
+  });
+
+  it.each([
+    { outcome: 'found', text: 'a\u0000b', bytes: 3 },
+    { outcome: 'binary', bytes: 3 },
+    { outcome: 'directory', entries: [{ name: 'a.ts', type: 'file' }], truncated: false },
+    { outcome: 'not_found' },
+    { outcome: 'ref_not_found' },
+    { outcome: 'too_large', limitBytes: 10 },
+    { outcome: 'too_large', limitBytes: 10, totalLines: 4 },
+    { outcome: 'unauthorized' },
+    { outcome: 'invalid_path', reason: 'escapes the repository' },
+    { outcome: 'unreachable', failure: 'timeout', detail: 'no response' },
+    { outcome: 'repo_not_connected' },
+    { outcome: 'provider_unavailable', detail: 'no App' },
+    { outcome: 'repo_not_in_project', repoSet: ['acme/beta'] },
+    { outcome: 'quarantined' },
+  ])('a $outcome answer carries no blobSha key and names no blob', (extra) => {
+    const { summary, structured } = renderReadFile({
+      repoRef: 'acme/alpha',
+      path: 'lib/a.ts',
+      ref: 'main',
+      commitSha: SHA,
+      blobSha: BLOB_SHA,
+      ...extra,
+    } as never);
+    expect(structured).not.toHaveProperty('blobSha');
+    expect(summary).not.toContain('(blob ');
   });
 });
