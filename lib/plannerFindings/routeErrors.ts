@@ -7,11 +7,7 @@ import {
   PlannerFindingNotFoundError,
   PlannerFindingRecordNotFoundError,
 } from '@/lib/ai/errors';
-import {
-  NotPlatformStaffError,
-  PlannerFindingInvalidError,
-  PlannerFindingLinkRefusedError,
-} from '@/lib/platform/errors';
+import { NotPlatformStaffError, PlannerFindingInvalidError } from '@/lib/platform/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
 /**
@@ -96,14 +92,6 @@ export function plannerFindingsErrorResponse(err: unknown): NextResponse {
   // motir-ai's own refusal of the content — it names the field or the problem.
   if (err instanceof MotirAiBadRequestError) {
     return plannerFindingsJson({ code: 'UPSTREAM_REJECTED', detail: err.detail }, 400);
-  }
-  // A link or unlink refused with nothing written (MOTIR-11504): a key naming no
-  // work item is the caller's mistake, the other two are the record's state.
-  if (err instanceof PlannerFindingLinkRefusedError) {
-    return plannerFindingsJson(
-      { code: err.code, reason: err.reason },
-      err.reason === 'not_a_work_item' ? 400 : 409,
-    );
   }
   if (err instanceof MotirAiConflictError) {
     return plannerFindingsJson({ code: 'CONFLICT', detail: err.detail }, 409);

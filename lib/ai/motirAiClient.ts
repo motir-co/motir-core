@@ -4606,12 +4606,6 @@ export interface RawPlannerFindingRecord {
   runThroughAnswer: PlannerFindingPrediction | null;
   /** The card refs the run would stop on, in report order; `[]` when there are none. */
   runThroughStopCards: string[];
-  /**
-   * The work-item keys linked to the record — the planning bugs its check
-   * produced (MOTIR-11504). Text to motir-ai; core resolves a key before linking
-   * it. `[]` when none is linked.
-   */
-  linkedBugKeys: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -4853,59 +4847,6 @@ export async function submitPlannerFindingRecordVerdict(
     );
   }
   return body as RawPlannerFindingVerdictResult;
-}
-
-/** A link or unlink's answer: the record as it now stands, and whether its key set changed. */
-export interface RawPlannerFindingRecordLinkResult {
-  record: RawPlannerFindingRecord;
-  changed: boolean;
-}
-
-async function postPlannerFindingRecordLink(
-  recordId: string,
-  key: string,
-  suffix: '/links' | '/links/remove',
-): Promise<RawPlannerFindingRecordLinkResult> {
-  const { url, serviceToken } = config();
-  const res = await aiFetch(
-    `${url}${PLANNER_FINDING_RECORDS_PATH}/${encodeURIComponent(recordId)}${suffix}`,
-    { method: 'POST', headers: authHeaders(serviceToken), body: JSON.stringify({ key }) },
-  );
-  if (!res.ok) throw await plannerFindingRecordError(res, recordId);
-  const body = (await res
-    .json()
-    .catch(() => null)) as Partial<RawPlannerFindingRecordLinkResult> | null;
-  if (
-    !body ||
-    typeof body.record !== 'object' ||
-    body.record === null ||
-    typeof body.record.id !== 'string' ||
-    !Array.isArray(body.record.linkedBugKeys) ||
-    typeof body.changed !== 'boolean'
-  ) {
-    throw new MotirAiUnavailableError(
-      'planner finding record link answered no `{ record, changed }`',
-    );
-  }
-  return body as RawPlannerFindingRecordLinkResult;
-}
-
-// POST /v1/admin/planner-finding-records/:id/links — add one key to the record's
-// set (MOTIR-11504). A key already in the set is motir-ai's `conflict`.
-export async function addPlannerFindingRecordLink(
-  recordId: string,
-  key: string,
-): Promise<RawPlannerFindingRecordLinkResult> {
-  return postPlannerFindingRecordLink(recordId, key, '/links');
-}
-
-// POST /v1/admin/planner-finding-records/:id/links/remove — take one key out of
-// the set. A key no longer there answers the record with `changed: false`.
-export async function removePlannerFindingRecordLink(
-  recordId: string,
-  key: string,
-): Promise<RawPlannerFindingRecordLinkResult> {
-  return postPlannerFindingRecordLink(recordId, key, '/links/remove');
 }
 
 // ── The lesson-retirement window N (MOTIR-1463) ────────────────────────────────

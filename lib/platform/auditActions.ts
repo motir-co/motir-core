@@ -338,29 +338,6 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'planner_finding.verdict': { kind: 'write', reason: 'inherited' },
   /**
-   * A work-item key was LINKED to a planner finding record through
-   * `/api/platform/planner-findings/records/:id/links` (Story MOTIR-11455 ·
-   * MOTIR-11504) — a planning bug the record's check produced. `operator`
-   * degree. ONE row per add that changed the record's set; a refusal writes
-   * none. Core resolves the key to a work item in the record's own project and
-   * motir-ai stores it as text. Target is `platform` with the record id as
-   * `targetId` (a record is not a core entity, the `planner_finding.record`
-   * precedent), the record's `coreOrganizationId` as the entry's
-   * `organizationId`, and `metadata` carries `{ recordId, key, credential }`.
-   * `inherited`, as `planner_finding.triage`: the console's link control carries
-   * no reason field, so the service writes a default one.
-   */
-  'planner_finding.link': { kind: 'write', reason: 'inherited' },
-  /**
-   * A work-item key was UNLINKED from a planner finding record through
-   * `/api/platform/planner-findings/records/:id/links/remove` (MOTIR-11504).
-   * `operator` degree. ONE row per remove that changed the set; a remove of a
-   * key the record no longer carries writes none and answers the record as it
-   * stands. Target and `metadata` as `planner_finding.link`. `inherited`, as
-   * `planner_finding.triage`.
-   */
-  'planner_finding.unlink': { kind: 'write', reason: 'inherited' },
-  /**
    * One organisation's fleet containers were STOPPED by a platform admin (Story
    * MOTIR-6905 · MOTIR-7317): its GitHub Actions runs cancelled and its CI
    * containers destroyed, its hosted-agent runs ended, its agent instances
