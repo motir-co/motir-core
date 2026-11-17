@@ -224,6 +224,10 @@ describe('the reason rule', () => {
     // The planner-finding triage (Story MOTIR-10353 · MOTIR-10517) — the console's
     // controls carry no reason field, so the service supplies a default one.
     'planner_finding.triage': 'inherited',
+    // A check-plan record and its verdict (Story MOTIR-11455 · MOTIR-11458) — the
+    // skill types no reason per record, so the service supplies a default one.
+    'planner_finding.record': 'inherited',
+    'planner_finding.verdict': 'inherited',
     // Story 10.3's credit & plan ops (MOTIR-747) — `superadmin`, `required`: they
     // change what an organization holds and is charged.
     'org.credit_grant': 'required',

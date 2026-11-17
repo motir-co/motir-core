@@ -60,6 +60,7 @@ const SUPPORT: PlatformPrincipal = { userId: 'u_sp', email: 'sp@moooon.net', rol
 function detail(over: Partial<PlannerFindingDetailDTO> = {}): PlannerFindingDetailDTO {
   return {
     id: 'pf_1',
+    recordId: 'rec_1',
     source: 'in_loop',
     planner: 'hosted',
     attribution: 'corpus',
@@ -166,6 +167,28 @@ describe('gate, 404 and shell', () => {
     expect(html).toContain(pf.detail.back);
     expect(html).toContain('data-testid="planner-finding-detail"');
     expect(html).toContain(`aria-label="${pf.a11y.detailRegion}"`);
+  });
+
+  it('names its record and links to the record page, before the triage state', async () => {
+    const html = await open({ recordId: 'rec 7' });
+    const link = /data-testid="planner-finding-record-link"[\s\S]*?<\/p>/.exec(html)?.[0] ?? '';
+    expect(link).toContain(pf.detail.record);
+    expect(link).toContain('href="/admin/planner-findings/records/rec%207"');
+    expect(link).toContain('>rec 7</a>');
+  });
+
+  it('shows a key linked from the record page whatever the status, and no row when there is none (MOTIR-11635)', async () => {
+    const row = (html: string) =>
+      /data-testid="planner-finding-bug-key"[\s\S]*?<\/p>/.exec(html)?.[0] ?? '';
+    const keyed = row(await open({ status: 'new', bugKey: 'MOTIR-77' }));
+    expect(keyed).toContain(pf.recordPage.findingKey.column);
+    expect(keyed).toContain('>MOTIR-77</span>');
+    expect(row(await open({ status: 'filed_as_bug', bugKey: 'MOTIR-42' }))).toContain(
+      '>MOTIR-42</span>',
+    );
+    expect(await open({ status: 'new', bugKey: null })).not.toContain(
+      'data-testid="planner-finding-bug-key"',
+    );
   });
 });
 

@@ -14,7 +14,7 @@
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { RawPlannerFinding } from '@/lib/ai/motirAiClient';
+import type { RawPlannerFinding, RawPlannerFindingRecord } from '@/lib/ai/motirAiClient';
 import type { PlannerDryRunCounts, StageUsageLine } from '@/lib/ai/types';
 import type {
   PlannerFindingsFixture,
@@ -78,6 +78,170 @@ export function fixtureFinding(
     updatedAt: daysAgo(1),
     ...over,
     site,
+  };
+}
+
+/**
+ * A stored plan-check RECORD with every column filled (Story MOTIR-11455 ·
+ * MOTIR-11507). Its findings are the fixture findings whose `recordId` names it:
+ * the seam composes them on every read, so a record carries no copy of them.
+ */
+export function fixtureRecord(
+  over: Partial<RawPlannerFindingRecord> & Pick<RawPlannerFindingRecord, 'id'>,
+): RawPlannerFindingRecord {
+  return {
+    source: 'check_plan',
+    planner: 'hosted',
+    coreOrganizationId: 'org_e2e',
+    coreWorkspaceId: 'ws_e2e',
+    coreProjectId: 'proj_e2e',
+    aiProjectId: 'aip_proj_e2e',
+    planId: 'plan_e2e_1',
+    planSessionId: null,
+    jobId: null,
+    planTitle: 'E2E plan',
+    authorModel: null,
+    baselineBranch: 'main',
+    baselineCommit: 'abc123def4567890',
+    verdictState: 'open',
+    verdictBy: null,
+    verdictAt: null,
+    runThroughAnswer: null,
+    runThroughStopCards: [],
+    createdAt: daysAgo(1),
+    updatedAt: daysAgo(1),
+    ...over,
+  };
+}
+
+/** The tenant a record walk is scoped to: the key rule resolves keys in this project. */
+export interface RecordWalkTenant {
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  /** The core user named as the attributed records' verdict giver. */
+  verdictBy: string;
+}
+
+/**
+ * The three records the record-page receipt walks, each with two findings:
+ *
+ *  - `built`   — attributed, answering THRU. `pf_rec_kept` starts with `keptKey`
+ *                and `pf_rec_empty` with none: the row the walk links into.
+ *  - `stops`   — open, answering STOPS with two stop cards in report order. Its
+ *                findings already carry an attribution and a key, so an open
+ *                record withholding them is a real assertion.
+ *  - `silent`  — attributed, with no answer recorded. Both findings carry the
+ *                SAME `sharedKey`.
+ */
+export function recordWalkFixture(
+  tenant: RecordWalkTenant,
+  keys: { keptKey: string; sharedKey: string },
+): Pick<PlannerFindingsFixture, 'records' | 'findings'> {
+  const { verdictBy, ...scope } = tenant;
+  const attributedAt = daysAgo(0.5);
+  const record = (over: Partial<RawPlannerFindingRecord> & Pick<RawPlannerFindingRecord, 'id'>) =>
+    fixtureRecord({ ...scope, aiProjectId: `aip_${scope.coreProjectId}`, ...over });
+  const finding = (
+    recordId: string,
+    over: Partial<RawPlannerFinding> & Pick<RawPlannerFinding, 'id'>,
+  ) =>
+    fixtureFinding({
+      ...scope,
+      aiProjectId: `aip_${scope.coreProjectId}`,
+      recordId,
+      source: 'check_plan',
+      planner: 'hosted',
+      outcome: 'reported',
+      ...over,
+    });
+  const attributed = {
+    attribution: 'corpus' as const,
+    hostedCell: 'author:leaf',
+    planpyCell: 'leaf.author',
+    triagedBy: verdictBy,
+    triagedAt: attributedAt,
+  };
+
+  const built = record({
+    id: 'rec_built',
+    planId: 'plan_rec_built',
+    planTitle: 'Invoice export',
+    planSessionId: 'ps_rec_built',
+    jobId: 'job_rec_built',
+    authorModel: 'claude-opus-5-5',
+    verdictState: 'attributed',
+    verdictBy,
+    verdictAt: attributedAt,
+    runThroughAnswer: 'THRU',
+    createdAt: daysAgo(1),
+  });
+  const stops = record({
+    id: 'rec_stops',
+    planId: 'plan_rec_stops',
+    planTitle: 'Search rework',
+    verdictState: 'open',
+    runThroughAnswer: 'STOPS',
+    runThroughStopCards: ['BILL-42', 'BILL-17'],
+    createdAt: daysAgo(2),
+  });
+  const silent = record({
+    id: 'rec_silent',
+    planId: 'plan_rec_silent',
+    planTitle: 'Onboarding checklist',
+    verdictState: 'attributed',
+    verdictBy,
+    verdictAt: attributedAt,
+    runThroughAnswer: null,
+    createdAt: daysAgo(3),
+  });
+
+  return {
+    records: [built, stops, silent],
+    findings: [
+      finding(built.id, {
+        id: 'pf_rec_kept',
+        site: 'leaf:BILL-5',
+        ...attributed,
+        why: 'The pack never says to read a path before naming it.',
+        bugKey: keys.keptKey,
+        createdAt: daysAgo(1),
+      }),
+      finding(built.id, {
+        id: 'pf_rec_empty',
+        site: 'story:BILL-3',
+        prediction: 'SETTLES',
+        ...attributed,
+        attribution: 'model',
+        why: 'The model merged two stories the plan kept apart.',
+        createdAt: daysAgo(1),
+      }),
+      finding(stops.id, {
+        id: 'pf_rec_open_a',
+        site: 'leaf:BILL-42',
+        attribution: 'code',
+        why: 'Seeded before the verdict: never drawn on an open record.',
+        bugKey: keys.keptKey,
+        createdAt: daysAgo(2),
+      }),
+      finding(stops.id, { id: 'pf_rec_open_b', site: 'leaf:BILL-17', createdAt: daysAgo(2) }),
+      finding(silent.id, {
+        id: 'pf_rec_dup_a',
+        site: 'leaf:BILL-8',
+        ...attributed,
+        why: 'Both leaves restated one rule.',
+        bugKey: keys.sharedKey,
+        createdAt: daysAgo(3),
+      }),
+      finding(silent.id, {
+        id: 'pf_rec_dup_b',
+        site: 'leaf:BILL-9',
+        ...attributed,
+        why: 'Both leaves restated one rule.',
+        bugKey: keys.sharedKey,
+        createdAt: daysAgo(3),
+      }),
+    ],
   };
 }
 

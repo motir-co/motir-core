@@ -11298,7 +11298,9 @@
             "retire": "Ha ritirato un modello iniziale"
           },
           "planner_finding": {
-            "triage": "Ha classificato un rilievo del pianificatore"
+            "triage": "Ha classificato un rilievo del pianificatore",
+            "record": "Ha registrato un rapporto di rilievi del pianificatore",
+            "verdict": "Ha dato il verdetto su un rapporto di rilievi del pianificatore"
           },
           "model_serving": {
             "set": "Ha cambiato quale fornitore eroga un modello"
@@ -12277,7 +12279,8 @@
       "view": {
         "label": "Vista",
         "grouped": "Raggruppata",
-        "all": "Tutti i rilievi"
+        "all": "Tutti i rilievi",
+        "records": "Registri"
       },
       "card": {
         "title": "Rilievi",
@@ -12416,7 +12419,8 @@
         "baseline": "Base del codice",
         "recorded": "Registrato",
         "triagedBy": "Ultimo smistamento di {who} · {when}",
-        "lessonLink": "Apri la lezione in Lezioni di pianificazione"
+        "lessonLink": "Apri la lezione in Lezioni di pianificazione",
+        "record": "Registro"
       },
       "cost": {
         "title": "Costo di revisione e riparazione",
@@ -12492,10 +12496,131 @@
       },
       "noop": "Già aggiornato. Qualcuno ha appena modificato questo rilievo, quindi non c’era nulla da cambiare e non è stato registrato nulla.",
       "a11y": {
-        "viewGroup": "Mostra i rilievi raggruppati per difetto o uno per uno",
+        "viewGroup": "Mostra i rilievi raggruppati per difetto, uno per uno o come un registro per controllo del piano",
         "captionGroups": "Rilievi raggruppati per difetto",
         "captionAll": "Tutti i rilievi",
         "detailRegion": "Dettaglio del rilievo"
+      },
+      "records": {
+        "title": "Registri",
+        "subtitle": "Una riga per controllo del piano, dal più recente.",
+        "caption": "Registri dei rilievi del pianificatore",
+        "col": {
+          "created": "Creato",
+          "planner": "Pianificatore",
+          "source": "Origine",
+          "plan": "Piano",
+          "verdict": "Verdetto",
+          "findings": "Rilievi",
+          "attributed": "Attribuiti",
+          "open": "Apri"
+        },
+        "row": {
+          "open": "Apri il registro {id}"
+        },
+        "verdict": {
+          "open": "Aperto",
+          "attributed": "Attribuito"
+        },
+        "filter": {
+          "label": "Filtra i registri",
+          "verdict": "Stato del verdetto",
+          "verdictAll": "Tutti",
+          "planner": "Pianificatore",
+          "plannerAny": "Qualsiasi pianificatore",
+          "source": "Origine",
+          "sourceAny": "Qualsiasi origine",
+          "sheetTitle": "Filtra i registri"
+        },
+        "empty": {
+          "title": "Ancora nessun registro",
+          "body": "Si conserva un registro ogni volta che il controllo finale del pianificatore ospitato o lo skill check plan esamina un piano. Finora non ne è stato conservato nessuno."
+        },
+        "noMatch": {
+          "title": "Nessun registro corrisponde a questi filtri",
+          "body": "Rimuovi un filtro, oppure cancellali tutti.",
+          "action": "Cancella i filtri"
+        },
+        "loading": "Caricamento dei registri",
+        "unavailable": {
+          "title": "Impossibile caricare i registri",
+          "body": "Il servizio di pianificazione (motir-ai) non ha risposto, quindi non viene mostrato alcun registro. È un errore di caricamento: non è cambiato nulla, e non significa che non ci siano registri.",
+          "retry": "Riprova"
+        }
+      },
+      "record": {
+        "crumb": "Operazioni · Rilievi del pianificatore · Registro",
+        "back": "Torna ai registri",
+        "title": "Registro",
+        "context": "Contesto del piano",
+        "field": {
+          "plan": "Piano",
+          "planSession": "Sessione di pianificazione",
+          "job": "Job",
+          "model": "Modello",
+          "baseline": "Base del codice",
+          "verdict": "Verdetto",
+          "none": "Nessuno"
+        },
+        "verdictBy": "Attribuito da {who} · {when}",
+        "findings": {
+          "title": "Rilievi in questo registro",
+          "col": {
+            "site": "Posizione",
+            "attribution": "Attribuzione",
+            "why": "Motivo",
+            "hosted": "Pianificatore ospitato",
+            "planpy": "plan.py"
+          },
+          "empty": "Questo registro non contiene rilievi."
+        },
+        "command": {
+          "intro": "Dai il verdetto a questo registro dal tuo agente di programmazione:",
+          "line": "motir check planner finding {id}",
+          "copy": "Copia",
+          "copyLabel": "Copia il comando",
+          "copied": "Comando copiato"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "Esecuzione completa",
+          "answer": {
+            "thru": "Arriva fino in fondo",
+            "stops": "Non arriva fino in fondo",
+            "none": "Nessuna risposta registrata"
+          },
+          "hint": {
+            "thru": "Il controllo che ha conservato questo registro ha previsto che un’esecuzione potrebbe portare questo piano fino in fondo. I suoi rilievi sono elencati qui sotto.",
+            "stops": "Il controllo ha previsto che un’esecuzione si fermerebbe sugli elementi di lavoro qui sotto. Correggi quegli elementi, poi esegui di nuovo il controllo.",
+            "none": "Nessun controllo ha inviato una risposta per questo registro, quindi non c’è nulla da leggere. Il verdetto non cambia le cose: la risposta è del controllo, non dell’agente."
+          },
+          "cards": {
+            "label": "Elementi di lavoro da correggere",
+            "none": "Nessun elemento registrato"
+          },
+          "a11y": {
+            "region": "Esecuzione completa: se un’esecuzione potrebbe portare questo piano fino in fondo"
+          }
+        },
+        "findingKey": {
+          "column": "Bug di pianificazione",
+          "labelFinding": "· {site}",
+          "hint": "Una chiave come MOTIR-123, nel progetto di questo registro.",
+          "link": "Collega",
+          "linking": "Collegamento…",
+          "remove": "Rimuovi",
+          "removing": "Rimozione…",
+          "removeFinding": "Rimuovi la chiave del bug di pianificazione da {site}",
+          "notAWorkItem": "Non collegato: {key} non è un elemento di lavoro del progetto di questo registro. Non è stato scritto nulla.",
+          "linked": "{key} collegato.",
+          "removed": "Chiave del bug di pianificazione rimossa.",
+          "unchanged": "Già collegato a {key}. Non è cambiato nulla.",
+          "openRecord": "Le chiavi dei bug di pianificazione si collegano quando questo registro ha un verdetto.",
+          "a11y": {
+            "empty": "Nessuna chiave del bug di pianificazione"
+          }
+        }
       }
     },
     "usage": {

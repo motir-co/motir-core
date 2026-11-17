@@ -335,6 +335,21 @@ export default defineConfig({
         'app/api/public/ideas/route.ts',
         'app/api/public/ideas/\\[slug\\]/route.ts',
         'app/api/public/ideas/tags/route.ts',
+        // Story MOTIR-11455 · MOTIR-11458 — the planner-findings token door: the shared
+        // token half, its gate, the route transport, the plan read and the five routes.
+        // MEASURED on this branch against `tests/api/platformPlannerFindingsRoutes`,
+        // `tests/platform/platformPlanRepository`, `tests/platform/platformTokenBoundary`
+        // and `tests/platform/ideasGate`: every file 100% lines and functions, ≥ 95%
+        // branches. Pinned at the floor below.
+        'lib/platform/staffTokenPrincipal.ts',
+        'lib/platform/plannerFindingsGate.ts',
+        'lib/plannerFindings/routeErrors.ts',
+        'lib/plannerFindings/schemas.ts',
+        'lib/repositories/platformPlanRepository.ts',
+        'app/api/platform/planner-findings/\\[findingId\\]/route.ts',
+        'app/api/platform/planner-findings/records/route.ts',
+        'app/api/platform/planner-findings/records/\\[id\\]/route.ts',
+        'app/api/platform/planner-findings/records/\\[id\\]/verdict/route.ts',
         'lib/services/manualWorkGateService.ts',
         // Story MOTIR-7220 · MOTIR-7234 — the planner-model story's motir-core
         // gate: the console seam (service + mapper), the one plan-read redaction
@@ -4577,6 +4592,60 @@ export default defineConfig({
           statements: 90,
         },
         'lib/platform/ideasGate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/platform/staffTokenPrincipal.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/platform/plannerFindingsGate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/plannerFindings/routeErrors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/plannerFindings/schemas.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/platformPlanRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/planner-findings/\\[findingId\\]/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/planner-findings/records/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/planner-findings/records/\\[id\\]/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/planner-findings/records/\\[id\\]/verdict/route.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

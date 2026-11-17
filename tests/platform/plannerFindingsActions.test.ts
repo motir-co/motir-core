@@ -6,6 +6,7 @@ import {
   MissingAuditReasonError,
   NotPlatformStaffError,
   PlannerFindingInvalidError,
+  PlannerFindingKeyRefusedError,
   PlannerFindingLessonNotLinkedError,
   PlannerFindingUnchangedError,
 } from '@/lib/platform/errors';
@@ -95,6 +96,7 @@ const SUPPORT: PlatformPrincipal = { userId: 'u_sp', email: 'sp@moooon.net', rol
 
 const FINDING: PlannerFindingRowDTO = {
   id: 'pf_1',
+  recordId: 'rec_1',
   source: 'in_loop',
   planner: 'hosted',
   attribution: 'code',
@@ -128,9 +130,9 @@ const ACTS: Act[] = [
     args: ['pf_1', ATTRIBUTION],
   },
   {
-    name: 'recordPlannerFindingBugKeyAction',
+    name: 'setPlannerFindingBugKeyAction',
     method: 'recordBugKey',
-    run: () => actions.recordPlannerFindingBugKeyAction('pf_1', ' motir-42 '),
+    run: () => actions.setPlannerFindingBugKeyAction('pf_1', ' motir-42 '),
     args: ['pf_1', ' motir-42 '],
   },
   {
@@ -220,6 +222,18 @@ describe('the refusal mapping', () => {
     [
       'PlannerFindingInvalidError',
       new PlannerFindingInvalidError('bad', 'bugKey'),
+      { code: 'INVALID' },
+      false,
+    ],
+    [
+      'PlannerFindingKeyRefusedError',
+      new PlannerFindingKeyRefusedError('not_a_work_item'),
+      { code: 'NOT_A_WORK_ITEM' },
+      false,
+    ],
+    [
+      'PlannerFindingKeyRefusedError (record_open)',
+      new PlannerFindingKeyRefusedError('record_open'),
       { code: 'INVALID' },
       false,
     ],

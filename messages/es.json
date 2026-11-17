@@ -11298,7 +11298,9 @@
             "retire": "Retiró una plantilla inicial"
           },
           "planner_finding": {
-            "triage": "Clasificó un hallazgo del planificador"
+            "triage": "Clasificó un hallazgo del planificador",
+            "record": "Registró un informe de hallazgos del planificador",
+            "verdict": "Dio su veredicto a un informe de hallazgos del planificador"
           },
           "model_serving": {
             "set": "Cambió qué proveedor sirve un modelo"
@@ -12277,7 +12279,8 @@
       "view": {
         "label": "Vista",
         "grouped": "Agrupada",
-        "all": "Todos los hallazgos"
+        "all": "Todos los hallazgos",
+        "records": "Registros"
       },
       "card": {
         "title": "Hallazgos",
@@ -12416,7 +12419,8 @@
         "baseline": "Base del código",
         "recorded": "Registrado",
         "triagedBy": "Clasificado por última vez por {who} · {when}",
-        "lessonLink": "Abrir la lección en Lecciones de planificación"
+        "lessonLink": "Abrir la lección en Lecciones de planificación",
+        "record": "Registro"
       },
       "cost": {
         "title": "Coste de revisión y reparación",
@@ -12492,10 +12496,131 @@
       },
       "noop": "Ya está al día. Alguien cambió este hallazgo hace un momento, así que no había nada que cambiar y no se registró nada.",
       "a11y": {
-        "viewGroup": "Mostrar los hallazgos agrupados por defecto o uno por uno",
+        "viewGroup": "Mostrar los hallazgos agrupados por defecto, uno por uno o como un registro por revisión de plan",
         "captionGroups": "Hallazgos agrupados por defecto",
         "captionAll": "Todos los hallazgos",
         "detailRegion": "Detalle del hallazgo"
+      },
+      "records": {
+        "title": "Registros",
+        "subtitle": "Una fila por revisión de plan, los más recientes primero.",
+        "caption": "Registros de hallazgos del planificador",
+        "col": {
+          "created": "Creado",
+          "planner": "Planificador",
+          "source": "Origen",
+          "plan": "Plan",
+          "verdict": "Veredicto",
+          "findings": "Hallazgos",
+          "attributed": "Atribuidos",
+          "open": "Abrir"
+        },
+        "row": {
+          "open": "Abrir el registro {id}"
+        },
+        "verdict": {
+          "open": "Abierto",
+          "attributed": "Atribuido"
+        },
+        "filter": {
+          "label": "Filtrar registros",
+          "verdict": "Estado del veredicto",
+          "verdictAll": "Todos",
+          "planner": "Planificador",
+          "plannerAny": "Cualquier planificador",
+          "source": "Origen",
+          "sourceAny": "Cualquier origen",
+          "sheetTitle": "Filtrar registros"
+        },
+        "empty": {
+          "title": "Aún no hay registros",
+          "body": "Se guarda un registro cada vez que la revisión final del planificador alojado o el skill check plan revisa un plan. Todavía no se ha guardado ninguno."
+        },
+        "noMatch": {
+          "title": "Ningún registro coincide con estos filtros",
+          "body": "Quita un filtro o bórralos todos.",
+          "action": "Borrar filtros"
+        },
+        "loading": "Cargando registros",
+        "unavailable": {
+          "title": "No se pudieron cargar los registros",
+          "body": "El servicio de planificación (motir-ai) no respondió, así que no se muestra ningún registro. Es un error de carga: no ha cambiado nada y no significa que no haya registros.",
+          "retry": "Reintentar"
+        }
+      },
+      "record": {
+        "crumb": "Operaciones · Hallazgos del planificador · Registro",
+        "back": "Volver a los registros",
+        "title": "Registro",
+        "context": "Contexto del plan",
+        "field": {
+          "plan": "Plan",
+          "planSession": "Sesión de planificación",
+          "job": "Trabajo",
+          "model": "Modelo",
+          "baseline": "Base del código",
+          "verdict": "Veredicto",
+          "none": "Ninguno"
+        },
+        "verdictBy": "Atribuido por {who} · {when}",
+        "findings": {
+          "title": "Hallazgos de este registro",
+          "col": {
+            "site": "Ubicación",
+            "attribution": "Atribución",
+            "why": "Motivo",
+            "hosted": "Planificador alojado",
+            "planpy": "plan.py"
+          },
+          "empty": "Este registro no contiene hallazgos."
+        },
+        "command": {
+          "intro": "Da su veredicto a este registro desde tu agente de código:",
+          "line": "motir check planner finding {id}",
+          "copy": "Copiar",
+          "copyLabel": "Copiar el comando",
+          "copied": "Comando copiado"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "Ejecución completa",
+          "answer": {
+            "thru": "Se completa",
+            "stops": "No se completa",
+            "none": "No hay respuesta registrada"
+          },
+          "hint": {
+            "thru": "La revisión que guardó este registro predijo que una ejecución podría llevar este plan hasta el final. Sus hallazgos aparecen abajo.",
+            "stops": "La revisión predijo que una ejecución se detendría en los elementos de trabajo de abajo. Corrige esos elementos y vuelve a ejecutar la revisión.",
+            "none": "Ninguna revisión envió una respuesta para este registro, así que no hay nada que leer. Su veredicto no cambia eso: la respuesta es de la revisión, no del agente."
+          },
+          "cards": {
+            "label": "Elementos de trabajo por corregir",
+            "none": "Ningún elemento registrado"
+          },
+          "a11y": {
+            "region": "Ejecución completa: si una ejecución podría llevar este plan hasta el final"
+          }
+        },
+        "findingKey": {
+          "column": "Bug de planificación",
+          "labelFinding": "· {site}",
+          "hint": "Una clave como MOTIR-123, del proyecto de este registro.",
+          "link": "Vincular",
+          "linking": "Vinculando…",
+          "remove": "Quitar",
+          "removing": "Quitando…",
+          "removeFinding": "Quitar la clave del bug de planificación de {site}",
+          "notAWorkItem": "No vinculado: {key} no es un elemento de trabajo del proyecto de este registro. No se escribió nada.",
+          "linked": "{key} vinculado.",
+          "removed": "Se quitó la clave del bug de planificación.",
+          "unchanged": "Ya está vinculado a {key}. No cambió nada.",
+          "openRecord": "Las claves de bugs de planificación se vinculan cuando este registro tiene un veredicto.",
+          "a11y": {
+            "empty": "Sin clave de bug de planificación"
+          }
+        }
       }
     },
     "usage": {

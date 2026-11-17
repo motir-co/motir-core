@@ -80,6 +80,7 @@ const SUPPORT: PlatformPrincipal = { userId: 'u_sp', email: 'sp@moooon.net', rol
 function row(over: Partial<PlannerFindingRowDTO> = {}): PlannerFindingRowDTO {
   return {
     id: 'pf_1',
+    recordId: 'rec_1',
     source: 'in_loop',
     planner: 'hosted',
     attribution: 'corpus',
@@ -469,8 +470,27 @@ describe('the view switch', () => {
     fireEvent.keyDown(all, { key: 'ArrowLeft' });
     expect(nav.push).toHaveBeenLastCalledWith('/admin/planner-findings');
     fireEvent.keyDown(all, { key: 'ArrowDown' });
-    expect(nav.push).toHaveBeenLastCalledWith('/admin/planner-findings');
+    expect(nav.push).toHaveBeenLastCalledWith('/admin/planner-findings?view=records');
     fireEvent.keyDown(all, { key: 'Enter' });
     expect(nav.push).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers Records third; view=records checks it and the arrows wrap', () => {
+    nav.search = 'view=records&verdict=open&cursor=c2';
+    renderWithIntl(<FindingsViewSwitch />);
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map((r) => r.textContent)).toEqual([
+      pf.view.grouped,
+      pf.view.all,
+      pf.view.records,
+    ]);
+    const records = screen.getByRole('radio', { name: pf.view.records });
+    expect(records.getAttribute('aria-checked')).toBe('true');
+    expect(records.getAttribute('tabindex')).toBe('0');
+    expect(records.getAttribute('href')).toBe('/admin/planner-findings?verdict=open&view=records');
+    fireEvent.keyDown(records, { key: 'ArrowRight' });
+    expect(nav.push).toHaveBeenLastCalledWith('/admin/planner-findings?verdict=open');
+    fireEvent.keyDown(records, { key: 'ArrowUp' });
+    expect(nav.push).toHaveBeenLastCalledWith('/admin/planner-findings?verdict=open&view=all');
   });
 });

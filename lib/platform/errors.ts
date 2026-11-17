@@ -760,6 +760,24 @@ export class PlannerFindingInvalidError extends Error {
   }
 }
 
+/** Why a write of one finding's planning-bug key was refused (MOTIR-11590). */
+export type PlannerFindingKeyRefusal = 'not_a_work_item' | 'record_open';
+
+/**
+ * A finding's planning-bug key was refused with nothing written (Story
+ * MOTIR-11455 · MOTIR-11590): the key names no work item in the finding's
+ * record's own project, or the record has no verdict yet. A principal below the
+ * route's level never sees this — it gets `NotPlatformStaffError`'s 404.
+ */
+export class PlannerFindingKeyRefusedError extends Error {
+  readonly code = 'FINDING_KEY_REFUSED';
+
+  constructor(readonly reason: PlannerFindingKeyRefusal) {
+    super(`planner finding bug key refused: ${reason}`);
+    this.name = 'PlannerFindingKeyRefusedError';
+  }
+}
+
 /**
  * A promote created the lesson but could not record it on the finding. The
  * lesson EXISTS: the caller must say so and must not create it again — the

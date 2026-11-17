@@ -22,9 +22,11 @@ import {
 } from '@/lib/mappers/plannerFindingMappers';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { type Prisma } from '@/generated/prisma/client';
-import { withPlatformWrite } from '@/lib/platform/context';
+import { withPlatformRead, withPlatformWrite } from '@/lib/platform/context';
+import { platformPlanRepository } from '@/lib/repositories/platformPlanRepository';
 import {
   PlannerFindingInvalidError,
+  PlannerFindingKeyRefusedError,
   PlannerFindingLessonNotLinkedError,
   PlannerFindingUnchangedError,
 } from '@/lib/platform/errors';
@@ -51,7 +53,9 @@ import {
 // exists: `PlannerFindingLessonNotLinkedError` carries both ids, nothing
 // retries the create, nothing deletes the lesson.
 //
-// It creates no work item and files no bug: a bug key is a string an admin typed.
+// It creates no work item and files no bug. A bug key is what an admin typed,
+// resolved as a work item in the finding's own project before it is written
+// (MOTIR-11590), the same rule the platform route's key write applies.
 
 /** The promote form, as the triage controls submit it. */
 export interface PlannerFindingPromoteForm {
@@ -212,7 +216,12 @@ export const plannerFindingsTriageService = {
     });
   },
 
-  /** Record the key of the planning bug an admin filed by hand. Files nothing. */
+  /**
+   * Record the key of the planning bug an admin filed by hand. Files nothing.
+   *
+   * @throws PlannerFindingKeyRefusedError `not_a_work_item` when the key names no
+   *   work item in the finding's own project — nothing is forwarded then.
+   */
   async recordBugKey(
     _principal: PlatformPrincipal,
     findingId: string,
@@ -223,7 +232,23 @@ export const plannerFindingsTriageService = {
     if (!BUG_KEY.test(key)) {
       throw new PlannerFindingInvalidError('bugKey must look like MOTIR-123', 'bugKey');
     }
-    return plainWrite(actor, findingId, { kind: 'bug', bugKey: key });
+    // The finding names its own project; the key is resolved there and never in
+    // the caller's, so a key from another project or tenant reads as no work item.
+    const item = await withPlatformRead(
+      actor,
+      {
+        action: 'estate.read',
+        targetKind: 'platform',
+        targetId: findingId,
+        metadata: { surface: 'planner_finding.bug_key' },
+      },
+      async (tx) => {
+        const finding = await getPlannerFinding(findingId);
+        return platformPlanRepository.findWorkItemByIdentifier(key, finding.coreProjectId, tx);
+      },
+    );
+    if (!item) throw new PlannerFindingKeyRefusedError('not_a_work_item');
+    return plainWrite(actor, findingId, { kind: 'bug', bugKey: item.identifier });
   },
 
   /** Hide the finding from the default list; the note, when given, is the reason. */

@@ -11298,7 +11298,9 @@
             "retire": "A retiré un modèle de départ"
           },
           "planner_finding": {
-            "triage": "A trié un constat du planificateur"
+            "triage": "A trié un constat du planificateur",
+            "record": "A enregistré un rapport de constats du planificateur",
+            "verdict": "A rendu le verdict d'un rapport de constats du planificateur"
           },
           "model_serving": {
             "set": "A changé le fournisseur qui sert un modèle"
@@ -12277,7 +12279,8 @@
       "view": {
         "label": "Vue",
         "grouped": "Groupée",
-        "all": "Tous les constats"
+        "all": "Tous les constats",
+        "records": "Enregistrements"
       },
       "card": {
         "title": "Constats",
@@ -12416,7 +12419,8 @@
         "baseline": "Base de code",
         "recorded": "Enregistré",
         "triagedBy": "Dernier tri par {who} · {when}",
-        "lessonLink": "Ouvrir la leçon dans Leçons de planification"
+        "lessonLink": "Ouvrir la leçon dans Leçons de planification",
+        "record": "Enregistrement"
       },
       "cost": {
         "title": "Coût de revue et de réparation",
@@ -12492,10 +12496,131 @@
       },
       "noop": "Déjà à jour. Quelqu’un a modifié ce constat à l’instant, il n’y avait donc rien à changer et rien n’a été journalisé.",
       "a11y": {
-        "viewGroup": "Afficher les constats groupés par défaut ou un par un",
+        "viewGroup": "Afficher les constats groupés par défaut, un par un, ou en un enregistrement par vérification de plan",
         "captionGroups": "Constats groupés par défaut",
         "captionAll": "Tous les constats",
         "detailRegion": "Détail du constat"
+      },
+      "records": {
+        "title": "Enregistrements",
+        "subtitle": "Une ligne par vérification de plan, les plus récentes d’abord.",
+        "caption": "Enregistrements des constats du planificateur",
+        "col": {
+          "created": "Créé",
+          "planner": "Planificateur",
+          "source": "Source",
+          "plan": "Plan",
+          "verdict": "Verdict",
+          "findings": "Constats",
+          "attributed": "Attribués",
+          "open": "Ouvrir"
+        },
+        "row": {
+          "open": "Ouvrir l’enregistrement {id}"
+        },
+        "verdict": {
+          "open": "Ouvert",
+          "attributed": "Attribué"
+        },
+        "filter": {
+          "label": "Filtrer les enregistrements",
+          "verdict": "État du verdict",
+          "verdictAll": "Tous",
+          "planner": "Planificateur",
+          "plannerAny": "Tout planificateur",
+          "source": "Source",
+          "sourceAny": "Toute source",
+          "sheetTitle": "Filtrer les enregistrements"
+        },
+        "empty": {
+          "title": "Aucun enregistrement pour l’instant",
+          "body": "Un enregistrement est conservé chaque fois que la vérification finale du planificateur hébergé ou le skill check plan examine un plan. Aucun n’a encore été conservé."
+        },
+        "noMatch": {
+          "title": "Aucun enregistrement ne correspond à ces filtres",
+          "body": "Retirez un filtre, ou effacez-les tous.",
+          "action": "Effacer les filtres"
+        },
+        "loading": "Chargement des enregistrements",
+        "unavailable": {
+          "title": "Impossible de charger les enregistrements",
+          "body": "Le service de planification (motir-ai) n’a pas répondu, aucun enregistrement n’est donc affiché. C’est une erreur de chargement : rien n’a changé, et cela ne signifie pas qu’il n’y a aucun enregistrement.",
+          "retry": "Réessayer"
+        }
+      },
+      "record": {
+        "crumb": "Opérations · Constats du planificateur · Enregistrement",
+        "back": "Retour aux enregistrements",
+        "title": "Enregistrement",
+        "context": "Contexte du plan",
+        "field": {
+          "plan": "Plan",
+          "planSession": "Session de planification",
+          "job": "Tâche",
+          "model": "Modèle",
+          "baseline": "Base de code",
+          "verdict": "Verdict",
+          "none": "Aucun"
+        },
+        "verdictBy": "Attribué par {who} · {when}",
+        "findings": {
+          "title": "Constats de cet enregistrement",
+          "col": {
+            "site": "Emplacement",
+            "attribution": "Attribution",
+            "why": "Raison",
+            "hosted": "Planificateur hébergé",
+            "planpy": "plan.py"
+          },
+          "empty": "Cet enregistrement ne contient aucun constat."
+        },
+        "command": {
+          "intro": "Donnez son verdict à cet enregistrement depuis votre agent de code :",
+          "line": "motir check planner finding {id}",
+          "copy": "Copier",
+          "copyLabel": "Copier la commande",
+          "copied": "Commande copiée"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "Exécution complète",
+          "answer": {
+            "thru": "Va jusqu’au bout",
+            "stops": "Ne va pas jusqu’au bout",
+            "none": "Aucune réponse enregistrée"
+          },
+          "hint": {
+            "thru": "La vérification qui a conservé cet enregistrement a prédit qu’une exécution pourrait mener ce plan jusqu’au bout. Ses constats sont listés ci-dessous.",
+            "stops": "La vérification a prédit qu’une exécution s’arrêterait sur les éléments de travail ci-dessous. Corrigez ces éléments, puis relancez la vérification.",
+            "none": "Aucune vérification n’a envoyé de réponse pour cet enregistrement, il n’y a donc rien à lire. Son verdict n’y change rien : la réponse vient de la vérification, pas de l’agent."
+          },
+          "cards": {
+            "label": "Éléments de travail à corriger",
+            "none": "Aucun élément enregistré"
+          },
+          "a11y": {
+            "region": "Exécution complète : si une exécution pourrait mener ce plan jusqu’au bout"
+          }
+        },
+        "findingKey": {
+          "column": "Bug de planification",
+          "labelFinding": "· {site}",
+          "hint": "Une clé comme MOTIR-123, dans le projet de cet enregistrement.",
+          "link": "Lier",
+          "linking": "Liaison…",
+          "remove": "Retirer",
+          "removing": "Retrait…",
+          "removeFinding": "Retirer la clé du bug de planification de {site}",
+          "notAWorkItem": "Non lié — {key} n’est pas un élément de travail du projet de cet enregistrement. Rien n’a été écrit.",
+          "linked": "{key} lié.",
+          "removed": "La clé du bug de planification a été retirée.",
+          "unchanged": "Déjà lié à {key}. Rien n’a changé.",
+          "openRecord": "Les clés de bugs de planification se lient une fois que cet enregistrement a un verdict.",
+          "a11y": {
+            "empty": "Aucune clé de bug de planification"
+          }
+        }
       }
     },
     "usage": {

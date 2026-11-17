@@ -11292,7 +11292,9 @@
             "retire": "스타터를 폐기함"
           },
           "planner_finding": {
-            "triage": "계획 도구 발견 사항을 분류함"
+            "triage": "계획 도구 발견 사항을 분류함",
+            "record": "계획 도구 발견 기록을 저장함",
+            "verdict": "계획 도구 발견 기록에 판정을 내림"
           },
           "model_serving": {
             "set": "모델을 제공하는 공급자를 변경함"
@@ -12271,7 +12273,8 @@
       "view": {
         "label": "보기",
         "grouped": "그룹별",
-        "all": "모든 발견 사항"
+        "all": "모든 발견 사항",
+        "records": "기록"
       },
       "card": {
         "title": "발견 사항",
@@ -12410,7 +12413,8 @@
         "baseline": "코드 기준점",
         "recorded": "기록됨",
         "triagedBy": "마지막 분류: {who} · {when}",
-        "lessonLink": "계획 교훈에서 교훈 열기"
+        "lessonLink": "계획 교훈에서 교훈 열기",
+        "record": "기록"
       },
       "cost": {
         "title": "검토 및 수리 비용",
@@ -12486,10 +12490,131 @@
       },
       "noop": "이미 최신 상태입니다. 방금 누군가 이 발견 사항을 변경해 바꿀 내용이 없었고 아무것도 기록되지 않았습니다.",
       "a11y": {
-        "viewGroup": "발견 사항을 결함별로 묶거나 하나씩 표시",
+        "viewGroup": "발견 사항을 결함별로 묶어서, 하나씩, 또는 계획 검사마다 하나의 기록으로 표시",
         "captionGroups": "결함별로 묶은 발견 사항",
         "captionAll": "모든 발견 사항",
         "detailRegion": "발견 사항 세부 정보"
+      },
+      "records": {
+        "title": "기록",
+        "subtitle": "계획 검사마다 한 행, 최신순.",
+        "caption": "계획 도구 발견 사항 기록",
+        "col": {
+          "created": "생성 시각",
+          "planner": "계획 도구",
+          "source": "출처",
+          "plan": "계획",
+          "verdict": "판정",
+          "findings": "발견 사항",
+          "attributed": "귀속됨",
+          "open": "열기"
+        },
+        "row": {
+          "open": "기록 {id} 열기"
+        },
+        "verdict": {
+          "open": "미판정",
+          "attributed": "귀속됨"
+        },
+        "filter": {
+          "label": "기록 필터",
+          "verdict": "판정 상태",
+          "verdictAll": "전체",
+          "planner": "계획 도구",
+          "plannerAny": "모든 계획 도구",
+          "source": "출처",
+          "sourceAny": "모든 출처",
+          "sheetTitle": "기록 필터"
+        },
+        "empty": {
+          "title": "아직 기록이 없습니다",
+          "body": "호스팅된 계획 도구의 최종 검사나 check plan 스킬이 계획을 검토할 때마다 기록이 하나 남습니다. 아직 남은 기록이 없습니다."
+        },
+        "noMatch": {
+          "title": "이 필터와 일치하는 기록이 없습니다",
+          "body": "필터를 하나 제거하거나 모두 지우세요.",
+          "action": "필터 지우기"
+        },
+        "loading": "기록 불러오는 중",
+        "unavailable": {
+          "title": "기록을 불러올 수 없습니다",
+          "body": "계획 서비스(motir-ai)가 응답하지 않아 기록을 표시하지 않습니다. 불러오기 오류이며, 아무것도 변경되지 않았고 기록이 없다는 뜻도 아닙니다.",
+          "retry": "다시 시도"
+        }
+      },
+      "record": {
+        "crumb": "운영 · 계획 도구 발견 사항 · 기록",
+        "back": "기록으로 돌아가기",
+        "title": "기록",
+        "context": "계획 맥락",
+        "field": {
+          "plan": "계획",
+          "planSession": "계획 세션",
+          "job": "작업",
+          "model": "모델",
+          "baseline": "코드 기준점",
+          "verdict": "판정",
+          "none": "없음"
+        },
+        "verdictBy": "{who}님이 귀속 · {when}",
+        "findings": {
+          "title": "이 기록의 발견 사항",
+          "col": {
+            "site": "위치",
+            "attribution": "귀속",
+            "why": "이유",
+            "hosted": "호스팅된 계획 도구",
+            "planpy": "plan.py"
+          },
+          "empty": "이 기록에는 발견 사항이 없습니다."
+        },
+        "command": {
+          "intro": "코딩 에이전트에서 이 기록의 판정을 내리세요:",
+          "line": "motir check planner finding {id}",
+          "copy": "복사",
+          "copyLabel": "명령 복사",
+          "copied": "명령을 복사했습니다"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "끝까지 실행 여부",
+          "answer": {
+            "thru": "끝까지 실행됨",
+            "stops": "끝까지 실행되지 않음",
+            "none": "기록된 답 없음"
+          },
+          "hint": {
+            "thru": "이 기록을 남긴 검사는 실행이 이 계획을 끝까지 진행할 수 있다고 예측했습니다. 그 발견 사항은 아래에 나와 있습니다.",
+            "stops": "검사는 실행이 아래 작업 항목에서 멈출 것이라고 예측했습니다. 그 작업 항목을 고친 뒤 검사를 다시 실행하세요.",
+            "none": "이 기록에 답을 보낸 검사가 없으므로 읽을 답이 없습니다. 판정으로 이것이 바뀌지는 않습니다. 답은 에이전트가 아니라 검사의 것입니다."
+          },
+          "cards": {
+            "label": "고칠 작업 항목",
+            "none": "기록된 작업 항목 없음"
+          },
+          "a11y": {
+            "region": "끝까지 실행 여부: 실행이 이 계획을 끝까지 진행할 수 있는지"
+          }
+        },
+        "findingKey": {
+          "column": "계획 버그",
+          "labelFinding": "· {site}",
+          "hint": "MOTIR-123 같은 키로, 이 기록의 프로젝트에 있어야 합니다.",
+          "link": "연결",
+          "linking": "연결 중…",
+          "remove": "제거",
+          "removing": "제거 중…",
+          "removeFinding": "{site}에서 계획 버그 키 제거",
+          "notAWorkItem": "연결되지 않음 — {key}은(는) 이 기록의 프로젝트에 있는 작업 항목이 아닙니다. 아무것도 기록되지 않았습니다.",
+          "linked": "{key}을(를) 연결했습니다.",
+          "removed": "계획 버그 키를 제거했습니다.",
+          "unchanged": "이미 {key}에 연결되어 있습니다. 변경된 것이 없습니다.",
+          "openRecord": "계획 버그 키는 이 기록에 판정이 내려진 뒤에 연결됩니다.",
+          "a11y": {
+            "empty": "계획 버그 키 없음"
+          }
+        }
       }
     },
     "usage": {

@@ -5,6 +5,10 @@ import type {
   RawPlannerFindingGroup,
   RawPlannerFindingGroupPage,
   RawPlannerFindingPage,
+  RawPlannerFindingRecord,
+  RawPlannerFindingRecordPage,
+  RawPlannerFindingRecordSummary,
+  RawPlannerFindingRecordWithFindings,
   RawPlannerFindingRetention,
 } from '@/lib/ai/motirAiClient';
 import type {
@@ -14,6 +18,11 @@ import type {
   PlannerFindingGroupListDTO,
   PlannerFindingGroupRowDTO,
   PlannerFindingListDTO,
+  PlannerFindingRecordDTO,
+  PlannerFindingRecordDetailDTO,
+  PlannerFindingRecordFindingDTO,
+  PlannerFindingRecordListDTO,
+  PlannerFindingRecordRowDTO,
   PlannerFindingRetentionDTO,
   PlannerFindingRowDTO,
   PlannerFindingTriageInput,
@@ -26,6 +35,7 @@ import type {
 export function toPlannerFindingRowDTO(raw: RawPlannerFinding): PlannerFindingRowDTO {
   return {
     id: raw.id,
+    recordId: raw.recordId ?? '',
     source: raw.source,
     planner: raw.planner,
     attribution: raw.attribution ?? 'unattributed',
@@ -99,6 +109,75 @@ export function toPlannerFindingGroupListDTO(
     groups: raw.groups.map(toPlannerFindingGroupRowDTO),
     nextCursor: raw.nextCursor,
     retention: toRetentionDTO(raw.retention),
+  };
+}
+
+// ── Records (Story MOTIR-11455 · MOTIR-11463) ───────────────────────────────
+// The answer, the stop-card list and each finding's `bugKey` cross unchanged: a
+// null answer stays null, an empty list stays empty, a key is passed as text.
+
+export function toPlannerFindingRecordDTO(raw: RawPlannerFindingRecord): PlannerFindingRecordDTO {
+  return {
+    id: raw.id,
+    source: raw.source,
+    planner: raw.planner,
+    planId: raw.planId,
+    planTitle: raw.planTitle,
+    planSessionId: raw.planSessionId,
+    jobId: raw.jobId,
+    authorModel: raw.authorModel,
+    baselineBranch: raw.baselineBranch,
+    baselineCommit: raw.baselineCommit,
+    verdictState: raw.verdictState,
+    verdictBy: raw.verdictBy,
+    verdictAt: raw.verdictAt,
+    runThroughAnswer: raw.runThroughAnswer,
+    runThroughStopCards: [...raw.runThroughStopCards],
+    createdAt: raw.createdAt,
+  };
+}
+
+export function toPlannerFindingRecordRowDTO(
+  raw: RawPlannerFindingRecordSummary,
+): PlannerFindingRecordRowDTO {
+  return {
+    ...toPlannerFindingRecordDTO(raw),
+    findingCount: raw.findingCount,
+    attributedCount: raw.attributedCount,
+  };
+}
+
+export function toPlannerFindingRecordFindingDTO(
+  raw: RawPlannerFinding,
+): PlannerFindingRecordFindingDTO {
+  return {
+    id: raw.id,
+    site: raw.site,
+    prediction: raw.prediction,
+    outcome: raw.outcome,
+    attribution: raw.attribution,
+    why: raw.why,
+    hostedCell: raw.hostedCell,
+    planpyCell: raw.planpyCell,
+    bugKey: raw.bugKey,
+  };
+}
+
+export function toPlannerFindingRecordDetailDTO(
+  raw: RawPlannerFindingRecordWithFindings,
+): PlannerFindingRecordDetailDTO {
+  return {
+    record: toPlannerFindingRecordDTO(raw.record),
+    findings: raw.findings.map(toPlannerFindingRecordFindingDTO),
+  };
+}
+
+export function toPlannerFindingRecordListDTO(
+  raw: RawPlannerFindingRecordPage,
+): PlannerFindingRecordListDTO {
+  return {
+    records: raw.records.map(toPlannerFindingRecordRowDTO),
+    nextCursor: raw.nextCursor,
   };
 }
 

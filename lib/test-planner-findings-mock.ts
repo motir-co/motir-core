@@ -1,7 +1,9 @@
 // E2E boundary seam for motir-ai's PLANNER-FINDINGS admin routes (Story
 // MOTIR-10353 · MOTIR-10529): an undici intercept of `{MOTIR_AI_URL}`'s
-// `/v1/admin/planner-findings…`, `POST /v1/lessons` and `GET /v1/jobs/:id` for
-// the plan jobs the fixture names, installed by `instrumentation.ts` (through
+// `/v1/admin/planner-findings…`, the two record reads
+// `GET /v1/admin/planner-finding-records[/:id]` (Story MOTIR-11455 ·
+// MOTIR-11507), `POST /v1/lessons` and `GET /v1/jobs/:id` for the plan jobs the
+// fixture names, installed by `instrumentation.ts` (through
 // `lib/test-mock-seams.ts`) behind `E2E_TEST_PLANNER_FINDINGS=1` and dormant
 // everywhere else. The same shape as `lib/test-platform-lessons-mock.ts`.
 //
@@ -15,8 +17,13 @@
 // ⚠️ A TRANSPORT MOCK. The real `motirAiClient`, the real staff gate and the real
 // audit transaction all stay in the path. What is SIMULATED is motir-ai's own wire
 // behaviour, kept to `src/app.ts` and `src/services/plannerFindingService.ts`
-// (`listGroups`, `triageColumns`, `updateTriage`) as read on main — and nothing
-// more: no fingerprint hashing, no retention window, no date filters.
+// (`listGroups`, `triageColumns`, `updateTriage`, `listRecords`, `getRecord`) —
+// and nothing more: no fingerprint hashing, no retention window, no date filters.
+//
+// ⚠️ A RECORD'S FINDINGS ARE THE FIXTURE'S FINDINGS. A fixture record holds the
+// record's own columns only; its findings are every fixture finding whose
+// `recordId` names it, in stored order — so a key written through the finding
+// PATCH is the key the next record read answers, with no second copy to drift.
 //
 // ⚠️ THE JOB READ SHARES ITS PATH WITH THE JOBS SEAM. This seam claims a
 // `GET /v1/jobs/:id` only when the id is a key of the fixture's `jobs`, and its
@@ -42,8 +49,13 @@ import {
   type RawPlannerFindingGroup,
   type RawPlannerFindingGroupPage,
   type RawPlannerFindingPage,
+  type RawPlannerFindingRecord,
+  type RawPlannerFindingRecordPage,
+  type RawPlannerFindingRecordSummary,
+  type RawPlannerFindingRecordWithFindings,
   type RawPlannerFindingRetention,
   type RawPlannerFindingTriageResult,
+  PLANNER_FINDING_VERDICT_STATES,
 } from '@/lib/ai/motirAiClient';
 import type { ResultEnvelope } from '@/lib/ai/types';
 import type { MockAgent } from 'undici';
@@ -66,6 +78,8 @@ export interface PlannerFindingsFixture {
   /** `down` answers every route this seam owns with a 503 problem. */
   mode?: 'live' | 'down';
   findings: RawPlannerFinding[];
+  /** Plan-check records; each one's findings are the `findings` naming it by `recordId`. */
+  records?: RawPlannerFindingRecord[];
   jobs?: Record<string, PlannerFindingsFixtureJob>;
   createdLessons?: PlannerFindingsCreatedLesson[];
 }
@@ -86,6 +100,8 @@ const PAGE_MAX = 100;
 const FINDINGS_PATH = '/v1/admin/planner-findings';
 const GROUPS_PATH = '/v1/admin/planner-findings/groups';
 const FINDING_PATH = /^\/v1\/admin\/planner-findings\/([^/]+)$/;
+const RECORDS_PATH = '/v1/admin/planner-finding-records';
+const RECORD_PATH = /^\/v1\/admin\/planner-finding-records\/([^/]+)$/;
 const LESSONS_PATH = '/v1/lessons';
 const JOB_PATH = /^\/v1\/jobs\/([^/]+)$/;
 
@@ -195,7 +211,10 @@ function pageLimit(q: URLSearchParams): number {
 }
 
 /** Newest first by `createdAt`, `id` descending on a tie — motir-ai's list order. */
-function newestFirst(a: RawPlannerFinding, b: RawPlannerFinding): number {
+function newestFirst(
+  a: { createdAt: string; id: string },
+  b: { createdAt: string; id: string },
+): number {
   if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
   // Ids are unique, so the tie-break never ties.
   return a.id < b.id ? 1 : -1;
@@ -269,6 +288,49 @@ function listGroups(q: URLSearchParams): RawPlannerFindingGroupPage {
   return { groups: page, nextCursor, retention: RETENTION };
 }
 
+/** A record with its findings, in stored order — motir-ai's `getRecord`. */
+function recordWithFindings(
+  fixture: PlannerFindingsFixture,
+  record: RawPlannerFindingRecord,
+): RawPlannerFindingRecordWithFindings {
+  return { record, findings: fixture.findings.filter((f) => f.recordId === record.id) };
+}
+
+function getRecord(id: string): RawPlannerFindingRecordWithFindings {
+  const fixture = readFixture();
+  const record = (fixture.records ?? []).find((r) => r.id === id);
+  if (!record) throw new Refusal(404, 'not_found', `planner finding record ${id} not found`);
+  return recordWithFindings(fixture, record);
+}
+
+/** motir-ai's `listRecords`: newest first, filtered, each row with its two counts. */
+function listRecords(q: URLSearchParams): RawPlannerFindingRecordPage {
+  const fixture = readFixture();
+  const verdictState = member(q, 'verdictState', PLANNER_FINDING_VERDICT_STATES);
+  const planner = member(q, 'planner', PLANNER_FINDING_PLANNERS);
+  const source = member(q, 'source', PLANNER_FINDING_SOURCES);
+  const planId = q.get('planId') || undefined;
+  const kept = (fixture.records ?? [])
+    .filter(
+      (r) =>
+        (verdictState === undefined || r.verdictState === verdictState) &&
+        (planner === undefined || r.planner === planner) &&
+        (source === undefined || r.source === source) &&
+        (planId === undefined || r.planId === planId),
+    )
+    .sort(newestFirst);
+  const { page, nextCursor } = paged(kept, (r) => r.id, q);
+  const records: RawPlannerFindingRecordSummary[] = page.map((record) => {
+    const { findings } = recordWithFindings(fixture, record);
+    return {
+      ...record,
+      findingCount: findings.length,
+      attributedCount: findings.filter((f) => f.attribution !== null).length,
+    };
+  });
+  return { records, nextCursor, retention: RETENTION };
+}
+
 type TriageColumns = Partial<
   Pick<
     RawPlannerFinding,
@@ -296,6 +358,21 @@ const TRIAGE_FIELDS = [
   'note',
 ] as const;
 const TEXT_FIELDS = ['why', 'hostedCell', 'planpyCell', 'fixDirection'] as const;
+
+/**
+ * motir-ai's `requestedBugKey` (MOTIR-11589): absent leaves the key alone; null,
+ * and a blank or whitespace-only string, clear it; any other string is stored as
+ * sent. To the store a key is text — whether it names a work item is core's rule.
+ */
+function requestedBugKey(body: Record<string, unknown>): string | null | undefined {
+  const v = body['bugKey'];
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'string') {
+    throw new Refusal(400, 'validation_error', "'bugKey' must be a string or null when present");
+  }
+  return v.trim() === '' ? null : v;
+}
 
 /** A present string must be non-blank; absent is `undefined`. The strict reading. */
 function text(body: Record<string, unknown>, key: string): string | undefined {
@@ -337,29 +414,33 @@ function triageColumns(body: Record<string, unknown>): TriageColumns {
     if (v !== undefined) columns[k] = v;
   }
   const lessonId = text(body, 'lessonId');
-  const bugKey = text(body, 'bugKey');
+  const bugKey = requestedBugKey(body);
   const note = text(body, 'note');
   const status = bodyMember(body, 'status', PLANNER_FINDING_STATUSES);
   if (status === undefined) {
-    if (lessonId !== undefined || bugKey !== undefined || note !== undefined) {
+    if (lessonId !== undefined || note !== undefined) {
       throw new Refusal(
         400,
         'validation_error',
-        "'lessonId', 'bugKey' and 'note' are set with the 'status' they belong to",
+        "'lessonId' and 'note' are set with the 'status' they belong to",
       );
     }
+    // A key alone is its own fact: it sets, replaces or clears that one finding's
+    // key and touches nothing else — not the lesson id a status write would null.
+    if (bugKey !== undefined) columns.bugKey = bugKey;
     return columns;
   }
   if (status === 'promoted_to_lesson' && lessonId === undefined) {
     throw new Refusal(400, 'validation_error', "'lessonId' is required for promoted_to_lesson");
   }
-  if (status === 'filed_as_bug' && bugKey === undefined) {
+  if (status === 'filed_as_bug' && (bugKey === undefined || bugKey === null)) {
     throw new Refusal(400, 'validation_error', "'bugKey' is required for filed_as_bug");
   }
   if (lessonId !== undefined && status !== 'promoted_to_lesson') {
     throw new Refusal(400, 'validation_error', "'lessonId' belongs to promoted_to_lesson only");
   }
-  if (bugKey !== undefined && status !== 'filed_as_bug') {
+  // Any other status clears the key anyway, so only a key it would contradict is refused.
+  if (typeof bugKey === 'string' && status !== 'filed_as_bug') {
     throw new Refusal(400, 'validation_error', "'bugKey' belongs to filed_as_bug only");
   }
   if (note !== undefined && status !== 'dismissed') {
@@ -524,6 +605,22 @@ export function installPlannerFindingsBoundaryMock(agent: MockAgent): void {
       )
       .persist();
   }
+
+  // GET /v1/admin/planner-finding-records — one cursor page of records, newest first.
+  pool
+    .intercept({ path: (p: string) => pathOf(p) === RECORDS_PATH, method: 'GET' })
+    .reply<object>((req) => answer({ ...req, method: 'GET' }, (_p, q) => ok(listRecords(q))))
+    .persist();
+
+  // GET /v1/admin/planner-finding-records/:id — one record with every finding.
+  pool
+    .intercept({ path: (p: string) => RECORD_PATH.test(pathOf(p)), method: 'GET' })
+    .reply<object>((req) =>
+      answer({ ...req, method: 'GET' }, (path) =>
+        ok(getRecord(decodeURIComponent(path.match(RECORD_PATH)![1]!))),
+      ),
+    )
+    .persist();
 
   // POST /v1/lessons — the promote's lesson create.
   pool
