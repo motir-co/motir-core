@@ -368,3 +368,68 @@ describe('the refusal code', () => {
     expect(offerRefusalCodeOf(new Error('boom'))).toBe('FAILED');
   });
 });
+
+// ── A kept request offered AFTER the decision (Story MOTIR-11515 · MOTIR-11521) ──────
+// The conversation a decision ended still answers ONE offer: the one posted after that
+// decision. Confirming it plans in a NEW conversation and the reader stays on the decided
+// one, which now shows the offer confirmed and the next kept request below it.
+
+const AFTER = { position: 1, total: 2 };
+const decidedSession = (o: PlanAnswerOfferDto): PlanChangeSessionDto => ({
+  ...session('s1', o),
+  endedAt: '2026-10-22T10:00:30.000Z',
+  endReason: 'approved',
+});
+
+describe('an offer posted after the decision that ended the conversation', () => {
+  it('Confirm starts it, stays on the decided conversation and follows no run here', async () => {
+    open.mockResolvedValue(decidedSession(offer({ afterDecision: AFTER })));
+    answerOffer.mockResolvedValue({ sessionId: 's9', jobId: 'job-9', planId: 'plan-9' });
+    const after = decidedSession(
+      offer({ afterDecision: AFTER, state: 'confirmed', confirmedSessionId: 's9' }),
+    );
+    readSession.mockResolvedValue(after);
+    const { result, onRestarted } = await mounted();
+
+    await act(async () => {
+      await result.current.confirmPlanOffer('t1');
+    });
+
+    expect(answerOffer).toHaveBeenCalledWith('s1', 't1', 'confirm');
+    expect(readSession).toHaveBeenCalledWith('s1');
+    expect(readSession).not.toHaveBeenCalledWith('s9');
+    expect(stream).not.toHaveBeenCalled();
+    expect(onRestarted).not.toHaveBeenCalled();
+    expect(result.current.state.session?.id).toBe('s1');
+    expect(result.current.state.session?.turns[1]?.offer?.state).toBe('confirmed');
+    expect(result.current.state.offerAnsweringTurnId).toBeNull();
+  });
+
+  it('Decline answers it and re-reads the decided conversation', async () => {
+    open.mockResolvedValue(decidedSession(offer({ afterDecision: AFTER })));
+    answerOffer.mockResolvedValue(OPEN);
+    readSession.mockResolvedValue(
+      decidedSession(offer({ afterDecision: AFTER, state: 'declined', declinedAt: '2026-10-22' })),
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.declinePlanOffer('t1');
+    });
+
+    expect(answerOffer).toHaveBeenCalledWith('s1', 't1', 'decline');
+    expect(result.current.state.session?.turns[1]?.offer?.state).toBe('declined');
+  });
+
+  it('any other offer on an ended conversation is not answered', async () => {
+    open.mockResolvedValue(decidedSession(offer()));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.confirmPlanOffer('t1');
+      await result.current.declinePlanOffer('t1');
+    });
+
+    expect(answerOffer).not.toHaveBeenCalled();
+  });
+});

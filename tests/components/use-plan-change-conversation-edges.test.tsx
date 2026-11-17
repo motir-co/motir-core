@@ -33,6 +33,7 @@ const {
   rerunAsk,
   settleAsk,
   streamAsk,
+  readSession,
 } = vi.hoisted(() => ({
   open: vi.fn(),
   append: vi.fn(),
@@ -48,6 +49,7 @@ const {
   rerunAsk: vi.fn(),
   settleAsk: vi.fn(),
   streamAsk: vi.fn(),
+  readSession: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
@@ -68,6 +70,7 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   submitAskTurn: submitAsk,
   rerunAskTurn: rerunAsk,
   settleAskJob: settleAsk,
+  getPlanChangeSession: readSession,
 }));
 
 vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
@@ -260,6 +263,9 @@ beforeEach(() => {
     session: session(['x']),
   });
   streamAsk.mockImplementation(async () => {});
+  // No case here reads a conversation by id except the decision re-read below, which
+  // sets its own answer; every other read fails, as the unmocked export did.
+  readSession.mockRejectedValue(new Error('no conversation read is declared'));
 });
 
 afterEach(() => {
@@ -2078,5 +2084,51 @@ describe('usePlanChangeConversation — a plan BEING APPROVED (Bug MOTIR-9006)',
     hook.unmount();
     await new Promise((r) => setTimeout(r, APPROVING_POLL_MS * 2));
     expect(fetchReview.mock.calls.length).toBe(reads);
+  });
+});
+
+// ── A decision ends the conversation (Story MOTIR-11515 · MOTIR-11521) ───────────────
+// Approve and Decline end the conversation server side and may post a kept request as a
+// new plan offer below the end marker, so the hook re-reads the thread after either.
+
+describe('usePlanChangeConversation — the thread is re-read after a decision', () => {
+  const ended = () => ({
+    ...session(['Add recurring invoices.']),
+    endedAt: '2026-07-27T10:05:00.000Z',
+    endReason: 'approved' as const,
+  });
+
+  for (const decision of ['approve', 'discard'] as const) {
+    it(`${decision} re-reads the conversation and adopts it`, async () => {
+      const hook = await mounted();
+      await act(async () => {
+        await hook.result.current.send('Add recurring invoices.');
+      });
+      readSession.mockResolvedValue(ended());
+
+      await act(async () => {
+        await (decision === 'approve'
+          ? hook.result.current.approve()
+          : hook.result.current.discard());
+      });
+
+      expect(readSession).toHaveBeenCalledWith('s1');
+      expect(hook.result.current.state.session?.endedAt).toBe('2026-07-27T10:05:00.000Z');
+    });
+  }
+
+  it('a failed re-read keeps the thread and the decision', async () => {
+    const hook = await mounted();
+    await act(async () => {
+      await hook.result.current.send('Add recurring invoices.');
+    });
+    readSession.mockRejectedValue(new Error('offline'));
+
+    await act(async () => {
+      await hook.result.current.approve();
+    });
+
+    expect(hook.result.current.state.decided).toBe('accepted');
+    expect(hook.result.current.state.session?.endedAt ?? null).toBeNull();
   });
 });
