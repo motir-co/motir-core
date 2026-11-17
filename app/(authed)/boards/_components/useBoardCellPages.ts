@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { appendBoardReadFilter } from '@/lib/boards/boardFilterHref';
 import { useCollapsedLanes } from '@/lib/hooks/useCollapsedLanes';
 import type {
   BoardCellPageDto,
@@ -95,6 +96,7 @@ export function useBoardCellPages({
   boardId,
   groupBy,
   filterParam = '',
+  boardFilterOff = false,
   columnIds,
   onPlanHolds,
 }: {
@@ -102,6 +104,8 @@ export function useBoardCellPages({
   groupBy: BoardSwimlaneGroupByDto;
   /** The toolbar filter the projection was read with; every page uses it too. */
   filterParam?: string;
+  /** The stored-filter-off signal the projection was read with (MOTIR-11564). */
+  boardFilterOff?: boolean;
   /** The board's columns, in order — the cells a lane page fills. */
   columnIds: readonly string[];
   /** Merges each response's plan holds into the board's. */
@@ -109,8 +113,8 @@ export function useBoardCellPages({
 }): BoardCellPagesApi {
   const grouped = groupBy !== 'none';
   const readKey = useMemo(
-    () => cellReadKey({ boardId, groupBy, filterParam }),
-    [boardId, groupBy, filterParam],
+    () => cellReadKey({ boardId, groupBy, filterParam, boardFilterOff }),
+    [boardId, groupBy, filterParam, boardFilterOff],
   );
   const [pages, setPages] = useState<CellPages>(() => emptyCellPages(readKey));
   const { collapsed } = useCollapsedLanes(boardId);
@@ -148,7 +152,7 @@ export function useBoardCellPages({
       laneStatusRef.current.set(laneId, 'loading');
       setPages((prev) => markLaneLoading(prev, readKey, laneKey, cols));
       const params = new URLSearchParams({ boardId });
-      if (filterParam) params.set('filter', filterParam);
+      appendBoardReadFilter(params, { filterParam, boardFilterOff });
       void readJson<BoardLanePageDto>(
         `/api/board/lanes/${encodeURIComponent(laneKey)}/cells?${params.toString()}`,
       )
@@ -167,7 +171,7 @@ export function useBoardCellPages({
           for (const id of flightIds) inFlightRef.current.delete(id);
         });
     },
-    [grouped, readKey, boardId, filterParam],
+    [grouped, readKey, boardId, filterParam, boardFilterOff],
   );
 
   const loadCell = useCallback(
@@ -184,7 +188,7 @@ export function useBoardCellPages({
       setPages((prev) => markCellsLoading(prev, readKey, cell));
       const params = new URLSearchParams({ boardId, lane: laneKey });
       if (page.cursor) params.set('cursor', page.cursor);
-      if (filterParam) params.set('filter', filterParam);
+      appendBoardReadFilter(params, { filterParam, boardFilterOff });
       const url = `/api/board/columns/${columnId}/cards?${params.toString()}`;
       // `after` only orders the read; its own outcome is its caller's to handle.
       // Without it the request starts now, in the same tick as the click.
@@ -199,7 +203,7 @@ export function useBoardCellPages({
         .catch(() => setPages((prev) => markCellsError(prev, readKey, cell)))
         .finally(() => inFlightRef.current.delete(flightId));
     },
-    [grouped, readKey, boardId, filterParam],
+    [grouped, readKey, boardId, filterParam, boardFilterOff],
   );
 
   const loadedLane = useCallback(

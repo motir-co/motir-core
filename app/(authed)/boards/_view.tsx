@@ -18,6 +18,7 @@ import {
 import { encodeFilterParam } from '@/lib/filters/ast';
 import { collectFilterReferentIds } from '@/lib/filters/registry';
 import { savedFilterCapabilitiesFromPermissions } from '@/lib/savedFilters/access';
+import { isBoardFilterOff } from '@/lib/boards/boardFilterOff';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { customFieldsService } from '@/lib/services/customFieldsService';
@@ -69,7 +70,9 @@ export default async function BoardView({
   searchParams,
 }: {
   ctx: ProjectPageContext;
-  searchParams: Promise<{ peek?: string; board?: string } & IssueFilterParams>;
+  searchParams: Promise<
+    { peek?: string; board?: string; boardFilter?: string } & IssueFilterParams
+  >;
 }) {
   const t = await getTranslations('boards');
   const ctx = pageScope(pageCtx);
@@ -124,6 +127,11 @@ export default async function BoardView({
   // decodes. Empty (nothing selected) → no param → the unfiltered projection.
   const effectiveAst = upgradeFacetsIntoAst(filter, ast);
   const filterParam = effectiveAst.conditions.length > 0 ? encodeFilterParam(effectiveAst) : '';
+  // The header filter REPLACES the board's own stored filter (MOTIR-11564), so
+  // no param here means "the board's filter". `?boardFilter=off` is the reader
+  // having removed every condition: forwarded to every board read, it asks for
+  // the board's whole scope (the server ignores it beside a header filter).
+  const boardFilterOff = isBoardFilterOff(sp.boardFilter);
 
   // Members resolve assignee / reporter ids to display names — for the board
   // cards' assignee avatars (the projection carries only `assigneeId`, Story
@@ -276,6 +284,7 @@ export default async function BoardView({
               projectName={ctx.project.name}
               workflow={workflow}
               filterParam={filterParam}
+              boardFilterOff={boardFilterOff}
               filterActive={filterActive}
               sprints={sprints}
               customFields={customFields}

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { PlanningCanvas, type CanvasNode } from '@/components/planning/PlanningCanvas';
 import {
@@ -18,19 +18,40 @@ import { fitView, nodesBounds } from '@/lib/planning/canvasGeometry';
 //
 // The engine fits ONCE, from a ResizeObserver callback once the viewport has a
 // size, so the test drives that callback by hand over a fixed 800×600 viewport.
+//
+// The stub keeps only LIVE observers, each with the elements it observes — a
+// disconnected one never fires, as in a browser — and `measure()` first WAITS for
+// the canvas's viewport to be observed (MOTIR-11593). The roadmap canvas draws a
+// level after `loadLevel` resolves, i.e. inside RTL's `findBy*` poll, where the act
+// environment is off: the render commits (so `findBy*` resolves on the card's
+// text) while the passive effect that registers the fit observer is still queued
+// on React's scheduler. Firing at that moment fired nothing — the view stayed at
+// its identity transform — and a loaded CI worker hit that window often enough to
+// flake shard 14/20.
 
 const VP = { w: 800, h: 600 };
-const observers: Array<(entries: unknown[]) => void> = [];
+type Observer = { cb: (entries: unknown[]) => void; targets: Set<Element> };
+const observers = new Set<Observer>();
 
 beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      private readonly o: Observer;
       constructor(cb: (entries: unknown[]) => void) {
-        observers.push(cb);
+        this.o = { cb, targets: new Set() };
+        observers.add(this.o);
       }
-      observe() {}
-      disconnect() {}
+      observe(el: Element) {
+        this.o.targets.add(el);
+      }
+      unobserve(el: Element) {
+        this.o.targets.delete(el);
+      }
+      disconnect() {
+        this.o.targets.clear();
+        observers.delete(this.o);
+      }
     },
   );
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -50,14 +71,19 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  observers.length = 0;
+  observers.clear();
 });
 
-/** Fire every observer — the viewport's first measurement. Empty entries leave
- *  node sizes at their declared width/height. */
-function measure() {
+/** The viewport's first measurement: wait until the drawn canvas's viewport is
+ *  observed (its fit effect has run), then fire every live observer once. Empty
+ *  entries leave node sizes at their declared width/height. */
+async function measure() {
+  await waitFor(() => {
+    const vp = screen.getByTestId('canvas-world').closest('[role="application"]');
+    expect([...observers].some((o) => vp !== null && o.targets.has(vp))).toBe(true);
+  });
   act(() => {
-    for (const cb of observers) cb([]);
+    for (const o of [...observers]) if (o.targets.size > 0) o.cb([]);
   });
 }
 
@@ -92,7 +118,7 @@ const targetRect = { x: target.x, y: target.y, w: W, h: H };
 const levelFit = fitView(nodesBounds(grid.map((n) => ({ x: n.x, y: n.y, w: W, h: H }))), VP);
 
 describe('PlanningCanvas — arrivalCentre', () => {
-  it('opens with the named card centred at the given scale, not the level fitted', () => {
+  it('opens with the named card centred at the given scale, not the level fitted', async () => {
     render(
       <PlanningCanvas
         nodes={grid}
@@ -101,7 +127,7 @@ describe('PlanningCanvas — arrivalCentre', () => {
         arrivalCentre={{ nodeId: target.id, scale: 1 }}
       />,
     );
-    measure();
+    await measure();
 
     expect(transform().scale).toBe(1);
     expect(screenCentre(targetRect)).toEqual({ x: VP.w / 2, y: VP.h / 2 });
@@ -109,7 +135,7 @@ describe('PlanningCanvas — arrivalCentre', () => {
     expect(levelFit.scale).toBeLessThan(1);
   });
 
-  it('outranks the readable-floor arrival when both are asked for', () => {
+  it('outranks the readable-floor arrival when both are asked for', async () => {
     render(
       <PlanningCanvas
         nodes={grid}
@@ -119,13 +145,13 @@ describe('PlanningCanvas — arrivalCentre', () => {
         arrivalCentre={{ nodeId: target.id, scale: 1 }}
       />,
     );
-    measure();
+    await measure();
 
     expect(transform().scale).toBe(1);
     expect(screenCentre(targetRect)).toEqual({ x: VP.w / 2, y: VP.h / 2 });
   });
 
-  it('falls back to the plain fit when the named card is not on the level', () => {
+  it('falls back to the plain fit when the named card is not on the level', async () => {
     render(
       <PlanningCanvas
         nodes={grid}
@@ -134,12 +160,12 @@ describe('PlanningCanvas — arrivalCentre', () => {
         arrivalCentre={{ nodeId: 'elsewhere', scale: 1 }}
       />,
     );
-    measure();
+    await measure();
 
     expect(transform()).toEqual(levelFit);
   });
 
-  it('leaves the fit-to-view control framing the whole level', () => {
+  it('leaves the fit-to-view control framing the whole level', async () => {
     render(
       <PlanningCanvas
         nodes={grid}
@@ -148,16 +174,16 @@ describe('PlanningCanvas — arrivalCentre', () => {
         arrivalCentre={{ nodeId: target.id, scale: 1 }}
       />,
     );
-    measure();
+    await measure();
     expect(transform().scale).toBe(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Fit to view' }));
     expect(transform()).toEqual(levelFit);
   });
 
-  it('is absent by default — the arrival is the plain fit', () => {
+  it('is absent by default — the arrival is the plain fit', async () => {
     render(<PlanningCanvas nodes={grid} edges={[]} renderNode={(n) => <div>Node {n.id}</div>} />);
-    measure();
+    await measure();
 
     expect(transform()).toEqual(levelFit);
   });
@@ -212,7 +238,7 @@ describe('ProjectRoadmapCanvas — initialCentreId', () => {
       />,
     );
     await screen.findByText('Target card');
-    measure();
+    await measure();
 
     expect(transform().scale).toBe(1);
     expect(screenCentre(drawnRect('T'))).toEqual({ x: VP.w / 2, y: VP.h / 2 });
@@ -227,7 +253,7 @@ describe('ProjectRoadmapCanvas — initialCentreId', () => {
     const root: RoadmapLevel = levels['P']!;
     render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(root)} initialCentreId="T" />);
     await screen.findByText('Target card');
-    measure();
+    await measure();
 
     expect(transform().scale).toBe(1);
     expect(screenCentre(drawnRect('T'))).toEqual({ x: VP.w / 2, y: VP.h / 2 });
@@ -241,7 +267,7 @@ describe('ProjectRoadmapCanvas — initialCentreId', () => {
       />,
     );
     await screen.findByText('Target card');
-    measure();
+    await measure();
 
     const ids = ['A', 'B', 'T', 'C', 'D', 'E'];
     expect(transform()).toEqual(fitView(nodesBounds(ids.map(drawnRect)), VP));
@@ -256,7 +282,7 @@ describe('ProjectRoadmapCanvas — initialCentreId', () => {
       />,
     );
     await screen.findByText('Target card');
-    measure();
+    await measure();
 
     const ids = ['A', 'B', 'T', 'C', 'D', 'E'];
     expect(transform()).toEqual(fitView(nodesBounds(ids.map(drawnRect)), VP));
@@ -271,19 +297,19 @@ describe('ProjectRoadmapCanvas — initialCentreId', () => {
       />,
     );
     await screen.findByText('Target card');
-    measure();
+    await measure();
     expect(transform().scale).toBe(1);
 
     // Drill into A, then come back: neither arrival is the opening centre.
     fireEvent.keyDown(document.querySelector('[data-node-id="A"]')!, { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('drill-button'));
     await screen.findByText('Card X');
-    measure();
+    await measure();
     expect(transform()).toEqual(fitView(nodesBounds(['X', 'Y'].map(drawnRect)), VP));
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     await screen.findByText('Target card');
-    measure();
+    await measure();
     const ids = ['A', 'B', 'T', 'C', 'D', 'E'];
     expect(transform()).toEqual(fitView(nodesBounds(ids.map(drawnRect)), VP));
   });

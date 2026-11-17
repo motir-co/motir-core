@@ -9,10 +9,9 @@ import {
   InvalidBoardNameError,
   InvalidSwimlaneGroupByError,
 } from '@/lib/boards/errors';
-import { decodeFilterParam } from '@/lib/filters/ast';
 import { FilterValidationError } from '@/lib/filters/errors';
 import { SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
-import type { BoardFilterInput } from '@/lib/dto/boards';
+import { readBoardFilterInput } from '@/lib/boards/boardPageHttp';
 import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 
 // GET /api/board (Subtask 3.1.6) — the board projection for the ACTIVE project's
@@ -48,6 +47,13 @@ import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 // forged-URL degrade, mirroring the navigator's recoverable-state handling).
 // `getBoard` re-validates the AST against the registry, so a structurally-valid
 // but semantically-bad condition throws `FilterValidationError` → 422.
+//
+// The header filter REPLACES the board's own stored filter (MOTIR-11564), never
+// ANDs with it: a `?filter=` param is the board's whole filter, and with none
+// the stored filter applies. `?boardFilter=off` asks for the board's whole scope
+// instead (the reader removed every condition on a board that has a stored
+// filter); it is ignored beside a `?filter=` and on a board with none. Both
+// params are read by `readBoardFilterInput`, the parse the page doors share.
 
 async function memberGET(req: Request): Promise<Response> {
   const gate = await requireCompliantSession();
@@ -64,15 +70,11 @@ async function memberGET(req: Request): Promise<Response> {
   const params = new URL(req.url).searchParams;
   const boardId = params.get('boardId')?.trim() || undefined;
 
-  // Decode the optional compiled-filter param. A bad decode → no filter (the
-  // graceful degrade, not a 400): the page never emits a malformed param, so
-  // this only guards a hand-forged URL, which should show the full board.
-  const rawFilter = params.get('filter')?.trim() || undefined;
-  let filter: BoardFilterInput | undefined;
-  if (rawFilter) {
-    const decoded = decodeFilterParam(rawFilter);
-    if (decoded.ok && decoded.ast.conditions.length > 0) filter = { ast: decoded.ast };
-  }
+  // Decode the optional header filter + the stored-filter-off signal. A bad
+  // decode → no header filter (the graceful degrade, not a 400): the page never
+  // emits a malformed param, so this only guards a hand-forged URL, which then
+  // reads as the board's own filter.
+  const filter = readBoardFilterInput(params);
 
   try {
     const board = await boardsService.getBoard(
@@ -104,7 +106,8 @@ async function memberGET(req: Request): Promise<Response> {
  * The board projection — for a VISITOR (MOTIR-6647), the board of the public
  * project the Visitor cookie names, with every private-epic descendant
  * withheld and names only (MOTIR-6644 / MOTIR-6646); an inline `?filter=` still
- * applies, a saved filter never does. Everyone else is answered exactly as before.
+ * applies — replacing the board's stored filter as it does for a member
+ * (MOTIR-11564) — and a saved filter never does. Everyone else is answered exactly as before.
  */
 export async function GET(req: Request): Promise<Response> {
   return visitorThenMember(
@@ -113,12 +116,7 @@ export async function GET(req: Request): Promise<Response> {
     async (ctx) => {
       const params = new URL(req.url).searchParams;
       const boardId = params.get('boardId')?.trim() || undefined;
-      const rawFilter = params.get('filter')?.trim() || undefined;
-      let filter: BoardFilterInput | undefined;
-      if (rawFilter) {
-        const decoded = decodeFilterParam(rawFilter);
-        if (decoded.ok && decoded.ast.conditions.length > 0) filter = { ast: decoded.ast };
-      }
+      const filter = readBoardFilterInput(params);
       try {
         const board = await boardsService.getBoard(ctx.project.id, ctx, boardId, filter);
         return NextResponse.json(board);
