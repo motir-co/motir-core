@@ -404,6 +404,21 @@ describe('readAskOutcome — a request too far from the waiting plan (MOTIR-1151
     });
   });
 
+  it('drops a farRequest carried beside a revision on an ask, whatever the intent says', () => {
+    const out = readAskOutcome({
+      ask: {
+        intent: 'ask',
+        answer: 'Answered.',
+        citations: [],
+        revision: { requirement: 'Remove it.' },
+        farRequest: { requirement: 'Add a PDF export.' },
+      },
+    });
+    expect(out).toMatchObject({ intent: 'ask', answer: 'Answered.' });
+    expect(out).not.toHaveProperty('farRequest');
+    expect(out).not.toHaveProperty('revision');
+  });
+
   it('ignores a farRequest on every redirect', () => {
     const farRequest = { requirement: 'Add a PDF export.' };
     expect(readAskOutcome({ ask: { intent: 'plan_change', farRequest } })).toEqual({

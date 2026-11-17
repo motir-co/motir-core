@@ -335,8 +335,10 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
   const offerReply = readOfferReplyField(ask['offerReply']);
   const answer = boundedString(ask['answer'], ASK_ANSWER_MAX_CHARS);
   // A too-far request is kept only beside an answer that reads: the person must be told
-  // the request was kept out of the plan, so a request with no reply is dropped.
-  const farRequest = answer ? readFarRequestField(ask['farRequest']) : null;
+  // the request was kept out of the plan, so a request with no reply is dropped. One
+  // carried beside a `revision` contradicts it whatever the intent says, so it is dropped
+  // too: the `plan_change` arm above reads that pair as a plain answer, and so does this.
+  const farRequest = answer && !('revision' in ask) ? readFarRequestField(ask['farRequest']) : null;
   return {
     intent: 'ask',
     answer,
