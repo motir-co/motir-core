@@ -9,7 +9,9 @@ import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // The unmapped-statuses tray (Subtask 3.2.6 · design `board.mock.html` panel 5).
 // Surfaces project workflow statuses mapped to NO board column
-// (`BoardProjectionDto.unmappedStatuses`, Story 3.1.4 — the Jira behaviour): a
+// (`BoardProjectionDto.unmappedStatusesInScope` — since MOTIR-11658 only those
+// the board's effective filter could still match; Story 3.1.4 — the Jira
+// behaviour): a
 // yellow callout above the board naming the statuses, so work items in them are
 // HIDDEN from the board but never silently dropped. The caller renders this
 // ONLY when `statuses` is non-empty (an empty tray never shows).

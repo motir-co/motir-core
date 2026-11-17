@@ -62,6 +62,7 @@ import {
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 import { buildDefaultBoard, DEFAULT_BOARD_NAME } from '@/lib/boards/defaultBoard';
+import { unmappedStatusesInScope } from '@/lib/boards/unmappedStatusesInScope';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
@@ -315,7 +316,9 @@ export const boardsService = {
    * with that model — paging is the bound now.
    *
    * Plus a top-level `unmappedStatuses` — every project status mapped to NO
-   * column (Jira's behaviour: surfaced, never dropped) — and the swimlane lanes,
+   * column (Jira's behaviour: surfaced, never dropped), beside
+   * `unmappedStatusesInScope`, the subset the effective filter could still match
+   * (MOTIR-11658, what the board's tray names) — and the swimlane lanes,
    * which stay a bounded aggregate over the whole (filtered) set, so a lane's
    * count and order do not depend on which pages are loaded.
    *
@@ -339,7 +342,7 @@ export const boardsService = {
     filter?: BoardFilterInput,
   ): Promise<BoardProjectionDto> {
     const frame = await loadBoardFrame(projectId, ctx, boardId, filter);
-    const { board, columns, liveByColumn, mappedStatusIds, statuses, readCtx } = frame;
+    const { board, columns, liveByColumn, readCtx } = frame;
     const groupBy = board.swimlaneGroupBy as BoardSwimlaneGroupByDto;
 
     // A scrum board with NO active sprint: empty columns + `sprint: null`, so the
@@ -365,7 +368,7 @@ export const boardsService = {
         swimlaneGroupBy: groupBy,
         columns: emptyColumns,
         swimlanes: [],
-        unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
+        ...unmappedStatusFields(frame),
         sprint: null,
         planHolds: {},
         storedFilter: frame.storedFilter?.dto ?? null,
@@ -453,7 +456,7 @@ export const boardsService = {
         cursor: b.cursor,
       })),
       swimlanes,
-      unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
+      ...unmappedStatusFields(frame),
       sprint,
       planHolds: decorated?.planHolds ?? {},
       storedFilter: frame.storedFilter?.dto ?? null,
@@ -2086,6 +2089,35 @@ function effectiveFilterSlots(effective: EffectiveBoardFilter | undefined): {
   return effective.source === 'header'
     ? { header: effective.filter }
     : { stored: effective.predicate };
+}
+
+/**
+ * The projection's two unmapped-status lists (MOTIR-11658): every status mapped
+ * to no column (`unmappedStatuses`, what Board settings lists), and the subset
+ * the effective filter could still match (`unmappedStatusesInScope`, what the
+ * board's tray names) — see {@link unmappedStatusesInScope}.
+ */
+function unmappedStatusFields(
+  frame: Pick<BoardFrame, 'statuses' | 'mappedStatusIds' | 'effectiveFilter'>,
+): Pick<BoardProjectionDto, 'unmappedStatuses' | 'unmappedStatusesInScope'> {
+  const unmapped = frame.statuses.filter((s) => !frame.mappedStatusIds.has(s.id));
+  return {
+    unmappedStatuses: unmapped,
+    unmappedStatusesInScope: unmappedStatusesInScope(
+      unmapped,
+      effectiveFilterAst(frame.effectiveFilter),
+    ),
+  };
+}
+
+/**
+ * The effective filter's AST, for the rules that read its conditions rather
+ * than compile it. `undefined` when no filter applies, and for a stored filter
+ * that no longer reads (`matchNothing`) — it carries no conditions to read.
+ */
+function effectiveFilterAst(effective: EffectiveBoardFilter | undefined): FilterAst | undefined {
+  const predicate = effectivePredicate(effective);
+  return predicate && 'ast' in predicate ? predicate.ast : undefined;
 }
 
 /**
