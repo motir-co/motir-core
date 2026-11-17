@@ -393,15 +393,13 @@ describe('group by a multi-value field', () => {
     const ui = await label(fx, 'ui');
     const id = await card(fx, { title: 'Tagged', type: 'code' });
     await tag.label(id, ui);
-    const read = <T>(
-      fn: (tx: Parameters<Parameters<typeof withWorkspaceServiceContext>[1]>[0]) => Promise<T>,
-    ) => withWorkspaceServiceContext(fx.workspaceId, fn);
-    const args = [fx.projectId, fx.workspaceId] as const;
+    const { projectId, workspaceId } = fx;
     expect(
-      await read((tx) =>
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
         workItemRepository.aggregateBoardLanesByField(
           'type',
-          ...args,
+          projectId,
+          workspaceId,
           [],
           undefined,
           undefined,
@@ -410,18 +408,31 @@ describe('group by a multi-value field', () => {
       ),
     ).toEqual([]);
     expect(
-      await read((tx) =>
-        workItemRepository.aggregateBoardLanesByTag('label', ...args, [], undefined, undefined, tx),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateBoardLanesByTag(
+          'label',
+          projectId,
+          workspaceId,
+          [],
+          undefined,
+          undefined,
+          tx,
+        ),
       ),
     ).toEqual([]);
-    expect(await read((tx) => workItemRepository.findLaneTagValues('label', [], tx))).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findLaneTagValues('label', [], tx),
+      ),
+    ).toEqual([]);
     // A sprint the card is not in holds none of its lanes.
     const sprint = 'cl0000000000000000000000';
     expect(
-      await read((tx) =>
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
         workItemRepository.aggregateBoardLanesByField(
           'type',
-          ...args,
+          projectId,
+          workspaceId,
           ['todo'],
           sprint,
           undefined,
@@ -430,10 +441,11 @@ describe('group by a multi-value field', () => {
       ),
     ).toEqual([]);
     expect(
-      await read((tx) =>
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
         workItemRepository.aggregateBoardLanesByTag(
           'label',
-          ...args,
+          projectId,
+          workspaceId,
           ['todo'],
           sprint,
           undefined,
@@ -442,10 +454,11 @@ describe('group by a multi-value field', () => {
       ),
     ).toEqual([]);
     expect(
-      await read((tx) =>
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
         workItemRepository.aggregateBoardLanesByTag(
           'label',
-          ...args,
+          projectId,
+          workspaceId,
           ['todo'],
           undefined,
           undefined,
