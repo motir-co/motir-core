@@ -81,6 +81,7 @@ export * from './backgrounds/tokens';
 export * from './backgrounds/clearArea';
 export * from './backgrounds/drawers';
 export * from './backgrounds/aurora';
+export * from './backgrounds/cellular';
 export * from './backgrounds/runtime';
 export * from './components/backgrounds/Background';
 export type * from './backgrounds/types';

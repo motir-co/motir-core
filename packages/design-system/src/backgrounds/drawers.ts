@@ -6,11 +6,16 @@
 // and stops. Every id is drawn by the time the package is released.
 
 import { createAurora } from './aurora';
+import { createBriansBrain, createCyclic, createDayNight, createRule110 } from './cellular';
 import type { BackgroundId } from './registry';
 import type { BackgroundDrawerFactory } from './types';
 
 export const BACKGROUND_DRAWERS: Partial<Record<BackgroundId, BackgroundDrawerFactory>> = {
   aurora: createAurora,
+  cyclic: createCyclic,
+  brian: createBriansBrain,
+  daynight: createDayNight,
+  rule110: createRule110,
 };
 
 /** The drawer factory for a background id, or `null` when it has none. */
