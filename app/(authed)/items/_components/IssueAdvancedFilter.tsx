@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
 import { FunnelPlus, X } from 'lucide-react';
@@ -73,6 +73,9 @@ export interface IssueAdvancedFilterProps {
    * `buildBoardFilterHref` (board-scoped URL, no view/sort). Defaults to the
    * /items `buildIssueListHref`. */
   buildHref?: (filter: IssueFilter) => string;
+  /** A host action placed before Clear all in the builder header (MOTIR-11565:
+   * the board's "Reset to board filter"). Absent on /items. */
+  headerAction?: ReactNode;
 }
 
 export function IssueAdvancedFilter({
@@ -90,6 +93,7 @@ export function IssueAdvancedFilter({
   projectKey,
   fields,
   buildHref,
+  headerAction,
 }: IssueAdvancedFilterProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -171,6 +175,26 @@ export function IssueAdvancedFilter({
   const appliedCount = astFromRows(working.combinator, working.rows, resolveDef).conditions.length;
   const active = appliedCount > 0;
 
+  const clearAllButton = (
+    <button
+      type="button"
+      disabled={working.rows.length === 0}
+      onClick={() => apply({ combinator: 'and', rows: [] })}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+        // Asked the same way `disabled` above is, so the faint ink is
+        // visibly the inactive state rather than a second, independent
+        // statement of it (MOTIR-2489).
+        working.rows.length === 0
+          ? 'cursor-default text-(--el-text-faint)'
+          : 'text-(--el-link) hover:underline',
+      )}
+    >
+      <X className="h-3.5 w-3.5" aria-hidden />
+      {t('advancedClearAll')}
+    </button>
+  );
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
@@ -222,23 +246,14 @@ export function IssueAdvancedFilter({
           <span className="font-mono text-[11px] font-semibold tracking-wider text-(--el-text-muted) uppercase">
             {t('advancedDialogLabel')}
           </span>
-          <button
-            type="button"
-            disabled={working.rows.length === 0}
-            onClick={() => apply({ combinator: 'and', rows: [] })}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
-              // Asked the same way `disabled` above is, so the faint ink is
-              // visibly the inactive state rather than a second, independent
-              // statement of it (MOTIR-2489).
-              working.rows.length === 0
-                ? 'cursor-default text-(--el-text-faint)'
-                : 'text-(--el-link) hover:underline',
-            )}
-          >
-            <X className="h-3.5 w-3.5" aria-hidden />
-            {t('advancedClearAll')}
-          </button>
+          {headerAction ? (
+            <span className="inline-flex items-center gap-1">
+              {headerAction}
+              {clearAllButton}
+            </span>
+          ) : (
+            clearAllButton
+          )}
         </div>
 
         <div className="flex max-h-[60vh] flex-col overflow-y-auto px-3.5 py-3">

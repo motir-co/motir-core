@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
 import { Check, CircleDashed, FunnelPlus, Search, SlidersHorizontal, UserX, X } from 'lucide-react';
@@ -147,6 +147,9 @@ export interface IssueFilterBarProps {
    * by MOTIR-10535). Uncontrolled (internal state) when omitted. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** A host action placed before Clear in the popover header (MOTIR-11565: the
+   * board's "Reset" to its own filter). Absent on /items. */
+  headerAction?: ReactNode;
 }
 
 export function IssueFilterBar({
@@ -159,6 +162,7 @@ export function IssueFilterBar({
   buildHref,
   open: controlledOpen,
   onOpenChange,
+  headerAction,
 }: IssueFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -313,6 +317,27 @@ export function IssueFilterBar({
     </button>
   );
 
+  const clearButton = (
+    <button
+      type="button"
+      disabled={!active || superseded}
+      onClick={() => {
+        setMemberQuery('');
+        setText('');
+        apply(clearFacets(filterRef.current));
+      }}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-sm focus-visible:outline-none',
+        active && !superseded
+          ? 'text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)'
+          : 'cursor-default text-(--el-text-faint)',
+      )}
+    >
+      <X className="h-3.5 w-3.5" aria-hidden />
+      {t('filterClearAll')}
+    </button>
+  );
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       {superseded ? (
@@ -335,24 +360,14 @@ export function IssueFilterBar({
           <span className="font-mono text-[11px] font-semibold tracking-wider text-(--el-text-muted) uppercase">
             {t('filter')}
           </span>
-          <button
-            type="button"
-            disabled={!active || superseded}
-            onClick={() => {
-              setMemberQuery('');
-              setText('');
-              apply(clearFacets(filterRef.current));
-            }}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-sm focus-visible:outline-none',
-              active && !superseded
-                ? 'text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)'
-                : 'cursor-default text-(--el-text-faint)',
-            )}
-          >
-            <X className="h-3.5 w-3.5" aria-hidden />
-            {t('filterClearAll')}
-          </button>
+          {headerAction ? (
+            <span className="inline-flex items-center gap-1">
+              {headerAction}
+              {clearButton}
+            </span>
+          ) : (
+            clearButton
+          )}
         </div>
 
         <div className="max-h-[440px] overflow-y-auto p-1.5">

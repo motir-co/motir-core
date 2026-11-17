@@ -262,7 +262,10 @@ describe('RAISE — one awaiting gate per card, on the run target, when its whol
   // holds the run target. In a parent run the How-to-test record is written once
   // onto the PARENT, so every child resolved to `ancestor` and raised nothing,
   // while the parent's own promotion was skipped by `ContainerHasOpenChildrenError`.
-  it('a CHILD a container run delivers raises its gate too, though its run target is the ANCESTOR', async () => {
+  // MOTIR-11624 narrowed this: the child's only pull request is also the STORY's, so it is
+  // the story's to be asked about. Asking the child too put an Approve that merges the whole
+  // story on one child's card (MOTIR-11455).
+  it('a CHILD riding its container run’s pull request raises NO gate — only the ANCESTOR is asked', async () => {
     const s = await makeScenario('pa-child@example.com');
     const story = await workItemsService.createWorkItem(
       { projectId: s.project.id, kind: 'story', title: 'The story' },
@@ -307,10 +310,11 @@ describe('RAISE — one awaiting gate per card, on the run target, when its whol
       };
     });
 
-    expect(raised).toEqual({ child: true, story: true });
-    for (const id of [child.id, story.id]) {
-      expect((await awaiting(id)).map((g) => g.subjectVersion)).toEqual(['moooon/acme#13@sha-p']);
-    }
+    expect(raised).toEqual({ child: false, story: true });
+    expect(await awaiting(child.id)).toEqual([]);
+    expect((await awaiting(story.id)).map((g) => g.subjectVersion)).toEqual([
+      'moooon/acme#13@sha-p',
+    ]);
   });
 });
 

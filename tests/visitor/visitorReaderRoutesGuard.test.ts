@@ -51,6 +51,10 @@ const WRAPPERS = new Set(['readerPath', 'path', 'view', 'revalidatePath']);
  */
 const BUILDERS: { file: string; fn: string; takes?: 'routes' }[] = [
   { file: 'lib/boards/boardFilterHref.ts', fn: 'buildBoardFilterHref' },
+  // The board header filter's hrefs (MOTIR-11565): a header change (which may
+  // carry `?boardFilter=off`) and Reset to board filter.
+  { file: 'lib/boards/boardHeaderFilter.ts', fn: 'buildBoardHeaderFilterHref' },
+  { file: 'lib/boards/boardHeaderFilter.ts', fn: 'boardFilterResetHref' },
   { file: 'lib/runs/runsAddress.ts', fn: 'runsHref' },
   // The Approval records room's pager (MOTIR-6891).
   { file: 'lib/approvals/recordsAddress.ts', fn: 'approvalRecordsHref' },
