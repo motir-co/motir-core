@@ -11317,7 +11317,9 @@
             "retire": "Retired a starter"
           },
           "planner_finding": {
-            "triage": "Triaged a planner finding"
+            "triage": "Triaged a planner finding",
+            "record": "Recorded a planner finding record",
+            "verdict": "Gave a planner finding record its verdict"
           },
           "model_serving": {
             "set": "Changed which provider serves a model"
@@ -12296,7 +12298,8 @@
       "view": {
         "label": "View",
         "grouped": "Grouped",
-        "all": "All findings"
+        "all": "All findings",
+        "records": "Records"
       },
       "card": {
         "title": "Findings",
@@ -12435,7 +12438,8 @@
         "baseline": "Code baseline",
         "recorded": "Recorded",
         "triagedBy": "Last triaged by {who} · {when}",
-        "lessonLink": "Open the lesson in Planning lessons"
+        "lessonLink": "Open the lesson in Planning lessons",
+        "record": "Record"
       },
       "cost": {
         "title": "Review and repair cost",
@@ -12511,10 +12515,131 @@
       },
       "noop": "Already up to date. Someone changed this finding a moment ago, so there was nothing to change and nothing was logged.",
       "a11y": {
-        "viewGroup": "Show findings grouped by defect or one by one",
+        "viewGroup": "Show findings grouped by defect, one by one, or as one record per plan check",
         "captionGroups": "Findings grouped by defect",
         "captionAll": "All findings",
         "detailRegion": "Finding detail"
+      },
+      "records": {
+        "title": "Records",
+        "subtitle": "One row per plan check, newest first.",
+        "caption": "Planner finding records",
+        "col": {
+          "created": "Created",
+          "planner": "Planner",
+          "source": "Source",
+          "plan": "Plan",
+          "verdict": "Verdict",
+          "findings": "Findings",
+          "attributed": "Attributed",
+          "open": "Open"
+        },
+        "row": {
+          "open": "Open record {id}"
+        },
+        "verdict": {
+          "open": "Open",
+          "attributed": "Attributed"
+        },
+        "filter": {
+          "label": "Filter records",
+          "verdict": "Verdict state",
+          "verdictAll": "All",
+          "planner": "Planner",
+          "plannerAny": "Any planner",
+          "source": "Source",
+          "sourceAny": "Any source",
+          "sheetTitle": "Filter records"
+        },
+        "empty": {
+          "title": "No records yet",
+          "body": "A record is kept each time the hosted planner’s final check or the check plan skill reviews a plan. None has been kept yet."
+        },
+        "noMatch": {
+          "title": "No records match these filters",
+          "body": "Remove a filter, or clear them all.",
+          "action": "Clear filters"
+        },
+        "loading": "Loading records",
+        "unavailable": {
+          "title": "Couldn’t load the records",
+          "body": "The planning service (motir-ai) didn’t respond, so no record is shown. This is a fetch error — nothing has changed, and it does not mean there are no records.",
+          "retry": "Retry"
+        }
+      },
+      "record": {
+        "crumb": "Operations · Planner findings · Record",
+        "back": "Back to records",
+        "title": "Record",
+        "context": "Plan context",
+        "field": {
+          "plan": "Plan",
+          "planSession": "Plan session",
+          "job": "Job",
+          "model": "Model",
+          "baseline": "Code baseline",
+          "verdict": "Verdict",
+          "none": "None"
+        },
+        "verdictBy": "Attributed by {who} · {when}",
+        "findings": {
+          "title": "Findings in this record",
+          "col": {
+            "site": "Site",
+            "attribution": "Attribution",
+            "why": "Why",
+            "hosted": "Hosted planner",
+            "planpy": "plan.py"
+          },
+          "empty": "This record holds no findings."
+        },
+        "command": {
+          "intro": "Give this record its verdict from your coding agent:",
+          "line": "motir check planner finding {id}",
+          "copy": "Copy",
+          "copyLabel": "Copy the command",
+          "copied": "Command copied"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "Run-through",
+          "answer": {
+            "thru": "Builds through",
+            "stops": "Does not build through",
+            "none": "No answer recorded"
+          },
+          "hint": {
+            "thru": "The check that stored this record predicted a run could build this plan through. Its findings are listed below.",
+            "stops": "The check predicted a run would stop on the work items below. Fix those work items, then run the check again.",
+            "none": "No check sent an answer for this record, so there is none to read. Its verdict does not change that — the answer is the check's, not the agent's."
+          },
+          "cards": {
+            "label": "Work items to fix",
+            "none": "No work item recorded"
+          },
+          "a11y": {
+            "region": "Run-through: whether a run could build this plan through"
+          }
+        },
+        "findingKey": {
+          "column": "Planning bug",
+          "labelFinding": "· {site}",
+          "hint": "A key such as MOTIR-123, in this record's project.",
+          "link": "Link",
+          "linking": "Linking…",
+          "remove": "Remove",
+          "removing": "Removing…",
+          "removeFinding": "Remove the planning bug key from {site}",
+          "notAWorkItem": "Not linked — {key} is not a work item in this record's project. Nothing was written.",
+          "linked": "Linked {key}.",
+          "removed": "Removed the planning bug key.",
+          "unchanged": "Already linked to {key}. Nothing changed.",
+          "openRecord": "Planning bug keys are linked once this record has a verdict.",
+          "a11y": {
+            "empty": "No planning bug key"
+          }
+        }
       }
     },
     "usage": {

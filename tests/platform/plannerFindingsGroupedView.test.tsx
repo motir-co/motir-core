@@ -68,6 +68,7 @@ const SUPPORT: PlatformPrincipal = { userId: 'u_sp', email: 'sp@moooon.net', rol
 function row(over: Partial<PlannerFindingRowDTO> = {}): PlannerFindingRowDTO {
   return {
     id: 'pf_1',
+    recordId: 'rec_1',
     source: 'in_loop',
     planner: 'hosted',
     attribution: 'corpus',

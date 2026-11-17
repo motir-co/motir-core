@@ -313,6 +313,31 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'planner_finding.triage': { kind: 'write', reason: 'inherited' },
   /**
+   * A planner finding RECORD — one plan check and its findings — was stored
+   * through `/api/platform/planner-findings/records` (Story MOTIR-11455 ·
+   * MOTIR-11458), by the console session or a staff personal access token (ADR
+   * §2, the 2026-11-16 amendment). motir-ai stores the record and writes no
+   * audit row; core appends this one after the create answers. Target is
+   * `platform` with the record id as `targetId` and the plan's title (else its
+   * id) as `targetLabel`, the record's `coreOrganizationId` as the entry's
+   * `organizationId`, and `metadata` carries `{ recordId, planId, findingCount,
+   * verdictState, credential }`. `inherited`, as `planner_finding.triage`: the
+   * skill types no reason per record, so the service writes a default one.
+   */
+  'planner_finding.record': { kind: 'write', reason: 'inherited' },
+  /**
+   * A planner finding record was given its VERDICT through
+   * `/api/platform/planner-findings/records/:id/verdict` (MOTIR-11458): every
+   * finding's attribution set in one motir-ai transaction. ONE row per finding
+   * the verdict changed, from motir-ai's from → to answer — `targetId` the
+   * finding id, `metadata` `{ recordId, findingId, before, after, credential }`
+   * with the changed fields only. A verdict that changed no finding writes ONE
+   * row on the record itself (`targetId` the record id, `metadata`
+   * `{ recordId, changedFindings: 0, credential }`), so the act is still on the
+   * trail. `inherited`, as `planner_finding.triage`.
+   */
+  'planner_finding.verdict': { kind: 'write', reason: 'inherited' },
+  /**
    * One organisation's fleet containers were STOPPED by a platform admin (Story
    * MOTIR-6905 · MOTIR-7317): its GitHub Actions runs cancelled and its CI
    * containers destroyed, its hosted-agent runs ended, its agent instances

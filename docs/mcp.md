@@ -133,8 +133,6 @@ to the destroy is a deliberate tick.
 three plan-session tools, all of which spend the workspace's AI credits. Under
 the old vocabulary they travelled with _edit work items_ because nothing
 narrower existed; an agent wired only to file work items can now be denied them.
-It also gates `record_planner_finding`, a planning write that spends no credits:
-a check run reports a planner defect on `ai:plan`, not on a lesson key.
 
 **Editing a repository's coding convention is `ai:configure`** — the admin key
 the Code page's editor checks. Only `update_coding_convention` asserts it, and a
@@ -337,7 +335,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **124 tools**.
+`initialize` handshake and registers **123 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -2276,90 +2274,6 @@ not `lesson:manage` — checked **before** any call to motir-ai.
 **Output** — `structuredContent`: the recorded lesson's `id`, `title`, its three
 axes as stored, and `sourceRef`.
 
-#### `record_planner_finding`
-
-Record **one planner defect** — something wrong with a plan, found while checking
-it — as **one finding** in the findings store in motir-ai. It is what the
-`motir check plan` skill calls for each defect it finds. The finding is relayed
-over the 7.1 boundary and stored as a `check_plan` row, which the admin
-planner-findings page shows beside the findings the hosted planner records about
-its own plans.
-
-**One call records one defect.** Make one call per defect, never one call for
-several; there is no batch argument.
-
-**The stored row is readable only by platform admins.** No MCP tool reads
-findings back, so the result naming the stored id is the caller's record that it
-was written.
-
-**It never files a planning bug and never creates or reinforces a lesson.** It
-only records the finding; an admin later triages it into a lesson, a bug or
-nothing.
-
-**It has no `source` argument and always writes `check_plan`**, so a caller cannot
-write an `in_loop` row — those are the hosted planner's own review stage. It also
-has no `status`, `fingerprint`, `lessonId`, `bugKey`, triage or batch
-argument. The schema is strict, so naming any of them is refused by name rather
-than dropped.
-
-⚠️ **A repeat call writes a second row.** The tool is not idempotent: a finding
-has no event key to replay against, and the admin view groups repeats by
-fingerprint — the `rule` and attribution when a `rule` is given, the site and
-attribution otherwise. Call it once per defect, and do not retry a
-failure blindly — a refusal names the field or the upstream reason, so fix that
-first.
-
-| Input              | Type   | Required | Notes                                                                                                                    |
-| ------------------ | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `projectKey`       | string | yes      | The project the finding is stored against. The finding belongs to that project only.                                     |
-| `planId`           | string | no       | The plan, as **text** — never a foreign key. An id that is no plan in Motir is accepted and stored as given.             |
-| `planTitle`        | string | no       | The plan's title, as text.                                                                                               |
-| `cardRef`          | string | no       | The card the defect sits on, as text — a plan item id (`planItem:…`) or a work-item key.                                 |
-| `planner`          | enum   | yes      | `hosted` · `plan_py` — which planner wrote the plan.                                                                     |
-| `site`             | string | yes      | Where the defect is: the card and the part of it, for a reader. It is the grouping key only when no `rule` is given.     |
-| `prediction`       | enum   | yes      | `STOPS` · `SETTLES` · `THRU` — what the runner would do at the site.                                                     |
-| `whatHappened`     | string | yes      | What is wrong, in a sentence or two.                                                                                     |
-| `evidence`         | string | yes      | What shows it — a `path:line` at a commit, a quoted criterion, a command and its output.                                 |
-| `correction`       | string | no       | The correction made or proposed.                                                                                         |
-| `outcome`          | enum   | yes      | `fixed` · `reported` · `fix_failed` — what was done about it.                                                            |
-| `attribution`      | enum   | no       | `code` · `corpus` · `model` · `unattributed` — whose fault it was. Omitted reads as unattributed.                        |
-| `why`              | string | no       | Why it is attributed that way.                                                                                           |
-| `hostedCell`       | string | no       | Where in the hosted planner the defect comes from.                                                                       |
-| `planpyCell`       | string | no       | Where in plan.py the defect comes from.                                                                                  |
-| `fixDirection`     | string | no       | Which way a fix to the planner should go.                                                                                |
-| `rule`             | string | no       | The planner rule or code site broken, as `path:line`. Repeats group by rule and attribution, across checks and plans.    |
-| `authorModel`      | string | no       | The model that wrote the plan.                                                                                           |
-| `authorSessionKey` | string | no       | The planning session that wrote the plan.                                                                                |
-| `baseline`         | object | no       | `{ branch?, commit? }` — the branch and commit the code was read at. One argument here; stored as a branch and a commit. |
-
-`planId` and `planTitle` are text and never a foreign key, because a finding
-outlives its plan and a check can run on a plan that is already decided, or one
-plan.py wrote. When `planId` is omitted, the service sends one fixed placeholder
-text in its place, because the store requires a non-empty plan id. Optional text
-that is blank is treated as omitted.
-
-Requires the **planning permission (`ai:plan`)**, checked **before** any request
-is sent to motir-ai. It is deliberately **not** `lesson:manage` and not a lesson
-key: a finding changes no standing instruction, so a plain member who holds
-`ai:plan` can report a defect without any right over the planner's lessons.
-
-**Output** — the first text line names the stored finding's id;
-`structuredContent` carries `id`, `source` (always `check_plan`), `fingerprint`
-and `status` (`new` for a fresh finding).
-
-| Refusal                                    | When                                                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| input validation error naming the argument | A value outside a closed enum, a missing required field, or an unknown key. Nothing sent.   |
-| `PERMISSION_DENIED`                        | The caller does not hold `ai:plan` on the project; the message names the key. Nothing sent. |
-| `PROJECT_NOT_FOUND`                        | `projectKey` resolves to no project the caller can see. Nothing sent.                       |
-| `MOTIR_AI_BAD_REQUEST`                     | motir-ai refused the finding; the message names the field.                                  |
-| `MOTIR_AI_UNAUTHORIZED`                    | motir-ai rejected the service credential.                                                   |
-| `MOTIR_AI_UNAVAILABLE`                     | motir-ai could not be reached, timed out, or answered with a server error.                  |
-| `MOTIR_AI_CONFIG`                          | motir-core has no motir-ai URL or service token configured.                                 |
-
-Every failure carries the upstream reason in its text, is **never** reported as a
-success, and is **never** retried — a retry could store a second row.
-
 #### `link_pull_request`
 
 Declare **which work item a pull request belongs to** — called immediately after
@@ -2398,12 +2312,30 @@ several pull requests. A second call naming a DIFFERENT work item therefore
 **ADDS** a row; it takes nothing off the first, and nothing is unlinked except by
 `unlink_pull_request`. The Development panel lists that set.
 
-> **ONE pull request delivering a parent and its children can be declared either
-> way.** Link the PARENT once and the merge cascades DOWN to the children on its
-> own (`childStatusCascadeService`); or link each card the pull request actually
-> delivers and the merge closes all of them, because the completion gate and the
-> status sync read the delivery set. Linking the parent is the shorter of the two
-> and stays correct as children are added.
+> **ONE pull request delivering a parent and its children links the PARENT —
+> once per repository — and never a child.** This is a correctness rule, not a
+> preference (Bug MOTIR-11624). The merge cascades DOWN to the children on its own
+> (`childStatusCascadeService`), so the parent link already closes every child.
+> What a child link adds is a QUESTION: since MOTIR-11624 the approval gates read
+> the delivery set too (`lib/services/gateSetFor.ts`), so a child linked to the
+> story's pull request is asked the approve-and-merge question for the whole
+> story, and its Approve merges every sibling with it. Only the parent's gate may
+> ask to merge the story's pull request.
+>
+> - **A child linked BESIDE the parent raises nothing and owes no repair.**
+>   `withoutAncestorDeliveries` drops a child's delivery whenever an ANCESTOR
+>   delivers the same pull request, so that link raises no gate, and a gate it
+>   raised earlier is withdrawn.
+> - **A child linked WITHOUT the parent is the defect.** Nothing is dropped, so the
+>   child carries its own merge gate over the story's pull request. **The repair is
+>   to link the PARENT** to that pull request (you may also `unlink_pull_request`
+>   the child); never answer the child's merge question.
+>
+> The dispatch prompt tells every parent-run child the same
+> (`lib/dispatch/promptTemplate.ts`: _do NOT call `link_pull_request` with key
+> <child>_). The parent link also stays correct as children are added, and it
+> spares N chances at a wrong per-child link, which is permanent until
+> `unlink_pull_request` removes it.
 
 ⚠️ **THIS PARAGRAPH USED TO SAY THE OPPOSITE, and the reversal is the point.**
 Until MOTIR-3721 / MOTIR-3757 the association a work item carried was a single

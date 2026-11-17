@@ -12,6 +12,7 @@ import { requirePlatformStaff } from '@/lib/platform/auth';
 import {
   NotPlatformStaffError,
   PlannerFindingInvalidError,
+  PlannerFindingKeyRefusedError,
   PlannerFindingLessonNotLinkedError,
   PlannerFindingUnchangedError,
 } from '@/lib/platform/errors';
@@ -47,7 +48,14 @@ export type PlannerFindingActionResult =
   | { ok: true; finding: PlannerFindingRowDTO }
   | {
       ok: false;
-      code: 'NOT_PERMITTED' | 'GONE' | 'UNCHANGED' | 'INVALID' | 'UNAVAILABLE' | 'FAILED';
+      code:
+        | 'NOT_PERMITTED'
+        | 'GONE'
+        | 'UNCHANGED'
+        | 'INVALID'
+        | 'NOT_A_WORK_ITEM'
+        | 'UNAVAILABLE'
+        | 'FAILED';
     }
   | { ok: false; code: 'LESSON_NOT_LINKED'; lessonId: string }
   | { ok: false; code: 'DUPLICATE_LESSON'; detail: string };
@@ -72,7 +80,17 @@ function refused(err: unknown, findingId: string, act: string): PlannerFindingAc
     revalidateConsole();
     return { ok: false, code: 'UNCHANGED' };
   }
-  if (err instanceof PlannerFindingInvalidError || err instanceof MotirAiBadRequestError) {
+  // A bug key naming no work item in the finding's project (MOTIR-11590) is an
+  // input the admin must correct. It gets its own code so the form says so in
+  // the record page's words, rather than blaming the planning service.
+  if (err instanceof PlannerFindingKeyRefusedError && err.reason === 'not_a_work_item') {
+    return { ok: false, code: 'NOT_A_WORK_ITEM' };
+  }
+  if (
+    err instanceof PlannerFindingInvalidError ||
+    err instanceof PlannerFindingKeyRefusedError ||
+    err instanceof MotirAiBadRequestError
+  ) {
     return { ok: false, code: 'INVALID' };
   }
   if (err instanceof PlannerFindingLessonNotLinkedError) {
@@ -114,7 +132,7 @@ export async function setPlannerFindingAttributionAction(
   }
 }
 
-export async function recordPlannerFindingBugKeyAction(
+export async function setPlannerFindingBugKeyAction(
   findingId: string,
   bugKey: string,
 ): Promise<PlannerFindingActionResult> {

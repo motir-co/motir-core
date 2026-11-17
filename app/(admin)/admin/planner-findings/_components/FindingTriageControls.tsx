@@ -24,11 +24,12 @@ import { useLessonTypeLabel } from '../../planning-lessons/_components/LessonBit
 import {
   dismissPlannerFindingAction,
   promotePlannerFindingAction,
-  recordPlannerFindingBugKeyAction,
+  setPlannerFindingBugKeyAction,
   restorePlannerFindingAction,
   setPlannerFindingAttributionAction,
   type PlannerFindingActionResult,
 } from '../actions';
+import { looksLikeBugKey } from './bugKeyShape';
 import { findingLabel } from './findingLabels';
 import { toPromoteDraft, type PromoteDraft } from './promotePrefill';
 
@@ -55,19 +56,17 @@ type InlineForm = 'attribution' | 'promote' | 'bug';
 type RetryableCode = 'NOT_PERMITTED' | 'INVALID' | 'UNAVAILABLE' | 'FAILED';
 type Failure =
   | { act: Act; code: RetryableCode }
+  | { act: 'bug'; code: 'NOT_A_WORK_ITEM'; key: string }
   | { act: 'promote'; code: 'DUPLICATE_LESSON'; detail: string };
 type Notice = { tone: 'success' | 'warning'; text: string };
 
-/** A project key, a dash and digits — the service's own rule after it upper-cases. */
-const BUG_KEY = /^[A-Z][A-Z0-9]*-\d+$/;
 const DISMISS_NOTE_MAX = 280;
 
 /** The statuses that may still be promoted; an unknown status never borrows a member's set. */
 const PROMOTABLE = new Set(['new', 'filed_as_bug']);
 
-export function looksLikeBugKey(value: string): boolean {
-  return BUG_KEY.test(value.trim().toUpperCase());
-}
+// The shape check lives in `./bugKeyShape`, shared with the record page's key cell.
+export { looksLikeBugKey };
 
 function trimPromote(draft: PromoteDraft): PromoteDraft {
   return {
@@ -144,7 +143,7 @@ function Controls({ detail }: { detail: PlannerFindingDetailDTO }) {
       case 'promote':
         return promotePlannerFindingAction(detail.id, trimPromote(promote));
       case 'bug':
-        return recordPlannerFindingBugKeyAction(detail.id, bugKey);
+        return setPlannerFindingBugKeyAction(detail.id, bugKey);
       case 'dismiss':
         return dismissPlannerFindingAction(detail.id, note.trim() || undefined);
       case 'restore':
@@ -192,6 +191,10 @@ function Controls({ detail }: { detail: PlannerFindingDetailDTO }) {
         setConfirm(null);
         setFailure({ act: 'promote', code: 'DUPLICATE_LESSON', detail: result.detail });
         return;
+      case 'NOT_A_WORK_ITEM':
+        // Only the bug-key form writes a key; the entry stays so it can be corrected.
+        setFailure({ act: 'bug', code: 'NOT_A_WORK_ITEM', key: bugKey.trim().toUpperCase() });
+        return;
       default:
         // The form keeps every entry; only the promote confirm steps aside so
         // the error sits under the form it belongs to (design Panel 13).
@@ -222,20 +225,22 @@ function Controls({ detail }: { detail: PlannerFindingDetailDTO }) {
         text={
           failure.code === 'DUPLICATE_LESSON'
             ? t('promote.duplicate')
-            : t(
-                (
-                  {
-                    NOT_PERMITTED: 'refused.notPermitted',
-                    INVALID: 'refused.invalid',
-                    UNAVAILABLE: 'refused.unavailable',
-                    FAILED: 'refused.failed',
-                  } as const
-                )[failure.code],
-              )
+            : failure.code === 'NOT_A_WORK_ITEM'
+              ? t('recordPage.findingKey.notAWorkItem', { key: failure.key })
+              : t(
+                  (
+                    {
+                      NOT_PERMITTED: 'refused.notPermitted',
+                      INVALID: 'refused.invalid',
+                      UNAVAILABLE: 'refused.unavailable',
+                      FAILED: 'refused.failed',
+                    } as const
+                  )[failure.code],
+                )
         }
         detail={failure.code === 'DUPLICATE_LESSON' ? failure.detail : null}
         retry={
-          failure.code === 'DUPLICATE_LESSON'
+          failure.code === 'DUPLICATE_LESSON' || failure.code === 'NOT_A_WORK_ITEM'
             ? null
             : { label: t('triage.retry'), onRetry: () => run(act), disabled: busy }
         }

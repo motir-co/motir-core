@@ -26,9 +26,7 @@ import {
   withdrawDeliveredCardsOnRed,
   withdrawDeliveredCardsOnRerun,
 } from './ciPromotion';
-import { recomputeWorkItemCiState } from './deliveryVerdict';
-import { recomputeWorkItemFixReason } from './fixReasonService';
-import { recomputeWorkItemResumeState } from './resumeStateService';
+import { recomputeCardCiAnswers } from './lostCheckCompletionService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 
@@ -392,14 +390,10 @@ async function applyOneCiDelivery(
       // The recompute runs under the SAME bound tenant (`work_item` has no system
       // arm) and in the same transaction as the row it reads, so it cannot fold a
       // set that is missing the row this very delivery just wrote.
-      for (const workItemId of resolved.allDeliveredWorkItemIds) {
-        await recomputeWorkItemCiState(workItemId, tx);
-        // …and the card's to-fix answer, which reads the same check rows (MOTIR-6602).
-        await recomputeWorkItemFixReason(workItemId, tx);
-        // …and whether it still waits to resume: CI started since a gated run stopped
-        // means the card is moving again (MOTIR-10308).
-        await recomputeWorkItemResumeState(workItemId, tx);
-      }
+      // `ciState`, the to-fix answer (MOTIR-6602) and the resume state (MOTIR-10308) —
+      // every answer folded from the same check rows, recomputed by the one helper the
+      // lost-completion settle also calls (MOTIR-11638).
+      await recomputeCardCiAnswers(resolved.allDeliveredWorkItemIds, tx);
       return true;
     }, CI_FEEDBACK_SYSTEM_TX);
     if (!recorded) {
@@ -621,14 +615,10 @@ async function applyOneCiDelivery(
   await withWorkspaceContext(
     actorCtx,
     async (tx) => {
-      for (const workItemId of resolved.allDeliveredWorkItemIds) {
-        await recomputeWorkItemCiState(workItemId, tx);
-        // …and the card's to-fix answer, which reads the same check rows (MOTIR-6602).
-        await recomputeWorkItemFixReason(workItemId, tx);
-        // …and whether it still waits to resume: CI started since a gated run stopped
-        // means the card is moving again (MOTIR-10308).
-        await recomputeWorkItemResumeState(workItemId, tx);
-      }
+      // `ciState`, the to-fix answer (MOTIR-6602) and the resume state (MOTIR-10308) —
+      // every answer folded from the same check rows, recomputed by the one helper the
+      // lost-completion settle also calls (MOTIR-11638).
+      await recomputeCardCiAnswers(resolved.allDeliveredWorkItemIds, tx);
     },
     CI_FEEDBACK_TENANT_TX,
   );

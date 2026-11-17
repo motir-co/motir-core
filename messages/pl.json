@@ -11320,7 +11320,9 @@
             "retire": "Wycofano szablon startowy"
           },
           "planner_finding": {
-            "triage": "Przeprowadził triaż ustalenia planisty"
+            "triage": "Przeprowadził triaż ustalenia planisty",
+            "record": "Zapisał raport ustaleń planisty",
+            "verdict": "Wydał werdykt w sprawie raportu ustaleń planisty"
           },
           "model_serving": {
             "set": "Zmieniono dostawcę obsługującego model"
@@ -12299,7 +12301,8 @@
       "view": {
         "label": "Widok",
         "grouped": "Pogrupowane",
-        "all": "Wszystkie ustalenia"
+        "all": "Wszystkie ustalenia",
+        "records": "Rekordy"
       },
       "card": {
         "title": "Ustalenia",
@@ -12438,7 +12441,8 @@
         "baseline": "Baza kodu",
         "recorded": "Zapisano",
         "triagedBy": "Ostatni triaż: {who} · {when}",
-        "lessonLink": "Otwórz lekcję w Lekcjach planowania"
+        "lessonLink": "Otwórz lekcję w Lekcjach planowania",
+        "record": "Rekord"
       },
       "cost": {
         "title": "Koszt przeglądu i naprawy",
@@ -12514,10 +12518,131 @@
       },
       "noop": "Już aktualne. Ktoś przed chwilą zmienił to ustalenie, więc nie było nic do zmiany i nic nie zostało zalogowane.",
       "a11y": {
-        "viewGroup": "Pokaż ustalenia pogrupowane według defektu lub pojedynczo",
+        "viewGroup": "Pokaż ustalenia pogrupowane według defektu, jedno po drugim albo jako jeden rekord na sprawdzenie planu",
         "captionGroups": "Ustalenia pogrupowane według defektu",
         "captionAll": "Wszystkie ustalenia",
         "detailRegion": "Szczegóły ustalenia"
+      },
+      "records": {
+        "title": "Rekordy",
+        "subtitle": "Jeden wiersz na sprawdzenie planu, najnowsze najpierw.",
+        "caption": "Rekordy ustaleń planisty",
+        "col": {
+          "created": "Utworzono",
+          "planner": "Planista",
+          "source": "Źródło",
+          "plan": "Plan",
+          "verdict": "Werdykt",
+          "findings": "Ustalenia",
+          "attributed": "Przypisane",
+          "open": "Otwórz"
+        },
+        "row": {
+          "open": "Otwórz rekord {id}"
+        },
+        "verdict": {
+          "open": "Otwarty",
+          "attributed": "Przypisany"
+        },
+        "filter": {
+          "label": "Filtruj rekordy",
+          "verdict": "Stan werdyktu",
+          "verdictAll": "Wszystkie",
+          "planner": "Planista",
+          "plannerAny": "Dowolny planista",
+          "source": "Źródło",
+          "sourceAny": "Dowolne źródło",
+          "sheetTitle": "Filtruj rekordy"
+        },
+        "empty": {
+          "title": "Brak rekordów",
+          "body": "Rekord jest zachowywany za każdym razem, gdy końcowe sprawdzenie hostowanego planisty lub skill check plan przegląda plan. Nie zachowano jeszcze żadnego."
+        },
+        "noMatch": {
+          "title": "Żaden rekord nie pasuje do tych filtrów",
+          "body": "Usuń filtr albo wyczyść wszystkie.",
+          "action": "Wyczyść filtry"
+        },
+        "loading": "Wczytywanie rekordów",
+        "unavailable": {
+          "title": "Nie udało się wczytać rekordów",
+          "body": "Usługa planowania (motir-ai) nie odpowiedziała, więc żaden rekord nie jest pokazany. To błąd wczytywania — nic się nie zmieniło i nie oznacza to, że rekordów nie ma.",
+          "retry": "Ponów"
+        }
+      },
+      "record": {
+        "crumb": "Operacje · Ustalenia planisty · Rekord",
+        "back": "Wróć do rekordów",
+        "title": "Rekord",
+        "context": "Kontekst planu",
+        "field": {
+          "plan": "Plan",
+          "planSession": "Sesja planowania",
+          "job": "Zadanie",
+          "model": "Model",
+          "baseline": "Baza kodu",
+          "verdict": "Werdykt",
+          "none": "Brak"
+        },
+        "verdictBy": "Przypisane przez {who} · {when}",
+        "findings": {
+          "title": "Ustalenia w tym rekordzie",
+          "col": {
+            "site": "Miejsce",
+            "attribution": "Przypisanie",
+            "why": "Powód",
+            "hosted": "Hostowany planista",
+            "planpy": "plan.py"
+          },
+          "empty": "Ten rekord nie zawiera ustaleń."
+        },
+        "command": {
+          "intro": "Wydaj werdykt dla tego rekordu w swoim agencie programistycznym:",
+          "line": "motir check planner finding {id}",
+          "copy": "Kopiuj",
+          "copyLabel": "Kopiuj polecenie",
+          "copied": "Skopiowano polecenie"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "Przejście do końca",
+          "answer": {
+            "thru": "Przechodzi do końca",
+            "stops": "Nie przechodzi do końca",
+            "none": "Nie zapisano odpowiedzi"
+          },
+          "hint": {
+            "thru": "Sprawdzenie, które zachowało ten rekord, przewidziało, że uruchomienie może przeprowadzić ten plan do końca. Jego ustalenia są wymienione poniżej.",
+            "stops": "Sprawdzenie przewidziało, że uruchomienie zatrzyma się na elementach roboczych poniżej. Popraw te elementy, a potem uruchom sprawdzenie ponownie.",
+            "none": "Żadne sprawdzenie nie wysłało odpowiedzi dla tego rekordu, więc nie ma czego odczytać. Werdykt tego nie zmienia — odpowiedź należy do sprawdzenia, nie do agenta."
+          },
+          "cards": {
+            "label": "Elementy robocze do poprawienia",
+            "none": "Nie zapisano elementu"
+          },
+          "a11y": {
+            "region": "Przejście do końca: czy uruchomienie może przeprowadzić ten plan do końca"
+          }
+        },
+        "findingKey": {
+          "column": "Bug planowania",
+          "labelFinding": "· {site}",
+          "hint": "Klucz taki jak MOTIR-123, z projektu tego rekordu.",
+          "link": "Połącz",
+          "linking": "Łączenie…",
+          "remove": "Usuń",
+          "removing": "Usuwanie…",
+          "removeFinding": "Usuń klucz buga planowania z {site}",
+          "notAWorkItem": "Nie połączono — {key} nie jest elementem roboczym w projekcie tego rekordu. Nic nie zapisano.",
+          "linked": "Połączono {key}.",
+          "removed": "Usunięto klucz buga planowania.",
+          "unchanged": "Już połączono z {key}. Nic się nie zmieniło.",
+          "openRecord": "Klucze bugów planowania łączy się, gdy ten rekord ma werdykt.",
+          "a11y": {
+            "empty": "Brak klucza buga planowania"
+          }
+        }
       }
     },
     "usage": {

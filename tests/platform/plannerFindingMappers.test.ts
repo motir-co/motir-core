@@ -104,6 +104,7 @@ describe('toPlannerFindingRowDTO', () => {
   it('maps the row fields and keeps the wire strings', () => {
     expect(toPlannerFindingRowDTO(RAW)).toEqual({
       id: 'pf_1',
+      recordId: '',
       source: 'in_loop',
       planner: 'hosted',
       attribution: 'corpus',
@@ -118,6 +119,11 @@ describe('toPlannerFindingRowDTO', () => {
       bugKey: null,
       createdAt: '2026-11-01T10:00:00.000Z',
     });
+  });
+
+  it('passes the record id through, and reads a pre-records answer as no id (MOTIR-11463)', () => {
+    expect(toPlannerFindingRowDTO({ ...RAW, recordId: 'rec_9' }).recordId).toBe('rec_9');
+    expect(toPlannerFindingRowDTO(RAW).recordId).toBe('');
   });
 
   it('reads a NULL attribution as unattributed', () => {

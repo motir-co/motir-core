@@ -151,6 +151,11 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // `platform_aws_read` is MOTIR-10890's record of WHEN each AWS figure on the
     // Services page was last read (`20261110230000_platform_aws_read`):
     // platform-only, written and read solely from this tier.
+    // `plan` carries MOTIR-11458's SELECT-only arm, for the one cross-tenant read
+    // the planner-findings platform route makes to resolve a record's plan
+    // (`20261116120000_plan_platform_staff_read`). `work_item` carries
+    // MOTIR-11504's SELECT-only arm, for the one lookup that resolves a typed key
+    // in a record's own project (`20261117090000_work_item_platform_staff_read`).
     // `ci_fleet_blind_spots` is MOTIR-11439's record of the provision sweep's last
     // reconcile outcome (`20261116210000_ci_fleet_blind_spots`): platform-only,
     // written by the sweep under `app.system_admin` and read from this tier.
@@ -171,6 +176,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'org_feature_flag',
       'organization',
       'organization_membership',
+      'plan',
       'platform_audit_log',
       'platform_aws_read',
       'platform_fleet_kind_switch',
@@ -180,6 +186,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'project',
       'project_repository',
       'seed_registry_entry',
+      'work_item',
       'workspace',
       'workspace_membership',
     ]);

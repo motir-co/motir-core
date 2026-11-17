@@ -8,25 +8,56 @@ import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
-// THE TOKEN BOUNDARY (Story MOTIR-7662 · MOTIR-7673 ·
-// `docs/decisions/platform-staff-auth.md` §2, the 2026-10-07 amendment).
+// THE TOKEN BOUNDARY (Story MOTIR-7662 · MOTIR-7673, widened by Story
+// MOTIR-11455 · MOTIR-11458 · `docs/decisions/platform-staff-auth.md` §2, the
+// 2026-10-07 and 2026-11-16 amendments).
 //
-// The amendment lets a staff member's personal access token reach the IDEAS
-// endpoints and nothing else on the platform. This file is what turns "nothing
-// else" from a promise into a failing build, in two halves:
+// The amendments let a staff member's personal access token reach the IDEAS and
+// the PLANNER-FINDINGS endpoints and nothing else on the platform. This file is
+// what turns "nothing else" from a promise into a failing build, in two halves:
 //
-//  1. STRUCTURAL — the ideas gate (`lib/platform/ideasGate.ts`) is imported from
-//     `app/api/platform/ideas/**` only. Any other importer under `app/` or `lib/`
-//     fails here, by path.
+//  1. STRUCTURAL — each token gate is imported from its own route tree only
+//     (`lib/platform/ideasGate.ts` from `app/api/platform/ideas/**`,
+//     `lib/platform/plannerFindingsGate.ts` from
+//     `app/api/platform/planner-findings/**`), and the token half they share
+//     (`lib/platform/staffTokenPrincipal.ts`) from the two gates only. Any other
+//     importer under `app/` or `lib/` fails here, by path.
 //  2. BEHAVIOURAL — the ordinary gate, `requirePlatformStaff`, never accepts a
 //     token: with a valid superadmin token and no session it refuses at every
 //     degree, and every route handler under `app/api/**` that calls it (found by
 //     scanning, not by a hand list) refuses a bearer-only request.
 
 const ROOT = process.cwd();
-const GATE_MODULE =
-  /['"]@\/lib\/platform\/ideasGate['"]|['"](\.{1,2}\/)+(lib\/)?platform\/ideasGate['"]|['"]\.\/ideasGate['"]/;
-const ALLOWED_DIR = 'app/api/platform/ideas/';
+
+/** A module named by any import spelling: `@/lib/platform/x`, a relative path, or `./x`. */
+function moduleImport(name: string): RegExp {
+  return new RegExp(
+    `['"]@\\/lib\\/platform\\/${name}['"]|['"](\\.{1,2}\\/)+(lib\\/)?platform\\/${name}['"]|['"]\\.\\/${name}['"]`,
+  );
+}
+
+/** Every token module, the module itself, and the ONLY places allowed to import it. */
+const TOKEN_MODULES = [
+  {
+    file: 'lib/platform/ideasGate.ts',
+    pattern: moduleImport('ideasGate'),
+    allowed: (file: string) => file.startsWith('app/api/platform/ideas/'),
+  },
+  {
+    file: 'lib/platform/plannerFindingsGate.ts',
+    pattern: moduleImport('plannerFindingsGate'),
+    allowed: (file: string) => file.startsWith('app/api/platform/planner-findings/'),
+  },
+  {
+    file: 'lib/platform/staffTokenPrincipal.ts',
+    pattern: moduleImport('staffTokenPrincipal'),
+    allowed: (file: string) =>
+      file === 'lib/platform/ideasGate.ts' || file === 'lib/platform/plannerFindingsGate.ts',
+  },
+] as const;
+
+/** The route trees whose handlers are token doors — left out of the behavioural scan. */
+const TOKEN_ROUTE_DIRS = ['app/api/platform/ideas/', 'app/api/platform/planner-findings/'];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -39,15 +70,15 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 /**
- * Every file (repo-relative) that imports the ideas gate from outside the one
- * directory allowed to. Pure over its input, so the negative case is testable.
+ * Every `file → module` import of a token module from outside the places allowed
+ * to import it. Pure over its input, so the negative case is testable.
  */
 function gateImportViolations(files: { file: string; source: string }[]): string[] {
-  return files
-    .filter(({ file }) => file !== 'lib/platform/ideasGate.ts')
-    .filter(({ file }) => !file.startsWith(ALLOWED_DIR))
-    .filter(({ source }) => GATE_MODULE.test(source))
-    .map(({ file }) => file);
+  return files.flatMap(({ file, source }) =>
+    TOKEN_MODULES.filter((m) => file !== m.file && !m.allowed(file) && m.pattern.test(source)).map(
+      (m) => `${file} -> ${m.file}`,
+    ),
+  );
 }
 
 function sourceTree(): { file: string; source: string }[] {
@@ -59,12 +90,38 @@ function sourceTree(): { file: string; source: string }[] {
   );
 }
 
-describe('structural — only app/api/platform/ideas/** imports the ideas gate', () => {
-  it('has no importer outside the allowed directory', () => {
+describe('structural — each token gate is imported from its own route tree only', () => {
+  it('has no importer outside the allowed places', () => {
     expect(gateImportViolations(sourceTree())).toEqual([]);
   });
 
-  it('catches an importer outside it, by any spelling (the negative fixture)', () => {
+  it('names exactly the two route trees and the two gates as the allowed importers', () => {
+    const allowedFor = (file: string) =>
+      TOKEN_MODULES.filter((m) => m.allowed(file)).map((m) => m.file);
+    expect(allowedFor('app/api/platform/ideas/route.ts')).toEqual(['lib/platform/ideasGate.ts']);
+    expect(allowedFor('app/api/platform/planner-findings/records/route.ts')).toEqual([
+      'lib/platform/plannerFindingsGate.ts',
+    ]);
+    expect(allowedFor('lib/platform/ideasGate.ts')).toEqual([
+      'lib/platform/staffTokenPrincipal.ts',
+    ]);
+    expect(allowedFor('lib/platform/plannerFindingsGate.ts')).toEqual([
+      'lib/platform/staffTokenPrincipal.ts',
+    ]);
+    expect(allowedFor('app/api/platform/orgs/route.ts')).toEqual([]);
+  });
+
+  it('really imports each gate where it is allowed to (the positive half)', () => {
+    const tree = sourceTree();
+    for (const m of TOKEN_MODULES) {
+      expect(
+        tree.some(({ file, source }) => m.allowed(file) && m.pattern.test(source)),
+        m.file,
+      ).toBe(true);
+    }
+  });
+
+  it('catches an importer outside them, by any spelling (the negative fixture)', () => {
     const offenders = gateImportViolations([
       {
         file: 'app/api/platform/orgs/route.ts',
@@ -81,12 +138,48 @@ describe('structural — only app/api/platform/ideas/** imports the ideas gate',
         source: "import { x } from '@/lib/platform/ideasGate';",
       },
       { file: 'lib/platform/ideasGate.ts', source: "import './ideasGate';" },
+      // The planner-findings gate: its own tree is allowed, the ideas tree is not.
+      {
+        file: 'app/api/platform/planner-findings/records/route.ts',
+        source: "import { x } from '@/lib/platform/plannerFindingsGate';",
+      },
+      {
+        file: 'app/api/platform/ideas/runs/route.ts',
+        source: "import { x } from '@/lib/platform/plannerFindingsGate';",
+      },
+      {
+        file: 'app/(admin)/admin/planner-findings/actions.ts',
+        source: "import { x } from '@/lib/platform/plannerFindingsGate';",
+      },
+      {
+        file: 'app/api/platform/planner-findings/[findingId]/route.ts',
+        source: "import { x } from '@/lib/platform/ideasGate';",
+      },
+      // The shared token half: the two gates only — never a route, never a service.
+      { file: 'lib/platform/ideasGate.ts', source: "import { x } from './staffTokenPrincipal';" },
+      {
+        file: 'lib/platform/plannerFindingsGate.ts',
+        source: "import { x } from './staffTokenPrincipal';",
+      },
+      {
+        file: 'app/api/platform/planner-findings/records/[id]/route.ts',
+        source: "import { x } from '@/lib/platform/staffTokenPrincipal';",
+      },
+      {
+        file: 'lib/services/plannerFindingsService.ts',
+        source: "import { x } from '../platform/staffTokenPrincipal';",
+      },
     ]);
     expect(offenders).toEqual([
-      'app/api/platform/orgs/route.ts',
-      'lib/services/fooService.ts',
-      'lib/platform/other.ts',
-      'app/(admin)/admin/ideas/actions.ts',
+      'app/api/platform/orgs/route.ts -> lib/platform/ideasGate.ts',
+      'lib/services/fooService.ts -> lib/platform/ideasGate.ts',
+      'lib/platform/other.ts -> lib/platform/ideasGate.ts',
+      'app/(admin)/admin/ideas/actions.ts -> lib/platform/ideasGate.ts',
+      'app/api/platform/ideas/runs/route.ts -> lib/platform/plannerFindingsGate.ts',
+      'app/(admin)/admin/planner-findings/actions.ts -> lib/platform/plannerFindingsGate.ts',
+      'app/api/platform/planner-findings/[findingId]/route.ts -> lib/platform/ideasGate.ts',
+      'app/api/platform/planner-findings/records/[id]/route.ts -> lib/platform/staffTokenPrincipal.ts',
+      'lib/services/plannerFindingsService.ts -> lib/platform/staffTokenPrincipal.ts',
     ]);
   });
 });
@@ -117,12 +210,12 @@ afterAll(async () => {
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 
-/** Every route handler under `app/api/` (outside the ideas tree) that calls `requirePlatformStaff`. */
+/** Every route handler under `app/api/` (outside the token trees) that calls `requirePlatformStaff`. */
 function platformRoutes(): string[] {
   return walk(path.join(ROOT, 'app/api'))
     .filter((full) => /route\.(ts|tsx)$/.test(full))
     .map((full) => path.relative(ROOT, full).split(path.sep).join('/'))
-    .filter((file) => !file.startsWith(ALLOWED_DIR))
+    .filter((file) => !TOKEN_ROUTE_DIRS.some((dir) => file.startsWith(dir)))
     .filter((file) =>
       /\brequirePlatformStaff\s*\(/.test(readFileSync(path.join(ROOT, file), 'utf8')),
     );
@@ -171,7 +264,7 @@ describe('behavioural — the ordinary platform gate never accepts a token', () 
         answered.push(`${method} ${file}`);
       }
     }
-    // Today no app/api route outside the ideas tree is platform-gated — the
+    // Today no app/api route outside the token trees is platform-gated — the
     // console is server actions behind the (admin) layout. The day one is added,
     // this loop starts probing it without anyone editing this file.
     expect(answered.length).toBeGreaterThanOrEqual(routes.length);

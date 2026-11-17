@@ -20,7 +20,7 @@ import { renderToHtml } from '../helpers/serverPageHarness';
 
 const actions = vi.hoisted(() => ({
   setPlannerFindingAttributionAction: vi.fn(),
-  recordPlannerFindingBugKeyAction: vi.fn(),
+  setPlannerFindingBugKeyAction: vi.fn(),
   dismissPlannerFindingAction: vi.fn(),
   restorePlannerFindingAction: vi.fn(),
   promotePlannerFindingAction: vi.fn(),
@@ -373,9 +373,28 @@ describe('record a bug key', () => {
     type(pf.bug.label, 'motir-123');
     expect(screen.queryByText(pf.bug.invalid)).toBeNull();
     await click(pf.bug.save);
-    expect(actions.recordPlannerFindingBugKeyAction).toHaveBeenCalledWith('pf_1', 'motir-123');
+    expect(actions.setPlannerFindingBugKeyAction).toHaveBeenCalledWith('pf_1', 'motir-123');
     expect(screen.getByRole('status').textContent).toBe('Recorded bug MOTIR-123.');
     expect(document.body.textContent).not.toMatch(/filed from|created a bug|work item/i);
+  });
+
+  it("a key outside the finding's project says so in the record page's words, keeps the entry and offers no retry", async () => {
+    actions.setPlannerFindingBugKeyAction.mockResolvedValueOnce({
+      ok: false,
+      code: 'NOT_A_WORK_ITEM',
+    });
+    mount();
+    fireEvent.click(button(pf.bug.open));
+    type(pf.bug.label, 'other-9');
+    await click(pf.bug.save);
+    const error = screen.getByTestId('planner-finding-triage-error');
+    expect(error.getAttribute('role')).toBe('alert');
+    expect(error.textContent).toContain(
+      pf.recordPage.findingKey.notAWorkItem.replace('{key}', 'OTHER-9'),
+    );
+    expect(error.textContent).not.toContain(pf.refused.invalid);
+    expect(screen.queryByRole('button', { name: pf.triage.retry })).toBeNull();
+    expect((screen.getByLabelText(pf.bug.label) as HTMLInputElement).value).toBe('other-9');
   });
 });
 
@@ -459,7 +478,7 @@ describe('every result code has its own text', () => {
   });
 
   it.each(RETRYABLE)('%s on a bug key keeps the key', async (code, text) => {
-    actions.recordPlannerFindingBugKeyAction.mockResolvedValueOnce({ ok: false, code });
+    actions.setPlannerFindingBugKeyAction.mockResolvedValueOnce({ ok: false, code });
     mount();
     fireEvent.click(button(pf.bug.open));
     type(pf.bug.label, 'MOTIR-9');
@@ -489,7 +508,7 @@ describe('every result code has its own text', () => {
   });
 
   it('GONE says so and returns to the list', async () => {
-    actions.recordPlannerFindingBugKeyAction.mockResolvedValueOnce({ ok: false, code: 'GONE' });
+    actions.setPlannerFindingBugKeyAction.mockResolvedValueOnce({ ok: false, code: 'GONE' });
     mount();
     fireEvent.click(button(pf.bug.open));
     type(pf.bug.label, 'MOTIR-9');
@@ -516,7 +535,7 @@ describe('every result code has its own text', () => {
 describe('in flight and cancel', () => {
   it('disables every control, shows Saving…, and never sends twice', async () => {
     let finish: (value: PlannerFindingActionResult) => void = () => {};
-    actions.recordPlannerFindingBugKeyAction.mockReturnValueOnce(
+    actions.setPlannerFindingBugKeyAction.mockReturnValueOnce(
       new Promise<PlannerFindingActionResult>((resolve) => {
         finish = resolve;
       }),
@@ -535,7 +554,7 @@ describe('in flight and cancel', () => {
     await act(async () => {
       fireEvent.click(saving);
     });
-    expect(actions.recordPlannerFindingBugKeyAction).toHaveBeenCalledTimes(1);
+    expect(actions.setPlannerFindingBugKeyAction).toHaveBeenCalledTimes(1);
     await act(async () => finish(OK));
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toBe('Recorded bug MOTIR-9.'),

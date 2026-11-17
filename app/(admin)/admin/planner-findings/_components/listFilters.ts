@@ -1,4 +1,7 @@
-import type { PlannerFindingListFilters } from '@/lib/dto/plannerFindings';
+import type {
+  PlannerFindingListFilters,
+  PlannerFindingRecordListFilters,
+} from '@/lib/dto/plannerFindings';
 import { oneParam } from './filterKeys';
 
 type Params = Record<string, string | string[] | undefined>;
@@ -26,4 +29,19 @@ export function toListFilters(params: Params): PlannerFindingListFilters {
     ...(state === 'dismissed' || state === 'all' ? { status: state } : {}),
     ...(cursor ? { cursor } : {}),
   };
+}
+
+/**
+ * The URL → the Records view's filters (MOTIR-11463). Only the three record keys
+ * and the cursor are read — a finding filter the view switch carried over is
+ * dropped here — and passed as given: the console service drops a value outside
+ * its closed set rather than sending it. Absent keys are omitted.
+ */
+export function toRecordListFilters(params: Params): PlannerFindingRecordListFilters {
+  const out: PlannerFindingRecordListFilters = {};
+  for (const key of ['verdict', 'planner', 'source', 'cursor'] as const) {
+    const value = oneParam(params[key]);
+    if (value) out[key] = value;
+  }
+  return out;
 }

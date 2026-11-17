@@ -5,6 +5,7 @@ import type { PlatformAuditEntry } from '@/lib/platform/context';
 import {
   NotPlatformStaffError,
   PlannerFindingInvalidError,
+  PlannerFindingKeyRefusedError,
   PlannerFindingLessonNotLinkedError,
   PlannerFindingUnchangedError,
 } from '@/lib/platform/errors';
@@ -39,7 +40,9 @@ const audit = vi.hoisted(() => ({
   rows: [] as PlatformAuditEntry[],
   failAppend: false,
   principals: [] as PlatformPrincipal[],
+  reads: [] as PlatformAuditEntry[],
 }));
+const repo = vi.hoisted(() => ({ findWorkItemByIdentifier: vi.fn() }));
 
 vi.mock('@/lib/ai/motirAiClient', async () => {
   const actual =
@@ -61,11 +64,28 @@ vi.mock('@/lib/platform/auth', async () => {
     ),
   };
 });
+vi.mock('@/lib/repositories/platformPlanRepository', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/repositories/platformPlanRepository')>(
+    '@/lib/repositories/platformPlanRepository',
+  );
+  return {
+    ...actual,
+    platformPlanRepository: { ...actual.platformPlanRepository, ...repo },
+  };
+});
 vi.mock('@/lib/platform/context', async () => {
   const actual =
     await vi.importActual<typeof import('@/lib/platform/context')>('@/lib/platform/context');
   return {
     ...actual,
+    // The key's resolution read: one up-front `estate.read` row, recorded apart
+    // from the write's principals so the write assertions stay the write's.
+    withPlatformRead: vi.fn(
+      async (_p: PlatformPrincipal, entry: PlatformAuditEntry, fn: (tx: unknown) => unknown) => {
+        audit.reads.push(entry);
+        return fn({});
+      },
+    ),
     withPlatformWrite: vi.fn(
       async (
         principal: PlatformPrincipal,
@@ -160,7 +180,12 @@ beforeEach(() => {
   gate.principal = OPERATOR;
   audit.rows = [];
   audit.principals = [];
+  audit.reads = [];
   audit.failAppend = false;
+  repo.findWorkItemByIdentifier.mockImplementation(async (key: string) => ({
+    id: `wi_${key}`,
+    identifier: key,
+  }));
   client.triagePlannerFinding.mockResolvedValue({ finding: finding(), audit: CHANGED });
   client.getPlannerFinding.mockResolvedValue(finding());
   client.createLesson.mockResolvedValue({ id: 'lsn_9' });
@@ -217,6 +242,29 @@ describe('the plain writes', () => {
   it('recordBugKey sends filed_as_bug with the trimmed, upper-cased key', async () => {
     await svc.recordBugKey(FORGED, 'pf_1', '  motir-123 ');
     expect(lastPatch()).toEqual({ status: 'filed_as_bug', bugKey: 'MOTIR-123' });
+  });
+
+  it("recordBugKey resolves the key in the finding's own project, in one audited read", async () => {
+    client.getPlannerFinding.mockResolvedValueOnce(finding({ coreProjectId: 'pj_other' }));
+    await svc.recordBugKey(FORGED, 'pf_1', 'motir-7');
+    expect(repo.findWorkItemByIdentifier).toHaveBeenCalledWith('MOTIR-7', 'pj_other', {});
+    expect(audit.reads).toEqual([
+      {
+        action: 'estate.read',
+        targetKind: 'platform',
+        targetId: 'pf_1',
+        metadata: { surface: 'planner_finding.bug_key' },
+      },
+    ]);
+  });
+
+  it('recordBugKey refuses a key that names no work item there, and writes nothing', async () => {
+    repo.findWorkItemByIdentifier.mockResolvedValueOnce(null);
+    const err = await svc.recordBugKey(FORGED, 'pf_1', 'MOTIR-404').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlannerFindingKeyRefusedError);
+    expect((err as PlannerFindingKeyRefusedError).reason).toBe('not_a_work_item');
+    expect(client.triagePlannerFinding).not.toHaveBeenCalled();
+    expect(audit.rows).toEqual([]);
   });
 
   it('dismiss sends the note only when one was given', async () => {

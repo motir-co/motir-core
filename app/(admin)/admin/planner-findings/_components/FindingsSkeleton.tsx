@@ -7,13 +7,22 @@ import { Card } from '@/components/ui/Card';
  * blocks and five table rows wait. One status announcement for the region; the
  * blocks are decorative.
  */
-export function FindingsSkeleton({ title, label }: { title: string; label: string }) {
+export function FindingsSkeleton({
+  title,
+  label,
+  filters = 5,
+}: {
+  title: string;
+  label: string;
+  /** How many inert filter blocks the frame draws: five for findings, three for records. */
+  filters?: number;
+}) {
   return (
     <div role="status" aria-label={label} aria-busy="true" data-testid="planner-findings-loading">
       <Card header={<h2 className="font-sans text-sm font-semibold text-(--el-text)">{title}</h2>}>
         <div className="flex animate-pulse flex-col gap-4" aria-hidden="true">
           <div className="flex flex-wrap gap-2">
-            {[0, 1, 2, 3, 4].map((i) => (
+            {Array.from({ length: filters }, (_, i) => (
               <Block key={i} className="h-(--height-control) w-36" />
             ))}
           </div>

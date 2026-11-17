@@ -205,10 +205,12 @@ export function registerLinkPullRequest(
         'request may deliver several work items and one work item may be delivered by several ' +
         'pull requests — the item page’s Development panel lists them. A link made by mistake ' +
         'is retracted with `unlink_pull_request`, which is the only thing that removes one. ' +
-        'So ONE pull request delivering a parent and its children can be declared either way: ' +
-        'link the PARENT once and the merge cascades DOWN to its children on its own, or link ' +
-        'each card the pull request actually delivers and the merge closes all of them. Linking ' +
-        'the parent is the shorter of the two and stays correct as children are added. ' +
+        'ONE pull request delivering a parent and its children links the PARENT — once per ' +
+        'repository — and NEVER a child: the merge cascades DOWN to the children on its own, and ' +
+        'the approval gates read the same set, so a child linked without its parent is asked to ' +
+        'approve and merge the whole story’s pull request. A child linked beside the parent ' +
+        'raises nothing and owes no repair; a child linked without it is repaired by linking ' +
+        'the parent. ' +
         'Address the pull request as `repository` ("owner/name") + `number`, or as the `url` ' +
         '`gh pr create` printed. It works BEFORE GitHub’s webhook has delivered anything — ' +
         'that is the case it exists for — writing the row from the `headRef` / `baseRef` / ' +

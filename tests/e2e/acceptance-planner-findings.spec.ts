@@ -1,6 +1,7 @@
 import { createFormatter, createTranslator } from 'next-intl';
 import { expect, test } from './_helpers/acceptance-video';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import { resetBillingFixture, seedBillingOwner } from './_helpers/billing';
 import {
   fixtureFinding,
@@ -128,6 +129,22 @@ test('platform admins list, group, open, triage and promote planner findings; a 
       data: { ...base, sessionId: session.id, status, title, createdById: seed.ownerId },
     });
   };
+  // A finding's bug key must name a work item in the finding's own project
+  // (MOTIR-11590), so the bug the console files against is a real card.
+  const bugItem = await adminDb.workItem.create({
+    data: {
+      ...base,
+      kind: 'bug',
+      key: 1,
+      identifier: 'BILL-1',
+      title: 'Planner names a path it never read',
+      status: 'todo',
+      reporterId: seed.ownerId,
+      position: keyForAppend(null),
+    },
+  });
+  const BUG_KEY = bugItem.identifier;
+
   const declinedPlan = await corePlan('Billing export, declined', 'declined');
   const deletedPlan = await corePlan('Search rework, later deleted', 'planned');
 
@@ -541,12 +558,15 @@ test('platform admins list, group, open, triage and promote planner findings; a 
     resetPlannerFindingsJournal();
     await openDetail(named.bug.id);
     await triage.getByRole('button', { name: ui.bug.open }).click();
-    await main.getByTestId('planner-finding-bug-key').getByLabel(ui.bug.label).fill('motir-123');
+    await main
+      .getByTestId('planner-finding-bug-key')
+      .getByLabel(ui.bug.label)
+      .fill(BUG_KEY.toLowerCase());
     await triage.getByRole('button', { name: ui.bug.save }).click();
-    await expect(notice).toHaveText(t('bug.saved', { key: 'MOTIR-123' }));
-    await expect(detail).toContainText(t('status.bugWithKey', { key: 'MOTIR-123' }));
+    await expect(notice).toHaveText(t('bug.saved', { key: BUG_KEY }));
+    await expect(detail).toContainText(t('status.bugWithKey', { key: BUG_KEY }));
     const bugPatch = patches()[0]!;
-    expect(bugPatch.body).toMatchObject({ status: 'filed_as_bug', bugKey: 'MOTIR-123' });
+    expect(bugPatch.body).toMatchObject({ status: 'filed_as_bug', bugKey: BUG_KEY });
     expect(Object.keys(bugPatch.body as object).sort()).toEqual([
       'actorCoreUserId',
       'bugKey',
@@ -564,7 +584,7 @@ test('platform admins list, group, open, triage and promote planner findings; a 
     await beat();
 
     await page.goto(`${BASE}?view=all`);
-    await expect(row(named.bug.id)).toContainText(t('status.bugWithKey', { key: 'MOTIR-123' }));
+    await expect(row(named.bug.id)).toContainText(t('status.bugWithKey', { key: BUG_KEY }));
     await expect(row(named.dismiss.id)).toHaveCount(0);
     await page.goto(`${BASE}?view=all&state=dismissed`);
     await expect(row(named.dismiss.id)).toBeVisible();

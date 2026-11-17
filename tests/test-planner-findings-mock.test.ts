@@ -312,6 +312,8 @@ describe('PATCH /v1/admin/planner-findings/:id', () => {
     ['a promote with no lesson id', { status: 'promoted_to_lesson' }],
     ['a bug with no key', { status: 'filed_as_bug' }],
     ['a blank text field', { why: '  ' }],
+    ['a key that is neither text nor null', { bugKey: 7 }],
+    ['a clear beside filed_as_bug', { status: 'filed_as_bug', bugKey: null }],
   ])('refuses %s with 400 validation_error', async (_name, body) => {
     const res = await patch('pf_1', body);
     expect(res.status).toBe(400);
@@ -329,6 +331,174 @@ describe('PATCH /v1/admin/planner-findings/:id', () => {
     const missing = await patch('pf_none', { attribution: 'code' });
     expect(missing.status).toBe(404);
     expect(missing.body['code']).toBe('not_found');
+  });
+});
+
+describe('PATCH /v1/admin/planner-findings/:id with a key alone (MOTIR-11589)', () => {
+  beforeEach(() =>
+    seed({
+      findings: [
+        finding({ id: 'pf_k', status: 'promoted_to_lesson', lessonId: 'les_9', why: 'w' }),
+      ],
+    }),
+  );
+
+  it('sets, replaces and clears the key, touching no other column', async () => {
+    const set = await patch('pf_k', { bugKey: 'BILL-1' });
+    expect(set.status).toBe(200);
+    expect(set.body['audit']).toMatchObject({
+      before: { bugKey: null },
+      after: { bugKey: 'BILL-1' },
+    });
+    expect(stored().findings[0]).toMatchObject({
+      bugKey: 'BILL-1',
+      status: 'promoted_to_lesson',
+      lessonId: 'les_9',
+      why: 'w',
+      triagedBy: 'u_op',
+    });
+
+    await patch('pf_k', { bugKey: 'BILL-2' });
+    expect(stored().findings[0]?.bugKey).toBe('BILL-2');
+
+    const cleared = await patch('pf_k', { bugKey: null });
+    expect(cleared.body['audit']).toMatchObject({ after: { bugKey: null } });
+    expect(stored().findings[0]).toMatchObject({ bugKey: null, lessonId: 'les_9' });
+
+    await patch('pf_k', { bugKey: 'BILL-3' });
+    await patch('pf_k', { bugKey: '   ' });
+    expect(stored().findings[0]?.bugKey).toBeNull();
+  });
+
+  it('answers a set of the key already carried with audit null and stores nothing', async () => {
+    await patch('pf_k', { bugKey: 'BILL-1' });
+    const before = readFileSync(fixturePath, 'utf8');
+    const again = await patch('pf_k', { bugKey: 'BILL-1' });
+    expect(again.status).toBe(200);
+    expect(again.body['audit']).toBeNull();
+    expect(readFileSync(fixturePath, 'utf8')).toBe(before);
+    expect((await patch('pf_k', { bugKey: null })).body['audit']).not.toBeNull();
+    expect((await patch('pf_k', { bugKey: null })).body['audit']).toBeNull();
+  });
+
+  it('keeps the shipped status behaviour: a status write clears the key', async () => {
+    await patch('pf_k', { bugKey: 'BILL-1' });
+    await patch('pf_k', { status: 'new' });
+    expect(stored().findings[0]).toMatchObject({ status: 'new', bugKey: null, lessonId: null });
+  });
+});
+
+describe('the record reads (MOTIR-11507)', () => {
+  const record = (id: string, over: Record<string, unknown> = {}) =>
+    helper.fixtureRecord({ id, ...over });
+
+  beforeEach(() =>
+    seed({
+      records: [
+        record('rec_old', { createdAt: at(1), verdictState: 'attributed', planner: 'plan_py' }),
+        record('rec_new', {
+          createdAt: at(3),
+          runThroughAnswer: 'STOPS',
+          runThroughStopCards: ['A-2', 'A-1'],
+        }),
+        record('rec_mid', { createdAt: at(2), source: 'in_loop', planId: 'plan_x' }),
+      ],
+      findings: [
+        finding({ id: 'pf_b', recordId: 'rec_new', attribution: 'code' }),
+        finding({ id: 'pf_a', recordId: 'rec_new', bugKey: 'A-9' }),
+        finding({ id: 'pf_c', recordId: 'rec_old', attribution: 'model' }),
+        finding({ id: 'pf_loose' }),
+      ],
+    }),
+  );
+
+  const recordIds = (body: Record<string, unknown>) =>
+    (body['records'] as { id: string }[]).map((r) => r.id);
+
+  it('lists newest first, each row with its finding and attributed counts', async () => {
+    const res = await get('/v1/admin/planner-finding-records');
+    expect(res.status).toBe(200);
+    expect(recordIds(res.body)).toEqual(['rec_new', 'rec_mid', 'rec_old']);
+    const rows = res.body['records'] as Record<string, unknown>[];
+    expect(rows[0]).toMatchObject({
+      runThroughAnswer: 'STOPS',
+      runThroughStopCards: ['A-2', 'A-1'],
+      findingCount: 2,
+      attributedCount: 1,
+    });
+    expect(rows[1]).toMatchObject({ findingCount: 0, attributedCount: 0 });
+    expect(res.body['retention']).toEqual({ days: 90, cutoff: null });
+  });
+
+  it('applies each filter, pages with a cursor, and refuses an out-of-set value', async () => {
+    const q = async (qs: string) =>
+      recordIds((await get(`/v1/admin/planner-finding-records?${qs}`)).body);
+    expect(await q('verdictState=attributed')).toEqual(['rec_old']);
+    expect(await q('planner=plan_py')).toEqual(['rec_old']);
+    expect(await q('source=in_loop')).toEqual(['rec_mid']);
+    expect(await q('planId=plan_x')).toEqual(['rec_mid']);
+    const first = await get('/v1/admin/planner-finding-records?limit=2');
+    expect(recordIds(first.body)).toEqual(['rec_new', 'rec_mid']);
+    expect(first.body['nextCursor']).toBe('rec_mid');
+    expect(await q('limit=2&cursor=rec_mid')).toEqual(['rec_old']);
+    const bad = await get('/v1/admin/planner-finding-records?verdictState=closed');
+    expect(bad.status).toBe(400);
+    expect(bad.body['code']).toBe('validation_error');
+  });
+
+  it('answers one record with its findings inline, in stored order, each with its key', async () => {
+    const res = await get('/v1/admin/planner-finding-records/rec_new');
+    expect(res.status).toBe(200);
+    expect((res.body['record'] as { id: string }).id).toBe('rec_new');
+    expect((res.body['findings'] as RawPlannerFinding[]).map((f) => [f.id, f.bugKey])).toEqual([
+      ['pf_b', null],
+      ['pf_a', 'A-9'],
+    ]);
+    const missing = await get('/v1/admin/planner-finding-records/rec_none');
+    expect(missing.status).toBe(404);
+    expect(missing.body['code']).toBe('not_found');
+  });
+
+  it('re-reads the fixture, so a key written through the finding PATCH is the next read', async () => {
+    await patch('pf_b', { bugKey: 'A-7' });
+    const res = await get('/v1/admin/planner-finding-records/rec_new');
+    expect((res.body['findings'] as RawPlannerFinding[])[0]?.bugKey).toBe('A-7');
+    const lines = readFileSync(journalPath, 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    expect(
+      lines.map((l: PlannerFindingsJournalLine) => `${l.method} ${l.path} ${l.status}`),
+    ).toEqual([
+      'PATCH /v1/admin/planner-findings/pf_b 200',
+      'GET /v1/admin/planner-finding-records/rec_new 200',
+    ]);
+  });
+
+  it('answers 503 for both reads while down, and reads a fixture with no records as none', async () => {
+    seed({ mode: 'down' });
+    expect((await get('/v1/admin/planner-finding-records')).status).toBe(503);
+    expect((await get('/v1/admin/planner-finding-records/rec_new')).status).toBe(503);
+    seed({});
+    expect((await get('/v1/admin/planner-finding-records')).body['records']).toEqual([]);
+  });
+});
+
+describe('the record walk fixture', () => {
+  it('builds three records of two findings each, every finding naming its record', () => {
+    const walk = helper.recordWalkFixture(
+      { coreOrganizationId: 'o', coreWorkspaceId: 'w', coreProjectId: 'p', verdictBy: 'u' },
+      { keptKey: 'BILL-1', sharedKey: 'BILL-2' },
+    );
+    expect(walk.records!.map((r) => [r.id, r.verdictState, r.runThroughAnswer])).toEqual([
+      ['rec_built', 'attributed', 'THRU'],
+      ['rec_stops', 'open', 'STOPS'],
+      ['rec_silent', 'attributed', null],
+    ]);
+    for (const r of walk.records!) {
+      expect(r.coreProjectId).toBe('p');
+      expect(walk.findings.filter((f) => f.recordId === r.id)).toHaveLength(2);
+    }
   });
 });
 
