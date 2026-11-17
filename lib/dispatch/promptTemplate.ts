@@ -531,6 +531,15 @@ export interface DispatchPromptSource {
    */
   runTargetKey?: string | null;
   /**
+   * The PARENT RUN this item rides (Bug MOTIR-11624) — the NEAREST ANCESTOR's OPEN pull
+   * request in the item's repository, when the item has none of its own there: the
+   * `inherited` entry of its in-flight code. A parent run builds every child as a commit on
+   * that ancestor's branch, and the pull request is the ancestor's to be asked about, so the
+   * single-repository per-item GIT WORKFLOW tells the agent to commit onto that branch and
+   * link NOTHING to this item. Omitted or null renders the per-item grammar unchanged.
+   */
+  parentRun?: { key: string; branch: string; pullRequestUrl: string } | null;
+  /**
    * The `likely-missing-edge` PROSE-vs-GRAPH advisories for this item
    * (MOTIR-2079) — items the card's ACCEPTANCE CRITERIA name but that it carries
    * no `blocked_by` edge to. Omitted or empty renders NOTHING (no empty
@@ -2198,8 +2207,22 @@ export function namesDeliveryFileRoute(
     src.runnerPostsAgentReport === true &&
     src.runnerPostsDelivery === true &&
     sessionBranch === null &&
+    parentRunOf(src, sessionBranch) === null &&
     !(src.runTargetKey && src.runTargetKey !== src.key)
   );
+}
+
+/**
+ * The PARENT RUN the GIT WORKFLOW renders for (Bug MOTIR-11624), or `null` — only on the
+ * single-repository per-item grammar: a session lineage, a continue and a repository set
+ * each carry their own branch rules, and none of them is the runbook's parent run.
+ */
+export function parentRunOf(
+  src: DispatchPromptSource,
+  sessionBranch: string | null,
+): NonNullable<DispatchPromptSource['parentRun']> | null {
+  if (!src.parentRun || sessionBranch !== null || src.continueFrom) return null;
+  return multiRepoSet(src) ? null : src.parentRun;
 }
 
 /** The GIT WORKFLOW's pointer to the delivery file route, for {@link linkingStep}'s trailer. */
@@ -2250,8 +2273,50 @@ function checkpointLines(branch: string, pad = ''): string[] {
   ];
 }
 
+/**
+ * The PARENT-RUN GIT WORKFLOW (Bug MOTIR-11624): the item's commit rides its ancestor's
+ * open pull request, and NOTHING is linked to the item.
+ *
+ * ⚠️ WHY THE ITEM IS NOT LINKED. The per-item grammar ends in *"LINK it … with key
+ * <item>"*, and a child of a parent run that followed it was linked to the STORY's pull
+ * request beside the story. When CI promoted the child to In Review, Motir asked the merge
+ * question on the CHILD — an Approve that merges the whole story from one finished child,
+ * while its siblings were unbuilt (MOTIR-11455). The gates now treat such a member as the
+ * ancestor's (`gateSetFor`), and the prompt stops asking for the link in the first place:
+ * the ancestor already carries it, and its merge cascades down to this item.
+ */
+function parentRunWorkflow(
+  src: DispatchPromptSource,
+  parent: NonNullable<DispatchPromptSource['parentRun']>,
+): string[] {
+  const dir = worktreeDir(src.targetRepo, parent.key);
+  return [
+    `This item is built inside the run of ${parent.key}, whose pull request already`,
+    `delivers this repository: ${parent.pullRequestUrl}, from ${parent.branch}.`,
+    'Your work is ONE commit on that branch. It joins that pull request instead of',
+    'opening one of its own.',
+    '',
+    '1. git fetch origin',
+    `2. If a worktree is already on ${parent.branch} (\`git worktree list\`), work there.`,
+    `   Otherwise: git worktree add ${dir} ${parent.branch}`,
+    '   (it checks the EXISTING branch out; never create a new one).',
+    '3. Do ALL the work there. Stage with explicit `git add <path>` — never `-A`.',
+    `4. Commit with a Conventional Commits subject that carries ${src.key}.`,
+    ...checkpointLines(parent.branch),
+    `5. Do NOT open a pull request, and do NOT call link_pull_request with key ${src.key}.`,
+    `   The pull request is ${parent.key}'s, and it is already linked to ${parent.key}: its`,
+    `   merge closes ${src.key} with every other card under ${parent.key}. A link on`,
+    `   ${src.key} would put the approve-and-merge question for the WHOLE pull request on`,
+    '   this one card. If you find the pull request is NOT linked to',
+    `   ${parent.key}, link it with key ${parent.key} — never with key ${src.key}.`,
+    '6. STOP. Do not merge that pull request and do not delete the branch.',
+  ];
+}
+
 /** The per-item-PR GIT WORKFLOW: branch from `origin/main`, one PR, stop. */
 function perItemPrWorkflow(src: DispatchPromptSource): string[] {
+  const parent = parentRunOf(src, null);
+  if (parent) return parentRunWorkflow(src, parent);
   const branch = `${branchPrefix(src.type)}/${src.key}-${branchSlug(src.title)}`;
   const dir = worktreeDir(src.targetRepo, src.key);
   return [
@@ -2561,6 +2626,7 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
   // line — whether the pull request is something you open or something the run
   // has already opened — so that line varies and nothing else does.
   const target = scopedRunTarget(src);
+  const parentRun = parentRunOf(src, sessionBranch);
   const finished = sessionBranch
     ? target
       ? [
@@ -2574,7 +2640,12 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
           `       (\`gh pr list --head ${sessionBranch}\`), or open it from that branch if`,
           '       you are the first item to reach this point in it',
         ]
-    : openPullRequestStep();
+    : parentRun
+      ? [
+          '    3. do NOT open a pull request: your commit rides',
+          `       ${parentRun.pullRequestUrl}, which belongs to ${parentRun.key}`,
+        ]
+      : openPullRequestStep();
   return [
     'Two outcomes end this work, and the loop can only tell them apart if you SAY',
     'which one happened. A process that exits 0 proves the process ended, nothing',
@@ -2586,21 +2657,32 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     // card the run has not opened its draft yet, so "is open" would be untrue.
     sessionBranch && target
       ? 'FINISHED — the work is done, committed, integrated and PUSHED:'
-      : 'FINISHED — the work is done, committed, PUSHED, and its pull request is open:',
+      : parentRun
+        ? 'FINISHED — the work is done, committed and PUSHED onto the pull request:'
+        : 'FINISHED — the work is done, committed, PUSHED, and its pull request is open:',
     '',
     '  IN THIS ORDER, and the order is the point:',
     '',
     '    1. commit',
     sessionBranch
       ? `    2. integrate into ${sessionBranch} and push that branch`
-      : '    2. push the branch',
+      : parentRun
+        ? `    2. push ${parentRun.branch}`
+        : '    2. push the branch',
     ...finished,
-    `    4. link it with the link_pull_request tool (key ${src.key}, and that`,
-    '       pull request) — once per repository if this item ships in more than',
-    '       one. The link is the only association a pull request has; the key in',
-    '       the branch and the title is a label Motir does not parse.',
+    ...(parentRun
+      ? [
+          `    4. do NOT link it to ${src.key}: ${parentRun.key} carries the link, and only`,
+          `       ${parentRun.key}'s approval may ask to merge it (GIT WORKFLOW step 5).`,
+        ]
+      : [
+          `    4. link it with the link_pull_request tool (key ${src.key}, and that`,
+          '       pull request) — once per repository if this item ships in more than',
+          '       one. The link is the only association a pull request has; the key in',
+          '       the branch and the title is a label Motir does not parse.',
+        ]),
     ...(delivery ? noToolsLinkLines(src) : []),
-    ...howToTestStep(src, delivery),
+    ...howToTestStep(src, delivery, parentRun?.key ?? null),
     `    5. move ${src.key} to Implemented with the transition_status tool`,
     `       (key ${src.key}, status implemented)`,
     ...(delivery ? noToolsTransitionLines(src) : []),
@@ -2674,12 +2756,18 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
  * Rendered only where the outcome protocol renders — a MANUAL item opens no pull
  * request and gets no protocol at all, so it gets no step.
  */
-function howToTestStep(src: DispatchPromptSource, delivery = false): string[] {
-  if (src.runTargetKey && src.runTargetKey !== src.key) {
+function howToTestStep(
+  src: DispatchPromptSource,
+  delivery = false,
+  parentRunKey: string | null = null,
+): string[] {
+  const runTarget =
+    src.runTargetKey && src.runTargetKey !== src.key ? src.runTargetKey : parentRunKey;
+  if (runTarget) {
     return [
       `    4b. do NOT publish How to test for ${src.key}. This item is part of a run`,
-      `        launched against ${src.runTargetKey}; How to test for that run is written`,
-      `        once, onto ${src.runTargetKey}, by the run's close-out step.`,
+      `        launched against ${runTarget}; How to test for that run is written`,
+      `        once, onto ${runTarget}, by the run's close-out step.`,
     ];
   }
   return [
@@ -4070,12 +4158,17 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   ];
 
   const branchless = manual || agentDecision || initCard;
-  const branch = branchless ? null : (src.continueFrom?.branch ?? sessionBranch ?? cardBranch(src));
+  // A parent run's child works on the ANCESTOR's branch (MOTIR-11624): that is the branch
+  // it is told to check out, and the one its pull request comes from.
+  const parentBranch = parentRunOf(src, sessionBranch)?.branch ?? null;
+  const branch = branchless
+    ? null
+    : (src.continueFrom?.branch ?? sessionBranch ?? parentBranch ?? cardBranch(src));
   return {
     prompt: lines.join('\n') + '\n',
     workflowMode,
     sessionBranch,
-    workBranch: branchless ? null : cardBranch(src),
+    workBranch: branchless ? null : (parentBranch ?? cardBranch(src)),
     branch,
   };
 }
