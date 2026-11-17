@@ -631,4 +631,16 @@ export const nl: McpSummaryTranslations = {
     source:
       'Take one proposal off a plan, instead of asking a reviewer to decline the whole thing.',
   },
+  record_name_occurrences: {
+    summary:
+      'Leg vast waar codenamen voorkomen in bestandsinhoud die een sessie las — naam, blob en regels — in het register dat beide planners eerst raadplegen; alleen toevoegend, een herhaling voegt niets in.',
+    source:
+      'Record where code names occur in file content a session read — name, blob and lines — in the record both planners ask first; additive, a repeat inserts nothing.',
+  },
+  lookup_name_occurrences: {
+    summary:
+      'Waar elk van maximaal 200 codenamen voorkomt in één repository bij een commit, uit het register dat beide planners schrijven — één vermelding per naam, een misser een lege lijst, nooit een fout.',
+    source:
+      'Where each of up to 200 code names occurs in one repository at a commit, from the record both planners write — one entry per name, a miss an empty list, never an error.',
+  },
 };

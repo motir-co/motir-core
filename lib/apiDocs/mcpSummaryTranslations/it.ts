@@ -635,4 +635,16 @@ export const it: McpSummaryTranslations = {
     source:
       'Take one proposal off a plan, instead of asking a reviewer to decline the whole thing.',
   },
+  record_name_occurrences: {
+    summary:
+      'Registra dove compaiono nomi di codice nei contenuti dei file letti da una sessione — nome, blob e righe — nel registro che entrambi i planner consultano per primo; solo aggiunte, una ripetizione non inserisce nulla.',
+    source:
+      'Record where code names occur in file content a session read — name, blob and lines — in the record both planners ask first; additive, a repeat inserts nothing.',
+  },
+  lookup_name_occurrences: {
+    summary:
+      'Dove compare ciascuno di un massimo di 200 nomi di codice in un repository a un commit, dal registro che entrambi i planner scrivono — una voce per nome, un mancato riscontro è una lista vuota, mai un errore.',
+    source:
+      'Where each of up to 200 code names occurs in one repository at a commit, from the record both planners write — one entry per name, a miss an empty list, never an error.',
+  },
 };
