@@ -286,8 +286,10 @@ test('the progress rail draws one line per card checked as each card’s check l
     for (const card of LEVEL) {
       await expect(node(page, card.title)).toBeVisible({ timeout: 4 * POLL_MS });
     }
-    // The check has written nothing yet: the act record is not on the rail.
-    await expect(acts(page)).toHaveCount(0);
+    // The check has written nothing yet: the record holds only the run's opening act
+    // (`firstAct`'s `submitted`), and no fact row.
+    await expect(acts(page)).toBeVisible();
+    await expect(factRows(page)).toHaveCount(0);
     await beat();
   });
 
@@ -329,7 +331,7 @@ test('a level that sends two cards back draws the sent-back line reading 2, and 
     'claim-check-sent-back',
     SENT_BACK_LEVEL.map((c) => c.title),
   );
-  await expect(acts(page)).toHaveCount(0);
+  await expect(factRows(page)).toHaveCount(0);
   await checkLevel(page, sse, hosted, SENT_BACK_LEVEL, 'en', beat);
 
   const sentBack = SENT_BACK_LEVEL.filter((c) => c.count > 0);
@@ -373,7 +375,7 @@ test('with the reader’s language Dutch, each per-card line is the Dutch catalo
     LEVEL.map((c) => c.title),
     'nl',
   );
-  await expect(acts(page)).toHaveCount(0);
+  await expect(factRows(page)).toHaveCount(0);
   await checkLevel(page, sse, hosted, LEVEL, 'nl', beat);
   for (const [i, card] of LEVEL.entries()) {
     const row = factRows(page).nth(i);
