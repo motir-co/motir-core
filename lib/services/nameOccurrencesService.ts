@@ -86,6 +86,10 @@ function stateNote(
   return { note: state.replace(/\s+/g, ' ').trim(), reason: 'record_unanswered' };
 }
 
+/** The note for a look-up the code-graph service answered with no graph for that repository at that commit. */
+export const NO_GRAPH_HELD =
+  'The code-graph service holds no graph for this repository at this commit (it is not indexed yet, or the commit is not held), so the name record could not answer.';
+
 const isLine = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 1;
 const isText = (s: unknown): s is string => typeof s === 'string' && s.trim() !== '';
 
@@ -188,8 +192,22 @@ export const nameOccurrencesService = {
     if (state !== null) {
       return { commit: null, names: inAskedOrder(args.names, null), ...state };
     }
+    // ⚠️ NO GRAPH HELD (review of MOTIR-11497). A reached service always answers the commit it
+    // read — the asked one, or its `x-graph-commit` — so `commit: null` with no `state` is
+    // motir-ai's SILENT miss for a service 404 `not_found` / 422 `graph_too_large`: the
+    // repository is not indexed yet, or that commit is not held. motir-ai keeps that miss quiet
+    // by contract (MOTIR-11646); the door names it, so the answer is not mistaken for "indexed
+    // at this commit, and none of these names recorded".
+    if (typeof answer.commit !== 'string') {
+      return {
+        commit: null,
+        names: inAskedOrder(args.names, null),
+        note: NO_GRAPH_HELD,
+        reason: 'record_unanswered',
+      };
+    }
     return {
-      commit: typeof answer.commit === 'string' ? answer.commit : null,
+      commit: answer.commit,
       names: inAskedOrder(args.names, answer),
       note: null,
       reason: null,

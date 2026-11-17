@@ -8,6 +8,7 @@ import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { TOOL_SCOPES } from '@/lib/mcp/scopes';
+import { NO_GRAPH_HELD } from '@/lib/services/nameOccurrencesService';
 import { TOOL_ANNOTATIONS } from '@/lib/mcp/toolAnnotations';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
@@ -424,6 +425,25 @@ describe('a forward that fails is an ANSWER — a miss with a state, never a too
         expect(answer(res)['reason']).toBe('ai_unreachable');
       }
     }
+  });
+
+  it('a silent miss with no commit (no graph held: not indexed, or the commit not held) gains the door’s note', async () => {
+    aiReply = (c) =>
+      json({
+        commit: null,
+        names: (c.body['names'] as string[]).map((name) => ({ name, occurrences: [] })),
+      });
+    const out = await call(LOOKUP, lookupArgs({ names: ['x', 'y'] }));
+    expect(out.isError).toBeFalsy();
+    expect(answer(out)).toEqual({
+      commit: null,
+      names: [
+        { name: 'x', occurrences: [] },
+        { name: 'y', occurrences: [] },
+      ],
+      note: NO_GRAPH_HELD,
+      reason: 'record_unanswered',
+    });
   });
 
   it('motir-ai’s own degraded 200 is carried as it said it, and the door adds nothing on top', async () => {
