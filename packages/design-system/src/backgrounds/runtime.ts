@@ -187,23 +187,28 @@ function runLoop({ host, still, measure, frame }: LoopOptions): () => void {
   let raf = 0;
   let last = 0;
   let visible = true;
+  // Set by the returned stop. A callback queued before the stop (fonts.ready,
+  // an observer delivery already in flight) must not draw or restart the loop
+  // afterwards: nothing could cancel a frame requested then.
+  let stopped = false;
   const start = performance.now();
   const tick = (now: number) => {
     raf = 0;
-    if (!visible || document.hidden) return;
+    if (stopped || !visible || document.hidden) return;
     if (now - last >= BACKGROUND_FRAME_MS) {
       last = now;
       frame((now - start) / 1000);
     }
     raf = requestAnimationFrame(tick);
   };
-  const showing = () => visible && !document.hidden;
+  const showing = () => !stopped && visible && !document.hidden;
   // Reduced motion: the still frame is t = 0, drawn once per measure and never
   // animated. Otherwise the loop runs while the host is showing.
   const play = () => {
     if (!still && !raf && showing()) raf = requestAnimationFrame(tick);
   };
   const refresh = () => {
+    if (stopped) return;
     measure();
     if (!showing()) return;
     frame(still ? 0 : (performance.now() - start) / 1000);
@@ -224,6 +229,7 @@ function runLoop({ host, still, measure, frame }: LoopOptions): () => void {
   void document.fonts?.ready?.then(refresh);
   refresh();
   return () => {
+    stopped = true;
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
     stopObserving();

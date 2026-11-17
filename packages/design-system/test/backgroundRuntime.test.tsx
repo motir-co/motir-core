@@ -284,6 +284,37 @@ describe('startBackground', () => {
     expect(frames()).toBe(1);
     stop();
   });
+
+  it('neither draws nor restarts the loop when fonts finish loading after a stop', async () => {
+    let fontsLoaded!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      fontsLoaded = resolve;
+    });
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { ready } });
+    try {
+      const { canvas } = makeHost();
+      const stop = startBackground({ canvas, id: 'aurora' });
+      expect(frames()).toBe(1);
+      stop();
+      expect(rafQueue.size).toBe(0);
+      fontsLoaded();
+      await ready;
+      await Promise.resolve();
+      expect(rafQueue.size).toBe(0);
+      expect(frames()).toBe(1);
+    } finally {
+      delete (document as { fonts?: unknown }).fonts;
+    }
+  });
+
+  it('ignores an observer delivery that lands after a stop', () => {
+    const { canvas } = makeHost();
+    const stop = startBackground({ canvas, id: 'aurora' });
+    stop();
+    intersect(true);
+    expect(rafQueue.size).toBe(0);
+    expect(frames()).toBe(1);
+  });
 });
 
 describe('boxParent and centreBox', () => {
