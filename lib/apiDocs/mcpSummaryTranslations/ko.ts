@@ -623,4 +623,16 @@ export const ko: McpSummaryTranslations = {
     source:
       'Take one proposal off a plan, instead of asking a reviewer to decline the whole thing.',
   },
+  record_name_occurrences: {
+    summary:
+      '세션이 읽은 파일 내용에서 코드 이름이 나타나는 위치(이름, blob, 줄)를 두 계획자가 먼저 확인하는 기록에 남깁니다. 추가만 하며, 같은 내용을 반복해도 아무것도 삽입되지 않습니다.',
+    source:
+      'Record where code names occur in file content a session read — name, blob and lines — in the record both planners ask first; additive, a repeat inserts nothing.',
+  },
+  lookup_name_occurrences: {
+    summary:
+      '최대 200개의 코드 이름 각각이 한 저장소의 특정 커밋에서 어디에 나타나는지를 두 계획자가 작성하는 기록에서 알려 줍니다. 이름마다 항목 하나를 반환하며, 찾지 못한 이름은 빈 목록이고 오류가 되지 않습니다.',
+    source:
+      'Where each of up to 200 code names occurs in one repository at a commit, from the record both planners write — one entry per name, a miss an empty list, never an error.',
+  },
 };

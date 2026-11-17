@@ -335,7 +335,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **123 tools**.
+`initialize` handshake and registers **125 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -6604,6 +6604,125 @@ read those with `read_file` before calling a list complete. The states are
 
 **Permission: `ai:plan`, at the door and in the service**, as the two graph reads.
 **Read-only**, closed-world.
+
+#### `record_name_occurrences`
+
+**Record where code names occur** (MOTIR-11647, story MOTIR-11497): for each code
+name a session found in file content it read, the git blob of that content and the
+1-based line range. The rows go into one record for the whole organisation, which
+both Motir planners ask before they search. plan.py records, after each author
+session, the names its card wrote, from the files that session read. A row is keyed
+to the **blob**, not to a path, a commit or a repository: the same file content
+under another path or in another commit is the same row. So `repo` picks **whose
+record** (which organisation's) the rows join. It does not scope the rows to that
+repository.
+
+**Input**
+
+| Field                     | Type    | Required | Notes                                                                                                                                      |
+| ------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `projectKey`              | string  | yes      | Project key, e.g. `"ACME"`, resolved inside the token's own workspace.                                                                     |
+| `repo`                    | string  | yes      | A repository in the project's set, by bare name or `owner/name`, case-insensitively. It names the organisation whose record the rows join. |
+| `occurrences`             | array   | yes      | 1 to **2,000** rows, each `{ blob, name, startLine, endLine }`. A larger set is sent as more than one call.                                |
+| `occurrences[].blob`      | string  | yes      | The git blob id of the file content the name was found in.                                                                                 |
+| `occurrences[].name`      | string  | yes      | The code name, exactly as written.                                                                                                         |
+| `occurrences[].startLine` | integer | yes      | The first line of the occurrence, 1-based, in that blob.                                                                                   |
+| `occurrences[].endLine`   | integer | yes      | The last line, inclusive, not before `startLine`.                                                                                          |
+
+**Output.** `structuredContent` is `{ recorded, note, reason }`. `recorded` is how
+many rows the record **inserted**. It is not how many were sent: repeating a row the
+record already holds inserts nothing, so a repeat call answers `recorded: 0` with
+`note: null`. Every answer is a **non-error** result. When the record could not be
+asked, the answer keeps its shape:
+
+| `reason`            | Meaning                                                                                                                                                                                                                  | Extra fields                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| `null`              | The record answered. `recorded` is what it inserted.                                                                                                                                                                     | —                              |
+| `ai_not_configured` | motir-ai is not configured for this deployment.                                                                                                                                                                          | `recorded: 0`, `note`          |
+| `ai_unreachable`    | motir-ai could not be reached or did not answer in time. Transport failures, deadlines and 5xx answers land here.                                                                                                        | `recorded: 0`, `note`          |
+| `ai_error`          | motir-ai answered the forward with an error, for example a motir-ai that does not serve the record yet.                                                                                                                  | `recorded: 0`, `note`          |
+| `record_unanswered` | motir-ai answered with its own state. Examples: no project known for these ids, an organisation with no code-graph tenant, or a request the code-graph service refused or never answered. `note` is motir-ai's sentence. | `recorded` (usually 0), `note` |
+
+`note` is one sentence naming the state that was met. It is `null` exactly when
+`reason` is.
+
+**Refusals.** Each is a tool error carrying its own code, and nothing is sent to
+motir-ai:
+
+| Refusal                           | When                                                                                                                                                                                                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PERMISSION_NOT_GRANTED`          | The token's grant lacks `ai:plan` (the token gate).                                                                                                                                                                                                    |
+| `PERMISSION_DENIED`               | The member's role lacks `ai:plan` on the project (the service's own check).                                                                                                                                                                            |
+| `PROJECT_NOT_FOUND`               | An unknown project key, or one in another workspace. The two cannot be told apart.                                                                                                                                                                     |
+| `NAME_OCCURRENCE_REPO_NOT_IN_SET` | `repo` names no repository in the project's set. The message lists the available repositories. This is an **error**, unlike the `repo_not_in_set` state of the graph reads above and the `repo_not_in_project` state of `get_coding_convention` below. |
+| `NAME_OCCURRENCE_BATCH_EMPTY`     | `occurrences` is empty.                                                                                                                                                                                                                                |
+| `NAME_OCCURRENCE_BATCH_TOO_LARGE` | More than 2,000 occurrences. The message names the cap; split the set into calls.                                                                                                                                                                      |
+| `NAME_OCCURRENCE_MALFORMED`       | A row missing `blob`, `name`, `startLine` or `endLine`, or with an `endLine` before its `startLine`. The message names the row and the field.                                                                                                          |
+| invalid arguments                 | A body the input schema refuses, such as a missing `repo` or `occurrences` that is not an array. This is the MCP argument error every tool answers.                                                                                                    |
+
+**Permission: `ai:plan`, at the door and in the service**, as the graph reads.
+It is a **write**, and an additive one: it only inserts occurrence rows and never
+changes or removes a row the record holds. It is idempotent and closed-world.
+motir-core holds no code-graph credential: the tool reaches the service only
+through motir-ai's `POST /v1/code-graph/name-occurrences/record`.
+
+#### `lookup_name_occurrences`
+
+**Ask the record where names occur** (MOTIR-11647, story MOTIR-11497). Give a batch
+of code names, one repository and a commit, and it answers where each name occurs
+there, from what any session in the organisation recorded through
+`record_name_occurrences` (or the hosted planner's own sessions). A planner asks it
+**before** searching, and searches only for the names it missed.
+
+**Input**
+
+| Field        | Type     | Required | Notes                                                                                                       |
+| ------------ | -------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `projectKey` | string   | yes      | Project key, e.g. `"ACME"`, resolved inside the token's own workspace.                                      |
+| `repo`       | string   | yes      | ONE repository in the project's set, by bare name or `owner/name`, case-insensitively.                      |
+| `commit`     | string   | no       | The commit to answer at (a full sha). Omit it to answer at the record's indexed head of the default branch. |
+| `names`      | string[] | yes      | 1 to **200** distinct names. A larger set is sent as more than one call.                                    |
+
+**Output.** `structuredContent` is `{ commit, names, note, reason }`. `names` holds
+**exactly one entry per asked name, in the order asked**, each `{ name, occurrences }`.
+Each occurrence is `{ path, startLine, endLine, blob }` at that commit. A name the
+record does not hold has an **empty** `occurrences` list. That is a **miss**: a
+normal answer and never an error, and it is not proof that the code lacks the name.
+`commit` is the commit the record answered at. Every answer is a **non-error**
+result. When the record could not be asked, the answer keeps its shape: `commit:
+null` and a miss for every asked name, with:
+
+| `reason`            | Meaning                                                                                                                                                                                                                                                                                                                                          | Extra fields                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `null`              | The record answered. A miss in `names` is the record holding nothing for that name.                                                                                                                                                                                                                                                              | —                                         |
+| `ai_not_configured` | motir-ai is not configured for this deployment.                                                                                                                                                                                                                                                                                                  | `commit: null`, every name a miss, `note` |
+| `ai_unreachable`    | motir-ai could not be reached or did not answer in time. Transport failures, deadlines and 5xx answers land here.                                                                                                                                                                                                                                | `commit: null`, every name a miss, `note` |
+| `ai_error`          | motir-ai answered the forward with an error, for example a motir-ai that does not serve the record yet.                                                                                                                                                                                                                                          | `commit: null`, every name a miss, `note` |
+| `record_unanswered` | motir-ai answered with its own state. Examples: no project known for these ids, the organisation or repository not mapped, the repository not indexed, or the service unreachable. `note` is motir-ai's sentence, or the door's own when the service holds no graph for the repository at that commit (not indexed yet, or the commit not held). | `commit: null`, every name a miss, `note` |
+
+`note` is one sentence naming the state that was met. It is `null` exactly when
+`reason` is. A commit the record does not hold, or a graph too large to answer
+from, is the service saying "nothing here": an ordinary all-miss with
+`reason: null`.
+
+**Refusals.** Each is a tool error carrying its own code, and nothing is sent to
+motir-ai:
+
+| Refusal                           | When                                                                                                                                                                                                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PERMISSION_NOT_GRANTED`          | The token's grant lacks `ai:plan` (the token gate).                                                                                                                                                                                                    |
+| `PERMISSION_DENIED`               | The member's role lacks `ai:plan` on the project (the service's own check).                                                                                                                                                                            |
+| `PROJECT_NOT_FOUND`               | An unknown project key, or one in another workspace. The two cannot be told apart.                                                                                                                                                                     |
+| `NAME_OCCURRENCE_REPO_NOT_IN_SET` | `repo` names no repository in the project's set. The message lists the available repositories. This is an **error**, unlike the `repo_not_in_set` state of the graph reads above and the `repo_not_in_project` state of `get_coding_convention` below. |
+| `NAME_OCCURRENCE_NAMES_EMPTY`     | `names` is empty.                                                                                                                                                                                                                                      |
+| `NAME_OCCURRENCE_NAMES_TOO_MANY`  | More than 200 names. The message names the cap; split the names into calls.                                                                                                                                                                            |
+| `NAME_OCCURRENCE_NAMES_DUPLICATE` | A name asked more than once. The message names it.                                                                                                                                                                                                     |
+| invalid arguments                 | A body the input schema refuses, such as a missing `repo` or `names` that is not an array of strings. This is the MCP argument error every tool answers.                                                                                               |
+
+**Permission: `ai:plan`, at the door and in the service**, as the graph reads.
+**Read-only**, closed-world. motir-core holds no code-graph credential: the tool
+reaches the service only through motir-ai's
+`POST /v1/code-graph/name-occurrences/lookup`.
 
 #### `get_coding_convention`
 

@@ -2410,6 +2410,37 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  lookup_name_occurrences: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository in the project’s set — its bare name ("motir-core") or `owner/name`, case-insensitively. A repository outside the set is refused with the set.',
+      },
+      commit: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The commit to answer at (a full sha). Omit to answer at the record’s indexed head of the default branch.',
+      },
+      names: {
+        type: 'array',
+        items: { type: 'string' },
+        description: '1 to 200 distinct names. Over the cap, empty, or with a repeat is refused.',
+      },
+    },
+    required: ['projectKey', 'repo', 'names'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   mark_integrated: {
     type: 'object',
     properties: {
@@ -2925,6 +2956,51 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey', 'repo', 'path'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  record_name_occurrences: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository in the project’s set the occurrences were read in — its bare name or `owner/name`. It names which organisation’s record the rows go to; the rows themselves belong to a blob, not to a repository.',
+      },
+      occurrences: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            blob: {
+              type: 'string',
+              description: 'REQUIRED. The git blob id of the file content the name was found in.',
+            },
+            name: { type: 'string', description: 'REQUIRED. The code name, exactly as written.' },
+            startLine: {
+              type: 'number',
+              description: 'REQUIRED. The first line of the occurrence, 1-based, in that blob.',
+            },
+            endLine: {
+              type: 'number',
+              description:
+                'REQUIRED. The last line of the occurrence, inclusive, not before `startLine`.',
+            },
+          },
+          additionalProperties: false,
+        },
+        description:
+          '1 to 2000 occurrences, each `{ blob, name, startLine, endLine }`. Over the cap, empty, or with a row missing a field is refused.',
+      },
+    },
+    required: ['projectKey', 'repo', 'occurrences'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -5624,6 +5700,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   list_ready: 'List ready work items',
   list_sprints: 'List sprints',
   list_work_item_todos: 'List a work item’s to-do list',
+  lookup_name_occurrences: 'Look up where names occur',
   mark_integrated: 'Mark integrated',
   move_page: 'Move page',
   move_to_backlog: 'Move work items to backlog',
@@ -5638,6 +5715,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   publish_test_instructions: 'Publish How to test',
   read_dependency_source: 'Read dependency source',
   read_file: 'Read a file',
+  record_name_occurrences: 'Record where names occur',
   record_plan_revision_reason: 'Record WHY a plan had to change',
   record_run_discrepancy: 'Record what you built differently from the plan',
   reinforce_lesson: 'Reinforce a lesson',
@@ -6013,6 +6091,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: true,
     openWorldHint: false,
   },
+  lookup_name_occurrences: {
+    title: 'Look up where names occur',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
   mark_integrated: {
     title: 'Mark integrated',
     readOnlyHint: false,
@@ -6097,6 +6180,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: true,
   },
   read_file: { title: 'Read a file', readOnlyHint: true, openWorldHint: true },
+  record_name_occurrences: {
+    title: 'Record where names occur',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   record_plan_revision_reason: {
     title: 'Record WHY a plan had to change',
     readOnlyHint: false,

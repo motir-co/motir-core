@@ -604,6 +604,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         code_explore: { projectKey: 'PROD', query: 'readFile' },
         code_search: { projectKey: 'PROD', query: 'readFile' },
         code_grep: { projectKey: 'PROD', pattern: 'readFile' },
+        // MOTIR-11647 — gated on `ai:plan`, so the read-only-token loop asserts both are
+        // REFUSED at the scope gate; the default token passes it.
+        lookup_name_occurrences: { projectKey: 'PROD', repo: 'motir-core', names: ['readFile'] },
+        record_name_occurrences: {
+          projectKey: 'PROD',
+          repo: 'motir-core',
+          occurrences: [{ blob: 'b'.repeat(40), name: 'readFile', startLine: 1, endLine: 1 }],
+        },
         skeleton: { projectKey: 'PROD' },
         // MOTIR-5409 — `list_folders` is a browse read that executes on the caller's own
         // project; the three writes are `work_item:edit`-gated, and a folder id that
