@@ -1,7 +1,6 @@
-// Acceptance E2E — the board's header filter IS the board's filter (MOTIR-11566,
+// E2E — the board's header filter IS the board's filter (MOTIR-11566,
 // the behaviour MOTIR-11564 (the read) and MOTIR-11565 (the UI) built). Walked
-// end to end in a real browser against the SERVED app, as a person would use it,
-// and recorded as the acceptance video:
+// end to end in a real browser against the SERVED app, as a person would use it:
 //
 //   1. Ada (board admin) opens the kanban board "Bugs", stored filter Kind is
 //      Bug, with no URL params: the header shows the Board filter chip with
@@ -32,8 +31,8 @@
 // ── THE ACTORS ──────────────────────────────────────────────────────────────
 // Ada (workspace owner, board admin) and Tess (a workspace member added to the
 // project as `member`, who holds no `board:configure`). Seeded through the real
-// services; both sign in on the ONE recorded page, because the lane publishes
-// one video per test.
+// services; both sign in on the one page, in one test, so the walk reads top to
+// bottom.
 //
 // ── WHAT IS SEEDED AND WHAT IS DRIVEN ───────────────────────────────────────
 // Seeded: the actors, the project, its cards and label, the two project-visible
@@ -48,19 +47,20 @@
 // status and body are read before anything else happens; every read of the
 // board arms the `GET /api/board` it causes. The visible UI (chips, card titles,
 // column counts, toasts) is then asserted against what that projection proved.
-// There is no sleep; the only holds are the recording's `chapter()` and `beat()`
-// pacing, always taken after the state is proven.
+// There is no sleep.
 //
 // ── THE STRINGS ─────────────────────────────────────────────────────────────
 // Every label and sentence matched is read from `messages/en.json`, never
 // retyped.
 //
-// This repository's acceptance lane publishes the receipt on a green run; no MCP
-// publish is made. The lane records at its one fixed viewport (MOTIR-11471), so
-// this spec never resizes the page.
+// ── WHY THIS IS NOT IN THE ACCEPTANCE LANE ──────────────────────────────────
+// MOTIR-11566 is a task with no parent story, so the lane's receipt publish is
+// refused (ACCEPTANCE_EVIDENCE_NOT_A_STORY). Xing chose to ship the walk as an
+// ordinary e2e spec rather than re-plan the card under a story, so it records
+// no video and declares no `acceptanceStory()`; `test.step` keeps the steps.
 
 import type { Locator, Page, Response } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from '@playwright/test';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { createTestPerson } from './_helpers/testPerson';
@@ -464,247 +464,202 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-// ═══ The recorded walk ═══════════════════════════════════════════════════════
+// ═══ The walk ═════════════════════════════════════════════════════════
 
 test('The board header filter opens as the board filter, saves to it, takes a saved filter in its place, and resets to it: steps 1 to 8', async ({
   page,
-  chapter,
-  beat,
-  acceptanceStory,
 }) => {
-  acceptanceStory('MOTIR-11566');
   const s = await seed();
   const bugsId = s.bugsBoardId;
 
-  await chapter(
-    'Step 1 · Ada opens “Bugs” with no filter in the URL: the header shows its board filter Kind is Bug, and only bugs show',
-    async () => {
-      await as(page, ADA);
-      const board = await openBoard(page, bugsId);
-      expect(board.storedFilter?.envelope).toEqual(encodeFilterEnvelope(KIND_BUG));
-      expectCleanUrl(page);
-      await expectBoardShows(page, board, BUGS);
+  await test.step('Step 1 · Ada opens “Bugs” with no filter in the URL: the header shows its board filter Kind is Bug, and only bugs show', async () => {
+    await as(page, ADA);
+    const board = await openBoard(page, bugsId);
+    expect(board.storedFilter?.envelope).toEqual(encodeFilterEnvelope(KIND_BUG));
+    expectCleanUrl(page);
+    await expectBoardShows(page, board, BUGS);
 
-      await expect(headerRow(page)).toBeVisible();
-      await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
-      await expect(headerRow(page).getByRole('button', { name: THF.chipAria })).toContainText(
-        THF.chip,
-      );
-      await expect(headerRow(page)).toContainText(KIND_BUG_TEXT);
-      await expect(editedMark(page)).toHaveCount(0);
-      await expect(actionsOf(page)).toHaveCount(0);
-      await beat();
-    },
-  );
+    await expect(headerRow(page)).toBeVisible();
+    await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
+    await expect(headerRow(page).getByRole('button', { name: THF.chipAria })).toContainText(
+      THF.chip,
+    );
+    await expect(headerRow(page)).toContainText(KIND_BUG_TEXT);
+    await expect(editedMark(page)).toHaveCount(0);
+    await expect(actionsOf(page)).toHaveCount(0);
+  });
 
-  await chapter(
-    'Step 2 · She adds Priority is High: Edited shows, only high-priority bugs show, and Save to board filter stores it',
-    async () => {
-      const board = await addPriorityHigh(page, bugsId, 1);
-      await expectBoardShows(page, board, HIGH_BUGS);
-      await expect(headerRow(page)).toHaveAttribute('data-mode', 'edited');
-      await expect(editedMark(page)).toBeVisible();
-      await expect(headerRow(page)).toContainText(KIND_BUG_TEXT);
-      await expect(headerRow(page)).toContainText(HIGH_TEXT);
-      await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
-      await beat();
+  await test.step('Step 2 · She adds Priority is High: Edited shows, only high-priority bugs show, and Save to board filter stores it', async () => {
+    const board = await addPriorityHigh(page, bugsId, 1);
+    await expectBoardShows(page, board, HIGH_BUGS);
+    await expect(headerRow(page)).toHaveAttribute('data-mode', 'edited');
+    await expect(editedMark(page)).toBeVisible();
+    await expect(headerRow(page)).toContainText(KIND_BUG_TEXT);
+    await expect(headerRow(page)).toContainText(HIGH_TEXT);
+    await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
 
-      await actionsOf(page).getByRole('button', { name: THF.saveToBoard }).click();
-      const { saved, board: after } = await confirmBoardWrite(
-        page,
-        bugsId,
-        THF.confirmSaveTitle,
-        THF.saveToBoard,
-      );
-      expect(saved.filter).toEqual(encodeFilterEnvelope(KIND_BUG_AND_HIGH));
-      await expect(toastOf(page, THF.savedToast)).toContainText(THF.savedToastBody);
-      await page.waitForURL((u) => !u.searchParams.has('filter'));
-      expectCleanUrl(page);
-      await expectBoardShows(page, after, HIGH_BUGS);
-      await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
-      await expect(editedMark(page)).toHaveCount(0);
-      await beat();
-    },
-  );
+    await actionsOf(page).getByRole('button', { name: THF.saveToBoard }).click();
+    const { saved, board: after } = await confirmBoardWrite(
+      page,
+      bugsId,
+      THF.confirmSaveTitle,
+      THF.saveToBoard,
+    );
+    expect(saved.filter).toEqual(encodeFilterEnvelope(KIND_BUG_AND_HIGH));
+    await expect(toastOf(page, THF.savedToast)).toContainText(THF.savedToastBody);
+    await page.waitForURL((u) => !u.searchParams.has('filter'));
+    expectCleanUrl(page);
+    await expectBoardShows(page, after, HIGH_BUGS);
+    await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
+    await expect(editedMark(page)).toHaveCount(0);
+  });
 
-  await chapter(
-    'Step 3 · A reload opens “Bugs” on its saved board filter: Kind is Bug and Priority is High',
-    async () => {
-      const board = await reloadBoard(page, bugsId);
-      expect(board.storedFilter?.envelope).toEqual(encodeFilterEnvelope(KIND_BUG_AND_HIGH));
-      expectCleanUrl(page);
-      await expectBoardShows(page, board, HIGH_BUGS);
-      await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
-      await expect(headerRow(page)).toContainText(THF.chip);
-      await expect(headerRow(page)).toContainText(KIND_BUG_TEXT);
-      await expect(headerRow(page)).toContainText(HIGH_TEXT);
-      await expect(editedMark(page)).toHaveCount(0);
-      await beat();
-    },
-  );
+  await test.step('Step 3 · A reload opens “Bugs” on its saved board filter: Kind is Bug and Priority is High', async () => {
+    const board = await reloadBoard(page, bugsId);
+    expect(board.storedFilter?.envelope).toEqual(encodeFilterEnvelope(KIND_BUG_AND_HIGH));
+    expectCleanUrl(page);
+    await expectBoardShows(page, board, HIGH_BUGS);
+    await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
+    await expect(headerRow(page)).toContainText(THF.chip);
+    await expect(headerRow(page)).toContainText(KIND_BUG_TEXT);
+    await expect(headerRow(page)).toContainText(HIGH_TEXT);
+    await expect(editedMark(page)).toHaveCount(0);
+  });
 
-  await chapter(
-    'Step 4 · The saved filter “mobile” replaces the board filter — every mobile card shows, tasks included — and Reset to board filter returns',
-    async () => {
-      const board = await applySaved(page, bugsId, MOBILE_FILTER);
-      // Replace, not narrow: the mobile TASKS show, which Kind is Bug would hide.
-      await expectBoardShows(page, board, MOBILE_CARDS);
-      await expect(headerRow(page)).toHaveCount(0);
-      await expect(appliedRow(page)).toContainText(MOBILE_FILTER);
-      await expect(appliedRow(page)).toContainText(LABEL_TEXT);
-      await expect(appliedRow(page)).not.toContainText(KIND_BUG_TEXT);
-      await expect(actionsOf(page).getByRole('button', { name: THF.setAsBoard })).toBeVisible();
-      await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
-      await beat();
+  await test.step('Step 4 · The saved filter “mobile” replaces the board filter — every mobile card shows, tasks included — and Reset to board filter returns', async () => {
+    const board = await applySaved(page, bugsId, MOBILE_FILTER);
+    // Replace, not narrow: the mobile TASKS show, which Kind is Bug would hide.
+    await expectBoardShows(page, board, MOBILE_CARDS);
+    await expect(headerRow(page)).toHaveCount(0);
+    await expect(appliedRow(page)).toContainText(MOBILE_FILTER);
+    await expect(appliedRow(page)).toContainText(LABEL_TEXT);
+    await expect(appliedRow(page)).not.toContainText(KIND_BUG_TEXT);
+    await expect(actionsOf(page).getByRole('button', { name: THF.setAsBoard })).toBeVisible();
+    await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
 
-      const back = await resetToBoardFilter(page, bugsId);
-      await page.waitForURL((u) => !u.searchParams.has('filter'));
-      expectCleanUrl(page);
-      await expectBoardShows(page, back, HIGH_BUGS);
-      await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
-      await expect(headerRow(page)).toContainText(KIND_BUG_TEXT);
-      await expect(headerRow(page)).toContainText(HIGH_TEXT);
-      await expect(editedMark(page)).toHaveCount(0);
-      await expect(actionsOf(page)).toHaveCount(0);
-      await beat();
-    },
-  );
+    const back = await resetToBoardFilter(page, bugsId);
+    await page.waitForURL((u) => !u.searchParams.has('filter'));
+    expectCleanUrl(page);
+    await expectBoardShows(page, back, HIGH_BUGS);
+    await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
+    await expect(headerRow(page)).toContainText(KIND_BUG_TEXT);
+    await expect(headerRow(page)).toContainText(HIGH_TEXT);
+    await expect(editedMark(page)).toHaveCount(0);
+    await expect(actionsOf(page)).toHaveCount(0);
+  });
 
-  await chapter(
-    'Step 5 · Ada picks “mobile” again and sets it as the board filter: after a reload the board’s filter is Label is mobile',
-    async () => {
-      await applySaved(page, bugsId, MOBILE_FILTER);
-      await actionsOf(page).getByRole('button', { name: THF.setAsBoard }).click();
-      const { saved } = await confirmBoardWrite(
-        page,
-        bugsId,
-        fill(THF.confirmSetTitle, { name: MOBILE_FILTER }),
-        THF.setAsBoard,
-      );
-      expect(saved.filter).toEqual(encodeFilterEnvelope(labelIs(s.labelId)));
-      await expect(toastOf(page, fill(THF.setToast, { name: MOBILE_FILTER }))).toBeVisible();
-      await page.waitForURL((u) => !u.searchParams.has('filter'));
-      expectCleanUrl(page);
-      await beat();
+  await test.step('Step 5 · Ada picks “mobile” again and sets it as the board filter: after a reload the board’s filter is Label is mobile', async () => {
+    await applySaved(page, bugsId, MOBILE_FILTER);
+    await actionsOf(page).getByRole('button', { name: THF.setAsBoard }).click();
+    const { saved } = await confirmBoardWrite(
+      page,
+      bugsId,
+      fill(THF.confirmSetTitle, { name: MOBILE_FILTER }),
+      THF.setAsBoard,
+    );
+    expect(saved.filter).toEqual(encodeFilterEnvelope(labelIs(s.labelId)));
+    await expect(toastOf(page, fill(THF.setToast, { name: MOBILE_FILTER }))).toBeVisible();
+    await page.waitForURL((u) => !u.searchParams.has('filter'));
+    expectCleanUrl(page);
 
-      const board = await reloadBoard(page, bugsId);
-      expect(board.storedFilter?.envelope).toEqual(encodeFilterEnvelope(labelIs(s.labelId)));
-      await expectBoardShows(page, board, MOBILE_CARDS);
-      await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
-      await expect(headerRow(page)).toContainText(THF.chip);
-      await expect(headerRow(page)).toContainText(LABEL_TEXT);
-      await expect(headerRow(page)).not.toContainText(KIND_BUG_TEXT);
-      await expect(editedMark(page)).toHaveCount(0);
-      await beat();
-    },
-  );
+    const board = await reloadBoard(page, bugsId);
+    expect(board.storedFilter?.envelope).toEqual(encodeFilterEnvelope(labelIs(s.labelId)));
+    await expectBoardShows(page, board, MOBILE_CARDS);
+    await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
+    await expect(headerRow(page)).toContainText(THF.chip);
+    await expect(headerRow(page)).toContainText(LABEL_TEXT);
+    await expect(headerRow(page)).not.toContainText(KIND_BUG_TEXT);
+    await expect(editedMark(page)).toHaveCount(0);
+  });
 
-  await chapter(
-    'Step 6 · Removing every condition shows every card on the board, and Reset returns to Label is mobile',
-    async () => {
-      await page.getByRole('button', { name: /^Advanced/ }).click();
-      const dialog = advancedDialog(page);
-      await expect(dialog.getByRole('group', { name: 'Condition 1' })).toBeVisible();
-      const read = frameOf(page, bugsId, false);
-      await dialog.getByRole('button', { name: TIV.advancedClearAll }).click();
-      const board = await frame(read);
-      await page.keyboard.press('Escape');
-      await expect(dialog).toBeHidden();
-      // The Cleared state survives a reload because the URL says so.
-      expect(new URL(page.url()).searchParams.get('boardFilter')).toBe('off');
-      await expectBoardShows(page, board, ALL);
-      await expect(headerRow(page)).toHaveAttribute('data-mode', 'cleared');
-      await expect(headerRow(page)).toContainText(THF.clearedNote);
-      await expect(editedMark(page)).toBeVisible();
-      await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
-      await beat();
+  await test.step('Step 6 · Removing every condition shows every card on the board, and Reset returns to Label is mobile', async () => {
+    await page.getByRole('button', { name: /^Advanced/ }).click();
+    const dialog = advancedDialog(page);
+    await expect(dialog.getByRole('group', { name: 'Condition 1' })).toBeVisible();
+    const read = frameOf(page, bugsId, false);
+    await dialog.getByRole('button', { name: TIV.advancedClearAll }).click();
+    const board = await frame(read);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    // The Cleared state survives a reload because the URL says so.
+    expect(new URL(page.url()).searchParams.get('boardFilter')).toBe('off');
+    await expectBoardShows(page, board, ALL);
+    await expect(headerRow(page)).toHaveAttribute('data-mode', 'cleared');
+    await expect(headerRow(page)).toContainText(THF.clearedNote);
+    await expect(editedMark(page)).toBeVisible();
+    await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
 
-      const back = await resetToBoardFilter(page, bugsId);
-      await page.waitForURL((u) => !u.searchParams.has('boardFilter'));
-      expectCleanUrl(page);
-      await expectBoardShows(page, back, MOBILE_CARDS);
-      await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
-      await expect(headerRow(page)).toContainText(LABEL_TEXT);
-      await expect(editedMark(page)).toHaveCount(0);
-      await beat();
-    },
-  );
+    const back = await resetToBoardFilter(page, bugsId);
+    await page.waitForURL((u) => !u.searchParams.has('boardFilter'));
+    expectCleanUrl(page);
+    await expectBoardShows(page, back, MOBILE_CARDS);
+    await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
+    await expect(headerRow(page)).toContainText(LABEL_TEXT);
+    await expect(editedMark(page)).toHaveCount(0);
+  });
 
-  await chapter(
-    'Step 7 · Tess, without board:configure, sees the board filter; her edits offer Reset but never Save to board filter or Set as board filter',
-    async () => {
-      await as(page, TESS);
-      const board = await openBoard(page, bugsId);
-      await expectBoardShows(page, board, MOBILE_CARDS);
-      await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
-      await expect(headerRow(page)).toContainText(THF.chip);
-      await expect(headerRow(page)).toContainText(LABEL_TEXT);
-      await expect(actionsOf(page)).toHaveCount(0);
-      await beat();
+  await test.step('Step 7 · Tess, without board:configure, sees the board filter; her edits offer Reset but never Save to board filter or Set as board filter', async () => {
+    await as(page, TESS);
+    const board = await openBoard(page, bugsId);
+    await expectBoardShows(page, board, MOBILE_CARDS);
+    await expect(headerRow(page)).toHaveAttribute('data-mode', 'board');
+    await expect(headerRow(page)).toContainText(THF.chip);
+    await expect(headerRow(page)).toContainText(LABEL_TEXT);
+    await expect(actionsOf(page)).toHaveCount(0);
 
-      // An edit in the header: Edited and Reset, Save as for her own copy, and
-      // no Save to board filter.
-      const edited = await addPriorityHigh(page, bugsId, 1);
-      await expectBoardShows(page, edited, MOBILE_HIGH);
-      await expect(editedMark(page)).toBeVisible();
-      await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
-      await expect(
-        actionsOf(page).getByRole('button', { name: TSF.applied.saveAs, exact: true }),
-      ).toBeVisible();
-      await expect(main(page).getByRole('button', { name: THF.saveToBoard })).toHaveCount(0);
-      await expect(main(page).getByRole('button', { name: THF.setAsBoard })).toHaveCount(0);
-      await beat();
+    // An edit in the header: Edited and Reset, Save as for her own copy, and
+    // no Save to board filter.
+    const edited = await addPriorityHigh(page, bugsId, 1);
+    await expectBoardShows(page, edited, MOBILE_HIGH);
+    await expect(editedMark(page)).toBeVisible();
+    await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
+    await expect(
+      actionsOf(page).getByRole('button', { name: TSF.applied.saveAs, exact: true }),
+    ).toBeVisible();
+    await expect(main(page).getByRole('button', { name: THF.saveToBoard })).toHaveCount(0);
+    await expect(main(page).getByRole('button', { name: THF.setAsBoard })).toHaveCount(0);
 
-      // A saved filter in its place: Reset, and no Set as board filter.
-      const high = await applySaved(page, bugsId, HIGH_FILTER);
-      await expectBoardShows(page, high, ALL_HIGH);
-      await expect(appliedRow(page)).toContainText(HIGH_FILTER);
-      await expect(appliedRow(page)).toContainText(HIGH_TEXT);
-      await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
-      await expect(main(page).getByRole('button', { name: THF.setAsBoard })).toHaveCount(0);
-      await expect(main(page).getByRole('button', { name: THF.saveToBoard })).toHaveCount(0);
-      await beat();
+    // A saved filter in its place: Reset, and no Set as board filter.
+    const high = await applySaved(page, bugsId, HIGH_FILTER);
+    await expectBoardShows(page, high, ALL_HIGH);
+    await expect(appliedRow(page)).toContainText(HIGH_FILTER);
+    await expect(appliedRow(page)).toContainText(HIGH_TEXT);
+    await expect(actionsOf(page).getByRole('button', { name: THF.reset })).toBeVisible();
+    await expect(main(page).getByRole('button', { name: THF.setAsBoard })).toHaveCount(0);
+    await expect(main(page).getByRole('button', { name: THF.saveToBoard })).toHaveCount(0);
 
-      const back = await resetToBoardFilter(page, bugsId);
-      await expectBoardShows(page, back, MOBILE_CARDS);
-      await expect(headerRow(page)).toContainText(LABEL_TEXT);
-      await expect(actionsOf(page)).toHaveCount(0);
-      await beat();
-    },
-  );
+    const back = await resetToBoardFilter(page, bugsId);
+    await expectBoardShows(page, back, MOBILE_CARDS);
+    await expect(headerRow(page)).toContainText(LABEL_TEXT);
+    await expect(actionsOf(page)).toHaveCount(0);
+  });
 
-  await chapter(
-    'Step 8 · The default board has no board filter: the header filter starts empty and behaves as before',
-    async () => {
-      const board = await openBoard(page, s.defaultBoardId);
-      expect(board.storedFilter).toBeNull();
-      await expectBoardShows(page, board, ALL);
-      await expect(headerRow(page)).toHaveCount(0);
-      await expect(main(page).getByText(THF.chip, { exact: true })).toHaveCount(0);
-      await expect(appliedRow(page)).toHaveCount(0);
-      await beat();
+  await test.step('Step 8 · The default board has no board filter: the header filter starts empty and behaves as before', async () => {
+    const board = await openBoard(page, s.defaultBoardId);
+    expect(board.storedFilter).toBeNull();
+    await expectBoardShows(page, board, ALL);
+    await expect(headerRow(page)).toHaveCount(0);
+    await expect(main(page).getByText(THF.chip, { exact: true })).toHaveCount(0);
+    await expect(appliedRow(page)).toHaveCount(0);
 
-      const narrowed = await addPriorityHigh(page, s.defaultBoardId, 0);
-      await expectBoardShows(page, narrowed, ALL_HIGH);
-      await expect(appliedRow(page)).toContainText(HIGH_TEXT);
-      await expect(main(page).getByText(THF.chip, { exact: true })).toHaveCount(0);
-      await expect(actionsOf(page)).toHaveCount(0);
-      await expect(main(page).getByRole('button', { name: THF.reset })).toHaveCount(0);
-      await beat();
+    const narrowed = await addPriorityHigh(page, s.defaultBoardId, 0);
+    await expectBoardShows(page, narrowed, ALL_HIGH);
+    await expect(appliedRow(page)).toContainText(HIGH_TEXT);
+    await expect(main(page).getByText(THF.chip, { exact: true })).toHaveCount(0);
+    await expect(actionsOf(page)).toHaveCount(0);
+    await expect(main(page).getByRole('button', { name: THF.reset })).toHaveCount(0);
 
-      // Clear all is the whole board again, with no `boardFilter=off`: there is
-      // no board filter to switch off.
-      await page.getByRole('button', { name: /^Advanced/ }).click();
-      const dialog = advancedDialog(page);
-      const read = frameOf(page, s.defaultBoardId, false);
-      await dialog.getByRole('button', { name: TIV.advancedClearAll }).click();
-      const cleared = await frame(read);
-      await page.keyboard.press('Escape');
-      await expect(dialog).toBeHidden();
-      expectCleanUrl(page);
-      await expectBoardShows(page, cleared, ALL);
-      await expect(appliedRow(page)).toHaveCount(0);
-      await beat();
-    },
-  );
+    // Clear all is the whole board again, with no `boardFilter=off`: there is
+    // no board filter to switch off.
+    await page.getByRole('button', { name: /^Advanced/ }).click();
+    const dialog = advancedDialog(page);
+    const read = frameOf(page, s.defaultBoardId, false);
+    await dialog.getByRole('button', { name: TIV.advancedClearAll }).click();
+    const cleared = await frame(read);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    expectCleanUrl(page);
+    await expectBoardShows(page, cleared, ALL);
+    await expect(appliedRow(page)).toHaveCount(0);
+  });
 });
