@@ -302,12 +302,18 @@ describe('the canvas card', () => {
     expect(document.querySelector('[data-obsolescence]')).toBeNull();
   });
 
-  it('an `add` superseding two cards shows `Supersedes 2` before the difficulty, keys in title', () => {
+  it('an `add` superseding two cards shows the `Supersedes 2` glyph, keys in title', () => {
     render(<PlanItemNode item={supersedingAdd([PROD_21, PROD_9])} />);
     const count = screen.getByTestId('plan-item-supersedes');
-    expect(count.textContent).toBe('Supersedes 2');
+    // The tag row's give-way form (MOTIR-11545 on a decided card, MOTIR-11549 on
+    // every card): `Supersedes 2` beside `New`, `+ add` and the difficulty ran
+    // 19.8px past the fixed 280px card, so the chip is its glyph, named on
+    // `aria-label`, and the difficulty leaves the row for the quick view.
+    expect(count.textContent).toBe('');
+    expect(count.getAttribute('role')).toBe('img');
+    expect(count.getAttribute('aria-label')).toBe('Supersedes 2');
     expect(count.getAttribute('title')).toBe('Supersedes PROD-21 · PROD-9');
-    expect(count.nextElementSibling?.getAttribute('data-testid')).toBe('plan-item-difficulty');
+    expect(screen.queryByTestId('plan-item-difficulty')).toBeNull();
     expect(count.querySelector('svg')!.getAttribute('class')).toContain('lucide-replace');
     // The bottom slot is not spent.
     expect(screen.queryByTestId('diff-line')).toBeNull();

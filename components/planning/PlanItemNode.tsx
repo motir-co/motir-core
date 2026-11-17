@@ -225,32 +225,36 @@ export const PlanItemNode = memo(function PlanItemNode({
   // difficulty indicator (and before the drill chevron on a container); no refs ⇒
   // nothing, byte-identical to before.
   const supersedes = item.op === 'add' ? (item.supersedesRefs ?? []) : [];
-  // A DECIDED card's tag row (MOTIR-11545, design Part XXX). Once the plan is
-  // decided an accepted `add` IS a work item: it gains its real five-digit key and
-  // a live status, so its row carries the committed card's facts plus the op chip.
-  // It therefore takes the committed card's tag-row forms (MOTIR-10508): the status
-  // as the truncating SLOT and the SHORT blocked flag — and the committed card's
-  // GIVE-WAY RULE ("When the tag row overflows"): a right-hand TEXT tag (the blocked
-  // flag, the stale badge, the `Supersedes N` chip) drops the status and the op chip to
-  // their glyphs (the op
+  // THE TAG ROW'S FORMS (MOTIR-11545, design Part XXX; widened to the undecided
+  // card by MOTIR-11549, Part XXXI). The card is a fixed 280px with every tag
+  // `shrink-0`, so the row takes the committed card's tag-row forms (MOTIR-10508)
+  // on EVERY plan card, decided or not: the status as the truncating SLOT and the
+  // SHORT blocked flag — and the committed card's GIVE-WAY RULE ("When the tag row
+  // overflows"): a right-hand TEXT tag (the blocked flag, the stale badge, the
+  // `Supersedes N` chip) drops the status and the op chip to their glyphs (the op
   // chip is this card's Manual chip, a type chip on the left) and the difficulty
   // out of the row (the peek carries it). A fixed rule, not a measurement: with a
-  // text tag beside them the words measured 18–34px past the 254px row in every
-  // style. A decided card that carries a live STATUS never draws its difficulty in
-  // the row either — the committed card it now is draws none, and `To Do` beside
-  // `High` already overflows the room the op chip leaves. An UNDECIDED card is
-  // left exactly as it shipped.
+  // text tag beside them the words measured 18–34px past the 254px row on a
+  // decided card in every style, and an undecided blocked `add` with a difficulty
+  // 70px past it (MOTIR-11549).
   //
-  // On a decided card the `Supersedes N` chip is the `Replace` glyph alone — its
-  // words on `aria-label`, the keys on `title` — because its words beside the key
-  // and two glyphs still ran 1.4px past the row. When it meets ANOTHER text tag
-  // (blocked, stale) even the glyph runs 1.7–9.7px past in five styles, so it
-  // leaves the row the way the difficulty does: the quick view's Supersedes row
+  // The `Supersedes N` chip is the `Replace` glyph alone — its words on
+  // `aria-label`, the keys on `title` — because its words beside the key and two
+  // glyphs still ran 1.4px past the row. When it meets ANOTHER text tag (blocked,
+  // stale) even the glyph runs 1.7–9.7px past in five styles, so it leaves the row
+  // the way the difficulty does: the quick view's Supersedes row
   // (`ProposalSupersedesRows`) carries it. Measured in design Part XXX §30.4.
+  //
+  // Once the plan is decided an accepted `add` IS a work item: it gains its real
+  // five-digit key and a live status, and a card that carries a live STATUS never
+  // draws its difficulty in the row — the committed card it now is draws none, and
+  // `To Do` beside `High` already overflows the room the op chip leaves. An
+  // undecided `add` has no status, so it keeps its difficulty unless it gives way.
   const decided = outcome != null;
-  const giveWay = decided && (crossBlocked || showStale || supersedes.length > 0);
-  const supersedesGlyphOnly = decided && supersedes.length > 0;
-  const supersedesInRow = supersedes.length > 0 && !(decided && (crossBlocked || showStale));
+  const textTag = crossBlocked || showStale;
+  const giveWay = textTag || supersedes.length > 0;
+  const supersedesGlyphOnly = supersedes.length > 0;
+  const supersedesInRow = supersedes.length > 0 && !textTag;
 
   // Op-specific frame — what the op MEANS, layered on the shell (which owns the
   // border weight, radius and padding). None reuses the cross-story red
@@ -300,14 +304,14 @@ export const PlanItemNode = memo(function PlanItemNode({
       // TOP ROW — the op badge (left) + the status pill / stale flag (right).
       statusRow={
         <>
-          {/* The PLAIN op chip on a decided plan too (MOTIR-11545): the outcome
+          {/* The PLAIN op chip, on a decided plan too (MOTIR-11545): the outcome
               rides the top-edge tab, not a segment fused onto this chip. Under the
               give-way rule above it is the op's glyph alone. */}
           <PlanItemOpBadge op={item.op} glyphOnly={giveWay} />
-          {/* On a decided card `min-w-0`, so the status SLOT below can truncate
-              inside the row rather than push the right-hand tags past the card's
-              edge (MOTIR-11545). */}
-          <div className={`ml-auto flex items-center gap-1.5${decided ? ' min-w-0' : ''}`}>
+          {/* `min-w-0`, so the status SLOT below can truncate inside the row rather
+              than push the right-hand tags past the card's edge (MOTIR-11545,
+              MOTIR-11549). */}
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
             {showStale ? (
               <span
                 data-testid="stale-badge"
@@ -330,14 +334,14 @@ export const PlanItemNode = memo(function PlanItemNode({
               />
             ) : null}
             {item.status ? (
-              // On a decided card the TAG-ROW slot form (MOTIR-10508), as on the
-              // committed card: it truncates last and carries its name on `title`;
-              // under the give-way rule it is the glyph alone (MOTIR-11545).
+              // The TAG-ROW slot form (MOTIR-10508), as on the committed card: it
+              // truncates last and carries its name on `title`; under the give-way
+              // rule it is the glyph alone (MOTIR-11545, MOTIR-11549).
               <WorkItemStatusPill
                 status={item.status}
                 label={item.statusLabel}
                 category={item.statusCategory}
-                slot={decided}
+                slot
                 glyphOnly={giveWay}
               />
             ) : null}
@@ -352,7 +356,7 @@ export const PlanItemNode = memo(function PlanItemNode({
                     )
                     .join(' · '),
                 })}
-                // On a decided card the glyph alone (MOTIR-11545): it is then the
+                // The glyph alone (MOTIR-11545, MOTIR-11549): it is then the
                 // chip's only content, so it is a labelled image in the secondary
                 // ink (graphics owe 3:1), not the faint decorative glyph that sits
                 // beside the words.
@@ -371,10 +375,9 @@ export const PlanItemNode = memo(function PlanItemNode({
               </span>
             ) : null}
             {crossBlocked ? (
-              // On a decided card the SHORT flag (`blocked`, the sentence on
-              // `title` / `aria-label`), the committed card's tag-row form
-              // (MOTIR-11545); an undecided card keeps the sentence.
-              <CrossBlockedFlag short={decided} />
+              // The SHORT flag (`blocked`, the sentence on `title` / `aria-label`),
+              // the committed card's tag-row form (MOTIR-11545, MOTIR-11549).
+              <CrossBlockedFlag short />
             ) : item.hasChildren ? (
               <ChevronRight
                 className="size-4 shrink-0 text-(--el-text-muted)"

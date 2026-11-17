@@ -535,14 +535,6 @@ describe('PlanItemNode — the outcome tab (MOTIR-11545)', () => {
     expect(within(row).getByTestId('plan-item-op-glyph')).toBeTruthy();
   });
 
-  it('an UNDECIDED add that supersedes a card keeps its Supersedes words, as it shipped', () => {
-    renderWithIntl(<PlanItemNode item={supersedingAdd()} crossBlocked />);
-    const chip = screen.getByTestId('plan-item-supersedes');
-    expect(chip.textContent).toBe('Supersedes 1');
-    expect(chip.getAttribute('role')).toBeNull();
-    expect(screen.queryByTestId('plan-item-op-glyph')).toBeNull();
-  });
-
   it('a declined add (no status, no key) keeps its difficulty in the row', () => {
     renderWithIntl(
       <PlanItemNode item={item({ op: 'add', difficulty: 'low' })} outcome="declined" />,
@@ -565,20 +557,6 @@ describe('PlanItemNode — the outcome tab (MOTIR-11545)', () => {
     expect(screen.getByTestId('stale-badge')).toBeTruthy();
     expect(screen.getByTestId('plan-item-op-glyph')).toBeTruthy();
     expect(screen.queryByTestId('plan-item-difficulty')).toBeNull();
-  });
-
-  it('an UNDECIDED blocked add is drawn exactly as it shipped', () => {
-    renderWithIntl(<PlanItemNode item={blockedAdd()} crossBlocked />);
-    const row = tagRow();
-    expect(within(row).queryByTestId('plan-item-op-glyph')).toBeNull();
-    expect(within(row).getByText('add')).toBeTruthy();
-    // The long sentence flag, the shipped `shrink-0` status chip, the difficulty.
-    expect(within(row).getByTestId('cross-blocked-flag').textContent).toBe('blocked elsewhere');
-    const status = row.querySelector('[data-status="todo"]') as HTMLElement;
-    expect(status.className).toContain('shrink-0');
-    expect(status.textContent).toBe('To Do');
-    expect(within(row).getByTestId('plan-item-difficulty')).toBeTruthy();
-    expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
   });
 
   it('hangs outside the fixed-size frame, before it, in the You are here tab frame', () => {
@@ -662,6 +640,138 @@ describe('PlanItemNode — the outcome tab (MOTIR-11545)', () => {
     expect((container.firstElementChild as HTMLElement).firstElementChild).toBe(
       screen.getByTestId('plan-item-node'),
     );
+  });
+});
+
+// ── MOTIR-11549 — the UNDECIDED card's tag row takes the same forms ─────────
+//
+// MOTIR-11545 gated the committed card's tag-row forms on a decided outcome and
+// left the undecided card as it shipped, which had two overflows of its own at the
+// fixed 280px node (measured in Chromium, warm-editorial light): a blocked `add`
+// with a difficulty (`New` · `+ add` · `blocked elsewhere` · `Medium`) ended 70px
+// past the row's inner right edge, and a `modify` of an `In Progress` target
+// 22.5px past it. The forms are now one rule for every plan card (design Part
+// XXXI). As above, happy-dom does no layout, so these pin the rule; the Chromium
+// measurement rides the design notes.
+describe('PlanItemNode — the undecided tag row (MOTIR-11549)', () => {
+  const tagRow = () => screen.getByTestId('plan-item-node').firstElementChild as HTMLElement;
+
+  it('an undecided blocked add with a difficulty gives way: op glyph, short tag, no difficulty', () => {
+    renderWithIntl(<PlanItemNode item={item({ op: 'add', difficulty: 'medium' })} crossBlocked />);
+    const row = tagRow();
+    // An undecided add has no key yet: the placeholder stays.
+    expect(within(row).getByText('New')).toBeTruthy();
+    const op = within(row).getByTestId('plan-item-op-glyph');
+    expect(op.getAttribute('role')).toBe('img');
+    expect(op.getAttribute('aria-label')).toBe('add');
+    expect(op.getAttribute('title')).toBe('add');
+    expect(op.textContent).toBe('');
+    const flag = within(row).getByTestId('cross-blocked-flag');
+    expect(flag.textContent).toBe('blocked');
+    expect(flag.getAttribute('aria-label')).toBe('blocked elsewhere');
+    expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
+    // Still undecided: no tab, no spine.
+    expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome-spine')).toBeNull();
+  });
+
+  it('an undecided add that is not blocked keeps its words and its difficulty', () => {
+    renderWithIntl(<PlanItemNode item={item({ op: 'add', difficulty: 'medium' })} />);
+    const row = tagRow();
+    expect(within(row).queryByTestId('plan-item-op-glyph')).toBeNull();
+    expect(within(row).getByText('add')).toBeTruthy();
+    expect(within(row).getByTestId('plan-item-difficulty').textContent).toContain('Medium');
+  });
+
+  it('a stale undecided add gives way too — the stale badge is a right-hand text tag', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'add',
+          difficulty: 'high',
+          stale: true,
+          staleReasons: [{ code: 'parent_removed', parentId: 'wi_gone' }],
+        })}
+      />,
+    );
+    expect(screen.getByTestId('stale-badge')).toBeTruthy();
+    expect(screen.getByTestId('plan-item-op-glyph')).toBeTruthy();
+    expect(screen.queryByTestId('plan-item-difficulty')).toBeNull();
+  });
+
+  const supersedingNew = () =>
+    item({
+      op: 'add',
+      difficulty: 'medium',
+      supersedesRefs: [
+        { identifier: 'MOTIR-11402', title: 'Poll the checker', kind: 'subtask', proposed: false },
+      ],
+    });
+
+  it('an undecided add that supersedes a card gives way, its Supersedes chip the named glyph', () => {
+    renderWithIntl(<PlanItemNode item={supersedingNew()} />);
+    const row = tagRow();
+    expect(within(row).getByTestId('plan-item-op-glyph').getAttribute('aria-label')).toBe('add');
+    expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
+    const chip = within(row).getByTestId('plan-item-supersedes');
+    expect(chip.getAttribute('role')).toBe('img');
+    expect(chip.getAttribute('aria-label')).toBe('Supersedes 1');
+    expect(chip.getAttribute('title')).toContain('MOTIR-11402');
+    expect(chip.textContent).toBe('');
+  });
+
+  it('an undecided blocked add that supersedes a card leaves the Supersedes chip to the quick view', () => {
+    renderWithIntl(<PlanItemNode item={supersedingNew()} crossBlocked />);
+    const row = tagRow();
+    expect(within(row).queryByTestId('plan-item-supersedes')).toBeNull();
+    expect(within(row).getByTestId('cross-blocked-flag').textContent).toBe('blocked');
+    expect(within(row).getByTestId('plan-item-op-glyph')).toBeTruthy();
+  });
+
+  it('an undecided modify of an In Progress target draws the status as the truncating slot', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          identifier: 'MOTIR-11490',
+          status: 'in_progress',
+          statusLabel: 'In Progress',
+          statusCategory: 'in_progress',
+        })}
+      />,
+    );
+    const row = tagRow();
+    const status = row.querySelector('[data-status="in_progress"]') as HTMLElement;
+    expect(status.textContent).toBe('In Progress');
+    expect(status.getAttribute('role')).toBeNull();
+    // The SLOT form: it may truncate inside the row, its name on `title` …
+    expect(status.className).toContain('min-w-0');
+    expect(status.getAttribute('title')).toBe('In Progress');
+    // … and the right-hand group can shrink, so the slot is what gives.
+    expect((status.parentElement as HTMLElement).className).toContain('min-w-0');
+    expect(within(row).queryByTestId('plan-item-op-glyph')).toBeNull();
+  });
+
+  it('an undecided blocked modify drops its op chip and its status to their glyphs', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          identifier: 'MOTIR-11490',
+          status: 'in_progress',
+          statusLabel: 'In Progress',
+          statusCategory: 'in_progress',
+        })}
+        crossBlocked
+      />,
+    );
+    const row = tagRow();
+    expect(within(row).getByTestId('plan-item-op-glyph').getAttribute('aria-label')).toBe('change');
+    const status = row.querySelector('[data-status="in_progress"]') as HTMLElement;
+    expect(status.getAttribute('role')).toBe('img');
+    expect(status.getAttribute('aria-label')).toBe('In Progress');
+    expect(status.textContent).toBe('');
+    expect(within(row).getByTestId('cross-blocked-flag').textContent).toBe('blocked');
   });
 });
 
