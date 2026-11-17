@@ -14,8 +14,9 @@ import type { RoadmapLevel } from '@/components/planning/ProjectRoadmapCanvas';
 // ⚠️ It WRAPS the shipped node — the compose-don't-redraw seam (`notes.html`
 // #82 / #95). The work item keeps rendering as the real `WorkItemNode` (kind
 // tile, status pill, progress meter); this adds a ring, a glow and a word on top.
-// It is drawn on `PlanChangeCanvas`, the pane for the "no plan" state; a pane
-// with a plan is the plan page's own component (MOTIR-6186 · MOTIR-6299).
+// It is drawn by `PlanReviewCanvas` in its "no plan" state (`prePlan`, bug
+// MOTIR-11513); once a plan is shown the target's own status pill says it is
+// being planned, and the ring leaves (MOTIR-6186 · MOTIR-6299).
 //
 // NOT COLOUR ALONE: the ring is paired with a "Target" pill whose label is real
 // text, so the state is legible and reaches a screen reader.

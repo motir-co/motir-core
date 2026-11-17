@@ -77,4 +77,16 @@ describe('the plan review is ONE component, mounted by two hosts (MOTIR-6186)', 
 
     expect(callers).toEqual(['components/planning/PlanReviewCanvas.tsx']);
   });
+
+  it('⭐ the planning surface draws its pane with ONE mount, before a plan exists and after (MOTIR-11513)', () => {
+    // The surface used to render a second component for the "no plan" state and
+    // swap the shared one in when the plan's first read landed, which remounted
+    // the canvas under the reader. One mount, with the pre-plan state as a prop,
+    // is what lets React keep the same canvas — so a second canvas mount in the
+    // host fails here by name.
+    const host = read('components/planning/PlanningWorkspaceHost.tsx');
+    expect(host.match(/<PlanProposalViews\b/g)).toHaveLength(1);
+    expect(host).toMatch(/\bprePlan=\{panePrePlan\}/);
+    expect(host).not.toMatch(/<(PlanReviewCanvas|ProjectRoadmapCanvas)\b/);
+  });
 });

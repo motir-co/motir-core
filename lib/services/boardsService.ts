@@ -340,7 +340,7 @@ export const boardsService = {
     // NEVER fall back to the unscoped board (that would masquerade the backlog as
     // a sprint). The column meta (name / statusKeys / wipLimit) is still returned
     // so the shape is honest, but every column is empty and nothing is counted.
-    if (board.type === BoardType.scrum && !frame.activeSprint) {
+    if (boardShowsNoCards(board, frame.activeSprint)) {
       const emptyColumns: BoardColumnDto[] = columns.map((col) => ({
         id: col.id,
         name: col.name,
@@ -1118,7 +1118,11 @@ export const boardsService = {
    *     you delete down to zero columns).
    *   - `ColumnNotEmptyError` (409) — refuse while a mapped status still holds
    *     work items on the board ("you can't delete a column with issues"); the
-   *     admin remaps those statuses elsewhere first.
+   *     admin remaps those statuses elsewhere first. "On the board" is the
+   *     board's own scope — its stored filter and scrum sprint — so a column
+   *     whose cards the board's filter excludes is empty here and deletes
+   *     (MOTIR-11550); its statuses go to the tray and the filter keeps their
+   *     cards off the board either way.
    * When it proceeds, it unmaps the column's statuses (they return to
    * `unmappedStatuses` — the 3.2.6 tray) and deletes the `board_column` row, in
    * ONE transaction. It NEVER deletes a work item (a card's column is derived
@@ -1136,6 +1140,11 @@ export const boardsService = {
     );
     if (!column) throw new BoardColumnNotFoundError(columnId);
     await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(column.boardId, ctx.workspaceId, tx),
+    );
+    /* v8 ignore next -- defensive: a column's board_id is an FK, so its board exists */
+    if (!board) throw new BoardColumnNotFoundError(columnId);
 
     // The project's statuses are stable w.r.t. this op (deleteColumn never
     // touches the workflow), so resolve them once outside the tx; the column
@@ -1145,6 +1154,15 @@ export const boardsService = {
       ctx.workspaceId,
     );
     const statusById = new Map(statuses.map((s) => [s.id, s]));
+    // The board's OWN card scope — its stored filter and its scrum sprint scope
+    // (MOTIR-11550) — resolved by the SAME helper the board projection uses, so
+    // "this column holds work items" is judged on exactly the cards the board
+    // (and the settings page's column count) shows. Like the statuses, it is
+    // resolved before the lock: the stored filter's referents load through their
+    // own bound read. A filter edited mid-delete is the same best-effort race as
+    // a card moving into the column — it can only UNMAP statuses, never lose a
+    // work item.
+    const ownScope = await resolveBoardOwnScope(board, ctx.workspaceId);
 
     await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
       // Lock the board row so concurrent column adds/deletes on this board
@@ -1165,7 +1183,12 @@ export const boardsService = {
       if (columns.length <= 1) throw new LastColumnError();
 
       // Not-empty guard — refuse if any of the column's mapped (live) statuses
-      // still holds non-archived work items on the board.
+      // still holds non-archived work items ON THIS BOARD: counted under the
+      // board's own scope (`columnReadScope` over the stored filter and the
+      // sprint), the predicate the projection's `totalCount` is read under, so
+      // the settings page's count and this refusal cannot disagree. A scrum
+      // board with no active sprint shows no cards in any column, so nothing
+      // is counted.
       const mappings = await boardColumnStatusRepository.findByColumn(
         columnId,
         ctx.workspaceId,
@@ -1175,11 +1198,18 @@ export const boardsService = {
         .map((m) => statusById.get(m.statusId))
         .filter((s): s is WorkflowStatusDto => s != null)
         .map((s) => s.key);
-      if (statusKeys.length > 0) {
+      if (statusKeys.length > 0 && !boardShowsNoCards(board, ownScope.activeSprint)) {
+        // No reader and no header filter here, so the effective filter is the
+        // board's stored one (MOTIR-11564's rule with no header).
+        const { count } = columnReadScope({
+          activeSprint: ownScope.activeSprint,
+          effectiveFilter: effectiveBoardFilter(undefined, ownScope.storedFilter, false),
+          excludeIds: undefined,
+        });
         const cardCount = await workItemRepository.countProjectIssues(
           column.projectId,
           ctx.workspaceId,
-          { statuses: statusKeys },
+          { statuses: statusKeys, ...count },
           tx,
         );
         if (cardCount > 0) throw new ColumnNotEmptyError(columnId, cardCount);
@@ -1796,6 +1826,46 @@ type BoardFrame = {
   activeSprint: Sprint | null;
 };
 
+/** What narrows a board's cards — the part of {@link BoardFrame} that
+ *  {@link columnReadScope} reads. */
+type BoardCardScope = Pick<BoardFrame, 'activeSprint' | 'effectiveFilter' | 'excludeIds'>;
+
+/**
+ * The board's OWN card scope — what narrows its cards whoever reads it and
+ * whatever the toolbar says: its stored filter (MOTIR-10560) and, on a scrum
+ * board, its project's active sprint (Subtask 4.5.2). Shared by the board
+ * projection ({@link loadBoardFrame}) and the column-delete guard
+ * (`deleteColumn`, MOTIR-11550), so a column's count on the board and the
+ * guard's count are read under one scope.
+ *
+ * SPRINT SCOPE: a SCRUM board renders only its project's ACTIVE sprint. The
+ * sprint is PROJECT-scoped, not board-scoped (schema rung 2: there is no
+ * `board.sprintId`; the `sprint_one_active_per_project` partial-unique index
+ * makes "the board's active sprint" unambiguous). A `kanban` board is unscoped.
+ * The stored filter never throws — a stale or unreadable condition narrows the
+ * board instead of breaking it.
+ */
+async function resolveBoardOwnScope(
+  board: Board,
+  workspaceId: string,
+): Promise<Pick<BoardFrame, 'storedFilter' | 'activeSprint'>> {
+  const storedFilter = await resolveStoredBoardFilter(board.projectId, workspaceId, board.filter);
+  const activeSprint =
+    board.type === BoardType.scrum
+      ? await withWorkspaceServiceContext(workspaceId, (tx) =>
+          sprintRepository.findActiveByProject(board.projectId, workspaceId, tx),
+        )
+      : null;
+  return { storedFilter, activeSprint };
+}
+
+/** A scrum board with no active sprint shows no card in any column — it never
+ *  falls back to the unscoped board, which would masquerade the backlog as a
+ *  sprint. */
+function boardShowsNoCards(board: Board, activeSprint: Sprint | null): boolean {
+  return board.type === BoardType.scrum && !activeSprint;
+}
+
 async function loadBoardFrame(
   projectId: string,
   ctx: ServiceContext | VisitorReadContext,
@@ -1848,7 +1918,7 @@ async function loadBoardFrame(
   // unreadable condition narrows the board instead of breaking it. It is
   // resolved even when the header filter replaces it, so the response can still
   // report it (`storedFilter` on the projection).
-  const storedFilter = await resolveStoredBoardFilter(projectId, readCtx.workspaceId, board.filter);
+  const { storedFilter, activeSprint } = await resolveBoardOwnScope(board, readCtx.workspaceId);
   const effectiveFilter = effectiveBoardFilter(boardFilter, storedFilter, filter?.storedFilterOff);
 
   // The board's own two reads share ONE bound transaction; the workflow LIST is
@@ -1877,18 +1947,6 @@ async function loadBoardFrame(
     list.push(s);
     liveByColumn.set(m.columnId, list);
   }
-
-  // SPRINT SCOPE (Subtask 4.5.2). A SCRUM board renders only its project's
-  // ACTIVE sprint. The sprint is PROJECT-scoped, not board-scoped (schema rung
-  // 2: there is no `board.sprintId`; the `sprint_one_active_per_project`
-  // partial-unique index makes "the board's active sprint" unambiguous). A
-  // `kanban` board is unscoped.
-  const activeSprint =
-    board.type === BoardType.scrum
-      ? await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
-          sprintRepository.findActiveByProject(projectId, readCtx.workspaceId, tx),
-        )
-      : null;
 
   return {
     member,
@@ -2044,7 +2102,7 @@ function effectivePredicate(
  * other's spelling silently drops the referents, so each read gets its own
  * object rather than one shared bag.
  */
-function columnReadScope(frame: BoardFrame, lane?: BoardLanePredicate) {
+function columnReadScope(frame: BoardCardScope, lane?: BoardLanePredicate) {
   const sprintId = frame.activeSprint?.id;
   const { header: filter, stored } = effectiveFilterSlots(frame.effectiveFilter);
   const excludeIds = frame.excludeIds;

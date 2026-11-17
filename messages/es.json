@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Un Tablero debe conservar al menos una columna.",
       "toastColumnNotEmptyError": "“{name}” todavía contiene elementos de trabajo: reasigna antes sus estados.",
       "toastRenameBoardError": "No se pudo renombrar el Tablero. Se ha restaurado el nombre anterior.",
-      "errorTitle": "No se pudo cargar la configuración del Tablero",
+      "errorTitle": "No se pudo guardar el cambio",
       "errorDescription": "Algo falló al cargar la configuración de este Tablero. Vuelve a intentarlo.",
       "storedFilter": {
         "title": "Filtro del Tablero",
@@ -8798,6 +8798,10 @@
       "approve": "Aprobar",
       "approveChanges": "Aprobar cambios",
       "nothingSavedYet": "Aún no se ha guardado nada",
+      "revision": {
+        "earlierVersion": "Versión anterior · reemplazada abajo",
+        "earlierVersionUnkept": "Aquí había una versión anterior de este plan ({count, plural, one {# elemento} other {# elementos}}). Su resumen no se conservó."
+      },
       "barCounts": "{added, plural, =0 {Sin añadidos} one {# añadido} other {# añadidos}}{changed, plural, =0 {} one {, # cambiado} other {, # cambiados}}{removed, plural, =0 {} one {, # eliminado} other {, # eliminados}}",
       "barNothingSaved": "No se guarda nada hasta que apruebes.",
       "summary": "{added, plural, =0 {Ningún elemento de trabajo nuevo} one {# añadido} other {# añadidos}}{changed, plural, =0 {} one {, # cambiado} other {, # cambiados}}{removed, plural, =0 {} one {, # eliminado} other {, # eliminados}}: está en el lienzo, aún no se ha guardado nada.",

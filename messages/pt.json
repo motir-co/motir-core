@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Um Quadro precisa manter pelo menos uma coluna.",
       "toastColumnNotEmptyError": "“{name}” ainda contém itens de trabalho — remapeie os status dela primeiro.",
       "toastRenameBoardError": "Não foi possível renomear o Quadro. O nome anterior foi restaurado.",
-      "errorTitle": "Não foi possível carregar as configurações do Quadro",
+      "errorTitle": "Não foi possível salvar a alteração",
       "errorDescription": "Algo deu errado ao carregar a configuração deste Quadro. Tente novamente.",
       "storedFilter": {
         "title": "Filtro do Quadro",
@@ -8798,6 +8798,10 @@
       "approve": "Aprovar",
       "approveChanges": "Aprovar alterações",
       "nothingSavedYet": "Nada salvo ainda",
+      "revision": {
+        "earlierVersion": "Versão anterior · substituída abaixo",
+        "earlierVersionUnkept": "Aqui havia uma versão anterior deste plano ({count, plural, one {# item} other {# itens}}). O resumo dela não foi mantido."
+      },
       "barCounts": "{added, plural, =0 {Nenhuma adição} one {# adicionado} other {# adicionados}}{changed, plural, =0 {} one {, # alterado} other {, # alterados}}{removed, plural, =0 {} one {, # removido} other {, # removidos}}",
       "barNothingSaved": "Nada é salvo até você aprovar.",
       "summary": "{added, plural, =0 {Nenhum item de trabalho novo} one {# adicionado} other {# adicionados}}{changed, plural, =0 {} one {, # alterado} other {, # alterados}}{removed, plural, =0 {} one {, # removido} other {, # removidos}} — está no canvas, nada foi salvo ainda.",

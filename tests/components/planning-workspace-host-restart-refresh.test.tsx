@@ -52,9 +52,16 @@ vi.mock('@/lib/hooks/usePlanChangeConversation', () => ({
 vi.mock('@/components/planning/PlanChangeRail', () => ({
   PlanChangeRail: () => <div data-testid="rail-stub" />,
 }));
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: () => <div data-testid="canvas-stub" />,
-}));
+// The canvas BEFORE a plan fetches its own levels; it is not what this file is
+// about. Since MOTIR-11513 it is `PlanReviewCanvas` with `prePlan`, so only that
+// state is stubbed and a plan's canvas stays real.
+vi.mock('@/components/planning/PlanReviewCanvas', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/components/planning/PlanReviewCanvas')>();
+  function PrePlanStub(props: Parameters<typeof real.PlanReviewCanvas>[0]) {
+    return props.prePlan ? <div data-testid="canvas-stub" /> : <real.PlanReviewCanvas {...props} />;
+  }
+  return { ...real, PlanReviewCanvas: PrePlanStub };
+});
 vi.mock('@/components/planning/AuditCoverageBanner', () => ({
   AuditCoverageBanner: () => null,
 }));

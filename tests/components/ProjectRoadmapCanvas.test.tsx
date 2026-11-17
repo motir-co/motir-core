@@ -636,8 +636,8 @@ describe('ProjectRoadmapCanvas', () => {
         .getAllByRole('listitem')
         .map((li) => li.textContent);
 
-    // THE CONTROL. The prop defaults to `false`, so the four consumers that do not opt
-    // in (OnboardingCanvas / PlanReviewCanvas / PlanChangeCanvas / PlanningWorkspaceHost)
+    // THE CONTROL. The prop defaults to `false`, so the consumers that do not opt
+    // in (OnboardingCanvas / PlanReviewCanvas / PlanningWorkspaceHost)
     // are provably unaffected by this whole feature.
     it('is OFF by default — a single drillable node renders as itself, no descent', async () => {
       render(<ProjectRoadmapCanvas loadLevel={serve(chain)} />);

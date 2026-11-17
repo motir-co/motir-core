@@ -4,7 +4,10 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Info, List, Workflow } from 'lucide-react';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
-import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
+import {
+  PlanReviewCanvas,
+  type PlanReviewCanvasPrePlan,
+} from '@/components/planning/PlanReviewCanvas';
 import type { ProjectRoadmapCanvasProps } from '@/components/planning/ProjectRoadmapCanvas';
 import { Segmented } from '@/components/ui/Segmented';
 import type { PlanViewDto } from '@/lib/planning/planView';
@@ -63,6 +66,21 @@ import {
 // somewhere to put it. Part VIII §2 is what decides that position — the header
 // governs the BODY, and the band is not part of the body — so the slot is that
 // decision expressed as a prop rather than re-argued in each host.
+//
+// ── Before there is a plan (`prePlan`, bug MOTIR-11513) ─────────────────────
+// The planning surface mounts this component from the moment it opens, so the
+// canvas the reader is looking at when they press Start planning is the canvas
+// the plan is drawn on. While `prePlan` is set there is no plan to switch views
+// over: the header, the band and the List are not drawn, and the body is the
+// canvas alone in its pre-plan state (the target ring, Set / Remove target, the
+// surface's empty statement). When the host clears it, the header and the band
+// mount AROUND the body — each in a slot of its own ahead of it, so the body
+// keeps its place in the tree and React keeps the same canvas, its level and its
+// viewport. The plan page and the run modal pass none of it.
+
+/** The pane's "no plan" state, defined by the canvas that draws it — re-exported
+ *  so a host names it without reaching past this component (MOTIR-6186). */
+export type { PlanReviewCanvasPrePlan };
 
 export interface PlanProposalViewsProps {
   /** The proposals to draw — the review's own item set. */
@@ -193,6 +211,17 @@ export interface PlanProposalViewsProps {
    * moves it (§31.5). Absent, the drafts array's identity stands in.
    */
   cueReads?: number;
+  /**
+   * THE "NO PLAN YET" STATE (bug MOTIR-11513) — the planning surface, before its
+   * first plan read. Forwarded to `PlanReviewCanvas`; this component draws no
+   * header, band or List while it is set. Absent or `null` on every other host.
+   */
+  prePlan?: PlanReviewCanvasPrePlan | null;
+  /** Forwarded verbatim to `PlanReviewCanvas` — the card the canvas OPENS centred
+   *  on (MOTIR-11472). A mount-time seed. */
+  initialCentreId?: string | null;
+  /** Forwarded verbatim to `PlanReviewCanvas` — the first level's skeleton. */
+  loadingFallback?: ReactNode;
 }
 
 export function PlanProposalViews({
@@ -224,6 +253,9 @@ export function PlanProposalViews({
   progressReading: hostReading,
   inFlightDrafts = null,
   cueReads,
+  prePlan = null,
+  initialCentreId = null,
+  loadingFallback,
 }: PlanProposalViewsProps) {
   const t = useTranslations('planReview');
   // THE ONE CLOCK (MOTIR-7829): read once here, so the line and anything else
@@ -252,7 +284,9 @@ export function PlanProposalViews({
   if (nextHeld !== heldSteps && stepsKey(nextHeld) !== stepsKey(heldSteps)) setHeldSteps(nextHeld);
   const presenceSteps =
     progressReading?.state === 'stalled' ? heldSteps : (progressReading?.liveSteps ?? null);
-  const showingList = view === 'list';
+  const noPlan = prePlan !== null;
+  // No plan, no List: the body is the canvas until there is something to list.
+  const showingList = !noPlan && view === 'list';
   // A CARD BEING WRITTEN (MOTIR-11201, Part XXIX §29.2): its drafts, and the
   // proposals an `author` step targets — read off the SAME presence steps the
   // canvas's drafting cue reads (§26.6), so the peek's cue and the card's agree.
@@ -286,7 +320,7 @@ export function PlanProposalViews({
     () => (liveDrafts ? { ...liveDrafts, cues: proposalCues.peek } : null),
     [liveDrafts, proposalCues],
   );
-  const announcement = useBatchAnnouncement(items, live);
+  const announcement = useBatchAnnouncement(items, live, noPlan);
   const canvas = (
     <PlanReviewCanvas
       items={items}
@@ -315,6 +349,9 @@ export function PlanProposalViews({
       movingSteps={atWork.steps}
       // Thinking · Drafting · Checking per card (MOTIR-11254, §31.1).
       cardCues={cardCues}
+      prePlan={prePlan}
+      initialCentreId={initialCentreId}
+      loadingFallback={loadingFallback}
     />
   );
   // THE DISCARDED BAND (§23.12) — the band idiom (`--el-surface-soft` +
@@ -330,7 +367,11 @@ export function PlanProposalViews({
   ) : null;
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col" data-testid="plan-proposal-views">
+    <div
+      className="flex h-full min-h-0 w-full flex-col"
+      data-testid="plan-proposal-views"
+      data-pre-plan={noPlan ? 'true' : undefined}
+    >
       {/* The PANE HEADER (Part VIII §2). The plan page's canvas pane had none —
           `PlanningWorkspace`'s `canvas` slot is filled edge to edge — so one was
           decided there rather than found. It sits at the TOP of the pane, ABOVE
@@ -343,64 +384,71 @@ export function PlanProposalViews({
           cluster, so the bar holds the switcher alone.) */}
       {/* `@container`: the progress line drops its parts on the HEADER's width
           (§26.2), never the viewport's. */}
-      <div className="@container flex h-11 shrink-0 items-center border-b border-(--el-border) bg-(--el-surface) px-(--spacing-control-x)">
-        <Segmented<PlanViewDto>
-          label={t('viewSwitchAria')}
-          value={view}
-          onChange={onViewChange}
-          options={[
-            { value: 'list', label: t('viewList'), icon: <List className="size-3.5" /> },
-            {
-              value: 'canvas',
-              label: t('viewCanvas'),
-              icon: <Workflow className="size-3.5" />,
-            },
-          ]}
-        />
-        {/* THE LIVE MARKER (§23.1) — the slot Part IX released. A 6px dot and a
+      {/* Not drawn before a plan exists (MOTIR-11513). `null` keeps this child
+          SLOT, so React matches the body below to the same instance when the
+          header arrives — the canvas is kept, never remounted. */}
+      {noPlan ? null : (
+        <div className="@container flex h-11 shrink-0 items-center border-b border-(--el-border) bg-(--el-surface) px-(--spacing-control-x)">
+          <Segmented<PlanViewDto>
+            label={t('viewSwitchAria')}
+            value={view}
+            onChange={onViewChange}
+            options={[
+              { value: 'list', label: t('viewList'), icon: <List className="size-3.5" /> },
+              {
+                value: 'canvas',
+                label: t('viewCanvas'),
+                icon: <Workflow className="size-3.5" />,
+              },
+            ]}
+          />
+          {/* THE LIVE MARKER (§23.1) — the slot Part IX released. A 6px dot and a
             word, STATIC (a permanent loop here is the attention sink the running
             edge warns about). `role="status"`, so *Being written → Reconnecting*
             is heard once. It leaves at the hand-over. */}
-        {/* THE PROGRESS LINE (§26.2) — marker · progress · pointer, while the
+          {/* THE PROGRESS LINE (§26.2) — marker · progress · pointer, while the
             plan is being written. It carries the marker itself. */}
-        {progressReading ? (
-          <PlanProgressLineView
-            reading={progressReading}
-            failing={progressFailing}
-            density="pane"
-          />
-        ) : live ? (
-          <span
-            data-testid="plan-live-state"
-            role="status"
-            aria-live="polite"
-            className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-(--el-text-secondary)"
-          >
-            <span
-              aria-hidden="true"
-              className={`size-1.5 shrink-0 rounded-(--radius-badge) ${
-                liveFailing ? 'bg-(--el-warning)' : 'bg-(--el-status-in-progress)'
-              }`}
+          {progressReading ? (
+            <PlanProgressLineView
+              reading={progressReading}
+              failing={progressFailing}
+              density="pane"
             />
-            {t(liveFailing ? 'liveReconnecting' : 'liveWriting')}
-          </span>
-        ) : null}
-        {/* ONE announcement per batch of added cards (§23.15) — never per card,
+          ) : live ? (
+            <span
+              data-testid="plan-live-state"
+              role="status"
+              aria-live="polite"
+              className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-(--el-text-secondary)"
+            >
+              <span
+                aria-hidden="true"
+                className={`size-1.5 shrink-0 rounded-(--radius-badge) ${
+                  liveFailing ? 'bg-(--el-warning)' : 'bg-(--el-status-in-progress)'
+                }`}
+              />
+              {t(liveFailing ? 'liveReconnecting' : 'liveWriting')}
+            </span>
+          ) : null}
+          {/* ONE announcement per batch of added cards (§23.15) — never per card,
             never for a read that added nothing, never for an exit or a deepen. */}
-        {live ? (
-          <span
-            className="sr-only"
-            role="status"
-            aria-live="polite"
-            data-testid="plan-live-announce"
-          >
-            {announcement ? (
-              <span key={announcement.seq}>{t('liveAnnounce', { count: announcement.count })}</span>
-            ) : null}
-          </span>
-        ) : null}
-      </div>
-      {band ?? discardedBand}
+          {live ? (
+            <span
+              className="sr-only"
+              role="status"
+              aria-live="polite"
+              data-testid="plan-live-announce"
+            >
+              {announcement ? (
+                <span key={announcement.seq}>
+                  {t('liveAnnounce', { count: announcement.count })}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
+      )}
+      {noPlan ? null : (band ?? discardedBand)}
       <div className="relative min-h-0 flex-1">
         {/* A SECOND BODY in the same pane, never a re-drawing of the first. The
             canvas answers where a proposal LANDS; the list answers what exactly
@@ -453,18 +501,24 @@ export function PlanProposalViews({
 function useBatchAnnouncement(
   items: readonly PlanReviewItemDto[],
   live: boolean,
+  noPlan: boolean,
 ): { count: number; seq: number } | null {
   const [state, setState] = useState<{
     items: readonly PlanReviewItemDto[];
     ids: ReadonlySet<string>;
+    noPlan: boolean;
     said: { count: number; seq: number } | null;
-  }>(() => ({ items, ids: addedProposalIds(items), said: null }));
-  if (items !== state.items) {
+  }>(() => ({ items, ids: addedProposalIds(items), noPlan, said: null }));
+  if (items !== state.items || noPlan !== state.noPlan) {
     const ids = addedProposalIds(items);
-    const count = live ? newlyAddedCount(state.ids, ids) : 0;
+    // The plan's FIRST snapshot is the baseline here too when this pane was
+    // drawn before the plan existed (MOTIR-11513): nothing ARRIVED while the
+    // reader watched — the plan simply began.
+    const count = live && !state.noPlan ? newlyAddedCount(state.ids, ids) : 0;
     setState({
       items,
       ids,
+      noPlan,
       said: count > 0 ? { count, seq: (state.said?.seq ?? 0) + 1 } : state.said,
     });
   }

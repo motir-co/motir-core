@@ -6256,6 +6256,23 @@ between the two. Every outcome that reached the host with a resolved ref carries
 `commitSha` (the full id), and its summary says `at <ref> (commit <sha>)` — the
 text a session stream carries, which is where plan.py records it from.
 
+**The content it read (MOTIR-11495).** A `found` answer read at a resolved commit
+also carries `blobSha`: the git host's own object id of the file's content at that
+commit — the id `git rev-parse <commit>:<path>` prints for that file in your own
+clone. It is the WHOLE file's id, so a `startLine` / `endLine` read of the same
+file at the same commit carries the same one. `found` is the only outcome that
+carries it: a `directory`, `not_found`, `ref_not_found`, `too_large`, `binary`,
+`unauthorized`, `invalid_path`, `unreachable`, `repo_not_connected`,
+`provider_unavailable` or `repo_not_in_project` answer has no `blobSha` field, and
+a read made without a resolved commit carries neither id (`commitSha` and
+`blobSha` are both `null`). When the host gives no object id for a file it
+served, the answer is still `found`, with its text and its `commitSha`, and
+`blobSha` is `null` — never a failure and never a different outcome. The summary
+names the blob in its OWN parenthetical AFTER the commit one —
+`… at <ref> (commit <sha>) (blob <sha>)…` — so the commit parenthetical is
+unchanged and first, and anything matching `(commit <sha>)` in that text still
+matches it.
+
 **The cap and the range.** The text returned — the range when one is asked for,
 else the whole file — is capped at **24,000 characters**, motir-ai's
 `FILE_CONTENT_CAP`. Over the cap it is cut, and ends with a SENTENCE, never a
@@ -6271,20 +6288,20 @@ returns the range under the same cap. Read whole, a file over 1 MB answers
 **Output** — `structuredContent.outcome` names what happened, and every outcome is
 a **non-error** result with its own summary sentence:
 
-| `outcome`              | Meaning                                                                                                                    | Extra fields                                                    |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `found`                | The file's text (ranged, then capped).                                                                                     | `repoRef`, `path`, `ref`, `bytes`, `lines`, `truncated`, `text` |
-| `directory`            | The path is a directory: its immediate entries (`name`, `type` file/dir/symlink/submodule), sorted by name, at most 1,000. | `repoRef`, `path`, `ref`, `entries`, `truncated`                |
-| `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository.                                     | `repoRef`, `path`, `ref`                                        |
-| `ref_not_found`        | The ref does not exist. Says nothing about the path.                                                                       | `repoRef`, `path`, `ref`                                        |
-| `too_large`            | The file exists and was read whole over 1 MB (`totalLines` set — read it by range), or is over the host's 100 MB.          | `repoRef`, `path`, `ref`, `limitBytes`, `totalLines`            |
-| `binary`               | The file exists and holds a NUL character, so no text is returned.                                                         | `repoRef`, `path`, `ref`, `bytes`                               |
-| `unauthorized`         | The host refused the stored credential. The file's existence is unknown.                                                   | `repoRef`, `path`, `ref`                                        |
-| `invalid_path`         | The path was refused before any request.                                                                                   | `repoRef`, `path`, `reason`                                     |
-| `unreachable`          | The host did not answer — a failure to ASK, not an answer.                                                                 | `repoRef`, `path`, `ref`, `failure`                             |
-| `repo_not_connected`   | The repository is in the set but not connected to the organisation.                                                        | `repoRef`                                                       |
-| `provider_unavailable` | The repository's git provider cannot be used on this deployment.                                                           | `repoRef`, `detail`                                             |
-| `repo_not_in_project`  | `repo` matches no repository in the project's set. Answered **before** any host call.                                      | `repo`, `repoSet`                                               |
+| `outcome`              | Meaning                                                                                                                    | Extra fields                                                               |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `found`                | The file's text (ranged, then capped).                                                                                     | `repoRef`, `path`, `ref`, `blobSha`, `bytes`, `lines`, `truncated`, `text` |
+| `directory`            | The path is a directory: its immediate entries (`name`, `type` file/dir/symlink/submodule), sorted by name, at most 1,000. | `repoRef`, `path`, `ref`, `entries`, `truncated`                           |
+| `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository.                                     | `repoRef`, `path`, `ref`                                                   |
+| `ref_not_found`        | The ref does not exist. Says nothing about the path.                                                                       | `repoRef`, `path`, `ref`                                                   |
+| `too_large`            | The file exists and was read whole over 1 MB (`totalLines` set — read it by range), or is over the host's 100 MB.          | `repoRef`, `path`, `ref`, `limitBytes`, `totalLines`                       |
+| `binary`               | The file exists and holds a NUL character, so no text is returned.                                                         | `repoRef`, `path`, `ref`, `bytes`                                          |
+| `unauthorized`         | The host refused the stored credential. The file's existence is unknown.                                                   | `repoRef`, `path`, `ref`                                                   |
+| `invalid_path`         | The path was refused before any request.                                                                                   | `repoRef`, `path`, `reason`                                                |
+| `unreachable`          | The host did not answer — a failure to ASK, not an answer.                                                                 | `repoRef`, `path`, `ref`, `failure`                                        |
+| `repo_not_connected`   | The repository is in the set but not connected to the organisation.                                                        | `repoRef`                                                                  |
+| `provider_unavailable` | The repository's git provider cannot be used on this deployment.                                                           | `repoRef`, `detail`                                                        |
+| `repo_not_in_project`  | `repo` matches no repository in the project's set. Answered **before** any host call.                                      | `repo`, `repoSet`                                                          |
 
 None of them means the project has no code, and none carries a provider
 credential or a download URL.

@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Un Tableau doit conserver au moins une colonne.",
       "toastColumnNotEmptyError": "« {name} » contient encore des éléments de travail : réassociez d’abord ses statuts.",
       "toastRenameBoardError": "Impossible de renommer le Tableau. L’ancien nom a été rétabli.",
-      "errorTitle": "Impossible de charger les paramètres du Tableau",
+      "errorTitle": "Impossible d’enregistrer la modification",
       "errorDescription": "Une erreur s’est produite lors du chargement de la configuration de ce Tableau. Réessayez.",
       "storedFilter": {
         "title": "Filtre du Tableau",
@@ -8798,6 +8798,10 @@
       "approve": "Approuver",
       "approveChanges": "Approuver les modifications",
       "nothingSavedYet": "Rien n'est encore enregistré",
+      "revision": {
+        "earlierVersion": "Version précédente · remplacée ci-dessous",
+        "earlierVersionUnkept": "Ici se trouvait une version précédente de ce plan ({count, plural, one {# élément} other {# éléments}}). Son résumé n'a pas été conservé."
+      },
       "barCounts": "{added, plural, =0 {Aucun ajout} one {# ajouté} other {# ajoutés}}{changed, plural, =0 {} one {, # modifié} other {, # modifiés}}{removed, plural, =0 {} one {, # supprimé} other {, # supprimés}}",
       "barNothingSaved": "Rien n'est enregistré tant que vous n'avez pas approuvé.",
       "summary": "{added, plural, =0 {Aucun nouvel élément de travail} one {# ajouté} other {# ajoutés}}{changed, plural, =0 {} one {, # modifié} other {, # modifiés}}{removed, plural, =0 {} one {, # supprimé} other {, # supprimés}} — c'est sur le canevas, rien n'est encore enregistré.",
