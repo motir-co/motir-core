@@ -117,6 +117,7 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
     swimlaneGroupBy: 'none',
     swimlanes: [],
     unmappedStatuses: [],
+    unmappedStatusesInScope: [],
     sprint: null,
     planHolds: {},
     storedFilter: null,

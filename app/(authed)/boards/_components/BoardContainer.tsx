@@ -113,7 +113,8 @@ import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 // refetching the whole board.
 //
 // Completeness (Subtask 3.2.6): an all-empty board renders the board EMPTY
-// state (a "New work item" CTA, not six blank columns); `unmappedStatuses`
+// state (a "New work item" CTA, not six blank columns); `unmappedStatusesInScope`
+// (the unmapped statuses the board's filter could still match, MOTIR-11658)
 // renders the unmapped-statuses TRAY above the board; and the flat column row is
 // a scroll-snap single-column pager on narrow viewports — see `BoardDnd`.
 //
@@ -350,7 +351,9 @@ export function BoardContainer({
   //     not absent — so we keep the columns + tray rather than claim "no work
   //     items"; rung-2 guard). An empty board has nothing to group, so the
   //     group-by control is omitted there (the CTA is the focus).
-  const hasUnmapped = board.unmappedStatuses.length > 0;
+  // The tray names only the unmapped statuses the board's effective filter could
+  // still match (MOTIR-11658): a status the filter excludes hides no work item.
+  const hasUnmapped = board.unmappedStatusesInScope.length > 0;
   const isEmpty = !hasUnmapped && board.columns.every((c) => c.totalCount === 0);
 
   // SCRUM resolution (Subtask 4.5.3) — keyed purely off the resolved board's
@@ -433,7 +436,7 @@ export function BoardContainer({
         </div>
       ) : null}
       {hasUnmapped ? (
-        <UnmappedStatusesTray statuses={board.unmappedStatuses} boardId={board.boardId} />
+        <UnmappedStatusesTray statuses={board.unmappedStatusesInScope} boardId={board.boardId} />
       ) : null}
       {isEmpty ? (
         // FILTERED-empty (Subtask 6.15.3): an active filter that matches no card
