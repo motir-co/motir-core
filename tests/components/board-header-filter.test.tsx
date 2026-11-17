@@ -6,6 +6,7 @@ import { encodeFilterEnvelope, encodeFilterParam, type FilterAst } from '@/lib/f
 import { EMPTY_FILTER, type IssueFilter } from '@/lib/issues/issueListFilter';
 import type { AppliedSavedFilter } from '@/lib/issues/savedFilterApplied';
 import type { StoredBoardFilterDto } from '@/lib/dto/boards';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { ToastProvider } from '@/components/ui/Toast';
 import enMessages from '@/messages/en.json';
@@ -83,6 +84,35 @@ const LABEL_MOBILE: FilterAst = {
   conditions: [{ field: 'lbl', operator: 'is_any_of', value: ['lbl_mobile'] }],
 };
 
+const NO_FOLDERS: ProjectFoldersDto = { folders: [], truncated: false };
+
+// The project's folders (MOTIR-11667): "Done" and a folder inside it, so a
+// summary is told apart from an id by its PATH.
+const FOLDERS: ProjectFoldersDto = {
+  truncated: false,
+  folders: [
+    { id: 'f-done', parentFolderId: null, name: 'Done', position: 'a0', path: ['Done'] },
+    {
+      id: 'f-done-oct',
+      parentFolderId: 'f-done',
+      name: 'Oct 2026',
+      position: 'a0',
+      path: ['Done', 'Oct 2026'],
+    },
+  ],
+};
+const NOT_DONE: FilterAst = {
+  combinator: 'and',
+  conditions: [{ field: 'folder', operator: 'is_none_of', value: ['f-done'] }],
+};
+const IN_DONE_OCT: FilterAst = {
+  combinator: 'and',
+  conditions: [
+    { field: 'folder', operator: 'is_none_of', value: ['f-done'] },
+    { field: 'folder', operator: 'is_any_of', value: ['f-done-oct'] },
+  ],
+};
+
 const VIEWER: Viewer = { userId: 'u-alice', canBrowse: true, canShare: true, canManageAny: false };
 
 function stored(ast: FilterAst, extra: Partial<StoredBoardFilterDto> = {}): StoredBoardFilterDto {
@@ -150,6 +180,7 @@ interface BarOpts {
   applied?: AppliedSavedFilter;
   selectedBoardId?: string;
   publishFor?: string | null;
+  folders?: ProjectFoldersDto;
 }
 
 function renderBar(opts: BarOpts = {}) {
@@ -178,6 +209,7 @@ function renderBar(opts: BarOpts = {}) {
           sprints={[]}
           customFields={[]}
           components={[]}
+          folders={opts.folders ?? NO_FOLDERS}
           referencedLabels={[]}
           boardFilterOff={opts.boardFilterOff ?? false}
           canConfigure={opts.canConfigure ?? true}
@@ -250,6 +282,7 @@ describe('the header starts as the board filter', () => {
             sprints={[]}
             customFields={[]}
             components={[]}
+            folders={NO_FOLDERS}
             referencedLabels={[]}
             projectKey="BRD"
             viewer={VIEWER}
@@ -597,6 +630,7 @@ describe('the toolbar popovers carry Reset while the header differs', () => {
             sprints={[]}
             customFields={[]}
             components={[]}
+            folders={NO_FOLDERS}
             referencedLabels={[]}
             projectKey="BRD"
             viewer={VIEWER}
@@ -634,6 +668,7 @@ describe('the toolbar popovers carry Reset while the header differs', () => {
             sprints={[]}
             customFields={[]}
             components={[]}
+            folders={NO_FOLDERS}
             referencedLabels={[]}
             projectKey="BRD"
             viewer={VIEWER}
@@ -666,6 +701,7 @@ describe('the toolbar popovers carry Reset while the header differs', () => {
             sprints={[]}
             customFields={[]}
             components={[]}
+            folders={NO_FOLDERS}
             referencedLabels={[]}
             projectKey="BRD"
             viewer={VIEWER}
@@ -677,6 +713,94 @@ describe('the toolbar popovers carry Reset while the header differs', () => {
     const reset = screen.getByTestId('board-filter-reset-link');
     expect(reset.textContent).toContain(H.resetShort);
     expect(reset.getAttribute('aria-label')).toBe(H.reset);
+  });
+});
+
+// Every applied summary on the Board names a folder by its PATH (MOTIR-11667):
+// the page threads the project's folders into the bar's one lookups object,
+// which feeds the stored-filter indicator, the condition chips, the Reset
+// tooltip's sentence and the save confirmation alike.
+describe('Folder conditions are named by path (MOTIR-11667)', () => {
+  it('the stored-filter indicator names a stored Folder condition by its path, never its id', () => {
+    renderBar({ storedFilter: stored(NOT_DONE), folders: FOLDERS });
+    const row = screen.getByTestId('board-header-filter');
+    expect(row.textContent).toContain('Folder');
+    expect(row.textContent).toContain('is none of Done');
+    expect(row.textContent).not.toContain('f-done');
+  });
+
+  it('the applied chips of an edited header name each folder by its full path', () => {
+    renderBar({ storedFilter: stored(NOT_DONE), ast: IN_DONE_OCT, folders: FOLDERS });
+    const row = screen.getByTestId('board-header-filter');
+    expect(row.getAttribute('data-mode')).toBe('edited');
+    expect(row.textContent).toContain('is any of Done ▸ Oct 2026');
+    expect(row.textContent).not.toContain('f-done-oct');
+  });
+
+  it('the Reset to board filter tooltip names the stored folder by path', async () => {
+    renderBar({ storedFilter: stored(NOT_DONE), ast: IN_DONE_OCT, folders: FOLDERS });
+    act(() => {
+      fireEvent.focus(screen.getByTestId('board-filter-reset'));
+    });
+    const tip = await screen.findByRole('tooltip');
+    expect(tip.textContent).toContain('Board filter: Folder is none of Done');
+    expect(tip.textContent).not.toContain('f-done');
+  });
+
+  it('the Save to board filter confirmation names the folders by path', async () => {
+    renderBar({ storedFilter: stored(NOT_DONE), ast: IN_DONE_OCT, folders: FOLDERS });
+    fireEvent.click(screen.getByRole('button', { name: H.saveToBoard }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('is any of Done ▸ Oct 2026');
+    expect(dialog.textContent).not.toContain('f-done-oct');
+  });
+
+  it('a saved filter carrying a Folder condition shows its path in the applied bar and in Set as board filter', async () => {
+    const applied: AppliedSavedFilter = {
+      id: 'sf_folder',
+      name: 'Parked work',
+      ownerName: 'Alice Chen',
+      visibility: 'project',
+      canOverwrite: true,
+      builtin: false,
+      envelopeParam: encodeFilterParam(IN_DONE_OCT),
+    };
+    renderBar({ ast: IN_DONE_OCT, applied, folders: FOLDERS });
+    await screen.findByRole('button', { name: /Parked work/ });
+    expect(screen.getByText('is any of Done ▸ Oct 2026')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: H.setAsBoard }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('is none of Done');
+    expect(dialog.textContent).not.toContain('f-done');
+  });
+
+  it('a stored folder that no longer exists reads Unknown value, and raises no error', () => {
+    renderBar({
+      storedFilter: stored(
+        {
+          combinator: 'and',
+          conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-gone'] }],
+        },
+        { staleConditions: [{ index: 0, field: 'folder', reason: 'unknown-value' }] },
+      ),
+      folders: FOLDERS,
+    });
+    const row = screen.getByTestId('board-header-filter');
+    expect(row.textContent).toContain('is any of Unknown value');
+    expect(screen.getByTestId('board-filter-chip-stale')).toBeTruthy();
+  });
+
+  it('a truncated folder list names a folder past the window by its id, never as unknown', () => {
+    renderBar({
+      storedFilter: stored({
+        combinator: 'and',
+        conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-past-the-cap'] }],
+      }),
+      folders: { ...FOLDERS, truncated: true },
+    });
+    const row = screen.getByTestId('board-header-filter');
+    expect(row.textContent).toContain('is any of f-past-the-cap');
+    expect(row.textContent).not.toContain('Unknown value');
   });
 });
 
