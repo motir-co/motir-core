@@ -8939,6 +8939,7 @@
         "unknown": "Travail sur le plan…",
         "claimCheck": {
           "started": "{count, plural, one {Vérification des références au code de # élément} other {Vérification des références au code de # éléments}}",
+          "cardChecked": "Vérification de {title} terminée — {count, plural, one {# problème} other {# problèmes}}",
           "held": "Les références au code de tous les éléments tiennent",
           "sentBack": "{count, plural, one {Les références au code de # élément ne tiennent pas ; il est renvoyé pour être réécrit} other {Les références au code de # éléments ne tiennent pas ; ils sont renvoyés pour être réécrits}}",
           "settleStarted": "{count, plural, one {Nouvelle vérification des références au code de # élément par rapport à tout le plan} other {Nouvelle vérification des références au code de # éléments par rapport à tout le plan}}",
