@@ -7589,3 +7589,117 @@ empty-root statement, and no List | Canvas switch. When the plan's first read la
 keeps its level and viewport, the ring leaves (the card's own status chip now reads **Planning**), and
 the List | Canvas switch, progress line and the rest of the plan chrome mount around it. The canvas's
 own pan and zoom are untouched; the header row arrives above it.
+
+## The design step's per-area Backgrounds picker (MOTIR-11615)
+
+> **Delta mock:** [`onboarding--background-picker.mock.html`](onboarding--background-picker.mock.html).
+> **Amends:** "⚠️ The design step styles its WHOLE self (screen H)" above and the
+> design-step screen in [`onboarding.mock.html`](onboarding.mock.html). What ships is
+> `components/onboarding/DesignStep.tsx`, and the delta is drawn against that file,
+> not against the older mock.
+
+**Design system.** Files read: `package.json` (depends on `@motir/design-system`
+`workspace:*`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`).
+Verdict: **on Motir Design**, installed version **0.23.0**. The step scopes its own
+axes (`data-appearance-scope` + `data-style` / `data-palette` / `data-type`), so the
+mock draws it at the defaults the step opens on: Warm Editorial, Motir, Motir type,
+light. It is built with `renderMock` (`boardWidth: 'full'`) from the package's
+`AxisRadioGroup`, `ThemeSegmentedControl`, `StylePicker`, `PalettePicker`,
+`TypePicker`, `AxisNote`, `Card` and `Button`.
+
+### What changes
+
+1. **A fifth field, Backgrounds**, below Typography in the controls column. It holds
+   one chip row per page area, in this order: **Landing page**, **Login page**,
+   **Hero section**. Each row is the step's existing chip radiogroup
+   (`AxisRadioGroup`: `role="radiogroup"` with roving tabindex and arrow keys). Its
+   eight chips are the seven backgrounds in registry order, then **None**.
+2. **Each chip leads with a still swatch of its background**, the same way a palette
+   chip leads with its swatch dot (`AxisOption.leading`). The swatch is a 28 × 16
+   canvas showing the background in miniature, drawn once and never animated, with
+   `aria-hidden`. Its frame is `rounded-(--radius-badge)` with
+   `border border-(--el-border)` on `bg-(--el-page-bg)`. None's swatch is a dashed
+   `--el-border-strong` frame around a `Ban` glyph in `--el-text-secondary`.
+3. **A note under each row** names the selection and says how it relates to the style:
+   - A style-following background (Wave, Topography): `AxisNote` (name and the
+     registry description), then **"Redrawn for {style}."**
+   - A style-fixed background (Aurora, Cyclic CA, Brian's Brain, Day & Night,
+     Rule 110): `AxisNote`, then **"Same in every style — it follows only the
+     palette and the theme."**
+   - None: **"No background — the area shows the page colour."**
+4. **The live preview gains the three areas** under the existing example window. The
+   eyebrow is **"Backgrounds — live preview"**, styled like the existing
+   "Your project — live preview" eyebrow. Below it are three frames, one per area,
+   each `h-[150px]`, `rounded-(--radius-card)`, `border border-(--el-border)`,
+   `bg-(--el-page-bg)`. Each frame draws the chosen background behind a stand-in for
+   that area's content (`<Background>` with the stand-in as its focus element):
+   - Landing page: a `Card` holding "Plan it. Build it." and "From idea to shipped."
+   - Login page: a `Card` holding "Sign in" and a small `Button`, "Continue".
+   - Hero section: a `Card` holding "Describe your idea…".
+
+   Captions read **"{area} · {background}"**, or **"{area} · No background"**, in
+   `--el-text-secondary`. The frames sit three across from `xl` and stack below it.
+   They follow the step's scoped style, palette and theme the way the example does.
+   The example window itself is unchanged and is not redrawn in the delta.
+
+### States drawn
+
+- **A · Defaults.** Every area is on the style's default background, the Wave
+  (`defaultBackgroundForStyle`).
+- **B · An area set to None.** Login page is None. Its preview frame shows the page
+  colour alone.
+- **C · A style-fixed background chosen.** Hero section is Cyclic CA, with the
+  "Same in every style" note. Landing is on Topography, showing the "Redrawn for"
+  note.
+- **D · Phone width (390px).** The step stacks as it ships below `lg`. Chip rows
+  wrap, and the three previews stack in one column.
+
+### Copy (new `onboarding.design.background.*` keys)
+
+| Key                                            | English                                                          |
+| ---------------------------------------------- | ---------------------------------------------------------------- |
+| `name`                                         | Backgrounds                                                      |
+| `help`                                         | What each page area draws behind its content.                    |
+| `areas.landing` / `areas.login` / `areas.hero` | Landing page / Login page / Hero section                         |
+| `none`                                         | None                                                             |
+| `noneNote`                                     | No background — the area shows the page colour.                  |
+| `followsNote`                                  | Redrawn for {style}.                                             |
+| `fixedNote`                                    | Same in every style — it follows only the palette and the theme. |
+| `previewEyebrow`                               | Backgrounds — live preview                                       |
+| `previewNone`                                  | No background                                                    |
+
+Background names and descriptions come from the package registry
+(`BACKGROUND_REGISTRY`), not from new keys.
+
+### Tokens
+
+- Field name: `--el-text`. Help, area labels, notes and captions:
+  `--el-text-secondary`. Selected chip: `AxisRadioGroup`'s own
+  `border-(--el-accent) bg-(--el-tint-lavender) text-(--el-accent-on-surface)`.
+  Chip shape: `--radius-badge`, with `--spacing-chip-x` / `--spacing-chip-y`.
+- **The field's help and note are drawn in `--el-text-secondary`, not
+  `AxisField`'s shipped `--el-text-muted`.** The step's section is `--el-surface`,
+  where muted is 4.12–4.34:1, under AA, and `tests/design-ink-contrast.test.ts`
+  fails the shipped markup. The mock draws `AxisField`'s markup with the corrected
+  ink for all five fields. The shipped primitive is filed as **MOTIR-11621**.
+- The dashed borders around the new field and the new preview mark the change on the
+  board. They are not part of the design.
+
+### Access path
+
+The door is the step itself. It is reached from the onboarding flow's design step,
+whose header (Back, "Design your project's look") is drawn in every panel. The new
+field sits in the step's existing controls column. No new route or navigation entry
+is added.
+
+### What the choice saves
+
+**"Use this design"** saves the three areas' choices with the style, palette and type
+(MOTIR-11607 and MOTIR-11618 build that). An area left on its default is saved as
+the default. None is saved as `none`.
+
+### Parts
+
+All from `@motir/design-system`. No addition is proposed, and no product-local
+component. The swatch is a `<Background>` at chip size with a still-frame flag; that
+flag is MOTIR-11618's to add when it builds the picker.
