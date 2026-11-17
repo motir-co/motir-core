@@ -12527,12 +12527,12 @@
           },
           "hint": {
             "thru": "The check that stored this record predicted a run could build this plan through. Its findings are listed below.",
-            "stops": "The check predicted a run would stop on the cards below. Fix those cards, then run the check again.",
+            "stops": "The check predicted a run would stop on the work items below. Fix those work items, then run the check again.",
             "none": "No check sent an answer for this record, so there is none to read. Its verdict does not change that — the answer is the check's, not the agent's."
           },
           "cards": {
-            "label": "Cards to fix",
-            "none": "No card recorded"
+            "label": "Work items to fix",
+            "none": "No work item recorded"
           },
           "a11y": {
             "region": "Run-through: whether a run could build this plan through"
