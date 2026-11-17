@@ -7556,3 +7556,564 @@ the `--retro-glow` lift carry it, and none of them changes.
 - The ink: the label stays `--el-accent-text` in every row.
 - No mock. The pill's shape, copy and placement are as drawn; only two mix percentages move, and the
   shipped component renders them on the card.
+
+## ⭐ The final check — a project setting, Skip the final check while it runs, and how a skipped plan reads (MOTIR-11263, 2026-11-14)
+
+**Design system.** Files read: `package.json` (depends on `@motir/design-system`, `workspace:*`),
+`app/globals.css` (imports `@motir/design-system/theme.css`), `app/layout.tsx` (axes
+`warm-editorial` / `motir` / `motir`). Verdict: **on Motir Design** (branch a). The mock is built
+with `renderMock` from `@motir/design-system/mock` at those axes; every part is the real shipped
+component rendered from source (`AiPlanningSettingsEditor`, `SettingsCard`, `SwitchRow`,
+`PlanActRecord`, `PlanNarration`, `PlanBriefing`, `MarkdownView`, `Button`, `Spinner`), with the
+two changed components rendered from proposed copies. No part is missing from the package and no
+product-local component is new: the confirm is the shipped `Modal`, drawn statically (a Radix
+portal does not render on the server) with exactly the classes the primitive emits.
+
+**Mock:** `design/ai-chat/planning-workspace--skip-final-check.mock.html` (a delta; panels 1–9c,
+each in light and dark, at desktop and at 390px). **Amends** the AI planning settings page
+(`design/ai-settings/design-notes.md` §4 _Three cards, one footer_ and §6 _Copy_, Planner card;
+its mock `design/ai-settings/ai-planning-settings--no-model.mock.html` is a record and is not
+edited), the planner narration (§ _⭐ Planner narration in the chat panel_, MOTIR-8061, and the
+final check's own heads, MOTIR-11256), and the confirm pattern of § _⭐ Plan something new confirms
+in a modal dialog_ (MOTIR-11260), whose dialog this one matches. **Decided by** the product owner on
+2026-11-14 (story MOTIR-11262). **Built by** MOTIR-11264 (setting), MOTIR-11265 (motir-ai honours
+it), MOTIR-11266 (control, dialog, mailbox), MOTIR-11267 (motir-ai ends the check on a skip).
+
+The person-facing name is **the final check** everywhere. "Dry run" is the code's name and never
+appears in a string this section adds.
+
+### 1. The setting — a second row on the Planner card (panels 1–3)
+
+| Element       | Spec                                                                                                                                                                                                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Placement     | The **Planner** card (`settings.aiPlanning.planner`), a second `SwitchRow` directly under _Draft a why for each item_ and above the data-practice callout, which stays at the card's foot (§D2). The card's subject is how the planner works for this project; the final check is part of that, so it gets no card of its own.             |
+| Row           | `SwitchRow` (`testId="ai-planning-final-check"`): label `finalCheckLabel` (`--el-text`, 14px medium), hint `finalCheckHint` (the shipped hint ink). On by default.                                                                                                                                                                         |
+| Off callout   | Only while the switch reads off (saved or not), inside the row's label column as `SwitchRow` children: the editor's `Callout` on a new `yellow` slot — `--el-tint-yellow` fill, `--el-border-soft`, `--el-text-strong` ink, `TriangleAlert` 15px in `--el-warning`, `--radius-card`, `--spacing-card-padding-12/-8`. Copy `finalCheckOff`. |
+| Save          | The page's one footer on the last editable card, unchanged: the switch makes the page dirty (_Unsaved changes_, Save enabled); Save sends `aiFinalCheck` with the other fields in the same PATCH, optimistic with reconcile.                                                                                                               |
+| Read-only     | A member without `ai:configure`: the shipped read-only banner on the first card, the switch `disabled` at its saved value (label and hint drop to `--el-text-faint`, the exempt disabled state), no footer. The off callout still shows when the saved value is off: a member should know why a plan says it was not checked.              |
+| Not connected | As every row: disabled under the shipped not-connected banner.                                                                                                                                                                                                                                                                             |
+
+**Disabled text says it is disabled.** A disabled row's label and hint (and a disabled dependent
+field's label, hint and unit) take `--el-text-faint`, which only the disabled exemption of WCAG
+1.4.3 allows. The mock marks each with `aria-disabled="true"` so the exemption is stated on the
+element (the design ink guard reads it); the shipped `SwitchRow` and the editor's `DependentField`
+paint the ink without the attribute, and MOTIR-11264 adds it where it touches them.
+
+**Why a yellow callout, and only when off.** On is the default and the quiet state, as on the other
+switches (§8.1 — a callout explains a setting that is live, the default view stays quiet). Off
+changes what every plan of the project is: it is proposed unchecked. Saying so where the switch is
+flipped is the cheapest moment to be honest about the trade. Yellow because the three tinted slots
+the editor already uses (sky, lavender, peach) belong to other meanings; a fourth distinct slot keeps
+the callouts from reading alike (§9).
+
+### 2. Skip the final check — the control (panels 4, 4b, 7)
+
+| Element   | Spec                                                                                                                                                                                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Placement | In `PlanNarration`, directly under the **live** final-check head (a group whose session `stepKind` is `check` and is live — the check's own head or the card it is reviewing now), indented to the notes column (`ml-5.5`). It sits between the head and the message list, so _Hide planner notes_ (which hides the lists) never hides it. |
+| Control   | `Button` `secondary` `sm` (`--radius-btn`, `--height-btn-sm`, `--el-button-border`, `--el-text`), `leftIcon` `SkipForward` 14px `aria-hidden`. Copy `narration.skipCheck`. `data-testid="plan-narration-skip-check-control"`.                                                                                                              |
+| Who       | Shown only to a person who may steer the plan (`ai:plan`, the gate the shipped Stop uses). A Visitor, or a member without it, sees the notes with no control.                                                                                                                                                                              |
+| When      | Only while a final-check session is live. Never during a lay, a card being written, an amend, **the fix after the check** (panel 4b) or once the plan is proposed. A project with the setting off never opens a check session, so it never shows.                                                                                          |
+| Pending   | After a confirmed skip is accepted (the mailbox entry is written), the control's place reads `narration.skippingCheck` beside a `Spinner` sm, `role="status"`, `--el-text-secondary` — until the check's head turns `· done` (the job ended it). Then the row is gone.                                                                     |
+
+**Why under the live head.** The card asks for the control beside the final check's head; the check
+is the one step a person may want to cut, and the live head is where the notes show what it is doing
+now. A control in the sticky notes bar would be visible for every step and need its own disabled
+state; one under the live head appears and disappears with the thing it acts on.
+
+### 3. The confirm (panels 5, 6, 8, 8b)
+
+Composed from the shipped `Modal` exactly as § MOTIR-11260's dialog composes it (`PlanCloseGuard`'s
+footer, `FolderDeleteDialog`'s tinted line and refusal line, `DeleteWorkItemDialog`'s _Try again_).
+No new primitive.
+
+| Element          | Spec                                                                                                                                                                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel            | `Modal`, `role="alertdialog"`, `size="md"` (28rem; 90% of a narrow viewport). `--radius-modal`, `--el-page-bg`, `--el-border`, `--shadow-modal`, `--spacing-card-padding`. Scrim `--el-overlay-scrim` over the whole planning overlay.                                                   |
+| Title            | `skipFinalCheck.title` — the `Modal` title (serif, `--el-text`); the accessible name.                                                                                                                                                                                                    |
+| Description      | `skipFinalCheck.body` — what the final check does, for someone who has never heard of it. `--el-text-subtitle`, 14px.                                                                                                                                                                    |
+| Consequence line | `skipFinalCheck.consequence` — what skipping means. A `<p>` in `Modal.Body`: `--el-tint-peach`, `--el-text-strong`, 13px, `--radius-control`, `--spacing-control-x-12` / `--spacing-control-y`; `CircleStop` 16px `--el-warning` `aria-hidden`. Part of the description (`describedBy`). |
+| Footer           | `Modal.Footer` `flex-wrap`: **Keep checking** (`Button` ghost sm) then **Skip the final check** (`Button` primary sm, `--el-accent` / `--el-accent-text`, `SkipForward` leftIcon).                                                                                                       |
+| Close (×)        | The `Modal`'s own close control, `common.close`.                                                                                                                                                                                                                                         |
+| Error line       | After a failed request only: `role="alert"`, `AlertCircle` 14px `--el-danger` `aria-hidden`, `skipFinalCheck.error` in `--el-text`, 13px. The primary reads `skipFinalCheck.retry`.                                                                                                      |
+| Finished line    | When the server refuses because the check had already ended: the consequence line is replaced by `skipFinalCheck.finished` on `--el-tint-mint`, `Info` 16px `--el-success`, `role="status"`; the footer holds one **Close** (`Button` primary sm, focused).                              |
+
+**Why primary, not danger.** Skipping deletes nothing the person made: the plan is still proposed,
+and everything already written stays. The loss is a check that did not finish, which the peach line
+names in words. MOTIR-11260 made the same call for the same reason.
+
+**States.**
+
+| #   | State    | What shows                                                                                                                                                                        |
+| --- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5   | Open     | Title, description, the peach line, Keep checking (focused) and Skip the final check.                                                                                             |
+| —   | Kept     | Keep checking, Escape, × or a scrim click closes it. Nothing is written; the check runs on. Focus returns to the control.                                                         |
+| 6   | Skipping | Skip the final check shows the `Button` loading spinner; both buttons and × disabled; `Modal.Body` `aria-busy`. Escape and the scrim are ignored until the request answers.       |
+| 7   | Skipped  | The request is accepted: the dialog closes, focus returns to the notes (the pending status row, then the next head), and the notes take over (§2 Pending, §4).                    |
+| 8   | Failed   | The dialog stays with the error line; the primary reads _Try again_ and sends the same request. Keep checking, Escape and × dismiss. Nothing changed: the check is still running. |
+| 8b  | Refused  | The check ended between the press and the answer (the job reached its fix, or proposed): the finished line and one Close. Behind it the control is already gone.                  |
+
+### 4. A plan whose final check did not run (panels 9a, 9b, 9c)
+
+Two places say it, and a plan whose check ran reads exactly as today (9c).
+
+**The planning notes (act record).** The final check's stage says why it ended, as the shipped skip
+lines do (`dryRunSkippedLine` in motir-ai `src/jobs/progressNotes.ts`). These lines are motir-ai's
+own, in English, and render verbatim as `note` acts:
+
+- Turned off: _Skipped the final check of the plan: it is turned off for this project_
+- Skipped by a person: _Ended the final check of the plan early because it was skipped: nothing it found was fixed_
+
+**The briefing (the plan's summary, `PlanBriefing`).** A bold claim line ends **section 2, _What the
+plan does_**, which is open by default, so the plan reads differently at a glance without opening
+anything; the counts line stays last in section 6:
+
+- Skipped by a person: **The final check was skipped** before it finished, so this plan was not
+  fully checked and nothing it found was fixed.
+- Turned off: **The final check did not run**: it is turned off for this project, so this plan was
+  not checked before it was proposed.
+
+After a person's skip, **section 5** carries what the check found before it was cut, in the place the
+check's block goes today: _Final check: skipped after {n} finding(s) was/were made; none was fixed._
+and one _Left unfixed: {card} — skipped before the fix._ line per finding. With no findings, section 5
+says nothing about the check. With the setting off, section 5 says nothing about it either.
+
+### 5. Focus, keyboard and screen readers
+
+Following the shipped confirm dialogs (`PlanCloseGuard`, `DeleteWorkItemDialog`, `FolderDeleteDialog`,
+and MOTIR-11260's dialog, all Radix through `Modal`):
+
+- **On open**, focus lands on **Keep checking**, the safe answer (first focusable element, so Radix
+  lands there itself).
+- **Tab / Shift+Tab** cycle Keep checking → Skip the final check → × (focus trap; the overlay
+  behind is inert).
+- **Enter / Space** press the focused button only.
+- **Escape**, **×** and a **scrim click** dismiss as Keep checking does, except while skipping.
+- **On close**, focus returns to the control (`onCloseAutoFocus` prevents the default and focuses
+  it); after an accepted skip the control is replaced by the pending status, so focus goes to that
+  row's group head.
+- **Naming:** `role="alertdialog"`, `aria-labelledby` the title, `aria-describedby` the description
+  and the consequence line. The error line is `role="alert"`; the finished line and the pending row
+  are `role="status"`.
+- **The setting:** the switch is named by its label (`aria-labelledby`, as `SwitchRow` does) and its
+  hint is read with it; the off callout is plain text under it, not a live region.
+
+### 6. Test ids
+
+`ai-planning-final-check` (the switch), `ai-planning-final-check-off` (the callout),
+`plan-narration-skip-check` (the row), `plan-narration-skip-check-control`,
+`plan-narration-skip-check-pending`, `planning-skip-check-dialog`,
+`planning-skip-check-dialog-consequence`, `planning-skip-check-dialog-error`,
+`planning-skip-check-dialog-finished`, `planning-skip-check-keep`, `planning-skip-check-confirm`.
+
+### 7. Copy
+
+New catalogue keys (every locale, under the catalogue parity rule; the other ten locales are written
+by the building cards). The notes lines and briefing lines in §4 are motir-ai's and stay English.
+
+| key                                                      | en                                                                                                                                                                                                                |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `settings.aiPlanning.planner.finalCheckLabel`            | Run the final check                                                                                                                                                                                               |
+| `settings.aiPlanning.planner.finalCheckHint`             | Before a plan is proposed, Motir AI reads its cards again in build order, checks that each can be built on what the cards before it deliver, and fixes what it finds. On a large plan this can take many minutes. |
+| `settings.aiPlanning.planner.finalCheckOff`              | Plans for this project are proposed without the final check. Each plan’s summary says it was not checked.                                                                                                         |
+| `planningWorkspace.conversation.narration.skipCheck`     | Skip the final check                                                                                                                                                                                              |
+| `planningWorkspace.conversation.narration.skippingCheck` | Skipping the final check…                                                                                                                                                                                         |
+| `planningWorkspace.skipFinalCheck.title`                 | Skip the final check?                                                                                                                                                                                             |
+| `planningWorkspace.skipFinalCheck.body`                  | The final check reads every card of this plan again in build order, checks that each can be built on what the cards before it deliver, and fixes what it finds.                                                   |
+| `planningWorkspace.skipFinalCheck.consequence`           | If you skip it, the plan is proposed now without that check. What it has found so far is listed in the plan’s summary, but nothing is fixed.                                                                      |
+| `planningWorkspace.skipFinalCheck.confirm`               | Skip the final check                                                                                                                                                                                              |
+| `planningWorkspace.skipFinalCheck.keep`                  | Keep checking                                                                                                                                                                                                     |
+| `planningWorkspace.skipFinalCheck.error`                 | The final check could not be skipped. It is still running: try again, or keep checking.                                                                                                                           |
+| `planningWorkspace.skipFinalCheck.retry`                 | Try again                                                                                                                                                                                                         |
+| `planningWorkspace.skipFinalCheck.finished`              | The final check had already finished, so there was nothing to skip.                                                                                                                                               |
+
+The control and the confirm share the words _Skip the final check_ but have their own keys, so the
+two can change apart. The confirm button repeats the title's verb so it can be answered without
+rereading the title (the MOTIR-11260 rule).
+
+### 8. Out of scope
+
+What the final check reviews and how it fixes; its own step kind, heads and narration (MOTIR-11256,
+MOTIR-11257); the Checking tag (MOTIR-11253, MOTIR-11254); the model it runs on (a platform
+setting); plan.py and the check plan skill; stopping the whole plan (the shipped Stop). The shipped
+section-5 block of a plan whose check ran still opens _Dry run:_ (panel 9c draws it as it ships);
+that wording is filed as its own bug, not changed here.
+
+## ⭐ The planning rail during a plan revision — one run under the turn that started it, and no decide panel while a new version is written (MOTIR-11486, 2026-11-16)
+
+**Design system, identified first.** Read `package.json` (depends on `@motir/design-system`,
+`workspace:*`) and `app/globals.css` (line 13, `@import '@motir/design-system/theme.css'`). Both
+hold, so the verdict is **(a) ON MOTIR DESIGN**, package **v0.23.0**
+(`packages/design-system/package.json`). The axes are per person, so the board renders at the
+package defaults (`warm-editorial` · `motir` · `motir`). The board is built with `renderMock` from
+`@motir/design-system/mock` at `boardWidth: 'full'`, and every rail in it is composed from the
+**shipped parts' real rendered markup**: `Bubble` (exported by `PlanChangeRail`),
+`PlanChangeComposer` with its running bar, `PlanNarration` over `groupNarration`,
+`PlanBriefing`, `PlanAtWorkMarkView`, `WaitingPlanFailureLine`, `Pill` and `Button`. The rail's
+aside and head, the submission marker (`TURN_RENDERERS.system`), the stopped marker, the hand-off
+and `GatedReviewBlock`'s decide and held branches are mirrored from `PlanChangeRail.tsx` class for
+class. No part is missing from the package for this change, and no product-local component is new.
+
+**Amendment to** `design/ai-chat/plan-change-run-live.mock.html` (the run surface, MOTIR-4066's
+section above) and `design/ai-chat/plan-change-run-live--narration.mock.html` (_"Planner narration
+in the chat panel"_, MOTIR-8061, above). Both stay as records and are not edited. Everything else
+those sections fixed stands: the narration group shape, its heads, its collapse-all control and its
+memory, the hand-off wording (`approvalGate.planApproval.handoff.rewriting`), the working-turn row
+(MOTIR-9213), the decide panel's markup and words, and the rail landing on its latest content
+(MOTIR-4023). **MOTIR-11487** builds this.
+
+**Asset:** `design/ai-chat/plan-change-run-live--revision-timeline.mock.html`, a delta holding only
+the panels that change.
+
+| Panel | What it shows                                                                                                     |
+| ----- | ----------------------------------------------------------------------------------------------------------------- |
+| **1** | Was → is, as the rail lands (bottom in view): the shipped order beside the new order, mid-revision                |
+| **2** | Revision writing, the whole transcript, light and dark                                                            |
+| **3** | Revision finished: the earlier briefing labelled, the new briefing and a live panel; light, dark, and as it lands |
+| **4** | Revision failed and revision stopped: the old version's panel back, live, under the failure line or marker        |
+| **5** | Reopened after the revision finished, notes expanded; **5b** the same with planner notes remembered as collapsed  |
+| **6** | Two follow-ups in a row: three versions, each revision under its own message                                      |
+| **7** | Visitor: the same order, read-only, no panel and no composer; light and dark                                      |
+| **8** | Chinese interface: writing, finished (light), writing and failed (dark)                                           |
+| **9** | A version replaced before briefings were kept: one line in its briefing's place                                   |
+
+### What ships today, rendered before drawn
+
+The defect, from the dogfood session the card cites (plan `cmwjoi61h08h101adnhkqeve7`, revision
+job `cmwjrdp8m0arm01of4ogi2rxu`): `PlanChangeRail` draws in a fixed order that does not know which
+run anything belongs to. `turns.map(...)` draws every turn first, the follow-up and its _Sending the
+conversation to Motir AI…_ marker included. Then ONE working row holds the hand-off and
+`PlanNarration` over every run's groups. Then the review block (`state.review && !state.decided`)
+draws the OLD briefing and `GatedReviewBlock`, whose `held` branch keeps _Nothing saved yet_ and the
+`approvalGate.planApproval.surface.held` line under disabled Decline · Approve. Panel 1, left, is
+that order drawn from the shipped parts at the overlay's 44rem transcript with its bottom in view:
+the only things on screen are the old briefing and a panel that says what the hand-off already
+says. The follow-up and the 41 new notes the job wrote sat above the fold, so the person read their
+message as lost.
+
+### The ordering rule — each run sits under the turn that started it
+
+1. **A run is a planner job.** Its notes are the narration groups whose `sessionKey` carries that
+   job: `ai:<jobId>:<n>` for the hosted planner (`motir-ai` `planStepReporter.ts`,
+   `planEntryRecorder.ts`). Group the narration by that prefix, one **run block** per job.
+2. **A run block is drawn directly under the turn that started it**: the user turn whose `jobId` is
+   that job, after that turn's submission marker. Drawn top to bottom, the rail is: message →
+   marker → run block → that run's briefing → the next message → its marker → its run block → its
+   briefing → … Nothing from a later run is drawn above an earlier run's briefing.
+3. **A run block is the shipped working-turn row**, one per run: one avatar (`PlanAtWorkMark`,
+   flowing only for the run that is writing), the hand-off while that run writes, the act record,
+   and that run's own `PlanNarration` (its own sticky _planner notes_ row and count). A finished
+   run's block keeps its notes and heads (· done) and loses the hand-off, exactly as a finished run
+   does today.
+4. **A run's briefing follows its run block.** The version a run produced is drawn under that
+   run's notes. While a later run is writing, the version above it is still the current plan.
+5. **A run with no turn to sit under** (a `plan.py` run, whose keys read `plan.py:<runId>:<n>`, or
+   an agent writing over MCP) is placed by time: after the last turn or briefing that came before
+   its first session's `firstReportedAt`. It is never moved under another run's turn.
+6. **A planner reply to the follow-up** (MOTIR-11488 lets the planner reply, or say it is revising,
+   before a revision starts) is an ordinary assistant turn of that job, drawn after the marker and
+   before the run block, where every turn already sits.
+7. **A message typed while a revision writes** is the shipped queued turn (MOTIR-4274): it stays at
+   the end of the rail, under the running block, with its queued and read markers, until that
+   revision lands and the queued message starts its own run, which then sits under it.
+8. **The same order on reopen.** Turns and narration both come from the store (the review read and
+   the session read), so a reopened, ended or Visitor rail draws the same order as the live one
+   (panels 5 and 7). Nothing in the order is kept only in memory.
+
+### The panel rule — no decide panel while a new version is written
+
+- **While a revision writes** (the shipped `rewritingPlan`: a plan run is writing, a review is in
+  hand and it is undecided), **no decide panel is drawn**: not the held branch, not a disabled one,
+  and not the ungated _Nothing saved yet_ block. The held line said what the hand-off says, one row
+  above it, and a disabled Approve under an old version invites a press that cannot happen. The
+  hand-off is the revision's one message about the decision.
+- **When the new version lands** (the plan is `planned` again and its gate `awaiting`), the new
+  briefing is drawn under the revision's run block and the **live** panel under it: _Nothing saved
+  yet_, `approvalGate.planApproval.surface.consequence`, Decline · Approve. The rail lands on it
+  (MOTIR-4023), so the decision is what the person sees.
+- **When the revision fails or is stopped**, nothing changed and the old proposal is still
+  decidable: under the revision's run block, the shipped failure line
+  (`planningWorkspace.waiting.failureLine`, `WaitingPlanFailureLine`) or the shipped stopped marker
+  (`planningWorkspace.conversation.stopped`), then the **live** panel for the version above. The
+  composer is open; the next message starts another revision.
+- **Only the newest version carries a panel**, in every state. A Visitor, or any reader with no
+  decide permission, keeps today's treatment: a Visitor sees no panel (panel 7); a member who may
+  not decide sees the shipped `seeOnly` line in the panel's place, at the same moments the panel
+  would show.
+- **The held branch is not retired.** `GatedReviewBlock`'s `held` view still answers a gate held by
+  a revision this rail is not following (another harness, `heldBy`), where there is no hand-off on
+  screen to say it. It stops rendering only for the revision this rail itself shows writing.
+
+### The earlier version, kept as history
+
+- **During the revision** the old briefing is drawn as it was, with no label: it is still the plan
+  on the canvas.
+- **Once a newer version lands**, the old briefing keeps its place and its text, and the bubble's
+  shipped label slot (the mono uppercase line `Bubble` already draws) reads **Earlier version ·
+  replaced below**. It is not dimmed, struck through or folded: it was true when it was written, and
+  the narration design already refused to dim history (MOTIR-8061, _Stalled_).
+- **A version replaced before this ships** has no briefing left to show: today only the plan's
+  current `summary` is stored. In its place, one planner bubble reads _An earlier version of this
+  plan was here (N items). Its briefing was not kept._, its count read from that version's
+  `planned` trail row (panel 9).
+
+### The collapse-all control across run blocks
+
+Each run block carries its own sticky _planner notes_ row, counting that run's notes, because each
+block is its own scroll section and its control must scroll with it. **The fold is one rail-wide
+state**: pressing _Hide_ or _Show_ in any block folds or opens every block, and the choice is
+remembered per browser exactly as today (`motir:planning:planner-notes`). A single group's own
+disclosure still opens just that group.
+
+### The data each element reads
+
+| drawn element                             | data                                                                                                                                                                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a run block, and which turn it sits under | `narration.sessions[].sessionKey` grouped by its job prefix; the user turn whose `jobId` is that job (`PlanChangeTurnDto.jobId`)                                                                                                    |
+| a run with no turn                        | its first session's `firstReportedAt`, against the turns' `createdAt` and the versions' `planned` times                                                                                                                             |
+| the live run block                        | the shipped `inFlightSteps[].sessionKey` while the plan is `generating`                                                                                                                                                             |
+| the current briefing                      | `review.summary`, as today                                                                                                                                                                                                          |
+| an earlier version's briefing             | **NEW:** the briefing stored with each version. MOTIR-11487 records `summary` in the diff of the `planned` trail row (`plan_revision`, `changeKind: 'planned'`) that closes each version, and the review read returns them in order |
+| where an earlier briefing sits            | the `planned` row's `changedAt`, against the run blocks                                                                                                                                                                             |
+| the unkept line's count                   | that version's `planned` row `diff.itemCount` (already stored)                                                                                                                                                                      |
+| panel shown or not                        | the shipped `planRunPhase` / `rewritingPlan`, `state.stopped`, `session.failure`, the gate's `state` and `canDecide`                                                                                                                |
+
+### Scroll and screen readers
+
+- The rail keeps its one rule: it lands on its latest content (MOTIR-4023) and follows new content
+  while the reader has not scrolled away. While a revision writes, the latest content is that run's
+  notes; when it lands, the new briefing and panel.
+- The announcer (`plan-change-announcer`) stays the only live region and says what it says today.
+  Each run block's narration keeps `aria-live="off"`. No region is added.
+- The _Earlier version · replaced below_ label is real text inside the bubble, read before the
+  briefing; it is not `aria-hidden`.
+
+### Copy, en and zh (`planningWorkspace.conversation.revision.*`, new)
+
+| key                    | en                                                                                                                   | zh                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `earlierVersion`       | Earlier version · replaced below                                                                                     | 早先的版本 · 已由下方的新版本取代                          |
+| `earlierVersionUnkept` | An earlier version of this plan was here ({count, plural, one {# item} other {# items}}). Its briefing was not kept. | 这里曾是此计划的早先版本（{count} 项）。它的说明没有保留。 |
+
+Reused, unchanged: `approvalGate.planApproval.handoff.rewriting`, `…surface.consequence`,
+`…surface.decline`, `…surface.approve`, `…surface.held` (now only for a revision this rail does not
+follow), `planningWorkspace.conversation.nothingSavedYet`, `…submitted`, `…stopped`,
+`planningWorkspace.waiting.failureLine`, and every `narration.*` key.
+
+### Primitives composed
+
+| element                       | built from                                                                                                  | colour                                                          | shape                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------- |
+| run block                     | the shipped working-turn row (`PlanAtWorkMark` + hand-off + `PlanActRecord` + `PlanNarration`), one per run | as shipped                                                      | as shipped                                     |
+| earlier-version label         | `Bubble`'s shipped `label` slot (mono, uppercase, `text-[10px]`)                                            | inherits the bubble's `--el-text` at the slot's `opacity-80`    | —                                              |
+| unkept line                   | `Bubble role="assistant"` with one line                                                                     | `--el-text-secondary` on `--el-chat-bubble-ai`                  | as shipped                                     |
+| decide panel                  | `GatedReviewBlock`'s `decide` branch, unchanged                                                             | `--el-accent` border; `--el-text-strong`, `--el-text-secondary` | `--radius-card`, `--spacing-card-padding-12/8` |
+| failure line / stopped marker | `WaitingPlanFailureLine` / the shipped stopped `<p>`, unchanged                                             | `--el-tint-rose` + `--el-text-strong` / `--el-text-secondary`   | as shipped                                     |
+
+No colour token, shape token or primitive is added.
+
+### Out of scope
+
+The canvas confirm bar (`PlanChangeConfirmBar`) keeps its held state while a revision writes: the
+canvas is where the proposals are being rewritten. The plan detail page's review rail
+(`PlanReviewRail`, MOTIR-4023's pinned footer) is a different surface and is unchanged. How the
+planner decides between replying and revising is MOTIR-11488's.
+
+### Deliverable
+
+`design/ai-chat/plan-change-run-live--revision-timeline.mock.html` (panels 1–9) and this section.
+It amends the run surface and the narration sections above, which stay as records, and it gates
+**MOTIR-11487**.
+
+## ⭐ The plan offer on a decided conversation — kept requests offered one at a time after Approve or Decline (2026-11-17)
+
+**Design system — read first.** Files read: `package.json` (depends on `@motir/design-system` `workspace:*`, version 0.23.0) and `app/globals.css` (imports `@motir/design-system/theme.css`). **Verdict: ON MOTIR DESIGN.** The mock is built with `renderMock` from `@motir/design-system/mock` at the project's own axes (`warm-editorial` · `motir` · `motir`, read from `app/layout.tsx`), on a full-width board. Every colour is an `--el-*` token and every surface's shape a shape token; nothing is invented. No part is missing from the package: every element is a shipped product component (below).
+
+**A DELTA.** The mock is **`design/ai-chat/plan-offer--after-decision.mock.html`**. It amends § _The plan offer on an answer turn_ (`design/ai-chat/plan-offer.mock.html`), § _The composed requirement in the left pane_ (`design/ai-chat/plan-offer--requirement.mock.html`, its no-requirement face) and the published session-end design (`planning-workspace--session-end.mock.html`, its end marker and ended composer slot; its failure state is outdated and not used). It renders, without redrawing them, the shipped `PlanOffer` (`components/planning/PlanOffer.tsx`), `SessionEndMarker` and `EndedComposerSlot` (`components/planning/SessionEndParts.tsx`), the rail's `Bubble` (`components/planning/PlanChangeRail.tsx`) and `RequirementNotice` (`components/planning/RequirementDocument.tsx`). The offer is drawn with one proposed prop, `afterDecision`, applied to the shipped source at render time; every other line of the component is as it ships.
+
+**The access path.** A person whose plan is waiting asks the planner for something the planner judges too far from that plan; the planner replies that it is better planned on its own and keeps the request. The person then presses **Approve** or **Decline** on the waiting plan in the same rail (the shipped decide panel). The conversation ends, and the offer turn arrives below the end marker in that rail.
+
+### What changes, in one sentence
+
+On a conversation a plan decision has just ended, each request the person made while the plan was waiting is offered as a new plan, one at a time and in the order asked, in a planner turn that sits below the end marker.
+
+### Decision — on a decided conversation the offer turns sit BELOW the end marker
+
+`SessionEndMarker` is documented as "the thread's last row on every ended session". **For a conversation ended by Approve or Decline, that rule is superseded:** the end marker stays where the decision happened, and the decided-conversation offer turns follow it. The marker still separates what was said while the plan waited from what came after the decision; nothing is ever drawn between the decision and the marker. Every other ended conversation (closed, idle, restarted, failed) keeps the marker as its last row.
+
+### The named elements
+
+| Element                                                                           | Where                                                                                                   | What is drawn                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Decided-conversation offer turn** (new composition)                             | below the end marker, one per kept request, oldest first                                                | the shipped assistant `Bubble`, then the shipped `plan-offer` panel under it at the rail's `pl-9` offer indent, exactly as an answer turn's offer sits                                                                                                                                                                                                                                                                                                                                         |
+| **Lead line** (new)                                                               | the bubble's text                                                                                       | `planOffer.afterDecision.lead`, in the bubble's shipped ink (`--el-text` on `--el-chat-bubble-ai`)                                                                                                                                                                                                                                                                                                                                                                                             |
+| **More-kept cue** (new)                                                           | under the lead line, in the same bubble, only while the offer is live and more than one request is kept | `planOffer.afterDecision.cue` ("Request 1 of 3. The next one is offered once you confirm or decline this one."), or `cueLast` on the last one; 12px in `--el-text-secondary`. A position and a total, never a list of the waiting requests or their buttons                                                                                                                                                                                                                                    |
+| `plan-offer`, `plan-offer-request`, `plan-offer-no-target`, `plan-offer-show-all` | the panel                                                                                               | unchanged from § _The plan offer on an answer turn_; the request text is the kept request's requirement, and the no-target line shows because these offers carry no target                                                                                                                                                                                                                                                                                                                     |
+| `plan-offer-confirm`, `plan-offer-decline`                                        | the panel, live offer                                                                                   | unchanged buttons; their help line takes the decided-conversation copy (`afterDecision.confirmHelp` + `afterDecision.declineHelp`), because the shipped one says "here in this conversation" and "the conversation carries on", which an ended conversation cannot do                                                                                                                                                                                                                          |
+| `plan-offer-confirmed`                                                            | the panel, after Confirm and on reload                                                                  | the shipped started chip (`--el-tint-mint`, `--el-text-strong`) and "Confirmed · {when}". The shipped "Planning runs here, in this conversation." line is replaced by **`plan-offer-started-elsewhere`**: `afterDecision.startedElsewhere`, with **Open it** as a link (`--el-link`, the copied divider's link idiom) that opens the session the confirm started (`confirmedSessionId`) in the same overlay. No `plan-offer-requirement-page` line: these offers carry no composed requirement |
+| `plan-offer-declined`                                                             | the panel, after Decline and on reload                                                                  | unchanged: chip, "Declined · {when}", "Nothing was planned."                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `plan-offer-cannot-start`                                                         | the panel, live offer that cannot start                                                                 | the shipped refused-press line (lock glyph `aria-hidden`, the shipped `cannotStart.*` reason) in Confirm's place; **Decline stays**, with `afterDecision.cannotStartHelp`. On an open conversation a cannot-start offer draws no panel and no Decline; here Decline is the only way to move the queue on, so it is kept. The queue does not advance until it is declined                                                                                                                       |
+| `planning-session-end`                                                            | above the first offer turn                                                                              | unchanged: the Approved (`success`) or Declined (`danger`) pill and "by {name} · {when}"                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ended composer slot (`planning-read-only`)                                        | the composer's place                                                                                    | unchanged: the shipped read-only face of an ended session. A decided session never offers the copy (`offersCopy`), so its face is the lock line, while the offer's Confirm and Decline stay live above it                                                                                                                                                                                                                                                                                      |
+| left pane                                                                         | the overlay's left pane while a decided-conversation offer is live                                      | the shipped `requirement-notice` (the no-requirement face of § _The composed requirement in the left pane_), because the offer carries no six-heading requirement. Once the offer is settled the pane returns to the decided plan's canvas, as it does when any offer settles                                                                                                                                                                                                                  |
+
+### States — the storyboard
+
+| Mock sheet | State                    | What is drawn                                                                                                                                          |
+| ---------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1          | after Approve, 3 kept    | the overlay (left pane notice + rail), then the rail alone; end marker Approved, one live offer turn, cue "1 of 3"                                     |
+| 2          | after Decline, 2 kept    | the same under the Declined marker; cue "1 of 2"                                                                                                       |
+| 3          | one kept                 | the offer turn with no cue                                                                                                                             |
+| 4          | next offer after Confirm | offer 1 confirmed with Open it; offer 2 live below it, cue "2 of 3"                                                                                    |
+| 5          | next offer after Decline | offer 1 declined; offer 2 live below it, cue "2 of 3"                                                                                                  |
+| 6          | every request resolved   | three settled offers, no cue, nothing live                                                                                                             |
+| 7          | reload                   | confirmed (Open it, no requirement page line) and declined, from the stored offer                                                                      |
+| 8          | cannot start             | the lock line in place of Confirm, Decline kept, cue still "1 of 3"                                                                                    |
+| 9          | long request             | clamped with the shipped Show all                                                                                                                      |
+| 10         | another member           | the same turns, lead line and cue; the offer without Confirm, Decline or help line. As shipped, only the conversation's owner can confirm a plan offer |
+
+Every sheet is drawn in en and zh, light and dark.
+
+### Strings (en / zh) — proposed keys under `planningWorkspace.planOffer.afterDecision`
+
+| Key                | en                                                                                                                             | zh                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `lead`             | While the plan was waiting for your decision, you asked for this. It’s better planned on its own, so here it is as a new plan. | 计划等待你决定时，你提出了这个请求。它更适合单独规划，所以这里把它作为一个新计划提供给你。 |
+| `cue`              | Request {position} of {total}. The next one is offered once you confirm or decline this one.                                   | 第 {position} 个请求，共 {total} 个。确认或拒绝这一个后，会提供下一个。                    |
+| `cueLast`          | Request {position} of {total}, the last one.                                                                                   | 第 {position} 个请求，共 {total} 个，这是最后一个。                                        |
+| `confirmHelp`      | Confirm starts planning this request in a new conversation.                                                                    | 确认后将在一个新的对话中开始规划这个请求。                                                 |
+| `declineHelp`      | Decline drops it, and nothing is planned.                                                                                      | 拒绝会放弃它，不会规划任何内容。                                                           |
+| `cannotStartHelp`  | Decline drops this request, and the next one is offered.                                                                       | 拒绝会放弃这个请求，然后提供下一个。                                                       |
+| `startedElsewhere` | Planning runs in a new conversation. `<link>Open it</link>`                                                                    | 规划在一个新的对话中进行。`<link>打开</link>`                                              |
+
+Every other string on the board is shipped copy: `planOffer.label`, `noTarget`, `confirm`, `decline`, `started`, `startedBy`, `declined`, `declinedBy`, `recorded`, `showAll`, `showLess`, `cannotStart.*`, `session.end.*`, `session.endedProject`, `requirementPane.notice`.
+
+### Decisions this design makes
+
+- **The cue is a count, not a list.** Only the live offer can be acted on, and the shipped one-live-offer rule (an offer reads `superseded` once a later planner turn exists) means later offers do not exist yet as turns. A position and a total tells the person how many are left without drawing work they cannot touch.
+- **The lead line is catalogue copy, not model text.** No model writes these turns; they are posted when the decision commits. The request box carries the kept requirement, which is model text, rendered as markdown like any offer's request.
+- **Confirm opens a new conversation.** An ended conversation accepts no turn, so the planning a confirm starts cannot run here; the confirmed line links it instead of saying it runs here.
+- **Decline stays on a cannot-start offer.** It is the only way to move past a request that cannot be planned now.
+- **The left pane shows the no-requirement notice.** It is what any undecided offer with no composed requirement shows today; showing the decided plan instead would put a plan nobody can act on any more beside an offer that can.
+
+### Accessibility contract
+
+Unchanged from § _The plan offer on an answer turn_: the panel is a named region, Confirm and Decline are labelled buttons with in-flight states, confirmed and declined are said in text plus an icon, the lock glyph is `aria-hidden`, and the Open it link takes `--focus-ring-color`. The cue is plain text inside the bubble, read with the lead line. A new offer turn arriving below a settled one is announced by the rail's own turn insertion, like any planner turn. Focus order: Show all → Confirm → Decline → (the read-only slot holds no control).
+
+### What this section does not decide
+
+- How the kept requests are stored, written, confirmed and declined, and what starts the new planning session.
+- The too-far reply itself: it is an ordinary assistant turn, drawn as one.
+- Any other ended conversation's order: closed, idle, restarted and failed sessions keep the end marker as their last row.
+
+## ⭐ The final check, §3 amended — the confirm points to the Run the final check setting, in a new tab (MOTIR-11547, 2026-11-17)
+
+**Design system.** Files read: `package.json` (depends on `@motir/design-system`, `workspace:*`),
+`app/globals.css` (imports `@motir/design-system/theme.css`), `app/layout.tsx` (axes
+`warm-editorial` / `motir` / `motir`). Verdict: **on Motir Design** (branch a). The mock is built
+with `renderMock` from `@motir/design-system/mock` at those axes, on a full-width board. Every part
+is the real shipped component rendered from source: `SkipFinalCheckDialog` and
+`AiPlanningSettingsEditor`, each with this section's change applied to a proposed copy, through the
+shipped `Button`, `SwitchRow`, `SettingsCard` and `Callout`. The `Modal` is drawn in place with
+exactly the classes the primitive emits (a Radix portal renders nothing on the server). No part is
+missing from the package and no product-local component is new. The link is the shipped external
+text link (`CurrentReleaseCard`'s address link, `ExistingRepositoryPicker`'s manage link): `<a
+target="_blank">`, the `ExternalLink` glyph and an `sr-only` new-tab note.
+
+**Mock:** `design/ai-chat/planning-workspace--skip-final-check--settings-link.mock.html` (a delta;
+panels 1–10). **Amends** § _⭐ The final check_ §3 _The confirm_, §5 _Focus, keyboard and screen
+readers_, §6 _Test ids_ and §7 _Copy_ (MOTIR-11263), and the Planner card's final-check row of §1.
+Its base mock `design/ai-chat/planning-workspace--skip-final-check.mock.html` is a record and is not
+edited. **Built by** MOTIR-11548.
+
+**What changes.** The confirm skips the final check for one plan. A person who skips it on every
+plan has a project setting for that, **Run the final check** (§1), and nothing in the dialog said so.
+One line under the peach consequence line now names the setting and links to it. The link opens
+Settings › AI planning in a **new browser tab**, on that row. This tab is left exactly as it was: the
+overlay, the plan, the running check and the dialog itself, still open.
+
+### 3a. The settings line (panels 1–7)
+
+| Element   | Spec                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Placement | In `Modal.Body`, **directly under the peach consequence line** (or the mint finished line), and above the error line. The error line stays last, next to the _Try again_ it answers.                                                                                                                                                                                                                                                             |
+| Line      | A `<p>` (`data-testid="planning-skip-check-dialog-setting"`): `flex gap-2`, `px-(--spacing-control-x-12)` so its text starts on the peach line's text column, 13px, `leading-relaxed`, `--el-text-secondary` (AA on `--el-page-bg` in every palette and theme). Leading glyph `Settings2` 16px, `--el-text-secondary`, `aria-hidden`. No fill, no border: it is a pointer, not a consequence, so it reads quieter than the tinted line above it. |
+| Link      | The words _Run the final check in AI planning settings_ inside the sentence (`t.rich`, a `<link>` chunk). `font-medium`, `--el-link`, `underline underline-offset-2`, `hover:no-underline`; focus is the shared `focus-visible:ring-2 ring-(--focus-ring-color) ring-offset-2` the Modal's close and `Button` use, at `--radius-control`. `data-testid="planning-skip-check-setting-link"`.                                                      |
+| Glyph     | `ExternalLink` 14px (`size-3.5`) inside the link after its words, `ml-1`, `inline align-[-2px]`, `aria-hidden`. The link is `inline`, not `inline-flex`, so at phone width it wraps with its words and the glyph stays on its last line (panel 6).                                                                                                                                                                                               |
+| Name      | The link's accessible name is its words plus an `sr-only` _(opens in a new tab)_: **"Run the final check in AI planning settings (opens in a new tab)"**.                                                                                                                                                                                                                                                                                        |
+| Target    | `href="/settings/project/ai-planning#final-check"`, `target="_blank"`, `rel="noopener noreferrer"`. A plain anchor, not `next/link`: it leaves this tab alone. The press does not close the dialog, change its phase or send anything.                                                                                                                                                                                                           |
+
+**Which phases show it.** All four, and the link stays live in all of them.
+
+| #   | Phase    | The line                                                                                                                                                                     |
+| --- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Open     | `settingLine` (or `settingLineReadOnly`) under the peach line.                                                                                                               |
+| 2   | Skipping | Unchanged and still enabled. The buttons and × are disabled as today; opening the settings in another tab touches nothing here, and keeping the line stops the body jumping. |
+| 3   | Failed   | Unchanged, under the peach line; the error line follows it.                                                                                                                  |
+| 4   | Finished | `settingLineFinished` (or `settingLineReadOnlyFinished`) under the mint line: the first sentence goes, because there was no skip to scope, and the pointer stays.            |
+
+**Why keep it when the check had finished.** The person pressed Skip: they wanted the check gone. The
+dialog now tells them there was nothing to skip, which is the moment a project-wide off is most
+useful to know about. Only the sentence about _this skip_ is dropped.
+
+**The read-only member (panel 5).** A member who may plan (`ai:plan`, who sees the control at all)
+but may not change project AI settings (no `ai:configure`) **still sees the line**: it tells them the
+setting exists, where it lives and who can change it. Its copy says _A project admin can turn the
+final check off …_ instead of _switch off_. The link is the same and lands on the same row, which
+that member sees read-only (§1 _Read-only_, panel 10). The dialog takes a new prop
+`canManageSettings: boolean`; the owner passes whether the viewer holds `ai:configure` for this
+project, the same permission the settings page reads as `isAdmin`.
+
+### 3b. Where the new tab lands (panels 9, 10)
+
+| Element | Spec                                                                                                                                                                                                                                                                                                                                                                          |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page    | Settings › AI planning (`/settings/project/ai-planning`) for the active project, which is the project being planned. Unchanged except the row below.                                                                                                                                                                                                                          |
+| Anchor  | The final-check row (the **Run the final check** `SwitchRow` with its off callout) is wrapped in a `<div id="final-check" data-testid="ai-planning-final-check-row">` with `scroll-mt-6`, `rounded-(--radius-control)` and `-m-2 p-2` (the padding gives the ring room; the negative margin cancels it, so nothing moves). The browser scrolls it to the top of the viewport. |
+| Arrival | When the page opens with `#final-check` (and on a later `hashchange` to it), the row is ringed: `ring-2 ring-(--el-highlight)` on the wrapper, at `--radius-control`. It holds 0.6s, fades to transparent over 1.4s, and is removed. Under `prefers-reduced-motion` it shows for 2s and is removed without the fade. Read the hash as `AgentVerdictActivityRow` does.         |
+| Focus   | Not moved. The fragment makes the row the sequential focus starting point, so the next Tab lands on its switch.                                                                                                                                                                                                                                                               |
+
+A ring rather than a fill: a tinted fill would put the row's label, hint and (for a read-only member)
+its disabled ink on a new surface. A ring around the row changes no ink pair, and only marks
+where to look.
+
+### 3c. Focus, keyboard and screen readers (amends §5)
+
+- **On open** focus still lands on **Keep checking**. The link now comes before the footer in the
+  DOM, and Radix's first focus leaves links out, so this holds without a change; MOTIR-11548's test
+  asserts it.
+- **Tab order:** the settings link → Keep checking → Skip the final check → × (panel 7).
+- **Enter** on the link opens the new tab; the dialog stays open and focus stays on the link.
+- The line is not part of `aria-describedby` (the dialog's description stays the body and the
+  consequence or finished line); it is reached by reading or by Tab.
+
+### 3d. Test ids (amends §6)
+
+`planning-skip-check-dialog-setting` (the line), `planning-skip-check-setting-link` (the link),
+`ai-planning-final-check-row` (the anchored row on the settings page).
+
+### 3e. Copy (amends §7)
+
+New catalogue keys under `planningWorkspace.skipFinalCheck` (every locale, under the catalogue
+parity rule; MOTIR-11548 writes the other ten). `<link>` is the rich-text chunk that renders the link.
+
+| key                           | en                                                                                                                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `settingLine`                 | This skip is for this plan only. To turn the final check off for every plan in this project, switch off <link>Run the final check in AI planning settings</link>.           |
+| `settingLineFinished`         | To turn the final check off for every plan in this project, switch off <link>Run the final check in AI planning settings</link>.                                            |
+| `settingLineReadOnly`         | This skip is for this plan only. A project admin can turn the final check off for every plan in this project with <link>Run the final check in AI planning settings</link>. |
+| `settingLineReadOnlyFinished` | A project admin can turn the final check off for every plan in this project with <link>Run the final check in AI planning settings</link>.                                  |
+| `settingNewTab`               | (opens in a new tab)                                                                                                                                                        |
+
+The link's words repeat the setting's own label, **Run the final check** (§7
+`finalCheckLabel`), so a person finds the same words on the page it opens.
+
+### 3f. Every style, both themes, phone width
+
+The line uses only `--el-*` inks and shape tokens, so every `data-style` and palette restyles it with
+the dialog. Light and dark are drawn for every phase (panels 1–5, 9, 10). Below 32rem the `lg` Modal
+is 90% of the viewport and the line wraps in its column (panel 6).
+
+### 3g. Out of scope
+
+What the setting does, and the skip itself. The settings page beyond the anchored row.
