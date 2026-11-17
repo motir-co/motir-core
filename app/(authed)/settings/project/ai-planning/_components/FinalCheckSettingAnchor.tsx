@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { FINAL_CHECK_SETTING_ID } from '@/app/(authed)/backlog/_components/aiSprintPlanShared';
+import { FINAL_CHECK_SETTING_ID } from '@/lib/settings/aiPlanningSettingsLinks';
 import { usePrefersReducedMotion } from '@/lib/hooks/usePrefersReducedMotion';
 
 // THE RUN THE FINAL CHECK ROW'S LANDING (MOTIR-11548), drawn to

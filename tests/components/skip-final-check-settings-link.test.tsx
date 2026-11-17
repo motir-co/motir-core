@@ -9,7 +9,7 @@ import {
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
-import { FINAL_CHECK_SETTING_HREF } from '@/app/(authed)/backlog/_components/aiSprintPlanShared';
+import { FINAL_CHECK_SETTING_HREF } from '@/lib/settings/aiPlanningSettingsLinks';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 import en from '@/messages/en.json';
 import { narrationEntry, narrationRead, narrationSession } from '../helpers/planNarration';

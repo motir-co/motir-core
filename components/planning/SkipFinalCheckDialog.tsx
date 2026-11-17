@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { AlertCircle, CircleStop, ExternalLink, Info, Settings2, SkipForward } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { FINAL_CHECK_SETTING_HREF } from '@/app/(authed)/backlog/_components/aiSprintPlanShared';
+import { FINAL_CHECK_SETTING_HREF } from '@/lib/settings/aiPlanningSettingsLinks';
 
 /**
  * THE CONFIRM FOR SKIPPING THE FINAL CHECK (Story MOTIR-11262 · MOTIR-11266), drawn

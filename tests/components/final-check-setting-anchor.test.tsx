@@ -11,7 +11,7 @@ import {
   AI_PLANNING_SETTINGS_HREF,
   FINAL_CHECK_SETTING_HREF,
   FINAL_CHECK_SETTING_ID,
-} from '@/app/(authed)/backlog/_components/aiSprintPlanShared';
+} from '@/lib/settings/aiPlanningSettingsLinks';
 
 // THE RUN THE FINAL CHECK ROW'S LANDING (MOTIR-11548), built to
 // `design/ai-chat/design-notes.md` § "⭐ The final check, §3 amended" §3b (MOTIR-11547):
