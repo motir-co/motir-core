@@ -521,6 +521,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'board-config.spec.ts': 15.1,
   'board-crud.spec.ts': 24.9,
   'board-filter.spec.ts': 4.5,
+  // MOTIR-11566 — a brand-new spec, MEASURED LOCALLY (16.4 s against a local
+  // prod build: one test, two actors, eight steps). Recorded at 25.0 as a
+  // floor-plus-margin; replace it with its measured CI time.
+  'board-header-filter.spec.ts': 25.0,
   'board-load.spec.ts': 7.5,
   'board-projection.spec.ts': 10.9,
   'board-scrum-at-scale-interaction.spec.ts': 0,
