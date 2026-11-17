@@ -64,6 +64,7 @@ import type {
   AnswerOfferInput,
   CopyableSessionDto,
   DebugLandingDto,
+  KeptFarRequestDto,
   PlanChangeSessionDto,
   PlanChangeSubmitResultDto,
   PlanOfferRestartResultDto,
@@ -2508,6 +2509,87 @@ export const planChangeSessionsService = {
           tx,
         );
         return toDto(fresh, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * KEEP a request the planner judged TOO FAR from the waiting plan (MOTIR-11518) on the
+   * person's `user` turn that asked it. Under the session's row lock, in one transaction;
+   * a compare-and-set on null, so a replayed settle never writes it twice nor overwrites
+   * it. `true` when this call kept it.
+   */
+  async recordFarRequest(
+    turnId: string,
+    requirement: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<boolean> {
+    const trimmed = requirement.trim();
+    if (!trimmed) return false;
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        return planChangeTurnRepository.setFarRequest(
+          turnId,
+          { sessionId: session.id, workspaceId: pctx.workspaceId },
+          trimmed,
+          tx,
+        );
+      },
+    );
+  },
+
+  /**
+   * The too-far requests this conversation KEEPS (MOTIR-11518): each one's source turn,
+   * position and requirement, in the order they were asked, until it is consumed. Read
+   * under the session's row lock, so it cannot interleave with a keep or a consume.
+   */
+  async listKeptFarRequests(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<KeptFarRequestDto[]> {
+    const session = await requireSession(pctx, address);
+    const rows = await withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        return planChangeTurnRepository.listKeptFarRequests(session.id, pctx.workspaceId, tx);
+      },
+    );
+    return rows.flatMap((r) =>
+      r.farRequestRequirement
+        ? [{ turnId: r.id, seq: r.seq, requirement: r.farRequestRequirement }]
+        : [],
+    );
+  },
+
+  /**
+   * CONSUME a kept too-far request (MOTIR-11518) — the one write an accepted or declined
+   * offer of it makes. `true` when this call consumed it; a second call, a turn keeping
+   * nothing, or a turn of another conversation writes nothing and answers `false`. Under
+   * the session's row lock, in one transaction.
+   */
+  async consumeKeptFarRequest(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+    turnId: string,
+  ): Promise<boolean> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        return planChangeTurnRepository.markFarRequestConsumed(
+          turnId,
+          { sessionId: session.id, workspaceId: pctx.workspaceId },
+          tx,
+        );
       },
     );
   },

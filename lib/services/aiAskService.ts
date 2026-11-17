@@ -681,6 +681,39 @@ async function settleRevision(args: {
   return { outcome: 'redirected', jobId: revised.jobId, planId: revised.planId, session };
 }
 
+/**
+ * The settle of a turn the PLANNER judged TOO FAR from the waiting plan (MOTIR-11518).
+ * The reply lands as the ordinary `assistant` answer (keyed on the job), and the
+ * planner's restatement is KEPT on the person's turn; nothing else happens — no offer
+ * lands, no offer reply is acted on, no revision or plan-edit job starts, and the plan
+ * stays `planned` and decidable. Both writes are replay-safe: the append is idempotent on
+ * the job, the keep is a compare-and-set on a null column.
+ */
+async function settleFarRequest(args: {
+  jobId: string;
+  turn: PlanChangeTurnDto;
+  answer: string;
+  citations: string[];
+  requirement: string;
+  ctx: ProjectContext;
+  address: { sessionId: string };
+  result: unknown;
+}): Promise<AskSettleResult> {
+  const { jobId, turn, ctx, address } = args;
+  const session = await planChangeSessionsService.appendAnswerTurn(
+    {
+      jobId,
+      body: args.answer,
+      citations: args.citations,
+      codeUnreadable: readCodeUnreadable(args.result) === 'answered' ? 'answered' : null,
+    },
+    ctx,
+    address,
+  );
+  await planChangeSessionsService.recordFarRequest(turn.id, args.requirement, ctx, address);
+  return { outcome: 'answered', session };
+}
+
 export const aiAskService = {
   /**
    * The composer's door: append what the person typed, then run it.
@@ -1109,6 +1142,22 @@ export const aiAskService = {
     }
 
     if (!outcome.answer) return { outcome: 'silent', session };
+
+    // ⚠️ TOO FAR FROM THE WAITING PLAN (MOTIR-11518) — after the mid-run and both
+    // `plan_change` arms, BEFORE the offer reply: the reply lands and the request is
+    // kept, and nothing on this arm lands an offer or starts a plan.
+    if (outcome.intent === 'ask' && outcome.farRequest) {
+      return settleFarRequest({
+        jobId,
+        turn,
+        answer: outcome.answer,
+        citations: outcome.citations,
+        requirement: outcome.farRequest.requirement,
+        ctx,
+        address,
+        result: job.result,
+      });
+    }
 
     // THE REPLY TO A PENDING OFFER (MOTIR-9291), decided BEFORE the answer is
     // appended: the answer supersedes the offer, so it must still be undecided when

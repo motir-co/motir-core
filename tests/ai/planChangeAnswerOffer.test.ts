@@ -46,6 +46,8 @@ function row(answerOffer: unknown): PlanChangeTurn {
     answerOffer,
     forwardedEntryId: null,
     revisedLateJobId: null,
+    farRequestRequirement: null,
+    farRequestConsumedAt: null,
     authorId: null,
     createdAt: new Date('2026-10-22T19:00:00Z'),
   } as PlanChangeTurn;

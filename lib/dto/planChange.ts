@@ -115,6 +115,16 @@ export interface PlanChangeRunPauseDto {
   entryRead?: boolean;
 }
 
+/** A too-far request KEPT on a conversation (MOTIR-11518): the person's `user` turn it
+ *  came from (`turnId`, the source message), its position in the thread (`seq`, the
+ *  order), and the planner's restatement of it as a requirement. Listed in `seq` order
+ *  until it is consumed. */
+export interface KeptFarRequestDto {
+  turnId: string;
+  seq: number;
+  requirement: string;
+}
+
 export interface PlanChangeTurnDto {
   id: string;
   seq: number;

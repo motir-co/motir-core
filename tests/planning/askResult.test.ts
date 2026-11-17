@@ -338,3 +338,100 @@ describe('readAskOutcome — a waiting-plan revision', () => {
     });
   });
 });
+
+describe('readAskOutcome — a request too far from the waiting plan (MOTIR-11518)', () => {
+  it('reads a too-far answer as an ask carrying the trimmed requirement', () => {
+    expect(
+      readAskOutcome({
+        ask: {
+          intent: 'ask',
+          answer: 'That is better planned on its own.',
+          citations: ['MOTIR-12'],
+          farRequest: { requirement: '  Add a PDF export.  ' },
+          waitingPlan: { readable: true },
+        },
+      }),
+    ).toEqual({
+      intent: 'ask',
+      answer: 'That is better planned on its own.',
+      citations: ['MOTIR-12'],
+      farRequest: { requirement: 'Add a PDF export.' },
+      waitingPlan: { readable: true, reason: null },
+    });
+  });
+
+  it('drops a farRequest that is not a record, or whose requirement is missing, blank or not a string', () => {
+    for (const farRequest of [
+      null,
+      'Add a PDF export.',
+      ['Add a PDF export.'],
+      42,
+      {},
+      { requirement: '   ' },
+      { requirement: 7 },
+      { requirement: null },
+    ]) {
+      const out = readAskOutcome({ ask: { intent: 'ask', answer: 'Answered.', farRequest } });
+      expect(out).toEqual({ intent: 'ask', answer: 'Answered.', citations: [] });
+    }
+  });
+
+  it('drops a farRequest that arrives without a readable answer', () => {
+    for (const answer of [null, '', '   ', 3]) {
+      const out = readAskOutcome({
+        ask: { intent: 'ask', answer, farRequest: { requirement: 'Add a PDF export.' } },
+      });
+      expect(out).toEqual({ intent: 'ask', answer: null, citations: [] });
+    }
+  });
+
+  it('reads a result carrying BOTH revision and farRequest as a plain answer with neither', () => {
+    const out = readAskOutcome({
+      ask: {
+        intent: 'plan_change',
+        answer: 'Revising.',
+        citations: ['MOTIR-12'],
+        revision: { requirement: 'Remove it.' },
+        farRequest: { requirement: 'Add a PDF export.' },
+        waitingPlan: { readable: true },
+      },
+    });
+    expect(out).toEqual({
+      intent: 'ask',
+      answer: 'Revising.',
+      citations: ['MOTIR-12'],
+      waitingPlan: { readable: true, reason: null },
+    });
+  });
+
+  it('ignores a farRequest on every redirect', () => {
+    const farRequest = { requirement: 'Add a PDF export.' };
+    expect(readAskOutcome({ ask: { intent: 'plan_change', farRequest } })).toEqual({
+      intent: 'plan_change',
+      answer: null,
+      citations: [],
+    });
+    expect(readAskOutcome({ ask: { intent: 'debug', farRequest } })).toEqual({
+      intent: 'debug',
+      answer: null,
+      citations: [],
+      anchorKey: null,
+    });
+    expect(readAskOutcome({ ask: { intent: 'new_session', farRequest } })).toEqual({
+      intent: 'new_session',
+      answer: null,
+      citations: [],
+    });
+  });
+
+  it('caps an over-long requirement', () => {
+    const out = readAskOutcome({
+      ask: {
+        intent: 'ask',
+        answer: 'Kept.',
+        farRequest: { requirement: 'x'.repeat(ASK_ANSWER_MAX_CHARS + 10) },
+      },
+    });
+    expect(out?.farRequest?.requirement).toHaveLength(ASK_ANSWER_MAX_CHARS);
+  });
+});
