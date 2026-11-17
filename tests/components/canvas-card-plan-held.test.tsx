@@ -91,6 +91,33 @@ describe('a held story on the roadmap canvas', () => {
     expect(screen.getByTestId('node-next-action').getAttribute('data-action')).toBe('plan');
   });
 
+  it('a held story that has started and has children wears no blocked flag', () => {
+    const { container } = render(
+      <WorkItemNode
+        item={{
+          ...held,
+          status: 'in_progress',
+          statusLabel: 'In Progress',
+          statusCategory: 'in_progress',
+          hasChildren: true,
+        }}
+      />,
+    );
+    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
+    const chip = container.querySelector<HTMLElement>('[data-status="in_progress"]');
+    expect(chip?.textContent).toContain('In Progress');
+  });
+
+  it('a held story that is Done keeps its Done state and wears no blocked flag', () => {
+    const { container } = render(
+      <WorkItemNode
+        item={{ ...held, status: 'done', statusLabel: 'Done', statusCategory: 'done' }}
+      />,
+    );
+    expect(frame(container).getAttribute('data-node-state')).toBe('done');
+    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
+  });
+
   it('an epic is never held: planHeld on an epic changes nothing', () => {
     render(<WorkItemNode item={{ ...held, kind: 'epic', planHeld: false }} />);
     expect(screen.getByTestId('to-plan-pill')).toBeTruthy();

@@ -339,8 +339,15 @@ export function WorkItemNode({
   // Plan button — and it shows as blocked, as a story with children would: its
   // status chip in the slot and, when that status is not the Blocked status itself,
   // the shared blocked flag (the board card's). The red cross-blocked flag, when
-  // the card carries it, is that signal already, so the card never wears two.
-  const showHeldFlag = item.planHeld === true && !crossBlocked && item.status !== 'blocked';
+  // the card carries it, is that signal already, so the card never wears two. The
+  // flag is drawn only where the story would otherwise be To plan (a childless
+  // `todo` story): a story that has started, has children or is Done cannot be
+  // blocked from planning, the same rule the board card's `isBlockedNotStarted` keeps.
+  const showHeldFlag =
+    item.planHeld === true &&
+    isToPlanItem({ ...item, planHeld: false }) &&
+    !crossBlocked &&
+    item.status !== 'blocked';
   const showToPlanPill = slot === 'to-plan';
   const showToPlanWash = showToPlanPill && !crossBlocked;
   const showReadyPill = slot === 'ready';
