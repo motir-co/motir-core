@@ -9463,6 +9463,7 @@
         "planningUnavailable": "Planowanie nie może się tu rozpocząć: Motir AI nie jest skonfigurowany dla tego projektu albo nie masz uprawnień do planowania i edytowania elementów roboczych.",
         "outOfCredits": "Twoja organizacja nie ma już kredytów AI, więc planowanie nie może się rozpocząć.",
         "targetUnavailable": "Nie możesz już otworzyć {key}, więc planowanie nie może się rozpocząć.",
+        "decideOpenPlanFirst": "Masz tu już plan, o którym jeszcze nie zdecydowano. Najpierw go zatwierdź lub odrzuć, a potem potwierdź ten.",
         "generic": "Planowanie nie może się rozpocząć z tej propozycji."
       },
       "held": "Motir AI zaproponuje planowanie, gdy skończą się te pytania.",
@@ -9470,7 +9471,16 @@
       "clearEnough": "Wystarczająco jasne, by zaplanować bez zmian.",
       "nothingSettled": "Nic nie ustalono, więc prośba zostanie zaplanowana bez zmian.",
       "requirementSaved": "Zapisano jako <link>{title}</link> w Dokumentach wymagań.",
-      "requirementPageNotSaved": "<lead>Nie udało się zapisać wymagania jako strony.</lead> Planowanie nadal z niego korzysta."
+      "requirementPageNotSaved": "<lead>Nie udało się zapisać wymagania jako strony.</lead> Planowanie nadal z niego korzysta.",
+      "afterDecision": {
+        "lead": "Gdy plan czekał na decyzję, pojawiła się ta prośba. Lepiej zaplanować ją osobno, więc oto ona jako nowy plan.",
+        "cue": "Żądanie {position} z {total}. Następne zostanie zaproponowane, gdy potwierdzisz lub odrzucisz to.",
+        "cueLast": "Żądanie {position} z {total}, ostatnie.",
+        "confirmHelp": "Potwierdź, aby rozpocząć planowanie tego żądania w nowej rozmowie.",
+        "declineHelp": "Odrzucenie porzuca je i niczego nie planuje.",
+        "cannotStartHelp": "Odrzucenie porzuca to żądanie i proponuje następne.",
+        "startedElsewhere": "Planowanie odbywa się w nowej rozmowie. <link>Otwórz ją</link>"
+      }
     },
     "logBugOffer": {
       "label": "Propozycja zgłoszenia błędu",

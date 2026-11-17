@@ -9463,6 +9463,7 @@
         "planningUnavailable": "O planejamento não pode começar aqui: o Motir AI não está configurado para este projeto, ou você não tem permissão para planejar e editar itens de trabalho.",
         "outOfCredits": "Sua organização está sem créditos de AI, então o planejamento não pode começar.",
         "targetUnavailable": "Você não pode mais abrir {key}, então o planejamento não pode começar.",
+        "decideOpenPlanFirst": "Você já tem aqui um plano ainda não decidido. Aprove-o ou recuse-o primeiro e depois confirme este.",
         "generic": "O planejamento não pode começar a partir desta proposta."
       },
       "held": "O Motir AI vai propor o planejamento quando estas perguntas terminarem.",
@@ -9470,7 +9471,16 @@
       "clearEnough": "Claro o bastante para planejar como está.",
       "nothingSettled": "Nada foi definido, então o pedido é planejado como está.",
       "requirementSaved": "Guardado como <link>{title}</link> em Documentos de requisitos.",
-      "requirementPageNotSaved": "<lead>Não foi possível guardar o requisito como página.</lead> O planeamento continua a utilizá-lo."
+      "requirementPageNotSaved": "<lead>Não foi possível guardar o requisito como página.</lead> O planeamento continua a utilizá-lo.",
+      "afterDecision": {
+        "lead": "Enquanto o plano aguardava sua decisão, você pediu isto. É melhor planejar separadamente, então aqui está como um novo plano.",
+        "cue": "Solicitação {position} de {total}. A próxima é oferecida quando você confirmar ou recusar esta.",
+        "cueLast": "Solicitação {position} de {total}, a última.",
+        "confirmHelp": "Confirmar inicia o planejamento desta solicitação em uma nova conversa.",
+        "declineHelp": "Recusar a descarta, e nada é planejado.",
+        "cannotStartHelp": "Recusar descarta esta solicitação, e a próxima é oferecida.",
+        "startedElsewhere": "O planejamento acontece em uma nova conversa. <link>Abrir</link>"
+      }
     },
     "logBugOffer": {
       "label": "Oferta para registrar um bug",

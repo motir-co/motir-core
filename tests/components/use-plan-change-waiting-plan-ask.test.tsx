@@ -21,6 +21,7 @@ const {
   streamContextual,
   streamAugment,
   fetchReview,
+  approveRequest,
 } = vi.hoisted(() => ({
   openSession: vi.fn(),
   resumeContextual: vi.fn(),
@@ -32,6 +33,7 @@ const {
   streamContextual: vi.fn(),
   streamAugment: vi.fn(),
   fetchReview: vi.fn(),
+  approveRequest: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
@@ -61,7 +63,11 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
 
 vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/planning/planReviewClient')>();
-  return { ...actual, fetchPlanReview: (...a: unknown[]) => fetchReview(...a) };
+  return {
+    ...actual,
+    fetchPlanReview: (...a: unknown[]) => fetchReview(...a),
+    approvePlanRequest: (...a: unknown[]) => approveRequest(...a),
+  };
 });
 
 import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
@@ -138,6 +144,25 @@ describe('a follow-up while the anchored plan waits', () => {
     await waitFor(() => expect(result.current.state.phase).toBe('review'));
     expect(result.current.state.review?.id).toBe(REVIEW.id);
     expect(streamContextual).toHaveBeenCalledTimes(1);
+  });
+
+  it('an ANSWER keeps the plan in hand, so Approve after it posts to that plan', async () => {
+    const { result } = await withWaitingPlan();
+    const planId = result.current.state.planId;
+    expect(planId).toBeTruthy();
+
+    await act(async () => {
+      await result.current.send('also plan a billing epic', TARGETS);
+    });
+    await waitFor(() => expect(result.current.state.phase).toBe('review'));
+    expect(result.current.state.planId).toBe(planId);
+
+    approveRequest.mockRejectedValueOnce(new Error('stop here'));
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(approveRequest).toHaveBeenCalledTimes(1);
+    expect(approveRequest.mock.calls[0]![0]).toBe(planId);
   });
 
   it("streams the planner's REVISION through the item's relay when the settle redirects", async () => {

@@ -10389,6 +10389,17 @@ model PlanChangeTurn {
   /// rail draws "applied as a revision of the plan" from it. Null on every turn that
   /// was not revised late.
   revisedLateJobId      String?                @map("revised_late_job_id")
+  /// A request the planner judged TOO FAR from the conversation's waiting plan to fold
+  /// into it (Story MOTIR-11515 · MOTIR-11518), restated by the planner as a requirement
+  /// and KEPT on the person's `user` turn that asked it, so it can be offered as a plan
+  /// of its own once the waiting plan is decided. The turn's `id` is the source message
+  /// and its `seq` the order, so a conversation keeps every such request in the order it
+  /// was made. Written once, by a compare-and-set on null. Null on every other turn.
+  farRequestRequirement String?                @map("far_request_requirement") @db.Text
+  /// When the kept request above was CONSUMED — accepted or declined as a plan offer
+  /// (MOTIR-11518 ships the write; the offer card calls it). A request is kept while its
+  /// requirement is set and this is null; written once, by a compare-and-set on null.
+  farRequestConsumedAt  DateTime?              @map("far_request_consumed_at")
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).

@@ -59,12 +59,19 @@ export function cannotStartKey(code: string): CannotStartLine {
 }
 
 /** The refused-press line keys under `planningWorkspace.planOffer.cannotStart`. */
-export type AnswerRefusalKey = 'outOfCredits' | 'targetUnavailable' | 'generic';
+export type AnswerRefusalKey =
+  | 'outOfCredits'
+  | 'targetUnavailable'
+  | 'decideOpenPlanFirst'
+  | 'generic';
 
 const ANSWER_REFUSAL_KEY: Record<string, AnswerRefusalKey> = {
   MOTIR_AI_OUT_OF_CREDITS: 'outOfCredits',
   out_of_credits: 'outOfCredits',
   target_not_available: 'targetUnavailable',
+  // A kept request accepted while the plan the previous one opened is undecided
+  // (MOTIR-11521): the line tells the person which decision comes first.
+  open_plan_in_scope: 'decideOpenPlanFirst',
 };
 
 /** The line a refused Confirm or Decline draws in place of the actions. `code` is

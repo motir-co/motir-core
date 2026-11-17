@@ -9460,6 +9460,7 @@
         "planningUnavailable": "ここでは計画を開始できません。このプロジェクトで Motir AI が設定されていないか、作業項目を計画・編集する権限がありません。",
         "outOfCredits": "組織の AI クレジットが不足しているため、計画を開始できません。",
         "targetUnavailable": "{key} を開けなくなったため、計画を開始できません。",
+        "decideOpenPlanFirst": "ここにはまだ決定していない計画がすでにあります。先にそれを承認または却下してから、こちらを確認してください。",
         "generic": "この提案から計画を開始できません。"
       },
       "held": "これらの質問が終わったら、Motir AI が計画を提案します。",
@@ -9467,7 +9468,16 @@
       "clearEnough": "このまま計画できるほど明確です。",
       "nothingSettled": "何も決まらなかったので、依頼をそのまま計画します。",
       "requirementSaved": "要件ドキュメントに<link>{title}</link>として保存しました。",
-      "requirementPageNotSaved": "<lead>要件をページとして保存できませんでした。</lead>計画では引き続きこの要件を使用します。"
+      "requirementPageNotSaved": "<lead>要件をページとして保存できませんでした。</lead>計画では引き続きこの要件を使用します。",
+      "afterDecision": {
+        "lead": "計画があなたの判断を待っている間に、これを依頼されました。単独で計画したほうがよいため、新しい計画としてここで提案します。",
+        "cue": "リクエスト {position}/{total}。これを確定または却下すると、次のリクエストが提案されます。",
+        "cueLast": "リクエスト {position}/{total}、これが最後です。",
+        "confirmHelp": "確定すると、このリクエストの計画を新しい会話で開始します。",
+        "declineHelp": "却下するとこれは破棄され、何も計画されません。",
+        "cannotStartHelp": "却下するとこのリクエストは破棄され、次のリクエストが提案されます。",
+        "startedElsewhere": "計画は新しい会話で進みます。<link>開く</link>"
+      }
     },
     "logBugOffer": {
       "label": "バグ登録の提案",

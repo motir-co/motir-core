@@ -9454,6 +9454,7 @@
         "planningUnavailable": "无法在这里开始规划：此项目尚未配置 Motir AI，或没有规划和编辑工作项的权限。",
         "outOfCredits": "所在组织的 AI 额度已用完，因此无法开始规划。",
         "targetUnavailable": "已无法打开 {key}，因此无法开始规划。",
+        "decideOpenPlanFirst": "这里已有一个尚未决定的计划。请先批准或拒绝它，然后再确认这一个。",
         "generic": "无法从这条提议开始规划。"
       },
       "held": "这几问答完后，Motir AI 会提议规划。",
@@ -9461,7 +9462,16 @@
       "clearEnough": "已足够清楚，可以按原样规划。",
       "nothingSettled": "没有确定任何内容，所以会按请求原样规划。",
       "requirementSaved": "已保存为需求文档中的<link>{title}</link>。",
-      "requirementPageNotSaved": "<lead>无法将需求保存为页面。</lead>规划仍会使用该需求。"
+      "requirementPageNotSaved": "<lead>无法将需求保存为页面。</lead>规划仍会使用该需求。",
+      "afterDecision": {
+        "lead": "计划等待你决定时，你提出了这个请求。它更适合单独规划，所以这里把它作为一个新计划提供给你。",
+        "cue": "第 {position} 个请求，共 {total} 个。确认或拒绝这一个后，会提供下一个。",
+        "cueLast": "第 {position} 个请求，共 {total} 个，这是最后一个。",
+        "confirmHelp": "确认后将在一个新的对话中开始规划这个请求。",
+        "declineHelp": "拒绝会放弃它，不会规划任何内容。",
+        "cannotStartHelp": "拒绝会放弃这个请求，然后提供下一个。",
+        "startedElsewhere": "规划在一个新的对话中进行。<link>打开</link>"
+      }
     },
     "logBugOffer": {
       "label": "提议记录缺陷",

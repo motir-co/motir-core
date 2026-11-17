@@ -9463,6 +9463,7 @@
         "planningUnavailable": "Die Planung kann hier nicht starten: Motir AI ist für dieses Projekt nicht eingerichtet, oder Ihnen fehlt die Berechtigung, Arbeitselemente zu planen und zu bearbeiten.",
         "outOfCredits": "Ihre Organisation hat keine AI-Credits mehr, daher kann die Planung nicht starten.",
         "targetUnavailable": "Sie können {key} nicht mehr öffnen, daher kann die Planung nicht starten.",
+        "decideOpenPlanFirst": "Du hast hier bereits einen Plan, über den noch nicht entschieden ist. Genehmige oder lehne ihn zuerst ab und bestätige dann diesen.",
         "generic": "Die Planung kann aus diesem Angebot nicht starten."
       },
       "held": "Motir AI bietet die Planung an, sobald diese Fragen beantwortet sind.",
@@ -9470,7 +9471,16 @@
       "clearEnough": "Klar genug, um es wie beschrieben zu planen.",
       "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant.",
       "requirementSaved": "Gespeichert als <link>{title}</link> in den Anforderungsdokumenten.",
-      "requirementPageNotSaved": "<lead>Die Anforderung konnte nicht als Seite gespeichert werden.</lead> Die Planung verwendet sie trotzdem."
+      "requirementPageNotSaved": "<lead>Die Anforderung konnte nicht als Seite gespeichert werden.</lead> Die Planung verwendet sie trotzdem.",
+      "afterDecision": {
+        "lead": "Während der Plan auf Ihre Entscheidung wartete, haben Sie darum gebeten. Es lässt sich besser für sich planen, deshalb folgt es hier als neuer Plan.",
+        "cue": "Anfrage {position} von {total}. Die nächste wird angeboten, sobald Sie diese bestätigen oder ablehnen.",
+        "cueLast": "Anfrage {position} von {total}, die letzte.",
+        "confirmHelp": "Bestätigen startet die Planung dieser Anfrage in einer neuen Unterhaltung.",
+        "declineHelp": "Ablehnen verwirft sie, und es wird nichts geplant.",
+        "cannotStartHelp": "Ablehnen verwirft diese Anfrage, und die nächste wird angeboten.",
+        "startedElsewhere": "Die Planung läuft in einer neuen Unterhaltung. <link>Öffnen</link>"
+      }
     },
     "logBugOffer": {
       "label": "Angebot, einen Bug zu erfassen",

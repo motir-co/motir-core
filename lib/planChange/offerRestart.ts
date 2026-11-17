@@ -10,19 +10,27 @@ import type { SessionTurnPlanStatus } from '@/lib/planChange/classifySessionTurn
 // session that follows it.
 
 /** Which route a confirmed offer's start takes on its addressed session. */
-export type PlanOfferStartPath = 'restart' | 'submit' | 'no-start';
+export type PlanOfferStartPath = 'restart' | 'submit' | 'decided' | 'no-start';
 
 /**
- * The route, from the two facts that decide it. An ENDED session starts nothing,
- * whatever its plan (the confirm already happened, or the session expired). An open one
- * restarts when it holds an undecided plan — `generating`, `planned` or `stale`, each of
- * which `submit` routes away from a new plan — and submits when it holds none.
+ * The route, from the facts that decide it. A session a plan DECISION ended (`approved`
+ * or `declined`) takes `decided` (MOTIR-11521): the start opens a new conversation of its
+ * scope and the decided one stays ended — the caller admits only an offer of a kept
+ * too-far request there. Any other ENDED session starts nothing, whatever its plan (the
+ * confirm already happened, or the session expired). An open one restarts when it holds
+ * an undecided plan — `generating`, `planned` or `stale`, each of which `submit` routes
+ * away from a new plan — and submits when it holds none.
  */
 export function planOfferStartPath(input: {
   endedAt: Date | string | null;
+  endReason?: string | null;
   latestUndecidedStatus: SessionTurnPlanStatus | null;
 }): PlanOfferStartPath {
-  if (input.endedAt !== null) return 'no-start';
+  if (input.endedAt !== null) {
+    return input.endReason === 'approved' || input.endReason === 'declined'
+      ? 'decided'
+      : 'no-start';
+  }
   return input.latestUndecidedStatus === null ? 'submit' : 'restart';
 }
 

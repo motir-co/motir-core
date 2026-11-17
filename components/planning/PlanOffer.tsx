@@ -8,6 +8,7 @@ import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import type { SettledAnswer, SharpenAssumption } from '@/lib/ai/types';
 import type { PlanAnswerOfferDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
+import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
 import { answerRefusalKey, cannotStartKey, logBugRefusalKey } from '@/lib/planning/planOfferRow';
 
 // THE PLAN OFFER on an answer turn (Story MOTIR-9219 · MOTIR-9294; design
@@ -43,6 +44,42 @@ export interface PlanOfferSettled {
   settled: readonly SettledAnswer[];
   assumptions: readonly SharpenAssumption[];
   empty: 'clearEnough' | 'nothingSettled';
+}
+
+/**
+ * THE DECIDED CONVERSATION'S CONFIRMED LINE (Story MOTIR-11515 · MOTIR-11521; design
+ * `design/ai-chat/plan-offer--after-decision.mock.html`, `plan-offer-started-elsewhere`):
+ * a kept request's confirm opens a NEW conversation, so the line links it instead of
+ * saying it runs here. Its own component, so the navigation hooks run only where drawn.
+ */
+function StartedElsewhereLine({
+  sessionId,
+  anchorKey,
+}: {
+  sessionId: string;
+  anchorKey: string | null;
+}) {
+  const t = useTranslations('planningWorkspace.planOffer.afterDecision');
+  const { href, open } = useOpenPlanningWorkspace(
+    anchorKey
+      ? { kind: 'work-item', itemKey: anchorKey, sessionId }
+      : { kind: 'project', sessionId },
+  );
+  return (
+    <p className="text-xs text-(--el-text-secondary)" data-testid="plan-offer-started-elsewhere">
+      {t.rich('startedElsewhere', {
+        link: (chunks) => (
+          <a
+            href={href}
+            onClick={open}
+            className="rounded-(--radius-control) font-medium text-(--el-link) underline hover:text-(--el-link-pressed) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            {chunks}
+          </a>
+        ),
+      })}
+    </p>
+  );
 }
 
 /** A long request clamps to this many characters' worth of room until *Show all*. */
@@ -233,8 +270,12 @@ export function PlanOffer({
 }: PlanOfferProps) {
   const t = useTranslations('planningWorkspace.planOffer');
   const tb = useTranslations('planningWorkspace.logBugOffer');
+  const ta = useTranslations('planningWorkspace.planOffer.afterDecision');
   const format = useFormatter();
   const bug = offer.kind === 'log_bug';
+  // A kept too-far request offered after a decision (MOTIR-11521): its own help copy, a
+  // confirmed line that links the new conversation, and Decline kept when it cannot start.
+  const afterDecision = !bug && offer.afterDecision !== undefined;
   const [expanded, setExpanded] = useState(false);
   const [pressed, setPressed] = useState<'confirm' | 'decline' | null>(null);
 
@@ -257,8 +298,10 @@ export function PlanOffer({
   }
 
   // AN OFFER THAT CANNOT START draws no panel and no Decline: there is nothing to
-  // confirm and nothing to decline (design, second review).
-  if (state === 'undecided' && offer.cannotStart) {
+  // confirm and nothing to decline (design, second review). On a DECIDED conversation it
+  // keeps its panel and its Decline (MOTIR-11521): declining is the only way to move on
+  // to the next kept request.
+  if (state === 'undecided' && offer.cannotStart && !afterDecision) {
     if (bug) {
       return (
         <AnswerLine testId="plan-offer-cannot-start" reason={offer.cannotStart}>
@@ -297,6 +340,10 @@ export function PlanOffer({
     sessionTargetKeys.length > 0 &&
     !sessionTargetKeys.some((k) => sameKey(k, target));
   const refusalKey = live && refusal !== null && !bug ? answerRefusalKey(refusal) : null;
+  // The served reason a decided conversation's offer cannot start, drawn in Confirm's
+  // place with Decline beside it.
+  const decidedCannotStart =
+    afterDecision && live && offer.cannotStart ? cannotStartKey(offer.cannotStart) : null;
   const bugRefusalKey = live && refusal !== null && bug ? logBugRefusalKey(refusal) : null;
   const label = bug ? tb('label') : variant ? t('labelMidPlanning') : t('label');
   const confirming = answering && pressed === 'confirm';
@@ -373,8 +420,16 @@ export function PlanOffer({
                 : t('startedBy', { when: when(offer.confirmedAt) })}
             </p>
           ) : null}
-          {/* A bug offer's result is the outcome line in the answer above. */}
-          {bug ? null : <p className="text-xs text-(--el-text-secondary)">{t('startedHere')}</p>}
+          {/* A bug offer's result is the outcome line in the answer above. A kept
+              request's plan runs in the new conversation its confirm opened. */}
+          {bug ? null : afterDecision && offer.confirmedSessionId ? (
+            <StartedElsewhereLine
+              sessionId={offer.confirmedSessionId}
+              anchorKey={sessionTargetKeys[0] ?? null}
+            />
+          ) : (
+            <p className="text-xs text-(--el-text-secondary)">{t('startedHere')}</p>
+          )}
           {requirementOffer && offer.requirementPage ? (
             <p
               className="text-xs text-(--el-text-secondary)"
@@ -421,7 +476,40 @@ export function PlanOffer({
             {bug ? tb('recorded') : t('recorded')}
           </p>
         </div>
-      ) : !live ? null : bugRefusalKey ? (
+      ) : !live ? null : decidedCannotStart ? (
+        <>
+          <p
+            className="flex items-start gap-1.5 border-l-2 border-(--el-border-strong) pl-2 text-xs text-(--el-text)"
+            data-testid="plan-offer-cannot-start"
+            data-reason={offer.cannotStart ?? undefined}
+          >
+            <Lock className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>
+              {decidedCannotStart.kind === 'beingPlanned'
+                ? t('beingPlanned', { key: target ?? '' })
+                : t(`cannotStart.${decidedCannotStart.key}`)}
+            </span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              data-testid="plan-offer-decline"
+              loading={declining}
+              disabled={disabled}
+              onClick={() => {
+                setPressed('decline');
+                onDecline?.(turnId);
+              }}
+            >
+              {declining ? t('declining') : t('decline')}
+            </Button>
+          </div>
+          <p className="text-xs leading-relaxed text-(--el-text-secondary)">
+            {ta('cannotStartHelp')}
+          </p>
+        </>
+      ) : bugRefusalKey ? (
         <p
           className="flex items-start gap-1.5 border-l-2 border-(--el-border-strong) pl-2 text-xs text-(--el-text)"
           data-testid="plan-offer-cannot-start"
@@ -479,7 +567,9 @@ export function PlanOffer({
           <p className="text-xs leading-relaxed text-(--el-text-secondary)">
             {bug
               ? `${tb('confirmHelp')} ${tb('declineHelp')}`
-              : `${target !== null ? t('confirmHelp', { key: target }) : t('confirmHelpNoTarget')} ${t('declineHelp')}`}
+              : afterDecision
+                ? `${ta('confirmHelp')} ${ta('declineHelp')}`
+                : `${target !== null ? t('confirmHelp', { key: target }) : t('confirmHelpNoTarget')} ${t('declineHelp')}`}
           </p>
         </>
       )}

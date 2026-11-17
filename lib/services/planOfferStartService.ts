@@ -13,6 +13,7 @@ import {
 } from '@/lib/services/contextualPlanningService';
 import { appendWithin, planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { planOfferService } from '@/lib/services/planOfferService';
+import { farRequestOfferService, farRequestTurnIdOf } from '@/lib/services/farRequestOfferService';
 import { requirementPageSaveService } from '@/lib/services/requirementPageSaveService';
 import type { RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -288,9 +289,13 @@ async function winnerOf(
 }
 
 /** How a claimed start proceeds: on its own conversation (`submit`), through the
- *  mid-planning restart (`restart`), or on the successor an earlier restart of this same
- *  offer already put its request on, whose start then threw (`resume`). */
-type ClaimOutcome = { kind: 'claimed'; path: 'submit' | 'restart' | 'resume' } | { kind: 'lost' };
+ *  mid-planning restart (`restart`), on the successor an earlier restart of this same
+ *  offer already put its request on, whose start then threw (`resume`), or — for a kept
+ *  too-far request offered after a plan decision (MOTIR-11521) — on a NEW conversation
+ *  of the decided one's scope (`decided`). */
+type ClaimOutcome =
+  | { kind: 'claimed'; path: 'submit' | 'restart' | 'resume' | 'decided' }
+  | { kind: 'lost' };
 
 /**
  * Claim the offer under the conversation's lock. An offer with no target, starting on
@@ -312,13 +317,6 @@ async function claimOffer(
 ): Promise<ClaimOutcome> {
   return withWorkspaceContext(txScope(pctx), async (tx) => {
     const conversation = await lockOwnConversation(pctx, input.conversationId, tx);
-    // Ended by the caller's own restart: only the retry of a restart whose start threw
-    // may still start here, on the successor. Any other end refuses.
-    const restartedByCaller =
-      conversation.endReason === 'restarted' && conversation.endedById === pctx.userId;
-    if (conversation.endedAt && !restartedByCaller) {
-      throw new PlanSessionEndedError(conversation.id);
-    }
     const rows = await planChangeTurnRepository.listBySessionId(
       input.conversationId,
       pctx.workspaceId,
@@ -326,6 +324,18 @@ async function claimOffer(
     );
     const offerRow = rows.find((t) => t.id === input.offerTurnId);
     const offer = offerRow && offerRow.role === 'assistant' ? offerJson(offerRow) : null;
+    // Ended by the caller's own restart: only the retry of a restart whose start threw
+    // may still start here, on the successor. Ended by a plan DECISION: only an offer of
+    // a kept too-far request may start, on a new conversation (MOTIR-11521). Any other
+    // end refuses — and so does a shipped offer on a decided conversation.
+    const restartedByCaller =
+      conversation.endReason === 'restarted' && conversation.endedById === pctx.userId;
+    const decidedFarRequest =
+      (conversation.endReason === 'approved' || conversation.endReason === 'declined') &&
+      farRequestTurnIdOf(offer) !== null;
+    if (conversation.endedAt && !restartedByCaller && !decidedFarRequest) {
+      throw new PlanSessionEndedError(conversation.id);
+    }
     if (!offerRow || !offer) throw new PlanChangeTurnNotFoundError(input.offerTurnId);
     // Taken by a door that committed first: the loser's cue to read the winner.
     if (typeof offer['confirmedAt'] === 'string') return { kind: 'lost' };
@@ -336,6 +346,7 @@ async function claimOffer(
       : await planChangeSessionsService.heldPlanOf(pctx, { sessionId: input.conversationId }, tx);
     const route = planOfferStartPath({
       endedAt: conversation.endedAt,
+      endReason: conversation.endReason,
       latestUndecidedStatus: held?.status ?? null,
     });
     const path = route === 'no-start' ? 'resume' : route;
@@ -346,6 +357,15 @@ async function claimOffer(
       tx,
     );
     if (!claimed) return { kind: 'lost' };
+    // The kept request is consumed in the claim's own transaction, so the two commit, and
+    // are released (`releaseOffer`), together.
+    if (path === 'decided') {
+      await farRequestOfferService.consumeForOffer(
+        offer,
+        { sessionId: input.conversationId, workspaceId: pctx.workspaceId },
+        tx,
+      );
+    }
     if (input.hasRequirement) {
       await requirementPageSaveService.requestAfterCommit({
         workspaceId: pctx.workspaceId,
@@ -419,6 +439,22 @@ async function releaseOffer(pctx: ProjectContext, conversationId: string, offerT
   await withWorkspaceContext(txScope(pctx), async (tx) => {
     await lockOwnConversation(pctx, conversationId, tx);
     await planChangeTurnRepository.releaseAnswerOfferStart(offerTurnId, pctx.workspaceId, tx);
+    // A kept too-far request the claim consumed is kept again (MOTIR-11521), so the offer
+    // and its request are pending together. Nothing to give back on any other offer.
+    const row = await planChangeTurnRepository.findByIdInSession(
+      offerTurnId,
+      conversationId,
+      pctx.workspaceId,
+      tx,
+    );
+    const offer = row ? offerJson(row) : null;
+    if (offer && typeof offer['confirmedSessionId'] !== 'string') {
+      await farRequestOfferService.releaseForOffer(
+        offer,
+        { sessionId: conversationId, workspaceId: pctx.workspaceId },
+        tx,
+      );
+    }
   });
 }
 
@@ -557,6 +593,23 @@ export const planOfferStartService = {
   },
 };
 
+/**
+ * A replayed or losing confirm's answer: the winner's start. A winner on a DECIDED
+ * conversation (MOTIR-11521) may have stamped its start and then failed to offer the next
+ * kept request, so the replay offers it — idempotent, and a no-op on every other
+ * conversation, which `offerNext` reads as not decided.
+ */
+async function answerWinner(
+  pctx: ProjectContext,
+  conversationId: string,
+  winner: PlanOfferStartResult,
+): Promise<PlanOfferStartResult> {
+  if (winner.sessionId !== conversationId) {
+    await farRequestOfferService.offerNextAfterCommit(txScope(pctx), conversationId, 'a confirm');
+  }
+  return winner;
+}
+
 async function confirm(
   pctx: ProjectContext,
   input: { conversationId: string; offerTurnId: string },
@@ -566,7 +619,7 @@ async function confirm(
   const read = await readOffer(pctx, input.conversationId, input.offerTurnId);
   if (read.kind !== 'open') {
     const winner = await winnerOf(pctx, input.conversationId, input.offerTurnId);
-    if (winner) return winner;
+    if (winner) return answerWinner(pctx, input.conversationId, winner);
     if (attempts <= 1) throw new PlanOfferStartRefusedError('offer_not_open');
     return confirm(pctx, input, attempts - 1);
   }
@@ -592,7 +645,7 @@ async function confirm(
   });
   if (claim.kind === 'lost') {
     const winner = await winnerOf(pctx, input.conversationId, input.offerTurnId);
-    if (winner) return winner;
+    if (winner) return answerWinner(pctx, input.conversationId, winner);
     if (attempts <= 1) throw new PlanOfferStartRefusedError('offer_not_open');
     return confirm(pctx, input, attempts - 1);
   }
@@ -626,6 +679,15 @@ async function confirm(
         throw new PlanOfferStartRefusedError('offer_not_open');
       }
       started = await submitOn(pctx, restarted.session.id, composed);
+    } else if (claim.path === 'decided') {
+      // A KEPT TOO-FAR REQUEST, offered after the plan decision (MOTIR-11521): it plans
+      // on a NEW conversation of the decided one's scope, opened with the request as its
+      // first turn; the decided conversation stays ended and is never reopened.
+      const successor = await planChangeSessionsService.openForDecidedOffer(pctx, {
+        scope,
+        requestMd: offer.requestMd,
+      });
+      started = await submitOn(pctx, successor.id, composed);
     } else if (claim.path === 'resume') {
       const successor = await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
       const last = successor?.turns.at(-1);
@@ -657,5 +719,13 @@ async function confirm(
     throw err;
   }
   await stampOffer(pctx, input.conversationId, input.offerTurnId, started);
+  // The request this offer was for is consumed, so the next kept one is offered now.
+  if (claim.path === 'decided') {
+    await farRequestOfferService.offerNextAfterCommit(
+      txScope(pctx),
+      input.conversationId,
+      'a confirm',
+    );
+  }
   return started;
 }

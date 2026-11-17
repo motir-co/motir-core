@@ -9460,6 +9460,7 @@
         "planningUnavailable": "Planning can’t start here: Motir AI isn’t set up for this project, or you don’t have permission to plan and edit work items.",
         "outOfCredits": "Your organization is out of AI credits, so planning can’t start.",
         "targetUnavailable": "You can no longer open {key}, so planning can’t start.",
+        "decideOpenPlanFirst": "You already have a plan here that isn’t decided yet. Approve or decline it first, then confirm this one.",
         "generic": "Planning can’t start from this offer."
       },
       "held": "Motir AI will offer to plan when these questions are done.",
@@ -9467,7 +9468,16 @@
       "clearEnough": "Clear enough to plan as stated.",
       "nothingSettled": "Nothing was settled, so the request is planned as stated.",
       "requirementSaved": "Saved as <link>{title}</link> in Requirements Docs.",
-      "requirementPageNotSaved": "<lead>Couldn’t save the requirement as a page.</lead> Planning still uses it."
+      "requirementPageNotSaved": "<lead>Couldn’t save the requirement as a page.</lead> Planning still uses it.",
+      "afterDecision": {
+        "lead": "While the plan was waiting for your decision, you asked for this. It’s better planned on its own, so here it is as a new plan.",
+        "cue": "Request {position} of {total}. The next one is offered once you confirm or decline this one.",
+        "cueLast": "Request {position} of {total}, the last one.",
+        "confirmHelp": "Confirm starts planning this request in a new conversation.",
+        "declineHelp": "Decline drops it, and nothing is planned.",
+        "cannotStartHelp": "Decline drops this request, and the next one is offered.",
+        "startedElsewhere": "Planning runs in a new conversation. <link>Open it</link>"
+      }
     },
     "logBugOffer": {
       "label": "Offer to log a bug",

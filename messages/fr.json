@@ -9463,6 +9463,7 @@
         "planningUnavailable": "La planification ne peut pas démarrer ici : Motir AI n’est pas configuré pour ce projet, ou vous n’avez pas l’autorisation de planifier et de modifier des éléments de travail.",
         "outOfCredits": "Votre organisation n’a plus de crédits AI, la planification ne peut donc pas démarrer.",
         "targetUnavailable": "Vous ne pouvez plus ouvrir {key}, la planification ne peut donc pas démarrer.",
+        "decideOpenPlanFirst": "Vous avez déjà ici un plan qui n’est pas encore décidé. Approuvez-le ou refusez-le d’abord, puis confirmez celui-ci.",
         "generic": "La planification ne peut pas démarrer à partir de cette offre."
       },
       "held": "Motir AI proposera de planifier une fois ces questions terminées.",
@@ -9470,7 +9471,16 @@
       "clearEnough": "Assez clair pour être planifié tel quel.",
       "nothingSettled": "Rien n’a été arrêté, la requête est donc planifiée telle quelle.",
       "requirementSaved": "Enregistré sous <link>{title}</link> dans les Documents d’exigences.",
-      "requirementPageNotSaved": "<lead>Impossible d’enregistrer l’exigence comme page.</lead> La planification l’utilise quand même."
+      "requirementPageNotSaved": "<lead>Impossible d’enregistrer l’exigence comme page.</lead> La planification l’utilise quand même.",
+      "afterDecision": {
+        "lead": "Pendant que le plan attendait votre décision, vous avez demandé ceci. Il vaut mieux le planifier à part, le voici donc comme un nouveau plan.",
+        "cue": "Requête {position} sur {total}. La suivante est proposée dès que vous confirmez ou refusez celle-ci.",
+        "cueLast": "Requête {position} sur {total}, la dernière.",
+        "confirmHelp": "Confirmer lance la planification de cette requête dans une nouvelle conversation.",
+        "declineHelp": "Refuser l’abandonne, et rien n’est planifié.",
+        "cannotStartHelp": "Refuser abandonne cette requête, et la suivante est proposée.",
+        "startedElsewhere": "La planification se déroule dans une nouvelle conversation. <link>L’ouvrir</link>"
+      }
     },
     "logBugOffer": {
       "label": "Proposition de consigner un bug",

@@ -64,6 +64,7 @@ import type {
   AnswerOfferInput,
   CopyableSessionDto,
   DebugLandingDto,
+  KeptFarRequestDto,
   PlanChangeSessionDto,
   PlanChangeSubmitResultDto,
   PlanOfferRestartResultDto,
@@ -542,7 +543,9 @@ async function appendLocked(
  */
 export async function appendWithin(
   sessionId: string,
-  pctx: ProjectContext,
+  // Only the tenancy pair is read, so a machine writer holding no ProjectDTO (the
+  // after-decision offer, MOTIR-11521) can append too.
+  pctx: Pick<ProjectContext, 'workspaceId' | 'projectId'>,
   turn: AppendTurn,
   patch: PlanChangeSessionUpdateInput,
   tx: Prisma.TransactionClient,
@@ -627,6 +630,15 @@ export async function appendWithin(
                       bug: JSON.parse(
                         JSON.stringify(turn.answerOffer.bug),
                       ) as Prisma.InputJsonObject,
+                    }
+                  : {}),
+                // The kept too-far request a decision offers (MOTIR-11521): which turn
+                // it came from, and its place among the conversation's kept requests.
+                ...(turn.answerOffer.farRequest
+                  ? {
+                      farRequestTurnId: turn.answerOffer.farRequest.turnId,
+                      farRequestPosition: turn.answerOffer.farRequest.position,
+                      farRequestTotal: turn.answerOffer.farRequest.total,
                     }
                   : {}),
                 declinedAt: null,
@@ -2513,6 +2525,87 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * KEEP a request the planner judged TOO FAR from the waiting plan (MOTIR-11518) on the
+   * person's `user` turn that asked it. Under the session's row lock, in one transaction;
+   * a compare-and-set on null, so a replayed settle never writes it twice nor overwrites
+   * it. `true` when this call kept it.
+   */
+  async recordFarRequest(
+    turnId: string,
+    requirement: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<boolean> {
+    const trimmed = requirement.trim();
+    if (!trimmed) return false;
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        return planChangeTurnRepository.setFarRequest(
+          turnId,
+          { sessionId: session.id, workspaceId: pctx.workspaceId },
+          trimmed,
+          tx,
+        );
+      },
+    );
+  },
+
+  /**
+   * The too-far requests this conversation KEEPS (MOTIR-11518): each one's source turn,
+   * position and requirement, in the order they were asked, until it is consumed. Read
+   * under the session's row lock, so it cannot interleave with a keep or a consume.
+   */
+  async listKeptFarRequests(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<KeptFarRequestDto[]> {
+    const session = await requireSession(pctx, address);
+    const rows = await withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        return planChangeTurnRepository.listKeptFarRequests(session.id, pctx.workspaceId, tx);
+      },
+    );
+    return rows.flatMap((r) =>
+      r.farRequestRequirement
+        ? [{ turnId: r.id, seq: r.seq, requirement: r.farRequestRequirement }]
+        : [],
+    );
+  },
+
+  /**
+   * CONSUME a kept too-far request (MOTIR-11518) — the one write an accepted or declined
+   * offer of it makes. `true` when this call consumed it; a second call, a turn keeping
+   * nothing, or a turn of another conversation writes nothing and answers `false`. Under
+   * the session's row lock, in one transaction.
+   */
+  async consumeKeptFarRequest(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+    turnId: string,
+  ): Promise<boolean> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        return planChangeTurnRepository.markFarRequestConsumed(
+          turnId,
+          { sessionId: session.id, workspaceId: pctx.workspaceId },
+          tx,
+        );
+      },
+    );
+  },
+
+  /**
    * KEEP PLANNING (MOTIR-7649; ADR AMENDMENT 3, A3.2): the confirm's second
    * answer. Writes the `system` marker that answers a PENDING confirm and closes
    * nothing. With no confirm pending (already answered, superseded by a later
@@ -2779,6 +2872,51 @@ export const planChangeSessionsService = {
         session: await toDto(row, pctx, tx),
         ownsStart: true,
       };
+    });
+  },
+
+  /**
+   * OPEN THE CONVERSATION a kept too-far request plans in, once its own conversation was
+   * ended by a plan DECISION (MOTIR-11521): the caller's open session of `scope`, resumed
+   * or started under the scope lock, with the request appended as its `user` turn — the
+   * mid-planning restart's steps, minus the end, which the decision already made. The
+   * decided conversation is never touched. A retry after a submit that threw finds the
+   * request already the session's last turn and appends nothing. A session of that scope
+   * that already holds an undecided plan refuses `open_plan_in_scope`: submitting there
+   * would revise that plan, not plan the request, and a second open conversation of the
+   * scope cannot hold its cards (AMENDMENT 23 §3), so the person decides that plan first
+   * — above all the one the previous kept request opened. The refusal says so on the
+   * offer, which stays pending.
+   */
+  async openForDecidedOffer(
+    pctx: ProjectContext,
+    input: { scope: PlanChangeScope; requestMd: string },
+  ): Promise<PlanChangeSessionDto> {
+    const request = input.requestMd.trim();
+    if (!request) throw new EmptyPlanChangeTurnError();
+    const txCtx = { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId };
+    return withWorkspaceContext(txCtx, async (tx) => {
+      const sessionId = await resumeOrStartWithin(pctx, input.scope, new Date(), tx);
+      if (await planRepository.findLatestUndecidedBySession(sessionId, tx)) {
+        throw new PlanOfferStartRefusedError('open_plan_in_scope');
+      }
+      const row = await appendWithin(
+        sessionId,
+        pctx,
+        { role: 'user', body: request, authorId: pctx.userId },
+        {},
+        tx,
+        async (t: Prisma.TransactionClient) => {
+          const turns = await planChangeTurnRepository.listBySessionId(
+            sessionId,
+            pctx.workspaceId,
+            t,
+          );
+          const last = turns.at(-1);
+          return last?.role === 'user' && last.body === request;
+        },
+      );
+      return toDto(row, pctx, tx);
     });
   },
 
