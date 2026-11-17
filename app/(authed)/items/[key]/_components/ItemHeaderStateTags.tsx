@@ -21,6 +21,7 @@ export function ItemHeaderStateTags({
   item,
   statuses,
   hasChildren,
+  planHeld = false,
   unblocked,
 }: {
   item: {
@@ -32,6 +33,9 @@ export function ItemHeaderStateTags({
   /** The project's workflow — the displayed status's label and category. */
   statuses: readonly WorkflowStatusDto[];
   hasChildren: boolean;
+  /** HELD out of planning (MOTIR-11546): a story blocked by an unfinished story
+   *  with no subtasks yet — not To plan, so the slot draws the status chip. */
+  planHeld?: boolean;
   /** The readiness verdict: own blockers done and every ancestor ready. */
   unblocked: boolean;
 }) {
@@ -49,6 +53,7 @@ export function ItemHeaderStateTags({
           statusLabel: meta?.label ?? null,
           statusCategory,
           hasChildren,
+          planHeld,
           type: item.type,
           executor: item.executor,
         }}

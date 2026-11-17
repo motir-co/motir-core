@@ -22,6 +22,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
+import { plannabilityService } from '@/lib/services/plannabilityService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
@@ -909,12 +910,16 @@ export const boardsService = {
     const withChildren = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.findParentIdsWithLiveChildren([row.id], ctx.workspaceId, tx),
     );
+    // …and whether it is held out of planning (MOTIR-11546): a move changes
+    // neither its blockers nor theirs, but the returned card replaces the loaded one.
+    const planHeld = await plannabilityService.isHeld(row, ctx.workspaceId);
     return {
       card: toBoardCardDto(row, {
         ready,
         readyToStart: isReadyToStart(appliedStatusCategory, ready),
         statusLabel: appliedStatusLabel,
         hasChildren: withChildren.has(row.id),
+        planHeld,
         pendingDecision: pendingById.get(row.id) ?? null,
         review: reviewById[row.id] ?? null,
         planHold: planHoldById.get(row.id) ?? null,
@@ -2160,6 +2165,13 @@ async function decorateBoardRows(
   const withChildren = await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
     workItemRepository.findParentIdsWithLiveChildren(ids, readCtx.workspaceId, tx),
   );
+  // …and which loaded stories are HELD out of planning (MOTIR-11546) — blocked by
+  // an unfinished story with no subtasks — so the slot does not draw them To plan.
+  // ONE blocker read for the page. A Visitor's withheld blockers are left out,
+  // as the roadmap level leaves them out.
+  const heldIds = await plannabilityService.heldStoryIds(rows, readCtx.workspaceId, {
+    excludeBlockerIds: frame.excludeIds ?? [],
+  });
 
   // The decision-waiting marker (Story MOTIR-4908 · MOTIR-5876): which cards have
   // an awaiting gate, and whether it is this reader's — ONE gate query. A Visitor
@@ -2224,6 +2236,7 @@ async function decorateBoardRows(
       // A Visitor's private epic reads childless, as the roadmap's root does:
       // the card must not say what the Visitor may not see.
       hasChildren: childrenHidden ? false : withChildren.has(r.id),
+      planHeld: heldIds.has(r.id),
       pendingDecision: pendingById.get(r.id) ?? null,
       review: reviewById[r.id] ?? null,
       planHold: planHoldRead.byItemId.get(r.id) ?? null,
