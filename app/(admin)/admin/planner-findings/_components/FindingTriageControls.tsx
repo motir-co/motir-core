@@ -56,6 +56,7 @@ type InlineForm = 'attribution' | 'promote' | 'bug';
 type RetryableCode = 'NOT_PERMITTED' | 'INVALID' | 'UNAVAILABLE' | 'FAILED';
 type Failure =
   | { act: Act; code: RetryableCode }
+  | { act: 'bug'; code: 'NOT_A_WORK_ITEM'; key: string }
   | { act: 'promote'; code: 'DUPLICATE_LESSON'; detail: string };
 type Notice = { tone: 'success' | 'warning'; text: string };
 
@@ -190,6 +191,10 @@ function Controls({ detail }: { detail: PlannerFindingDetailDTO }) {
         setConfirm(null);
         setFailure({ act: 'promote', code: 'DUPLICATE_LESSON', detail: result.detail });
         return;
+      case 'NOT_A_WORK_ITEM':
+        // Only the bug-key form writes a key; the entry stays so it can be corrected.
+        setFailure({ act: 'bug', code: 'NOT_A_WORK_ITEM', key: bugKey.trim().toUpperCase() });
+        return;
       default:
         // The form keeps every entry; only the promote confirm steps aside so
         // the error sits under the form it belongs to (design Panel 13).
@@ -220,20 +225,22 @@ function Controls({ detail }: { detail: PlannerFindingDetailDTO }) {
         text={
           failure.code === 'DUPLICATE_LESSON'
             ? t('promote.duplicate')
-            : t(
-                (
-                  {
-                    NOT_PERMITTED: 'refused.notPermitted',
-                    INVALID: 'refused.invalid',
-                    UNAVAILABLE: 'refused.unavailable',
-                    FAILED: 'refused.failed',
-                  } as const
-                )[failure.code],
-              )
+            : failure.code === 'NOT_A_WORK_ITEM'
+              ? t('recordPage.findingKey.notAWorkItem', { key: failure.key })
+              : t(
+                  (
+                    {
+                      NOT_PERMITTED: 'refused.notPermitted',
+                      INVALID: 'refused.invalid',
+                      UNAVAILABLE: 'refused.unavailable',
+                      FAILED: 'refused.failed',
+                    } as const
+                  )[failure.code],
+                )
         }
         detail={failure.code === 'DUPLICATE_LESSON' ? failure.detail : null}
         retry={
-          failure.code === 'DUPLICATE_LESSON'
+          failure.code === 'DUPLICATE_LESSON' || failure.code === 'NOT_A_WORK_ITEM'
             ? null
             : { label: t('triage.retry'), onRetry: () => run(act), disabled: busy }
         }

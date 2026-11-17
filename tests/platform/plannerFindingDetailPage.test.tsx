@@ -176,6 +176,20 @@ describe('gate, 404 and shell', () => {
     expect(link).toContain('href="/admin/planner-findings/records/rec%207"');
     expect(link).toContain('>rec 7</a>');
   });
+
+  it('shows a key linked from the record page whatever the status, and no row when there is none (MOTIR-11635)', async () => {
+    const row = (html: string) =>
+      /data-testid="planner-finding-bug-key"[\s\S]*?<\/p>/.exec(html)?.[0] ?? '';
+    const keyed = row(await open({ status: 'new', bugKey: 'MOTIR-77' }));
+    expect(keyed).toContain(pf.recordPage.findingKey.column);
+    expect(keyed).toContain('>MOTIR-77</span>');
+    expect(row(await open({ status: 'filed_as_bug', bugKey: 'MOTIR-42' }))).toContain(
+      '>MOTIR-42</span>',
+    );
+    expect(await open({ status: 'new', bugKey: null })).not.toContain(
+      'data-testid="planner-finding-bug-key"',
+    );
+  });
 });
 
 describe('fields', () => {

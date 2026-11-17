@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations } from 'next-intl/server';
-import { BookOpen, ChevronLeft, ClipboardList } from 'lucide-react';
+import { BookOpen, Bug, ChevronLeft, ClipboardList } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { MotirAiError, PlannerFindingNotFoundError } from '@/lib/ai/errors';
 import type { PlannerFindingDetailDTO } from '@/lib/dto/plannerFindings';
@@ -85,6 +85,7 @@ export default async function AdminPlannerFindingPage({
           <TriageChip status={detail.status} label={status} />
         </div>
         <RecordLink recordId={detail.recordId} label={t('detail.record')} />
+        <BugKeyRow bugKey={detail.bugKey} label={t('recordPage.findingKey.column')} />
         <TriageState detail={detail} triagedByName={triagedByName} />
       </header>
       {/* Below operator the controls render nothing: the writes need operator (MOTIR-10525). */}
@@ -121,6 +122,26 @@ function BackLink({ label }: { label: string }) {
  * record id, linking to the record page. Every finding belongs to exactly one
  * record (the relation is required and backfilled), so it always renders.
  */
+/**
+ * The finding's PLANNING BUG KEY row (MOTIR-11635). A key linked from the record
+ * page (MOTIR-11590) leaves the status as it was, so the key is drawn here on
+ * its own whatever the status: the stored text, exactly the value the record
+ * page's key cell shows, and nothing at all when the finding has none.
+ */
+function BugKeyRow({ bugKey, label }: { bugKey: string | null; label: string }) {
+  if (!bugKey) return null;
+  return (
+    <p
+      data-testid="planner-finding-bug-key"
+      className="flex items-center gap-1.5 font-sans text-sm text-(--el-text-secondary)"
+    >
+      <Bug aria-hidden className="h-3.5 w-3.5 shrink-0" />
+      {label}
+      <span className="font-mono text-xs break-all text-(--el-text)">{bugKey}</span>
+    </p>
+  );
+}
+
 function RecordLink({ recordId, label }: { recordId: string; label: string }) {
   return (
     <p

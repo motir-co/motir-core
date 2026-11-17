@@ -48,7 +48,14 @@ export type PlannerFindingActionResult =
   | { ok: true; finding: PlannerFindingRowDTO }
   | {
       ok: false;
-      code: 'NOT_PERMITTED' | 'GONE' | 'UNCHANGED' | 'INVALID' | 'UNAVAILABLE' | 'FAILED';
+      code:
+        | 'NOT_PERMITTED'
+        | 'GONE'
+        | 'UNCHANGED'
+        | 'INVALID'
+        | 'NOT_A_WORK_ITEM'
+        | 'UNAVAILABLE'
+        | 'FAILED';
     }
   | { ok: false; code: 'LESSON_NOT_LINKED'; lessonId: string }
   | { ok: false; code: 'DUPLICATE_LESSON'; detail: string };
@@ -74,7 +81,11 @@ function refused(err: unknown, findingId: string, act: string): PlannerFindingAc
     return { ok: false, code: 'UNCHANGED' };
   }
   // A bug key naming no work item in the finding's project (MOTIR-11590) is an
-  // input the admin must correct, drawn as the control's existing INVALID answer.
+  // input the admin must correct. It gets its own code so the form says so in
+  // the record page's words, rather than blaming the planning service.
+  if (err instanceof PlannerFindingKeyRefusedError && err.reason === 'not_a_work_item') {
+    return { ok: false, code: 'NOT_A_WORK_ITEM' };
+  }
   if (
     err instanceof PlannerFindingInvalidError ||
     err instanceof PlannerFindingKeyRefusedError ||

@@ -228,6 +228,12 @@ describe('the refusal mapping', () => {
     [
       'PlannerFindingKeyRefusedError',
       new PlannerFindingKeyRefusedError('not_a_work_item'),
+      { code: 'NOT_A_WORK_ITEM' },
+      false,
+    ],
+    [
+      'PlannerFindingKeyRefusedError (record_open)',
+      new PlannerFindingKeyRefusedError('record_open'),
       { code: 'INVALID' },
       false,
     ],

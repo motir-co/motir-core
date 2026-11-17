@@ -377,6 +377,25 @@ describe('record a bug key', () => {
     expect(screen.getByRole('status').textContent).toBe('Recorded bug MOTIR-123.');
     expect(document.body.textContent).not.toMatch(/filed from|created a bug|work item/i);
   });
+
+  it("a key outside the finding's project says so in the record page's words, keeps the entry and offers no retry", async () => {
+    actions.setPlannerFindingBugKeyAction.mockResolvedValueOnce({
+      ok: false,
+      code: 'NOT_A_WORK_ITEM',
+    });
+    mount();
+    fireEvent.click(button(pf.bug.open));
+    type(pf.bug.label, 'other-9');
+    await click(pf.bug.save);
+    const error = screen.getByTestId('planner-finding-triage-error');
+    expect(error.getAttribute('role')).toBe('alert');
+    expect(error.textContent).toContain(
+      pf.recordPage.findingKey.notAWorkItem.replace('{key}', 'OTHER-9'),
+    );
+    expect(error.textContent).not.toContain(pf.refused.invalid);
+    expect(screen.queryByRole('button', { name: pf.triage.retry })).toBeNull();
+    expect((screen.getByLabelText(pf.bug.label) as HTMLInputElement).value).toBe('other-9');
+  });
 });
 
 describe('dismiss and restore', () => {

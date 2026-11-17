@@ -343,6 +343,10 @@ test('platform staff read a plan check record, link and remove each finding’s 
     await beat();
     await findingRow(keptRow.id).getByRole('link', { name: keptRow.site }).click();
     await expect(page).toHaveURL(new RegExp(`${BASE}/${keptRow.id}$`));
+    // The finding's own page shows the same key the record row does (MOTIR-11635).
+    const key = main.getByTestId('planner-finding-bug-key');
+    await expect(key).toContainText(ui.recordPage.findingKey.column);
+    await expect(key).toContainText(kept.identifier);
     const back = main.getByTestId('planner-finding-record-link');
     await expect(back).toContainText(ui.detail.record);
     await expect(back.getByRole('link', { name: built.id })).toHaveAttribute(
