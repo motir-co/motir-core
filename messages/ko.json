@@ -8933,6 +8933,7 @@
         "unknown": "계획을 작업하는 중…",
         "claimCheck": {
           "started": "{count, plural, other {항목 #개의 코드 참조를 확인하는 중}}",
+          "cardChecked": "“{title}” 검사 완료 — {count, plural, other {문제 #개}}",
           "held": "모든 항목의 코드 참조가 유효합니다",
           "sentBack": "{count, plural, other {항목 #개의 코드 참조가 유효하지 않아 다시 작성하도록 돌려보냅니다}}",
           "settleStarted": "{count, plural, other {항목 #개의 코드 참조를 전체 계획에 비추어 다시 확인하는 중}}",

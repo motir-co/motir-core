@@ -8930,6 +8930,7 @@
         "unknown": "正在处理计划…",
         "claimCheck": {
           "started": "{count, plural, other {正在检查 # 个工作项的代码引用}}",
+          "cardChecked": "已检查 {title} — {count, plural, other {# 项发现}}",
           "held": "所有工作项的代码引用均成立",
           "sentBack": "{count, plural, other {# 个工作项的代码引用不成立，正在退回重写}}",
           "settleStarted": "{count, plural, other {正在对照整个计划再次检查 # 个工作项的代码引用}}",

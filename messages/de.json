@@ -8939,6 +8939,7 @@
         "unknown": "Am Plan wird gearbeitet…",
         "claimCheck": {
           "started": "{count, plural, one {Code-Verweise von # Element werden geprüft} other {Code-Verweise von # Elementen werden geprüft}}",
+          "cardChecked": "„{title}“ geprüft — {count, plural, one {# Problem} other {# Probleme}}",
           "held": "Die Code-Verweise aller Elemente sind stichhaltig",
           "sentBack": "{count, plural, one {Die Code-Verweise von # Element sind nicht stichhaltig; es wird neu geschrieben} other {Die Code-Verweise von # Elementen sind nicht stichhaltig; sie werden neu geschrieben}}",
           "settleStarted": "{count, plural, one {Code-Verweise von # Element werden erneut gegen den ganzen Plan geprüft} other {Code-Verweise von # Elementen werden erneut gegen den ganzen Plan geprüft}}",

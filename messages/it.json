@@ -8939,6 +8939,7 @@
         "unknown": "Lavoro sul piano in corso…",
         "claimCheck": {
           "started": "{count, plural, one {Verifica dei riferimenti al codice di # elemento} other {Verifica dei riferimenti al codice di # elementi}}",
+          "cardChecked": "Verifica di {title} completata — {count, plural, one {# problema} other {# problemi}}",
           "held": "I riferimenti al codice di tutti gli elementi reggono",
           "sentBack": "{count, plural, one {I riferimenti al codice di # elemento non reggono; viene rimandato indietro per essere riscritto} other {I riferimenti al codice di # elementi non reggono; vengono rimandati indietro per essere riscritti}}",
           "settleStarted": "{count, plural, one {Nuova verifica dei riferimenti al codice di # elemento rispetto all’intero piano} other {Nuova verifica dei riferimenti al codice di # elementi rispetto all’intero piano}}",
