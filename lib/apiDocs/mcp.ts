@@ -501,7 +501,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-5188: the description said a "cross-workspace repository" is
     // refused, which stopped being true when the repository read moved to the ORGANISATION.
     // The summary names no tier, so it stands.
-    descriptionFingerprint: '120f83a21d3e',
+    // Re-pinned for MOTIR-11640, summary UNCHANGED: the description said a parent and its
+    // children could be linked "either way", which stopped being true when the approval gates
+    // moved onto the delivery set (MOTIR-11624). The summary says nothing about which card.
+    descriptionFingerprint: 'aa4fcda4a711',
   },
   find_work_items_for_pull_request: {
     // MOTIR-10331 (Story MOTIR-10327 R5b).
