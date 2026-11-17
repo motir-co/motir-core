@@ -271,3 +271,70 @@ describe('readAskOutcome — the plan offer’s composed requirement (MOTIR-9432
     expect('requirement' in offer).toBe(false);
   });
 });
+
+// THE WAITING-PLAN REVISION (Bug MOTIR-11488): a `plan_change` that carries the
+// planner's reply AND its restated change. Anything less must never read as the legacy
+// redirect, whose settle rewrites the plan from the accumulated turns.
+describe('readAskOutcome — a waiting-plan revision', () => {
+  it('reads the reply, its citations, the restatement and the waiting-plan echo', () => {
+    expect(
+      readAskOutcome({
+        ask: {
+          intent: 'plan_change',
+          answer: "  I'm revising the plan to drop the CSV writer.  ",
+          citations: ['ABC-1', 'nope'],
+          revision: { requirement: ' Remove the CSV writer. ' },
+          waitingPlan: { readable: true },
+        },
+      }),
+    ).toEqual({
+      intent: 'plan_change',
+      answer: "I'm revising the plan to drop the CSV writer.",
+      citations: ['ABC-1'],
+      revision: { requirement: 'Remove the CSV writer.' },
+      waitingPlan: { readable: true, reason: null },
+    });
+  });
+
+  it('reads a revision with no reply, or no readable requirement, as an answer — never a redirect', () => {
+    expect(
+      readAskOutcome({
+        ask: { intent: 'plan_change', answer: null, revision: { requirement: 'Remove it.' } },
+      }),
+    ).toEqual({ intent: 'ask', answer: null, citations: [] });
+    for (const revision of [null, 'Remove it.', { requirement: '  ' }]) {
+      expect(
+        readAskOutcome({ ask: { intent: 'plan_change', answer: 'Revising.', revision } }),
+      ).toEqual({ intent: 'ask', answer: 'Revising.', citations: [] });
+    }
+  });
+
+  it('caps an over-long restatement', () => {
+    const out = readAskOutcome({
+      ask: {
+        intent: 'plan_change',
+        answer: 'Revising.',
+        revision: { requirement: 'x'.repeat(ASK_ANSWER_MAX_CHARS + 10) },
+      },
+    });
+    expect(out?.revision?.requirement).toHaveLength(ASK_ANSWER_MAX_CHARS);
+  });
+
+  it('echoes an unreadable waiting plan on an answer, and leaves the legacy redirect alone', () => {
+    expect(
+      readAskOutcome({
+        ask: {
+          intent: 'ask',
+          answer: 'I could not read the plan.',
+          citations: [],
+          waitingPlan: { readable: false, reason: 'PLAN_NOT_FOUND' },
+        },
+      }),
+    ).toMatchObject({ intent: 'ask', waitingPlan: { readable: false, reason: 'PLAN_NOT_FOUND' } });
+    expect(readAskOutcome({ ask: { intent: 'plan_change' } })).toEqual({
+      intent: 'plan_change',
+      answer: null,
+      citations: [],
+    });
+  });
+});

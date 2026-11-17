@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import { planReviewItem } from '../helpers/planReview';
@@ -29,12 +28,14 @@ import { planReviewItem } from '../helpers/planReview';
 // on it, and the accepted card is appended a second time as a keyless ghost.
 // That is bug MOTIR-3206, re-created by passing one boolean.
 //
-// ⚠️ WHICH CANVAS HOLDS WHICH HALF (MOTIR-6299). `PlanChangeCanvas` is the
-// surface's pane for the "no plan" state, so it keeps DECISION 1 and the tile.
-// Every pane WITH a plan is `PlanReviewCanvas` (through `PlanProposalViews`), so
-// DECISION 2's cases — a row the plan touches stays on the road — live on it,
-// below. They were first written against `PlanChangeCanvas`'s own proposal
-// decoration, which the host had stopped reaching and which is now deleted.
+// ⚠️ WHICH STATE HOLDS WHICH HALF (MOTIR-6299 · MOTIR-11513). The surface's pane
+// is `PlanReviewCanvas` (through `PlanProposalViews`) before a plan and after it.
+// Its "no plan" state (`prePlan`) keeps DECISION 1 and the tile; with a plan,
+// DECISION 2's cases — a row the plan touches stays on the road — apply, below.
+// Until MOTIR-11513 the "no plan" state was a component of its own.
+
+/** The overlay's canvas before a plan exists (MOTIR-11513). */
+const NO_TARGETS = { targetIds: [] as readonly string[] };
 
 const EPIC_ID = 'wi_epic';
 const BUG_A = 'wi_bug_a';
@@ -133,7 +134,7 @@ afterEach(() => {
 
 describe('the planning workspace overlay groups the roots that are in no epic', () => {
   it('draws the epics plus ONE grouped node — no bug / story / task beside them (DECISION 1)', async () => {
-    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k0" />);
+    render(<PlanReviewCanvas items={[]} projectKey="MOTIR" version={0} prePlan={NO_TARGETS} />);
 
     // The epic is on the road…
     await waitFor(() => expect(el(EPIC_ID)).not.toBeNull());
@@ -147,8 +148,8 @@ describe('the planning workspace overlay groups the roots that are in no epic', 
     expect(group.textContent).toContain('3 items');
   });
 
-  it('the grouped node DRILLS IN from the overlay, served from the root read (criterion 2)', async () => {
-    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k0" />);
+  it('the grouped node DRILLS IN from the overlay, drawn from the root’s rows (criterion 2)', async () => {
+    render(<PlanReviewCanvas items={[]} projectKey="MOTIR" version={0} prePlan={NO_TARGETS} />);
     await waitFor(() => expect(screen.getByTestId('level-group-node')).toBeTruthy());
 
     drill('__not_in_an_epic__');
@@ -160,13 +161,15 @@ describe('the planning workspace overlay groups the roots that are in no epic', 
     // (bug MOTIR-3557: the root's whole edge list handed over would redraw every
     // root epic as an anonymous "blocked elsewhere" node).
     expect(el(EPIC_ID)).toBeNull();
-    // Served from the root read the canvas already made: no SECOND root request.
-    expect(allFlags).toHaveLength(1);
+    // The group is the ROOT's rows, re-read (MOTIR-11513): the shared canvas keeps
+    // no level cache, so the door reads the root again rather than reading one
+    // back, at the same cap — the MOTIR-4426 property holds by construction.
+    expect(allFlags).toEqual(['-', '-']);
   });
 
   it('draws the truncation tile, and Show all re-reads THIS level uncapped (criterion 4)', async () => {
     rootLevelTotal = 12;
-    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k0" />);
+    render(<PlanReviewCanvas items={[]} projectKey="MOTIR" version={0} prePlan={NO_TARGETS} />);
 
     const tile = await screen.findByTestId('level-truncation-tile');
     expect(tile.textContent).toContain('+ 8 more');

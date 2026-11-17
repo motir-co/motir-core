@@ -431,19 +431,18 @@ describe('MOTIR-3833 — the assembled roadmap seams', () => {
 describe('MOTIR-3833 — the shared canvas’s opt-in defaults', () => {
   const consumers = [
     'components/onboarding/OnboardingCanvas.tsx',
-    'components/planning/PlanChangeCanvas.tsx',
     'components/planning/PlanReviewCanvas.tsx',
   ];
   // Every prop THIS STORY added to the shared canvas. `initialTrail` is NOT one of
-  // them — it is MOTIR-2070's shipped arrival seed, and `PlanChangeCanvas` already
-  // forwards it, which is exactly why the list is the story's additions rather than
-  // "every prop with a trail in its name".
+  // them — it is MOTIR-2070's shipped arrival seed, which the planning surface's
+  // canvas already forwarded, which is exactly why the list is the story's additions
+  // rather than "every prop with a trail in its name".
   //
   // Two of them CHANGE what the canvas does, and no other consumer may pass them.
   // The third, `onLevelChange`, is a REPORT: it fires after the reader's own move
-  // and changes nothing the canvas draws. MOTIR-6155 needs it on both plan canvases
-  // (the planning surface swaps one for the other and has to carry "the reader
-  // moved" across the swap), so they FORWARD it — optional, no default — and the
+  // and changes nothing the canvas draws. MOTIR-6155 needs it on the plan canvas
+  // (the planning surface mounts a fresh one for a later plan and has to carry "the
+  // reader moved" across), so it FORWARDS it — optional, no default — and the
   // promise it keeps instead is that exactly ONE host supplies it.
   const behaviourOptIns = ['controlledTrail', 'arriveAtReadableScale'];
 
@@ -459,11 +458,8 @@ describe('MOTIR-3833 — the shared canvas’s opt-in defaults', () => {
     ).not.toContain('onLevelChange');
   });
 
-  it('the plan canvases only FORWARD the level report, and one host supplies it (MOTIR-6155)', () => {
-    for (const file of [
-      'components/planning/PlanChangeCanvas.tsx',
-      'components/planning/PlanReviewCanvas.tsx',
-    ]) {
+  it('the plan canvas only FORWARDS the level report, and one host supplies it (MOTIR-6155)', () => {
+    for (const file of ['components/planning/PlanReviewCanvas.tsx']) {
       const src = readFileSync(join(process.cwd(), file), 'utf8');
       // Optional, destructured with NO default, handed straight through.
       expect(src).toMatch(/onLevelChange\?: \(trail: readonly CanvasCrumb\[\]\) => void;/);

@@ -427,7 +427,6 @@ async function as(page: Page, actor: Actor): Promise<void> {
 
 /** Open `/boards` on `boardId` and return its first projection. */
 async function openBoard(page: Page, boardId: string): Promise<BoardProjectionDto> {
-  await page.setViewportSize({ width: 1600, height: 1000 });
   const read = frameOf(page, boardId);
   await page.goto(`/boards?board=${boardId}`);
   const board = await frame(read);

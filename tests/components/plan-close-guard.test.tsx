@@ -40,10 +40,16 @@ vi.mock('@/lib/hooks/usePlanChangeConversation', () => ({
   },
 }));
 
-// The canvas fetches its own levels; it is not what this file is about.
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: () => <div data-testid="canvas-stub" />,
-}));
+// The canvas BEFORE a plan fetches its own levels; it is not what this file is
+// about. Since MOTIR-11513 it is `PlanReviewCanvas` with `prePlan`, so only that
+// state is stubbed and a plan's canvas stays real.
+vi.mock('@/components/planning/PlanReviewCanvas', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/components/planning/PlanReviewCanvas')>();
+  function PrePlanStub(props: Parameters<typeof real.PlanReviewCanvas>[0]) {
+    return props.prePlan ? <div data-testid="canvas-stub" /> : <real.PlanReviewCanvas {...props} />;
+  }
+  return { ...real, PlanReviewCanvas: PrePlanStub };
+});
 vi.mock('@/components/planning/PlanChangeRail', () => ({
   PlanChangeRail: () => <div data-testid="rail-stub" />,
 }));
@@ -92,18 +98,23 @@ afterEach(cleanup);
 function renderHost(onClose = vi.fn()) {
   const closeGuardRef = { current: null as null | (() => boolean) };
   const onKeepPlanningAfterBack = vi.fn();
-  const view = renderWithIntl(
+  const launch = parsePlanningLaunch({ mode: 'replan', from: 'project' });
+  const host = () => (
     <PlanningWorkspaceHost
       projectKey="ACME"
       projectName="Acme"
-      launch={parsePlanningLaunch({ mode: 'replan', from: 'project' })}
+      launch={launch}
       anchorId={null}
       onClose={onClose}
       closeGuardRef={closeGuardRef}
       onKeepPlanningAfterBack={onKeepPlanningAfterBack}
-    />,
+    />
   );
-  return { view, closeGuardRef, onClose, onKeepPlanningAfterBack };
+  const view = renderWithIntl(host());
+  // Re-renders the host after a test moved the conversation's state, as a state change
+  // inside the real hook would.
+  const rerender = () => view.rerender(host());
+  return { view, rerender, closeGuardRef, onClose, onKeepPlanningAfterBack };
 }
 
 const guard = () => screen.queryByRole('alertdialog');
@@ -407,6 +418,69 @@ describe('coverage · the arms the happy path does not reach', () => {
     // The predicate is about the REVIEW, never about the targets: adding one
     // must not make a close safe, and removing one must not make it unsafe.
     act(() => void closeGuardRef.current?.());
+    expect(guard()).not.toBeNull();
+  });
+});
+
+describe('a plan DECIDED ELSEWHERE while the guard is up (Bug MOTIR-11464)', () => {
+  // The conversation settles the overlay when a re-read (or a refused press) finds the
+  // plan already decided; the guard's question — "closing now discards them" — is then
+  // false, so it must step aside rather than keep asking.
+  it('steps aside when the plan is found DECLINED, and the overlay stays open on it', () => {
+    conversation.state = stateWith({ review: REVIEW, phase: 'review' });
+    const { rerender, closeGuardRef, onClose } = renderHost();
+    act(() => void closeGuardRef.current?.());
+    expect(guard()).not.toBeNull();
+
+    conversation.state = stateWith({ review: REVIEW, decided: 'declined' });
+    rerender();
+
+    expect(guard()).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    // …and the next Close is instant: nothing is left to lose.
+    let allowed = false;
+    act(() => {
+      allowed = closeGuardRef.current?.() ?? false;
+    });
+    expect(allowed).toBe(true);
+  });
+
+  it('a Confirm & add refused because the plan was declined elsewhere disarms its close', async () => {
+    conversation.state = stateWith({ review: REVIEW, phase: 'review' });
+    const { rerender, closeGuardRef, onClose } = renderHost();
+    act(() => void closeGuardRef.current?.());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm & add' }));
+    });
+
+    // The refusal settled the overlay to the plan's real decision.
+    conversation.state = stateWith({ review: REVIEW, decided: 'declined' });
+    rerender();
+    expect(guard()).toBeNull();
+
+    // A later approval of a NEW plan must not close the workspace on the old press.
+    act(() => conversation.onApproved?.());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('a Confirm & add refused because the plan was approved elsewhere still closes', async () => {
+    conversation.state = stateWith({ review: REVIEW, phase: 'review' });
+    const { closeGuardRef, onClose } = renderHost();
+    act(() => void closeGuardRef.current?.());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm & add' }));
+    });
+    // The settle reports the approval it found, as a press made here does.
+    act(() => conversation.onApproved?.());
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays up while a decision is in flight', () => {
+    conversation.state = stateWith({ review: REVIEW, phase: 'review' });
+    const { rerender, closeGuardRef } = renderHost();
+    act(() => void closeGuardRef.current?.());
+    conversation.state = stateWith({ review: REVIEW, phase: 'deciding' });
+    rerender();
     expect(guard()).not.toBeNull();
   });
 });

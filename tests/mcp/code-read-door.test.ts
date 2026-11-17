@@ -235,6 +235,8 @@ describe('read_file — every outcome through the door', () => {
     expect(hostCalls).toEqual([
       `https://api.github.com/repos/${OWNER}/motir-ai/commits/trunk`,
       `https://api.github.com/repos/${OWNER}/motir-ai/contents/lib/x.ts?ref=${HEAD_SHA}`,
+      // The found read's object-id question (MOTIR-11528).
+      'https://api.github.com/graphql',
     ]);
 
     hostCalls.length = 0;
@@ -243,6 +245,7 @@ describe('read_file — every outcome through the door', () => {
     expect(hostCalls).toEqual([
       `https://api.github.com/repos/${OWNER}/motir-core/commits/feat%2Fy`,
       `https://api.github.com/repos/${OWNER}/motir-core/contents/lib/x.ts?ref=${HEAD_SHA}`,
+      'https://api.github.com/graphql',
     ]);
   });
 
@@ -252,9 +255,10 @@ describe('read_file — every outcome through the door', () => {
         `${OWNER}/motir-core`,
       );
     }
-    // One resolve and one read per call, the same two URLs each time.
-    expect(new Set(hostCalls).size).toBe(2);
-    expect(hostCalls).toHaveLength(6);
+    // One resolve, one read and one object-id question (MOTIR-11528) per call,
+    // the same three URLs each time.
+    expect(new Set(hostCalls).size).toBe(3);
+    expect(hostCalls).toHaveLength(9);
   });
 
   it('a whitespace-only repo matches nothing — repo_not_in_project, zero host calls', async () => {

@@ -310,6 +310,116 @@ describe('boardsService.deleteColumn (Subtask 3.6.2)', () => {
   });
 });
 
+// MOTIR-11550 — the not-empty guard judges a column through the board's OWN
+// scope (its stored filter and its scrum sprint), the predicate the board
+// projection's `totalCount` — and so the settings page's column count — is read
+// under. Every fixture here makes the project's population and the board's view
+// DIFFER, so a guard counting the whole project would refuse where the board
+// shows an empty column.
+describe('boardsService.deleteColumn — counted through the board’s own scope (MOTIR-11550)', () => {
+  /** Store a board filter that hides the Done and Cancelled statuses. */
+  async function hideDoneAndCancelled(fx: Fixture): Promise<void> {
+    await adminDb.board.update({
+      where: { id: fx.boardId },
+      data: { filter: { v: 'v1', c: 'and', f: [['status', 'is_none_of', ['done', 'cancelled']]] } },
+    });
+  }
+
+  /** The settings page's number for a column: the projection's `totalCount`. */
+  async function boardCount(fx: Fixture, columnId: string): Promise<number> {
+    const board = await boardsService.getBoard(fx.projectId, fx.ownerCtx, fx.boardId);
+    return board.columns.find((c) => c.id === columnId)!.totalCount;
+  }
+
+  async function makeScrum(fx: Fixture, withActiveSprint: boolean): Promise<string | null> {
+    await adminDb.board.update({ where: { id: fx.boardId }, data: { type: 'scrum' } });
+    if (!withActiveSprint) return null;
+    const now = Date.now();
+    const sprint = await adminDb.sprint.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: 'Sprint 1',
+        state: 'active',
+        startDate: new Date(now - 86_400_000),
+        endDate: new Date(now + 5 * 86_400_000),
+        sequence: 1,
+      },
+    });
+    return sprint.id;
+  }
+
+  it('deletes a column whose statuses the stored filter excludes, though the project has items in them', async () => {
+    const fx = await makeFixture('scope-stored');
+    const doneId = await cardInStatus(fx, 'done', 'Shipped card');
+    await hideDoneAndCancelled(fx);
+    const columnId = fx.columnByStatusKey.get('done')!;
+    // The settings page reads 0 for the column — the number the guard must agree with.
+    expect(await boardCount(fx, columnId)).toBe(0);
+
+    await boardsService.deleteColumn(columnId, fx.ownerCtx);
+
+    expect(await adminDb.boardColumn.findUnique({ where: { id: columnId } })).toBeNull();
+    const board = await boardsService.getBoard(fx.projectId, fx.ownerCtx, fx.boardId);
+    expect(board.unmappedStatuses.map((s) => s.key)).toContain('done');
+    // No work item changes: the Done card is still there, still Done.
+    const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: doneId } });
+    expect(item.status).toBe('done');
+    expect(item.archivedAt).toBeNull();
+  });
+
+  it('still refuses a column whose cards the stored filter keeps on the board, with the page’s count', async () => {
+    const fx = await makeFixture('scope-stored-busy');
+    await cardInStatus(fx, 'in_progress', 'Visible card');
+    await cardInStatus(fx, 'in_progress', 'Another visible card');
+    await cardInStatus(fx, 'done', 'Hidden card');
+    await hideDoneAndCancelled(fx);
+    const columnId = fx.columnByStatusKey.get('in_progress')!;
+    const pageCount = await boardCount(fx, columnId);
+    expect(pageCount).toBe(2);
+
+    const refusal = await boardsService.deleteColumn(columnId, fx.ownerCtx).catch((e) => e);
+
+    expect(refusal).toBeInstanceOf(ColumnNotEmptyError);
+    // The guard's count and the settings page's count are the same number.
+    expect((refusal as ColumnNotEmptyError).cardCount).toBe(pageCount);
+    expect(await adminDb.boardColumn.findUnique({ where: { id: columnId } })).not.toBeNull();
+  });
+
+  it('counts only the active sprint on a scrum board, matching the page', async () => {
+    const fx = await makeFixture('scope-scrum');
+    const sprintId = await makeScrum(fx, true);
+    const inSprint = await cardInStatus(fx, 'todo', 'Sprint card');
+    await adminDb.workItem.update({ where: { id: inSprint }, data: { sprintId } });
+    await cardInStatus(fx, 'todo', 'Backlog card');
+    await cardInStatus(fx, 'in_progress', 'Backlog WIP');
+    const todoColumn = fx.columnByStatusKey.get('todo')!;
+    const wipColumn = fx.columnByStatusKey.get('in_progress')!;
+    expect(await boardCount(fx, todoColumn)).toBe(1);
+    expect(await boardCount(fx, wipColumn)).toBe(0);
+
+    const refusal = await boardsService.deleteColumn(todoColumn, fx.ownerCtx).catch((e) => e);
+    expect(refusal).toBeInstanceOf(ColumnNotEmptyError);
+    expect((refusal as ColumnNotEmptyError).cardCount).toBe(1);
+
+    // The backlog-only column is empty on this board, and deletes.
+    await boardsService.deleteColumn(wipColumn, fx.ownerCtx);
+    expect(await adminDb.boardColumn.findUnique({ where: { id: wipColumn } })).toBeNull();
+  });
+
+  it('deletes any column of a scrum board with no active sprint, which shows no cards', async () => {
+    const fx = await makeFixture('scope-scrum-none');
+    await makeScrum(fx, false);
+    await cardInStatus(fx, 'todo', 'Backlog card');
+    const columnId = fx.columnByStatusKey.get('todo')!;
+    expect(await boardCount(fx, columnId)).toBe(0);
+
+    await boardsService.deleteColumn(columnId, fx.ownerCtx);
+
+    expect(await adminDb.boardColumn.findUnique({ where: { id: columnId } })).toBeNull();
+  });
+});
+
 describe('boardsService.mapStatusToColumn (Subtask 3.6.2)', () => {
   it('is a MOVE — a status maps to exactly one column per board (re-map replaces, never duplicates)', async () => {
     const fx = await makeFixture('map-move');

@@ -728,6 +728,15 @@ const APP_SERVER_ENV = {
 };
 process.env['E2E_WORKER_APP_ENV'] = JSON.stringify(APP_SERVER_ENV);
 
+// THE ACCEPTANCE FRAME (MOTIR-11471) — every receipt is recorded at ONE size,
+// and the page is that size from the first frame to the last. It is both the
+// viewport and the video size below, so a clip is never a scaled copy of a
+// differently-sized page. 1920×1080 because the surfaces receipts walk (admin
+// tables, the board's columns) need the width; a spec never resizes it, and a
+// responsive check belongs in a spec outside this lane.
+// `tests/e2e-acceptance-lane-viewport.test.ts` holds all of that.
+const ACCEPTANCE_FRAME = { width: 1920, height: 1080 } as const;
+
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/acceptance*.spec.ts'],
@@ -760,13 +769,23 @@ export default defineConfig({
   outputDir: 'out/playwright-output-acceptance',
   use: {
     baseURL: BASE_URL,
-    // Record the GREEN run — the whole point of this lane. 720p keeps the clip a
-    // few MB (the ADR's budget); the acceptance spec keeps itself short (≤ ~60s).
-    video: { mode: 'on', size: { width: 1280, height: 720 } },
+    // Record the GREEN run — the whole point of this lane — at the lane's one
+    // fixed frame (ACCEPTANCE_FRAME above): the clip is exactly the viewport,
+    // so nothing is scaled or letterboxed.
+    video: { mode: 'on', size: ACCEPTANCE_FRAME },
     trace: 'on',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // The frame is set AFTER the device spread, so the device's own 1280×720
+  // viewport cannot win, and `deviceScaleFactor: 1` keeps one CSS pixel one
+  // video pixel. Contexts a spec opens itself (`browser.newContext()`) inherit
+  // both, and are never recorded: only the `page` / `context` fixture records.
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'], viewport: ACCEPTANCE_FRAME, deviceScaleFactor: 1 },
+    },
+  ],
   webServer: [
     {
       // MOTIR-1682: run the acceptance lane against a PRODUCTION build (`next

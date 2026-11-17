@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Tablica musi mieć co najmniej jedną kolumnę.",
       "toastColumnNotEmptyError": "Kolumna „{name}” nadal zawiera elementy robocze — najpierw zmapuj ponownie jej statusy.",
       "toastRenameBoardError": "Nie udało się zmienić nazwy tablicy. Przywrócono poprzednią nazwę.",
-      "errorTitle": "Nie udało się załadować ustawień tablicy",
+      "errorTitle": "Nie udało się zapisać zmiany",
       "errorDescription": "Coś poszło nie tak podczas ładowania konfiguracji tej tablicy. Spróbuj ponownie.",
       "storedFilter": {
         "title": "Filtr Tablicy",
@@ -4989,6 +4989,13 @@
     "laneCountLoaded": "{loaded, number} z {total, number}",
     "laneLoading": "Ładowanie…",
     "laneLoadRetry": "Nie udało się wczytać kolejnych elementów roboczych · Ponów",
+    "cellLoadMore": "Wczytaj więcej",
+    "cellLoadMoreAria": "Wczytaj więcej elementów roboczych w kolumnie {column}, tor {lane}",
+    "cellLoadRetryAria": "Nie udało się wczytać kolejnych elementów roboczych · Ponów, w kolumnie {column}, tor {lane}",
+    "cellLoadingAria": "Wczytywanie elementów roboczych w kolumnie {column}, tor {lane}",
+    "laneScrollLeftAria": "Przewiń tor {lane} w lewo",
+    "laneScrollRightAria": "Przewiń tor {lane} w prawo",
+    "laneEmpty": "Brak elementów roboczych w tym torze",
     "pagerPosition": "{name} · {index} z {count}",
     "groupByLabel": "Grupuj według",
     "groupByAria": "Grupowanie torów według",
@@ -8791,6 +8798,10 @@
       "approve": "Zatwierdź",
       "approveChanges": "Zatwierdź zmiany",
       "nothingSavedYet": "Nic jeszcze nie zapisano",
+      "revision": {
+        "earlierVersion": "Wcześniejsza wersja · zastąpiona poniżej",
+        "earlierVersionUnkept": "Tu była wcześniejsza wersja tego planu ({count, plural, one {# element} few {# elementy} many {# elementów} other {# elementu}}). Jej podsumowanie nie zostało zachowane."
+      },
       "barCounts": "{added, plural, =0 {Brak dodanych} one {# dodany} few {# dodane} many {# dodanych} other {# dodanego}}{changed, plural, =0 {} one {, # zmieniony} few {, # zmienione} many {, # zmienionych} other {, # zmienionego}}{removed, plural, =0 {} one {, # usunięty} few {, # usunięte} many {, # usuniętych} other {, # usuniętego}}",
       "barNothingSaved": "Nic nie zostanie zapisane, dopóki nie zatwierdzisz.",
       "summary": "{added, plural, =0 {Brak nowych elementów roboczych} one {# dodany} few {# dodane} many {# dodanych} other {# dodanego}}{changed, plural, =0 {} one {, # zmieniony} few {, # zmienione} many {, # zmienionych} other {, # zmienionego}}{removed, plural, =0 {} one {, # usunięty} few {, # usunięte} many {, # usuniętych} other {, # usuniętego}} — jest na kanwie, nic nie zostało jeszcze zapisane.",
@@ -14802,6 +14813,63 @@
         },
         "pausedUntil": "do {time}, za {left}",
         "readOnly": "Tylko do odczytu. Aby poprosić AWS o większy limit, uruchom <cmd>{command}</cmd> w terminalu; nadpisanie limitu konta pozostaje w swoim dotychczasowym miejscu."
+      },
+      "blindSpots": {
+        "title": "Martwe punkty floty CI",
+        "subtitle": "Repozytoria, których flota CI nie widzi, dla każdej obsługiwanej organizacji GitHub: repozytoria z oczekującymi zadaniami floty, ale bez dostaw workflow_job, oraz powiązane repozytoria, których motir-studio nie może odczytać. Obliczane przez uzgadnianie w każdym przebiegu udostępniania; tylko do odczytu.",
+        "card": {
+          "title": "Według organizacji GitHub",
+          "subtitle": "Jeden wiersz na każdą organizację obsłużoną przez flotę CI w ciągu ostatnich 3 dni."
+        },
+        "pill": {
+          "orgs": "{count, plural, one {# organizacja z martwymi punktami} few {# organizacje z martwymi punktami} many {# organizacji z martwymi punktami} other {# organizacji z martwymi punktami}}",
+          "orgsNotRead": "{count, plural, one {# organizacja nieodczytana} few {# organizacje nieodczytane} many {# organizacji nieodczytanych} other {# organizacji nieodczytanych}}",
+          "allSeen": "Każde repozytorium widoczne",
+          "notRead": "Nieodczytana"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, one {# repozytorium bez dostaw} few {# repozytoria bez dostaw} many {# repozytoriów bez dostaw} other {# repozytorium bez dostaw}}",
+          "unreadableCount": "{count, plural, one {# repozytorium nieczytelne} few {# repozytoria nieczytelne} many {# repozytoriów nieczytelnych} other {# repozytorium nieczytelnego}}",
+          "seen": "Każde repozytorium z zadaniami floty otrzymało swoje dostawy workflow_job i żadne zadanie nie utknęło."
+        },
+        "undelivered": {
+          "title": "Oczekujące zadania floty, brak dostaw workflow_job od 3 dni",
+          "hint": "Zadania motir-runner, ale brak dostaw workflow_job — czy motir-studio jest zainstalowane w tym repozytorium?"
+        },
+        "unreadable": {
+          "title": "Powiązane, ale motir-studio nie może odczytać ich kolejki Actions",
+          "body": "Podczas ostatniego przebiegu w tej organizacji utknęły zadania, a poświadczenie motir-studio floty nie mogło wyświetlić oczekujących zadań tych repozytoriów, więc nie uruchomiono dla nich żadnego runnera."
+        },
+        "repo": {
+          "link": "{repo} w GitHub"
+        },
+        "orgError": {
+          "title": "Nie udało się odczytać tej organizacji podczas ostatniego przebiegu.",
+          "body": "Jej repozytoria nie zostały sprawdzone, więc nic tutaj nie oznacza, że są widoczne. Pozostałe organizacje nie są objęte problemem, a następny przebieg spróbuje ponownie. Odpowiedź GitHub:"
+        },
+        "empty": {
+          "title": "Brak martwych punktów",
+          "body": "Flota CI widzi każde repozytorium {count, plural, one {# organizacji} few {# organizacji} many {# organizacji} other {# organizacji}} obsłużonych w ciągu ostatnich 3 dni: każde repozytorium z zadaniami floty otrzymało swoje dostawy workflow_job i żadne zadanie nie utknęło.",
+          "noOrgs": "Żadna organizacja nie uruchomiła zadania na flocie CI w ciągu ostatnich 3 dni, więc nie ma repozytorium do sprawdzenia."
+        },
+        "error": {
+          "title": "Nie udało się odczytać martwych punktów floty CI",
+          "body": "Rekord martwych punktów się nie wczytał, więc nic tutaj nie oznacza, że każde repozytorium jest widoczne. Obrazy i pule nie są objęte problemem. Odśwież, aby spróbować ponownie."
+        },
+        "reconcileError": {
+          "title": "Uzgadnianie ostatniego przebiegu nie zakończyło się",
+          "body": "Zatrzymało się z tym błędem, więc nie sprawdzono żadnej organizacji i nic tutaj nie oznacza, że każde repozytorium jest widoczne. Następny przebieg spróbuje ponownie."
+        },
+        "notComputed": {
+          "title": "Jeszcze nie obliczono",
+          "body": "Od tego wdrożenia żaden przebieg udostępniania nie obliczył martwych punktów. Przebieg działa co 5 minut; odśwież po następnym."
+        },
+        "notConfigured": {
+          "title": "Flota CI nie jest skonfigurowana",
+          "body": "To wdrożenie nie uruchamia zadań CI na flocie, więc uzgadnianie nie obsługuje żadnej organizacji i nie ma repozytorium do sprawdzenia. Przełącznik znajduje się w <link>Ustawieniach floty</link>."
+        },
+        "computed": "Obliczone przez przebieg udostępniania z {time} ({age}). Tylko do odczytu: motir-studio instaluje się w repozytorium w GitHub, nie tutaj.",
+        "loading": "Wczytywanie martwych punktów floty CI"
       }
     }
   },

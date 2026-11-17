@@ -175,6 +175,25 @@ function titles(board: Columns): string[] {
   return board.columns.flatMap((c) => c.cards.map((x) => x.title)).sort();
 }
 
+/**
+ * Every card title on a GROUPED board, sorted. A grouped projection's columns
+ * are meta only (MOTIR-11445), so its cards are read where the grid reads them:
+ * each lane's cell pages, as the same reader.
+ */
+async function laneTitles(
+  board: BoardProjectionDto,
+  projectId: string,
+  ctx: Parameters<typeof boardsService.getBoard>[1],
+): Promise<string[]> {
+  expect(titles(board)).toEqual([]);
+  const pages = await Promise.all(
+    board.swimlanes.map((lane) =>
+      boardsService.getLanePage(projectId, ctx, board.boardId, lane.key),
+    ),
+  );
+  return pages.flatMap((p) => p.cells.flatMap((c) => c.cards.map((x) => x.title))).sort();
+}
+
 function total(board: Columns): number {
   return board.columns.reduce((sum, c) => sum + c.totalCount, 0);
 }
@@ -560,7 +579,7 @@ describe('getBoard — no stored filter (parity)', () => {
 
     const bare = await boardsService.getBoard(fx.projectId, fx.ctx);
     expect(bare.storedFilter).toBeNull();
-    expect(titles(bare)).toEqual(['Bug', 'Story', 'Task']);
+    expect(await laneTitles(bare, fx.projectId, fx.ctx)).toEqual(['Bug', 'Story', 'Task']);
 
     // A stored filter with zero conditions narrows nothing: the same board.
     await store(fx, env('and'));
@@ -606,7 +625,7 @@ describe('the stored filter for a Visitor and on the public preview', () => {
       data: { swimlaneGroupBy: 'priority' },
     });
     const board = await boardsService.getBoard(fx.projectId, visitor);
-    expect(titles(board)).toEqual(['Public bug']);
+    expect(await laneTitles(board, fx.projectId, visitor)).toEqual(['Public bug']);
     expect(total(board)).toBe(1);
     // The Visitor's lanes count the same stored-filtered set.
     expect(board.swimlanes.reduce((sum, l) => sum + l.count, 0)).toBe(1);

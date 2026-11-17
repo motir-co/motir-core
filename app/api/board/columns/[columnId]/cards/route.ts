@@ -1,80 +1,69 @@
 import { NextResponse } from 'next/server';
 import { visitorThenMember } from '@/lib/visitor/readActor';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
 import {
-  BoardColumnNotFoundError,
-  BoardNotFoundError,
-  InvalidBoardCursorError,
-} from '@/lib/boards/errors';
-import { decodeFilterParam } from '@/lib/filters/ast';
-import { FilterValidationError } from '@/lib/filters/errors';
-import type { BoardFilterInput } from '@/lib/dto/boards';
+  badRequest,
+  boardPageErrorResponse,
+  readBoardPageParams,
+} from '@/lib/boards/boardPageHttp';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { VisitorReadContext } from '@/lib/visitor/context';
 
-// GET /api/board/columns/[columnId]/cards?boardId=&cursor=&filter= (MOTIR-10535)
-// — the NEXT PAGE of one board lane: what the board fetches when the user
-// scrolls a lane to its bottom. Thin HTTP layer over
-// `boardsService.getColumnPage`; the project + workspace come from the
-// active-project context (NEVER the client), exactly as `GET /api/board`.
+// GET /api/board/columns/[columnId]/cards?boardId=&cursor=&lane=&filter=
+// (MOTIR-10535, MOTIR-11446) — a page of one board column. Thin HTTP layer over
+// `boardsService`; the project + workspace come from the active-project context
+// (NEVER the client), exactly as `GET /api/board`.
 //
-//   - `boardId` (required) — the board the lane belongs to, tenant-gated to the
+//   - `boardId` (required) — the board the column belongs to, tenant-gated to the
 //     active project by the service like the projection's `?boardId=`.
-//   - `cursor`  (required) — the lane's `cursor` from the projection or the
-//     previous page. A cursor this lane did not mint → 400.
+//   - `lane`    (optional) — ONE swimlane of a grouped board, as the projection's
+//     `swimlanes[].key` names it (the catch-all sentinel and priority values
+//     included, passed through unparsed). Present → that (lane × column) CELL's
+//     page from `getCellPage`, a `BoardCellPageDto`. Absent → the column's own
+//     next page from `getColumnPage`, a `BoardColumnPageDto`, byte for byte the
+//     flat board's door.
+//   - `cursor`  — the page's own `cursor` from the projection, the lane page or
+//     the previous page. REQUIRED without `lane`; optional with it, where absent
+//     asks for the cell's FIRST page (a cell that never loaded). A cursor that
+//     column did not mint → 400.
 //   - `filter`  (optional) — the SAME `?filter=v1:` param the projection was
-//     read with, so a page never holds a card the filtered lane would not; a bad
-//     decode degrades to no filter, as on the projection.
+//     read with; a bad decode degrades to no filter, as on the projection.
 //
 // A VISITOR (MOTIR-6647) pages the public project's board with the same
 // private-epic exclusion the projection applies.
 //
-// Typed errors → status codes:
-//   InvalidBoardCursorError / a missing `boardId` or `cursor`  → 400
+// Typed errors → status codes (`lib/boards/boardPageHttp.ts`, shared with the
+// lane route):
+//   a missing `boardId`, or `cursor` without `lane`                   → 400 BAD_REQUEST
+//   InvalidBoardCursorError / InvalidBoardLaneError                   → 400
 //   BoardNotFoundError / BoardColumnNotFoundError / ProjectNotFoundError → 404
-//   FilterValidationError                                       → 422
+//   FilterValidationError                                             → 422
 
-type PageParams = { boardId: string; cursor: string; filter: BoardFilterInput | undefined };
-
-/** Read the page query, or answer the 400 a missing required param owes. */
-function readPageParams(req: Request): PageParams | Response {
-  const params = new URL(req.url).searchParams;
-  const boardId = params.get('boardId')?.trim();
-  const cursor = params.get('cursor')?.trim();
-  if (!boardId || !cursor) {
-    return NextResponse.json(
-      { code: 'BAD_REQUEST', error: '`boardId` and `cursor` are required.' },
-      { status: 400 },
-    );
+async function readPage(
+  req: Request,
+  projectId: string,
+  ctx: ServiceContext | VisitorReadContext,
+  columnId: string,
+): Promise<Response> {
+  const { boardId, filter, params } = readBoardPageParams(req);
+  const lane = params.get('lane') ?? undefined;
+  const cursor = params.get('cursor')?.trim() || undefined;
+  if (!boardId || (lane === undefined && !cursor)) {
+    return badRequest('`boardId` and `cursor` are required.');
   }
-  const rawFilter = params.get('filter')?.trim() || undefined;
-  let filter: BoardFilterInput | undefined;
-  if (rawFilter) {
-    const decoded = decodeFilterParam(rawFilter);
-    if (decoded.ok && decoded.ast.conditions.length > 0) filter = { ast: decoded.ast };
+  try {
+    const page =
+      lane === undefined
+        ? await boardsService.getColumnPage(projectId, ctx, boardId, columnId, cursor!, filter)
+        : await boardsService.getCellPage(projectId, ctx, boardId, columnId, lane, cursor, filter);
+    return NextResponse.json(page);
+  } catch (err) {
+    const mapped = boardPageErrorResponse(err);
+    if (mapped) return mapped;
+    throw err;
   }
-  return { boardId, cursor, filter };
-}
-
-/** The typed refusals of a page read, as the status each owes; null = not ours. */
-function pageErrorResponse(err: unknown): Response | null {
-  if (err instanceof InvalidBoardCursorError) {
-    return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
-  }
-  if (err instanceof BoardNotFoundError || err instanceof BoardColumnNotFoundError) {
-    return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
-  }
-  if (err instanceof ProjectNotFoundError) {
-    return NextResponse.json(
-      { code: 'BOARD_NOT_FOUND', error: 'Board not found.' },
-      { status: 404 },
-    );
-  }
-  if (err instanceof FilterValidationError) {
-    return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
-  }
-  return null;
 }
 
 async function memberGET(req: Request, columnId: string): Promise<Response> {
@@ -88,24 +77,12 @@ async function memberGET(req: Request, columnId: string): Promise<Response> {
       { status: 400 },
     );
   }
-  const read = readPageParams(req);
-  if (read instanceof Response) return read;
-
-  try {
-    const page = await boardsService.getColumnPage(
-      ctx.projectId,
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      read.boardId,
-      columnId,
-      read.cursor,
-      read.filter,
-    );
-    return NextResponse.json(page);
-  } catch (err) {
-    const mapped = pageErrorResponse(err);
-    if (mapped) return mapped;
-    throw err;
-  }
+  return readPage(
+    req,
+    ctx.projectId,
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    columnId,
+  );
 }
 
 export async function GET(
@@ -116,24 +93,6 @@ export async function GET(
   return visitorThenMember(
     req,
     () => memberGET(req, columnId),
-    async (ctx) => {
-      const read = readPageParams(req);
-      if (read instanceof Response) return read;
-      try {
-        const page = await boardsService.getColumnPage(
-          ctx.project.id,
-          ctx,
-          read.boardId,
-          columnId,
-          read.cursor,
-          read.filter,
-        );
-        return NextResponse.json(page);
-      } catch (err) {
-        const mapped = pageErrorResponse(err);
-        if (mapped) return mapped;
-        throw err;
-      }
-    },
+    (ctx) => readPage(req, ctx.project.id, ctx, columnId),
   );
 }

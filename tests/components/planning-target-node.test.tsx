@@ -9,9 +9,10 @@ import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 // The TARGET ring layered onto a roadmap level (Subtask MOTIR-1491; design
 // `target-picker.mock.html` panels 3 + 5 — "the canvas highlights the target").
 // It wraps the SHIPPED node rather than redrawing one, so these assert the
-// layering, not the canvas. The ring is drawn by `PlanChangeCanvas`, the pane for
-// the "no plan" state, so the level under it is the plain work-item level
-// (MOTIR-6299 removed the proposal decoration that used to sit between them).
+// layering, not the canvas. The ring is drawn by `PlanReviewCanvas` in its "no
+// plan" state (`prePlan`, MOTIR-11513), so the level under it is the plain
+// work-item level (MOTIR-6299 removed the proposal decoration that used to sit
+// between them).
 
 const LEVEL: RoadmapLevelData = {
   items: [

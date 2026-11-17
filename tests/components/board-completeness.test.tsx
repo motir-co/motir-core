@@ -507,9 +507,10 @@ describe('per-lane scroll-to-load paging (MOTIR-10535)', () => {
     expect(screen.getAllByText('Card 100')).toHaveLength(1);
   });
 
-  it('pages a lane of the swimlane board from its footer row, against the viewport', async () => {
+  it('fills a swimlane lane in view with its own cell pages, against the viewport — no footer row', async () => {
     const SWIMLANES: BoardSwimlaneDto[] = [
       { key: 'u1', label: 'Ana Ruiz', kind: 'assignee', count: 11 },
+      { key: 'u2', label: 'Bea Lin', kind: 'assignee', count: 1 },
     ];
     const board = projection({
       swimlaneGroupBy: 'assignee',
@@ -518,36 +519,91 @@ describe('per-lane scroll-to-load paging (MOTIR-10535)', () => {
         column({
           id: 'c1',
           name: 'To Do',
-          totalCount: 11,
+          totalCount: 12,
           cursor: 'CUR-1',
           cards: cardsFrom(1, 10, { swimlaneKey: 'u1', assigneeId: 'u1' }),
         }),
         column({ id: 'c2', name: 'In Progress' }),
       ],
     });
-    vi.stubGlobal(
-      'fetch',
-      routedFetch(board, [
+    const lanePage = {
+      laneKey: 'u1',
+      cells: [
         {
           columnId: 'c1',
-          cards: cardsFrom(11, 1, { swimlaneKey: 'u1', assigneeId: 'u1' }),
+          laneKey: 'u1',
+          cards: cardsFrom(1, 10, { swimlaneKey: 'u1', assigneeId: 'u1' }),
           totalCount: 11,
-          cursor: null,
+          cursor: 'CELL-1',
           planHolds: {},
         },
-      ]),
-    );
+        { columnId: 'c2', laneKey: 'u1', cards: [], totalCount: 0, cursor: null, planHolds: {} },
+      ],
+    };
+    const cellPage = {
+      columnId: 'c1',
+      laneKey: 'u1',
+      cards: cardsFrom(11, 1, { swimlaneKey: 'u1', assigneeId: 'u1' }),
+      totalCount: 11,
+      cursor: null,
+      planHolds: {},
+    };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).startsWith('/api/board/lanes/')) {
+        return { ok: true, status: 200, json: async () => lanePage };
+      }
+      if (String(url).startsWith('/api/board/columns/')) {
+        return { ok: true, status: 200, json: async () => cellPage };
+      }
+      return { ok: true, status: 200, json: async () => board };
+    });
+    vi.stubGlobal('fetch', fetchMock);
     render(<BoardContainer />);
 
     await waitFor(() => expect(screen.getByText('Ana Ruiz')).toBeTruthy());
-    expect(screen.getByTestId('swimlane-load-row')).toBeTruthy();
-    expect(screen.getByTestId('board-count-c1').textContent).toBe('10 of 11');
-    // The swimlane board scrolls as a whole, so the lane sentinel's root is the
-    // viewport (null), not a column body.
-    expect(liveObserverFor('c1')!.root).toBeNull();
+    // The per-column footer row is gone: a grouped board pages each cell itself.
+    expect(screen.queryByTestId('swimlane-load-row')).toBeNull();
+    expect(screen.queryByTestId(/^board-lane-sentinel-/)).toBeNull();
+    // Nothing loads until a lane comes into view, and no lane asks at mount.
+    expect(screen.queryByText('Card 1')).toBeNull();
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('0 of 12');
 
-    scrollIntoView('c1');
-    await waitFor(() => expect(screen.getByTestId('board-count-c1').textContent).toBe('11'));
-    expect(screen.getByText('Card 11')).toBeTruthy();
+    // One board-wide observer, rooted at the viewport, watches every lane's row.
+    const o = [...observers].reverse().find((x) => x.live)!;
+    expect(o.root).toBeNull();
+    const row = screen.getByTestId('swimlane-cells-u1');
+    expect(o.targets).toContain(row);
+    o.callback(
+      [{ isIntersecting: true, target: row } as unknown as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+
+    await waitFor(() => expect(screen.getByText('Card 1')).toBeTruthy());
+    const laneCalls = fetchMock.mock.calls.filter(([u]) =>
+      String(u).startsWith('/api/board/lanes/'),
+    );
+    expect(laneCalls.map(([u]) => String(u))).toEqual(['/api/board/lanes/u1/cells?boardId=b1']);
+    // The header's loaded count is the sum over the column's cells.
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('10 of 12');
+    // Lane u2 was never in view: its cells sit in the not-yet-loaded skeleton,
+    // never claiming to be empty.
+    expect(screen.getByTestId('lane-cell-c1-u2').getAttribute('data-cell-phase')).toBe(
+      'not-loaded',
+    );
+    expect(screen.getByTestId('lane-cell-c1-u2').textContent).not.toContain('No work items');
+
+    // The cell pages through its own Load more: one request, that cell alone.
+    expect(screen.getByTestId('cell-count-c1-u1').textContent).toBe('10 of 11');
+    fireEvent.click(screen.getByTestId('cell-load-more-c1-u1'));
+    await waitFor(() => expect(screen.getByText('Card 11')).toBeTruthy());
+    const cellCalls = fetchMock.mock.calls.filter(([u]) =>
+      String(u).startsWith('/api/board/columns/'),
+    );
+    expect(cellCalls.map(([u]) => String(u))).toEqual([
+      '/api/board/columns/c1/cards?boardId=b1&lane=u1&cursor=CELL-1',
+    ]);
+    expect(screen.getByTestId('cell-count-c1-u1').textContent).toBe('11');
+    expect(screen.queryByTestId('cell-load-more-c1-u1')).toBeNull();
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('11 of 12');
   });
 });

@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "A board must keep at least one column.",
       "toastColumnNotEmptyError": "“{name}” still holds work items — remap its statuses first.",
       "toastRenameBoardError": "Couldn’t rename the board. The previous name was restored.",
-      "errorTitle": "Couldn’t load board settings",
+      "errorTitle": "Couldn’t save the change",
       "errorDescription": "Something went wrong loading this board’s configuration. Try again.",
       "storedFilter": {
         "title": "Board filter",
@@ -4989,6 +4989,13 @@
     "laneCountLoaded": "{loaded, number} of {total, number}",
     "laneLoading": "Loading…",
     "laneLoadRetry": "Couldn’t load more work items · Retry",
+    "cellLoadMore": "Load more",
+    "cellLoadMoreAria": "Load more work items in {column}, {lane} lane",
+    "cellLoadRetryAria": "Couldn’t load more work items · Retry, in {column}, {lane} lane",
+    "cellLoadingAria": "Loading work items in {column}, {lane} lane",
+    "laneScrollLeftAria": "Scroll {lane} lane left",
+    "laneScrollRightAria": "Scroll {lane} lane right",
+    "laneEmpty": "No work items in this lane",
     "pagerPosition": "{name} · {index} of {count}",
     "groupByLabel": "Group by",
     "groupByAria": "Swimlane group by",
@@ -8788,6 +8795,10 @@
       "approve": "Approve",
       "approveChanges": "Approve changes",
       "nothingSavedYet": "Nothing saved yet",
+      "revision": {
+        "earlierVersion": "Earlier version · replaced below",
+        "earlierVersionUnkept": "An earlier version of this plan was here ({count, plural, one {# item} other {# items}}). Its briefing was not kept."
+      },
       "barCounts": "{added, plural, =0 {No additions} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}{removed, plural, =0 {} one {, # removed} other {, # removed}}",
       "barNothingSaved": "Nothing is saved until you approve.",
       "summary": "{added, plural, =0 {No new work items} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}{removed, plural, =0 {} one {, # removed} other {, # removed}} — it's on the canvas, nothing is saved yet.",
@@ -14799,6 +14810,63 @@
         },
         "pausedUntil": "until {time}, in {left}",
         "readOnly": "Read-only. To ask AWS for more quota, run <cmd>{command}</cmd> at a terminal; an account’s ceiling override stays on its existing door."
+      },
+      "blindSpots": {
+        "title": "CI fleet blind spots",
+        "subtitle": "The repos the CI fleet cannot see, for each GitHub organisation it serves: repos with queued fleet jobs but no workflow_job deliveries, and linked repos motir-studio cannot read. Computed by the reconcile in every provision sweep; read-only.",
+        "card": {
+          "title": "By GitHub organisation",
+          "subtitle": "One row per organisation the CI fleet served in the last 3 days."
+        },
+        "pill": {
+          "orgs": "{count, plural, one {# organisation with blind spots} other {# organisations with blind spots}}",
+          "orgsNotRead": "{count, plural, one {# organisation not read} other {# organisations not read}}",
+          "allSeen": "Every repo seen",
+          "notRead": "Not read"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, one {# repo with no deliveries} other {# repos with no deliveries}}",
+          "unreadableCount": "{count, plural, one {# repo unreadable} other {# repos unreadable}}",
+          "seen": "Every repo with fleet jobs had its workflow_job deliveries, and no job was left stranded."
+        },
+        "undelivered": {
+          "title": "Queued fleet jobs, no workflow_job deliveries in 3 days",
+          "hint": "motir-runner jobs but no workflow_job deliveries — is motir-studio installed on this repo?"
+        },
+        "unreadable": {
+          "title": "Linked, but motir-studio cannot read their Actions queue",
+          "body": "Jobs were left stranded in this organisation at the last sweep, and the fleet's motir-studio credential could not list these repos' queued jobs, so no runner was booted for them."
+        },
+        "repo": {
+          "link": "{repo} on GitHub"
+        },
+        "orgError": {
+          "title": "Couldn't read this organisation at the last sweep.",
+          "body": "Its repos are not checked, so nothing here means they are seen. The other organisations are unaffected, and the next sweep tries again. GitHub's answer:"
+        },
+        "empty": {
+          "title": "No blind spots",
+          "body": "The CI fleet sees every repo of the {count, plural, one {# organisation} other {# organisations}} it served in the last 3 days: each repo with fleet jobs had its workflow_job deliveries, and no job was left stranded.",
+          "noOrgs": "No organisation ran a job on the CI fleet in the last 3 days, so there is no repo to check."
+        },
+        "error": {
+          "title": "Couldn't read the CI fleet's blind spots",
+          "body": "The blind-spot record didn't load, so nothing here means every repo is seen. The images and the pools are unaffected. Reload to try again."
+        },
+        "reconcileError": {
+          "title": "The last sweep's reconcile didn't finish",
+          "body": "It stopped with this error, so no organisation was checked and nothing here means every repo is seen. The next sweep tries again."
+        },
+        "notComputed": {
+          "title": "Not computed yet",
+          "body": "No provision sweep has computed the blind spots since this deploy. The sweep runs every 5 minutes; reload after the next one."
+        },
+        "notConfigured": {
+          "title": "The CI fleet is not configured",
+          "body": "This deployment does not run CI jobs on the fleet, so the reconcile serves no organisation and there is no repo to check. <link>Fleet settings</link> has the switch."
+        },
+        "computed": "Computed by the provision sweep of {time} ({age}). Read-only: motir-studio is installed on a repo in GitHub, not here.",
+        "loading": "Loading the CI fleet's blind spots"
       }
     }
   },

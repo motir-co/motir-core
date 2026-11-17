@@ -51,5 +51,5 @@ export const MOTIR_6241_DESIGN_CARD_CRITERIA = [
   '1. `design/ai-planning/design-notes.md` carries the new section and the delta mock is built from',
   '   the real design system.',
   '2. The shipped surface is RENDERED before anything is drawn (the live app, or a headless render of',
-  '   the real `PlanChangeCanvas` + real `globals.css`), and the notes say which.',
+  '   the real `PlanReviewCanvas` + real `globals.css`), and the notes say which.',
 ].join('\n');

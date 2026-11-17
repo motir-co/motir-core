@@ -1,4 +1,4 @@
-import type { PlanHistoryEventDto } from '@/lib/dto/planReview';
+import type { PlanHistoryEventDto, PlanVersionDto } from '@/lib/dto/planReview';
 
 // The plan timeline's MERGE (Story MOTIR-3532 · Subtask MOTIR-3536) — pure logic,
 // no I/O, so the ordering and collapse rules `design/ai-planning/design-notes.md`
@@ -106,4 +106,37 @@ export function mergeTimeline(
     out.push({ ...ev });
   }
   return out;
+}
+
+/**
+ * The plan's VERSIONS, oldest first (MOTIR-11487; design MOTIR-11486 § "The
+ * earlier version, kept as history"): one per stored `planned` close, which is
+ * the moment a version became something a person was asked to read. Each carries
+ * the count that close recorded and the briefing it closed with — `null` for a
+ * close written before the briefing was kept, which the planning rail draws as
+ * its one *briefing was not kept* line.
+ *
+ * Pure: `planReviewService` hands it the trail it already read. A close whose
+ * diff is not the shape this file reads (a hand-written row) still yields a
+ * version — a count of 0 and no briefing — rather than vanishing from the rail.
+ */
+export function planVersionsOf(
+  trail: ReadonlyArray<{ id: string; changeKind: string; changedAt: Date; diff: unknown }>,
+): PlanVersionDto[] {
+  return trail
+    .filter((row) => row.changeKind === 'planned')
+    .map((row) => {
+      const diff = (row.diff ?? {}) as { itemCount?: unknown; summary?: unknown };
+      return {
+        id: row.id,
+        plannedAt: row.changedAt.toISOString(),
+        itemCount:
+          typeof diff.itemCount === 'number' && Number.isFinite(diff.itemCount)
+            ? diff.itemCount
+            : 0,
+        summary:
+          typeof diff.summary === 'string' && diff.summary.trim() !== '' ? diff.summary : null,
+      };
+    })
+    .sort((a, b) => a.plannedAt.localeCompare(b.plannedAt));
 }

@@ -14,6 +14,7 @@ import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatu
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import {
   workItemRepository,
+  type BoardLanePredicate,
   type StoredFilterPredicate,
 } from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -21,6 +22,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
+import { plannabilityService } from '@/lib/services/plannabilityService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
@@ -65,12 +67,14 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type {
   BoardCardDto,
+  BoardCellPageDto,
   BoardColumnConfigDto,
   BoardColumnDto,
   BoardColumnPageDto,
   BoardColumnStatusDto,
   BoardDto,
   BoardFilterInput,
+  BoardLanePageDto,
   BoardPlanHoldSummaryDto,
   BoardProjectionDto,
   BoardSummaryDto,
@@ -95,6 +99,7 @@ import {
   ColumnNotEmptyError,
   IllegalBoardMoveError,
   InvalidBoardCursorError,
+  InvalidBoardLaneError,
   InvalidBoardNameError,
   InvalidBoardTypeError,
   InvalidColumnNameError,
@@ -283,6 +288,16 @@ export const boardsService = {
    * bottom. Done and Cancelled lanes page exactly like the others — no lane is
    * windowed, skipped or emptied.
    *
+   * **Two shapes, by group-by (MOTIR-11445).** A FLAT board (`swimlaneGroupBy`
+   * `none`) returns each column's first page as described here. A GROUPED board
+   * (`assignee`, `priority` or `epic`) returns column META only — `id`, `name`,
+   * `position`, `wipLimit`, `statusKeys` and the column's FULL `totalCount`
+   * across every lane, with `cards: []`, `cursor: null` and `planHolds: {}` —
+   * plus its lanes: a cell's cards arrive from the lane-scoped cell pages
+   * ({@link boardsService.getLanePage}, and {@link boardsService.getCellPage}
+   * for one cell), each carrying its own `planHolds`. A grouped read therefore
+   * costs one count per column and one lane aggregate, and no card read.
+   *
    * Every per-card batch — readiness, the pending decision marker, the review
    * state, the plan hold, the swimlane key and the To fix tag — runs over the
    * LOADED cards only, so the board's cost is bounded by lanes × page size and
@@ -326,7 +341,7 @@ export const boardsService = {
     // NEVER fall back to the unscoped board (that would masquerade the backlog as
     // a sprint). The column meta (name / statusKeys / wipLimit) is still returned
     // so the shape is honest, but every column is empty and nothing is counted.
-    if (board.type === BoardType.scrum && !frame.activeSprint) {
+    if (boardShowsNoCards(board, frame.activeSprint)) {
       const emptyColumns: BoardColumnDto[] = columns.map((col) => ({
         id: col.id,
         name: col.name,
@@ -351,18 +366,34 @@ export const boardsService = {
       };
     }
 
-    // Each lane's first page + its full count (one bound transaction per lane —
-    // see `buildColumnPage`). The query count is per LANE, never per card.
-    const built = await Promise.all(
-      columns.map((col) => buildColumnPage(projectId, col, frame, undefined)),
-    );
+    // A GROUPED board (MOTIR-11445) reads column META only — each column's full
+    // count across every lane, no card read — because its cells page themselves
+    // through the lane-scoped reads; the server cannot know which lanes are in
+    // view, so it pre-loads none. A FLAT board reads each column's first page +
+    // its full count (one bound transaction per column — see `buildColumnPage`)
+    // and decorates the loaded cards, as before.
+    const grouped = groupBy !== 'none';
+    const built: Array<{
+      col: BoardColumn;
+      statusKeys: string[];
+      rows: WorkItem[];
+      totalCount: number;
+      cursor: string | null;
+    }> = grouped
+      ? (await Promise.all(columns.map((col) => buildColumnMeta(projectId, col, frame)))).map(
+          (meta) => ({ ...meta, rows: [], cursor: null }),
+        )
+      : await Promise.all(columns.map((col) => buildColumnPage(projectId, col, frame, undefined)));
 
-    // Every per-card batch, over the loaded pages only (MOTIR-10535).
-    const decorated = await decorateBoardRows(
-      projectId,
-      built.flatMap((b) => b.rows),
-      frame,
-    );
+    // Every per-card batch, over the loaded pages only (MOTIR-10535) — none at
+    // all on a grouped board, which loaded no card.
+    const decorated = grouped
+      ? null
+      : await decorateBoardRows(
+          projectId,
+          built.flatMap((b) => b.rows),
+          frame,
+        );
 
     // Swimlanes (Subtask 3.3.4). The union of the board's mapped column statuses
     // IS the board's card population, so the lane list is resolved over that set
@@ -411,14 +442,14 @@ export const boardsService = {
         position: b.col.position.toString(),
         wipLimit: b.col.wipLimit,
         statusKeys: b.statusKeys,
-        cards: b.rows.map(decorated.toCard),
+        cards: decorated ? b.rows.map(decorated.toCard) : [],
         totalCount: b.totalCount,
         cursor: b.cursor,
       })),
       swimlanes,
       unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
       sprint,
-      planHolds: decorated.planHolds,
+      planHolds: decorated?.planHolds ?? {},
       storedFilter: frame.storedFilter?.dto ?? null,
     };
   },
@@ -470,6 +501,120 @@ export const boardsService = {
       totalCount: page.totalCount,
       cursor: page.cursor,
       planHolds: decorated.planHolds,
+    };
+  },
+
+  /**
+   * One page of ONE board CELL — one swimlane's cards in one column (MOTIR-11444).
+   * A grouped board pages each `(lane × column)` cell on its own, so a lane whose
+   * header counts 40 shows its first {@link BOARD_PAGE_SIZE} cards in a column
+   * rather than an empty cell because other lanes filled that column's page.
+   *
+   * `laneKey` is a key the board's ACTIVE group-by can hold (a lane's `key` from
+   * the projection's `swimlanes`). `cursor` is optional: absent answers the
+   * cell's FIRST page; present, the page strictly after it, in the column's
+   * order. Every gate of {@link getColumnPage} applies unchanged and in the same
+   * order, and the count and the cards run over the same set the column page
+   * does — the stored and toolbar filters, the scrum sprint scope and a
+   * Visitor's exclusion — narrowed by ONE lane condition shared by both, so the
+   * cell's `{loaded} of {total}` is one definition.
+   *
+   * Throws `BoardNotFoundError` / `BoardColumnNotFoundError` (404),
+   * `InvalidBoardCursorError` for a cursor this column did not mint, and
+   * `InvalidBoardLaneError` for a lane key the active group-by cannot hold.
+   */
+  async getCellPage(
+    projectId: string,
+    ctx: ServiceContext | VisitorReadContext,
+    boardId: string,
+    columnId: string,
+    laneKey: string,
+    cursor?: string,
+    filter?: BoardFilterInput,
+  ): Promise<BoardCellPageDto> {
+    const frame = await loadBoardFrame(projectId, ctx, boardId, filter);
+    const col = frame.columns.find((c) => c.id === columnId);
+    if (!col) throw new BoardColumnNotFoundError(columnId);
+    const order = columnOrder(columnStatusKeys(frame.liveByColumn, col.id), frame.terminalKeys);
+    let after: ColumnCursor | undefined;
+    if (cursor !== undefined) {
+      const decoded = decodeColumnCursor(cursor, order);
+      if (!decoded) throw new InvalidBoardCursorError();
+      after = decoded;
+    }
+    const lane = resolveBoardLane(frame.board.swimlaneGroupBy as BoardSwimlaneGroupByDto, laneKey);
+
+    // The projection's rule: a scrum board with no active sprint shows no cards.
+    if (frame.board.type === BoardType.scrum && !frame.activeSprint) {
+      return { columnId, laneKey, cards: [], totalCount: 0, cursor: null, planHolds: {} };
+    }
+
+    const page = await buildCellPage(projectId, col, frame, lane, after);
+    const decorated = await decorateBoardRows(projectId, page.rows, frame, laneKey);
+    return {
+      columnId,
+      laneKey,
+      cards: page.rows.map(decorated.toCard),
+      totalCount: page.totalCount,
+      cursor: page.cursor,
+      planHolds: decorated.planHolds,
+    };
+  },
+
+  /**
+   * One swimlane's FIRST page in every column of the board (MOTIR-11444) — what a
+   * lane entering view loads in ONE request instead of one per column. Each cell
+   * is a {@link getCellPage} first page (its own `totalCount` and `cursor`); the
+   * rows of all the cells are decorated in ONE pass, so the per-card batches run
+   * once for the response, and every cell carries that pass's merged
+   * `planHolds`. The cost is one count and one page per column — what the
+   * projection already spends to load the board's columns.
+   *
+   * Throws `BoardNotFoundError` (404) and `InvalidBoardLaneError`.
+   */
+  async getLanePage(
+    projectId: string,
+    ctx: ServiceContext | VisitorReadContext,
+    boardId: string,
+    laneKey: string,
+    filter?: BoardFilterInput,
+  ): Promise<BoardLanePageDto> {
+    const frame = await loadBoardFrame(projectId, ctx, boardId, filter);
+    const lane = resolveBoardLane(frame.board.swimlaneGroupBy as BoardSwimlaneGroupByDto, laneKey);
+
+    if (frame.board.type === BoardType.scrum && !frame.activeSprint) {
+      return {
+        laneKey,
+        cells: frame.columns.map((col) => ({
+          columnId: col.id,
+          laneKey,
+          cards: [],
+          totalCount: 0,
+          cursor: null,
+          planHolds: {},
+        })),
+      };
+    }
+
+    const built = await Promise.all(
+      frame.columns.map((col) => buildCellPage(projectId, col, frame, lane, undefined)),
+    );
+    const decorated = await decorateBoardRows(
+      projectId,
+      built.flatMap((b) => b.rows),
+      frame,
+      laneKey,
+    );
+    return {
+      laneKey,
+      cells: built.map((b) => ({
+        columnId: b.col.id,
+        laneKey,
+        cards: b.rows.map(decorated.toCard),
+        totalCount: b.totalCount,
+        cursor: b.cursor,
+        planHolds: decorated.planHolds,
+      })),
     };
   },
 
@@ -765,12 +910,16 @@ export const boardsService = {
     const withChildren = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.findParentIdsWithLiveChildren([row.id], ctx.workspaceId, tx),
     );
+    // …and whether it is held out of planning (MOTIR-11546): a move changes
+    // neither its blockers nor theirs, but the returned card replaces the loaded one.
+    const planHeld = await plannabilityService.isHeld(row, ctx.workspaceId);
     return {
       card: toBoardCardDto(row, {
         ready,
         readyToStart: isReadyToStart(appliedStatusCategory, ready),
         statusLabel: appliedStatusLabel,
         hasChildren: withChildren.has(row.id),
+        planHeld,
         pendingDecision: pendingById.get(row.id) ?? null,
         review: reviewById[row.id] ?? null,
         planHold: planHoldById.get(row.id) ?? null,
@@ -973,7 +1122,11 @@ export const boardsService = {
    *     you delete down to zero columns).
    *   - `ColumnNotEmptyError` (409) — refuse while a mapped status still holds
    *     work items on the board ("you can't delete a column with issues"); the
-   *     admin remaps those statuses elsewhere first.
+   *     admin remaps those statuses elsewhere first. "On the board" is the
+   *     board's own scope — its stored filter and scrum sprint — so a column
+   *     whose cards the board's filter excludes is empty here and deletes
+   *     (MOTIR-11550); its statuses go to the tray and the filter keeps their
+   *     cards off the board either way.
    * When it proceeds, it unmaps the column's statuses (they return to
    * `unmappedStatuses` — the 3.2.6 tray) and deletes the `board_column` row, in
    * ONE transaction. It NEVER deletes a work item (a card's column is derived
@@ -991,6 +1144,11 @@ export const boardsService = {
     );
     if (!column) throw new BoardColumnNotFoundError(columnId);
     await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(column.boardId, ctx.workspaceId, tx),
+    );
+    /* v8 ignore next -- defensive: a column's board_id is an FK, so its board exists */
+    if (!board) throw new BoardColumnNotFoundError(columnId);
 
     // The project's statuses are stable w.r.t. this op (deleteColumn never
     // touches the workflow), so resolve them once outside the tx; the column
@@ -1000,6 +1158,15 @@ export const boardsService = {
       ctx.workspaceId,
     );
     const statusById = new Map(statuses.map((s) => [s.id, s]));
+    // The board's OWN card scope — its stored filter and its scrum sprint scope
+    // (MOTIR-11550) — resolved by the SAME helper the board projection uses, so
+    // "this column holds work items" is judged on exactly the cards the board
+    // (and the settings page's column count) shows. Like the statuses, it is
+    // resolved before the lock: the stored filter's referents load through their
+    // own bound read. A filter edited mid-delete is the same best-effort race as
+    // a card moving into the column — it can only UNMAP statuses, never lose a
+    // work item.
+    const ownScope = await resolveBoardOwnScope(board, ctx.workspaceId);
 
     await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
       // Lock the board row so concurrent column adds/deletes on this board
@@ -1020,7 +1187,12 @@ export const boardsService = {
       if (columns.length <= 1) throw new LastColumnError();
 
       // Not-empty guard — refuse if any of the column's mapped (live) statuses
-      // still holds non-archived work items on the board.
+      // still holds non-archived work items ON THIS BOARD: counted under the
+      // board's own scope (`columnReadScope` over the stored filter and the
+      // sprint), the predicate the projection's `totalCount` is read under, so
+      // the settings page's count and this refusal cannot disagree. A scrum
+      // board with no active sprint shows no cards in any column, so nothing
+      // is counted.
       const mappings = await boardColumnStatusRepository.findByColumn(
         columnId,
         ctx.workspaceId,
@@ -1030,11 +1202,16 @@ export const boardsService = {
         .map((m) => statusById.get(m.statusId))
         .filter((s): s is WorkflowStatusDto => s != null)
         .map((s) => s.key);
-      if (statusKeys.length > 0) {
+      if (statusKeys.length > 0 && !boardShowsNoCards(board, ownScope.activeSprint)) {
+        const { count } = columnReadScope({
+          ...ownScope,
+          boardFilter: undefined,
+          excludeIds: undefined,
+        });
         const cardCount = await workItemRepository.countProjectIssues(
           column.projectId,
           ctx.workspaceId,
-          { statuses: statusKeys },
+          { statuses: statusKeys, ...count },
           tx,
         );
         if (cardCount > 0) throw new ColumnNotEmptyError(columnId, cardCount);
@@ -1648,6 +1825,49 @@ type BoardFrame = {
   activeSprint: Sprint | null;
 };
 
+/** What narrows a board's cards — the part of {@link BoardFrame} that
+ *  {@link columnReadScope} reads. */
+type BoardCardScope = Pick<
+  BoardFrame,
+  'activeSprint' | 'boardFilter' | 'storedFilter' | 'excludeIds'
+>;
+
+/**
+ * The board's OWN card scope — what narrows its cards whoever reads it and
+ * whatever the toolbar says: its stored filter (MOTIR-10560) and, on a scrum
+ * board, its project's active sprint (Subtask 4.5.2). Shared by the board
+ * projection ({@link loadBoardFrame}) and the column-delete guard
+ * (`deleteColumn`, MOTIR-11550), so a column's count on the board and the
+ * guard's count are read under one scope.
+ *
+ * SPRINT SCOPE: a SCRUM board renders only its project's ACTIVE sprint. The
+ * sprint is PROJECT-scoped, not board-scoped (schema rung 2: there is no
+ * `board.sprintId`; the `sprint_one_active_per_project` partial-unique index
+ * makes "the board's active sprint" unambiguous). A `kanban` board is unscoped.
+ * The stored filter never throws — a stale or unreadable condition narrows the
+ * board instead of breaking it.
+ */
+async function resolveBoardOwnScope(
+  board: Board,
+  workspaceId: string,
+): Promise<Pick<BoardFrame, 'storedFilter' | 'activeSprint'>> {
+  const storedFilter = await resolveStoredBoardFilter(board.projectId, workspaceId, board.filter);
+  const activeSprint =
+    board.type === BoardType.scrum
+      ? await withWorkspaceServiceContext(workspaceId, (tx) =>
+          sprintRepository.findActiveByProject(board.projectId, workspaceId, tx),
+        )
+      : null;
+  return { storedFilter, activeSprint };
+}
+
+/** A scrum board with no active sprint shows no card in any column — it never
+ *  falls back to the unscoped board, which would masquerade the backlog as a
+ *  sprint. */
+function boardShowsNoCards(board: Board, activeSprint: Sprint | null): boolean {
+  return board.type === BoardType.scrum && !activeSprint;
+}
+
 async function loadBoardFrame(
   projectId: string,
   ctx: ServiceContext | VisitorReadContext,
@@ -1698,7 +1918,7 @@ async function loadBoardFrame(
   // The board's OWN stored filter (MOTIR-10560): part of the board, not of the
   // reader, so a member and a Visitor read it alike. Never throws — a stale or
   // unreadable condition narrows the board instead of breaking it.
-  const storedFilter = await resolveStoredBoardFilter(projectId, readCtx.workspaceId, board.filter);
+  const { storedFilter, activeSprint } = await resolveBoardOwnScope(board, readCtx.workspaceId);
 
   // The board's own two reads share ONE bound transaction; the workflow LIST is
   // a service call and opens its own (the call-into-another-service clause in
@@ -1726,18 +1946,6 @@ async function loadBoardFrame(
     list.push(s);
     liveByColumn.set(m.columnId, list);
   }
-
-  // SPRINT SCOPE (Subtask 4.5.2). A SCRUM board renders only its project's
-  // ACTIVE sprint. The sprint is PROJECT-scoped, not board-scoped (schema rung
-  // 2: there is no `board.sprintId`; the `sprint_one_active_per_project`
-  // partial-unique index makes "the board's active sprint" unambiguous). A
-  // `kanban` board is unscoped.
-  const activeSprint =
-    board.type === BoardType.scrum
-      ? await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
-          sprintRepository.findActiveByProject(projectId, readCtx.workspaceId, tx),
-        )
-      : null;
 
   return {
     member,
@@ -1777,6 +1985,8 @@ async function buildColumnPage(
   col: BoardColumn,
   frame: BoardFrame,
   after: ColumnCursor | undefined,
+  // ONE swimlane (MOTIR-11444) — set only by `buildCellPage`; absent ⇒ the column.
+  lane?: BoardLanePredicate,
 ): Promise<{
   col: BoardColumn;
   statusKeys: string[];
@@ -1790,10 +2000,7 @@ async function buildColumnPage(
   }
   const order = columnOrder(statusKeys, frame.terminalKeys);
   const { workspaceId } = frame.readCtx;
-  const sprintId = frame.activeSprint?.id;
-  const filter = frame.boardFilter;
-  const stored = frame.storedFilter?.predicate;
-  const excludeIds = frame.excludeIds;
+  const scope = columnReadScope(frame, lane);
   // The lane's cards and its own denominator, in ONE bound transaction: two
   // reads of the same predicate rendered as one column header, so a write
   // landing between them cannot make "12 of 9" appear.
@@ -1801,13 +2008,7 @@ async function buildColumnPage(
     totalCount: await workItemRepository.countProjectIssues(
       projectId,
       workspaceId,
-      {
-        statuses: statusKeys,
-        ...(sprintId ? { sprintId } : {}),
-        ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
-        ...(stored ? { storedFilter: stored } : {}),
-        ...(excludeIds ? { excludeIds } : {}),
-      },
+      { statuses: statusKeys, ...scope.count },
       tx,
     ),
     fetched: await workItemRepository.findColumnCards(
@@ -1818,10 +2019,7 @@ async function buildColumnPage(
       {
         limit: BOARD_PAGE_SIZE + 1,
         ...(after ? { after } : {}),
-        sprintId,
-        ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
-        ...(stored ? { storedFilter: stored } : {}),
-        ...(excludeIds ? { excludeIds } : {}),
+        ...scope.cards,
       },
       tx,
     ),
@@ -1830,6 +2028,111 @@ async function buildColumnPage(
   const last = rows[rows.length - 1];
   const cursor = fetched.length > BOARD_PAGE_SIZE && last ? cursorAfter(order, last) : null;
   return { col, statusKeys, rows, totalCount, cursor };
+}
+
+/**
+ * The predicate set a column's count and its cards are read under — the scrum
+ * sprint scope, the toolbar filter, the board's stored filter, a Visitor's
+ * private-epic exclusion and (for a cell) the lane — assembled in ONE place so
+ * the column page, the cell page and the grouped board's column meta
+ * ({@link buildColumnMeta}) can never narrow under different sets.
+ *
+ * The two reads spell the toolbar filter's referents differently: the count
+ * takes `filterReferents`, the card read `referents`. Handing either the
+ * other's spelling silently drops the referents, so each read gets its own
+ * object rather than one shared bag.
+ */
+function columnReadScope(frame: BoardCardScope, lane?: BoardLanePredicate) {
+  const sprintId = frame.activeSprint?.id;
+  const filter = frame.boardFilter;
+  const stored = frame.storedFilter?.predicate;
+  const excludeIds = frame.excludeIds;
+  const shared = {
+    ...(stored ? { storedFilter: stored } : {}),
+    ...(excludeIds ? { excludeIds } : {}),
+    ...(lane ? { lane } : {}),
+  };
+  return {
+    count: {
+      ...(sprintId ? { sprintId } : {}),
+      ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+      ...shared,
+    },
+    cards: {
+      sprintId,
+      ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
+      ...shared,
+    },
+  };
+}
+
+/**
+ * One column's META on a GROUPED board (MOTIR-11445): its mapped status keys and
+ * its FULL `totalCount` across every lane, read under exactly the predicates
+ * {@link buildColumnPage} counts under ({@link columnReadScope}), with no card
+ * read and no cursor — a grouped board's cards arrive from its cell pages. A
+ * column mapping no live status answers an empty count and issues no query.
+ */
+async function buildColumnMeta(
+  projectId: string,
+  col: BoardColumn,
+  frame: BoardFrame,
+): Promise<{ col: BoardColumn; statusKeys: string[]; totalCount: number }> {
+  const statusKeys = columnStatusKeys(frame.liveByColumn, col.id);
+  if (statusKeys.length === 0) return { col, statusKeys, totalCount: 0 };
+  const { workspaceId } = frame.readCtx;
+  const { count } = columnReadScope(frame);
+  const totalCount = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.countProjectIssues(
+      projectId,
+      workspaceId,
+      { statuses: statusKeys, ...count },
+      tx,
+    ),
+  );
+  return { col, statusKeys, totalCount };
+}
+
+/**
+ * Build one page of a board CELL — one swimlane's cards in one column
+ * (MOTIR-11444): {@link buildColumnPage} with the lane condition handed to BOTH
+ * its reads, so the cell's count and its cards are the same predicate in the
+ * same bound transaction, asked for `BOARD_PAGE_SIZE + 1` rows with the cursor
+ * minted only when the extra row came back.
+ */
+function buildCellPage(
+  projectId: string,
+  col: BoardColumn,
+  frame: BoardFrame,
+  lane: BoardLanePredicate,
+  after: ColumnCursor | undefined,
+) {
+  return buildColumnPage(projectId, col, frame, after, lane);
+}
+
+/** A priority lane's value — the `WorkItemPriority` the lane condition takes. */
+type BoardLanePriority = Extract<BoardLanePredicate, { kind: 'priority' }>['priority'];
+
+/**
+ * Turn a lane key into the lane condition for the board's ACTIVE group-by
+ * (MOTIR-11444), exactly as `resolveSwimlaneKeys` keys a card: an assignee id
+ * (the catch-all an unassigned card), a priority value, or an epic id (the
+ * catch-all a card with no epic in its chain). Refuses with
+ * `InvalidBoardLaneError` a key the dimension cannot denote — any key on a
+ * `none` board, and on a `priority` board the catch-all or a non-priority. A key
+ * it CAN denote that holds no cards is not refused: its cell is simply empty.
+ */
+export function resolveBoardLane(
+  groupBy: BoardSwimlaneGroupByDto,
+  laneKey: string,
+): BoardLanePredicate {
+  const catchAll = laneKey === BOARD_SWIMLANE_NO_VALUE;
+  if (groupBy === 'assignee') return { kind: 'assignee', assigneeId: catchAll ? null : laneKey };
+  if (groupBy === 'epic') return { kind: 'epic', epicId: catchAll ? null : laneKey };
+  if (groupBy === 'priority' && PRIORITY_LANE_ORDER.includes(laneKey)) {
+    return { kind: 'priority', priority: laneKey as BoardLanePriority };
+  }
+  throw new InvalidBoardLaneError(laneKey, groupBy);
 }
 
 /**
@@ -1844,6 +2147,9 @@ async function decorateBoardRows(
   projectId: string,
   rows: WorkItem[],
   frame: BoardFrame,
+  // The ONE lane every row is in (MOTIR-11444): a cell or lane page's own
+  // predicate established it, so the key is stamped rather than re-derived.
+  laneKey?: string,
 ): Promise<{
   toCard: (row: WorkItem) => BoardCardDto;
   planHolds: Record<string, BoardPlanHoldSummaryDto>;
@@ -1859,6 +2165,13 @@ async function decorateBoardRows(
   const withChildren = await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
     workItemRepository.findParentIdsWithLiveChildren(ids, readCtx.workspaceId, tx),
   );
+  // …and which loaded stories are HELD out of planning (MOTIR-11546) — blocked by
+  // an unfinished story with no subtasks — so the slot does not draw them To plan.
+  // ONE blocker read for the page. A Visitor's withheld blockers are left out,
+  // as the roadmap level leaves them out.
+  const heldIds = await plannabilityService.heldStoryIds(rows, readCtx.workspaceId, {
+    excludeBlockerIds: frame.excludeIds ?? [],
+  });
 
   // The decision-waiting marker (Story MOTIR-4908 · MOTIR-5876): which cards have
   // an awaiting gate, and whether it is this reader's — ONE gate query. A Visitor
@@ -1895,7 +2208,10 @@ async function decorateBoardRows(
   }
 
   // Swimlane membership (Subtask 3.3.4) — per loaded card; a no-op on `none`.
-  const swimlaneKeyByCard = await resolveSwimlaneKeys(groupBy, rows, readCtx);
+  const swimlaneKeyByCard =
+    laneKey !== undefined
+      ? new Map(rows.map((r) => [r.id, laneKey]))
+      : await resolveSwimlaneKeys(groupBy, rows, readCtx);
 
   // The To fix tag's *· with {head}* (MOTIR-7589) and Fixing (MOTIR-10309): read only for
   // the cards showing a reason, and never for a Visitor — a head key names another card.
@@ -1920,6 +2236,7 @@ async function decorateBoardRows(
       // A Visitor's private epic reads childless, as the roadmap's root does:
       // the card must not say what the Visitor may not see.
       hasChildren: childrenHidden ? false : withChildren.has(r.id),
+      planHeld: heldIds.has(r.id),
       pendingDecision: pendingById.get(r.id) ?? null,
       review: reviewById[r.id] ?? null,
       planHold: planHoldRead.byItemId.get(r.id) ?? null,

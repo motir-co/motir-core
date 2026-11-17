@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "面板必须至少保留一列。",
       "toastColumnNotEmptyError": "“{name}”仍有工作项——请先重新映射其状态。",
       "toastRenameBoardError": "无法重命名面板，已还原为之前的名称。",
-      "errorTitle": "无法加载面板设置",
+      "errorTitle": "无法保存更改",
       "errorDescription": "加载该面板的配置时出了点问题，请重试。",
       "storedFilter": {
         "title": "面板筛选器",
@@ -4989,6 +4989,13 @@
     "laneCountLoaded": "{loaded, number} / {total, number}",
     "laneLoading": "正在加载…",
     "laneLoadRetry": "无法加载更多工作项 · 重试",
+    "cellLoadMore": "加载更多",
+    "cellLoadMoreAria": "加载 {column} 中 {lane} 泳道的更多工作项",
+    "cellLoadRetryAria": "无法加载更多工作项 · 重试，{column}，{lane} 泳道",
+    "cellLoadingAria": "正在加载 {column} 中 {lane} 泳道的工作项",
+    "laneScrollLeftAria": "向左滚动 {lane} 泳道",
+    "laneScrollRightAria": "向右滚动 {lane} 泳道",
+    "laneEmpty": "此泳道暂无工作项",
     "pagerPosition": "{name} · 第 {index}/{count}",
     "groupByLabel": "分组方式",
     "groupByAria": "泳道分组方式",
@@ -8782,6 +8789,10 @@
       "approve": "确认",
       "approveChanges": "确认变更",
       "nothingSavedYet": "尚未保存",
+      "revision": {
+        "earlierVersion": "早先的版本 · 已由下方的新版本取代",
+        "earlierVersionUnkept": "这里曾是此计划的早先版本（{count, plural, other {# 项}}）。它的说明没有保留。"
+      },
       "barCounts": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}}{removed, plural, =0 {} other {，移除 #}}",
       "barNothingSaved": "确认之前不会保存任何内容。",
       "summary": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}}{removed, plural, =0 {} other {，移除 #}} —— 已放到画布上，尚未保存。",
@@ -14793,6 +14804,63 @@
         },
         "pausedUntil": "至 {time}，{left}后",
         "readOnly": "只读。如需向 AWS 申请更多配额，请在终端运行 <cmd>{command}</cmd>；账户上限的覆盖仍在原来的位置设置。"
+      },
+      "blindSpots": {
+        "title": "CI 集群盲区",
+        "subtitle": "CI 集群在其服务的每个 GitHub 组织中看不到的仓库：有排队的集群作业却没有 workflow_job 投递的仓库，以及 motir-studio 无法读取的已关联仓库。由每次预置扫描中的对账计算；只读。",
+        "card": {
+          "title": "按 GitHub 组织",
+          "subtitle": "过去 3 天内 CI 集群服务过的每个组织各一行。"
+        },
+        "pill": {
+          "orgs": "{count, plural, other {# 个组织有盲区}}",
+          "orgsNotRead": "{count, plural, other {# 个组织未读取}}",
+          "allSeen": "所有仓库均可见",
+          "notRead": "未读取"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, other {# 个仓库无投递}}",
+          "unreadableCount": "{count, plural, other {# 个仓库无法读取}}",
+          "seen": "每个有集群作业的仓库都收到了 workflow_job 投递，也没有作业滞留。"
+        },
+        "undelivered": {
+          "title": "有排队的集群作业，3 天内无 workflow_job 投递",
+          "hint": "有 motir-runner 作业但没有 workflow_job 投递——此仓库是否安装了 motir-studio？"
+        },
+        "unreadable": {
+          "title": "已关联，但 motir-studio 无法读取其 Actions 队列",
+          "body": "上次扫描时该组织中有作业滞留，而集群的 motir-studio 凭据无法列出这些仓库的排队作业，因此没有为它们启动运行器。"
+        },
+        "repo": {
+          "link": "GitHub 上的 {repo}"
+        },
+        "orgError": {
+          "title": "上次扫描未能读取该组织。",
+          "body": "它的仓库未被检查，因此这里不代表它们可见。其他组织不受影响，下次扫描会重试。GitHub 的回复："
+        },
+        "empty": {
+          "title": "没有盲区",
+          "body": "CI 集群能看到过去 3 天内服务过的 {count, plural, other {# 个组织}}的所有仓库：每个有集群作业的仓库都收到了 workflow_job 投递，也没有作业滞留。",
+          "noOrgs": "过去 3 天内没有组织在 CI 集群上运行作业，因此没有需要检查的仓库。"
+        },
+        "error": {
+          "title": "无法读取 CI 集群盲区",
+          "body": "盲区记录未能加载，因此这里不代表所有仓库均可见。镜像和池不受影响。请重新加载重试。"
+        },
+        "reconcileError": {
+          "title": "上次扫描的对账未完成",
+          "body": "对账因以下错误停止，因此未检查任何组织，这里不代表所有仓库均可见。下次扫描会重试。"
+        },
+        "notComputed": {
+          "title": "尚未计算",
+          "body": "自本次部署以来，还没有预置扫描计算过盲区。扫描每 5 分钟运行一次；请在下次扫描后重新加载。"
+        },
+        "notConfigured": {
+          "title": "CI 集群未配置",
+          "body": "此部署未在集群上运行 CI 作业，因此对账不服务任何组织，也没有需要检查的仓库。开关位于<link>集群设置</link>。"
+        },
+        "computed": "由 {time} 的预置扫描计算（{age}）。只读：motir-studio 需在 GitHub 中安装到仓库，而不是在这里。",
+        "loading": "正在加载 CI 集群盲区"
       }
     }
   },

@@ -18,14 +18,17 @@ import { OverlayExitButton } from '@/components/ui/OverlayExitButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AuditCoverageBanner } from '@/components/planning/AuditCoverageBanner';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
-import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
 import { PlanningCanvasSkeleton } from '@/components/planning/PlanningWorkspaceSkeleton';
 import {
   PlanChangeConfirmBar,
   PLAN_CONFIRM_BAR_HEIGHT,
 } from '@/components/planning/PlanChangeConfirmBar';
 import type { PlanApproveProgressView } from '@/components/planning/PlanApproveProgress';
-import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
+import {
+  PlanProposalViews,
+  type PlanReviewCanvasPrePlan,
+} from '@/components/planning/PlanProposalViews';
+import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import { RequirementDocument, RequirementNotice } from '@/components/planning/RequirementDocument';
 import { requirementPaneOf } from '@/lib/planning/requirementPane';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
@@ -115,7 +118,7 @@ import {
 //
 // PAGE STATE AFTER A MUTATION (`motir-core/CLAUDE.md`): an approve commits work
 // items. The canvas is a CLIENT ISLAND that seeds its level once, so it gets an
-// explicit refetch trigger (`treeVersion`, folded into the canvas's diff key), and
+// explicit refetch trigger (`treeVersion`, folded into the canvas's `version`), and
 // the plan review is re-read and merged by identity (`usePlanChangeConversation`).
 // The Workbench behind this overlay — the surface whose counts move — re-reads
 // its own window when asked (`useRequestWorkbenchReread`, Story MOTIR-8539 ·
@@ -138,6 +141,10 @@ import {
 // paint. (`app/(planning)/loading.tsx` covered the navigation ahead of this while
 // the workspace was a route; the overlay has no navigation to cover — it renders
 // `PlanningWorkspaceSkeleton` inside the dialog instead.)
+
+/** The "no plan" pane's item set — one stable empty array, so the canvas's
+ *  memoised level reads do not churn on every host render (MOTIR-11513). */
+const NO_ITEMS: PlanReviewItemDto[] = [];
 
 export interface PlanningWorkspaceHostProps {
   /** The project's `MOTIR`-style key — the canvas's per-level read source. */
@@ -677,8 +684,10 @@ function PlanWorkspaceHost({
   // honouring MOTIR-6161's rule).
   //
   // `navigated` is per-mount state inside `ProjectRoadmapCanvas`, which is right
-  // until a surface REPLACES its canvas — and this one does, the moment a plan is
-  // proposed. Without this, the fresh `PlanReviewCanvas` mounted with
+  // until a surface REPLACES its canvas. This one keeps its canvas when a plan
+  // first lands on the pane it opened with (bug MOTIR-11513), but it still mounts
+  // a FRESH one for a later plan, and for a named session's plan after its
+  // skeleton. Without this, that fresh `PlanReviewCanvas` mounted with
   // `navigated: false`, granted the pending `followTo`, and moved a reader off the
   // level they had chosen. That is the one thing MOTIR-6161 decided must not
   // happen, and its own gate catches it.
@@ -693,8 +702,6 @@ function PlanWorkspaceHost({
     setCanvasHeldTrail(trail);
   }, []);
   const readerHasNavigated = canvasHeldTrail !== null;
-  // One key for "what the canvas is drawing": a new proposal, or a fresh commit.
-  const diffKey = `${treeVersion}:${state.jobId ?? 'none'}:${state.decided ?? 'pending'}:${index.counts.added}-${index.counts.changed}-${index.counts.removed}`;
 
   // THE PREDICATE, from `lib/planning/planPending.ts` — the SAME expression that
   // used to sit inline in the footer slot below, moved into a module so the bar
@@ -742,8 +749,8 @@ function PlanWorkspaceHost({
   //
   // `state.decided` keeps it mounted after the decision, in Part VI's decided
   // treatment (MOTIR-3162 keeps the review across approve and discard). A new turn
-  // clears the review, and the pane falls back to `PlanChangeCanvas` — which is the
-  // "no plan" state again, and correct.
+  // clears the review, and the pane falls back to the "no plan" state again — the
+  // same component with `prePlan` set (bug MOTIR-11513, `paneInstance` below).
   //
   // ── …AND WHILE THE PLAN IS BEING WRITTEN (MOTIR-6300; design Part XXIII) ─────────
   //
@@ -994,10 +1001,79 @@ function PlanWorkspaceHost({
     ) : undefined;
   // ⚠️ A NAMED session is opened to show its plan (bug MOTIR-6289) — a To-approve row
   // or a Plans row writes `planSession`. Until the conversation has read whether a plan
-  // is pending, the pane is its skeleton, NOT the roadmap: drawing `PlanChangeCanvas`
+  // is pending, the pane is its skeleton, NOT the roadmap: drawing the "no plan" canvas
   // for that interval is what flashed the roadmap and then jumped to the plan. A launch
   // with no session has no plan to wait for, so it draws the roadmap at once, as before.
   const openingNamedSession = Boolean(launch.sessionId) && state.phase === 'loading';
+
+  // ── ONE PANE, FROM THE OPEN THROUGH THE FIRST PLAN (bug MOTIR-11513) ─────────
+  //
+  // The pane is `PlanProposalViews` from the moment the surface opens. Before a
+  // plan exists it draws the roadmap level with the targets ringed (`prePlan`);
+  // when the plan's first read lands, the SAME instance — the same canvas, its
+  // level, its centred target and its zoom and pan — takes the plan, and only the
+  // List | Canvas header and the plan's chrome arrive around it. It used to be a
+  // second component (`<pre-plan canvas> → PlanProposalViews`), so pressing Start
+  // planning unmounted the canvas the reader was looking at, re-read the level,
+  // re-fitted it and lost the target.
+  //
+  // THE KEY says when the pane IS a new instance, and it is narrower than the plan
+  // id on purpose. A pre-plan pane ADOPTS the first plan that lands on it — that
+  // is the fix. A pane that already showed a plan gets a FRESH instance for any
+  // other plan, and for the "no plan" state after one, exactly as each did when
+  // the pane was keyed on the plan: a later plan opens as it always has (held
+  // trail, arrival), and the "no plan" state re-opens on the launch's level.
+  // Folded in render (the `paneTick` shape below), never in an effect.
+  const [paneInstance, setPaneInstance] = useState<{ seq: number; planId: string | null }>(() => ({
+    seq: 0,
+    planId: paneId,
+  }));
+  if (paneInstance.planId !== paneId) {
+    setPaneInstance({
+      seq: paneInstance.planId === null ? paneInstance.seq : paneInstance.seq + 1,
+      planId: paneId,
+    });
+  }
+  // The pane's "no plan" state: the targets, the target action and the empty
+  // statement, which only the pre-plan canvas draws. A new object per render is
+  // fine — the canvas reads the target SET through its joined key.
+  const panePrePlan: PlanReviewCanvasPrePlan | null =
+    paneReview === null
+      ? {
+          targetIds,
+          // The canvas's Set as target / Remove target (MOTIR-6898) — while there
+          // is no plan, and only then: a plan's cards are proposals, or committed
+          // cards seen through a plan under review.
+          onToggleTarget: toggleCanvasTarget,
+          canAddTarget: targets.length < MAX_PLANNING_TARGETS,
+          searchLabel: t('searchLabel'),
+          emptyRoot: (
+            <EmptyState
+              icon={<Map className="h-12 w-12" aria-hidden />}
+              title={t('emptyCanvasTitle')}
+              description={t('emptyCanvasDescription')}
+            />
+          ),
+        }
+      : null;
+
+  // ── THE SPLIT'S RESET ON PROPOSE, WHERE IT STILL APPLIES (MOTIR-6248 · MOTIR-11513) ──
+  //
+  // `ResizableSplit` returns a widened conversation to the default third when its
+  // `resetWhen` turns true. MOTIR-6248 put that on "a plan is proposed", so a plan
+  // opened for reading gets the canvas's two-thirds. It does NOT apply to a plan the
+  // person STARTED here: they chose that width while looking at this canvas, and the
+  // plan is drawn on the canvas they already have, so moving the divider under them
+  // is the jump this bug removes. What is left is a NAMED session (a To-approve or
+  // Plans row, MOTIR-6289) whose plan arrives after its opening skeleton — the case
+  // MOTIR-6248's reasoning was about. So the signal is latched OFF for good the first
+  // time this overlay draws the "no plan" pane, and every later plan in it — the
+  // first or a re-plan after a decision — leaves the divider where the person put it.
+  // `design/ai-chat/design-notes.md` § *The reset on propose, after MOTIR-11513*.
+  const [splitResetArmed, setSplitResetArmed] = useState(Boolean(launch.sessionId));
+  if (splitResetArmed && paneReview === null && !openingNamedSession) {
+    setSplitResetArmed(false);
+  }
 
   // ⚠️ THE VIEW IS LOCAL, AND IT IS NEVER WRITTEN TO THE URL (`design-notes.md`
   // Part XXI 21.4). The plan page keeps it in the URL and is right to; this is an
@@ -1122,6 +1198,23 @@ function PlanWorkspaceHost({
     };
   }, [closeGuardRef, guarded]);
 
+  // THE GUARD STEPS ASIDE WHEN ITS QUESTION GOES AWAY (Bug MOTIR-11464). A guard that is
+  // open over a plan somebody then decides ELSEWHERE — the re-read settles the overlay,
+  // or the guard's own *Confirm & add* is refused because the plan was already decided —
+  // has nothing left to lose, so its copy ("closing now discards them") is false. An
+  // approve settled that way closes through `onApproved` like a press made here; a
+  // decline leaves the overlay open on the declined plan, so the reader sees the items
+  // were not added, and the next Close is instant.
+  //
+  // Adjusted DURING RENDER, the React-documented way to reset state when an input changes,
+  // so the dialog never paints one frame over a question that has gone; the armed close
+  // is disarmed in an effect, since a ref is never written while rendering.
+  const guardStillAsks = guarded || deciding;
+  if (guardOpen && !guardStillAsks) setGuardOpen(false);
+  useEffect(() => {
+    if (!guardStillAsks) closeAfterApproveRef.current = false;
+  }, [guardStillAsks]);
+
   // ⚠️ TWO VECTORS ARE DELIBERATELY NOT GUARDED, and the design says why
   // (`design/ai-chat/design-notes.md` § *Opening & exiting* → *The
   // CLOSE-WITH-PENDING guard*, the vector table):
@@ -1179,13 +1272,11 @@ function PlanWorkspaceHost({
       // variant its own docstring offers is exactly this case.
       className="h-full w-full"
       // THE RESIZABLE SPLIT (MOTIR-6250), opt-in — this host is its ONE consumer.
-      // `state.review` is non-null exactly when a plan has been PROPOSED, which is
-      // the transition the reset fires on; it is the workspace's own state rather
-      // than a route change, so it covers a plan watched as it is written.
       resizable
-      // The PANE's plan, so the reset fires when a plan first appears — its first
-      // live read — and not again at the hand-over, where nothing resizes (§23.13).
-      proposalPresent={paneReview !== null}
+      // The PANE's plan, so the reset fires when a plan first appears and not again
+      // at the hand-over, where nothing resizes (§23.13) — and only on a named
+      // session's opening, never for a plan started on this canvas (MOTIR-11513).
+      proposalPresent={splitResetArmed && paneReview !== null}
       canvas={
         <div className="flex h-full min-h-0 flex-col bg-(--el-canvas)">
           {/* The shell's own exit chrome + project crumb. The canvas keeps its
@@ -1240,14 +1331,20 @@ function PlanWorkspaceHost({
             className="@container/plan-pane relative min-h-0 flex-1 overflow-hidden"
             style={{ '--canvas-foot-inset': PLAN_CONFIRM_BAR_HEIGHT } as CSSProperties}
           >
-            {paneReview !== null ? (
+            {openingNamedSession ? (
+              <div className="h-full w-full" data-testid="planning-pane-opening" aria-busy>
+                <PlanningCanvasSkeleton />
+              </div>
+            ) : (
               <PlanProposalViews
-                // ONE key per PLAN: the instance mounted at the first live read is
-                // the one that shows the proposed plan (§23.13).
-                key={paneReview.id}
-                items={paneReview.items}
-                edgeCoverage={paneReview.edgeCoverage}
-                outcome={paneLive ? null : state.decided}
+                // ONE key per pane INSTANCE (MOTIR-11513, `paneInstance` above): the
+                // instance the surface opened with takes its first plan, and the one
+                // mounted at a plan's first live read is the one that shows the
+                // proposed plan (§23.13).
+                key={paneInstance.seq}
+                items={paneReview?.items ?? NO_ITEMS}
+                edgeCoverage={paneReview?.edgeCoverage}
+                outcome={paneLive || paneReview === null ? null : state.decided}
                 projectKey={projectKey}
                 version={treeVersion + paneTick.tick}
                 ariaLabel={t('canvasAria', { project: projectName })}
@@ -1257,20 +1354,35 @@ function PlanWorkspaceHost({
                 // who drills the canvas, reads the List and comes back is returned
                 // to the level they were on.
                 preserveCanvasLevel
-                // The hand-off: open where the reader was, already marked as having
-                // navigated, so the pending request is DECLINED into the bar's
-                // offer rather than granted as a move.
-                //
-                // A pane that mounts LIVE opens where the roadmap stood (§23.2,
-                // §23.8): the reader's own level, else the level the surface
-                // arrived on — never the root because nothing is proposed yet. It
-                // is a mount-time seed, so the value it takes later is ignored.
+                // The "no plan" state (MOTIR-11513): the targets and their action.
+                prePlan={panePrePlan}
+                // The launch target opens CENTRED at a readable zoom (MOTIR-11472),
+                // not as one small card in a fitted level. A project-scoped launch
+                // has no initial target, so it keeps the plain fit. A mount-time
+                // seed, and the "no plan" pane's alone: a pane that mounts on a plan
+                // arrives where the plan is.
+                initialCentreId={paneReview === null ? (initialTarget?.id ?? null) : null}
+                loadingFallback={<PlanningCanvasSkeleton />}
+                // Where the pane OPENS — a mount-time seed, so the value it takes
+                // later is ignored:
+                //   · the "no plan" pane opens on the launch's level (MOTIR-2070),
+                //     the `?item=` anchor's own level rather than the root;
+                //   · a pane that mounts on a plan opens where the reader was,
+                //     already marked as having navigated, so the pending request is
+                //     DECLINED into the bar's offer rather than granted as a move;
+                //   · a pane that mounts LIVE opens where the roadmap stood (§23.2,
+                //     §23.8): the reader's own level, else the level the surface
+                //     arrived on — never the root because nothing is proposed yet.
                 canvasHeldTrail={
-                  canvasHeldTrail ??
-                  (paneLive && initialCanvasTrail && initialCanvasTrail.length > 0
-                    ? initialCanvasTrail
-                    : null)
+                  paneReview === null
+                    ? (initialCanvasTrail ?? null)
+                    : (canvasHeldTrail ??
+                      (paneLive && initialCanvasTrail && initialCanvasTrail.length > 0
+                        ? initialCanvasTrail
+                        : null))
                 }
+                // MOTIR-6154/6161's follow-move while there is no plan, and the
+                // plan's own follow after: the same request, one canvas.
                 followTo={paneFollowTo}
                 // While live the canvas is driven (MOTIR-8594): every new key is
                 // honoured, and the person's own navigation turns following off.
@@ -1281,55 +1393,23 @@ function PlanWorkspaceHost({
                   drivenPane && paneLive && drive.held ? drive.held.levelId : undefined
                 }
                 progressReading={paneReading}
-                readerHasNavigated={readerHasNavigated}
+                // A mount-time seed too: the "no plan" pane has not been navigated.
+                readerHasNavigated={paneReview === null ? false : readerHasNavigated}
                 onCanvasLevelChange={noteReaderLevel}
                 live={paneLive}
                 liveFailing={state.liveFailing}
                 // The progress line (MOTIR-7829) — on the review's own `progress`,
                 // which is null once the plan leaves `generating` (the hand-over).
-                progress={paneReview.progress ?? null}
+                progress={paneReview?.progress ?? null}
                 progressFailing={state.liveFailing}
                 discarded={paneDiscarded}
                 // The plan BESIDE the reader's level offers the trip (MOTIR-6223).
                 offerPlanElsewhere
                 // The cards being written (MOTIR-11201): the open proposal's quick
                 // view shows their partial text while the plan is `generating`.
-                inFlightDrafts={paneReview.inFlightDrafts ?? null}
+                inFlightDrafts={paneReview?.inFlightDrafts ?? null}
                 // Counts ARRIVED reads for the cues' two-read hold (MOTIR-11254).
                 cueReads={state.liveReads}
-              />
-            ) : openingNamedSession ? (
-              <div className="h-full w-full" data-testid="planning-pane-opening" aria-busy>
-                <PlanningCanvasSkeleton />
-              </div>
-            ) : (
-              <PlanChangeCanvas
-                projectKey={projectKey}
-                diffKey={diffKey}
-                targetIds={targetIds}
-                // The canvas's Set as target / Remove target (MOTIR-6898) — on
-                // here, and only here: the proposed-plan pane above draws no
-                // target action (its cards are proposals, or committed cards seen
-                // through a plan under review).
-                onToggleTarget={toggleCanvasTarget}
-                canAddTarget={targets.length < MAX_PLANNING_TARGETS}
-                initialTrail={initialCanvasTrail}
-                // MOTIR-6154/6161's follow-move. It stays on THIS branch of the
-                // swap and is not passed to the component above: the follow moves
-                // the roadmap canvas inside a target that settles while there is no
-                // plan yet, and once a plan is PROPOSED the pane is the plan page's
-                // component, which does its own arriving (`arrivalLevel`).
-                followTo={followTo}
-                onLevelChange={noteReaderLevel}
-                ariaLabel={t('canvasAria', { project: projectName })}
-                loadingFallback={<PlanningCanvasSkeleton />}
-                emptyRoot={
-                  <EmptyState
-                    icon={<Map className="h-12 w-12" aria-hidden />}
-                    title={t('emptyCanvasTitle')}
-                    description={t('emptyCanvasDescription')}
-                  />
-                }
               />
             )}
 

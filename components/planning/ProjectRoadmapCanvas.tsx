@@ -295,8 +295,8 @@ interface ProjectRoadmapCanvasBaseProps {
    * moved from the node ring to the crumb it became.
    *
    * Answered by the CONSUMER, for the same reason `isFolderCrumb` is — only the
-   * consumer knows what a crumb id means. `PlanChangeCanvas` answers it from the
-   * `targetIds` it already has, so a target that becomes known LATER marks its
+   * consumer knows what a crumb id means. `PlanReviewCanvas` answers it, in its
+   * "no plan" state, from the `targetIds` it already has, so a target that becomes known LATER marks its
    * crumb with no further wiring. Absent ⇒ no crumb is one, which is every other
    * consumer.
    */
@@ -320,7 +320,7 @@ interface ProjectRoadmapCanvasBaseProps {
    * reader's navigation authoritative, which is the rule the story states.
    *
    * ⚠️ AND IT IS WHY THIS IS NOT `controlledTrail` HERE SPECIFICALLY.
-   * `PlanChangeCanvas` — the one consumer that needs to follow — already passes
+   * `PlanReviewCanvas` — the one consumer that needs to follow — already passes
    * `resolveHeldNode`, because approving a plan re-keys every proposal. Those two
    * props are documented as not combinable, and the measured failure is not a
    * subtle one: with an id the resolver remaps, they fight over `focusId` until
@@ -399,12 +399,13 @@ interface ProjectRoadmapCanvasBaseProps {
    * THE READER HAD ALREADY NAVIGATED — BEFORE THIS MOUNT (MOTIR-6155).
    *
    * `navigated` is per-mount state, and that is right for a canvas that lives as
-   * long as its surface. The planning surface SWAPS the pane when a plan becomes
-   * proposed (`PlanChangeCanvas` → the plan page's component), so a reader who had
-   * drilled somewhere met a FRESH canvas with `navigated: false`, which granted the
-   * follow and moved them off the level they chose — the one thing MOTIR-6161 ruled
-   * must not happen. Seeding the flag carries that fact across the swap, so the new
-   * canvas declines exactly as the old one would have and the bar offers the trip.
+   * long as its surface. The planning surface mounts a FRESH pane for a later plan
+   * (it keeps the one it opened with for the first, bug MOTIR-11513), so a reader
+   * who had drilled somewhere met a FRESH canvas with `navigated: false`, which
+   * granted the follow and moved them off the level they chose — the one thing
+   * MOTIR-6161 ruled must not happen. Seeding the flag carries that fact across the
+   * swap, so the new canvas declines exactly as the old one would have and the bar
+   * offers the trip.
    *
    * It seeds MOUNT state only: the reader's own navigation still sets the flag, and
    * a later change of this prop does not clear it. A surface that never swaps its
@@ -501,6 +502,19 @@ interface ProjectRoadmapCanvasBaseProps {
    * only the work-item roadmap asks for it.
    */
   arriveAtReadableScale?: boolean;
+  /**
+   * OPEN CENTRED ON THIS CARD (MOTIR-11472) — the node id the ARRIVAL level opens
+   * centred on, at the LOCATE control's readable zoom, instead of fitting the
+   * whole level. The planning workspace opened on a target passes the target, so
+   * a busy level does not shrink the card the conversation is about.
+   *
+   * A mount-time SEED, like `initialTrail`: read once, honoured only on the level
+   * the canvas opens on, and dropped the moment the canvas stands anywhere else —
+   * a drill, a crumb, Back or a granted follow. Coming back to that level later is
+   * an ordinary arrival. A node that is not on the arrival level (an anchor the
+   * canvas opened INSIDE is the crumb, not a card) changes nothing.
+   */
+  initialCentreId?: string | null;
   /**
    * FOLLOW a node the consumer RE-KEYS under a mounted canvas (bug MOTIR-3439).
    *
@@ -717,6 +731,7 @@ export function ProjectRoadmapCanvas({
   onLevelChange,
   controlledTrail,
   arriveAtReadableScale = false,
+  initialCentreId = null,
   resolveHeldNode,
   levelCaption,
   motion = false,
@@ -764,6 +779,21 @@ export function ProjectRoadmapCanvas({
   // window: the engine remounts exactly when the data it will fit has arrived,
   // and the prior level stays on screen until then, unchanged.
   const [level, setLevel] = useState<{ focusId: string | null; data: RoadmapLevel } | null>(null);
+  // The OPENING CENTRE (MOTIR-11472), seeded once with the level it belongs to —
+  // the arrival level `focusId` starts on. Dropped (state adjusted during render)
+  // as soon as a level other than that one is drawn, so it shapes the first
+  // arrival only and never a later one.
+  const [openingCentre, setOpeningCentre] = useState<{
+    levelId: string | null;
+    nodeId: string;
+  } | null>(() =>
+    initialCentreId
+      ? { levelId: initialTrail?.[initialTrail.length - 1]?.id ?? null, nodeId: initialCentreId }
+      : null,
+  );
+  if (openingCentre !== null && level !== null && level.focusId !== openingCentre.levelId) {
+    setOpeningCentre(null);
+  }
   const [query, setQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -2516,6 +2546,11 @@ export function ProjectRoadmapCanvas({
             showChanges && connectedIds === null && emphasisedIds.size > 0 ? emphasisedIds : null
           }
           arrival={arriveAtReadableScale ? { floor: ARRIVAL_MIN_SCALE, focalNodeId } : undefined}
+          arrivalCentre={
+            openingCentre !== null && level.focusId === openingCentre.levelId
+              ? { nodeId: openingCentre.nodeId, scale: LOCATE_ZOOM }
+              : null
+          }
           onBackgroundClick={() => setSelectedId(null)}
           focusNodeId={highlightId ?? undefined}
           focusNonce={focusNonce}

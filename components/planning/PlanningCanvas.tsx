@@ -159,6 +159,17 @@ export interface PlanningCanvasProps {
    */
   arrival?: { floor: number; focalNodeId?: string | null };
   /**
+   * OPEN CENTRED ON ONE CARD (MOTIR-11472) — the once-only arrival puts this node
+   * in the centre of the viewport at `scale`, instead of framing the level. The
+   * planning workspace opened on a target passes the target card at the LOCATE
+   * scale, so a busy level does not shrink the card it was opened for.
+   *
+   * It outranks `arrival` when the node is on this level, and falls back to it
+   * (or to the plain fit) when it is not. Like `arrival` it shapes the ARRIVAL
+   * only: the fit-to-view control still frames the whole level.
+   */
+  arrivalCentre?: { nodeId: string; scale: number } | null;
+  /**
    * MOTION (MOTIR-6297, `design/ai-planning/design-notes.md` Part XXIII §23.3–§23.5)
    * — opt-in, OFF by default. On, the canvas diffs each new `nodes` / `edges`
    * snapshot against the one it drew and PLAYS the difference, staged: a leaving
@@ -515,6 +526,7 @@ export function PlanningCanvas({
   onBackgroundClick,
   ariaLabel,
   arrival,
+  arrivalCentre = null,
   motion = false,
   animateInitial = false,
   nodeCues = null,
@@ -626,6 +638,10 @@ export function PlanningCanvas({
   // (MOTIR-3837), in which case a level that cannot be shown legibly arrives AT the
   // floor, centred per axis on the focal card rather than shrunk to frame.
   const computeArrival = (vw: number, vh: number): View => {
+    const centre = arrivalCentre ? nodeById.get(arrivalCentre.nodeId) : undefined;
+    if (centre && arrivalCentre) {
+      return centerOn(rectOf(centre), { w: vw, h: vh }, arrivalCentre.scale);
+    }
     if (!arrival) return computeFit(vw, vh);
     const focal = arrival.focalNodeId ? nodeById.get(arrival.focalNodeId) : undefined;
     return arrivalView(

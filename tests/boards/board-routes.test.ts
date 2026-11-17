@@ -10,7 +10,13 @@ import { truncateAuthTables } from '../helpers/db';
 import { encodeFilterParam, facetFilterToAst, type FilterAst } from '@/lib/filters/ast';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 import type { ProjectContext } from '@/lib/projects';
-import type { BoardColumnPageDto, BoardProjectionDto } from '@/lib/dto/boards';
+import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
+import type {
+  BoardCellPageDto,
+  BoardColumnPageDto,
+  BoardLanePageDto,
+  BoardProjectionDto,
+} from '@/lib/dto/boards';
 import { spyOnJobDispatch } from '../helpers/jobs';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 
@@ -32,6 +38,7 @@ const { GET: boardGET, PATCH: boardPATCH } = await import('@/app/api/board/route
 const { PATCH: columnPATCH } = await import('@/app/api/board/columns/[columnId]/route');
 const { POST: movePOST } = await import('@/app/api/board/move/route');
 const { GET: pageGET } = await import('@/app/api/board/columns/[columnId]/cards/route');
+const { GET: laneGET } = await import('@/app/api/board/lanes/[laneKey]/cells/route');
 
 const BASE = 'http://localhost:3000';
 
@@ -508,6 +515,200 @@ describe("GET /api/board/columns/[columnId]/cards — a lane's next page", () =>
     await makeFixture();
     activeCtx.current = null;
     const res = await pageReq('col_x', { boardId: 'b', cursor: 'c' });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe('NO_ACTIVE_PROJECT');
+  });
+});
+
+describe('the cell and lane page doors (MOTIR-11446)', () => {
+  function pageReq(columnId: string, query: Record<string, string>) {
+    const qs = new URLSearchParams(query).toString();
+    return pageGET(new Request(`${BASE}/api/board/columns/${columnId}/cards?${qs}`), {
+      params: Promise.resolve({ columnId }),
+    });
+  }
+
+  function laneReq(laneKey: string, query: Record<string, string>) {
+    const qs = new URLSearchParams(query).toString();
+    return laneGET(
+      new Request(`${BASE}/api/board/lanes/${encodeURIComponent(laneKey)}/cells?${qs}`),
+      { params: Promise.resolve({ laneKey }) },
+    );
+  }
+
+  /** A board grouped by `groupBy` with 12 high-priority bugs and 3 tasks in To Do. */
+  async function groupedBoard(groupBy: 'assignee' | 'priority' | 'none' = 'priority') {
+    const fx = await makeFixture();
+    const ctx = { userId: fx.userId, workspaceId: fx.workspaceId };
+    for (let i = 0; i < 12; i++) {
+      const item = await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'bug', title: `bug ${i}` },
+        ctx,
+      );
+      await adminDb.workItem.update({ where: { id: item.id }, data: { priority: 'high' } });
+    }
+    for (let i = 0; i < 3; i++) {
+      await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'task', title: `task ${i}` },
+        ctx,
+      );
+    }
+    await adminDb.board.updateMany({
+      where: { projectId: fx.projectId },
+      data: { swimlaneGroupBy: groupBy },
+    });
+    const board = (await (await boardGetReq()).json()) as BoardProjectionDto;
+    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
+    return { fx, board, todo };
+  }
+
+  it('→ 401 without a session, on both doors', async () => {
+    expect((await pageReq('col_x', { boardId: 'b', lane: 'high' })).status).toBe(401);
+    expect((await laneReq('high', { boardId: 'b' })).status).toBe(401);
+  });
+
+  it('?lane= answers the cell’s first page with no cursor, then its next page', async () => {
+    const { board, todo } = await groupedBoard();
+    const first = await pageReq(todo.id, { boardId: board.boardId, lane: 'high' });
+    expect(first.status).toBe(200);
+    const page = (await first.json()) as BoardCellPageDto;
+    expect(page).toMatchObject({ columnId: todo.id, laneKey: 'high', totalCount: 12 });
+    expect(page.cards).toHaveLength(10);
+    expect(page.cards.every((c) => c.priority === 'high')).toBe(true);
+    expect(page.planHolds).toEqual({});
+
+    const next = await pageReq(todo.id, {
+      boardId: board.boardId,
+      lane: 'high',
+      cursor: page.cursor!,
+    });
+    const rest = (await next.json()) as BoardCellPageDto;
+    expect(rest.cards.map((c) => c.title).sort()).toEqual(['bug 10', 'bug 11']);
+    expect(rest.cursor).toBeNull();
+
+    // The service is handed the cursor exactly as it arrived.
+    const spy = vi.spyOn(boardsService, 'getCellPage');
+    await pageReq(todo.id, { boardId: board.boardId, lane: 'high', cursor: page.cursor! });
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      board.boardId,
+      todo.id,
+      'high',
+      page.cursor,
+      undefined,
+    );
+  });
+
+  it('?lane= passes the catch-all sentinel through to the read', async () => {
+    const { board, todo } = await groupedBoard('assignee');
+    const res = await pageReq(todo.id, { boardId: board.boardId, lane: BOARD_SWIMLANE_NO_VALUE });
+    expect(res.status).toBe(200);
+    const page = (await res.json()) as BoardCellPageDto;
+    expect(page.totalCount).toBe(15);
+    expect(page.cards.every((c) => c.swimlaneKey === BOARD_SWIMLANE_NO_VALUE)).toBe(true);
+  });
+
+  it('?lane= answers 400 for a missing boardId, a lane the group-by cannot hold, a bad cursor', async () => {
+    const { board, todo } = await groupedBoard();
+    const noBoard = await pageReq(todo.id, { lane: 'high' });
+    expect(noBoard.status).toBe(400);
+    expect(((await noBoard.json()) as { code: string }).code).toBe('BAD_REQUEST');
+
+    const catchAll = await pageReq(todo.id, {
+      boardId: board.boardId,
+      lane: BOARD_SWIMLANE_NO_VALUE,
+    });
+    expect(catchAll.status).toBe(400);
+    expect(((await catchAll.json()) as { code: string }).code).toBe('INVALID_BOARD_LANE');
+
+    const forged = await pageReq(todo.id, {
+      boardId: board.boardId,
+      lane: 'high',
+      cursor: 'forged',
+    });
+    expect(forged.status).toBe(400);
+    expect(((await forged.json()) as { code: string }).code).toBe('INVALID_BOARD_CURSOR');
+
+    const unknown = await pageReq('col_does_not_exist', { boardId: board.boardId, lane: 'high' });
+    expect(unknown.status).toBe(404);
+  });
+
+  it('?lane= threads the filter, and 422s an invalid one', async () => {
+    const { board, todo } = await groupedBoard('assignee');
+    const filter = encodeFilterParam(facetFilterToAst({ ...EMPTY_FILTER, kinds: ['task'] }));
+    const res = await pageReq(todo.id, {
+      boardId: board.boardId,
+      lane: BOARD_SWIMLANE_NO_VALUE,
+      filter,
+    });
+    expect(((await res.json()) as BoardCellPageDto).totalCount).toBe(3);
+
+    const badAst = {
+      combinator: 'and',
+      conditions: [{ field: 'not_a_field', operator: 'is_any_of', value: ['x'] }],
+    } as unknown as FilterAst;
+    const bad = await pageReq(todo.id, {
+      boardId: board.boardId,
+      lane: BOARD_SWIMLANE_NO_VALUE,
+      filter: encodeFilterParam(badAst),
+    });
+    expect(bad.status).toBe(422);
+  });
+
+  it('GET lanes/[laneKey]/cells → one first page per column', async () => {
+    const { board, todo } = await groupedBoard();
+    const res = await laneReq('high', { boardId: board.boardId });
+    expect(res.status).toBe(200);
+    const lane = (await res.json()) as BoardLanePageDto;
+    expect(lane.laneKey).toBe('high');
+    expect(lane.cells.map((c) => c.columnId)).toEqual(board.columns.map((c) => c.id));
+    const cell = lane.cells.find((c) => c.columnId === todo.id)!;
+    expect(cell.totalCount).toBe(12);
+    expect(cell.cards).toHaveLength(10);
+    expect(cell.cursor).not.toBeNull();
+
+    const medium = (await (
+      await laneReq('medium', { boardId: board.boardId })
+    ).json()) as BoardLanePageDto;
+    expect(medium.cells.find((c) => c.columnId === todo.id)!.totalCount).toBe(3);
+  });
+
+  it('GET lanes/[laneKey]/cells → 400, 404, 422 and an untyped failure rethrown', async () => {
+    const { board } = await groupedBoard();
+    const noBoard = await laneReq('high', {});
+    expect(noBoard.status).toBe(400);
+    expect(((await noBoard.json()) as { code: string }).code).toBe('BAD_REQUEST');
+
+    const refused = await laneReq(BOARD_SWIMLANE_NO_VALUE, { boardId: board.boardId });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { code: string }).code).toBe('INVALID_BOARD_LANE');
+
+    const missing = await laneReq('high', { boardId: 'brd_not_real' });
+    expect(missing.status).toBe(404);
+    expect(((await missing.json()) as { code: string }).code).toBe('BOARD_NOT_FOUND');
+
+    const badAst = {
+      combinator: 'and',
+      conditions: [{ field: 'not_a_field', operator: 'is_any_of', value: ['x'] }],
+    } as unknown as FilterAst;
+    const bad = await laneReq('high', {
+      boardId: board.boardId,
+      filter: encodeFilterParam(badAst),
+    });
+    expect(bad.status).toBe(422);
+
+    const spy = vi.spyOn(boardsService, 'getLanePage');
+    spy.mockRejectedValueOnce(new ProjectNotFoundError('p'));
+    expect((await laneReq('high', { boardId: 'b' })).status).toBe(404);
+    spy.mockRejectedValueOnce(new Error('boom'));
+    await expect(laneReq('high', { boardId: 'b' })).rejects.toThrow('boom');
+  });
+
+  it('GET lanes/[laneKey]/cells → 400 when there is no active project', async () => {
+    await makeFixture();
+    activeCtx.current = null;
+    const res = await laneReq('high', { boardId: 'b' });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { code: string }).code).toBe('NO_ACTIVE_PROJECT');
   });

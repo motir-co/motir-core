@@ -156,9 +156,13 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // (`20261116120000_plan_platform_staff_read`). `work_item` carries
     // MOTIR-11504's SELECT-only arm, for the one lookup that resolves a typed key
     // in a record's own project (`20261117090000_work_item_platform_staff_read`).
+    // `ci_fleet_blind_spots` is MOTIR-11439's record of the provision sweep's last
+    // reconcile outcome (`20261116210000_ci_fleet_blind_spots`): platform-only,
+    // written by the sweep under `app.system_admin` and read from this tier.
     expect(rows.map((r) => r.tablename)).toEqual([
       'capacity_alert_setting',
       'capacity_raised_alert',
+      'ci_fleet_blind_spots',
       'github_repo',
       'idea',
       'idea_evidence',

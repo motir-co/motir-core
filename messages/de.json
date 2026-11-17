@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Ein Board muss mindestens eine Spalte behalten.",
       "toastColumnNotEmptyError": "„{name}“ enthält noch Arbeitselemente – ordnen Sie zuerst ihre Status neu zu.",
       "toastRenameBoardError": "Das Board konnte nicht umbenannt werden. Der vorherige Name wurde wiederhergestellt.",
-      "errorTitle": "Board-Einstellungen konnten nicht geladen werden",
+      "errorTitle": "Die Änderung konnte nicht gespeichert werden",
       "errorDescription": "Beim Laden der Konfiguration dieses Boards ist ein Fehler aufgetreten. Versuchen Sie es erneut.",
       "storedFilter": {
         "title": "Board-Filter",
@@ -4989,6 +4989,13 @@
     "laneCountLoaded": "{loaded, number} von {total, number}",
     "laneLoading": "Wird geladen…",
     "laneLoadRetry": "Weitere Arbeitselemente konnten nicht geladen werden · Erneut versuchen",
+    "cellLoadMore": "Mehr laden",
+    "cellLoadMoreAria": "Weitere Arbeitselemente in {column}, Swimlane {lane} laden",
+    "cellLoadRetryAria": "Weitere Arbeitselemente konnten nicht geladen werden · Erneut versuchen, in {column}, Swimlane {lane}",
+    "cellLoadingAria": "Arbeitselemente in {column}, Swimlane {lane} werden geladen",
+    "laneScrollLeftAria": "Swimlane {lane} nach links scrollen",
+    "laneScrollRightAria": "Swimlane {lane} nach rechts scrollen",
+    "laneEmpty": "Keine Arbeitselemente in dieser Swimlane",
     "pagerPosition": "{name} · {index} von {count}",
     "groupByLabel": "Gruppieren nach",
     "groupByAria": "Swimlanes gruppieren nach",
@@ -8791,6 +8798,10 @@
       "approve": "Genehmigen",
       "approveChanges": "Änderungen genehmigen",
       "nothingSavedYet": "Noch nichts gespeichert",
+      "revision": {
+        "earlierVersion": "Frühere Version · unten ersetzt",
+        "earlierVersionUnkept": "Hier stand eine frühere Version dieses Plans ({count, plural, one {# Eintrag} other {# Einträge}}). Ihre Zusammenfassung wurde nicht aufbewahrt."
+      },
       "barCounts": "{added, plural, =0 {Keine Ergänzungen} one {# hinzugefügt} other {# hinzugefügt}}{changed, plural, =0 {} one {, # geändert} other {, # geändert}}{removed, plural, =0 {} one {, # entfernt} other {, # entfernt}}",
       "barNothingSaved": "Nichts wird gespeichert, bis Sie genehmigen.",
       "summary": "{added, plural, =0 {Keine neuen Arbeitselemente} one {# hinzugefügt} other {# hinzugefügt}}{changed, plural, =0 {} one {, # geändert} other {, # geändert}}{removed, plural, =0 {} one {, # entfernt} other {, # entfernt}} – es ist auf der Arbeitsfläche, noch ist nichts gespeichert.",
@@ -14802,6 +14813,63 @@
         },
         "pausedUntil": "bis {time}, in {left}",
         "readOnly": "Nur lesen. Um bei AWS mehr Kontingent zu beantragen, führen Sie <cmd>{command}</cmd> in einem Terminal aus; die Obergrenzen-Überschreibung eines Kontos bleibt an ihrer bisherigen Stelle."
+      },
+      "blindSpots": {
+        "title": "Blinde Flecken der CI-Flotte",
+        "subtitle": "Die Repositorys, die die CI-Flotte nicht sieht, für jede GitHub-Organisation, die sie bedient: Repositorys mit wartenden Flottenjobs, aber ohne workflow_job-Zustellungen, und verknüpfte Repositorys, die motir-studio nicht lesen kann. Vom Abgleich in jedem Bereitstellungsdurchlauf berechnet; schreibgeschützt.",
+        "card": {
+          "title": "Nach GitHub-Organisation",
+          "subtitle": "Eine Zeile pro Organisation, die die CI-Flotte in den letzten 3 Tagen bedient hat."
+        },
+        "pill": {
+          "orgs": "{count, plural, one {# Organisation mit blinden Flecken} other {# Organisationen mit blinden Flecken}}",
+          "orgsNotRead": "{count, plural, one {# Organisation nicht gelesen} other {# Organisationen nicht gelesen}}",
+          "allSeen": "Jedes Repository sichtbar",
+          "notRead": "Nicht gelesen"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, one {# Repository ohne Zustellungen} other {# Repositorys ohne Zustellungen}}",
+          "unreadableCount": "{count, plural, one {# Repository nicht lesbar} other {# Repositorys nicht lesbar}}",
+          "seen": "Jedes Repository mit Flottenjobs hatte seine workflow_job-Zustellungen, und kein Job blieb hängen."
+        },
+        "undelivered": {
+          "title": "Wartende Flottenjobs, keine workflow_job-Zustellungen in 3 Tagen",
+          "hint": "motir-runner-Jobs, aber keine workflow_job-Zustellungen – ist motir-studio in diesem Repository installiert?"
+        },
+        "unreadable": {
+          "title": "Verknüpft, aber motir-studio kann ihre Actions-Warteschlange nicht lesen",
+          "body": "Beim letzten Durchlauf blieben in dieser Organisation Jobs hängen, und die motir-studio-Anmeldedaten der Flotte konnten die wartenden Jobs dieser Repositorys nicht auflisten, daher wurde für sie kein Runner gestartet."
+        },
+        "repo": {
+          "link": "{repo} auf GitHub"
+        },
+        "orgError": {
+          "title": "Diese Organisation konnte beim letzten Durchlauf nicht gelesen werden.",
+          "body": "Ihre Repositorys wurden nicht geprüft, daher bedeutet nichts hier, dass sie sichtbar sind. Die anderen Organisationen sind nicht betroffen, und der nächste Durchlauf versucht es erneut. Antwort von GitHub:"
+        },
+        "empty": {
+          "title": "Keine blinden Flecken",
+          "body": "Die CI-Flotte sieht jedes Repository der {count, plural, one {# Organisation} other {# Organisationen}}, die sie in den letzten 3 Tagen bedient hat: Jedes Repository mit Flottenjobs hatte seine workflow_job-Zustellungen, und kein Job blieb hängen.",
+          "noOrgs": "Keine Organisation hat in den letzten 3 Tagen einen Job auf der CI-Flotte ausgeführt, daher gibt es kein Repository zu prüfen."
+        },
+        "error": {
+          "title": "Die blinden Flecken der CI-Flotte konnten nicht gelesen werden",
+          "body": "Der Datensatz der blinden Flecken wurde nicht geladen, daher bedeutet nichts hier, dass jedes Repository sichtbar ist. Die Images und die Pools sind nicht betroffen. Laden Sie die Seite neu, um es erneut zu versuchen."
+        },
+        "reconcileError": {
+          "title": "Der Abgleich des letzten Durchlaufs wurde nicht abgeschlossen",
+          "body": "Er wurde mit diesem Fehler beendet, daher wurde keine Organisation geprüft, und nichts hier bedeutet, dass jedes Repository sichtbar ist. Der nächste Durchlauf versucht es erneut."
+        },
+        "notComputed": {
+          "title": "Noch nicht berechnet",
+          "body": "Seit dieser Bereitstellung hat kein Bereitstellungsdurchlauf die blinden Flecken berechnet. Der Durchlauf läuft alle 5 Minuten; laden Sie die Seite nach dem nächsten neu."
+        },
+        "notConfigured": {
+          "title": "Die CI-Flotte ist nicht konfiguriert",
+          "body": "Diese Bereitstellung führt keine CI-Jobs auf der Flotte aus, daher bedient der Abgleich keine Organisation, und es gibt kein Repository zu prüfen. Der Schalter befindet sich unter <link>Flotteneinstellungen</link>."
+        },
+        "computed": "Berechnet vom Bereitstellungsdurchlauf um {time} ({age}). Schreibgeschützt: motir-studio wird in GitHub auf einem Repository installiert, nicht hier.",
+        "loading": "Blinde Flecken der CI-Flotte werden geladen"
       }
     }
   },

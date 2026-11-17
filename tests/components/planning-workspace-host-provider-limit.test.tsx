@@ -50,9 +50,6 @@ vi.mock('@/components/planning/PlanChangeRail', () => ({
     return <div data-testid="rail-stub" />;
   },
 }));
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: () => <div data-testid="canvas-stub" />,
-}));
 vi.mock('@/components/planning/AuditCoverageBanner', () => ({
   AuditCoverageBanner: () => null,
 }));

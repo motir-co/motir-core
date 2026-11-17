@@ -1154,6 +1154,38 @@ async function turnStatusOf(
     : status;
 }
 
+/** What a turn on this session does about a recorded FAILURE (MOTIR-7916 / MOTIR-7938):
+ *  the shared read `submit` and `reviseWaitingPlan` route by. */
+async function failedTurnOf(session: PlanChangeSession, pctx: ProjectContext) {
+  return classifyFailedWaitingTurn({
+    waiting: sessionWaitingState(session),
+    failedJobId: session.failedJobId,
+    failureResumable: session.failureResumable,
+    plans:
+      sessionWaitingState(session) === 'failed'
+        ? await withWorkspaceServiceContext(pctx.workspaceId, async (tx) =>
+            Promise.all(
+              (await planRepository.listUndecidedBySession(session.id, tx)).map(async (p) => ({
+                ...p,
+                status: await turnStatusOf(p, tx),
+              })),
+            ),
+          )
+        : [],
+  });
+}
+
+/** The session's most recent undecided plan and the status a turn routes it by. */
+async function latestUndecidedOf(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+): Promise<{ id: string; status: SessionTurnPlanStatus } | null> {
+  return withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+    const row = await planRepository.findLatestUndecidedBySession(session.id, tx);
+    return row ? { id: row.id, status: await turnStatusOf(row, tx) } : null;
+  });
+}
+
 /** The revision actor a conversation's revise records — Motir's own planner. */
 const SESSION_REVISION_ACTOR = { source: 'native', harness: 'Motir', model: null } as const;
 
@@ -2486,6 +2518,62 @@ export const planChangeSessionsService = {
    * nothing. With no confirm pending (already answered, superseded by a later
    * turn, or the session ended) it writes nothing and returns the thread.
    */
+  /**
+   * The plan this conversation WAITS on, when a turn sent now is about a PROPOSED plan
+   * (Bug MOTIR-11488): the session's most recent undecided plan, when a turn would
+   * REVISE it (`classifySessionTurn` → `revise`, so `planned`, or reopened by a
+   * revision). `null` for a guide or ended session, no undecided plan, one still
+   * `generating`, and a `stale` one — each keeps its shipped path. Read-only; the
+   * revision that may follow re-checks under its own lock.
+   */
+  async waitingPlanIdOf(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<string | null> {
+    const session = await findSessionById(pctx, address.sessionId);
+    const turn = classifySessionTurn({
+      origin: session.origin,
+      endedAt: session.endedAt,
+      latestUndecided: await latestUndecidedOf(session, pctx),
+    });
+    return turn.kind === 'revise' ? turn.planId : null;
+  },
+
+  /**
+   * Start the revision the PLANNER decided on (Bug MOTIR-11488): an `ask_project` turn
+   * against the waiting plan came back `plan_change` with the change restated as
+   * `requirement`, and this revises that plan through the shipped `revise` route —
+   * the lease, the `system` marker, the heartbeat and the Planning listing are
+   * `reviseOrQueueWithinSession`'s, unchanged. The marker carries the restatement,
+   * because that is the intent that went out; the raw accumulated turns are NOT sent.
+   *
+   * `null` when the plan no longer waits to be revised — it was decided, went stale or
+   * another plan superseded it since the turn was read — so the caller lands the reply
+   * and starts nothing. A failed-waiting session that must Resume is refused as the
+   * submit door refuses it.
+   */
+  async reviseWaitingPlan(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+    requirement: string,
+  ): Promise<PlanChangeSubmitResultDto | null> {
+    const session = await requireSession(pctx, address);
+    const failedTurn = await failedTurnOf(session, pctx);
+    if (failedTurn === 'refuse_resume') throw new PlanSessionAwaitingResumeError(session.id);
+    const turn = classifySessionTurn({
+      origin: session.origin,
+      endedAt: session.endedAt,
+      latestUndecided: await latestUndecidedOf(session, pctx),
+    });
+    if (turn.kind !== 'revise') return null;
+    const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx),
+    );
+    return reviseOrQueueWithinSession(session, pctx, turn.planId, requirement, turns, {
+      clearFailure: failedTurn === 'continue',
+    });
+  },
+
   async keepPlanning(
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
@@ -3167,22 +3255,7 @@ export const planChangeSessionsService = {
     // other exit) is refused. A failed session whose most recent undecided plan is `planned` /
     // `stale` — situation 2 — falls through to the revise routing, and the bind clears the
     // failure in the same transaction that records the turn.
-    const failedTurn = classifyFailedWaitingTurn({
-      waiting: sessionWaitingState(session),
-      failedJobId: session.failedJobId,
-      failureResumable: session.failureResumable,
-      plans:
-        sessionWaitingState(session) === 'failed'
-          ? await withWorkspaceServiceContext(pctx.workspaceId, async (tx) =>
-              Promise.all(
-                (await planRepository.listUndecidedBySession(session.id, tx)).map(async (p) => ({
-                  ...p,
-                  status: await turnStatusOf(p, tx),
-                })),
-              ),
-            )
-          : [],
-    });
+    const failedTurn = await failedTurnOf(session, pctx);
     if (failedTurn === 'refuse_resume') throw new PlanSessionAwaitingResumeError(session.id);
     const clearFailure = failedTurn === 'continue';
     const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
@@ -3212,10 +3285,7 @@ export const planChangeSessionsService = {
     // plan is revised in place, a `stale` one is answered in words, and an
     // accept of that answer plans it again. Read outside any lock — every
     // branch that writes re-checks under its own lock.
-    const latest = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
-      const row = await planRepository.findLatestUndecidedBySession(session.id, tx);
-      return row ? { id: row.id, status: await turnStatusOf(row, tx) } : null;
-    });
+    const latest = await latestUndecidedOf(session, pctx);
     const turn = classifySessionTurn({
       origin: session.origin,
       endedAt: session.endedAt,

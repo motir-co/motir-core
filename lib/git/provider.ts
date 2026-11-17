@@ -21,6 +21,7 @@ import type {
   NormalizedWorkflowJobProgressEvent,
   NormalizedProductionImageRun,
   NormalizedWorkflowRunEvent,
+  ReadFileAtRefOptions,
   RepoFileReadResult,
   RefResolution,
   CommitComparison,
@@ -303,6 +304,15 @@ export interface GitProvider {
    * `ref` is required: the caller knows the repository's default branch (it is
    * a stored column) and the provider does not, so defaulting here would mean a
    * second host round-trip to learn something the caller already had.
+   *
+   * `options.blobSha` (MOTIR-11528) asks for the file's git object id as well:
+   * a `found` answer then carries `blobSha`, the HOST's own id for that path at
+   * `ref` — never a hash motir computes over the text it received, because a
+   * planner records it as the key another service stores content under, and a
+   * computed value can disagree with the host's. It is BEST EFFORT: a host that
+   * gives no id, or fails, refuses or times out on the question, leaves the
+   * read `found` without the field — no new outcome and nothing thrown. Without
+   * the flag the read makes exactly the host requests it always did.
    */
   readFileAtRef(
     installationId: string,
@@ -310,6 +320,7 @@ export interface GitProvider {
     name: string,
     path: string,
     ref: string,
+    options?: ReadFileAtRefOptions,
   ): Promise<RepoFileReadResult>;
 
   /**
