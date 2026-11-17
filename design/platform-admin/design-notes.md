@@ -26,6 +26,7 @@ closest existing usage surface.
 | **MONITORING · POOLS — one block per fleet kind on `/admin/monitoring`: provider, pool total, account rows, the Motir spare, quota raises, growth events, every state** (AMENDMENT 2026-10-25) | **`monitoring--pools.mock.html`** (delta, Panels 1–9, each light then dark) | A section added after the Fleet section of the shipped monitoring page; no new route. See § _AMENDMENT 2026-10-25 — Monitoring · Pools_. |
 | **USAGE & COST · PROVIDER BILLS — the daily provider-bill reconciliation on `/admin/usage`: per provider and UTC day, recorded beside billed, the gap, its source and status, days past tolerance, the per-model breakdown, findings with the differing side, providers with no billing source; no-records, All-time, loading, error, no-source and no-findings states** (AMENDMENT 2026-11-15, MOTIR-11375) | **`console--estate-usage-drilldown--provider-bills.mock.html`** (delta, Panels 1–8) | A new read-only section after the two model tables on Usage & cost. **Gates MOTIR-11376** (the section) and the story checks MOTIR-11387 / MOTIR-11388 (story MOTIR-11350). |
 | **PLANNER FINDINGS · RECORDS — a third view, Records, on `/admin/planner-findings`: one row per plan check with its verdict, filters, pager and every list state; the record page with its plan context, findings and the copyable command; the Record link on the finding detail** (AMENDMENT 2026-11-16) | **`console--planner-findings--records.mock.html`** (delta, Panels 1–12) | A display-only Records view and record page added to the shipped Planner findings console. |
+| **PLANNER FINDINGS · RECORDS · RUN-THROUGH — the record page's run-through block: the check's own answer to whether a run could build the plan through, in three readings (builds through; does not build through, with the cards to fix; no answer recorded), on an open and an attributed record, with no card, with eleven cards, and narrow** (AMENDMENT 2026-11-17) | **`console--planner-findings--records--run-through.mock.html`** (delta, Panels 1–7) | One display-only block on the record page, between the plan-context header and the findings table. |
 
 ## What this area is
 
@@ -4262,3 +4263,117 @@ Filters, Clear all, Remove {filter}) are reused as they are.
   page leaves the space below the findings table free and draws no linked list of its own.
 - What a field means, how it is computed or which route answers it.
 - Any change under `/api/platform/planner-findings/**` or to the records store.
+
+# AMENDMENT 2026-11-17 — Planner findings · Records · the run-through answer
+
+**Mock:** [`console--planner-findings--records--run-through.mock.html`](./console--planner-findings--records--run-through.mock.html)
+— a DELTA, Panels 1–7.
+
+**Amends** § AMENDMENT 2026-11-16 — Planner findings · Records and its mock,
+[`console--planner-findings--records.mock.html`](./console--planner-findings--records.mock.html): the record page
+at `/admin/planner-findings/records/[id]`. None of its panels is redrawn.
+
+**Design system (step 1 of the design lane).** Files read: `package.json` (depends on `@motir/design-system`
+`workspace:*`) and `app/globals.css` (imports `@motir/design-system/theme.css`). **Verdict: on Motir Design,
+branch (a)**, at the area's default axes (`warm-editorial` shape, `motir` palette, light with one nested dark
+stage). The mock is hand-authored because the block does not exist in code yet. Its whole `<style>` block is
+spliced verbatim from the records mock (tokens, primitives and that page's own additions, because the block is
+drawn inside that page). An additions block holds only the `rt-*` classes, and the sprite adds one lucide glyph,
+circle-dashed. The block is a **product-local composition** of parts the console already ships (`Card`, its
+heading row, the chip grammar of `.rec-site`): nothing is proposed for `@motir/design-system`.
+
+**Base context, one line.** The block sits directly under the plan-context header (the `Record` title row with its
+verdict chip, and the plan-context card) and directly above _Findings in this record_; the back link, header,
+findings table and command keep the places the records delta drew them in.
+
+## Elements — each named once, mapped to the field it shows
+
+| Element                    | What it is                                                                                                                                                                                 | The field it shows                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| **Run-through block**      | A labelled region (a `Card` section named by its heading) between the plan-context header and the findings table, carrying the heading and ONE reading and nothing else.                   | The record's run-through answer.                                                                |
+| **Block heading**          | The word Run-through, in the page's card-heading grammar (the size and weight of _Findings in this record_), with no glyph.                                                                | —                                                                                               |
+| **Answer line**            | The reading in words at strong ink with one glyph of its own per reading; never a chip, never a tint, never inside the header that carries the verdict.                                    | The answer, as one of the three readings below.                                                 |
+| **Builds-through reading** | Circled-check glyph in the success ink, and the words Builds through.                                                                                                                      | The answer is `THRU`.                                                                           |
+| **Does-not reading**       | Warning-triangle glyph in the warning ink, and the words Does not build through.                                                                                                           | The answer is `STOPS`.                                                                          |
+| **No-answer reading**      | Dashed-circle glyph and words in the secondary ink at a lighter weight, the softest of the three: No answer recorded.                                                                      | The answer field is absent (`null`). Never inferred from an empty cards list; never an em dash. |
+| **Hint**                   | One line under the answer line, one string per reading, saying what that reading means for an admin.                                                                                       | —                                                                                               |
+| **Cards to fix**           | Under the does-not reading only: a labelled list of mono key chips, one per stored card, in the stored order, wrapping in full, with no link on any key, no truncation and no +N overflow. | The record's stop cards, with the answer `STOPS`.                                               |
+| **No-card line**           | One quiet italic line in place of the list when a does-not answer carries no card.                                                                                                         | The stop cards are empty while the answer is `STOPS`.                                           |
+
+## The panels
+
+1. **Open record, builds through** — the record page in the console shell exactly as the records delta draws it,
+   with the block between the plan-context card and _Findings in this record_: heading, answer line, hint. Light.
+2. **Does not build through** — the answer line, its hint and _Cards to fix_ with three key chips in stored order.
+   Light, then the same block on a nested dark stage that re-binds the element tokens.
+3. **Builds through, with findings beneath** — the first reading on a record whose findings table lists two
+   findings; the hint never claims the check found nothing.
+4. **No answer recorded**, drawn twice — on an open record and on an attributed one: the heading and one quiet line.
+5. **An attributed record** — the verdict chip reads Attributed with its by and at, and the block is drawn exactly
+   as in panel 1.
+6. **The two awkward cases** — a does-not answer with no stored card (the no-card line in place of the list), and a
+   does-not answer with eleven cards (the list wraps in full, every key intact).
+7. **Narrow** (390 px) — the blocks stack; the block keeps its heading, its answer line and a full-width cards list,
+   and the keys wrap rather than truncate.
+
+## Rules the drawing holds
+
+- **Display only.** Nothing on the block writes; nothing on the console sets, clears or re-runs the answer, so no
+  panel draws a button, filter, menu or retry inside it.
+- **Exactly three readings, each produced by a different thing**: `THRU`, `STOPS` with its stored cards, and the
+  field's absence. None is inferred from another, and an empty cards list never turns a does-not answer into a
+  no-answer one. No fourth reading: a finding's own prediction stays in the findings table.
+- **Builds through is not "nothing found".** A record may list findings and still answer that a run would build the
+  plan through.
+- **No loading, error, empty or retry state of its own.** The answer arrives with the record read, as the plan
+  context does; the page's own frame and unavailable state cover it.
+- **One answer per record, drawn once.** The block is the only place the answer appears on the page; the records
+  list carries no column for it.
+- **Apart from the verdict, structurally.** The answer is never a pill or a tint and never shares a line, a container
+  or a role with the verdict chip; its drawing is identical beside Open and Attributed.
+- **Fields are drawn, never defined.** The Elements table names the field each element shows and nothing about its
+  meaning, its computation or the route that answers it.
+- **One list of panels**, numbered 1–7 in the mock's header comment, its panel labels and the list above.
+
+## Copy (en · zh; every locale carries it)
+
+Namespace `platformAdmin.plannerFindings.recordPage.runThrough.*`.
+
+| Key            | en                                                                                                                                                | zh                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `heading`      | Run-through                                                                                                                                       | 跑通情况                                                                                           |
+| `answer.thru`  | Builds through                                                                                                                                    | 可以跑通                                                                                           |
+| `answer.stops` | Does not build through                                                                                                                            | 无法跑通                                                                                           |
+| `answer.none`  | No answer recorded                                                                                                                                | 未记录答案                                                                                         |
+| `hint.thru`    | The check that stored this record predicted a run could build this plan through. Its findings are listed below.                                   | 存下这条记录的检查预测：一次运行可以把这份计划跑通。它当时做的发现列在下方。                       |
+| `hint.stops`   | The check predicted a run would stop on the cards below. Fix those cards, then run the check again.                                               | 该检查预测一次运行会停在下面这些卡片上。先修好这些卡片，再跑一次检查。                             |
+| `hint.none`    | No check sent an answer for this record, so there is none to read. Its verdict does not change that — the answer is the check's, not the agent's. | 没有检查为这条记录发送过答案，因此没有可读的答案。判定不会改变这一点——答案来自检查，不来自智能体。 |
+| `cards.label`  | Cards to fix                                                                                                                                      | 需要修复的卡片                                                                                     |
+| `cards.none`   | No card recorded                                                                                                                                  | 未记录卡片                                                                                         |
+| `a11y.region`  | Run-through: whether a run could build this plan through                                                                                          | 跑通情况：一次运行能否把这份计划跑通                                                               |
+
+## Colour and shape roles (`--el-*` and shape tokens only)
+
+| Element                           | Colour                                                               | Shape                              |
+| --------------------------------- | -------------------------------------------------------------------- | ---------------------------------- |
+| Block · heading row               | the `Card` recipe (`--el-border`, page surface), heading `--el-text` | `--radius-card`, card padding      |
+| Answer line (thru, stops)         | words `--el-text-strong`; glyph `--el-success` / `--el-warning`      | —                                  |
+| Answer line (none)                | words and glyph `--el-text-secondary`                                | —                                  |
+| Hint · cards label · no-card line | `--el-text-secondary`                                                | —                                  |
+| Key chip                          | `--el-surface` fill, `--el-text-identifier` ink                      | `--radius-badge`, chip x/y spacing |
+
+## Accessibility contract
+
+- The block is a `section` named by its heading; the region's full name (`a11y.region`) is carried in a visually
+  hidden line inside it.
+- Each reading is words plus a glyph, never colour alone; every glyph is `aria-hidden`.
+- The cards are a real list named by its _Cards to fix_ label.
+- Every ink is `--el-text`, `--el-text-strong`, `--el-text-secondary` or `--el-text-identifier`, which clear AA on
+  the page and on `--el-surface` in both themes; no text uses `--el-text-muted` or `--el-text-faint`.
+
+## What this amendment does NOT draw
+
+- Any part of the record page the records delta drew, any change to the records list, or the finding detail page.
+- A per-finding planning-bug key: that lives in the findings table and is a separate delta.
+- Any control, and any loading, error, empty or retry state for the block.
+- What the answer or the stop cards mean, how they are computed or which route answers them.
