@@ -310,16 +310,20 @@ describe('the PREMISE the legibility arm is justified against (MOTIR-6250)', () 
     expect(others).toEqual([]);
   });
 
-  it('the workspace host seeds on the SAME transition the rail resets on', () => {
-    // The premise above holds only because the seed is read when the rail is at
-    // its default. The reset is keyed on `proposalPresent`, which the host feeds
-    // from `paneReview !== null` — the same plan the seed effect waits for. (Since
+  it('the workspace host seeds on the plan the rail reset waits for, where it still resets', () => {
+    // The premise above holds where the seed is read with the rail at its default.
+    // The reset is keyed on `proposalPresent`, which the host feeds from
+    // `paneReview !== null` — the same plan the seed effect waits for. (Since
     // MOTIR-6300 that is the PANE's plan: the live review from its first read, then
     // the proposed one, so both fire once, at the first read, and not at the
-    // hand-over.)
+    // hand-over.) Since MOTIR-11513 the reset is ARMED only for a named-session
+    // open; a plan started on the overlay keeps the person's own width, which
+    // `planView.ts` names as the one place the canvas may be narrower.
     const host = read('components/planning/PlanningWorkspaceHost.tsx');
-    expect(host).toMatch(/proposalPresent=\{paneReview !== null\}/);
+    expect(host).toMatch(/proposalPresent=\{splitResetArmed && paneReview !== null\}/);
+    expect(host).toMatch(/useState\(Boolean\(launch\.sessionId\)\)/);
     expect(host).toMatch(/setView\(defaultPlanView\(paneReview\)\)/);
+    expect(read('lib/planning/planView.ts')).toMatch(/MOTIR-11513/);
   });
 
   it('the plan detail does NOT opt into the resizable split', () => {
