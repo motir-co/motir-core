@@ -206,7 +206,7 @@ export function StyleVignette({ styleId, palette, type, label, className }: Styl
           {/* MODAL — a floating dialog panel; modal radius + elevation + scrim. */}
           <div className="relative">
             <span
-              className="pointer-events-none absolute -inset-1 rounded-(--radius-card) bg-black/10"
+              className="pointer-events-none absolute -inset-1 rounded-(--radius-card) bg-[color-mix(in_srgb,var(--el-overlay-scrim)_25%,transparent)]"
               aria-hidden
             />
             <div
