@@ -6538,10 +6538,12 @@ export interface BoardCardFilter {
 }
 
 /**
- * A board's STORED filter as the board reads take it (MOTIR-10560): a SECOND
- * predicate beside the toolbar's `ast`, compiled on its own and AND-ed, never
- * merged into one AST (the AST is flat, so `stored(or) ∧ toolbar(or)` is not one
- * AST). Either the validated stored AST with the referents its Epic-5
+ * A board's STORED filter as the board reads take it (MOTIR-10560): a
+ * predicate in its own slot beside `ast`, compiled on its own and AND-ed when
+ * both are given, never merged into one AST (the AST is flat, so
+ * `stored(or) ∧ toolbar(or)` is not one AST). The board service sets at most one
+ * of the two — a header filter replaces the stored one (MOTIR-11564) — so the
+ * slot is also how a single-predicate read (the sprint points) takes either. Either the validated stored AST with the referents its Epic-5
  * conditions resolve against (a stale referent compiles to `FALSE`, the
  * compiler's shipped rule), or `matchNothing` for a stored envelope that no
  * longer decodes or validates: a board's filter is its scope, so an unreadable
