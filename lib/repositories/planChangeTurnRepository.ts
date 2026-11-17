@@ -315,6 +315,26 @@ export const planChangeTurnRepository = {
     return count === 1;
   },
 
+  /** GIVE BACK a consume whose start threw (MOTIR-11521): the request is kept again, so
+   *  the offer that consumed it can be confirmed or declined once more. Only a consumed
+   *  request of this session is touched. */
+  async releaseFarRequestConsumed(
+    id: string,
+    scope: { sessionId: string; workspaceId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.planChangeTurn.updateMany({
+      where: {
+        id,
+        sessionId: scope.sessionId,
+        workspaceId: scope.workspaceId,
+        farRequestRequirement: { not: null },
+        farRequestConsumedAt: { not: null },
+      },
+      data: { farRequestConsumedAt: null },
+    });
+  },
+
   /** The session's KEPT too-far requests (MOTIR-11518) — requirement set, not consumed —
    *  in `seq` order, the order they were asked. Workspace-scoped like the thread read. */
   async listKeptFarRequests(

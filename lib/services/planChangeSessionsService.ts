@@ -543,7 +543,9 @@ async function appendLocked(
  */
 export async function appendWithin(
   sessionId: string,
-  pctx: ProjectContext,
+  // Only the tenancy pair is read, so a machine writer holding no ProjectDTO (the
+  // after-decision offer, MOTIR-11521) can append too.
+  pctx: Pick<ProjectContext, 'workspaceId' | 'projectId'>,
   turn: AppendTurn,
   patch: PlanChangeSessionUpdateInput,
   tx: Prisma.TransactionClient,
@@ -628,6 +630,15 @@ export async function appendWithin(
                       bug: JSON.parse(
                         JSON.stringify(turn.answerOffer.bug),
                       ) as Prisma.InputJsonObject,
+                    }
+                  : {}),
+                // The kept too-far request a decision offers (MOTIR-11521): which turn
+                // it came from, and its place among the conversation's kept requests.
+                ...(turn.answerOffer.farRequest
+                  ? {
+                      farRequestTurnId: turn.answerOffer.farRequest.turnId,
+                      farRequestPosition: turn.answerOffer.farRequest.position,
+                      farRequestTotal: turn.answerOffer.farRequest.total,
                     }
                   : {}),
                 declinedAt: null,
@@ -2861,6 +2872,48 @@ export const planChangeSessionsService = {
         session: await toDto(row, pctx, tx),
         ownsStart: true,
       };
+    });
+  },
+
+  /**
+   * OPEN THE CONVERSATION a kept too-far request plans in, once its own conversation was
+   * ended by a plan DECISION (MOTIR-11521): the caller's open session of `scope`, resumed
+   * or started under the scope lock, with the request appended as its `user` turn — the
+   * mid-planning restart's steps, minus the end, which the decision already made. The
+   * decided conversation is never touched. A retry after a submit that threw finds the
+   * request already the session's last turn and appends nothing. A session of that scope
+   * that already holds an undecided plan refuses `already_planning`: submitting there
+   * would revise that plan, not plan the request.
+   */
+  async openForDecidedOffer(
+    pctx: ProjectContext,
+    input: { scope: PlanChangeScope; requestMd: string },
+  ): Promise<PlanChangeSessionDto> {
+    const request = input.requestMd.trim();
+    if (!request) throw new EmptyPlanChangeTurnError();
+    const txCtx = { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId };
+    return withWorkspaceContext(txCtx, async (tx) => {
+      const sessionId = await resumeOrStartWithin(pctx, input.scope, new Date(), tx);
+      if (await planRepository.findLatestUndecidedBySession(sessionId, tx)) {
+        throw new PlanOfferStartRefusedError('already_planning');
+      }
+      const row = await appendWithin(
+        sessionId,
+        pctx,
+        { role: 'user', body: request, authorId: pctx.userId },
+        {},
+        tx,
+        async (t) => {
+          const turns = await planChangeTurnRepository.listBySessionId(
+            sessionId,
+            pctx.workspaceId,
+            t,
+          );
+          const last = turns.at(-1);
+          return last?.role === 'user' && last.body === request;
+        },
+      );
+      return toDto(row, pctx, tx);
     });
   },
 

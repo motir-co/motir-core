@@ -9418,7 +9418,16 @@
       "clearEnough": "Wystarczająco jasne, by zaplanować bez zmian.",
       "nothingSettled": "Nic nie ustalono, więc prośba zostanie zaplanowana bez zmian.",
       "requirementSaved": "Zapisano jako <link>{title}</link> w Dokumentach wymagań.",
-      "requirementPageNotSaved": "<lead>Nie udało się zapisać wymagania jako strony.</lead> Planowanie nadal z niego korzysta."
+      "requirementPageNotSaved": "<lead>Nie udało się zapisać wymagania jako strony.</lead> Planowanie nadal z niego korzysta.",
+      "afterDecision": {
+        "lead": "Gdy plan czekał na decyzję, pojawiła się ta prośba. Lepiej zaplanować ją osobno, więc oto ona jako nowy plan.",
+        "cue": "Żądanie {position} z {total}. Następne zostanie zaproponowane, gdy potwierdzisz lub odrzucisz to.",
+        "cueLast": "Żądanie {position} z {total}, ostatnie.",
+        "confirmHelp": "Potwierdź, aby rozpocząć planowanie tego żądania w nowej rozmowie.",
+        "declineHelp": "Odrzucenie porzuca je i niczego nie planuje.",
+        "cannotStartHelp": "Odrzucenie porzuca to żądanie i proponuje następne.",
+        "startedElsewhere": "Planowanie odbywa się w nowej rozmowie. <link>Otwórz ją</link>"
+      }
     },
     "logBugOffer": {
       "label": "Propozycja zgłoszenia błędu",

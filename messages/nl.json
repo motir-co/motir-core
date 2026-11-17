@@ -9418,7 +9418,16 @@
       "clearEnough": "Duidelijk genoeg om zo te plannen.",
       "nothingSettled": "Er is niets vastgelegd, dus het verzoek wordt gepland zoals het er staat.",
       "requirementSaved": "Opgeslagen als <link>{title}</link> in Vereistendocumenten.",
-      "requirementPageNotSaved": "<lead>De vereiste kon niet als pagina worden opgeslagen.</lead> De planning gebruikt hem toch."
+      "requirementPageNotSaved": "<lead>De vereiste kon niet als pagina worden opgeslagen.</lead> De planning gebruikt hem toch.",
+      "afterDecision": {
+        "lead": "Terwijl het plan op je beslissing wachtte, vroeg je hierom. Het is beter apart te plannen, dus hier is het als een nieuw plan.",
+        "cue": "Verzoek {position} van {total}. Het volgende wordt aangeboden zodra je dit bevestigt of afwijst.",
+        "cueLast": "Verzoek {position} van {total}, het laatste.",
+        "confirmHelp": "Bevestigen start de planning van dit verzoek in een nieuw gesprek.",
+        "declineHelp": "Afwijzen laat het vallen, en er wordt niets gepland.",
+        "cannotStartHelp": "Afwijzen laat dit verzoek vallen, en het volgende wordt aangeboden.",
+        "startedElsewhere": "De planning gebeurt in een nieuw gesprek. <link>Openen</link>"
+      }
     },
     "logBugOffer": {
       "label": "Aanbod om een bug vast te leggen",

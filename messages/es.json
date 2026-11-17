@@ -9418,7 +9418,16 @@
       "clearEnough": "Lo bastante claro para planificarlo tal como está.",
       "nothingSettled": "No se decidió nada, así que la solicitud se planifica tal como está.",
       "requirementSaved": "Guardado como <link>{title}</link> en Documentos de requisitos.",
-      "requirementPageNotSaved": "<lead>No se pudo guardar el requisito como página.</lead> La planificación lo sigue usando."
+      "requirementPageNotSaved": "<lead>No se pudo guardar el requisito como página.</lead> La planificación lo sigue usando.",
+      "afterDecision": {
+        "lead": "Mientras el plan esperaba tu decisión, pediste esto. Es mejor planificarlo por separado, así que aquí lo tienes como un plan nuevo.",
+        "cue": "Solicitud {position} de {total}. La siguiente se ofrece cuando confirmes o rechaces esta.",
+        "cueLast": "Solicitud {position} de {total}, la última.",
+        "confirmHelp": "Confirmar inicia la planificación de esta solicitud en una conversación nueva.",
+        "declineHelp": "Rechazar la descarta y no se planifica nada.",
+        "cannotStartHelp": "Rechazar descarta esta solicitud y se ofrece la siguiente.",
+        "startedElsewhere": "La planificación se hace en una conversación nueva. <link>Abrirla</link>"
+      }
     },
     "logBugOffer": {
       "label": "Oferta para registrar un bug",

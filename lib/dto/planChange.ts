@@ -630,6 +630,14 @@ export interface PlanAnswerOfferDto {
    * reads, so a permission revoked or a target closed since the answer shows here.
    */
   cannotStart?: PlanOfferCannotStart | null;
+  /**
+   * Present only on an offer a plan DECISION wrote from a kept too-far request
+   * (MOTIR-11521): which of the conversation's kept requests this is, counted from 1,
+   * out of how many were kept when it was written. The rail draws the decided
+   * conversation's lead line and more-kept cue from it, and the confirmed line links
+   * the new conversation the confirm opened.
+   */
+  afterDecision?: { position: number; total: number };
 }
 
 /** What a writer passes to store an offer: what was offered, and no disposition —
@@ -642,6 +650,10 @@ export interface AnswerOfferInput {
   requirement?: SubmittedRequirement;
   /** Present exactly on a `log_bug` offer. */
   bug?: LogBugOfferDto;
+  /** A `plan` offer written after a decision for a kept too-far request (MOTIR-11521):
+   *  the kept request's source turn, its position from 1 and the total kept. Stored as
+   *  `farRequestTurnId` / `farRequestPosition` / `farRequestTotal` beside the store keys. */
+  farRequest?: { turnId: string; position: number; total: number };
 }
 
 /**

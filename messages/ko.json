@@ -9412,7 +9412,16 @@
       "clearEnough": "그대로 계획할 만큼 충분히 명확합니다.",
       "nothingSettled": "확정된 내용이 없어 요청을 그대로 계획합니다.",
       "requirementSaved": "요구사항 문서에 <link>{title}</link>(으)로 저장했습니다.",
-      "requirementPageNotSaved": "<lead>요구사항을 페이지로 저장하지 못했습니다.</lead> 계획에는 계속 이 요구사항이 사용됩니다."
+      "requirementPageNotSaved": "<lead>요구사항을 페이지로 저장하지 못했습니다.</lead> 계획에는 계속 이 요구사항이 사용됩니다.",
+      "afterDecision": {
+        "lead": "계획이 결정을 기다리는 동안 이것을 요청하셨습니다. 따로 계획하는 편이 나으므로 여기서 새 계획으로 제안합니다.",
+        "cue": "요청 {position}/{total}. 이 요청을 확인하거나 거절하면 다음 요청이 제안됩니다.",
+        "cueLast": "요청 {position}/{total}, 마지막 요청입니다.",
+        "confirmHelp": "확인하면 이 요청의 계획을 새 대화에서 시작합니다.",
+        "declineHelp": "거절하면 이 요청은 버려지고 아무것도 계획되지 않습니다.",
+        "cannotStartHelp": "거절하면 이 요청은 버려지고 다음 요청이 제안됩니다.",
+        "startedElsewhere": "계획은 새 대화에서 진행됩니다. <link>열기</link>"
+      }
     },
     "logBugOffer": {
       "label": "버그 기록 제안",

@@ -14,6 +14,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { farRequestOfferService, farRequestTurnIdOf } from '@/lib/services/farRequestOfferService';
 import { isExpired } from '@/lib/planChange/targetLock';
 import {
   cannotStartOf,
@@ -251,6 +252,7 @@ export const planOfferService = {
     address: { sessionId: string },
   ): Promise<PlanChangeSessionDto> {
     await projectAccessService.assertPermission(pctx.projectId, actorOf(pctx), 'ai:plan');
+    let farRequestDeclined = false;
     await withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       async (tx) => {
@@ -269,7 +271,18 @@ export const planOfferService = {
         );
         const state = planOfferStateOf(offerTurns(rows), turnId);
         if (state === null) throw new PlanOfferNotFoundError(turnId);
-        if (state === 'declined') return;
+        // A replayed decline writes nothing, but still offers the next kept request: the
+        // first decline's after-commit offer may not have landed (MOTIR-11521).
+        if (state === 'declined') {
+          farRequestDeclined =
+            farRequestTurnIdOf(
+              (rows.find((t) => t.id === turnId)?.answerOffer ?? null) as Record<
+                string,
+                unknown
+              > | null,
+            ) !== null;
+          return;
+        }
         if (state === 'confirmed' || state === 'superseded') {
           throw new PlanOfferNotOpenError(turnId);
         }
@@ -288,6 +301,15 @@ export const planOfferService = {
           } as Prisma.InputJsonValue,
           tx,
         );
+        // A kept too-far request offered after a decision (MOTIR-11521) is consumed by
+        // its decline, in this same write; the next one is offered after the commit.
+        const declinedOffer = row.answerOffer as Record<string, unknown>;
+        await farRequestOfferService.consumeForOffer(
+          declinedOffer,
+          { sessionId: address.sessionId, workspaceId: pctx.workspaceId },
+          tx,
+        );
+        farRequestDeclined = farRequestTurnIdOf(declinedOffer) !== null;
         if (latest && latest.createdAt >= row.createdAt) {
           const grilling = await sharpenSessionRepository.findByIdInProject(
             latest.id,
@@ -311,6 +333,13 @@ export const planOfferService = {
         }
       },
     );
+    if (farRequestDeclined) {
+      await farRequestOfferService.offerNextAfterCommit(
+        { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+        address.sessionId,
+        'a decline',
+      );
+    }
     return threadOf(pctx, address.sessionId);
   },
 

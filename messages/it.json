@@ -9418,7 +9418,16 @@
       "clearEnough": "Abbastanza chiaro da pianificare così com’è.",
       "nothingSettled": "Non è stato stabilito nulla, quindi la richiesta viene pianificata così com’è.",
       "requirementSaved": "Salvato come <link>{title}</link> in Documenti dei requisiti.",
-      "requirementPageNotSaved": "<lead>Impossibile salvare il requisito come pagina.</lead> La pianificazione lo usa comunque."
+      "requirementPageNotSaved": "<lead>Impossibile salvare il requisito come pagina.</lead> La pianificazione lo usa comunque.",
+      "afterDecision": {
+        "lead": "Mentre il piano attendeva la tua decisione, hai chiesto questo. È meglio pianificarlo a parte, quindi eccolo come nuovo piano.",
+        "cue": "Richiesta {position} di {total}. La successiva viene offerta quando confermi o rifiuti questa.",
+        "cueLast": "Richiesta {position} di {total}, l’ultima.",
+        "confirmHelp": "Conferma avvia la pianificazione di questa richiesta in una nuova conversazione.",
+        "declineHelp": "Rifiuta la scarta e non viene pianificato nulla.",
+        "cannotStartHelp": "Rifiuta scarta questa richiesta e viene offerta la successiva.",
+        "startedElsewhere": "La pianificazione avviene in una nuova conversazione. <link>Aprila</link>"
+      }
     },
     "logBugOffer": {
       "label": "Proposta di registrare un bug",

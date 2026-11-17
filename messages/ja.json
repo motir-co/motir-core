@@ -9415,7 +9415,16 @@
       "clearEnough": "このまま計画できるほど明確です。",
       "nothingSettled": "何も決まらなかったので、依頼をそのまま計画します。",
       "requirementSaved": "要件ドキュメントに<link>{title}</link>として保存しました。",
-      "requirementPageNotSaved": "<lead>要件をページとして保存できませんでした。</lead>計画では引き続きこの要件を使用します。"
+      "requirementPageNotSaved": "<lead>要件をページとして保存できませんでした。</lead>計画では引き続きこの要件を使用します。",
+      "afterDecision": {
+        "lead": "計画があなたの判断を待っている間に、これを依頼されました。単独で計画したほうがよいため、新しい計画としてここで提案します。",
+        "cue": "リクエスト {position}/{total}。これを確定または却下すると、次のリクエストが提案されます。",
+        "cueLast": "リクエスト {position}/{total}、これが最後です。",
+        "confirmHelp": "確定すると、このリクエストの計画を新しい会話で開始します。",
+        "declineHelp": "却下するとこれは破棄され、何も計画されません。",
+        "cannotStartHelp": "却下するとこのリクエストは破棄され、次のリクエストが提案されます。",
+        "startedElsewhere": "計画は新しい会話で進みます。<link>開く</link>"
+      }
     },
     "logBugOffer": {
       "label": "バグ登録の提案",

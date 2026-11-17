@@ -9418,7 +9418,16 @@
       "clearEnough": "Klar genug, um es wie beschrieben zu planen.",
       "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant.",
       "requirementSaved": "Gespeichert als <link>{title}</link> in den Anforderungsdokumenten.",
-      "requirementPageNotSaved": "<lead>Die Anforderung konnte nicht als Seite gespeichert werden.</lead> Die Planung verwendet sie trotzdem."
+      "requirementPageNotSaved": "<lead>Die Anforderung konnte nicht als Seite gespeichert werden.</lead> Die Planung verwendet sie trotzdem.",
+      "afterDecision": {
+        "lead": "Während der Plan auf Ihre Entscheidung wartete, haben Sie darum gebeten. Es lässt sich besser für sich planen, deshalb folgt es hier als neuer Plan.",
+        "cue": "Anfrage {position} von {total}. Die nächste wird angeboten, sobald Sie diese bestätigen oder ablehnen.",
+        "cueLast": "Anfrage {position} von {total}, die letzte.",
+        "confirmHelp": "Bestätigen startet die Planung dieser Anfrage in einer neuen Unterhaltung.",
+        "declineHelp": "Ablehnen verwirft sie, und es wird nichts geplant.",
+        "cannotStartHelp": "Ablehnen verwirft diese Anfrage, und die nächste wird angeboten.",
+        "startedElsewhere": "Die Planung läuft in einer neuen Unterhaltung. <link>Öffnen</link>"
+      }
     },
     "logBugOffer": {
       "label": "Angebot, einen Bug zu erfassen",
