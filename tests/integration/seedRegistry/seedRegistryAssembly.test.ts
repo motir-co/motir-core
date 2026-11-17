@@ -73,6 +73,9 @@ vi.mock('@/lib/auth', async (importOriginal) => ({
 const MOTIR_ORG = 'motir-projects';
 const INSTALLATION_ID = '556677';
 const CHOICE = { styleId: 'neo-brutalism', paletteId: 'cobalt', typeId: 'grotesk' };
+// A choice saved with no backgrounds is written with the style's default
+// background in every area (MOTIR-11607).
+const WRITTEN = { ...CHOICE, backgrounds: { landing: 'wave', login: 'wave', hero: 'wave' } };
 const DESIGN_MANIFEST = `${JSON.stringify({ styleId: 'warm-editorial', paletteId: 'motir', typeId: 'motir' }, null, 2)}\n`;
 const FLY_MANIFEST = readFileSync(
   join(__dirname, '../../fixtures/hosting-manifests/fly.json'),
@@ -370,7 +373,7 @@ describe('1. each target’s web row gets its own starter, end to end', () => {
       expect(result.rows).toEqual([expect.objectContaining({ rowId: row.id, outcome: 'created' })]);
       expect(generatedFrom.get(name)).toBe(`motir-co/${starter}`);
       expect(designCommitsOn(name)).toHaveLength(1);
-      expect(designWrittenTo(name)).toEqual(CHOICE);
+      expect(designWrittenTo(name)).toEqual(WRITTEN);
     }
     expect(generatedTemplates()).toEqual([
       `motir-co/${SEED_SOURCE_PLATFORM_STARTER}`,
