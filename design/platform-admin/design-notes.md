@@ -26,6 +26,7 @@ closest existing usage surface.
 | **MONITORING · POOLS — one block per fleet kind on `/admin/monitoring`: provider, pool total, account rows, the Motir spare, quota raises, growth events, every state** (AMENDMENT 2026-10-25) | **`monitoring--pools.mock.html`** (delta, Panels 1–9, each light then dark) | A section added after the Fleet section of the shipped monitoring page; no new route. See § _AMENDMENT 2026-10-25 — Monitoring · Pools_. |
 | **USAGE & COST · PROVIDER BILLS — the daily provider-bill reconciliation on `/admin/usage`: per provider and UTC day, recorded beside billed, the gap, its source and status, days past tolerance, the per-model breakdown, findings with the differing side, providers with no billing source; no-records, All-time, loading, error, no-source and no-findings states** (AMENDMENT 2026-11-15, MOTIR-11375) | **`console--estate-usage-drilldown--provider-bills.mock.html`** (delta, Panels 1–8) | A new read-only section after the two model tables on Usage & cost. **Gates MOTIR-11376** (the section) and the story checks MOTIR-11387 / MOTIR-11388 (story MOTIR-11350). |
 | **PLANNER FINDINGS · RECORDS — a third view, Records, on `/admin/planner-findings`: one row per plan check with its verdict, filters, pager and every list state; the record page with its plan context, findings and the copyable command; the Record link on the finding detail** (AMENDMENT 2026-11-16) | **`console--planner-findings--records.mock.html`** (delta, Panels 1–12) | A display-only Records view and record page added to the shipped Planner findings console. |
+| **PLANNER FINDINGS · LINKED PLANNING BUGS — the record page's Planning bugs section: the linked work-item keys, the add and remove controls, every refusal, the in-flight and stale-remove states, the reader's and the open record's forms** (AMENDMENT 2026-11-16) | **`console--planner-findings--records--linked-bugs.mock.html`** (delta, Panels 1–10) | One section on the record page where an operator links and removes the planning-bug keys a check produced, read-only below operator. |
 
 ## What this area is
 
@@ -4262,3 +4263,184 @@ Filters, Clear all, Remove {filter}) are reused as they are.
   page leaves the space below the findings table free and draws no linked list of its own.
 - What a field means, how it is computed or which route answers it.
 - Any change under `/api/platform/planner-findings/**` or to the records store.
+
+---
+
+# AMENDMENT 2026-11-16 — Planner findings · Linked planning bugs
+
+**Mock:** [`console--planner-findings--records--linked-bugs.mock.html`](./console--planner-findings--records--linked-bugs.mock.html)
+— a DELTA, Panels 1–10.
+
+**Amends** § AMENDMENT 2026-11-16 — Planner findings · Records (design MOTIR-11470) and its mock,
+[`console--planner-findings--records.mock.html`](./console--planner-findings--records.mock.html): the record page at
+`/admin/planner-findings/records/[id]`.
+
+**Design system (step 1 of the design lane).** Files read: `package.json` (depends on `@motir/design-system`
+`workspace:*`) and `app/globals.css` (imports `@motir/design-system/theme.css`). **Verdict: on Motir Design, branch
+(a)**, at the area's default axes (`warm-editorial` shape, `motir` palette, light theme with one nested dark stage).
+The mock is hand-authored, not a render, because the section it draws does not exist in code yet. Its token block,
+its primitive CSS and the record page's own classes are spliced verbatim from the records mock, and its sprite is
+that mock's, unchanged; an additions block holds only this section's classes and one token the shipped danger
+recipe needs and the base did not declare, `--el-danger-surface` (`var(--color-tint-rose)`, as
+`packages/design-system/theme.css` defines it). Shipped parts read for the drawing: the triage controls on the
+finding detail page (`app/(admin)/admin/planner-findings/_components/FindingTriageControls.tsx`: the labelled key
+input, the inline form box, the danger refusal box with its retry, the status notice, and the role lowering a
+control out of the tree) and the planner-findings actions (`app/(admin)/admin/planner-findings/actions.ts`: a
+discriminated result a control draws rather than a throw). No part is missing from the package: the section is a
+**product-local composition** of `Card`, `Input`, `Button`, the inline form box, the danger refusal recipe and the
+status line.
+
+**Assumed base context, in one line.** The record page already has, as the records delta draws them, a page frame
+with a breadcrumb and a **Back to records** link, a plan-context header (the record id, its verdict chip and the
+plan, session, job, model, baseline and verdict fields), a **Findings in this record** table, and, on an `open`
+record only, a card holding the copyable `motir check planner finding <id>` command. This section adds the linked-key
+surfaces between the plan-context header and the findings table and redraws none of the rest.
+
+## Elements — each named once, mapped to the field it shows
+
+| Element                             | What it is                                                                                                                                                                                                                             | Field it shows                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Planning bugs section**           | One `Card` on the record page, between the plan-context header and the record findings table: a heading in the page's small-caps section style, a one-line intro, the list and, for a writer, the add control beneath it.              | The record's linked set as a whole                         |
+| **Page context strip**              | The reused surroundings drawn abbreviated above and below the section — the back link and the plan-context header above, the record findings table below — each closed by a dashed "Abbreviated" note so nothing of them is re-issued. | Nothing; it places the section                             |
+| **Linked-key row**                  | One row per stored key in the list's own order: the key as mono text in the page ink and, for a writer, the remove control at the row's end. It is not a link, has no chevron and opens nothing.                                       | One stored key from `linkedBugKeys`                        |
+| **Linked-key row · work item gone** | The same row, unchanged, when the work item behind a key no longer exists: the key is stored text, so nothing is struck through, no marker is added and no row is hidden.                                                              | The same stored key                                        |
+| **Remove control**                  | The shipped `Button`, ghost, at its smallest size, at a row's end. Its visible word is the action and its accessible name names the key; pending while its own write runs; not rendered for a reader.                                  | The key on its row                                         |
+| **Add control**                     | A bordered form box at card radius (the shipped inline form box) holding the labelled key input with its helper line, the primary submit button and the message slot beneath them.                                                     | The key being typed                                        |
+| **Refusal box**                     | The control's own one-at-a-time message slot, in the shipped danger recipe: a danger border on the danger surface, a danger-ink glyph, the sentence in the page ink, and the shipped retry button only where trying again can help.    | Which refusal the last write met                           |
+| **Change notice**                   | The quiet status line a completed write leaves: the key linked, the key removed, or that nothing changed (with the shipped warning glyph). Words in the secondary ink, no box.                                                         | The outcome of the last write                              |
+| **Empty-list line**                 | The section's own empty body: one line where the rows would be, never an empty list box and never a table with no rows.                                                                                                                | That the record has no linked keys                         |
+| **Verdict-first line**              | The standing line an `open` record's section carries where the add control would sit: one sentence saying a verdict comes first. A string of its own, not the empty-list line.                                                         | That the set cannot change before the record is attributed |
+| **Reader form**                     | The section for a staff session below operator: the heading, the intro and the rows exactly as a writer sees them, with neither control rendered.                                                                                      | The same linked set                                        |
+| **Open form**                       | The section on a record whose verdict state is `open`: no add control, the empty-list line, the verdict-first line, and the record-open refusal in the slot if a write is named at it.                                                 | That the set cannot change before a verdict                |
+| **Narrow form**                     | The section below `md`: the input full width with the button beneath it, and each row stacked so the key sits on its own line with its remove control at the row's end.                                                                | The same fields                                            |
+
+## The panels
+
+1. **An attributed record with two keys, light** — the record page in abbreviated page context (back link and
+   plan-context header above, the record findings table below) with the Planning bugs section fully drawn between
+   them: heading, intro, two linked-key rows in the order the record answers, each with its remove control, and
+   the add control at rest. No count, no paging, no sort control. Back to records is the way in from the Records
+   view.
+2. **The same section in dark** — a nested dark stage that re-binds the element tokens and its own page
+   background on its own stage, so the block computes dark.
+3. **The section in detail** — the row at rest, being removed (its control pending, the other row live), and a
+   key whose work item is gone, drawn identically and captioned so; beside them the add control's parts at rest,
+   the empty message slot and the empty-list line.
+4. **An attributed record with no keys yet** — the empty-list line and the add control; the heading and intro
+   unchanged.
+5. **Each refusal, in the same slot** — the refusal box under the add control with the two rows unchanged and
+   the typed key still in the input: **a** no such work item in this record's project; **b** already linked;
+   **c** a link named at an open record; **d** an unexpected failure, with the retry. A session below operator is
+   not among them: it is drawn no control at all (panel 7), and the route answers it with the gate's own 404.
+6. **In flight, and what a finished write leaves** — the add button pending with its input held and the list
+   unchanged; one row's remove control pending while the other row stays live; and the change notice after a
+   link and after a remove.
+7. **The reader's form** — heading, intro and rows as a writer sees them; no remove control, no add control;
+   nothing rendered rather than rendered disabled.
+8. **The open record** — no add control, the empty-list line, the verdict-first line, the record-open refusal in
+   the slot, and the page's copyable command below the section as the records delta draws it.
+9. **The stale remove** — two admins on one record: the second remove of a key already gone answers the record as
+   it stands; after the re-read the row is gone and the nothing-changed notice stands in place of a refusal. No
+   error is drawn.
+10. **Narrow width** — below `md`: the input full width with its button beneath it, each row stacked with the key
+    on its own line and its remove control at the row's end, the refusal box wrapping under the control; the
+    reader's and the open record's forms stacked the same way.
+
+Not drawn, on purpose: no loading panel (the record page's read decides existence before anything streams, as the
+records delta's record-page rule says, so a skeleton would flash over an unknown id); no unreadable-store panel
+(the records delta's shipped error state with a retry covers it); no verdict control anywhere (a verdict comes from
+the check skill); no not-found panel (the records delta answers an unknown id with the app's 404).
+
+## Rules the drawing holds
+
+- **The record page's only write.** Linking a key and removing one are the page's whole write surface. The
+  verdict is never set from a page, no row edits a work item, and every surface the records delta draws stays as
+  it draws it.
+- **A key is drawn, not resolved.** A linked key renders as the stored string and links nowhere, because the
+  record's read answers stored strings and nothing resolves one; so a key whose work item is gone draws exactly
+  like a live one. No marker, no strike-through and no missing-state chip.
+- **A control that could only be refused is not rendered.** Below operator, and on an open record, the controls
+  are absent rather than disabled, so a read-only session gains no dead tab stop.
+- **One refusal, one place, nothing changed.** A refusal goes in the control's own message slot and leaves both
+  the list and the typed key as they were. The page-level error state stays reserved for a store that could not
+  be read, and a remove that changed nothing is a quiet notice, never a refusal.
+- **Placement.** The section sits between the plan-context header and the findings table: it is the page's only
+  write, and the findings list is the page's long body, so the control is reachable without scrolling past every
+  finding.
+- **Composition, not addition.** No new primitive: `Card`, `Input`, `Button` (primary, ghost, secondary at `sm`),
+  the inline form box, the danger refusal recipe and the status line.
+- **Shape and colour.** Every ink comes from the element-token layer and every control's radius, padding and
+  height from a shape token; no muted or faint ink in the additions, no raw hue, no privately-named colour alias.
+- **Fields are drawn, never defined.** Each element names the field it shows and nothing about its meaning, its
+  storage, or which route answers it.
+
+## Colour and shape roles (`--el-*` and shape tokens only)
+
+| Element                         | Colour                                                                                             | Shape                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Section card · heading · intro  | shipped `Card`; heading and intro `--el-text-secondary`                                            | `--radius-card`, `--spacing-card-padding`                      |
+| Linked-key row · key            | `--el-border-soft` divider; key `--el-text` (mono)                                                 | `--height-control`, `--spacing-control-y-4`                    |
+| Remove control                  | `Button` ghost, `--el-text`                                                                        | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`        |
+| Add control box                 | `--el-border`                                                                                      | `--radius-card`, `--spacing-card-padding-12`                   |
+| Key input · label · hint        | `--el-page-bg`, `--el-border-strong`, value `--el-text`, label and hint `--el-text-secondary`      | `--radius-input`, `--height-input`, `--spacing-input-x`        |
+| Link key button                 | `Button` primary, `--el-accent` / `--el-accent-text`                                               | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`        |
+| Refusal box                     | `--el-danger` border, `--el-danger-surface` fill, glyph `--el-danger-on-surface`, text `--el-text` | `--radius-card`, `--spacing-control-x` / `--spacing-control-y` |
+| Retry                           | `Button` secondary                                                                                 | `--radius-btn`, `--height-btn-sm`                              |
+| Change notice                   | `--el-text-secondary`; the nothing-changed glyph `--el-warning`                                    | —                                                              |
+| Empty-list line · verdict-first | `--el-text-secondary`                                                                              | —                                                              |
+| Pending spinner                 | `currentColor` of its button                                                                       | a circle (`rounded-full`)                                      |
+
+## Accessibility contract
+
+- The section is a `region` named by its heading; the list is a `<ul>` named "Linked planning bugs".
+- The key's text is the row's whole label, so a screen reader reads the key itself; the row is not a link and adds
+  no tab stop of its own.
+- Every remove control's accessible name names its key ("Remove ACME-41"); a pending remove is
+  `aria-disabled` and reads "Removing…".
+- The key input is labelled "Work item key" and described by its hint; a refusal is announced through a
+  `role="alert"` region the input's `aria-describedby` also points at, so the refusal is read with the field.
+- A finished write, and a write that changed nothing, are announced through a `role="status"` region.
+- A pending add holds the input (`aria-readonly`) and its button is `aria-disabled` with the word "Linking…".
+- The reader's form and the open form render no control, so they add no tab stop.
+- Glyphs are `aria-hidden`; the refusal and the notice are words, never colour alone. Every ink is `--el-text`,
+  `--el-text-secondary`, `--el-accent-text` on `--el-accent` or `--el-text` on `--el-danger-surface`, which clear
+  AA in both themes.
+
+## Copy (en · zh; every locale carries it)
+
+Keys sit under the page's existing namespace, `platformAdmin.plannerFindings`; the key names are suggestions.
+**Reused as shipped, not re-worded:** `refused.notPermitted` (the below-operator refusal, for a write the console
+never offers that principal), `refused.failed` (the unexpected-failure line), `triage.retry` (Try again), and the
+nothing-changed notice's form (`noop`: the warning glyph and the secondary-ink status line). The nothing-changed
+WORDS are the record's own (`recordLinks.noop`), because the shipped `noop` names "this finding".
+
+| Key (`platformAdmin.plannerFindings.*`) | en                                                                                                                    | zh                                                                       |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `recordLinks.title`                     | Planning bugs                                                                                                         | 规划缺陷                                                                 |
+| `recordLinks.intro`                     | The work items this check produced, in the order they were linked.                                                    | 此次检查产生的工作项，按关联顺序排列。                                   |
+| `recordLinks.listLabel`                 | Linked planning bugs                                                                                                  | 已关联的规划缺陷                                                         |
+| `recordLinks.empty`                     | No planning bugs linked yet.                                                                                          | 尚未关联规划缺陷。                                                       |
+| `recordLinks.verdictFirst`              | Give this record its verdict first — planning bugs are linked once it is attributed.                                  | 请先为此记录给出结论——归因后才能关联规划缺陷。                           |
+| `recordLinks.label`                     | Work item key                                                                                                         | 工作项编号                                                               |
+| `recordLinks.hint`                      | The key of a work item in this record’s project — a planning bug you filed, for example. It is kept exactly as typed. | 此记录所属项目中的工作项编号，例如你提交的规划缺陷。按输入原样保存。     |
+| `recordLinks.placeholder`               | MOTIR-123                                                                                                             | MOTIR-123                                                                |
+| `recordLinks.add`                       | Link key                                                                                                              | 关联编号                                                                 |
+| `recordLinks.adding`                    | Linking…                                                                                                              | 正在关联…                                                                |
+| `recordLinks.remove`                    | Remove                                                                                                                | 移除                                                                     |
+| `recordLinks.removeLabel`               | Remove {key}                                                                                                          | 移除 {key}                                                               |
+| `recordLinks.removing`                  | Removing…                                                                                                             | 正在移除…                                                                |
+| `recordLinks.refused.notAWorkItem`      | Not linked — no work item {key} in this record’s project.                                                             | 未关联——此记录所属项目中没有工作项 {key}。                               |
+| `recordLinks.refused.alreadyLinked`     | Not linked — {key} is already linked to this record.                                                                  | 未关联——{key} 已关联到此记录。                                           |
+| `recordLinks.refused.recordOpen`        | Not changed — this record has no verdict yet. Give it a verdict first, then link its planning bugs.                   | 未更改——此记录尚无结论。请先给出结论，再关联其规划缺陷。                 |
+| `refused.failed` (reused)               | Not saved — something went wrong. Nothing was written. Your entries are kept; try again.                              | 未保存——出错了。未写入任何内容。你的输入已保留，请重试。                 |
+| `triage.retry` (reused)                 | Try again                                                                                                             | 再试一次                                                                 |
+| `recordLinks.linked`                    | Linked {key}.                                                                                                         | 已关联 {key}。                                                           |
+| `recordLinks.removed`                   | Removed {key}.                                                                                                        | 已移除 {key}。                                                           |
+| `recordLinks.noop`                      | Already up to date — {key} was no longer linked, so nothing changed and nothing was logged.                           | 已是最新——{key} 已不再关联，因此没有需要更改的内容，也没有记录任何内容。 |
+
+## What this amendment does NOT draw
+
+- Any surface the records delta draws: the page frame, the Records view, the plan-context header, the record
+  findings table or the copyable command, beyond their abbreviated placement.
+- A verdict control, or any change to the per-finding triage link or its bug-key form.
+- What a key means, what it is stored in, which route answers a write, or what a refusal is called on the wire.

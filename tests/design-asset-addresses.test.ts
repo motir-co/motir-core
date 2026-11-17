@@ -1166,6 +1166,15 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/admin/planner-findings/records/[id]',
     why: 'FORWARD-LOOKING: the record page of the Planner findings Records view, drawn before its route exists. MOTIR-11463 serves `app/(admin)/admin/planner-findings/records/[id]` and deletes this row in the same diff, because the row stops applying the moment the route lands.',
   },
+  // ── Planner findings · Linked planning bugs (design MOTIR-11505) ────────────
+  //    The linked-bugs delta draws one section on that same record page, and its header
+  //    comment quotes the address. Only the MOCK gets a row: the notes file's row for this
+  //    address is the Records section's above, and the guard lists each pair once.
+  {
+    file: 'design/platform-admin/console--planner-findings--records--linked-bugs.mock.html',
+    address: '/admin/planner-findings/records/[id]',
+    why: "FORWARD-LOOKING: the record page the linked-bugs delta adds its Planning bugs section to, drawn before its route exists. MOTIR-11463 serves `app/(admin)/admin/planner-findings/records/[id]` and deletes this row with the Records delta's, in the same diff, because both stop applying the moment the route lands.",
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };
