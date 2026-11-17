@@ -11,7 +11,8 @@
 // three components, and a unit of any one of them mocks the other two.
 //
 // So this spec mounts the REAL chain — `PlanningWorkspaceOverlay` →
-// `PlanningWorkspaceHost` → `PlanChangeCanvas` → `ProjectRoadmapCanvas` — and
+// `PlanningWorkspaceHost` → `PlanProposalViews` → `PlanReviewCanvas` →
+// `ProjectRoadmapCanvas` — and
 // stubs only what is genuinely outside it: the two network reads and the
 // conversation transport. The canvas is NOT mocked, which is the whole point.
 //

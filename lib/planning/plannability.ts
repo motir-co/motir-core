@@ -69,6 +69,18 @@ export function planBlockReasons(
   return [{ kind: 'blocker_has_no_subtasks', blockers: held.map(toBlockerDto) }];
 }
 
+/**
+ * Is this card HELD out of planning (MOTIR-11546)? Exactly "it has a reason" —
+ * the canvas's To plan state and the Plan button's check read the one rule, so
+ * the card never offers Plan on a story the check would refuse.
+ */
+export function isPlanHeld(
+  card: { kind: string },
+  blockers: readonly PlannabilityBlockerFacts[],
+): boolean {
+  return planBlockReasons(card, blockers).length > 0;
+}
+
 /** The whole answer: `plannable` is exactly "no reasons". */
 export function plannabilityOf(
   card: { kind: string },

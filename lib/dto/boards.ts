@@ -198,6 +198,11 @@ export interface BoardCardDto {
   /** Has at least one live (non-archived, non-triage) child — with the kind and
    *  the category it decides the To plan pill (MOTIR-10534). */
   hasChildren: boolean;
+  /** HELD out of planning (MOTIR-11546): a story blocked by an unfinished story
+   *  with no subtasks yet — `plannabilityService.heldStoryIds`, the Plan button's
+   *  own rule — so its slot draws the status chip, not To plan, as the canvas
+   *  does. Every board read sets it; absent (a hand-built card) reads not held. */
+  planHeld?: boolean;
   /** The work TYPE — with `executor`, decides the Manual chip (MOTIR-10534). */
   type: WorkItemTypeDto | null;
   /** WHO executes the work — `human` (or `type: 'manual'`) is Manual. */

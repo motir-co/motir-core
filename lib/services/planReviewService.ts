@@ -24,6 +24,7 @@ import {
   DERIVED_EVENT_KINDS,
   TRAIL_ONLY_KINDS,
   mergeTimeline,
+  planVersionsOf,
   revisionCount,
 } from '@/lib/plans/timeline';
 import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
@@ -2105,7 +2106,17 @@ export const planReviewService = {
     // The plan's own SUMMARY (the briefing) rides the SAME read (bug MOTIR-9697):
     // both surfaces that draw it — the review rail and the overlay's briefing
     // bubble — had no map built from it, so every chip in it was drawn deleted.
-    const summaryRefIds = plan.summary ? parseWorkItemTokenIds(plan.summary) : [];
+    // …and every EARLIER version's briefing (MOTIR-11487), which the planning rail
+    // draws as history above the follow-up that replaced it — the same read, so
+    // its chips resolve for this reader exactly as the current briefing's do.
+    const versions = planVersionsOf(revisions);
+    const summaryRefIds = [
+      ...new Set(
+        [plan.summary, ...versions.map((v) => v.summary)].flatMap((text) =>
+          text ? parseWorkItemTokenIds(text) : [],
+        ),
+      ),
+    ];
     const bodyRefs = await resolveWorkItemRefSummaries(
       { ids: [...new Set([...refIdsByItem.values()].flat().concat(summaryRefIds))], keys: [] },
       plan.projectId,
@@ -2367,6 +2378,7 @@ export const planReviewService = {
       conversation,
       narration,
       history,
+      versions,
       items,
       edgeCoverage,
       stale: staleCount > 0,

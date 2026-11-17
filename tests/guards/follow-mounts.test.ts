@@ -10,8 +10,9 @@ import { describe, expect, it } from 'vitest';
 // The design is explicit that both behaviours live in ONE place: the planning
 // overlay's proposed-plan pane while the plan is written. The plan page
 // (`PlanDetail`) renders the same `PlanProposalViews` over a generating plan and
-// must never be driven; the pre-plan roadmap canvas (`PlanChangeCanvas`) keeps
-// MOTIR-6154's own follow-move and must never be handed the driven mode; and a
+// must never be driven; the overlay's pane before a plan exists (the same
+// `PlanProposalViews`, in its `prePlan` state since MOTIR-11513) keeps MOTIR-6154's
+// own follow-move and must never be handed the driven mode; and a
 // committed card's quick view must never show a partial. The integration gate
 // (`tests/integration/planning/followThePlannerGate.test.tsx`) proves each of
 // those at runtime for the mounts that exist TODAY. This file is the other half:
@@ -114,17 +115,19 @@ describe('following is mounted in one place', () => {
     expect(sitesOf(/\bprogressReading=\{/)).toEqual([HOST]);
   });
 
-  it('in the host, only the PlanProposalViews mount carries them — never PlanChangeCanvas', () => {
+  it('in the host, the ONE PlanProposalViews mount carries them, gated on the live pane', () => {
+    // Since MOTIR-11513 the same mount draws the pre-plan roadmap (`prePlan`) and
+    // the plan, so what keeps the driven mode off the "no plan" state is the gate
+    // on the live pane — never a second component.
     const src = read(join(ROOT, HOST));
     const views = jsxElements(src, 'PlanProposalViews');
     expect(views).toHaveLength(1);
-    expect(views[0]).toMatch(/\bfollowMode=\{/);
+    expect(views[0]).toMatch(/\bfollowMode=\{drivenPane && paneLive \? 'whileOn' : undefined\}/);
     expect(views[0]).toMatch(/\bfollowControl=\{/);
-    const canvases = jsxElements(src, 'PlanChangeCanvas');
-    expect(canvases.length).toBeGreaterThan(0);
-    for (const el of canvases) {
-      expect(el).not.toMatch(/\bfollowMode=|\bfollowControl=|\bprogressReading=/);
-    }
+    expect(views[0]).toMatch(/\bprePlan=\{/);
+    // No other canvas component is mounted by the host at all.
+    expect(jsxElements(src, 'PlanReviewCanvas')).toHaveLength(0);
+    expect(jsxElements(src, 'ProjectRoadmapCanvas')).toHaveLength(0);
   });
 
   it('the plan page passes none of them', () => {

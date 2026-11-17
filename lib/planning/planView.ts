@@ -135,12 +135,15 @@ export function defaultPlanView(review: PlanReviewDto): PlanViewDto {
   // `PlanDetail` (`:396`) deliberately does NOT opt into the split — MOTIR-6250
   // (*"Does NOT change: … the plan page's rail"*) and MOTIR-6236 (*"This host is
   // NOT a split"*) both say so — and `PlanningWorkspaceHost` (MOTIR-6155, Part XXI
-  // decision 2) IS the split, but seeds on the plan's first proposed read, the same
-  // transition the rail resets on. So at that moment the rail is at most
-  // `max(352px, a third)` of a FULL-BLEED overlay, and the canvas is at least as
-  // wide as the plan page's at every viewport Part XIII §6 measured: the number was
-  // derived against the narrower frame. `tests/planning/planView.test.ts` pins both:
-  // a third caller, or the plan page opting in, fails NAMING this derivation.
+  // decision 2) IS the split. It seeds on the plan's first read. Opened from a
+  // named session, that is the transition the rail resets on, so the rail is at
+  // most `max(352px, a third)` of a FULL-BLEED overlay and the canvas is at least
+  // as wide as the plan page's at every viewport Part XIII §6 measured. Since
+  // MOTIR-11513 a plan STARTED on the overlay keeps the width the person dragged
+  // (at most half), so there the canvas can be narrower than the plan page's: the
+  // seed is still only the OPENING view, one click from the other, and the person
+  // chose the narrower canvas. `tests/planning/planView.test.ts` pins both: a third
+  // caller, or the plan page opting in, fails NAMING this derivation.
   if (review.arrivalLevelSize > ARRIVAL_LEVEL_MAX_NODES) return 'list';
 
   // Part IX §3's arm, unchanged and last: a plan SPREAD across containers has no

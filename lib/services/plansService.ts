@@ -7638,12 +7638,25 @@ export const plansService = {
         // The close, on the trail (MOTIR-3535) — the moment the plan stopped
         // moving and became something a person is asked to read. The count is
         // what that person is being asked to approve.
+        //
+        // ⚠️ AND THE BRIEFING THIS VERSION CLOSED WITH (MOTIR-11487; design
+        // MOTIR-11486 § "The earlier version, kept as history"). The plan row
+        // keeps only its CURRENT `summary`, so a revision that closes again
+        // overwrites the briefing a person read for the version before it. The
+        // planning rail draws every version under the run that produced it, and
+        // this row is the one place an earlier version's briefing survives. It
+        // is the row's stored summary after the update — the one the reader is
+        // shown — and absent when the plan has none.
         await planRevisionsService.recordRevision(
           {
             planId,
             changeKind: 'planned',
             ...generationActor(fresh, ctx),
-            diff: { itemCount: n, ...(productName != null ? { productName } : {}) },
+            diff: {
+              itemCount: n,
+              ...(productName != null ? { productName } : {}),
+              ...(updated.summary != null ? { summary: updated.summary } : {}),
+            },
           },
           tx,
         );

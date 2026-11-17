@@ -34,9 +34,6 @@ vi.mock('@/lib/hooks/useWorkItemTargetSearch', () => ({
 vi.mock('@/components/planning/PlanReviewCanvas', () => ({
   PlanReviewCanvas: () => <div data-testid="review-canvas-stub" />,
 }));
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: () => <div data-testid="canvas-stub" />,
-}));
 
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';

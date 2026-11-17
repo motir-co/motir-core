@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Tablica musi mieć co najmniej jedną kolumnę.",
       "toastColumnNotEmptyError": "Kolumna „{name}” nadal zawiera elementy robocze — najpierw zmapuj ponownie jej statusy.",
       "toastRenameBoardError": "Nie udało się zmienić nazwy tablicy. Przywrócono poprzednią nazwę.",
-      "errorTitle": "Nie udało się załadować ustawień tablicy",
+      "errorTitle": "Nie udało się zapisać zmiany",
       "errorDescription": "Coś poszło nie tak podczas ładowania konfiguracji tej tablicy. Spróbuj ponownie.",
       "storedFilter": {
         "title": "Filtr Tablicy",
@@ -8798,6 +8798,10 @@
       "approve": "Zatwierdź",
       "approveChanges": "Zatwierdź zmiany",
       "nothingSavedYet": "Nic jeszcze nie zapisano",
+      "revision": {
+        "earlierVersion": "Wcześniejsza wersja · zastąpiona poniżej",
+        "earlierVersionUnkept": "Tu była wcześniejsza wersja tego planu ({count, plural, one {# element} few {# elementy} many {# elementów} other {# elementu}}). Jej podsumowanie nie zostało zachowane."
+      },
       "barCounts": "{added, plural, =0 {Brak dodanych} one {# dodany} few {# dodane} many {# dodanych} other {# dodanego}}{changed, plural, =0 {} one {, # zmieniony} few {, # zmienione} many {, # zmienionych} other {, # zmienionego}}{removed, plural, =0 {} one {, # usunięty} few {, # usunięte} many {, # usuniętych} other {, # usuniętego}}",
       "barNothingSaved": "Nic nie zostanie zapisane, dopóki nie zatwierdzisz.",
       "summary": "{added, plural, =0 {Brak nowych elementów roboczych} one {# dodany} few {# dodane} many {# dodanych} other {# dodanego}}{changed, plural, =0 {} one {, # zmieniony} few {, # zmienione} many {, # zmienionych} other {, # zmienionego}}{removed, plural, =0 {} one {, # usunięty} few {, # usunięte} many {, # usuniętych} other {, # usuniętego}} — jest na kanwie, nic nie zostało jeszcze zapisane.",

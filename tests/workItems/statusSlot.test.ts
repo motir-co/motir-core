@@ -51,6 +51,33 @@ describe('statusSlotOf', () => {
   });
 });
 
+// MOTIR-11546: a story HELD out of planning — blocked by an unfinished story with
+// no subtasks yet — is not To plan on any surface; it falls through to the chip.
+describe('a story held out of planning', () => {
+  const story = {
+    kind: 'story',
+    status: 'todo',
+    statusCategory: 'todo' as const,
+    hasChildren: false,
+  };
+
+  it('is not To plan, and its slot is the status chip', () => {
+    expect(isToPlanItem({ ...story, planHeld: true })).toBe(false);
+    // Held means an open blocker, so the story is never ready.
+    expect(statusSlotOf({ ...story, planHeld: true }, { ready: false, blocked: true })).toBe(
+      'status',
+    );
+  });
+
+  it('released, or never computed, it is To plan as before', () => {
+    expect(isToPlanItem({ ...story, planHeld: false })).toBe(true);
+    expect(isToPlanItem(story)).toBe(true);
+    expect(statusSlotOf({ ...story, planHeld: false }, { ready: false, blocked: true })).toBe(
+      'to-plan',
+    );
+  });
+});
+
 describe('isToPlanItem', () => {
   it('is a childless story in the todo category', () => {
     expect(

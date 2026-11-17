@@ -163,6 +163,11 @@ export interface PlanRevisionAgentActor {
  * carried, which fields an edit supplied, how many items a decision covered —
  * never the proposal bodies themselves.
  *
+ * ⚠️ The `planned` row's `summary` (MOTIR-11487) is the plan's OWN briefing as
+ * that version closed with it — the plan-level text `brief_edited` already names,
+ * never a proposal body. It is kept because the plan row holds only the current
+ * one, and the planning rail draws every earlier version's briefing from it.
+ *
  * `noteMd` is the ONE exception to that, and it is a separate field precisely so
  * the `diff` contract above stays true: a `reason_classified` row carries prose
  * EVIDENCE (the turn that raised the thing, or the rule search that came back

@@ -320,7 +320,8 @@ export function toWorkItemTreeNodeDto(
  * (`!hasChildren`); the service passes it through here. `inActiveSprint` is the
  * service's call too — it holds the resolved active sprint and compares each
  * row's `sprintId` to it (always `false` in project scope, where no sprint is
- * resolved).
+ * resolved). `planHeld` (MOTIR-11546) is the service's call as well: it reads the
+ * level's blockers once through `plannabilityService.heldStoryIds`.
  */
 export function toRoadmapNodeDto(
   row: WorkItemTreeRow,
@@ -329,6 +330,7 @@ export function toRoadmapNodeDto(
   ready: boolean,
   inActiveSprint: boolean,
   status: Pick<WorkflowStatusDto, 'label' | 'category'> | null,
+  planHeld = false,
 ): RoadmapNodeDto {
   return {
     id: row.id,
@@ -351,6 +353,7 @@ export function toRoadmapNodeDto(
     hasChildren: row.hasChildren,
     progress,
     ready,
+    planHeld,
     inActiveSprint,
     fixReason: row.fixReason,
   };

@@ -97,6 +97,31 @@ describe.each([
     ).toEqual({ outcome: 'binary', path: 'app/apple-icon.png', ref: 'main', bytes: PNG.length });
   });
 
+  // MOTIR-11528: the id is asked only on a FOUND answer, so a binary read with
+  // the ask on carries none and never reaches the host's object read.
+  it('carries no blobSha on a binary answer, and makes no id request, with the ask on', async () => {
+    const fetchMock = stubFetch(() => bytesResponse(PNG));
+    const result = await provider.readFileAtRef(
+      installationId,
+      owner,
+      'web',
+      'app/apple-icon.png',
+      'main',
+      { blobSha: true },
+    );
+    expect(result).toEqual({
+      outcome: 'binary',
+      path: 'app/apple-icon.png',
+      ref: 'main',
+      bytes: PNG.length,
+    });
+    const hostCalls = fetchMock.mock.calls
+      .map(([u]) => String(u))
+      .filter((u) => !u.includes('/access_tokens'));
+    expect(hostCalls).toHaveLength(1);
+    expect(hostCalls.some((u) => u.endsWith('/graphql'))).toBe(false);
+  });
+
   it('names valid UTF-8 carrying a NUL `binary` — git’s own heuristic', async () => {
     stubFetch(() => bytesResponse(NUL_TEXT));
     expect(await provider.readFileAtRef(installationId, owner, 'web', 'data.bin', 'main')).toEqual({

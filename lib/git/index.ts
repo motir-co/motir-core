@@ -58,6 +58,7 @@ export type {
   NormalizedRepo,
   NormalizedStatusEvent,
   RepoFileReadOutcome,
+  ReadFileAtRefOptions,
   RepoFileReadResult,
   RepoFileReadTransportFailure,
 } from './types';

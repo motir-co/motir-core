@@ -44,76 +44,79 @@ vi.mock('@/lib/hooks/useWorkItemTargetSearch', () => ({
   }),
 }));
 
-// MOTIR-6186 — the surface now mounts the plan page's own List | Canvas for a
-// proposed or decided plan, so this suite needs the review canvas stubbed for the
-// same reason the change canvas is: it reads its own level over the network.
+// The canvas is STUBBED: it reads its own level over the network. Since
+// MOTIR-11513 ONE component, `PlanReviewCanvas`, is the pane before a plan
+// (`prePlan` set — the roadmap the conversation is about) and after it (the plan
+// page's own List | Canvas, MOTIR-6186), so the stub draws the state it is in:
+// `canvas-stub` before a plan, `review-canvas-stub` once there is one.
 vi.mock('@/components/planning/PlanReviewCanvas', () => ({
-  PlanReviewCanvas: ({ outcome, ariaLabel }: { outcome?: string | null; ariaLabel?: string }) => (
-    <div data-testid="review-canvas-stub" data-outcome={outcome ?? ''} aria-label={ariaLabel} />
-  ),
-}));
-
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: ({
-    projectKey,
+  PlanReviewCanvas: ({
+    outcome,
     ariaLabel,
-    diffKey,
-    targetIds,
-    initialTrail,
+    projectKey,
+    version,
+    prePlan,
+    heldTrail,
     followTo,
     loadingFallback,
-    emptyRoot,
-    onToggleTarget,
-    canAddTarget,
   }: {
-    projectKey: string;
+    outcome?: string | null;
     ariaLabel?: string;
-    diffKey: string | number;
-    targetIds?: readonly string[];
-    initialTrail?: readonly { id: string; label: string }[];
+    projectKey: string;
+    version: number;
+    prePlan?: {
+      targetIds: readonly string[];
+      onToggleTarget?: (
+        target: { id: string; identifier: string; title: string; kind: string },
+        isTarget: boolean,
+      ) => void;
+      canAddTarget?: boolean;
+      emptyRoot?: ReactNode;
+    } | null;
+    heldTrail?: readonly { id: string; label: string }[] | null;
     followTo?: { key: string; trail: readonly { id: string; label: string }[] } | null;
     loadingFallback?: ReactNode;
-    emptyRoot?: ReactNode;
-    onToggleTarget?: (
-      target: { id: string; identifier: string; title: string; kind: string },
-      isTarget: boolean,
-    ) => void;
-    canAddTarget?: boolean;
-  }) => (
-    <div
-      data-testid="canvas-stub"
-      data-project={projectKey}
-      data-diff-key={String(diffKey)}
-      data-targets={(targetIds ?? []).join(',')}
-      data-trail={(initialTrail ?? []).map((c) => c.id).join(',')}
-      // THE FOLLOW-MOVE's request (MOTIR-6161) — the host DERIVES it; the canvas
-      // decides whether to honour it, and has its own suite for that.
-      data-follow-key={followTo?.key ?? ''}
-      data-follow-trail={(followTo?.trail ?? []).map((c) => c.id).join(',')}
-      aria-label={ariaLabel}
-    >
-      {/* The two states the host DELEGATES to the canvas (MOTIR-2069). The real
-          canvas picks between them off the level it reads itself; the stub
-          renders both so the host's side of that contract is assertable. */}
-      {/* The canvas's Set as target (MOTIR-6898): the real button lives in
-          `ProjectRoadmapCanvas` and has its own suite; the stub hands the HOST
-          the call the canvas would make for the card in `stubCard`. */}
-      {onToggleTarget ? (
-        <button
-          type="button"
-          data-testid="stub-toggle-target"
-          data-can-add={String(canAddTarget)}
-          onClick={() =>
-            onToggleTarget(stubCard.current, (targetIds ?? []).includes(stubCard.current.id))
-          }
-        >
-          toggle
-        </button>
-      ) : null}
-      <div data-testid="canvas-loading-slot">{loadingFallback}</div>
-      <div data-testid="canvas-empty-slot">{emptyRoot}</div>
-    </div>
-  ),
+  }) =>
+    prePlan ? (
+      <div
+        data-testid="canvas-stub"
+        data-project={projectKey}
+        data-version={String(version)}
+        data-targets={prePlan.targetIds.join(',')}
+        data-trail={(heldTrail ?? []).map((c) => c.id).join(',')}
+        // THE FOLLOW-MOVE's request (MOTIR-6161) — the host DERIVES it; the canvas
+        // decides whether to honour it, and has its own suite for that.
+        data-follow-key={followTo?.key ?? ''}
+        data-follow-trail={(followTo?.trail ?? []).map((c) => c.id).join(',')}
+        aria-label={ariaLabel}
+      >
+        {/* The two states the host DELEGATES to the canvas (MOTIR-2069). The real
+            canvas picks between them off the level it reads itself; the stub
+            renders both so the host's side of that contract is assertable. */}
+        {/* The canvas's Set as target (MOTIR-6898): the real button lives in
+            `ProjectRoadmapCanvas` and has its own suite; the stub hands the HOST
+            the call the canvas would make for the card in `stubCard`. */}
+        {prePlan.onToggleTarget ? (
+          <button
+            type="button"
+            data-testid="stub-toggle-target"
+            data-can-add={String(prePlan.canAddTarget)}
+            onClick={() =>
+              prePlan.onToggleTarget!(
+                stubCard.current,
+                prePlan.targetIds.includes(stubCard.current.id),
+              )
+            }
+          >
+            toggle
+          </button>
+        ) : null}
+        <div data-testid="canvas-loading-slot">{loadingFallback}</div>
+        <div data-testid="canvas-empty-slot">{prePlan.emptyRoot}</div>
+      </div>
+    ) : (
+      <div data-testid="review-canvas-stub" data-outcome={outcome ?? ''} aria-label={ariaLabel} />
+    ),
 }));
 
 // The card the canvas stub's toggle acts on — a hoisted box, so a test can move
@@ -367,14 +370,15 @@ describe('the requirement document', () => {
 describe('the layer over the pane', () => {
   it('marks the pane beneath inert and hidden while the layer is up, and only then', () => {
     const { rerender } = renderHost(thread(offer({ requirement: REQUIREMENT })));
-    const body = screen.getByTestId('canvas-stub');
+    // The pane's direct child — `PlanProposalViews`' root since MOTIR-11513.
+    const body = screen.getByTestId('plan-proposal-views');
     expect(body.hasAttribute('inert')).toBe(true);
     expect(body.getAttribute('aria-hidden')).toBe('true');
     conversation.state = thread(offer({ declinedAt: '2026-10-24T10:05:00.000Z' }));
     rerender(element());
     expect(region()).toBeNull();
-    expect(screen.getByTestId('canvas-stub').hasAttribute('inert')).toBe(false);
-    expect(screen.getByTestId('canvas-stub').getAttribute('aria-hidden')).toBeNull();
+    expect(screen.getByTestId('plan-proposal-views').hasAttribute('inert')).toBe(false);
+    expect(screen.getByTestId('plan-proposal-views').getAttribute('aria-hidden')).toBeNull();
   });
 
   it('keeps the canvas mounted across the offer and Decline, with the level it was given', () => {
@@ -460,6 +464,6 @@ describe('the layer over the pane', () => {
   ])('does not appear for %s', (_label, o) => {
     renderHost(thread(o));
     expect(region()).toBeNull();
-    expect(screen.getByTestId('canvas-stub').hasAttribute('inert')).toBe(false);
+    expect(screen.getByTestId('plan-proposal-views').hasAttribute('inert')).toBe(false);
   });
 });

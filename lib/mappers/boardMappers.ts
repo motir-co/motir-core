@@ -112,6 +112,8 @@ export function toBoardCardDto(
     readyToStart: boolean;
     statusLabel: string | null;
     hasChildren: boolean;
+    /** Held out of planning (MOTIR-11546) — required for `hasChildren`'s reason. */
+    planHeld: boolean;
     /** The card's decision-waiting marker (MOTIR-5876); `null` when omitted. */
     pendingDecision?: PendingDecisionDTO | null;
     swimlaneKey?: string;
@@ -147,6 +149,7 @@ export function toBoardCardDto(
     readyToStart: opts.readyToStart,
     statusLabel: opts.statusLabel ?? row.status,
     hasChildren: opts.hasChildren,
+    planHeld: opts.planHeld,
     type: row.type,
     executor: row.executor,
     pendingDecision: opts.pendingDecision ?? null,

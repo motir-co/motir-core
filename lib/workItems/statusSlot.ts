@@ -20,6 +20,14 @@ export interface StatusSlotItem {
   statusCategory?: StatusCategoryDto | null;
   /** Has live children. Must be KNOWN to be `false` for To plan. */
   hasChildren?: boolean;
+  /**
+   * HELD out of planning (MOTIR-11546): a story with an open `blocked_by` edge to
+   * a story that has no live children yet — `lib/planning/plannability.ts`'s rule
+   * 1, the same one the Plan button's click-time check refuses with. A held story
+   * is not To plan. Absent reads as not held, so a surface that never computed it
+   * draws what it drew before.
+   */
+  planHeld?: boolean;
 }
 
 /** What the slot draws. (The canvas's You are here is a tab on the card, not a
@@ -33,14 +41,22 @@ const TO_PLAN_KINDS: ReadonlySet<string> = new Set(['story', 'epic']);
 /**
  * A TO PLAN item (design MOTIR-10508 § "The To plan story", amended for epics by
  * MOTIR-11106): a STORY or an EPIC with no children whose status category is
- * `todo`. A childless story or epic already In Progress is not To plan (someone
- * holds it), and a childless Done one is Done.
+ * `todo`, and that is not HELD out of planning. A childless story or epic already
+ * In Progress is not To plan (someone holds it), and a childless Done one is Done.
+ *
+ * HELD (MOTIR-11546): a story blocked by an unfinished story that has no subtasks
+ * yet (`planHeld`) can't be planned — the planner holds it (motir-ai
+ * `src/llm/blockerHold.ts`, rule 1) and the Plan button refuses it — so it is not
+ * To plan either. It falls through to the status chip, and the surface's blocked
+ * flag says why. A story blocked only by a story with subtasks, or by a task or a
+ * bug, is not held, and stays To plan.
  *
  * `hasChildren` must be KNOWN to be false: a node built without it (an onboarding
  * preview, a run's canvas fed an older read) never claims the item is unplanned.
  */
 export function isToPlanItem(item: StatusSlotItem): boolean {
   if (!TO_PLAN_KINDS.has(item.kind) || item.hasChildren !== false) return false;
+  if (item.planHeld === true) return false;
   // The category is the rule; an item built without it falls back to the default
   // workflow's own `todo` key rather than guessing from a custom one.
   const category = item.statusCategory ?? (item.status === 'todo' ? 'todo' : null);
@@ -55,7 +71,9 @@ export function isToPlanItem(item: StatusSlotItem): boolean {
  * - Done is the `done` KEY, and a BLOCKED item does not wear the Done stamp: its
  *   blocked flag is the louder signal, and the slot keeps the status chip.
  * - To plan never meets Done (a `todo` story or epic is never done); it is checked after
- *   Done for the order's sake.
+ *   Done for the order's sake. A story HELD out of planning (`planHeld`, MOTIR-11546)
+ *   is not To plan: it is blocked, so it is never Ready either, and it gets the
+ *   status chip.
  * - Ready is "startable and fully unblocked" — the caller's `ready`, the rule the
  *   roadmap read writes into `RoadmapNodeDto.ready`.
  */

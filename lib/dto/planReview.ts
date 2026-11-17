@@ -1066,6 +1066,20 @@ export interface PlanHistoryEventDto {
   actorModel?: string | null;
 }
 
+/**
+ * ONE VERSION of the plan (MOTIR-11487; design MOTIR-11486): a stored `planned`
+ * close — the count it recorded and the briefing it closed with. `summary` is null
+ * for a close written before the briefing was kept on the trail.
+ */
+export interface PlanVersionDto {
+  /** The `planned` trail row's id — stable, so the rail can key on it. */
+  id: string;
+  /** When this version closed (the row's `changedAt`). */
+  plannedAt: string;
+  itemCount: number;
+  summary: string | null;
+}
+
 /** The whole plan-detail review model. */
 /**
  * A revision in flight, as the review surface reads it (Subtask MOTIR-3601).
@@ -1195,6 +1209,14 @@ export interface PlanReviewDto {
   authorModel: string | null;
   /** The lifecycle timeline (created → planned → decision). */
   history: PlanHistoryEventDto[];
+  /**
+   * EVERY VERSION the plan has closed with, oldest first (MOTIR-11487) — one per
+   * `planned` close on its trail. The last one is the version `summary` is the
+   * briefing of; the planning rail draws each earlier one, with its own briefing,
+   * under the run that wrote it. OPTIONAL on the type only so hand-built review
+   * fixtures stay valid; `getPlanReview` always sets it.
+   */
+  versions?: PlanVersionDto[];
   /** The proposed items, enriched for the canvas. */
   /**
    * The REVISION the reviewer is watching, or null when none is running (Story
