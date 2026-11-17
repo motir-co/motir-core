@@ -402,7 +402,14 @@ describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on 
   // The How-to-test half of the assertion is UNCHANGED and is why the test is kept
   // rather than deleted: the two questions used to share one answer, and this is
   // where they are shown to have come apart.
-  it('a CHILD a container run delivers raises its gate exactly as its run target does — and How to test still names the ancestor', async () => {
+  //
+  // ⚠️ AND NARROWED BY MOTIR-11624. MOTIR-5662's fix was that SOMEBODY is asked; it made
+  // the child ask too, over the story's whole pull request — an Approve that merges the
+  // story from one child while its siblings are unbuilt. The pull request is linked to the
+  // STORY as well, so it is the story's (`gateSetFor`'s ancestor rule): the story is asked,
+  // the child is not. A child's OWN pull request is still asked about —
+  // `tests/integration/approvals/childOfParentRunMergeGate.test.ts`.
+  it('a CHILD riding its container run’s pull request raises NO gate — the run target is asked — and How to test still names the ancestor', async () => {
     const s = await makeScenario('mg-child@example.com');
     const story = await workItemsService.createWorkItem(
       { projectId: s.project.id, kind: 'story', title: 'The story' },
@@ -457,13 +464,14 @@ describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on 
       };
     });
 
-    expect(raised.child).toBe(true);
+    expect(raised.child).toBe(false);
     expect(raised.story).toBe(true);
-    expect(await awaitingVersions(child.id)).toEqual(['moooon/acme#13@sha-p']);
+    expect(await awaitingVersions(child.id)).toEqual([]);
     expect(await awaitingVersions(story.id)).toEqual(['moooon/acme#13@sha-p']);
 
     // The child's run target is still the STORY — naming the resolved kind, because
-    // the point is that a gate is now raised DESPITE it.
+    // the gate's owner and How to test's owner are now the same card again, for two
+    // different reasons.
     expect(raised.target).toMatchObject({ kind: 'ancestor', holder: { id: story.id } });
     expect((await howToTestService.getForWorkItem(child.id, s.ctx)).runTarget).toEqual({
       key: story.identifier,
