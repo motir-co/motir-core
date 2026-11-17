@@ -228,16 +228,19 @@ describe('startBackground', () => {
     expect(ops.some((op) => op[0] === 'createRadialGradient')).toBe(false);
   });
 
-  it('redraws a running Wave in the new style when data-style changes on <html>', async () => {
-    document.documentElement.setAttribute('data-style', 'warm-editorial');
-    const { canvas } = makeHost();
-    startBackground({ canvas, id: 'wave' });
-    expect(ops).not.toContainEqual(['=lineWidth', 3]);
-    document.documentElement.setAttribute('data-style', 'neo-brutalism');
-    await new Promise((r) => setTimeout(r, 0));
-    expect(ops).toContainEqual(['=lineWidth', 3]);
-    document.documentElement.removeAttribute('data-style');
-  });
+  it.each(['wave', 'topography'])(
+    'redraws a running %s in the new style when data-style changes on <html>',
+    async (id) => {
+      document.documentElement.setAttribute('data-style', 'warm-editorial');
+      const { canvas } = makeHost();
+      startBackground({ canvas, id });
+      expect(ops).not.toContainEqual(['=lineWidth', 3]);
+      document.documentElement.setAttribute('data-style', 'neo-brutalism');
+      await new Promise((r) => setTimeout(r, 0));
+      expect(ops).toContainEqual(['=lineWidth', 3]);
+      document.documentElement.removeAttribute('data-style');
+    },
+  );
 
   it('draws nothing, and does not throw, for an id without a drawer or tokens', () => {
     const { host, canvas } = makeHost();

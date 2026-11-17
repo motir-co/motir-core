@@ -565,3 +565,17 @@ Every ink is a token read off the live theme; "accent" is
 `--el-showcase-decision`. Under reduced motion it holds one still frame. The
 drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
 to the approved design in `design/backgrounds/` (MOTIR-11602).
+
+## Background: Topography
+
+Topography (`topography` in the background registry) is contour lines over a
+slowly moving height map, redrawn per style. Every style keeps one seeded height
+field drifting slowly, contoured by marching squares, and the feathered clear area
+behind the main content. Under this style:
+
+Shape: 6 un-interpolated, machined levels on a 14px grid. Stroke: 2px metal plus a 1px inner rule 4px below, one level in the first hue. Glow: none. Motion: four steps a second.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/topography.ts` (MOTIR-11617),
+built to the approved design in `design/backgrounds/` (MOTIR-11602).

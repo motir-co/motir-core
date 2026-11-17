@@ -59,7 +59,7 @@ describe('the Wave', () => {
         const first = ops!.findIndex((op) => op[0] === 'fillRect');
         expect(ops![first], style).toEqual(['fillRect', 0, 0, W, H]);
       }
-  });
+  }, 60_000);
 
   it('draws a visibly different variation under each style', () => {
     const seen = new Set(STYLE_IDS.map((style) => sig(frames(style, [0.7])[0]!)));

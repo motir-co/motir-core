@@ -2,17 +2,19 @@
 // stays pure data; this module is plain drawing code over a 2D context (no DOM
 // at import time), so it is server-safe to import too.
 //
-// A registered id with no drawer yet draws nothing: the runtime clears its box
-// and stops. Every id is drawn by the time the package is released.
+// Every registered id has a drawer. An id that ever lacks one draws nothing:
+// the runtime clears its box and stops.
 
 import { createAurora } from './aurora';
 import { createBriansBrain, createCyclic, createDayNight, createRule110 } from './cellular';
 import type { BackgroundId } from './registry';
+import { createTopography } from './topography';
 import { createWave } from './wave';
 import type { BackgroundDrawerFactory } from './types';
 
 export const BACKGROUND_DRAWERS: Partial<Record<BackgroundId, BackgroundDrawerFactory>> = {
   wave: createWave,
+  topography: createTopography,
   aurora: createAurora,
   cyclic: createCyclic,
   brian: createBriansBrain,
