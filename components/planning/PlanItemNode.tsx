@@ -231,7 +231,8 @@ export const PlanItemNode = memo(function PlanItemNode({
   // It therefore takes the committed card's tag-row forms (MOTIR-10508): the status
   // as the truncating SLOT and the SHORT blocked flag — and the committed card's
   // GIVE-WAY RULE ("When the tag row overflows"): a right-hand TEXT tag (the blocked
-  // flag, the stale badge) drops the status and the op chip to their glyphs (the op
+  // flag, the stale badge, the `Supersedes N` chip) drops the status and the op chip to
+  // their glyphs (the op
   // chip is this card's Manual chip, a type chip on the left) and the difficulty
   // out of the row (the peek carries it). A fixed rule, not a measurement: with a
   // text tag beside them the words measured 18–34px past the 254px row in every
@@ -239,8 +240,17 @@ export const PlanItemNode = memo(function PlanItemNode({
   // the row either — the committed card it now is draws none, and `To Do` beside
   // `High` already overflows the room the op chip leaves. An UNDECIDED card is
   // left exactly as it shipped.
+  //
+  // On a decided card the `Supersedes N` chip is the `Replace` glyph alone — its
+  // words on `aria-label`, the keys on `title` — because its words beside the key
+  // and two glyphs still ran 1.4px past the row. When it meets ANOTHER text tag
+  // (blocked, stale) even the glyph runs 1.7–9.7px past in five styles, so it
+  // leaves the row the way the difficulty does: the quick view's Supersedes row
+  // (`ProposalSupersedesRows`) carries it. Measured in design Part XXX §30.4.
   const decided = outcome != null;
-  const giveWay = decided && (crossBlocked || showStale);
+  const giveWay = decided && (crossBlocked || showStale || supersedes.length > 0);
+  const supersedesGlyphOnly = decided && supersedes.length > 0;
+  const supersedesInRow = supersedes.length > 0 && !(decided && (crossBlocked || showStale));
 
   // Op-specific frame — what the op MEANS, layered on the shell (which owns the
   // border weight, radius and padding). None reuses the cross-story red
@@ -331,7 +341,7 @@ export const PlanItemNode = memo(function PlanItemNode({
                 glyphOnly={giveWay}
               />
             ) : null}
-            {supersedes.length > 0 ? (
+            {supersedesInRow ? (
               <span
                 className="inline-flex shrink-0 items-center gap-1 text-xs text-(--el-text-secondary)"
                 data-testid="plan-item-supersedes"
@@ -342,9 +352,22 @@ export const PlanItemNode = memo(function PlanItemNode({
                     )
                     .join(' · '),
                 })}
+                // On a decided card the glyph alone (MOTIR-11545): it is then the
+                // chip's only content, so it is a labelled image in the secondary
+                // ink (graphics owe 3:1), not the faint decorative glyph that sits
+                // beside the words.
+                {...(supersedesGlyphOnly
+                  ? {
+                      role: 'img',
+                      'aria-label': t('nodeSupersedes', { n: supersedes.length }),
+                    }
+                  : {})}
               >
-                <Replace className="h-3 w-3 shrink-0 text-(--el-text-faint)" aria-hidden />
-                {t('nodeSupersedes', { n: supersedes.length })}
+                <Replace
+                  className={`h-3 w-3 shrink-0 ${supersedesGlyphOnly ? 'text-(--el-text-secondary)' : 'text-(--el-text-faint)'}`}
+                  aria-hidden
+                />
+                {supersedesGlyphOnly ? null : t('nodeSupersedes', { n: supersedes.length })}
               </span>
             ) : null}
             {crossBlocked ? (

@@ -495,6 +495,54 @@ describe('PlanItemNode — the outcome tab (MOTIR-11545)', () => {
     expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
   });
 
+  /** A decided add that SUPERSEDES a committed card (the review's finding 1). */
+  const supersedingAdd = () =>
+    item({
+      ...blockedAdd(),
+      identifier: 'MOTIR-11546',
+      supersedesRefs: [
+        { identifier: 'MOTIR-11402', title: 'Poll the checker', kind: 'subtask', proposed: false },
+      ],
+    });
+
+  it('a decided add that supersedes a card gives way, its Supersedes chip the named glyph', () => {
+    renderWithIntl(<PlanItemNode item={supersedingAdd()} outcome="accepted" />);
+    const row = tagRow();
+    // `Supersedes 1` is a right-hand text tag, so the give-way rule applies…
+    expect(within(row).getByTestId('plan-item-op-glyph').getAttribute('aria-label')).toBe('add');
+    const status = row.querySelector('[data-status="todo"]') as HTMLElement;
+    expect(status.getAttribute('role')).toBe('img');
+    expect(status.textContent).toBe('');
+    expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
+    // …and the chip itself is its glyph: no words drawn, the words on the label,
+    // the keys it replaces on the tooltip.
+    const chip = within(row).getByTestId('plan-item-supersedes');
+    expect(chip.getAttribute('role')).toBe('img');
+    expect(chip.getAttribute('aria-label')).toBe('Supersedes 1');
+    expect(chip.getAttribute('title')).toContain('MOTIR-11402');
+    expect(chip.textContent).toBe('');
+    // The glyph is the chip's only content, so it is not the faint decorative ink.
+    expect(chip.querySelector('svg')!.getAttribute('class')).toContain(
+      'text-(--el-text-secondary)',
+    );
+  });
+
+  it('a decided blocked add that supersedes a card leaves the Supersedes chip to the quick view', () => {
+    renderWithIntl(<PlanItemNode item={supersedingAdd()} outcome="accepted" crossBlocked />);
+    const row = tagRow();
+    expect(within(row).queryByTestId('plan-item-supersedes')).toBeNull();
+    expect(within(row).getByTestId('cross-blocked-flag').textContent).toBe('blocked');
+    expect(within(row).getByTestId('plan-item-op-glyph')).toBeTruthy();
+  });
+
+  it('an UNDECIDED add that supersedes a card keeps its Supersedes words, as it shipped', () => {
+    renderWithIntl(<PlanItemNode item={supersedingAdd()} crossBlocked />);
+    const chip = screen.getByTestId('plan-item-supersedes');
+    expect(chip.textContent).toBe('Supersedes 1');
+    expect(chip.getAttribute('role')).toBeNull();
+    expect(screen.queryByTestId('plan-item-op-glyph')).toBeNull();
+  });
+
   it('a declined add (no status, no key) keeps its difficulty in the row', () => {
     renderWithIntl(
       <PlanItemNode item={item({ op: 'add', difficulty: 'low' })} outcome="declined" />,

@@ -8989,6 +8989,14 @@ op chip in the role the committed card gives its Manual chip (a type chip on the
 - a decided card that carries a live status draws NO difficulty in the row — the committed card it
   now is draws none, and `To Do` beside `High` already overflows the room the op chip leaves. A
   declined `add` (no key, no status) keeps it. The peek carries the difficulty either way.
+- **an `add` that supersedes a card** (`Supersedes N`, `plan-item-supersedes`) is a right-hand text
+  tag too, so it triggers the give-way rule, and on a decided card the chip itself is the `Replace`
+  glyph alone: `role="img"`, `Supersedes N` on `aria-label`, the keys on `title`, the glyph in
+  `--el-text-secondary` (it is then the chip's only content, so not the faint decorative ink). Its
+  words beside the key and two glyphs ran 1.4px past the row. Beside ANOTHER text tag (blocked,
+  stale), even the glyph ran 1.7–9.7px past in five styles (soft-playful, swiss-minimal-flat,
+  3d-immersive, hand-drawn-indie and their dark boards), so there it leaves the row the way the
+  difficulty does: the quick view's Supersedes row (`ProposalSupersedesRows`) carries it.
 
 An **undecided** card is unchanged, byte for byte: its row has no live status and no real key on an
 `add`. (Its own overflows — a blocked `add` with a difficulty, a `modify` with a long status — are
@@ -9003,15 +9011,17 @@ edge.
 Chromium, the delta mock's own render, every card at its fixed 280px: the right edge of the last
 tag against the row's inner right edge (positive = past it), and the clipped tags.
 
-| card                             | styles × themes                | overflow | clipped                  |
-| -------------------------------- | ------------------------------ | -------- | ------------------------ |
-| was: add · accepted · blocked    | warm-editorial light           | 255px    | `To Do`, `blocked`       |
-| was: add · accepted · ready      | warm-editorial light           | 85px     | `To Do`, `High`          |
-| is: add · accepted · blocked     | all 11 styles × light and dark | 0        | none                     |
-| is: add · accepted · ready       | warm-editorial light and dark  | 0        | none                     |
-| is: add · declined               | warm-editorial light and dark  | 0        | none                     |
-| is: modify · accepted / declined | all 11 styles × light and dark | 0        | `In Progress` (slot `…`) |
-| is: remove · declined            | warm-editorial light and dark  | 0        | none                     |
+| card                                      | styles × themes                | overflow | clipped                             |
+| ----------------------------------------- | ------------------------------ | -------- | ----------------------------------- |
+| was: add · accepted · blocked             | warm-editorial light           | 255px    | `To Do`, `blocked`                  |
+| was: add · accepted · ready               | warm-editorial light           | 85px     | `To Do`, `High`                     |
+| is: add · accepted · blocked              | all 11 styles × light and dark | 0        | none                                |
+| is: add · accepted · ready                | warm-editorial light and dark  | 0        | none                                |
+| is: add · declined                        | warm-editorial light and dark  | 0        | none                                |
+| is: modify · accepted / declined          | all 11 styles × light and dark | 0        | `In Progress` (slot `…`)            |
+| is: remove · declined                     | warm-editorial light and dark  | 0        | none                                |
+| is: add · accepted · supersedes           | warm-editorial light and dark  | 0        | none                                |
+| is: add · accepted · supersedes · blocked | all 11 styles × light and dark | 0        | none (Supersedes in the quick view) |
 
 ## 30.5 Copy
 
@@ -9024,7 +9034,7 @@ No new key. `planReview.outcomeAccepted` / `outcomeDeclined` (the tab), `planRev
 A temporary generator rendered the shipped `PlanItemNode` (and, for panel 1, a copy of it at
 `bc4a092c0`) with `renderMock`, bundled with esbuild as Part XXIX's was. The cards sit on the canvas's
 `--el-canvas` board with the row gap above them so the tab is seen where it hangs. Panel 4 repeats
-two cards under every registered `data-style`, light and dark. Every panel was rendered in Chromium
+three cards under every registered `data-style`, light and dark. Every panel was rendered in Chromium
 and looked at; the generator was not committed.
 
 ## 30.7 What Part XXX does NOT draw or decide
