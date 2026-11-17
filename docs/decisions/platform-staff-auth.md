@@ -272,7 +272,7 @@ that reaches the platform tier without passing through a layout.
 > - **The level is a per-route fact, not the door's.** Each handler passes its level to the gate
 >   as a named constant exported by `lib/services/plannerFindingsService.ts`, and the records
 >   service re-asserts that same constant, so a route's level is one argument and one constant.
->   Every write (the record create, the verdict, and since MOTIR-11504 the link and the unlink)
+>   Every write (the record create and the verdict)
 >   reads `PLANNER_FINDING_RECORDS_LEVEL`, which is `operator`, at both layers; the three record
 >   reads read `PLANNER_FINDING_RECORDS_READ_LEVEL`, which is `support`. The route table in
 >   `docs/platform-planner-findings-api.md` names each route's level, and
@@ -763,19 +763,15 @@ status = from`), so a move that loses a race to another staff member changes not
 > gives a move no reason field. Listing and reading requests are the first row's `support` reads,
 > audited as `estate.read`.
 >
-> **⚠️ AMENDED 2026-11-17 (Story MOTIR-11455 · MOTIR-11504) — linking planning bugs to a planner
-> finding record.** Two more writes, both at `operator` and both `reason: 'inherited'`:
-> `planner_finding.link` (`POST /api/platform/planner-findings/records/:id/links`) and
-> `planner_finding.unlink` (`.../links/remove`). The console's link control carries no reason field,
-> so the service writes a default one. Core resolves the typed key to a work item in the RECORD's
-> own project (`platformPlanRepository.findWorkItemByIdentifier`, inside `withPlatformWrite`), and
-> motir-ai stores it as text. Each row has `targetKind: 'platform'`, the record id as `targetId`,
-> the record's organization as `organizationId`, and `{ recordId, key, credential }` as metadata.
-> ONE row per add or remove that changed the record's set; a refusal (no work item, already linked,
-> record still open) and a remove of a key no longer linked write none. The resolution needs
-> `work_item_platform_staff_read` (`20261117090000_work_item_platform_staff_read`), a SELECT-only
-> arm as §3a requires. The three record reads move to `support`, the console's read level; a level
-> change on a read is not a new token door (§2, the 2026-11-16 amendment).
+> **⚠️ AMENDED 2026-11-17 (Story MOTIR-11455 · MOTIR-11504, narrowed by MOTIR-11587) — resolving a
+> planning-bug key on the planner-findings door.** No audit member is added here. Core resolves a
+> typed work-item key in a planner finding RECORD's own project through
+> `platformPlanRepository.findWorkItemByIdentifier`, inside a platform transaction, which needs
+> `work_item_platform_staff_read` (`20261117090000_work_item_platform_staff_read`), a SELECT-only arm
+> as §3a requires. The three record reads move to `support`, the console's read level; a level
+> change on a read is not a new token door (§2, the 2026-11-16 amendment). The record-level link and
+> unlink writes this amendment first named were withdrawn by MOTIR-11587 before they merged: a
+> planning bug is linked to ONE finding, not to its record.
 
 ---
 

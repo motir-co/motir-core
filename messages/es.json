@@ -11222,9 +11222,7 @@
           "planner_finding": {
             "triage": "Clasificó un hallazgo del planificador",
             "record": "Registró un informe de hallazgos del planificador",
-            "verdict": "Dio su veredicto a un informe de hallazgos del planificador",
-            "link": "Vinculó un error de planificación a un registro de hallazgos del planificador",
-            "unlink": "Desvinculó un error de planificación de un registro de hallazgos del planificador"
+            "verdict": "Dio su veredicto a un informe de hallazgos del planificador"
           },
           "model_serving": {
             "set": "Cambió qué proveedor sirve un modelo"

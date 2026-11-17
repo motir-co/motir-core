@@ -11222,9 +11222,7 @@
           "planner_finding": {
             "triage": "Heeft een plannerbevinding beoordeeld",
             "record": "Heeft een plannerbevindingenrapport vastgelegd",
-            "verdict": "Heeft een oordeel gegeven over een plannerbevindingenrapport",
-            "link": "Planningsbug gekoppeld aan een planner-bevindingenrecord",
-            "unlink": "Planningsbug ontkoppeld van een planner-bevindingenrecord"
+            "verdict": "Heeft een oordeel gegeven over een plannerbevindingenrapport"
           },
           "model_serving": {
             "set": "Heeft gewijzigd welke aanbieder een model levert"

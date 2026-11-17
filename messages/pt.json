@@ -11222,9 +11222,7 @@
           "planner_finding": {
             "triage": "Fez a triagem de um achado do planejador",
             "record": "Registrou um relatório de achados do planejador",
-            "verdict": "Deu o veredito de um relatório de achados do planejador",
-            "link": "Vinculou um bug de planejamento a um registro de achados do planejador",
-            "unlink": "Desvinculou um bug de planejamento de um registro de achados do planejador"
+            "verdict": "Deu o veredito de um relatório de achados do planejador"
           },
           "model_serving": {
             "set": "Alterou qual provedor fornece um modelo"

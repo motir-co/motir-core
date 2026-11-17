@@ -147,7 +147,6 @@ function rawRecord(over: Partial<RawPlannerFindingRecord> = {}): RawPlannerFindi
     verdictAt: null,
     runThroughAnswer: null,
     runThroughStopCards: [],
-    linkedBugKeys: [],
     createdAt: NOW,
     updatedAt: NOW,
     ...over,
@@ -1230,12 +1229,6 @@ describe('the records service re-checks the level the gate resolved', () => {
     ).rejects.toBeInstanceOf(NotPlatformStaffError);
     await expect(
       plannerFindingRecordsService.submitVerdict(actor, 'rec_1', VERDICT as never),
-    ).rejects.toBeInstanceOf(NotPlatformStaffError);
-    await expect(
-      plannerFindingRecordsService.linkKey(actor, 'rec_1', { key: 'PROD-1' }),
-    ).rejects.toBeInstanceOf(NotPlatformStaffError);
-    await expect(
-      plannerFindingRecordsService.unlinkKey(actor, 'rec_1', { key: 'PROD-1' }),
     ).rejects.toBeInstanceOf(NotPlatformStaffError);
     for (const fn of Object.values(client)) expect(fn).not.toHaveBeenCalled();
     expect(await auditRows()).toEqual([]);

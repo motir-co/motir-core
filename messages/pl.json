@@ -11222,9 +11222,7 @@
           "planner_finding": {
             "triage": "Przeprowadził triaż ustalenia planisty",
             "record": "Zapisał raport ustaleń planisty",
-            "verdict": "Wydał werdykt w sprawie raportu ustaleń planisty",
-            "link": "Powiązano błąd planowania z rekordem ustaleń planisty",
-            "unlink": "Odłączono błąd planowania od rekordu ustaleń planisty"
+            "verdict": "Wydał werdykt w sprawie raportu ustaleń planisty"
           },
           "model_serving": {
             "set": "Zmieniono dostawcę obsługującego model"
