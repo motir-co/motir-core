@@ -66,6 +66,11 @@ export interface StartBackgroundOptions {
   id: unknown;
   /** The main content to gather around / clear behind, looked up on each measure. */
   focus?: () => Element | null;
+  /**
+   * Draw one still frame and never animate, whatever the motion preference — a
+   * picker's swatch. It still redraws on a resize or a theme change.
+   */
+  still?: boolean;
 }
 
 interface Scene {
@@ -84,11 +89,17 @@ interface Scene {
  * every observer and listener and cancels the pending frame. Returns a no-op
  * stop when the canvas has no host or no 2D context.
  */
-export function startBackground({ canvas, id, focus }: StartBackgroundOptions): () => void {
+export function startBackground({
+  canvas,
+  id,
+  focus,
+  still: forceStill = false,
+}: StartBackgroundOptions): () => void {
   const host = boxParent(canvas);
   const ctx = canvas.getContext('2d');
   if (!host || !ctx) return () => {};
-  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const still =
+    forceStill || (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   const createCanvas = (w: number, h: number): BackgroundCanvas | null => {
     const c = document.createElement('canvas');
     c.width = w;

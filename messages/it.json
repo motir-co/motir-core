@@ -7980,7 +7980,29 @@
       },
       "footerNote": "Questo definisce lo stile del tuo progetto, non di Motir: nulla è definitivo, puoi cambiarlo quando vuoi.",
       "reset": "Ripristina predefinito",
-      "use": "Usa questo design"
+      "use": "Usa questo design",
+      "background": {
+        "name": "Sfondi",
+        "help": "Ciò che ogni area della pagina disegna dietro al suo contenuto.",
+        "areas": {
+          "landing": "Pagina di destinazione",
+          "login": "Pagina di accesso",
+          "hero": "Sezione principale"
+        },
+        "none": "Nessuno",
+        "noneNote": "Nessuno sfondo: l’area mostra il colore della pagina.",
+        "followsNote": "Ridisegnato per {style}.",
+        "fixedNote": "Uguale in ogni stile: segue solo la tavolozza e il tema.",
+        "previewEyebrow": "Sfondi — anteprima dal vivo",
+        "previewNone": "Nessuno sfondo",
+        "standIn": {
+          "landingTitle": "Pianificalo. Costruiscilo.",
+          "landingLead": "Dall’idea al rilascio.",
+          "loginTitle": "Accedi",
+          "loginCta": "Continua",
+          "heroPrompt": "Descrivi la tua idea…"
+        }
+      }
     },
     "generation": {
       "title": "Creazione del tuo piano",

@@ -158,6 +158,15 @@ describe('startBackground', () => {
     expect(rafQueue.size).toBe(0);
   });
 
+  it('holds one still frame when asked, whatever the motion preference', () => {
+    const { canvas } = makeHost();
+    startBackground({ canvas, id: 'aurora', still: true });
+    expect(frames()).toBe(1);
+    expect(rafQueue.size).toBe(0);
+    flushRaf(1000);
+    expect(frames()).toBe(1);
+  });
+
   it('draws nothing off screen, and resumes when it comes back', () => {
     const { canvas } = makeHost();
     startBackground({ canvas, id: 'aurora' });
@@ -322,6 +331,19 @@ describe('<Background>', () => {
     expect(ops.some((op) => op[0] === 'createRadialGradient')).toBe(true);
     await act(async () => root.unmount());
     expect(rafQueue.size).toBe(0);
+  });
+
+  it('passes `still` through: one frame, no loop', async () => {
+    const host = document.createElement('div');
+    for (const [k, v] of Object.entries(TOKENS)) host.style.setProperty(k, v);
+    Object.defineProperty(host, 'clientWidth', { get: () => W });
+    Object.defineProperty(host, 'clientHeight', { get: () => H });
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => root.render(<Background id="aurora" still />));
+    expect(frames()).toBe(1);
+    expect(rafQueue.size).toBe(0);
+    await act(async () => root.unmount());
   });
 
   it('renders nothing for `none`', async () => {

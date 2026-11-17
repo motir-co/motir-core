@@ -7977,7 +7977,29 @@
       },
       "footerNote": "This styles your project, not Motir — nothing locks, change it any time.",
       "reset": "Reset to default",
-      "use": "Use this design"
+      "use": "Use this design",
+      "background": {
+        "name": "Backgrounds",
+        "help": "What each page area draws behind its content.",
+        "areas": {
+          "landing": "Landing page",
+          "login": "Login page",
+          "hero": "Hero section"
+        },
+        "none": "None",
+        "noneNote": "No background — the area shows the page colour.",
+        "followsNote": "Redrawn for {style}.",
+        "fixedNote": "Same in every style — it follows only the palette and the theme.",
+        "previewEyebrow": "Backgrounds — live preview",
+        "previewNone": "No background",
+        "standIn": {
+          "landingTitle": "Plan it. Build it.",
+          "landingLead": "From idea to shipped.",
+          "loginTitle": "Sign in",
+          "loginCta": "Continue",
+          "heroPrompt": "Describe your idea…"
+        }
+      }
     },
     "generation": {
       "title": "Building your plan",

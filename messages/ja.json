@@ -7977,7 +7977,29 @@
       },
       "footerNote": "これは Motir ではなくあなたのプロジェクトのスタイルです。何も確定せず、いつでも変更できます。",
       "reset": "デフォルトに戻す",
-      "use": "このデザインを使う"
+      "use": "このデザインを使う",
+      "background": {
+        "name": "背景",
+        "help": "各ページ領域がコンテンツの背後に描くもの。",
+        "areas": {
+          "landing": "ランディングページ",
+          "login": "ログインページ",
+          "hero": "ヒーローセクション"
+        },
+        "none": "なし",
+        "noneNote": "背景なし — この領域にはページの色が表示されます。",
+        "followsNote": "{style} 用に描き直されます。",
+        "fixedNote": "どのスタイルでも同じです — パレットとテーマにだけ従います。",
+        "previewEyebrow": "背景 — ライブプレビュー",
+        "previewNone": "背景なし",
+        "standIn": {
+          "landingTitle": "計画して、作る。",
+          "landingLead": "アイデアからリリースまで。",
+          "loginTitle": "サインイン",
+          "loginCta": "続行",
+          "heroPrompt": "アイデアを説明してください…"
+        }
+      }
     },
     "generation": {
       "title": "計画を作成しています",

@@ -7980,7 +7980,29 @@
       },
       "footerNote": "Isto estiliza o seu projeto, não o Motir — nada fica travado, mude quando quiser.",
       "reset": "Restaurar o padrão",
-      "use": "Usar este design"
+      "use": "Usar este design",
+      "background": {
+        "name": "Fundos",
+        "help": "O que cada área da página desenha atrás do seu conteúdo.",
+        "areas": {
+          "landing": "Página inicial",
+          "login": "Página de login",
+          "hero": "Seção principal"
+        },
+        "none": "Nenhum",
+        "noneNote": "Sem fundo — a área mostra a cor da página.",
+        "followsNote": "Redesenhado para {style}.",
+        "fixedNote": "Igual em todos os estilos — segue apenas a paleta e o tema.",
+        "previewEyebrow": "Fundos — pré-visualização ao vivo",
+        "previewNone": "Sem fundo",
+        "standIn": {
+          "landingTitle": "Planeje. Construa.",
+          "landingLead": "Da ideia ao lançamento.",
+          "loginTitle": "Entrar",
+          "loginCta": "Continuar",
+          "heroPrompt": "Descreva sua ideia…"
+        }
+      }
     },
     "generation": {
       "title": "Construindo seu plano",

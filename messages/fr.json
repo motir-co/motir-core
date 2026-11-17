@@ -7980,7 +7980,29 @@
       },
       "footerNote": "Ce réglage concerne votre projet, pas Motir — rien n'est figé, vous pouvez le modifier à tout moment.",
       "reset": "Rétablir la valeur par défaut",
-      "use": "Utiliser ce design"
+      "use": "Utiliser ce design",
+      "background": {
+        "name": "Arrière-plans",
+        "help": "Ce que chaque zone de la page dessine derrière son contenu.",
+        "areas": {
+          "landing": "Page d’accueil",
+          "login": "Page de connexion",
+          "hero": "Section principale"
+        },
+        "none": "Aucun",
+        "noneNote": "Pas d’arrière-plan — la zone affiche la couleur de la page.",
+        "followsNote": "Redessiné pour {style}.",
+        "fixedNote": "Identique dans tous les styles — il ne suit que la palette et le thème.",
+        "previewEyebrow": "Arrière-plans — aperçu en direct",
+        "previewNone": "Pas d’arrière-plan",
+        "standIn": {
+          "landingTitle": "Planifiez. Construisez.",
+          "landingLead": "De l’idée à la mise en ligne.",
+          "loginTitle": "Se connecter",
+          "loginCta": "Continuer",
+          "heroPrompt": "Décrivez votre idée…"
+        }
+      }
     },
     "generation": {
       "title": "Construction de votre plan",

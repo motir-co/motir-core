@@ -7971,7 +7971,29 @@
       },
       "footerNote": "这只影响你的项目，不影响 Motir —— 不会锁定，随时可改。",
       "reset": "重置为默认",
-      "use": "使用此设计"
+      "use": "使用此设计",
+      "background": {
+        "name": "背景",
+        "help": "每个页面区域在内容后面绘制的背景。",
+        "areas": {
+          "landing": "着陆页",
+          "login": "登录页",
+          "hero": "首屏区域"
+        },
+        "none": "无",
+        "noneNote": "无背景——该区域显示页面底色。",
+        "followsNote": "已按 {style} 重新绘制。",
+        "fixedNote": "在所有风格中都相同——只随调色板和主题变化。",
+        "previewEyebrow": "背景——实时预览",
+        "previewNone": "无背景",
+        "standIn": {
+          "landingTitle": "规划它，构建它。",
+          "landingLead": "从想法到上线。",
+          "loginTitle": "登录",
+          "loginCta": "继续",
+          "heroPrompt": "描述你的想法…"
+        }
+      }
     },
     "generation": {
       "title": "生成你的计划",

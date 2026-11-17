@@ -17,7 +17,8 @@
  * Decorative only: `aria-hidden`, no pointer events, nothing to tab to. Every
  * colour is a design-system token read from the live theme. It stops drawing
  * off screen and in a hidden tab, and holds one still frame under
- * `prefers-reduced-motion` (see `../../backgrounds/runtime`).
+ * `prefers-reduced-motion` (see `../../backgrounds/runtime`). `still` holds that
+ * one still frame whatever the motion preference — a picker's swatch.
  */
 
 import { useEffect, useRef } from 'react';
@@ -30,11 +31,13 @@ export interface BackgroundProps {
   id: string | null | undefined;
   /** The id of the element the background gathers around / clears behind. */
   focusId?: string;
+  /** Draw one still frame and never animate (a swatch). */
+  still?: boolean;
   /** Extra classes for the canvas (it already fills its parent). */
   className?: string;
 }
 
-export function Background({ id, focusId, className }: Readonly<BackgroundProps>) {
+export function Background({ id, focusId, still, className }: Readonly<BackgroundProps>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const none = id === BACKGROUND_NONE;
 
@@ -45,8 +48,9 @@ export function Background({ id, focusId, className }: Readonly<BackgroundProps>
       canvas,
       id,
       focus: focusId ? () => document.getElementById(focusId) : undefined,
+      still,
     });
-  }, [id, focusId, none]);
+  }, [id, focusId, still, none]);
 
   if (none) return null;
   return (

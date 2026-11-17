@@ -7980,7 +7980,29 @@
       },
       "footerNote": "Dies gestaltet Ihr Projekt, nicht Motir – nichts ist festgelegt, Sie können es jederzeit ändern.",
       "reset": "Auf Standard zurücksetzen",
-      "use": "Dieses Design verwenden"
+      "use": "Dieses Design verwenden",
+      "background": {
+        "name": "Hintergründe",
+        "help": "Was jeder Seitenbereich hinter seinem Inhalt zeichnet.",
+        "areas": {
+          "landing": "Landingpage",
+          "login": "Anmeldeseite",
+          "hero": "Hero-Bereich"
+        },
+        "none": "Keiner",
+        "noneNote": "Kein Hintergrund — der Bereich zeigt die Seitenfarbe.",
+        "followsNote": "Für {style} neu gezeichnet.",
+        "fixedNote": "In jedem Stil gleich — er folgt nur der Palette und dem Theme.",
+        "previewEyebrow": "Hintergründe — Live-Vorschau",
+        "previewNone": "Kein Hintergrund",
+        "standIn": {
+          "landingTitle": "Planen. Bauen.",
+          "landingLead": "Von der Idee bis zum Release.",
+          "loginTitle": "Anmelden",
+          "loginCta": "Weiter",
+          "heroPrompt": "Beschreibe deine Idee…"
+        }
+      }
     },
     "generation": {
       "title": "Ihr Plan wird erstellt",

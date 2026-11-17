@@ -7980,7 +7980,29 @@
       },
       "footerNote": "To stylizuje Twój projekt, a nie Motir — nic nie jest blokowane, zmień to w dowolnej chwili.",
       "reset": "Przywróć domyślne",
-      "use": "Użyj tego wyglądu"
+      "use": "Użyj tego wyglądu",
+      "background": {
+        "name": "Tła",
+        "help": "Co każdy obszar strony rysuje za swoją treścią.",
+        "areas": {
+          "landing": "Strona docelowa",
+          "login": "Strona logowania",
+          "hero": "Sekcja główna"
+        },
+        "none": "Brak",
+        "noneNote": "Brak tła — obszar pokazuje kolor strony.",
+        "followsNote": "Przerysowane dla stylu {style}.",
+        "fixedNote": "Takie samo w każdym stylu — zmienia się tylko z paletą i motywem.",
+        "previewEyebrow": "Tła — podgląd na żywo",
+        "previewNone": "Brak tła",
+        "standIn": {
+          "landingTitle": "Zaplanuj. Zbuduj.",
+          "landingLead": "Od pomysłu do wydania.",
+          "loginTitle": "Zaloguj się",
+          "loginCta": "Dalej",
+          "heroPrompt": "Opisz swój pomysł…"
+        }
+      }
     },
     "generation": {
       "title": "Tworzenie planu",

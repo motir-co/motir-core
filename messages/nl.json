@@ -7980,7 +7980,29 @@
       },
       "footerNote": "Dit bepaalt de stijl van je project, niet van Motir — niets ligt vast, je kunt het altijd wijzigen.",
       "reset": "Standaard herstellen",
-      "use": "Dit ontwerp gebruiken"
+      "use": "Dit ontwerp gebruiken",
+      "background": {
+        "name": "Achtergronden",
+        "help": "Wat elk paginagebied achter de inhoud tekent.",
+        "areas": {
+          "landing": "Landingspagina",
+          "login": "Inlogpagina",
+          "hero": "Hero-sectie"
+        },
+        "none": "Geen",
+        "noneNote": "Geen achtergrond — het gebied toont de paginakleur.",
+        "followsNote": "Opnieuw getekend voor {style}.",
+        "fixedNote": "Gelijk in elke stijl — volgt alleen het palet en het thema.",
+        "previewEyebrow": "Achtergronden — live voorbeeld",
+        "previewNone": "Geen achtergrond",
+        "standIn": {
+          "landingTitle": "Plan het. Bouw het.",
+          "landingLead": "Van idee tot release.",
+          "loginTitle": "Inloggen",
+          "loginCta": "Doorgaan",
+          "heroPrompt": "Beschrijf je idee…"
+        }
+      }
     },
     "generation": {
       "title": "Je plan wordt gebouwd",
