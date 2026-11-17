@@ -8932,6 +8932,7 @@
         "unknown": "計画を作業しています…",
         "claimCheck": {
           "started": "{count, plural, other {# 件の項目のコード参照を確認しています}}",
+          "cardChecked": "「{title}」を確認しました — {count, plural, other {# 件の問題}}",
           "held": "すべての項目のコード参照が成り立っています",
           "sentBack": "{count, plural, other {# 件の項目のコード参照が成り立たなかったため、書き直しに戻しています}}",
           "settleStarted": "{count, plural, other {# 件の項目のコード参照を計画全体に照らして再確認しています}}",

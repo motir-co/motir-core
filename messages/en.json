@@ -8932,6 +8932,7 @@
         "unknown": "Working on the plan…",
         "claimCheck": {
           "started": "{count, plural, one {Checking the code names of # item} other {Checking the code names of # items}}",
+          "cardChecked": "Checked {title} — {count, plural, one {# issue} other {# issues}}",
           "held": "Every item's code names hold",
           "sentBack": "{count, plural, one {# item's code names did not hold; sending it back} other {# items' code names did not hold; sending them back}}",
           "settleStarted": "{count, plural, one {Checking the code names of # item again against the whole plan} other {Checking the code names of # items again against the whole plan}}",

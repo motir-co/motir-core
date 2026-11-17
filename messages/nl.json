@@ -8935,6 +8935,7 @@
         "unknown": "Bezig met het plan…",
         "claimCheck": {
           "started": "{count, plural, one {Codeverwijzingen van # item worden gecontroleerd} other {Codeverwijzingen van # items worden gecontroleerd}}",
+          "cardChecked": "‘{title}’ gecontroleerd — {count, plural, one {# probleem} other {# problemen}}",
           "held": "De codeverwijzingen van alle items kloppen",
           "sentBack": "{count, plural, one {De codeverwijzingen van # item kloppen niet; het gaat terug om opnieuw te worden geschreven} other {De codeverwijzingen van # items kloppen niet; ze gaan terug om opnieuw te worden geschreven}}",
           "settleStarted": "{count, plural, one {Codeverwijzingen van # item worden opnieuw tegen het hele plan gecontroleerd} other {Codeverwijzingen van # items worden opnieuw tegen het hele plan gecontroleerd}}",

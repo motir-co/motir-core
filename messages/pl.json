@@ -8935,6 +8935,7 @@
         "unknown": "Trwa praca nad planem…",
         "claimCheck": {
           "started": "{count, plural, one {Sprawdzanie odwołań do kodu w # elemencie} few {Sprawdzanie odwołań do kodu w # elementach} many {Sprawdzanie odwołań do kodu w # elementach} other {Sprawdzanie odwołań do kodu w # elementach}}",
+          "cardChecked": "Sprawdzono: {title} — {count, plural, one {# problem} few {# problemy} many {# problemów} other {# problemy}}",
           "held": "Odwołania do kodu we wszystkich elementach są poprawne",
           "sentBack": "{count, plural, one {Odwołania do kodu w # elemencie są niepoprawne; wraca do ponownego napisania} few {Odwołania do kodu w # elementach są niepoprawne; wracają do ponownego napisania} many {Odwołania do kodu w # elementach są niepoprawne; wracają do ponownego napisania} other {Odwołania do kodu w # elementach są niepoprawne; wracają do ponownego napisania}}",
           "settleStarted": "{count, plural, one {Ponowne sprawdzanie odwołań do kodu w # elemencie względem całego planu} few {Ponowne sprawdzanie odwołań do kodu w # elementach względem całego planu} many {Ponowne sprawdzanie odwołań do kodu w # elementach względem całego planu} other {Ponowne sprawdzanie odwołań do kodu w # elementach względem całego planu}}",

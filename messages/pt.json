@@ -8935,6 +8935,7 @@
         "unknown": "Trabalhando no plano…",
         "claimCheck": {
           "started": "{count, plural, one {Verificando as referências ao código de # item} other {Verificando as referências ao código de # itens}}",
+          "cardChecked": "Verificado {title} — {count, plural, one {# problema} other {# problemas}}",
           "held": "As referências ao código de cada item se confirmam",
           "sentBack": "{count, plural, one {As referências ao código de # item não se confirmaram; ele volta para ser reescrito} other {As referências ao código de # itens não se confirmaram; eles voltam para ser reescritos}}",
           "settleStarted": "{count, plural, one {Verificando de novo as referências ao código de # item em relação ao plano inteiro} other {Verificando de novo as referências ao código de # itens em relação ao plano inteiro}}",
