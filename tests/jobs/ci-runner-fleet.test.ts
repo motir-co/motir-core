@@ -14,6 +14,7 @@ import {
 import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 import { ciRunnerReconcileService } from '@/lib/services/ciRunnerReconcileService';
+import { ciFleetBlindSpotsService } from '@/lib/services/ciFleetBlindSpotsService';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import {
   CI_RUNNER_PROVISION_SWEEP_CRON,
@@ -323,6 +324,78 @@ describe('the sweep fans out ONE event per intent', () => {
     vi.spyOn(ciRunnerReconcileService, 'reconcile').mockRejectedValue('nope');
     const again = await new JobTestEngine({ function: ciRunnerProvisionSweep }).execute();
     expect(again.result).toMatchObject({ reconcile: { error: 'unknown' } });
+  });
+
+  it('keeps the reconcile outcome as the latest blind-spot record (MOTIR-11439)', async () => {
+    await adminDb.$executeRawUnsafe('TRUNCATE TABLE "ci_fleet_blind_spots"');
+    const outcome = {
+      added: 0,
+      orgs: [
+        {
+          org: 'acme-labs',
+          queued: 1,
+          idleRunners: 0,
+          awaiting: 1,
+          added: 0,
+          undeliveredRepos: ['acme-labs/web'],
+          unreadableRepos: ['acme-labs/infra'],
+        },
+      ],
+    };
+    vi.spyOn(ciRunnerReconcileService, 'reconcile').mockResolvedValue(outcome);
+    vi.spyOn(ciRunnerBootService, 'listRunnableIntentIds').mockResolvedValue([]);
+    spyOnJobDispatch();
+    const before = Date.now();
+
+    const { result } = await new JobTestEngine({ function: ciRunnerProvisionSweep }).execute();
+
+    // The step's memo — the sweep's output — is unchanged by the record.
+    expect(result).toEqual({ dispatched: 0, reconcile: outcome });
+    const rows = await adminDb.ciFleetBlindSpots.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.outcome).toEqual({
+      orgs: [
+        {
+          org: 'acme-labs',
+          undeliveredRepos: ['acme-labs/web'],
+          unreadableRepos: ['acme-labs/infra'],
+          error: null,
+        },
+      ],
+      error: null,
+    });
+    expect(rows[0]!.computedAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+
+    // A reconcile that threw is kept too, as the reconcile-failed record.
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(ciRunnerReconcileService, 'reconcile').mockRejectedValue(new Error('db down'));
+    await new JobTestEngine({ function: ciRunnerProvisionSweep }).execute();
+    const failed = await adminDb.ciFleetBlindSpots.findUniqueOrThrow({ where: { id: 'latest' } });
+    expect(failed.outcome).toEqual({ orgs: [], error: 'db down' });
+  });
+
+  it('a blind-spot record that cannot be written never fails the sweep', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const outcome = { added: 0, orgs: [] };
+    vi.spyOn(ciRunnerReconcileService, 'reconcile').mockResolvedValue(outcome);
+    vi.spyOn(ciFleetBlindSpotsService, 'record').mockRejectedValueOnce(
+      Object.assign(new Error('row data'), { name: 'PrismaClientKnownRequestError' }),
+    );
+    vi.spyOn(ciRunnerBootService, 'listRunnableIntentIds').mockResolvedValue(['i1']);
+    const send = spyOnJobDispatch();
+
+    const { result } = await new JobTestEngine({ function: ciRunnerProvisionSweep }).execute();
+
+    expect(result).toEqual({ dispatched: 1, reconcile: outcome });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(
+      '[ciRunnerProvisionSweep] could not keep the CI fleet blind spots',
+      { error: 'PrismaClientKnownRequestError' },
+    );
+
+    vi.spyOn(ciFleetBlindSpotsService, 'record').mockRejectedValueOnce('not an error');
+    await new JobTestEngine({ function: ciRunnerProvisionSweep }).execute();
+    expect(log).toHaveBeenLastCalledWith(expect.any(String), { error: 'unknown' });
   });
 
   it('LOGS when the batch ceiling binds — never a silent truncation', async () => {

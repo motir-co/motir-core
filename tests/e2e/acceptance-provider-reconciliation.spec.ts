@@ -236,7 +236,6 @@ test('a platform admin reads a month of provider bills beside what Motir recorde
 
   await resetDatabase();
   writeFixture();
-  await page.setViewportSize({ width: 1440, height: 900 });
   await signUpToOnboarding(page, STAFF);
   await adminDb.user.update({ where: { email: STAFF }, data: { platformRole: 'support' } });
 

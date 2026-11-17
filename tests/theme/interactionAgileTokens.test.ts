@@ -83,7 +83,7 @@ describe('dnd drop targets route through --el-droptarget-bg / --el-board-column-
   const DROP_FILES = [
     'app/(authed)/boards/_components/BoardColumn.tsx',
     'app/(authed)/boards/_components/LaneCell.tsx',
-    'app/(authed)/boards/_components/SwimlaneBoard.tsx',
+    'app/(authed)/boards/_components/LaneRow.tsx',
     'app/(authed)/backlog/_components/BacklogList.tsx',
     'app/(authed)/dashboard/_components/DashboardGrid.tsx',
   ];

@@ -63,6 +63,9 @@ export default defineConfig({
       'tests/components/code-unsearchable-banner.test.tsx',
       // The pieces on their own, in every state their props can take.
       'tests/components/plan-change-mid-run-pieces.test.tsx',
+      // The waiting-plan snapshot (Bug MOTIR-11488): `buildWaitingPlanContext`.
+      'tests/planning/waitingPlanContext.test.ts',
+      'tests/integration/planning/waitingPlanAsk.test.ts',
       // The no-run submit path, listed so it is proven UNCHANGED beside the new one.
       'tests/ai/askRoutes.test.ts',
       'tests/ai/askGate.test.ts',

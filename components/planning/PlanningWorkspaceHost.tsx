@@ -1122,6 +1122,23 @@ function PlanWorkspaceHost({
     };
   }, [closeGuardRef, guarded]);
 
+  // THE GUARD STEPS ASIDE WHEN ITS QUESTION GOES AWAY (Bug MOTIR-11464). A guard that is
+  // open over a plan somebody then decides ELSEWHERE — the re-read settles the overlay,
+  // or the guard's own *Confirm & add* is refused because the plan was already decided —
+  // has nothing left to lose, so its copy ("closing now discards them") is false. An
+  // approve settled that way closes through `onApproved` like a press made here; a
+  // decline leaves the overlay open on the declined plan, so the reader sees the items
+  // were not added, and the next Close is instant.
+  //
+  // Adjusted DURING RENDER, the React-documented way to reset state when an input changes,
+  // so the dialog never paints one frame over a question that has gone; the armed close
+  // is disarmed in an effect, since a ref is never written while rendering.
+  const guardStillAsks = guarded || deciding;
+  if (guardOpen && !guardStillAsks) setGuardOpen(false);
+  useEffect(() => {
+    if (!guardStillAsks) closeAfterApproveRef.current = false;
+  }, [guardStillAsks]);
+
   // ⚠️ TWO VECTORS ARE DELIBERATELY NOT GUARDED, and the design says why
   // (`design/ai-chat/design-notes.md` § *Opening & exiting* → *The
   // CLOSE-WITH-PENDING guard*, the vector table):
@@ -1314,6 +1331,10 @@ function PlanWorkspaceHost({
                 onToggleTarget={toggleCanvasTarget}
                 canAddTarget={targets.length < MAX_PLANNING_TARGETS}
                 initialTrail={initialCanvasTrail}
+                // The launch target opens CENTRED at a readable zoom (MOTIR-11472),
+                // not as one small card in a fitted level. A project-scoped launch
+                // has no initial target, so it keeps the plain fit.
+                initialCentreId={initialTarget?.id ?? null}
                 // MOTIR-6154/6161's follow-move. It stays on THIS branch of the
                 // swap and is not passed to the component above: the follow moves
                 // the roadmap canvas inside a target that settles while there is no

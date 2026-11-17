@@ -299,6 +299,10 @@ export default defineConfig({
         'app/**/admin/fleet-status/_components/PoolDisclosure.tsx',
         'lib/awsServices/ec2VcpuQuotaReader.ts',
         'lib/services/fleetStatusPoolsService.ts',
+        // MOTIR-11439 — the Fleet status page's CI fleet blind spots. Pinned at 90 in `thresholds`.
+        'app/**/admin/fleet-status/_components/BlindSpotsCard.tsx',
+        'lib/repositories/ciFleetBlindSpotsRepository.ts',
+        'lib/services/ciFleetBlindSpotsService.ts',
         // MOTIR-10986 — the Indexer image card's ECR read. Pinned at 90 in `thresholds`.
         'lib/awsServices/ecrImagesReader.ts',
         'lib/ideas/consoleActor.ts',
@@ -6644,6 +6648,24 @@ export default defineConfig({
           lines: 90,
         },
         'lib/awsServices/ecrImagesReader.ts': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/admin/fleet-status/_components/BlindSpotsCard.tsx': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/ciFleetBlindSpotsRepository.ts': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/ciFleetBlindSpotsService.ts': {
           statements: 90,
           branches: 90,
           functions: 90,

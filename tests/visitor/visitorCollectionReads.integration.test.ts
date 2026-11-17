@@ -245,8 +245,12 @@ describe('the board', () => {
     const board = await boardsService.getBoard(t.fx.projectId, t.visitor);
     expect(board.swimlaneGroupBy).toBe('epic');
     expect(counts(board.swimlanes)).toEqual({ [t.privateEpic.id]: 1, [t.openEpic.id]: 2 });
-    const cards = board.columns.flatMap((c) => c.cards);
-    expect(board.swimlanes.reduce((sum, l) => sum + l.count, 0)).toBe(cards.length);
+    // A grouped board's columns are meta only (MOTIR-11445): the lanes sum to
+    // the columns' full totals, both over the Visitor's visible set.
+    const visible = board.columns.reduce((sum, c) => sum + c.totalCount, 0);
+    expect(board.columns.every((c) => c.cards.length === 0)).toBe(true);
+    expect(visible).toBe(3);
+    expect(board.swimlanes.reduce((sum, l) => sum + l.count, 0)).toBe(visible);
 
     // A member's lanes are unchanged: the hidden descendants count in their epic.
     const memberBoard = await boardsService.getBoard(t.fx.projectId, t.fx.ctx);

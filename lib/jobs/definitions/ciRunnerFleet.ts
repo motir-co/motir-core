@@ -3,6 +3,7 @@ import { deferRun } from '../engine/defer';
 import { dispatchSystemEvent } from '../sendEvent';
 import { transactionTimeoutHalf } from '@/lib/monitoring/transactionStall';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
+import type { ciFleetBlindSpotsService } from '@/lib/services/ciFleetBlindSpotsService';
 import type { ReconcileOutcome } from '@/lib/services/ciRunnerReconcileService';
 
 // The runner FLEET's background jobs (Story MOTIR-1916 · MOTIR-1921) — the
@@ -66,6 +67,26 @@ export const CI_RUNNER_PROVISION_SWEEP_CRON = '*/5 * * * *';
 // reconciler replaced it (MOTIR-6925, `fleet-per-org-pool.md` §5–§6) — see
 // `./fleetAttribution.ts`, which also runs the stale-claim sweep it carried.
 
+/**
+ * Keep the reconcile's outcome as the latest blind-spot record (MOTIR-11439).
+ * A failed write never fails the sweep: the reconcile already ran and the boot
+ * fan-out still has to happen. The page keeps showing the previous record, with
+ * its own older time, so a write that keeps failing reads as stale, never as
+ * fresh. Logged by error name only.
+ */
+async function recordBlindSpots(
+  blindSpots: Pick<typeof ciFleetBlindSpotsService, 'record'>,
+  outcome: ReconcileOutcome,
+): Promise<void> {
+  try {
+    await blindSpots.record(outcome, new Date());
+  } catch (err) {
+    console.error('[ciRunnerProvisionSweep] could not keep the CI fleet blind spots', {
+      error: err instanceof Error ? err.name : 'unknown',
+    });
+  }
+}
+
 /** How many pending intents one sweep will fan out. A ceiling rather than
  *  "everything", so a backlog drains at a predictable rate instead of firing
  *  hundreds of concurrent boots at GitHub's registration limit — and it is
@@ -112,19 +133,27 @@ export const ciRunnerProvisionSweep = defineJob(
     // shows on the `job_run` row, not only in the logs. `-v3` because the memo's
     // shape changed again; re-executing it on a resumed run is safe, since the
     // reconcile counts coverage before it mints anything.
+    //
+    // The outcome is also KEPT as the latest blind-spot record (MOTIR-11439), the
+    // one the console's Fleet status page reads. Inside this step, so a replayed
+    // step (whose memo holds the outcome) writes nothing, and with the time the
+    // reconcile finished — the tick the page names.
     const reconcile = await ctx.step.run(
       'reconcile-github-queue-v3',
       async (): Promise<ReconcileOutcome> => {
+        let outcome: ReconcileOutcome;
         try {
-          return await services.ciRunnerReconcile.reconcile();
+          outcome = await services.ciRunnerReconcile.reconcile();
         } catch (err) {
           console.error('[ciRunnerProvisionSweep] the GitHub-queue reconcile failed', err);
-          return {
+          outcome = {
             orgs: [],
             added: 0,
             error: err instanceof Error ? err.message : 'unknown',
           };
         }
+        await recordBlindSpots(services.ciFleetBlindSpots, outcome);
+        return outcome;
       },
     );
 

@@ -281,7 +281,7 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
       // The lane header's count badge (flat column + swimlane pinned header)
       // lives in LanePager since MOTIR-10535.
       'app/(authed)/boards/_components/LanePager.tsx',
-      'app/(authed)/boards/_components/SwimlaneBoard.tsx',
+      'app/(authed)/boards/_components/LaneRow.tsx',
       'app/(authed)/boards/_components/ColumnWipBadge.tsx',
       'app/(authed)/boards/_components/ColumnPointsBadge.tsx',
     ];

@@ -146,17 +146,25 @@ test('the roadmap remembers the level, fills the fold, and arrives readable', as
 
   // ── 2. The root arrives READABLE ─────────────────────────────────────────
   await chapter('A big level arrives at a scale you can read', async () => {
-    // Eighteen epics cannot be fitted legibly, so the arrival is the FLOOR — not
-    // the whole-level fit, which would be roughly a third of it. Polled for the
+    // Six full rows of the loose band cannot be fitted legibly, so the arrival is
+    // the FLOOR — not the whole-level fit, which would be roughly 0.58. Polled for the
     // same reason as the drilled level below: the fit is a ResizeObserver
     // callback, not part of the level response.
     await expect.poll(() => arrivalScale(page)).toBeCloseTo(ARRIVAL_FLOOR, 2);
     // …and the frontier card — the work that is happening — is what you land on.
+    // The level overflows the canvas on BOTH axes at the floor (the seed fills
+    // `WIDE_ROADMAP_ROWS` full rows of the 5-column band), and the arrival
+    // centres the frontier on every axis that overflows — so it is centred on
+    // both. On an axis that FITS it would centre the level's bounds instead
+    // (`arrivalView`, design-notes §2); the fixture is sized so neither fits.
     const here = page.locator('[data-node-state="here"]').first();
     await expect(here).toBeVisible();
     const frame = await canvasFrame(page).boundingBox();
     const card = await here.boundingBox();
     expect(frame && card).toBeTruthy();
+    const cardCentreX = card!.x + card!.width / 2;
+    const frameCentreX = frame!.x + frame!.width / 2;
+    expect(Math.abs(cardCentreX - frameCentreX)).toBeLessThan(40);
     const cardCentreY = card!.y + card!.height / 2;
     const frameCentreY = frame!.y + frame!.height / 2;
     expect(Math.abs(cardCentreY - frameCentreY)).toBeLessThan(40);

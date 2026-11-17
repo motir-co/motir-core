@@ -435,17 +435,23 @@ describe('no surface carries a hard-coded status count', () => {
     // lane's own `count` is the aggregate the header renders, so asserting the
     // card's `swimlaneKey` alone would miss a lane that placed the card and
     // counted it nowhere.
-    await boardsService.setSwimlaneGroupBy(await defaultBoardId(), 'assignee', fx.ctx);
+    const boardId = await defaultBoardId();
+    await boardsService.setSwimlaneGroupBy(boardId, 'assignee', fx.ctx);
     const c = await card('in a lane');
     await workItemsService.updateWorkItem(c.id, { assigneeId: fx.ownerId }, fx.ctx);
     await move(c.id, ...TO_APPROVED);
 
+    // A grouped board's cards come per lane cell (MOTIR-11445): the owner's lane
+    // page holds the card once, in the column that maps the new status.
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
-    const placed = board.columns.flatMap((col) =>
-      col.cards.filter((r) => r.identifier === c.identifier),
+    const lanePage = await boardsService.getLanePage(fx.projectId, fx.ctx, boardId, fx.ownerId);
+    const placed = lanePage.cells.flatMap((cell) =>
+      cell.cards.filter((r) => r.identifier === c.identifier).map((r) => ({ ...r, cell })),
     );
     expect(placed).toHaveLength(1);
     expect(placed[0]?.swimlaneKey).toBe(fx.ownerId);
+    const approvedColumn = board.columns.find((col) => col.statusKeys.includes('approved'));
+    expect(placed[0]?.cell.columnId).toBe(approvedColumn?.id);
 
     const lane = board.swimlanes.find((l) => l.key === fx.ownerId);
     expect(lane?.count).toBe(1);

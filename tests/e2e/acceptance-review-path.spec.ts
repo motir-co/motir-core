@@ -4,8 +4,7 @@ import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { ingestContext } from './_helpers/agent-run-seed';
-import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
-import { linkPr } from './_helpers/pr-link';
+import { postSignedWebhook } from './_helpers/github-seed';
 import { headShaFor } from './_helpers/approve-and-merge-seed';
 import { closeOverlay, developmentSection } from './_helpers/development-decide';
 import {
@@ -14,7 +13,23 @@ import {
   writeHostedRunFixture,
 } from './_helpers/hosted-run-boundary';
 import type { ContinueHostedSeed } from './_helpers/continue-hosted-seed';
-import { REVIEW_REPO, type ReviewAgentCard } from './_helpers/review-agent-seed';
+import type { ReviewAgentCard } from './_helpers/review-agent-seed';
+import {
+  REVIEW_REPO_NAME,
+  awaitReviewGate,
+  awaitingReviewGate,
+  openReviewPullRequest,
+  revealReviewBoardCard,
+  reviewBoardCard,
+  reviewChecksGreen,
+  reviewDeliveryVersion,
+  reviewPrKey,
+  reviewPrPayload,
+  submitOwnAgentVerdict,
+  type OwnAgentVerdict,
+  type ReviewGateKind,
+  type ReviewPullRequest,
+} from './_helpers/review-path-flow';
 import {
   APP_GITHUB,
   OWNER_GITHUB,
@@ -45,7 +60,9 @@ import zh from '@/messages/zh.json';
 // not run*. The author note appears only for a card whose every pull request the routed
 // person opened. Each part of a story wears its own badge; the story none. Approve and merge
 // finishes a card whose record
-// names the review it stood on. Then the same surfaces in 中文, and a narrow board.
+// names the review it stood on. Then the same surfaces in 中文. (The phone-width check is
+// `regression-review-path-phone.spec.ts`: a receipt records at the lane's one fixed frame and
+// never resizes its page — MOTIR-11471.)
 //
 // ── THE FAKES — AND ONLY THESE ──────────────────────────────────────────────
 //
@@ -111,15 +128,16 @@ const plain = (text: string, vars: Record<string, string | number> = {}) => {
   return fill(stripped, vars);
 };
 
-const repoName = `${REVIEW_REPO.owner}/${REVIEW_REPO.name}`;
-const prKey = (pr: PrName) => `${repoName}#${PRS[pr].number}`;
-const headRefFor = (pr: PrName) => `review-path/${PRS[pr].number}`;
+const repoName = REVIEW_REPO_NAME;
+const prKey = (pr: PrName) => reviewPrKey(PRS[pr]);
+/** `pr` as the shared flow's doors take it: its number, author and head branch. */
+const prOf = (pr: PrName): ReviewPullRequest => ({
+  ...PRS[pr],
+  headRef: `review-path/${PRS[pr].number}`,
+});
 /** The delivery-set version over `members` at their heads — sorted, comma-joined. */
 const versionOf = (members: Array<[PrName, string]>) =>
-  members
-    .map(([pr, sha]) => `${prKey(pr)}@${sha}`)
-    .sort()
-    .join(',');
+  reviewDeliveryVersion(members.map(([pr, sha]) => [PRS[pr], sha] as const));
 
 const MERGE_CONTROL_PATH = process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH']!;
 const MERGE_JOURNAL_PATH = process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH']!;
@@ -127,43 +145,16 @@ const MERGE_JOURNAL_PATH = process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH']!;
 // ── Locators ────────────────────────────────────────────────────────────────
 
 const main = (page: Page) => page.getByRole('main');
-const boardCard = (page: Page, card: ReviewAgentCard) =>
-  main(page).getByTestId(`board-card-${card.identifier}`);
-/**
- * The board card, scrolled into its column's window. A board column VIRTUALIZES its stack
- * (`useRowWindow`), so with seven cards in In review the later ones mount only once the
- * column scrolls — the way a person reaches them. Each column's own scroller is stepped
- * down until the card mounts, then the card is brought into view.
- */
-async function revealBoardCard(page: Page, card: ReviewAgentCard): Promise<Locator> {
-  const target = boardCard(page, card);
-  await expect
-    .poll(
-      async () => {
-        if ((await target.count()) > 0) return true;
-        await main(page)
-          .locator('[data-testid^="board-column-"] div.overflow-y-auto')
-          .evaluateAll((els) => {
-            for (const el of els) {
-              el.scrollTop += el.clientHeight / 2;
-              el.dispatchEvent(new Event('scroll'));
-            }
-          });
-        return false;
-      },
-      { timeout: FIRST_PAINT_MS },
-    )
-    .toBe(true);
-  await target.scrollIntoViewIfNeeded();
-  return target;
-}
+const boardCard = reviewBoardCard;
+/** The board card, scrolled into its column's window (the shared flow's reveal). */
+const revealBoardCard = revealReviewBoardCard;
 /** The approval record's *reviewed* line, with the commits it names as a pattern: the
  *  repo and pull request are known, the merged head is whatever the lane's push left. */
 function recordReviewed(copy: typeof rp, name: string, prNumber: number): RegExp {
   const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const [before, after] = fill(copy.record.reviewed, { name, commits: '\u0000' }).split('\u0000');
   return new RegExp(
-    `^${escape(before!)}${escape(`${REVIEW_REPO.owner}/${REVIEW_REPO.name}`)}#${prNumber} @ [0-9a-f]{7}${escape(after!)}$`,
+    `^${escape(before!)}${escape(REVIEW_REPO_NAME)}#${prNumber} @ [0-9a-f]{7}${escape(after!)}$`,
   );
 }
 const listRow = (page: Page, card: ReviewAgentCard) =>
@@ -190,57 +181,18 @@ const serverAction = (page: Page) =>
 
 // ── GitHub, through the real webhook route ──────────────────────────────────
 
-function prPayload(card: ReviewAgentCard, pr: PrName, extra: Record<string, unknown> = {}) {
-  const payload = pullRequestPayload({
-    action: 'opened',
-    number: PRS[pr].number,
-    title: card.title,
-    headRef: headRefFor(pr),
-    state: 'open',
-    merged: false,
-    repo: REVIEW_REPO,
-  }) as { pull_request: Record<string, unknown> } & Record<string, unknown>;
-  // WHO OPENED IT — the author fact the note reads (the helper's default is one account).
-  return {
-    ...payload,
-    pull_request: {
-      ...payload.pull_request,
-      user: { id: PRS[pr].author.id, login: PRS[pr].author.login },
-      ...extra,
-    },
-  };
-}
+const prPayload = (card: ReviewAgentCard, pr: PrName, extra: Record<string, unknown> = {}) =>
+  reviewPrPayload(card, prOf(pr), extra);
 
-async function openPullRequest(page: Page, card: ReviewAgentCard, pr: PrName) {
-  const res = await postSignedWebhook(page.request, 'pull_request', prPayload(card, pr));
-  expect(res.status(), `open #${PRS[pr].number}`).toBe(200);
-  await linkPr(page, {
-    workItemId: card.id,
-    repo: REVIEW_REPO,
-    number: PRS[pr].number,
-    headRef: headRefFor(pr),
-  });
-}
+const openPullRequest = (page: Page, card: ReviewAgentCard, pr: PrName) =>
+  openReviewPullRequest(page, card, prOf(pr));
 
 /** CI finished green at `sha` — a signed `check_suite` delivery. */
-async function green(page: Page, pr: PrName, sha: string) {
-  const res = await postSignedWebhook(
-    page.request,
-    'check_suite',
-    checkSuitePayload({
-      conclusion: 'success',
-      headSha: sha,
-      prNumber: PRS[pr].number,
-      headBranch: headRefFor(pr),
-      repo: REVIEW_REPO,
-    }),
-  );
-  expect(res.status(), `green #${PRS[pr].number}@${sha}`).toBe(200);
-}
+const green = (page: Page, pr: PrName, sha: string) => reviewChecksGreen(page, prOf(pr), sha);
 
 /** A push moved the pull request's head — GitHub's `synchronize` delivery. */
 async function push(page: Page, card: ReviewAgentCard, pr: PrName, sha: string) {
-  const payload = prPayload(card, pr, { head: { ref: headRefFor(pr), sha } });
+  const payload = prPayload(card, pr, { head: { ref: prOf(pr).headRef, sha } });
   const res = await postSignedWebhook(page.request, 'pull_request', {
     ...payload,
     action: 'synchronize',
@@ -261,26 +213,11 @@ async function merged(page: Page, card: ReviewAgentCard, pr: PrName) {
 // ── Committed reads ─────────────────────────────────────────────────────────
 
 /** The card's newest gate of `kind` in `state` — the committed read a wait polls. */
-const gateOf = (card: ReviewAgentCard, kind: 'agent_review' | 'pull_request_approval') =>
-  adminDb.approvalGate.findFirst({
-    where: { workItemId: card.id, kind, state: 'awaiting' },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true, subjectVersion: true, reviewUnavailableReason: true },
-  });
+const gateOf = (card: ReviewAgentCard, kind: ReviewGateKind) => awaitingReviewGate(card, kind);
 
 /** Wait until the card has an awaiting `kind` gate at exactly `version`. */
-async function awaitGate(
-  card: ReviewAgentCard,
-  kind: 'agent_review' | 'pull_request_approval',
-  version: string,
-) {
-  await expect
-    .poll(async () => (await gateOf(card, kind))?.subjectVersion ?? null, {
-      timeout: 60_000,
-      message: `${card.identifier}: an awaiting ${kind} at ${version}`,
-    })
-    .toBe(version);
-}
+const awaitGate = (card: ReviewAgentCard, kind: ReviewGateKind, version: string) =>
+  awaitReviewGate(card, kind, version);
 
 const statusOf = async (card: ReviewAgentCard) =>
   (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id }, select: { status: true } }))
@@ -289,30 +226,8 @@ const statusOf = async (card: ReviewAgentCard) =>
 // ── The user-token verdict door ─────────────────────────────────────────────
 
 /** The routed person's own agent answers — `motir review`'s submit, with their token. */
-async function submitVerdict(
-  api: APIRequestContext,
-  card: ReviewAgentCard,
-  body: { verdict: 'approved' | 'changes_requested'; subjectVersion: string; findingsMd?: string },
-) {
-  const res = await api.post(`/api/v1/work-items/${card.identifier}/review-verdict`, {
-    data: {
-      summaryMd: body.verdict === 'approved' ? 'Meets every acceptance criterion.' : null,
-      checklist: [],
-      harness: HARNESS,
-      model: OWN_MODEL,
-      ...body,
-    },
-  });
-  const text = await res.text();
-  expect(res.status(), `verdict → ${text.slice(0, 400)}`).toBe(200);
-  const json = JSON.parse(text) as { recordId: string; verdict: string; subjectVersion: string };
-  expect(json).toMatchObject({
-    key: card.identifier,
-    verdict: body.verdict,
-    subjectVersion: body.subjectVersion,
-  });
-  return json;
-}
+const submitVerdict = (api: APIRequestContext, card: ReviewAgentCard, body: OwnAgentVerdict) =>
+  submitOwnAgentVerdict(api, card, body, { harness: HARNESS, model: OWN_MODEL });
 
 // ── The bot's posts, read from the merge seam's journal ─────────────────────
 
@@ -439,15 +354,6 @@ async function approveAndMerge(page: Page, card: ReviewAgentCard, prs: PrName[])
   for (const pr of prs) await merged(page, card, pr);
   await page.reload();
   await expect(statusCard(page)).toContainText('Done', { timeout: FIRST_PAINT_MS });
-}
-
-/** No horizontal overflow inside `el` — a pill or chip pushed out reads as scrollWidth. */
-async function fitsItsBox(el: Locator) {
-  const { scroll, client } = await el.evaluate((node) => ({
-    scroll: node.scrollWidth,
-    client: node.clientWidth,
-  }));
-  expect(scroll, 'nothing overflows the box').toBeLessThanOrEqual(client + 1);
 }
 
 test.describe('the review path', () => {
@@ -1094,21 +1000,6 @@ test.describe('the review path', () => {
       await dialog.getByRole('button', { name: zrp.dismiss.cancel, exact: true }).click();
       await expect(dialog).toBeHidden();
     });
-
-    await chapter('中文 at phone width — the board card and the To approve row fit', async () => {
-      await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto('/boards');
-      const card = await revealBoardCard(page, partTwo);
-      await expect(card).toBeVisible({ timeout: FIRST_PAINT_MS });
-      await card.scrollIntoViewIfNeeded();
-      await fitsItsBox(card);
-      await page.goto('/workbench?tab=approvals');
-      const row = toApproveRow(page, mainCard, zh);
-      await expect(row).toBeVisible({ timeout: FIRST_PAINT_MS });
-      await row.scrollIntoViewIfNeeded();
-      await fitsItsBox(row);
-    });
-    await beat();
 
     await api.dispose();
   });

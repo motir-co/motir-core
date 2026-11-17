@@ -157,7 +157,7 @@ async function switchToBoard(page: Page, boardId: string): Promise<void> {
   await page.waitForURL((url) => url.searchParams.get('board') === boardId, { timeout: 10_000 });
 }
 
-// Set the swimlane group-by via the board-header Segmented control, awaiting the
+// Set the swimlane group-by via the board-header group-by menu, awaiting the
 // persist PATCH (which carries the SELECTED board's id — 3.7.5). Mirrors
 // board-swimlanes.spec.ts.
 async function setGroupBy(
@@ -168,7 +168,10 @@ async function setGroupBy(
   const patch = page.waitForResponse(
     (r) => r.url().endsWith('/api/board') && r.request().method() === 'PATCH',
   );
-  await control.getByRole('button', { name: label, exact: true }).click();
+  // The group-by trigger opens the group-by menu (MOTIR-11451); the dimensions
+  // are its menuitemradio rows, portaled out of the group.
+  await control.getByRole('button').click();
+  await page.getByRole('menuitemradio', { name: label, exact: true }).click();
   expect((await patch).ok(), `group-by → ${label} persisted`).toBeTruthy();
 }
 

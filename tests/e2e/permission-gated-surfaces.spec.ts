@@ -90,8 +90,13 @@ test('a VIEWER meets no control that writes, and every disabled one says why', a
   ).toBeVisible();
   await expect(page.getByText('boards.readOnlyBoardBanner')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Column actions' })).toHaveCount(0);
+  // The group-by trigger (MOTIR-11451) is inert, opens no menu, and the group
+  // is the focus stop that carries the read-only reason.
   const groupBy = page.getByRole('group', { name: 'Swimlane group by' });
-  await expect(groupBy.getByRole('button', { name: 'Assignee' })).toBeDisabled();
+  await expect(groupBy.getByRole('button')).toBeDisabled();
+  await expect(groupBy).toHaveAccessibleDescription('You have read-only access to this project');
+  await groupBy.getByRole('button').click({ force: true });
+  await expect(page.getByRole('menu', { name: 'Group by' })).toHaveCount(0);
 
   // …and the quick view from the board draws the same treatment.
   await page.getByRole('button', { name: new RegExp(`^Open ${seed.itemKey}:`) }).click();

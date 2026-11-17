@@ -346,15 +346,24 @@ export interface BoardColumnDto {
   wipLimit: number | null;
   /** The workflow status keys this column maps (the statuses its cards hold). */
   statusKeys: string[];
+  /**
+   * The column's first page of cards — on a FLAT board (`swimlaneGroupBy`
+   * `none`) only. On a GROUPED board this is always EMPTY (MOTIR-11445): a
+   * grouped board's cards arrive from its lane-scoped cell pages
+   * (`BoardLanePageDto` / `BoardCellPageDto`), so a reader must not take an
+   * empty array here for an empty column — `totalCount` says that.
+   */
   cards: BoardCardDto[];
-  /** The lane's FULL card count — the header's denominator, independent of how
-   *  many of its cards are loaded (finding #57). */
+  /** The column's FULL card count across every lane — the header's denominator,
+   *  independent of how many of its cards are loaded (finding #57). Meaningful
+   *  on a flat AND a grouped board. */
   totalCount: number;
   /**
    * The lane's next-page cursor (MOTIR-10535): opaque, naming the last loaded
    * card, or `null` when every card of the lane is loaded. The board passes it to
    * `GET /api/board/columns/{id}/cards?cursor=` when the lane is scrolled to its
-   * bottom, and replaces it with the page's own cursor.
+   * bottom, and replaces it with the page's own cursor. Always `null` on a
+   * GROUPED board, whose cells page through their own cursors (MOTIR-11445).
    */
   cursor: string | null;
 }
@@ -373,6 +382,36 @@ export interface BoardColumnPageDto {
   totalCount: number;
   cursor: string | null;
   planHolds: Record<string, BoardPlanHoldSummaryDto>;
+}
+
+/**
+ * One page of ONE swimlane in ONE column — a board CELL (MOTIR-11444). The
+ * grouped board pages each `(lane × column)` cell on its own, so a lane whose
+ * header counts 40 never shows an empty cell because other lanes filled the
+ * column's page. `cards` are up to `BOARD_PAGE_SIZE` of the lane's cards in that
+ * column, in the column's own order (the shipped `BoardCardDto`, its
+ * `swimlaneKey` the requested lane); `totalCount` is the cell's CURRENT full
+ * count over the same set; `cursor` names the page's last card when more remain
+ * (null when the cell is exhausted); `planHolds` holds the label fields of every
+ * plan holding one of the response's cards.
+ */
+export interface BoardCellPageDto {
+  columnId: string;
+  laneKey: string;
+  cards: BoardCardDto[];
+  totalCount: number;
+  cursor: string | null;
+  planHolds: Record<string, BoardPlanHoldSummaryDto>;
+}
+
+/**
+ * One lane's FIRST page in every column of the board (MOTIR-11444) — what a lane
+ * coming into view loads in one request. One cell per column, in the board's
+ * column order; every cell carries the response's single merged `planHolds`.
+ */
+export interface BoardLanePageDto {
+  laneKey: string;
+  cells: BoardCellPageDto[];
 }
 
 /**
@@ -435,8 +474,10 @@ export interface BoardProjectionDto {
    * The ordered lane list when `swimlaneGroupBy` is non-`none` (lanes-with-cards
    * + the catch-all, in the documented order); an EMPTY array when the board is
    * `none` (the flat board has no lanes). Built from a bounded aggregate, never
-   * a load-all (finding #57). The 3.3.5 UI buckets each column's loaded cards
-   * into (lane, column) cells by matching `card.swimlaneKey` to `lane.key`.
+   * a load-all (finding #57). On a grouped board `columns[]` carries column
+   * meta only (empty `cards`, null `cursor`, the full `totalCount`); each
+   * (lane, column) cell loads its own cards from the lane-scoped cell pages
+   * (MOTIR-11445).
    */
   swimlanes: BoardSwimlaneDto[];
   unmappedStatuses: WorkflowStatusDto[];
@@ -453,7 +494,8 @@ export interface BoardProjectionDto {
    * Every plan — or open session — that holds a loaded card, keyed by
    * `planHoldKey` (MOTIR-6268; MOTIR-7640) — the
    * label fields and held count each card's plan footer and refusal read. Empty
-   * when no loaded card is held.
+   * when no loaded card is held — and ALWAYS empty on a grouped board, which
+   * loads no card here: each cell page brings its own `planHolds` (MOTIR-11445).
    */
   planHolds: Record<string, BoardPlanHoldSummaryDto>;
   /**

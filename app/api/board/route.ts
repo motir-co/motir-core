@@ -16,8 +16,10 @@ import type { BoardFilterInput } from '@/lib/dto/boards';
 import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 
 // GET /api/board (Subtask 3.1.6) — the board projection for the ACTIVE project's
-// default board: a BoardProjectionDto (columns in workflow order, each with a
-// bounded first page of cards + count + cursor, plus unmappedStatuses). Thin
+// default board: a BoardProjectionDto (columns in workflow order plus
+// unmappedStatuses). On a flat board each column carries a bounded first page of
+// cards + its count + a cursor; on a grouped board (MOTIR-11445) each column is
+// meta + its full count only, and the cells load from the lane routes. Thin
 // HTTP layer over boardsService.getBoard; session-required; the project +
 // workspace come from the active-project context (NEVER the client). No db / no
 // transaction here (CLAUDE.md).

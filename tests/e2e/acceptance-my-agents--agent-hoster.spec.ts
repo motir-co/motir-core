@@ -63,7 +63,6 @@ test.describe.configure({ timeout: 900_000 });
 const copy = en.myAgents;
 const boot = copy.boot;
 const r = en.runs.agent;
-const WIDE = { width: 1440, height: 810 };
 /** Pull-request numbers: this spec owns the 94xxx block. */
 const PR_NUMBER = 94781;
 const TYPE_DELAY_MS = 30;
@@ -218,7 +217,6 @@ test('new agents are created on the agent-hoster AWS pool behind its own switch,
     orderBy: { fleetKind: 'asc' },
   });
 
-  await page.setViewportSize(WIDE);
   await signIn(page, seed.email, seed.password);
 
   let flyId = '';
