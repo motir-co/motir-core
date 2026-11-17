@@ -34,9 +34,6 @@ import type {
 import type { BoardColumnPageDto, MoveCardResultDto } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkflowDto } from '@/lib/dto/workflows';
-import type { SprintDto } from '@/lib/dto/sprints';
-import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
-import type { ComponentDto } from '@/lib/dto/components';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
 import { usePeekOpen } from '../../items/_components/IssueQuickView';
 import { updateIssueAction } from '../../items/[key]/edit/actions';
@@ -47,8 +44,8 @@ import { BoardColumnArrows } from './BoardColumnArrows';
 import { BOARD_SCROLL_NAV_CLASS } from './boardHorizontalNav';
 import { BoardEmptyState } from './BoardEmptyState';
 import { BoardFilteredEmptyState } from './BoardFilteredEmptyState';
-import { BoardStoredFilterIndicator } from './BoardStoredFilterIndicator';
-import { BOARD_STORED_FILTER_SLOT_ID } from '@/lib/boards/boardSlots';
+import { useBoardHeaderFilterContext } from './BoardHeaderFilterContext';
+import { boardEmptyVariant } from '@/lib/boards/boardHeaderFilter';
 import { BoardSkeleton } from './BoardSkeleton';
 import { GroupByControl } from './GroupByControl';
 import { NoActiveSprintState } from './NoActiveSprintState';
@@ -136,20 +133,8 @@ export function BoardContainer({
   workflow,
   filterParam = '',
   boardFilterOff = false,
-  filterActive = false,
-  sprints = [],
-  customFields = [],
-  components = [],
 }: {
   members?: WorkspaceMemberDTO[];
-  /**
-   * The project's sprints, custom fields and components (MOTIR-11335) — the
-   * vocabularies the stored-filter indicator names its conditions' values with,
-   * the same ones the page already read for the toolbar filter.
-   */
-  sprints?: SprintDto[];
-  customFields?: CustomFieldDefinitionDTO[];
-  components?: ComponentDto[];
   activeProjectId?: string;
   selectedBoardId?: string;
   /**
@@ -167,12 +152,6 @@ export function BoardContainer({
    * header filter (which already replaces the stored one).
    */
   boardFilterOff?: boolean;
-  /**
-   * Whether a filter is active (Story 6.15.3) — selects the FILTERED-empty state
-   * ("no card matches", Clear CTA) over the brand-new-board empty state ("New
-   * work item") when every column is empty.
-   */
-  filterActive?: boolean;
   /**
    * Whether the actor may edit this board (Story 6.4.6). `false` for a viewer /
    * a member on a `limited` project: the board renders read-only — drag is
@@ -227,14 +206,9 @@ export function BoardContainer({
   // group-by control vanishes). The effect runs post-commit, when the sibling
   // slot exists, on both first load and client nav.
   const [groupBySlot, setGroupBySlot] = useState<HTMLElement | null>(null);
-  // The stored-filter indicator's slot (MOTIR-11335) — the page's applied-filter
-  // row, so the indicator sits beside the toolbar's chips as the design draws
-  // it. Captured post-commit for the same reason as the group-by slot.
-  const [storedFilterSlot, setStoredFilterSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- capturing a portal target that commits in the same render pass; it must be read post-commit, which is exactly what an effect is for (DOM sync)
     setGroupBySlot(document.getElementById('board-toolbar-groupby-slot'));
-    setStoredFilterSlot(document.getElementById(BOARD_STORED_FILTER_SLOT_ID));
   }, []);
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
   const [status, setStatus] = useState<BoardStatus>('loading');
@@ -255,6 +229,14 @@ export function BoardContainer({
   // it — instead we watch the provider's `issuesChangedAt` tick and refetch.
   // Fixes: creating from the empty state left the board stuck on "No work items".
   const { issuesChangedAt } = useCreateIssue();
+
+  // The board's own stored filter, shared with the page's header filter
+  // (MOTIR-11565): the header starts as it, compares against it and saves to it,
+  // and is a separate client subtree, so the board publishes what it read. A
+  // save to the board filter asks for a fresh read through `reloadTick`.
+  const headerFilter = useBoardHeaderFilterContext();
+  const publish = headerFilter?.publish;
+  const reloadTick = headerFilter?.reloadTick ?? 0;
 
   useEffect(() => {
     let active = true;
@@ -288,7 +270,17 @@ export function BoardContainer({
     // board instead of leaving the previous project's board on screen.
     // `boardQuery` is in the deps so changing the `?board=` selection (the 3.7.4
     // switcher) refetches the newly-selected board's projection.
-  }, [reloadKey, issuesChangedAt, activeProjectId, boardQuery]);
+  }, [reloadKey, reloadTick, issuesChangedAt, activeProjectId, boardQuery]);
+
+  useEffect(() => {
+    if (!publish || !board) return;
+    publish({
+      requestedBoardId: selectedBoardId ?? null,
+      boardId: board.boardId,
+      boardType: board.type,
+      storedFilter: board.storedFilter,
+    });
+  }, [publish, board, selectedBoardId]);
 
   const retry = useCallback(() => {
     setStatus('loading');
@@ -387,28 +379,17 @@ export function BoardContainer({
     );
   }
 
-  // The board's own stored filter (MOTIR-11335): a read-only indicator on every
-  // ready frame that has one — portaled into the page's applied-filter row,
-  // beside the toolbar's chips, or (with no such row, an isolated render) at the
-  // top of the board. A board admin gets an Edit link to this board's settings.
-  const editHref = canConfigure
-    ? `/settings/project/board?board=${encodeURIComponent(board.boardId)}`
-    : undefined;
-  const storedFilterIndicator = board.storedFilter ? (
-    <BoardStoredFilterIndicator
-      storedFilter={board.storedFilter}
-      lookups={{ statuses: workflow?.statuses ?? [], members, sprints, customFields, components }}
-      editHref={editHref}
-    />
-  ) : null;
+  // Which empty state an empty board shows (MOTIR-11565): the brand-new-board
+  // one when nothing narrows it (no filter, or every condition removed), else a
+  // filtered-empty variant by how the header filter relates to the board's own.
+  const emptyVariant = boardEmptyVariant({
+    storedFilter: board.storedFilter,
+    filterParam,
+    boardFilterOff,
+  });
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      {storedFilterIndicator
-        ? storedFilterSlot
-          ? createPortal(storedFilterIndicator, storedFilterSlot)
-          : storedFilterIndicator
-        : null}
       {/* SCRUM sprint header (Subtask 4.5.3) — the one net-new surface, above the
           REUSED 3.2/3.3 board, drawn from the 4.5.2 `SprintSummaryDto`. Present
           only on a scrum board with an active sprint (the no-active-sprint case
@@ -454,15 +435,11 @@ export function BoardContainer({
         // brand-new-board "New work item" empty state (the board has items; the
         // filter is over-narrow). The toolbar + applied summary stay (page-level)
         // so the user can edit what they filtered on.
-        // A stored filter that matches nothing is the same over-narrow case
-        // (MOTIR-11335): its own copy, and Clear only when a toolbar filter is
-        // there to clear.
-        filterActive || board.storedFilter !== null ? (
-          <BoardFilteredEmptyState
-            selectedBoardId={selectedBoardId}
-            toolbarFilterActive={filterActive}
-            editHref={editHref}
-          />
+        // A board's own stored filter that matches nothing is the same
+        // over-narrow case (MOTIR-11335), and a header filter that differs from
+        // it offers Reset to board filter (MOTIR-11565).
+        emptyVariant !== 'none' ? (
+          <BoardFilteredEmptyState selectedBoardId={selectedBoardId} variant={emptyVariant} />
         ) : (
           <BoardEmptyState />
         )

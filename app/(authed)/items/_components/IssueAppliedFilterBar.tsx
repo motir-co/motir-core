@@ -56,6 +56,12 @@ export interface IssueAppliedFilterBarProps {
    * `buildBoardFilterHref` (board-scoped URL, no view/sort) so Discard returns
    * to the board, not /items. Defaults to the /items `buildIssueListHref`. */
   buildHref?: (filter: IssueFilter) => string;
+  /** Host actions appended after the bar's own (MOTIR-11565: the board's divider,
+   * Set as board filter and Reset to board filter). Absent on /items. */
+  trailing?: ReactNode;
+  /** Whether Save as is offered (MOTIR-11565: false for a board Visitor, who has
+   * no saved filters). Defaults to true. */
+  saveAs?: boolean;
 }
 
 export function IssueAppliedFilterBar({
@@ -67,6 +73,8 @@ export function IssueAppliedFilterBar({
   ast,
   children,
   buildHref,
+  trailing,
+  saveAs = true,
 }: IssueAppliedFilterBarProps) {
   const t = useTranslations('savedFilters');
   const router = useRouter();
@@ -132,7 +140,8 @@ export function IssueAppliedFilterBar({
     });
   }
 
-  const showSaveAs = (applied !== null && dirty) || (applied === null && hasActiveFilter);
+  const showSaveAs =
+    saveAs && ((applied !== null && dirty) || (applied === null && hasActiveFilter));
 
   return (
     <div className="flex flex-wrap items-center gap-1.5" aria-label={t('applied.barAria')}>
@@ -176,6 +185,8 @@ export function IssueAppliedFilterBar({
         </span>
       )}
 
+      {trailing}
+
       {saveAsOpen && currentParam !== null ? (
         <SaveFilterDialog
           projectKey={projectKey}
@@ -190,7 +201,13 @@ export function IssueAppliedFilterBar({
   );
 }
 
-function NameChip({ applied, onClick }: { applied: AppliedSavedFilter; onClick: () => void }) {
+export function NameChip({
+  applied,
+  onClick,
+}: {
+  applied: AppliedSavedFilter;
+  onClick: () => void;
+}) {
   const t = useTranslations('savedFilters');
   const VisGlyph =
     applied.visibility === 'project' ? Users : applied.visibility === 'private' ? Lock : null;
@@ -217,7 +234,7 @@ function NameChip({ applied, onClick }: { applied: AppliedSavedFilter; onClick: 
   );
 }
 
-function DirtyMarker({ label }: { label: string }) {
+export function DirtyMarker({ label }: { label: string }) {
   return (
     <span
       role="status"
@@ -229,7 +246,7 @@ function DirtyMarker({ label }: { label: string }) {
   );
 }
 
-function SaveAsButton({ label, onClick }: { label: string; onClick: () => void }) {
+export function SaveAsButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
