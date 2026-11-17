@@ -356,8 +356,8 @@
       "amendingChildrenOf": "Reconciling: {title}",
       "amendingTopLevel": "Reconciling the project's top level",
       "checkingPlan": "Running the final check",
-      "checkingCard": "Checking: {title}",
-      "repairing": "Fixing what the final check found"
+      "checkingCard": "Checking and fixing: {title}",
+      "repairing": "Fixing the plan's links and order"
     },
     "cue": {
       "drafting": "Drafting",
@@ -8975,13 +8975,13 @@
         "resumedLine": "Lost its machine — Motir started it again and it picks up where it stopped",
         "resumedLineSecond": "Lost its machine again — second automatic attempt, picking up where it stopped",
         "amending": "reconcile",
-        "checking": "check",
+        "checking": "check & fix",
         "repairing": "fix",
         "amendingLine": "Reconciling the items under {target}",
         "amendingTopLine": "Reconciling the items at the top level",
         "checkingLine": "Running the final check",
-        "checkingCardLine": "Checking {title}",
-        "repairingLine": "Fixing what the final check found"
+        "checkingCardLine": "Checking and fixing {title}",
+        "repairingLine": "Fixing the plan's links and order"
       },
       "fact": {
         "unknown": "Working on the plan…",
@@ -9004,11 +9004,12 @@
           "skippedNoContainers": "Skipped the final check of the plan: no story, task or bug in it was ready to check",
           "skippedByPerson": "Ended the final check of the plan early because it was skipped: nothing it found was fixed",
           "selectionFailed": "The final check of the plan did not finish: its items could not be read",
-          "checking": "Checking “{title}”",
+          "checking": "Checking and fixing “{title}”",
           "notFinished": "Could not finish checking “{title}”",
           "containerClean": "No issues found in “{title}”",
           "containerFound": "{count, plural, one {Found # issue in “{title}”} other {Found # issues in “{title}”}}",
-          "finding": "Issue: {summary}"
+          "finding": "Issue: {summary}",
+          "rechecking": "Checking “{title}” again: “{blocker}” changed what it delivers"
         },
         "repair": {
           "started": "Fixing the findings…",
@@ -9021,7 +9022,8 @@
           "notFixedCommittedInProgress": "Not fixed: {summary} (the item is already being worked on)",
           "notFixedSizing": "Not fixed: {summary} (it is about how the work is sized)",
           "notFixedFixFailed": "Not fixed: {summary} (the fix could not be made)",
-          "notFixedSkipped": "Not fixed: {summary} (the final check was skipped before the fix)"
+          "notFixedSkipped": "Not fixed: {summary} (the final check was skipped before the fix)",
+          "notFixedOtherCard": "Not fixed: {summary} (the fix belongs on another item)"
         },
         "reopen": {
           "started": "Re-checking the plan's links and order",
@@ -10943,7 +10945,7 @@
         "amend": "Reconciling the items under {title}",
         "amendTop": "Reconciling the items at the top level",
         "check": "Running the final check",
-        "repair": "Fixing what the final check found"
+        "repair": "Fixing the plan's links and order"
       },
       "reason": {
         "rate_limited": "the model was rate-limited",

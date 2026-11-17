@@ -356,8 +356,8 @@
       "amendingChildrenOf": "Réconciliation : {title}",
       "amendingTopLevel": "Réconciliation du niveau supérieur du projet",
       "checkingPlan": "Vérification finale en cours",
-      "checkingCard": "Vérification : {title}",
-      "repairing": "Correction de ce que la vérification finale a trouvé"
+      "checkingCard": "Vérification et correction : {title}",
+      "repairing": "Correction des liens et de l’ordre du plan"
     },
     "cue": {
       "drafting": "Rédaction",
@@ -8978,13 +8978,13 @@
         "resumedLine": "Machine perdue — Motir l’a relancé et il reprend là où il s’était arrêté",
         "resumedLineSecond": "Machine de nouveau perdue — deuxième tentative automatique, reprise là où il s’était arrêté",
         "amending": "réconcilier",
-        "checking": "vérifier",
+        "checking": "vérifier et corriger",
         "repairing": "corriger",
         "amendingLine": "Réconciliation des éléments sous {target}",
         "amendingTopLine": "Réconciliation des éléments du niveau supérieur",
         "checkingLine": "Vérification finale en cours",
-        "checkingCardLine": "Vérification de {title}",
-        "repairingLine": "Correction de ce que la vérification finale a trouvé"
+        "checkingCardLine": "Vérification et correction de {title}",
+        "repairingLine": "Correction des liens et de l’ordre du plan"
       },
       "fact": {
         "unknown": "Travail sur le plan…",
@@ -9007,11 +9007,12 @@
           "skippedNoContainers": "Vérification finale du plan ignorée : aucune story, tâche ou bug n’était prêt à être vérifié",
           "skippedByPerson": "Vérification finale du plan arrêtée plus tôt, car elle a été ignorée : rien de ce qu’elle a trouvé n’a été corrigé",
           "selectionFailed": "La vérification finale du plan n’a pas abouti : ses éléments n’ont pas pu être lus",
-          "checking": "Vérification de « {title} »",
+          "checking": "Vérification et correction de « {title} »",
           "notFinished": "Impossible de terminer la vérification de « {title} »",
           "containerClean": "Aucun problème trouvé dans « {title} »",
           "containerFound": "{count, plural, one {# problème trouvé dans « {title} »} other {# problèmes trouvés dans « {title} »}}",
-          "finding": "Problème : {summary}"
+          "finding": "Problème : {summary}",
+          "rechecking": "Nouvelle vérification de « {title} » : « {blocker} » a changé ce qu’il livre"
         },
         "repair": {
           "started": "Correction des résultats…",
@@ -9024,7 +9025,8 @@
           "notFixedCommittedInProgress": "Non corrigé : {summary} (l’élément est déjà en cours de travail)",
           "notFixedSizing": "Non corrigé : {summary} (cela concerne la taille du travail)",
           "notFixedFixFailed": "Non corrigé : {summary} (la correction n’a pas pu être faite)",
-          "notFixedSkipped": "Non corrigé : {summary} (la vérification finale a été ignorée avant la correction)"
+          "notFixedSkipped": "Non corrigé : {summary} (la vérification finale a été ignorée avant la correction)",
+          "notFixedOtherCard": "Non corrigé : {summary} (la correction concerne un autre élément)"
         },
         "reopen": {
           "started": "Nouvelle vérification des liens et de l’ordre du plan",
@@ -10946,7 +10948,7 @@
         "amend": "Réconciliation des éléments sous {title}",
         "amendTop": "Réconciliation des éléments du niveau supérieur",
         "check": "Vérification finale en cours",
-        "repair": "Correction de ce que la vérification finale a trouvé"
+        "repair": "Correction des liens et de l’ordre du plan"
       },
       "reason": {
         "rate_limited": "le modèle a atteint sa limite de requêtes",

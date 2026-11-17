@@ -204,8 +204,10 @@ export interface PlanNarrationProps {
 /**
  * The group the Skip the final check control sits under: the first LIVE group
  * whose session is the final check (its own head or a card it is reviewing),
- * and none at all while a `repair` session is live — the fix has begun and
- * there is no check left to skip (design § "⭐ The final check" §2, When).
+ * and none at all while a `repair` session is live. Since MOTIR-11489 the check
+ * fixes as it goes and a `repair` is the validity re-open's, which runs before it;
+ * on an older stored plan it was the fix after the check, which had nothing left
+ * to skip (design § "⭐ The final check" §2, When).
  */
 export function skipCheckGroupKey(groups: readonly NarrationGroup[]): string | null {
   if (groups.some((g) => g.live && g.session?.stepKind === 'repair')) return null;

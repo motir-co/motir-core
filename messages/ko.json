@@ -356,8 +356,8 @@
       "amendingChildrenOf": "조정 중: {title}",
       "amendingTopLevel": "프로젝트 최상위 수준을 조정하는 중",
       "checkingPlan": "최종 검사를 실행하는 중",
-      "checkingCard": "검사 중: {title}",
-      "repairing": "최종 검사에서 찾은 문제를 수정하는 중"
+      "checkingCard": "검사 및 수정 중: {title}",
+      "repairing": "계획의 링크와 순서를 수정하는 중"
     },
     "cue": {
       "drafting": "초안 작성 중",
@@ -8972,13 +8972,13 @@
         "resumedLine": "머신 손실 — Motir가 다시 시작했으며 중단된 지점부터 이어서 진행합니다",
         "resumedLineSecond": "머신이 다시 손실됨 — 두 번째 자동 시도, 중단된 지점부터 이어서 진행합니다",
         "amending": "조정",
-        "checking": "검사",
+        "checking": "검사 및 수정",
         "repairing": "수정",
         "amendingLine": "{target} 아래 항목을 조정하는 중",
         "amendingTopLine": "최상위 수준의 항목을 조정하는 중",
         "checkingLine": "최종 검사를 실행하는 중",
-        "checkingCardLine": "{title} 검사 중",
-        "repairingLine": "최종 검사에서 찾은 문제를 수정하는 중"
+        "checkingCardLine": "{title} 검사 및 수정 중",
+        "repairingLine": "계획의 링크와 순서를 수정하는 중"
       },
       "fact": {
         "unknown": "계획을 작업하는 중…",
@@ -9001,11 +9001,12 @@
           "skippedNoContainers": "계획의 최종 검사를 건너뛰었습니다: 검사할 준비가 된 스토리, 작업, 버그가 없었습니다",
           "skippedByPerson": "건너뛰기로 해서 계획의 최종 검사를 일찍 끝냈습니다: 찾은 문제는 수정되지 않았습니다",
           "selectionFailed": "계획의 최종 검사를 끝내지 못했습니다: 항목을 읽을 수 없었습니다",
-          "checking": "“{title}” 검사 중",
+          "checking": "“{title}” 검사 및 수정 중",
           "notFinished": "“{title}” 검사를 끝내지 못했습니다",
           "containerClean": "“{title}”에서 문제를 찾지 못했습니다",
           "containerFound": "{count, plural, other {“{title}”에서 문제 #개를 찾았습니다}}",
-          "finding": "문제: {summary}"
+          "finding": "문제: {summary}",
+          "rechecking": "“{title}” 다시 검사 중: “{blocker}”이(가) 제공하는 내용을 바꿨습니다"
         },
         "repair": {
           "started": "찾은 문제를 수정하는 중…",
@@ -9018,7 +9019,8 @@
           "notFixedCommittedInProgress": "수정 안 됨: {summary} (이미 작업 중인 항목입니다)",
           "notFixedSizing": "수정 안 됨: {summary} (작업 규모에 관한 문제입니다)",
           "notFixedFixFailed": "수정 안 됨: {summary} (수정할 수 없었습니다)",
-          "notFixedSkipped": "수정 안 됨: {summary} (수정 전에 최종 검사를 건너뛰었습니다)"
+          "notFixedSkipped": "수정 안 됨: {summary} (수정 전에 최종 검사를 건너뛰었습니다)",
+          "notFixedOtherCard": "수정 안 됨: {summary} (수정은 다른 항목에서 해야 합니다)"
         },
         "reopen": {
           "started": "계획의 링크와 순서를 다시 확인하는 중",
@@ -10940,7 +10942,7 @@
         "amend": "{title} 아래 항목 조정 중",
         "amendTop": "최상위 항목 조정 중",
         "check": "최종 검사 실행 중",
-        "repair": "최종 검사에서 찾은 문제 수정 중"
+        "repair": "계획의 링크와 순서 수정 중"
       },
       "reason": {
         "rate_limited": "모델의 요청 한도를 초과했습니다",
