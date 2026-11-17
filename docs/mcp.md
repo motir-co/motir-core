@@ -2312,12 +2312,30 @@ several pull requests. A second call naming a DIFFERENT work item therefore
 **ADDS** a row; it takes nothing off the first, and nothing is unlinked except by
 `unlink_pull_request`. The Development panel lists that set.
 
-> **ONE pull request delivering a parent and its children can be declared either
-> way.** Link the PARENT once and the merge cascades DOWN to the children on its
-> own (`childStatusCascadeService`); or link each card the pull request actually
-> delivers and the merge closes all of them, because the completion gate and the
-> status sync read the delivery set. Linking the parent is the shorter of the two
-> and stays correct as children are added.
+> **ONE pull request delivering a parent and its children links the PARENT —
+> once per repository — and never a child.** This is a correctness rule, not a
+> preference (Bug MOTIR-11624). The merge cascades DOWN to the children on its own
+> (`childStatusCascadeService`), so the parent link already closes every child.
+> What a child link adds is a QUESTION: since MOTIR-11624 the approval gates read
+> the delivery set too (`lib/services/gateSetFor.ts`), so a child linked to the
+> story's pull request is asked the approve-and-merge question for the whole
+> story, and its Approve merges every sibling with it. Only the parent's gate may
+> ask to merge the story's pull request.
+>
+> - **A child linked BESIDE the parent raises nothing and owes no repair.**
+>   `withoutAncestorDeliveries` drops a child's delivery whenever an ANCESTOR
+>   delivers the same pull request, so that link raises no gate, and a gate it
+>   raised earlier is withdrawn.
+> - **A child linked WITHOUT the parent is the defect.** Nothing is dropped, so the
+>   child carries its own merge gate over the story's pull request. **The repair is
+>   to link the PARENT** to that pull request (you may also `unlink_pull_request`
+>   the child); never answer the child's merge question.
+>
+> The dispatch prompt tells every parent-run child the same
+> (`lib/dispatch/promptTemplate.ts`: _do NOT call `link_pull_request` with key
+> <child>_). The parent link also stays correct as children are added, and it
+> spares N chances at a wrong per-child link, which is permanent until
+> `unlink_pull_request` removes it.
 
 ⚠️ **THIS PARAGRAPH USED TO SAY THE OPPOSITE, and the reversal is the point.**
 Until MOTIR-3721 / MOTIR-3757 the association a work item carried was a single
