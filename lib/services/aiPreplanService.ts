@@ -8,6 +8,13 @@ import { InvalidDesignChoiceError } from '@/lib/ai/preplanErrors';
 import { isStyleId, type StyleId } from '@/lib/theme/styles';
 import { isPaletteId, type PaletteId } from '@/lib/theme/palettes';
 import { isTypeId, type TypeId } from '@/lib/theme/typography';
+import {
+  BACKGROUND_AREAS,
+  BACKGROUND_NONE,
+  isBackgroundId,
+  type BackgroundArea,
+  type BackgroundChoice,
+} from '@motir/design-system';
 import type { RawPreplanSession, RawPreplanStateResponse } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import type { DesignChoiceDTO, PreplanStateDTO } from '@/lib/dto/aiPreplan';
@@ -20,12 +27,14 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 // is the plan-exit's concern (MOTIR-1041).
 const DESIGN_STARTER_ON_PICK = 'bare';
 
-// The raw three-axis ids as they arrive from the route (pre-validation). Each is
-// validated against the motir-core registry before the write.
+// The raw three-axis ids as they arrive from the route (pre-validation), and the
+// optional per-area backgrounds (MOTIR-11607). Each is validated against the
+// registries before the write.
 export interface DesignChoiceInput {
   styleId: string;
   paletteId: string;
   typeId: string;
+  backgrounds?: Record<BackgroundArea, string>;
 }
 
 // The pre-plan READ-THROUGH service (Subtask 7.3.70): the thin motir-core seam
@@ -95,25 +104,49 @@ export const aiPreplanService = {
 };
 
 // Validate the three axes against the motir-core registries, narrowing to the
-// branded ids. Each axis is checked in order; the FIRST unknown id throws.
+// branded ids, then each page area's background against the package's background
+// registry (or `none`). Checked in order; the FIRST unknown value throws.
 function validateDesignChoice(choice: DesignChoiceInput): DesignChoiceDTO {
   if (!isStyleId(choice.styleId)) throw new InvalidDesignChoiceError('styleId', choice.styleId);
   if (!isPaletteId(choice.paletteId))
     throw new InvalidDesignChoiceError('paletteId', choice.paletteId);
   if (!isTypeId(choice.typeId)) throw new InvalidDesignChoiceError('typeId', choice.typeId);
-  return { styleId: choice.styleId, paletteId: choice.paletteId, typeId: choice.typeId };
+  const dto: DesignChoiceDTO = {
+    styleId: choice.styleId,
+    paletteId: choice.paletteId,
+    typeId: choice.typeId,
+  };
+  if (choice.backgrounds !== undefined) {
+    const backgrounds = {} as Record<BackgroundArea, BackgroundChoice>;
+    for (const area of BACKGROUND_AREAS) {
+      const value = choice.backgrounds[area];
+      if (value !== BACKGROUND_NONE && !isBackgroundId(value)) {
+        throw new InvalidDesignChoiceError(`backgrounds.${area}`, value);
+      }
+      backgrounds[area] = value;
+    }
+    dto.backgrounds = backgrounds;
+  }
+  return dto;
 }
 
 // Map the wire design choice (opaque strings) to the DTO (branded ids). motir-core
 // validated these before writing, so the cast is sound; null stays null.
 function mapDesignChoice(raw: RawPreplanSession['designChoice']): DesignChoiceDTO | null {
-  return raw
-    ? {
-        styleId: raw.styleId as StyleId,
-        paletteId: raw.paletteId as PaletteId,
-        typeId: raw.typeId as TypeId,
-      }
-    : null;
+  if (!raw) return null;
+  const dto: DesignChoiceDTO = {
+    styleId: raw.styleId as StyleId,
+    paletteId: raw.paletteId as PaletteId,
+    typeId: raw.typeId as TypeId,
+  };
+  if (raw.backgrounds) {
+    dto.backgrounds = {
+      landing: raw.backgrounds.landing as BackgroundChoice,
+      login: raw.backgrounds.login as BackgroundChoice,
+      hero: raw.backgrounds.hero as BackgroundChoice,
+    };
+  }
+  return dto;
 }
 
 // Resolve the active workspace's organization id — the billing entity the write

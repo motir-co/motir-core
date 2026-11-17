@@ -244,6 +244,62 @@ describe('PATCH /api/ai/pre-plan (the design-choice write, 7.3.81)', () => {
     expect(saveDesignChoiceMock).not.toHaveBeenCalled();
   });
 
+  // MOTIR-11607 — the optional per-area backgrounds.
+  it('400s a backgrounds that is not three strings, before any write', async () => {
+    signIn();
+    withActiveProject();
+    const bad = [
+      'wave',
+      null,
+      ['wave', 'wave', 'wave'],
+      { landing: 'wave', login: 'wave' },
+      { landing: 'wave', login: 'wave', hero: 3 },
+    ];
+    for (const backgrounds of bad) {
+      const res = await PATCH(patchReq({ designChoice: { ...choice, backgrounds } }));
+      expect(res.status).toBe(400);
+    }
+    expect(saveDesignChoiceMock).not.toHaveBeenCalled();
+  });
+
+  it('422s an unknown background id, naming the area, without writing', async () => {
+    signIn();
+    withActiveProject();
+    const res = await PATCH(
+      patchReq({
+        designChoice: {
+          ...choice,
+          backgrounds: { landing: 'wave', login: 'lava-lamp', hero: 'none' },
+        },
+      }),
+    );
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string; error: string };
+    expect(body.code).toBe('INVALID_DESIGN_CHOICE');
+    expect(body.error).toContain('backgrounds.login');
+    expect(saveDesignChoiceMock).not.toHaveBeenCalled();
+  });
+
+  it('forwards valid backgrounds to motir-ai and echoes them back unchanged', async () => {
+    signIn();
+    withActiveProject();
+    const withBackgrounds = {
+      ...choice,
+      backgrounds: { landing: 'topography', login: 'none', hero: 'aurora' },
+    };
+    saveDesignChoiceMock.mockResolvedValue({
+      designChoice: withBackgrounds,
+    } as unknown as RawPreplanSession);
+
+    const res = await PATCH(patchReq({ designChoice: { ...withBackgrounds, stray: 'x' } }));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ designChoice: withBackgrounds });
+    expect(saveDesignChoiceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ designChoice: withBackgrounds }),
+    );
+  });
+
   it('422s an unknown axis id (motir-core owns the registries), without writing', async () => {
     signIn();
     withActiveProject();

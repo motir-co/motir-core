@@ -11,6 +11,7 @@ import {
   DESIGN_MANIFEST_PATH,
   DESIGN_NOTES_PATH,
   designSeedFor,
+  type StoredDesignChoice,
 } from '@/lib/projectRepos/designChoiceSeed';
 import {
   SEED_SOURCE_INITIALISED,
@@ -196,9 +197,17 @@ const STARTER_SEED = {
   source: { owner: 'motir-co', repo: 'nextjs-prisma-serverless-starter' },
 };
 
-const CHOICE = { styleId: 'neo-brutalism', paletteId: 'cobalt', typeId: 'grotesk' };
+const CHOICE = {
+  styleId: 'neo-brutalism',
+  paletteId: 'cobalt',
+  typeId: 'grotesk',
+  backgrounds: { landing: 'topography', login: 'none', hero: 'cyclic' },
+};
+/** What every area draws when nothing (or nothing valid) is stored — the style's default. */
+const DEFAULT_BACKGROUNDS = { landing: 'wave', login: 'wave', hero: 'wave' };
+const BACKGROUND_FALLBACKS = ['backgrounds.landing', 'backgrounds.login', 'backgrounds.hero'];
 
-function webRow(design?: { choice: typeof CHOICE | null }) {
+function webRow(design?: { choice: StoredDesignChoice | null }) {
   return { name: NAME, role: 'web' as const, seed: STARTER_SEED, projectName: 'Acme', design };
 }
 
@@ -247,8 +256,9 @@ describe('the stored choice, resolved through the package registries', () => {
       styleId: THEME_DEFAULTS.style,
       paletteId: THEME_DEFAULTS.palette,
       typeId: THEME_DEFAULTS.type,
+      backgrounds: DEFAULT_BACKGROUNDS,
     });
-    expect(seed.fallbacks).toEqual(['styleId', 'paletteId', 'typeId']);
+    expect(seed.fallbacks).toEqual(['styleId', 'paletteId', 'typeId', ...BACKGROUND_FALLBACKS]);
   });
 
   it('falls back per axis on an unknown id, and an unknown type follows the style', async () => {
@@ -256,11 +266,13 @@ describe('the stored choice, resolved through the package registries', () => {
       styleId: 'swiss-minimal-flat',
       paletteId: 'gone',
       typeId: 'gone',
+      backgrounds: CHOICE.backgrounds,
     });
     expect(seed.applied).toEqual({
       styleId: 'swiss-minimal-flat',
       paletteId: THEME_DEFAULTS.palette,
       typeId: defaultTypeForStyle('swiss-minimal-flat'),
+      backgrounds: CHOICE.backgrounds,
     });
     expect(seed.fallbacks).toEqual(['paletteId', 'typeId']);
   });
@@ -268,7 +280,44 @@ describe('the stored choice, resolved through the package registries', () => {
   it('agrees with the package’s own resolution — no table of its own', async () => {
     const input = { styleId: 'aurora', paletteId: 'evergreen', typeId: 'nope' };
     const { pattern: _pattern, typePinned: _pinned, ...ids } = resolveAxesToApplied(input);
-    expect((await designSeedFor(input)).applied).toEqual(ids);
+    expect((await designSeedFor(input)).applied).toEqual({
+      ...ids,
+      backgrounds: DEFAULT_BACKGROUNDS,
+    });
+  });
+
+  // MOTIR-11607 — the per-area backgrounds resolve through the package too.
+  it('keeps none, and writes an unknown background id as the default, listing it', async () => {
+    const seed = await designSeedFor({
+      ...CHOICE,
+      backgrounds: { landing: 'lava-lamp', login: 'none', hero: 'rule110' },
+    });
+    expect(seed.applied.backgrounds).toEqual({ landing: 'wave', login: 'none', hero: 'rule110' });
+    expect(seed.fallbacks).toEqual(['backgrounds.landing']);
+  });
+
+  it('gives a choice saved before backgrounds existed the default for every area', async () => {
+    const legacy = { styleId: 'neo-brutalism', paletteId: 'cobalt', typeId: 'grotesk' };
+    const seed = await designSeedFor(legacy);
+    expect(seed.applied).toEqual({ ...legacy, backgrounds: DEFAULT_BACKGROUNDS });
+    expect(seed.fallbacks).toEqual(BACKGROUND_FALLBACKS);
+  });
+
+  it('treats a partial or null backgrounds object area by area', async () => {
+    const partial = await designSeedFor({ ...CHOICE, backgrounds: { hero: 'aurora' } });
+    expect(partial.applied.backgrounds).toEqual({ landing: 'wave', login: 'wave', hero: 'aurora' });
+    expect(partial.fallbacks).toEqual(['backgrounds.landing', 'backgrounds.login']);
+
+    const nulled = await designSeedFor({ ...CHOICE, backgrounds: null });
+    expect(nulled.applied.backgrounds).toEqual(DEFAULT_BACKGROUNDS);
+  });
+
+  it('names each area’s background in DESIGN.md, and says what none means', async () => {
+    const seed = await designSeedFor(CHOICE);
+    const notes = seed.files.find((f) => f.path === DESIGN_NOTES_PATH)!.content;
+    expect(notes).toContain('| Landing page | `topography` | Topography |');
+    expect(notes).toContain('| Login page | `none` | None (draws nothing) |');
+    expect(notes).toContain('| Hero section | `cyclic` | Cyclic CA |');
   });
 });
 
@@ -281,7 +330,10 @@ describe('a repository generated from a design-system starter', () => {
     const files = filesAt(head!);
     expect(JSON.parse(files.get(DESIGN_MANIFEST_PATH)!)).toEqual(CHOICE);
     const notes = files.get(DESIGN_NOTES_PATH)!;
-    for (const id of Object.values(CHOICE)) expect(notes).toContain(`\`${id}\``);
+    const { backgrounds, ...axes } = CHOICE;
+    for (const id of [...Object.values(axes), ...Object.values(backgrounds)]) {
+      expect(notes).toContain(`\`${id}\``);
+    }
     expect(notes).toMatch(/data-style[^]*data-palette[^]*data-type/);
     // The template's own files are kept: the commit is on top of its tree.
     expect(files.get('package.json')).toBe('{}');
@@ -302,6 +354,7 @@ describe('a repository generated from a design-system starter', () => {
       styleId: THEME_DEFAULTS.style,
       paletteId: THEME_DEFAULTS.palette,
       typeId: THEME_DEFAULTS.type,
+      backgrounds: DEFAULT_BACKGROUNDS,
     });
     expect(filesAt(head!).get(DESIGN_NOTES_PATH)).toContain(`\`${THEME_DEFAULTS.style}\``);
     // The fallback is LOGGED, never thrown.
@@ -309,6 +362,17 @@ describe('a repository generated from a design-system starter', () => {
       expect.stringContaining('styleId, paletteId, typeId'),
       expect.anything(),
     );
+  });
+
+  it('carries default backgrounds for a choice saved before backgrounds existed', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { backgrounds: _bg, ...legacy } = CHOICE;
+    const repo = await repoProvisioningClient.provisionRepository(webRow({ choice: legacy }));
+    expect(repo.adopted).toBe(false);
+    expect(JSON.parse(filesAt(head!).get(DESIGN_MANIFEST_PATH)!)).toEqual({
+      ...legacy,
+      backgrounds: DEFAULT_BACKGROUNDS,
+    });
   });
 
   it('carries the defaults for an unknown stored id, and still succeeds', async () => {
