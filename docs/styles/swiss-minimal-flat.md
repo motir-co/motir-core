@@ -90,3 +90,18 @@ preserved by construction (text/background pairs are untouched). The only
 shape-side AA consideration — that structure stays legible once shadows are
 removed — is satisfied by the hairline `--el-border` doing the dividing work on
 every surface.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 12 evenly spaced lines, no bunching. Stroke: 1px ink rules, one line in the accent at 1.5px with three 8px accent squares on it. Glow: none. Motion: slow drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).

@@ -156,3 +156,18 @@ not balanced against a translucent blur. Four things keep it AA:
 The drift animation is **stilled** under `prefers-reduced-motion: reduce`.
 Verified in light and dark themes against the `/tokens` specimen with the
 `--el-*` AA + design-mockup render checklist.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 24 lines bunched around the content, two band lines at 3px. Stroke: 1.4px in the palette band. Glow: every line lit from within (16px glow in dark mode with additive light, 10px in light); glowing rounded squares. Motion: very slow ambient drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).

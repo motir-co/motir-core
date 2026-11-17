@@ -383,3 +383,18 @@ deltas, each a design decision:
    no canvas.
 4. **A soft type** — the `rounded` pairing lets the geometry shout, where
    Neo-Brutalism's type is as heavy as its frames.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: zigzag and squiggle lines over a static Bacterio texture of staggered hue dots and a diagonal hatch strip. Stroke: 2.5px ink on a 3px hard-offset accent block, the band lines 4px in the hues; squares stacked as ink, accent and hue blocks. Glow: none. Motion: fast drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).

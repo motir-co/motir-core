@@ -80,6 +80,7 @@ export * from './backgrounds/colour';
 export * from './backgrounds/tokens';
 export * from './backgrounds/clearArea';
 export * from './backgrounds/drawers';
+export * from './backgrounds/wave';
 export * from './backgrounds/aurora';
 export * from './backgrounds/cellular';
 export * from './backgrounds/runtime';

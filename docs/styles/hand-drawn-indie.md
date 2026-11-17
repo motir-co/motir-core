@@ -191,3 +191,18 @@ that `3d-immersive` established for effects a token swap cannot express).
   very dense surface ever shows scroll cost under this style, the natural
   optimisation is to scope the rough overlay to the `[data-surface]` panels rather
   than every `.border` — a follow-up, not a blocker for the gallery.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 20 jittered pencil lines, each drawn twice. Stroke: 1.3px and 0.8px in ink, two lines in the accent; decision squares as sketched outlines. Glow: none. Motion: the line boils (re-jitters) eight times a second.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).

@@ -116,3 +116,18 @@ preserved by construction (text/background pairs are untouched). The shape-side
 AA considerations are satisfied too: the hard-offset shadow colour is decorative
 (it frames, it carries no text), and structure stays unmistakably legible because
 the heavy 2px border on every framed surface does the dividing work loudly.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 11 polylines with hard miter corners at a coarse knot spacing, three bands filled solid in the palette hues. Stroke: 3px ink with a 4px hard-offset shadow, every fourth line in the accent; 18px squares with hard offset blocks. Glow: none. Motion: steps twice a second.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).

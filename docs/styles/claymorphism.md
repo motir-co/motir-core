@@ -467,3 +467,18 @@ fold each value and the contrast measurement can resolve it.
   twice the blur) would fail on the popover's first row, the input and the pill,
   which sit 12–14px from their edges. 6px keeps the bands on all of them and the
   inflation still reads (see the mock).
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 7 fat clay tubes with round caps, two in the palette hues and the rest neutral clay. Stroke: a tube about 4.5% of the box high with a light band on its top and a shade band on its bottom. Glow: one soft outer drop; decision marks are clay blobs. Motion: drift with a slow squish (the amplitude breathes).
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).

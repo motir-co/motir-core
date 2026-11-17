@@ -36,3 +36,18 @@ Only shape/feel tokens — no colour token appears in the block:
   `--spacing-card-padding: 28px`, roomier control/chip/kbd/tooltip spacing,
   `--height-control: 40px`.
 - **Motion:** `--transition-duration: 200ms`, `--active-scale: 0.97`.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 16 rounded lines with round caps and joins. Stroke: 2.6px in the palette band. Glow: a soft diffused blur under every line; decision squares are rounded 16px chips on a soft shadow. Motion: a gentle springy bob on top of the drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).

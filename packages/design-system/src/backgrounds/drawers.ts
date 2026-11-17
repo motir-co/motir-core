@@ -8,9 +8,11 @@
 import { createAurora } from './aurora';
 import { createBriansBrain, createCyclic, createDayNight, createRule110 } from './cellular';
 import type { BackgroundId } from './registry';
+import { createWave } from './wave';
 import type { BackgroundDrawerFactory } from './types';
 
 export const BACKGROUND_DRAWERS: Partial<Record<BackgroundId, BackgroundDrawerFactory>> = {
+  wave: createWave,
   aurora: createAurora,
   cyclic: createCyclic,
   brian: createBriansBrain,

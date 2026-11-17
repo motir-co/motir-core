@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  BACKGROUND_DRAWERS,
   BACKGROUND_FRAME_MS,
   Background,
   boxParent,
@@ -219,9 +220,34 @@ describe('startBackground', () => {
     expect(frames()).toBe(before + 1);
   });
 
+  it('draws an unknown id as the style default, the Wave', () => {
+    const { canvas } = makeHost();
+    startBackground({ canvas, id: 'not-a-background' });
+    expect(frames()).toBe(1);
+    // The Wave gathers around the content: no clear area is painted over it.
+    expect(ops.some((op) => op[0] === 'createRadialGradient')).toBe(false);
+  });
+
+  it('redraws a running Wave in the new style when data-style changes on <html>', async () => {
+    document.documentElement.setAttribute('data-style', 'warm-editorial');
+    const { canvas } = makeHost();
+    startBackground({ canvas, id: 'wave' });
+    expect(ops).not.toContainEqual(['=lineWidth', 3]);
+    document.documentElement.setAttribute('data-style', 'neo-brutalism');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(ops).toContainEqual(['=lineWidth', 3]);
+    document.documentElement.removeAttribute('data-style');
+  });
+
   it('draws nothing, and does not throw, for an id without a drawer or tokens', () => {
     const { host, canvas } = makeHost();
-    expect(() => startBackground({ canvas, id: 'not-a-background' })).not.toThrow();
+    const wave = BACKGROUND_DRAWERS.wave;
+    delete BACKGROUND_DRAWERS.wave;
+    try {
+      expect(() => startBackground({ canvas, id: 'not-a-background' })).not.toThrow();
+    } finally {
+      BACKGROUND_DRAWERS.wave = wave;
+    }
     expect(frames()).toBe(0);
     expect(ops.some((op) => op[0] === 'clearRect')).toBe(true);
     host.style.removeProperty('--el-showcase-wave-1');

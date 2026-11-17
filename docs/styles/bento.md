@@ -290,3 +290,18 @@ palette × mode contrast gate.
 - **Neumorphism** moulds every surface from one continuous field with a dual
   shadow and paints its canvas. Bento paints no canvas of its own and keeps a
   single, faint drop.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: the box cut into rounded tiles (4 × 3) with even gutters; the lines run through every tile, one hero tile tinted with the first hue and its lines stronger. Stroke: 1px in the palette band, 1.6px in the hero tile. Glow: none. Motion: the tiles stay still, only the lines inside them drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).

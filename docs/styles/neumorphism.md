@@ -164,3 +164,18 @@ Verified in light and dark themes against the `/tokens` specimen with the
 `[data-style='neumorphism'][data-theme='dark']` block re-balances the two inks for
 dark surfaces — a faint white top-left lighten + a deeper black bottom-right shade
 — so the constant light-above / dark-below mould holds in both themes.)
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 9 soft grooves moulded into the page. Stroke: 4px in the page colour with a light highlight top-left and a soft shade bottom-right, one band line through the middle. Glow: none; decision squares are raised pebbles with a dual soft shadow. Motion: slow drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).

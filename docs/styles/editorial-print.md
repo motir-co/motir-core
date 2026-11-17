@@ -332,3 +332,18 @@ contradict the flat page.
 - No ratio is claimed: colour is untouched, so the palette's pairs hold, and the
   reversed-out pill (`--el-page-bg` on `--el-text`) is measured by the contrast
   pass.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 26 lines over vertical column rules. Stroke: 1px ink, two 2px ink section rules, one 1.5px accent line; 8px ink and accent squares. Glow: none. Motion: advances once a second, set rather than animated.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).
