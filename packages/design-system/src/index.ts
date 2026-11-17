@@ -73,5 +73,17 @@ export * from './components/ui/ColorSwatchPicker';
 export * from './components/ui/datePickerFormat';
 export * from './components/ui/DatePickerFormatContext';
 
+// ── Backgrounds: the registry (pure data), the drawing interface, the shared
+//    runtime and the client component that draws one by id ───────────────────
+export * from './backgrounds/registry';
+export * from './backgrounds/colour';
+export * from './backgrounds/tokens';
+export * from './backgrounds/clearArea';
+export * from './backgrounds/drawers';
+export * from './backgrounds/aurora';
+export * from './backgrounds/runtime';
+export * from './components/backgrounds/Background';
+export type * from './backgrounds/types';
+
 // ── The isolation specimen (a live /tokens-style render) ─────────────────────
 export * from './specimen/TokensSpecimen';
