@@ -326,6 +326,7 @@ describe('<Background>', () => {
     const canvas = host.querySelector('canvas')!;
     expect(canvas.getAttribute('aria-hidden')).toBe('true');
     expect(canvas.getAttribute('data-background')).toBe('aurora');
+    expect(canvas.getAttribute('data-background-focus')).toBe('card');
     expect(canvas.className).toContain('pointer-events-none');
     expect(frames()).toBe(1);
     expect(ops.some((op) => op[0] === 'createRadialGradient')).toBe(true);

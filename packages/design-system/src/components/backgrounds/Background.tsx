@@ -58,6 +58,7 @@ export function Background({ id, focusId, still, className }: Readonly<Backgroun
       ref={canvasRef}
       aria-hidden="true"
       data-background={id ?? ''}
+      data-background-focus={focusId}
       className={cn('pointer-events-none absolute inset-0 -z-10 block size-full', className)}
     />
   );

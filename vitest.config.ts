@@ -3480,7 +3480,6 @@ export default defineConfig({
         'components/onboarding/layout/SectionArt.tsx',
         'components/onboarding/layout/WarmButton.tsx',
         'components/onboarding/layout/index.ts',
-        'components/brand/HeroWaves.tsx',
         'components/onboarding/OnboardingEntrance.tsx',
         'components/onboarding/OnboardingTopBar.tsx',
         'app/**/onboarding/how-it-works/page.tsx',
@@ -8800,12 +8799,6 @@ export default defineConfig({
           statements: 90,
         },
         'components/onboarding/layout/index.ts': {
-          lines: 90,
-          functions: 90,
-          branches: 90,
-          statements: 90,
-        },
-        'components/brand/HeroWaves.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

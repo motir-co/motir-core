@@ -941,9 +941,9 @@ const WAVE_DRAW: Partial<Record<StyleId, WaveDraw>> = {
 
 /* ───────────── Warm Editorial — today's HeroWaves, line for line ───────────── */
 
-// Ported from `components/brand/HeroWaves.tsx` (motir-core) and its motir.co
-// twin, which both delete once this ships: the same 47 lines, bunching, drift,
-// glow, touches and squares, so the swap is invisible.
+// Ported from motir-core's `components/brand/HeroWaves.tsx` (deleted by
+// MOTIR-11608) and its motir.co twin: the same 47 lines, bunching, drift, glow,
+// touches and squares, so the swap is invisible.
 const MARK_LINES = 46;
 const MARK_DRIFT = 0.012;
 const MARK_BAND_SPEED = 0.035;
