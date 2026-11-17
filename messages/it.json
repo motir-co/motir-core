@@ -9540,7 +9540,12 @@
       "keep": "Continua la verifica",
       "error": "Non è stato possibile saltare la verifica finale. È ancora in corso: riprova, oppure continua la verifica.",
       "retry": "Riprova",
-      "finished": "La verifica finale era già terminata, quindi non c’era nulla da saltare."
+      "finished": "La verifica finale era già terminata, quindi non c’era nulla da saltare.",
+      "settingLine": "Questo salto vale solo per questo piano. Per disattivare la verifica finale per ogni piano di questo progetto, disattiva <link>Esegui la verifica finale nelle impostazioni di Pianificazione AI</link>.",
+      "settingLineFinished": "Per disattivare la verifica finale per ogni piano di questo progetto, disattiva <link>Esegui la verifica finale nelle impostazioni di Pianificazione AI</link>.",
+      "settingLineReadOnly": "Questo salto vale solo per questo piano. Un amministratore del progetto può disattivare la verifica finale per ogni piano di questo progetto con <link>Esegui la verifica finale nelle impostazioni di Pianificazione AI</link>.",
+      "settingLineReadOnlyFinished": "Un amministratore del progetto può disattivare la verifica finale per ogni piano di questo progetto con <link>Esegui la verifica finale nelle impostazioni di Pianificazione AI</link>.",
+      "settingNewTab": "(si apre in una nuova tab)"
     }
   },
   "codeHealth": {

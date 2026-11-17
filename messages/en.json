@@ -9537,7 +9537,12 @@
       "keep": "Keep checking",
       "error": "The final check could not be skipped. It is still running: try again, or keep checking.",
       "retry": "Try again",
-      "finished": "The final check had already finished, so there was nothing to skip."
+      "finished": "The final check had already finished, so there was nothing to skip.",
+      "settingLine": "This skip is for this plan only. To turn the final check off for every plan in this project, switch off <link>Run the final check in AI planning settings</link>.",
+      "settingLineFinished": "To turn the final check off for every plan in this project, switch off <link>Run the final check in AI planning settings</link>.",
+      "settingLineReadOnly": "This skip is for this plan only. A project admin can turn the final check off for every plan in this project with <link>Run the final check in AI planning settings</link>.",
+      "settingLineReadOnlyFinished": "A project admin can turn the final check off for every plan in this project with <link>Run the final check in AI planning settings</link>.",
+      "settingNewTab": "(opens in a new tab)"
     }
   },
   "codeHealth": {

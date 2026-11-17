@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
 import { SettingsCard } from '@/components/settings/SettingsCard';
 import { SwitchRow } from '@/components/settings/SwitchRow';
+import { FinalCheckSettingAnchor } from './FinalCheckSettingAnchor';
 import { useToast } from '@/components/ui/Toast';
 import {
   AI_AUTO_PLAN_THRESHOLD_MAX,
@@ -456,24 +457,27 @@ export function AiPlanningSettingsEditor({
           hint={t('aiPlanning.planner.explanationsHint')}
         />
 
-        <SwitchRow
-          checked={working.finalCheck}
-          onCheckedChange={(v) => patch({ finalCheck: v })}
-          disabled={locked}
-          label={t('aiPlanning.planner.finalCheckLabel')}
-          hint={t('aiPlanning.planner.finalCheckHint')}
-          testId="ai-planning-final-check"
-        >
-          {working.finalCheck ? null : (
-            <Callout
-              tint="yellow"
-              icon={<TriangleAlert className="size-[15px]" aria-hidden />}
-              testId="ai-planning-final-check-off"
-            >
-              {t('aiPlanning.planner.finalCheckOff')}
-            </Callout>
-          )}
-        </SwitchRow>
+        {/* The Skip the final check dialog links here, in a new tab (MOTIR-11548). */}
+        <FinalCheckSettingAnchor>
+          <SwitchRow
+            checked={working.finalCheck}
+            onCheckedChange={(v) => patch({ finalCheck: v })}
+            disabled={locked}
+            label={t('aiPlanning.planner.finalCheckLabel')}
+            hint={t('aiPlanning.planner.finalCheckHint')}
+            testId="ai-planning-final-check"
+          >
+            {working.finalCheck ? null : (
+              <Callout
+                tint="yellow"
+                icon={<TriangleAlert className="size-[15px]" aria-hidden />}
+                testId="ai-planning-final-check-off"
+              >
+                {t('aiPlanning.planner.finalCheckOff')}
+              </Callout>
+            )}
+          </SwitchRow>
+        </FinalCheckSettingAnchor>
 
         {/* THE DATA-PRACTICE PROMISE (Story MOTIR-3665 · MOTIR-3670; design
             §D2-D4, panel 7). At the FOOT of this card and nowhere else: the

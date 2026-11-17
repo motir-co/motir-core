@@ -9540,7 +9540,12 @@
       "keep": "Continuer la vérification",
       "error": "La vérification finale n’a pas pu être passée. Elle est toujours en cours : réessayez, ou continuez la vérification.",
       "retry": "Réessayer",
-      "finished": "La vérification finale était déjà terminée, il n’y avait donc rien à passer."
+      "finished": "La vérification finale était déjà terminée, il n’y avait donc rien à passer.",
+      "settingLine": "Ce saut ne vaut que pour ce plan. Pour désactiver la vérification finale pour tous les plans de ce projet, désactivez <link>Exécuter la vérification finale dans les paramètres de Planification IA</link>.",
+      "settingLineFinished": "Pour désactiver la vérification finale pour tous les plans de ce projet, désactivez <link>Exécuter la vérification finale dans les paramètres de Planification IA</link>.",
+      "settingLineReadOnly": "Ce saut ne vaut que pour ce plan. Un administrateur du projet peut désactiver la vérification finale pour tous les plans de ce projet avec <link>Exécuter la vérification finale dans les paramètres de Planification IA</link>.",
+      "settingLineReadOnlyFinished": "Un administrateur du projet peut désactiver la vérification finale pour tous les plans de ce projet avec <link>Exécuter la vérification finale dans les paramètres de Planification IA</link>.",
+      "settingNewTab": "(s’ouvre dans un nouvel onglet)"
     }
   },
   "codeHealth": {

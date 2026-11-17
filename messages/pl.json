@@ -9540,7 +9540,12 @@
       "keep": "Sprawdzaj dalej",
       "error": "Nie udało się pominąć końcowego sprawdzenia. Nadal trwa: spróbuj ponownie albo sprawdzaj dalej.",
       "retry": "Spróbuj ponownie",
-      "finished": "Końcowe sprawdzenie już się zakończyło, więc nie było czego pomijać."
+      "finished": "Końcowe sprawdzenie już się zakończyło, więc nie było czego pomijać.",
+      "settingLine": "To pominięcie dotyczy tylko tego planu. Aby wyłączyć końcowe sprawdzenie dla każdego planu w tym projekcie, wyłącz <link>Wykonuj końcowe sprawdzenie w ustawieniach Planowania AI</link>.",
+      "settingLineFinished": "Aby wyłączyć końcowe sprawdzenie dla każdego planu w tym projekcie, wyłącz <link>Wykonuj końcowe sprawdzenie w ustawieniach Planowania AI</link>.",
+      "settingLineReadOnly": "To pominięcie dotyczy tylko tego planu. Administrator projektu może wyłączyć końcowe sprawdzenie dla każdego planu w tym projekcie za pomocą <link>Wykonuj końcowe sprawdzenie w ustawieniach Planowania AI</link>.",
+      "settingLineReadOnlyFinished": "Administrator projektu może wyłączyć końcowe sprawdzenie dla każdego planu w tym projekcie za pomocą <link>Wykonuj końcowe sprawdzenie w ustawieniach Planowania AI</link>.",
+      "settingNewTab": "(otwiera się w nowej karcie)"
     }
   },
   "codeHealth": {
