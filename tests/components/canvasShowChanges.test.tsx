@@ -80,8 +80,8 @@ const renderCanvas = (emphasis: typeof EMPHASIS | null = EMPHASIS) =>
 
 describe('the prop is OPT-IN (MOTIR-3261)', () => {
   it('a canvas with no `emphasis` renders no toggle at all', async () => {
-    // The four other consumers — `OnboardingCanvas`, `PlanChangeCanvas`,
-    // `WorkItemRoadmap`, `RoadmapView` — mount this component without the prop,
+    // The other consumers — `OnboardingCanvas`, the planning overlay's canvas
+    // before a plan, `WorkItemRoadmap`, `RoadmapView` — mount this component without the prop,
     // so this is what keeps them byte-unchanged. An onboarding canvas that grew a
     // Show-changes toggle would be a regression.
     renderCanvas(null);

@@ -3,7 +3,7 @@ import { useEffect, type ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { parsePlanningLaunch } from '@/lib/planning/launcher';
+import { parsePlanningLaunch, parsePlanningOverlay } from '@/lib/planning/launcher';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
@@ -26,10 +26,19 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh }) }));
 const { fetchPlanningAnchor } = vi.hoisted(() => ({ fetchPlanningAnchor: vi.fn() }));
 vi.mock('@/lib/planning/planningAnchorClient', () => ({ fetchPlanningAnchor }));
 
-// The no-plan roadmap is not this card's; it is stubbed to a marker.
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: () => <div data-testid="roadmap-stub" />,
-}));
+// The no-plan roadmap is not this card's; it is stubbed to a marker. Since
+// MOTIR-11513 it is `PlanReviewCanvas` with `prePlan`, so only that state is stubbed.
+vi.mock('@/components/planning/PlanReviewCanvas', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/components/planning/PlanReviewCanvas')>();
+  function PrePlanStub(props: Parameters<typeof real.PlanReviewCanvas>[0]) {
+    return props.prePlan ? (
+      <div data-testid="roadmap-stub" />
+    ) : (
+      <real.PlanReviewCanvas {...props} />
+    );
+  }
+  return { ...real, PlanReviewCanvas: PrePlanStub };
+});
 
 // ⭐ THE MOUNT COUNTER — the proof that the hand-over is not a remount. The real
 // component, wrapped: every MOUNT of it bumps the count, a re-render does not.
@@ -43,6 +52,20 @@ vi.mock('@/components/planning/PlanProposalViews', async (importOriginal) => {
     return <real.PlanProposalViews {...props} />;
   }
   return { ...real, PlanProposalViews: Counted };
+});
+
+// THE SPLIT's reset signal (MOTIR-6248 · MOTIR-11513) — every `proposalPresent`
+// the host hands the frame, in order. `ResizableSplit` resets a widened
+// conversation on its false → true edge, so a value log that never reads `true`
+// is a split that never moved.
+const { frame } = vi.hoisted(() => ({ frame: { proposalPresent: [] as boolean[] } }));
+vi.mock('@/components/planning/PlanningWorkspace', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/components/planning/PlanningWorkspace')>();
+  function Logged(props: ComponentProps<typeof real.PlanningWorkspace>) {
+    frame.proposalPresent.push(props.proposalPresent ?? false);
+    return <real.PlanningWorkspace {...props} />;
+  }
+  return { ...real, PlanningWorkspace: Logged };
 });
 
 const { conversation } = vi.hoisted(() => ({
@@ -134,6 +157,7 @@ const LEVELS: Record<string, unknown> = {
 let reduced = false;
 beforeEach(() => {
   mounts.count = 0;
+  frame.proposalPresent = [];
   reduced = false;
   vi.stubGlobal(
     'fetch',
@@ -692,5 +716,76 @@ describe('a fresh plan opens on the CANVAS at its target, not on an empty List (
     await act(async () => {});
     expect(fetchPlanningAnchor).not.toHaveBeenCalled();
     expect(activeCrumb()).toBe('MOTIR-3070 · The review surface');
+  });
+});
+
+// BUG MOTIR-11513 — Start planning on an overlay that is already open. The pane
+// was a different component before a plan and after it, so the plan's first live
+// read REMOUNTED it (the canvas re-read its level and refit, the target no longer
+// centred) and the split reset under the person's own width. The pane is now ONE
+// instance from the open, and the reset is kept for a named-session open only.
+describe('Start planning on an open overlay (MOTIR-11513)', () => {
+  const NO_PLAN: PlanChangeConversationState = {
+    ...BASE,
+    phase: 'idle',
+    jobId: null,
+    planId: null,
+  };
+
+  it('keeps ONE pane from the open through the first live read and the proposed plan', async () => {
+    const next = mountHost(NO_PLAN, undefined, true);
+    expect(screen.getByTestId('roadmap-stub')).toBeTruthy();
+    const views = screen.getByTestId('plan-proposal-views');
+    expect(views.getAttribute('data-pre-plan')).toBe('true');
+
+    next(live([P1]));
+    // The same pane element, never the opening skeleton in between.
+    expect(screen.getByTestId('plan-proposal-views')).toBe(views);
+    expect(screen.queryByTestId('planning-pane-opening')).toBeNull();
+    expect(views.getAttribute('data-pre-plan')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Plan view' })).toBeTruthy();
+
+    next({ ...BASE, phase: 'review', liveReview: null, review: proposed([P1]) });
+    expect(screen.getByTestId('plan-proposal-views')).toBe(views);
+    await act(async () => {});
+    // ⭐ ONE mount, from the "no plan" pane to the proposed plan.
+    expect(mounts.count).toBe(1);
+  });
+
+  it('never resets the split: a plan started here leaves the divider where it was', () => {
+    const next = mountHost(NO_PLAN, undefined, true);
+    next(live([P1]));
+    next({ ...BASE, phase: 'review', liveReview: null, review: proposed([P1]) });
+    expect(frame.proposalPresent.length).toBeGreaterThan(0);
+    expect(frame.proposalPresent).not.toContain(true);
+  });
+
+  it('a project-scoped launch is the same: no reset when its plan arrives', () => {
+    const next = mountHost(NO_PLAN);
+    next(live([P1]));
+    expect(frame.proposalPresent).not.toContain(true);
+  });
+
+  it('a NAMED session open whose plan arrives after its skeleton still resets (MOTIR-6248)', () => {
+    const launch = parsePlanningOverlay(
+      new URLSearchParams('plan=project&planFrom=project&planSession=s1&planVia=approvals'),
+    )!;
+    const named = () => (
+      <PlanningWorkspaceHost
+        projectKey="MOTIR"
+        projectName="Motir"
+        launch={launch}
+        onClose={() => {}}
+        initialTarget={null}
+      />
+    );
+    conversation.state = { ...NO_PLAN, phase: 'loading' };
+    const r = renderWithIntl(named());
+    expect(screen.getByTestId('planning-pane-opening')).toBeTruthy();
+    expect(frame.proposalPresent).not.toContain(true);
+
+    conversation.state = { ...BASE, phase: 'review', review: proposed([P1]) };
+    r.rerender(named());
+    expect(frame.proposalPresent.at(-1)).toBe(true);
   });
 });

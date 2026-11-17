@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ComponentProps } from 'react';
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
@@ -39,12 +40,15 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/planning/planReviewClient')>()),
   fetchPlanReview: fetchReview,
 }));
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: () => <div data-testid="roadmap-stub" />,
-}));
+// The pane, stubbed to say which state it is in: the roadmap before a plan
+// (`prePlan`, MOTIR-11513), the plan's views after.
 vi.mock('@/components/planning/PlanProposalViews', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/components/planning/PlanProposalViews')>();
-  return { ...real, PlanProposalViews: () => <div data-testid="plan-views-stub" /> };
+  return {
+    ...real,
+    PlanProposalViews: (props: ComponentProps<typeof real.PlanProposalViews>) =>
+      props.prePlan ? <div data-testid="roadmap-stub" /> : <div data-testid="plan-views-stub" />,
+  };
 });
 
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';

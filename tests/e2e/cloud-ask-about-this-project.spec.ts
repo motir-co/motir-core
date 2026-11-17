@@ -256,8 +256,8 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
     // The no-mutation claim, checked on the TREE rather than on the absence of a
     // bar: the roadmap still shows the project as saved, with no diff on it.
     await expect(confirmBar(page)).toHaveCount(0);
-    // ON THE CANVAS — with NO plan the pane is still `PlanChangeCanvas`, the
-    // plain roadmap, so no proposal card is drawn on it.
+    // ON THE CANVAS — with NO plan the pane is still the plain roadmap (the
+    // shared canvas in its "no plan" state), so no proposal card is drawn on it.
     await expect(canvas(page).getByTestId('plan-item-node')).toHaveCount(0);
     await expect(opNodes(page, 'add')).toHaveCount(0);
     await expect(canvasFooter(page)).toHaveCount(0);

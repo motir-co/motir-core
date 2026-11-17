@@ -295,8 +295,8 @@ interface ProjectRoadmapCanvasBaseProps {
    * moved from the node ring to the crumb it became.
    *
    * Answered by the CONSUMER, for the same reason `isFolderCrumb` is — only the
-   * consumer knows what a crumb id means. `PlanChangeCanvas` answers it from the
-   * `targetIds` it already has, so a target that becomes known LATER marks its
+   * consumer knows what a crumb id means. `PlanReviewCanvas` answers it, in its
+   * "no plan" state, from the `targetIds` it already has, so a target that becomes known LATER marks its
    * crumb with no further wiring. Absent ⇒ no crumb is one, which is every other
    * consumer.
    */
@@ -320,7 +320,7 @@ interface ProjectRoadmapCanvasBaseProps {
    * reader's navigation authoritative, which is the rule the story states.
    *
    * ⚠️ AND IT IS WHY THIS IS NOT `controlledTrail` HERE SPECIFICALLY.
-   * `PlanChangeCanvas` — the one consumer that needs to follow — already passes
+   * `PlanReviewCanvas` — the one consumer that needs to follow — already passes
    * `resolveHeldNode`, because approving a plan re-keys every proposal. Those two
    * props are documented as not combinable, and the measured failure is not a
    * subtle one: with an id the resolver remaps, they fight over `focusId` until
@@ -399,12 +399,13 @@ interface ProjectRoadmapCanvasBaseProps {
    * THE READER HAD ALREADY NAVIGATED — BEFORE THIS MOUNT (MOTIR-6155).
    *
    * `navigated` is per-mount state, and that is right for a canvas that lives as
-   * long as its surface. The planning surface SWAPS the pane when a plan becomes
-   * proposed (`PlanChangeCanvas` → the plan page's component), so a reader who had
-   * drilled somewhere met a FRESH canvas with `navigated: false`, which granted the
-   * follow and moved them off the level they chose — the one thing MOTIR-6161 ruled
-   * must not happen. Seeding the flag carries that fact across the swap, so the new
-   * canvas declines exactly as the old one would have and the bar offers the trip.
+   * long as its surface. The planning surface mounts a FRESH pane for a later plan
+   * (it keeps the one it opened with for the first, bug MOTIR-11513), so a reader
+   * who had drilled somewhere met a FRESH canvas with `navigated: false`, which
+   * granted the follow and moved them off the level they chose — the one thing
+   * MOTIR-6161 ruled must not happen. Seeding the flag carries that fact across the
+   * swap, so the new canvas declines exactly as the old one would have and the bar
+   * offers the trip.
    *
    * It seeds MOUNT state only: the reader's own navigation still sets the flag, and
    * a later change of this prop does not clear it. A surface that never swaps its
