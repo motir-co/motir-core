@@ -1459,6 +1459,9 @@ describe('seeds resolve through the seed registry (MOTIR-708)', () => {
 
 describe('the project’s stored design choice reaches a design-system repo (MOTIR-1529)', () => {
   const CHOICE = { styleId: 'neo-brutalism', paletteId: 'cobalt', typeId: 'grotesk' };
+  // Every area's background is written too; a choice with none gets the style's
+  // default, the Wave (MOTIR-11607).
+  const DEFAULT_BACKGROUNDS = { landing: 'wave', login: 'wave', hero: 'wave' };
   const MANIFEST = `${JSON.stringify({ styleId: 'warm-editorial', paletteId: 'motir', typeId: 'motir' }, null, 2)}\n`;
 
   /** Put a design-system starter and motir-ai in front of the suite's GitHub:
@@ -1512,7 +1515,7 @@ describe('the project’s stored design choice reaches a design-system repo (MOT
     expect(result.rows[0]).toMatchObject({ rowId, outcome: 'created' });
     const read = calls.find((c) => c.url.startsWith('https://ai.test/v1/preplan'))!;
     expect(read.url).toContain(`coreProjectId=${fx.projectId}`);
-    expect(writtenManifest()).toEqual(CHOICE);
+    expect(writtenManifest()).toEqual({ ...CHOICE, backgrounds: DEFAULT_BACKGROUNDS });
     expect(calls.filter((c) => c.url.endsWith('/git/commits') && c.method === 'POST')).toHaveLength(
       1,
     );
@@ -1531,6 +1534,7 @@ describe('the project’s stored design choice reaches a design-system repo (MOT
       styleId: 'warm-editorial',
       paletteId: 'motir',
       typeId: 'motir',
+      backgrounds: DEFAULT_BACKGROUNDS,
     });
   });
 
