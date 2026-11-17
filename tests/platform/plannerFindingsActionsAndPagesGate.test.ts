@@ -69,6 +69,8 @@ const { default: DetailPage } = await import('@/app/(admin)/admin/planner-findin
 const { FindingTriageControls } =
   await import('@/app/(admin)/admin/planner-findings/_components/FindingTriageControls');
 const { workspacesService } = await import('@/lib/services/workspacesService');
+const { workItemsService } = await import('@/lib/services/workItemsService');
+const { createTestProject } = await import('../fixtures/projectFixtures');
 const { createTestUser } = await import('../fixtures/userFixtures');
 const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
 const { adminDb } = await import('../helpers/adminDb');
@@ -81,6 +83,9 @@ interface World {
   nonStaff: Record<'noRole' | 'workspaceMember' | 'orgOwner', string>;
   operator: string;
   support: string;
+  /** The finding's own project, holding the one work item a bug key may name (MOTIR-11590). */
+  project: string;
+  bugKey: string;
 }
 
 let world: World;
@@ -92,7 +97,7 @@ function finding(id: string, over: Partial<RawPlannerFinding> = {}): RawPlannerF
     id,
     coreOrganizationId: world.org,
     coreWorkspaceId: world.ws,
-    coreProjectId: 'proj_of_the_finding',
+    coreProjectId: world.project,
     ...over,
   });
 }
@@ -130,7 +135,7 @@ const FIVE = [
     () => actions.setPlannerFindingAttributionAction('pf_a', { attribution: 'corpus' }),
   ],
   ['promote', () => actions.promotePlannerFindingAction('pf_b', FORM)],
-  ['bug key', () => actions.setPlannerFindingBugKeyAction('pf_c', 'MOTIR-123')],
+  ['bug key', () => actions.setPlannerFindingBugKeyAction('pf_c', world.bugKey)],
   ['dismiss', () => actions.dismissPlannerFindingAction('pf_d', 'noise')],
   ['restore', () => actions.restorePlannerFindingAction('pf_r')],
 ] as const;
@@ -156,12 +161,20 @@ beforeEach(async () => {
     workspaceRole: 'member',
   });
   const loner = await createTestUser({ email: 'nobody@example.test' });
+  // A bug key is resolved as a work item in the finding's own project (MOTIR-11590).
+  const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+  const bug = await workItemsService.createWorkItem(
+    { projectId: project.id, kind: 'bug', title: 'the planner skipped a read' },
+    { userId: owner.id, workspaceId: workspace.id },
+  );
   world = {
     org: workspace.organizationId,
     ws: workspace.id,
     nonStaff: { noRole: loner.id, workspaceMember: member.id, orgOwner: owner.id },
     operator: await staff('operator'),
     support: await staff('support'),
+    project: project.id,
+    bugKey: bug.identifier,
   };
   install([]);
   as(null);
@@ -212,7 +225,11 @@ describe('the five actions refuse non-staff and support', () => {
     }
     expect(revalidated()).toHaveLength(5);
     for (const call of revalidated()) expect(call).toEqual(['/admin/planner-findings', 'layout']);
-    expect(await auditCount()).toBe(5);
+    // Five triage rows, plus the one estate.read the bug key's resolution writes (MOTIR-11590).
+    const rows = await adminDb.platformAuditLog.findMany({ select: { action: true } });
+    expect(rows.filter((r) => r.action === 'planner_finding.triage')).toHaveLength(5);
+    expect(rows.filter((r) => r.action === 'estate.read')).toHaveLength(1);
+    expect(rows).toHaveLength(6);
 
     as(world.support);
     const html = await renderToHtml(
