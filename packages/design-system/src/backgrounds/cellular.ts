@@ -142,10 +142,13 @@ export const BRIAN: CellularSpec = {
     // It reseeds rather than dying out.
     return firing < c * r * 0.005 ? BRIAN.init(c, r, rnd) : next;
   },
+  // "The accent" here is the hero's decision colour (`--el-showcase-decision`):
+  // `--el-accent` is the CTA fill, which several palettes (Motir among them)
+  // set to the ink, and the cells would draw grey.
   colours: (c) => [
     packRgb(c.bg),
-    packRgb(mixRgb(c.bg, c.accent, 0.85)),
-    packRgb(mixRgb(c.bg, c.accent, 0.28)),
+    packRgb(mixRgb(c.bg, c.decision, 0.85)),
+    packRgb(mixRgb(c.bg, c.decision, 0.28)),
   ],
   paint: paintStates,
 };
@@ -173,7 +176,7 @@ export const DAY_NIGHT: CellularSpec = {
     }
     return next;
   },
-  colours: (c) => [packRgb(c.bg), packRgb(mixRgb(c.bg, c.accent, c.dark ? 0.22 : 0.15))],
+  colours: (c) => [packRgb(c.bg), packRgb(mixRgb(c.bg, c.decision, c.dark ? 0.22 : 0.15))],
   paint: paintStates,
 };
 

@@ -216,6 +216,16 @@ describe('cellular drawer', () => {
     expect(next.some((v) => v === 1)).toBe(true);
   });
 
+  it("Brian's Brain and Day & Night colour their cells from the decision token, not the CTA fill", () => {
+    const colours = fixtureColours('motir', 'light');
+    const inkAccent = { ...colours, accent: colours.ink };
+    expect(BRIAN.colours(inkAccent)).toEqual(BRIAN.colours(colours));
+    expect(DAY_NIGHT.colours(inkAccent)).toEqual(DAY_NIGHT.colours(colours));
+    const otherDecision = { ...colours, decision: colours.hues[0] };
+    expect(BRIAN.colours(otherDecision)).not.toEqual(BRIAN.colours(colours));
+    expect(DAY_NIGHT.colours(otherDecision)).not.toEqual(DAY_NIGHT.colours(colours));
+  });
+
   it('Cyclic cycles through all of its states', () => {
     const { g } = grid(CYCLIC, 60, 40);
     expect(new Set(g).size).toBe(CYCLIC_STATES);
