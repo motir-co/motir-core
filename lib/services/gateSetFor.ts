@@ -90,6 +90,12 @@ export interface GateSetForResult extends GateSet {
    * subtree and is left alone (MOTIR-6971).
    */
   readonly deliversPullRequests: boolean;
+  /**
+   * Whether EVERY pull request linked to the card is also an ancestor's (Bug MOTIR-11624) —
+   * a child riding its parent run's branch. Such a card owes no merge question, and
+   * {@link reconcileGatesFor} withdraws one it still holds as `set_changed`.
+   */
+  readonly ridesAncestorPullRequestsOnly: boolean;
   readonly blockedMembers: ReadonlyArray<{
     pullRequestId: string;
     state: string;
@@ -120,7 +126,7 @@ export async function gateSetFor(
     latestMergeGate,
     latestDecisionGate,
     latestAgentReviewGate,
-    deliveries,
+    linkedDeliveries,
     mode,
     terminalByProject,
     pageDecision,
@@ -157,6 +163,17 @@ export async function gateSetFor(
     // its version to tell whether the send-back there still stands.
     reviewDismissalRepository.findLatestByWorkItem(item.id, tx),
   ]);
+
+  // ⚠️ A PULL REQUEST AN ANCESTOR ALSO DELIVERS IS THE ANCESTOR'S (Bug MOTIR-11624). A
+  // parent run's story-branch pull request is linked to the story, and a child linked to
+  // it as well used to be asked the merge question the moment CI promoted it — an Approve
+  // that merges the whole story from one child. Every input below reads the card's OWN
+  // members only, so such a child is, for the gates, a card that delivers nothing.
+  const { own: deliveries, ancestorOwned } = await withoutAncestorDeliveries(
+    item,
+    linkedDeliveries,
+    tx,
+  );
 
   const members: GateSetMember[] = [];
   const blockedMembers: GateSetForResult['blockedMembers'][number][] = [];
@@ -305,7 +322,48 @@ export async function gateSetFor(
       : {}),
   });
 
-  return { ...set, blockedMembers, deliversPullRequests: deliveries.length > 0 };
+  return {
+    ...set,
+    blockedMembers,
+    deliversPullRequests: deliveries.length > 0,
+    ridesAncestorPullRequestsOnly: deliveries.length === 0 && ancestorOwned > 0,
+  };
+}
+
+/**
+ * The card's delivery rows WITHOUT the ones an ANCESTOR also delivers (Bug MOTIR-11624),
+ * and how many it left out.
+ *
+ * A pull request linked both to a card and to one of its ancestors is the ancestor's: it
+ * is the parent run's branch, and only the parent's approval may ask to merge it — the
+ * merge cascades down and closes every child, built or not. Two reads, and only for a
+ * child that delivers something: the ancestor chain (one recursive CTE) and every
+ * delivery row of the card's pull requests (one indexed read).
+ */
+async function withoutAncestorDeliveries<T extends { githubPullRequestId: string }>(
+  item: Pick<WorkItem, 'id' | 'parentId' | 'workspaceId'>,
+  deliveries: readonly T[],
+  tx: Prisma.TransactionClient,
+): Promise<{ own: T[]; ancestorOwned: number }> {
+  if (item.parentId === null || deliveries.length === 0) {
+    return { own: [...deliveries], ancestorOwned: 0 };
+  }
+  const [chains, rows] = await Promise.all([
+    workItemRepository.findAncestorIdsForItems([item.id], item.workspaceId, tx),
+    workItemDeliveryRepository.listByPullRequests(
+      deliveries.map((delivery) => delivery.githubPullRequestId),
+      tx,
+    ),
+  ]);
+  // The batch walk seeds every id it is asked about, so the card's chain is always present.
+  const ancestorIds = new Set(chains.get(item.id)!);
+  const ancestorPullRequests = new Set(
+    rows.filter((row) => ancestorIds.has(row.workItemId)).map((row) => row.githubPullRequestId),
+  );
+  const own = deliveries.filter(
+    (delivery) => !ancestorPullRequests.has(delivery.githubPullRequestId),
+  );
+  return { own, ancestorOwned: deliveries.length - own.length };
 }
 
 /**
@@ -352,6 +410,8 @@ export async function reconcileGatesFor(
   // included.
   if (item.status !== IN_REVIEW_STATUS_KEY) {
     await withdrawMergeQuestionOffReview(item, tx, set);
+  } else if (set.ridesAncestorPullRequestsOnly) {
+    await withdrawMergeQuestionOfAncestorSet(item, tx);
   }
   if (set.awaited.length === 0) return [];
 
@@ -431,6 +491,35 @@ export async function withdrawMergeQuestionOffReview(
     });
   }
   return withdrawn;
+}
+
+/**
+ * WITHDRAW THE MERGE QUESTION FROM A CHILD WHOSE EVERY PULL REQUEST IS AN ANCESTOR'S (Bug
+ * MOTIR-11624) — its awaiting `pull_request_approval` and the `agent_review` in front of
+ * it, superseded as `set_changed`: the card's OWN set is empty, because every member it
+ * was linked to belongs to the parent run. It retires a gate raised before the rule (and
+ * one raised before the ancestor's link landed) on the next reconcile, the 30-minute
+ * sweep's included. A DECIDED gate is never touched.
+ */
+async function withdrawMergeQuestionOfAncestorSet(
+  item: WorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  let withdrawn = 0;
+  for (const kind of ['pull_request_approval', 'agent_review'] as const) {
+    withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(
+      item.id,
+      kind,
+      'set_changed',
+      tx,
+    );
+  }
+  if (withdrawn > 0) {
+    console.warn("[gateSetFor] merge question withdrawn: every pull request is an ancestor's", {
+      workItemId: item.id,
+      withdrawn,
+    });
+  }
 }
 
 /**

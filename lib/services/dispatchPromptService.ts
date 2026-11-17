@@ -2,11 +2,14 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { inFlightCodeService } from '@/lib/services/inFlightCodeService';
+import type { InFlightCodeDto } from '@/lib/dto/ai';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import {
   assembleDispatchPrompt,
   type ContinueFromForPrompt,
+  type DispatchPromptSource,
   type FindingsPolicy,
 } from '@/lib/dispatch/promptTemplate';
 import { ContinueFromInvalidError } from '@/lib/dispatchRuns/errors';
@@ -383,6 +386,25 @@ async function resolveContinueFrom(
   });
 }
 
+/**
+ * The PARENT RUN an item rides in its primary repository (MOTIR-11624): the `inherited`
+ * in-flight entry for `targetRepo`, or `null` when the item has its own open pull request
+ * there, nothing in flight, or no repository Motir can name. The entry's `repo` is
+ * `owner/name`; `targetRepo` is the bare name, compared case-insensitively as the host does.
+ */
+export function parentRunFrom(
+  inFlightCode: readonly InFlightCodeDto[],
+  targetRepo: string | null,
+): DispatchPromptSource['parentRun'] {
+  if (targetRepo === null) return null;
+  const name = targetRepo.toLowerCase();
+  const entry = inFlightCode.find(
+    (code) => code.repo.slice(code.repo.lastIndexOf('/') + 1).toLowerCase() === name,
+  );
+  if (!entry || entry.source !== 'inherited') return null;
+  return { key: entry.fromKey, branch: entry.branch, pullRequestUrl: entry.prUrl };
+}
+
 export const dispatchPromptService = {
   /**
    * Assemble the canonical dispatch prompt for ONE work item.
@@ -445,6 +467,7 @@ export const dispatchPromptService = {
       ownRefusal,
       obsoleteNeighbours,
       contentLanguage,
+      inFlight,
     ] = await allSettledOrThrow([
       item.parentId
         ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -520,6 +543,14 @@ export const dispatchPromptService = {
       )
         .then(toOrgContentLanguage)
         .catch((): Locale => defaultLocale),
+      // The PARENT RUN this item rides (MOTIR-11624) — its in-flight code, the SAME read
+      // `get_work_item` answers, so a child whose ancestor already has an open pull
+      // request is told to commit onto that branch and link nothing to itself. Only a
+      // child has an ancestor to inherit from. A plain database read with no refusal of its
+      // own, like the readiness read beside it.
+      item.parentId
+        ? inFlightCodeService.readForItem(item.id, projectId, ctx)
+        : Promise.resolve(null),
     ]);
 
     // …and its RUN TARGET's, when this card is a leg of a run launched against
@@ -582,6 +613,7 @@ export const dispatchPromptService = {
       sessionBranch:
         readiness.inheritedSessionBranch ?? item.sessionBranch ?? opts.sessionBranch ?? null,
       runTargetKey: runScope?.identifier ?? null,
+      parentRun: parentRunFrom(inFlight?.inFlightCode ?? [], targetRepo),
       // Passed through UNDEFAULTED. `undefined` is the template's own signal for
       // "the full protocol", so defaulting it here would put a second copy of
       // that decision in a second place.
