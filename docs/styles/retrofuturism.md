@@ -213,3 +213,32 @@ the Outrun read.
 is `--el-accent-text`, which each palette tunes against its bare accent (only
 4.99:1 in amethyst dark). The bevel's crown and base therefore move the accent by
 4% `white` and 7% `black` (from 18% / 16%), which keeps the worst end at 4.61:1.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 14 lines held above a horizon, with a static receding accent grid floor and a horizon glow band below the content. Stroke: 1.4px in the palette band, two band lines at 2.6px. Glow: a neon glow in dark mode; chrome capsule decision marks. Motion: the lines drift slowly; the grid and horizon never move.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).
+
+## Background: Topography
+
+Topography (`topography` in the background registry) is contour lines over a
+slowly moving height map, redrawn per style. Every style keeps one seeded height
+field drifting slowly, contoured by marching squares, and the feathered clear area
+behind the main content. Under this style:
+
+Shape: 8 levels above the same static horizon and grid floor. Stroke: alternating 1.6px and 1px in the palette band. Glow: neon glow in dark mode. Motion: slow drift; the floor is static.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/topography.ts` (MOTIR-11617),
+built to the approved design in `design/backgrounds/` (MOTIR-11602).

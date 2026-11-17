@@ -118,7 +118,7 @@ describe('OnboardingHero — the full-width hero (Pattern B)', () => {
     screen.getByRole('region', { name: 'Vibe the project' });
   });
 
-  it('draws HeroWaves gathered on controlId, inside a relative isolate band', () => {
+  it('draws the Wave gathered on controlId, inside a relative isolate band', () => {
     const { container } = render(
       <OnboardingHero headline="Vibe the project" controlId="idea-box">
         <span>control</span>
@@ -128,9 +128,9 @@ describe('OnboardingHero — the full-width hero (Pattern B)', () => {
     expect(classes(hero)).toEqual(
       expect.arrayContaining(['relative', 'isolate', 'overflow-hidden', 'bg-(--el-surface)']),
     );
-    const waves = hero.querySelectorAll('canvas[data-hero-waves]');
+    const waves = hero.querySelectorAll('canvas[data-background="wave"]');
     expect(waves).toHaveLength(1);
-    expect(waves[0]!.getAttribute('data-focus-id')).toBe('idea-box');
+    expect(waves[0]!.getAttribute('data-background-focus')).toBe('idea-box');
     expect(waves[0]!.getAttribute('aria-hidden')).toBe('true');
     expect(classes(waves[0]!)).toEqual(
       expect.arrayContaining(['absolute', 'inset-0', '-z-10', 'pointer-events-none']),
@@ -151,8 +151,8 @@ describe('OnboardingHero — the full-width hero (Pattern B)', () => {
 
   it('with no control, still gives the waves a focus: the headline group', () => {
     const { container } = render(<OnboardingHero headline="How it works" lede="Three beats." />);
-    const canvas = container.querySelector('canvas[data-hero-waves]')!;
-    expect(canvas.getAttribute('data-focus-id')).toBe(ONBOARDING_HERO_CONTROL_ID);
+    const canvas = container.querySelector('canvas[data-background="wave"]')!;
+    expect(canvas.getAttribute('data-background-focus')).toBe(ONBOARDING_HERO_CONTROL_ID);
     const focus = container.querySelector(`#${ONBOARDING_HERO_CONTROL_ID}`)!;
     expect(focus.contains(screen.getByRole('heading', { level: 1 }))).toBe(true);
   });

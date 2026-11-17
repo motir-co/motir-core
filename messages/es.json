@@ -7980,7 +7980,29 @@
       },
       "footerNote": "Esto da estilo a tu proyecto, no a Motir: nada se bloquea, puedes cambiarlo cuando quieras.",
       "reset": "Restablecer valores predeterminados",
-      "use": "Usar este diseño"
+      "use": "Usar este diseño",
+      "background": {
+        "name": "Fondos",
+        "help": "Lo que cada zona de la página dibuja detrás de su contenido.",
+        "areas": {
+          "landing": "Página de inicio",
+          "login": "Página de inicio de sesión",
+          "hero": "Sección principal"
+        },
+        "none": "Ninguno",
+        "noneNote": "Sin fondo: la zona muestra el color de la página.",
+        "followsNote": "Redibujado para {style}.",
+        "fixedNote": "Igual en todos los estilos: solo sigue la paleta y el tema.",
+        "previewEyebrow": "Fondos — vista previa en vivo",
+        "previewNone": "Sin fondo",
+        "standIn": {
+          "landingTitle": "Planifícalo. Constrúyelo.",
+          "landingLead": "De la idea al lanzamiento.",
+          "loginTitle": "Iniciar sesión",
+          "loginCta": "Continuar",
+          "heroPrompt": "Describe tu idea…"
+        }
+      }
     },
     "generation": {
       "title": "Creando tu plan",

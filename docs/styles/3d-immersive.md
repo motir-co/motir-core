@@ -320,3 +320,32 @@ type, component plane ladder, layout, depth & elevation, motion, do/don't) — t
 same shape as Motir's own [`DESIGN.md`](../DESIGN.md), grounded in
 [getdesign.md](https://getdesign.md) references for the palette/type axes it
 composes with.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: the lines split into three depth planes: far, middle, near. Stroke: 0.8px faint ink far, 1.4px band middle, 2.6px band near. Glow: the near plane seated on a deep 8px drop shadow; decision squares are small extruded cubes. Motion: the planes parallax at different speeds.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).
+
+## Background: Topography
+
+Topography (`topography` in the background registry) is contour lines over a
+slowly moving height map, redrawn per style. Every style keeps one seeded height
+field drifting slowly, contoured by marching squares, and the feathered clear area
+behind the main content. Under this style:
+
+Shape: 7 levels lifted one step higher each, so the map reads as raised relief. Stroke: levels thicken as they rise, alternating band and ink. Glow: a drop shadow under every level. Motion: drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/topography.ts` (MOTIR-11617),
+built to the approved design in `design/backgrounds/` (MOTIR-11602).

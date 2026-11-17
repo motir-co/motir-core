@@ -99,7 +99,7 @@ function resolveColours(
 /**
  * Calls `onChange` whenever the applied theme may have changed, and answers the
  * function that stops watching. The attribute observer on <html> (the one
- * `components/brand/HeroWaves.tsx` keeps too) is the route every switch takes
+ * the design system's background runtime keeps too) is the route every switch takes
  * today: the CSS keys its dark ramp on `[data-theme]`, and while the page follows
  * the system the theme context writes the OS appearance to `data-theme` after
  * `prefers-color-scheme` flips. The query is watched too, as a backstop for a

@@ -823,8 +823,9 @@ async function seedCiStub(org: string, name: string, token: string, branch: stri
 
 /**
  * Apply the project's design choice to a repository generated from a template,
- * as ONE commit on its default branch writing `motir.design.json` (the ids the
- * root layout reads) and `DESIGN.md` (naming them for later agent runs).
+ * as ONE commit on its default branch writing `motir.design.json` (the axis ids
+ * the root layout reads, and the background each page area draws — MOTIR-11607)
+ * and `DESIGN.md` (naming them for later agent runs).
  *
  * - The manifest is also the MARKER: a template without it does not use
  *   `@motir/design-system`, and its repository is left exactly as generated.

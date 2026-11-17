@@ -1340,7 +1340,14 @@ export interface RawPreplanSession {
   // the style/palette/type registries live in motir-core — so on the wire the
   // three axes are plain strings; the motir-core service validated them before
   // the write, and re-validates/casts on read.
-  designChoice: { styleId: string; paletteId: string; typeId: string } | null;
+  // `backgrounds` (MOTIR-11607) is a background id or `none` per page area; absent
+  // on a choice saved before it existed.
+  designChoice: {
+    styleId: string;
+    paletteId: string;
+    typeId: string;
+    backgrounds?: { landing: string; login: string; hero: string };
+  } | null;
   validationTiming: string | null;
   currentGate: string | null;
   conversation: unknown;

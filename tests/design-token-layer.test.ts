@@ -254,8 +254,10 @@ const KNOWN_PRIVATE_COLOURS: { file: string; property: string; why: string }[] =
   },
   // The style mocks (MOTIR-10549) and the palette mocks (MOTIR-10550) are
   // `renderMock` output over the REAL
-  // `StyleVignette`, whose modal scrim is `bg-black/10`: the compiler writes
-  // `--color-black` for it, the same machine output as context-row's row above.
+  // `StyleVignette`, whose modal scrim was `bg-black/10` when they were drawn
+  // (MOTIR-11622 moved it onto `--el-overlay-scrim`; the mocks stay as records):
+  // the compiler wrote `--color-black` for it, the same machine output as
+  // context-row's row above.
   ...[...STYLE_MOCKS, ...PALETTE_MOCKS].map((file) => ({
     file,
     property: '--color-black',

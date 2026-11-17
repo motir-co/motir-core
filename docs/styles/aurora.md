@@ -156,3 +156,32 @@ not balanced against a translucent blur. Four things keep it AA:
 The drift animation is **stilled** under `prefers-reduced-motion: reduce`.
 Verified in light and dark themes against the `/tokens` specimen with the
 `--el-*` AA + design-mockup render checklist.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 24 lines bunched around the content, two band lines at 3px. Stroke: 1.4px in the palette band. Glow: every line lit from within (16px glow in dark mode with additive light, 10px in light); glowing rounded squares. Motion: very slow ambient drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).
+
+## Background: Topography
+
+Topography (`topography` in the background registry) is contour lines over a
+slowly moving height map, redrawn per style. Every style keeps one seeded height
+field drifting slowly, contoured by marching squares, and the feathered clear area
+behind the main content. Under this style:
+
+Shape: 10 levels, alternate levels brighter. Stroke: 1.8px and 1px in the palette band. Glow: a 14px glow with additive light in dark mode, 8px in light. Motion: half-speed drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/topography.ts` (MOTIR-11617),
+built to the approved design in `design/backgrounds/` (MOTIR-11602).

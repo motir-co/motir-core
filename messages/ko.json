@@ -7974,7 +7974,29 @@
       },
       "footerNote": "Motir가 아니라 프로젝트의 스타일을 정합니다 — 확정되는 것은 없으며 언제든 바꿀 수 있습니다.",
       "reset": "기본값으로 재설정",
-      "use": "이 디자인 사용"
+      "use": "이 디자인 사용",
+      "background": {
+        "name": "배경",
+        "help": "각 페이지 영역이 콘텐츠 뒤에 그리는 배경입니다.",
+        "areas": {
+          "landing": "랜딩 페이지",
+          "login": "로그인 페이지",
+          "hero": "히어로 섹션"
+        },
+        "none": "없음",
+        "noneNote": "배경 없음 — 이 영역에는 페이지 색상이 표시됩니다.",
+        "followsNote": "{style}에 맞게 다시 그립니다.",
+        "fixedNote": "모든 스타일에서 같습니다 — 팔레트와 테마만 따릅니다.",
+        "previewEyebrow": "배경 — 실시간 미리보기",
+        "previewNone": "배경 없음",
+        "standIn": {
+          "landingTitle": "계획하고, 만드세요.",
+          "landingLead": "아이디어에서 출시까지.",
+          "loginTitle": "로그인",
+          "loginCta": "계속",
+          "heroPrompt": "아이디어를 설명하세요…"
+        }
+      }
     },
     "generation": {
       "title": "계획 생성 중",

@@ -364,3 +364,32 @@ no motion — is adopted whole; the colour half is palette work.
 values. No shipped product's token-level "high contrast style" was available at
 the depth this record needs; the standards state the numbers, which is what a
 style promising measurable accessibility needs.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 8 well-spaced lines. Stroke: 2px ink, the two band lines 3px solid in the accent and the second hue; 14px squares with a 2px ink edge. Glow: none. Motion: none, it is one still frame.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).
+
+## Background: Topography
+
+Topography (`topography` in the background registry) is contour lines over a
+slowly moving height map, redrawn per style. Every style keeps one seeded height
+field drifting slowly, contoured by marching squares, and the feathered clear area
+behind the main content. Under this style:
+
+Shape: 5 levels on a 12px grid. Stroke: 2px ink, one 3px accent index level. Glow: none. Motion: none, one still frame.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/topography.ts` (MOTIR-11617),
+built to the approved design in `design/backgrounds/` (MOTIR-11602).

@@ -311,6 +311,25 @@ describe('aiPreplanService.getPreplanState', () => {
     await expect(aiPreplanService.getPreplanState(ctx)).rejects.toThrow('boom');
   });
 
+  it('maps stored backgrounds through, and leaves them off a choice saved without them', async () => {
+    const backgrounds = { landing: 'aurora', login: 'none', hero: 'wave' };
+    vi.mocked(getPreplanState).mockResolvedValue({
+      ...fullRaw,
+      session: {
+        ...fullRaw.session!,
+        designChoice: { ...fullRaw.session!.designChoice!, backgrounds },
+      },
+    });
+    expect(
+      (await aiPreplanService.getPreplanState(ctx)).session?.designChoice?.backgrounds,
+    ).toEqual(backgrounds);
+
+    vi.mocked(getPreplanState).mockResolvedValue(fullRaw);
+    const legacy = (await aiPreplanService.getPreplanState(ctx)).session?.designChoice;
+    expect(legacy).toEqual({ styleId: 'soft-playful', paletteId: 'cobalt', typeId: 'grotesk' });
+    expect(legacy).not.toHaveProperty('backgrounds');
+  });
+
   it('maps a null designChoice through (the user never picked a design)', async () => {
     vi.mocked(getPreplanState).mockResolvedValue({
       ...fullRaw,
@@ -352,6 +371,35 @@ describe('aiPreplanService.saveDesignChoice (7.3.81)', () => {
 
     expect(result).toEqual(choice);
   });
+
+  // MOTIR-11607 — backgrounds per page area, validated against the package registry.
+  it('validates and forwards backgrounds per area, and maps them back', async () => {
+    const withBackgrounds = {
+      ...choice,
+      backgrounds: { landing: 'wave', login: 'none', hero: 'brian' },
+    };
+    vi.mocked(saveDesignChoice).mockResolvedValue({
+      designChoice: withBackgrounds,
+    } as unknown as RawPreplanSession);
+
+    const result = await aiPreplanService.saveDesignChoice(ctx, withBackgrounds);
+
+    expect(saveDesignChoice).toHaveBeenCalledWith(
+      expect.objectContaining({ designChoice: withBackgrounds }),
+    );
+    expect(result).toEqual(withBackgrounds);
+  });
+
+  it.each(['landing', 'login', 'hero'] as const)(
+    'rejects an unknown %s background before any write',
+    async (area) => {
+      const backgrounds = { landing: 'wave', login: 'wave', hero: 'wave', [area]: 'lava-lamp' };
+      await expect(
+        aiPreplanService.saveDesignChoice(ctx, { ...choice, backgrounds }),
+      ).rejects.toMatchObject({ axis: `backgrounds.${area}`, value: 'lava-lamp' });
+      expect(saveDesignChoice).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ['styleId', { ...choice, styleId: 'not-a-style' }],
