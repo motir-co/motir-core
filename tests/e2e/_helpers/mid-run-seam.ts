@@ -249,12 +249,17 @@ export type AppendedProposal =
  * THE RUN'S APPEND: `POST /api/internal/ai/plan-proposals`, the door a planning
  * run's callbacks write through. `final` closes the plan (`planned`), which a walk
  * does as its last act. Resolves with the created PlanItem ids IN APPEND ORDER.
+ *
+ * `summary` is the planner's BRIEFING, which rides only a final append. `revision`
+ * marks the append as a REVISION pass of a plan core re-opened for it (Story
+ * MOTIR-11515 · MOTIR-11524): its `final` closes the revision and gives the plan back
+ * `planned`, which is the close motir-ai's revision handler makes.
  */
 export async function appendAsAi(
   page: Page,
   run: RunHandle,
   proposals: AppendedProposal[],
-  opts: { final?: boolean } = {},
+  opts: { final?: boolean; summary?: string; revision?: boolean } = {},
 ): Promise<string[]> {
   const res = await page.request.post('/api/internal/ai/plan-proposals', {
     headers: asAi(run),
@@ -270,6 +275,8 @@ export async function appendAsAi(
           : { op: 'remove', workItemId: p.workItemId, ...(p.reason ? { reason: p.reason } : {}) },
       ),
       ...(opts.final ? { final: true } : {}),
+      ...(opts.final && opts.summary !== undefined ? { summary: opts.summary } : {}),
+      ...(opts.revision ? { revision: true } : {}),
     },
   });
   if (res.status() !== 200) {

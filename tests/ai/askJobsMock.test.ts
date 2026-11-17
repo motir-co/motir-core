@@ -213,3 +213,56 @@ describe('the composed requirement arms of the jobs mock (MOTIR-9441)', () => {
     expect(first).not.toHaveProperty('conversationTurns');
   });
 });
+
+// ── The waiting-plan verdicts (Story MOTIR-11515 · MOTIR-11524) ───────────────────────
+// The acceptance lane could not answer a turn on a waiting plan with a revision or a
+// too-far request, nor show that the turn was asked against the waiting plan. Each arm is
+// crossed on the wire by the real client, and an outcome declaring neither is unchanged.
+
+describe('the waiting-plan arms of the jobs mock (MOTIR-11524)', () => {
+  it('passes a declared revision and farRequest onto the ask result', async () => {
+    declare([
+      {
+        intent: 'plan_change',
+        answer: 'Revising.',
+        revision: { requirement: 'Remove the CSV writer.' },
+      },
+      { intent: 'ask', answer: 'Kept for later.', farRequest: { requirement: 'Add billing.' } },
+    ]);
+    const first = await ask();
+    const second = await ask();
+
+    expect((await getJob(first.jobId, 'proj-1')).result).toEqual({
+      ask: {
+        intent: 'plan_change',
+        answer: 'Revising.',
+        citations: [],
+        revision: { requirement: 'Remove the CSV writer.' },
+      },
+    });
+    expect((await getJob(second.jobId, 'proj-1')).result).toEqual({
+      ask: {
+        intent: 'ask',
+        answer: 'Kept for later.',
+        citations: [],
+        farRequest: { requirement: 'Add billing.' },
+      },
+    });
+  });
+
+  it('journals the waiting plan an ask submit was asked against, and none otherwise', async () => {
+    declare([{ intent: 'ask', answer: 'One.' }]);
+
+    await submitJob(
+      'ask_project',
+      tenant,
+      { prompt: 'what does it add?', waitingPlan: { planId: 'plan-9', readable: true } },
+      { userId: 'user-1' },
+    );
+    await ask();
+
+    const [asked, plain] = submitted();
+    expect(asked).toMatchObject({ kind: 'ask_project', waitingPlanId: 'plan-9' });
+    expect(plain).not.toHaveProperty('waitingPlanId');
+  });
+});
