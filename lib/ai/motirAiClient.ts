@@ -1325,8 +1325,9 @@ export async function getPreplanState(query: PreplanStateQuery): Promise<RawPrep
 // the read above, a write FIND-OR-CREATES the AiProject + its org spine, so the
 // body carries the `coreOrganizationId` too (the caller — aiPreplanService — has
 // resolved it). `designChoice` is Motir's three axes `{ styleId, paletteId, typeId }`,
-// validated against the motir-core registries BEFORE this call (motir-ai stores it
-// opaquely); `designStarter` is the distinct with-design-vs-bare starter flag.
+// plus an optional `backgrounds` per page area (MOTIR-11607: a background id or
+// `none` for each of landing, login and hero), all validated against the
+// registries BEFORE this call (motir-ai stores it opaquely); `designStarter` is the distinct with-design-vs-bare starter flag.
 // motir-ai returns the updated session DTO (same shape GET's `session` carries),
 // so the choice can be echoed back. A transport failure / non-2xx maps to a typed
 // error the caller degrades on (the choice is kept optimistically in the UI).
@@ -1334,7 +1335,12 @@ export interface SaveDesignChoiceInput {
   coreOrganizationId: string;
   coreWorkspaceId: string;
   coreProjectId: string;
-  designChoice: { styleId: string; paletteId: string; typeId: string };
+  designChoice: {
+    styleId: string;
+    paletteId: string;
+    typeId: string;
+    backgrounds?: { landing: string; login: string; hero: string };
+  };
   designStarter: string;
 }
 

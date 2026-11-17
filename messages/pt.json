@@ -356,8 +356,8 @@
       "amendingChildrenOf": "Conciliando: {title}",
       "amendingTopLevel": "Conciliando o nível superior do projeto",
       "checkingPlan": "Fazendo a verificação final",
-      "checkingCard": "Verificando: {title}",
-      "repairing": "Corrigindo o que a verificação final encontrou"
+      "checkingCard": "Verificando e corrigindo: {title}",
+      "repairing": "Corrigindo os vínculos e a ordem do plano"
     },
     "cue": {
       "drafting": "Redigindo",
@@ -7980,7 +7980,29 @@
       },
       "footerNote": "Isto estiliza o seu projeto, não o Motir — nada fica travado, mude quando quiser.",
       "reset": "Restaurar o padrão",
-      "use": "Usar este design"
+      "use": "Usar este design",
+      "background": {
+        "name": "Fundos",
+        "help": "O que cada área da página desenha atrás do seu conteúdo.",
+        "areas": {
+          "landing": "Página inicial",
+          "login": "Página de login",
+          "hero": "Seção principal"
+        },
+        "none": "Nenhum",
+        "noneNote": "Sem fundo — a área mostra a cor da página.",
+        "followsNote": "Redesenhado para {style}.",
+        "fixedNote": "Igual em todos os estilos — segue apenas a paleta e o tema.",
+        "previewEyebrow": "Fundos — pré-visualização ao vivo",
+        "previewNone": "Sem fundo",
+        "standIn": {
+          "landingTitle": "Planeje. Construa.",
+          "landingLead": "Da ideia ao lançamento.",
+          "loginTitle": "Entrar",
+          "loginCta": "Continuar",
+          "heroPrompt": "Descreva sua ideia…"
+        }
+      }
     },
     "generation": {
       "title": "Construindo seu plano",
@@ -8978,13 +9000,13 @@
         "resumedLine": "Perdeu sua máquina — o Motir o reiniciou e ele continua de onde parou",
         "resumedLineSecond": "Perdeu sua máquina de novo — segunda tentativa automática, continuando de onde parou",
         "amending": "conciliar",
-        "checking": "verificar",
+        "checking": "verificar e corrigir",
         "repairing": "corrigir",
         "amendingLine": "Conciliando os itens de {target}",
         "amendingTopLine": "Conciliando os itens do nível superior",
         "checkingLine": "Fazendo a verificação final",
-        "checkingCardLine": "Verificando {title}",
-        "repairingLine": "Corrigindo o que a verificação final encontrou"
+        "checkingCardLine": "Verificando e corrigindo {title}",
+        "repairingLine": "Corrigindo os vínculos e a ordem do plano"
       },
       "fact": {
         "unknown": "Trabalhando no plano…",
@@ -9007,11 +9029,12 @@
           "skippedNoContainers": "A verificação final do plano foi pulada: nenhuma história, tarefa ou bug estava pronto para ser verificado",
           "skippedByPerson": "A verificação final do plano terminou antes porque foi pulada: nada do que ela encontrou foi corrigido",
           "selectionFailed": "A verificação final do plano não terminou: não foi possível ler os itens dele",
-          "checking": "Verificando “{title}”",
+          "checking": "Verificando e corrigindo “{title}”",
           "notFinished": "Não foi possível terminar de verificar “{title}”",
           "containerClean": "Nenhum problema encontrado em “{title}”",
           "containerFound": "{count, plural, one {# problema encontrado em “{title}”} other {# problemas encontrados em “{title}”}}",
-          "finding": "Problema: {summary}"
+          "finding": "Problema: {summary}",
+          "rechecking": "Verificando de novo “{title}”: “{blocker}” mudou o que entrega"
         },
         "repair": {
           "started": "Corrigindo o que foi encontrado…",
@@ -9024,7 +9047,8 @@
           "notFixedCommittedInProgress": "Não corrigido: {summary} (o item já está sendo trabalhado)",
           "notFixedSizing": "Não corrigido: {summary} (trata do tamanho do trabalho)",
           "notFixedFixFailed": "Não corrigido: {summary} (não foi possível fazer a correção)",
-          "notFixedSkipped": "Não corrigido: {summary} (a verificação final foi pulada antes da correção)"
+          "notFixedSkipped": "Não corrigido: {summary} (a verificação final foi pulada antes da correção)",
+          "notFixedOtherCard": "Não corrigido: {summary} (a correção pertence a outro item)"
         },
         "reopen": {
           "started": "Verificando de novo os vínculos e a ordem do plano",
@@ -10946,7 +10970,7 @@
         "amend": "Conciliando os itens de {title}",
         "amendTop": "Conciliando os itens do nível superior",
         "check": "Fazendo a verificação final",
-        "repair": "Corrigindo o que a verificação final encontrou"
+        "repair": "Corrigindo os vínculos e a ordem do plano"
       },
       "reason": {
         "rate_limited": "o modelo atingiu o limite de requisições",

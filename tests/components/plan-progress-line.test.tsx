@@ -405,6 +405,20 @@ describe('PlanProgressLine — copy', () => {
       );
   }
 
+  // MOTIR-11491 — the final check checks AND fixes each card; a fix step is the
+  // validity re-open's, and says so rather than naming the final check.
+  it('a card under the final check reads as checked and fixed; a fix reads as the plan’s links and order', () => {
+    mount(snap({ steps: [step('checkingCard', 'Invoice export', 'c')] }));
+    expect(screen.getByTestId('plan-progress-steps').textContent).toBe(
+      'Checking and fixing: Invoice export',
+    );
+    cleanup();
+    mount(snap({ steps: [step('repairing', null, 'r')] }));
+    const fix = screen.getByTestId('plan-progress-steps').textContent ?? '';
+    expect(fix).toBe("Fixing the plan's links and order");
+    expect(fix).not.toMatch(/final check|repair/i);
+  });
+
   it('every PLAN_STEP_PHRASE_MESSAGE_KEY resolves in en AND zh', () => {
     for (const key of Object.values(PLAN_STEP_PHRASE_MESSAGE_KEY)) {
       expect(typeof resolve(enMessages, key), `en ${key}`).toBe('string');

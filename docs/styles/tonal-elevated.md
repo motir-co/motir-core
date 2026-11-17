@@ -409,3 +409,32 @@ that adds the token block.
 - **A surface member added later** — resolves to rung 1 by the default rule.
 - **Unknown style id** — `resolveStyle` still resolves to `warm-editorial`; this
   style adds no resolver branch.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 10 lines with the bands between them filled as tonal rungs, a step closer to the ink the nearer they are to the content, one band in the first hue. Stroke: 1px hairline on every line. Glow: each rung seated by a soft neutral shadow; tonal tiles for squares. Motion: calm drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).
+
+## Background: Topography
+
+Topography (`topography` in the background registry) is contour lines over a
+slowly moving height map, redrawn per style. Every style keeps one seeded height
+field drifting slowly, contoured by marching squares, and the feathered clear area
+behind the main content. Under this style:
+
+Shape: 6 levels as flat tonal terraces, 4% further toward the ink per level. Stroke: 1px hairline on a soft shadow, one level in the first hue. Glow: none. Motion: drift.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/topography.ts` (MOTIR-11617),
+built to the approved design in `design/backgrounds/` (MOTIR-11602).

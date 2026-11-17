@@ -1,13 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, ArrowRight, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Ban, RotateCcw } from 'lucide-react';
+import {
+  BACKGROUND_AREAS,
+  BACKGROUND_IDS,
+  BACKGROUND_NONE,
+  BACKGROUND_REGISTRY,
+  Background,
+  defaultBackgroundForStyle,
+  resolveBackgroundChoice,
+  type AxisOption,
+  type BackgroundArea,
+  type BackgroundChoice,
+} from '@motir/design-system';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { StyleVignette } from '@/components/theme/StyleVignette';
 import {
   AxisField,
   AxisNote,
+  AxisRadioGroup,
   PalettePicker,
   StylePicker,
   ThemeSegmentedControl,
@@ -43,6 +57,14 @@ import type { DesignChoiceDTO } from '@/lib/dto/aiPreplan';
 // The chosen design is local for now; persisting it to the user's project (the
 // DESIGN.md starter) is the cross-repo handoff downstream (MOTIR-1041 / motir-ai).
 // "Fine-tune" knobs (density/radius/motion) are a separate subtask (MOTIR-1246/47).
+//
+// The fifth field, Backgrounds (MOTIR-11618, design MOTIR-11615 —
+// `design/ai-chat/onboarding--background-picker.mock.html`), picks what each page
+// area of the project (landing page, login page, hero section) draws behind its
+// content: one of the package's registered backgrounds, or None. Each chip leads
+// with a still swatch of its background; the preview under the example draws the
+// three choices live, in the step's scoped style, palette and theme. The choice is
+// saved with the three axes (`DesignChoiceDTO.backgrounds`, MOTIR-11607).
 
 export interface DesignStepProps {
   /** Leave the design step for the hub. */
@@ -73,6 +95,13 @@ export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepPro
     isPaletteId(initialChoice?.paletteId) ? initialChoice.paletteId : DEFAULT_PROJECT_PALETTE_ID,
   );
   const [type, setType] = useState<TypeId>(initialChoice?.typeId ?? DEFAULT_TYPE_ID);
+  // Per-area backgrounds. A saved choice is restored through
+  // `resolveBackgroundChoice`, so a retired id falls back to the style's default
+  // rather than drawing nothing; a choice saved before backgrounds existed opens
+  // every area on that default.
+  const [backgrounds, setBackgrounds] = useState<Record<BackgroundArea, BackgroundChoice>>(() =>
+    initialBackgrounds(initialChoice?.backgrounds, initialChoice?.styleId ?? DEFAULT_STYLE_ID),
+  );
 
   const themeLabels: Record<ThemePattern, string> = {
     light: t('theme.light'),
@@ -85,6 +114,7 @@ export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepPro
     setStyleId(DEFAULT_STYLE_ID);
     setPalette(DEFAULT_PROJECT_PALETTE_ID);
     setType(DEFAULT_TYPE_ID);
+    setBackgrounds(initialBackgrounds(undefined, DEFAULT_STYLE_ID));
   }
 
   // The page's scoped axis attributes — applied to the design step's ROOT section
@@ -183,6 +213,20 @@ export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepPro
             >
               <TypePicker value={type} onChange={setType} label={t('type.name')} />
             </AxisField>
+
+            <AxisField name={t('background.name')} help={t('background.help')}>
+              <div className="flex flex-col">
+                {BACKGROUND_AREAS.map((area) => (
+                  <BackgroundAreaRow
+                    key={area}
+                    area={area}
+                    value={backgrounds[area]}
+                    styleName={STYLE_REGISTRY[styleId].name}
+                    onChange={(value) => setBackgrounds((prev) => ({ ...prev, [area]: value }))}
+                  />
+                ))}
+              </div>
+            </AxisField>
           </div>
         </div>
 
@@ -208,6 +252,15 @@ export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepPro
               <StyleVignette label={t('example.label')} className="w-full" />
             </div>
           </div>
+
+          <p className="mt-6 text-[11px] font-semibold uppercase tracking-wide text-(--el-text-secondary)">
+            {t('background.previewEyebrow')}
+          </p>
+          <div className="mt-2.5 grid grid-cols-1 gap-3 xl:grid-cols-3">
+            {BACKGROUND_AREAS.map((area) => (
+              <BackgroundPreview key={area} area={area} value={backgrounds[area]} />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -225,11 +278,143 @@ export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepPro
         <Button
           variant="primary"
           rightIcon={<ArrowRight className="size-4" />}
-          onClick={() => onUseDesign({ styleId, paletteId: palette, typeId: type })}
+          onClick={() => onUseDesign({ styleId, paletteId: palette, typeId: type, backgrounds })}
         >
           {t('use')}
         </Button>
       </div>
     </section>
+  );
+}
+
+/** Every area's opening choice: the saved one where there is one, else the style's default. */
+function initialBackgrounds(
+  saved: Partial<Record<BackgroundArea, unknown>> | undefined,
+  styleId: StyleId,
+): Record<BackgroundArea, BackgroundChoice> {
+  const out = {} as Record<BackgroundArea, BackgroundChoice>;
+  for (const area of BACKGROUND_AREAS) {
+    out[area] = saved
+      ? resolveBackgroundChoice(saved[area], styleId)
+      : defaultBackgroundForStyle(styleId);
+  }
+  return out;
+}
+
+/** A chip's leading still swatch — the background in miniature, drawn once. */
+function BackgroundSwatch({ id }: { id: BackgroundChoice }) {
+  if (id === BACKGROUND_NONE) {
+    return (
+      <span
+        aria-hidden
+        className="inline-flex h-4 w-7 shrink-0 items-center justify-center rounded-(--radius-badge) border border-dashed border-(--el-border-strong) bg-(--el-page-bg)"
+      >
+        <Ban className="size-2.5 text-(--el-text-secondary)" aria-hidden />
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      data-background-swatch={id}
+      className="relative isolate inline-block h-4 w-7 shrink-0 overflow-hidden rounded-(--radius-badge) border border-(--el-border) bg-(--el-page-bg)"
+    >
+      <Background id={id} still />
+    </span>
+  );
+}
+
+/** One page area's chip row: the seven backgrounds in registry order, then None. */
+function BackgroundAreaRow({
+  area,
+  value,
+  styleName,
+  onChange,
+}: {
+  area: BackgroundArea;
+  value: BackgroundChoice;
+  styleName: string;
+  onChange: (value: BackgroundChoice) => void;
+}) {
+  const t = useTranslations('onboarding.design.background');
+  const label = t(`areas.${area}`);
+  const options: AxisOption<BackgroundChoice>[] = [
+    ...BACKGROUND_IDS.map((id) => ({
+      id,
+      label: BACKGROUND_REGISTRY[id].name,
+      leading: <BackgroundSwatch id={id} />,
+    })),
+    { id: BACKGROUND_NONE, label: t('none'), leading: <BackgroundSwatch id={BACKGROUND_NONE} /> },
+  ];
+  return (
+    <div className="flex flex-col gap-2 py-2 first:pt-0">
+      <span className="text-xs font-semibold text-(--el-text-secondary)">{label}</span>
+      <AxisRadioGroup label={label} value={value} onChange={onChange} options={options} />
+      <p className="text-xs leading-relaxed text-(--el-text-secondary)">
+        {value === BACKGROUND_NONE ? (
+          t('noneNote')
+        ) : (
+          <>
+            <AxisNote
+              name={BACKGROUND_REGISTRY[value].name}
+              tagline={BACKGROUND_REGISTRY[value].description}
+            />{' '}
+            {BACKGROUND_REGISTRY[value].followsStyle
+              ? t('followsNote', { style: styleName })
+              : t('fixedNote')}
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** One area's live preview: its background behind a stand-in for the area's content. */
+function BackgroundPreview({ area, value }: { area: BackgroundArea; value: BackgroundChoice }) {
+  const t = useTranslations('onboarding.design.background');
+  const focusId = useId();
+  const caption = `${t(`areas.${area}`)} · ${
+    value === BACKGROUND_NONE ? t('previewNone') : BACKGROUND_REGISTRY[value].name
+  }`;
+  return (
+    <figure className="flex min-w-0 flex-col gap-1.5" data-background-preview={area}>
+      <div className="relative isolate flex h-[150px] items-center justify-center overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)">
+        <Background id={value} focusId={focusId} />
+        <PreviewStandIn area={area} id={focusId} />
+      </div>
+      <figcaption className="text-xs text-(--el-text-secondary)">{caption}</figcaption>
+    </figure>
+  );
+}
+
+/**
+ * The stand-in content each area's background gathers around / clears behind. It
+ * is a picture of the area, not a control: `inert` keeps its button out of the tab
+ * order and the accessibility tree, and the caption names what it shows.
+ */
+function PreviewStandIn({ area, id }: { area: BackgroundArea; id: string }) {
+  const t = useTranslations('onboarding.design.background.standIn');
+  if (area === 'landing') {
+    return (
+      <Card id={id} inert className="flex w-[190px] flex-col items-center gap-1 text-center">
+        <p className="font-serif text-base font-semibold text-(--el-text)">{t('landingTitle')}</p>
+        <p className="text-xs text-(--el-text-secondary)">{t('landingLead')}</p>
+      </Card>
+    );
+  }
+  if (area === 'login') {
+    return (
+      <Card id={id} inert className="flex w-[140px] flex-col gap-2">
+        <p className="text-sm font-semibold text-(--el-text)">{t('loginTitle')}</p>
+        <Button size="sm" variant="primary">
+          {t('loginCta')}
+        </Button>
+      </Card>
+    );
+  }
+  return (
+    <Card id={id} inert className="w-[180px]">
+      <p className="text-xs text-(--el-text-secondary)">{t('heroPrompt')}</p>
+    </Card>
   );
 }

@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react';
-import { HeroWaves } from '@/components/brand/HeroWaves';
+import { Background } from '@motir/design-system';
 import { OnboardingBrandBar } from './OnboardingBrandBar';
 
 // The onboarding hero (MOTIR-8252) — Pattern B of
@@ -9,7 +9,8 @@ import { OnboardingBrandBar } from './OnboardingBrandBar';
 // the only width limits are the lede's measure and the control slot's.
 //
 //   ground   `--el-surface`, `relative isolate overflow-hidden`, so
-//            `HeroWaves`' `absolute inset-0 -z-10` canvas stays inside the band
+//            the Wave's `absolute inset-0 -z-10` canvas (the design system's
+//            `<Background id="wave">`, MOTIR-11608) stays inside the band
 //   bar      `OnboardingBrandBar` at the top of the hero, on the hero ground
 //            (design: "OnboardingHero (ground, lockup bar, waves)"); its
 //            trailing slot is `barEnd` (the language control, MOTIR-8286)
@@ -47,7 +48,7 @@ export interface OnboardingHeroProps {
   /** The hero's control — the idea box on the entrance. Omitted on how-it-works. */
   children?: ReactNode;
   /**
-   * The id `HeroWaves` gathers around. It is set on the control slot — or, with
+   * The id the Wave gathers around. It is set on the control slot — or, with
    * no control, on the headline group, so the lines still have a focus.
    */
   controlId?: string;
@@ -86,7 +87,7 @@ export function OnboardingHero({
       aria-labelledby={headingId}
       className="relative isolate overflow-hidden bg-(--el-surface)"
     >
-      {waves ? <HeroWaves focusId={controlId} /> : null}
+      {waves ? <Background id="wave" focusId={controlId} /> : null}
       {bar ?? (brandBar ? <OnboardingBrandBar>{barEnd}</OnboardingBrandBar> : null)}
       <div
         className={

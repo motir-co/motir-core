@@ -2,6 +2,7 @@ import type { FeatureCatalogView } from '@/lib/onboarding/directionDoc';
 import type { StyleId } from '@/lib/theme/styles';
 import type { PaletteId } from '@/lib/theme/palettes';
 import type { TypeId } from '@/lib/theme/typography';
+import type { BackgroundArea, BackgroundChoice } from '@motir/design-system';
 
 // The onboarding DESIGN CHOICE (Subtask 7.3.81 / MOTIR-1255) — Motir's three
 // design axes the design step (MOTIR-1040) lets the user pick for THEIR project:
@@ -12,10 +13,16 @@ import type { TypeId } from '@/lib/theme/typography';
 // (motir-ai owns no registries), so a populated DTO always carries a known id.
 // The light/dark Theme toggle is a PREVIEW mode, NOT an axis — it is not part of
 // the persisted design choice.
+//
+// `backgrounds` (MOTIR-11607) is the background each page area draws — a
+// registered background id or `none` — validated against the package's
+// background registry the same way. Absent on a choice saved before it existed;
+// provisioning then writes the style's default background for every area.
 export interface DesignChoiceDTO {
   styleId: StyleId;
   paletteId: PaletteId;
   typeId: TypeId;
+  backgrounds?: Record<BackgroundArea, BackgroundChoice>;
 }
 
 // The pre-plan read DTO (Subtask 7.3.70) — what `GET /api/ai/pre-plan` returns to

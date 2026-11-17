@@ -174,8 +174,9 @@ export type PlanChangeProgress =
   /** A level being laid, and one card being written. */
   | { kind: 'laying'; target: string | null }
   | { kind: 'authoring'; title: string | null }
-  /** A laid level's amend reconciling its cards, the plan's final check, and the
-   *  fix after it (MOTIR-11256) — none of them lays a level. `target` is the
+  /** A laid level's amend reconciling its cards, the plan's final check, and a
+   *  fix — the validity re-open's, or on an older plan the one after the final
+   *  check (MOTIR-11256 · MOTIR-11489) — none of them lays a level. `target` is the
    *  level's parent, as the `lay` frame names it; `null` at the top level. */
   | { kind: 'amending'; target: string | null }
   | { kind: 'checking' }
@@ -184,7 +185,7 @@ export type PlanChangeProgress =
    *  nothing when the text is blank, so this is never an empty row. */
   | { kind: 'note'; text: string }
   /** A line motir-ai's CODE reported as a fact — the claim check, the final check
-   *  and its repair, the validity re-open, a code-graph refresh (MOTIR-11296). The
+   *  (its findings' outcomes and rechecks included), the validity re-open, a code-graph refresh (MOTIR-11296). The
    *  words are this app's catalogue, in the reader's locale (`progressFacts.ts`). */
   | { kind: 'fact'; fact: ProgressFact }
   | { kind: 'proposed'; count: number }

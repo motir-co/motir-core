@@ -2,8 +2,8 @@
 //
 // Between its writing steps a hosted plan runs stages whose progress motir-ai's CODE
 // reports, not its model: the claim check after each level and its end-of-walk
-// settle, the final check and its repair, the validity re-open, and the
-// turn-boundary code-graph refresh. Those lines used to arrive as `note` frames
+// settle, the final check, the validity re-open, and the turn-boundary code-graph
+// refresh. Those lines used to arrive as `note` frames
 // carrying an English sentence, and a note is drawn verbatim (it is the model's own
 // prose), so every locale read English.
 //
@@ -25,6 +25,14 @@
 // the reader's locale. A repository list is joined by the reader's own list rules
 // (`Intl.ListFormat`); the content hashes a refresh carries are never kept, so they
 // are never drawn (MOTIR-7181).
+//
+// THE FINAL CHECK IS ONE STEP, "check & fix" (MOTIR-11489 · MOTIR-11491). Each of its
+// sessions fixes its own card, so there is no repair pass after it: every finding's
+// outcome (`finding_fixed`, `not_fixed_<class>`) rides the `dry_run` fact, worded by
+// the same catalogue keys the repair used, and a card whose upstream changed what it
+// delivers is checked again (`rechecking`: `params.title` the card, `params.blocker`
+// the upstream card's name) as a line under the same step. `dry_run_repair` is no longer sent; it
+// stays below so an older stored plan's lines read as they always did.
 //
 // Two lines the walk itself wrote joined them (MOTIR-11338): the type given to a
 // committed card that had none before it was written (`author`, MOTIR-8193) — the type
@@ -99,7 +107,21 @@ export const FACT_KEYS: Readonly<Record<string, Readonly<Record<string, FactLine
     container_clean: line('dryRun.containerClean', 'title'),
     container_found: line('dryRun.containerFound', 'title', 'count'),
     finding: line('dryRun.finding', 'summary'),
+    // Each finding's outcome, from the session that found it (MOTIR-11490): the
+    // repair's own keys, so no translation goes stale.
+    finding_fixed: line('repair.findingFixed', 'summary'),
+    not_fixed_open_what: line('repair.notFixedOpenWhat', 'summary'),
+    not_fixed_whole_what_disproved: line('repair.notFixedWholeWhatDisproved', 'summary'),
+    not_fixed_extension_contradicted: line('repair.notFixedExtensionContradicted', 'summary'),
+    not_fixed_committed_in_progress: line('repair.notFixedCommittedInProgress', 'summary'),
+    not_fixed_sizing: line('repair.notFixedSizing', 'summary'),
+    not_fixed_other_card: line('repair.notFixedOtherCard', 'summary'),
+    not_fixed_fix_failed: line('repair.notFixedFixFailed', 'summary'),
+    not_fixed_skipped: line('repair.notFixedSkipped', 'summary'),
+    // A card checked again because its upstream changed what it delivers (MOTIR-11596).
+    rechecking: line('dryRun.rechecking', 'title', 'blocker'),
   },
+  // Sent by no current motir-ai: kept so an older stored plan's lines still read.
   dry_run_repair: {
     started: line('repair.started'),
     retrying: line('repair.retrying'),

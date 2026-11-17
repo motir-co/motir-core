@@ -356,8 +356,8 @@
       "amendingChildrenOf": "調整中: {title}",
       "amendingTopLevel": "プロジェクトの最上位階層を調整しています",
       "checkingPlan": "最終確認を実行しています",
-      "checkingCard": "確認中: {title}",
-      "repairing": "最終確認で見つかった点を修正しています"
+      "checkingCard": "確認・修正中: {title}",
+      "repairing": "計画のリンクと順序を修正しています"
     },
     "cue": {
       "drafting": "下書き中",
@@ -7977,7 +7977,29 @@
       },
       "footerNote": "これは Motir ではなくあなたのプロジェクトのスタイルです。何も確定せず、いつでも変更できます。",
       "reset": "デフォルトに戻す",
-      "use": "このデザインを使う"
+      "use": "このデザインを使う",
+      "background": {
+        "name": "背景",
+        "help": "各ページ領域がコンテンツの背後に描くもの。",
+        "areas": {
+          "landing": "ランディングページ",
+          "login": "ログインページ",
+          "hero": "ヒーローセクション"
+        },
+        "none": "なし",
+        "noneNote": "背景なし — この領域にはページの色が表示されます。",
+        "followsNote": "{style} 用に描き直されます。",
+        "fixedNote": "どのスタイルでも同じです — パレットとテーマにだけ従います。",
+        "previewEyebrow": "背景 — ライブプレビュー",
+        "previewNone": "背景なし",
+        "standIn": {
+          "landingTitle": "計画して、作る。",
+          "landingLead": "アイデアからリリースまで。",
+          "loginTitle": "サインイン",
+          "loginCta": "続行",
+          "heroPrompt": "アイデアを説明してください…"
+        }
+      }
     },
     "generation": {
       "title": "計画を作成しています",
@@ -8975,13 +8997,13 @@
         "resumedLine": "マシンが失われました — Motir が再開し、中断したところから続行します",
         "resumedLineSecond": "再びマシンが失われました — 2回目の自動試行、中断したところから続行します",
         "amending": "調整",
-        "checking": "確認",
+        "checking": "確認・修正",
         "repairing": "修正",
         "amendingLine": "{target} の下の項目を調整しています",
         "amendingTopLine": "最上位階層の項目を調整しています",
         "checkingLine": "最終確認を実行しています",
-        "checkingCardLine": "{title} を確認しています",
-        "repairingLine": "最終確認で見つかった点を修正しています"
+        "checkingCardLine": "{title} を確認・修正しています",
+        "repairingLine": "計画のリンクと順序を修正しています"
       },
       "fact": {
         "unknown": "計画を作業しています…",
@@ -9004,11 +9026,12 @@
           "skippedNoContainers": "計画の最終確認をスキップしました。確認できる状態のストーリー、タスク、バグがありませんでした",
           "skippedByPerson": "スキップされたため、計画の最終確認を早めに終了しました。見つかった点は修正されていません",
           "selectionFailed": "計画の最終確認が完了しませんでした。項目を読み込めませんでした",
-          "checking": "「{title}」を確認しています",
+          "checking": "「{title}」を確認・修正しています",
           "notFinished": "「{title}」の確認を完了できませんでした",
           "containerClean": "「{title}」に問題は見つかりませんでした",
           "containerFound": "{count, plural, other {「{title}」で # 件の問題が見つかりました}}",
-          "finding": "問題：{summary}"
+          "finding": "問題：{summary}",
+          "rechecking": "「{title}」を再確認しています：「{blocker}」が提供する内容を変更しました"
         },
         "repair": {
           "started": "見つかった点を修正しています…",
@@ -9021,7 +9044,8 @@
           "notFixedCommittedInProgress": "未修正：{summary}（項目はすでに作業中です）",
           "notFixedSizing": "未修正：{summary}（作業の規模に関するものです）",
           "notFixedFixFailed": "未修正：{summary}（修正できませんでした）",
-          "notFixedSkipped": "未修正：{summary}（修正の前に最終確認がスキップされました）"
+          "notFixedSkipped": "未修正：{summary}（修正の前に最終確認がスキップされました）",
+          "notFixedOtherCard": "未修正：{summary}（修正は別の項目で行う必要があります）"
         },
         "reopen": {
           "started": "計画のリンクと順序を再確認しています",
@@ -10943,7 +10967,7 @@
         "amend": "{title}の下の項目を調整中",
         "amendTop": "最上位の項目を調整中",
         "check": "最終確認を実行中",
-        "repair": "最終確認で見つかった点を修正中"
+        "repair": "計画のリンクと順序を修正中"
       },
       "reason": {
         "rate_limited": "モデルのレート制限に達したため",

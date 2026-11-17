@@ -37,7 +37,8 @@ export function isStep(act: PlanChangeProgress): boolean {
 
 /** The step rows a session head replaces once the plan's narration names its
  *  sessions (MOTIR-8061: "the session heads replace them, from the store") — the
- *  lay and author rows, and the amend, final-check and fix rows (MOTIR-11256). */
+ *  lay and author rows, and the amend, final-check and fix rows (MOTIR-11256; the
+ *  fix is the validity re-open's since MOTIR-11489). */
 export function isSessionStep(act: PlanChangeProgress): boolean {
   return (
     act.kind === 'laying' ||

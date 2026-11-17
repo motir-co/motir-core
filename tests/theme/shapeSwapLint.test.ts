@@ -325,6 +325,8 @@ const OWN_BOX_ALLOWED: Record<string, string> = {
     'Illustration frame sized to its artwork; a layout constant, not a control or card height, so no height step fits.',
   'components/onboarding/howItWorks/HowItWorksArt.tsx → h-16':
     'Illustration frame sized to its artwork; a layout constant, not a control or card height, so no height step fits.',
+  'components/onboarding/DesignStep.tsx → h-[150px]':
+    'The Backgrounds preview frame (MOTIR-11615 design): a fixed-height picture of a page area for a background to fill; a layout constant, not a control or card height, so no height step fits.',
   'components/onboarding/layout/SectionArt.tsx → h-[208px]':
     'Illustration frame sized to its artwork; a layout constant, not a control or card height, so no height step fits.',
   'components/onboarding/layout/SectionArt.tsx → h-[248px]':

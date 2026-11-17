@@ -550,3 +550,32 @@ build should check compact cards in the render.
   offset, and the band is inset, so the ring lands outside the frame.
 - **Targets do not shrink.** `--height-control` is 38px, above the base 36px.
 - **Nothing animates.**
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: a static sunburst fanning up from under the content, and every other line drawn as a double rule. Stroke: a 2px metal rule plus a 1px rule 4px below, band lines in the hues; decision marks are stepped-corner plates with an inner rule. Glow: none. Motion: mechanical, four steps a second.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).
+
+## Background: Topography
+
+Topography (`topography` in the background registry) is contour lines over a
+slowly moving height map, redrawn per style. Every style keeps one seeded height
+field drifting slowly, contoured by marching squares, and the feathered clear area
+behind the main content. Under this style:
+
+Shape: 6 un-interpolated, machined levels on a 14px grid. Stroke: 2px metal plus a 1px inner rule 4px below, one level in the first hue. Glow: none. Motion: four steps a second.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/topography.ts` (MOTIR-11617),
+built to the approved design in `design/backgrounds/` (MOTIR-11602).

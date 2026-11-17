@@ -62,10 +62,12 @@ export async function GET(): Promise<Response> {
 // gates as the GET (getSession → 401, getActiveProject → 404 no-existence-leak),
 // one service call.
 //
-// The body carries only `{ designChoice: { styleId, paletteId, typeId } }` — the
-// three axes. A malformed body (missing/!object/non-string axis) is a 400 before
-// the service runs; an axis whose id is not a known motir-core registry id is a
-// 422 (InvalidDesignChoiceError — motir-core owns the registries). Only a
+// The body carries only `{ designChoice: { styleId, paletteId, typeId,
+// backgrounds? } }` — the three axes and, optionally, a background id or `none`
+// for each page area (MOTIR-11607). A malformed body (missing/!object/non-string
+// axis, a backgrounds that is not three strings) is a 400 before the service
+// runs; an axis or background whose id is not a registered id is a 422
+// (InvalidDesignChoiceError — motir-core owns the registries). Only a
 // motir-ai transport / upstream failure maps to 502. The Theme toggle is a
 // preview mode, NOT an axis, and is never sent here.
 
@@ -89,20 +91,39 @@ export async function PATCH(req: Request): Promise<Response> {
     Array.isArray(dc) ||
     typeof (dc as Record<string, unknown>).styleId !== 'string' ||
     typeof (dc as Record<string, unknown>).paletteId !== 'string' ||
-    typeof (dc as Record<string, unknown>).typeId !== 'string'
+    typeof (dc as Record<string, unknown>).typeId !== 'string' ||
+    !isBackgroundsShape((dc as Record<string, unknown>).backgrounds)
   ) {
     return NextResponse.json(
-      { code: 'INVALID_BODY', error: 'Expected { designChoice: { styleId, paletteId, typeId } }.' },
+      {
+        code: 'INVALID_BODY',
+        error:
+          'Expected { designChoice: { styleId, paletteId, typeId, backgrounds?: { landing, login, hero } } }.',
+      },
       { status: 400 },
     );
   }
-  const axes = dc as { styleId: string; paletteId: string; typeId: string };
+  const axes = dc as {
+    styleId: string;
+    paletteId: string;
+    typeId: string;
+    backgrounds?: { landing: string; login: string; hero: string };
+  };
 
   try {
     const designChoice = await aiPreplanService.saveDesignChoice(ctx, {
       styleId: axes.styleId,
       paletteId: axes.paletteId,
       typeId: axes.typeId,
+      ...(axes.backgrounds === undefined
+        ? {}
+        : {
+            backgrounds: {
+              landing: axes.backgrounds.landing,
+              login: axes.backgrounds.login,
+              hero: axes.backgrounds.hero,
+            },
+          }),
     });
     return NextResponse.json(
       { designChoice },
@@ -121,4 +142,14 @@ export async function PATCH(req: Request): Promise<Response> {
     }
     throw err;
   }
+}
+
+// The optional per-area backgrounds (MOTIR-11607): absent, or an object holding a
+// string for each of landing, login and hero. Only the SHAPE is checked here; the
+// service validates each value against the background registry (→ 422).
+function isBackgroundsShape(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.landing === 'string' && typeof v.login === 'string' && typeof v.hero === 'string';
 }

@@ -23,7 +23,7 @@ import enMessages from '@/messages/en.json';
 // Every case also asserts the mount MEASURED something (`measuredInkSites`), so
 // a refactor that stops rendering the text cannot pass as clean.
 //
-// `HeroWaves` is a canvas: `aria-hidden`, no text, so it carries no ink to
+// The Wave (`<Background>`) is a canvas: `aria-hidden`, no text, so it carries no ink to
 // measure. It is asserted `aria-hidden` and otherwise left alone.
 //
 // The migrate wizard and the importer: their frame is covered — the wizard bar,

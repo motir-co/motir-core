@@ -332,3 +332,32 @@ contradict the flat page.
 - No ratio is claimed: colour is untouched, so the palette's pairs hold, and the
   reversed-out pill (`--el-page-bg` on `--el-text`) is measured by the contrast
   pass.
+
+## Background: the Wave
+
+The Wave (`@motir/design-system`, `wave` in the background registry) redraws per
+style. Every style keeps the mark — the deep dip first and the crest later, the
+lines gathering around the main content, the sliding band of the palette's wave
+hues and the decision squares riding the lines — and changes only shape, stroke,
+glow and motion. Under this style:
+
+Shape: 26 lines over vertical column rules. Stroke: 1px ink, two 2px ink section rules, one 1.5px accent line; 8px ink and accent squares. Glow: none. Motion: advances once a second, set rather than animated.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/wave.ts` (MOTIR-11606), built
+to the approved design in `design/backgrounds/` (MOTIR-11602).
+
+## Background: Topography
+
+Topography (`topography` in the background registry) is contour lines over a
+slowly moving height map, redrawn per style. Every style keeps one seeded height
+field drifting slowly, contoured by marching squares, and the feathered clear area
+behind the main content. Under this style:
+
+Shape: 12 levels over column rules. Stroke: 1px ink, every fourth level a 2px ink rule, one accent level. Glow: none. Motion: advances once a second.
+
+Every ink is a token read off the live theme; "accent" is
+`--el-showcase-decision`. Under reduced motion it holds one still frame. The
+drawing is `packages/design-system/src/backgrounds/topography.ts` (MOTIR-11617),
+built to the approved design in `design/backgrounds/` (MOTIR-11602).
