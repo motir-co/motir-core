@@ -12217,7 +12217,8 @@
       "view": {
         "label": "Visualização",
         "grouped": "Agrupada",
-        "all": "Todos os achados"
+        "all": "Todos os achados",
+        "records": "Registros"
       },
       "card": {
         "title": "Achados",
@@ -12356,7 +12357,8 @@
         "baseline": "Base do código",
         "recorded": "Registrado",
         "triagedBy": "Última triagem por {who} · {when}",
-        "lessonLink": "Abrir a lição em Lições de planejamento"
+        "lessonLink": "Abrir a lição em Lições de planejamento",
+        "record": "Registro"
       },
       "cost": {
         "title": "Custo de revisão e reparo",
@@ -12432,10 +12434,131 @@
       },
       "noop": "Já está atualizado. Alguém alterou este achado agora há pouco, então não havia nada a mudar e nada foi registrado.",
       "a11y": {
-        "viewGroup": "Mostrar achados agrupados por defeito ou um a um",
+        "viewGroup": "Mostrar os achados agrupados por defeito, um a um ou como um registro por verificação de plano",
         "captionGroups": "Achados agrupados por defeito",
         "captionAll": "Todos os achados",
         "detailRegion": "Detalhe do achado"
+      },
+      "records": {
+        "title": "Registros",
+        "subtitle": "Uma linha por verificação de plano, os mais recentes primeiro.",
+        "caption": "Registros de achados do planejador",
+        "col": {
+          "created": "Criado",
+          "planner": "Planejador",
+          "source": "Origem",
+          "plan": "Plano",
+          "verdict": "Veredito",
+          "findings": "Achados",
+          "attributed": "Atribuídos",
+          "open": "Abrir"
+        },
+        "row": {
+          "open": "Abrir o registro {id}"
+        },
+        "verdict": {
+          "open": "Aberto",
+          "attributed": "Atribuído"
+        },
+        "filter": {
+          "label": "Filtrar registros",
+          "verdict": "Estado do veredito",
+          "verdictAll": "Todos",
+          "planner": "Planejador",
+          "plannerAny": "Qualquer planejador",
+          "source": "Origem",
+          "sourceAny": "Qualquer origem",
+          "sheetTitle": "Filtrar registros"
+        },
+        "empty": {
+          "title": "Nenhum registro ainda",
+          "body": "Um registro é guardado sempre que a verificação final do planejador hospedado ou o skill check plan revisa um plano. Nenhum foi guardado ainda."
+        },
+        "noMatch": {
+          "title": "Nenhum registro corresponde a estes filtros",
+          "body": "Remova um filtro ou limpe todos.",
+          "action": "Limpar filtros"
+        },
+        "loading": "Carregando registros",
+        "unavailable": {
+          "title": "Não foi possível carregar os registros",
+          "body": "O serviço de planejamento (motir-ai) não respondeu, então nenhum registro é mostrado. É um erro de carregamento: nada mudou, e isso não significa que não haja registros.",
+          "retry": "Tentar novamente"
+        }
+      },
+      "record": {
+        "crumb": "Operações · Achados do planejador · Registro",
+        "back": "Voltar aos registros",
+        "title": "Registro",
+        "context": "Contexto do plano",
+        "field": {
+          "plan": "Plano",
+          "planSession": "Sessão de planejamento",
+          "job": "Job",
+          "model": "Modelo",
+          "baseline": "Base do código",
+          "verdict": "Veredito",
+          "none": "Nenhum"
+        },
+        "verdictBy": "Atribuído por {who} · {when}",
+        "findings": {
+          "title": "Achados neste registro",
+          "col": {
+            "site": "Local",
+            "attribution": "Atribuição",
+            "why": "Motivo",
+            "hosted": "Planejador hospedado",
+            "planpy": "plan.py"
+          },
+          "empty": "Este registro não contém achados."
+        },
+        "command": {
+          "intro": "Dê o veredito deste registro pelo seu agente de código:",
+          "line": "motir check planner finding {id}",
+          "copy": "Copiar",
+          "copyLabel": "Copiar o comando",
+          "copied": "Comando copiado"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "Execução completa",
+          "answer": {
+            "thru": "Vai até o fim",
+            "stops": "Não vai até o fim",
+            "none": "Nenhuma resposta registrada"
+          },
+          "hint": {
+            "thru": "A verificação que guardou este registro previu que uma execução poderia levar este plano até o fim. Os achados dela estão listados abaixo.",
+            "stops": "A verificação previu que uma execução pararia nos itens de trabalho abaixo. Corrija esses itens e depois execute a verificação de novo.",
+            "none": "Nenhuma verificação enviou uma resposta para este registro, então não há nada para ler. O veredito não muda isso: a resposta é da verificação, não do agente."
+          },
+          "cards": {
+            "label": "Itens de trabalho a corrigir",
+            "none": "Nenhum item registrado"
+          },
+          "a11y": {
+            "region": "Execução completa: se uma execução poderia levar este plano até o fim"
+          }
+        },
+        "findingKey": {
+          "column": "Bug de planejamento",
+          "labelFinding": "· {site}",
+          "hint": "Uma chave como MOTIR-123, no projeto deste registro.",
+          "link": "Vincular",
+          "linking": "Vinculando…",
+          "remove": "Remover",
+          "removing": "Removendo…",
+          "removeFinding": "Remover a chave do bug de planejamento de {site}",
+          "notAWorkItem": "Não vinculado — {key} não é um item de trabalho no projeto deste registro. Nada foi gravado.",
+          "linked": "{key} vinculado.",
+          "removed": "A chave do bug de planejamento foi removida.",
+          "unchanged": "Já vinculado a {key}. Nada mudou.",
+          "openRecord": "As chaves de bugs de planejamento são vinculadas quando este registro tem um veredito.",
+          "a11y": {
+            "empty": "Sem chave de bug de planejamento"
+          }
+        }
       }
     },
     "usage": {

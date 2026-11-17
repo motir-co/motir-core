@@ -9,11 +9,13 @@ type SearchParams = Record<string, string | string[] | undefined>;
  * grouped view and a group's page. There is no total: Next carries the answered
  * cursor and pushes the current one onto `trail`; Previous pops it, so every
  * page a walk left is reachable again. Every link keeps the filter keys and the
- * `keep` params (the view), in that order, and lands on `basePath`.
+ * `keep` params (the view), in that order, and lands on `basePath`. The Records
+ * view passes its own `filterKeys`, so its links carry the record filters only.
  */
 export async function FindingsPager({
   basePath,
   params,
+  filterKeys = FINDING_FILTER_KEYS,
   keep = {},
   pageNumber,
   trail,
@@ -22,6 +24,7 @@ export async function FindingsPager({
 }: {
   basePath: string;
   params: SearchParams;
+  filterKeys?: readonly string[];
   keep?: Record<string, string>;
   pageNumber: number;
   trail: string[];
@@ -31,7 +34,7 @@ export async function FindingsPager({
   const t = await getTranslations('platformAdmin.plannerFindings.pager');
   const href = (nextCursorValue: string | undefined, nextTrail: string[]) => {
     const url = new URLSearchParams();
-    for (const key of FINDING_FILTER_KEYS) {
+    for (const key of filterKeys) {
       const value = oneParam(params[key]);
       if (value) url.set(key, value);
     }

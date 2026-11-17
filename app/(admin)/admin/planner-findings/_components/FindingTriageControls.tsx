@@ -29,6 +29,7 @@ import {
   setPlannerFindingAttributionAction,
   type PlannerFindingActionResult,
 } from '../actions';
+import { looksLikeBugKey } from './bugKeyShape';
 import { findingLabel } from './findingLabels';
 import { toPromoteDraft, type PromoteDraft } from './promotePrefill';
 
@@ -58,16 +59,13 @@ type Failure =
   | { act: 'promote'; code: 'DUPLICATE_LESSON'; detail: string };
 type Notice = { tone: 'success' | 'warning'; text: string };
 
-/** A project key, a dash and digits — the service's own rule after it upper-cases. */
-const BUG_KEY = /^[A-Z][A-Z0-9]*-\d+$/;
 const DISMISS_NOTE_MAX = 280;
 
 /** The statuses that may still be promoted; an unknown status never borrows a member's set. */
 const PROMOTABLE = new Set(['new', 'filed_as_bug']);
 
-export function looksLikeBugKey(value: string): boolean {
-  return BUG_KEY.test(value.trim().toUpperCase());
-}
+// The shape check lives in `./bugKeyShape`, shared with the record page's key cell.
+export { looksLikeBugKey };
 
 function trimPromote(draft: PromoteDraft): PromoteDraft {
   return {

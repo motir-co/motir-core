@@ -66,6 +66,8 @@ const { default: ListPage } = await import('@/app/(admin)/admin/planner-findings
 const { default: GroupPage } =
   await import('@/app/(admin)/admin/planner-findings/groups/[fingerprint]/page');
 const { default: DetailPage } = await import('@/app/(admin)/admin/planner-findings/[id]/page');
+const { default: RecordPage } =
+  await import('@/app/(admin)/admin/planner-findings/records/[id]/page');
 const { FindingTriageControls } =
   await import('@/app/(admin)/admin/planner-findings/_components/FindingTriageControls');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -239,12 +241,12 @@ describe('the five actions refuse non-staff and support', () => {
   });
 });
 
-describe('the layout and the three pages give non-staff the 404 before any read', () => {
+describe('the layout and the pages give non-staff the 404 before any read', () => {
   it.each(KINDS)('%s — every surface rejects with the sentinel', async (kind) => {
     install([finding('pf_a')]);
     as(sessionOf(kind));
     await expect(AdminLayout({ children: null })).rejects.toBeInstanceOf(NotFoundSentinel);
-    for (const view of ['all', 'grouped']) {
+    for (const view of ['all', 'grouped', 'records']) {
       await expect(ListPage({ searchParams: Promise.resolve({ view }) })).rejects.toBeInstanceOf(
         NotFoundSentinel,
       );
@@ -256,6 +258,9 @@ describe('the layout and the three pages give non-staff the 404 before any read'
       }),
     ).rejects.toBeInstanceOf(NotFoundSentinel);
     await expect(DetailPage({ params: Promise.resolve({ id: 'pf_a' }) })).rejects.toBeInstanceOf(
+      NotFoundSentinel,
+    );
+    await expect(RecordPage({ params: Promise.resolve({ id: 'rec_a' }) })).rejects.toBeInstanceOf(
       NotFoundSentinel,
     );
     expect(fetchSpy).not.toHaveBeenCalled();

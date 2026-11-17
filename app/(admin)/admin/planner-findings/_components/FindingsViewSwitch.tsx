@@ -9,13 +9,16 @@ import { FINDING_FILTER_KEYS } from './filterKeys';
 /**
  * The VIEW SWITCH — design MOTIR-10362 § Elements: the Segmented anatomy as a
  * labelled radio group of links. Grouped is the default (no `view` in the URL);
- * All findings is `?view=all`. A switch keeps every filter and starts the cursor
- * walk over. One tab stop; the arrow keys move the choice.
+ * All findings is `?view=all`; Records is `?view=records` (design MOTIR-11470,
+ * the third option). A switch keeps every filter and starts the cursor walk
+ * over. One tab stop; the arrow keys move the choice.
  */
 
 const BASE = '/admin/planner-findings';
-const VIEWS = ['grouped', 'all'] as const;
+const VIEWS = ['grouped', 'all', 'records'] as const;
 type View = (typeof VIEWS)[number];
+
+const VIEW_LABEL = { grouped: 'view.grouped', all: 'view.all', records: 'view.records' } as const;
 
 export function findingsViewHref(view: View, params: URLSearchParams): string {
   const url = new URLSearchParams();
@@ -23,7 +26,7 @@ export function findingsViewHref(view: View, params: URLSearchParams): string {
     const value = params.get(key);
     if (value) url.set(key, value);
   }
-  if (view === 'all') url.set('view', 'all');
+  if (view !== 'grouped') url.set('view', view);
   const qs = url.toString();
   return qs ? `${BASE}?${qs}` : BASE;
 }
@@ -32,8 +35,13 @@ export function FindingsViewSwitch() {
   const t = useTranslations('platformAdmin.plannerFindings');
   const params = useSearchParams();
   const router = useRouter();
-  const refs = useRef<Record<View, HTMLAnchorElement | null>>({ grouped: null, all: null });
-  const active: View = params.get('view') === 'all' ? 'all' : 'grouped';
+  const refs = useRef<Record<View, HTMLAnchorElement | null>>({
+    grouped: null,
+    all: null,
+    records: null,
+  });
+  const asked = params.get('view');
+  const active: View = asked === 'all' || asked === 'records' ? asked : 'grouped';
 
   function onKeyDown(event: KeyboardEvent<HTMLAnchorElement>) {
     const step =
@@ -79,7 +87,7 @@ export function FindingsViewSwitch() {
                 : 'text-(--el-text-secondary) hover:text-(--el-text)'
             }`}
           >
-            {view === 'grouped' ? t('view.grouped') : t('view.all')}
+            {t(VIEW_LABEL[view])}
           </Link>
         );
       })}

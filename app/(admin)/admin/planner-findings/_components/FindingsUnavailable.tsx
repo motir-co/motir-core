@@ -8,10 +8,14 @@ import { ErrorState } from '@/components/ui/ErrorState';
 /**
  * motir-ai could not be reached — design MOTIR-10362 Panel 7. The console's error
  * card with Retry and NO rows: an unreadable store never reads as an empty one.
- * Retry re-runs the server read. Exported for the finding detail page too.
+ * Retry re-runs the server read. Exported for the finding detail page too, and
+ * for the Records view and the record page, which pass `copy="records"`
+ * (design MOTIR-11470 Panel 7: the same state, the records words).
  */
-export function FindingsUnavailable() {
-  const t = useTranslations('platformAdmin.plannerFindings');
+export function FindingsUnavailable({ copy = 'findings' }: { copy?: 'findings' | 'records' }) {
+  const root = useTranslations('platformAdmin.plannerFindings');
+  const records = useTranslations('platformAdmin.plannerFindings.records');
+  const t = copy === 'records' ? records : root;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 

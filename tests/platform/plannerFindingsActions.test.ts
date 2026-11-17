@@ -96,6 +96,7 @@ const SUPPORT: PlatformPrincipal = { userId: 'u_sp', email: 'sp@moooon.net', rol
 
 const FINDING: PlannerFindingRowDTO = {
   id: 'pf_1',
+  recordId: 'rec_1',
   source: 'in_loop',
   planner: 'hosted',
   attribution: 'code',

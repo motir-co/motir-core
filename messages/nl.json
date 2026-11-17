@@ -12217,7 +12217,8 @@
       "view": {
         "label": "Weergave",
         "grouped": "Gegroepeerd",
-        "all": "Alle bevindingen"
+        "all": "Alle bevindingen",
+        "records": "Records"
       },
       "card": {
         "title": "Bevindingen",
@@ -12356,7 +12357,8 @@
         "baseline": "Codebasis",
         "recorded": "Vastgelegd",
         "triagedBy": "Laatst beoordeeld door {who} · {when}",
-        "lessonLink": "De les openen in Planningslessen"
+        "lessonLink": "De les openen in Planningslessen",
+        "record": "Record"
       },
       "cost": {
         "title": "Kosten van review en reparatie",
@@ -12432,10 +12434,131 @@
       },
       "noop": "Al bijgewerkt. Iemand heeft deze bevinding zojuist gewijzigd, dus er was niets te wijzigen en er is niets gelogd.",
       "a11y": {
-        "viewGroup": "Bevindingen gegroepeerd per fout of één voor één tonen",
+        "viewGroup": "Bevindingen tonen gegroepeerd per fout, een voor een, of als één record per plancontrole",
         "captionGroups": "Bevindingen gegroepeerd per fout",
         "captionAll": "Alle bevindingen",
         "detailRegion": "Details van de bevinding"
+      },
+      "records": {
+        "title": "Records",
+        "subtitle": "Eén rij per plancontrole, nieuwste eerst.",
+        "caption": "Records van plannerbevindingen",
+        "col": {
+          "created": "Aangemaakt",
+          "planner": "Planner",
+          "source": "Bron",
+          "plan": "Plan",
+          "verdict": "Oordeel",
+          "findings": "Bevindingen",
+          "attributed": "Toegewezen",
+          "open": "Openen"
+        },
+        "row": {
+          "open": "Record {id} openen"
+        },
+        "verdict": {
+          "open": "Open",
+          "attributed": "Toegewezen"
+        },
+        "filter": {
+          "label": "Records filteren",
+          "verdict": "Status van het oordeel",
+          "verdictAll": "Alle",
+          "planner": "Planner",
+          "plannerAny": "Elke planner",
+          "source": "Bron",
+          "sourceAny": "Elke bron",
+          "sheetTitle": "Records filteren"
+        },
+        "empty": {
+          "title": "Nog geen records",
+          "body": "Elke keer dat de eindcontrole van de gehoste planner of de skill check plan een plan beoordeelt, wordt er een record bewaard. Er is er nog geen bewaard."
+        },
+        "noMatch": {
+          "title": "Geen records komen overeen met deze filters",
+          "body": "Verwijder een filter, of wis ze allemaal.",
+          "action": "Filters wissen"
+        },
+        "loading": "Records laden",
+        "unavailable": {
+          "title": "Kan de records niet laden",
+          "body": "De planningsdienst (motir-ai) reageerde niet, dus er wordt geen record getoond. Dit is een laadfout — er is niets gewijzigd, en het betekent niet dat er geen records zijn.",
+          "retry": "Opnieuw proberen"
+        }
+      },
+      "record": {
+        "crumb": "Beheer · Plannerbevindingen · Record",
+        "back": "Terug naar records",
+        "title": "Record",
+        "context": "Plancontext",
+        "field": {
+          "plan": "Plan",
+          "planSession": "Planningssessie",
+          "job": "Taak",
+          "model": "Model",
+          "baseline": "Codebasis",
+          "verdict": "Oordeel",
+          "none": "Geen"
+        },
+        "verdictBy": "Toegewezen door {who} · {when}",
+        "findings": {
+          "title": "Bevindingen in dit record",
+          "col": {
+            "site": "Plek",
+            "attribution": "Toewijzing",
+            "why": "Reden",
+            "hosted": "Gehoste planner",
+            "planpy": "plan.py"
+          },
+          "empty": "Dit record bevat geen bevindingen."
+        },
+        "command": {
+          "intro": "Geef dit record zijn oordeel vanuit je codeeragent:",
+          "line": "motir check planner finding {id}",
+          "copy": "Kopiëren",
+          "copyLabel": "De opdracht kopiëren",
+          "copied": "Opdracht gekopieerd"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "Doorloop",
+          "answer": {
+            "thru": "Loopt door",
+            "stops": "Loopt niet door",
+            "none": "Geen antwoord vastgelegd"
+          },
+          "hint": {
+            "thru": "De controle die dit record bewaarde, voorspelde dat een run dit plan helemaal kan uitvoeren. De bevindingen staan hieronder.",
+            "stops": "De controle voorspelde dat een run zou stoppen bij de werkitems hieronder. Herstel die werkitems en voer de controle daarna opnieuw uit.",
+            "none": "Geen controle stuurde een antwoord voor dit record, dus er is niets te lezen. Het oordeel verandert dat niet — het antwoord is van de controle, niet van de agent."
+          },
+          "cards": {
+            "label": "Werkitems om te herstellen",
+            "none": "Geen werkitem vastgelegd"
+          },
+          "a11y": {
+            "region": "Doorloop: of een run dit plan helemaal kan uitvoeren"
+          }
+        },
+        "findingKey": {
+          "column": "Planningsbug",
+          "labelFinding": "· {site}",
+          "hint": "Een sleutel zoals MOTIR-123, in het project van dit record.",
+          "link": "Koppelen",
+          "linking": "Bezig met koppelen…",
+          "remove": "Verwijderen",
+          "removing": "Bezig met verwijderen…",
+          "removeFinding": "De sleutel van de planningsbug van {site} verwijderen",
+          "notAWorkItem": "Niet gekoppeld — {key} is geen werkitem in het project van dit record. Er is niets geschreven.",
+          "linked": "{key} gekoppeld.",
+          "removed": "De sleutel van de planningsbug is verwijderd.",
+          "unchanged": "Al gekoppeld aan {key}. Er is niets gewijzigd.",
+          "openRecord": "Sleutels van planningsbugs worden gekoppeld zodra dit record een oordeel heeft.",
+          "a11y": {
+            "empty": "Geen sleutel van een planningsbug"
+          }
+        }
       }
     },
     "usage": {

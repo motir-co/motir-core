@@ -12208,7 +12208,8 @@
       "view": {
         "label": "视图",
         "grouped": "分组",
-        "all": "全部发现"
+        "all": "全部发现",
+        "records": "记录"
       },
       "card": {
         "title": "发现",
@@ -12347,7 +12348,8 @@
         "baseline": "代码基线",
         "recorded": "记录时间",
         "triagedBy": "最近分诊：{who} · {when}",
-        "lessonLink": "在规划经验中打开该经验"
+        "lessonLink": "在规划经验中打开该经验",
+        "record": "记录"
       },
       "cost": {
         "title": "审查与修复成本",
@@ -12423,10 +12425,131 @@
       },
       "noop": "已是最新。有人刚刚更改了此发现，因此没有需要更改的内容，也没有记录任何内容。",
       "a11y": {
-        "viewGroup": "按错误分组或逐条显示发现",
+        "viewGroup": "按缺陷分组、逐条显示，或按每次计划检查一条记录显示发现",
         "captionGroups": "按错误分组的发现",
         "captionAll": "全部发现",
         "detailRegion": "发现详情"
+      },
+      "records": {
+        "title": "记录",
+        "subtitle": "每次计划检查一行，最新在前。",
+        "caption": "规划器发现记录",
+        "col": {
+          "created": "创建时间",
+          "planner": "规划器",
+          "source": "来源",
+          "plan": "计划",
+          "verdict": "结论",
+          "findings": "发现",
+          "attributed": "已归因",
+          "open": "打开"
+        },
+        "row": {
+          "open": "打开记录 {id}"
+        },
+        "verdict": {
+          "open": "待定",
+          "attributed": "已归因"
+        },
+        "filter": {
+          "label": "筛选记录",
+          "verdict": "结论状态",
+          "verdictAll": "全部",
+          "planner": "规划器",
+          "plannerAny": "任意规划器",
+          "source": "来源",
+          "sourceAny": "任意来源",
+          "sheetTitle": "筛选记录"
+        },
+        "empty": {
+          "title": "还没有记录",
+          "body": "每当托管规划器的最终检查或 check plan 技能审查一个计划，就会保留一条记录。目前还没有保留任何记录。"
+        },
+        "noMatch": {
+          "title": "没有符合这些筛选条件的记录",
+          "body": "移除一个筛选条件，或全部清除。",
+          "action": "清除筛选"
+        },
+        "loading": "正在加载记录",
+        "unavailable": {
+          "title": "无法加载记录",
+          "body": "规划服务（motir-ai）没有响应，因此不显示任何记录。这是加载错误——没有任何更改，也不表示没有记录。",
+          "retry": "重试"
+        }
+      },
+      "record": {
+        "crumb": "运营 · 规划器发现 · 记录",
+        "back": "返回记录",
+        "title": "记录",
+        "context": "计划上下文",
+        "field": {
+          "plan": "计划",
+          "planSession": "规划会话",
+          "job": "作业",
+          "model": "模型",
+          "baseline": "代码基线",
+          "verdict": "结论",
+          "none": "无"
+        },
+        "verdictBy": "由 {who} 归因 · {when}",
+        "findings": {
+          "title": "此记录中的发现",
+          "col": {
+            "site": "位置",
+            "attribution": "归因",
+            "why": "原因",
+            "hosted": "托管规划器",
+            "planpy": "plan.py"
+          },
+          "empty": "此记录没有任何发现。"
+        },
+        "command": {
+          "intro": "在你的编码智能体中为此记录给出结论：",
+          "line": "motir check planner finding {id}",
+          "copy": "复制",
+          "copyLabel": "复制命令",
+          "copied": "命令已复制"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "跑通情况",
+          "answer": {
+            "thru": "可以跑通",
+            "stops": "无法跑通",
+            "none": "未记录答案"
+          },
+          "hint": {
+            "thru": "存下这条记录的检查预测：一次运行可以把这份计划跑通。它当时做的发现列在下方。",
+            "stops": "该检查预测一次运行会停在下面这些工作项上。先修好这些工作项，再跑一次检查。",
+            "none": "没有检查为这条记录发送过答案，因此没有可读的答案。判定不会改变这一点——答案来自检查，不来自智能体。"
+          },
+          "cards": {
+            "label": "需要修复的工作项",
+            "none": "未记录工作项"
+          },
+          "a11y": {
+            "region": "跑通情况：一次运行能否把这份计划跑通"
+          }
+        },
+        "findingKey": {
+          "column": "规划缺陷",
+          "labelFinding": "· {site}",
+          "hint": "例如 MOTIR-123，须属于这条记录所在的项目。",
+          "link": "关联",
+          "linking": "正在关联…",
+          "remove": "移除",
+          "removing": "正在移除…",
+          "removeFinding": "移除 {site} 的规划缺陷编号",
+          "notAWorkItem": "未关联——{key} 不是这条记录所在项目中的工作项。未写入任何内容。",
+          "linked": "已关联 {key}。",
+          "removed": "已移除规划缺陷编号。",
+          "unchanged": "已关联 {key}，无需更改。",
+          "openRecord": "这条记录有了判定之后，才能关联规划缺陷编号。",
+          "a11y": {
+            "empty": "无规划缺陷编号"
+          }
+        }
       }
     },
     "usage": {

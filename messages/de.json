@@ -12217,7 +12217,8 @@
       "view": {
         "label": "Ansicht",
         "grouped": "Gruppiert",
-        "all": "Alle Befunde"
+        "all": "Alle Befunde",
+        "records": "Datensätze"
       },
       "card": {
         "title": "Befunde",
@@ -12356,7 +12357,8 @@
         "baseline": "Code-Stand",
         "recorded": "Erfasst",
         "triagedBy": "Zuletzt triagiert von {who} · {when}",
-        "lessonLink": "Lektion in Planungslektionen öffnen"
+        "lessonLink": "Lektion in Planungslektionen öffnen",
+        "record": "Datensatz"
       },
       "cost": {
         "title": "Kosten für Prüfung und Reparatur",
@@ -12432,10 +12434,131 @@
       },
       "noop": "Bereits aktuell. Jemand hat diesen Befund gerade geändert, daher gab es nichts zu ändern und nichts wurde protokolliert.",
       "a11y": {
-        "viewGroup": "Befunde nach Fehler gruppiert oder einzeln anzeigen",
+        "viewGroup": "Befunde nach Fehler gruppiert, einzeln oder als ein Datensatz pro Planprüfung anzeigen",
         "captionGroups": "Befunde nach Fehler gruppiert",
         "captionAll": "Alle Befunde",
         "detailRegion": "Befunddetails"
+      },
+      "records": {
+        "title": "Datensätze",
+        "subtitle": "Eine Zeile pro Planprüfung, neueste zuerst.",
+        "caption": "Datensätze der Planer-Befunde",
+        "col": {
+          "created": "Erstellt",
+          "planner": "Planer",
+          "source": "Quelle",
+          "plan": "Plan",
+          "verdict": "Urteil",
+          "findings": "Befunde",
+          "attributed": "Zugeordnet",
+          "open": "Öffnen"
+        },
+        "row": {
+          "open": "Datensatz {id} öffnen"
+        },
+        "verdict": {
+          "open": "Offen",
+          "attributed": "Zugeordnet"
+        },
+        "filter": {
+          "label": "Datensätze filtern",
+          "verdict": "Urteilsstatus",
+          "verdictAll": "Alle",
+          "planner": "Planer",
+          "plannerAny": "Jeder Planer",
+          "source": "Quelle",
+          "sourceAny": "Jede Quelle",
+          "sheetTitle": "Datensätze filtern"
+        },
+        "empty": {
+          "title": "Noch keine Datensätze",
+          "body": "Jedes Mal, wenn die abschließende Prüfung des gehosteten Planers oder die Skill check plan einen Plan prüft, wird ein Datensatz gespeichert. Bisher wurde keiner gespeichert."
+        },
+        "noMatch": {
+          "title": "Keine Datensätze entsprechen diesen Filtern",
+          "body": "Entfernen Sie einen Filter oder löschen Sie alle.",
+          "action": "Filter löschen"
+        },
+        "loading": "Datensätze werden geladen",
+        "unavailable": {
+          "title": "Die Datensätze konnten nicht geladen werden",
+          "body": "Der Planungsdienst (motir-ai) hat nicht geantwortet, daher wird kein Datensatz angezeigt. Das ist ein Ladefehler – nichts wurde geändert, und es bedeutet nicht, dass es keine Datensätze gibt.",
+          "retry": "Erneut versuchen"
+        }
+      },
+      "record": {
+        "crumb": "Betrieb · Planer-Befunde · Datensatz",
+        "back": "Zurück zu den Datensätzen",
+        "title": "Datensatz",
+        "context": "Plankontext",
+        "field": {
+          "plan": "Plan",
+          "planSession": "Planungssitzung",
+          "job": "Job",
+          "model": "Modell",
+          "baseline": "Code-Stand",
+          "verdict": "Urteil",
+          "none": "Keine"
+        },
+        "verdictBy": "Zugeordnet von {who} · {when}",
+        "findings": {
+          "title": "Befunde in diesem Datensatz",
+          "col": {
+            "site": "Stelle",
+            "attribution": "Zuordnung",
+            "why": "Begründung",
+            "hosted": "Gehosteter Planer",
+            "planpy": "plan.py"
+          },
+          "empty": "Dieser Datensatz enthält keine Befunde."
+        },
+        "command": {
+          "intro": "Geben Sie diesem Datensatz sein Urteil über Ihren Coding-Agent:",
+          "line": "motir check planner finding {id}",
+          "copy": "Kopieren",
+          "copyLabel": "Befehl kopieren",
+          "copied": "Befehl kopiert"
+        }
+      },
+      "recordPage": {
+        "runThrough": {
+          "heading": "Durchlauf",
+          "answer": {
+            "thru": "Läuft durch",
+            "stops": "Läuft nicht durch",
+            "none": "Keine Antwort gespeichert"
+          },
+          "hint": {
+            "thru": "Die Prüfung, die diesen Datensatz gespeichert hat, sagte voraus, dass ein Lauf diesen Plan vollständig umsetzen kann. Ihre Befunde stehen unten.",
+            "stops": "Die Prüfung sagte voraus, dass ein Lauf bei den Arbeitselementen unten anhält. Korrigieren Sie diese Arbeitselemente und führen Sie die Prüfung dann erneut aus.",
+            "none": "Keine Prüfung hat für diesen Datensatz eine Antwort gesendet, daher gibt es keine zu lesen. Das Urteil ändert daran nichts – die Antwort stammt von der Prüfung, nicht vom Agent."
+          },
+          "cards": {
+            "label": "Zu korrigierende Arbeitselemente",
+            "none": "Kein Arbeitselement gespeichert"
+          },
+          "a11y": {
+            "region": "Durchlauf: ob ein Lauf diesen Plan vollständig umsetzen kann"
+          }
+        },
+        "findingKey": {
+          "column": "Planungs-Bug",
+          "labelFinding": "· {site}",
+          "hint": "Ein Schlüssel wie MOTIR-123 aus dem Projekt dieses Datensatzes.",
+          "link": "Verknüpfen",
+          "linking": "Wird verknüpft…",
+          "remove": "Entfernen",
+          "removing": "Wird entfernt…",
+          "removeFinding": "Den Schlüssel des Planungs-Bugs von {site} entfernen",
+          "notAWorkItem": "Nicht verknüpft – {key} ist kein Arbeitselement im Projekt dieses Datensatzes. Es wurde nichts geschrieben.",
+          "linked": "{key} verknüpft.",
+          "removed": "Der Schlüssel des Planungs-Bugs wurde entfernt.",
+          "unchanged": "Bereits mit {key} verknüpft. Nichts wurde geändert.",
+          "openRecord": "Schlüssel von Planungs-Bugs werden verknüpft, sobald dieser Datensatz ein Urteil hat.",
+          "a11y": {
+            "empty": "Kein Schlüssel eines Planungs-Bugs"
+          }
+        }
       }
     },
     "usage": {

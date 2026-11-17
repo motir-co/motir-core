@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations } from 'next-intl/server';
-import { BookOpen, ChevronLeft } from 'lucide-react';
+import { BookOpen, ChevronLeft, ClipboardList } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { MotirAiError, PlannerFindingNotFoundError } from '@/lib/ai/errors';
 import type { PlannerFindingDetailDTO } from '@/lib/dto/plannerFindings';
@@ -84,6 +84,7 @@ export default async function AdminPlannerFindingPage({
           <h1 className="font-mono text-xl break-all text-(--el-text)">{detail.site}</h1>
           <TriageChip status={detail.status} label={status} />
         </div>
+        <RecordLink recordId={detail.recordId} label={t('detail.record')} />
         <TriageState detail={detail} triagedByName={triagedByName} />
       </header>
       {/* Below operator the controls render nothing: the writes need operator (MOTIR-10525). */}
@@ -112,6 +113,29 @@ function BackLink({ label }: { label: string }) {
       <ChevronLeft aria-hidden className="h-3.5 w-3.5" />
       {label}
     </Link>
+  );
+}
+
+/**
+ * The finding's RECORD row — design MOTIR-11470 Panel 12: `Record` and the
+ * record id, linking to the record page. Every finding belongs to exactly one
+ * record (the relation is required and backfilled), so it always renders.
+ */
+function RecordLink({ recordId, label }: { recordId: string; label: string }) {
+  return (
+    <p
+      data-testid="planner-finding-record-link"
+      className="flex items-center gap-1.5 font-sans text-sm text-(--el-text-secondary)"
+    >
+      <ClipboardList aria-hidden className="h-3.5 w-3.5 shrink-0" />
+      {label}
+      <Link
+        href={`/admin/planner-findings/records/${encodeURIComponent(recordId)}`}
+        className="font-mono text-xs break-all text-(--el-link) hover:underline"
+      >
+        {recordId}
+      </Link>
+    </p>
   );
 }
 

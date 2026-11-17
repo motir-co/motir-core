@@ -35,6 +35,12 @@ export type PlannerFindingAttributionValue = (typeof PLANNER_FINDING_ATTRIBUTION
 /** One finding as a list row. */
 export interface PlannerFindingRowDTO {
   id: string;
+  /**
+   * The record — the one plan check — the finding belongs to (MOTIR-11463). The
+   * store makes the relation required and backfilled every finding onto one;
+   * `''` only when a motir-ai deployed before records answers none.
+   */
+  recordId: string;
   source: string;
   planner: string;
   /** A NULL attribution upstream reads `unattributed`, as motir-ai's own filter and fingerprint read it. */
@@ -133,6 +139,85 @@ export interface PlannerFindingListFilters {
   outcome?: string;
   status?: string;
   fingerprint?: string;
+  cursor?: string;
+}
+
+// ── The console's RECORDS (Story MOTIR-11455 · Subtask MOTIR-11463) ─────────
+//
+// What crosses from `plannerFindingRecordsConsoleService` to the Records view and
+// the record page (design MOTIR-11470 · MOTIR-11509 · MOTIR-11591). As above, the
+// wire strings pass through as they came. The check's answer, its stop cards and
+// each finding's `bugKey` are rendered as stored: nothing here defaults, derives
+// or resolves one. A record carries no key set of its own — a key lives on its
+// finding — so no DTO below declares one.
+
+export const PLANNER_FINDING_VERDICT_STATE_VALUES = ['open', 'attributed'] as const;
+
+/** One record: the plan check's context, its verdict and the check's run-through answer. */
+export interface PlannerFindingRecordDTO {
+  id: string;
+  source: string;
+  planner: string;
+  planId: string;
+  planTitle: string | null;
+  planSessionId: string | null;
+  jobId: string | null;
+  authorModel: string | null;
+  baselineBranch: string | null;
+  baselineCommit: string | null;
+  verdictState: string;
+  /** The core user id of whoever gave the verdict. */
+  verdictBy: string | null;
+  /** ISO string. */
+  verdictAt: string | null;
+  /** `THRU`, `STOPS`, or null when no check sent an answer — never defaulted. */
+  runThroughAnswer: string | null;
+  /** The stop cards in stored order; `[]` when there are none. */
+  runThroughStopCards: string[];
+  /** ISO string. */
+  createdAt: string;
+}
+
+/** One record as a Records-view row: the record plus its two counts. */
+export interface PlannerFindingRecordRowDTO extends PlannerFindingRecordDTO {
+  findingCount: number;
+  attributedCount: number;
+}
+
+/** One finding of a record, as the record page's findings table draws it. */
+export interface PlannerFindingRecordFindingDTO {
+  id: string;
+  site: string;
+  prediction: string;
+  outcome: string;
+  /** Null when the finding carries none — the record page decides whether it is drawn at all. */
+  attribution: string | null;
+  why: string | null;
+  hostedCell: string | null;
+  planpyCell: string | null;
+  /** The finding's own planning-bug key as stored text, never resolved. */
+  bugKey: string | null;
+}
+
+/** One record in full, with its findings in stored order. */
+export interface PlannerFindingRecordDetailDTO {
+  record: PlannerFindingRecordDTO;
+  findings: PlannerFindingRecordFindingDTO[];
+}
+
+export interface PlannerFindingRecordListDTO {
+  records: PlannerFindingRecordRowDTO[];
+  nextCursor: string | null;
+}
+
+/**
+ * The Records view's filters, as the page reads them from the URL. The console
+ * service drops a value outside its closed set rather than sending it.
+ */
+export interface PlannerFindingRecordListFilters {
+  verdict?: string;
+  planner?: string;
+  source?: string;
   cursor?: string;
 }
 

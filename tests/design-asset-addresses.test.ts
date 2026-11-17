@@ -1157,15 +1157,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/login',
     why: "Not an address: Claude Code's own `/login` slash command, typed in the agent's terminal to sign in (docs/decisions/agent-terminal.md Q9: the sign-in completes through the vendor's own flow). The panel's not-signed-in line quotes it verbatim. PERMANENT.",
   },
-  // ── Planner findings · Records (design MOTIR-11470) ─────────────────────
-  //    Forward-looking: the record page is drawn before MOTIR-11463 serves it.
-  //    Only the notes write the address in a syntax this sweep reads (a quoted
-  //    `/path`); the mock names it inside <code>, which the sweep does not read.
-  {
-    file: 'design/platform-admin/design-notes.md',
-    address: '/admin/planner-findings/records/[id]',
-    why: 'FORWARD-LOOKING: the record page of the Planner findings Records view, drawn before its route exists. MOTIR-11463 serves `app/(admin)/admin/planner-findings/records/[id]` and deletes this row in the same diff, because the row stops applying the moment the route lands.',
-  },
 ];
 
 type Entry = { file: string; address: string; why: string };

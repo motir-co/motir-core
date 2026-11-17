@@ -1,4 +1,4 @@
-import { BookOpen, Bug, EyeOff } from 'lucide-react';
+import { BookOpen, Bug, CircleCheck, CircleDot, EyeOff } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 
 /**
@@ -54,5 +54,32 @@ export function TriageChip({ status, label }: { status: string; label: string })
 export function OutcomeChip({ outcome, label }: { outcome: string; label: string }) {
   if (outcome === 'fixed') return <Pill severity="success">{label}</Pill>;
   if (outcome === 'fix_failed') return <Pill severity="danger">{label}</Pill>;
+  return <Pill tone="neutral">{label}</Pill>;
+}
+
+/**
+ * The record's VERDICT chip — design MOTIR-11470 § Elements: two values, each a
+ * word, a glyph and a tint (Open peach, Attributed mint) with `--el-text-strong`
+ * ink, so neither reads by colour alone. A value the design never drew is the
+ * neutral chip carrying the raw label.
+ */
+export function VerdictChip({ state, label }: { state: string; label: string }) {
+  const glyph = 'h-3 w-3';
+  if (state === 'open') {
+    return (
+      <Pill className="border-transparent bg-(--el-tint-peach) text-(--el-text-strong)">
+        <CircleDot aria-hidden className={glyph} />
+        {label}
+      </Pill>
+    );
+  }
+  if (state === 'attributed') {
+    return (
+      <Pill className="border-transparent bg-(--el-tint-mint) text-(--el-text-strong)">
+        <CircleCheck aria-hidden className={glyph} />
+        {label}
+      </Pill>
+    );
+  }
   return <Pill tone="neutral">{label}</Pill>;
 }
