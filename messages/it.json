@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Una Bacheca deve avere almeno una colonna.",
       "toastColumnNotEmptyError": "«{name}» contiene ancora elementi di lavoro: rimappa prima i suoi stati.",
       "toastRenameBoardError": "Impossibile rinominare la Bacheca. Il nome precedente è stato ripristinato.",
-      "errorTitle": "Impossibile caricare le impostazioni della Bacheca",
+      "errorTitle": "Impossibile salvare la modifica",
       "errorDescription": "Si è verificato un errore durante il caricamento della configurazione di questa Bacheca. Riprova.",
       "storedFilter": {
         "title": "Filtro della Bacheca",

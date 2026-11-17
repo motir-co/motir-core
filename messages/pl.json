@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Tablica musi mieć co najmniej jedną kolumnę.",
       "toastColumnNotEmptyError": "Kolumna „{name}” nadal zawiera elementy robocze — najpierw zmapuj ponownie jej statusy.",
       "toastRenameBoardError": "Nie udało się zmienić nazwy tablicy. Przywrócono poprzednią nazwę.",
-      "errorTitle": "Nie udało się załadować ustawień tablicy",
+      "errorTitle": "Nie udało się zapisać zmiany",
       "errorDescription": "Coś poszło nie tak podczas ładowania konfiguracji tej tablicy. Spróbuj ponownie.",
       "storedFilter": {
         "title": "Filtr Tablicy",

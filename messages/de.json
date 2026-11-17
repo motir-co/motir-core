@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Ein Board muss mindestens eine Spalte behalten.",
       "toastColumnNotEmptyError": "„{name}“ enthält noch Arbeitselemente – ordnen Sie zuerst ihre Status neu zu.",
       "toastRenameBoardError": "Das Board konnte nicht umbenannt werden. Der vorherige Name wurde wiederhergestellt.",
-      "errorTitle": "Board-Einstellungen konnten nicht geladen werden",
+      "errorTitle": "Die Änderung konnte nicht gespeichert werden",
       "errorDescription": "Beim Laden der Konfiguration dieses Boards ist ein Fehler aufgetreten. Versuchen Sie es erneut.",
       "storedFilter": {
         "title": "Board-Filter",

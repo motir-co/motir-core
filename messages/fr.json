@@ -2504,7 +2504,7 @@
       "toastLastColumnError": "Un Tableau doit conserver au moins une colonne.",
       "toastColumnNotEmptyError": "« {name} » contient encore des éléments de travail : réassociez d’abord ses statuts.",
       "toastRenameBoardError": "Impossible de renommer le Tableau. L’ancien nom a été rétabli.",
-      "errorTitle": "Impossible de charger les paramètres du Tableau",
+      "errorTitle": "Impossible d’enregistrer la modification",
       "errorDescription": "Une erreur s’est produite lors du chargement de la configuration de ce Tableau. Réessayez.",
       "storedFilter": {
         "title": "Filtre du Tableau",
