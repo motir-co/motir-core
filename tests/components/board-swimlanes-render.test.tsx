@@ -209,7 +209,7 @@ describe('SwimlaneBoard', () => {
     expect(
       within(screen.getByTestId('lane-cell-c1-u2')).queryByTestId('board-card-PROD-2'),
     ).toBeNull();
-    // The header: loaded = the sum over the column's cells, over the column's total.
+    // The header: loaded = the distinct cards over the column's cells, over its total.
     expect(screen.getByTestId('board-count-c1').textContent).toBe('1 of 3');
     expect(screen.getByTestId('board-count-c2').textContent).toBe('1');
   });
@@ -487,5 +487,179 @@ describe('laneScrollStore', () => {
     off();
     store.follow('u1', 0);
     expect(seen).toHaveBeenCalledTimes(2);
+  });
+});
+
+// MOTIR-11585 — the field lanes' headers: each wears the chip or glyph the item
+// page shows, names its value in the reader's locale, and each new catch-all
+// reads its own translated "No …".
+describe('SwimlaneBoard field lane headers', () => {
+  function renderLanes(swimlanes: BoardSwimlaneDto[]) {
+    return render(
+      <DndContext>
+        <SwimlaneBoard
+          boardId="b-fields"
+          columns={COLUMNS}
+          swimlanes={swimlanes}
+          assigneeNameById={new Map()}
+          onOpenQuickView={noop}
+          onSetWipLimit={noop}
+          activeCardId={null}
+          overLaneKey={null}
+        />
+      </DndContext>,
+    );
+  }
+  const head = (key: string) => screen.getByTestId(`swimlane-headcontent-${key}`);
+  const lane = (kind: BoardSwimlaneDto['kind'], key: string, label = key): BoardSwimlaneDto => ({
+    key,
+    label,
+    kind,
+    count: 1,
+  });
+
+  it('enum lanes read their translated value, their catch-alls their own name', () => {
+    renderLanes([
+      lane('type', 'code'),
+      lane('difficulty', 'high'),
+      lane('executor', 'coding_agent'),
+      lane('executor', 'human'),
+      lane('type', BOARD_SWIMLANE_NO_VALUE, 'No type'),
+    ]);
+    expect(head('code').textContent).toContain('Code');
+    expect(head('high').textContent).toMatch(/High/);
+    expect(head('coding_agent').textContent).not.toContain('coding_agent');
+    expect(head('coding_agent').querySelector('svg.lucide-bot')).not.toBeNull();
+    expect(head('human').querySelector('svg.lucide-user')).not.toBeNull();
+    expect(head(BOARD_SWIMLANE_NO_VALUE).textContent).toContain('No type');
+    // The collapse control is named by the same words.
+    expect(screen.getByRole('button', { name: /Collapse.*Code|Code.*collapse/i })).toBeTruthy();
+  });
+
+  it('kind lanes wear the kind’s icon; tag lanes their glyph and the server’s name', () => {
+    renderLanes([
+      lane('kind', 'story'),
+      lane('label', 'l1', 'ui'),
+      lane('component', 'k1', 'Billing'),
+      lane('repository', 'r1', 'motir-core'),
+      lane('reporter', 'p1', 'Ana Ruiz'),
+      lane('label', BOARD_SWIMLANE_NO_VALUE, 'No label'),
+    ]);
+    expect(head('story').textContent).toContain('Story');
+    expect(head('l1').querySelector('svg.lucide-tag')).not.toBeNull();
+    expect(head('l1').textContent).toContain('ui');
+    expect(head('k1').querySelector('svg.lucide-puzzle')).not.toBeNull();
+    expect(
+      head('r1').querySelector('svg.lucide-folder-git-2, svg.lucide-folder-git2'),
+    ).not.toBeNull();
+    expect(head('r1').textContent).toContain('motir-core');
+    expect(head('p1').textContent).toContain('Ana Ruiz');
+    expect(head(BOARD_SWIMLANE_NO_VALUE).textContent).toContain('No label');
+  });
+
+  it('the column header counts a card shown in two label lanes once (MOTIR-11585)', () => {
+    // Column c1 holds 3 cards: w1 carries labels l1 AND l2, w2 only l1, w3 none.
+    // Every cell is fully loaded, so the header reads the total with no "of".
+    const both = (laneKey: string) => card({ id: 'w1', key: 1, swimlaneKey: laneKey });
+    const page = (
+      columnId: string,
+      laneKey: string,
+      cards: BoardCardDto[],
+      totalCount: number,
+    ) => ({
+      columnId,
+      laneKey,
+      cards,
+      totalCount,
+      cursor: null,
+      planHolds: {},
+    });
+    const api = cellsApi([
+      page('c1', 'l1', [both('l1'), card({ id: 'w2', key: 2, swimlaneKey: 'l1' })], 2),
+      page('c1', 'l2', [both('l2')], 1),
+      page('c1', BOARD_SWIMLANE_NO_VALUE, [card({ id: 'w3', key: 3 })], 1),
+    ]);
+    render(
+      <DndContext>
+        <SwimlaneBoard
+          boardId="b-multi"
+          columns={[column({ id: 'c1', name: 'To Do', totalCount: 3 })]}
+          swimlanes={[
+            lane('label', 'l1', 'api'),
+            lane('label', 'l2', 'ui'),
+            lane('label', BOARD_SWIMLANE_NO_VALUE, 'No label'),
+          ]}
+          assigneeNameById={new Map()}
+          onOpenQuickView={noop}
+          onSetWipLimit={noop}
+          activeCardId={null}
+          overLaneKey={null}
+          cells={api}
+        />
+      </DndContext>,
+    );
+    // Four renderings, three cards: the header says 3, not "4 of 3".
+    expect(screen.getAllByTestId('board-card-PROD-1')).toHaveLength(2);
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('3');
+  });
+
+  it('a column header still shows more to load while a multi-value lane is unloaded', () => {
+    const page = (
+      columnId: string,
+      laneKey: string,
+      cards: BoardCardDto[],
+      totalCount: number,
+    ) => ({
+      columnId,
+      laneKey,
+      cards,
+      totalCount,
+      cursor: null,
+      planHolds: {},
+    });
+    // Column of 4: the loaded l1 and l2 cells hold w1 twice and w2 (2 distinct);
+    // a sum would read 3 of 4. The no-label lane has not loaded yet.
+    const api = cellsApi([
+      page(
+        'c1',
+        'l1',
+        [
+          card({ id: 'w1', key: 1, swimlaneKey: 'l1' }),
+          card({ id: 'w2', key: 2, swimlaneKey: 'l1' }),
+        ],
+        2,
+      ),
+      page('c1', 'l2', [card({ id: 'w1', key: 1, swimlaneKey: 'l2' })], 1),
+    ]);
+    render(
+      <DndContext>
+        <SwimlaneBoard
+          boardId="b-multi-more"
+          columns={[column({ id: 'c1', name: 'To Do', totalCount: 4 })]}
+          swimlanes={[
+            lane('label', 'l1', 'api'),
+            lane('label', 'l2', 'ui'),
+            lane('label', BOARD_SWIMLANE_NO_VALUE, 'No label'),
+          ]}
+          assigneeNameById={new Map()}
+          onOpenQuickView={noop}
+          onSetWipLimit={noop}
+          activeCardId={null}
+          overLaneKey={null}
+          cells={api}
+        />
+      </DndContext>,
+    );
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('2 of 4');
+  });
+
+  it('an enum value the glossary does not know falls back to the server label', () => {
+    renderLanes([
+      lane('kind', 'theme', 'Theme (new)'),
+      lane('kind', BOARD_SWIMLANE_NO_VALUE, 'None'),
+    ]);
+    expect(head('theme').textContent).toContain('Theme (new)');
+    // A catch-all with no translated name of its own keeps the server's label.
+    expect(head(BOARD_SWIMLANE_NO_VALUE).textContent).toContain('None');
   });
 });

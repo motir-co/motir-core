@@ -144,6 +144,9 @@ function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
   // The saved page (MOTIR-9436) and the failed background save (MOTIR-10091) ride the
   // same offers, each dropped alone when it does not read.
   const requirementPage = plan ? toRequirementPageRef(v.requirementPage) : undefined;
+  // The kept too-far request a decision offers (MOTIR-11521): its place among the
+  // conversation's kept requests, dropped alone when it does not read.
+  const afterDecision = plan ? toAfterDecision(v) : undefined;
   return {
     kind: v.kind as AnswerOfferKindDto,
     requestMd: v.requestMd,
@@ -152,7 +155,21 @@ function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
     ...(requirementPage ? { requirementPage } : {}),
     ...(plan && v.requirementPageFailed === true ? { requirementPageFailed: true as const } : {}),
     ...(bug ? { bug } : {}),
+    ...(afterDecision ? { afterDecision } : {}),
   };
+}
+
+/** A stored offer's after-decision position (MOTIR-11521), or undefined unless it
+ *  names its source turn and carries a position within a total, both positive. */
+function toAfterDecision(
+  v: Record<string, unknown>,
+): { position: number; total: number } | undefined {
+  const position = v.farRequestPosition;
+  const total = v.farRequestTotal;
+  if (typeof v.farRequestTurnId !== 'string') return undefined;
+  if (typeof position !== 'number' || !Number.isInteger(position) || position < 1) return undefined;
+  if (typeof total !== 'number' || !Number.isInteger(total) || total < position) return undefined;
+  return { position, total };
 }
 
 /** A run pause row → its DTO (MOTIR-8007). The delivery state is derived: an answer

@@ -332,6 +332,11 @@ export interface PlanChangeRailProps {
    */
   onSkipFinalCheck?: () => Promise<'skipped' | 'not_running'>;
   /**
+   * May the viewer change project AI settings (`ai:configure`)? The Skip the final
+   * check confirm words its settings line by it (MOTIR-11548). Absent → read-only.
+   */
+  canManageSettings?: boolean;
+  /**
    * THE PLAN GATE'S STATE for the plan in hand (Story MOTIR-6012 · MOTIR-6037; design
    * Part XXII §22.4–§22.5) — the SAME derivation the canvas bar reads, so the review block
    * mirrors the gate it sits beside. Absent → `ungated`: the shipped words.
@@ -467,6 +472,7 @@ export function PlanChangeRail({
   onDiscard,
   onStop,
   onSkipFinalCheck,
+  canManageSettings = false,
   gateView = { kind: 'ungated' },
   declining = false,
   onRequestDecline,
@@ -812,6 +818,13 @@ export function PlanChangeRail({
   // THE ENDED SESSION (AMENDMENT 23 §1): read from the server's row, so a reload
   // draws the same end. It accepts no turn — the composer slot says so instead.
   const ended = Boolean(state.session?.endedAt);
+  // Ended by Approve or Decline: its kept too-far requests are offered BELOW the end
+  // marker (MOTIR-11521), so the marker is drawn above the first such offer turn.
+  const decidedEnd =
+    ended && (state.session?.endReason === 'approved' || state.session?.endReason === 'declined');
+  const firstAfterDecisionIndex = decidedEnd
+    ? turns.findIndex((t) => t.role === 'assistant' && t.offer?.afterDecision)
+    : -1;
   // The plan offer's MID-PLANNING variant (MOTIR-9294): a PLANNING run in flight, a
   // plan still being written (a reopened one is the live review), or a plan still
   // waiting for its decision. An ask streaming carries no plan id, and plans nothing.
@@ -936,7 +949,10 @@ export function PlanChangeRail({
     i: number,
   ): Omit<PlanOfferProps, 'turnId' | 'offer' | 'workItemRefs'> => ({
     answerable: offerAnswerable(turns, i, {
-      canContinue: !ended && !state.readOnly,
+      // A decided conversation takes no turn, but its kept requests' offers are still
+      // answered on it (MOTIR-11521): Confirm opens a new conversation.
+      canContinue:
+        (!ended || (decidedEnd && Boolean(turn.offer?.afterDecision))) && !state.readOnly,
       hasActions: Boolean(onConfirmPlanOffer && onDeclinePlanOffer),
     }),
     answering: offerAnsweringTurnId === turn.id,
@@ -1436,6 +1452,7 @@ export function PlanChangeRail({
             {...(onSkipFinalCheck && state.phase === 'streaming'
               ? { onSkipCheck: onSkipFinalCheck }
               : {})}
+            canManageSettings={canManageSettings}
           />
         </div>
       </div>
@@ -1759,6 +1776,11 @@ export function PlanChangeRail({
           const turn = turns[i]!;
           return (
             <Fragment key={turn.id}>
+              {/* On a conversation a decision ended, the marker stays where the decision
+                happened and the kept requests' offers follow it (MOTIR-11521). */}
+              {i === firstAfterDecisionIndex && state.session ? (
+                <SessionEndMarker session={state.session} />
+              ) : null}
               {/* What the answering session said while it worked (MOTIR-10235),
                 stored against the conversation, above the answer it produced. */}
               {turn.role === 'assistant' ? (
@@ -2067,7 +2089,9 @@ export function PlanChangeRail({
             {tc('error.failedClosed')}
           </p>
         ) : null}
-        {ended && state.session ? <SessionEndMarker session={state.session} /> : null}
+        {ended && state.session && firstAfterDecisionIndex < 0 ? (
+          <SessionEndMarker session={state.session} />
+        ) : null}
         {/* The plan this ended session made was CARRIED to a newer one (design
             state 4, right) — read from the server's row, so a reload says it too. */}
         {ended && state.session?.planMovedToSessionId ? (
@@ -2689,17 +2713,27 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
               never a second inline treatment invented for this surface. THIS IS
               ALSO HOW AN ANSWER CITES: a citation is that chip, in the sentence
               that rests on it, and there is no trailing source list. */}
-          <MarkdownView
-            value={turn.body}
-            workItemRefs={workItemRefs}
-            renderProposalRef={(planItemId, label) => (
-              <ProposalRef
-                planItemId={planItemId}
-                label={label}
-                {...(midRun.onSelectProposal ? { onSelect: midRun.onSelectProposal } : {})}
-              />
-            )}
-          />
+          {turn.offer?.afterDecision ? (
+            // A kept too-far request offered after the decision (MOTIR-11521): no model
+            // wrote this turn, so its words are the catalogue's lead line and cue.
+            <AfterDecisionLead
+              position={turn.offer.afterDecision.position}
+              total={turn.offer.afterDecision.total}
+              live={(turn.offer.state ?? 'undecided') === 'undecided'}
+            />
+          ) : (
+            <MarkdownView
+              value={turn.body}
+              workItemRefs={workItemRefs}
+              renderProposalRef={(planItemId, label) => (
+                <ProposalRef
+                  planItemId={planItemId}
+                  label={label}
+                  {...(midRun.onSelectProposal ? { onSelect: midRun.onSelectProposal } : {})}
+                />
+              )}
+            />
+          )}
           {/* The size of the evidence base — a NUMBER, not a second chip list.
               An answer may rest on items its prose never names, and `citations`
               is the grounding contract; saying how many keeps that checkable
@@ -2724,7 +2758,9 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
             bubble, aligned with its left edge, a sibling of the mid-run panels. A
             cannot-start or being-planned line carries its own avatar spacer. */}
         {planOffer && turn.offer ? (
-          turn.offer.state === 'undecided' && turn.offer.cannotStart ? (
+          turn.offer.state === 'undecided' &&
+          turn.offer.cannotStart &&
+          !turn.offer.afterDecision ? (
             <PlanOffer
               turnId={turn.id}
               offer={turn.offer}
@@ -2862,6 +2898,37 @@ const RestartControl = forwardRef<
     </Tooltip>
   );
 });
+
+/**
+ * The words of a decided conversation's offer turn (Story MOTIR-11515 · MOTIR-11521;
+ * design `plan-offer--after-decision.mock.html`): the lead line, and — only while the
+ * offer is live and more than one request was kept — which request this is out of how
+ * many. A count, never a list: later requests are not turns yet.
+ */
+function AfterDecisionLead({
+  position,
+  total,
+  live,
+}: {
+  position: number;
+  total: number;
+  live: boolean;
+}) {
+  const t = useTranslations('planningWorkspace.planOffer.afterDecision');
+  return (
+    <>
+      <p data-testid="plan-offer-after-decision-lead">{t('lead')}</p>
+      {live && total > 1 ? (
+        <p
+          className="mt-1 text-xs text-(--el-text-secondary)"
+          data-testid="plan-offer-after-decision-cue"
+        >
+          {position === total ? t('cueLast', { position, total }) : t('cue', { position, total })}
+        </p>
+      ) : null}
+    </>
+  );
+}
 
 function Turn(props: TurnProps) {
   const Render = TURN_RENDERERS[props.turn.role];

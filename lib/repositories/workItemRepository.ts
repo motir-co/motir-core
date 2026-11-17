@@ -5278,6 +5278,106 @@ export const workItemRepository = {
   },
 
   /**
+   * Per-value card counts of a SINGLE-VALUE lane field among the board's cards
+   * (MOTIR-11585) — one row per distinct value of `field`, `null` being the
+   * catch-all bucket (a card with no type / difficulty / executor). Same shape,
+   * scope and filter as {@link aggregateBoardLanesByPriority}: one grouped row
+   * per lane, never one per card.
+   */
+  async aggregateBoardLanesByField(
+    field: BoardLaneScalarField,
+    projectId: string,
+    workspaceId: string,
+    statusKeys: string[],
+    sprintId?: string,
+    filter?: BoardCardFilter,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ value: string | null; count: number }>> {
+    if (statusKeys.length === 0) return [];
+    const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
+    const column = laneScalarSql(field, 'w');
+    const client = tx ?? dbRead;
+    return client.$queryRaw<Array<{ value: string | null; count: number }>>`
+      SELECT ${column} AS "value", COUNT(*)::int AS "count"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+          AND w."status" = ANY(${statusKeys})
+          ${sprintScope}
+          AND (${boardCardFilterSql(filter)})
+        GROUP BY 1`;
+  },
+
+  /**
+   * Per-value card counts of a MULTI-VALUE lane field among the board's cards
+   * (MOTIR-11585) — one row per value at least one board card carries, plus one
+   * `valueId: null` row counting the cards that carry none (the catch-all; it
+   * is absent when every card has a value). A card with two labels counts once
+   * in EACH of its lanes, so the rows sum to more than the board's card total —
+   * by design: the column totals are a separate count.
+   */
+  async aggregateBoardLanesByTag(
+    tag: BoardLaneTag,
+    projectId: string,
+    workspaceId: string,
+    statusKeys: string[],
+    sprintId?: string,
+    filter?: BoardCardFilter,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ valueId: string | null; count: number }>> {
+    if (statusKeys.length === 0) return [];
+    const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
+    const { table, valueColumn } = LANE_TAG_JOIN[tag];
+    const join = Prisma.raw(`"${table}"`);
+    const valueCol = Prisma.raw(`j."${valueColumn}"`);
+    const cards = Prisma.sql`
+      SELECT w."id"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+          AND w."status" = ANY(${statusKeys})
+          ${sprintScope}
+          AND (${boardCardFilterSql(filter)})`;
+    const client = tx ?? dbRead;
+    const rows = await client.$queryRaw<Array<{ valueId: string | null; count: number }>>`
+      WITH cards AS (${cards})
+      SELECT ${valueCol} AS "valueId", COUNT(*)::int AS "count"
+        FROM cards c
+        JOIN ${join} j ON j."work_item_id" = c."id"
+        GROUP BY ${valueCol}
+      UNION ALL
+      SELECT NULL, COUNT(*)::int
+        FROM cards c
+        WHERE NOT EXISTS (SELECT 1 FROM ${join} j WHERE j."work_item_id" = c."id")`;
+    return rows.filter((r) => r.valueId !== null || r.count > 0);
+  },
+
+  /**
+   * The MULTI-VALUE lane values of a BOUNDED set of cards (MOTIR-11585) — one
+   * `(cardId, valueId)` row per join row, in ONE read over the loaded ids (no
+   * N+1). A card with no value contributes no row.
+   */
+  async findLaneTagValues(
+    tag: BoardLaneTag,
+    cardIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ cardId: string; valueId: string }>> {
+    if (cardIds.length === 0) return [];
+    const { table, valueColumn } = LANE_TAG_JOIN[tag];
+    const join = Prisma.raw(`"${table}"`);
+    const valueCol = Prisma.raw(`j."${valueColumn}"`);
+    const client = tx ?? dbRead;
+    return client.$queryRaw<Array<{ cardId: string; valueId: string }>>`
+      SELECT j."work_item_id" AS "cardId", ${valueCol} AS "valueId"
+        FROM ${join} j
+        WHERE j."work_item_id" = ANY(${cardIds})`;
+  },
+
+  /**
    * Per-ANCESTOR-EPIC card counts among the board's cards — one row per epic
    * that is the nearest epic ancestor of at least one board card. A recursive
    * CTE walks each card UP its `parentId` chain, stopping at the first `epic`
@@ -6538,10 +6638,12 @@ export interface BoardCardFilter {
 }
 
 /**
- * A board's STORED filter as the board reads take it (MOTIR-10560): a SECOND
- * predicate beside the toolbar's `ast`, compiled on its own and AND-ed, never
- * merged into one AST (the AST is flat, so `stored(or) ∧ toolbar(or)` is not one
- * AST). Either the validated stored AST with the referents its Epic-5
+ * A board's STORED filter as the board reads take it (MOTIR-10560): a
+ * predicate in its own slot beside `ast`, compiled on its own and AND-ed when
+ * both are given, never merged into one AST (the AST is flat, so
+ * `stored(or) ∧ toolbar(or)` is not one AST). The board service sets at most one
+ * of the two — a header filter replaces the stored one (MOTIR-11564) — so the
+ * slot is also how a single-predicate read (the sprint points) takes either. Either the validated stored AST with the referents its Epic-5
  * conditions resolve against (a stale referent compiles to `FALSE`, the
  * compiler's shipped rule), or `matchNothing` for a stored envelope that no
  * longer decodes or validates: a board's filter is its scope, so an unreadable
@@ -6569,7 +6671,57 @@ export type StoredFilterPredicate =
 export type BoardLanePredicate =
   | { kind: 'assignee'; assigneeId: string | null }
   | { kind: 'priority'; priority: WorkItemPriority }
-  | { kind: 'epic'; epicId: string | null };
+  | { kind: 'epic'; epicId: string | null }
+  | { kind: 'field'; field: BoardLaneScalarField; value: string | null }
+  | { kind: 'tag'; tag: BoardLaneTag; valueId: string | null };
+
+/**
+ * The SINGLE-VALUE work-item columns a board can group by (MOTIR-11585), each a
+ * column of `work_item`. `reporterId` and `kind` are never null; `type`,
+ * `difficulty` and `executor` are leaf-only and null on an epic, a story or an
+ * untyped leaf — the catch-all lane (`value: null`).
+ */
+export type BoardLaneScalarField = 'reporterId' | 'type' | 'difficulty' | 'executor' | 'kind';
+
+/**
+ * The MULTI-VALUE work-item fields a board can group by (MOTIR-11585), each a
+ * join table. A card belongs to the lane of EVERY row it has there, and to the
+ * catch-all (`valueId: null`) when it has none.
+ */
+export type BoardLaneTag = 'label' | 'component' | 'repository';
+
+/** Each scalar lane field's column, as a raw identifier (a closed set, never input). */
+const LANE_SCALAR_COLUMN: Record<BoardLaneScalarField, string> = {
+  reporterId: 'reporterId',
+  type: 'type',
+  difficulty: 'difficulty',
+  executor: 'executor',
+  kind: 'kind',
+};
+
+/** Each tag's join table and its value column, as raw identifiers (a closed set). */
+const LANE_TAG_JOIN: Record<BoardLaneTag, { table: string; valueColumn: string }> = {
+  label: { table: 'work_item_label', valueColumn: 'label_id' },
+  component: { table: 'work_item_component', valueColumn: 'component_id' },
+  repository: { table: 'work_item_repository', valueColumn: 'project_repo_id' },
+};
+
+/** `<alias>."<column>"::text` for a scalar lane field — the enum's string value. */
+function laneScalarSql(field: BoardLaneScalarField, alias: string): Prisma.Sql {
+  return Prisma.raw(`"${alias}"."${LANE_SCALAR_COLUMN[field]}"::text`);
+}
+
+/** The lane condition of one TAG lane over alias `w`: the card has that value
+ * (an `EXISTS` over the join table), or — the catch-all — it has none at all. */
+function laneTagSql(tag: BoardLaneTag, valueId: string | null, alias: string): Prisma.Sql {
+  const { table, valueColumn } = LANE_TAG_JOIN[tag];
+  const join = Prisma.raw(`"${table}"`);
+  const valueCol = Prisma.raw(`j."${valueColumn}"`);
+  const card = Prisma.raw(`"${alias}"."id"`);
+  return valueId === null
+    ? Prisma.sql`NOT EXISTS (SELECT 1 FROM ${join} j WHERE j."work_item_id" = ${card})`
+    : Prisma.sql`EXISTS (SELECT 1 FROM ${join} j WHERE j."work_item_id" = ${card} AND ${valueCol} = ${valueId})`;
+}
 
 /**
  * The lane condition over alias `w` (MOTIR-11444). The `epic` form is the
@@ -6598,6 +6750,13 @@ export function boardLanePredicateSql(
   if (lane.kind === 'priority') {
     return Prisma.sql`${a}."priority"::text = ${lane.priority}`;
   }
+  if (lane.kind === 'field') {
+    const column = laneScalarSql(lane.field, alias);
+    return lane.value === null
+      ? Prisma.sql`${column} IS NULL`
+      : Prisma.sql`${column} = ${lane.value}`;
+  }
+  if (lane.kind === 'tag') return laneTagSql(lane.tag, lane.valueId, alias);
   const nearestEpic = Prisma.sql`
     WITH RECURSIVE up AS (
       SELECT ${a}."id" AS node_id, ${a}."parentId", ${a}."kind"::text AS kind

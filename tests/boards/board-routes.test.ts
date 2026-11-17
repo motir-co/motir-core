@@ -277,6 +277,116 @@ describe('board API routes', () => {
 // Board CONFIG routes (Subtask 3.3.3) — PATCH /api/board (swimlane group-by) +
 // PATCH /api/board/columns/[columnId] (WIP limit). Transport contract only; the
 // validation/authorization behaviour itself is covered in board-config-service.
+describe('GET /api/board — the header filter replaces the stored filter (MOTIR-11564)', () => {
+  const BUGS = { v: 'v1', c: 'and', f: [['kind', 'is_any_of', ['bug']]] };
+  const tasks = encodeFilterParam(facetFilterToAst({ ...EMPTY_FILTER, kinds: ['task'] }));
+
+  /** A default board storing Kind is Bug, over two bugs, a task and a story. */
+  async function storedBugs() {
+    const fx = await makeFixture();
+    const ctx = { userId: fx.userId, workspaceId: fx.workspaceId };
+    for (const [kind, title] of [
+      ['bug', 'bug one'],
+      ['bug', 'bug two'],
+      ['task', 'a task'],
+      ['story', 'a story'],
+    ] as const) {
+      await workItemsService.createWorkItem({ projectId: fx.projectId, kind, title }, ctx);
+    }
+    await adminDb.board.updateMany({
+      where: { projectId: fx.projectId },
+      data: { filter: BUGS as never },
+    });
+    return fx;
+  }
+
+  async function todoTitles(query: string) {
+    const res = await boardGetReq(query);
+    expect(res.status).toBe(200);
+    const board = (await res.json()) as BoardProjectionDto;
+    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
+    return {
+      board,
+      todo,
+      titles: todo.cards.map((c) => c.title).sort(),
+    };
+  }
+
+  it('no header filter → the stored filter; ?filter= → the header filter alone', async () => {
+    await storedBugs();
+    const stored = await todoTitles('');
+    expect(stored.titles).toEqual(['bug one', 'bug two']);
+    expect(stored.todo.totalCount).toBe(2);
+    expect(stored.board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [], labels: [] });
+
+    const header = await todoTitles(`?filter=${encodeURIComponent(tasks)}`);
+    expect(header.titles).toEqual(['a task']);
+    expect(header.todo.totalCount).toBe(1);
+    // The response still carries the board's own filter.
+    expect(header.board.storedFilter?.envelope).toEqual(BUGS);
+  });
+
+  it('?boardFilter=off → the whole scope; beside ?filter= → the header filter alone', async () => {
+    await storedBugs();
+    const off = await todoTitles('?boardFilter=off');
+    expect(off.titles).toEqual(['a story', 'a task', 'bug one', 'bug two']);
+    expect(off.todo.totalCount).toBe(4);
+
+    const both = await todoTitles(`?boardFilter=off&filter=${encodeURIComponent(tasks)}`);
+    expect(both.titles).toEqual(['a task']);
+  });
+
+  it('only `off` lifts it, and a forged ?filter= reads as the board’s own filter', async () => {
+    await storedBugs();
+    expect((await todoTitles('?boardFilter=on')).titles).toEqual(['bug one', 'bug two']);
+    expect((await todoTitles('?filter=not-a-valid-param')).titles).toEqual(['bug one', 'bug two']);
+  });
+
+  it('the page doors read under the same rule as the projection', async () => {
+    const fx = await storedBugs();
+    const ctx = { userId: fx.userId, workspaceId: fx.workspaceId };
+    for (let i = 0; i < 10; i++) {
+      await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'task', title: `more task ${i}` },
+        ctx,
+      );
+    }
+    const { board, todo } = await todoTitles('?boardFilter=off');
+    expect(todo.totalCount).toBe(14);
+    const qs = new URLSearchParams({
+      boardId: board.boardId,
+      cursor: todo.cursor!,
+      boardFilter: 'off',
+    });
+    const res = await pageGET(new Request(`${BASE}/api/board/columns/${todo.id}/cards?${qs}`), {
+      params: Promise.resolve({ columnId: todo.id }),
+    });
+    expect(res.status).toBe(200);
+    const page = (await res.json()) as BoardColumnPageDto;
+    expect(page.totalCount).toBe(14);
+    expect(page.cards).toHaveLength(4);
+
+    await adminDb.board.updateMany({
+      where: { projectId: fx.projectId },
+      data: { swimlaneGroupBy: 'priority' },
+    });
+    const lane = await laneGET(
+      new Request(
+        `${BASE}/api/board/lanes/medium/cells?${new URLSearchParams({
+          boardId: board.boardId,
+          filter: tasks,
+        })}`,
+      ),
+      { params: Promise.resolve({ laneKey: 'medium' }) },
+    );
+    expect(lane.status).toBe(200);
+    const cells = (await lane.json()) as BoardLanePageDto;
+    const todoCell = cells.cells.find((c) => c.columnId === todo.id)!;
+    expect(todoCell.totalCount).toBe(11);
+    expect(todoCell.cards.every((c) => c.title.includes('task'))).toBe(true);
+  });
+});
+
 describe('board config API routes (Subtask 3.3.3)', () => {
   async function firstColumnId(boardId: string): Promise<string> {
     const col = await adminDb.boardColumn.findFirstOrThrow({

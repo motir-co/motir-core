@@ -446,8 +446,13 @@ export function BoardCard({
   assigneeName,
   routedToName = null,
   onOpenQuickView,
+  sortableId,
 }: {
   card: BoardCardDto;
+  /** The card's drag id — its own id unless one card renders in several cells
+   *  (a multi-value grouping, MOTIR-11585), where each rendering's id names its
+   *  lane so no two sortables share one. */
+  sortableId?: string;
   assigneeName: string | null;
   routedToName?: string | null;
   onOpenQuickView: (identifier: string) => void;
@@ -476,7 +481,7 @@ export function BoardCard({
     transition,
     isDragging,
   } = useSortable({
-    id: card.id,
+    id: sortableId ?? card.id,
   });
   // THE PLAN HOLD (MOTIR-6268): drawn up front from the projection, and — when a
   // move was refused with `PLAN_TARGET_HELD` — from the refusal's own payload,

@@ -297,3 +297,252 @@ describe('the PROJECT thread whose plan waits', () => {
     },
   );
 });
+
+// A REQUEST TOO FAR FROM THE WAITING PLAN (Story MOTIR-11515 · MOTIR-11518): the planner
+// answers it as an ordinary reply and restates it as a requirement, which core KEEPS on the
+// person's turn, in order, until a later offer consumes it. Nothing starts and the plan
+// stays decidable.
+
+const userTurnOf = (sessionId: string, jobId: string) =>
+  adminDb.planChangeTurn.findFirstOrThrow({ where: { sessionId, jobId, role: 'user' } });
+const assistantTurnsOf = (sessionId: string, jobId: string) =>
+  adminDb.planChangeTurn.findMany({ where: { sessionId, jobId, role: 'assistant' } });
+
+function tooFar(jobId: string, requirement: string, answer = 'That is better planned on its own.') {
+  answers(jobId, {
+    intent: 'ask',
+    answer,
+    citations: [],
+    farRequest: { requirement },
+    waitingPlan: { readable: true },
+  });
+}
+
+describe('a request TOO FAR from the waiting plan', () => {
+  it(
+    'settles answered: one reply, no revision, no offer, the plan still planned, and the request kept on the turn',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const { sessionId, planId } = await anchoredConversation();
+      const markersBefore = (await markers(sessionId)).length;
+      const jobId = await send(sessionId, 'also build a PDF report with charts');
+      tooFar(jobId, 'Add a PDF report with charts.');
+      submitJobMock.mockClear();
+      const revise = vi.spyOn(planChangeSessionsService, 'reviseWaitingPlan');
+      const submit = vi.spyOn(planChangeSessionsService, 'submit');
+
+      const settled = await aiAskService.settle(jobId, me(), { sessionId });
+
+      expect(settled.outcome).toBe('answered');
+      const replies = await assistantTurnsOf(sessionId, jobId);
+      expect(replies).toHaveLength(1);
+      expect(replies[0]).toMatchObject({
+        body: 'That is better planned on its own.',
+        answerOffer: null,
+      });
+      const turn = await userTurnOf(sessionId, jobId);
+      expect(turn.intent).toBe('ask');
+      expect(turn.farRequestRequirement).toBe('Add a PDF report with charts.');
+      expect(turn.farRequestConsumedAt).toBeNull();
+      expect(revise).not.toHaveBeenCalled();
+      expect(submit).not.toHaveBeenCalled();
+      expect(submitJobMock).not.toHaveBeenCalled();
+      expect(await planStatus(planId)).toBe('planned');
+      expect(await revisionStarts(planId)).toBe(0);
+      expect((await markers(sessionId)).length).toBe(markersBefore);
+      expect(await planChangeSessionsService.waitingPlanIdOf(me(), { sessionId })).toBe(planId);
+
+      // A replayed settle — even one reading a different restatement — writes no second
+      // reply and does not overwrite the kept requirement.
+      tooFar(jobId, 'Something else entirely.');
+      const again = await aiAskService.settle(jobId, me(), { sessionId });
+      expect(again.outcome).toBe('answered');
+      expect(await assistantTurnsOf(sessionId, jobId)).toHaveLength(1);
+      expect((await userTurnOf(sessionId, jobId)).farRequestRequirement).toBe(
+        'Add a PDF report with charts.',
+      );
+      revise.mockRestore();
+      submit.mockRestore();
+    },
+  );
+
+  it(
+    'a malformed farRequest is a plain answer and keeps nothing',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const { sessionId, planId } = await anchoredConversation();
+      const jobId = await send(sessionId, 'also build a PDF report');
+      answers(jobId, {
+        intent: 'ask',
+        answer: 'Answered.',
+        citations: [],
+        farRequest: { requirement: '   ' },
+      });
+
+      const settled = await aiAskService.settle(jobId, me(), { sessionId });
+
+      expect(settled.outcome).toBe('answered');
+      const turn = await userTurnOf(sessionId, jobId);
+      expect(turn.farRequestRequirement).toBeNull();
+      expect(turn.farRequestConsumedAt).toBeNull();
+      expect(await planStatus(planId)).toBe('planned');
+      expect(await planChangeSessionsService.listKeptFarRequests(me(), { sessionId })).toEqual([]);
+    },
+  );
+
+  it(
+    'a too-far result beside a revision is a plain answer: no revision, nothing kept',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const { sessionId, planId } = await anchoredConversation();
+      const jobId = await send(sessionId, 'drop the csv thing and add a PDF report');
+      answers(jobId, {
+        intent: 'plan_change',
+        answer: 'Hmm.',
+        citations: [],
+        revision: { requirement: 'Remove the CSV writer.' },
+        farRequest: { requirement: 'Add a PDF report.' },
+      });
+      submitJobMock.mockClear();
+
+      const settled = await aiAskService.settle(jobId, me(), { sessionId });
+
+      expect(settled.outcome).toBe('answered');
+      expect(submitJobMock).not.toHaveBeenCalled();
+      expect(await revisionStarts(planId)).toBe(0);
+      expect((await userTurnOf(sessionId, jobId)).farRequestRequirement).toBeNull();
+    },
+  );
+
+  it(
+    'a MID-RUN turn settles through the mid-run arm and keeps nothing',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const { sessionId } = await anchoredConversation();
+      const jobId = await send(sessionId, 'also build a PDF report');
+      const turn = await userTurnOf(sessionId, jobId);
+      await adminDb.planChangeTurn.update({
+        where: { id: turn.id },
+        data: { runJobId: 'run-job-1' },
+      });
+      tooFar(jobId, 'Add a PDF report.');
+
+      const settled = await aiAskService.settle(jobId, me(), { sessionId });
+
+      expect(settled.outcome).toBe('answered');
+      expect(await assistantTurnsOf(sessionId, jobId)).toHaveLength(1);
+      expect((await userTurnOf(sessionId, jobId)).farRequestRequirement).toBeNull();
+    },
+  );
+
+  it(
+    'two too-far turns are both kept, listed in order, and only for their own conversation',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const { sessionId } = await anchoredConversation();
+      const other = await anchoredConversation();
+      const first = await send(sessionId, 'also build a PDF report');
+      tooFar(first, 'Add a PDF report.');
+      await aiAskService.settle(first, me(), { sessionId });
+      const second = await send(sessionId, 'and a Slack integration');
+      tooFar(second, 'Add a Slack integration.');
+      await aiAskService.settle(second, me(), { sessionId });
+      const elsewhere = await send(other.sessionId, 'and an audit log');
+      tooFar(elsewhere, 'Add an audit log.');
+      await aiAskService.settle(elsewhere, me(), { sessionId: other.sessionId });
+
+      const kept = await planChangeSessionsService.listKeptFarRequests(me(), { sessionId });
+
+      const firstTurn = await userTurnOf(sessionId, first);
+      const secondTurn = await userTurnOf(sessionId, second);
+      expect(kept).toEqual([
+        { turnId: firstTurn.id, seq: firstTurn.seq, requirement: 'Add a PDF report.' },
+        { turnId: secondTurn.id, seq: secondTurn.seq, requirement: 'Add a Slack integration.' },
+      ]);
+      expect(firstTurn.seq).toBeLessThan(secondTurn.seq);
+      expect(
+        (
+          await planChangeSessionsService.listKeptFarRequests(me(), { sessionId: other.sessionId })
+        ).map((k) => k.requirement),
+      ).toEqual(['Add an audit log.']);
+
+      // Another workspace cannot read this conversation's kept requests at all.
+      const stranger = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+      const strangerCtx: ProjectContext = {
+        userId: stranger.ownerId,
+        workspaceId: stranger.workspaceId,
+        projectId: stranger.projectId,
+        project: stranger.project,
+      };
+      await expect(
+        planChangeSessionsService.listKeptFarRequests(strangerCtx, { sessionId }),
+      ).rejects.toThrow();
+    },
+  );
+
+  it(
+    'consumeKeptFarRequest consumes a kept request once, and refuses every other turn',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const { sessionId } = await anchoredConversation();
+      const other = await anchoredConversation();
+      const jobId = await send(sessionId, 'also build a PDF report');
+      tooFar(jobId, 'Add a PDF report.');
+      await aiAskService.settle(jobId, me(), { sessionId });
+      const plainJob = await send(sessionId, 'what does the plan add?');
+      answers(plainJob, { intent: 'ask', answer: 'A CSV writer.', citations: [] });
+      await aiAskService.settle(plainJob, me(), { sessionId });
+      const keptTurn = await userTurnOf(sessionId, jobId);
+      const plainTurn = await userTurnOf(sessionId, plainJob);
+
+      // A turn of ANOTHER conversation, addressed through this one, writes nothing.
+      expect(
+        await planChangeSessionsService.consumeKeptFarRequest(
+          me(),
+          { sessionId: other.sessionId },
+          keptTurn.id,
+        ),
+      ).toBe(false);
+      expect((await userTurnOf(sessionId, jobId)).farRequestConsumedAt).toBeNull();
+      // A turn keeping nothing.
+      expect(
+        await planChangeSessionsService.consumeKeptFarRequest(me(), { sessionId }, plainTurn.id),
+      ).toBe(false);
+      expect((await userTurnOf(sessionId, plainJob)).farRequestConsumedAt).toBeNull();
+
+      expect(
+        await planChangeSessionsService.consumeKeptFarRequest(me(), { sessionId }, keptTurn.id),
+      ).toBe(true);
+      const consumedAt = (await userTurnOf(sessionId, jobId)).farRequestConsumedAt;
+      expect(consumedAt).toBeInstanceOf(Date);
+      expect(
+        await planChangeSessionsService.consumeKeptFarRequest(me(), { sessionId }, keptTurn.id),
+      ).toBe(false);
+      expect((await userTurnOf(sessionId, jobId)).farRequestConsumedAt).toEqual(consumedAt);
+      expect(await planChangeSessionsService.listKeptFarRequests(me(), { sessionId })).toEqual([]);
+    },
+  );
+
+  it(
+    'recordFarRequest keeps nothing for a blank requirement or a non-user turn',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const { sessionId } = await anchoredConversation();
+      const jobId = await send(sessionId, 'what does the plan add?');
+      answers(jobId, { intent: 'ask', answer: 'A CSV writer.', citations: [] });
+      await aiAskService.settle(jobId, me(), { sessionId });
+      const userTurn = await userTurnOf(sessionId, jobId);
+      const [reply] = await assistantTurnsOf(sessionId, jobId);
+
+      expect(
+        await planChangeSessionsService.recordFarRequest(userTurn.id, '  ', me(), { sessionId }),
+      ).toBe(false);
+      expect(
+        await planChangeSessionsService.recordFarRequest(reply!.id, 'Add a PDF report.', me(), {
+          sessionId,
+        }),
+      ).toBe(false);
+      expect(await planChangeSessionsService.listKeptFarRequests(me(), { sessionId })).toEqual([]);
+    },
+  );
+});

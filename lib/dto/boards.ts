@@ -36,7 +36,49 @@ export type BoardTypeDto = 'kanban' | 'scrum';
  * board into horizontal lanes by that dimension (3.3.4 resolves each card's
  * lane server-side, `epic` by ANCESTOR epic).
  */
-export type BoardSwimlaneGroupByDto = 'none' | 'assignee' | 'epic' | 'priority';
+export type BoardSwimlaneGroupByDto =
+  | 'none'
+  | 'assignee'
+  | 'epic'
+  | 'priority'
+  // MOTIR-11585 — single-value work-item fields (one lane per card).
+  | 'reporter'
+  | 'type'
+  | 'difficulty'
+  | 'executor'
+  | 'kind'
+  // MOTIR-11585 — MULTI-VALUE fields: a card sits in the lane of EACH of its
+  // values (see {@link BOARD_MULTI_VALUE_GROUP_BYS}).
+  | 'label'
+  | 'component'
+  | 'repository';
+
+/**
+ * The group-bys whose field holds SEVERAL values per card (MOTIR-11585): a card
+ * with two labels is in both label lanes, each lane counts it once, and the
+ * column total still counts it once. On these boards the same card renders in
+ * more than one cell, so the client keys each rendering by its lane.
+ */
+export const BOARD_MULTI_VALUE_GROUP_BYS: ReadonlySet<BoardSwimlaneGroupByDto> = new Set([
+  'label',
+  'component',
+  'repository',
+]);
+
+/**
+ * The group-bys a card can be DRAGGED between lanes in (MOTIR-11585): the drop
+ * writes the grouped field through the work-item update. Every other grouping
+ * keeps a card in its lane — reporter is the author, kind has its own flow, and
+ * a multi-value move is ambiguous — while moves between columns still work.
+ */
+export const BOARD_CROSS_LANE_GROUP_BYS: ReadonlySet<BoardSwimlaneGroupByDto> = new Set([
+  'assignee',
+  'epic',
+  'priority',
+  'type',
+  'difficulty',
+  'executor',
+]);
 
 /**
  * The swimlane dimensions that actually slice the board into lanes — the
@@ -52,8 +94,8 @@ export type BoardSwimlaneKindDto = Exclude<BoardSwimlaneGroupByDto, 'none'>;
  * `swimlaneKey` and the catch-all `BoardSwimlaneDto.key` use this sentinel, so
  * the UI buckets catch-all cards into the catch-all lane by key equality. It is
  * NOT a real id (cuid) or priority value, so it can never collide with a live
- * lane key. Priority has no catch-all (the column is non-null, default
- * `medium`), so this only appears under `assignee` / `epic` group-by.
+ * lane key. Priority, reporter and kind have no catch-all (every card has
+ * one), so this never appears under those group-bys.
  */
 export const BOARD_SWIMLANE_NO_VALUE = '__no_value__';
 
@@ -504,10 +546,13 @@ export interface BoardProjectionDto {
    */
   planHolds: Record<string, BoardPlanHoldSummaryDto>;
   /**
-   * The board's OWN stored filter (MOTIR-10560), applied to every column,
-   * count, lane page, swimlane and sprint point above, ANDed with the toolbar
-   * filter. `null` when the board has none, so it shows its whole scope (the
-   * project, or the active sprint on a scrum board).
+   * The board's OWN stored filter (MOTIR-10560). It is applied to every column,
+   * count, lane page, swimlane and sprint point above when the request carries
+   * no header filter; a header filter REPLACES it, and `boardFilter=off` lifts
+   * it (MOTIR-11564). Reported either way — stale conditions included — so the
+   * client can show and compare the board's own filter. `null` when the board
+   * has none, so it shows its whole scope (the project, or the active sprint on
+   * a scrum board).
    */
   storedFilter: StoredBoardFilterDto | null;
 }
@@ -558,12 +603,19 @@ export interface StoredBoardFilterDto {
  * one the `/items` navigator threads) OR a **`savedFilterId`** (a row id or a
  * `builtin:<slug>`) resolved through the 6.2 saved-filter access gate — never
  * both (the service prefers `savedFilterId` when both are present). Absent (or
- * an empty AST) leaves the board unfiltered — byte-for-byte the prior
- * projection. The board read applies the predicate per column (its count and
- * every page) AND to the swimlane lane aggregates, and composes it with
- * the 4.5 Scrum sprint scope (it narrows WITHIN the sprint, never widening it).
+ * an empty AST) is NO header filter. The board read applies the predicate per
+ * column (its count and every page), to the swimlane lane aggregates and to the
+ * sprint points, and composes it with the 4.5 Scrum sprint scope (it narrows
+ * WITHIN the sprint, never widening it).
+ *
+ * A header filter REPLACES the board's own stored filter (MOTIR-11564) rather
+ * than narrowing it; with no header filter the stored filter applies, unless
+ * `storedFilterOff` — the `boardFilter=off` query param — asks for the board's
+ * whole scope. `storedFilterOff` is ignored when a header filter is present and
+ * on a board with no stored filter.
  */
 export interface BoardFilterInput {
   ast?: FilterAst;
   savedFilterId?: string;
+  storedFilterOff?: boolean;
 }

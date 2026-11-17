@@ -768,3 +768,26 @@ describe('AiPlanningSettingsEditor — the final check (MOTIR-11264)', () => {
     expect(label.getAttribute('aria-disabled')).toBe('true');
   });
 });
+
+// ─── The final check row's landing (MOTIR-11548; design MOTIR-11547 §3b) ─────
+// The Skip the final check dialog opens `/settings/project/ai-planning#final-check`
+// in a new tab, so the row — switch, hint and off callout — carries that id. The
+// ring on arrival is pinned in `final-check-setting-anchor.test.tsx`.
+describe('AiPlanningSettingsEditor — the final check row is the dialog link’s anchor (MOTIR-11548)', () => {
+  it.each([
+    ['an admin', true],
+    ['a read-only member', false],
+  ])('for %s, `#final-check` wraps the whole row and nothing else', (_who, isAdmin) => {
+    mount({ aiFinalCheck: false }, { isAdmin });
+    const row = screen.getByTestId('ai-planning-final-check-row');
+    expect(row.id).toBe('final-check');
+    expect(document.querySelectorAll('#final-check')).toHaveLength(1);
+    expect(row.contains(finalCheckSwitch())).toBe(true);
+    expect(row.contains(screen.getByTestId('ai-planning-final-check-off'))).toBe(true);
+    expect(row.textContent).not.toContain(enMessages.settings.aiPlanning.planner.explanationsLabel);
+    // Lands below the top edge, and the ring's room cancels out so nothing moves.
+    expect(row.className).toContain('scroll-mt-6');
+    expect(row.className).toContain('-m-2');
+    expect(row.className).toContain('p-2');
+  });
+});

@@ -80,6 +80,16 @@ export interface AskOutcome {
    * `revision` is the legacy redirect and keeps its old shape.
    */
   revision?: { requirement: string };
+  /**
+   * WAITING-PLAN mode only (MOTIR-11518 consumer ↔ MOTIR-11517 producer): on an `ask`,
+   * the planner judged the request TOO FAR from the waiting plan to fold into it. The
+   * outcome is an ordinary answer telling the person so, and this is the request
+   * restated as a requirement, which core KEEPS on the person's turn to offer once the
+   * plan is decided. Present only when the record reads AND the answer reads; a result
+   * that carries it beside `revision` is contradictory and reads as a plain answer with
+   * neither. Never read on a redirect.
+   */
+  farRequest?: { requirement: string };
   /** WAITING-PLAN mode only: whether the answering session could read the waiting plan. */
   waitingPlan?: { readable: boolean; reason: string | null } | null;
 }
@@ -219,6 +229,14 @@ function readRunField(value: unknown): { readable: boolean; reason: string | nul
   return { readable: value['readable'], reason: boundedString(value['reason'], 200) };
 }
 
+/** The envelope's `farRequest` (MOTIR-11518), or null unless it is a record whose
+ *  `requirement` is a non-blank string; the requirement is bounded on read. */
+function readFarRequestField(value: unknown): { requirement: string } | null {
+  if (!isRecord(value)) return null;
+  const requirement = boundedString(value['requirement'], ASK_ANSWER_MAX_CHARS);
+  return requirement ? { requirement } : null;
+}
+
 function readCitations(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const out: string[] = [];
@@ -262,6 +280,17 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
         ? boundedString(ask['revision']['requirement'], ASK_ANSWER_MAX_CHARS)
         : null;
       const reply = boundedString(ask['answer'], ASK_ANSWER_MAX_CHARS);
+      // A revision AND a too-far request on one turn contradict each other: the planner
+      // cannot both fold the change in and keep it out. Neither is honoured, so the turn
+      // is the plain answer it carried (MOTIR-11518) — never a revision, never a kept request.
+      if ('farRequest' in ask) {
+        return {
+          intent: 'ask',
+          answer: reply,
+          citations: readCitations(ask['citations']),
+          ...(waitingPlan ? { waitingPlan } : {}),
+        };
+      }
       return {
         intent: requirement && reply ? 'plan_change' : 'ask',
         answer: reply,
@@ -304,14 +333,21 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
 
   const offer = readOfferField(ask['offer']);
   const offerReply = readOfferReplyField(ask['offerReply']);
+  const answer = boundedString(ask['answer'], ASK_ANSWER_MAX_CHARS);
+  // A too-far request is kept only beside an answer that reads: the person must be told
+  // the request was kept out of the plan, so a request with no reply is dropped. One
+  // carried beside a `revision` contradicts it whatever the intent says, so it is dropped
+  // too: the `plan_change` arm above reads that pair as a plain answer, and so does this.
+  const farRequest = answer && !('revision' in ask) ? readFarRequestField(ask['farRequest']) : null;
   return {
     intent: 'ask',
-    answer: boundedString(ask['answer'], ASK_ANSWER_MAX_CHARS),
+    answer,
     citations: readCitations(ask['citations']),
     ...('offerForward' in ask ? { offerForward: readTextField(ask['offerForward']) } : {}),
     ...(run ? { run } : {}),
     ...(offer ? { offer } : {}),
     ...(offerReply ? { offerReply } : {}),
+    ...(farRequest ? { farRequest } : {}),
     ...(waitingPlan ? { waitingPlan } : {}),
   };
 }

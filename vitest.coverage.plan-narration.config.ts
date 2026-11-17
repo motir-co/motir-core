@@ -81,6 +81,9 @@ export default defineConfig({
       // MOTIR-11266 — the skip-the-final-check control and its live head, which
       // MOTIR-11262 added to `PlanNarration.tsx`.
       'tests/components/plan-narration-skip-check.test.tsx',
+      // MOTIR-11548 — the confirm's settings line, worded by `canManageSettings`,
+      // which the rail threads through `PlanNarration.tsx`.
+      'tests/components/skip-final-check-settings-link.test.tsx',
       'tests/planning/planNarrationGroups.test.ts',
       // MOTIR-11184 — `findLatestBySessionForPlans`, the quiet drop's author
       // signal, is called directly (and with no plans) by the progress service's

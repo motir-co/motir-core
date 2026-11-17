@@ -704,32 +704,59 @@ export function WorkItemCardShell({
 }
 
 /**
- * The "You are here" TAB (MOTIR-10630; design MOTIR-10629 § "The tab") — the
- * current-position cue, hung on the card's top edge, LEFT, in the 72px row gap, so
- * it frees the status slot and changes neither `NODE_H` nor the layout.
+ * A TAB hung on a canvas card's top edge — the frame the "You are here" cue
+ * (MOTIR-10630; design MOTIR-10629 § "The tab") introduced, shared since
+ * MOTIR-11545 with a decided plan card's outcome (`PlanItemNode`), so the two
+ * tabs are one shape and a style swap reshapes both. Rendered into
+ * `WorkItemCardShell`'s `tab` slot; it sits LEFT, in the 72px row gap, so it
+ * frees the tag row and changes neither `NODE_H` nor the layout.
  *
- * - `bottom-[calc(100%-1px)]` overlaps the frame's 1px top border, so on the accent
- *   frame the tab and the border read as one shape, a folder tab.
+ * - `bottom-[calc(100%-1px)]` overlaps the frame's 1px top border, so the tab and
+ *   the border read as one shape, a folder tab.
  * - `left-3` mirrors the next-action button's `right-3` and clears the card's
  *   corner radius in every style.
  * - The tag row's one chip size (`h-5`, 11px, a 12px glyph), and the chip's own
  *   shape tokens (`--radius-badge` on the top corners, `chip-x-6`), so a style
  *   swap reshapes it; the bottom corners stay square because they join the frame.
  *   No shadow: under neo-brutalism the hard offset shadow belongs to the frame.
- * - The accent fill / ink pair the primary button uses, AA in every palette.
  * - Its words are always shown (never truncated, never cut to the glyph) and not
  *   `aria-hidden`, so they are read out before the frame's content.
+ *
+ * The caller supplies only the TONE — a fill / ink pair of `--el-*` tokens that
+ * clears AA in every palette — and the contents.
+ */
+export function CardEdgeTab({
+  toneClassName,
+  testId,
+  children,
+}: {
+  /** The tab's fill + ink, e.g. `bg-(--el-accent) text-(--el-accent-text)`. */
+  toneClassName: string;
+  testId: string;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      data-testid={testId}
+      className={`absolute bottom-[calc(100%-1px)] left-3 z-10 inline-flex h-5 items-center gap-1 rounded-t-(--radius-badge) px-(--spacing-chip-x-6) text-[11px] leading-none font-semibold whitespace-nowrap ${toneClassName}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The "You are here" TAB (MOTIR-10630; design MOTIR-10629 § "The tab") — the
+ * current-position cue, on the accent fill / ink pair the primary button uses,
+ * AA in every palette. On the accent frame it and the border read as one shape.
  */
 function HereTab() {
   const t = useTranslations('roadmap.canvas.node');
   return (
-    <span
-      data-testid="here-tab"
-      className="absolute bottom-[calc(100%-1px)] left-3 z-10 inline-flex h-5 items-center gap-1 rounded-t-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x-6) text-[11px] leading-none font-semibold whitespace-nowrap text-(--el-accent-text)"
-    >
+    <CardEdgeTab testId="here-tab" toneClassName="bg-(--el-accent) text-(--el-accent-text)">
       <MapPin className="size-3 shrink-0" aria-hidden="true" />
       {t('here')}
-    </span>
+    </CardEdgeTab>
   );
 }
 

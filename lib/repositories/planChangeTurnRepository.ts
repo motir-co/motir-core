@@ -270,6 +270,92 @@ export const planChangeTurnRepository = {
          AND ("answer_offer" ->> 'confirmedSessionId') IS NULL`;
   },
 
+  /** KEEP a too-far request on a `user` turn of this session (MOTIR-11518): write the
+   *  planner's restated requirement ONLY while none is kept there yet — a compare-and-set
+   *  on null, so a replayed settle never overwrites the first. `true` when THIS call wrote.
+   *  The caller holds the session's row lock. */
+  async setFarRequest(
+    id: string,
+    scope: { sessionId: string; workspaceId: string },
+    requirement: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.planChangeTurn.updateMany({
+      where: {
+        id,
+        sessionId: scope.sessionId,
+        workspaceId: scope.workspaceId,
+        role: 'user',
+        farRequestRequirement: null,
+      },
+      data: { farRequestRequirement: requirement },
+    });
+    return count === 1;
+  },
+
+  /** CONSUME a kept too-far request (MOTIR-11518): stamp `farRequestConsumedAt` ONLY
+   *  while the request is kept (requirement set, not yet consumed). `true` when THIS call
+   *  wrote; a second call, a turn with nothing kept, or a turn of another session or
+   *  tenant writes nothing and answers `false`. */
+  async markFarRequestConsumed(
+    id: string,
+    scope: { sessionId: string; workspaceId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.planChangeTurn.updateMany({
+      where: {
+        id,
+        sessionId: scope.sessionId,
+        workspaceId: scope.workspaceId,
+        farRequestRequirement: { not: null },
+        farRequestConsumedAt: null,
+      },
+      data: { farRequestConsumedAt: new Date() },
+    });
+    return count === 1;
+  },
+
+  /** GIVE BACK a consume whose start threw (MOTIR-11521): the request is kept again, so
+   *  the offer that consumed it can be confirmed or declined once more. Only a consumed
+   *  request of this session is touched. */
+  async releaseFarRequestConsumed(
+    id: string,
+    scope: { sessionId: string; workspaceId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.planChangeTurn.updateMany({
+      where: {
+        id,
+        sessionId: scope.sessionId,
+        workspaceId: scope.workspaceId,
+        farRequestRequirement: { not: null },
+        farRequestConsumedAt: { not: null },
+      },
+      data: { farRequestConsumedAt: null },
+    });
+  },
+
+  /** The session's KEPT too-far requests (MOTIR-11518) — requirement set, not consumed —
+   *  in `seq` order, the order they were asked. Workspace-scoped like the thread read.
+   *  Read inside the caller's transaction, which holds the session's row lock, so the
+   *  list cannot change between this read and the consume that follows it. */
+  async listKeptFarRequests(
+    sessionId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; seq: number; farRequestRequirement: string | null }[]> {
+    return tx.planChangeTurn.findMany({
+      where: {
+        sessionId,
+        workspaceId,
+        farRequestRequirement: { not: null },
+        farRequestConsumedAt: null,
+      },
+      orderBy: { seq: 'asc' },
+      select: { id: true, seq: true, farRequestRequirement: true },
+    });
+  },
+
   /** The thread's LATEST turn (highest `seq`), or null on an empty thread — the
    *  read that decides whether the Plan something new confirm is still PENDING
    *  (MOTIR-7649; ADR AMENDMENT 3, A3.2: pending while it is the latest turn).

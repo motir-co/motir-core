@@ -210,6 +210,27 @@ describe('the line, in English: what the rail said before the words moved', () =
     );
   });
 
+  it('each card checked has its own line, a clean card with 0 included (MOTIR-11494)', () => {
+    const three = line('claim_check', 'card_checked', {
+      title: 'Publish the export layer',
+      count: 3,
+    });
+    expect(three).toBe('Checked Publish the export layer — 3 issues');
+    expect(three).not.toBe(tc(`fact.${UNKNOWN_FACT_KEY}`));
+    expect(
+      line('claim_check', 'card_checked', { title: 'Publish the export layer', count: 1 }),
+    ).toBe('Checked Publish the export layer — 1 issue');
+    // A clean card sends a zero, and zero is PRESENT: the card keeps its line.
+    expect(
+      line('claim_check', 'card_checked', { title: 'Publish the export layer', count: 0 }),
+    ).toBe('Checked Publish the export layer — 0 issues');
+    // A frame missing either parameter is the generic line, as for every code.
+    expect(line('claim_check', 'card_checked', { count: 2 })).toBe('Working on the plan…');
+    expect(line('claim_check', 'card_checked', { title: 'Publish the export layer' })).toBe(
+      'Working on the plan…',
+    );
+  });
+
   it('the final check, its repair and the re-open say what they said, around the data', () => {
     expect(line('dry_run', 'started')).toBe('Starting the final check of the plan');
     expect(line('dry_run', 'skipped_turned_off')).toBe(

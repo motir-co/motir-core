@@ -1,6 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { TriangleAlert } from 'lucide-react';
+import { Tooltip } from '@/components/ui/Tooltip';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -35,6 +37,15 @@ export interface AdvancedFilterSummaryProps {
    * Absent on a host that loads none, where an id renders as itself. */
   folders?: ProjectFoldersDto;
   referencedLabels: LabelDto[];
+  /**
+   * Which conditions match nothing (MOTIR-11565: the board's stored conditions
+   * whose referent was deleted): the tooltip for condition `index`, or null for
+   * a condition that is fine. Such a chip gains the warning glyph labelled
+   * `staleLabel`. Absent on /items, where no chip is marked.
+   */
+  staleTooltip?: (index: number) => string | null;
+  /** The stale glyph's accessible name ("matches nothing"). */
+  staleLabel?: string;
 }
 
 export function AdvancedFilterSummary({
@@ -46,6 +57,8 @@ export function AdvancedFilterSummary({
   components,
   folders,
   referencedLabels,
+  staleTooltip,
+  staleLabel,
 }: AdvancedFilterSummaryProps) {
   const t = useTranslations('issueViews');
   const setOpen = useAdvancedFilterPopover()?.setOpen ?? (() => {});
@@ -72,11 +85,13 @@ export function AdvancedFilterSummary({
       ) : null}
       {ast.conditions.map((condition, i) => {
         const values = text.values(condition);
-        return (
+        const stale = staleTooltip?.(i) ?? null;
+        const chip = (
           <button
             key={i}
             type="button"
             onClick={() => setOpen(true)}
+            data-stale={stale !== null ? 'true' : undefined}
             className="inline-flex max-w-full items-center gap-1 rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <strong className="font-semibold text-(--el-text-strong)">
@@ -86,7 +101,21 @@ export function AdvancedFilterSummary({
               {text.operator(condition)}
               {values !== null ? ` ${values}` : ''}
             </span>
+            {stale !== null ? (
+              <TriangleAlert
+                role="img"
+                aria-label={staleLabel}
+                className="size-3.5 shrink-0 text-(--el-warning)"
+              />
+            ) : null}
           </button>
+        );
+        return stale !== null ? (
+          <Tooltip key={i} content={stale}>
+            {chip}
+          </Tooltip>
+        ) : (
+          chip
         );
       })}
     </div>

@@ -127,6 +127,30 @@ describe('planOfferStartPath', () => {
     }
   });
 
+  it('a session a plan decision ended takes the decided route (MOTIR-11521)', () => {
+    for (const endReason of ['approved', 'declined'] as const) {
+      for (const status of ['generating', 'planned', 'stale', null] as const) {
+        expect(
+          planOfferStartPath({ endedAt: new Date(), endReason, latestUndecidedStatus: status }),
+        ).toBe('decided');
+      }
+    }
+  });
+
+  it('every other ended session still starts nothing', () => {
+    for (const endReason of ['restarted', 'idle', 'failed', null, undefined] as const) {
+      expect(
+        planOfferStartPath({ endedAt: new Date(), endReason, latestUndecidedStatus: null }),
+      ).toBe('no-start');
+    }
+  });
+
+  it('an OPEN session ignores an end reason', () => {
+    expect(
+      planOfferStartPath({ endedAt: null, endReason: 'approved', latestUndecidedStatus: null }),
+    ).toBe('submit');
+  });
+
   it('mints one stop key per offer', () => {
     expect(offerRestartStopKey('t1')).toBe(offerRestartStopKey('t1'));
     expect(offerRestartStopKey('t1')).not.toBe(offerRestartStopKey('t2'));

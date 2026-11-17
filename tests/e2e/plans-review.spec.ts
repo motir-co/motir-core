@@ -209,7 +209,7 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   const acceptedNodes = main.getByTestId('plan-item-node');
   await expect(acceptedNodes.first()).toBeVisible();
   // Queried by TEXT, so a colour-only treatment cannot pass.
-  await expect(main.getByTestId('plan-item-outcome').first()).toHaveText('accepted');
+  await expect(main.getByTestId('plan-item-outcome-tab').first()).toHaveText('accepted');
 
   // ONE node per approved `add`, carrying the REAL identifier its materialized
   // work item was given — which is what proves the node landed ON the committed
@@ -221,7 +221,11 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
     .getByTestId('plan-item-node')
     .filter({ hasText: materialized.identifier });
   await expect(acceptedCard).toHaveCount(1);
-  await expect(acceptedCard.getByTestId('plan-item-outcome')).toHaveText('accepted');
+  // The outcome hangs on the card's top edge, a sibling of the frame and so
+  // outside `plan-item-node` (MOTIR-11545) — read from the card's wrapper.
+  await expect(acceptedCard.locator('..').getByTestId('plan-item-outcome-tab')).toHaveText(
+    'accepted',
+  );
 
   // Guarded on ABSENCE (the coding convention § E2E): a DECIDED plan can never be decided
   // again, so every staleness warning on it is advice about a choice nobody can
@@ -296,7 +300,11 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   const declinedCard = main.getByTestId('plan-item-node').filter({ hasText: seed.declineProposal });
   await expect(declinedCard).toHaveCount(1);
   // By TEXT, not by a class — a colour-only treatment must not pass here either.
-  await expect(declinedCard.getByTestId('plan-item-outcome')).toHaveText('declined');
+  // The outcome hangs on the card's top edge, a sibling of the frame and so
+  // outside `plan-item-node` (MOTIR-11545) — read from the card's wrapper.
+  await expect(declinedCard.locator('..').getByTestId('plan-item-outcome-tab')).toHaveText(
+    'declined',
+  );
   // It never became anything, so it has no key to show and none is invented.
   await expect(declinedCard).toContainText('New');
 

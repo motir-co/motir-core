@@ -108,6 +108,15 @@ export interface AskJobOutcome {
     | null;
   offerReply?: { seq: number; kind: 'plan' | 'log_bug'; decision: 'agree' | 'decline' } | null;
   /**
+   * THE WAITING-PLAN VERDICTS (Story MOTIR-11515 · MOTIR-11524), in motir-ai's shape:
+   * `revision` — on a `plan_change`, the planner's restatement of a change to the waiting
+   * plan (MOTIR-11488); `farRequest` — on an `ask`, a request too far from the waiting
+   * plan, kept for after the decision (MOTIR-11518). Each is passed onto `result.ask`
+   * only when declared, so every other reply is byte-identical to before.
+   */
+  revision?: { requirement: string };
+  farRequest?: { requirement: string };
+  /**
    * The code graph could not be read for this answer (Story MOTIR-8136 · MOTIR-8144):
    * the result carries motir-ai's top-level `codeUnreadable` signal beside the answer.
    * Present only when declared, so every other reply is byte-identical to before.
@@ -307,6 +316,10 @@ export interface SubmittedJob {
    */
   runPlanId?: string;
   runReadable?: boolean;
+  /** The WAITING-PLAN snapshot an `ask_project` submit carried (`context.waitingPlan`,
+   *  MOTIR-11488): the plan the turn was asked against. Present only on a turn sent
+   *  while a plan waits, so a spec can tell it from a mid-run or plain ask. */
+  waitingPlanId?: string;
   /** A `plan` submit's `context.planId` — set on a REVISION of that plan, absent
    *  on a run that starts a plan of its own. */
   planId?: string;
@@ -440,6 +453,9 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
       ...(resume ? { resume } : {}),
       ...(snapshot.runPlanId !== undefined ? { runPlanId: snapshot.runPlanId } : {}),
       ...(snapshot.runReadable !== undefined ? { runReadable: snapshot.runReadable } : {}),
+      ...(kind === 'ask_project' && snapshot.waitingPlanId !== undefined
+        ? { waitingPlanId: snapshot.waitingPlanId }
+        : {}),
       ...(kind === 'plan' && snapshot.planId !== undefined ? { planId: snapshot.planId } : {}),
       ...(kind === 'plan' && carriedAnswersOf(rawBody)
         ? { carriedAnswers: carriedAnswersOf(rawBody)! }
@@ -522,6 +538,7 @@ function submitContext(rawBody: string): {
   runPlanId?: string;
   runReadable?: boolean;
   planId?: string;
+  waitingPlanId?: string;
 } {
   try {
     const context = (JSON.parse(rawBody) as { context?: Record<string, unknown> }).context ?? {};
@@ -531,7 +548,13 @@ function submitContext(rawBody: string): {
     const runPlanId = runRecord?.['planId'];
     const runReadable = runRecord?.['readable'];
     const planId = context['planId'];
+    const waiting = context['waitingPlan'];
+    const waitingPlanId =
+      typeof waiting === 'object' && waiting !== null
+        ? (waiting as Record<string, unknown>)['planId']
+        : undefined;
     return {
+      ...(typeof waitingPlanId === 'string' ? { waitingPlanId } : {}),
       ...(typeof runPlanId === 'string' ? { runPlanId } : {}),
       ...(typeof runReadable === 'boolean' ? { runReadable } : {}),
       ...(typeof planId === 'string' ? { planId } : {}),
@@ -1091,6 +1114,9 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                 // The plan offer (MOTIR-9297): present only when the fixture declared them.
                 ...(outcome.offer !== undefined ? { offer: outcome.offer } : {}),
                 ...(outcome.offerReply !== undefined ? { offerReply: outcome.offerReply } : {}),
+                // The waiting-plan verdicts (MOTIR-11524): present only when declared.
+                ...(outcome.revision !== undefined ? { revision: outcome.revision } : {}),
+                ...(outcome.farRequest !== undefined ? { farRequest: outcome.farRequest } : {}),
               },
               ...(outcome.codeUnreadable
                 ? { codeUnreadable: codeUnreadableSignal(outcome.codeUnreadable) }

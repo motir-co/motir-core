@@ -6188,6 +6188,41 @@ async function releasePlanTargetLocks(
 }
 
 /**
+ * OFFER THE KEPT TOO-FAR REQUESTS once a plan is decided (Story MOTIR-11515 · MOTIR-11521):
+ * the decision ended the conversation (`endDecidedSession`) exactly when the plan was its
+ * LATEST, so only then is its earliest kept request offered. AFTER the commit and
+ * BEST-EFFORT, the lock release's posture and for its reason: the decision is the durable
+ * effect, and an offer that failed to write is written by the next door that resolves an
+ * offer. A failure is logged and never reaches the decision's result.
+ *
+ * The service is imported LAZILY, as the convention trigger is, so the conversation
+ * service graph stays out of plansService's static imports.
+ */
+async function offerKeptFarRequests(
+  plan: { id: string; projectId: string; sessionId: string | null },
+  ctx: ServiceContext,
+): Promise<void> {
+  if (!plan.sessionId) return;
+  const sessionId = plan.sessionId;
+  try {
+    const latest = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findLatestIdBySession(sessionId, tx),
+    );
+    if (latest !== plan.id) return;
+    const { farRequestOfferService } = await import('@/lib/services/farRequestOfferService');
+    await farRequestOfferService.offerNext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      sessionId,
+    );
+  } catch (err) {
+    console.warn(
+      `[plansService] offering the kept far requests after deciding plan ${plan.id} failed; the decision stands`,
+      err,
+    );
+  }
+}
+
+/**
  * The raised transaction budget for `approvePlan` (MOTIR-3396) — the ONE plan
  * path that gets one, and {@link TransactionBudget} asks for the argument here
  * rather than a number, so here it is.
@@ -10667,6 +10702,7 @@ export const plansService = {
     // exist, so continuing to hold the targets blocks a colleague for nothing
     // (MOTIR-2787). The tree was never touched, so there is nothing else to undo.
     await releasePlanTargetLocks(plan, ctx);
+    await offerKeptFarRequests(plan, ctx);
     return toPlanDto(row, count);
   },
 
@@ -10684,7 +10720,13 @@ export const plansService = {
     ctx: ServiceContext,
   ): Promise<{ plan: PlanDto; afterCommit: () => Promise<void> }> {
     const { row, count } = await declineWithin(tx, planId, ctx, { viaGate: true });
-    return { plan: toPlanDto(row, count), afterCommit: () => releasePlanTargetLocks(row, ctx) };
+    return {
+      plan: toPlanDto(row, count),
+      afterCommit: async () => {
+        await releasePlanTargetLocks(row, ctx);
+        await offerKeptFarRequests(row, ctx);
+      },
+    };
   },
 };
 
@@ -11265,6 +11307,9 @@ async function afterApproveCommit(
   // Give the conversation its targets back — the epic's stories now exist, so
   // the level the lock was held at is finished (MOTIR-2787).
   await releasePlanTargetLocks(plan, ctx, { approved: true });
+  // Offer the conversation's kept too-far requests, now that its plan is decided
+  // (MOTIR-11521). After the commit and best-effort, like the release above.
+  await offerKeptFarRequests(plan, ctx);
 
   // ROUTE THE WAITERS WHOSE DECLARED REPOSITORY ALREADY EXISTS (Story MOTIR-10162 ·
   // MOTIR-11058) — the THIRD moment an init card's waiters are routed, after the two

@@ -77,6 +77,7 @@ const line = (key: string, ...needs: Param[]): FactLine => ({ key, needs });
 export const FACT_KEYS: Readonly<Record<string, Readonly<Record<string, FactLine>>>> = {
   claim_check: {
     started: line('claimCheck.started', 'count'),
+    card_checked: line('claimCheck.cardChecked', 'title', 'count'),
     held: line('claimCheck.held'),
     sent_back: line('claimCheck.sentBack', 'count'),
     settle_started: line('claimCheck.settleStarted', 'count'),

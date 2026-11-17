@@ -2564,11 +2564,15 @@ export function usePlanChangeConversation({
           phase: 'streaming',
           session: submitted.session,
           jobId: submitted.jobId,
-          planId: null,
           // The same supersede rule `run` applies: a DECIDED overlay stops
           // describing anything the moment a new run starts; a still-pending
           // proposal survives, because asking a question mid-review is a lookup
           // and not an abandonment.
+          //
+          // ⚠️ ITS HANDLE SURVIVES WITH IT (Story MOTIR-11515). Approve and Decline post
+          // to `planId`, so a pending proposal kept without it drew live verbs that
+          // pressed nothing after any answered question on a waiting plan.
+          planId: s.decided ? null : s.planId,
           review: s.decided ? null : s.review,
           decided: null,
           ...firstAct('reading'),
@@ -3532,6 +3536,28 @@ export function usePlanChangeConversation({
    * Plan: two entrances, one door, no second write path. The press carries the stamp
    * of the review the reader was shown. The thread STAYS.
    */
+  /**
+   * RE-READ THE THREAD the reader is on, best-effort. A failed read leaves the thread as
+   * it was drawn; it resolves either way.
+   *
+   * ⚠️ A DECISION ENDS THE CONVERSATION (Story MOTIR-11515 · MOTIR-11521). Approve and
+   * Decline end it server side and post the first request kept while the plan waited as a
+   * new plan offer below the end marker, so the thread in hand is stale the moment either
+   * answers: without this read the end marker and the offer appear only on a reopen.
+   */
+  const rereadThread = useCallback(async () => {
+    const session = stateRef.current.session;
+    if (!session) return;
+    try {
+      const read = await getPlanChangeSession(session.id);
+      // A read that answered no thread is no thread: the one drawn stays.
+      if (!read || !mountedRef.current) return;
+      setState((s) => (s.session?.id === read.id ? { ...s, session: read } : s));
+    } catch {
+      // The thread already drawn stays: nothing the person sent is lost.
+    }
+  }, []);
+
   const approve = useCallback(async () => {
     const { planId, review } = stateRef.current;
     if (!planId) return;
@@ -3591,6 +3617,7 @@ export function usePlanChangeConversation({
         errorCode: null,
       }));
       approvedCbRef.current?.(approved);
+      await rereadThread();
     } catch (err) {
       if (gateId) clearGatePressPending(gateId);
       if (!mountedRef.current) return;
@@ -3604,7 +3631,7 @@ export function usePlanChangeConversation({
       }));
       await rereadAfterRefusal(planId, err);
     }
-  }, [rereadAfterRefusal, adoptApprovalInProgress, adoptDecidedElsewhere]);
+  }, [rereadAfterRefusal, adoptApprovalInProgress, adoptDecidedElsewhere, rereadThread]);
 
   // AN APPROVAL IN PROGRESS, RE-ENTERED (Bug MOTIR-9006). A plan somebody approved —
   // here before the overlay was closed, or in another tab — reads `approving` while its
@@ -3683,6 +3710,7 @@ export function usePlanChangeConversation({
           progress: null,
           errorCode: null,
         }));
+        if (planId) await rereadThread();
       } catch (err) {
         if (!mountedRef.current) return;
         // A decline pressed while somebody's approve is being written (Bug MOTIR-9006).
@@ -3700,7 +3728,7 @@ export function usePlanChangeConversation({
         if (planId) await rereadAfterRefusal(planId, err);
       }
     },
-    [rereadAfterRefusal, adoptApprovalInProgress, adoptDecidedElsewhere],
+    [rereadAfterRefusal, adoptApprovalInProgress, adoptDecidedElsewhere, rereadThread],
   );
 
   const dismissError = useCallback(() => {
@@ -4072,7 +4100,13 @@ export function usePlanChangeConversation({
   const answerOffer = useCallback(
     async (turnId: string, answer: 'confirm' | 'decline') => {
       const session = stateRef.current.session;
-      if (!session || sessionEnded(session) || stateRef.current.readOnly) return;
+      // An offer posted AFTER the decision that ended this conversation (MOTIR-11521) is
+      // the one offer an ended conversation still answers.
+      const afterDecision = Boolean(
+        session?.turns.find((t) => t.id === turnId)?.offer?.afterDecision,
+      );
+      if (!session || (sessionEnded(session) && !afterDecision) || stateRef.current.readOnly)
+        return;
       if (offerAnsweringRef.current) return;
       offerAnsweringRef.current = true;
       setState((s) => ({ ...s, offerAnsweringTurnId: turnId, offerRefusal: null }));
@@ -4095,6 +4129,15 @@ export function usePlanChangeConversation({
           if (!mountedRef.current) return;
           const landed = started.session;
           setState((s) => (s.session?.id === landed.id ? { ...s, session: landed } : s));
+          return;
+        }
+        // A kept request offered after the decision (MOTIR-11521) plans in a NEW
+        // conversation, and the reader STAYS on the decided one: it now shows this offer
+        // confirmed with its Open it link, and the next kept request offered below it.
+        if (afterDecision) {
+          const decided = await getPlanChangeSession(session.id);
+          if (!mountedRef.current) return;
+          setState((s) => (s.session?.id === decided.id ? { ...s, session: decided } : s));
           return;
         }
         const read = await getPlanChangeSession(started.sessionId);
@@ -4162,17 +4205,7 @@ export function usePlanChangeConversation({
    * pane read the requirement that holds the answers only once the thread is read
    * again. A failed read leaves the thread as it was; it resolves either way.
    */
-  const refreshThread = useCallback(async () => {
-    const session = stateRef.current.session;
-    if (!session) return;
-    try {
-      const read = await getPlanChangeSession(session.id);
-      if (!mountedRef.current) return;
-      setState((s) => (s.session?.id === read.id ? { ...s, session: read } : s));
-    } catch {
-      // The thread already drawn stays: nothing the person sent is lost.
-    }
-  }, []);
+  const refreshThread = rereadThread;
 
   return {
     state: exposed,

@@ -31,9 +31,10 @@ import { consentedVisitor } from '../visitor/_consentedVisitor';
 // never writes `Board.filter` itself.
 //
 // Fixture rule: every narrowing case seeds cards that differ on the STORED axis
-// and on the TOOLBAR axis, so "stored only", "toolbar only", "both" and
+// and on the HEADER (toolbar) axis, so "stored only", "header only", "both" and
 // "neither" are four different card sets, and the assertions name the exact
-// cards. A fixture every card of which matched the stored filter could not tell
+// cards. A header filter REPLACES the stored one (MOTIR-11564), so with one the
+// board shows "header only" + "both", and without one "stored only" + "both". A fixture every card of which matched the stored filter could not tell
 // an applied stored filter from an ignored one.
 //
 // Real Postgres (no mocks), per the convention; `createTestProject` seeds the
@@ -307,11 +308,11 @@ describe('stored filter — kanban round trip (write → read)', () => {
     expect(project.storedFilter).toBeNull();
   });
 
-  it('stored Kind is Bug AND toolbar Assignee is me: only my bugs, in columns, counts and every lane page', async () => {
+  it('stored Kind is Bug, header Assignee is me: every card of mine, in columns, counts and every lane page', async () => {
     const fx = await makeFixture();
     const me = fx.admin.userId;
     const mine: string[] = [];
-    // 12 of my bugs in To Do, so the lane pages (10 per page).
+    // 12 of my bugs and my task in To Do, so the lane pages (10 per page).
     for (let i = 0; i < 12; i++) {
       mine.push(await card(fx, { kind: 'bug', title: `my bug ${i}`, assigneeId: me }));
     }
@@ -321,23 +322,31 @@ describe('stored filter — kanban round trip (write → read)', () => {
       status: 'in_progress',
       assigneeId: me,
     });
-    // Stored-only (a bug not mine), toolbar-only (my tasks), neither.
+    // The header filter REPLACES the stored one (MOTIR-11564): my non-bugs show,
+    // and a bug that is not mine does not.
     await card(fx, { kind: 'bug', title: 'their bug', assigneeId: fx.member.userId });
     await card(fx, { kind: 'bug', title: 'unassigned bug' });
-    await card(fx, { title: 'my task', assigneeId: me });
-    await card(fx, { title: 'my wip task', status: 'in_progress', assigneeId: me });
+    mine.push(await card(fx, { title: 'my task', assigneeId: me }));
+    const myWipTask = await card(fx, {
+      title: 'my wip task',
+      status: 'in_progress',
+      assigneeId: me,
+    });
     await card(fx, { title: 'their task', assigneeId: fx.member.userId });
 
     const boardId = await createBoard(fx, BUGS);
-    const toolbar = { ast: assignedTo(me) };
-    const board = await boardsService.getBoard(fx.projectId, fx.admin, boardId, toolbar);
+    const header = { ast: assignedTo(me) };
+    const board = await boardsService.getBoard(fx.projectId, fx.admin, boardId, header);
 
     const todo = col(board, 'todo');
-    expect(todo.totalCount).toBe(12);
+    expect(todo.totalCount).toBe(13);
     expect(todo.cards).toHaveLength(10);
-    expect(col(board, 'in_progress').cards.map((c) => c.id)).toEqual([myWipBug]);
-    expect(col(board, 'in_progress').totalCount).toBe(1);
+    expect(sorted(...col(board, 'in_progress').cards.map((c) => c.id))).toEqual(
+      sorted(myWipBug, myWipTask),
+    );
+    expect(col(board, 'in_progress').totalCount).toBe(2);
     expect(col(board, 'done').totalCount).toBe(0);
+    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [], labels: [] });
 
     const page = await boardsService.getColumnPage(
       fx.projectId,
@@ -345,16 +354,16 @@ describe('stored filter — kanban round trip (write → read)', () => {
       boardId,
       todo.id,
       todo.cursor!,
-      toolbar,
+      header,
     );
-    expect(page.totalCount).toBe(12);
+    expect(page.totalCount).toBe(13);
     expect(page.cursor).toBeNull();
     expect(sorted(...todo.cards.map((c) => c.id), ...page.cards.map((c) => c.id))).toEqual(
       sorted(...mine),
     );
   });
 
-  it('stored (Bug OR Label mobile) AND toolbar (Priority High OR Assignee me) is exactly the intersection', async () => {
+  it('stored (Bug OR Label mobile), header (Priority High OR Assignee me): exactly the header’s set', async () => {
     const fx = await makeFixture();
     const me = fx.admin.userId;
     const mobile = await label(fx, 'mobile');
@@ -362,12 +371,12 @@ describe('stored filter — kanban round trip (write → read)', () => {
     const bugHigh = await card(fx, { kind: 'bug', title: 'bug high', priority: 'high' });
     const mobileMine = await card(fx, { title: 'mobile mine', labelIds: [mobile], assigneeId: me });
     const bugMine = await card(fx, { kind: 'bug', title: 'bug mine', assigneeId: me });
-    // Stored only.
+    // Stored only — replaced, so not shown.
     await card(fx, { kind: 'bug', title: 'bug low', priority: 'low' });
     await card(fx, { title: 'mobile low', labelIds: [mobile], priority: 'low' });
-    // Toolbar only.
-    await card(fx, { title: 'task high', priority: 'high' });
-    await card(fx, { title: 'task mine', assigneeId: me });
+    // Header only — shown.
+    const taskHigh = await card(fx, { title: 'task high', priority: 'high' });
+    const taskMine = await card(fx, { title: 'task mine', assigneeId: me });
     // Neither.
     await card(fx, { title: 'task low', priority: 'low' });
 
@@ -382,11 +391,11 @@ describe('stored filter — kanban round trip (write → read)', () => {
     );
     const board = await boardsService.getBoard(fx.projectId, fx.admin, boardId, { ast: toolbar });
 
-    expect(ids(board)).toEqual(sorted(bugHigh, mobileMine, bugMine));
-    expect(total(board)).toBe(3);
+    expect(ids(board)).toEqual(sorted(bugHigh, mobileMine, bugMine, taskHigh, taskMine));
+    expect(total(board)).toBe(5);
   });
 
-  it('swimlanes are computed over the stored-filtered set, with and without a toolbar filter', async () => {
+  it('swimlanes are computed over the stored-filtered set, and over the header’s set when one replaces it', async () => {
     const fx = await makeFixture();
     const me = fx.admin.userId;
     const myBugHigh = await card(fx, {
@@ -403,7 +412,11 @@ describe('stored filter — kanban round trip (write → read)', () => {
       assigneeId: me,
     });
     // Tasks the stored filter excludes, in lanes of their own.
-    await card(fx, { title: 'my task highest', priority: 'highest', assigneeId: me });
+    const myTaskHighest = await card(fx, {
+      title: 'my task highest',
+      priority: 'highest',
+      assigneeId: me,
+    });
     await card(fx, { title: 'task high', priority: 'high' });
 
     const boardId = await createBoard(fx, BUGS);
@@ -416,14 +429,17 @@ describe('stored filter — kanban round trip (write → read)', () => {
     ]);
     expect(await laneIds(fx, stored)).toEqual(sorted(myBugHigh, bugHigh, myBugLow));
 
-    const both = await boardsService.getBoard(fx.projectId, fx.admin, boardId, {
+    const header = await boardsService.getBoard(fx.projectId, fx.admin, boardId, {
       ast: assignedTo(me),
     });
-    expect(both.swimlanes.map((l) => [l.key, l.count])).toEqual([
+    expect(header.swimlanes.map((l) => [l.key, l.count])).toEqual([
+      ['highest', 1],
       ['high', 1],
       ['low', 1],
     ]);
-    expect(await laneIds(fx, both, { ast: assignedTo(me) })).toEqual(sorted(myBugHigh, myBugLow));
+    expect(await laneIds(fx, header, { ast: assignedTo(me) })).toEqual(
+      sorted(myBugHigh, myBugLow, myTaskHighest),
+    );
   });
 });
 
@@ -534,8 +550,11 @@ describe('stored filter — null filter parity', () => {
       const b = await boardsService.getBoard(fx.projectId, fx.admin, created, filter);
       expect(a.storedFilter).toBeNull();
       expect(frameShape(a)).toEqual(frameShape(b));
-      // Sprint points take no toolbar filter (unchanged), so they are the whole sprint.
-      expect(a.sprint!.points).toMatchObject({ committed: 8, completed: 5 });
+      // Sprint points follow the set the board shows (MOTIR-11564): the whole
+      // sprint with no filter, the header filter's cards with one.
+      expect(a.sprint!.points).toMatchObject(
+        filter ? { committed: 3, completed: 0 } : { committed: 8, completed: 5 },
+      );
       expect(total(a)).toBe(filter ? 1 : 2);
     }
   });

@@ -1,6 +1,7 @@
 'use client';
 
 import { personDisplayName } from '@/lib/people/personLabel';
+import { appendBoardReadFilter } from '@/lib/boards/boardFilterHref';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
@@ -31,11 +32,9 @@ import type {
   BoardSwimlaneGroupByDto,
 } from '@/lib/dto/boards';
 import type { BoardColumnPageDto, MoveCardResultDto } from '@/lib/dto/boards';
+import { BOARD_CROSS_LANE_GROUP_BYS, BOARD_MULTI_VALUE_GROUP_BYS } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkflowDto } from '@/lib/dto/workflows';
-import type { SprintDto } from '@/lib/dto/sprints';
-import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
-import type { ComponentDto } from '@/lib/dto/components';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
 import { usePeekOpen } from '../../items/_components/IssueQuickView';
 import { updateIssueAction } from '../../items/[key]/edit/actions';
@@ -46,8 +45,8 @@ import { BoardColumnArrows } from './BoardColumnArrows';
 import { BOARD_SCROLL_NAV_CLASS } from './boardHorizontalNav';
 import { BoardEmptyState } from './BoardEmptyState';
 import { BoardFilteredEmptyState } from './BoardFilteredEmptyState';
-import { BoardStoredFilterIndicator } from './BoardStoredFilterIndicator';
-import { BOARD_STORED_FILTER_SLOT_ID } from '@/lib/boards/boardSlots';
+import { useBoardHeaderFilterContext } from './BoardHeaderFilterContext';
+import { boardEmptyVariant } from '@/lib/boards/boardHeaderFilter';
 import { BoardSkeleton } from './BoardSkeleton';
 import { GroupByControl } from './GroupByControl';
 import { NoActiveSprintState } from './NoActiveSprintState';
@@ -80,12 +79,17 @@ import {
   findCardCell,
   findCardInCells,
   moveCardBetweenCells,
+  moveCardColumnInOtherLanes,
   overCardIdOf,
+  parseCellId,
+  placementId,
   reassignPatchForLane,
   reconcileCellCard,
   resolveSwimlaneDrop,
+  splitDragId,
   type CellAddress,
 } from './boardSwimlanes';
+import { useLaneDisplayLabel } from './laneDisplayLabel';
 import type { CellPages } from './boardCellPages';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
@@ -134,20 +138,9 @@ export function BoardContainer({
   projectName = '',
   workflow,
   filterParam = '',
-  filterActive = false,
-  sprints = [],
-  customFields = [],
-  components = [],
+  boardFilterOff = false,
 }: {
   members?: WorkspaceMemberDTO[];
-  /**
-   * The project's sprints, custom fields and components (MOTIR-11335) — the
-   * vocabularies the stored-filter indicator names its conditions' values with,
-   * the same ones the page already read for the toolbar filter.
-   */
-  sprints?: SprintDto[];
-  customFields?: CustomFieldDefinitionDTO[];
-  components?: ComponentDto[];
   activeProjectId?: string;
   selectedBoardId?: string;
   /**
@@ -159,11 +152,12 @@ export function BoardContainer({
    */
   filterParam?: string;
   /**
-   * Whether a filter is active (Story 6.15.3) — selects the FILTERED-empty state
-   * ("no card matches", Clear CTA) over the brand-new-board empty state ("New
-   * work item") when every column is empty.
+   * The reader turned the board's stored filter off (MOTIR-11564) —
+   * `?boardFilter=off` on the page, forwarded to the projection and every page
+   * read so the board shows its whole scope. The server ignores it beside a
+   * header filter (which already replaces the stored one).
    */
-  filterActive?: boolean;
+  boardFilterOff?: boolean;
   /**
    * Whether the actor may edit this board (Story 6.4.6). `false` for a viewer /
    * a member on a `limited` project: the board renders read-only — drag is
@@ -199,10 +193,10 @@ export function BoardContainer({
   const boardQuery = useMemo(() => {
     const params = new URLSearchParams();
     if (selectedBoardId) params.set('boardId', selectedBoardId);
-    if (filterParam) params.set('filter', filterParam);
+    appendBoardReadFilter(params, { filterParam, boardFilterOff });
     const qs = params.toString();
     return qs ? `?${qs}` : '';
-  }, [selectedBoardId, filterParam]);
+  }, [selectedBoardId, filterParam, boardFilterOff]);
   const { toast } = useToast();
   // The group-by control lives in the PAGE HEADER toolbar row (beside the board
   // switcher), per design/boards/multi-board.mock.html — but its value + change
@@ -218,14 +212,9 @@ export function BoardContainer({
   // group-by control vanishes). The effect runs post-commit, when the sibling
   // slot exists, on both first load and client nav.
   const [groupBySlot, setGroupBySlot] = useState<HTMLElement | null>(null);
-  // The stored-filter indicator's slot (MOTIR-11335) — the page's applied-filter
-  // row, so the indicator sits beside the toolbar's chips as the design draws
-  // it. Captured post-commit for the same reason as the group-by slot.
-  const [storedFilterSlot, setStoredFilterSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- capturing a portal target that commits in the same render pass; it must be read post-commit, which is exactly what an effect is for (DOM sync)
     setGroupBySlot(document.getElementById('board-toolbar-groupby-slot'));
-    setStoredFilterSlot(document.getElementById(BOARD_STORED_FILTER_SLOT_ID));
   }, []);
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
   const [status, setStatus] = useState<BoardStatus>('loading');
@@ -246,6 +235,14 @@ export function BoardContainer({
   // it — instead we watch the provider's `issuesChangedAt` tick and refetch.
   // Fixes: creating from the empty state left the board stuck on "No work items".
   const { issuesChangedAt } = useCreateIssue();
+
+  // The board's own stored filter, shared with the page's header filter
+  // (MOTIR-11565): the header starts as it, compares against it and saves to it,
+  // and is a separate client subtree, so the board publishes what it read. A
+  // save to the board filter asks for a fresh read through `reloadTick`.
+  const headerFilter = useBoardHeaderFilterContext();
+  const publish = headerFilter?.publish;
+  const reloadTick = headerFilter?.reloadTick ?? 0;
 
   useEffect(() => {
     let active = true;
@@ -279,7 +276,17 @@ export function BoardContainer({
     // board instead of leaving the previous project's board on screen.
     // `boardQuery` is in the deps so changing the `?board=` selection (the 3.7.4
     // switcher) refetches the newly-selected board's projection.
-  }, [reloadKey, issuesChangedAt, activeProjectId, boardQuery]);
+  }, [reloadKey, reloadTick, issuesChangedAt, activeProjectId, boardQuery]);
+
+  useEffect(() => {
+    if (!publish || !board) return;
+    publish({
+      requestedBoardId: selectedBoardId ?? null,
+      boardId: board.boardId,
+      boardType: board.type,
+      storedFilter: board.storedFilter,
+    });
+  }, [publish, board, selectedBoardId]);
 
   const retry = useCallback(() => {
     setStatus('loading');
@@ -378,28 +385,17 @@ export function BoardContainer({
     );
   }
 
-  // The board's own stored filter (MOTIR-11335): a read-only indicator on every
-  // ready frame that has one — portaled into the page's applied-filter row,
-  // beside the toolbar's chips, or (with no such row, an isolated render) at the
-  // top of the board. A board admin gets an Edit link to this board's settings.
-  const editHref = canConfigure
-    ? `/settings/project/board?board=${encodeURIComponent(board.boardId)}`
-    : undefined;
-  const storedFilterIndicator = board.storedFilter ? (
-    <BoardStoredFilterIndicator
-      storedFilter={board.storedFilter}
-      lookups={{ statuses: workflow?.statuses ?? [], members, sprints, customFields, components }}
-      editHref={editHref}
-    />
-  ) : null;
+  // Which empty state an empty board shows (MOTIR-11565): the brand-new-board
+  // one when nothing narrows it (no filter, or every condition removed), else a
+  // filtered-empty variant by how the header filter relates to the board's own.
+  const emptyVariant = boardEmptyVariant({
+    storedFilter: board.storedFilter,
+    filterParam,
+    boardFilterOff,
+  });
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      {storedFilterIndicator
-        ? storedFilterSlot
-          ? createPortal(storedFilterIndicator, storedFilterSlot)
-          : storedFilterIndicator
-        : null}
       {/* SCRUM sprint header (Subtask 4.5.3) — the one net-new surface, above the
           REUSED 3.2/3.3 board, drawn from the 4.5.2 `SprintSummaryDto`. Present
           only on a scrum board with an active sprint (the no-active-sprint case
@@ -445,15 +441,11 @@ export function BoardContainer({
         // brand-new-board "New work item" empty state (the board has items; the
         // filter is over-narrow). The toolbar + applied summary stay (page-level)
         // so the user can edit what they filtered on.
-        // A stored filter that matches nothing is the same over-narrow case
-        // (MOTIR-11335): its own copy, and Clear only when a toolbar filter is
-        // there to clear.
-        filterActive || board.storedFilter !== null ? (
-          <BoardFilteredEmptyState
-            selectedBoardId={selectedBoardId}
-            toolbarFilterActive={filterActive}
-            editHref={editHref}
-          />
+        // A board's own stored filter that matches nothing is the same
+        // over-narrow case (MOTIR-11335), and a header filter that differs from
+        // it offers Reset to board filter (MOTIR-11565).
+        emptyVariant !== 'none' ? (
+          <BoardFilteredEmptyState selectedBoardId={selectedBoardId} variant={emptyVariant} />
         ) : (
           <BoardEmptyState />
         )
@@ -472,6 +464,7 @@ export function BoardContainer({
           columnPoints={columnPoints}
           projectName={projectName}
           filterParam={filterParam}
+          boardFilterOff={boardFilterOff}
         />
       )}
     </div>
@@ -503,6 +496,7 @@ function BoardDnd({
   columnPoints,
   projectName = '',
   filterParam = '',
+  boardFilterOff = false,
 }: {
   board: BoardProjectionDto;
   assigneeNameById: Map<string, string>;
@@ -518,12 +512,19 @@ function BoardDnd({
   /** The compiled board filter the projection was read with (Story 6.15.3) — a
    *  lane's next page is read with the same one (MOTIR-10535). */
   filterParam?: string;
+  /** The stored-filter-off signal the projection was read with (MOTIR-11564). */
+  boardFilterOff?: boolean;
 }) {
   const t = useTranslations('boards');
   const { toast } = useToast();
   const openPeek = usePeekOpen();
   const groupBy = board.swimlaneGroupBy;
   const swimlaned = groupBy !== 'none';
+  // MOTIR-11585 — a grouping whose field a drop cannot write keeps every card in
+  // its lane (moves between columns still work), and a MULTI-VALUE grouping
+  // renders one card in each of its values' lanes, each with its own drag id.
+  const laneLocked = swimlaned && !BOARD_CROSS_LANE_GROUP_BYS.has(groupBy);
+  const multiValue = BOARD_MULTI_VALUE_GROUP_BYS.has(groupBy);
 
   const [columns, setColumns] = useState<BoardColumnDto[]>(board.columns);
   // Every plan that holds a loaded card (MOTIR-6268): the projection's, plus each
@@ -543,6 +544,7 @@ function BoardDnd({
     boardId: board.boardId,
     groupBy,
     filterParam,
+    boardFilterOff,
     columnIds,
     onPlanHolds: mergePlanHolds,
   });
@@ -718,7 +720,7 @@ function BoardDnd({
       inFlightRef.current.add(columnId);
       setLoadStates((prev) => ({ ...prev, [columnId]: 'loading' }));
       const params = new URLSearchParams({ boardId: board.boardId, cursor: col.cursor });
-      if (filterParam) params.set('filter', filterParam);
+      appendBoardReadFilter(params, { filterParam, boardFilterOff });
       try {
         const res = await fetch(`/api/board/columns/${columnId}/cards?${params.toString()}`, {
           headers: { accept: 'application/json' },
@@ -734,7 +736,7 @@ function BoardDnd({
         inFlightRef.current.delete(columnId);
       }
     },
-    [board.boardId, filterParam],
+    [board.boardId, filterParam, boardFilterOff],
   );
 
   // Horizontal edge auto-scroll for the flat board (bug-board-cannot-drag-from-
@@ -838,9 +840,13 @@ function BoardDnd({
     (cols: BoardColumnDto[], colId: string | null) => cols.find((c) => c.id === colId)?.name ?? '',
     [],
   );
+  const laneDisplayLabel = useLaneDisplayLabel();
   const laneLabel = useCallback(
-    (key: string) => board.swimlanes.find((l) => l.key === key)?.label ?? key,
-    [board.swimlanes],
+    (key: string) => {
+      const lane = board.swimlanes.find((l) => l.key === key);
+      return lane ? laneDisplayLabel(lane) : key;
+    },
+    [board.swimlanes, laneDisplayLabel],
   );
 
   const snapBack = useCallback(
@@ -916,13 +922,16 @@ function BoardDnd({
   // one axis of a revert. Reading the current cell (not the drop's target) is what
   // keeps the other axis' outcome: a refused transition returns the card to its
   // origin column in the lane the reassign left it in, and the mirror.
+  // `dragId` is the card's id, or — under a multi-value grouping — the placement
+  // id of the rendering that was dragged (MOTIR-11585), so the revert finds THAT
+  // lane's copy.
   const moveCardBackInCells = useCallback(
-    (workItemId: string, toward: (at: CellAddress) => CellAddress, originNextId: string | null) => {
+    (dragId: string, toward: (at: CellAddress) => CellAddress, originNextId: string | null) => {
       applyCellPages((current) => {
-        const at = findCardCell(current, workItemId);
+        const at = findCardCell(current, dragId);
         if (!at) return current;
         return moveCardBetweenCells(current, {
-          cardId: workItemId,
+          cardId: splitDragId(dragId).cardId,
           from: at,
           to: toward(at),
           overCardId: originNextId,
@@ -939,6 +948,10 @@ function BoardDnd({
   const runTransition = useCallback(
     async (args: {
       workItemId: string;
+      /** The dragged rendering's id — the card's id, or a placement id. */
+      dragId: string;
+      /** The lane the drag moved the card within (its other lanes follow). */
+      laneKey: string;
       seq: number;
       originColId: string;
       targetColId: string;
@@ -952,10 +965,21 @@ function BoardDnd({
       const latest = () => isLatestMove(args.workItemId, args.seq);
       const revert = () => {
         moveCardBackInCells(
-          args.workItemId,
+          args.dragId,
           (at) => ({ columnId: args.originColId, laneKey: at.laneKey }),
           args.originNextId,
         );
+        // A multi-value card's other renderings followed the move; they go back too.
+        if (multiValue) {
+          applyCellPages((current) =>
+            moveCardColumnInOtherLanes(current, {
+              cardId: args.workItemId,
+              fromColumnId: args.targetColId,
+              toColumnId: args.originColId,
+              exceptLaneKey: args.laneKey,
+            }),
+          );
+        }
         setColumns((prev) => transferCount(prev, args.targetColId, args.originColId));
       };
       try {
@@ -1011,6 +1035,7 @@ function BoardDnd({
       board.boardId,
       isLatestMove,
       moveCardBackInCells,
+      multiValue,
       showHeld,
       showMarkHeld,
       showPlanHeld,
@@ -1241,21 +1266,37 @@ function BoardDnd({
       if (!resolved) return;
       const { move } = resolved;
       const { columnChanged, laneChanged } = move;
+      // A lane-locked grouping (MOTIR-11585) offers no other lane as a target
+      // (the collision filter below); a drop that still lands across lanes is
+      // refused here, before anything is applied, so the card stays put.
+      if (laneLocked && laneChanged) return;
+      // The dragged rendering's card — `activeId` is a placement id under a
+      // multi-value grouping, the card's id otherwise.
+      const cardId = splitDragId(activeId).cardId;
       const rankChanged =
         !columnChanged && !laneChanged && move.originIndexInCell !== move.finalIndexInCell;
       if (!columnChanged && !laneChanged && !rankChanged) return;
       // The drop resolved, so the reconciled cells hold the card.
       const card = findCardInCells(resolved.cells, activeId)!;
 
-      const seq = nextMoveSeq(activeId);
+      const seq = nextMoveSeq(cardId);
       const from = { columnId: move.originColId, laneKey: move.originLaneKey };
       const to = { columnId: move.targetColId, laneKey: move.targetLaneKey };
       const overCardId = overCardIdOf(String(over.id));
       // Applied to the LATEST cells (not the snapshot), so a page that merged into
       // any cell while the drag was in flight is kept.
-      applyCellPages((current) =>
-        moveCardBetweenCells(current, { cardId: activeId, from, to, overCardId }),
-      );
+      applyCellPages((current) => {
+        const moved = moveCardBetweenCells(current, { cardId, from, to, overCardId });
+        // One transition moves every lane's rendering of a multi-value card.
+        return multiValue && columnChanged
+          ? moveCardColumnInOtherLanes(moved, {
+              cardId,
+              fromColumnId: from.columnId,
+              toColumnId: to.columnId,
+              exceptLaneKey: to.laneKey,
+            })
+          : moved;
+      });
       if (columnChanged) setColumns((prev) => transferCount(prev, from.columnId, to.columnId));
       if (laneChanged) shiftLaneCount(from.laneKey, to.laneKey);
       const target = cellSnapshot.cells[cellId(to.columnId, to.laneKey)];
@@ -1266,7 +1307,9 @@ function BoardDnd({
       if (columnChanged || rankChanged) {
         writes.push(
           runTransition({
-            workItemId: activeId,
+            workItemId: cardId,
+            dragId: multiValue ? placementId(cardId, to.laneKey) : cardId,
+            laneKey: to.laneKey,
             seq,
             originColId: move.originColId,
             targetColId: move.targetColId,
@@ -1282,7 +1325,7 @@ function BoardDnd({
       if (laneChanged) {
         writes.push(
           runReassign({
-            workItemId: activeId,
+            workItemId: cardId,
             seq,
             originLaneKey: move.originLaneKey,
             targetLaneKey: move.targetLaneKey,
@@ -1303,6 +1346,8 @@ function BoardDnd({
     },
     [
       swimlaned,
+      laneLocked,
+      multiValue,
       applyCellPages,
       colName,
       loadCellPage,
@@ -1341,7 +1386,8 @@ function BoardDnd({
       const col = cell ? columnsRef.current.find((c) => c.id === cell.columnId) : undefined;
       if (!cell || !col) return null;
       const cards = cellPagesRef.current.cells[cellId(cell.columnId, cell.laneKey)]?.cards ?? [];
-      const idx = cards.findIndex((c) => c.id === overId);
+      const overCardId = splitDragId(overId).cardId;
+      const idx = cards.findIndex((c) => c.id === overCardId);
       return { col: col.name, index: (idx < 0 ? cards.length : idx) + 1, count: cards.length };
     };
     const at = (overId: string) => {
@@ -1423,13 +1469,29 @@ function BoardDnd({
   // is outside every droppable (a gutter / past the last column) so a drop is
   // never lost. SWIMLANE mode keeps closestCorners — its (column×lane) grid was
   // tuned around it (handleDragOver) and is out of scope for this bug.
+  //
+  // A LANE-LOCKED grouping (MOTIR-11585 — reporter, kind, label, component,
+  // repository) offers only the dragged card's own lane: every droppable in
+  // another lane (its cells and the cards in them) is left out of the collision,
+  // so no other lane lights as a target and a drop can only change the column.
   const collisionDetectionStrategy: CollisionDetection = useCallback(
     (args) => {
-      if (swimlaned) return closestCorners(args);
+      if (swimlaned) {
+        if (!laneLocked) return closestCorners(args);
+        const pages = cellPagesRef.current;
+        const ownLane = findCardCell(pages, String(args.active.id))?.laneKey;
+        if (ownLane === undefined) return closestCorners(args);
+        const droppableContainers = args.droppableContainers.filter((container) => {
+          const id = String(container.id);
+          const lane = (parseCellId(id) ?? findCardCell(pages, id))?.laneKey;
+          return lane === ownLane;
+        });
+        return closestCorners({ ...args, droppableContainers });
+      }
       const pointer = pointerWithin(args);
       return pointer.length > 0 ? pointer : closestCorners(args);
     },
-    [swimlaned],
+    [swimlaned, laneLocked],
   );
 
   return (

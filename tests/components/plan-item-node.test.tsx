@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
 import { WorkItemNode } from '@/components/planning/WorkItemNode';
@@ -329,7 +329,10 @@ describe('PlanItemNode', () => {
 // `design/ai-planning/design-notes.md` Part VI §3: the outcome CROSSES the three
 // op languages rather than joining them (every op can be accepted and every op
 // can be declined ⇒ six renderings), so the op frame is untouched and the
-// outcome rides the chip's second SEGMENT plus a decorative spine.
+// outcome rides a decorative spine plus — since MOTIR-11545 (Part XXX) — a TAB
+// on the card's top edge, in the "You are here" tab's frame. Until then it rode
+// a second segment fused onto the op chip, which pushed the status pill and the
+// Blocked chip off the fixed-width card.
 
 describe('PlanItemNode — the decided outcome', () => {
   const OPS = ['add', 'modify', 'remove'] as const;
@@ -343,9 +346,14 @@ describe('PlanItemNode — the decided outcome', () => {
       // Queried by TEXT, not by class: the word is the whole of the meaning, and
       // the a11y rule this asset holds itself to is that state is never carried
       // by colour alone.
-      expect(screen.getByTestId('plan-item-outcome').textContent).toBe(word);
-      // …and the op is STILL named beside it — the chip reads op × outcome.
-      expect(screen.getByTestId('plan-item-op-chip').textContent).toContain(word);
+      const tab = screen.getByTestId('plan-item-outcome-tab');
+      expect(tab.textContent).toBe(word);
+      // Read out: not hidden from the accessibility tree.
+      expect(tab.getAttribute('aria-hidden')).toBeNull();
+      // …and it is NOT in the tag row: the op chip there is the plain one, with
+      // no fused outcome segment (MOTIR-11545).
+      expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+      expect(screen.queryByTestId('plan-item-op-chip')).toBeNull();
       cleanup();
     }
   });
@@ -370,7 +378,7 @@ describe('PlanItemNode — the decided outcome', () => {
 
   it('renders NOTHING new while the plan is still planned', () => {
     renderWithIntl(<PlanItemNode item={item({ op: 'add' })} />);
-    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
     expect(screen.queryByTestId('plan-item-outcome-spine')).toBeNull();
     // The undecided badge is the shipped one, byte for byte — no chip wrapper.
     expect(screen.queryByTestId('plan-item-op-chip')).toBeNull();
@@ -388,13 +396,13 @@ describe('PlanItemNode — the decided outcome', () => {
     //
     // Nothing is lost: `remove` still speaks through the strong border, the muted
     // fill and the strike, and PENDING vs DECIDED is carried by the two signals a
-    // decided node ADDS — the spine and the outcome segment — which is how `add`
+    // decided node ADDS — the spine and the outcome tab — which is how `add`
     // and `modify` distinguish the same two states without dimming anything.
     renderWithIntl(<PlanItemNode item={item({ op: 'remove' })} />);
     expect(screen.getByTestId('plan-item-node').className).not.toContain('opacity-');
     // …and the PENDING node still says nothing about an outcome, which is what
     // makes it legible as pending.
-    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
     expect(screen.queryByTestId('plan-item-outcome-spine')).toBeNull();
     cleanup();
 
@@ -404,7 +412,7 @@ describe('PlanItemNode — the decided outcome', () => {
     // …and the strike stays: a declined remove is the one place a reader could be
     // misled, which is exactly why the word must be there to correct it.
     expect(screen.getByText('A proposed item').className).toContain('line-through');
-    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('declined');
+    expect(screen.getByTestId('plan-item-outcome-tab').textContent).toBe('declined');
   });
 
   it('carries the spine as DECORATION only', () => {
@@ -412,6 +420,358 @@ describe('PlanItemNode — the decided outcome', () => {
     const spine = screen.getByTestId('plan-item-outcome-spine');
     expect(spine.getAttribute('aria-hidden')).toBe('true');
     expect(spine.textContent).toBe('');
+  });
+});
+
+// ── MOTIR-11545 — the outcome is a TOP-EDGE TAB, and the tag row fits ───────
+//
+// happy-dom does no layout, so "nothing is cut off at the card edge" cannot be
+// measured here (every box is 0×0 and a width assertion would be green on the
+// unfixed card). What this lane CAN see is the mechanism: which tags the row
+// carries and in which FORM. The forms are a fixed rule (design Part XXX), and
+// the rule is what was measured in Chromium at the node's fixed 280px width in all
+// eleven styles, light and dark — the table rides the design notes. So the
+// assertions pin the rule: on a decided card the outcome leaves the row for the
+// tab, the status is the committed card's truncating slot and the blocked flag
+// its short tag, and a right-hand text tag sends the op chip and the status to
+// their glyphs and the difficulty out of the row.
+describe('PlanItemNode — the outcome tab (MOTIR-11545)', () => {
+  /** A blocked `add` with a live status, the card the defect was found on. */
+  const blockedAdd = () =>
+    item({
+      op: 'add',
+      identifier: 'MOTIR-11544',
+      title: 'E2E and acceptance video — the progress rail shows one line per card checked',
+      status: 'todo',
+      statusLabel: 'To Do',
+      statusCategory: 'todo',
+      difficulty: 'medium',
+    });
+
+  /** The tag row: the frame's first child (the kind tile, the key, the tags). */
+  const tagRow = () => screen.getByTestId('plan-item-node').firstElementChild as HTMLElement;
+
+  it.each(['accepted', 'declined'] as const)(
+    'a %s blocked add gives way: op and status to glyphs, the short blocked tag, no difficulty',
+    (outcome) => {
+      renderWithIntl(<PlanItemNode item={blockedAdd()} crossBlocked outcome={outcome} />);
+      const row = tagRow();
+      // The outcome is NOT in the row — no fused segment, no chip wrapper.
+      expect(row.querySelector('[data-testid="plan-item-outcome"]')).toBeNull();
+      expect(row.querySelector('[data-testid="plan-item-op-chip"]')).toBeNull();
+      // The op chip is its glyph, still NAMED for a screen reader and a tooltip.
+      const op = within(row).getByTestId('plan-item-op-glyph');
+      expect(op.getAttribute('role')).toBe('img');
+      expect(op.getAttribute('aria-label')).toBe('add');
+      expect(op.getAttribute('title')).toBe('add');
+      expect(op.textContent).toBe('');
+      // The status is the slot's glyph, named the same way.
+      const status = row.querySelector('[data-status="todo"]') as HTMLElement;
+      expect(status.getAttribute('role')).toBe('img');
+      expect(status.getAttribute('aria-label')).toBe('To Do');
+      expect(status.textContent).toBe('');
+      // The blocked flag is the committed card's SHORT tag, its sentence on the label.
+      const flag = within(row).getByTestId('cross-blocked-flag');
+      expect(flag.textContent).toBe('blocked');
+      expect(flag.getAttribute('aria-label')).toBe('blocked elsewhere');
+      // The difficulty leaves the row (the peek carries it).
+      expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
+    },
+  );
+
+  it('a decided add with no text tag keeps its words: plain op chip and status slot', () => {
+    renderWithIntl(<PlanItemNode item={blockedAdd()} outcome="accepted" />);
+    const row = tagRow();
+    expect(within(row).queryByTestId('plan-item-op-glyph')).toBeNull();
+    expect(within(row).getByText('add')).toBeTruthy();
+    const status = row.querySelector('[data-status="todo"]') as HTMLElement;
+    expect(status.textContent).toBe('To Do');
+    expect(status.getAttribute('role')).toBeNull();
+    // The SLOT form: it may truncate inside the row, its name on `title`.
+    expect(status.className).toContain('min-w-0');
+    expect(status.getAttribute('title')).toBe('To Do');
+    // A decided card with a live status draws no difficulty in the row: it is a
+    // committed card now, and the committed card draws none.
+    expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
+  });
+
+  /** A decided add that SUPERSEDES a committed card (the review's finding 1). */
+  const supersedingAdd = () =>
+    item({
+      ...blockedAdd(),
+      identifier: 'MOTIR-11546',
+      supersedesRefs: [
+        { identifier: 'MOTIR-11402', title: 'Poll the checker', kind: 'subtask', proposed: false },
+      ],
+    });
+
+  it('a decided add that supersedes a card gives way, its Supersedes chip the named glyph', () => {
+    renderWithIntl(<PlanItemNode item={supersedingAdd()} outcome="accepted" />);
+    const row = tagRow();
+    // `Supersedes 1` is a right-hand text tag, so the give-way rule applies…
+    expect(within(row).getByTestId('plan-item-op-glyph').getAttribute('aria-label')).toBe('add');
+    const status = row.querySelector('[data-status="todo"]') as HTMLElement;
+    expect(status.getAttribute('role')).toBe('img');
+    expect(status.textContent).toBe('');
+    expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
+    // …and the chip itself is its glyph: no words drawn, the words on the label,
+    // the keys it replaces on the tooltip.
+    const chip = within(row).getByTestId('plan-item-supersedes');
+    expect(chip.getAttribute('role')).toBe('img');
+    expect(chip.getAttribute('aria-label')).toBe('Supersedes 1');
+    expect(chip.getAttribute('title')).toContain('MOTIR-11402');
+    expect(chip.textContent).toBe('');
+    // The glyph is the chip's only content, so it is not the faint decorative ink.
+    expect(chip.querySelector('svg')!.getAttribute('class')).toContain(
+      'text-(--el-text-secondary)',
+    );
+  });
+
+  it('a decided blocked add that supersedes a card leaves the Supersedes chip to the quick view', () => {
+    renderWithIntl(<PlanItemNode item={supersedingAdd()} outcome="accepted" crossBlocked />);
+    const row = tagRow();
+    expect(within(row).queryByTestId('plan-item-supersedes')).toBeNull();
+    expect(within(row).getByTestId('cross-blocked-flag').textContent).toBe('blocked');
+    expect(within(row).getByTestId('plan-item-op-glyph')).toBeTruthy();
+  });
+
+  it('a declined add (no status, no key) keeps its difficulty in the row', () => {
+    renderWithIntl(
+      <PlanItemNode item={item({ op: 'add', difficulty: 'low' })} outcome="declined" />,
+    );
+    expect(screen.getByTestId('plan-item-difficulty').textContent).toContain('Low');
+    expect(screen.getByText('add')).toBeTruthy();
+  });
+
+  it('a stale decided card gives way too — the stale badge is a right-hand text tag', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={{
+          ...blockedAdd(),
+          stale: true,
+          staleReasons: [{ code: 'parent_removed', parentId: 'wi_gone' }],
+        }}
+        outcome="accepted"
+      />,
+    );
+    expect(screen.getByTestId('stale-badge')).toBeTruthy();
+    expect(screen.getByTestId('plan-item-op-glyph')).toBeTruthy();
+    expect(screen.queryByTestId('plan-item-difficulty')).toBeNull();
+  });
+
+  it('hangs outside the fixed-size frame, before it, in the You are here tab frame', () => {
+    const { container } = renderWithIntl(
+      <PlanItemNode item={blockedAdd()} crossBlocked outcome="accepted" />,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    const frame = screen.getByTestId('plan-item-node');
+    const tab = screen.getByTestId('plan-item-outcome-tab');
+    // The wrapper and the frame keep the card's fixed footprint: the tab costs
+    // neither the card's height nor the layout's row spacing.
+    expect(wrapper.style.width).toBe('280px');
+    expect(wrapper.style.height).toBe('124px');
+    expect(frame.style.height).toBe('124px');
+    expect(wrapper.firstElementChild).toBe(tab);
+    expect(frame.contains(tab)).toBe(false);
+    const cls = tab.className.split(/\s+/);
+    for (const c of [
+      'absolute',
+      'bottom-[calc(100%-1px)]',
+      'left-3',
+      'z-10',
+      'h-5',
+      'text-[11px]',
+      'whitespace-nowrap',
+      'rounded-t-(--radius-badge)',
+      'px-(--spacing-chip-x-6)',
+    ]) {
+      expect(cls).toContain(c);
+    }
+    expect(cls.some((c) => c.startsWith('shadow'))).toBe(false);
+  });
+
+  it('is the very frame the You are here tab is drawn in', () => {
+    // Shared, not copied: the two tabs differ ONLY in their tone classes.
+    const tone = /^(bg|text)-\(--el-/;
+    const shape = (el: HTMLElement) =>
+      el.className
+        .split(/\s+/)
+        .filter((c) => c && !tone.test(c))
+        .sort();
+    const { container: a } = renderWithIntl(
+      <PlanItemNode item={blockedAdd()} outcome="accepted" />,
+    );
+    const outcomeShape = shape(a.querySelector('[data-testid="plan-item-outcome-tab"]')!);
+    cleanup();
+    const { container: b } = renderWithIntl(
+      <WorkItemNode
+        item={{
+          id: 'wi_1',
+          identifier: 'MOTIR-1',
+          title: 'Here',
+          kind: 'task',
+          status: 'in_progress',
+          statusLabel: 'In Progress',
+          statusCategory: 'in_progress',
+        }}
+        here
+      />,
+    );
+    const hereTab = b.querySelector('[data-testid="here-tab"]') as HTMLElement;
+    expect(outcomeShape).toEqual(shape(hereTab));
+  });
+
+  it('paints the outcome tones: mint + strong ink accepted, muted + secondary declined', () => {
+    renderWithIntl(<PlanItemNode item={blockedAdd()} outcome="accepted" />);
+    let cls = screen.getByTestId('plan-item-outcome-tab').className;
+    expect(cls).toContain('bg-(--el-tint-mint)');
+    expect(cls).toContain('text-(--el-text-strong)');
+    cleanup();
+    renderWithIntl(<PlanItemNode item={blockedAdd()} outcome="declined" />);
+    cls = screen.getByTestId('plan-item-outcome-tab').className;
+    expect(cls).toContain('bg-(--el-muted)');
+    expect(cls).toContain('text-(--el-text-secondary)');
+  });
+
+  it('draws no tab while the plan is undecided', () => {
+    const { container } = renderWithIntl(<PlanItemNode item={blockedAdd()} crossBlocked />);
+    expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
+    // The wrapper's first child is the frame itself: nothing hangs above it.
+    expect((container.firstElementChild as HTMLElement).firstElementChild).toBe(
+      screen.getByTestId('plan-item-node'),
+    );
+  });
+});
+
+// ── MOTIR-11549 — the UNDECIDED card's tag row takes the same forms ─────────
+//
+// MOTIR-11545 gated the committed card's tag-row forms on a decided outcome and
+// left the undecided card as it shipped, which had two overflows of its own at the
+// fixed 280px node (measured in Chromium, warm-editorial light): a blocked `add`
+// with a difficulty (`New` · `+ add` · `blocked elsewhere` · `Medium`) ended 70px
+// past the row's inner right edge, and a `modify` of an `In Progress` target
+// 22.5px past it. The forms are now one rule for every plan card (design Part
+// XXXI). As above, happy-dom does no layout, so these pin the rule; the Chromium
+// measurement rides the design notes.
+describe('PlanItemNode — the undecided tag row (MOTIR-11549)', () => {
+  const tagRow = () => screen.getByTestId('plan-item-node').firstElementChild as HTMLElement;
+
+  it('an undecided blocked add with a difficulty gives way: op glyph, short tag, no difficulty', () => {
+    renderWithIntl(<PlanItemNode item={item({ op: 'add', difficulty: 'medium' })} crossBlocked />);
+    const row = tagRow();
+    // An undecided add has no key yet: the placeholder stays.
+    expect(within(row).getByText('New')).toBeTruthy();
+    const op = within(row).getByTestId('plan-item-op-glyph');
+    expect(op.getAttribute('role')).toBe('img');
+    expect(op.getAttribute('aria-label')).toBe('add');
+    expect(op.getAttribute('title')).toBe('add');
+    expect(op.textContent).toBe('');
+    const flag = within(row).getByTestId('cross-blocked-flag');
+    expect(flag.textContent).toBe('blocked');
+    expect(flag.getAttribute('aria-label')).toBe('blocked elsewhere');
+    expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
+    // Still undecided: no tab, no spine.
+    expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome-spine')).toBeNull();
+  });
+
+  it('an undecided add that is not blocked keeps its words and its difficulty', () => {
+    renderWithIntl(<PlanItemNode item={item({ op: 'add', difficulty: 'medium' })} />);
+    const row = tagRow();
+    expect(within(row).queryByTestId('plan-item-op-glyph')).toBeNull();
+    expect(within(row).getByText('add')).toBeTruthy();
+    expect(within(row).getByTestId('plan-item-difficulty').textContent).toContain('Medium');
+  });
+
+  it('a stale undecided add gives way too — the stale badge is a right-hand text tag', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'add',
+          difficulty: 'high',
+          stale: true,
+          staleReasons: [{ code: 'parent_removed', parentId: 'wi_gone' }],
+        })}
+      />,
+    );
+    expect(screen.getByTestId('stale-badge')).toBeTruthy();
+    expect(screen.getByTestId('plan-item-op-glyph')).toBeTruthy();
+    expect(screen.queryByTestId('plan-item-difficulty')).toBeNull();
+  });
+
+  const supersedingNew = () =>
+    item({
+      op: 'add',
+      difficulty: 'medium',
+      supersedesRefs: [
+        { identifier: 'MOTIR-11402', title: 'Poll the checker', kind: 'subtask', proposed: false },
+      ],
+    });
+
+  it('an undecided add that supersedes a card gives way, its Supersedes chip the named glyph', () => {
+    renderWithIntl(<PlanItemNode item={supersedingNew()} />);
+    const row = tagRow();
+    expect(within(row).getByTestId('plan-item-op-glyph').getAttribute('aria-label')).toBe('add');
+    expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
+    const chip = within(row).getByTestId('plan-item-supersedes');
+    expect(chip.getAttribute('role')).toBe('img');
+    expect(chip.getAttribute('aria-label')).toBe('Supersedes 1');
+    expect(chip.getAttribute('title')).toContain('MOTIR-11402');
+    expect(chip.textContent).toBe('');
+  });
+
+  it('an undecided blocked add that supersedes a card leaves the Supersedes chip to the quick view', () => {
+    renderWithIntl(<PlanItemNode item={supersedingNew()} crossBlocked />);
+    const row = tagRow();
+    expect(within(row).queryByTestId('plan-item-supersedes')).toBeNull();
+    expect(within(row).getByTestId('cross-blocked-flag').textContent).toBe('blocked');
+    expect(within(row).getByTestId('plan-item-op-glyph')).toBeTruthy();
+  });
+
+  it('an undecided modify of an In Progress target draws the status as the truncating slot', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          identifier: 'MOTIR-11490',
+          status: 'in_progress',
+          statusLabel: 'In Progress',
+          statusCategory: 'in_progress',
+        })}
+      />,
+    );
+    const row = tagRow();
+    const status = row.querySelector('[data-status="in_progress"]') as HTMLElement;
+    expect(status.textContent).toBe('In Progress');
+    expect(status.getAttribute('role')).toBeNull();
+    // The SLOT form: it may truncate inside the row, its name on `title` …
+    expect(status.className).toContain('min-w-0');
+    expect(status.getAttribute('title')).toBe('In Progress');
+    // … and the right-hand group can shrink, so the slot is what gives.
+    expect((status.parentElement as HTMLElement).className).toContain('min-w-0');
+    expect(within(row).queryByTestId('plan-item-op-glyph')).toBeNull();
+  });
+
+  it('an undecided blocked modify drops its op chip and its status to their glyphs', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          identifier: 'MOTIR-11490',
+          status: 'in_progress',
+          statusLabel: 'In Progress',
+          statusCategory: 'in_progress',
+        })}
+        crossBlocked
+      />,
+    );
+    const row = tagRow();
+    expect(within(row).getByTestId('plan-item-op-glyph').getAttribute('aria-label')).toBe('change');
+    const status = row.querySelector('[data-status="in_progress"]') as HTMLElement;
+    expect(status.getAttribute('role')).toBe('img');
+    expect(status.getAttribute('aria-label')).toBe('In Progress');
+    expect(status.textContent).toBe('');
+    expect(within(row).getByTestId('cross-blocked-flag').textContent).toBe('blocked');
   });
 });
 
@@ -517,7 +877,7 @@ describe('mergePlanLevel', () => {
     expect(level.nodes.some((n) => n.id === 'pi_1')).toBe(false);
 
     renderWithIntl(<>{level.nodes[0]!.content}</>);
-    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('accepted');
+    expect(screen.getByTestId('plan-item-outcome-tab').textContent).toBe('accepted');
     expect(screen.getByText('MOTIR-3166')).toBeTruthy();
   });
 
@@ -543,16 +903,16 @@ describe('mergePlanLevel', () => {
     expect(level.nodes.map((n) => n.id)).toEqual(['wi_mod', 'wi_untouched', 'pi_a']);
 
     renderWithIntl(<>{level.nodes[0]!.content}</>);
-    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('declined');
+    expect(screen.getByTestId('plan-item-outcome-tab').textContent).toBe('declined');
     cleanup();
 
     renderWithIntl(<>{level.nodes[2]!.content}</>);
-    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('declined');
+    expect(screen.getByTestId('plan-item-outcome-tab').textContent).toBe('declined');
     cleanup();
 
     // The committed neighbour the plan decided NOTHING about carries no outcome.
     renderWithIntl(<>{level.nodes[1]!.content}</>);
-    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
   });
 
   it('renders the proposals alone when the committed level is empty', () => {
