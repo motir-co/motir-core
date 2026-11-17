@@ -67,6 +67,30 @@ export interface UnreadableRunContext {
 
 export type RunContext = ReadableRunContext | UnreadableRunContext;
 
+/**
+ * THE WAITING PLAN an `ask_project` turn carries once the conversation's plan is
+ * PROPOSED and waits for the person's decision (Bug MOTIR-11488) — the
+ * `context.waitingPlan` object motir-ai's `src/llm/waitingPlanContext.ts` reads. The
+ * answering session decides from it whether the turn needs the plan revised. `summary`
+ * is the plan's briefing; the proposals have the run snapshot's shape.
+ */
+export interface ReadableWaitingPlanContext {
+  planId: string;
+  readable: true;
+  planStatus: string;
+  title: string | null;
+  summary: string | null;
+  proposals: RunContextProposal[];
+}
+
+export interface UnreadableWaitingPlanContext {
+  planId: string;
+  readable: false;
+  reason: string;
+}
+
+export type WaitingPlanContext = ReadableWaitingPlanContext | UnreadableWaitingPlanContext;
+
 /** The ref a node id carries on the wire: a proposal in this plan is
  *  `planItem:<id>`, anything else (a committed work item) is its identifier or id. */
 function refOfNode(
@@ -103,7 +127,7 @@ function toProposal(
   };
 }
 
-function toRunContext(review: PlanReviewDto): ReadableRunContext {
+function toProposals(review: PlanReviewDto): RunContextProposal[] {
   const planItemIds = new Set(review.items.map((i) => i.planItemId));
   const committedIdentifiers = new Map<string, string>();
   for (const item of review.items) {
@@ -112,6 +136,10 @@ function toRunContext(review: PlanReviewDto): ReadableRunContext {
       if (stub.identifier) committedIdentifiers.set(stub.nodeId, stub.identifier);
     }
   }
+  return review.items.map((i) => toProposal(i, planItemIds, committedIdentifiers));
+}
+
+function toRunContext(review: PlanReviewDto): ReadableRunContext {
   return {
     planId: review.id,
     readable: true,
@@ -122,7 +150,7 @@ function toRunContext(review: PlanReviewDto): ReadableRunContext {
       title: s.targetTitle,
       startedAt: s.startedAt,
     })),
-    proposals: review.items.map((i) => toProposal(i, planItemIds, committedIdentifiers)),
+    proposals: toProposals(review),
   };
 }
 
@@ -161,6 +189,31 @@ export const planRunContextService = {
       return { ...toRunContext(review), ...offer };
     } catch (err) {
       return { planId, readable: false, reason: errorCode(err), ...offer };
+    }
+  },
+
+  /**
+   * The `context.waitingPlan` object for a turn sent while the conversation's plan
+   * waits for a decision (MOTIR-11488). Never throws, for the same reason the run
+   * snapshot does: a plan that cannot be read costs an honest "I could not read the
+   * plan", never a failed turn.
+   */
+  async buildWaitingPlanContext(planId: string, ctx: ProjectContext): Promise<WaitingPlanContext> {
+    try {
+      const review = await planReviewService.getPlanReview(planId, ctx);
+      if (review.projectId !== ctx.projectId) {
+        return { planId, readable: false, reason: 'PLAN_NOT_FOUND' };
+      }
+      return {
+        planId: review.id,
+        readable: true,
+        planStatus: review.status,
+        title: review.title,
+        summary: review.summary,
+        proposals: toProposals(review),
+      };
+    } catch (err) {
+      return { planId, readable: false, reason: errorCode(err) };
     }
   },
 };

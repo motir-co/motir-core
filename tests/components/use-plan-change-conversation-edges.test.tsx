@@ -109,6 +109,7 @@ import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
+import { closeLosesProposal } from '@/lib/planning/planPending';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import deMessages from '@/messages/de.json';
@@ -1570,11 +1571,16 @@ describe('usePlanChangeConversation — a revision lease taken ELSEWHERE reaches
     await waitFor(() => expect(fetchReview.mock.calls.length).toBe(before + 1));
   });
 
-  it('a plan nobody was asked about is not watched — no gate, no read', async () => {
-    await deciding(REVIEW);
+  it('a plan nobody was asked about IS watched too — it can be decided elsewhere (MOTIR-11464)', async () => {
+    // Before MOTIR-11464 a plan with no `awaiting` gate was never re-read, so a decision
+    // taken in another tab never reached the overlay whose close guard protects exactly it.
+    const { result } = await deciding(REVIEW);
     const before = fetchReview.mock.calls.length;
     focus();
-    expect(fetchReview.mock.calls.length).toBe(before);
+    await waitFor(() => expect(fetchReview.mock.calls.length).toBe(before + 1));
+    // A read that is still undecided changes nothing the reader can see.
+    expect(result.current.state.decided).toBeNull();
+    expect(result.current.state.phase).toBe('review');
   });
 
   it('a DECIDED plan is not watched, and a read in flight at the decision never lands over it', async () => {
@@ -1608,6 +1614,275 @@ describe('usePlanChangeConversation — a revision lease taken ELSEWHERE reaches
     const before = fetchReview.mock.calls.length;
     focus();
     expect(fetchReview.mock.calls.length).toBe(before);
+  });
+});
+
+describe('usePlanChangeConversation — a plan DECIDED ELSEWHERE settles the open overlay (Bug MOTIR-11464)', () => {
+  // The decision is driven from OUTSIDE this surface — another tab's overlay, `/plans/[id]`,
+  // a To-approve row — so the only thing that changes is what the review READ answers.
+  // Every assertion is on what the bar and the close guard read: `decided`, `planId`, and
+  // the one predicate both consult (`closeLosesProposal`).
+  function asked(gateId: string, over: Partial<PlanReviewDto> = {}): PlanReviewDto {
+    return {
+      ...REVIEW,
+      gate: {
+        id: gateId,
+        state: 'awaiting',
+        stamp: `stamp-${gateId}`,
+        held: null,
+        canDecide: true,
+      },
+      ...over,
+    };
+  }
+  const decidedRead = (status: 'approved' | 'declined', gateId: string | null = null) =>
+    ({
+      ...REVIEW,
+      status,
+      gate: gateId
+        ? { id: gateId, state: status, stamp: null, held: null, canDecide: false }
+        : null,
+      items:
+        status === 'approved'
+          ? [planReviewItem({ planItemId: 'pi_1', nodeId: 'wi_existing', op: 'add' })]
+          : REVIEW.items,
+    }) as PlanReviewDto;
+
+  const loses = (state: PlanChangeConversationState) =>
+    closeLosesProposal(state, indexPlanReview(state.review));
+
+  async function withProposal(review: PlanReviewDto, onApproved?: (r: unknown) => void) {
+    fetchReview.mockResolvedValue(review);
+    const hook = renderHook(() =>
+      usePlanChangeConversation(onApproved ? { onApproved: onApproved as never } : {}),
+    );
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+    await act(async () => {
+      await hook.result.current.send('Add recurring invoices.');
+    });
+    expect(hook.result.current.state.phase).toBe('review');
+    return hook;
+  }
+  const focus = () =>
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+  const decidedState = (gateId: string) =>
+    renderHook(() => useDecidedGateState(gateId)).result.current;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('⭐ criterion 1 — approved elsewhere: the next focus read shows it accepted, the verbs go, Close is instant', async () => {
+    const onApproved = vi.fn();
+    const { result } = await withProposal(REVIEW, onApproved);
+    // The guard the reader would have met: an unasked, undecided, non-empty plan.
+    expect(loses(result.current.state)).toBe(true);
+
+    fetchReview.mockResolvedValue(decidedRead('approved'));
+    focus();
+    await waitFor(() => expect(result.current.state.decided).toBe('accepted'));
+
+    const s = result.current.state;
+    expect(s.phase).toBe('idle');
+    expect(s.planId).toBeNull();
+    expect(s.review?.status).toBe('approved');
+    expect(s.approved).toEqual({ created: ['wi_existing'], updated: [], removed: [] });
+    expect(loses(s)).toBe(false);
+    // The tree under the overlay re-reads, exactly as after a press made here.
+    expect(onApproved).toHaveBeenCalledTimes(1);
+    // Settled: the watch stops — nothing is pending to re-read.
+    const after = fetchReview.mock.calls.length;
+    focus();
+    expect(fetchReview.mock.calls.length).toBe(after);
+  });
+
+  it('⭐ criterion 2 — declined elsewhere: shown declined, Close is instant, no approval reported', async () => {
+    const onApproved = vi.fn();
+    const { result } = await withProposal(REVIEW, onApproved);
+
+    fetchReview.mockResolvedValue(decidedRead('declined'));
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await waitFor(() => expect(result.current.state.decided).toBe('declined'));
+    expect(result.current.state.planId).toBeNull();
+    expect(result.current.state.phase).toBe('idle');
+    expect(loses(result.current.state)).toBe(false);
+    expect(onApproved).not.toHaveBeenCalled();
+  });
+
+  it('⭐ criterion 3 — the POLL catches it with no focus at all, on a plan with no gate', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = await withProposal(REVIEW);
+    expect(result.current.state.review?.gate ?? null).toBeNull();
+
+    fetchReview.mockResolvedValue(decidedRead('approved'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PLAN_GATE_POLL_MS);
+    });
+    expect(result.current.state.decided).toBe('accepted');
+    expect(loses(result.current.state)).toBe(false);
+  });
+
+  it('an ASKED plan decided elsewhere settles too — and its To-approve row with it', async () => {
+    // The MOTIR-6151 watch used to turn the guard ON here: the read that saw the gate
+    // decided filed it, the gate stopped being `awaiting`, and `closeLosesProposal`
+    // answered true for a plan that was already approved.
+    const { result } = await withProposal(asked('gate-elsewhere'));
+    expect(loses(result.current.state)).toBe(false);
+
+    fetchReview.mockResolvedValue(decidedRead('approved', 'gate-elsewhere'));
+    focus();
+    await waitFor(() => expect(result.current.state.decided).toBe('accepted'));
+    expect(loses(result.current.state)).toBe(false);
+    expect(decidedState('gate-elsewhere')).toBe('approved');
+  });
+
+  it('an asked plan DECLINED elsewhere announces the decline to its row', async () => {
+    const { result } = await withProposal(asked('gate-declined-elsewhere'));
+    fetchReview.mockResolvedValue(decidedRead('declined', 'gate-declined-elsewhere'));
+    focus();
+    await waitFor(() => expect(result.current.state.decided).toBe('declined'));
+    expect(decidedState('gate-declined-elsewhere')).toBe('declined');
+  });
+
+  it('a plan being APPROVED elsewhere is handed to the approving watch, which settles it', async () => {
+    const { result } = await withProposal(REVIEW);
+    fetchReview.mockResolvedValue({ ...REVIEW, status: 'approving' } as PlanReviewDto);
+    focus();
+    await waitFor(() => expect(result.current.state.phase).toBe('deciding'));
+    expect(loses(result.current.state)).toBe(true);
+
+    fetchReview.mockResolvedValue(decidedRead('approved'));
+    await waitFor(() => expect(result.current.state.decided).toBe('accepted'), {
+      timeout: APPROVING_POLL_MS * 4,
+    });
+  });
+
+  it('a read that lands after the reader pressed here is dropped — the press decides', async () => {
+    const { result } = await withProposal(REVIEW);
+    const late = deferred<PlanReviewDto>();
+    fetchReview.mockReturnValueOnce(late.promise);
+    focus();
+    await waitFor(() => expect(fetchReview).toHaveBeenCalledTimes(2));
+
+    let answer!: (v: PlanWithItemsDto) => void;
+    approve.mockReturnValueOnce(new Promise<PlanWithItemsDto>((r) => (answer = r)));
+    let pressing!: Promise<void>;
+    act(() => {
+      pressing = result.current.approve();
+    });
+    // The watch's read answers mid-press: it must not settle over the press in flight.
+    late.resolve(decidedRead('declined'));
+    await act(async () => {
+      await late.promise;
+    });
+    expect(result.current.state.decided).toBeNull();
+    expect(result.current.state.phase).toBe('deciding');
+
+    fetchReview.mockResolvedValue(decidedRead('approved'));
+    await act(async () => {
+      answer(MATERIALIZED);
+      await pressing;
+    });
+    expect(result.current.state.decided).toBe('accepted');
+  });
+
+  it('⭐ criterion 4 — an approve refused because the plan was ALREADY APPROVED settles it, with no error', async () => {
+    const onApproved = vi.fn();
+    const { result } = await withProposal(REVIEW, onApproved);
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_NOT_IN_EXPECTED_STATUS'));
+    fetchReview.mockResolvedValue(decidedRead('approved'));
+
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    const s = result.current.state;
+    expect(s.decided).toBe('accepted');
+    expect(s.errorCode).toBeNull();
+    expect(s.decisionRefusal).toBeNull();
+    expect(s.planId).toBeNull();
+    expect(loses(s)).toBe(false);
+    // The press is not retried: the refused approve is the only write the overlay sent,
+    // and the server refused it before materializing anything.
+    expect(approve).toHaveBeenCalledTimes(1);
+    // The overlay reports the approval it found, so the tree re-reads and an armed
+    // Confirm & add completes its close.
+    expect(onApproved).toHaveBeenCalledTimes(1);
+  });
+
+  it('criterion 4 — an approve refused because the plan was DECLINED elsewhere settles it declined', async () => {
+    const onApproved = vi.fn();
+    const { result } = await withProposal(asked('gate-refused'), onApproved);
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'APPROVAL_GATE_ALREADY_DECIDED'));
+    fetchReview.mockResolvedValue(decidedRead('declined', 'gate-refused'));
+
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.decided).toBe('declined');
+    expect(result.current.state.errorCode).toBeNull();
+    expect(onApproved).not.toHaveBeenCalled();
+  });
+
+  it('a decline refused because the plan was approved elsewhere settles it accepted', async () => {
+    const { result } = await withProposal(REVIEW);
+    decline.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_NOT_IN_EXPECTED_STATUS'));
+    fetchReview.mockResolvedValue(decidedRead('approved'));
+
+    await act(async () => {
+      await result.current.discard();
+    });
+    expect(result.current.state.decided).toBe('accepted');
+    expect(result.current.state.errorCode).toBeNull();
+  });
+
+  it('a "decided" refusal whose re-read is NOT a decision still shows the refusal', async () => {
+    const { result } = await withProposal(REVIEW);
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_NOT_IN_EXPECTED_STATUS'));
+    // e.g. the plan was given back to `planned` between the refusal and the read.
+    fetchReview.mockResolvedValue(REVIEW);
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.decided).toBeNull();
+    expect(result.current.state.errorCode).toBe('decided');
+  });
+
+  it('a "decided" refusal whose re-read FAILS still shows the refusal', async () => {
+    const { result } = await withProposal(REVIEW);
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'APPROVAL_GATE_ALREADY_DECIDED'));
+    fetchReview.mockRejectedValue(new Error('offline'));
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.decided).toBeNull();
+    expect(result.current.state.errorCode).toBe('decided');
+  });
+
+  it('a refusal that is not about the decision is not re-read as one', async () => {
+    const { result } = await withProposal(REVIEW);
+    const before = fetchReview.mock.calls.length;
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_REVISION_IN_FLIGHT'));
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(fetchReview.mock.calls.length).toBe(before);
+    expect(result.current.state.errorCode).toBe('held');
+  });
+
+  it('a non-request failure is not re-read as a decision either', async () => {
+    const { result } = await withProposal(REVIEW);
+    const before = fetchReview.mock.calls.length;
+    approve.mockRejectedValueOnce(new Error('network'));
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(fetchReview.mock.calls.length).toBe(before);
+    expect(result.current.state.decided).toBeNull();
   });
 });
 

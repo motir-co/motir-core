@@ -4287,7 +4287,8 @@ export const workItemRepository = {
           AND ${notInTriageSql('w')}
           AND ${notExcludedSql('w', filter.excludeIds)}
           AND (${matched})
-          ${andStoredFilterSql(filter.storedFilter)}`;
+          ${andStoredFilterSql(filter.storedFilter)}
+          ${andBoardLaneSql(filter.lane, workspaceId)}`;
     return rows[0]?.count ?? 0;
   },
 
@@ -4676,6 +4677,9 @@ export const workItemRepository = {
       // on its own and AND-ed beside `ast`, never merged into it. Absent ⇒ no
       // clause.
       storedFilter?: StoredFilterPredicate;
+      // ONE swimlane of the board (MOTIR-11444) — a board CELL's read. SQL, so
+      // its presence selects the raw path below. Absent ⇒ no clause.
+      lane?: BoardLanePredicate;
     },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
@@ -4692,7 +4696,7 @@ export const workItemRepository = {
     // `WorkItem` rows through the builder (keeping the row type exact for the
     // board mapper) and restore the raw query's order. No AST → the existing
     // builder read, byte-for-byte the 3.8.2 projection (no regression).
-    if (hasAst || opts.storedFilter) {
+    if (hasAst || opts.storedFilter || opts.lane) {
       const orderSql =
         order === 'recent'
           ? Prisma.sql`w."updatedAt" DESC, w."key" ASC`
@@ -4721,6 +4725,7 @@ export const workItemRepository = {
             AND ${notExcludedSql('w', opts.excludeIds)}
             AND (${hasAst ? compileFilterConditionsSql(opts.ast!, opts.referents) : Prisma.sql`TRUE`})
             ${andStoredFilterSql(opts.storedFilter)}
+            ${andBoardLaneSql(opts.lane, workspaceId)}
           ORDER BY ${orderSql}
           LIMIT ${opts.limit}`;
       const ids = idRows.map((r) => r.id);
@@ -6502,6 +6507,13 @@ export interface RepoIssueFilter {
    * is also the forest read's `matched` flag). Absent ⇒ no clause.
    */
   storedFilter?: StoredFilterPredicate;
+  /**
+   * ONE swimlane of a board (MOTIR-11444) — a board cell's denominator. Like
+   * `storedFilter` it is honoured by {@link workItemRepository.countProjectIssues}
+   * only, as its own AND-ed clause, and never by {@link buildIssueFilterSql}.
+   * Absent ⇒ no clause.
+   */
+  lane?: BoardLanePredicate;
 }
 
 /**
@@ -6538,6 +6550,76 @@ export interface BoardCardFilter {
 export type StoredFilterPredicate =
   | { ast: FilterAst; referents?: ProjectFilterReferents }
   | { matchNothing: true };
+
+/**
+ * ONE swimlane of a board as the cell reads take it (MOTIR-11444): the lane
+ * condition a card must meet to sit in that lane under the board's group-by. It
+ * mirrors how the board already sorts a card into a lane — the service's
+ * `resolveSwimlaneKeys` per card, and the `aggregateBoardLanesBy*` reads per
+ * lane — so a cell holds exactly the cards its lane header counts:
+ *
+ * - `assignee` — `assigneeId` equals the id; `assigneeId: null` is the
+ *   catch-all (an unassigned card).
+ * - `priority` — the card's priority. Priority is non-null, so there is no
+ *   catch-all form.
+ * - `epic` — the card's NEAREST ancestor epic (the card itself when it is an
+ *   epic); `epicId: null` is the catch-all, a card with no epic anywhere in its
+ *   chain.
+ */
+export type BoardLanePredicate =
+  | { kind: 'assignee'; assigneeId: string | null }
+  | { kind: 'priority'; priority: WorkItemPriority }
+  | { kind: 'epic'; epicId: string | null };
+
+/**
+ * The lane condition over alias `w` (MOTIR-11444). The `epic` form is the
+ * upward climb `aggregateBoardLanesByEpic` and `findEpicAncestors` perform,
+ * correlated to the one card `w`: it starts AT the card (an epic is its own
+ * lane), climbs `parentId` while the node is not an epic (so it stops at the
+ * FIRST epic), filters the workspace on the anchor and on every parent, and —
+ * exactly as those two reads do — applies no archived or triage filter to a
+ * parent, so a card under an archived epic stays in that epic's lane. The
+ * catch-all is the climb's exact complement: no epic is reached at all.
+ *
+ * ⚠️ Keep this climb identical to the other two. A predicate that is merely
+ * close misfiles cards between lanes while every count still renders.
+ */
+export function boardLanePredicateSql(
+  lane: BoardLanePredicate,
+  alias: 'w',
+  workspaceId: string,
+): Prisma.Sql {
+  const a = Prisma.raw(`"${alias}"`);
+  if (lane.kind === 'assignee') {
+    return lane.assigneeId === null
+      ? Prisma.sql`${a}."assigneeId" IS NULL`
+      : Prisma.sql`${a}."assigneeId" = ${lane.assigneeId}`;
+  }
+  if (lane.kind === 'priority') {
+    return Prisma.sql`${a}."priority"::text = ${lane.priority}`;
+  }
+  const nearestEpic = Prisma.sql`
+    WITH RECURSIVE up AS (
+      SELECT ${a}."id" AS node_id, ${a}."parentId", ${a}."kind"::text AS kind
+       WHERE ${a}."workspaceId" = ${workspaceId}
+      UNION ALL
+      SELECT p."id", p."parentId", p."kind"::text
+        FROM up u
+        JOIN "work_item" p ON p."id" = u."parentId" AND p."workspaceId" = ${workspaceId}
+       WHERE u.kind <> 'epic'
+    )
+    SELECT 1 FROM up WHERE kind = 'epic'`;
+  return lane.epicId === null
+    ? Prisma.sql`NOT EXISTS (${nearestEpic})`
+    : Prisma.sql`EXISTS (${nearestEpic} AND node_id = ${lane.epicId})`;
+}
+
+/** `AND (<lane condition>)` over alias `w`, or nothing when no lane is given, so a
+ * lane-less read's SQL is byte-for-byte today's. */
+function andBoardLaneSql(lane: BoardLanePredicate | undefined, workspaceId: string): Prisma.Sql {
+  if (!lane) return Prisma.empty;
+  return Prisma.sql`AND (${boardLanePredicateSql(lane, 'w', workspaceId)})`;
+}
 
 /** `AND (<stored predicate>)` over alias `w`, or nothing at all when the board
  * has no stored filter, so a filterless board's SQL is byte-for-byte today's. */

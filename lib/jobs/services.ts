@@ -57,6 +57,7 @@ import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterSe
 import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
+import { ciFleetBlindSpotsService } from '@/lib/services/ciFleetBlindSpotsService';
 import { ciRunnerReconcileService } from '@/lib/services/ciRunnerReconcileService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
@@ -168,6 +169,8 @@ export const jobServices = {
   ciRunnerBoot: ciRunnerBootService,
   // The GitHub-side reconcile of the fleet's queue (MOTIR-8976).
   ciRunnerReconcile: ciRunnerReconcileService,
+  // Keeps the reconcile's latest blind spots for Fleet status (MOTIR-11439).
+  ciFleetBlindSpots: ciFleetBlindSpotsService,
   // A hosted run's supervision (Story MOTIR-683 · MOTIR-690).
   hostedRun: hostedRunService,
   jobScheduleHealth: jobScheduleHealthService,

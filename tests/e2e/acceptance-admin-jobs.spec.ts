@@ -54,7 +54,6 @@ const RUN_SYSTEM = 'system.e2e-ledger-report';
 
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
-const WIDE = { width: 1440, height: 810 };
 
 /** A message with `{name}` placeholders filled. */
 const fill = (text: string, values: Record<string, string | number>) =>
@@ -143,7 +142,6 @@ test('platform staff read the whole job ledger, and an operator replays one row,
   const tenant = await seedTenantOrg('Northwind Labs', 'e2e-jobs-northwind');
   await seedLedger(tenant.workspaceId);
 
-  await page.setViewportSize(WIDE);
   await signUpToOnboarding(page, STAFF);
 
   const main = page.getByRole('main');

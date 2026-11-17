@@ -72,6 +72,16 @@ export interface AskOutcome {
    * `decline`, is NO reply — never agreement.
    */
   offerReply?: AskOfferReply;
+  /**
+   * WAITING-PLAN mode only (Bug MOTIR-11488; `ask_project` with `context.waitingPlan`):
+   * on a `plan_change`, the planner decided the waiting plan must change, and this is the
+   * change it restated as the revision's requirement. Such an outcome carries the reply
+   * naming the change as `answer`, and its citations. A `plan_change` with no readable
+   * `revision` is the legacy redirect and keeps its old shape.
+   */
+  revision?: { requirement: string };
+  /** WAITING-PLAN mode only: whether the answering session could read the waiting plan. */
+  waitingPlan?: { readable: boolean; reason: string | null } | null;
 }
 
 /** The typed reply to a pending offer, once read. */
@@ -240,7 +250,26 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
 
   // The redirect: no answer and no citations, whatever else the field carried.
   const run = readRunField(ask['run']);
+  const waitingPlan = readRunField(ask['waitingPlan']);
   if (ask['intent'] === 'plan_change') {
+    // THE WAITING-PLAN REVISION (MOTIR-11488): the planner's reply AND its restated
+    // change. One missing either is not a revision core can honour — the person must be
+    // told what will change, and the planner must be told what to change — so it reads
+    // as an ANSWER (or a silent turn), never as the legacy redirect, whose settle would
+    // rewrite the plan from the accumulated turns: the very defect this mode retires.
+    if ('revision' in ask) {
+      const requirement = isRecord(ask['revision'])
+        ? boundedString(ask['revision']['requirement'], ASK_ANSWER_MAX_CHARS)
+        : null;
+      const reply = boundedString(ask['answer'], ASK_ANSWER_MAX_CHARS);
+      return {
+        intent: requirement && reply ? 'plan_change' : 'ask',
+        answer: reply,
+        citations: readCitations(ask['citations']),
+        ...(requirement && reply ? { revision: { requirement } } : {}),
+        ...(waitingPlan ? { waitingPlan } : {}),
+      };
+    }
     // `forward` is read only here: it is the run-mode form of the redirect. A
     // malformed one reads `null` — the intent is unchanged, and the caller treats
     // a forward-less mid-run `plan_change` as nothing to forward.
@@ -283,5 +312,6 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
     ...(run ? { run } : {}),
     ...(offer ? { offer } : {}),
     ...(offerReply ? { offerReply } : {}),
+    ...(waitingPlan ? { waitingPlan } : {}),
   };
 }

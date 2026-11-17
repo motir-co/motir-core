@@ -437,6 +437,13 @@ export interface JobContextBag {
   // ABSENT ⇒ `ask_project` behaves exactly as it always has. Loosely typed here by
   // design, like `discovery`: each side declares its own types against the contract.
   run?: unknown;
+  // The WAITING PLAN of an `ask_project` turn typed once the conversation's plan is
+  // PROPOSED and waits for a decision (Bug MOTIR-11488) — `{ planId, readable,
+  // planStatus?, title?, summary?, proposals?, reason? }` (`WaitingPlanContext`,
+  // lib/services/planRunContextService.ts). PRESENT ⇒ the answering session decides
+  // whether the turn needs that plan revised, answering it or returning the change as
+  // `ask.revision`. Never sent beside `run`: a plan still being written is run mode.
+  waitingPlan?: unknown;
   // The LIVE PLAN OFFER of an `ask_project` turn typed with NO run (Story MOTIR-9219 ·
   // MOTIR-9290 producer ↔ MOTIR-9292 consumer) — `{ kind, requestText, targetKey,
   // seq }` (`PendingPlanOfferStatement`, lib/services/planOfferService.ts), the offer

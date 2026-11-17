@@ -34,7 +34,7 @@
 //   - ILLEGAL-MOVE SNAP-BACK (409) AT SCALE — an illegal cross-column move
 //     snaps back, status + sprint unchanged (the 3.1.5 IllegalBoardMoveError).
 //   - SWIMLANES RE-LAY AT SCALE, STILL SPRINT-SCOPED — group-by re-lays the
-//     sprint board into bounded lanes + catch-all with NO "Load more" (3.8.5),
+//     sprint board into bounded lanes + catch-all with no column "Load more" (cells page themselves, MOTIR-11450),
 //     never falling back to the unscoped backlog; a collapsed lane persists.
 //   - CROSS-LANE REASSIGN + DIAGONAL — the grouped field reassigns (3.3.5),
 //     both diagonal writes apply, and the card stays in the sprint throughout.
@@ -69,6 +69,7 @@ import {
   getFullBoard,
   columnByStatus,
   cardIdsIn,
+  expectNoColumnLoadMore,
   expectNoLoadMore,
   expectActiveSprintScope,
   identifierOf,
@@ -393,7 +394,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     expect(row?.sprintId).toBe(scale.manifest.activeSprintId);
   });
 
-  test('group-by re-lays the sprint board into bounded, SPRINT-SCOPED lanes + catch-all with NO "Load more"; a collapsed lane persists on reload', async ({
+  test('group-by re-lays the sprint board into bounded, SPRINT-SCOPED lanes + catch-all with no column "Load more"; a collapsed lane persists on reload', async ({
     page,
   }) => {
     const scale = await seedScrumAtScale(page);
@@ -411,7 +412,8 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     await expectNoLoadMore(page);
 
     // Group by Assignee → one lane per assignee-with-cards plus the catch-all
-    // (sorted LAST), still bounded with NO "Load more" (3.8.5) and STILL
+    // (sorted LAST), still bounded with no column "Load more" (cells page themselves,
+    // MOTIR-11450) and STILL
     // sprint-scoped — the re-lay never falls back to the unscoped backlog.
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
@@ -423,18 +425,18 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
       .locator('[data-testid^="swimlane-head-"]')
       .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
     expect(laneHeadIds.at(-1), 'the catch-all lane sorts last').toBe(`swimlane-head-${CATCH_ALL}`);
-    await expectNoLoadMore(page);
+    await expectNoColumnLoadMore(page);
     expectActiveSprintScope(await getFullBoard(page.request), { absent: outsider.id });
 
-    // Epic / Priority / None all re-lay (server-side group-by) without a paging
+    // Epic / Priority / None all re-lay (server-side group-by) without a column paging
     // affordance ever appearing, sprint scope intact throughout.
     await setGroupBy(page, 'Epic');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
     await expect(page.getByTestId(`swimlane-${CATCH_ALL}`)).toBeVisible(); // epics + root cards have no epic ancestor
-    await expectNoLoadMore(page);
+    await expectNoColumnLoadMore(page);
     await setGroupBy(page, 'Priority');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    await expectNoLoadMore(page);
+    await expectNoColumnLoadMore(page);
     expectActiveSprintScope(await getFullBoard(page.request), { absent: outsider.id });
     await setGroupBy(page, 'None');
     await expect(page.getByTestId('board')).toBeVisible();

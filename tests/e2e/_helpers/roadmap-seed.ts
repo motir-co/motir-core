@@ -43,6 +43,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { foldersService } from '@/lib/services/foldersService';
 import { plansService } from '@/lib/services/plansService';
 import { FOLDER_REF_PREFIX } from '@/lib/plans/refs';
+import { LOOSE_BAND_COLS } from '@/lib/planning/projectCanvasModel';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { waitForDerivedStatus } from './derivedStatus';
 
@@ -593,11 +594,17 @@ export async function seedSprintRoadmap(email: string): Promise<SprintRoadmapSee
  * arrival floor (Story MOTIR-3833 · MOTIR-3841).
  *
  * The arrival rule only bites on a level that cannot be drawn legibly whole, so a
- * fixture with two epics cannot see it at all. Eighteen root epics put the
- * level's world box at roughly 1720×712 under the shipped
- * 5-column `deterministicLayout` band (MOTIR-10537), which fits at ~0.60 in a
- * laptop-sized canvas — under the 0.80 floor, and too tall at the floor to fit, so
- * the arrival still follows the frontier vertically. One of
+ * fixture with two epics cannot see it at all. The level carries
+ * {@link WIDE_ROADMAP_ROWS} full rows of the loose band ({@link LOOSE_BAND_COLS}
+ * cards each — 30 root epics at the shipped 5 columns, MOTIR-10537), a world box
+ * of roughly 1720×1104 that fits at ~0.58 in a laptop-sized canvas — under the
+ * 0.80 floor — and OVERFLOWS the canvas on BOTH axes at the floor (1376×883 px
+ * against a ~1136×739 frame), so the arrival follows the frontier horizontally
+ * AND vertically. The count is derived from `LOOSE_BAND_COLS` on purpose: with
+ * 18 epics the 5-column band is only 4 rows, 570 px tall at the floor, which
+ * FITS the frame — `arrivalView` then centres the band's bounds on Y rather than
+ * the frontier, and the acceptance walk measured a case the fixture no longer
+ * built (MOTIR-11473). One of
  * them is the in-progress FRONTIER (the card the arrival centres on) and one is a
  * drillable STORY-bearing epic, so the same fixture serves the drill / URL / Back
  * walk without a second seed.
@@ -617,6 +624,14 @@ export interface WideRoadmapSeed extends RoadmapSeed {
   /** How many root epics the level carries. */
   rootEpicCount: number;
 }
+
+/**
+ * How many full rows of the loose band {@link seedWideRoadmap} fills. Six rows are
+ * (6·124 + 5·72)·0.8 = 883 px tall at the arrival floor — past the ~739 px canvas
+ * frame at 1440×900 — whatever `LOOSE_BAND_COLS` is, so the vertical axis always
+ * overflows. Fewer rows is how the fixture went stale (MOTIR-11473).
+ */
+export const WIDE_ROADMAP_ROWS = 6;
 
 export async function seedWideRoadmap(email: string): Promise<WideRoadmapSeed> {
   const { ctx, projectId, projectKey } = await makeTenant(
@@ -673,10 +688,12 @@ export async function seedWideRoadmap(email: string): Promise<WideRoadmapSeed> {
     },
   });
 
-  // …and enough siblings that the level cannot be fitted legibly. Leaf epics: a
+  // …and enough siblings that the level cannot be fitted legibly, and overflows
+  // the canvas on both axes at the floor: WIDE_ROADMAP_ROWS full rows of the
+  // loose band, less the frontier and the drill target above. Leaf epics: a
   // childless epic still occupies a cell in the layout, which is all the arrival
   // scale depends on.
-  const FILLER = 16;
+  const FILLER = LOOSE_BAND_COLS * WIDE_ROADMAP_ROWS - 2;
   for (let i = 1; i <= FILLER; i += 1) {
     await workItemsService.createWorkItem(
       { projectId, kind: 'epic', title: `Epic ${i}: Filler stream ${i}` },

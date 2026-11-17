@@ -4989,6 +4989,13 @@
     "laneCountLoaded": "{loaded, number} / {total, number}",
     "laneLoading": "読み込み中…",
     "laneLoadRetry": "作業項目をさらに読み込めませんでした · 再試行",
+    "cellLoadMore": "さらに読み込む",
+    "cellLoadMoreAria": "{column}、{lane} レーンの作業項目をさらに読み込む",
+    "cellLoadRetryAria": "作業項目をさらに読み込めませんでした · 再試行、{column}、{lane} レーン",
+    "cellLoadingAria": "{column}、{lane} レーンの作業項目を読み込み中",
+    "laneScrollLeftAria": "{lane} レーンを左にスクロール",
+    "laneScrollRightAria": "{lane} レーンを右にスクロール",
+    "laneEmpty": "このレーンに作業項目はありません",
     "pagerPosition": "{name} · {count} 件中 {index} 件目",
     "groupByLabel": "グループ化",
     "groupByAria": "スイムレーンのグループ化",
@@ -14797,6 +14804,63 @@
         },
         "pausedUntil": "{time} まで(残り {left})",
         "readOnly": "読み取り専用です。AWS にクォータの追加を申請するには、ターミナルで <cmd>{command}</cmd> を実行してください。アカウントの上限の上書きは従来の場所のままです。"
+      },
+      "blindSpots": {
+        "title": "CI フリートの死角",
+        "subtitle": "CI フリートがサービスを提供する各 GitHub 組織で、フリートから見えないリポジトリ：フリートのジョブがキューにあるのに workflow_job の配信がないリポジトリと、motir-studio が読み取れない連携済みリポジトリ。各プロビジョニングスイープの照合で計算されます。読み取り専用です。",
+        "card": {
+          "title": "GitHub 組織別",
+          "subtitle": "過去 3 日間に CI フリートがサービスを提供した組織ごとに 1 行。"
+        },
+        "pill": {
+          "orgs": "{count, plural, other {死角のある組織 # 件}}",
+          "orgsNotRead": "{count, plural, other {未読み取りの組織 # 件}}",
+          "allSeen": "すべてのリポジトリが見えています",
+          "notRead": "未読み取り"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, other {配信のないリポジトリ # 件}}",
+          "unreadableCount": "{count, plural, other {読み取れないリポジトリ # 件}}",
+          "seen": "フリートのジョブがあるすべてのリポジトリに workflow_job の配信があり、滞留したジョブはありません。"
+        },
+        "undelivered": {
+          "title": "フリートのジョブがキューにあり、3 日間 workflow_job の配信なし",
+          "hint": "motir-runner のジョブはあるが workflow_job の配信がない — このリポジトリに motir-studio はインストールされていますか？"
+        },
+        "unreadable": {
+          "title": "連携済みだが、motir-studio が Actions キューを読み取れない",
+          "body": "前回のスイープでこの組織にジョブが滞留しましたが、フリートの motir-studio 認証情報ではこれらのリポジトリのキュー内ジョブを一覧できなかったため、ランナーは起動されませんでした。"
+        },
+        "repo": {
+          "link": "GitHub の {repo}"
+        },
+        "orgError": {
+          "title": "前回のスイープでこの組織を読み取れませんでした。",
+          "body": "リポジトリは確認されていないため、ここに何も表示されていなくても見えているとは限りません。他の組織には影響がなく、次のスイープで再試行されます。GitHub の応答："
+        },
+        "empty": {
+          "title": "死角はありません",
+          "body": "CI フリートは、過去 3 日間にサービスを提供した {count, plural, other {# 件の組織}}のすべてのリポジトリを把握しています。フリートのジョブがあるリポジトリにはいずれも workflow_job の配信があり、滞留したジョブはありません。",
+          "noOrgs": "過去 3 日間に CI フリートでジョブを実行した組織はないため、確認するリポジトリはありません。"
+        },
+        "error": {
+          "title": "CI フリートの死角を読み取れませんでした",
+          "body": "死角の記録を読み込めなかったため、ここに何も表示されていなくてもすべてのリポジトリが見えているとは限りません。イメージとプールには影響ありません。再読み込みしてもう一度お試しください。"
+        },
+        "reconcileError": {
+          "title": "前回のスイープの照合が完了しませんでした",
+          "body": "このエラーで停止したため、どの組織も確認されておらず、ここに何も表示されていなくてもすべてのリポジトリが見えているとは限りません。次のスイープで再試行されます。"
+        },
+        "notComputed": {
+          "title": "まだ計算されていません",
+          "body": "このデプロイ以降、死角を計算したプロビジョニングスイープはありません。スイープは 5 分ごとに実行されます。次のスイープの後に再読み込みしてください。"
+        },
+        "notConfigured": {
+          "title": "CI フリートが設定されていません",
+          "body": "このデプロイではフリートで CI ジョブを実行しないため、照合はどの組織にもサービスを提供せず、確認するリポジトリはありません。切り替えは<link>フリート設定</link>にあります。"
+        },
+        "computed": "{time} のプロビジョニングスイープで計算（{age}）。読み取り専用：motir-studio はここではなく GitHub でリポジトリにインストールします。",
+        "loading": "CI フリートの死角を読み込んでいます"
       }
     }
   },

@@ -389,6 +389,13 @@ export const STRUCTURAL_GUARD_SPECS = [
   // — hence the `SELF_WALKING_MEMBERS` entry beside this one in
   // `tests/ci-structural-guards-lane.test.ts`.
   'tests/e2e-acceptance-lane-imports.test.ts',
+  // ── tests/ — the acceptance-lane FRAME guard (MOTIR-11471) ───────────────
+  // Same shape as the entry above: it reads `playwright.acceptance.config.ts`
+  // for the lane's `testMatch` and its recording frame, walks the lane's specs
+  // and the local helpers they import, and fails any resize. Text only — no
+  // database, nothing rendered — and its own walk, so it is also listed in
+  // `SELF_WALKING_MEMBERS` in `tests/ci-structural-guards-lane.test.ts`.
+  'tests/e2e-acceptance-lane-viewport.test.ts',
   // ── tests/ — the PAGE-ROOTED LOCATOR ratchet (MOTIR-5037) ─────────────────
   // A whole-tree read of `tests/e2e/**` — 277 files — asking which locators are
   // page-rooted and strict. It reaches the tree through a SUBPROCESS

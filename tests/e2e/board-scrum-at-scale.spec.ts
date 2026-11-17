@@ -43,6 +43,7 @@ import {
   getBoard,
   getFullBoard,
   columnByStatus,
+  pageFirstCellThroughLoadMore,
   columnCardNodes,
   columnTotalBadge,
   columnPointPill,
@@ -51,7 +52,6 @@ import {
   expectNoLoadMore,
   gotoLoadedBoard,
   scrollLaneToEnd,
-  scrollSwimlaneColumnToEnd,
   signInScrumSeedOwnerAndOpenScrumBoard,
 } from './_helpers/board';
 import { usersService } from '@/lib/services/usersService';
@@ -276,7 +276,7 @@ async function seedNoActiveSprint(): Promise<NoSprintSeed> {
   return { email };
 }
 
-// Switch the active swimlane group-by via the board-header Segmented control,
+// Switch the active swimlane group-by via the board-header group-by menu,
 // waiting for the PATCH /api/board that persists it. Mirrors board-at-scale.spec.ts.
 async function setGroupBy(
   page: Page,
@@ -286,7 +286,10 @@ async function setGroupBy(
   const patch = page.waitForResponse(
     (r) => r.url().endsWith('/api/board') && r.request().method() === 'PATCH',
   );
-  await control.getByRole('button', { name: label, exact: true }).click();
+  // The group-by trigger opens the group-by menu (MOTIR-11451); the dimensions
+  // are its menuitemradio rows, portaled out of the group.
+  await control.getByRole('button').click();
+  await page.getByRole('menuitemradio', { name: label, exact: true }).click();
   expect((await patch).ok(), `group-by → ${label} persisted`).toBeTruthy();
 }
 
@@ -563,22 +566,26 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     expect(board.sprint).toBeNull();
   });
 
-  test('pages the swimlane sprint board from its footer row, over the lane route', async ({
-    page,
-  }) => {
-    const pageReads: string[] = [];
+  test('pages the swimlane sprint board lane by lane, with no footer row', async ({ page }) => {
+    const laneReads: string[] = [];
     page.on('request', (r) => {
-      if (/\/api\/board\/columns\/[^/?]+\/cards\?/.test(r.url())) pageReads.push(r.url());
+      if (/\/api\/board\/lanes\/[^/?]+\/cells\?/.test(r.url())) laneReads.push(r.url());
     });
     await signInScrumSeedOwnerAndOpenScrumBoard(page);
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    const board = await getBoard(page.request);
-    const tall = columnByStatus(board, big.manifest.tallStatusKey);
 
-    await expect(page.getByRole('main').getByTestId('swimlane-load-row')).toBeAttached();
-    await scrollSwimlaneColumnToEnd(page, tall.id, tall.totalCount);
-    expect(pageReads.some((u) => u.includes(`/columns/${tall.id}/cards?`))).toBe(true);
-    await expectNoLoadMore(page);
+    // A grouped sprint board pages each (lane × column) cell itself (MOTIR-11448):
+    // no footer row, no column sentinel, and the lanes in view fill over the lane
+    // route, each read once.
+    const main = page.getByRole('main');
+    await expect(main.getByTestId('swimlane-load-row')).toHaveCount(0);
+    await expect(main.locator('[data-testid^="board-lane-footer-"]')).toHaveCount(0);
+    await expect
+      .poll(() => laneReads.length, { message: 'a lane in view read its cells' })
+      .toBeGreaterThan(0);
+    expect(new Set(laneReads).size, 'no lane read twice').toBe(laneReads.length);
+    // A cell pages through its own Load more control.
+    await pageFirstCellThroughLoadMore(page);
   });
 });

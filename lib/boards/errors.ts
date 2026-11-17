@@ -156,6 +156,26 @@ export class InvalidBoardCursorError extends Error {
   }
 }
 
+/**
+ * A board cell or lane page was asked for with a lane key the board's ACTIVE
+ * group-by cannot hold (MOTIR-11444): any key at all on a `none` board (it has no
+ * lanes), the catch-all on a `priority` board (priority is never empty, so that
+ * dimension has no catch-all lane), or a value that is not a priority there. A
+ * key the dimension CAN denote that simply holds no cards is NOT this error — it
+ * answers an empty cell.
+ */
+export class InvalidBoardLaneError extends Error {
+  readonly code = 'INVALID_BOARD_LANE' as const;
+  readonly laneKey: string;
+  readonly groupBy: string;
+  constructor(laneKey: string, groupBy: string) {
+    super(`"${laneKey}" is not a lane of a board grouped by ${groupBy}.`);
+    this.name = 'InvalidBoardLaneError';
+    this.laneKey = laneKey;
+    this.groupBy = groupBy;
+  }
+}
+
 // ── Board CONFIG writes (Subtask 3.3.3) — set swimlane group-by + per-column
 // WIP limit. The validation + authorization errors the config write path
 // raises, mapped to status codes by the PATCH routes.

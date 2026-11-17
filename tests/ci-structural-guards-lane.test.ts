@@ -205,6 +205,10 @@ const SELF_WALKING_MEMBERS = [
   // text handed to it and reaches no filesystem of its own — so, like the
   // entries above, nothing derives it.
   'tests/e2e-acceptance-lane-imports.test.ts',
+  // MOTIR-11471. Its own `readdirSync` over the acceptance config's `testDir`;
+  // it imports only `importGraph`'s text parsers and `playwrightLane`, neither
+  // of which reaches a filesystem — so nothing derives it.
+  'tests/e2e-acceptance-lane-viewport.test.ts',
   // MOTIR-5037. It reaches the tree through a SUBPROCESS — the shared predicate
   // in `scripts/enumerate-page-locators.mjs` — rather than through an entry
   // point in its own source, so it is invisible to `entryPointsIn` for a reason

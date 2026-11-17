@@ -4989,6 +4989,13 @@
     "laneCountLoaded": "{loaded, number} de {total, number}",
     "laneLoading": "Carregando…",
     "laneLoadRetry": "Não foi possível carregar mais itens de trabalho · Tentar novamente",
+    "cellLoadMore": "Carregar mais",
+    "cellLoadMoreAria": "Carregar mais itens de trabalho em {column}, raia {lane}",
+    "cellLoadRetryAria": "Não foi possível carregar mais itens de trabalho · Tentar novamente, em {column}, raia {lane}",
+    "cellLoadingAria": "Carregando itens de trabalho em {column}, raia {lane}",
+    "laneScrollLeftAria": "Rolar a raia {lane} para a esquerda",
+    "laneScrollRightAria": "Rolar a raia {lane} para a direita",
+    "laneEmpty": "Nenhum item de trabalho nesta raia",
     "pagerPosition": "{name} · {index} de {count}",
     "groupByLabel": "Agrupar por",
     "groupByAria": "Agrupar raias por",
@@ -14800,6 +14807,63 @@
         },
         "pausedUntil": "até {time}, em {left}",
         "readOnly": "Somente leitura. Para pedir mais cota à AWS, execute <cmd>{command}</cmd> em um terminal; a substituição do limite de uma conta continua no lugar de sempre."
+      },
+      "blindSpots": {
+        "title": "Pontos cegos da frota de CI",
+        "subtitle": "Os repositórios que a frota de CI não vê, para cada organização do GitHub que ela atende: repositórios com jobs da frota na fila mas sem entregas de workflow_job, e repositórios vinculados que o motir-studio não consegue ler. Calculado pela reconciliação em cada varredura de provisionamento; somente leitura.",
+        "card": {
+          "title": "Por organização do GitHub",
+          "subtitle": "Uma linha por organização atendida pela frota de CI nos últimos 3 dias."
+        },
+        "pill": {
+          "orgs": "{count, plural, one {# organização com pontos cegos} other {# organizações com pontos cegos}}",
+          "orgsNotRead": "{count, plural, one {# organização não lida} other {# organizações não lidas}}",
+          "allSeen": "Todos os repositórios visíveis",
+          "notRead": "Não lida"
+        },
+        "org": {
+          "undeliveredCount": "{count, plural, one {# repositório sem entregas} other {# repositórios sem entregas}}",
+          "unreadableCount": "{count, plural, one {# repositório ilegível} other {# repositórios ilegíveis}}",
+          "seen": "Cada repositório com jobs da frota recebeu suas entregas de workflow_job, e nenhum job ficou travado."
+        },
+        "undelivered": {
+          "title": "Jobs da frota na fila, sem entregas de workflow_job em 3 dias",
+          "hint": "Jobs do motir-runner mas nenhuma entrega de workflow_job — o motir-studio está instalado neste repositório?"
+        },
+        "unreadable": {
+          "title": "Vinculados, mas o motir-studio não consegue ler a fila do Actions deles",
+          "body": "Na última varredura, jobs ficaram travados nesta organização, e a credencial do motir-studio da frota não conseguiu listar os jobs na fila destes repositórios, então nenhum runner foi iniciado para eles."
+        },
+        "repo": {
+          "link": "{repo} no GitHub"
+        },
+        "orgError": {
+          "title": "Não foi possível ler esta organização na última varredura.",
+          "body": "Os repositórios dela não foram verificados, então nada aqui significa que estejam visíveis. As outras organizações não são afetadas, e a próxima varredura tenta de novo. Resposta do GitHub:"
+        },
+        "empty": {
+          "title": "Nenhum ponto cego",
+          "body": "A frota de CI vê todos os repositórios {count, plural, one {da # organização que atendeu} other {das # organizações que atendeu}} nos últimos 3 dias: cada repositório com jobs da frota recebeu suas entregas de workflow_job, e nenhum job ficou travado.",
+          "noOrgs": "Nenhuma organização executou um job na frota de CI nos últimos 3 dias, então não há repositório para verificar."
+        },
+        "error": {
+          "title": "Não foi possível ler os pontos cegos da frota de CI",
+          "body": "O registro de pontos cegos não carregou, então nada aqui significa que todos os repositórios estejam visíveis. As imagens e os pools não são afetados. Recarregue para tentar de novo."
+        },
+        "reconcileError": {
+          "title": "A reconciliação da última varredura não terminou",
+          "body": "Ela parou com este erro, então nenhuma organização foi verificada e nada aqui significa que todos os repositórios estejam visíveis. A próxima varredura tenta de novo."
+        },
+        "notComputed": {
+          "title": "Ainda não calculado",
+          "body": "Nenhuma varredura de provisionamento calculou os pontos cegos desde esta implantação. A varredura é executada a cada 5 minutos; recarregue após a próxima."
+        },
+        "notConfigured": {
+          "title": "A frota de CI não está configurada",
+          "body": "Esta implantação não executa jobs de CI na frota, então a reconciliação não atende nenhuma organização e não há repositório para verificar. A chave fica em <link>Configurações da frota</link>."
+        },
+        "computed": "Calculado pela varredura de provisionamento de {time} ({age}). Somente leitura: o motir-studio é instalado em um repositório no GitHub, não aqui.",
+        "loading": "Carregando os pontos cegos da frota de CI"
       }
     }
   },
