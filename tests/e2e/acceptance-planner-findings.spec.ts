@@ -558,7 +558,10 @@ test('platform admins list, group, open, triage and promote planner findings; a 
     resetPlannerFindingsJournal();
     await openDetail(named.bug.id);
     await triage.getByRole('button', { name: ui.bug.open }).click();
-    await main.getByTestId('planner-finding-bug-key').getByLabel(ui.bug.label).fill(BUG_KEY.toLowerCase());
+    await main
+      .getByTestId('planner-finding-bug-key')
+      .getByLabel(ui.bug.label)
+      .fill(BUG_KEY.toLowerCase());
     await triage.getByRole('button', { name: ui.bug.save }).click();
     await expect(notice).toHaveText(t('bug.saved', { key: BUG_KEY }));
     await expect(detail).toContainText(t('status.bugWithKey', { key: BUG_KEY }));
