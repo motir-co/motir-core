@@ -336,7 +336,9 @@ describe('after the waiting plan is decided', () => {
           farRequestOfferService.offerNextAfterCommit(actor, sessionId, 'confirm'),
         ).resolves.toBeUndefined();
         expect(warn).toHaveBeenCalledWith(
-          expect.stringContaining('after confirm on conversation'),
+          expect.stringContaining('after %s on conversation %s failed'),
+          'confirm',
+          sessionId,
           expect.any(Error),
         );
       } finally {

@@ -336,14 +336,15 @@ export const planChangeTurnRepository = {
   },
 
   /** The session's KEPT too-far requests (MOTIR-11518) — requirement set, not consumed —
-   *  in `seq` order, the order they were asked. Workspace-scoped like the thread read. */
+   *  in `seq` order, the order they were asked. Workspace-scoped like the thread read.
+   *  Read inside the caller's transaction, which holds the session's row lock, so the
+   *  list cannot change between this read and the consume that follows it. */
   async listKeptFarRequests(
     sessionId: string,
     workspaceId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<{ id: string; seq: number; farRequestRequirement: string | null }[]> {
-    const client = tx ?? dbRead;
-    return client.planChangeTurn.findMany({
+    return tx.planChangeTurn.findMany({
       where: {
         sessionId,
         workspaceId,

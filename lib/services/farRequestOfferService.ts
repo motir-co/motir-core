@@ -150,8 +150,12 @@ export const farRequestOfferService = {
     try {
       await farRequestOfferService.offerNext(actor, sessionId);
     } catch (err) {
+      // A constant format string: the door and the conversation id ride as arguments, so
+      // neither can be read as a `%` directive (CodeQL js/tainted-format-string).
       console.warn(
-        `[farRequestOfferService] offering the next kept far request after ${door} on conversation ${sessionId} failed; it is offered by the next door that resolves an offer`,
+        '[farRequestOfferService] offering the next kept far request after %s on conversation %s failed; it is offered by the next door that resolves an offer',
+        door,
+        sessionId,
         err,
       );
     }
