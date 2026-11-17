@@ -403,6 +403,7 @@ describe('a refused press', () => {
     ['MOTIR_AI_OUT_OF_CREDITS', en.cannotStart.outOfCredits],
     ['target_not_available', 'You can no longer open ACME-40, so planning can’t start.'],
     ['already_planning', en.cannotStart.generic],
+    ['open_plan_in_scope', en.cannotStart.decideOpenPlanFirst],
     ['NOT_A_CODE', en.cannotStart.generic],
   ])('%s replaces both buttons with its line', (code, line) => {
     renderRail({}, { refusal: { turnId: 't1', code } });

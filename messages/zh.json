@@ -9403,6 +9403,7 @@
         "planningUnavailable": "无法在这里开始规划：此项目尚未配置 Motir AI，或没有规划和编辑工作项的权限。",
         "outOfCredits": "所在组织的 AI 额度已用完，因此无法开始规划。",
         "targetUnavailable": "已无法打开 {key}，因此无法开始规划。",
+        "decideOpenPlanFirst": "这里已有一个尚未决定的计划。请先批准或拒绝它，然后再确认这一个。",
         "generic": "无法从这条提议开始规划。"
       },
       "held": "这几问答完后，Motir AI 会提议规划。",

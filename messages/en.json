@@ -9409,6 +9409,7 @@
         "planningUnavailable": "Planning can’t start here: Motir AI isn’t set up for this project, or you don’t have permission to plan and edit work items.",
         "outOfCredits": "Your organization is out of AI credits, so planning can’t start.",
         "targetUnavailable": "You can no longer open {key}, so planning can’t start.",
+        "decideOpenPlanFirst": "You already have a plan here that isn’t decided yet. Approve or decline it first, then confirm this one.",
         "generic": "Planning can’t start from this offer."
       },
       "held": "Motir AI will offer to plan when these questions are done.",

@@ -9412,6 +9412,7 @@
         "planningUnavailable": "De planning kan hier niet starten: Motir AI is niet ingesteld voor dit project, of je hebt geen toestemming om werkitems te plannen en te bewerken.",
         "outOfCredits": "Je organisatie heeft geen AI-tegoed meer, dus de planning kan niet starten.",
         "targetUnavailable": "Je kunt {key} niet meer openen, dus de planning kan niet starten.",
+        "decideOpenPlanFirst": "Je hebt hier al een plan waarover nog niet is beslist. Keur het eerst goed of wijs het af en bevestig daarna dit verzoek.",
         "generic": "De planning kan niet starten vanuit dit voorstel."
       },
       "held": "Motir AI biedt aan te plannen zodra deze vragen klaar zijn.",

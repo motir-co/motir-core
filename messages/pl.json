@@ -9412,6 +9412,7 @@
         "planningUnavailable": "Planowanie nie może się tu rozpocząć: Motir AI nie jest skonfigurowany dla tego projektu albo nie masz uprawnień do planowania i edytowania elementów roboczych.",
         "outOfCredits": "Twoja organizacja nie ma już kredytów AI, więc planowanie nie może się rozpocząć.",
         "targetUnavailable": "Nie możesz już otworzyć {key}, więc planowanie nie może się rozpocząć.",
+        "decideOpenPlanFirst": "Masz tu już plan, o którym jeszcze nie zdecydowano. Najpierw go zatwierdź lub odrzuć, a potem potwierdź ten.",
         "generic": "Planowanie nie może się rozpocząć z tej propozycji."
       },
       "held": "Motir AI zaproponuje planowanie, gdy skończą się te pytania.",

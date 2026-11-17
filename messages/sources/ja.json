@@ -7519,6 +7519,7 @@
   "planningWorkspace.planOffer.cannotStart.planningUnavailable": "Planning can’t start here: Motir AI isn’t set up for this project, or you don’t have permission to plan and edit work items.",
   "planningWorkspace.planOffer.cannotStart.outOfCredits": "Your organization is out of AI credits, so planning can’t start.",
   "planningWorkspace.planOffer.cannotStart.targetUnavailable": "You can no longer open {key}, so planning can’t start.",
+  "planningWorkspace.planOffer.cannotStart.decideOpenPlanFirst": "You already have a plan here that isn’t decided yet. Approve or decline it first, then confirm this one.",
   "planningWorkspace.planOffer.cannotStart.generic": "Planning can’t start from this offer.",
   "planningWorkspace.planOffer.held": "Motir AI will offer to plan when these questions are done.",
   "planningWorkspace.planOffer.settledHeading": "What your answers settled",

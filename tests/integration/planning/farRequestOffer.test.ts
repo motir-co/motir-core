@@ -204,6 +204,60 @@ describe('after the waiting plan is decided', () => {
   );
 
   it(
+    'the next request waits for the plan the previous one opened, says so, and starts once it is decided',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const { sessionId, planId, second } = await conversationKeepingTwo();
+      await plansService.approvePlan(planId, fx.ctx);
+      const [offer1] = await offerTurns(sessionId);
+      const first = await planOfferStartService.confirmPlanOffer(me(), {
+        conversationId: sessionId,
+        offerTurnId: offer1!.id,
+      });
+      const offer2 = (await offerTurns(sessionId))[1]!;
+      submitJobMock.mockClear();
+
+      // The first request's plan is still being written: the scope's one conversation
+      // holds it, so the second is refused with the reason that names the way on.
+      await expect(
+        planOfferStartService.confirmPlanOffer(me(), {
+          conversationId: sessionId,
+          offerTurnId: offer2.id,
+        }),
+      ).rejects.toMatchObject({ code: 'PLAN_OFFER_START_REFUSED', reason: 'open_plan_in_scope' });
+      expect((await offerTurns(sessionId))[1]!.offer?.state).toBe('undecided');
+      expect(await consumedAt(second)).toBeNull();
+      expect(planSubmits()).toEqual([]);
+      const firstThread = await thread(first.sessionId);
+      expect(firstThread.turns.filter((t) => t.role === 'user').map((t) => t.body)).toEqual([
+        'Add a PDF report.',
+      ]);
+
+      // Once that plan is decided its conversation ends, and the second request opens a
+      // conversation of its own with the request as its first turn.
+      await plansService.addProposals(
+        first.planId,
+        [{ op: 'add', proposedFields: { title: 'PDF report', kind: 'task' } }],
+        fx.ctx,
+      );
+      await plansService.markPlanned(first.planId, fx.ctx);
+      await plansService.declinePlan(first.planId, fx.ctx);
+      const started = await planOfferStartService.confirmPlanOffer(me(), {
+        conversationId: sessionId,
+        offerTurnId: offer2.id,
+      });
+      expect(started.sessionId).not.toBe(first.sessionId);
+      expect(started.sessionId).not.toBe(sessionId);
+      const successor = await thread(started.sessionId);
+      expect(successor.turns.filter((t) => t.role === 'user').map((t) => t.body)).toEqual([
+        'Add a Slack integration.',
+      ]);
+      expect(planSubmits()).toHaveLength(1);
+      expect(await consumedAt(second)).toBeInstanceOf(Date);
+    },
+  );
+
+  it(
     'declining drops it, consumes it, offers the next, and the last one ends the queue',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {

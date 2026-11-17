@@ -342,11 +342,15 @@ export class PlanOfferNotOpenError extends Error {
 }
 
 /** Why a start of a plan offer was refused (MOTIR-9291). `target_closed` is the
- *  lifecycle's own reason passed through; the other three only a start can find. */
+ *  lifecycle's own reason passed through; the others only a start can find.
+ *  `open_plan_in_scope` (MOTIR-11521) is a kept request accepted after a decision while
+ *  the person's own conversation of that scope still holds an undecided plan — one
+ *  conversation plans a scope at a time, so they decide that plan first. */
 export type PlanOfferStartRefusal =
   | 'target_not_available'
   | 'target_closed'
   | 'already_planning'
+  | 'open_plan_in_scope'
   | 'offer_not_open';
 
 /**

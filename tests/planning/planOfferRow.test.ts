@@ -79,6 +79,7 @@ describe('the total maps', () => {
   it('answerRefusalKey: credits and an unreadable target, anything else generic', () => {
     expect(answerRefusalKey('MOTIR_AI_OUT_OF_CREDITS')).toBe('outOfCredits');
     expect(answerRefusalKey('target_not_available')).toBe('targetUnavailable');
+    expect(answerRefusalKey('open_plan_in_scope')).toBe('decideOpenPlanFirst');
     expect(answerRefusalKey('already_planning')).toBe('generic');
     expect(answerRefusalKey('constructor')).toBe('generic');
   });

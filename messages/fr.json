@@ -9412,6 +9412,7 @@
         "planningUnavailable": "La planification ne peut pas démarrer ici : Motir AI n’est pas configuré pour ce projet, ou vous n’avez pas l’autorisation de planifier et de modifier des éléments de travail.",
         "outOfCredits": "Votre organisation n’a plus de crédits AI, la planification ne peut donc pas démarrer.",
         "targetUnavailable": "Vous ne pouvez plus ouvrir {key}, la planification ne peut donc pas démarrer.",
+        "decideOpenPlanFirst": "Vous avez déjà ici un plan qui n’est pas encore décidé. Approuvez-le ou refusez-le d’abord, puis confirmez celui-ci.",
         "generic": "La planification ne peut pas démarrer à partir de cette offre."
       },
       "held": "Motir AI proposera de planifier une fois ces questions terminées.",

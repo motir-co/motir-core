@@ -2882,8 +2882,11 @@ export const planChangeSessionsService = {
    * mid-planning restart's steps, minus the end, which the decision already made. The
    * decided conversation is never touched. A retry after a submit that threw finds the
    * request already the session's last turn and appends nothing. A session of that scope
-   * that already holds an undecided plan refuses `already_planning`: submitting there
-   * would revise that plan, not plan the request.
+   * that already holds an undecided plan refuses `open_plan_in_scope`: submitting there
+   * would revise that plan, not plan the request, and a second open conversation of the
+   * scope cannot hold its cards (AMENDMENT 23 §3), so the person decides that plan first
+   * — above all the one the previous kept request opened. The refusal says so on the
+   * offer, which stays pending.
    */
   async openForDecidedOffer(
     pctx: ProjectContext,
@@ -2895,7 +2898,7 @@ export const planChangeSessionsService = {
     return withWorkspaceContext(txCtx, async (tx) => {
       const sessionId = await resumeOrStartWithin(pctx, input.scope, new Date(), tx);
       if (await planRepository.findLatestUndecidedBySession(sessionId, tx)) {
-        throw new PlanOfferStartRefusedError('already_planning');
+        throw new PlanOfferStartRefusedError('open_plan_in_scope');
       }
       const row = await appendWithin(
         sessionId,
