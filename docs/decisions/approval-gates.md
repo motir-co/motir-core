@@ -6539,6 +6539,16 @@ the agent's send-back through the user-token door (§12.11):
   submitted.
 - **The key must be a RUN TARGET** (`resolveRunTarget`, 12.1). Any other card is
   refused, and the refusal names the run target to review instead.
+  **Amended by Bug MOTIR-11673 (2026-11-17):** a card that delivers pull requests
+  of its OWN — rows no ancestor also delivers, the same "own" set `gateSetFor`
+  raises the review and approve-and-merge gates on (Bug MOTIR-11624) — is its own
+  review subject even when an ancestor holds the How to test. A story run writes
+  its record once, onto the story, so a child built in another repository by its
+  own run (a starter re-pin) resolved to the story, whose delivery set never holds
+  the child's pull request: refusing the child left that pull request with no card
+  a verdict could land on. The refusal now applies only to a card with no pull
+  request of its own — one that delivers nothing, or whose every pull request an
+  ancestor also delivers.
 - **The row it writes** carries authority **`review_agent`**, with
   `decidedById` the submitting user and the harness and model on the row, so it
   never reads as a person's approval. **It never decides `pull_request_approval`**:
