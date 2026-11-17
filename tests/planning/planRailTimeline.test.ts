@@ -211,6 +211,93 @@ describe('layoutRail', () => {
   });
 });
 
+describe('layoutRail — with each job’s settle-time reply (written after its close)', () => {
+  const reply = (seq: number, jobId: string, minute: number) => ({
+    ...turn(seq, jobId, minute),
+    role: 'assistant' as const,
+  });
+  const first = [turn(0, null, 0), turn(1, 'job-a', 1), reply(2, 'job-a', 11)];
+  const revision = [...first, turn(3, null, 20), turn(4, 'job-b', 21)];
+  const runA = narrationRuns([group('ai:job-a:1', 2)]);
+  const runsAB = narrationRuns([group('ai:job-a:1', 2), group('ai:job-b:1', 22)]);
+
+  it('a first proposal alone: the briefing follows the run, so the review block draws it', () => {
+    expect(
+      lay({
+        turns: first,
+        runs: runA,
+        versions: [version('v1', 10)],
+        workRunKey: 'ai:job-a',
+        workShown: true,
+      }),
+    ).toEqual({ order: ['turn0', 'turn1', 'turn2', 'work:ai:job-a'], trailing: true });
+  });
+
+  it('writing: the first briefing under the first run’s notes, above the follow-up', () => {
+    expect(
+      lay({
+        turns: revision,
+        runs: runsAB,
+        versions: [version('v1', 10)],
+        workRunKey: 'ai:job-b',
+        workJobId: 'job-b',
+        workShown: true,
+      }),
+    ).toEqual({
+      order: [
+        'turn0',
+        'turn1',
+        'turn2',
+        'run:ai:job-a',
+        'current:v1',
+        'turn3',
+        'turn4',
+        'work:ai:job-b',
+      ],
+      trailing: false,
+    });
+  });
+
+  it('finished (and reopened, from the same rows): the new briefing follows the revision’s notes', () => {
+    expect(
+      lay({
+        turns: [...revision, reply(5, 'job-b', 31)],
+        runs: runsAB,
+        versions: [version('v1', 10), version('v2', 30)],
+        workRunKey: 'ai:job-b',
+        workShown: true,
+      }),
+    ).toEqual({
+      order: [
+        'turn0',
+        'turn1',
+        'turn2',
+        'run:ai:job-a',
+        'earlier:v1',
+        'turn3',
+        'turn4',
+        'turn5',
+        'work:ai:job-b',
+      ],
+      trailing: true,
+    });
+  });
+
+  it('a version whose run left no notes is placed by time, not under an earlier run', () => {
+    expect(
+      lay({
+        turns: revision,
+        runs: runA,
+        versions: [version('v1', 10), version('v2', 30)],
+        workShown: false,
+      }),
+    ).toEqual({
+      order: ['turn0', 'turn1', 'turn2', 'run:ai:job-a', 'earlier:v1', 'turn3', 'turn4', 'work:-'],
+      trailing: true,
+    });
+  });
+});
+
 describe('planVersionsOf', () => {
   const row = (id: string, changeKind: string, minute: number, diff: unknown) => ({
     id,

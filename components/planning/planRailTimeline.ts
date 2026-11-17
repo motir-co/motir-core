@@ -176,12 +176,17 @@ export function layoutRail(input: RailLayoutInput): RailLayout {
     workJobId ?? workRun?.jobId ?? null,
     workRun?.startedAt ?? null,
   );
-  versions.forEach((version, i) =>
-    timed.push({
-      at: version.plannedAt,
-      slot: { kind: 'version', version, earlier: i < versions.length - 1 },
-    }),
-  );
+  // A version follows the block of the run that closed it (design rule 4), which is
+  // NOT the same as by time: the planner's reply turn of that job is written on
+  // settle, after its close, and the run block sits under that reply. A version no
+  // run can be tied to is placed by time.
+  const tiedAfter = new Map<string, RailSlot[]>();
+  versions.forEach((version, i) => {
+    const slot: RailSlot = { kind: 'version', version, earlier: i < versions.length - 1 };
+    const closer = closingRun(runs, turns, version.plannedAt);
+    if (closer) tiedAfter.set(closer.key, [...(tiedAfter.get(closer.key) ?? []), slot]);
+    else timed.push({ at: version.plannedAt, slot });
+  });
   // Stable: two things at one instant keep the order they were pushed in — a run
   // before the version it closed with.
   const queue = timed
@@ -197,7 +202,45 @@ export function layoutRail(input: RailLayoutInput): RailLayout {
   while (next < queue.length) slots.push(queue[next++]!.slot);
   slots.push(...tail);
 
-  return trailingCurrent(slots, workShown);
+  return trailingCurrent(withTiedVersions(slots, tiedAfter), workShown);
+}
+
+/**
+ * The run that closed a version: the latest run started at or before `plannedAt`,
+ * provided no person's turn and no turn of ANOTHER job (a follow-up, its marker) was
+ * written between that run's start and the close — otherwise the version belongs to a later run that left
+ * no notes, and time places it.
+ */
+function closingRun(
+  runs: readonly RailRun[],
+  turns: readonly PlanChangeTurnDto[],
+  plannedAt: string,
+): RailRun | null {
+  let closer: RailRun | null = null;
+  for (const run of runs) {
+    if (run.startedAt !== null && run.startedAt <= plannedAt) {
+      if (closer === null || closer.startedAt! <= run.startedAt) closer = run;
+    }
+  }
+  if (closer === null) return null;
+  const run = closer;
+  const from = run.startedAt!;
+  const interrupted = turns.some(
+    (turn) =>
+      turn.createdAt > from &&
+      turn.createdAt < plannedAt &&
+      (turn.jobId === null || turn.jobId !== run.jobId),
+  );
+  return interrupted ? null : run;
+}
+
+/** Each run's versions, drawn straight after that run's block (or working row). */
+function withTiedVersions(slots: RailSlot[], tiedAfter: Map<string, RailSlot[]>): RailSlot[] {
+  if (tiedAfter.size === 0) return slots;
+  return slots.flatMap((slot) => {
+    const key = slot.kind === 'run' ? slot.run.key : slot.kind === 'work' ? slot.run?.key : null;
+    return key != null && tiedAfter.has(key) ? [slot, ...tiedAfter.get(key)!] : [slot];
+  });
 }
 
 /** Take the current version's briefing out of `slots` when nothing with content

@@ -1213,7 +1213,14 @@ export function PlanChangeRail({
   // § "The panel rule"). The hand-off is the revision's one word on the decision.
   // A Visitor never gets one, in any state (design panel 7): the rail is theirs to
   // read, and nothing on it is theirs to decide.
-  const panelShown = reviewShown && !rewritingPlan && readerRoutes.identifier === null;
+  // "Writing" covers the revision's whole job, its conversation phase included: the
+  // host holds the gate as rewriting from the moment a plan run streams into the
+  // plan in hand (`PlanningWorkspaceHost`'s `planGateView`), before the job settles
+  // into planning, and the held branch must not show under the follow-up then either.
+  const revisingHere =
+    state.phase === 'streaming' && state.planId !== null && Boolean(state.review) && !state.decided;
+  const panelShown =
+    reviewShown && !rewritingPlan && !revisingHere && readerRoutes.identifier === null;
   // The revision ended without a new version (failed): its failure line goes under
   // its run, ABOVE the old version's panel, which is decidable again.
   const failureAbovePanel =

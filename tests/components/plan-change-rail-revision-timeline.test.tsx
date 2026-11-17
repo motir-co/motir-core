@@ -57,14 +57,23 @@ function turn(
 
 const ASK = 'Plan the planner finding records.';
 const FOLLOW_UP = 'One more requirement: keep the dry run verdict on the record.';
+const REPLY_A = 'Here is the plan: three cards.';
+const REPLY_B = 'The record now keeps the verdict.';
 // The first run: asked at :00, its marker at :01, its notes from :02, its version
-// closed at :10. The follow-up at :20 starts the revision, its marker at :21.
-const FIRST_TURNS = [turn(0, 'user', ASK, null, 0), turn(1, 'system', '', 'job-a', 1)];
+// closed at :10, and the planner's reply written on settle at :11 — AFTER the close,
+// as `recordPlannerTurn` writes it. The follow-up at :20 starts the revision, its
+// marker at :21; the revision closes at :30 and replies at :31.
+const FIRST_TURNS = [
+  turn(0, 'user', ASK, null, 0),
+  turn(1, 'system', '', 'job-a', 1),
+  turn(2, 'assistant', REPLY_A, 'job-a', 11),
+];
 const REVISION_TURNS = [
   ...FIRST_TURNS,
-  turn(2, 'user', FOLLOW_UP, null, 20),
-  turn(3, 'system', '', 'job-b', 21),
+  turn(3, 'user', FOLLOW_UP, null, 20),
+  turn(4, 'system', '', 'job-b', 21),
 ];
+const FINISHED_TURNS = [...REVISION_TURNS, turn(5, 'assistant', REPLY_B, 'job-b', 31)];
 
 function session(turns: PlanChangeTurnDto[], extra: Partial<PlanChangeSessionDto> = {}) {
   return {
@@ -155,6 +164,7 @@ const WRITING: PlanChangeConversationState = {
 /** The revision FINISHED: a second version closed under it. */
 const FINISHED: PlanChangeConversationState = {
   ...BASE,
+  session: session(FINISHED_TURNS),
   review: review('Version two briefing.', [V1, V2]),
   narration: narrationRead([A1, A2, B1], [...NOTES_A, NOTE_B]),
   narrationKept: { planId: 'plan-1', live: [], earlier: [], loadingEarlier: false },
@@ -234,6 +244,28 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('a first proposal, before any revision', () => {
+  it('reads ask → marker → the planner’s reply → its notes → its briefing → the panel', () => {
+    // The reply is written on settle, after the version closed: the briefing still
+    // follows the run's block, not the moment it closed.
+    renderRail({
+      ...BASE,
+      session: session(FIRST_TURNS),
+      review: review('Version one briefing.', [V1]),
+      narration: narrationRead([A1, A2], NOTES_A),
+      narrationKept: { planId: 'plan-1', live: [], earlier: [], loadingEarlier: false },
+    });
+    expectInOrder(
+      screen.getByText(ASK),
+      markers()[0]!,
+      screen.getByText(REPLY_A),
+      runOf('job-a'),
+      screen.getByTestId('plan-change-briefing'),
+      screen.getByTestId('plan-change-review'),
+    );
+  });
+});
+
 describe('while a revision is writing (design panel 2)', () => {
   it('reads first notes → first briefing → follow-up → marker → hand-off → the revision’s notes', () => {
     renderRail(WRITING, true);
@@ -244,6 +276,7 @@ describe('while a revision is writing (design panel 2)', () => {
     expectInOrder(
       screen.getByText(ASK),
       markers()[0]!,
+      screen.getByText(REPLY_A),
       runOf('job-a'),
       screen.getByTestId('plan-change-briefing'),
       screen.getByText(FOLLOW_UP),
@@ -266,6 +299,18 @@ describe('while a revision is writing (design panel 2)', () => {
     expect(screen.queryByRole('button', { name: SURFACE.approve })).toBeNull();
     // The version above is still the plan on the canvas: no earlier-version label yet.
     expect(screen.queryByText(CONV.revision.earlierVersion)).toBeNull();
+  });
+
+  it('draws no panel in the revision’s conversation phase either, before the job settles', () => {
+    // The follow-up's job is streaming but has not reached planning yet
+    // (`settledJobId` unset): the host already holds the gate as rewriting.
+    const conversing = { ...WRITING } as PlanChangeConversationState;
+    delete (conversing as { settledJobId?: string }).settledJobId;
+    renderRail(conversing, true);
+    expect(screen.queryByTestId('plan-change-review')).toBeNull();
+    expect(screen.queryByText(CONV.nothingSavedYet)).toBeNull();
+    expect(screen.queryByText(SURFACE.held)).toBeNull();
+    expect(screen.queryByRole('button', { name: SURFACE.approve })).toBeNull();
   });
 
   it('also when the rail is ungated: the shipped review panel steps aside too', () => {
@@ -312,6 +357,7 @@ describe('when the revision finishes (design panel 3)', () => {
       earlier,
       screen.getByText(FOLLOW_UP),
       markers()[1]!,
+      screen.getByText(REPLY_B),
       runOf('job-b'),
       current,
       panel,
@@ -398,9 +444,9 @@ describe('reopened after the revision (design panel 5)', () => {
     // A reopen: nothing streams and no act is in memory; a later question was asked
     // and answered after the revision, so the revision's notes must stay under its turn.
     const later = [
-      ...REVISION_TURNS,
-      turn(4, 'user', 'Which card carries the migration?', null, 40),
-      turn(5, 'assistant', 'The table card carries it.', 'job-c', 41),
+      ...FINISHED_TURNS,
+      turn(6, 'user', 'Which card carries the migration?', null, 40),
+      turn(7, 'assistant', 'The table card carries it.', 'job-c', 41),
     ];
     renderRail({
       ...FINISHED,
