@@ -113,8 +113,11 @@ const sentence = (operator: string, values?: string) =>
 // four folders, an epic filed in "To do" with a story and a subtask that are
 // filed only THROUGH it, unfiled cards, cards in every column, and an active
 // sprint holding a Done card, two To do cards and an unfiled card while the
-// rest stay in the backlog. Bugs are left out on purpose: a new bug is filed
-// into the project's Bugs folder, which would blur "unfiled".
+// rest stay in the backlog. Every card outside the sprint is in a todo or
+// in-progress status: the backlog section leaves out done-category work, so a
+// done card outside the sprint would never reach it. Bugs are left out on
+// purpose: a new bug is filed into the project's Bugs folder, which would blur
+// "unfiled".
 
 const DONE = 'Done';
 const TODO = 'To do';
@@ -136,7 +139,7 @@ interface CardSeed {
 
 const CARDS: CardSeed[] = [
   { title: 'Export to CSV', kind: 'task', status: 'done', folder: 'done', inSprint: true },
-  { title: 'October release notes', kind: 'task', status: 'done', folder: 'doneOct' },
+  { title: 'October release notes', kind: 'task', status: 'todo', folder: 'doneOct' },
   { title: 'Pricing table', kind: 'task', status: 'todo', folder: 'todo', inSprint: true },
   {
     title: 'October onboarding email',
@@ -628,6 +631,7 @@ test('The Board, the Backlog and a board’s stored filter narrow by folder — 
       wholeBacklog = whole;
       // The sprint holds a card from each group; the rest are in the backlog.
       expect(whole.sprint).toEqual(titles((c) => !!c.inSprint));
+      expect(whole.backlog).toEqual(titles((c) => !c.inSprint));
       await expect(backlogList(page).getByText('October release notes')).toBeVisible();
       await expect(sprintList(page).getByText('Export to CSV')).toBeVisible();
 
