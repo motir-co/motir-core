@@ -7020,6 +7020,8 @@
   "planningWorkspace.conversation.approve": "Approve",
   "planningWorkspace.conversation.approveChanges": "Approve changes",
   "planningWorkspace.conversation.nothingSavedYet": "Nothing saved yet",
+  "planningWorkspace.conversation.revision.earlierVersion": "Earlier version · replaced below",
+  "planningWorkspace.conversation.revision.earlierVersionUnkept": "An earlier version of this plan was here ({count, plural, one {# item} other {# items}}). Its briefing was not kept.",
   "planningWorkspace.conversation.barCounts": "{added, plural, =0 {No additions} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}{removed, plural, =0 {} one {, # removed} other {, # removed}}",
   "planningWorkspace.conversation.barNothingSaved": "Nothing is saved until you approve.",
   "planningWorkspace.conversation.summary": "{added, plural, =0 {No new work items} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}{removed, plural, =0 {} one {, # removed} other {, # removed}} — it's on the canvas, nothing is saved yet.",

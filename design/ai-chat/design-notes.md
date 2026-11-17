@@ -7556,3 +7556,36 @@ the `--retro-glow` lift carry it, and none of them changes.
 - The ink: the label stays `--el-accent-text` in every row.
 - No mock. The pill's shape, copy and placement are as drawn; only two mix percentages move, and the
   shipped component renders them on the card.
+
+## The reset on propose, after MOTIR-11513 (2026-11-17)
+
+Amends **MOTIR-6249**'s section _The planning split is RESIZABLE — the default third, the divider,
+the bounds, and the reset on propose_, sub-section **5 · The reset on propose — animated, 200ms, and
+once** (published with MOTIR-6248; the copy on `main` predates it). No mock: nothing is drawn
+differently, only _when_ the existing reset fires changes.
+
+**The reset no longer fires for a plan started on the overlay.** MOTIR-6248 returned a widened
+conversation to the default third the moment _a plan is proposed_, so a plan opened for reading
+gets the canvas's two-thirds. That reasoning does not hold for a plan the person STARTED in the
+overlay they are looking at: they chose the width while reading this canvas, and the plan is drawn
+on the canvas they already have. Moving the divider under them at that moment is the layout jump bug
+MOTIR-11513 removes, together with the canvas remount that came with it.
+
+| how the overlay opened                                         | the plan's first read              | the split                  |
+| -------------------------------------------------------------- | ---------------------------------- | -------------------------- |
+| Plan with AI on a work item, ⌘K, a project launcher            | arrives on the open canvas         | **stays where it is**      |
+| a later plan in the same overlay (a re-plan after a decision)  | arrives on the open canvas         | **stays where it is**      |
+| a **To approve** or **Plans** row (`planSession=`, MOTIR-6289) | arrives after the opening skeleton | **resets once**, as before |
+
+So the reset is armed only for a named-session open, and it is disarmed for good the first time the
+overlay draws its "no plan" pane. Everything else in sub-section 5 stands: it fires once, on the
+transition, animated 200ms (instant under reduced motion); it does not clear the stored width; it is
+a no-op at or below the default; and it never re-fits the canvas.
+
+**The pane is one component from the open (MOTIR-11513).** Before a plan exists the overlay's pane is
+`PlanProposalViews` in its "no plan" state: the roadmap level with the targets ringed and their
+**Target** tag, Set as target / Remove target, the centred open (MOTIR-11472), the follow-move and the
+empty-root statement, and no List | Canvas switch. When the plan's first read lands, the same canvas
+keeps its level and viewport, the ring leaves (the card's own status chip now reads **Planning**), and
+the List | Canvas switch, progress line and the rest of the plan chrome mount around it. The canvas's
+own pan and zoom are untouched; the header row arrives above it.

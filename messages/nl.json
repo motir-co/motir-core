@@ -8798,6 +8798,10 @@
       "approve": "Goedkeuren",
       "approveChanges": "Wijzigingen goedkeuren",
       "nothingSavedYet": "Nog niets opgeslagen",
+      "revision": {
+        "earlierVersion": "Eerdere versie · hieronder vervangen",
+        "earlierVersionUnkept": "Hier stond een eerdere versie van dit plan ({count, plural, one {# item} other {# items}}). De toelichting ervan is niet bewaard."
+      },
       "barCounts": "{added, plural, =0 {Niets toegevoegd} one {# toegevoegd} other {# toegevoegd}}{changed, plural, =0 {} one {, # gewijzigd} other {, # gewijzigd}}{removed, plural, =0 {} one {, # verwijderd} other {, # verwijderd}}",
       "barNothingSaved": "Er wordt niets opgeslagen totdat je goedkeurt.",
       "summary": "{added, plural, =0 {Geen nieuwe werkitems} one {# toegevoegd} other {# toegevoegd}}{changed, plural, =0 {} one {, # gewijzigd} other {, # gewijzigd}}{removed, plural, =0 {} one {, # verwijderd} other {, # verwijderd}} — het staat op het canvas, er is nog niets opgeslagen.",

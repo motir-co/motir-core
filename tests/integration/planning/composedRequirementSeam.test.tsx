@@ -85,9 +85,6 @@ vi.mock('@/lib/hooks/useWorkItemTargetSearch', () => ({
 vi.mock('@/components/planning/PlanReviewCanvas', () => ({
   PlanReviewCanvas: () => <div data-testid="review-canvas-stub" />,
 }));
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: () => <div data-testid="canvas-stub" />,
-}));
 const { conversation } = vi.hoisted(() => ({
   conversation: {
     state: null as unknown,

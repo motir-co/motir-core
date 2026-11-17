@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
+import {
+  PlanReviewCanvas,
+  type PlanReviewCanvasPrePlan,
+} from '@/components/planning/PlanReviewCanvas';
+import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { mergePlanLevel } from '@/components/planning/planLevel';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
@@ -20,11 +24,28 @@ import { planReview, planReviewItem } from '../helpers/planReview';
 // at its destination (decision 4), the folder crumb navigates (decision 5), and a
 // proposal whose folder was deleted stays at the root (decision 6).
 //
-// ⚠️ MOTIR-6299: `PlanChangeCanvas` is now the pane for the "no plan" state, so
-// its over-the-wire cases below assert the folder tree it draws with NO plan
+// ⚠️ MOTIR-6299 · MOTIR-11513: the overlay's "no plan" state is `PlanReviewCanvas`
+// with `prePlan` set (it was a component of its own until MOTIR-11513), so the
+// over-the-wire cases below assert the folder tree it draws with NO plan
 // (decisions 1 and 5). Where a proposal sits in a folder, and the badge on the
 // folder holding it (decisions 2, 3), are drawn by `PlanReviewCanvas` — the pane
 // every plan is shown in — and are held in `planReviewCanvasFolders.test.tsx`.
+
+/** The planning surface's canvas BEFORE a plan exists (MOTIR-11513). */
+function PrePlanCanvas({
+  version = 0,
+  targetIds = [],
+  onToggleTarget,
+  canAddTarget,
+}: {
+  version?: number;
+  targetIds?: readonly string[];
+  onToggleTarget?: (target: PlanningTarget, isTarget: boolean) => void;
+  canAddTarget?: boolean;
+}) {
+  const prePlan: PlanReviewCanvasPrePlan = { targetIds, onToggleTarget, canAddTarget };
+  return <PlanReviewCanvas items={[]} projectKey="MOTIR" version={version} prePlan={prePlan} />;
+}
 
 const PARKED = { id: 'f1', name: 'Parked' };
 const Y2025 = { id: 'f2', name: '2025' };
@@ -190,7 +211,7 @@ describe('mergePlanLevel — a folder move is drawn once, at its DESTINATION (de
   });
 });
 
-describe('PlanChangeCanvas — folders over the wire, with no plan (decisions 1, 5)', () => {
+describe('the pre-plan canvas — folders over the wire, with no plan (decisions 1, 5)', () => {
   const tree = {
     __root__: {
       nodes: [wireNode('E1', 'Road epic', 'epic', true)],
@@ -210,7 +231,7 @@ describe('PlanChangeCanvas — folders over the wire, with no plan (decisions 1,
 
   it('reads the folder-aware root and draws the folder cards — with no change badge', async () => {
     const spy = serve(tree);
-    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" />);
+    render(<PrePlanCanvas />);
 
     expect(await screen.findByText('Parked')).toBeTruthy();
     await act(async () => {});
@@ -223,7 +244,7 @@ describe('PlanChangeCanvas — folders over the wire, with no plan (decisions 1,
 
   it('drills folder by folder, reading each level by folderId, and a folder crumb navigates back', async () => {
     const spy = serve(tree);
-    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" />);
+    render(<PrePlanCanvas />);
     await screen.findByText('Parked');
 
     await drill('folder:f1');
@@ -252,7 +273,7 @@ describe('PlanChangeCanvas — folders over the wire, with no plan (decisions 1,
 
   it('an EMPTY folder’s level says so in folder words', async () => {
     serve(tree);
-    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" />);
+    render(<PrePlanCanvas />);
     await screen.findByText('Later');
     await drill('folder:f0');
     expect(await screen.findByText('This folder is empty')).toBeTruthy();
@@ -264,7 +285,7 @@ describe('PlanChangeCanvas — folders over the wire, with no plan (decisions 1,
 // here is this canvas's half: WHICH nodes are eligible (the work items its levels
 // drew, never a folder) and WHAT the host is handed (the item, and whether it is
 // already a target).
-describe('PlanChangeCanvas — the target action over the wire (MOTIR-6898)', () => {
+describe('the pre-plan canvas — the target action over the wire (MOTIR-6898)', () => {
   const tree = {
     __root__: {
       nodes: [wireNode('E1', 'Road epic', 'epic', true)],
@@ -274,9 +295,9 @@ describe('PlanChangeCanvas — the target action over the wire (MOTIR-6898)', ()
     },
   };
 
-  it('is OFF without `onToggleTarget` — every other mount of this canvas', async () => {
+  it('is OFF without `onToggleTarget`', async () => {
     serve(tree);
-    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" />);
+    render(<PrePlanCanvas />);
     await screen.findByText('Road epic');
     fireEvent.keyDown(el('E1')!, { key: 'Enter' });
 
@@ -287,9 +308,7 @@ describe('PlanChangeCanvas — the target action over the wire (MOTIR-6898)', ()
   it('hands the host the card’s WORK ITEM, and whether it is a target already', async () => {
     serve(tree);
     const onToggleTarget = vi.fn();
-    const { rerender } = render(
-      <PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={onToggleTarget} />,
-    );
+    const { rerender } = render(<PrePlanCanvas onToggleTarget={onToggleTarget} />);
     await screen.findByText('Road epic');
     fireEvent.keyDown(el('E1')!, { key: 'Enter' });
 
@@ -303,13 +322,7 @@ describe('PlanChangeCanvas — the target action over the wire (MOTIR-6898)', ()
     );
 
     rerender(
-      <PlanChangeCanvas
-        projectKey="MOTIR"
-        diffKey="k1"
-        targetIds={['E1']}
-        onToggleTarget={onToggleTarget}
-        canAddTarget={false}
-      />,
+      <PrePlanCanvas targetIds={['E1']} onToggleTarget={onToggleTarget} canAddTarget={false} />,
     );
     await waitFor(() =>
       expect(screen.getByTestId('target-toggle-button').textContent).toBe('Remove target'),
@@ -331,7 +344,7 @@ describe('PlanChangeCanvas — the target action over the wire (MOTIR-6898)', ()
       },
     });
     const onToggleTarget = vi.fn();
-    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={onToggleTarget} />);
+    render(<PrePlanCanvas onToggleTarget={onToggleTarget} />);
     await screen.findByText('Road epic');
     await drill('E1');
     await screen.findByText('A story');
@@ -344,15 +357,13 @@ describe('PlanChangeCanvas — the target action over the wire (MOTIR-6898)', ()
     );
   });
 
-  it('a NEW diffKey (an approve) drops the cached levels and re-reads the one on screen', async () => {
+  it('a NEW version (an approve) re-reads the level on screen', async () => {
     const spy = serve(tree);
-    const { rerender } = render(
-      <PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={vi.fn()} />,
-    );
+    const { rerender } = render(<PrePlanCanvas onToggleTarget={vi.fn()} />);
     await screen.findByText('Road epic');
     const before = spy.mock.calls.length;
 
-    rerender(<PlanChangeCanvas projectKey="MOTIR" diffKey="k2" onToggleTarget={vi.fn()} />);
+    rerender(<PrePlanCanvas version={1} onToggleTarget={vi.fn()} />);
 
     await waitFor(() => expect(spy.mock.calls.length).toBeGreaterThan(before));
     expect(await screen.findByText('Road epic')).toBeTruthy();
@@ -360,7 +371,7 @@ describe('PlanChangeCanvas — the target action over the wire (MOTIR-6898)', ()
 
   it('a FOLDER tile is never a target', async () => {
     serve(tree);
-    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={vi.fn()} />);
+    render(<PrePlanCanvas onToggleTarget={vi.fn()} />);
     await screen.findByText('Parked');
     fireEvent.keyDown(el('folder:f1')!, { key: 'Enter' });
 

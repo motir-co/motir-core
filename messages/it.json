@@ -8798,6 +8798,10 @@
       "approve": "Approva",
       "approveChanges": "Approva le modifiche",
       "nothingSavedYet": "Ancora niente di salvato",
+      "revision": {
+        "earlierVersion": "Versione precedente · sostituita sotto",
+        "earlierVersionUnkept": "Qui c'era una versione precedente di questo piano ({count, plural, one {# elemento} other {# elementi}}). Il suo riepilogo non è stato conservato."
+      },
       "barCounts": "{added, plural, =0 {Nessuna aggiunta} one {# aggiunto} other {# aggiunti}}{changed, plural, =0 {} one {, # modificato} other {, # modificati}}{removed, plural, =0 {} one {, # rimosso} other {, # rimossi}}",
       "barNothingSaved": "Nulla viene salvato finché non approvi.",
       "summary": "{added, plural, =0 {Nessun nuovo elemento di lavoro} one {# aggiunto} other {# aggiunti}}{changed, plural, =0 {} one {, # modificato} other {, # modificati}}{removed, plural, =0 {} one {, # rimosso} other {, # rimossi}}: è sul canvas, ma non è ancora stato salvato nulla.",

@@ -45,15 +45,14 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => ({
 
 // ⭐ THE PANE LOG — every render of either pane, in order.
 const { panes } = vi.hoisted(() => ({ panes: [] as string[] }));
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: () => {
-    panes.push('roadmap');
-    return <div data-testid="roadmap-stub" />;
-  },
-}));
 vi.mock('@/components/planning/PlanProposalViews', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/components/planning/PlanProposalViews')>();
   function Logged(props: ComponentProps<typeof real.PlanProposalViews>) {
+    // Before a plan the pane is the roadmap (`prePlan`, MOTIR-11513).
+    if (props.prePlan) {
+      panes.push('roadmap');
+      return <div data-testid="roadmap-stub" />;
+    }
     panes.push(props.live ? 'live' : 'proposed');
     return <div data-testid="plan-views-stub" data-live={String(props.live === true)} />;
   }

@@ -14,8 +14,8 @@ import { MAX_PLANNING_TARGETS, type PlanningTarget } from '@/lib/planning/planni
 // must carry, and — since MOTIR-1730 — the wiring between the conversation, the
 // canvas diff and the confirm-to-persist gate.
 //
-// The canvas is STUBBED: `PlanChangeCanvas` fetches its own levels, and a plan's
-// op treatments are `mergePlanLevel`'s (`plan-level-op-treatments.test.tsx`).
+// The canvas is STUBBED: it fetches its own levels, and a plan's op treatments
+// are `mergePlanLevel`'s (`plan-level-op-treatments.test.tsx`).
 // What matters here is that the host mounts it for a populated project, and
 // swaps in the empty state otherwise.
 
@@ -49,79 +49,82 @@ vi.mock('@/lib/hooks/useWorkItemTargetSearch', () => ({
   }),
 }));
 
-// MOTIR-6186 — the surface now mounts the plan page's own List | Canvas for a
-// proposed or decided plan, so this suite needs the review canvas stubbed for the
-// same reason the change canvas is: it reads its own level over the network.
+// The canvas is STUBBED: it reads its own level over the network. Since
+// MOTIR-11513 ONE component, `PlanReviewCanvas`, is the pane before a plan
+// (`prePlan` set — the roadmap the conversation is about) and after it (the plan
+// page's own List | Canvas, MOTIR-6186), so the stub draws the state it is in:
+// `canvas-stub` before a plan, `review-canvas-stub` once there is one.
 vi.mock('@/components/planning/PlanReviewCanvas', () => ({
-  PlanReviewCanvas: ({ outcome, ariaLabel }: { outcome?: string | null; ariaLabel?: string }) => (
-    <div data-testid="review-canvas-stub" data-outcome={outcome ?? ''} aria-label={ariaLabel} />
-  ),
-}));
-
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: ({
-    projectKey,
+  PlanReviewCanvas: ({
+    outcome,
     ariaLabel,
-    diffKey,
-    targetIds,
-    initialTrail,
+    projectKey,
+    version,
+    prePlan,
+    heldTrail,
     initialCentreId,
     followTo,
     loadingFallback,
-    emptyRoot,
-    onToggleTarget,
-    canAddTarget,
   }: {
-    projectKey: string;
+    outcome?: string | null;
     ariaLabel?: string;
-    diffKey: string | number;
-    targetIds?: readonly string[];
-    initialTrail?: readonly { id: string; label: string }[];
+    projectKey: string;
+    version: number;
+    prePlan?: {
+      targetIds: readonly string[];
+      onToggleTarget?: (
+        target: { id: string; identifier: string; title: string; kind: string },
+        isTarget: boolean,
+      ) => void;
+      canAddTarget?: boolean;
+      emptyRoot?: ReactNode;
+    } | null;
+    heldTrail?: readonly { id: string; label: string }[] | null;
     initialCentreId?: string | null;
     followTo?: { key: string; trail: readonly { id: string; label: string }[] } | null;
     loadingFallback?: ReactNode;
-    emptyRoot?: ReactNode;
-    onToggleTarget?: (
-      target: { id: string; identifier: string; title: string; kind: string },
-      isTarget: boolean,
-    ) => void;
-    canAddTarget?: boolean;
-  }) => (
-    <div
-      data-testid="canvas-stub"
-      data-project={projectKey}
-      data-diff-key={String(diffKey)}
-      data-targets={(targetIds ?? []).join(',')}
-      data-trail={(initialTrail ?? []).map((c) => c.id).join(',')}
-      data-centre={initialCentreId ?? ''}
-      // THE FOLLOW-MOVE's request (MOTIR-6161) — the host DERIVES it; the canvas
-      // decides whether to honour it, and has its own suite for that.
-      data-follow-key={followTo?.key ?? ''}
-      data-follow-trail={(followTo?.trail ?? []).map((c) => c.id).join(',')}
-      aria-label={ariaLabel}
-    >
-      {/* The two states the host DELEGATES to the canvas (MOTIR-2069). The real
-          canvas picks between them off the level it reads itself; the stub
-          renders both so the host's side of that contract is assertable. */}
-      {/* The canvas's Set as target (MOTIR-6898): the real button lives in
-          `ProjectRoadmapCanvas` and has its own suite; the stub hands the HOST
-          the call the canvas would make for the card in `stubCard`. */}
-      {onToggleTarget ? (
-        <button
-          type="button"
-          data-testid="stub-toggle-target"
-          data-can-add={String(canAddTarget)}
-          onClick={() =>
-            onToggleTarget(stubCard.current, (targetIds ?? []).includes(stubCard.current.id))
-          }
-        >
-          toggle
-        </button>
-      ) : null}
-      <div data-testid="canvas-loading-slot">{loadingFallback}</div>
-      <div data-testid="canvas-empty-slot">{emptyRoot}</div>
-    </div>
-  ),
+  }) =>
+    prePlan ? (
+      <div
+        data-testid="canvas-stub"
+        data-project={projectKey}
+        data-version={String(version)}
+        data-targets={prePlan.targetIds.join(',')}
+        data-trail={(heldTrail ?? []).map((c) => c.id).join(',')}
+        data-centre={initialCentreId ?? ''}
+        // THE FOLLOW-MOVE's request (MOTIR-6161) — the host DERIVES it; the canvas
+        // decides whether to honour it, and has its own suite for that.
+        data-follow-key={followTo?.key ?? ''}
+        data-follow-trail={(followTo?.trail ?? []).map((c) => c.id).join(',')}
+        aria-label={ariaLabel}
+      >
+        {/* The two states the host DELEGATES to the canvas (MOTIR-2069). The real
+            canvas picks between them off the level it reads itself; the stub
+            renders both so the host's side of that contract is assertable. */}
+        {/* The canvas's Set as target (MOTIR-6898): the real button lives in
+            `ProjectRoadmapCanvas` and has its own suite; the stub hands the HOST
+            the call the canvas would make for the card in `stubCard`. */}
+        {prePlan.onToggleTarget ? (
+          <button
+            type="button"
+            data-testid="stub-toggle-target"
+            data-can-add={String(prePlan.canAddTarget)}
+            onClick={() =>
+              prePlan.onToggleTarget!(
+                stubCard.current,
+                prePlan.targetIds.includes(stubCard.current.id),
+              )
+            }
+          >
+            toggle
+          </button>
+        ) : null}
+        <div data-testid="canvas-loading-slot">{loadingFallback}</div>
+        <div data-testid="canvas-empty-slot">{prePlan.emptyRoot}</div>
+      </div>
+    ) : (
+      <div data-testid="review-canvas-stub" data-outcome={outcome ?? ''} aria-label={ariaLabel} />
+    ),
 }));
 
 // The card the canvas stub's toggle acts on — a hoisted box, so a test can move
@@ -375,7 +378,10 @@ describe('PlanningWorkspaceHost — the frame opens BEFORE any canvas data (MOTI
     const slot = container.querySelector('.min-h-0.flex-1.overflow-hidden')!;
     expect(slot).toBeTruthy();
     expect(slot.childElementCount).toBe(1);
-    expect(slot.firstElementChild!.getAttribute('data-testid')).toBe('canvas-stub');
+    // That child is the ONE pane component (MOTIR-11513), in its "no plan" state.
+    expect(slot.firstElementChild!.getAttribute('data-testid')).toBe('plan-proposal-views');
+    expect(slot.firstElementChild!.getAttribute('data-pre-plan')).toBe('true');
+    expect(within(slot as HTMLElement).getByTestId('canvas-stub')).toBeTruthy();
 
     // …and what it shows while the level is in flight is a skeleton, not a
     // blank pane and not a bare spinner.
@@ -426,14 +432,15 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
 
   it('mounts the shared component for a PROPOSED plan, and the roadmap otherwise', () => {
     const { rerender } = renderHost({ mode: 'replan', from: 'project' });
-    // No plan: the roadmap, exactly as before, and NO List | Canvas switch.
+    // No plan: the roadmap, and NO List | Canvas switch. Since MOTIR-11513 the
+    // roadmap is the same component in its "no plan" state, not a second one.
     expect(screen.getByTestId('canvas-stub')).toBeTruthy();
-    expect(screen.queryByTestId('plan-proposal-views')).toBeNull();
+    expect(screen.getByTestId('plan-proposal-views').getAttribute('data-pre-plan')).toBe('true');
     expect(screen.queryByRole('group', { name: 'Plan view' })).toBeNull();
 
     conversation.state = REVIEWING;
     rerender(hostElement({ mode: 'replan', from: 'project' }));
-    expect(screen.getByTestId('plan-proposal-views')).toBeTruthy();
+    expect(screen.getByTestId('plan-proposal-views').getAttribute('data-pre-plan')).toBeNull();
     expect(screen.getByRole('group', { name: 'Plan view' })).toBeTruthy();
   });
 
@@ -658,11 +665,10 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     // before the press (MOTIR-6186). While a plan is proposed the pane is the
     // shared component, so there is no `canvas-stub` at that moment to read a
     // "before" from; the review is cleared by the approve and the roadmap comes
-    // back. `diffKey` opens with `treeVersion`, which `onApproved` bumps, so
+    // back. The canvas's `version` opens with `treeVersion`, which `onApproved` bumps, so
     // asserting the bump IS the re-key — and it says so more directly than an
     // inequality against a string that happens to differ.
-    const key = screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!;
-    expect(key.startsWith('1:')).toBe(true);
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-version')).toBe('1');
   });
 });
 
@@ -679,8 +685,7 @@ describe('PlanningWorkspaceHost — the session ENDS (MOTIR-7643)', () => {
 
     expect(reread).toHaveBeenCalledTimes(1);
     expect(refresh).not.toHaveBeenCalled();
-    const key = screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!;
-    expect(key.startsWith('1:')).toBe(true);
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-version')).toBe('1');
   });
 
   it('a session that MOUNTS already ended refreshes nothing — nothing changed', () => {
@@ -695,9 +700,7 @@ describe('PlanningWorkspaceHost — the session ENDS (MOTIR-7643)', () => {
     );
     expect(refresh).not.toHaveBeenCalled();
     expect(reread).not.toHaveBeenCalled();
-    expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!.startsWith('0:')).toBe(
-      true,
-    );
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-version')).toBe('0');
   });
 });
 
@@ -760,9 +763,7 @@ describe('PlanningWorkspaceHost — Plan something new (MOTIR-7650)', () => {
     // no second navigation to overlap it (MOTIR-8212) and nothing to wait for.
     expect(refresh).not.toHaveBeenCalled();
     expect(reread).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!.startsWith('1:')).toBe(
-      true,
-    );
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-version')).toBe('1');
   });
 
   it('an address that named no session is left alone', () => {

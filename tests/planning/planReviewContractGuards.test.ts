@@ -64,7 +64,7 @@ describe('the rail’s footer is TOTAL over PlanStatus (MOTIR-4025)', () => {
 // `ProjectRoadmapCanvas`'s props already make `searchLabel` required exactly when
 // `searchable` is true, so this cannot regress through an ordinary prop. What it
 // CAN regress through is a spread — `{...props}`, `{...(cond ? a : b)}` — which
-// satisfies the type from a variable the reader cannot see. Two of the five
+// satisfies the type from a variable the reader cannot see. Two of the four
 // mounts already spread (`OnboardingCanvas`, `WorkItemRoadmap`), because their
 // `searchable` is a runtime boolean.
 //
@@ -107,8 +107,9 @@ const mounts: Mount[] = [...walk(join(ROOT, 'components')), ...walk(join(ROOT, '
 
 describe('every searchable canvas mount says what it SEARCHES (MOTIR-4025)', () => {
   it('finds the mounts to rule on', () => {
-    // `RunCanvasPane`, `PlanReviewCanvas`, `PlanChangeCanvas`, `OnboardingCanvas`,
-    // `WorkItemRoadmap`.
+    // `RunCanvasPane`, `PlanReviewCanvas`, `OnboardingCanvas`, `WorkItemRoadmap`.
+    // (The planning surface's pre-plan canvas was a fifth until MOTIR-11513 folded
+    // it into `PlanReviewCanvas`'s `prePlan` state.)
     //
     // ⚠️ `RunCanvasPane` joined on 2026-08-31 (MOTIR-4047) and is the FIFTH this
     // header anticipated. It arrived the hard way, which is worth recording: the
@@ -119,7 +120,6 @@ describe('every searchable canvas mount says what it SEARCHES (MOTIR-4025)', () 
     expect(mounts.map((m) => m.file).sort()).toEqual([
       'app/(authed)/runs/_components/RunCanvasPane.tsx',
       'components/onboarding/OnboardingCanvas.tsx',
-      'components/planning/PlanChangeCanvas.tsx',
       'components/planning/PlanReviewCanvas.tsx',
       'components/planning/WorkItemRoadmap.tsx',
     ]);
@@ -131,7 +131,7 @@ describe('every searchable canvas mount says what it SEARCHES (MOTIR-4025)', () 
       .map((m) => `${m.file} mounts the canvas searchable and supplies no searchLabel`);
     expect(
       unpaired,
-      'The canvas has five searchable mounts and exactly ONE of them is the roadmap. ' +
+      'The canvas has four searchable mounts and exactly ONE of them is the roadmap. ' +
         'A default is how one sentence — "Search the roadmap" — came to greet a reader ' +
         'on /plans/[id], on the plan-change canvas and in onboarding (MOTIR-4021). The ' +
         'props type enforces the pair for an ordinary prop; this catches a SPREAD, ' +

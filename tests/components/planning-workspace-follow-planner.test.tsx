@@ -25,10 +25,19 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh }) }));
 const { fetchPlanningAnchor } = vi.hoisted(() => ({ fetchPlanningAnchor: vi.fn() }));
 vi.mock('@/lib/planning/planningAnchorClient', () => ({ fetchPlanningAnchor }));
 
-// The no-plan roadmap is not this card's; it is stubbed to a marker.
-vi.mock('@/components/planning/PlanChangeCanvas', () => ({
-  PlanChangeCanvas: () => <div data-testid="roadmap-stub" />,
-}));
+// The no-plan roadmap is not this card's; it is stubbed to a marker. Since
+// MOTIR-11513 it is `PlanReviewCanvas` with `prePlan`, so only that state is stubbed.
+vi.mock('@/components/planning/PlanReviewCanvas', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/components/planning/PlanReviewCanvas')>();
+  function PrePlanStub(props: Parameters<typeof real.PlanReviewCanvas>[0]) {
+    return props.prePlan ? (
+      <div data-testid="roadmap-stub" />
+    ) : (
+      <real.PlanReviewCanvas {...props} />
+    );
+  }
+  return { ...real, PlanReviewCanvas: PrePlanStub };
+});
 
 // ⭐ THE MOUNT COUNTER — the proof that the hand-over is not a remount. The real
 // component, wrapped: every MOUNT of it bumps the count, a re-render does not.

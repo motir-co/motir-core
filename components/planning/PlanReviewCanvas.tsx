@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
+  type CanvasTargetAction,
   type ProjectRoadmapCanvasProps,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
@@ -20,7 +21,9 @@ import {
   NOT_IN_EPIC_ID,
 } from '@/components/planning/workItemLevel';
 import { FolderEmptyLevel } from '@/components/planning/WorkItemNode';
-import { fetchRoadmapLevel } from '@/lib/planning/roadmapClient';
+import { decorateTargetLevel } from '@/components/planning/PlanningTargetNode';
+import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
+import { MAX_PLANNING_TARGETS, type PlanningTarget } from '@/lib/planning/planningTargets';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import {
   folderIdFromNodeId,
@@ -100,11 +103,43 @@ function withChangeKeys(level: RoadmapLevel, items: PlanReviewItemDto[]): Roadma
 // down; no `searchText` made the search box throw; and the edges, still
 // `{ blockedId, blockerId }`, were dropped by the layout's id filter. So the
 // committed level goes through `fetchRoadmapLevel` + `buildWorkItemLevel` — the
-// same pair `PlanChangeCanvas` composes — and nothing here builds a canvas node
+// same pair `WorkItemRoadmap` composes — and nothing here builds a canvas node
 // by hand.
 //
 // `version` bumps `reloadKey` so the "live while generating" poll re-renders the
 // current level as new PlanItems arrive.
+//
+// ── BEFORE THERE IS A PLAN (bug MOTIR-11513) ─────────────────────────────────
+// The planning surface mounts THIS canvas from the moment it opens, before any
+// plan exists, and keeps the same instance when the plan's first read lands. It
+// used to draw a second component for the "no plan" state and swap this one in
+// underneath the reader, which reloaded the level, dropped the centred target
+// and lost the viewport. `prePlan` is that state: the committed level with the
+// planning TARGETS ringed on it, the selected card's Set as target / Remove
+// target, the target crumb, the in-progress frontier, full screen and the
+// surface's own empty-root statement — and no Show changes, because there are
+// no changes. When `prePlan` turns null the same level re-reads in place (its
+// `reloadKey` moves with `version`), the target ring leaves and the card's own
+// status pill says it is being planned. Every other mount passes none of it.
+
+/** What the canvas draws while NO plan exists yet (bug MOTIR-11513). */
+export interface PlanReviewCanvasPrePlan {
+  /** The chat's planning TARGETS, by work-item id (MOTIR-1491) — the ones on the
+   *  CURRENT level take the target ring, and a target the canvas stands inside
+   *  marks its crumb (MOTIR-6160). */
+  targetIds: readonly string[];
+  /** Turn on the selected card's **Set as target** / **Remove target**
+   *  (MOTIR-6898). Called with the card's work item and whether it is a target
+   *  already. */
+  onToggleTarget?: (target: PlanningTarget, isTarget: boolean) => void;
+  /** False at the target cap: Set is disabled, Remove still works. */
+  canAddTarget?: boolean;
+  /** The surface's own "nothing to draw yet" statement for an established but
+   *  EMPTY project (MOTIR-2069). */
+  emptyRoot?: ReactNode;
+  /** The search box's label — the surface searches the PROJECT here (MOTIR-4021). */
+  searchLabel?: string;
+}
 
 export interface PlanReviewCanvasProps {
   items: PlanReviewItemDto[];
@@ -129,11 +164,12 @@ export interface PlanReviewCanvasProps {
    * them (MOTIR-6155). The plan page passes nothing and keeps ARRIVING at the
    * level the plan fills, which is right for a page opened on a plan.
    *
-   * The planning surface is the case this exists for: it replaces
-   * `PlanChangeCanvas` with this component the moment a plan is proposed, and a
-   * reader who had drilled somewhere must not be moved off it (MOTIR-6161's rule).
-   * Given a held trail, this canvas opens THERE instead of at `arrivalLevel`, and
-   * the `followTo` below is what then offers the trip they did not take.
+   * The planning surface is the case this exists for. It mounts this canvas
+   * before any plan exists (bug MOTIR-11513) and opens it on the launch's level,
+   * and when it mounts a FRESH instance for a later plan, a reader who had
+   * drilled somewhere must not be moved off it (MOTIR-6161's rule). Given a held
+   * trail, this canvas opens THERE instead of at `arrivalLevel`, and the
+   * `followTo` below is what then offers the trip they did not take.
    */
   heldTrail?: readonly CanvasCrumb[] | null;
   /** Forwarded verbatim to the foundation — see its own contract. Together with
@@ -202,6 +238,17 @@ export interface PlanReviewCanvasProps {
    * reads Drafting, as it shipped, and no check marks anything.
    */
   cardCues?: CardCues | null;
+  /**
+   * THE "NO PLAN YET" STATE (bug MOTIR-11513) — see `PlanReviewCanvasPrePlan`.
+   * Non-null while the host has no plan to show; `null` (the default) is every
+   * plan-review mount, unchanged.
+   */
+  prePlan?: PlanReviewCanvasPrePlan | null;
+  /** The card the canvas OPENS centred on, at a readable zoom (MOTIR-11472) — a
+   *  mount-time seed for the arrival level, forwarded to the foundation. */
+  initialCentreId?: string | null;
+  /** What fills the canvas while the first level is still being read (MOTIR-2069). */
+  loadingFallback?: ReactNode;
 }
 
 export function PlanReviewCanvas({
@@ -226,6 +273,9 @@ export function PlanReviewCanvas({
   liveSteps = null,
   movingSteps = null,
   cardCues = null,
+  prePlan = null,
+  initialCentreId = null,
+  loadingFallback,
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tPlan = useTranslations('planReview');
@@ -286,6 +336,22 @@ export function PlanReviewCanvas({
   // node id → its identifier, accumulated as levels load. A ref, not state: it is
   // a lookup the View handler reads, never something a render depends on.
   const identifierByIdRef = useRef(new Map<string, string>());
+  // …and every COMMITTED work item a level has drawn, by id, for the pre-plan
+  // target action (MOTIR-6898): adding a target needs the item's key, title and
+  // kind, and the canvas node carries none of them. Filled by the same reads that
+  // fill the map above, so a card is eligible exactly when View can open it.
+  const targetItemsRef = useRef(new Map<string, PlanningTarget>());
+  const registerLevelItems = useCallback((level: RoadmapLevelData) => {
+    for (const it of level.items) {
+      identifierByIdRef.current.set(it.id, it.identifier);
+      targetItemsRef.current.set(it.id, {
+        id: it.id,
+        identifier: it.identifier,
+        title: it.title,
+        kind: it.kind,
+      });
+    }
+  }, []);
   const onView = useCallback(
     (nodeId: string) => {
       const proposal = byNodeId.get(nodeId);
@@ -449,6 +515,24 @@ export function PlanReviewCanvas({
     () => new Map((edgeCoverage ?? []).map((e) => [`${e.blockedId} ${e.blockerId}`, e.coverage])),
     [edgeCoverage],
   );
+  // THE PRE-PLAN TARGETS as a STABLE dependency: the host hands a fresh array on
+  // every render, so the joined key is what `loadLevel` and `reloadKey` depend on
+  // — the level is rebuilt when the SET changes, not on every keystroke in the
+  // composer. `null` while a plan is shown: the ring is the pre-plan state's alone.
+  const isPrePlan = prePlan !== null;
+  // FULL SCREEN is the pre-plan canvas's control (it shipped on the "no plan"
+  // pane), and an instance that OPENED without a plan keeps it once the plan
+  // lands: a control the reader may be using must not vanish from under them at
+  // the hand-over. A mount-time seed, so a plan-review mount is unchanged.
+  const [fullScreenable] = useState(isPrePlan);
+  const targetKey = isPrePlan ? prePlan.targetIds.join(',') : null;
+  const withTargets = useCallback(
+    (level: RoadmapLevel): RoadmapLevel =>
+      targetKey === null || targetKey === ''
+        ? level
+        : decorateTargetLevel(level, targetKey.split(',')),
+    [targetKey],
+  );
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
       // An off-level blocker's ANCHOR is viewable (bug MOTIR-5387), and the peek
@@ -479,7 +563,7 @@ export function PlanReviewCanvas({
             undefined,
             { folders: true },
           );
-          for (const it of root.items) identifierByIdRef.current.set(it.id, it.identifier);
+          registerLevelItems(root);
           const rows = root.items.filter((i) => isNotInEpicRow(i) && !touchedNodeIds.has(i.id));
           // ⚠️ EDGES SCOPED TO THE ROWS (bug MOTIR-3557) — the root's edge list is
           // the whole root level's, epics included, and handing it over whole
@@ -497,6 +581,9 @@ export function PlanReviewCanvas({
               },
               coverageOverride,
             ),
+            // The in-progress FRONTIER is drawn while there is no plan, as the
+            // roadmap draws it; a plan's level marks its proposals instead.
+            { markActive: isPrePlan },
           );
         }
         // Nothing the plan touches is in here (the conjunct above), so no
@@ -507,7 +594,7 @@ export function PlanReviewCanvas({
         // NOT the all-proposed caption: these are committed rows, and the caption
         // says the opposite (Part IX §1.4).
         setLevelIsAllProposed(false);
-        return merged;
+        return withTargets(merged);
       }
 
       // The COMMITTED level. A failure here must not blank the review — the plan
@@ -542,7 +629,7 @@ export function PlanReviewCanvas({
               ? { folders: true }
               : undefined,
         );
-        for (const it of wi.items) identifierByIdRef.current.set(it.id, it.identifier);
+        registerLevelItems(wi);
         for (const b of wi.offLevelBlockers) identifierByIdRef.current.set(b.id, b.identifier);
         const atRoot = parentId === null;
         const excluded = atRoot
@@ -584,6 +671,7 @@ export function PlanReviewCanvas({
           // Grouping is a statement about the PROJECT's roots, so it is the root
           // level's alone — a drilled level's rows are somebody's children.
           groupNonEpicRoots: atRoot,
+          markActive: isPrePlan,
           arrivingBlockers,
           departingIds,
           ...(excluded ? { groupExcludeIds: excluded } : {}),
@@ -595,10 +683,52 @@ export function PlanReviewCanvas({
       }
       const merged = mergePlanLevel(committed, items, parentId, outcome);
       setLevelIsAllProposed(committed.nodes.length === 0 && merged.nodes.length > 0);
-      return live ? withChangeKeys(merged, items) : merged;
+      // The target ring is applied LAST, outside any frame the merge drew.
+      return withTargets(live ? withChangeKeys(merged, items) : merged);
     },
-    [items, projectKey, outcome, touchedNodeIds, folderChanges, t, live, coverageOverride],
+    [
+      items,
+      projectKey,
+      outcome,
+      touchedNodeIds,
+      folderChanges,
+      t,
+      live,
+      coverageOverride,
+      isPrePlan,
+      registerLevelItems,
+      withTargets,
+    ],
   );
+
+  // ── THE PRE-PLAN TARGET MARKS (MOTIR-6160 · MOTIR-6898) ───────────────────
+  // The target CRUMB answers from the same set that rings a node, so whichever of
+  // the two the target currently is, exactly one of them is marked. The follow-
+  // move (MOTIR-6161) needs no wiring here: a target added later marks its crumb
+  // the moment the canvas stands in it.
+  const targetIdSet = useMemo(() => new Set(targetKey ? targetKey.split(',') : []), [targetKey]);
+  const isTargetCrumb = useCallback(
+    (crumb: CanvasCrumb) => targetIdSet.has(crumb.id),
+    [targetIdSet],
+  );
+  const tTargets = useTranslations('planningWorkspace.targets');
+  const onToggleTarget = prePlan?.onToggleTarget;
+  const canAddTarget = prePlan?.canAddTarget ?? true;
+  const targetAction = useMemo<CanvasTargetAction | undefined>(() => {
+    if (!onToggleTarget) return undefined;
+    return {
+      isEligible: (id) => targetItemsRef.current.has(id),
+      isTarget: (id) => targetIdSet.has(id),
+      // Asked only for an id `isEligible` passed, which is exactly a key in the map.
+      keyFor: (id) => targetItemsRef.current.get(id)!.identifier,
+      canAdd: canAddTarget,
+      disabledReason: tTargets('limitReached', { max: MAX_PLANNING_TARGETS }),
+      onToggle: (id) => {
+        const item = targetItemsRef.current.get(id);
+        if (item) onToggleTarget(item, targetIdSet.has(id));
+      },
+    };
+  }, [onToggleTarget, canAddTarget, targetIdSet, tTargets]);
 
   // The plan's cards for the ARRIVALS count (§23.7) — only while it is written.
   const proposedWord = tPlan('proposedCrumb');
@@ -739,8 +869,14 @@ export function PlanReviewCanvas({
         onView={onView}
         loadLevel={loadLevel}
         onSelect={handleSelect}
-        reloadKey={`${version}:${proposalsAtLevel(items, null).length}:${showAllTick}`}
+        // The target SET joins it while there is no plan, so the ring appears (and
+        // leaves) by re-reading the level in place — drill, zoom and pan kept.
+        reloadKey={`${version}:${proposalsAtLevel(items, null).length}:${showAllTick}:${targetKey ?? ''}`}
         initialTrail={initialTrail}
+        // …and the opening VIEW on that level (MOTIR-11472): the target card at
+        // the readable zoom, not the whole level fitted. Read once, at mount.
+        initialCentreId={initialCentreId}
+        loadingFallback={loadingFallback}
         followTo={followTo}
         onFollowDeclined={onFollowDeclined}
         readerHasNavigated={readerHasNavigated}
@@ -754,6 +890,10 @@ export function PlanReviewCanvas({
         // naming anything (bug MOTIR-3439).
         resolveHeldNode={resolveHeldNode}
         isFolderCrumb={isFolderCrumb}
+        isTargetCrumb={isPrePlan ? isTargetCrumb : undefined}
+        targetAction={isPrePlan ? targetAction : undefined}
+        emptyRoot={prePlan?.emptyRoot}
+        fullScreenable={fullScreenable}
         emptyDrilledFor={emptyDrilledFor}
         // Part IX §1.4's caption, on the one level that needs it. The foundation
         // owns the slot and knows only that it has nodes; which KIND of nodes
@@ -764,7 +904,9 @@ export function PlanReviewCanvas({
         // §5). It read `roadmap.canvas.search` — "Search the roadmap" — on a
         // surface that is not the roadmap, because the foundation used to own
         // the string. The consumer owns it now, exactly as it owns `emphasis`'s.
-        searchLabel={tPlan('searchLabel')}
+        // Before a plan exists the canvas draws the PROJECT, and the host names
+        // that search itself.
+        searchLabel={prePlan?.searchLabel ?? tPlan('searchLabel')}
         // SHOW CHANGES (MOTIR-3261) — the set is EVERY proposal's node id,
         // whatever its `op`, which is what the request's *added / updated /
         // archived* names. A `modify` / `remove` shares its node id with the
@@ -783,25 +925,33 @@ export function PlanReviewCanvas({
         // DECIDED plan arrives armed too, in the past tense — *"what did this plan
         // change?"* is a better question after approve than before it, and the
         // decided pane exists to be a RECORD (Part VI).
-        emphasis={{
-          // …and every FOLDER holding one, so a closed folder with work changing
-          // behind it is ringed like a card (Part XVIII decision 3).
-          ids: [...items.map((i) => i.nodeId), ...[...folderChanges.keys()].map(folderNodeId)],
-          total: items.length,
-          label: decided ? tPlan('showChangesPast') : t('showChanges'),
-          emptyLabel: t('showChangesNone'),
-          // The other degenerate level — every card on it is this plan's — where
-          // ringing everything says nothing (§3d, reversing Part IX §L6).
-          allLabel: tPlan('showChangesAll'),
-          // The LOCATE control walks this same set (§4). Its shipped labels name
-          // a READY frontier, which a proposal never is.
-          locateLabel: tPlan('locateChange'),
-          // …and while the plan is written, the cards being worked on come first.
-          active:
-            activeLocate.length > 0
-              ? { targets: activeLocate, label: tPlan('locateActive') }
-              : null,
-        }}
+        // No plan, no changes: the control is not drawn at all before one exists.
+        emphasis={
+          isPrePlan
+            ? undefined
+            : {
+                // …and every FOLDER holding one, so a closed folder with work changing
+                // behind it is ringed like a card (Part XVIII decision 3).
+                ids: [
+                  ...items.map((i) => i.nodeId),
+                  ...[...folderChanges.keys()].map(folderNodeId),
+                ],
+                total: items.length,
+                label: decided ? tPlan('showChangesPast') : t('showChanges'),
+                emptyLabel: t('showChangesNone'),
+                // The other degenerate level — every card on it is this plan's — where
+                // ringing everything says nothing (§3d, reversing Part IX §L6).
+                allLabel: tPlan('showChangesAll'),
+                // The LOCATE control walks this same set (§4). Its shipped labels name
+                // a READY frontier, which a proposal never is.
+                locateLabel: tPlan('locateChange'),
+                // …and while the plan is written, the cards being worked on come first.
+                active:
+                  activeLocate.length > 0
+                    ? { targets: activeLocate, label: tPlan('locateActive') }
+                    : null,
+              }
+        }
         // ⚠️ MOUNTED HERE FOR THE FIRST TIME (MOTIR-4020). The control was doubly
         // out of reach on this surface: this consumer passed no `locatable`, and
         // the ladder behind it targeted `here` / `ready` nodes. It now walks the
@@ -812,7 +962,7 @@ export function PlanReviewCanvas({
         // (bug MOTIR-3152). It used to read "Plan" while navigating to the project
         // roadmap root, which named a destination it did not have; and the design
         // asks for the breadcrumb *"exactly as the roadmap draws it"*, which is
-        // this label, on this consumer, for the same reason `PlanChangeCanvas`
+        // this label, on this consumer, for the same reason `WorkItemRoadmap`
         // uses it.
         rootLabel={t('breadcrumbRoot')}
         ariaLabel={ariaLabel ?? 'Proposed plan'}
