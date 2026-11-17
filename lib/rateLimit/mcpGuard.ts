@@ -116,7 +116,13 @@ export function mcpRateLimitedResponse(decision: RateLimitDecision): Response {
     }),
     {
       status: 429,
-      headers: { ...rateLimitResponseHeaders(decision), 'Content-Type': 'application/json' },
+      // `Retry-After` is re-stated from the SAME value as the body, so a second
+      // boundary ticking between two reads of the clock cannot make them disagree.
+      headers: {
+        ...rateLimitResponseHeaders(decision),
+        'Retry-After': String(retryAfter),
+        'Content-Type': 'application/json',
+      },
     },
   );
 }

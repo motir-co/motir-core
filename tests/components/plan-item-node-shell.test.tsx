@@ -257,8 +257,9 @@ describe('ONE outcome spine', () => {
     // The card still carries the outcome WORD, so the decided state is not
     // reduced to the spine's colour. (This limb was asserted on the planning
     // surface's own add frame until MOTIR-6299 deleted it; every pane with a
-    // plan now draws through this canvas.)
-    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('accepted');
+    // plan now draws through this canvas.) Since MOTIR-11545 the word rides the
+    // card's top-edge tab, not a segment of the op chip.
+    expect(screen.getByTestId('plan-item-outcome-tab').textContent).toBe('accepted');
   });
 });
 

@@ -495,7 +495,7 @@ describe('the grouped board cell pages over the real datastore (MOTIR-11453)', (
     }
   });
 
-  it('the stored filter, the toolbar filter and both together narrow a cell exactly as the column', async () => {
+  it('the stored filter, the header filter and the header replacing the stored one read a cell exactly as the column', async () => {
     const fx = await makeFixture();
     const [ana, ben] = [await person('Ana'), await person('Ben')];
     const [bugHighAna, bugLowAna, taskHighAna] = await seed(fx, [
@@ -531,13 +531,16 @@ describe('the grouped board cell pages over the real datastore (MOTIR-11453)', (
     expect(await cellIds(ben)).toMatchObject({ ids: [bugLowBen], total: 1 });
     await sameAsColumn();
 
-    // Both together: only high bugs; Ben's lane has none and answers an empty
-    // cell with a zero total and no cursor.
-    expect(await cellIds(ana, HIGH)).toMatchObject({ ids: [bugHighAna], total: 1 });
-    expect(await cellIds(ben, HIGH)).toEqual({ ids: [], total: 0, cursor: null });
+    // Both present: the header filter REPLACES the stored one (MOTIR-11564), so
+    // every high card shows, bug or not — exactly the header filter alone.
+    expect(await cellIds(ana, HIGH)).toMatchObject({
+      ids: [bugHighAna, taskHighAna].sort(),
+      total: 2,
+    });
+    expect(await cellIds(ben, HIGH)).toMatchObject({ ids: [taskHighBen], total: 1 });
     await sameAsColumn(HIGH);
 
-    // Clearing the toolbar filter restores every stored-filtered bug.
+    // Clearing the header filter restores every stored-filtered bug.
     expect((await cellIds(ana)).ids).toEqual([bugHighAna, bugLowAna].sort());
     expect((await cellIds(ben)).ids).toEqual([bugLowBen]);
   });

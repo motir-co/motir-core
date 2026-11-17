@@ -1,6 +1,7 @@
 'use client';
 
 import { personDisplayName } from '@/lib/people/personLabel';
+import { appendBoardReadFilter } from '@/lib/boards/boardFilterHref';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
@@ -134,6 +135,7 @@ export function BoardContainer({
   projectName = '',
   workflow,
   filterParam = '',
+  boardFilterOff = false,
   filterActive = false,
   sprints = [],
   customFields = [],
@@ -158,6 +160,13 @@ export function BoardContainer({
    * matching set; a change refetches (it's in the fetch query → the effect dep).
    */
   filterParam?: string;
+  /**
+   * The reader turned the board's stored filter off (MOTIR-11564) —
+   * `?boardFilter=off` on the page, forwarded to the projection and every page
+   * read so the board shows its whole scope. The server ignores it beside a
+   * header filter (which already replaces the stored one).
+   */
+  boardFilterOff?: boolean;
   /**
    * Whether a filter is active (Story 6.15.3) — selects the FILTERED-empty state
    * ("no card matches", Clear CTA) over the brand-new-board empty state ("New
@@ -199,10 +208,10 @@ export function BoardContainer({
   const boardQuery = useMemo(() => {
     const params = new URLSearchParams();
     if (selectedBoardId) params.set('boardId', selectedBoardId);
-    if (filterParam) params.set('filter', filterParam);
+    appendBoardReadFilter(params, { filterParam, boardFilterOff });
     const qs = params.toString();
     return qs ? `?${qs}` : '';
-  }, [selectedBoardId, filterParam]);
+  }, [selectedBoardId, filterParam, boardFilterOff]);
   const { toast } = useToast();
   // The group-by control lives in the PAGE HEADER toolbar row (beside the board
   // switcher), per design/boards/multi-board.mock.html — but its value + change
@@ -472,6 +481,7 @@ export function BoardContainer({
           columnPoints={columnPoints}
           projectName={projectName}
           filterParam={filterParam}
+          boardFilterOff={boardFilterOff}
         />
       )}
     </div>
@@ -503,6 +513,7 @@ function BoardDnd({
   columnPoints,
   projectName = '',
   filterParam = '',
+  boardFilterOff = false,
 }: {
   board: BoardProjectionDto;
   assigneeNameById: Map<string, string>;
@@ -518,6 +529,8 @@ function BoardDnd({
   /** The compiled board filter the projection was read with (Story 6.15.3) — a
    *  lane's next page is read with the same one (MOTIR-10535). */
   filterParam?: string;
+  /** The stored-filter-off signal the projection was read with (MOTIR-11564). */
+  boardFilterOff?: boolean;
 }) {
   const t = useTranslations('boards');
   const { toast } = useToast();
@@ -543,6 +556,7 @@ function BoardDnd({
     boardId: board.boardId,
     groupBy,
     filterParam,
+    boardFilterOff,
     columnIds,
     onPlanHolds: mergePlanHolds,
   });
@@ -718,7 +732,7 @@ function BoardDnd({
       inFlightRef.current.add(columnId);
       setLoadStates((prev) => ({ ...prev, [columnId]: 'loading' }));
       const params = new URLSearchParams({ boardId: board.boardId, cursor: col.cursor });
-      if (filterParam) params.set('filter', filterParam);
+      appendBoardReadFilter(params, { filterParam, boardFilterOff });
       try {
         const res = await fetch(`/api/board/columns/${columnId}/cards?${params.toString()}`, {
           headers: { accept: 'application/json' },
@@ -734,7 +748,7 @@ function BoardDnd({
         inFlightRef.current.delete(columnId);
       }
     },
-    [board.boardId, filterParam],
+    [board.boardId, filterParam, boardFilterOff],
   );
 
   // Horizontal edge auto-scroll for the flat board (bug-board-cannot-drag-from-

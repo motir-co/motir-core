@@ -408,17 +408,17 @@ export const boardsService = {
       boardStatusKeys,
       readCtx,
       frame.activeSprint?.id,
-      frame.boardFilter,
+      frame.effectiveFilter,
       frame.excludeIds,
       !frame.member,
-      frame.storedFilter?.predicate,
     );
 
     // The active-sprint summary that drives the 4.5.3 sprint header (Subtask
     // 4.5.2) — present only on a scrum board with an active sprint. The points
     // come from the estimation domain (the SUM lives in ONE place — 4.3.3); this
     // service folds in the per-column breakdown via the column→status layout.
-    // An aggregate over the sprint, never a sum over the loaded pages.
+    // An aggregate over the sprint, never a sum over the loaded pages — over the
+    // set the board SHOWS (MOTIR-11564): the effective filter, whichever it is.
     let sprint: SprintSummaryDto | null = null;
     if (frame.activeSprint) {
       const { points, columnPoints } = await estimationService.sprintBoardPoints(
@@ -426,7 +426,7 @@ export const boardsService = {
         built.map((b) => ({ id: b.col.id, statusKeys: b.statusKeys })),
         readCtx,
         frame.excludeIds,
-        frame.storedFilter?.predicate,
+        effectivePredicate(frame.effectiveFilter),
       );
       sprint = toSprintSummaryDto(frame.activeSprint, points, columnPoints, new Date());
     }
@@ -515,7 +515,8 @@ export const boardsService = {
    * cell's FIRST page; present, the page strictly after it, in the column's
    * order. Every gate of {@link getColumnPage} applies unchanged and in the same
    * order, and the count and the cards run over the same set the column page
-   * does — the stored and toolbar filters, the scrum sprint scope and a
+   * does — the effective filter (the header filter or the board's stored
+   * filter, MOTIR-11564), the scrum sprint scope and a
    * Visitor's exclusion — narrowed by ONE lane condition shared by both, so the
    * cell's `{loaded} of {total}` is one definition.
    *
@@ -1203,9 +1204,11 @@ export const boardsService = {
         .filter((s): s is WorkflowStatusDto => s != null)
         .map((s) => s.key);
       if (statusKeys.length > 0 && !boardShowsNoCards(board, ownScope.activeSprint)) {
+        // No reader and no header filter here, so the effective filter is the
+        // board's stored one (MOTIR-11564's rule with no header).
         const { count } = columnReadScope({
-          ...ownScope,
-          boardFilter: undefined,
+          activeSprint: ownScope.activeSprint,
+          effectiveFilter: effectiveBoardFilter(undefined, ownScope.storedFilter, false),
           excludeIds: undefined,
         });
         const cardCount = await workItemRepository.countProjectIssues(
@@ -1809,10 +1812,13 @@ type BoardFrame = {
   /** The binding every read runs under: the PROJECT's workspace. */
   readCtx: { workspaceId: string; userId: string | null };
   board: Board;
-  boardFilter: ResolvedBoardFilter | undefined;
-  /** The board's OWN stored filter (MOTIR-10560) — the same for every reader,
-   *  ANDed beside `boardFilter` in every card read; `undefined` when the board
-   *  has none. */
+  /** The ONE filter every card read applies (MOTIR-11564) — the request's
+   *  header filter, else the board's stored filter, else none. See
+   *  {@link effectiveBoardFilter}. */
+  effectiveFilter: EffectiveBoardFilter | undefined;
+  /** The board's OWN stored filter (MOTIR-10560), resolved for the response's
+   *  `storedFilter` DTO whether or not it is the one applied; `undefined` when
+   *  the board has none. */
   storedFilter: ResolvedStoredBoardFilter | undefined;
   columns: BoardColumn[];
   liveByColumn: Map<string, WorkflowStatusDto[]>;
@@ -1827,10 +1833,7 @@ type BoardFrame = {
 
 /** What narrows a board's cards — the part of {@link BoardFrame} that
  *  {@link columnReadScope} reads. */
-type BoardCardScope = Pick<
-  BoardFrame,
-  'activeSprint' | 'boardFilter' | 'storedFilter' | 'excludeIds'
->;
+type BoardCardScope = Pick<BoardFrame, 'activeSprint' | 'effectiveFilter' | 'excludeIds'>;
 
 /**
  * The board's OWN card scope — what narrows its cards whoever reads it and
@@ -1917,8 +1920,11 @@ async function loadBoardFrame(
       : undefined;
   // The board's OWN stored filter (MOTIR-10560): part of the board, not of the
   // reader, so a member and a Visitor read it alike. Never throws — a stale or
-  // unreadable condition narrows the board instead of breaking it.
+  // unreadable condition narrows the board instead of breaking it. It is
+  // resolved even when the header filter replaces it, so the response can still
+  // report it (`storedFilter` on the projection).
   const { storedFilter, activeSprint } = await resolveBoardOwnScope(board, readCtx.workspaceId);
+  const effectiveFilter = effectiveBoardFilter(boardFilter, storedFilter, filter?.storedFilterOff);
 
   // The board's own two reads share ONE bound transaction; the workflow LIST is
   // a service call and opens its own (the call-into-another-service clause in
@@ -1952,7 +1958,7 @@ async function loadBoardFrame(
     excludeIds,
     readCtx,
     board,
-    boardFilter,
+    effectiveFilter,
     storedFilter,
     columns,
     liveByColumn,
@@ -2031,8 +2037,67 @@ async function buildColumnPage(
 }
 
 /**
+ * The ONE filter a board read applies (MOTIR-11564). The header filter (an
+ * inline AST or a saved filter) REPLACES the board's stored filter rather than
+ * narrowing it, so the two are never ANDed:
+ *
+ *   - a header filter in the request → it alone;
+ *   - no header filter → the board's stored filter, unless the request turned
+ *     the board filter off (`boardFilter=off`), which is then ignored on a
+ *     board with no stored filter and whenever a header filter is present;
+ *   - otherwise → none: the board's whole scope.
+ *
+ * The stored filter is a view setting, not an access boundary: the sprint scope
+ * and a Visitor's private-epic exclusion are applied beside this in every read,
+ * so replacing it never shows a card the board with no stored filter would not.
+ * A stored filter with zero conditions resolves to no predicate, so it, too,
+ * applies nothing.
+ */
+export type EffectiveBoardFilter =
+  | { source: 'header'; filter: ResolvedBoardFilter }
+  | { source: 'stored'; predicate: StoredFilterPredicate };
+
+export function effectiveBoardFilter(
+  header: ResolvedBoardFilter | undefined,
+  stored: ResolvedStoredBoardFilter | undefined,
+  storedFilterOff: boolean | undefined,
+): EffectiveBoardFilter | undefined {
+  if (header) return { source: 'header', filter: header };
+  if (storedFilterOff || !stored?.predicate) return undefined;
+  return { source: 'stored', predicate: stored.predicate };
+}
+
+/**
+ * The effective filter in the two slots the repository reads take it in: a
+ * header filter rides the `ast` (+ referents) slot, the stored filter its own
+ * `storedFilter` slot. At most one is ever set — that is the replace rule.
+ */
+function effectiveFilterSlots(effective: EffectiveBoardFilter | undefined): {
+  header?: ResolvedBoardFilter;
+  stored?: StoredFilterPredicate;
+} {
+  if (!effective) return {};
+  return effective.source === 'header'
+    ? { header: effective.filter }
+    : { stored: effective.predicate };
+}
+
+/**
+ * The effective filter as ONE {@link StoredFilterPredicate}, for the reads that
+ * take a single predicate (the sprint-points sums). A header filter's
+ * `{ ast, referents }` compiles through the same compiler as a stored one.
+ */
+function effectivePredicate(
+  effective: EffectiveBoardFilter | undefined,
+): StoredFilterPredicate | undefined {
+  if (!effective) return undefined;
+  return effective.source === 'header' ? effective.filter : effective.predicate;
+}
+
+/**
  * The predicate set a column's count and its cards are read under — the scrum
- * sprint scope, the toolbar filter, the board's stored filter, a Visitor's
+ * sprint scope, the effective filter (MOTIR-11564: the header filter or the
+ * board's stored filter, never both), a Visitor's
  * private-epic exclusion and (for a cell) the lane — assembled in ONE place so
  * the column page, the cell page and the grouped board's column meta
  * ({@link buildColumnMeta}) can never narrow under different sets.
@@ -2044,8 +2109,7 @@ async function buildColumnPage(
  */
 function columnReadScope(frame: BoardCardScope, lane?: BoardLanePredicate) {
   const sprintId = frame.activeSprint?.id;
-  const filter = frame.boardFilter;
-  const stored = frame.storedFilter?.predicate;
+  const { header: filter, stored } = effectiveFilterSlots(frame.effectiveFilter);
   const excludeIds = frame.excludeIds;
   const shared = {
     ...(stored ? { storedFilter: stored } : {}),
@@ -2327,16 +2391,16 @@ async function buildSwimlanes(
   statusKeys: string[],
   ctx: Pick<ServiceContext, 'workspaceId'>,
   sprintId?: string,
-  filter?: ResolvedBoardFilter,
+  // The effective filter (MOTIR-11564) — the lanes AND the "No epic" total
+  // count the same filtered set the columns show.
+  effective?: EffectiveBoardFilter,
   // A Visitor's private-epic exclusion (MOTIR-6644): lanes count visible cards only.
   excludeIds?: readonly string[],
   // A Visitor's lanes name people by display name only (MOTIR-6646).
   nameOnly = false,
-  // The board's stored filter (MOTIR-10560) — the lanes AND the "No epic"
-  // total count the same stored-filtered set the columns show.
-  storedFilter?: StoredFilterPredicate,
 ): Promise<BoardSwimlaneDto[]> {
   if (groupBy === 'none' || statusKeys.length === 0) return [];
+  const { header: filter, stored: storedFilter } = effectiveFilterSlots(effective);
 
   // 6.15.2 — the lane aggregates AND in the SAME compiled filter as the columns
   // so a filtered, grouped board's lanes + counts reflect only matching cards

@@ -216,7 +216,7 @@ describe('mergePlanLevel — the decided outcome', () => {
   it('draws NOTHING decided while the plan is still pending', () => {
     const level = merge(PLAN);
     renderNode(level, 'pi_1');
-    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
     expect(document.querySelectorAll('[data-testid$="outcome-spine"]')).toHaveLength(0);
   });
 
@@ -226,7 +226,7 @@ describe('mergePlanLevel — the decided outcome', () => {
       const level = merge(PLAN, LEVEL, null, outcome);
       renderNode(level, 'pi_1');
 
-      expect(screen.getByTestId('plan-item-outcome').textContent).toBe(outcome);
+      expect(screen.getByTestId('plan-item-outcome-tab').textContent).toBe(outcome);
       expect(document.querySelectorAll('[data-testid$="outcome-spine"]')).toHaveLength(1);
     },
   );
@@ -234,7 +234,7 @@ describe('mergePlanLevel — the decided outcome', () => {
   it('names the outcome on a CHANGED committed card too', () => {
     const level = merge(PLAN, LEVEL, null, 'accepted');
     renderNode(level, 'wi-21');
-    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('accepted');
+    expect(screen.getByTestId('plan-item-outcome-tab').textContent).toBe('accepted');
   });
 });
 
@@ -285,7 +285,7 @@ describe('mergePlanLevel — a DECIDED add', () => {
 
     renderNode(level, 'wi-90');
     expect(screen.getByTestId('plan-item-node').getAttribute('data-op')).toBe('add');
-    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('accepted');
+    expect(screen.getByTestId('plan-item-outcome-tab').textContent).toBe('accepted');
     // The real key is what Part VI §3 calls the strongest accepted signal.
     expect(screen.getByText('PAY-90')).toBeTruthy();
   });
