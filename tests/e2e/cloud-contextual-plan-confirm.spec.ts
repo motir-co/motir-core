@@ -593,11 +593,13 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     //
     // Asserted by the outcome WORD, not by the attribute alone, so a
     // colour-only treatment cannot pass this (Part VI §3's a11y rule: the word
-    // in the chip carries the meaning, the spine is decoration).
+    // in the outcome tab carries the meaning, the spine is decoration).
     await expect(confirmBar(page)).toHaveCount(0);
     await expect(addFrames(page)).toHaveCount(2);
     await expect(addFrames(page).first()).toHaveAttribute('data-outcome', 'accepted');
-    await expect(workspace(page).getByTestId('plan-item-outcome').first()).toHaveText('accepted');
+    await expect(workspace(page).getByTestId('plan-item-outcome-tab').first()).toHaveText(
+      'accepted',
+    );
     await expect(canvasTitle(page, DIGEST)).toBeVisible();
 
     // The real substrate: both landed UNDER the anchor, as subtasks, and the Plan

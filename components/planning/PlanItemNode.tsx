@@ -4,6 +4,7 @@ import { AlertTriangle, ArchiveX, ChevronRight, Pencil, Plus, Replace } from 'lu
 import { memo } from 'react';
 import { useTranslations } from 'next-intl';
 import {
+  CardEdgeTab,
   CrossBlockedFlag,
   GhostAnchor,
   WorkItemCardShell,
@@ -49,8 +50,12 @@ import { changeCellText } from '@/components/planning/changeCellText';
 // therefore rides two channels the op treatments do not use at all — they
 // already consume border style, border colour, fill, the ring, opacity and the
 // strike:
-//   • the op badge gains a second SEGMENT carrying the WORD (`accepted` /
-//     `declined`), which is the whole of the meaning; and
+//   • a TAB on the card's top edge carrying the WORD (`accepted` /
+//     `declined`), which is the whole of the meaning — the "You are here" tab's
+//     frame (`CardEdgeTab`), so it costs the fixed-width tag row nothing. Until
+//     MOTIR-11545 the word rode a second segment fused onto the op badge, and
+//     that segment pushed the status pill and the Blocked chip past the card's
+//     right edge; and
 //   • a solid spine on the node's inline-start edge, decorative (`aria-hidden`),
 //     so the outcome survives a zoom-out where 10.5px chip text does not.
 // The spine's two values are the review rail's OWN outcome colours one component
@@ -220,6 +225,22 @@ export const PlanItemNode = memo(function PlanItemNode({
   // difficulty indicator (and before the drill chevron on a container); no refs ⇒
   // nothing, byte-identical to before.
   const supersedes = item.op === 'add' ? (item.supersedesRefs ?? []) : [];
+  // A DECIDED card's tag row (MOTIR-11545, design Part XXX). Once the plan is
+  // decided an accepted `add` IS a work item: it gains its real five-digit key and
+  // a live status, so its row carries the committed card's facts plus the op chip.
+  // It therefore takes the committed card's tag-row forms (MOTIR-10508): the status
+  // as the truncating SLOT and the SHORT blocked flag — and the committed card's
+  // GIVE-WAY RULE ("When the tag row overflows"): a right-hand TEXT tag (the blocked
+  // flag, the stale badge) drops the status and the op chip to their glyphs (the op
+  // chip is this card's Manual chip, a type chip on the left) and the difficulty
+  // out of the row (the peek carries it). A fixed rule, not a measurement: with a
+  // text tag beside them the words measured 18–34px past the 254px row in every
+  // style. A decided card that carries a live STATUS never draws its difficulty in
+  // the row either — the committed card it now is draws none, and `To Do` beside
+  // `High` already overflows the room the op chip leaves. An UNDECIDED card is
+  // left exactly as it shipped.
+  const decided = outcome != null;
+  const giveWay = decided && (crossBlocked || showStale);
 
   // Op-specific frame — what the op MEANS, layered on the shell (which owns the
   // border weight, radius and padding). None reuses the cross-story red
@@ -245,7 +266,7 @@ export const PlanItemNode = memo(function PlanItemNode({
           // three other channels — the strong border, the muted fill and the
           // strike — and the PENDING/DECIDED distinction is carried by the two
           // signals a decided node ADDS: the outcome spine below and the outcome
-          // segment fused onto its op badge. That is exactly how `add` and
+          // tab on its top edge. That is exactly how `add` and
           // `modify` distinguish the same two states, and neither of them dims.
           //
           // `tests/components/composed-surface-ink.test.tsx` mounts the pending
@@ -262,14 +283,21 @@ export const PlanItemNode = memo(function PlanItemNode({
       data-outcome={outcome ?? undefined}
       data-locked={locked ? 'true' : undefined}
       data-testid="plan-item-node"
+      tab={outcome ? <PlanItemOutcomeTab outcome={outcome} /> : null}
       // A locked proposal cannot be applied — the approve is refused server-side
       // for a finished target — so say so rather than imply it.
       aria-disabled={locked ? true : undefined}
       // TOP ROW — the op badge (left) + the status pill / stale flag (right).
       statusRow={
         <>
-          <PlanItemOpBadge op={item.op} outcome={outcome} />
-          <div className="ml-auto flex items-center gap-1.5">
+          {/* The PLAIN op chip on a decided plan too (MOTIR-11545): the outcome
+              rides the top-edge tab, not a segment fused onto this chip. Under the
+              give-way rule above it is the op's glyph alone. */}
+          <PlanItemOpBadge op={item.op} glyphOnly={giveWay} />
+          {/* On a decided card `min-w-0`, so the status SLOT below can truncate
+              inside the row rather than push the right-hand tags past the card's
+              edge (MOTIR-11545). */}
+          <div className={`ml-auto flex items-center gap-1.5${decided ? ' min-w-0' : ''}`}>
             {showStale ? (
               <span
                 data-testid="stale-badge"
@@ -292,10 +320,15 @@ export const PlanItemNode = memo(function PlanItemNode({
               />
             ) : null}
             {item.status ? (
+              // On a decided card the TAG-ROW slot form (MOTIR-10508), as on the
+              // committed card: it truncates last and carries its name on `title`;
+              // under the give-way rule it is the glyph alone (MOTIR-11545).
               <WorkItemStatusPill
                 status={item.status}
                 label={item.statusLabel}
                 category={item.statusCategory}
+                slot={decided}
+                glyphOnly={giveWay}
               />
             ) : null}
             {supersedes.length > 0 ? (
@@ -315,7 +348,10 @@ export const PlanItemNode = memo(function PlanItemNode({
               </span>
             ) : null}
             {crossBlocked ? (
-              <CrossBlockedFlag />
+              // On a decided card the SHORT flag (`blocked`, the sentence on
+              // `title` / `aria-label`), the committed card's tag-row form
+              // (MOTIR-11545); an undecided card keeps the sentence.
+              <CrossBlockedFlag short={decided} />
             ) : item.hasChildren ? (
               <ChevronRight
                 className="size-4 shrink-0 text-(--el-text-muted)"
@@ -329,7 +365,7 @@ export const PlanItemNode = memo(function PlanItemNode({
                 title to one line). ONLY an `add`: a `modify` card says what
                 CHANGES (its diff line), and a container never carries one. None ⇒
                 nothing drawn — the card has no field labels to hang a `None` on. */}
-            {showDifficulty ? (
+            {showDifficulty && !giveWay && !(decided && item.status) ? (
               <DifficultyIndicator
                 difficulty={item.difficulty!}
                 compact={{
@@ -365,8 +401,8 @@ export const PlanItemNode = memo(function PlanItemNode({
       }
       overlay={
         <>
-          {/* The outcome SPINE — decorative reinforcement only; the word in the op
-              chip carries the meaning, which is what keeps this off colour-alone
+          {/* The outcome SPINE — decorative reinforcement only; the word in the
+              outcome tab carries the meaning, which is what keeps this off colour-alone
               and discharges 1.4.11 on the bar itself. Drawn HERE and nowhere else
               (MOTIR-6296): the one card owns the one spine. */}
           {outcome ? (
@@ -413,8 +449,33 @@ function ReasonLine({ reason, label }: { reason: string; label: string }) {
 }
 
 /**
+ * A decided plan card's OUTCOME — `accepted` / `declined` — as a tab on the
+ * card's top edge (MOTIR-11545, `design/ai-planning/design-notes.md` Part XXX),
+ * in the "You are here" tab's frame and the outcome's own tones from Part VI §3:
+ * mint + strong ink for accepted, muted + secondary ink for declined, both AA.
+ * The word is the whole of the meaning and is read out; the spine is decoration.
+ */
+export function PlanItemOutcomeTab({ outcome }: { outcome: PlanItemOutcome }) {
+  const t = useTranslations('planReview');
+  return (
+    <CardEdgeTab
+      testId="plan-item-outcome-tab"
+      toneClassName={
+        outcome === 'accepted'
+          ? 'bg-(--el-tint-mint) text-(--el-text-strong)'
+          : 'bg-(--el-muted) text-(--el-text-secondary)'
+      }
+    >
+      {outcome === 'accepted' ? t('outcomeAccepted') : t('outcomeDeclined')}
+    </CardEdgeTab>
+  );
+}
+
+/**
  * The op badge, with the OUTCOME fused to its trailing edge once the plan is
- * decided — so the chip reads `op × outcome` (Part VI §3).
+ * decided — so the chip reads `op × outcome` (Part VI §3). The fused form is the
+ * LEVEL band's (`LevelChangeBand`), which is not a fixed-width card; the canvas
+ * card passes no outcome and draws it as {@link PlanItemOutcomeTab} instead.
  *
  * Segment 1 is the SHIPPED op tone, unchanged; segment 2 is the outcome. The
  * word is the whole of the meaning, which is what keeps the decided state off
@@ -424,9 +485,15 @@ function ReasonLine({ reason, label }: { reason: string; label: string }) {
 export function PlanItemOpBadge({
   op,
   outcome = null,
+  glyphOnly = false,
 }: {
   op: PlanReviewItemDto['op'];
   outcome?: PlanItemOutcome | null;
+  /** The give-way form (MOTIR-11545): the op's glyph alone, its word on
+   *  `aria-label` (`role="img"`) and `title` — the committed card drops its Manual
+   *  chip the same way. Only the plain chip has this form: with an `outcome`
+   *  (the level band's fused chip) it is ignored. */
+  glyphOnly?: boolean;
 }) {
   const t = useTranslations('planReview');
   const seg = 'inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold';
@@ -445,6 +512,20 @@ export function PlanItemOpBadge({
       <Pencil className="size-3" aria-hidden="true" />
     );
   const label = op === 'add' ? t('opAdd') : op === 'remove' ? t('opRemove') : t('opModify');
+
+  if (!outcome && glyphOnly) {
+    return (
+      <span
+        role="img"
+        aria-label={label}
+        title={label}
+        data-testid="plan-item-op-glyph"
+        className={`${opSeg} rounded-(--radius-badge)`}
+      >
+        {glyph}
+      </span>
+    );
+  }
 
   // Undecided: exactly the shipped badge, byte for byte.
   if (!outcome) {

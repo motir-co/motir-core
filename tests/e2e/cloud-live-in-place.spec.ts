@@ -842,7 +842,7 @@ test.describe('plans, under a second actor', () => {
 
       // The decided plan stays, each card carrying its outcome AS A WORD.
       await expect(bar).toHaveCount(0);
-      const outcomes = workspace(page).getByTestId('plan-item-outcome');
+      const outcomes = workspace(page).getByTestId('plan-item-outcome-tab');
       await expect(outcomes).toHaveCount(proposals.length, { timeout: FIRST_PAINT_MS });
       for (const outcome of await outcomes.all()) await expect(outcome).toHaveText('accepted');
       await expect.poll(() => counter.inFlight(), { timeout: 60_000 }).toBe(0);

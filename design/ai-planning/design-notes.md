@@ -37,6 +37,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **A plan resumed after a lost machine**         | **`plan-review--live-progress--resuming.mock.html`**      | MOTIR-8306           | Part XXVII  |
 | **Following the planner, and fields typing in** | **`plan-review--follow-the-planner.mock.html`**           | MOTIR-8591           | Part XXVIII |
 | **A card's text as it is written, in the peek** | **`peek-proposal-mode--being-written.mock.html`**         | MOTIR-11196          | Part XXIX   |
+| **A decided card's outcome as a top-edge tab**  | **`plans-surface--outcome-tab.mock.html`**                | MOTIR-11545          | Part XXX    |
 | **The Plans page lists CONVERSATIONS**          | `plans-sessions--list.mock.html` (on the design result)   | MOTIR-6019           | by title    |
 | **The list shows only what reached planning**   | **`plans-sessions--reached-planning.mock.html`**          | MOTIR-9298           | § at end    |
 
@@ -8933,3 +8934,100 @@ were deleted; the design lane (`vitest --config vitest.design.config.ts`) is gre
 How the partial text travels from motir-ai to motir-core, the live read's shape, and the planner's
 streaming; deleting the typewriter's code, token and tests (the quick-view card's); the other nine
 locales' strings; the plan page's peek (unchanged); the canvas card's drafting cue (unchanged).
+
+# Part XXX — a DECIDED plan card's outcome is a TAB on its top edge, and its tag row takes the committed card's forms (MOTIR-11545 · bug — `plans-surface--outcome-tab.mock.html`, DATED 2026-11-17)
+
+**Amends Part VI §3 ("Panel G — a DECIDED node", `plans-surface.mock.html` panel G) and Part XVI §16.3
+for the canvas CARD only.** The level band (`LevelChangeBand`) keeps the fused `op · outcome` chip
+Part VI §3 drew: it is not a fixed-width card. The delta mock renders the shipped `PlanItemNode`, and
+its panel 1 renders the component as it was at main `bc4a092c0`, which is the reproduction.
+
+## 30.1 What was wrong
+
+Part VI §3 put the outcome in a second SEGMENT fused onto the op chip (`+ add | accepted`). The card
+is a fixed 280 × 124 and every tag in its row is `shrink-0`, so the extra segment pushed the rest of
+the row past the right edge. And an accepted `add` is a work item by then: it gains its real
+five-digit key and a live status, which the undecided card never had. Measured in Chromium on the
+blocked `add` the bug was found on (warm-editorial, light): the row's tags ended **255px** past the
+row's inner right edge; `To Do` showed as `To` and the blocked flag was gone.
+
+## 30.2 The outcome tab
+
+The outcome WORD — `accepted` / `declined` (`planReview.outcomeAccepted` / `outcomeDeclined`, both
+shipped) — hangs on the card's top edge, left, in the 72px row gap, as `You are here` does
+(MOTIR-10630, design MOTIR-10629 § "The tab"). It is the SAME frame, shared, not copied:
+`CardEdgeTab` in `components/planning/WorkItemNode.tsx`, rendered into `WorkItemCardShell`'s `tab`
+slot, a sibling before the frame (outside its `overflow-hidden` and its `NODE_W × NODE_H`).
+
+| element      | colour                                            | shape                                                                         |
+| ------------ | ------------------------------------------------- | ----------------------------------------------------------------------------- |
+| accepted tab | `bg-(--el-tint-mint)` / `text-(--el-text-strong)` | `h-5`, `rounded-t-(--radius-badge)`, `px-(--spacing-chip-x-6)`, 11px semibold |
+| declined tab | `bg-(--el-muted)` / `text-(--el-text-secondary)`  | as above                                                                      |
+
+The tones are Part VI §3's outcome segment, unchanged, so the band and the card still say the same
+thing in the same colour. `--el-text-secondary` on `--el-muted` is 6.18:1; strong ink on a tint is
+the AA pairing finding #35 set. No glyph: the outcome segment had none, and the word is the whole of
+the meaning. The tab is not `aria-hidden` and carries no role, so its word is read out before the
+frame's content. No shadow (under neo-brutalism the offset shadow belongs to the frame). The
+outcome SPINE (Part VI §3 channel 2) and `data-outcome` on the frame are unchanged. Card height and
+layout are unchanged: the tab sits in the row gap.
+
+## 30.3 The decided card's tag row
+
+Taking the outcome out of the row is necessary and not sufficient: key + op chip + status + the long
+`blocked elsewhere` flag still measured 18–34px past the row in every style. So a DECIDED card's row
+takes the committed card's own tag-row forms (MOTIR-10508, `design/roadmap/design-notes.md`), with the
+op chip in the role the committed card gives its Manual chip (a type chip on the left):
+
+- the status pill is the TAG-ROW SLOT (`WorkItemStatusPill slot`): `min-w-0`, the name on `title`,
+  the label truncating last;
+- the blocked flag is the SHORT tag (`CrossBlockedFlag short` → `BlockedTag`): `blocked`, the
+  sentence on `title` / `aria-label`;
+- **the give-way rule** ("When the tag row overflows"): a right-hand TEXT tag — the blocked flag or
+  the stale badge — drops the op chip and the status to their glyphs, each `role="img"` with its
+  word on `aria-label` and `title`, and takes the difficulty out of the row;
+- a decided card that carries a live status draws NO difficulty in the row — the committed card it
+  now is draws none, and `To Do` beside `High` already overflows the room the op chip leaves. A
+  declined `add` (no key, no status) keeps it. The peek carries the difficulty either way.
+
+An **undecided** card is unchanged, byte for byte: its row has no live status and no real key on an
+`add`. (Its own overflows — a blocked `add` with a difficulty, a `modify` with a long status — are
+pre-existing and filed as bug MOTIR-11549; they are not this Part's.)
+
+A long status beside the wide `change` chip — `In Progress` on a `modify` — still truncates, as the
+slot is designed to: an ellipsis inside the row with the name on `title`, never a tag cut at the card
+edge.
+
+## 30.4 Measured
+
+Chromium, the delta mock's own render, every card at its fixed 280px: the right edge of the last
+tag against the row's inner right edge (positive = past it), and the clipped tags.
+
+| card                             | styles × themes                | overflow | clipped                  |
+| -------------------------------- | ------------------------------ | -------- | ------------------------ |
+| was: add · accepted · blocked    | warm-editorial light           | 255px    | `To Do`, `blocked`       |
+| was: add · accepted · ready      | warm-editorial light           | 85px     | `To Do`, `High`          |
+| is: add · accepted · blocked     | all 11 styles × light and dark | 0        | none                     |
+| is: add · accepted · ready       | warm-editorial light and dark  | 0        | none                     |
+| is: add · declined               | warm-editorial light and dark  | 0        | none                     |
+| is: modify · accepted / declined | all 11 styles × light and dark | 0        | `In Progress` (slot `…`) |
+| is: remove · declined            | warm-editorial light and dark  | 0        | none                     |
+
+## 30.5 Copy
+
+No new key. `planReview.outcomeAccepted` / `outcomeDeclined` (the tab), `planReview.opAdd` /
+`opModify` / `opRemove` (the op glyph's label), `roadmap.canvas.node.blockedShort` /
+`blockedElsewhere` (the short flag and its label) and the status's own label all ship.
+
+## 30.6 How the mock was made
+
+A temporary generator rendered the shipped `PlanItemNode` (and, for panel 1, a copy of it at
+`bc4a092c0`) with `renderMock`, bundled with esbuild as Part XXIX's was. The cards sit on the canvas's
+`--el-canvas` board with the row gap above them so the tab is seen where it hangs. Panel 4 repeats
+two cards under every registered `data-style`, light and dark. Every panel was rendered in Chromium
+and looked at; the generator was not committed.
+
+## 30.7 What Part XXX does NOT draw or decide
+
+The level band's fused chip (unchanged); the undecided card (unchanged); the peek; the outcome
+spine; the canvas's level caption.
