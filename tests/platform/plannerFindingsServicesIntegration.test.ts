@@ -51,6 +51,7 @@ const {
   PlannerFindingNotFoundError,
 } = await import('@/lib/ai/errors');
 const { workspacesService } = await import('@/lib/services/workspacesService');
+const { workItemsService } = await import('@/lib/services/workItemsService');
 const { createTestUser } = await import('../fixtures/userFixtures');
 const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
 const { createTestProject } = await import('../fixtures/projectFixtures');
@@ -277,17 +278,29 @@ describe('each write appends exactly one planner_finding.triage row', () => {
     expect(await auditCount()).toBe(1);
   });
 
-  it('bug key: `motir-123` is recorded as MOTIR-123', async () => {
+  it("bug key: a lower-case paste of a work item in the finding's project is recorded upper-cased", async () => {
+    // The key must name a work item in the finding's OWN project (MOTIR-11590); its
+    // resolution is one audited estate.read before the triage row.
+    const bug = await workItemsService.createWorkItem(
+      { projectId: world.project, kind: 'bug', title: 'the planner skipped a read' },
+      { userId: world.nonStaff.orgOwner, workspaceId: world.ws },
+    );
     const f = finding('pf_bug');
     install([f]);
-    await plannerFindingsTriageService.recordBugKey(FORGED, f.id, ' motir-123 ');
-    const audit = await onlyRow();
+    await plannerFindingsTriageService.recordBugKey(
+      FORGED,
+      f.id,
+      ` ${bug.identifier.toLowerCase()} `,
+    );
+    const rows = await auditRows();
+    expect(rows.map((r) => r.action)).toEqual(['estate.read', 'planner_finding.triage']);
+    const audit = rows[1]!;
     expectRow(audit, f);
     expect(audit.reason).toMatch(DEFAULT_REASON);
     expect(audit.metadata).toEqual({
       findingId: f.id,
       before: { status: 'new', bugKey: null },
-      after: { status: 'filed_as_bug', bugKey: 'MOTIR-123' },
+      after: { status: 'filed_as_bug', bugKey: bug.identifier },
     });
   });
 
