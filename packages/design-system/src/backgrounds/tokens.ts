@@ -72,7 +72,10 @@ export function readBackgroundColours(
   const styles = getComputedStyle(el);
   const normalise = (value: string) => {
     if (!normaliser) return value;
-    normaliser.fillStyle = '#000';
+    // Reset first, so a value the canvas cannot parse reads back as the reset
+    // rather than the previous token's colour. A keyword, not a hex literal: the
+    // swap-layer lint holds the design system's source to no raw hex.
+    normaliser.fillStyle = 'transparent';
     normaliser.fillStyle = value;
     return String(normaliser.fillStyle);
   };
