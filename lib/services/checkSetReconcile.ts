@@ -8,6 +8,7 @@ import {
 } from '@/lib/github/checkRuns';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 
 // THE RECORDED SET IS NOT THE WHOLE SET (MOTIR-4199).
 //
@@ -324,6 +325,54 @@ export async function reconcileRecordedCheckSet(args: {
   }
 
   return { created, settled, decided };
+}
+
+/** One pull request's commit to re-read from the host, with what the read needs. */
+export interface CheckSetReReadTarget {
+  pullRequestId: string;
+  commitSha: string;
+  installationId: string;
+  owner: string;
+  name: string;
+}
+
+/**
+ * Ask the host about ONE target and write what the recorded set is missing or still holds
+ * `pending` (MOTIR-4199 · MOTIR-5838) — the phase-2 half both re-read paths share: the
+ * Implemented latch (`ciPromotion`) and the status-independent sweep (Bug MOTIR-11638,
+ * `lostCheckCompletionService`).
+ *
+ * ⚠️ THE ROUND TRIP IS OUTSIDE ANY TRANSACTION, structurally: the host is asked first, and
+ * only its answer is written, in a transaction of its own under the pull request's
+ * workspace. A network read inside `withSystemContext` would hold a connection open on
+ * GitHub's latency.
+ *
+ * Answers whether the recorded set CHANGED (a row created or settled) — `false` when the
+ * host could not be reached (`null`), which leaves the set exactly as recorded.
+ */
+export async function reReadCheckSetFromHost(
+  target: CheckSetReReadTarget,
+  workspaceId: string,
+  readCheckSet: typeof readReportedCheckSet,
+): Promise<boolean> {
+  const reported = await readCheckSet(target);
+  if (reported === null) return false;
+  const wrote = await withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, workspaceId);
+    const recorded = await githubCheckRunRepository.listByPrAndSha(
+      target.pullRequestId,
+      target.commitSha,
+      tx,
+    );
+    return reconcileRecordedCheckSet({
+      pullRequestId: target.pullRequestId,
+      commitSha: target.commitSha,
+      reported,
+      recorded,
+      tx,
+    });
+  });
+  return wrote.created + wrote.settled > 0;
 }
 
 /**

@@ -167,6 +167,41 @@ MOTIR-3823's own criteria are unchanged and still green (`tests/github/ciGreenPr
 repository that CANNOT report still counts as green, and a pull request with zero rows in a repository
 that CAN report is still not promoted.
 
+## AMENDMENT 4 — the re-read is asked of the PULL REQUEST, whatever its cards' status (MOTIR-11638)
+
+**AMENDMENT 1 put the stale-pending re-read inside the Implemented → In Review latch, and so it ran
+only for a card at `implemented`.** `reconcileClaimedCompleteDeliveries`' first step is _is this card
+at `implemented`?_, and the reconcile tick reached the re-read only through that latch. A card already
+In Review was never re-read — and In Review is where every fix after a review send-back runs, so all
+of that fix's CI ran outside the window the re-read covered.
+
+**Observed** (2026-11-17, motir-core#4306 / MOTIR-11585): the review agent sent the card back at 03:52
+on head `4f119995`; the fix `2cb7524b` was pushed at ~03:57 with the card still In Review. On GitHub
+`Coverage (run overlay parity)` completed `success` at 04:00:59 and `CI complete` at 04:28:56; in
+Motir that check's row was still `pending`, created and last updated at 03:58:31. The card's `ciState`
+read `running`, the CI comment read "75 of 76 checks complete", and `fixReasonService` — reading CI
+running at a head other than the one the send-back was raised on — held `changes_requested` as
+Fixing. The review agent's pass at 11:20 could not clear it, and nothing would have until another
+delivery arrived.
+
+**The decision.** The re-read is a fact about the pull request's recorded set, so it is asked per pull
+request: the reconcile tick calls `lostCheckCompletionService.settleLostCheckCompletions` for every
+open delivering pull request it reaches, BEFORE the latch, with the same two predicates and the same
+host read and `pending`-guarded write (`reReadCheckSetFromHost`, shared with the latch). When the read
+changed the set, what the lost delivery would have done next is done, in the CI-feedback consumer's
+order: every delivered card's `ciState`, fix reason and resume state recomputed
+(`recomputeCardCiAnswers`, now the consumer's helper too); the CI comment re-rendered at the commit
+whose set changed; then the verdict latches — a red set withdraws the merge question, a green one
+promotes from `implemented` and re-raises the question for a card already in review. **The promotion
+stays the only status-gated part.**
+
+**What it costs.** A fresh pending row is still believed without a call. A set claiming completeness
+is asked about once per head rather than every tick: the read that finds the host decided records
+`ciDecidedSha` (MOTIR-10797), and the sweep does not ask again about a complete set at a head the host
+has already decided. A stale pending row at such a head — a re-run whose completion was lost — is
+still asked about. The tick's summary counts the settles as `checkSetsSettled`; like `promoted`, one
+is a lost delivery repaired and a steady trickle is an ingestion defect.
+
 ## AMENDMENT 3 — a workflow run with no job yet is READ, and failure mode 1 was wrong about it (MOTIR-6946)
 
 **Failure mode 1 said a workflow that has not started "is in no snapshot and cannot be". For a

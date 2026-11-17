@@ -15,6 +15,7 @@ import { resyncLinkedPullRequest, type ChangeRequestSyncResult } from './changeR
 import { workflowsService } from './workflowsService';
 import { reconcileGatesFor } from './gateSetFor';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
+import { settleLostCheckCompletions } from './lostCheckCompletionService';
 import { readReportedCheckRuns, readReportedCheckSet } from './checkSetReconcile';
 import { pullRequestMergeabilityService } from './pullRequestMergeabilityService';
 import { resettleStandingExit } from './mergeQueueExitService';
@@ -148,6 +149,16 @@ export interface PullRequestReconcileSummary {
    */
   promoted: number;
   /**
+   * Open pull requests whose recorded check set the host re-read CHANGED — a lost
+   * completion settled, or a missing check written — whatever their cards' status (Bug
+   * MOTIR-11638). Each one then had its cards' `ciState` and fix reason recomputed and its
+   * CI comment re-rendered.
+   *
+   * ⚠️ READ IT LIKE `promoted`: one is a lost `check_run` delivery repaired; a steady
+   * trickle is an ingestion defect, and the ingestion is the bug to fix.
+   */
+  checkSetsSettled: number;
+  /**
    * Standing queue-failure exits whose check's conclusion Motir never received, now
    * READ from the host and recorded (§4 SIXTH AMENDMENT, point 4; MOTIR-6848). A
    * cancelled / timed-out one re-settles its card through `resettleStandingExit`.
@@ -197,6 +208,7 @@ export const pullRequestReconcileService = {
       failed: 0,
       gatesRaised: 0,
       promoted: 0,
+      checkSetsSettled: 0,
       queueExitsResolved: 0,
       implemented: 0,
       implementedRefused: 0,
@@ -276,7 +288,7 @@ export const pullRequestReconcileService = {
           // failed enqueue, or a member GitHub had not computed within that job's waits
           // is settled here — BEFORE the promotion and the re-ask below, so a member
           // that now conflicts is neither promoted nor asked about. Not counted on the
-          // summary: that is a memoized step result (`reconcile-open-deliveries-v5`), and
+          // summary: that is a memoized step result (`reconcile-open-deliveries-v6`), and
           // widening it would owe an id bump for a number nothing reads.
           await settleMergeability(candidate, read.pullRequest);
           // ⚠️ A QUEUE EXIT WHOSE CHECK'S END NOBODY HEARD (MOTIR-6848). Before the
@@ -309,6 +321,19 @@ export const pullRequestReconcileService = {
           // correctly, and for ever. Re-asking the host is what makes the state
           // right, and doing it before the gate sweep is what lets the gate be
           // derived from the repaired state in THIS pass rather than the next one.
+          // ⚠️ …AND THE RE-READ IS ASKED OF THE PULL REQUEST, NOT OF A CARD AT ONE STATUS
+          // (Bug MOTIR-11638). The latch below re-reads only for a card at `implemented`,
+          // so a card already In Review — every fix pushed after a review send-back — kept
+          // a lost completion for ever. This settles it first, for every open delivering
+          // pull request, and recomputes what the cards fold from it; the latch then finds
+          // nothing stale and judges the repaired set.
+          const settle = await settleLostCheckCompletions({
+            pullRequestId: candidate.id,
+            workspaceId: candidate.repo.workspaceId,
+            now,
+          });
+          if (settle.settled) summary.checkSetsSettled += 1;
+          summary.promoted += settle.promoted.length;
           summary.promoted += await promoteDeliveredCardsAfterReRead(candidate, now);
           summary.gatesRaised += await reconcileGatesForDeliveredCards(candidate);
           await markReconciled(candidate);

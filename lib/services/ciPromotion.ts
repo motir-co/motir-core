@@ -8,10 +8,10 @@ import { prCiStateAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
 import { refreshFeedbackComments } from './ciFeedbackComments';
 import {
   readReportedCheckSet,
-  reconcileRecordedCheckSet,
+  reReadCheckSetFromHost,
   shaToReReadFromHost,
+  type CheckSetReReadTarget,
 } from './checkSetReconcile';
-import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import {
   collectDeliveries,
   classifyDeliveries,
@@ -630,16 +630,16 @@ async function reconcileClaimedCompleteDeliveries(
     const candidates = await withSystemContext(async (tx) => {
       await bindWorkspaceContext(tx, ctx.workspaceId);
       const item = await workItemRepository.findById(workItemId, tx);
+      // ⚠️ THIS GATE IS THE LATCH'S, NOT THE RE-READ'S (Bug MOTIR-11638). Edge 2 asks
+      // only about a card it could promote, so it re-reads only at `implemented`. A
+      // card at any OTHER status — In Review after a send-back, above all — has its
+      // lost completions settled by the reconcile tick's status-independent sweep
+      // (`lostCheckCompletionService.settleLostCheckCompletions`), which runs for every
+      // open delivering pull request before this latch does.
       if (item?.status !== SOURCE_STATUS) return [];
       const byId = await collectDeliveries(item, tx);
 
-      const asking: {
-        pullRequestId: string;
-        commitSha: string;
-        installationId: string;
-        owner: string;
-        name: string;
-      }[] = [];
+      const asking: CheckSetReReadTarget[] = [];
       for (const [pullRequestId, pr] of byId) {
         // The members whose own recorded set makes a claim worth checking — it
         // asserts it is WHOLE (MOTIR-4199), or it has asserted it is STILL
@@ -670,28 +670,11 @@ async function reconcileClaimedCompleteDeliveries(
     });
 
     // Phase 2 — ask the host and write what is missing. ⚠️ THE ROUND TRIP IS
-    // OUTSIDE THE TRANSACTION, structurally: a network read inside
-    // `withSystemContext` would hold a connection open on GitHub's latency for
-    // every card arriving at Implemented.
+    // OUTSIDE THE TRANSACTION, structurally (`reReadCheckSetFromHost`): a network
+    // read inside `withSystemContext` would hold a connection open on GitHub's
+    // latency for every card arriving at Implemented.
     for (const c of candidates) {
-      const reported = await readCheckSet(c);
-      if (reported === null) continue;
-      const wrote = await withSystemContext(async (tx) => {
-        await bindWorkspaceContext(tx, ctx.workspaceId);
-        const recorded = await githubCheckRunRepository.listByPrAndSha(
-          c.pullRequestId,
-          c.commitSha,
-          tx,
-        );
-        return reconcileRecordedCheckSet({
-          pullRequestId: c.pullRequestId,
-          commitSha: c.commitSha,
-          reported,
-          recorded,
-          tx,
-        });
-      });
-      if (wrote.created + wrote.settled > 0) {
+      if (await reReadCheckSetFromHost(c, ctx.workspaceId, readCheckSet)) {
         changed.push({ pullRequestId: c.pullRequestId, commitSha: c.commitSha });
       }
     }

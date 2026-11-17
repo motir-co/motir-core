@@ -39,8 +39,13 @@ export const pullRequestReconcile = defineJob(
     // The summary IS the return value, persisted on the run's `job_run` ledger
     // row — the durable record of a replay, and of a row that failed, since a
     // per-row failure is counted rather than thrown.
-    // ⚠️ THE ID IS `-v5` BECAUSE THE RESULT SHAPE CHANGED AGAIN (MOTIR-9455): the
-    // summary gained `implemented` and `implementedRefused`. Before that it was
+    // ⚠️ THE ID IS `-v6` BECAUSE THE RESULT SHAPE CHANGED AGAIN (Bug MOTIR-11638): the
+    // summary gained `checkSetsSettled`, the open pull requests whose lost check
+    // completions the status-independent re-read settled. Its limb is the same host
+    // read and the same `pending`-guarded settle as the latch's re-read, followed by
+    // idempotent recomputes and the verdict latches, so re-executing it on a resumed
+    // run is safe. It was `-v5` because MOTIR-9455 added `implemented` and
+    // `implementedRefused`. Before that it was
     // `-v4`, because MOTIR-6848 added `queueExitsResolved`, and `-v3` before that,
     // for the reason below.
     //
@@ -60,7 +65,7 @@ export const pullRequestReconcile = defineJob(
     // at `implemented`, so a card the first pass promoted is no longer a candidate;
     // and the in-progress re-sync asks only about a card still at `in_progress`,
     // through a sync that reads `noop` for a card already where it would go.
-    return ctx.step.run('reconcile-open-deliveries-v5', () =>
+    return ctx.step.run('reconcile-open-deliveries-v6', () =>
       services.pullRequestReconcile.reconcileOpenDeliveries(),
     );
   },
