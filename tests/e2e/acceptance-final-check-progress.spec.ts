@@ -136,6 +136,10 @@ const acts = (page: Page) => rail(page).getByTestId('plan-change-acts');
 const factRows = (page: Page) => acts(page).getByTestId('plan-change-act-fact');
 const checkActs = (page: Page) => acts(page).getByTestId('plan-change-act-checking');
 const fixActs = (page: Page) => acts(page).getByTestId('plan-change-act-repairing');
+const repairGroups = (page: Page) =>
+  groups(page).filter({ has: page.locator('[data-kind="repair"]') });
+/** The check's own head: it names the plan's step, not a card. */
+const planHead = (page: Page) => checkGroups(page).filter({ hasText: PLAN_LINE });
 const groups = (page: Page) => rail(page).getByTestId('plan-narration-group');
 const checkGroups = (page: Page) =>
   groups(page).filter({ has: page.locator('[data-kind="check"]') });
@@ -266,7 +270,11 @@ async function openFinalCheck(page: Page, sse: SseFrameServer, hosted: Hosted): 
   await expect(checkActs(page)).toHaveCount(1, { timeout: 4 * POLL_MS });
   await expect(checkActs(page)).toContainText(CHECK_TAG);
   await expect(checkActs(page)).toContainText(PLAN_LINE);
+  // The plan-wide step's head now stands in for the stream's step row: the rail
+  // draws a session's step once, as its head (`PlanActRecord`'s `sessionHeads`).
   await hostedStep(page, hosted.job, 'final-check', { step: 'check' });
+  await expect(planHead(page)).toHaveCount(1, { timeout: 4 * POLL_MS });
+  await expect(checkActs(page)).toHaveCount(0);
   await factLands(page, sse, 0, fact('dryRun.started'), 'started', {});
   await factLands(
     page,
@@ -310,10 +318,9 @@ async function expectOneHeadPerCard(page: Page): Promise<void> {
     await expect(group.locator('[data-kind]')).toHaveText(CHECK_TAG);
     await expect(group.getByTestId('plan-narration-head-line')).toHaveText(headLine(title));
   }
-  // The check's own head names the plan's step, not a card.
-  const planHead = checkGroups(page).filter({ hasText: PLAN_LINE });
-  await expect(planHead).toHaveCount(1);
-  await expect(planHead.getByTestId('plan-narration-head-title')).toHaveCount(0);
+  await expect(planHead(page)).toHaveCount(1);
+  await expect(planHead(page).locator('[data-kind]')).toHaveText(CHECK_TAG);
+  await expect(planHead(page).getByTestId('plan-narration-head-title')).toHaveCount(0);
 }
 
 /** Neither the rail nor the progress card says "dry run" or "repair". */
@@ -359,7 +366,8 @@ test('the final check reads as one check & fix step: every card at once, each fi
   await chapter('Ask Motir AI for a plan — two containers and their four cards', async () => {
     hosted = await openRun(page, sse, 'final-check');
     await showCanvas(page);
-    for (const title of CHECKED) {
+    // The canvas draws the plan's top level: the two containers.
+    for (const title of [A, B]) {
       await expect(node(page, title)).toBeVisible({ timeout: 4 * POLL_MS });
     }
     await expect(factRows(page)).toHaveCount(0);
@@ -372,8 +380,8 @@ test('the final check reads as one check & fix step: every card at once, each fi
       await openFinalCheck(page, sse, hosted);
       await openEverySession(page, hosted);
       await expectOneHeadPerCard(page);
-      // One step: the check's own act, and no fix act after it.
-      await expect(checkActs(page)).toHaveCount(1);
+      // One step: no fix step after the check, as a head or as a row.
+      await expect(repairGroups(page)).toHaveCount(0);
       await expect(fixActs(page)).toHaveCount(0);
       await beat();
     },
@@ -435,7 +443,7 @@ test('the final check reads as one check & fix step: every card at once, each fi
       // The recheck resumed A2's own session: no second head, no new act.
       await expect(cardGroup(page, A2)).toHaveCount(1);
       await expect(checkGroups(page)).toHaveCount(CHECKED.length + 1);
-      await expect(checkActs(page)).toHaveCount(1);
+      await expect(repairGroups(page)).toHaveCount(0);
       await expect(fixActs(page)).toHaveCount(0);
       // A3 waits on B1, whose delivery did not change: no recheck names it.
       await expect(factRows(page).filter({ hasText: A3 })).toHaveCount(0);
@@ -465,7 +473,8 @@ test('the final check reads as one check & fix step: every card at once, each fi
         { title: B, count: 1 },
         hosted.refs.get(B)!,
       );
-      await expect(checkActs(page)).toContainText(PLAN_LINE);
+      await expect(planHead(page)).toHaveCount(1);
+      await expect(repairGroups(page)).toHaveCount(0);
       await expect(fixActs(page)).toHaveCount(0);
       await expectNoBannedWords(page, rail(page), paneProgress(page));
       await beat();
@@ -491,10 +500,11 @@ test('an older plan’s stream, with a repair pass after the check, still render
   await openEverySession(page, hosted);
   await expectOneHeadPerCard(page);
 
-  // What an older motir-ai sent after its check: a `repair` frame, then the
-  // repair's own facts under `dry_run_repair`.
+  // What an older motir-ai sent after its check: a `repair` frame and the repair
+  // session's own step, then the repair's facts under `dry_run_repair`.
   sse.write('repair', {});
-  await expect(fixActs(page)).toHaveCount(1, { timeout: 4 * POLL_MS });
+  await hostedStep(page, hosted.job, 'final-check-repair', { step: 'repair' });
+  await expect(repairGroups(page)).toHaveCount(1, { timeout: 4 * POLL_MS });
   await factLands(page, sse, 3, fact('repair.started'), 'started', {}, null, 'dry_run_repair');
   await factLands(
     page,
@@ -518,13 +528,13 @@ test('an older plan’s stream, with a repair pass after the check, still render
   );
 
   // Still one check & fix step, one head per card.
-  await expect(checkActs(page)).toHaveCount(1);
-  await expect(checkActs(page)).toContainText(CHECK_TAG);
   await expectOneHeadPerCard(page);
-  // The fix act that remains is worded as the validity re-open's fix: it never
+  // The fix head that remains is worded as the validity re-open's fix: it never
   // claims to fix what the final check found (MOTIR-11491 keeps it for that pass).
-  await expect(fixActs(page)).toContainText(tc('act.repairingLine'));
-  await expect(fixActs(page)).not.toContainText(PLAN_LINE);
+  const fix = repairGroups(page);
+  await expect(fix.locator('[data-kind]')).toHaveText(tc('act.repairing'));
+  await expect(fix.getByTestId('plan-narration-head-line')).toHaveText(tc('act.repairingLine'));
+  await expect(fix).not.toContainText(PLAN_LINE);
   await expect(workspace(page)).toBeVisible();
   await expect(paneProgress(page)).toBeVisible();
   expect(errors, 'no page or console error').toEqual([]);
