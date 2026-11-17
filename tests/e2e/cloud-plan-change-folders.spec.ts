@@ -1,6 +1,7 @@
 // FOLDERS ON THE PLAN-CHANGE OVERLAY — the assembled journey (Bug MOTIR-5782 ·
 // MOTIR-5796; design `design/ai-planning/design-notes.md` Part XVIII). The code is
-// MOTIR-5794's (`PlanChangeCanvas`), and its component tests prove the logic; this
+// MOTIR-5794's (the overlay's canvas, `PlanReviewCanvas` since MOTIR-11513), and its
+// component tests prove the logic; this
 // spec walks it in a real browser against a real server:
 //
 //   • the overlay canvas is MOUNTED — asserted first, so the spec cannot pass
@@ -201,9 +202,9 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   // ── 3. DRILL THE FOLDER: its child folder, its items, the filed proposal ─────
   // ⚠️ THE WAIT IS BACK, AND MOTIR-6155 IS WHY. This step carried a note saying a
   // `folderLoad` wait here would hang for the full test budget, because the
-  // follow-move had already read this level and `PlanChangeCanvas` serves a level
-  // it has read from `cacheRef`. That was true of `PlanChangeCanvas` and is not
-  // true of the pane any more: a PROPOSED plan is drawn by `PlanReviewCanvas`,
+  // follow-move had already read this level and the overlay's old no-plan canvas
+  // served a level it had read from a cache. That is not true of the pane any
+  // more: the plan is drawn by `PlanReviewCanvas`,
   // which keeps NO level cache — its `loadLevel` goes through `fetchRoadmapLevel`
   // every time, deliberately, so a drilled level can never be served stale. So the
   // GET does go out, and the repo's rule for a lazy-load applies again: await the

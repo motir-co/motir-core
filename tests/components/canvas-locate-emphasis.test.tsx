@@ -147,7 +147,8 @@ describe('the LOCATE control walks the emphasised set (Part XIII §4)', () => {
 });
 
 describe('every consumer that supplies NO emphasis keeps the `here` / `ready` ladder', () => {
-  // `PlanChangeCanvas` is the one existing `locatable` caller, and this card
+  // The planning overlay's canvas before a plan is the one existing `locatable`
+  // caller (`PlanReviewCanvas` with `prePlan`, MOTIR-11513), and this card
   // changes how targets are CHOSEN — so the untouched path is asserted by name.
   it('targets the ready node, and says the shipped words', async () => {
     render(<ProjectRoadmapCanvas loadLevel={async () => level} rootLabel="Roadmap" locatable />);

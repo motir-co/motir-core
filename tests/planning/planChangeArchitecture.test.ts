@@ -113,7 +113,9 @@ describe('the client/server boundary holds', () => {
     const storyClientModules = [
       'components/planning/PlanningWorkspaceHost.tsx',
       'components/planning/PlanChangeRail.tsx',
-      'components/planning/PlanChangeCanvas.tsx',
+      // The pane, before and after a plan exists (MOTIR-11513).
+      'components/planning/PlanProposalViews.tsx',
+      'components/planning/PlanReviewCanvas.tsx',
       'components/planning/PlanChangeConfirmBar.tsx',
       'lib/hooks/usePlanChangeConversation.ts',
       // The `@`-mention target picker (MOTIR-1491) joins the same island: its
@@ -158,7 +160,7 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     'lib/hooks/usePlanChangeConversation.ts',
     'components/planning/PlanningWorkspaceHost.tsx',
     'components/planning/PlanChangeRail.tsx',
-    'components/planning/PlanChangeCanvas.tsx',
+    'components/planning/PlanReviewCanvas.tsx',
     'components/planning/PlanChangeConfirmBar.tsx',
     'lib/planning/planChangeDiff.ts',
     // The `/ready` expansion nudge moved off the same dead delta by MOTIR-1747,
@@ -352,16 +354,21 @@ describe('the workspace is not hostage to the roadmap read', () => {
     const host = read(join(ROOT, 'components/planning/PlanningWorkspaceHost.tsx'));
     // Mounted unconditionally — no `hasItems ? canvas : empty` branch to revive.
     expect(host).toMatch(/loadingFallback=\{<PlanningCanvasSkeleton \/>\}/);
-    expect(host).toMatch(/emptyRoot=\{/);
+    // The empty-root statement rides the pane's "no plan" state (MOTIR-11513).
+    expect(host).toMatch(/emptyRoot: \(/);
 
     // …and the canvas honours both, with the shipped behaviour as the default so
     // the other four consumers of the reusable canvas are untouched.
     const canvas = read(join(ROOT, 'components/planning/ProjectRoadmapCanvas.tsx'));
     expect(canvas).toMatch(/loadingFallback \?\? <Spinner/);
     expect(canvas).toMatch(/!drilled && emptyRoot/);
-    expect(read(join(ROOT, 'components/planning/PlanChangeCanvas.tsx'))).toMatch(
+    // The pane forwards both to the canvas it mounts (MOTIR-11513).
+    expect(read(join(ROOT, 'components/planning/PlanProposalViews.tsx'))).toMatch(
       /loadingFallback=\{loadingFallback\}/,
     );
+    const review = read(join(ROOT, 'components/planning/PlanReviewCanvas.tsx'));
+    expect(review).toMatch(/loadingFallback=\{loadingFallback\}/);
+    expect(review).toMatch(/emptyRoot=\{prePlan\?\.emptyRoot\}/);
   });
 
   it('the ACCESS gate still resolves BEFORE the workspace renders', () => {
