@@ -7,13 +7,20 @@ import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import {
+  BOARD_MULTI_VALUE_GROUP_BYS,
   BOARD_SWIMLANE_NO_VALUE,
   type BoardCardDto,
   type BoardColumnDto,
   type BoardSwimlaneDto,
 } from '@/lib/dto/boards';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
+import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
+import { DifficultyIndicator } from '@/components/issues/DifficultyPicker';
+import type { ExecutorDto, WorkItemDifficultyDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { IssueType } from '@/lib/issues/parentRules';
+import { Bot, FolderGit2, Puzzle, Tag, User } from 'lucide-react';
 import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitives';
+import { useLaneDisplayLabel, useLaneValueKnown } from './laneDisplayLabel';
 import { LaneCell } from './LaneCell';
 import { BOARD_SCROLL_NAV_CLASS, useColumnArrows, useDragToPan } from './boardHorizontalNav';
 import type { LaneScrollStore } from './laneScrollStore';
@@ -112,7 +119,10 @@ export function LaneRow({
     () => false,
   );
 
-  const laneLabel = lane.label;
+  // The words the lane is named by — the header and every accessible name that
+  // names the lane read the same text (MOTIR-11585).
+  const laneLabel = useLaneDisplayLabel()(lane);
+  const laneKnown = useLaneValueKnown()(lane);
   return (
     <div
       data-testid={`swimlane-${lane.key}`}
@@ -125,7 +135,7 @@ export function LaneRow({
         tabIndex={0}
         aria-expanded={!collapsed}
         aria-label={t(collapsed ? 'laneExpand' : 'laneCollapse', {
-          label: lane.label,
+          label: laneLabel,
           count: lane.count,
         })}
         data-testid={`swimlane-head-${lane.key}`}
@@ -152,7 +162,7 @@ export function LaneRow({
             }`}
             aria-hidden
           />
-          <LaneLabel lane={lane} isCatchAll={isCatchAll} />
+          <LaneLabel lane={lane} text={laneLabel} known={laneKnown} isCatchAll={isCatchAll} />
           <span
             className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
             data-testid={`swimlane-count-${lane.key}`}
@@ -266,6 +276,7 @@ export function LaneRow({
                       onRetry={onRetryCell ? () => onRetryCell(column.id, lane.key) : undefined}
                       laneLabel={laneLabel}
                       columnName={column.name}
+                      perLaneIds={BOARD_MULTI_VALUE_GROUP_BYS.has(lane.kind)}
                     />
                   </div>
                 ))}
@@ -338,8 +349,20 @@ function LaneArrow({
   );
 }
 
-/** The lane header's group label, rendered by dimension (mock: `.lane-label`). */
-function LaneLabel({ lane, isCatchAll }: { lane: BoardSwimlaneDto; isCatchAll: boolean }) {
+/** The lane header's group label, rendered by dimension (mock: `.lane-label`).
+ *  `text` is the lane's display words (`useLaneDisplayLabel`); the shipped
+ *  dimensions' `text` is their projection label, unchanged. */
+function LaneLabel({
+  lane,
+  text,
+  known,
+  isCatchAll,
+}: {
+  lane: BoardSwimlaneDto;
+  text: string;
+  known: boolean;
+  isCatchAll: boolean;
+}) {
   if (isCatchAll) {
     return (
       <span className="inline-flex items-center gap-2 text-[13px] font-medium text-(--el-text-secondary)">
@@ -349,30 +372,75 @@ function LaneLabel({ lane, isCatchAll }: { lane: BoardSwimlaneDto; isCatchAll: b
         >
           –
         </span>
-        {lane.label}
+        {text}
       </span>
     );
   }
-  if (lane.kind === 'priority') {
-    return (
-      <span className="inline-flex items-center text-[13px] font-semibold text-(--el-text-strong)">
-        <PriorityValue priority={lane.key as WorkItemPriorityDto} />
-      </span>
-    );
+  const strong =
+    'inline-flex items-center gap-1.5 text-[13px] font-semibold text-(--el-text-strong)';
+  // An enum value this client does not know has no chip or icon to draw.
+  if (!known) return <span className={strong}>{text}</span>;
+  switch (lane.kind) {
+    case 'priority':
+      return (
+        <span className="inline-flex items-center text-[13px] font-semibold text-(--el-text-strong)">
+          <PriorityValue priority={lane.key as WorkItemPriorityDto} />
+        </span>
+      );
+    case 'epic':
+      return (
+        <span className={strong}>
+          <IssueTypeIcon type="epic" className="h-4 w-4 shrink-0" />
+          {text}
+        </span>
+      );
+    // MOTIR-11585 — each field lane wears the chip or glyph the item page shows.
+    case 'type':
+      return (
+        <span className="inline-flex items-center">
+          <WorkItemTypeChip type={lane.key as WorkItemTypeDto} />
+        </span>
+      );
+    case 'difficulty':
+      return (
+        <span className={strong}>
+          <DifficultyIndicator difficulty={lane.key as WorkItemDifficultyDto} />
+        </span>
+      );
+    case 'executor': {
+      const Glyph = (lane.key as ExecutorDto) === 'coding_agent' ? Bot : User;
+      return (
+        <span className={strong}>
+          <Glyph className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+          {text}
+        </span>
+      );
+    }
+    case 'kind':
+      return (
+        <span className={strong}>
+          <IssueTypeIcon type={lane.key as IssueType} className="h-4 w-4 shrink-0" />
+          {text}
+        </span>
+      );
+    case 'label':
+    case 'component':
+    case 'repository': {
+      const Glyph = lane.kind === 'label' ? Tag : lane.kind === 'component' ? Puzzle : FolderGit2;
+      return (
+        <span className={strong}>
+          <Glyph className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+          {text}
+        </span>
+      );
+    }
+    default:
+      // assignee and reporter — a person.
+      return (
+        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-(--el-text-strong)">
+          <Avatar name={text} />
+          {text}
+        </span>
+      );
   }
-  if (lane.kind === 'epic') {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-(--el-text-strong)">
-        <IssueTypeIcon type="epic" className="h-4 w-4 shrink-0" />
-        {lane.label}
-      </span>
-    );
-  }
-  // assignee
-  return (
-    <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-(--el-text-strong)">
-      <Avatar name={lane.label} />
-      {lane.label}
-    </span>
-  );
 }

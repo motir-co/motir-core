@@ -32,6 +32,7 @@ import type {
   BoardSwimlaneGroupByDto,
 } from '@/lib/dto/boards';
 import type { BoardColumnPageDto, MoveCardResultDto } from '@/lib/dto/boards';
+import { BOARD_CROSS_LANE_GROUP_BYS, BOARD_MULTI_VALUE_GROUP_BYS } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
@@ -78,12 +79,17 @@ import {
   findCardCell,
   findCardInCells,
   moveCardBetweenCells,
+  moveCardColumnInOtherLanes,
   overCardIdOf,
+  parseCellId,
+  placementId,
   reassignPatchForLane,
   reconcileCellCard,
   resolveSwimlaneDrop,
+  splitDragId,
   type CellAddress,
 } from './boardSwimlanes';
+import { useLaneDisplayLabel } from './laneDisplayLabel';
 import type { CellPages } from './boardCellPages';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
@@ -514,6 +520,11 @@ function BoardDnd({
   const openPeek = usePeekOpen();
   const groupBy = board.swimlaneGroupBy;
   const swimlaned = groupBy !== 'none';
+  // MOTIR-11585 — a grouping whose field a drop cannot write keeps every card in
+  // its lane (moves between columns still work), and a MULTI-VALUE grouping
+  // renders one card in each of its values' lanes, each with its own drag id.
+  const laneLocked = swimlaned && !BOARD_CROSS_LANE_GROUP_BYS.has(groupBy);
+  const multiValue = BOARD_MULTI_VALUE_GROUP_BYS.has(groupBy);
 
   const [columns, setColumns] = useState<BoardColumnDto[]>(board.columns);
   // Every plan that holds a loaded card (MOTIR-6268): the projection's, plus each
@@ -829,9 +840,13 @@ function BoardDnd({
     (cols: BoardColumnDto[], colId: string | null) => cols.find((c) => c.id === colId)?.name ?? '',
     [],
   );
+  const laneDisplayLabel = useLaneDisplayLabel();
   const laneLabel = useCallback(
-    (key: string) => board.swimlanes.find((l) => l.key === key)?.label ?? key,
-    [board.swimlanes],
+    (key: string) => {
+      const lane = board.swimlanes.find((l) => l.key === key);
+      return lane ? laneDisplayLabel(lane) : key;
+    },
+    [board.swimlanes, laneDisplayLabel],
   );
 
   const snapBack = useCallback(
@@ -907,13 +922,16 @@ function BoardDnd({
   // one axis of a revert. Reading the current cell (not the drop's target) is what
   // keeps the other axis' outcome: a refused transition returns the card to its
   // origin column in the lane the reassign left it in, and the mirror.
+  // `dragId` is the card's id, or — under a multi-value grouping — the placement
+  // id of the rendering that was dragged (MOTIR-11585), so the revert finds THAT
+  // lane's copy.
   const moveCardBackInCells = useCallback(
-    (workItemId: string, toward: (at: CellAddress) => CellAddress, originNextId: string | null) => {
+    (dragId: string, toward: (at: CellAddress) => CellAddress, originNextId: string | null) => {
       applyCellPages((current) => {
-        const at = findCardCell(current, workItemId);
+        const at = findCardCell(current, dragId);
         if (!at) return current;
         return moveCardBetweenCells(current, {
-          cardId: workItemId,
+          cardId: splitDragId(dragId).cardId,
           from: at,
           to: toward(at),
           overCardId: originNextId,
@@ -930,6 +948,10 @@ function BoardDnd({
   const runTransition = useCallback(
     async (args: {
       workItemId: string;
+      /** The dragged rendering's id — the card's id, or a placement id. */
+      dragId: string;
+      /** The lane the drag moved the card within (its other lanes follow). */
+      laneKey: string;
       seq: number;
       originColId: string;
       targetColId: string;
@@ -943,10 +965,21 @@ function BoardDnd({
       const latest = () => isLatestMove(args.workItemId, args.seq);
       const revert = () => {
         moveCardBackInCells(
-          args.workItemId,
+          args.dragId,
           (at) => ({ columnId: args.originColId, laneKey: at.laneKey }),
           args.originNextId,
         );
+        // A multi-value card's other renderings followed the move; they go back too.
+        if (multiValue) {
+          applyCellPages((current) =>
+            moveCardColumnInOtherLanes(current, {
+              cardId: args.workItemId,
+              fromColumnId: args.targetColId,
+              toColumnId: args.originColId,
+              exceptLaneKey: args.laneKey,
+            }),
+          );
+        }
         setColumns((prev) => transferCount(prev, args.targetColId, args.originColId));
       };
       try {
@@ -1002,6 +1035,7 @@ function BoardDnd({
       board.boardId,
       isLatestMove,
       moveCardBackInCells,
+      multiValue,
       showHeld,
       showMarkHeld,
       showPlanHeld,
@@ -1232,21 +1266,37 @@ function BoardDnd({
       if (!resolved) return;
       const { move } = resolved;
       const { columnChanged, laneChanged } = move;
+      // A lane-locked grouping (MOTIR-11585) offers no other lane as a target
+      // (the collision filter below); a drop that still lands across lanes is
+      // refused here, before anything is applied, so the card stays put.
+      if (laneLocked && laneChanged) return;
+      // The dragged rendering's card — `activeId` is a placement id under a
+      // multi-value grouping, the card's id otherwise.
+      const cardId = splitDragId(activeId).cardId;
       const rankChanged =
         !columnChanged && !laneChanged && move.originIndexInCell !== move.finalIndexInCell;
       if (!columnChanged && !laneChanged && !rankChanged) return;
       // The drop resolved, so the reconciled cells hold the card.
       const card = findCardInCells(resolved.cells, activeId)!;
 
-      const seq = nextMoveSeq(activeId);
+      const seq = nextMoveSeq(cardId);
       const from = { columnId: move.originColId, laneKey: move.originLaneKey };
       const to = { columnId: move.targetColId, laneKey: move.targetLaneKey };
       const overCardId = overCardIdOf(String(over.id));
       // Applied to the LATEST cells (not the snapshot), so a page that merged into
       // any cell while the drag was in flight is kept.
-      applyCellPages((current) =>
-        moveCardBetweenCells(current, { cardId: activeId, from, to, overCardId }),
-      );
+      applyCellPages((current) => {
+        const moved = moveCardBetweenCells(current, { cardId, from, to, overCardId });
+        // One transition moves every lane's rendering of a multi-value card.
+        return multiValue && columnChanged
+          ? moveCardColumnInOtherLanes(moved, {
+              cardId,
+              fromColumnId: from.columnId,
+              toColumnId: to.columnId,
+              exceptLaneKey: to.laneKey,
+            })
+          : moved;
+      });
       if (columnChanged) setColumns((prev) => transferCount(prev, from.columnId, to.columnId));
       if (laneChanged) shiftLaneCount(from.laneKey, to.laneKey);
       const target = cellSnapshot.cells[cellId(to.columnId, to.laneKey)];
@@ -1257,7 +1307,9 @@ function BoardDnd({
       if (columnChanged || rankChanged) {
         writes.push(
           runTransition({
-            workItemId: activeId,
+            workItemId: cardId,
+            dragId: multiValue ? placementId(cardId, to.laneKey) : cardId,
+            laneKey: to.laneKey,
             seq,
             originColId: move.originColId,
             targetColId: move.targetColId,
@@ -1273,7 +1325,7 @@ function BoardDnd({
       if (laneChanged) {
         writes.push(
           runReassign({
-            workItemId: activeId,
+            workItemId: cardId,
             seq,
             originLaneKey: move.originLaneKey,
             targetLaneKey: move.targetLaneKey,
@@ -1294,6 +1346,8 @@ function BoardDnd({
     },
     [
       swimlaned,
+      laneLocked,
+      multiValue,
       applyCellPages,
       colName,
       loadCellPage,
@@ -1332,7 +1386,8 @@ function BoardDnd({
       const col = cell ? columnsRef.current.find((c) => c.id === cell.columnId) : undefined;
       if (!cell || !col) return null;
       const cards = cellPagesRef.current.cells[cellId(cell.columnId, cell.laneKey)]?.cards ?? [];
-      const idx = cards.findIndex((c) => c.id === overId);
+      const overCardId = splitDragId(overId).cardId;
+      const idx = cards.findIndex((c) => c.id === overCardId);
       return { col: col.name, index: (idx < 0 ? cards.length : idx) + 1, count: cards.length };
     };
     const at = (overId: string) => {
@@ -1414,13 +1469,29 @@ function BoardDnd({
   // is outside every droppable (a gutter / past the last column) so a drop is
   // never lost. SWIMLANE mode keeps closestCorners — its (column×lane) grid was
   // tuned around it (handleDragOver) and is out of scope for this bug.
+  //
+  // A LANE-LOCKED grouping (MOTIR-11585 — reporter, kind, label, component,
+  // repository) offers only the dragged card's own lane: every droppable in
+  // another lane (its cells and the cards in them) is left out of the collision,
+  // so no other lane lights as a target and a drop can only change the column.
   const collisionDetectionStrategy: CollisionDetection = useCallback(
     (args) => {
-      if (swimlaned) return closestCorners(args);
+      if (swimlaned) {
+        if (!laneLocked) return closestCorners(args);
+        const pages = cellPagesRef.current;
+        const ownLane = findCardCell(pages, String(args.active.id))?.laneKey;
+        if (ownLane === undefined) return closestCorners(args);
+        const droppableContainers = args.droppableContainers.filter((container) => {
+          const id = String(container.id);
+          const lane = (parseCellId(id) ?? findCardCell(pages, id))?.laneKey;
+          return lane === ownLane;
+        });
+        return closestCorners({ ...args, droppableContainers });
+      }
       const pointer = pointerWithin(args);
       return pointer.length > 0 ? pointer : closestCorners(args);
     },
-    [swimlaned],
+    [swimlaned, laneLocked],
   );
 
   return (

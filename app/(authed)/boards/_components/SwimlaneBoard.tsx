@@ -33,8 +33,8 @@ import type { BoardCellPagesApi } from './useBoardCellPages';
 // state (`useBoardCellPages`, handed in as `cells`): a lane's cells fill with one
 // request when its cell row first comes into view (`cells.laneRef`), and each
 // later page lands in exactly one cell. The pinned header's loaded count is the
-// sum over that column's cells, over the column's full `totalCount`, so it can
-// never disagree with the cells beneath it. Each cell still virtualizes via
+// distinct cards over that column's cells, over the column's full `totalCount`, so
+// it can never disagree with the cells beneath it. Each cell still virtualizes via
 // `useRowWindow` (LaneCell, kept) so the DOM stays bounded. Without `cells` (a
 // render with no paging) a cell shows the column's loaded cards that sit in its
 // lane (`cardsInCell`).
@@ -84,14 +84,21 @@ export function SwimlaneBoard({
   const { collapsed, toggle } = useCollapsedLanes(boardId);
   const cardsOf = (columnId: string, laneKey: string) =>
     cells ? cells.cellState(columnId, laneKey).cards : cardsInCell(columns, columnId, laneKey);
-  // The pinned header's loaded count: on a paged grid the sum over the column's
-  // cells (its denominator is still the column's total); otherwise its page.
+  // The pinned header's loaded count: on a paged grid the DISTINCT cards loaded
+  // across the column's cells (its denominator is still the column's total);
+  // otherwise its page. Distinct, not a sum: under a multi-value grouping
+  // (label, component, repository — MOTIR-11585) one card renders in each of
+  // its values' lanes, and the column total counts it once, so the loaded half
+  // must too. Under a single-value grouping the two are the same number.
   const headerCount = (column: BoardColumnDto) => {
     if (!cells) {
       return { loaded: column.cards.length, hasMore: column.cursor !== null };
     }
-    let loaded = 0;
-    for (const lane of swimlanes) loaded += cells.cellSummary(column.id, lane.key).loaded;
+    const loadedIds = new Set<string>();
+    for (const lane of swimlanes) {
+      for (const card of cells.cellState(column.id, lane.key).cards) loadedIds.add(card.id);
+    }
+    const loaded = loadedIds.size;
     return { loaded, hasMore: loaded < column.totalCount };
   };
 

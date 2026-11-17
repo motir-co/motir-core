@@ -47,18 +47,50 @@ describe('GroupByControl', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('opens a menu of all four dimensions in order, the active one checked', () => {
+  it('opens a menu of every dimension in its sections, in order, the active one checked', () => {
     renderControl({ value: 'assignee' });
     const menu = openMenu();
     expect(trigger().getAttribute('aria-expanded')).toBe('true');
     const rows = within(menu).getAllByRole('menuitemradio');
-    expect(rows.map((r) => r.textContent)).toEqual(['None', 'Assignee', 'Epic', 'Priority']);
-    expect(rows.map((r) => r.getAttribute('aria-checked'))).toEqual([
-      'false',
-      'true',
-      'false',
-      'false',
+    expect(rows.map((r) => r.textContent)).toEqual([
+      'None',
+      'Assignee',
+      'Reporter',
+      'Epic',
+      'Priority',
+      'Kind',
+      'Type',
+      'Difficulty',
+      'Executor',
+      'Label',
+      'Component',
+      'Repository',
     ]);
+    expect(rows.filter((r) => r.getAttribute('aria-checked') === 'true')).toHaveLength(1);
+    expect(rows[1]!.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('groups the rows into named sections divided by a rule (MOTIR-11585)', () => {
+    renderControl({ value: 'label' });
+    const menu = openMenu();
+    const sections = within(menu).getAllByRole('group');
+    expect(sections.map((g) => g.getAttribute('aria-label'))).toEqual([
+      null,
+      'People',
+      'Planning',
+      'Tags',
+    ]);
+    expect(
+      within(sections[3]!)
+        .getAllByRole('menuitemradio')
+        .map((r) => r.textContent),
+    ).toEqual(['Label', 'Component', 'Repository']);
+    expect(
+      within(sections[3]!)
+        .getByRole('menuitemradio', { name: 'Label' })
+        .getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(trigger().textContent).toBe('Group by Label');
   });
 
   it('calls the change callback exactly once with a different dimension, then closes', () => {

@@ -11,7 +11,7 @@ import { SkeletonCard } from './BoardSkeleton';
 import { CellLoadMore, type CellControl } from './CellLoadMore';
 import { LaneCountBadge } from './LanePager';
 import type { CellPage } from './boardCellPages';
-import { cellId } from './boardSwimlanes';
+import { cellId, placementId } from './boardSwimlanes';
 
 // LaneCell (Subtask 3.3.5) — one `(column × lane)` cell of the swimlane grid per
 // `design/boards/swimlanes-wip.mock.html` (`.lane-col`). It is the swimlane
@@ -109,6 +109,7 @@ export function LaneCell({
   onRetry,
   laneLabel = '',
   columnName = '',
+  perLaneIds = false,
 }: {
   columnId: string;
   laneKey: string;
@@ -123,9 +124,14 @@ export function LaneCell({
   /** The lane and column the cell's controls name themselves by. */
   laneLabel?: string;
   columnName?: string;
+  /** A MULTI-VALUE grouping (MOTIR-11585) renders one card in several lanes, so
+   *  each rendering's drag id carries its lane (`placementId`) — two sortables
+   *  can never share an id. Off, the drag id is the card's id, as shipped. */
+  perLaneIds?: boolean;
 }) {
   const t = useTranslations('boards');
   const id = cellId(columnId, laneKey);
+  const dragIdOf = (card: BoardCardDto) => (perLaneIds ? placementId(card.id, laneKey) : card.id);
   const { setNodeRef, isOver } = useDroppable({ id });
   const rootRef = useRef<HTMLDivElement | null>(null);
   const setRoot = useCallback(
@@ -265,7 +271,7 @@ export function LaneCell({
         isOver ? 'bg-(--el-droptarget-bg) inset-ring-2 inset-ring-(--el-board-column-accent)' : ''
       }`}
     >
-      <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={cards.map(dragIdOf)} strategy={verticalListSortingStrategy}>
         <div
           ref={containerRef}
           data-testid={`cell-cards-${columnId}-${laneKey}`}
@@ -286,6 +292,7 @@ export function LaneCell({
               >
                 <BoardCard
                   card={card}
+                  sortableId={dragIdOf(card)}
                   assigneeName={
                     card.assigneeId ? (assigneeNameById.get(card.assigneeId) ?? null) : null
                   }

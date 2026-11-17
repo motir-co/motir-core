@@ -5,15 +5,19 @@ import {
   cellId,
   cellOfOverId,
   findCardCell,
+  findCardCells,
   findCardInCells,
   laneKeyOfCard,
   moveCardBetweenCells,
+  moveCardColumnInOtherLanes,
   overCardIdOf,
   parseCellId,
+  placementId,
   reassignPatchForLane,
   reconcileCellCard,
   resolveCellMove,
   resolveSwimlaneDrop,
+  splitDragId,
 } from '@/app/(authed)/boards/_components/boardSwimlanes';
 import {
   appendCellPage,
@@ -344,6 +348,19 @@ describe('reassignPatchForLane', () => {
     expect(reassignPatchForLane('epic', 'epic1')).toEqual({ parentId: 'epic1' });
     expect(reassignPatchForLane('epic', BOARD_SWIMLANE_NO_VALUE)).toEqual({ parentId: null });
     expect(reassignPatchForLane('none', 'whatever')).toEqual({});
+    // MOTIR-11585 — the leaf-only fields; the catch-all clears each.
+    expect(reassignPatchForLane('type', 'design')).toEqual({ type: 'design' });
+    expect(reassignPatchForLane('type', BOARD_SWIMLANE_NO_VALUE)).toEqual({ type: null });
+    expect(reassignPatchForLane('difficulty', 'high')).toEqual({ difficulty: 'high' });
+    expect(reassignPatchForLane('difficulty', BOARD_SWIMLANE_NO_VALUE)).toEqual({
+      difficulty: null,
+    });
+    expect(reassignPatchForLane('executor', 'human')).toEqual({ executor: 'human' });
+    expect(reassignPatchForLane('executor', BOARD_SWIMLANE_NO_VALUE)).toEqual({ executor: null });
+    // Fields a drop cannot write patch nothing (the board locks their lanes).
+    for (const g of ['reporter', 'kind', 'label', 'component', 'repository'] as const) {
+      expect(reassignPatchForLane(g, 'x')).toEqual({});
+    }
   });
 });
 
@@ -437,5 +454,90 @@ describe('resolveSwimlaneDrop (3.3.8 — resolve-on-drop, the loop fix)', () => 
   it('returns null when `over` resolves to neither a cell nor a card, or the card is in no cell', () => {
     expect(resolveSwimlaneDrop(snapshot, 'nonexistent-id', 'w1')).toBeNull();
     expect(resolveSwimlaneDrop(snapshot, cellId('c1', 'u1'), 'zz')).toBeNull();
+  });
+});
+
+// MOTIR-11585 — a multi-value grouping (label, component, repository) renders one
+// card in several lanes, so each rendering's drag id is a PLACEMENT id naming its
+// lane; a column move moves every rendering.
+describe('multi-value placements', () => {
+  // w1 carries two labels (l1, l2); w2 only l1.
+  //   (c1,l1) w1 w2   (c1,l2) w1   (c2,l1) —   (c2,l2) —
+  function tagged(): CellPages {
+    return pagesOf({
+      [cellId('c1', 'l1')]: page([
+        card({ id: 'w1', key: 1, swimlaneKey: 'l1' }),
+        card({ id: 'w2', key: 2, swimlaneKey: 'l1' }),
+      ]),
+      [cellId('c1', 'l2')]: page([card({ id: 'w1', key: 1, swimlaneKey: 'l2' })]),
+      [cellId('c2', 'l1')]: page([]),
+      [cellId('c2', 'l2')]: page([]),
+    });
+  }
+
+  it('round-trips a placement id, and a plain id carries no lane', () => {
+    expect(placementId('w1', 'l2')).toBe('w1@@l2');
+    expect(splitDragId('w1@@l2')).toEqual({ cardId: 'w1', laneKey: 'l2' });
+    expect(splitDragId('w1')).toEqual({ cardId: 'w1', laneKey: null });
+    expect(overCardIdOf('w1@@l2')).toBe('w1');
+  });
+
+  it('finds the rendering a placement id names, and every cell a card renders in', () => {
+    const pages = tagged();
+    expect(findCardCell(pages, placementId('w1', 'l2'))).toEqual(c('c1', 'l2'));
+    expect(findCardCell(pages, placementId('w1', 'l1'))).toEqual(c('c1', 'l1'));
+    expect(findCardCell(pages, placementId('w2', 'l2'))).toBeNull();
+    expect(findCardCells(pages, 'w1')).toEqual([c('c1', 'l1'), c('c1', 'l2')]);
+    expect(findCardInCells(pages, placementId('w1', 'l2'))!.id).toBe('w1');
+    expect(cellOfOverId(pages, placementId('w1', 'l2'))).toEqual(c('c1', 'l2'));
+  });
+
+  it('a column drop of one rendering resolves in its own lane', () => {
+    const r = resolveSwimlaneDrop(tagged(), cellId('c2', 'l2'), placementId('w1', 'l2'))!;
+    expect(r.move).toMatchObject({
+      originLaneKey: 'l2',
+      targetColId: 'c2',
+      targetLaneKey: 'l2',
+      columnChanged: true,
+      laneChanged: false,
+    });
+    expect(ids(at(r.cells, 'c2', 'l2').cards)).toEqual(['w1']);
+    // The other rendering is still where it was until the column follow-up runs.
+    expect(ids(at(r.cells, 'c1', 'l1').cards)).toEqual(['w1', 'w2']);
+  });
+
+  it('a drop on another lane’s card resolves the move under the target lane', () => {
+    const r = resolveSwimlaneDrop(tagged(), placementId('w2', 'l1'), placementId('w1', 'l2'))!;
+    expect(r.move).toMatchObject({ targetLaneKey: 'l1', laneChanged: true });
+  });
+
+  it('moves every other rendering to the new column, appended, and leaves the dragged lane', () => {
+    const moved = resolveSwimlaneDrop(tagged(), cellId('c2', 'l2'), placementId('w1', 'l2'))!.cells;
+    const next = moveCardColumnInOtherLanes(moved, {
+      cardId: 'w1',
+      fromColumnId: 'c1',
+      toColumnId: 'c2',
+      exceptLaneKey: 'l2',
+    });
+    expect(ids(at(next, 'c1', 'l1').cards)).toEqual(['w2']);
+    expect(ids(at(next, 'c2', 'l1').cards)).toEqual(['w1']);
+    expect(at(next, 'c2', 'l1').totalCount).toBe(1);
+    expect(ids(at(next, 'c2', 'l2').cards)).toEqual(['w1']);
+    // Its revert, with the columns swapped, takes every rendering back.
+    const back = moveCardColumnInOtherLanes(next, {
+      cardId: 'w1',
+      fromColumnId: 'c2',
+      toColumnId: 'c1',
+      exceptLaneKey: 'none-dragged',
+    });
+    expect(ids(at(back, 'c1', 'l1').cards)).toEqual(['w2', 'w1']);
+    expect(ids(at(back, 'c1', 'l2').cards)).toEqual(['w1']);
+    expect(findCardCells(back, 'w1').every((a) => a.columnId === 'c1')).toBe(true);
+  });
+
+  it('reconciles a confirmed card into every lane it renders in, each keeping its lane key', () => {
+    const next = reconcileCellCard(tagged(), card({ id: 'w1', key: 1, title: 'Renamed' }));
+    expect(at(next, 'c1', 'l1').cards[0]).toMatchObject({ title: 'Renamed', swimlaneKey: 'l1' });
+    expect(at(next, 'c1', 'l2').cards[0]).toMatchObject({ title: 'Renamed', swimlaneKey: 'l2' });
   });
 });

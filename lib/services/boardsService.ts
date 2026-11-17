@@ -64,6 +64,12 @@ import {
 import { buildDefaultBoard, DEFAULT_BOARD_NAME } from '@/lib/boards/defaultBoard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import {
+  buildFieldSwimlanes,
+  isFieldGroupBy,
+  resolveFieldLane,
+  resolveFieldLaneKeys,
+} from '@/lib/services/boardLanesService';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type {
   BoardCardDto,
@@ -2190,6 +2196,7 @@ export function resolveBoardLane(
   groupBy: BoardSwimlaneGroupByDto,
   laneKey: string,
 ): BoardLanePredicate {
+  if (isFieldGroupBy(groupBy)) return resolveFieldLane(groupBy, laneKey);
   const catchAll = laneKey === BOARD_SWIMLANE_NO_VALUE;
   if (groupBy === 'assignee') return { kind: 'assignee', assigneeId: catchAll ? null : laneKey };
   if (groupBy === 'epic') return { kind: 'epic', epicId: catchAll ? null : laneKey };
@@ -2359,6 +2366,9 @@ async function resolveSwimlaneKeys(
 ): Promise<Map<string, string>> {
   const keyByCard = new Map<string, string>();
   if (groupBy === 'none' || rows.length === 0) return keyByCard;
+  if (isFieldGroupBy(groupBy)) {
+    return resolveFieldLaneKeys(groupBy, rows[0]!.projectId, rows, ctx.workspaceId);
+  }
   if (groupBy === 'assignee') {
     for (const r of rows) keyByCard.set(r.id, r.assigneeId ?? BOARD_SWIMLANE_NO_VALUE);
   } else if (groupBy === 'priority') {
@@ -2414,6 +2424,18 @@ async function buildSwimlanes(
           ...(excludeIds ? { excludeIds } : {}),
         }
       : undefined;
+
+  // MOTIR-11585 — the work-item field lanes, over the same scope and filter.
+  if (isFieldGroupBy(groupBy)) {
+    return buildFieldSwimlanes(groupBy, {
+      projectId,
+      workspaceId: ctx.workspaceId,
+      statusKeys,
+      sprintId,
+      laneFilter,
+      nameOnly,
+    });
+  }
 
   if (groupBy === 'assignee') {
     const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
