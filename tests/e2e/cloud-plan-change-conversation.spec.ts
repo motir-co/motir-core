@@ -424,7 +424,9 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     await expect(confirmBar(page)).toHaveCount(0);
     await expect(canvas(page).getByTestId('plan-item-node')).toHaveCount(3);
     // The outcome is read as the WORD, so a colour-only treatment cannot pass.
-    await expect(workspace(page).getByTestId('plan-item-outcome').first()).toHaveText('accepted');
+    await expect(workspace(page).getByTestId('plan-item-outcome-tab').first()).toHaveText(
+      'accepted',
+    );
     await expect(canvas(page).getByText(REFINED_TITLE, { exact: true })).toBeVisible();
     page.off('request', countDocumentLoads);
     expect(documentLoads, 'Approve must not reload the page').toEqual([]);
