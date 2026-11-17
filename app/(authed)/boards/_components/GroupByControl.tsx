@@ -2,7 +2,22 @@
 
 import { useId, useState, type ComponentType } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, ChevronDown, Flag, LayoutGrid, User, Zap } from 'lucide-react';
+import {
+  Bot,
+  Check,
+  ChevronDown,
+  Flag,
+  FolderGit2,
+  Gauge,
+  Layers,
+  LayoutGrid,
+  Puzzle,
+  Shapes,
+  Tag,
+  User,
+  UserPen,
+  Zap,
+} from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Spinner } from '@/components/ui/Spinner';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -18,8 +33,9 @@ import type { BoardSwimlaneGroupByDto } from '@/lib/dto/boards';
 //     current dimension's glyph, "Group by" + the dimension, a chevron. Its
 //     accessible name is that visible text; below `sm` the words are visually
 //     dropped (glyph + chevron) but stay in the accessibility tree.
-//   - The menu: `role=menu` of four `menuitemradio` rows, the current one
-//     `aria-checked` with the trailing `Check`. Tab / Enter / Space and Escape are
+//   - The menu: `role=menu` of `menuitemradio` rows, the current one
+//     `aria-checked` with the trailing `Check`. Since MOTIR-11585 the rows sit in
+//     labelled `group`s divided by a rule — None, People, Planning, Tags. Tab / Enter / Space and Escape are
 //     the native button's and Radix's own (Escape returns focus to the trigger).
 //   - Writing (`disabled` — the container is re-laying): the glyph becomes the
 //     shipped `Spinner`, the trigger is disabled and `aria-busy`.
@@ -33,17 +49,75 @@ import type { BoardSwimlaneGroupByDto } from '@/lib/dto/boards';
 
 interface Dimension {
   value: BoardSwimlaneGroupByDto;
-  labelKey: 'groupByNone' | 'groupByAssignee' | 'groupByEpic' | 'groupByPriority';
+  labelKey:
+    | 'groupByNone'
+    | 'groupByAssignee'
+    | 'groupByEpic'
+    | 'groupByPriority'
+    | 'groupByReporter'
+    | 'groupByType'
+    | 'groupByDifficulty'
+    | 'groupByExecutor'
+    | 'groupByKind'
+    | 'groupByLabelField'
+    | 'groupByComponent'
+    | 'groupByRepository';
   icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }
 
-/** The four dimensions, in the design's order — the whole vocabulary. */
-export const GROUP_BY_DIMENSIONS: readonly Dimension[] = [
-  { value: 'none', labelKey: 'groupByNone', icon: LayoutGrid },
-  { value: 'assignee', labelKey: 'groupByAssignee', icon: User },
-  { value: 'epic', labelKey: 'groupByEpic', icon: Zap },
-  { value: 'priority', labelKey: 'groupByPriority', icon: Flag },
+/** A divided section of the menu (MOTIR-11585): its heading, then its rows.
+ *  The first section has no heading — None stands alone at the top. */
+interface DimensionSection {
+  id: 'none' | 'people' | 'planning' | 'tags';
+  headingKey?: 'groupBySectionPeople' | 'groupBySectionPlanning' | 'groupBySectionTags';
+  dimensions: readonly Dimension[];
+}
+
+/**
+ * The menu's sections, in order (MOTIR-11585). Twelve rows make the design's
+ * single list long, so it is divided into People, Planning and Tags — the card's
+ * grouping — with the four shipped rows keeping their relative order.
+ */
+export const GROUP_BY_SECTIONS: readonly DimensionSection[] = [
+  { id: 'none', dimensions: [{ value: 'none', labelKey: 'groupByNone', icon: LayoutGrid }] },
+  {
+    id: 'people',
+    headingKey: 'groupBySectionPeople',
+    dimensions: [
+      { value: 'assignee', labelKey: 'groupByAssignee', icon: User },
+      { value: 'reporter', labelKey: 'groupByReporter', icon: UserPen },
+    ],
+  },
+  {
+    id: 'planning',
+    headingKey: 'groupBySectionPlanning',
+    dimensions: [
+      { value: 'epic', labelKey: 'groupByEpic', icon: Zap },
+      { value: 'priority', labelKey: 'groupByPriority', icon: Flag },
+      { value: 'kind', labelKey: 'groupByKind', icon: Layers },
+      { value: 'type', labelKey: 'groupByType', icon: Shapes },
+      { value: 'difficulty', labelKey: 'groupByDifficulty', icon: Gauge },
+      { value: 'executor', labelKey: 'groupByExecutor', icon: Bot },
+    ],
+  },
+  {
+    id: 'tags',
+    headingKey: 'groupBySectionTags',
+    dimensions: [
+      { value: 'label', labelKey: 'groupByLabelField', icon: Tag },
+      { value: 'component', labelKey: 'groupByComponent', icon: Puzzle },
+      { value: 'repository', labelKey: 'groupByRepository', icon: FolderGit2 },
+    ],
+  },
 ];
+
+/** Every dimension, in menu order — the whole vocabulary. */
+export const GROUP_BY_DIMENSIONS: readonly Dimension[] = GROUP_BY_SECTIONS.flatMap(
+  (section) => section.dimensions,
+);
+
+const SECTION_HEADING_CLASS =
+  'px-(--spacing-control-x) pt-(--spacing-control-y) pb-(--spacing-control-y-2) text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase';
 
 const TRIGGER_CLASS =
   'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-control-x-12) font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:pointer-events-none data-[state=open]:bg-(--el-surface)';
@@ -124,31 +198,46 @@ export function GroupByControl({ value, onChange, disabled, readOnlyReason }: Gr
             align="end"
             className="p-0"
           >
-            <div className="p-1">
-              {GROUP_BY_DIMENSIONS.map((d) => {
-                const Icon = d.icon;
-                const selected = d.value === value;
-                return (
-                  <button
-                    key={d.value}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    onClick={() => choose(d.value)}
-                    className={ROW_CLASS}
-                  >
-                    <Icon className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
-                    <span className="min-w-0 flex-1">{t(d.labelKey)}</span>
-                    <Check
-                      aria-hidden
-                      className={cn(
-                        'h-4 w-4 shrink-0 text-(--el-accent-on-surface)',
-                        selected ? 'opacity-100' : 'opacity-0',
-                      )}
-                    />
-                  </button>
-                );
-              })}
+            <div className="max-h-[min(70vh,480px)] overflow-y-auto p-1">
+              {GROUP_BY_SECTIONS.map((section, index) => (
+                <div
+                  key={section.id}
+                  role="group"
+                  aria-label={section.headingKey ? t(section.headingKey) : undefined}
+                  className={cn(index > 0 && 'mt-1 border-t border-(--el-border-soft) pt-1')}
+                  data-testid={`board-group-by-section-${section.id}`}
+                >
+                  {section.headingKey ? (
+                    <div aria-hidden className={SECTION_HEADING_CLASS}>
+                      {t(section.headingKey)}
+                    </div>
+                  ) : null}
+                  {section.dimensions.map((d) => {
+                    const Icon = d.icon;
+                    const selected = d.value === value;
+                    return (
+                      <button
+                        key={d.value}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={selected}
+                        onClick={() => choose(d.value)}
+                        className={ROW_CLASS}
+                      >
+                        <Icon className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+                        <span className="min-w-0 flex-1">{t(d.labelKey)}</span>
+                        <Check
+                          aria-hidden
+                          className={cn(
+                            'h-4 w-4 shrink-0 text-(--el-accent-on-surface)',
+                            selected ? 'opacity-100' : 'opacity-0',
+                          )}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </Popover.Content>
         </Popover>

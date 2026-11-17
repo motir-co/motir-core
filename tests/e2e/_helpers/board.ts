@@ -602,7 +602,19 @@ export function waitForMoveWrite(page: Page, timeout = 5_000): Promise<unknown> 
  *  board-swimlanes.spec.ts (3.3.7). */
 export async function setGroupBy(
   page: Page,
-  label: 'None' | 'Assignee' | 'Epic' | 'Priority',
+  label:
+    | 'None'
+    | 'Assignee'
+    | 'Reporter'
+    | 'Epic'
+    | 'Priority'
+    | 'Kind'
+    | 'Type'
+    | 'Difficulty'
+    | 'Executor'
+    | 'Label'
+    | 'Component'
+    | 'Repository',
 ): Promise<void> {
   const control = page.getByRole('group', { name: 'Swimlane group by' });
   const patch = page.waitForResponse(

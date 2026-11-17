@@ -76,9 +76,22 @@ describe('board.swimlaneGroupBy enum column (Subtask 3.3.2)', () => {
     }
   });
 
-  it('exposes exactly the four stub-specified enum values', () => {
+  it('exposes exactly the stub-specified values plus the MOTIR-11585 fields', () => {
     expect(Object.values(BoardSwimlaneGroupBy).sort()).toEqual(
-      ['assignee', 'epic', 'none', 'priority'].sort(),
+      [
+        'assignee',
+        'epic',
+        'none',
+        'priority',
+        'reporter',
+        'type',
+        'difficulty',
+        'executor',
+        'kind',
+        'label',
+        'component',
+        'repository',
+      ].sort(),
     );
   });
 });

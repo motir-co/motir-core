@@ -193,6 +193,8 @@ function stubFetch(
     move?: () => Reply;
     cellPage?: (url: string) => Reply;
     failLane?: string;
+    board?: BoardProjectionDto;
+    lanes?: Record<string, BoardLanePageDto>;
   } = {},
 ) {
   const json = (status: number, body: unknown) =>
@@ -209,22 +211,22 @@ function stubFetch(
     const lane = /^\/api\/board\/lanes\/([^/]+)\/cells/.exec(url);
     if (lane) {
       if (lane[1] === opts.failLane) return json(500, {});
-      return json(200, lanePages[decodeURIComponent(lane[1]!)]);
+      return json(200, (opts.lanes ?? lanePages)[decodeURIComponent(lane[1]!)]);
     }
     if (url.startsWith('/api/board/columns/')) {
       const reply = await (opts.cellPage?.(url) ?? { status: 500, body: {} });
       return json(reply.status, reply.body);
     }
-    return json(200, projection);
+    return json(200, opts.board ?? projection);
   });
   vi.stubGlobal('fetch', fetchSpy);
   return fetchSpy;
 }
 
-async function renderBoard() {
+async function renderBoard(c1u2 = '1 of 5', [l1, l2] = ['u1', 'u2']) {
   render(<BoardContainer projectName="Motir" />);
-  await waitFor(() => expect(screen.getByTestId('cell-count-c1-u2').textContent).toBe('1 of 5'));
-  await waitFor(() => expect(screen.getByTestId('cell-count-c1-u1')).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId(`cell-count-c1-${l2}`).textContent).toBe(c1u2));
+  await waitFor(() => expect(screen.getByTestId(`cell-count-c1-${l1}`)).toBeTruthy());
 }
 
 async function drag(activeId: string, overId: string) {
@@ -662,5 +664,165 @@ describe('a drag across cells on a grouped board', () => {
     await act(async () => dnd.props!.onDragEnd({ active: { id: 'w1' }, over: { id: 'c1::u2' } }));
     await act(async () => {});
     expect(cardsIn('c1', 'u2')).toEqual(['PROD-4', 'PROD-1']);
+  });
+});
+
+// MOTIR-11585 — the new group-by fields. Only the fields a drop can write let a
+// card change lanes; the others are LANE-LOCKED (a drop can still change the
+// column). A multi-value field renders one card in several lanes, each rendering
+// dragged by its placement id, and one column move moves them all.
+describe('a drag under the field groupings', () => {
+  /** The fixture board re-grouped by `groupBy`, its lanes re-keyed l1/l2. */
+  function regrouped(groupBy: BoardProjectionDto['swimlaneGroupBy'], twoLabelCard = false) {
+    const kind = groupBy as BoardProjectionDto['swimlanes'][number]['kind'];
+    const board: BoardProjectionDto = {
+      ...projection,
+      swimlaneGroupBy: groupBy,
+      swimlanes: [
+        { key: 'u1', label: 'design', kind, count: 3 },
+        { key: 'u2', label: 'code', kind, count: 5 },
+      ],
+    };
+    if (!twoLabelCard) return { board, lanes: lanePages };
+    // w1 also carries the u2 label, so it renders in both lanes' To Do cells.
+    const lanes: Record<string, BoardLanePageDto> = {
+      ...lanePages,
+      u2: {
+        laneKey: 'u2',
+        cells: [
+          cell('c1', 'u2', [card('w1', 1, 'u2'), card('w4', 4, 'u2')], 6, 'CUR-c1u2'),
+          cell('c2', 'u2', [], 0),
+        ],
+      } as BoardLanePageDto,
+    };
+    return { board, lanes };
+  }
+
+  /** The same board with its lane keys u1/u2 renamed to real enum values — an
+   *  enum lane's header draws that value's chip or icon. */
+  function rekeyed<T>(fixture: T, l1: string, l2: string): T {
+    return JSON.parse(
+      JSON.stringify(fixture).replaceAll('"u1"', `"${l1}"`).replaceAll('"u2"', `"${l2}"`),
+    ) as T;
+  }
+
+  it('a lane-locked grouping refuses a cross-lane drop before applying anything', async () => {
+    const fetchSpy = stubFetch(regrouped('reporter'));
+    await renderBoard();
+    const before = counts();
+
+    await drag('w1', 'w4');
+
+    expect(cardsIn('c1', 'u1')).toEqual(['PROD-1', 'PROD-2']);
+    expect(cardsIn('c1', 'u2')).toEqual(['PROD-4']);
+    expect(counts()).toEqual(before);
+    expect(updateIssueAction).not.toHaveBeenCalled();
+    expect(moveCalls(fetchSpy)).toHaveLength(0);
+
+    // A column move inside its own lane is still a transition.
+    await drag('w1', 'c2::u1');
+    expect(cardsIn('c2', 'u1')).toEqual(['PROD-3', 'PROD-1']);
+    expect(moveCalls(fetchSpy)).toHaveLength(1);
+  });
+
+  it('a lane-locked grouping leaves every other lane out of the collision', async () => {
+    stubFetch(rekeyed(regrouped('kind'), 'task', 'bug'));
+    await renderBoard('1 of 5', ['task', 'bug']);
+    const rect = { top: 0, left: 0, bottom: 10, right: 10, width: 10, height: 10 };
+    const ids = ['c1::task', 'c2::task', 'c1::bug', 'w4', 'w2'];
+    const collide = (
+      dnd.props as unknown as {
+        collisionDetection: (args: unknown) => Array<{ id: string }>;
+      }
+    ).collisionDetection;
+    const hits = collide({
+      active: { id: 'w1' },
+      collisionRect: rect,
+      droppableRects: new Map(ids.map((id) => [id, rect])),
+      droppableContainers: ids.map((id) => ({ id })),
+      pointerCoordinates: { x: 5, y: 5 },
+    });
+    expect(hits.map((h) => h.id).sort()).toEqual(['c1::task', 'c2::task', 'w2']);
+    // A card in no loaded cell is not filtered.
+    const free = collide({
+      active: { id: 'zz' },
+      collisionRect: rect,
+      droppableRects: new Map(ids.map((id) => [id, rect])),
+      droppableContainers: ids.map((id) => ({ id })),
+      pointerCoordinates: { x: 5, y: 5 },
+    });
+    expect(free).toHaveLength(ids.length);
+  });
+
+  it('a cross-lane grouping keeps every lane in the collision', async () => {
+    stubFetch();
+    await renderBoard();
+    const rect = { top: 0, left: 0, bottom: 10, right: 10, width: 10, height: 10 };
+    const ids = ['c1::u1', 'c1::u2', 'w4'];
+    const collide = (
+      dnd.props as unknown as { collisionDetection: (args: unknown) => Array<{ id: string }> }
+    ).collisionDetection;
+    const hits = collide({
+      active: { id: 'w1' },
+      collisionRect: rect,
+      droppableRects: new Map(ids.map((id) => [id, rect])),
+      droppableContainers: ids.map((id) => ({ id })),
+      pointerCoordinates: { x: 5, y: 5 },
+    });
+    expect(hits).toHaveLength(ids.length);
+  });
+
+  it('a type lane drop reassigns the type, never the board move', async () => {
+    const fetchSpy = stubFetch(rekeyed(regrouped('type'), 'code', 'design'));
+    await renderBoard('1 of 5', ['code', 'design']);
+
+    await drag('w1', 'c1::design');
+
+    expect(cardsIn('c1', 'design')).toEqual(['PROD-4', 'PROD-1']);
+    expect(updateIssueAction).toHaveBeenCalledWith({ id: 'w1', type: 'design' });
+    expect(moveCalls(fetchSpy)).toHaveLength(0);
+  });
+
+  it('a multi-value card moves column in every lane it renders in, and a refusal moves them all back', async () => {
+    let refuse!: (r: { status: number; body: unknown }) => void;
+    const fetchSpy = stubFetch({
+      ...regrouped('label', true),
+      move: () => new Promise((resolve) => (refuse = resolve)),
+    });
+    await renderBoard('2 of 6');
+    expect(cardsIn('c1', 'u1')).toEqual(['PROD-1', 'PROD-2']);
+    expect(cardsIn('c1', 'u2')).toEqual(['PROD-1', 'PROD-4']);
+
+    act(() => dnd.props!.onDragStart({ active: { id: 'w1@@u2' } }));
+    await act(async () => {
+      dnd.props!.onDragEnd({ active: { id: 'w1@@u2' }, over: { id: 'c2::u2' } });
+    });
+
+    // Optimistically both renderings are in In Progress, the column counted once.
+    expect(cardsIn('c2', 'u2')).toEqual(['PROD-1']);
+    expect(cardsIn('c2', 'u1')).toEqual(['PROD-3', 'PROD-1']);
+    expect(count('board-count-c2')).toBe('2');
+    const body = JSON.parse(String(moveCalls(fetchSpy)[0]![1]!.body));
+    expect(body).toMatchObject({ workItemId: 'w1', toColumnId: 'c2' });
+
+    // The refusal takes every rendering home.
+    await act(async () => refuse({ status: 409, body: { title: 'Refused' } }));
+    await waitFor(() => expect(cardsIn('c1', 'u2')).toEqual(['PROD-1', 'PROD-4']));
+    expect(cardsIn('c1', 'u1')).toContain('PROD-1');
+    expect(cardsIn('c2', 'u1')).toEqual(['PROD-3']);
+    expect(count('board-count-c2')).toBe('1');
+  });
+
+  it('a multi-value grouping is lane-locked: a drop into another tag lane writes nothing', async () => {
+    const fetchSpy = stubFetch(regrouped('label', true));
+    await renderBoard('2 of 6');
+    await drag('w1@@u1', 'w3');
+    expect(cardsIn('c2', 'u1')).toEqual(['PROD-1', 'PROD-3']);
+    expect(cardsIn('c2', 'u2')).toEqual(['PROD-1']);
+    expect(moveCalls(fetchSpy)).toHaveLength(1);
+    updateIssueAction.mockClear();
+    await drag('w2', 'c1::u2');
+    expect(cardsIn('c1', 'u2')).toEqual(['PROD-4']);
+    expect(updateIssueAction).not.toHaveBeenCalled();
   });
 });

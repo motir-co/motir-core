@@ -4379,6 +4379,17 @@ enum BoardSwimlaneGroupBy {
   assignee
   epic
   priority
+  // MOTIR-11585 — the work-item fields a board can also group by. Single-value
+  // fields put a card in one lane; label, component and repository are
+  // MULTI-VALUE, so a card sits in the lane of each of its values.
+  reporter
+  type
+  difficulty
+  executor
+  kind
+  label
+  component
+  repository
 
   @@map("board_swimlane_group_by")
 }

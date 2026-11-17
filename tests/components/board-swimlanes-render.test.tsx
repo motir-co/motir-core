@@ -489,3 +489,81 @@ describe('laneScrollStore', () => {
     expect(seen).toHaveBeenCalledTimes(2);
   });
 });
+
+// MOTIR-11585 — the field lanes' headers: each wears the chip or glyph the item
+// page shows, names its value in the reader's locale, and each new catch-all
+// reads its own translated "No …".
+describe('SwimlaneBoard field lane headers', () => {
+  function renderLanes(swimlanes: BoardSwimlaneDto[]) {
+    return render(
+      <DndContext>
+        <SwimlaneBoard
+          boardId="b-fields"
+          columns={COLUMNS}
+          swimlanes={swimlanes}
+          assigneeNameById={new Map()}
+          onOpenQuickView={noop}
+          onSetWipLimit={noop}
+          activeCardId={null}
+          overLaneKey={null}
+        />
+      </DndContext>,
+    );
+  }
+  const head = (key: string) => screen.getByTestId(`swimlane-headcontent-${key}`);
+  const lane = (kind: BoardSwimlaneDto['kind'], key: string, label = key): BoardSwimlaneDto => ({
+    key,
+    label,
+    kind,
+    count: 1,
+  });
+
+  it('enum lanes read their translated value, their catch-alls their own name', () => {
+    renderLanes([
+      lane('type', 'code'),
+      lane('difficulty', 'high'),
+      lane('executor', 'coding_agent'),
+      lane('executor', 'human'),
+      lane('type', BOARD_SWIMLANE_NO_VALUE, 'No type'),
+    ]);
+    expect(head('code').textContent).toContain('Code');
+    expect(head('high').textContent).toMatch(/High/);
+    expect(head('coding_agent').textContent).not.toContain('coding_agent');
+    expect(head('coding_agent').querySelector('svg.lucide-bot')).not.toBeNull();
+    expect(head('human').querySelector('svg.lucide-user')).not.toBeNull();
+    expect(head(BOARD_SWIMLANE_NO_VALUE).textContent).toContain('No type');
+    // The collapse control is named by the same words.
+    expect(screen.getByRole('button', { name: /Collapse.*Code|Code.*collapse/i })).toBeTruthy();
+  });
+
+  it('kind lanes wear the kind’s icon; tag lanes their glyph and the server’s name', () => {
+    renderLanes([
+      lane('kind', 'story'),
+      lane('label', 'l1', 'ui'),
+      lane('component', 'k1', 'Billing'),
+      lane('repository', 'r1', 'motir-core'),
+      lane('reporter', 'p1', 'Ana Ruiz'),
+      lane('label', BOARD_SWIMLANE_NO_VALUE, 'No label'),
+    ]);
+    expect(head('story').textContent).toContain('Story');
+    expect(head('l1').querySelector('svg.lucide-tag')).not.toBeNull();
+    expect(head('l1').textContent).toContain('ui');
+    expect(head('k1').querySelector('svg.lucide-puzzle')).not.toBeNull();
+    expect(
+      head('r1').querySelector('svg.lucide-folder-git-2, svg.lucide-folder-git2'),
+    ).not.toBeNull();
+    expect(head('r1').textContent).toContain('motir-core');
+    expect(head('p1').textContent).toContain('Ana Ruiz');
+    expect(head(BOARD_SWIMLANE_NO_VALUE).textContent).toContain('No label');
+  });
+
+  it('an enum value the glossary does not know falls back to the server label', () => {
+    renderLanes([
+      lane('kind', 'theme', 'Theme (new)'),
+      lane('kind', BOARD_SWIMLANE_NO_VALUE, 'None'),
+    ]);
+    expect(head('theme').textContent).toContain('Theme (new)');
+    // A catch-all with no translated name of its own keeps the server's label.
+    expect(head(BOARD_SWIMLANE_NO_VALUE).textContent).toContain('None');
+  });
+});
