@@ -3,10 +3,11 @@ import { db } from '@/lib/db';
 import { boardsService } from '@/lib/services/boardsService';
 import { resolveStoredBoardFilter } from '@/lib/services/boardStoredFilter';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
+import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import type { FilterAst, FilterEnvelope } from '@/lib/filters/ast';
+import { encodeFilterParam, type FilterAst, type FilterEnvelope } from '@/lib/filters/ast';
 import type { BoardProjectionDto } from '@/lib/dto/boards';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
@@ -17,11 +18,12 @@ import { projectAccessData } from '@/tests/helpers/projectAccess';
 import { consentedVisitor } from '../visitor/_consentedVisitor';
 
 // The board READ of a board's STORED filter (Story MOTIR-10560 · Subtask
-// MOTIR-11332). `board.filter` is a second predicate beside the toolbar's,
-// compiled on its own and ANDed into every card read: each column's cards and
-// `totalCount`, every lane page, the swimlane aggregates and the derived "No
-// epic" total, the scrum sprint points, and the public project page's board
-// preview. A stale condition matches nothing; an unreadable stored envelope
+// MOTIR-11332). `board.filter` is the board's own predicate, compiled on its own
+// and applied to every card read: each column's cards and `totalCount`, every
+// lane page, the swimlane aggregates and the derived "No epic" total, the scrum
+// sprint points, and the public project page's board preview. A header filter
+// (an inline AST or a saved filter) REPLACES it rather than narrowing it, and
+// `boardFilter=off` lifts it (MOTIR-11564). A stale condition matches nothing; an unreadable stored envelope
 // narrows the board to nothing. Real Postgres (no mocks), per the convention;
 // `createTestProject` seeds the default kanban board (one column per status).
 
@@ -388,7 +390,7 @@ describe('getBoard — a kanban board with a stored filter', () => {
   });
 });
 
-describe('getBoard — stored filter AND toolbar filter', () => {
+describe('getBoard — a header filter replaces the stored filter (MOTIR-11564)', () => {
   // Cards spanning kind × priority so every pairing has a distinct answer.
   async function seed(fx: Fixture) {
     await card(fx, { kind: 'bug', priority: 'high', title: 'bug-high' });
@@ -416,25 +418,24 @@ describe('getBoard — stored filter AND toolbar filter', () => {
   );
 
   it.each([
-    // stored ∧ toolbar, each side evaluated on its own
-    ['and', 'and', storedAnd, toolbarAnd, ['bug-high']],
-    ['and', 'or', storedAnd, toolbarOr, []],
+    // The header filter's own answer, whatever the stored filter says.
+    ['and', 'and', storedAnd, toolbarAnd, ['bug-high', 'story-medium']],
+    ['and', 'or', storedAnd, toolbarOr, ['bug-low', 'story-medium', 'task-low']],
     ['or', 'and', storedOr, toolbarAnd, ['bug-high', 'story-medium']],
-    ['or', 'or', storedOr, toolbarOr, ['bug-low', 'story-medium']],
-  ])(
-    'stored %s ∧ toolbar %s returns the intersection',
-    async (_s, _t, stored, toolbar, expected) => {
-      const fx = await makeFixture();
-      await seed(fx);
-      await store(fx, stored);
+    ['or', 'or', storedOr, toolbarOr, ['bug-low', 'story-medium', 'task-low']],
+  ])('stored %s, header %s: the header filter alone', async (_s, _t, stored, toolbar, expected) => {
+    const fx = await makeFixture();
+    await seed(fx);
+    await store(fx, stored);
 
-      const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, { ast: toolbar });
-      expect(titles(board)).toEqual(expected);
-      expect(total(board)).toBe(expected.length);
-    },
-  );
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, { ast: toolbar });
+    expect(titles(board)).toEqual(expected);
+    expect(total(board)).toBe(expected.length);
+    // The board still reports its own filter, so the client can compare.
+    expect(board.storedFilter?.envelope).toEqual(stored);
+  });
 
-  it('a toolbar filter alone still narrows the epic lanes, with no stored filter', async () => {
+  it('a header filter alone still narrows the epic lanes, with no stored filter', async () => {
     const fx = await makeFixture();
     await card(fx, { kind: 'bug', title: 'Bug' });
     await card(fx, { kind: 'task', title: 'Task' });
@@ -446,19 +447,65 @@ describe('getBoard — stored filter AND toolbar filter', () => {
     expect(board.swimlanes.map((l) => [l.label, l.count])).toEqual([['No epic', 1]]);
   });
 
-  it('falls back to the stored-filtered board when the toolbar filter is removed', async () => {
+  it('Kind is Bug stored, Assignee is me in the header: every card of mine, counts over that set', async () => {
+    const fx = await makeFixture();
+    const mine = async (kind: WorkItemKind, title: string, status = 'todo') => {
+      const id = await card(fx, { kind, title, status });
+      await adminDb.workItem.update({ where: { id }, data: { assigneeId: fx.ctx.userId } });
+    };
+    await mine('bug', 'My bug');
+    await mine('task', 'My task');
+    await mine('story', 'My done story', 'done');
+    await card(fx, { kind: 'bug', title: 'Someone’s bug' });
+    await store(fx, BUGS);
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+      ast: ast('and', { field: 'assignee', operator: 'is_any_of', value: [fx.ctx.userId] }),
+    });
+    expect(titles(board)).toEqual(['My bug', 'My done story', 'My task']);
+    expect(col(board, 'todo').totalCount).toBe(2);
+    expect(col(board, 'done').totalCount).toBe(1);
+  });
+
+  it('a saved filter replaces the stored filter the same way: exactly the mobile cards', async () => {
+    const fx = await makeFixture();
+    const mobile = await label(fx, 'mobile');
+    await card(fx, { kind: 'bug', title: 'Mobile bug', labelIds: [mobile] });
+    await card(fx, { kind: 'task', title: 'Mobile task', labelIds: [mobile] });
+    await card(fx, { kind: 'bug', title: 'Web bug' });
+    await store(fx, BUGS);
+    const saved = await savedFiltersService.create(
+      fx.projectKey,
+      {
+        name: 'Mobile',
+        visibility: 'private',
+        filterParam: encodeFilterParam(
+          ast('and', { field: 'lbl', operator: 'is_any_of', value: [mobile] }),
+        ),
+      },
+      fx.ctx,
+    );
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+      savedFilterId: saved.id,
+    });
+    expect(titles(board)).toEqual(['Mobile bug', 'Mobile task']);
+    expect(total(board)).toBe(2);
+  });
+
+  it('falls back to the stored-filtered board when the header filter is removed', async () => {
     const fx = await makeFixture();
     await seed(fx);
     await store(fx, storedOr);
     const filtered = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
       ast: toolbarOr,
     });
-    expect(titles(filtered)).toEqual(['bug-low', 'story-medium']);
+    expect(titles(filtered)).toEqual(['bug-low', 'story-medium', 'task-low']);
     const cleared = await boardsService.getBoard(fx.projectId, fx.ctx);
     expect(titles(cleared)).toEqual(['bug-high', 'bug-low', 'story-medium']);
   });
 
-  it('keeps the toolbar filter’s 422 for an invalid inline filter', async () => {
+  it('keeps the header filter’s 422 for an invalid inline filter', async () => {
     const fx = await makeFixture();
     await store(fx, BUGS);
     await expect(
@@ -466,6 +513,124 @@ describe('getBoard — stored filter AND toolbar filter', () => {
         ast: ast('and', { field: 'kind', operator: 'gt', value: 3 }),
       }),
     ).rejects.toMatchObject({ code: 'UNKNOWN_FILTER_OPERATOR' });
+  });
+
+  it('pages a column and a cell through the header filter’s set, not the stored one', async () => {
+    const fx = await makeFixture();
+    for (let i = 0; i < 4; i++) await card(fx, { kind: 'bug', title: `Bug ${i}` });
+    for (let i = 0; i < 12; i++) {
+      await card(fx, { kind: 'task', title: `Task ${i}`, priority: 'high' });
+    }
+    await store(fx, BUGS);
+    const header = { ast: ast('and', { field: 'kind', operator: 'is_any_of', value: ['task'] }) };
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, header);
+    const todo = col(board, 'todo');
+    expect(todo.totalCount).toBe(12);
+    expect(todo.cards).toHaveLength(10);
+    const page = await boardsService.getColumnPage(
+      fx.projectId,
+      fx.ctx,
+      board.boardId,
+      todo.id,
+      todo.cursor!,
+      header,
+    );
+    expect(page.totalCount).toBe(12);
+    expect(page.cards).toHaveLength(2);
+    expect([...todo.cards, ...page.cards].every((c) => c.title.startsWith('Task'))).toBe(true);
+
+    await adminDb.board.update({
+      where: { id: fx.boardId },
+      data: { swimlaneGroupBy: 'priority' },
+    });
+    const cell = await boardsService.getCellPage(
+      fx.projectId,
+      fx.ctx,
+      board.boardId,
+      todo.id,
+      'high',
+      undefined,
+      header,
+    );
+    expect(cell.totalCount).toBe(12);
+    expect(cell.cards.every((c) => c.title.startsWith('Task'))).toBe(true);
+  });
+});
+
+describe('getBoard — the board filter turned off (boardFilter=off, MOTIR-11564)', () => {
+  it('with no header filter: every card in the board’s scope', async () => {
+    const fx = await makeFixture();
+    await card(fx, { kind: 'bug', title: 'Bug' });
+    await card(fx, { kind: 'task', title: 'Task' });
+    await card(fx, { kind: 'story', title: 'Story', status: 'done' });
+    await store(fx, BUGS);
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+      storedFilterOff: true,
+    });
+    expect(titles(board)).toEqual(['Bug', 'Story', 'Task']);
+    expect(total(board)).toBe(3);
+    expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [], labels: [] });
+  });
+
+  it('beside a header filter: the header filter alone', async () => {
+    const fx = await makeFixture();
+    await card(fx, { kind: 'bug', title: 'Bug' });
+    await card(fx, { kind: 'task', title: 'Task' });
+    await store(fx, BUGS);
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+      ast: ast('and', { field: 'kind', operator: 'is_any_of', value: ['task'] }),
+      storedFilterOff: true,
+    });
+    expect(titles(board)).toEqual(['Task']);
+  });
+
+  it('lifts an unreadable stored filter too (it narrows to nothing otherwise)', async () => {
+    const fx = await makeFixture();
+    await card(fx, { kind: 'bug', title: 'Bug' });
+    await store(fx, { v: 'v2', c: 'and', f: [] });
+    expect(total(await boardsService.getBoard(fx.projectId, fx.ctx))).toBe(0);
+    const off = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+      storedFilterOff: true,
+    });
+    expect(titles(off)).toEqual(['Bug']);
+    expect(off.storedFilter?.staleConditions).toEqual([
+      { index: null, field: null, reason: 'invalid' },
+    ]);
+  });
+
+  it('counts the swimlanes and pages every lane over the whole scope', async () => {
+    const fx = await makeFixture();
+    await card(fx, { kind: 'bug', title: 'Bug high', priority: 'high' });
+    await card(fx, { kind: 'task', title: 'Task high', priority: 'high' });
+    await card(fx, { kind: 'task', title: 'Task low', priority: 'low' });
+    await adminDb.board.update({
+      where: { id: fx.boardId },
+      data: { swimlaneGroupBy: 'priority', filter: BUGS as never },
+    });
+    const off = { storedFilterOff: true };
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, off);
+    expect(board.swimlanes.map((l) => [l.key, l.count])).toEqual([
+      ['high', 2],
+      ['low', 1],
+    ]);
+    const lane = await boardsService.getLanePage(fx.projectId, fx.ctx, board.boardId, 'high', off);
+    expect(lane.cells.flatMap((c) => c.cards.map((x) => x.title)).sort()).toEqual([
+      'Bug high',
+      'Task high',
+    ]);
+  });
+
+  it('is ignored on a board with no stored filter', async () => {
+    const fx = await makeFixture();
+    await card(fx, { kind: 'bug', title: 'Bug' });
+    await card(fx, { kind: 'task', title: 'Task' });
+    const bare = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const off = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+      storedFilterOff: true,
+    });
+    expect(off).toEqual(bare);
   });
 });
 
@@ -492,6 +657,37 @@ describe('getBoard — a scrum board with a stored filter', () => {
     expect(board.sprint!.points).toMatchObject({ committed: 8, completed: 5 });
     expect(board.sprint!.columnPoints[col(board, 'todo').id]).toBe(3);
     expect(board.sprint!.columnPoints[col(board, 'done').id]).toBe(5);
+  });
+
+  it('a header filter replaces it within the sprint, and the points follow the shown set', async () => {
+    const fx = await makeFixture();
+    const sprintId = await activeSprint(fx);
+    const mobile = await label(fx, 'mobile');
+    await card(fx, { kind: 'bug', title: 'Mobile bug', sprintId, points: 3, labelIds: [mobile] });
+    await card(fx, { kind: 'bug', title: 'Web bug', sprintId, points: 5 });
+    await card(fx, { title: 'Web task', status: 'done', sprintId, points: 8 });
+    await card(fx, { kind: 'bug', title: 'Backlog bug', points: 13 });
+    await store(fx, env('and', ['lbl', 'is_any_of', [mobile]]));
+
+    const header = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+      ast: ast('and', { field: 'kind', operator: 'is_any_of', value: ['bug'] }),
+    });
+    expect(titles(header)).toEqual(['Mobile bug', 'Web bug']);
+    expect(header.sprint!.points).toMatchObject({ committed: 8, completed: 0 });
+    expect(header.sprint!.columnPoints[col(header, 'todo').id]).toBe(8);
+
+    const off = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+      storedFilterOff: true,
+    });
+    expect(titles(off)).toEqual(['Mobile bug', 'Web bug', 'Web task']);
+    expect(off.sprint!.points).toMatchObject({ committed: 16, completed: 8 });
+
+    const both = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+      ast: ast('and', { field: 'kind', operator: 'is_none_of', value: ['bug'] }),
+      storedFilterOff: true,
+    });
+    expect(titles(both)).toEqual(['Web task']);
+    expect(both.sprint!.points).toMatchObject({ committed: 8, completed: 8 });
   });
 
   it('reports storedFilter: null on the no-active-sprint frame of an unfiltered board', async () => {
@@ -630,6 +826,53 @@ describe('the stored filter for a Visitor and on the public preview', () => {
     // The Visitor's lanes count the same stored-filtered set.
     expect(board.swimlanes.reduce((sum, l) => sum + l.count, 0)).toBe(1);
     expect(board.storedFilter).toEqual({ envelope: BUGS, staleConditions: [], labels: [] });
+  });
+
+  it('a Visitor’s inline header filter replaces it; a saved filter never applies; a private epic stays hidden', async () => {
+    const fx = await publicFixture();
+    const previousCloud = process.env['MOTIR_CLOUD'];
+    process.env['MOTIR_CLOUD'] = 'true';
+    onTestFinished(() => {
+      if (previousCloud === undefined) delete process.env['MOTIR_CLOUD'];
+      else process.env['MOTIR_CLOUD'] = previousCloud;
+    });
+    const privateEpic = await card(fx, { kind: 'epic', title: 'Private epic', status: 'done' });
+    await adminDb.workItem.update({
+      where: { id: privateEpic },
+      data: { publicChildrenHidden: true },
+    });
+    await card(fx, { kind: 'task', title: 'Hidden task', parentId: privateEpic });
+    await card(fx, { kind: 'bug', title: 'Hidden bug', parentId: privateEpic });
+    const saved = await savedFiltersService.create(
+      fx.projectKey,
+      {
+        name: 'Tasks',
+        visibility: 'project',
+        filterParam: encodeFilterParam(
+          ast('and', { field: 'kind', operator: 'is_any_of', value: ['task'] }),
+        ),
+      },
+      fx.ctx,
+    );
+    const visitor = await consentedVisitor(fx.projectKey);
+    const tasks = ast('and', { field: 'kind', operator: 'is_any_of', value: ['task'] });
+
+    const header = await boardsService.getBoard(fx.projectId, visitor, undefined, { ast: tasks });
+    expect(titles(header)).toEqual(['Public task']);
+    expect(header.storedFilter?.envelope).toEqual(BUGS);
+
+    // A saved filter is its owner's: a Visitor's read ignores it, and the board
+    // keeps its own filter rather than widening to everything.
+    const viaSaved = await boardsService.getBoard(fx.projectId, visitor, undefined, {
+      savedFilterId: saved.id,
+    });
+    expect(titles(viaSaved)).toEqual(['Public bug']);
+
+    const off = await boardsService.getBoard(fx.projectId, visitor, undefined, {
+      storedFilterOff: true,
+    });
+    // The whole scope — the epic itself is public; only its descendants are held.
+    expect(titles(off)).toEqual(['Private epic', 'Public bug', 'Public task']);
   });
 
   it('applies the default board’s stored filter to the public preview', async () => {

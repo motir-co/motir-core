@@ -44,6 +44,8 @@ export interface CellReadIdentity {
   boardId: string;
   groupBy: BoardSwimlaneGroupByDto;
   filterParam: string;
+  /** The stored-filter-off signal (MOTIR-11564); absent reads as `false`. */
+  boardFilterOff?: boolean;
 }
 
 /** Every cell's page, keyed by `cellId`, for one read identity. */
@@ -70,7 +72,12 @@ export const EMPTY_CELL_PAGE: CellPage = Object.freeze({
 
 /** The stable string a read identity is compared by. */
 export function cellReadKey(identity: CellReadIdentity): string {
-  return JSON.stringify([identity.boardId, identity.groupBy, identity.filterParam]);
+  return JSON.stringify([
+    identity.boardId,
+    identity.groupBy,
+    identity.filterParam,
+    identity.boardFilterOff === true,
+  ]);
 }
 
 /** A map with no cell loaded, for `readKey`. */

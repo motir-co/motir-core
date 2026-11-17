@@ -178,6 +178,14 @@ describe('boardCellPages reducers', () => {
     expect(cellReadKey({ boardId: 'b2', groupBy: 'assignee', filterParam: '' })).not.toBe(a);
     expect(cellReadKey({ boardId: 'b1', groupBy: 'priority', filterParam: '' })).not.toBe(a);
     expect(cellReadKey({ boardId: 'b1', groupBy: 'assignee', filterParam: 'v1:x' })).not.toBe(a);
+    // The stored-filter-off signal is part of what the cells were read against
+    // (MOTIR-11564); an absent flag reads as off-not-set.
+    expect(
+      cellReadKey({ boardId: 'b1', groupBy: 'assignee', filterParam: '', boardFilterOff: true }),
+    ).not.toBe(a);
+    expect(
+      cellReadKey({ boardId: 'b1', groupBy: 'assignee', filterParam: '', boardFilterOff: false }),
+    ).toBe(a);
   });
 });
 

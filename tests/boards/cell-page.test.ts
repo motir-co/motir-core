@@ -391,7 +391,7 @@ describe('getCellPage — paging bounds and the cursor', () => {
 describe('getCellPage — the set it reads over', () => {
   const BUGS: FilterEnvelope = { v: 'v1', c: 'and', f: [['kind', 'is_any_of', ['bug']]] };
 
-  it('honours the stored filter, the toolbar filter and the sprint scope', async () => {
+  it('honours the stored filter, a header filter replacing it, and the sprint scope', async () => {
     const fx = await makeFixture();
     const ana = await person('Ana');
     await card(fx, { title: 'Bug one', kind: 'bug', assigneeId: ana, priority: 'high' });
@@ -409,15 +409,19 @@ describe('getCellPage — the set it reads over', () => {
     expect(stored.totalCount).toBe(2);
     expect(stored.cards.map((c) => c.title).sort()).toEqual(['Bug one', 'Bug two']);
 
-    // …and the toolbar filter ANDs beside it.
-    const both = await cell(fx, todo.id, ana, undefined, {
+    // …and a header filter REPLACES it (MOTIR-11564): every high card, bug or not.
+    const header = await cell(fx, todo.id, ana, undefined, {
       ast: {
         combinator: 'and',
         conditions: [{ field: 'priority', operator: 'is_any_of', value: ['high'] }],
       },
     });
-    expect(both.totalCount).toBe(1);
-    expect(both.cards.map((c) => c.title)).toEqual(['Bug one']);
+    expect(header.totalCount).toBe(2);
+    expect(header.cards.map((c) => c.title).sort()).toEqual(['Bug one', 'Task one']);
+
+    // `boardFilter=off` lifts the stored filter: the whole column again.
+    const off = await cell(fx, todo.id, ana, undefined, { storedFilterOff: true });
+    expect(off.totalCount).toBe(3);
 
     // A scrum board reads its active sprint only.
     await adminDb.board.update({

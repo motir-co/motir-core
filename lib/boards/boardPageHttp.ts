@@ -9,6 +9,7 @@ import {
 import { decodeFilterParam } from '@/lib/filters/ast';
 import { FilterValidationError } from '@/lib/filters/errors';
 import type { BoardFilterInput } from '@/lib/dto/boards';
+import { BOARD_FILTER_OFF_PARAM, isBoardFilterOff } from '@/lib/boards/boardFilterOff';
 
 // The board PAGE routes' shared HTTP plumbing (MOTIR-11446) — the counterpart of
 // `boardGateResponse.ts` for the two doors a board pages through:
@@ -31,23 +32,41 @@ export type BoardPageParams = {
 };
 
 /**
- * Read `?boardId=` and `?filter=v1:` — the SAME filter param the projection was
- * read with, so a page never holds a card the filtered board would not. A value
- * that does not decode degrades to no filter, as on the projection; a decodable
- * AST the registry rejects is the service's 422. Which params are REQUIRED is
- * each route's own contract, so a missing one is answered by the route, with
- * {@link badRequest}.
+ * The board filter a board read was asked for — the ONE parse the projection
+ * (`/api/board`) and both page doors share, so a page is always read under the
+ * filter its projection was:
+ *
+ *   - `?filter=v1:` — the header filter's compiled AST. A value that does not
+ *     decode, or decodes to zero conditions, is no header filter (the
+ *     forged-URL degrade); a decodable AST the registry rejects is the
+ *     service's 422.
+ *   - `?boardFilter=off` — do not apply the board's stored filter. Any other
+ *     value is ignored.
+ *
+ * `undefined` when the request carries neither.
+ */
+export function readBoardFilterInput(params: URLSearchParams): BoardFilterInput | undefined {
+  const rawFilter = params.get('filter')?.trim() || undefined;
+  let ast: BoardFilterInput['ast'];
+  if (rawFilter) {
+    const decoded = decodeFilterParam(rawFilter);
+    if (decoded.ok && decoded.ast.conditions.length > 0) ast = decoded.ast;
+  }
+  const storedFilterOff = isBoardFilterOff(params.get(BOARD_FILTER_OFF_PARAM));
+  if (!ast && !storedFilterOff) return undefined;
+  return { ...(ast ? { ast } : {}), ...(storedFilterOff ? { storedFilterOff } : {}) };
+}
+
+/**
+ * Read `?boardId=` and the board filter ({@link readBoardFilterInput}) — the
+ * SAME params the projection was read with, so a page never holds a card the
+ * filtered board would not. Which params are REQUIRED is each route's own
+ * contract, so a missing one is answered by the route, with {@link badRequest}.
  */
 export function readBoardPageParams(req: Request): BoardPageParams {
   const params = new URL(req.url).searchParams;
   const boardId = params.get('boardId')?.trim() || undefined;
-  const rawFilter = params.get('filter')?.trim() || undefined;
-  let filter: BoardFilterInput | undefined;
-  if (rawFilter) {
-    const decoded = decodeFilterParam(rawFilter);
-    if (decoded.ok && decoded.ast.conditions.length > 0) filter = { ast: decoded.ast };
-  }
-  return { boardId, filter, params };
+  return { boardId, filter: readBoardFilterInput(params), params };
 }
 
 /** The 400 a request missing a required page param owes. */
