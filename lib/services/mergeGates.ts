@@ -15,7 +15,7 @@ import {
   primaryApprovalStandsForMerge,
 } from '@/lib/approvalGates/gateSet';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { listOwnDeliveriesWithChecks } from '@/lib/approvalGates/ownDeliveries';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -195,9 +195,12 @@ export async function agentReviewHoldsMerge(
   // (MOTIR-10333; `approval-gates.md` §12.14): no code the review agent sent back merges
   // on a carry, whatever the switch says.
   // A person's DISMISSAL at the version (MOTIR-10334; §12.15) releases it again.
+  // The version is the card's OWN set's (Bug MOTIR-11695) — the set its review gate, its
+  // verdicts and its dismissals are measured over — so a child sharing a pull request with
+  // its story is held by a send-back at its own version.
   const [deliveries, latestAgentReviewGate, latestMergeGate, latestSendBack, latestDismissal] =
     await Promise.all([
-      workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+      listOwnDeliveriesWithChecks(item.id, tx),
       approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
       approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
       reviewVerdictRecordRepository.findLatestRecordedSendBack(item.id, tx),
