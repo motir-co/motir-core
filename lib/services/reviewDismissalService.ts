@@ -11,6 +11,7 @@ import {
   type ReviewDismissalSnapshot,
 } from '@/lib/agentReview/dismissalActivity';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { listOwnDeliveriesWithChecks } from '@/lib/approvalGates/ownDeliveries';
 import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
 import {
   REVIEW_DISMISSAL_REASON_MAX_LENGTH,
@@ -20,7 +21,6 @@ import {
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { reviewDismissalRepository } from '@/lib/repositories/reviewDismissalRepository';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { resolveGateAuthority } from '@/lib/services/approvalGatesService';
 import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
@@ -64,9 +64,15 @@ function reasonOf(input: DismissReviewInput): string {
   return reason;
 }
 
-/** The card's delivery set and its version — null when it delivers no pull request. */
+/**
+ * The card's OWN delivery set and its version — null when it delivers no pull request of its
+ * own. Own, not every linked row (Bug MOTIR-11693): the send-back being dismissed was stamped
+ * with the review gate's version, and that gate is raised over the card's own members
+ * (`gateSetFor`). A child that also carries its story's pull request would otherwise never
+ * match the version it was sent back at.
+ */
 async function readDeliverySet(workItemId: string, tx: Prisma.TransactionClient) {
-  const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+  const deliveries = await listOwnDeliveriesWithChecks(workItemId, tx);
   return {
     deliveries,
     version: deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d))),
@@ -75,8 +81,8 @@ async function readDeliverySet(workItemId: string, tx: Prisma.TransactionClient)
 
 /**
  * The card's CURRENT delivery-set version, read exactly as {@link reviewDismissalService.dismiss}
- * computes the version it checks — every pull request as `owner/name#number@headSha`, sorted,
- * comma-joined — or null when it delivers no pull request. MOTIR-11092: the `dismiss_review`
+ * computes the version it checks — every pull request of the card's OWN set as
+ * `owner/name#number@headSha`, sorted, comma-joined — or null when it delivers no pull request. MOTIR-11092: the `dismiss_review`
  * MCP tool dismisses at this version when its caller names none. A read only: the dismissal
  * re-reads the version under its locks, so a push in between still answers
  * `REVIEW_DISMISSAL_STALE`.

@@ -51,6 +51,8 @@ const { approvalGateSettingsService } = await import('@/lib/services/approvalGat
 const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
 const { reviewVerdictService } = await import('@/lib/services/reviewVerdictService');
+const { reviewDismissalService, currentDeliverySetVersion } =
+  await import('@/lib/services/reviewDismissalService');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 const {
   ReviewNothingToReviewError,
@@ -879,7 +881,7 @@ describe('refusals that store nothing', () => {
 async function childUnderTestedStory(
   slug: string,
   number: number,
-  opts: { gate: boolean; ridesStory?: boolean },
+  opts: { gate: boolean; ridesStory?: boolean; sharedWithStory?: number },
 ) {
   const s = await makeScenario(slug);
   if (!opts.gate) {
@@ -922,6 +924,26 @@ async function childUnderTestedStory(
     pullRequestPayload('opened', number, headRef),
   );
   await ci('sha-a', number);
+  if (opts.sharedWithStory !== undefined) {
+    // A SECOND pull request, linked to the story AND the child — the parent run's branch the
+    // child was also linked to before MOTIR-11637 (Bug MOTIR-11693).
+    const shared = opts.sharedWithStory;
+    const sharedRef = `parent/${story.identifier}-${shared}`;
+    for (const identifier of [story.identifier, child.identifier]) {
+      await linkPrByIdentifier({
+        identifier,
+        owner: 'moooon',
+        name: 'acme',
+        number: shared,
+        headRef: sharedRef,
+      });
+    }
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('opened', shared, sharedRef),
+    );
+    await ci('sha-a', shared);
+  }
   return { s, story, child };
 }
 
@@ -1005,6 +1027,92 @@ describe('a child with its own pull request under a story run (Bug MOTIR-11673)'
     );
     expect((res as { isError?: boolean }).isError).toBeFalsy();
     expect((await recordsOf(child.id)).map((r) => r.outcome)).toEqual(['recorded']);
+  });
+});
+
+// ── A child that shares one pull request with its story (Bug MOTIR-11693) ─────────────
+//
+// The review and approve-and-merge gates are raised over the child's OWN pull requests
+// (`gateSetFor` leaves out one its story also delivers, MOTIR-11624). The verdict door, the
+// dismissal and the To fix derivation measured the version over EVERY linked row, so for a
+// child holding one of each the gate named one pull request and the door named two: a verdict
+// at the door's version never decided the gate, and one at the gate's version was refused late.
+
+describe('a child that shares one pull request with its story (Bug MOTIR-11693)', () => {
+  /** Both members, as the whole linked set spells them — the version the door used to name. */
+  const linkedSetOf = (own: number, shared: number) =>
+    [versionOf(own), versionOf(shared)].sort().join(',');
+
+  it('gate ON: the review is held at the child’s own version, and the verdict there decides it', async () => {
+    const { s, story, child } = await childUnderTestedStory('child-mixed-on', 130, {
+      gate: true,
+      sharedWithStory: 131,
+    });
+    const [review] = await awaitingOf(child.id, REVIEW);
+    expect(review?.subjectVersion, 'the gate names the child’s own pull request only').toBe(
+      versionOf(130),
+    );
+
+    const dto = await reviewVerdictService.submit(
+      s.project.id,
+      child.identifier,
+      input(versionOf(130)),
+      s.ctx,
+    );
+    expect(dto).toMatchObject({ outcome: 'decided', gateId: review!.id });
+    expect((await gateRow(review!.id)).state).toBe('approved');
+    expect((await recordsOf(child.id)).map((r) => r.outcome)).toEqual(['decided']);
+    expect(await recordsOf(story.id)).toEqual([]);
+  });
+
+  it('a verdict at the whole linked set’s version is late, and names the child’s own version', async () => {
+    const { s, child } = await childUnderTestedStory('child-mixed-late', 132, {
+      gate: true,
+      sharedWithStory: 133,
+    });
+    const [review] = await awaitingOf(child.id, REVIEW);
+    const refused = await reviewVerdictService
+      .submit(s.project.id, child.identifier, input(linkedSetOf(132, 133)), s.ctx)
+      .catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(ReviewVerdictLateError);
+    expect((refused as InstanceType<typeof ReviewVerdictLateError>).currentVersion).toBe(
+      versionOf(132),
+    );
+    expect((await gateRow(review!.id)).state).toBe('awaiting');
+    expect((await recordsOf(child.id)).map((r) => r.outcome)).toEqual(['late']);
+  });
+
+  it('gate OFF: a send-back at the own version stands, and is dismissed at that version', async () => {
+    const { s, child } = await childUnderTestedStory('child-mixed-off', 134, {
+      gate: false,
+      sharedWithStory: 135,
+    });
+    const [approval] = await awaitingOf(child.id, PR_APPROVAL);
+    expect(approval?.subjectVersion).toBe(versionOf(134));
+
+    const dto = await reviewVerdictService.submit(
+      s.project.id,
+      child.identifier,
+      sendBack(versionOf(134)),
+      s.ctx,
+    );
+    expect(dto).toMatchObject({ outcome: 'recorded', withdrewApprovalGateIds: [approval!.id] });
+    expect((await itemRow(child.id)).fixReason, 'the send-back stands on To fix').toBe(
+      'changes_requested',
+    );
+
+    // The MCP door's default version is the dismissal's own, and the send-back's.
+    expect(await currentDeliverySetVersion(child.id, s.ctx)).toBe(versionOf(134));
+    const dismissed = await reviewDismissalService.dismiss(
+      s.project.id,
+      child.identifier,
+      { subjectVersion: versionOf(134), reasonMd: 'Out of scope for this card.' },
+      s.ctx,
+    );
+    expect(dismissed.subjectVersion).toBe(versionOf(134));
+    expect((await itemRow(child.id)).fixReason).toBeNull();
+    const [asked] = await awaitingOf(child.id, PR_APPROVAL);
+    expect(asked?.subjectVersion).toBe(versionOf(134));
   });
 });
 

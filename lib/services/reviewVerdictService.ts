@@ -8,6 +8,7 @@ import {
   ReviewVerdictSecondError,
 } from '@/lib/agentReview/errors';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { withoutAncestorDeliveries } from '@/lib/approvalGates/ownDeliveries';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateStaleSubjectError,
@@ -28,13 +29,15 @@ import {
   type ReviewVerdictRecordCreateRow,
 } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { reviewVerdictRecordService } from '@/lib/services/reviewVerdictRecordService';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import {
+  workItemDeliveryRepository,
+  type WorkItemDeliveryWithChecks,
+} from '@/lib/repositories/workItemDeliveryRepository';
 import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
-import { withoutAncestorDeliveries } from '@/lib/services/gateSetFor';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -187,23 +190,30 @@ async function applySendBack(workItemId: string, tx: Prisma.TransactionClient): 
  * nothing, or whose every pull request an ancestor also delivers (a child riding its parent
  * run's branch, Bug MOTIR-11624). That is the same "own" set the review and approve-and-merge
  * gates are raised on (`gateSetFor`), so the card the door accepts is the card the gate asks.
+ *
+ * ⚠️ AND IT RETURNS THAT OWN SET, BECAUSE THE VERSION IS MEASURED OVER IT (Bug MOTIR-11693).
+ * The review gate's `subjectVersion` names the card's own members only. A door that measured
+ * `current` over the whole linked set named one more pull request for a child that shares
+ * one with its story, so a verdict at `current` never matched the awaiting gate and a
+ * verdict at the gate's version was refused late — the gate was never decided.
  */
-async function assertReviewSubject(
+async function reviewSubjectDeliveries(
   item: { id: string; identifier: string; parentId: string | null },
-  deliveries: readonly { githubPullRequestId: string }[],
+  deliveries: readonly WorkItemDeliveryWithChecks[],
   workspaceId: string,
   tx: Prisma.TransactionClient,
-): Promise<void> {
+): Promise<WorkItemDeliveryWithChecks[]> {
   const { own } = await withoutAncestorDeliveries(
     { id: item.id, parentId: item.parentId, workspaceId },
     deliveries,
     tx,
   );
-  if (own.length > 0) return;
+  if (own.length > 0) return own;
   const target = await resolveRunTargetFor({ id: item.id, workspaceId }, tx);
   if (target.kind === 'ancestor') {
     throw new ReviewTargetNotRunTargetError(item.identifier, target.holder.identifier);
   }
+  return own;
 }
 
 /** Why a verdict was refused, once its record is stored. */
@@ -272,8 +282,12 @@ export const reviewVerdictService = {
     let first: FirstPass;
     try {
       first = await withWorkspaceContext(scope, async (tx): Promise<FirstPass> => {
-        const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
-        await assertReviewSubject(item, deliveries, ctx.workspaceId, tx);
+        const deliveries = await reviewSubjectDeliveries(
+          item,
+          await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+          ctx.workspaceId,
+          tx,
+        );
         const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
         if (current === null) throw new ReviewNothingToReviewError(item.identifier);
 
