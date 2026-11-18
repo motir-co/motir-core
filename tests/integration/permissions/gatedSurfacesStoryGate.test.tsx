@@ -312,6 +312,7 @@ describe('the backlog and the board', () => {
             swimlaneGroupBy: 'none',
             swimlanes: [],
             unmappedStatuses: [],
+            unmappedStatusesInScope: [],
             cap: 5000,
             truncated: false,
             sprint: null,

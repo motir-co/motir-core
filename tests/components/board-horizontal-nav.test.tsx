@@ -473,6 +473,7 @@ describe('the flat board', () => {
     swimlaneGroupBy: 'none',
     swimlanes: [],
     unmappedStatuses: [],
+    unmappedStatusesInScope: [],
     sprint: null,
     planHolds: {},
     storedFilter: null,

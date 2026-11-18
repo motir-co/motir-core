@@ -155,6 +155,7 @@ const projection: BoardProjectionDto = {
     { key: 'u2', label: 'Ben', kind: 'assignee', count: 5 },
   ],
   unmappedStatuses: [],
+  unmappedStatusesInScope: [],
   sprint: null,
   storedFilter: null,
   planHolds: {},

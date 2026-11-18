@@ -214,6 +214,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   code_explore: 'read',
   code_search: 'read',
   code_grep: 'read',
+  // MOTIR-11647 — rows for totality only: the real gate is `ai:plan` (TOOL_PERMISSIONS).
+  record_name_occurrences: 'work_items:write',
+  lookup_name_occurrences: 'read',
   skeleton: 'read',
   list_folders: 'read',
   get_section_sets: 'read',

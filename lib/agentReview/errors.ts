@@ -162,6 +162,10 @@ export class ReviewAgainNotOfferedError extends Error {
 /**
  * 422 — the card is not a RUN TARGET (§12.11): its tests are its ancestor's, so the
  * review is that ancestor's to receive. The refusal names it. Nothing was stored.
+ *
+ * Only a card with NO pull request of its own is refused (Bug MOTIR-11673): a child whose
+ * own run opened its own pull request is its own review subject, whoever holds the How to
+ * test, because the ancestor's delivery set never holds that pull request.
  */
 export class ReviewTargetNotRunTargetError extends Error {
   readonly code = 'REVIEW_TARGET_NOT_RUN_TARGET';

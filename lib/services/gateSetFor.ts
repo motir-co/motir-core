@@ -339,8 +339,13 @@ export async function gateSetFor(
  * merge cascades down and closes every child, built or not. Two reads, and only for a
  * child that delivers something: the ancestor chain (one recursive CTE) and every
  * delivery row of the card's pull requests (one indexed read).
+ *
+ * ⚠️ EXPORTED FOR THE VERDICT DOOR (Bug MOTIR-11673). `reviewVerdictService` asks the same
+ * question — *does this card deliver pull requests of its own?* — to decide whether a child
+ * tested through its story is still its own review subject. One definition, so the card a
+ * verdict may land on and the card the review gate is raised on cannot disagree.
  */
-async function withoutAncestorDeliveries<T extends { githubPullRequestId: string }>(
+export async function withoutAncestorDeliveries<T extends { githubPullRequestId: string }>(
   item: Pick<WorkItem, 'id' | 'parentId' | 'workspaceId'>,
   deliveries: readonly T[],
   tx: Prisma.TransactionClient,

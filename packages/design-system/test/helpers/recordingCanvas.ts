@@ -63,6 +63,18 @@ export function recordingContext(): RecordingContext {
       for (let i = 0; i < data.length; i++) hash = (Math.imul(hash, 31) + data[i]!) | 0;
       ops.push(['putImageData', hash]);
     },
+    // A browser throws on a negative radius; the stand-in does too, so a frame
+    // that would throw on a real canvas fails here (MOTIR-11672).
+    arcTo: (...a) => {
+      if ((a[4] as number) < 0)
+        throw new RangeError(`arcTo: the radius provided (${String(a[4])}) is negative`);
+      ops.push(['arcTo', ...a.map(norm)]);
+    },
+    arc: (...a) => {
+      if ((a[2] as number) < 0)
+        throw new RangeError(`arc: the radius provided (${String(a[2])}) is negative`);
+      ops.push(['arc', ...a.map(norm)]);
+    },
     measureText: () => ({ width: 0 }),
     getLineDash: () => [],
   };

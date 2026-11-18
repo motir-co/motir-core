@@ -527,7 +527,20 @@ export interface BoardProjectionDto {
    * (MOTIR-11445).
    */
   swimlanes: BoardSwimlaneDto[];
+  /**
+   * EVERY project status mapped to no column, whatever the board's filter —
+   * what Board settings lists, because that is where columns are mapped.
+   */
   unmappedStatuses: WorkflowStatusDto[];
+  /**
+   * The subset of `unmappedStatuses` the board's EFFECTIVE filter could still
+   * match (MOTIR-11658) — what the unmapped-statuses tray above the board
+   * names. A status leaves it only when the effective filter is an AND whose
+   * `status` row provably excludes it (`is_any_of` without it, `is_none_of`
+   * with it); with no filter, an OR filter or no status row it equals
+   * `unmappedStatuses`. Empty ⇒ no work item is hidden by a missing mapping.
+   */
+  unmappedStatusesInScope: WorkflowStatusDto[];
   /**
    * The active-sprint summary for a SCRUM board (Subtask 4.5.2) — drives the
    * 4.5.3 sprint header. `null` on a `kanban` board (no sprint scope) AND on a

@@ -109,6 +109,7 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
     swimlaneGroupBy: 'none',
     swimlanes: [],
     unmappedStatuses: [],
+    unmappedStatusesInScope: [],
     sprint: null,
     planHolds: {},
     storedFilter: null,
@@ -217,13 +218,61 @@ describe('board completeness (3.2.6)', () => {
     // so the board must NOT claim "no work items" (the rung-2 guard).
     vi.stubGlobal(
       'fetch',
-      mockFetchOk(projection({ unmappedStatuses: [status({ id: 's-hold', label: 'On Hold' })] })),
+      mockFetchOk(
+        projection({
+          unmappedStatuses: [status({ id: 's-hold', label: 'On Hold' })],
+          unmappedStatusesInScope: [status({ id: 's-hold', label: 'On Hold' })],
+        }),
+      ),
     );
     render(<BoardContainer />);
 
     await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
     expect(screen.queryByText('No work items yet')).toBeNull();
     expect(screen.getByTestId('board-unmapped-tray')).toBeTruthy();
+  });
+
+  it('omits the tray, and shows the empty state, when the board filter excludes every unmapped status (MOTIR-11658)', async () => {
+    // Done and Cancelled are mapped to no column, but the board's filter already
+    // excludes both — no work item is hidden by the missing mapping, so there is
+    // nothing to warn about and nothing can hide behind the empty state.
+    vi.stubGlobal(
+      'fetch',
+      mockFetchOk(
+        projection({
+          unmappedStatuses: [
+            status({ id: 's-done', label: 'Done' }),
+            status({ id: 's-cancelled', label: 'Cancelled' }),
+          ],
+          unmappedStatusesInScope: [],
+        }),
+      ),
+    );
+    render(<BoardContainer />);
+
+    await waitFor(() => expect(screen.getByText('No work items yet')).toBeTruthy());
+    expect(screen.queryByTestId('board-unmapped-tray')).toBeNull();
+  });
+
+  it('names only the unmapped statuses the board filter could still match (MOTIR-11658)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchOk(
+        projection({
+          columns: [column({ id: 'c1', name: 'To Do', totalCount: 1 })],
+          unmappedStatuses: [
+            status({ id: 's-done', label: 'Done' }),
+            status({ id: 's-cancelled', label: 'Cancelled' }),
+          ],
+          unmappedStatusesInScope: [status({ id: 's-done', label: 'Done' })],
+        }),
+      ),
+    );
+    render(<BoardContainer />);
+
+    const tray = await screen.findByTestId('board-unmapped-tray');
+    expect(tray.textContent).toContain('Done');
+    expect(tray.textContent).not.toContain('Cancelled');
   });
 
   it('renders the unmapped-statuses tray with the status names + a Map columns → link to board settings (3.6.3)', async () => {
@@ -233,6 +282,10 @@ describe('board completeness (3.2.6)', () => {
         projection({
           columns: [column({ id: 'c1', name: 'To Do', totalCount: 1 })],
           unmappedStatuses: [
+            status({ id: 's-triage', label: 'Needs Triage' }),
+            status({ id: 's-hold', label: 'On Hold' }),
+          ],
+          unmappedStatusesInScope: [
             status({ id: 's-triage', label: 'Needs Triage' }),
             status({ id: 's-hold', label: 'On Hold' }),
           ],

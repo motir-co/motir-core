@@ -124,6 +124,7 @@ import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
 import { DecisionPageError } from '@/lib/decisionPages/errors';
 import { TestInstructionsError } from '@/lib/testInstructions/errors';
+import { NameOccurrenceError } from '@/lib/codeGraph/errors';
 import { PageError, PageRevisionConflictError, PageTreeError } from '@/lib/pages';
 import { PageSearchQueryEmptyError, PageSearchQueryTooLongError } from '@/lib/pages/searchErrors';
 import { PageLinkAlreadyExistsError, PageLinkNotFoundError } from '@/lib/pages/linkErrors';
@@ -491,6 +492,11 @@ export function toToolError(err: unknown): CallToolResult {
     return toolError(err.code, err.message);
   }
   if (err instanceof TestInstructionsError) {
+    return toolError(err.code, err.message);
+  }
+  // The name record's own refusals (MOTIR-11647): a cap, an empty or duplicate list, a
+  // malformed row, a repo outside the set. Each message names the cap or the field.
+  if (err instanceof NameOccurrenceError) {
     return toolError(err.code, err.message);
   }
   // The page tools (MOTIR-5760). Every refusal `@motir/pages` raises carries its
