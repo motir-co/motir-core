@@ -16,7 +16,12 @@ export function hash(a: number, b: number, c: number): number {
   return (x - Math.floor(x)) * 2 - 1;
 }
 
-/** A rounded-rectangle path. */
+/**
+ * A rounded-rectangle path. A box with no size — a tile laid out with gutters
+ * wider than the box it is drawn into, like a picker's chip swatch — leaves an
+ * EMPTY path, so a fill, stroke or clip after it draws nothing, and the corner
+ * radius never goes negative (a negative `arcTo` radius throws, MOTIR-11672).
+ */
 export function rr(
   ctx: BackgroundContext,
   x: number,
@@ -25,8 +30,9 @@ export function rr(
   h: number,
   r: number,
 ): void {
-  const q = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
+  if (!(w > 0 && h > 0)) return;
+  const q = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.moveTo(x + q, y);
   ctx.arcTo(x + w, y, x + w, y + h, q);
   ctx.arcTo(x + w, y + h, x, y + h, q);
