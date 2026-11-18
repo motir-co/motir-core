@@ -13,7 +13,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 //   - a push to the STORY's pull request withdrew the child's questions;
 //   - a CI re-run at the child's own head never retired its question;
 //   - a gate-off send-back at the child's own version never held its carried merge;
-//   - the review state read model named a version no gate of the child carries.
+//   - the review state read model named a version no gate of the child carries;
+//   - the at-press mergeability read (MOTIR-11698) refused the child's press over a conflict
+//     on the story's pull request — one the press would never merge.
 
 const sent: Array<{ name: string; data: Record<string, unknown> }> = [];
 vi.mock('@/lib/jobs/sendEvent', async (importOriginal) => ({
@@ -26,6 +28,9 @@ vi.mock('@/lib/jobs/sendEvent', async (importOriginal) => ({
 import { fakeOrchestrator } from '@motir/orchestrator';
 import type { ApprovalGateKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { getGitProvider } from '@/lib/git';
+import type { GitProvider } from '@/lib/git/provider';
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { adminDb } from '../helpers/adminDb';
@@ -46,6 +51,8 @@ const { pullRequestApprovalGateHandler } =
 const { agentReviewHoldsMerge } = await import('@/lib/services/mergeGates');
 const { readReviewStates } = await import('@/lib/services/reviewStateService');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
+const { pullRequestMergeService } = await import('@/lib/services/pullRequestMergeService');
+const { approvalGateRepository } = await import('@/lib/repositories/approvalGateRepository');
 
 const MODEL = 'claude-opus-5-5';
 const AI = 'https://ai.test';
@@ -509,5 +516,136 @@ describe('the review state read model (Bug MOTIR-11695)', () => {
     expect(states.get(child.id)?.currentVersion).toBe(versionOf(152));
     // The story is not a child of anything: its whole set is its own.
     expect(states.get(story.id)?.currentVersion).toBe(versionOf(153));
+  });
+});
+
+describe('the at-press conflict read (Bug MOTIR-11698)', () => {
+  const github = getGitProvider('github') as Required<GitProvider>;
+
+  /** The host reports `dirty` for the pull requests in `dirty`, clean for every other. */
+  function stubReads(dirty: number[]) {
+    return vi
+      .spyOn(github, 'readChangeRequestMergeability')
+      .mockImplementation(async (args) =>
+        dirty.includes(args.number)
+          ? { mergeable: false, mergeableState: 'dirty', headSha: 'sha-a' }
+          : { mergeable: true, mergeableState: 'clean', headSha: null },
+      );
+  }
+
+  /** Every merge the press attempts succeeds, so what it attempted is what it was given. */
+  function stubMerge() {
+    return vi.spyOn(github, 'mergeChangeRequest').mockImplementation(async (args) => ({
+      outcome: 'merged',
+      commitSha: `merge-${args.number}`,
+    }));
+  }
+
+  /** A CURRENT design result on the child and its awaiting design gate — a PRIMARY. */
+  async function withDesignGate(
+    s: {
+      workspace: { id: string };
+      project: { id: string };
+      ctx: { userId: string; workspaceId: string };
+    },
+    workItemId: string,
+  ) {
+    const evidence = await adminDb.designEvidence.create({
+      data: { workspaceId: s.workspace.id, workItemId, commitSha: 'sha-a', isCurrent: true },
+    });
+    return withWorkspaceContext(s.ctx, (tx) =>
+      approvalGateRepository.create(
+        {
+          workspaceId: s.workspace.id,
+          projectId: s.project.id,
+          workItemId,
+          kind: 'design_result',
+          subjectId: evidence.id,
+          subjectVersion: evidence.commitSha,
+        },
+        tx,
+      ),
+    );
+  }
+
+  it('a conflict on the story’s pull request does not refuse the child’s Approve — the press approves and merges the child’s own pull request alone', async () => {
+    const { s, child } = await childSharingWithStory('press-shared', 160, 161, { gate: false });
+    const [gate] = await awaitingOf(child.id, PR_APPROVAL);
+    expect(gate?.subjectVersion).toBe(versionOf(160));
+    const reads = stubReads([161]);
+    const merge = stubMerge();
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate!.id, source: 'ui' },
+      s.ctx,
+    );
+
+    expect(result.approval.gate.state).toBe('approved');
+    expect(
+      reads.mock.calls.map(([args]) => args.number),
+      'the host is asked only about what the press would merge',
+    ).toEqual([160]);
+    expect(merge.mock.calls.map(([args]) => args.number)).toEqual([160]);
+    expect(result.members.map((m) => m.outcome)).toEqual(['merged']);
+  });
+
+  it('a conflict on the child’s OWN pull request still refuses the press, naming only it', async () => {
+    const { s, child } = await childSharingWithStory('press-own', 162, 163, { gate: false });
+    const [gate] = await awaitingOf(child.id, PR_APPROVAL);
+    stubReads([162, 163]);
+    const merge = stubMerge();
+
+    await expect(
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate!.id, source: 'ui' },
+        s.ctx,
+      ),
+    ).rejects.toMatchObject({
+      tag: 'MERGE_CONFLICT',
+      atPress: true,
+      conflicts: [{ pullRequest: 'moooon/acme#162', baseRef: 'main' }],
+    });
+    const withdrawn = await gateRow(gate!.id);
+    expect([withdrawn.state, withdrawn.supersededCause]).toEqual(['superseded', 'conflict']);
+    expect(merge).not.toHaveBeenCalled();
+  });
+
+  it('a PRIMARY press on the child is not refused by a conflict on the story’s pull request either', async () => {
+    const { s, child } = await childSharingWithStory('press-primary', 164, 165, { gate: false });
+    const [mergeGate] = await awaitingOf(child.id, PR_APPROVAL);
+    const design = await withDesignGate(s, child.id);
+    const reads = stubReads([165]);
+    stubMerge();
+
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
+      s.ctx,
+    );
+
+    expect(reads.mock.calls.map(([args]) => args.number)).toEqual([164]);
+    const [designRow, mergeRow] = await Promise.all([gateRow(design.id), gateRow(mergeGate!.id)]);
+    expect([designRow.state, mergeRow.state]).toEqual(['approved', 'approved']);
+  });
+
+  it('a conflict on the child’s own pull request refuses the PRIMARY press too, leaving the design awaiting', async () => {
+    const { s, child } = await childSharingWithStory('press-primary-own', 166, 167, {
+      gate: false,
+    });
+    const [mergeGate] = await awaitingOf(child.id, PR_APPROVAL);
+    const design = await withDesignGate(s, child.id);
+    stubReads([166]);
+
+    await expect(
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
+        s.ctx,
+      ),
+    ).rejects.toMatchObject({
+      tag: 'MERGE_CONFLICT',
+      atPress: true,
+      conflicts: [{ pullRequest: 'moooon/acme#166', baseRef: 'main' }],
+    });
+    expect((await gateRow(design.id)).state).toBe('awaiting');
+    expect((await gateRow(mergeGate!.id)).supersededCause).toBe('conflict');
   });
 });
