@@ -220,19 +220,61 @@ export async function scrollLaneToEnd(page: Page, columnId: string, total: numbe
     .toBe(total.toLocaleString('en-US'));
 }
 
-/** Page ONE grouped-board cell through its own Load more (MOTIR-11450): press the
- *  first cell control on the board and wait for that cell's own count to grow —
- *  the cell pages itself; no column footer or sentinel is involved. */
-export async function pageFirstCellThroughLoadMore(page: Page): Promise<void> {
+/**
+ * The first cell of a GROUPED board that holds more than one page, read the way
+ * the grid reads it — each lane's `GET /api/board/lanes/[laneKey]/cells`, in lane
+ * order — or null when every cell fits in its first page.
+ *
+ * A grouped board reads a lane only when it comes into view (MOTIR-11448), and a
+ * seed decides which lanes hold a deep cell: on the at-scale seed every member's
+ * cell fits in one page and the one deep cell sits in the LAST lane ("No
+ * assignee"), far below the fold (MOTIR-11691). So a spec that wants a cell with
+ * a Load more asks the server which cell has one instead of hoping the viewport
+ * shows it.
+ */
+export async function findCellWithMore(
+  ctx: APIRequestContext,
+): Promise<{ columnId: string; laneKey: string; totalCount: number } | null> {
+  const board = await getBoard(ctx);
+  expect(board.swimlaneGroupBy, 'the board is grouped').not.toBe('none');
+  for (const lane of board.swimlanes) {
+    const qs = new URLSearchParams({ boardId: board.boardId });
+    const res = await ctx.get(
+      `/api/board/lanes/${encodeURIComponent(lane.key)}/cells?${qs.toString()}`,
+    );
+    expect(res.status(), `GET lane ${lane.key} cells`).toBe(200);
+    const cell = ((await res.json()) as BoardLanePageDto).cells.find((c) => c.cursor !== null);
+    if (cell) return { columnId: cell.columnId, laneKey: lane.key, totalCount: cell.totalCount };
+  }
+  return null;
+}
+
+/** Page ONE grouped-board cell through its own Load more (MOTIR-11450): find a
+ *  cell that holds more than a page ({@link findCellWithMore}), bring its lane
+ *  into view so the grid reads it, press that cell's control and wait for the
+ *  cell's own count to grow — the cell pages itself; no column footer or sentinel
+ *  is involved. */
+export async function pageCellThroughLoadMore(page: Page): Promise<void> {
+  const deep = await findCellWithMore(page.request);
+  expect(deep, 'the seed holds a cell deeper than one page').not.toBeNull();
+  const { columnId, laneKey } = deep!;
+  const cellKey = `${columnId}-${laneKey}`;
   const main = page.getByRole('main');
-  const more = main.locator('[data-testid^="cell-load-more-"]').first();
-  await expect(more, 'a cell with more offers Load more').toBeVisible({ timeout: 30_000 });
-  const cellKey = ((await more.getAttribute('data-testid')) ?? '').slice('cell-load-more-'.length);
+  // The lane reads its cells only once its cell row is in view (MOTIR-11448).
+  await main.getByTestId(`swimlane-cells-${laneKey}`).scrollIntoViewIfNeeded();
+  const more = main.getByTestId(`cell-load-more-${cellKey}`);
+  await expect(more, `cell ${cellKey} offers Load more`).toBeVisible({ timeout: 30_000 });
   const count = main.getByTestId(`cell-count-${cellKey}`);
   const loadedOf = async () =>
     Number(((await count.textContent()) ?? '').match(/[\d,]+/)?.[0]?.replace(/,/g, '') ?? 0);
   const before = await loadedOf();
+  const nextPage = page.waitForResponse(
+    (r) =>
+      r.url().includes(`/api/board/columns/${columnId}/cards?`) &&
+      new URL(r.url()).searchParams.get('lane') === laneKey,
+  );
   await more.click();
+  expect((await nextPage).ok(), `cell ${cellKey} read its next page`).toBeTruthy();
   await expect
     .poll(loadedOf, { message: `cell ${cellKey} loaded its next page` })
     .toBeGreaterThan(before);
