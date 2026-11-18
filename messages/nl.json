@@ -11284,6 +11284,9 @@
               "enable": "Nieuwe agents naar AWS gestuurd",
               "disable": "Nieuwe agents terug naar Fly gestuurd"
             },
+            "ci_spot": {
+              "update": "CI-Spot-instelling gewijzigd"
+            },
             "shard": {
               "add": "Een vlootaccount toegevoegd",
               "limits": "De limieten van een vlootaccount vernieuwd",

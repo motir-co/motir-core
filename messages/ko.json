@@ -11278,6 +11278,9 @@
               "enable": "새 에이전트를 AWS로 전환함",
               "disable": "새 에이전트를 Fly로 되돌림"
             },
+            "ci_spot": {
+              "update": "CI Spot 설정을 변경함"
+            },
             "shard": {
               "add": "플릿 계정 추가함",
               "limits": "플릿 계정 한도 갱신함",

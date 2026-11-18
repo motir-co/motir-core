@@ -11281,6 +11281,9 @@
               "enable": "Sent new agents to AWS",
               "disable": "Sent new agents back to Fly"
             },
+            "ci_spot": {
+              "update": "Changed the CI Spot setting"
+            },
             "shard": {
               "add": "Added a fleet account",
               "limits": "Refreshed a fleet account's limits",

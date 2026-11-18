@@ -11284,6 +11284,9 @@
               "enable": "Neue Agenten auf AWS umgestellt",
               "disable": "Neue Agenten zurück auf Fly umgestellt"
             },
+            "ci_spot": {
+              "update": "CI-Spot-Einstellung geändert"
+            },
             "shard": {
               "add": "Flottenkonto hinzugefügt",
               "limits": "Limits eines Flottenkontos aktualisiert",

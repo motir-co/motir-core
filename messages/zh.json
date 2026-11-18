@@ -11275,6 +11275,9 @@
               "enable": "已将新智能体切换到 AWS",
               "disable": "已将新智能体切回 Fly"
             },
+            "ci_spot": {
+              "update": "已更改 CI Spot 设置"
+            },
             "shard": {
               "add": "已添加集群账户",
               "limits": "已刷新集群账户的上限",
