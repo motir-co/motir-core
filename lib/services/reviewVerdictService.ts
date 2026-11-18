@@ -8,6 +8,7 @@ import {
   ReviewVerdictSecondError,
 } from '@/lib/agentReview/errors';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { withoutAncestorDeliveries } from '@/lib/approvalGates/ownDeliveries';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateStaleSubjectError,
@@ -34,7 +35,6 @@ import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
-import { withoutAncestorDeliveries } from '@/lib/services/gateSetFor';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';

@@ -7,10 +7,8 @@ import type {
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { routingTargetId } from '@/lib/approvalGates/routing';
-import {
-  workItemDeliveryRepository,
-  type WorkItemDeliveryWithChecks,
-} from '@/lib/repositories/workItemDeliveryRepository';
+import { listOwnDeliveriesWithChecks } from '@/lib/approvalGates/ownDeliveries';
+import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -64,18 +62,23 @@ export { deliverySetVersion };
 
 export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubject> = {
   /**
-   * The subject is the card's delivery SET, read in the door's transaction. Null when
-   * the card delivers nothing — the gate asks about pull requests, and there are none.
+   * The subject is the card's OWN delivery SET, read in the door's transaction. Null when
+   * the card delivers nothing of its own — the gate asks about pull requests, and there
+   * are none.
+   *
+   * ⚠️ OWN, NOT EVERY LINKED ROW (Bug MOTIR-11695). The gate is raised over the card's own
+   * members (`gateSetFor`, Bug MOTIR-11624): a pull request an ancestor also delivers is the
+   * parent run's branch, and only the parent's approval may ask to merge it. Over every
+   * linked row, a child sharing one pull request with its story recorded an approval whose
+   * version named the story's pull request too — so the press merged the story's branch
+   * under a child's Approve, the shape MOTIR-11624 set out to prevent.
    *
    * `github_pull_request` stores no head sha of its own: a member's head is its latest
    * check run's commit, which is exactly the window the all-green verdict (and so the
    * gate) was formed over. `deliveryMemberVersion` reads it the merge handler's way.
    */
   async resolveSubject({ gate, tx }: GateEffectArgs): Promise<PullRequestApprovalSubject | null> {
-    const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(
-      gate.subjectId,
-      tx,
-    );
+    const deliveries = await listOwnDeliveriesWithChecks(gate.subjectId, tx);
     return deliveries.length > 0 ? deliveries : null;
   },
 
