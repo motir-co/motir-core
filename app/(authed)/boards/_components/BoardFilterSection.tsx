@@ -26,6 +26,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { SavedFilterSummaryDto } from '@/lib/dto/savedFilters';
 
@@ -48,6 +49,10 @@ export interface BoardFilterLookups {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders by path (MOTIR-11667) — the builder's Folder field.
+   * Required: a host that left it out would silently hide the Folder field, so
+   * the type check catches it instead. */
+  folders: ProjectFoldersDto;
   /** Labels the page already resolved (its URL filter's). The section adds the
    * labels a copied saved filter references. */
   referencedLabels: LabelDto[];
@@ -119,6 +124,7 @@ export function useBoardFilterDraft(lookups: BoardFilterLookups): BoardFilterDra
     ast: seedAst,
     customFields: lookups.customFields,
     components: lookups.components,
+    folders: lookups.folders,
     referencedLabels,
   });
 
@@ -363,6 +369,7 @@ export function BoardFilterSection({
               sprints={lookups.sprints}
               customFields={lookups.customFields}
               components={lookups.components}
+              folders={lookups.folders}
               referencedLabels={draft.referencedLabels}
               projectKey={lookups.projectKey}
               host="form"

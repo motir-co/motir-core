@@ -58,7 +58,8 @@ export interface IssueAdvancedFilterProps {
   /** The project's components (bounded) — the Component field's value editor. */
   components: ComponentDto[];
   /** The project's folders by path (Story MOTIR-5309 · MOTIR-5378) — the Folder
-   * field's value editor. The board and backlog omit it, and offer no Folder
+   * field's value editor. Every page that mounts this dialog passes it, the
+   * board's toolbar included (MOTIR-11667); leaving it out offers no Folder
    * field. */
   folders?: ProjectFoldersDto;
   /** The active AST's referenced labels, resolved to names server-side — seeds

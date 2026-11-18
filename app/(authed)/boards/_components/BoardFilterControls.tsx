@@ -8,6 +8,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { IssueFilterBar } from '../../items/_components/IssueFilterBar';
@@ -53,6 +54,9 @@ export interface BoardFilterControlsProps {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders by path (MOTIR-11667) — the Advanced builder's
+   * Folder field. Required, so a board host cannot silently hide the field. */
+  folders: ProjectFoldersDto;
   referencedLabels: LabelDto[];
   projectKey: string;
   viewer: Viewer;
@@ -71,6 +75,7 @@ export function BoardFilterControls({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
   projectKey,
   viewer,
@@ -110,6 +115,7 @@ export function BoardFilterControls({
         sprints={sprints}
         customFields={customFields}
         components={components}
+        folders={folders}
         referencedLabels={header.labels}
         projectKey={projectKey}
         buildHref={buildHref}

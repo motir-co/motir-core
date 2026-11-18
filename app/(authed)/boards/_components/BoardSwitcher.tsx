@@ -826,6 +826,7 @@ const NO_LOOKUPS: BoardFilterLookups = {
   sprints: [],
   customFields: [],
   components: [],
+  folders: { folders: [], truncated: false },
   referencedLabels: [],
   projectKey: '',
 };

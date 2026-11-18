@@ -20,6 +20,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { componentsService } from '@/lib/services/componentsService';
 import { labelsService } from '@/lib/services/labelsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { AdvancedFilterProvider } from '../items/_components/AdvancedFilterContext';
 import { SavedFilterSessionProvider } from '../items/_components/SavedFilterContext';
@@ -146,21 +147,33 @@ export default async function BoardView({
   // Visitor's (MOTIR-6648): the component list takes `read`, so a Visitor gets its
   // default assignees by name only; the members are name-only for a Visitor too.
   const wsCtx = ctx.service;
-  const [members, workflow, sprints, customFields, components, referencedLabels, titleTranslation] =
-    await Promise.all([
-      pageMembers(ctx),
-      workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
-      sprintsService.listByProject(ctx.projectId, wsCtx),
-      customFieldsService.listFields({
-        key: ctx.project.identifier,
-        actorUserId: wsCtx.userId,
-        ctx: wsCtx,
-      }),
-      componentsService.listComponents(ctx.project.identifier, ctx.read),
-      labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
-      // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8833).
-      resolveSurfaceTranslation(ctx.project, ctx.read),
-    ]);
+  const [
+    members,
+    workflow,
+    sprints,
+    customFields,
+    components,
+    folders,
+    referencedLabels,
+    titleTranslation,
+  ] = await Promise.all([
+    pageMembers(ctx),
+    workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
+    sprintsService.listByProject(ctx.projectId, wsCtx),
+    customFieldsService.listFields({
+      key: ctx.project.identifier,
+      actorUserId: wsCtx.userId,
+      ctx: wsCtx,
+    }),
+    componentsService.listComponents(ctx.project.identifier, ctx.read),
+    // The builder's Folder field and every applied summary's folder paths
+    // (MOTIR-11667) — the same browse-gated read /items makes, bounded at
+    // FOLDER_PICKER_MAX.
+    foldersService.listProjectFolders({ projectId: ctx.projectId }, wsCtx),
+    labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
+    // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8833).
+    resolveSurfaceTranslation(ctx.project, ctx.read),
+  ]);
 
   // The saved-filter tier (Subtask 6.2.3) — { canBrowse, canShare, canManageAny },
   // distinct from the drag-edit `caps` above. Powers the [Saved] dropdown + the
@@ -215,6 +228,7 @@ export default async function BoardView({
                       sprints,
                       customFields,
                       components,
+                      folders,
                       referencedLabels,
                       projectKey: ctx.project.identifier,
                     }}
@@ -237,6 +251,7 @@ export default async function BoardView({
                     sprints={sprints}
                     customFields={customFields}
                     components={components}
+                    folders={folders}
                     referencedLabels={referencedLabels}
                     projectKey={ctx.project.identifier}
                     viewer={viewer}
@@ -272,6 +287,7 @@ export default async function BoardView({
                   sprints={sprints}
                   customFields={customFields}
                   components={components}
+                  folders={folders}
                   referencedLabels={referencedLabels}
                   boardFilterOff={boardFilterOff}
                   canConfigure={canConfigureBoard}
