@@ -6,6 +6,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import {
   Bot,
   CheckCircle2,
+  CirclePause,
   Clock,
   Loader2,
   OctagonAlert,
@@ -60,6 +61,7 @@ export interface PlanHistorySectionProps {
 // conversations since MOTIR-6025, so this section is now their one reader.
 const STATUS_ICON: Record<PlanStatusDto, LucideIcon> = {
   generating: Loader2,
+  stopped: CirclePause,
   planned: Clock,
   approving: Loader2,
   stale: OctagonAlert,
@@ -68,6 +70,7 @@ const STATUS_ICON: Record<PlanStatusDto, LucideIcon> = {
 };
 const STATUS_TINT: Record<PlanStatusDto, string> = {
   generating: 'bg-(--el-tint-sky)',
+  stopped: 'bg-(--el-tint-peach)',
   planned: 'bg-(--el-tint-lavender)',
   approving: 'bg-(--el-tint-mint)',
   stale: 'bg-(--el-tint-rose)',
@@ -84,6 +87,9 @@ function StatusPill({ status, label }: { status: PlanStatusDto; label: string })
       return <Pill status="planned">{label}</Pill>;
     case 'approving':
       return <Pill severity="info">{label}</Pill>;
+    // Bug MOTIR-11701: unfinished, waiting on a Resume — a warning, not a failure.
+    case 'stopped':
+      return <Pill severity="warning">{label}</Pill>;
     case 'stale':
       return <Pill severity="danger">{label}</Pill>;
     case 'declined':
@@ -104,6 +110,7 @@ type Tense = 'proposing' | 'applied' | 'declined';
 function tenseOf(status: PlanStatusDto): Tense {
   switch (status) {
     case 'generating':
+    case 'stopped':
     case 'planned':
     case 'stale':
     // Not applied until the approval commits (Bug MOTIR-9006) — the sentence must not

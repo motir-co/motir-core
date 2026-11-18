@@ -79,7 +79,24 @@ export const FAILED_WAITING_WHERE = {
 
 /** The plan statuses that are UNDECIDED — a session holding one has work in front of a person
  *  or an engine (MOTIR-7939). One definition for every read that spells the set. */
-export const UNDECIDED_PLAN_STATUSES = ['generating', 'planned', 'approving', 'stale'] as const;
+export const UNDECIDED_PLAN_STATUSES = [
+  'generating',
+  // Bug MOTIR-11701: an unfinished walk waiting on a person's Resume or Decline.
+  'stopped',
+  'planned',
+  'approving',
+  'stale',
+] as const;
+
+/**
+ * Whether a plan in `status` is a WALK still owed its cards (Bug MOTIR-11701): one an
+ * engine is writing (`generating`) or one whose walk ended before every card was
+ * written (`stopped`). Both are what a failed attempt's Resume continues; neither can
+ * be approved.
+ */
+export function isUnfinishedWalkStatus(status: string): boolean {
+  return status === 'generating' || status === 'stopped';
+}
 
 /** The undecided statuses a PERSON is waiting to decide — the plan a failure leaves beside
  *  (situation 2), as opposed to a `generating` plan an engine is still writing. */
@@ -171,6 +188,8 @@ export const PLAN_SESSION_FAILURE_REASONS = [
   'job_failed',
   'stalled',
   'internal',
+  // Bug MOTIR-11701 — written by core's own close, never received from motir-ai.
+  'stopped',
 ] as const satisfies readonly PlanSessionFailureReason[];
 
 /**

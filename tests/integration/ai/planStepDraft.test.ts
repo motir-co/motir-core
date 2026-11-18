@@ -7,6 +7,7 @@ import { PLAN_ITEM_DRAFT_BODY_MAX, PLAN_ITEM_DRAFT_TITLE_MAX } from '@/lib/plans
 import { POST as stepPOST } from '@/app/api/internal/ai/plan-step/route';
 import { createTestWorkItem, makeWorkItemFixture as makeFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { markEveryAddWritten } from '../../helpers/walkWritten';
 import { truncateAuthTables } from '../../helpers/db';
 
 // CONTRACT TEST (Story MOTIR-11190 · Subtask MOTIR-11199) — the plan-step door's
@@ -284,6 +285,8 @@ describe('POST /api/internal/ai/plan-step — itemDraft', () => {
     });
     expect(await drafts(planId, fx)).toHaveLength(1);
 
+    // The walk's author sessions finished every card (Bug MOTIR-11701: else it closes `stopped`).
+    await markEveryAddWritten(planId);
     await plansService.markPlanned(planId, fx.ctx);
     expect(await drafts(planId, fx)).toEqual([]);
 

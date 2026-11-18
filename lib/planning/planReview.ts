@@ -58,7 +58,14 @@ export async function readPendingProposal(
  * the roadmap as though no plan existed.
  */
 export function isProposedReview(review: PlanReviewDto): boolean {
-  return review.status === 'planned' || review.status === 'stale' || isApprovingReview(review);
+  return (
+    review.status === 'planned' ||
+    review.status === 'stale' ||
+    // Bug MOTIR-11701: a STOPPED plan is undecided and held — its proposals are drawn,
+    // with Discard and the session's Resume, never Approve.
+    review.status === 'stopped' ||
+    isApprovingReview(review)
+  );
 }
 
 /**
@@ -114,6 +121,8 @@ export function planDecisionErrorCode(err: unknown, fallback = 'APPROVE_ERROR'):
     return 'stale';
   }
   if (err.code === 'PLAN_NOT_DECIDABLE_YET') return 'notDecidable';
+  // Bug MOTIR-11701: the plan's walk is owed cards — Resume, never Approve.
+  if (err.code === 'PLAN_WALK_INCOMPLETE') return 'walkIncomplete';
   return planDecisionRefusalCode(err) ?? fallback;
 }
 

@@ -11,6 +11,7 @@ import {
   type CommittedCard,
   type PlanAuthoringStateRow,
 } from '@/lib/plans/authoringState';
+import { walkListedOf } from '@/lib/plans/walkCompleteness';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The AUTHORING-STATE read (MOTIR-9821) — which of a plan's proposals are being
@@ -41,14 +42,6 @@ export interface PlanAuthoringStateDto {
   committed: CommittedAuthoringStateRow[];
   /** The `workItems` entries that name no work item of this plan's project. */
   unresolved: string[];
-}
-
-/** The plan record's `walkListed` ids — anything else in the record is not this read's. */
-function walkListedOf(record: Record<string, unknown> | null): string[] {
-  const listed = record?.walkListed;
-  return Array.isArray(listed)
-    ? listed.filter((v): v is string => typeof v === 'string' && v.length > 0)
-    : [];
 }
 
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9]*-\d+$/;

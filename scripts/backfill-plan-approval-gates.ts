@@ -94,6 +94,7 @@ function printReport(out: Out, heading: string, report: PlanGateBackfillReport):
     out.log(
       `${TAG}   workspace ${w.workspaceId}: ${w.raise} ${verb}, ` +
         `${w.alreadyAwaiting} already awaiting, ${w.noProposals} with no proposals, ` +
+        `${w.walkIncomplete} with an unfinished walk, ` +
         `${w.notPlanned} no longer planned, ${w.failed} failed (of ${w.examined} planned)`,
     );
   }
@@ -106,7 +107,8 @@ function printReport(out: Out, heading: string, report: PlanGateBackfillReport):
   for (const f of report.failed) out.error(`${TAG}   plan ${f.planId} FAILED — ${f.error}`);
   out.log(
     `${TAG}   total: ${report.raised.length} ${verb}, ${report.alreadyAwaiting} already awaiting, ` +
-      `${report.noProposals} with no proposals, ${report.notPlanned} no longer planned, ` +
+      `${report.noProposals} with no proposals, ${report.walkIncomplete} with an unfinished walk, ` +
+      `${report.notPlanned} no longer planned, ` +
       `${report.failed.length} failed — ${report.examined} of ${report.total} planned plan(s) examined.`,
   );
 }

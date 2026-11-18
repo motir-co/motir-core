@@ -1,4 +1,7 @@
-import type { SessionWaitingState } from '@/lib/planChange/sessionWaitingState';
+import {
+  isUnfinishedWalkStatus,
+  type SessionWaitingState,
+} from '@/lib/planChange/sessionWaitingState';
 
 // WHAT A TURN ON A FAILED-WAITING SESSION DOES (Story MOTIR-7905 · MOTIR-7938).
 //
@@ -28,7 +31,7 @@ import type { SessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 
 export interface FailedWaitingTurnPlan {
   id: string;
-  status: 'generating' | 'planned' | 'stale';
+  status: 'generating' | 'stopped' | 'planned' | 'stale';
   sourceJobId: string | null;
   createdAt: Date;
 }
@@ -53,7 +56,7 @@ export function classifyFailedWaitingTurn(
     !unresumable &&
     input.plans.some(
       (p) =>
-        p.status === 'generating' &&
+        isUnfinishedWalkStatus(p.status) &&
         input.failedJobId !== null &&
         p.sourceJobId === input.failedJobId,
     );

@@ -646,11 +646,21 @@ export const aiGenerationService = {
        * plan by the close of a final append, a generation's or a revision's.
        */
       authorModel?: string | null;
+      /**
+       * The engine's word that the walk ended before every card was written (Bug
+       * MOTIR-11701) — the person's Stop, a failed author session, a limit. Read on a
+       * FINAL append only: the close then writes `stopped`, never `planned`.
+       */
+      walkIncomplete?: boolean;
+      /** …because it RETURNED with a question (Bug MOTIR-11701): no failure is recorded. */
+      walkReturned?: boolean;
     } = {},
   ): Promise<{
     planId: string;
     planItemIds: string[];
     planned: boolean;
+    /** Bug MOTIR-11701: the close wrote `stopped` — the walk is owed cards. */
+    stopped?: boolean;
     released?: boolean;
     warnings?: ProposalLinkWarningDto[];
     rescopeWarnings?: ProposalRescopeWarningDto[];
@@ -728,17 +738,21 @@ export const aiGenerationService = {
         summary: opts.summary ?? null,
         authorModel: opts.authorModel ?? null,
         trailDiff: { proposalCount: createdIds.length },
+        ...(opts.walkIncomplete ? { walkIncomplete: true } : {}),
+        ...(opts.walkReturned ? { walkReturned: true } : {}),
       });
       return {
         planId: plan.id,
         planItemIds: createdIds,
         planned: closed.planned,
+        ...(closed.status === 'stopped' ? { stopped: true } : {}),
         released: closed.released,
         ...linkWarnings,
       };
     }
 
     let planned = false;
+    let stopped = false;
     if (opts.final) {
       // `productName` (MOTIR-1554/1551) is persisted onto the Plan here, on the
       // final append — it is later consumed at approve to name the draft project.
@@ -755,11 +769,20 @@ export const aiGenerationService = {
         productName: opts.productName ?? null,
         summary: opts.summary ?? null,
         authorModel: opts.authorModel ?? null,
+        ...(opts.walkIncomplete ? { walkIncomplete: true } : {}),
+        ...(opts.walkReturned ? { walkReturned: true } : {}),
       });
       planned = closed.status === 'planned';
+      stopped = closed.status === 'stopped';
     }
 
-    return { planId: plan.id, planItemIds: createdIds, planned, ...linkWarnings };
+    return {
+      planId: plan.id,
+      planItemIds: createdIds,
+      planned,
+      ...(stopped ? { stopped: true } : {}),
+      ...linkWarnings,
+    };
   },
 
   // The INTERNAL generation-time DEEPEN seam (7.4.4a · MOTIR-1441): PATCH one

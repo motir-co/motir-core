@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toResumeFormOf } from '@/lib/planChange/toResumeForm';
 
 const t = (n: number) => new Date(2026, 9, 1, 0, n);
-const plan = (id: string, status: 'generating' | 'planned' | 'stale', n: number) => ({
+const plan = (id: string, status: 'generating' | 'stopped' | 'planned' | 'stale', n: number) => ({
   id,
   status,
   createdAt: t(n),
@@ -18,6 +18,14 @@ describe('toResumeFormOf (MOTIR-7939)', () => {
       waitingPlanId: null,
     });
   });
+  it('an open failed session holding a STOPPED plan is a failed_walk too (Bug MOTIR-11701)', () => {
+    expect(toResumeFormOf(open, [plan('s', 'stopped', 2)])).toEqual({
+      form: 'failed_walk',
+      entryPlanId: 's',
+      waitingPlanId: null,
+    });
+  });
+
   it('a failed_walk names an older waiting plan as its second line', () => {
     expect(toResumeFormOf(open, [plan('g', 'generating', 2), plan('p', 'planned', 1)])).toEqual({
       form: 'failed_walk',

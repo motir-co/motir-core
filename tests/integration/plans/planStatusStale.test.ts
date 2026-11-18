@@ -62,8 +62,11 @@ describe('the vocabulary — one edit, and every derived surface follows', () =>
     // the two terminal members (Part XI §4).
     // `approving` (Bug MOTIR-9006) is the step from `planned` to `approved`; it sits
     // right after `planned`, before the detour `stale` and the two terminal members.
+    // `stopped` (Bug MOTIR-11701) is a walk that ended before every card was written: it
+    // sits between `generating` and `planned`, the step it never finished.
     expect([...PLAN_STATUS_DTO_VALUES]).toEqual([
       'generating',
+      'stopped',
       'planned',
       'approving',
       'stale',

@@ -13,6 +13,7 @@ import {
   PlanGateAwaitingError,
   PlanNotDecidableYetError,
   PlanRevisionInFlightError,
+  PlanWalkIncompleteError,
 } from '@/lib/plans/errors';
 
 // THE DECIDE DOOR'S REFUSALS AS HTTP — one mapping for every route that decides a gate
@@ -41,6 +42,20 @@ export function gateDecisionRefusalResponse(err: unknown): NextResponse | null {
         error: err.message,
         planId: err.planId,
         approvingSince: err.approvingSince?.toISOString() ?? null,
+      },
+      { status: 409 },
+    );
+  }
+  // A PLAN gate whose plan's walk never finished (Bug MOTIR-11701) — a legacy `planned`
+  // close still asked about: the claim under the plan lock refuses it, nothing committed.
+  if (err instanceof PlanWalkIncompleteError) {
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        planId: err.planId,
+        planStatus: err.actual,
+        unwritten: err.unwritten,
       },
       { status: 409 },
     );
@@ -82,6 +97,20 @@ export function gateDecisionRefusalResponse(err: unknown): NextResponse | null {
  * person's decision of an asked plan sent without the stamp they were shown.
  */
 export function planDecisionRefusalResponse(err: unknown): NextResponse | null {
+  // Bug MOTIR-11701: the walk ended before every card was written. 409 with the plan's
+  // status and the cards still owed, so a caller can say which a Resume will write.
+  if (err instanceof PlanWalkIncompleteError) {
+    return NextResponse.json(
+      {
+        code: err.code,
+        planId: err.planId,
+        planStatus: err.actual,
+        unwritten: err.unwritten,
+        error: err.message,
+      },
+      { status: 409 },
+    );
+  }
   if (err instanceof PlanNotDecidableYetError) {
     return NextResponse.json(
       { code: err.code, planId: err.planId, error: err.message },

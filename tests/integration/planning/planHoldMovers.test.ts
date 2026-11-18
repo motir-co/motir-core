@@ -204,6 +204,29 @@ describe('the up-front read agrees with the guard — and the PlanStatus checkli
       },
     ],
     [
+      // Bug MOTIR-11701 — a walk that stopped before every card was written is
+      // undecided: it holds until it is resumed and decided, or declined.
+      'stopped — holds',
+      true,
+      async () => {
+        const c = await seedCard();
+        const planId = await plannedModify(c.id);
+        await adminDb.plan.update({ where: { id: planId }, data: { status: 'stopped' } });
+        return c;
+      },
+    ],
+    [
+      'stopped PAST its lease — still holds (it never expires, as `stale`)',
+      true,
+      async () => {
+        const c = await seedCard();
+        const planId = await plannedModify(c.id);
+        await adminDb.plan.update({ where: { id: planId }, data: { status: 'stopped' } });
+        await expireLease(c.id);
+        return c;
+      },
+    ],
+    [
       'stale — holds',
       true,
       async () => {
@@ -358,7 +381,9 @@ describe('the up-front read agrees with the guard — and the PlanStatus checkli
   it('the checklist is TOTAL — the shapes above name every PlanStatus member', () => {
     const named = new Set(
       SHAPES.map(([label]) => label.split(/[ ,]/)[0]).filter((w) =>
-        ['generating', 'planned', 'approving', 'stale', 'approved', 'declined'].includes(w!),
+        ['generating', 'stopped', 'planned', 'approving', 'stale', 'approved', 'declined'].includes(
+          w!,
+        ),
       ),
     );
     // Read from the Prisma enum, not listed, so a sixth member fails here.

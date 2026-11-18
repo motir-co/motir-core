@@ -6,7 +6,7 @@
 // `createdAt`; `generating` / `planned` / `stale` — `planRepository.findLatestUndecidedBySession`):
 //
 //   - none, or `generating`  → `submit`: the shipped new-plan path, unchanged.
-//   - `planned`              → `revise` that plan in place.
+//   - `planned` / `stopped`  → `revise` that plan in place (`stopped`: Bug MOTIR-11701).
 //   - `stale`                → `stale`: answered in words naming the finished
 //                              card(s); nothing is revised and nothing is spent.
 //
@@ -19,7 +19,7 @@
 // are refused upstream (`GuideSessionNotPlannableError`, `PlanSessionEndedError`),
 // so this never has to own those refusals.
 
-export type SessionTurnPlanStatus = 'generating' | 'planned' | 'stale';
+export type SessionTurnPlanStatus = 'generating' | 'stopped' | 'planned' | 'stale';
 
 export interface ClassifySessionTurnInput {
   origin: string;
@@ -51,6 +51,11 @@ export function classifySessionTurn(input: ClassifySessionTurnInput): SessionTur
   }
 
   if (latest?.status === 'planned') return { kind: 'revise', planId: latest.id };
+  // A STOPPED plan (Bug MOTIR-11701) is revised in place too: a walk that RETURNED with
+  // a question closes `stopped`, and the answer continues that plan — the revision
+  // re-opens it and writes every card still owed. (A stop that left a failure record
+  // never reaches here: Resume owns that session's next move.)
+  if (latest?.status === 'stopped') return { kind: 'revise', planId: latest.id };
   if (latest?.status === 'stale') return { kind: 'stale', planId: latest.id };
   return { kind: 'submit' };
 }

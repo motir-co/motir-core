@@ -30,8 +30,10 @@ function call(over: Partial<PlanRowDestinationInput> = {}): PlanRowDestination {
 }
 
 // `approving` (Bug MOTIR-9006) is undecided: the overlay draws its progress until it commits.
+// `stopped` (Bug MOTIR-11701) is undecided too: its walk is unfinished and it is resumed in place.
 const UNDECIDED = [
   'generating',
+  'stopped',
   'planned',
   'approving',
   'stale',

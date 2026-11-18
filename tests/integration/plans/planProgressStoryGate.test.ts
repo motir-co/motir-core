@@ -735,6 +735,10 @@ describe('D. the non-happy inputs, on the assembled path', () => {
       step: 'author',
       target: `planItem:${addIds[0]}`,
     });
+    // The author finishes the card and its session ends, so the close is `planned`: a
+    // close racing a live author step owes that card and lands `stopped` (Bug MOTIR-11701).
+    await plansService.deepenProposal(planId, addIds[0]!, { authorFinished: true }, fx.ctx);
+    await plansService.endPlanStep(planId, 'last', fx.ctx);
     await plansService.markPlanned(planId, fx.ctx);
     const before = (await reviewRead(fx, planId)).lastActivityAt;
 

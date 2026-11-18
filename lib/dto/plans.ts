@@ -27,6 +27,10 @@ import type { WorkItemSections } from '@/lib/workItems/sections/registry';
  *  and there is no second place to forget. */
 export const PLAN_STATUS_DTO_VALUES = [
   'generating',
+  // Bug MOTIR-11701: the walk ended before every card was written. Undecided and
+  // NOT approvable — it offers Resume (and Decline) until a resumed walk closes it
+  // `planned`.
+  'stopped',
   'planned',
   'approving',
   'stale',
@@ -2147,6 +2151,9 @@ export const WORK_ITEM_PENDING_PLAN_STATUSES = [
  *  instead of quietly falling out of the item page's predicate. */
 export const WORK_ITEM_PENDING_PLAN_SILENT_STATUSES = [
   'generating',
+  // Stopped (Bug MOTIR-11701): the walk ended unfinished, so — like `generating` —
+  // its claims on this card are not finished being made; there is no decision yet.
+  'stopped',
   // Being approved (Bug MOTIR-9006): the decision is MADE and only its write is still
   // running, so there is no pending decision to announce on the card.
   'approving',
@@ -2299,7 +2306,7 @@ export interface PlanHeldByPlanDTO {
   /** The plan holding it. */
   planId: string;
   /** Only an UNDECIDED status holds — the second line's copy key. */
-  planStatus: 'generating' | 'planned' | 'approving' | 'stale';
+  planStatus: 'generating' | 'stopped' | 'planned' | 'approving' | 'stale';
   /** The plan's session, or null when it has none. */
   sessionId: string | null;
   /** The plan's first anchor key (its session's `targetKeys[0]`), or null. */

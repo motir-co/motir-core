@@ -1308,7 +1308,7 @@ export const planTargetHeldSchema = z.object({
       itemKey: z.string(),
       workItemId: z.string(),
       planId: z.string(),
-      planStatus: z.enum(['generating', 'planned', 'stale']),
+      planStatus: z.enum(['generating', 'stopped', 'planned', 'stale']),
       sessionId: z.string().nullable(),
       anchorKey: z.string().nullable(),
     }),

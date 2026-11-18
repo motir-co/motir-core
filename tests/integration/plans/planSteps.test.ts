@@ -8,6 +8,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { markEveryAddWritten } from '../../helpers/walkWritten';
 import { truncateAuthTables } from '../../helpers/db';
 import { RLS_DENIAL, isRlsDenial } from '../../helpers/sqlstate';
 
@@ -149,6 +150,8 @@ describe('the generating-only guard', () => {
       { sessionKey: 'left', kind: 'settle', targetRef: null },
       fx.ctx,
     );
+    // The walk's author sessions finished every card (Bug MOTIR-11701: else it closes `stopped`).
+    await markEveryAddWritten(planId);
     await plansService.markPlanned(planId, fx.ctx);
     if (to === 'approved') await plansService.approvePlan(planId, fx.ctx);
     if (to === 'declined') await plansService.declinePlan(planId, fx.ctx);
@@ -409,6 +412,8 @@ describe('the review read carries both fields', () => {
       'targetRef',
     ]);
 
+    // The walk's author sessions finished every card (Bug MOTIR-11701: else it closes `stopped`).
+    await markEveryAddWritten(planId);
     await plansService.markPlanned(planId, fx.ctx);
     // The rows are still there — nobody cleared them — and the read hides them.
     expect(await stepsOf(planId)).toHaveLength(2);
@@ -443,6 +448,9 @@ describe('REAL concurrency — parallel transactions against one plan row', () =
     for (let round = 0; round < 4; round += 1) {
       const fx = await makeWorkItemFixture({ name: `Race ${round}`, identifier: `RC${round}` });
       const { planId } = await generatingPlan(fx);
+      // Its card is written, so whichever way the race lands the close is `planned`
+      // (a walked plan owed a card closes `stopped`, Bug MOTIR-11701).
+      await markEveryAddWritten(planId);
       const [step, close] = await Promise.allSettled([
         plansService.recordPlanStep(
           planId,

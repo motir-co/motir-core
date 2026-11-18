@@ -16,6 +16,7 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanItemDto } from '@/lib/dto/plans';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { markEveryAddWritten } from '../../helpers/walkWritten';
 import { truncateAuthTables } from '../../helpers/db';
 import { renderWithIntl } from '../../helpers/renderWithIntl';
 
@@ -387,6 +388,8 @@ describe('2. a partial body is never the proposal', () => {
     });
 
     // Close the walk through the real door and approve through the real route.
+    // The walk's author sessions finished every card (Bug MOTIR-11701: else it closes `stopped`).
+    await markEveryAddWritten(w.planId);
     await proposals(w.fx, { jobId: w.jobId, proposals: [], final: true });
     await approve(w.fx, w.planId);
     const made = await adminDb.workItem.findMany({ where: { projectId: w.fx.projectId } });
@@ -485,6 +488,8 @@ describe('4. the three exits clear the draft', () => {
   it('the plan leaves generating — no draft', async () => {
     const w = await walk('job_pdg_exit_close');
     await draftOk(w, 1, PARTIAL);
+    // The walk's author sessions finished every card (Bug MOTIR-11701: else it closes `stopped`).
+    await markEveryAddWritten(w.planId);
     await proposals(w.fx, { jobId: w.jobId, proposals: [], final: true });
     const review = await liveRead(w.fx, w.planId);
     expect(review.status).toBe('planned');

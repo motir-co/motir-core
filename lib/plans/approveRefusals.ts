@@ -121,6 +121,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       "How many proposals a plan holds is the plan alone, and the CLOSE already decides it: `plansService.markPlanned` discards an empty set rather than queueing it (MOTIR-4124). What reaches approve is a LEGACY row that closed before that rule existed — and, until MOTIR-4146, a `planned` plan whose last proposal had just been withdrawn. Both are properties of the plan's own contents.",
   },
+  PLAN_WALK_INCOMPLETE: {
+    cause: 'plan-internal',
+    justification:
+      "Whether every card the walk owes is written is the plan's own authoring state, and the CLOSE already decides it: `plansService.markPlanned` closes an unfinished walk `stopped`, never `planned` (Bug MOTIR-11701). What reaches approve is a `stopped` plan (Resume is its answer) or a LEGACY `planned` row that closed before that rule existed.",
+  },
   PLAN_ITEM_FIELD_REJECTED: {
     cause: 'plan-internal',
     justification:

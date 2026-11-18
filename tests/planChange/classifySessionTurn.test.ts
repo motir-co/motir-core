@@ -21,6 +21,13 @@ describe('classifySessionTurn', () => {
       { kind: 'revise', planId: 'p' },
     ],
     [
+      // Bug MOTIR-11701: a walk that returned with a question closes `stopped`; the answer revises it.
+      'a stopped plan',
+      { id: 'p', status: 'stopped' as const },
+      undefined,
+      { kind: 'revise', planId: 'p' },
+    ],
+    [
       'a stale plan',
       { id: 'p', status: 'stale' as const },
       undefined,

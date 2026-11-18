@@ -289,9 +289,11 @@ export const planRepository = {
     jobId: string,
     tx: Prisma.TransactionClient,
   ): Promise<boolean> {
+    // A `stopped` plan (Bug MOTIR-11701) is re-pointed too, and goes back to `generating`:
+    // its Resume is a new walk attempt on the SAME plan, exactly as a failed one's is.
     const result = await tx.plan.updateMany({
-      where: { id: planId, status: 'generating' },
-      data: { sourceJobId: jobId, lastActivityAt: new Date() },
+      where: { id: planId, status: { in: ['generating', 'stopped'] } },
+      data: { sourceJobId: jobId, lastActivityAt: new Date(), status: 'generating' },
     });
     return result.count > 0;
   },

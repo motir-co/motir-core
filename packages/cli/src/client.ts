@@ -1017,7 +1017,7 @@ export interface PlanOutcome {
    *  SIX since MOTIR-9006: `approving` is an approve IN PROGRESS — its proposals are
    *  being written into work items. Not over yet (it ends `approved`, or back at
    *  `planned` if the approval failed), and not approvable again. */
-  status: 'generating' | 'planned' | 'approving' | 'stale' | 'approved' | 'declined';
+  status: 'generating' | 'stopped' | 'planned' | 'approving' | 'stale' | 'approved' | 'declined';
   origin: string;
   jobId: string | null;
   itemCount: number;
@@ -1083,7 +1083,7 @@ export interface PlanWithItems {
    *  SIX since MOTIR-9006: `approving` is an approve IN PROGRESS — its proposals are
    *  being written into work items. Not over yet (it ends `approved`, or back at
    *  `planned` if the approval failed), and not approvable again. */
-  status: 'generating' | 'planned' | 'approving' | 'stale' | 'approved' | 'declined';
+  status: 'generating' | 'stopped' | 'planned' | 'approving' | 'stale' | 'approved' | 'declined';
   title: string | null;
   summary: string | null;
   sourceJobId: string | null;

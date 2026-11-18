@@ -1999,15 +1999,19 @@ export function PlanChangeRail({
                     <Button variant="ghost" size="sm" onClick={onDiscard} disabled={busy}>
                       {tc('discard')}
                     </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      leftIcon={<Check className="size-4" aria-hidden="true" />}
-                      onClick={onApprove}
-                      disabled={busy}
-                    >
-                      {tc('approve')}
-                    </Button>
+                    {/* A STOPPED plan offers no Approve (Bug MOTIR-11701): its walk is owed
+                        cards, and the failure line above offers the Resume that writes them. */}
+                    {state.review?.status === 'stopped' ? null : (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        leftIcon={<Check className="size-4" aria-hidden="true" />}
+                        onClick={onApprove}
+                        disabled={busy}
+                      >
+                        {tc('approve')}
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -2418,6 +2422,8 @@ function errorKey(code: string): string {
       return 'error.stale';
     case 'notDecidable':
       return 'error.notDecidable';
+    case 'walkIncomplete':
+      return 'error.walkIncomplete';
     case 'SESSION_UNAVAILABLE':
       return 'error.session';
     // A turn on a session that waits (MOTIR-7941): a revision already runs, or the session holds

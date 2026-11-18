@@ -6,6 +6,7 @@ import { planReviewService } from '@/lib/services/planReviewService';
 import { POST as stepPOST } from '@/app/api/internal/ai/plan-step/route';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { markEveryAddWritten } from '../../helpers/walkWritten';
 import { truncateAuthTables } from '../../helpers/db';
 
 // CONTRACT TEST (Story MOTIR-7820 · Subtask MOTIR-7824) — the hosted planner's
@@ -832,6 +833,8 @@ describe('the provider-retry arm (Story MOTIR-9540 · MOTIR-9619)', () => {
     expect(((await ghost.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
     expect(await adminDb.planStep.count({ where: { planId } })).toBe(1);
 
+    // The walk's author sessions finished every card (Bug MOTIR-11701: else it closes `stopped`).
+    await markEveryAddWritten(planId);
     await plansService.markPlanned(planId, fx.ctx);
     const late = await report(fx, jobId, { sessionKey: 's', providerRetry });
     expect(late.status).toBe(409);

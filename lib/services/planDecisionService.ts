@@ -10,6 +10,7 @@ import {
   type DecidePlanOptions,
 } from '@/lib/services/planGateDoor';
 import { plansService } from '@/lib/services/plansService';
+import { PlanWalkIncompleteError } from '@/lib/plans/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 
 export type {
@@ -57,6 +58,15 @@ export const planDecisionService = {
     opts: DecidePlanOptions = {},
   ): Promise<PlanWithItemsDto> {
     const { plan, gate } = await planAndGate(input.planId, ctx);
+    // ⚠️ AN UNFINISHED WALK IS REFUSED BY NAME (Bug MOTIR-11701), before the door: a
+    // `stopped` plan always, and an ungated `planned` one whose walk is owed a card (a
+    // legacy close — an awaiting gate on one is refused by the claim under the lock).
+    if (plan.status === 'stopped' || (!gate && plan.status === 'planned')) {
+      const walk = await plansService.readWalkCompleteness(plan, ctx);
+      if (plan.status === 'stopped' || !walk.complete) {
+        throw new PlanWalkIncompleteError(plan.id, plan.status, walk.unwritten);
+      }
+    }
     if (!gate) refuseUngated(plan, 'approve');
     await decideThroughDoor(gate, 'approve', input, ctx, opts);
     return plansService.getPlan(plan.id, ctx);
@@ -70,7 +80,12 @@ export const planDecisionService = {
   async decline(input: DecidePlanInput, ctx: ServiceContext): Promise<PlanDto> {
     const { plan, gate } = await planAndGate(input.planId, ctx);
     const asked = gate?.state === 'awaiting';
-    if (!asked && (plan.status === 'generating' || plan.status === 'stale')) {
+    if (
+      !asked &&
+      // `stopped` (Bug MOTIR-11701): its walk never finished, so nobody is asked about
+      // it either — its Decline is the plain discard a `generating` plan's is.
+      (plan.status === 'generating' || plan.status === 'stale' || plan.status === 'stopped')
+    ) {
       return plansService.declineUnaskedPlan(plan.id, ctx);
     }
     if (!gate) refuseUngated(plan, 'decline');

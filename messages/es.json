@@ -446,7 +446,9 @@
       "checking": "Revisando",
       "editing": "Editando",
       "fixing": "Corrigiendo"
-    }
+    },
+    "status_stopped": "Detenido",
+    "stoppedHint": "Este plan se detuvo antes de que se escribieran todos los elementos. Reanúdalo desde su conversación para terminarlo, o descártalo: nada cambia en tu backlog."
   },
   "projectAccess": {
     "noAccessTitle": "No tienes acceso a este proyecto",
@@ -8673,7 +8675,8 @@
       "approving": "Aprobando…",
       "stale": "Desactualizado",
       "approved": "Aprobado",
-      "declined": "Rechazado"
+      "declined": "Rechazado",
+      "stopped": "Detenido"
     },
     "loadingMore": "Cargando…",
     "generation": {
@@ -8723,7 +8726,8 @@
         "approved": "Aprobado",
         "declined": "Rechazado",
         "closed": "Cerrado",
-        "waiting": "Por reanudar"
+        "waiting": "Por reanudar",
+        "stopped": "Detenido"
       },
       "origin": {
         "mcp": "Plan del Agente",
@@ -8918,7 +8922,8 @@
         "linkRefused": "Motir no pudo aprobar este plan: una de sus dependencias formaría un ciclo o repetiría un vínculo que ya existe. No se añadió nada: hay que corregir las dependencias del plan antes de poder aprobarlo.",
         "notAuthorised": "No puedes decidir sobre este plan: para aprobarlo o rechazarlo necesitas un permiso que no tienes en este proyecto. No se cambió nada.",
         "refused": "Motir rechazó esta decisión{hasItem, select, yes { sobre el elemento de trabajo propuesto “{item}”} other {}}, así que no se cambió nada; volver a pulsar no servirá por sí solo.",
-        "refusalReason": "Motivo indicado: {reason}"
+        "refusalReason": "Motivo indicado: {reason}",
+        "walkIncomplete": "Este plan aún no se puede aprobar: se detuvo antes de que se escribieran todos los elementos. Reanúdalo para escribir el resto. No se cambió nada."
       },
       "answeredFrom": "{count, plural, =0 {Respondido sin citar nada} one {Respondido a partir de # elemento de trabajo} other {Respondido a partir de # elementos de trabajo}}",
       "correctToAsk": "Responder esto en su lugar",
@@ -10980,7 +10985,8 @@
         "prompt_too_large": "el contexto del plan era demasiado grande para el modelo",
         "job_failed": "el trabajo de planificación falló",
         "stalled": "el plan dejó de avanzar",
-        "internal": "algo salió mal por nuestra parte"
+        "internal": "algo salió mal por nuestra parte",
+        "stopped": "el plan se detuvo antes de que se escribieran todos los elementos"
       },
       "refusal": {
         "credits": "Tu organización se ha quedado sin créditos de Motir AI. Añade créditos y luego reanuda.",
@@ -16606,7 +16612,8 @@
         "generating": "Motir AI aún está escribiendo este plan.",
         "planned": "Este plan está esperando aprobación.",
         "approving": "Este plan se está aprobando.",
-        "stale": "Este plan necesita atención antes de poder aprobarse."
+        "stale": "Este plan necesita atención antes de poder aprobarse.",
+        "stopped": "Este plan se detuvo antes de que se escribieran todos los elementos. Reanúdalo para terminarlo."
       },
       "reviewPlan": "Revisar plan",
       "planHeldOption": "retenido por el plan",

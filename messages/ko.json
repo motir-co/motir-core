@@ -446,7 +446,9 @@
       "checking": "검사 중",
       "editing": "편집 중",
       "fixing": "수정 중"
-    }
+    },
+    "status_stopped": "중지됨",
+    "stoppedHint": "이 계획은 모든 항목이 작성되기 전에 중지되었습니다. 대화에서 재개하여 완료하거나 폐기하세요 — 백로그는 변경되지 않습니다."
   },
   "projectAccess": {
     "noAccessTitle": "이 프로젝트에 액세스할 수 없습니다",
@@ -8667,7 +8669,8 @@
       "approving": "승인 중…",
       "stale": "오래됨",
       "approved": "승인됨",
-      "declined": "거절됨"
+      "declined": "거절됨",
+      "stopped": "중지됨"
     },
     "loadingMore": "불러오는 중…",
     "generation": {
@@ -8717,7 +8720,8 @@
         "approved": "승인됨",
         "declined": "거절됨",
         "closed": "종료됨",
-        "waiting": "재개 필요"
+        "waiting": "재개 필요",
+        "stopped": "중지됨"
       },
       "origin": {
         "mcp": "에이전트 계획",
@@ -8912,7 +8916,8 @@
         "linkRefused": "Motir가 이 계획을 승인하지 못했습니다. 의존 관계 중 하나가 순환하거나 이미 있는 링크를 반복합니다. 아무것도 추가되지 않았습니다. 승인하려면 먼저 계획의 의존 관계를 수정해야 합니다.",
         "notAuthorised": "이 계획을 결정할 수 없습니다. 승인하거나 거부하려면 이 프로젝트에서 보유하지 않은 권한이 필요합니다. 아무것도 변경되지 않았습니다.",
         "refused": "Motir가 {hasItem, select, yes {제안된 작업 항목 “{item}”에 대한 } other {}}이 결정을 거부했으므로 아무것도 변경되지 않았습니다. 다시 누르는 것만으로는 해결되지 않습니다.",
-        "refusalReason": "제시된 이유: {reason}"
+        "refusalReason": "제시된 이유: {reason}",
+        "walkIncomplete": "이 계획은 아직 승인할 수 없습니다 — 모든 항목이 작성되기 전에 중지되었습니다. 재개하여 나머지를 작성하세요. 변경된 것은 없습니다."
       },
       "answeredFrom": "{count, plural, =0 {아무것도 인용하지 않고 답변함} other {작업 항목 #개를 근거로 답변함}}",
       "correctToAsk": "대신 이 질문에 답변",
@@ -10974,7 +10979,8 @@
         "prompt_too_large": "플랜의 컨텍스트가 모델에 비해 너무 컸습니다",
         "job_failed": "계획 작업이 실패했습니다",
         "stalled": "계획이 더 이상 진행되지 않았습니다",
-        "internal": "저희 쪽에서 문제가 발생했습니다"
+        "internal": "저희 쪽에서 문제가 발생했습니다",
+        "stopped": "모든 항목이 작성되기 전에 계획이 중지되었습니다"
       },
       "refusal": {
         "credits": "조직의 Motir AI 크레딧이 소진되었습니다. 크레딧을 추가한 뒤 다시 재개하세요.",
@@ -16600,7 +16606,8 @@
         "generating": "Motir AI가 아직 이 계획을 작성하고 있습니다.",
         "planned": "이 계획은 승인을 기다리고 있습니다.",
         "approving": "이 계획을 승인하는 중입니다.",
-        "stale": "이 계획은 승인하기 전에 확인이 필요합니다."
+        "stale": "이 계획은 승인하기 전에 확인이 필요합니다.",
+        "stopped": "이 계획은 모든 항목이 작성되기 전에 중지되었습니다. 재개하여 완료하세요."
       },
       "reviewPlan": "계획 검토",
       "planHeldOption": "계획으로 보류됨",

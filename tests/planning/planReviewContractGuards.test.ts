@@ -30,6 +30,7 @@ const FOOTER_ARM: Record<PlanStatusDto, 'gate' | 'outcome'> = {
   planned: 'gate', // Approve · Decline · the approve hint
   approving: 'gate', // MOTIR-9006 — Approve and Decline disabled while it is written
   stale: 'gate', // Approve live · Decline live · the stale OUTCOME line, then the hint
+  stopped: 'gate', // MOTIR-11701 — no Approve · Discard · `stoppedHint`
   approved: 'outcome', // `DecidedOutcome` — no gate, band and padding kept
   declined: 'outcome', // `DecidedOutcome` — same
 };

@@ -304,6 +304,35 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
     expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('planned');
   });
 
+  it('answers 409 PLAN_WALK_INCOMPLETE for a `stopped` plan, naming what is owed', async () => {
+    // Bug MOTIR-11701. A walk ran (a lay step) and ended with its card unwritten, so the
+    // close lands `stopped`, not `planned` — and this door refuses it by name, with the
+    // status as data, exactly as the in-app approve does. Nothing is committed.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key, planId } = await refusedCardWithPlan(caller, { close: false });
+    await plansService.recordPlanStep(
+      planId,
+      { sessionKey: 'lay', kind: 'lay', targetRef: null },
+      caller.ctx,
+    );
+    await plansService.endPlanStep(planId, 'lay', caller.ctx);
+    await plansService.markPlanned(planId, caller.ctx);
+    expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('stopped');
+
+    const res = await approve(caller, key);
+
+    expect(res.status).toBe(409);
+    expect(res.status).toBe(DOMAIN_ERROR_STATUS['PLAN_WALK_INCOMPLETE']);
+    expect(await res.json()).toMatchObject({
+      code: 'PLAN_WALK_INCOMPLETE',
+      planId,
+      planStatus: 'stopped',
+      unwritten: [{ key: null, title: 'the corrected card' }],
+    });
+    expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('stopped');
+    expect(await adminDb.workItem.count({ where: { title: 'the corrected card' } })).toBe(0);
+  });
+
   // ── B4, and the scope ─────────────────────────────────────────────────────
 
   it('404s an unknown card and another tenant’s card IDENTICALLY — no existence leak', async () => {

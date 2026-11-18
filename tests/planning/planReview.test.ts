@@ -131,6 +131,12 @@ describe('summarizePlanApproval', () => {
 });
 
 describe('planDecisionErrorCode', () => {
+  it('names an unfinished walk (Bug MOTIR-11701)', () => {
+    expect(planDecisionErrorCode(new PlanRequestError(409, 'PLAN_WALK_INCOMPLETE'))).toBe(
+      'walkIncomplete',
+    );
+  });
+
   it('names the refusal the persist gate raises', () => {
     expect(planDecisionErrorCode(new PlanRequestError(409, 'PLAN_TARGET_IMMUTABLE'))).toBe(
       'immutable',

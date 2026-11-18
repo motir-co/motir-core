@@ -191,6 +191,14 @@ export const planStepRepository = {
     return r.count;
   },
 
+  /** Clear EVERY step of a plan — a walk that closed `stopped` (Bug MOTIR-11701) has no
+   *  session running, so a step it left behind would read its card as being written
+   *  after the walk resumes. Returns how many rows went. */
+  async deleteForPlan(planId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const r = await tx.planStep.deleteMany({ where: { planId } });
+    return r.count;
+  },
+
   /** One plan's steps, oldest first. */
   async listByPlan(planId: string, tx: Prisma.TransactionClient): Promise<PlanStep[]> {
     return tx.planStep.findMany({

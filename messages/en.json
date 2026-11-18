@@ -446,7 +446,9 @@
       "checking": "Checking",
       "editing": "Editing",
       "fixing": "Fixing"
-    }
+    },
+    "status_stopped": "Stopped",
+    "stoppedHint": "This plan stopped before every item was written. Resume it from its conversation to finish it, or discard it — nothing in your backlog changes."
   },
   "projectAccess": {
     "noAccessTitle": "You don’t have access to this project",
@@ -8670,7 +8672,8 @@
       "approving": "Approving…",
       "stale": "Stale",
       "approved": "Approved",
-      "declined": "Declined"
+      "declined": "Declined",
+      "stopped": "Stopped"
     },
     "loadingMore": "Loading…",
     "generation": {
@@ -8720,7 +8723,8 @@
         "approved": "Approved",
         "declined": "Declined",
         "closed": "Closed",
-        "waiting": "Waiting to resume"
+        "waiting": "Waiting to resume",
+        "stopped": "Stopped"
       },
       "origin": {
         "mcp": "Agent plan",
@@ -8915,7 +8919,8 @@
         "linkRefused": "Motir couldn’t approve this plan: one of its dependencies would loop back on itself or repeat a link that already exists. Nothing was added — the plan’s dependencies need correcting before it can be approved.",
         "notAuthorised": "You can’t decide this plan — approving or declining it needs a permission you don’t have in this project. Nothing was changed.",
         "refused": "Motir refused this decision{hasItem, select, yes { about the proposed work item “{item}”} other {}}, so nothing was changed — pressing again won’t help on its own.",
-        "refusalReason": "Reason given: {reason}"
+        "refusalReason": "Reason given: {reason}",
+        "walkIncomplete": "This plan can’t be approved yet — it stopped before every item was written. Resume it to write the rest. Nothing was changed."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToAsk": "Answer this instead",
@@ -10977,7 +10982,8 @@
         "prompt_too_large": "the plan's context was too large for the model",
         "job_failed": "the planning job failed",
         "stalled": "the plan stopped making progress",
-        "internal": "something went wrong on our side"
+        "internal": "something went wrong on our side",
+        "stopped": "the plan stopped before every item was written"
       },
       "refusal": {
         "credits": "Your organization is out of Motir AI credits. Add credits, then resume.",
@@ -16603,7 +16609,8 @@
         "generating": "Motir AI is still writing this plan.",
         "planned": "This plan is waiting for approval.",
         "approving": "This plan is being approved.",
-        "stale": "This plan needs attention before it can be approved."
+        "stale": "This plan needs attention before it can be approved.",
+        "stopped": "This plan stopped before every item was written. Resume it to finish."
       },
       "reviewPlan": "Review plan",
       "planHeldOption": "held by plan",

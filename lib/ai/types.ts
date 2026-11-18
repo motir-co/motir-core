@@ -796,8 +796,12 @@ export interface RequestEnvelope {
    * motir-ai's `JobRequest.resume`, MOTIR-7910): `planId` is the plan to continue and
    * `fromJobId` the failed job whose conversation and settled PART 1 the new job reads.
    * Absent on every other submit, so the body is byte-identical to before.
+   *
+   * `stoppedWalk` (Bug MOTIR-11701): the plan is `stopped` — its walk CLOSED before every
+   * card was written — so `fromJobId` SUCCEEDED rather than failed. motir-ai accepts a
+   * settled succeeded job only with this flag; it is absent on a failed attempt's resume.
    */
-  resume?: { planId: string; fromJobId: string };
+  resume?: { planId: string; fromJobId: string; stoppedWalk?: true };
   /**
    * The submit's idempotency key (MOTIR-9255; motir-ai's `JobRequest.idempotencyKey`): a
    * repeat in the same project answers the job the first submit created. Sent on a

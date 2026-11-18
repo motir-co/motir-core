@@ -405,7 +405,11 @@ export type PlanSessionFailureReasonDto =
   | 'prompt_too_large'
   | 'job_failed'
   | 'stalled'
-  | 'internal';
+  | 'internal'
+  // Bug MOTIR-11701 — core's own reason, never motir-ai's: the walk CLOSED before
+  // every card was written (the person's Stop, a failed author session, a limit),
+  // so the plan is `stopped` and resumable.
+  | 'stopped';
 
 /** A failed attempt waiting to resume — see {@link PlanChangeSessionDto.failure}. */
 export interface PlanSessionFailureDto {

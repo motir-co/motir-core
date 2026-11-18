@@ -446,7 +446,9 @@
       "checking": "Wordt gecontroleerd",
       "editing": "Wordt bewerkt",
       "fixing": "Wordt hersteld"
-    }
+    },
+    "status_stopped": "Gestopt",
+    "stoppedHint": "Dit plan is gestopt voordat alle items waren geschreven. Hervat het vanuit het gesprek om het af te maken, of verwerp het — er verandert niets in je backlog."
   },
   "projectAccess": {
     "noAccessTitle": "Je hebt geen toegang tot dit project",
@@ -8673,7 +8675,8 @@
       "approving": "Wordt goedgekeurd…",
       "stale": "Verouderd",
       "approved": "Goedgekeurd",
-      "declined": "Afgewezen"
+      "declined": "Afgewezen",
+      "stopped": "Gestopt"
     },
     "loadingMore": "Laden…",
     "generation": {
@@ -8723,7 +8726,8 @@
         "approved": "Goedgekeurd",
         "declined": "Afgewezen",
         "closed": "Gesloten",
-        "waiting": "Te hervatten"
+        "waiting": "Te hervatten",
+        "stopped": "Gestopt"
       },
       "origin": {
         "mcp": "Agentplan",
@@ -8918,7 +8922,8 @@
         "linkRefused": "Motir kon dit plan niet goedkeuren: een van de afhankelijkheden zou een kringloop vormen of een bestaande koppeling herhalen. Er is niets toegevoegd — de afhankelijkheden van het plan moeten worden gecorrigeerd voordat het kan worden goedgekeurd.",
         "notAuthorised": "Je kunt niet over dit plan beslissen — goedkeuren of afwijzen vereist een recht dat je in dit project niet hebt. Er is niets gewijzigd.",
         "refused": "Motir heeft deze beslissing{hasItem, select, yes { over het voorgestelde werkitem ‘{item}’} other {}} geweigerd, dus er is niets gewijzigd — nogmaals drukken helpt op zichzelf niet.",
-        "refusalReason": "Opgegeven reden: {reason}"
+        "refusalReason": "Opgegeven reden: {reason}",
+        "walkIncomplete": "Dit plan kan nog niet worden goedgekeurd — het is gestopt voordat alle items waren geschreven. Hervat het om de rest te schrijven. Er is niets gewijzigd."
       },
       "answeredFrom": "{count, plural, =0 {Beantwoord zonder iets aan te halen} one {Beantwoord op basis van # werkitem} other {Beantwoord op basis van # werkitems}}",
       "correctToAsk": "In plaats daarvan dit beantwoorden",
@@ -10980,7 +10985,8 @@
         "prompt_too_large": "de context van het plan te groot was voor het model",
         "job_failed": "de planningstaak mislukt is",
         "stalled": "het plan niet meer vorderde",
-        "internal": "er aan onze kant iets misging"
+        "internal": "er aan onze kant iets misging",
+        "stopped": "het plan stopte voordat alle items waren geschreven"
       },
       "refusal": {
         "credits": "Je organisatie heeft geen Motir AI-tegoed meer. Voeg tegoed toe en hervat dan.",
@@ -16606,7 +16612,8 @@
         "generating": "Motir AI is dit plan nog aan het schrijven.",
         "planned": "Dit plan wacht op Goedkeuring.",
         "approving": "Dit plan wordt goedgekeurd.",
-        "stale": "Dit plan heeft aandacht nodig voordat het kan worden goedgekeurd."
+        "stale": "Dit plan heeft aandacht nodig voordat het kan worden goedgekeurd.",
+        "stopped": "Dit plan is gestopt voordat alle items waren geschreven. Hervat het om het af te maken."
       },
       "reviewPlan": "Plan bekijken",
       "planHeldOption": "tegengehouden door plan",

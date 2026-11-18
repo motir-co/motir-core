@@ -446,7 +446,9 @@
       "checking": "Vérification en cours",
       "editing": "Modification",
       "fixing": "Correction"
-    }
+    },
+    "status_stopped": "Arrêté",
+    "stoppedHint": "Ce plan s'est arrêté avant que tous les éléments soient rédigés. Reprenez-le depuis sa conversation pour le terminer, ou abandonnez-le — rien ne change dans votre backlog."
   },
   "projectAccess": {
     "noAccessTitle": "Vous n’avez pas accès à ce projet",
@@ -8673,7 +8675,8 @@
       "approving": "Approbation…",
       "stale": "Obsolète",
       "approved": "Approuvé",
-      "declined": "Refusé"
+      "declined": "Refusé",
+      "stopped": "Arrêté"
     },
     "loadingMore": "Chargement…",
     "generation": {
@@ -8723,7 +8726,8 @@
         "approved": "Approuvé",
         "declined": "Refusé",
         "closed": "Fermé",
-        "waiting": "À reprendre"
+        "waiting": "À reprendre",
+        "stopped": "Arrêté"
       },
       "origin": {
         "mcp": "Plan d'agent",
@@ -8918,7 +8922,8 @@
         "linkRefused": "Motir n’a pas pu approuver ce plan : l’une de ses dépendances formerait une boucle ou répéterait un lien qui existe déjà. Rien n’a été ajouté — les dépendances du plan doivent être corrigées avant qu’il puisse être approuvé.",
         "notAuthorised": "Vous ne pouvez pas décider de ce plan — l’approuver ou le refuser requiert une autorisation que vous n’avez pas dans ce projet. Rien n’a été modifié.",
         "refused": "Motir a refusé cette décision{hasItem, select, yes { concernant l’élément de travail proposé « {item} »} other {}}, donc rien n’a été modifié — appuyer à nouveau ne suffira pas.",
-        "refusalReason": "Motif indiqué : {reason}"
+        "refusalReason": "Motif indiqué : {reason}",
+        "walkIncomplete": "Ce plan ne peut pas encore être approuvé — il s'est arrêté avant que tous les éléments soient rédigés. Reprenez-le pour rédiger le reste. Rien n'a été modifié."
       },
       "answeredFrom": "{count, plural, =0 {Répondu sans rien citer} one {Répondu à partir de # élément de travail} other {Répondu à partir de # éléments de travail}}",
       "correctToAsk": "Répondre plutôt à cette question",
@@ -10980,7 +10985,8 @@
         "prompt_too_large": "le contexte du plan était trop volumineux pour le modèle",
         "job_failed": "la tâche de planification a échoué",
         "stalled": "le plan a cessé de progresser",
-        "internal": "un problème est survenu de notre côté"
+        "internal": "un problème est survenu de notre côté",
+        "stopped": "le plan s'est arrêté avant que tous les éléments soient rédigés"
       },
       "refusal": {
         "credits": "Votre organisation n’a plus de crédits Motir AI. Ajoutez des crédits, puis reprenez.",
@@ -16606,7 +16612,8 @@
         "generating": "Motir AI rédige encore ce plan.",
         "planned": "Ce plan attend une approbation.",
         "approving": "Ce plan est en cours d'approbation.",
-        "stale": "Ce plan nécessite votre attention avant de pouvoir être approuvé."
+        "stale": "Ce plan nécessite votre attention avant de pouvoir être approuvé.",
+        "stopped": "Ce plan s'est arrêté avant que tous les éléments soient rédigés. Reprenez-le pour le terminer."
       },
       "reviewPlan": "Examiner le plan",
       "planHeldOption": "bloqué par un plan",

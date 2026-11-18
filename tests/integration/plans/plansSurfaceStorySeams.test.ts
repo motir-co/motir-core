@@ -360,6 +360,7 @@ describe('GUARD: totality over the status vocabulary', () => {
       'generating',
       'planned',
       'stale',
+      'stopped',
     ]);
   });
 

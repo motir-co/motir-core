@@ -14,6 +14,7 @@ import {
 import {
   AUTO_RESUMES_PER_SESSION,
   type AutoResumeCause,
+  isUnfinishedWalkStatus,
   sessionWaitingState,
 } from '@/lib/planChange/sessionWaitingState';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
@@ -57,6 +58,9 @@ interface ResumeTarget {
   failedJobId: string;
   /** The plan's starter (MOTIR-8741) — whose language the resumed walk speaks. */
   starterUserId: string | null;
+  /** The plan is `stopped` (Bug MOTIR-11701): its walk CLOSED unfinished, so the job it
+   *  continues succeeded, and motir-ai is told so. */
+  stoppedWalk: boolean;
 }
 
 /**
@@ -108,7 +112,7 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
     // released when the failure was recorded, and the next turn plans again.
     if (session.failureResumable === false) throw new PlanNotResumableError(session.id);
     const plan = await planRepository.findLatestForResume(session.id, tx);
-    if (!plan || plan.status !== 'generating' || plan.sourceJobId !== session.failedJobId) {
+    if (!plan || !isUnfinishedWalkStatus(plan.status) || plan.sourceJobId !== session.failedJobId) {
       // Neither read takes a lock and the isolation is read committed, so a concurrent
       // Resume's bind can commit BETWEEN the two: the session above was read still failed,
       // and the plan is already re-pointed at the winner's job (MOTIR-8261). Re-read the
@@ -132,6 +136,7 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
       planId: plan.id,
       failedJobId: session.failedJobId,
       starterUserId: plan.createdById,
+      stoppedWalk: plan.status === 'stopped',
     };
   });
 }
@@ -171,7 +176,7 @@ async function bindWithin(
   if (fresh.failedJobId !== target.failedJobId) throw new PlanNotResumableError(fresh.id);
   if (fresh.failureResumable === false) throw new PlanNotResumableError(fresh.id);
   const plan = await planRepository.findById(target.planId, workspaceId, tx);
-  if (!plan || plan.status !== 'generating' || plan.sourceJobId !== target.failedJobId) {
+  if (!plan || !isUnfinishedWalkStatus(plan.status) || plan.sourceJobId !== target.failedJobId) {
     throw new PlanNotResumableError(fresh.id);
   }
   if (!(await planRepository.repointSourceJob(target.planId, jobId, tx))) {
@@ -207,7 +212,7 @@ async function markUnresumable(pctx: ProjectContext, target: ResumeTarget): Prom
     if (!(await planRepository.lockById(target.planId, tx))) return false;
     if (!(await planChangeSessionRepository.lockById(target.sessionId, tx))) return false;
     const plan = await planRepository.findById(target.planId, pctx.workspaceId, tx);
-    if (!plan || plan.status !== 'generating' || plan.sourceJobId !== target.failedJobId) {
+    if (!plan || !isUnfinishedWalkStatus(plan.status) || plan.sourceJobId !== target.failedJobId) {
       return false;
     }
     return planChangeSessionRepository.markFailureUnresumable(
@@ -326,6 +331,9 @@ async function precheckAutomatic(
         planId: plan.id,
         failedJobId: session.failedJobId,
         starterUserId: plan.createdById,
+        // The automatic resume never continues a `stopped` walk (its precheck reads
+        // `generating` only): a stop is a person's or a walk's own ending, not a lost machine.
+        stoppedWalk: false,
       },
       starterCtx: {
         userId: session.createdById,
@@ -423,6 +431,7 @@ export const planSessionResumeService = {
         pctx,
         target.starterUserId,
         target.sessionId,
+        target.stoppedWalk,
       ));
     } catch (err) {
       // NOTHING TO CONTINUE FROM (MOTIR-9121): motir-ai refuses a resume of a job that failed

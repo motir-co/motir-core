@@ -62,6 +62,8 @@ export interface PlanGateBackfillWorkspaceCounts {
   raise: number;
   alreadyAwaiting: number;
   noProposals: number;
+  /** Bug MOTIR-11701: `planned`, but its walk is owed a card — asked nothing. */
+  walkIncomplete: number;
   /** Left `planned` between the scan and its own transaction. */
   notPlanned: number;
   failed: number;
@@ -76,6 +78,8 @@ export interface PlanGateBackfillReport {
   raised: PlanGateBackfillRaise[];
   alreadyAwaiting: number;
   noProposals: number;
+  /** Bug MOTIR-11701: `planned` plans whose walk is owed a card — never asked. */
+  walkIncomplete: number;
   notPlanned: number;
   failed: PlanGateBackfillFailure[];
   byWorkspace: PlanGateBackfillWorkspaceCounts[];
@@ -127,6 +131,7 @@ export const planGateBackfillService = {
       raised: [],
       alreadyAwaiting: 0,
       noProposals: 0,
+      walkIncomplete: 0,
       notPlanned: 0,
       failed: [],
       byWorkspace: [],
@@ -142,6 +147,7 @@ export const planGateBackfillService = {
           raise: 0,
           alreadyAwaiting: 0,
           noProposals: 0,
+          walkIncomplete: 0,
           notPlanned: 0,
           failed: 0,
         };
@@ -201,6 +207,10 @@ export const planGateBackfillService = {
           case 'no_proposals':
             counts.noProposals += 1;
             report.noProposals += 1;
+            break;
+          case 'walk_incomplete':
+            counts.walkIncomplete += 1;
+            report.walkIncomplete += 1;
             break;
           case 'not_planned':
             counts.notPlanned += 1;

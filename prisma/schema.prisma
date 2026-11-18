@@ -7555,6 +7555,18 @@ model ApiToken {
 /// (the materialize committed) and back to `planned` (it failed, timed out, or
 /// the stalled-approval sweep released a claim whose approver died —
 /// `Plan.approvingAt` is its clock).
+///
+/// `stopped` — the walk ENDED BEFORE IT WAS COMPLETE (Bug MOTIR-11701): the
+/// person pressed Stop, an author session failed, a limit was met or the run
+/// crashed, and at least one card the walk owes is not written. The close
+/// writes it INSTEAD of `planned`, so `planned` keeps meaning a whole plan.
+/// NOT terminal and NOT decided: the plan keeps every proposal and holds its
+/// targets, raises NO approval gate, and every approve door refuses it with
+/// `PLAN_WALK_INCOMPLETE`. Its exits are a Resume (back to `generating`, then
+/// closed again — `planned` once every card is written) and a Decline
+/// (`declined` / `discarded`, as an unfinished plan's ending is recorded).
+/// Appended LAST, as `ALTER TYPE … ADD VALUE` places it; nothing orders plans
+/// by status.
 enum PlanStatus {
   generating
   planned
@@ -7562,6 +7574,7 @@ enum PlanStatus {
   stale
   approved
   declined
+  stopped
 
   @@map("plan_status")
 }
@@ -7676,6 +7689,11 @@ enum PlanSessionFailureReason {
   job_failed
   stalled
   internal
+  /// The walk ended before every card was written and closed its plan
+  /// `stopped` (Bug MOTIR-11701). Core's own member, like `stalled`: written by
+  /// the close, never sent by motir-ai. The session waits in To resume with
+  /// the failed-attempt Resume, which continues the same plan.
+  stopped
 
   @@map("plan_session_failure_reason")
 }

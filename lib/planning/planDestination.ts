@@ -142,6 +142,7 @@ export function planRowDestination({
 
   switch (planStatus) {
     case 'generating':
+    case 'stopped':
     case 'planned':
     case 'approving':
     case 'stale':

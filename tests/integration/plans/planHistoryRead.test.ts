@@ -96,6 +96,12 @@ async function planWith(
     await adminDb.plan.update({ where: { id: plan.id }, data: { status: 'stale' } });
     return freeTargets(plan.id);
   }
+  // A walk that ended unfinished (Bug MOTIR-11701) — what the close writes for a walked
+  // plan still owed a card; the fixture walks nothing, so it is set directly.
+  if (status === 'stopped') {
+    await adminDb.plan.update({ where: { id: plan.id }, data: { status: 'stopped' } });
+    return freeTargets(plan.id);
+  }
   // Being approved (Bug MOTIR-9006): the claim an approve commits before it materializes.
   if (status === 'approving') {
     await adminDb.plan.update({

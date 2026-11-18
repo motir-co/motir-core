@@ -18,6 +18,7 @@ import {
   REVISION_ENDED_KIND,
   REVISION_STARTED_KIND,
   isReopenedByRevision,
+  revisionReopenedFrom,
   PLAN_REVISION_LEASE_MS,
   revisionLeaseOf,
 } from '@/lib/planChange/revisionLease';
@@ -298,7 +299,8 @@ export async function releaseRevisionForFailedJob(
     // A revision that RE-OPENED its plan is given back however its lease stands
     // (Bug MOTIR-8208): a lapsed lease over a `generating` plan still owes the plan
     // its `planned`.
-    const reopened = isReopenedByRevision(fresh, rows);
+    const reopenedFrom = fresh.status === 'generating' ? revisionReopenedFrom(rows) : null;
+    const reopened = reopenedFrom !== null;
     if (!reopened && !revisionLeaseOf(rows, new Date())) {
       return { planId: plan.id, released: false };
     }
@@ -315,7 +317,7 @@ export async function releaseRevisionForFailedJob(
           revision: true,
           jobId,
           failed: true,
-          ...(reopened ? { restoredTo: 'planned' } : {}),
+          ...(reopenedFrom ? { restoredTo: reopenedFrom } : {}),
         },
       },
       tx,
@@ -323,7 +325,7 @@ export async function releaseRevisionForFailedJob(
     if (reopened) {
       // Loaded lazily, for the cycle this file's header warns about.
       const { plansService } = await import('@/lib/services/plansService');
-      await plansService.restoreReopenedPlanWithin(tx, plan.id);
+      await plansService.restoreReopenedPlanWithin(tx, plan.id, reopenedFrom ?? 'planned');
     }
     return { planId: plan.id, released: true };
   });

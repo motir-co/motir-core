@@ -7,6 +7,7 @@ import {
 } from '@/lib/repositories/approvalGateRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planWalkCompletenessService } from '@/lib/services/planWalkCompletenessService';
 
 // THE PLAN GATE'S LIFECYCLE — when a `plan_approval` gate is RAISED, and when it is
 // WITHDRAWN (Story MOTIR-6012 · Subtask MOTIR-6036; ADR `approval-gates.md` §11.5,
@@ -24,6 +25,8 @@ import { planRepository } from '@/lib/repositories/planRepository';
 //   · SUPERSEDE `plan_stale` — `planDriftService.markStaleForTerminalTarget`, and
 //     `approvePlan`'s lazy backstop (`markStaleOnImmutableTarget`).
 //   · SUPERSEDE `plan_discarded` — `withdrawProposal`'s LAST-proposal discard.
+//   · SUPERSEDE `subject_gone` — `markPlanned`'s `stopped` close (Bug MOTIR-11701): a
+//     re-opened plan whose revision ended unfinished is no longer a question.
 //
 // ⚠️ WHAT DOES NOT TOUCH THE GATE (§11.5c, §11.7), stated so nobody "completes" it:
 //
@@ -55,7 +58,13 @@ import { planRepository } from '@/lib/repositories/planRepository';
 const KIND = 'plan_approval' as const;
 
 /** The two causes a plan-side writer withdraws a plan gate with (§11.7). */
-export type PlanGateSupersedeCause = Extract<LiveSupersedeCause, 'plan_stale' | 'plan_discarded'>;
+export type PlanGateSupersedeCause = Extract<
+  LiveSupersedeCause,
+  // `subject_gone` (Bug MOTIR-11701): a re-opened plan's revision closed `stopped`, so
+  // the plan is no longer a question — its subject no longer resolves (`currentPlanSubject`
+  // reads `planned` only), which is the sentence that cause already says.
+  'plan_stale' | 'plan_discarded' | 'subject_gone'
+>;
 
 /**
  * Whether a plan asks a question RIGHT NOW (§11.7 row 1): it is `planned` and holds at
@@ -70,6 +79,13 @@ async function askedSubjectOf(
   const subjectId = await currentPlanSubject(plan.id, plan.workspaceId, tx);
   if (!subjectId) return null;
   if ((await planItemRepository.countByPlan(plan.id, tx)) === 0) return null;
+  // ⚠️ AN UNFINISHED WALK ASKS NOTHING (Bug MOTIR-11701). Every raise path —
+  // the close, a drift restore, a revision's give-back, the backfill — reads this
+  // predicate, so a `planned` row whose walk is owed a card (a legacy close from
+  // before `stopped` existed) is never put in front of a person as a question.
+  if (!(await planWalkCompletenessService.readByIdWithin(plan.id, plan.workspaceId, tx)).complete) {
+    return null;
+  }
   return subjectId;
 }
 
@@ -80,9 +96,16 @@ async function askedSubjectOf(
  *   · `raise`           — a question with no awaiting gate: a raise inserts one.
  *   · `already_awaiting` — a question already asked: a raise is a no-op.
  *   · `no_proposals`    — `planned` but empty: nothing to ask.
+ *   · `walk_incomplete` — `planned` with proposals, but its walk is owed a card (Bug
+ *                         MOTIR-11701): nothing to ask until a Resume finishes it.
  *   · `not_planned`     — any other status (or gone): nothing to ask.
  */
-export type PlanGateAssessment = 'raise' | 'already_awaiting' | 'no_proposals' | 'not_planned';
+export type PlanGateAssessment =
+  | 'raise'
+  | 'already_awaiting'
+  | 'no_proposals'
+  | 'walk_incomplete'
+  | 'not_planned';
 
 /** What {@link planGateService.raise} did. */
 export interface PlanGateRaise {
@@ -142,7 +165,10 @@ export const planGateService = {
     const subjectId = await askedSubjectOf(plan, tx);
     if (!subjectId) {
       const row = await planRepository.findById(plan.id, plan.workspaceId, tx);
-      return row?.status === 'planned' ? 'no_proposals' : 'not_planned';
+      if (row?.status !== 'planned') return 'not_planned';
+      return (await planItemRepository.countByPlan(plan.id, tx)) === 0
+        ? 'no_proposals'
+        : 'walk_incomplete';
     }
     const [awaiting] = await approvalGateRepository.findAwaitingCardlessBySubject(
       KIND,
