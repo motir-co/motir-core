@@ -12,7 +12,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
-import { ciSpotSettingService } from '@/lib/services/ciSpotSettingService';
+import { ciSpotSettingReader } from '@/lib/services/ciSpotSettingReader';
 import { fleetShardService } from '@/lib/services/fleetShardService';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
@@ -236,7 +236,7 @@ describe('the boot asks for Spot only while the setting is on', () => {
   });
 
   it('a setting that cannot be read asks for no Spot — the runner still boots', async () => {
-    vi.spyOn(ciSpotSettingService, 'read').mockRejectedValue(new Error('database away'));
+    vi.spyOn(ciSpotSettingReader, 'read').mockRejectedValue(new Error('database away'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const intent = await seedIntent();
 
@@ -379,7 +379,7 @@ describe("a CI pool account's AWS adapter walks the setting's types, read per la
 
   it('a runner that asks for no Spot sends exactly the on-demand request, reading no setting', async () => {
     await saveSetting(true, ['m7i.large']);
-    const read = vi.spyOn(ciSpotSettingService, 'read');
+    const read = vi.spyOn(ciSpotSettingReader, 'read');
     const shard = await poolAccount();
 
     const handle = await fleetShardOrchestratorService.forShardRow(shard).provision(runnerSpec());

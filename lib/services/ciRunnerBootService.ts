@@ -58,7 +58,7 @@ import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { fleetCodeScanningCatchUpService } from '@/lib/services/fleetCodeScanningCatchUpService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
-import { ciSpotSettingService } from '@/lib/services/ciSpotSettingService';
+import { ciSpotSettingReader } from '@/lib/services/ciSpotSettingReader';
 import {
   githubRunnerCallLedgerService as runnerCallLedger,
   runnerCallReachedGithub,
@@ -1640,7 +1640,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
  */
 async function requestedCapacity(intentId: string): Promise<ContainerCapacity> {
   try {
-    return (await ciSpotSettingService.read()).enabled ? 'spot' : 'on_demand';
+    return (await ciSpotSettingReader.read()).enabled ? 'spot' : 'on_demand';
   } catch (err) {
     console.warn('[ciRunnerBootService] the CI Spot setting could not be read — on-demand', {
       intentId,

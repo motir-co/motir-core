@@ -74,7 +74,7 @@ import { indexFleetOnPool } from '@/lib/ciFleet/limits';
 import { agentRunnerOnPool } from '@/lib/ciFleet/fleetKindSwitches';
 import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
-import { ciSpotSettingService } from '@/lib/services/ciSpotSettingService';
+import { ciSpotSettingReader } from '@/lib/services/ciSpotSettingReader';
 import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
 import { observeHostingDestroyApp } from './hosting';
 import { observeDatabaseBranchDelete } from './database';
@@ -595,7 +595,7 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     shardTag: shard.name,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
     indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
-    spotInstanceTypes: async () => (await ciSpotSettingService.read()).instanceTypes,
+    spotInstanceTypes: async () => (await ciSpotSettingReader.read()).instanceTypes,
   });
 }
 
