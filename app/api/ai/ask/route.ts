@@ -32,7 +32,10 @@ import { PlanSeedNotApplicableError } from '@/lib/planChange/errors';
 //                                  affordance sent the turn (the shipped
 //                                  `isAnswer` precedent), so the thread can say
 //                                  later whether the planner's question was
-//                                  answered or superseded.
+//                                  answered or superseded. Beside it,
+//                                  `answerOptionId` names the option the person
+//                                  CLICKED (MOTIR-11700), resolved against the
+//                                  question the thread waits on.
 //   Either body may carry `anchorKey` (MOTIR-7047 · ADR AMENDMENT 1, A1.2): ONE
 //   work-item key the turn is ABOUT — usually the triage bug just reported. It is
 //   DATA, not an intent or a mode: the turn still lands on the project-wide
@@ -85,6 +88,7 @@ export async function POST(req: Request): Promise<Response> {
     turnId?: unknown;
     flip?: unknown;
     isAnswer?: unknown;
+    answerOptionId?: unknown;
     sessionId?: unknown;
     seedGateId?: unknown;
     anchorKey?: unknown;
@@ -150,6 +154,13 @@ export async function POST(req: Request): Promise<Response> {
         : null;
     const result = await aiAskService.submitTurn(body.body, ctx, {
       isAnswer: body.isAnswer === true,
+      // The option an answer PICKED (MOTIR-11700) — honoured only with `isAnswer`, and
+      // resolved by the service against the question the thread waits on.
+      ...(body.isAnswer === true &&
+      typeof body.answerOptionId === 'string' &&
+      body.answerOptionId.length > 0
+        ? { answerOptionId: body.answerOptionId }
+        : {}),
       ...(sessionId ? { sessionId } : {}),
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
       ...(anchorKey ? { anchorKey } : {}),

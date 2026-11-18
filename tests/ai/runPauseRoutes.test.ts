@@ -120,6 +120,24 @@ describe('POST /api/ai/plan-change/session/run-pause', () => {
     );
   });
 
+  it('passes a picked option’s id through (MOTIR-11700)', async () => {
+    const res = await answerPause(
+      sessionReq('POST', { ...body, choice: 'reply', text: 'Billing', optionId: 'o2' }),
+    );
+    expect(res.status).toBe(200);
+    expect(answer).toHaveBeenCalledWith(
+      {
+        sessionId: 's1',
+        jobId: 'job-1',
+        pauseId: 'p1',
+        choice: 'reply',
+        text: 'Billing',
+        optionId: 'o2',
+      },
+      expect.objectContaining({ projectId: 'pj1' }),
+    );
+  });
+
   it('passes a resume (a code_unsearchable pause’s answer) to the service', async () => {
     const res = await answerPause(sessionReq('POST', { ...body, choice: 'resume' }));
     expect(res.status).toBe(200);

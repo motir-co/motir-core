@@ -745,6 +745,16 @@ export class PlanChangeRunPauseShapeError extends Error {
   }
 }
 
+/** An answer named an option the question it answers did not offer (MOTIR-11700) —
+ *  a stale click, or no question waiting at all. → 400 */
+export class PlanChangeAnswerOptionUnknownError extends Error {
+  readonly code = 'PLAN_CHANGE_ANSWER_OPTION_UNKNOWN' as const;
+  constructor(readonly optionId: string) {
+    super(`The option ${optionId} is not one of the waiting question's options.`);
+    this.name = 'PlanChangeAnswerOptionUnknownError';
+  }
+}
+
 /** The pause was already answered, and not with this choice. Carries the stored
  *  answer so the surface can show what stands. → 409 */
 export class PlanChangeRunPauseAnsweredError extends Error {

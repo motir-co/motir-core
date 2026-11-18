@@ -3,6 +3,7 @@ import type {
   PlanChangeSession,
   PlanChangeTurn,
 } from '@/generated/prisma/client';
+import { readQuestionOption, readQuestionOptions } from '@/lib/planning/questionOptions';
 import type {
   AnswerOfferKindDto,
   DebugLandingDto,
@@ -186,11 +187,13 @@ export function toPlanChangeRunPauseDto(
     changeTurnIds: row.changeTurnIds,
     reason: row.reason,
     question: row.question,
+    options: row.kind === 'unclear' ? readQuestionOptions(row.options) : null,
     repos: parseCodeUnsearchableRepos(row.unsearchableRepos),
     createdAt: row.createdAt.toISOString(),
     answer: row.answer as PlanChangeRunPauseDto['answer'],
     answeredAt: row.answeredAt ? row.answeredAt.toISOString() : null,
     replyText: row.answer === 'replied' ? row.replyText : null,
+    replyOption: row.answer === 'replied' ? readQuestionOption(row.replyOption) : null,
     delivery: row.mailboxEntryId ? 'delivered' : row.deliveryRefusedCode ? 'refused' : 'pending',
     refusedCode: row.deliveryRefusedCode,
     mailboxEntryId: row.mailboxEntryId,
@@ -206,7 +209,9 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     body: row.body,
     jobId: row.jobId,
     question: row.question,
+    questionOptions: row.question ? readQuestionOptions(row.questionOptions) : null,
     isAnswer: row.isAnswer,
+    answerOption: row.isAnswer ? readQuestionOption(row.answerOption) : null,
     intent: (row.intent as PlanChangeTurnIntentDto | null) ?? null,
     intentCorrected: row.intentCorrected,
     citations: row.citations,

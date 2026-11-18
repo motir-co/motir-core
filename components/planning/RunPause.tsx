@@ -6,6 +6,11 @@ import { MessageCircleQuestionMark, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Bubble } from '@/components/planning/PlanChangeRail';
 import { ForwardedMarks, QueuedLabel } from '@/components/planning/MidRunTurn';
+import {
+  QuestionOptionList,
+  QuestionOptionReplies,
+  pickerOptionsOf,
+} from '@/components/planning/QuestionOptionPicker';
 import type { PlanChangeRunPauseDto } from '@/lib/dto/planChange';
 import type { QueuedTurn } from '@/lib/hooks/usePlanChangeConversation';
 
@@ -14,10 +19,17 @@ import type { QueuedTurn } from '@/lib/hooks/usePlanChangeConversation';
 // distinctness strip). Two kinds, one speaker treatment: the shipped ASKING
 // bubble — the planner asking the person — which the answering session never
 // uses. The planner's `reason` and `question` are MODEL output and are drawn as
-// plain text, never as Markdown.
+// plain text, never as Markdown. An `unclear` question's options (MOTIR-11700) are
+// drawn with `QuestionOptionPicker`, the same list and replies Grill me draws.
 
 const NS = 'planningWorkspace.conversation';
 export type PauseChoice = 'start_over' | 'apply';
+
+/** Picking one of an `unclear` question's options, or turning to the composer (MOTIR-11700). */
+export interface QuestionPick {
+  onPick: (option: { id: string; label: string }) => void;
+  onOwnWords: () => void;
+}
 
 // A `code_unsearchable` pause (MOTIR-9170) is drawn by `CodeUnsearchableBanner`, not by this
 // file's turns: its one control is the banner's own *Check again and continue*.
@@ -102,18 +114,41 @@ export function ReplanOfferTurn({
 export function PlannerQuestionTurn({
   pause,
   resumed,
+  pending = false,
+  questionPick,
 }: {
   pause: PlanChangeRunPauseDto;
   resumed: boolean;
+  /** An answer is in flight. */
+  pending?: boolean;
+  /** The question's options as replies while it is open (MOTIR-11700). */
+  questionPick?: QuestionPick;
 }) {
   const tc = useTranslations(NS);
   const tp = useTranslations(`${NS}.midRun.pause`);
+  const options = pause.options ? pickerOptionsOf(pause.options) : null;
   return (
     <>
       <PlannerBubble testId="plan-change-question">
         <span className="block">{pause.question}</span>
+        {options ? (
+          <QuestionOptionList options={options} testId="plan-change-question-options" />
+        ) : null}
         <span className="mt-1.5 block">{tp('unclearNote')}</span>
       </PlannerBubble>
+      {options && questionPick && pause.answer === null ? (
+        <QuestionOptionReplies
+          testId="plan-change-question-replies"
+          options={options}
+          disabled={pending}
+          onPick={(option) => questionPick.onPick({ id: option.id, label: option.label })}
+          optionTestId={(id) => `plan-change-question-option-${id}`}
+          groupLabel={tc('questionOptions.group')}
+          ownWordsLabel={tc('questionOptions.ownWords')}
+          ownWordsTestId="plan-change-question-own-words"
+          onOwnWords={questionPick.onOwnWords}
+        />
+      ) : null}
       {pause.answer !== null ? (
         <p
           className="text-center text-xs text-(--el-text-secondary)"
@@ -267,12 +302,15 @@ export function PauseThread({
   onAnswer,
   replyEntry,
   refusalCode,
+  questionPick,
 }: {
   pause: PlanChangeRunPauseDto;
   pending: boolean;
   onAnswer: (choice: PauseChoice) => void;
   replyEntry: QueuedTurn | null;
   refusalCode: string | null;
+  /** An `unclear` question's options as replies (MOTIR-11700). */
+  questionPick?: QuestionPick;
 }) {
   if (pause.kind === 'replan') {
     return (
@@ -287,6 +325,8 @@ export function PauseThread({
       <PlannerQuestionTurn
         pause={pause}
         resumed={Boolean(replyEntry?.read) || pause.entryRead === true}
+        pending={pending}
+        {...(questionPick ? { questionPick } : {})}
       />
       {pause.answer === 'replied' ? <PauseReply pause={pause} entry={replyEntry} /> : null}
       <PauseRecord pause={pause} refusalCode={refusalCode} />

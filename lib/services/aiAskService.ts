@@ -1,4 +1,5 @@
 import type { ProjectContext } from '@/lib/projects';
+import { plannerReadTexts } from '@/lib/planning/questionOptions';
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
@@ -223,12 +224,17 @@ export const ASK_CONVERSATION_TURNS_MAX = 20;
  * Pass the turns BEFORE the one being answered.
  */
 export function conversationTurnsOf(
-  turns: readonly Pick<PlanChangeTurnDto, 'role' | 'body'>[],
+  turns: readonly (Pick<PlanChangeTurnDto, 'role' | 'body'> &
+    Partial<
+      Pick<PlanChangeTurnDto, 'question' | 'questionOptions' | 'isAnswer' | 'answerOption'>
+    >)[],
 ): AskConversationTurn[] {
   const out: AskConversationTurn[] = [];
-  for (const t of turns) {
+  // A question's options, and which one an answer picked, read as words (MOTIR-11700).
+  const read = plannerReadTexts(turns);
+  for (const [i, t] of turns.entries()) {
     if (t.role === 'system') continue;
-    const text = t.body.trim();
+    const text = read[i]!.trim();
     if (text) out.push({ role: t.role === 'user' ? 'person' : 'motir', text });
   }
   return out.slice(-ASK_CONVERSATION_TURNS_MAX);
@@ -729,6 +735,8 @@ export const aiAskService = {
     ctx: ProjectContext,
     opts: {
       isAnswer?: boolean;
+      /** An answer that PICKED one of the waiting question's options (MOTIR-11700). */
+      answerOptionId?: string | null;
       sessionId?: string;
       seedGateId?: string;
       anchorKey?: string;
@@ -839,6 +847,8 @@ export const aiAskService = {
         // what runs on this branch is the plan-change submit, not an ask.
         intent: 'plan_change',
         isAnswer: true,
+        // The option the person clicked, resolved against the waiting question.
+        answerOptionId: opts.answerOptionId ?? null,
       });
       // The SHIPPED submit, untouched: it accumulates every user turn in order,
       // which is how answering RESUMES the run rather than restarting it.

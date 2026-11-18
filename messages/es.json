@@ -8869,6 +8869,10 @@
       "send": "Enviar",
       "answer": "Responder",
       "awaitingAnswer": "Esperando tu respuesta",
+      "questionOptions": {
+        "group": "Opciones de respuesta",
+        "ownWords": "Con mis propias palabras"
+      },
       "seeQuestion": "Verla",
       "retry": "Volver a intentar",
       "discard": "Descartar",

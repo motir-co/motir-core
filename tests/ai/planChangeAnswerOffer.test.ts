@@ -28,6 +28,8 @@ function row(answerOffer: unknown): PlanChangeTurn {
     jobId: 'job-1',
     question: null,
     isAnswer: false,
+    questionOptions: null,
+    answerOption: null,
     intent: null,
     intentCorrected: false,
     debugLandingClaimedAt: null,

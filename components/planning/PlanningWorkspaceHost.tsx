@@ -1530,6 +1530,12 @@ function PlanWorkspaceHost({
           offerRefusal={state.offerRefusal ?? null}
           providerLimit={railProviderLimit}
           onAnswerRunPause={(choice) => void answerRunPause(choice)}
+          // A click on one of the waiting question's options (MOTIR-11700): its label is
+          // the answer, and its id travels beside it — through the same send, so a
+          // mid-run question's pick reaches the pause door and any other the answer bar's.
+          onPickQuestionOption={(option) =>
+            void send(option.label, targets, { answerOptionId: option.id })
+          }
           // THE CARRY (MOTIR-7932): the hook routes an ended session's send to it, and
           // its swap re-keys the address through `onRestarted`, the restart's path.
           onCarrySend={sendTargeted}

@@ -8869,6 +8869,10 @@
       "send": "Versturen",
       "answer": "Antwoorden",
       "awaitingAnswer": "Wacht op je antwoord",
+      "questionOptions": {
+        "group": "Antwoordopties",
+        "ownWords": "In mijn eigen woorden"
+      },
       "seeQuestion": "Bekijken",
       "retry": "Opnieuw proberen",
       "discard": "Verwijderen",

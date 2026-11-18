@@ -7079,6 +7079,8 @@
   "planningWorkspace.conversation.send": "Send",
   "planningWorkspace.conversation.answer": "Answer",
   "planningWorkspace.conversation.awaitingAnswer": "Waiting for your answer",
+  "planningWorkspace.conversation.questionOptions.group": "Answer options",
+  "planningWorkspace.conversation.questionOptions.ownWords": "In my own words",
   "planningWorkspace.conversation.seeQuestion": "See it",
   "planningWorkspace.conversation.retry": "Try again",
   "planningWorkspace.conversation.discard": "Discard",

@@ -10259,6 +10259,15 @@ model PlanChangeTurn {
   /// thread rather than held in client state — so re-opening the workspace hours
   /// later comes back to the same pending question. Null on every other role.
   question              String?                @db.Text
+  /// The OPTIONS of that question (MOTIR-11700), `[{ id, label, means }]` — 2 to 4,
+  /// ids assigned by motir-ai (`o1`…). Drawn as choices the person clicks beside a
+  /// box for their own words. Null on every other turn, and on a question asked by
+  /// an engine that predates options.
+  questionOptions       Json?                  @map("question_options")
+  /// The option a `user` answer turn PICKED (MOTIR-11700), `{ id, label, means }`
+  /// copied from the question it answers. Null on an answer in the person's own
+  /// words (`isAnswer` with no option) and on every other turn.
+  answerOption          Json?                  @map("answer_option")
   /// A `user` turn sent as the REPLY to the pending question (through the answer
   /// bar), as opposed to one that changed the subject and SUPERSEDED it. The two
   /// dispositions render different markers (design state C vs E), and neither may
@@ -10698,6 +10707,12 @@ model PlanChangeMailboxEntry {
   /// The run pause this `fold` turn ANSWERS (MOTIR-8007): the person's reply to the
   /// planner's mid-run question, verbatim. Null on every other turn.
   answersPauseId  String?                       @map("answers_pause_id")
+  /// The option an answering turn PICKED (MOTIR-11700), `{ id, label, means }`,
+  /// delivered to the walk as `answerOption`. Null on every other turn.
+  answerOption    Json?                         @map("answer_option")
+  /// The answering turn was typed in the person's OWN WORDS against a question that
+  /// offered options (MOTIR-11700), delivered as `ownWords: true`.
+  answerOwnWords  Boolean                       @default(false) @map("answer_own_words")
   createdAt       DateTime                      @default(now()) @map("created_at")
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -10758,6 +10773,9 @@ model PlanChangeRunPause {
   reason              String?   @db.Text
   /// The planner's question — set exactly when `kind = 'unclear'` (≤ 600). Same.
   question            String?   @db.Text
+  /// That question's options (MOTIR-11700), `[{ id, label, means }]` — set with an
+  /// `unclear` question from an engine that sends them; null otherwise.
+  options             Json?
   idempotencyKey      String    @map("idempotency_key")
   createdAt           DateTime  @default(now()) @map("created_at")
   /// `start_over` | `apply` (replan), `replied` (unclear) or `resumed` (code_unsearchable); null while open.
@@ -10767,6 +10785,9 @@ model PlanChangeRunPause {
   /// The person's typed reply, verbatim — set only on `replied`. Kept on the pause
   /// so a replay can be compared against it and a refused delivery still records it.
   replyText           String?   @map("reply_text") @db.Text
+  /// The option the reply PICKED (MOTIR-11700), `{ id, label, means }`; null on a
+  /// reply in the person's own words and on every other answer.
+  replyOption         Json?     @map("reply_option")
   /// The mailbox entry written for the answer (the restart, decline or reply turn).
   mailboxEntryId      String?   @map("mailbox_entry_id")
   /// Set when the answer was recorded but could not be delivered because the run

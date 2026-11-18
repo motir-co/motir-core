@@ -564,12 +564,16 @@ export async function submitAskTurn(
    *  (MOTIR-7050). DATA, not an intent: the turn still lands on the project-wide
    *  thread, and what it turns out to be is still the server's reading. */
   anchorKey: string | null = null,
+  /** The option of the waiting question this answer PICKED (MOTIR-11700) — only
+   *  with `isAnswer`; the server resolves it against that question. */
+  answerOptionId: string | null = null,
 ): Promise<AskSubmitResponse | AskRedirectResponse> {
   return post<AskSubmitResponse | AskRedirectResponse>(
     '/api/ai/ask',
     {
       body,
       isAnswer,
+      ...(isAnswer && answerOptionId ? { answerOptionId } : {}),
       ...(sessionId ? { sessionId } : {}),
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
       ...(anchorKey ? { anchorKey } : {}),
@@ -606,8 +610,9 @@ export async function readRunPause(
 }
 
 /** Answer the planner's pause: START OVER or apply-to-written on a replan, a typed
- *  reply on an unclear one (MOTIR-8007). A run that ended first answers `refused`
- *  with the choice (and reply text) to hand back. */
+ *  reply on an unclear one (MOTIR-8007) — or, on an unclear one, a click on one of the
+ *  question's options (`optionId`, MOTIR-11700). A run that ended first answers
+ *  `refused` with the choice (and reply text) to hand back. */
 export async function answerRunPause(
   sessionId: string,
   jobId: string,
@@ -615,10 +620,18 @@ export async function answerRunPause(
   choice: 'start_over' | 'apply' | 'reply' | 'resume',
   text?: string,
   signal?: AbortSignal,
+  optionId?: string,
 ): Promise<AnswerRunPauseResponse> {
   return post<AnswerRunPauseResponse>(
     '/api/ai/plan-change/session/run-pause',
-    { sessionId, jobId, pauseId, choice, ...(text !== undefined ? { text } : {}) },
+    {
+      sessionId,
+      jobId,
+      pauseId,
+      choice,
+      ...(text !== undefined ? { text } : {}),
+      ...(optionId ? { optionId } : {}),
+    },
     signal,
   );
 }
@@ -797,6 +810,8 @@ export async function submitContextualPlan(
   sessionId: string | null = null,
   seedGateId: string | null = null,
   seedGuideTurnId: string | null = null,
+  /** The option of the waiting question this answer PICKED (MOTIR-11700). */
+  answerOptionId: string | null = null,
 ): Promise<ContextualPlanResponse> {
   if (seedGateId && seedGuideTurnId) {
     throw new Error('A planning turn is seeded by a gate or a guide offer, never both.');
@@ -806,6 +821,7 @@ export async function submitContextualPlan(
     {
       prompt,
       isAnswer,
+      ...(isAnswer && answerOptionId ? { answerOptionId } : {}),
       ...extra(targetKeys),
       ...withSession(sessionId),
       ...(seedGateId && !sessionId ? { seedGateId } : {}),

@@ -681,3 +681,101 @@ describe('a code_unsearchable pause', () => {
     expect(next.pause.repos).toEqual([{ repoRef: 'acme/web', state: 'indexing' }]);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// AN UNCLEAR QUESTION CARRIES ITS OPTIONS AS DATA (MOTIR-11700): the pause stores
+// them, a click answers with one of them — checked against what THIS pause stored —
+// and the walk receives the option, or the own-words mark on a typed reply.
+// ════════════════════════════════════════════════════════════════════════════
+describe('an unclear question with options', () => {
+  const OPTIONS = [
+    { id: 'o1', label: 'Profile settings', means: 'The change is to the profile page.' },
+    { id: 'o2', label: 'Billing settings', means: 'The change is to the billing page.' },
+  ];
+  const recordUnclear = () =>
+    record({ kind: 'unclear', reason: null, question: 'Which settings page?', options: OPTIONS });
+  const pick = (pauseId: string, optionId: string, text?: string) =>
+    planChangeRunPauseService.answer(
+      { sessionId, jobId: RUN_JOB, pauseId, choice: 'reply', optionId, text },
+      ctx,
+    );
+
+  it('records the options with the question and draws them on the DTO', async () => {
+    const { pause } = await recordUnclear();
+    expect(pause.options).toEqual(OPTIONS);
+    expect(pause.replyOption).toBeNull();
+  });
+
+  it('refuses malformed options, and options on another kind, writing no row', async () => {
+    await expect(
+      record({ kind: 'unclear', reason: null, question: 'Which?', options: [OPTIONS[0]] }),
+    ).rejects.toMatchObject({ code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE' });
+    await expect(record({ options: OPTIONS })).rejects.toMatchObject({
+      code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+    });
+    expect(await adminDb.planChangeRunPause.count()).toBe(0);
+  });
+
+  it('a click answers with the option: its label is the reply and the walk gets the option', async () => {
+    const { pause } = await recordUnclear();
+    const res = await pick(pause.id, 'o2');
+    expect(res.outcome).toBe('answered');
+    if (res.outcome !== 'answered') return;
+    expect(res.pause).toMatchObject({
+      answer: 'replied',
+      replyText: 'Billing settings',
+      replyOption: OPTIONS[1],
+    });
+    const reply = res.delivery.turns.find((t) => t.answersQuestion === pause.id);
+    expect(reply).toMatchObject({ text: 'Billing settings', answerOption: OPTIONS[1] });
+    expect(reply).not.toHaveProperty('ownWords');
+    // A replay of the same click writes nothing new; a different pick is refused.
+    await pick(pause.id, 'o2');
+    expect((await entries()).filter((e) => e.answersPauseId === pause.id)).toHaveLength(1);
+    await expect(pick(pause.id, 'o1')).rejects.toMatchObject({
+      code: 'PLAN_CHANGE_RUN_PAUSE_ANSWERED',
+    });
+  });
+
+  it('a typed reply to a question with options travels marked as own words', async () => {
+    const { pause } = await recordUnclear();
+    const res = await answer(pause.id, 'reply', 'Neither — the notifications page.');
+    if (res.outcome !== 'answered') throw new Error('not answered');
+    expect(res.pause.replyOption).toBeNull();
+    const reply = res.delivery.turns.find((t) => t.answersQuestion === pause.id);
+    expect(reply).toMatchObject({ text: 'Neither — the notifications page.', ownWords: true });
+    expect(reply).not.toHaveProperty('answerOption');
+  });
+
+  it('a typed reply to a question with no options carries neither mark', async () => {
+    const { pause } = await record({ kind: 'unclear', reason: null, question: 'Which?' });
+    const res = await answer(pause.id, 'reply', 'The profile page.');
+    if (res.outcome !== 'answered') throw new Error('not answered');
+    const reply = res.delivery.turns.find((t) => t.answersQuestion === pause.id)!;
+    expect(reply).not.toHaveProperty('ownWords');
+    expect(reply).not.toHaveProperty('answerOption');
+  });
+
+  it('refuses an option the question did not offer, and a pick on another kind, writing nothing', async () => {
+    const { pause } = await recordUnclear();
+    await expect(pick(pause.id, 'o9')).rejects.toMatchObject({
+      code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+    });
+    const row = await adminDb.planChangeRunPause.findUniqueOrThrow({ where: { id: pause.id } });
+    expect(row.answer).toBeNull();
+    await answer(pause.id, 'reply', 'x');
+    const replan = await record({ idempotencyKey: 'pk-2' });
+    await expect(
+      planChangeRunPauseService.answer(
+        {
+          sessionId,
+          jobId: RUN_JOB,
+          pauseId: replan.pause.id,
+          choice: 'start_over',
+          optionId: 'o1',
+        },
+        ctx,
+      ),
+    ).rejects.toMatchObject({ code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE' });
+  });
+});

@@ -8863,6 +8863,10 @@
       "send": "보내기",
       "answer": "답변",
       "awaitingAnswer": "답변을 기다리는 중",
+      "questionOptions": {
+        "group": "답변 선택지",
+        "ownWords": "내 말로 답하기"
+      },
       "seeQuestion": "보기",
       "retry": "다시 시도",
       "discard": "삭제",

@@ -94,7 +94,9 @@ export function useRunPause({
 
   const pendingRef = useRef(false);
   const answerRunPause = useCallback(
-    async (choice: Choice, text?: string) => {
+    /** `optionId` (MOTIR-11700): a reply that CLICKED one of the question's options;
+     *  `text` is then that option's label. */
+    async (choice: Choice, text?: string, optionId?: string) => {
       const current = stateRef.current;
       const open = pauseOf(current);
       const run =
@@ -103,7 +105,9 @@ export function useRunPause({
       pendingRef.current = true;
       setState((s) => ({ ...s, answeringPause: true, pauseAnswerRefusal: null }));
       try {
-        const res = await answerRunPauseClient(run.sid, run.job, open.id, choice, text);
+        const res = optionId
+          ? await answerRunPauseClient(run.sid, run.job, open.id, choice, text, undefined, optionId)
+          : await answerRunPauseClient(run.sid, run.job, open.id, choice, text);
         if (!mountedRef.current) return;
         if (res.outcome === 'answered') {
           setState((s) => ({

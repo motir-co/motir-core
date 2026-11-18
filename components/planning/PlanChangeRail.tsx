@@ -77,6 +77,11 @@ import {
   QueuedLabel,
 } from '@/components/planning/MidRunTurn';
 import { PauseThread } from '@/components/planning/RunPause';
+import {
+  QuestionOptionList,
+  QuestionOptionReplies,
+  pickerOptionsOf,
+} from '@/components/planning/QuestionOptionPicker';
 import { CodeUnsearchableBanner } from '@/components/planning/CodeUnsearchableBanner';
 import { isOpenUnclear, pauseAnchorIndex, pauseOf, pauseOwnedIds } from '@/lib/planning/runPause';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
@@ -411,6 +416,13 @@ export interface PlanChangeRailProps {
    * a re-plan offer. Optional: absent, the offer's buttons do nothing.
    */
   onAnswerRunPause?: (choice: 'start_over' | 'apply' | 'resume') => void;
+  /**
+   * The person CLICKED one of the waiting question's options (MOTIR-11700) — the
+   * planner's question on the thread, or its mid-run `unclear` pause. The host sends
+   * the option's label as the answer, carrying the option's id. Absent → the options
+   * are drawn as a list and the person answers by typing.
+   */
+  onPickQuestionOption?: (option: { id: string; label: string }) => void;
   /** "N earlier notes" (MOTIR-8064): page earlier narration sentences in. */
   onShowEarlierNarration?: () => void;
   /**
@@ -490,6 +502,7 @@ export function PlanChangeRail({
   canResume = true,
   onSelectProposal,
   onAnswerRunPause,
+  onPickQuestionOption,
   onShowEarlierNarration,
   onOpenSession,
   onConfirmPlanOffer,
@@ -564,6 +577,7 @@ export function PlanChangeRail({
   }
 
   const busy = state.phase === 'streaming' || state.phase === 'deciding';
+  const railRef = useRef<HTMLElement>(null);
   const turns = state.session?.turns ?? [];
   // A forwarded change is a thread turn AND a mailbox entry: the thread draws it,
   // the standalone queued render below skips it (MOTIR-7998).
@@ -628,6 +642,14 @@ export function PlanChangeRail({
         pause={runPause}
         pending={Boolean(state.answeringPause)}
         onAnswer={(choice) => onAnswerRunPause?.(choice)}
+        {...(onPickQuestionOption
+          ? {
+              questionPick: {
+                onPick: onPickQuestionOption,
+                onOwnWords: () => railRef.current?.querySelector('textarea')?.focus(),
+              },
+            }
+          : {})}
         replyEntry={pauseReplyEntry}
         refusalCode={state.pauseAnswerRefusal?.code ?? null}
       />
@@ -981,8 +1003,8 @@ export function PlanChangeRail({
   // OPENED ON A PENDING QUESTION (Story MOTIR-7905 · MOTIR-7918; panel 1): a door that lands on
   // a session whose planner is waiting for an answer scrolls the question into view and puts the
   // cursor in the composer, ONCE per opened session. A question that arrives LIVE in a thread
-  // the viewer is already in is not "opened on" and steals nothing.
-  const railRef = useRef<HTMLElement>(null);
+  // the viewer is already in is not "opened on" and steals nothing. (`railRef` is declared
+  // above, with `busy`: the question's own-words reply focuses the composer through it too.)
   const openedRef = useRef<string | null>(null);
   const openedSessionId = state.session?.id ?? null;
   const hasPendingQuestion = question !== null;
@@ -1798,6 +1820,15 @@ export function PlanChangeRail({
                 debugOutcome={debugOutcomeFor(turn, turns, turnAnchors)}
                 disposition={dispositionMarkerFor(turns, i)}
                 isPending={question?.id === turn.id}
+                questionPick={
+                  question?.id === turn.id && onPickQuestionOption
+                    ? {
+                        pending: busy,
+                        onPick: onPickQuestionOption,
+                        onOwnWords: () => railRef.current?.querySelector('textarea')?.focus(),
+                      }
+                    : null
+                }
                 // Keyed on the ASSISTANT turn that carries it — `correction.turnId`
                 // names the USER turn the re-run replays, which is a different turn.
                 correction={latest && turn.id === latest.id ? correctable : null}
@@ -2539,6 +2570,16 @@ interface TurnProps {
   /** This turn IS the question the thread is currently waiting on. */
   isPending: boolean;
   /**
+   * The pending question's OPTIONS as replies (MOTIR-11700) — one button per option and
+   * the own-words button, under the question. Null on every other turn, and on a host
+   * that takes no pick (the options are then drawn in the bubble only).
+   */
+  questionPick?: {
+    pending: boolean;
+    onPick: (option: { id: string; label: string }) => void;
+    onOwnWords: () => void;
+  } | null;
+  /**
    * The CORRECTION this assistant turn offers — null on every other turn, and
    * null on an assistant turn that is not the latest one.
    *
@@ -2634,6 +2675,7 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
     turn,
     workItemRefs,
     isPending,
+    questionPick,
     correction,
     debugOutcome,
     restartConfirm,
@@ -2644,6 +2686,9 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
     const tc = useTranslations('planningWorkspace.conversation');
     const tr = useTranslations('planningWorkspace.restart');
     const asking = turn.question !== null;
+    // A question's options (MOTIR-11700): drawn in the bubble, and — while it is the
+    // question the thread waits on — as replies under it.
+    const options = asking && turn.questionOptions ? pickerOptionsOf(turn.questionOptions) : null;
     // THE PLAN SOMETHING NEW CONFIRM (MOTIR-7650; A3.2): a planner bubble with the
     // fixed question, read from the CATALOGUE so it speaks the viewer's locale —
     // never the stored body. Not a question: no asking tint, no label.
@@ -2759,7 +2804,23 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
             </p>
           ) : null}
           {turn.forwardOffer ? <ForwardOffer turn={turn} stale={midRun.offerStale} /> : null}
+          {options ? (
+            <QuestionOptionList options={options} testId="plan-change-question-options" />
+          ) : null}
         </Bubble>
+        {options && questionPick ? (
+          <QuestionOptionReplies
+            testId="plan-change-question-replies"
+            options={options}
+            disabled={questionPick.pending}
+            onPick={(option) => questionPick.onPick({ id: option.id, label: option.label })}
+            optionTestId={(id) => `plan-change-question-option-${id}`}
+            groupLabel={tc('questionOptions.group')}
+            ownWordsLabel={tc('questionOptions.ownWords')}
+            ownWordsTestId="plan-change-question-own-words"
+            onOwnWords={questionPick.onOwnWords}
+          />
+        ) : null}
         {/* THE PLAN OFFER (MOTIR-9294; design `plan-offer.mock.html`): under the answer
             bubble, aligned with its left edge, a sibling of the mid-run panels. A
             cannot-start or being-planned line carries its own avatar spacer. */}

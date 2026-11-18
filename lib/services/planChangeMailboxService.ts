@@ -1,5 +1,10 @@
 import { Prisma, type PlanChangeMailboxEntry } from '@/generated/prisma/client';
 
+import {
+  questionOptionJson,
+  readQuestionOption,
+  type QuestionOption,
+} from '@/lib/planning/questionOptions';
 import type { ProjectContext } from '@/lib/projects';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 
@@ -118,6 +123,11 @@ export interface AttachTurnInput {
   declinesPauseId?: string;
   /** The run pause this `fold` turn ANSWERS (MOTIR-8007). */
   answersPauseId?: string;
+  /** The option an answering turn PICKED (MOTIR-11700) — only with `answersPauseId`. */
+  answerOption?: QuestionOption | null;
+  /** The answering turn was typed in the person's OWN WORDS against a question that
+   *  offered options (MOTIR-11700) — only with `answersPauseId`. */
+  answerOwnWords?: boolean;
 }
 
 /** Build the two-repo contract's shape from rows. The ONE place it is built. */
@@ -141,10 +151,23 @@ function toDelivery(
         // Present ONLY when set (MOTIR-8007), so every other turn's shape is byte-identical.
         ...(e.declinesPauseId ? { declinesPause: e.declinesPauseId } : {}),
         ...(e.answersPauseId ? { answersQuestion: e.answersPauseId } : {}),
+        // The answer's KIND (MOTIR-11700): the option picked, or the own-words mark —
+        // present only on an answering turn, so every other turn's shape is unchanged.
+        ...answerOf(e),
       })),
     stopped: flags.stopped,
     skipFinalCheck: flags.skipFinalCheck,
   };
+}
+
+/** The answer half of an answering entry (MOTIR-11700) — the option, or own words. */
+function answerOf(
+  e: PlanChangeMailboxEntry,
+): { answerOption: QuestionOption } | { ownWords: true } | Record<string, never> {
+  if (!e.answersPauseId) return {};
+  const option = readQuestionOption(e.answerOption);
+  if (option) return { answerOption: questionOptionJson(option) };
+  return e.answerOwnWords ? { ownWords: true } : {};
 }
 
 /** The two flags a delivery derives from an entry EXISTING, read in one place. */
@@ -212,6 +235,8 @@ async function appendLocked(
     authorId?: string | null;
     declinesPauseId?: string | null;
     answersPauseId?: string | null;
+    answerOption?: QuestionOption | null;
+    answerOwnWords?: boolean;
   },
 ): Promise<PlanChangeMailboxEntry> {
   return withWorkspaceContext(
@@ -250,6 +275,11 @@ async function appendLocked(
             authorId: entry.authorId ?? null,
             declinesPauseId: entry.declinesPauseId ?? null,
             answersPauseId: entry.answersPauseId ?? null,
+            ...(entry.answersPauseId && entry.answerOption
+              ? { answerOption: questionOptionJson(entry.answerOption) }
+              : {}),
+            answerOwnWords:
+              Boolean(entry.answersPauseId) && !entry.answerOption && entry.answerOwnWords === true,
           },
           tx,
         );
@@ -381,6 +411,8 @@ export const planChangeMailboxService = {
       authorId: pctx.userId,
       declinesPauseId: input.declinesPauseId ?? null,
       answersPauseId: input.answersPauseId ?? null,
+      answerOption: input.answerOption ?? null,
+      answerOwnWords: input.answerOwnWords === true,
     });
 
     // The caller gets the mailbox AS IT NOW STANDS, not just the row it wrote —

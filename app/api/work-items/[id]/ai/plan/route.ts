@@ -136,6 +136,8 @@ export async function POST(
             // MOTIR-2226: read strictly — anything but `true` is "not an answer",
             // which is the disposition the transcript records forever after.
             isAnswer: (body as { isAnswer?: unknown })?.isAnswer === true,
+            // The option an answer PICKED (MOTIR-11700), resolved against the waiting question.
+            ...answerOptionIdFrom(body),
           },
           ctx,
         );
@@ -153,6 +155,16 @@ export async function POST(
  * silently dropping a target the user picked would plan against a set they never
  * asked for. Shared by all three verbs so one shape can never diverge.
  */
+/** An answer's picked option id (MOTIR-11700), spread-ready — only beside `isAnswer`. */
+function answerOptionIdFrom(body: unknown): { answerOptionId?: string } {
+  const bag = body as { isAnswer?: unknown; answerOptionId?: unknown } | null;
+  return bag?.isAnswer === true &&
+    typeof bag.answerOptionId === 'string' &&
+    bag.answerOptionId.length > 0
+    ? { answerOptionId: bag.answerOptionId }
+    : {};
+}
+
 /** An optional `sessionId`, spread-ready: `{ sessionId }` or `{}`. */
 function sessionIdFrom(raw: unknown): { sessionId?: string } {
   return typeof raw === 'string' && raw.length > 0 ? { sessionId: raw } : {};
