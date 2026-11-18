@@ -9007,6 +9007,7 @@
   "platformAdmin.users.log.action.fleet.org_ci.disable": "Turned fleet CI off",
   "platformAdmin.users.log.action.fleet.agent_hosting.enable": "Sent new agents to AWS",
   "platformAdmin.users.log.action.fleet.agent_hosting.disable": "Sent new agents back to Fly",
+  "platformAdmin.users.log.action.fleet.ci_spot.update": "Changed the CI Spot setting",
   "platformAdmin.users.log.action.fleet.shard.add": "Added a fleet account",
   "platformAdmin.users.log.action.fleet.shard.limits": "Refreshed a fleet account's limits",
   "platformAdmin.users.log.action.fleet.shard.ceiling": "Changed a fleet account's ceiling",

@@ -261,6 +261,8 @@ describe('the reason rule', () => {
     // The agent hoster's Fly↔AWS switch (MOTIR-9503): a flip says why.
     'fleet.agent_hosting.enable': 'required',
     'fleet.agent_hosting.disable': 'required',
+    // The CI runner Spot setting (MOTIR-11725): a save says why.
+    'fleet.ci_spot.update': 'required',
     // Publish latest on /admin/fleet-status (MOTIR-10886): the confirm has no
     // reason field, so the service writes one; the page's read of those rows.
     'fleet.image.publish': 'inherited',

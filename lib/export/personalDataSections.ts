@@ -868,6 +868,13 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'written only from the platform tier, not a record about the operator as a data ' +
     'subject — `PlatformFleetOrgCi`’s argument; every flip is recorded in the audit log ' +
     '(`fleet.agent_hosting.enable` / `fleet.agent_hosting.disable`) with the same actor.',
+  PlatformCiSpotSetting:
+    'The CI runner Spot setting (MOTIR-11725) — whether CI runners launch as Spot and ' +
+    'the ordered instance types they may launch on — whose only User FK is the platform ' +
+    'superadmin who last saved it. Platform configuration written only from the platform ' +
+    'tier, not a record about the operator as a data subject — `PlatformFleetKindSwitch`’s ' +
+    'argument; every save is recorded in the audit log (`fleet.ci_spot.update`) with the ' +
+    'same actor.',
   CapacityAlertSetting:
     'The single platform-wide provider-capacity alert share (MOTIR-9609), whose only ' +
     'User FK is the platform operator who last set it. Platform configuration written ' +

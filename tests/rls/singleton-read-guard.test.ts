@@ -292,6 +292,15 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public',
     'platform_fleet_kind_switch_read (20261025090000) · platformFleetKindSwitchRead.test "the fleet kind switch read" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
+  // ── the CI SPOT SETTING (MOTIR-11725) ──────────────────────────────────
+  // The CI runner launch reads the setting on every launch with no platform
+  // flag bound, and the console route reads it outside any platform
+  // transaction. The table's SELECT arm is `USING (true)`; its writes stay
+  // behind `app.platform_staff`.
+  'platformCiSpotSettingRepository.ts#find': [
+    'public',
+    'platform_ci_spot_setting_read (20261118140000) · platformCiSpotSettingRead.test "the CI Spot setting read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
   // ── the SEED REGISTRY (Story MOTIR-704 · MOTIR-708) ──────────────────────
   // Motir's catalogue of what a new repository starts from, read by every
   // workspace's establish, the planner's request path and the console — no
