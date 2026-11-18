@@ -406,6 +406,7 @@ model User {
   platformRunModelsAdded           PlatformRunModel[]                  @relation("PlatformRunModelAddedBy")
   platformFleetOrgCiUpdated        PlatformFleetOrgCi[]                @relation("PlatformFleetOrgCiUpdatedBy")
   platformFleetKindSwitchUpdated   PlatformFleetKindSwitch[]           @relation("PlatformFleetKindSwitchUpdatedBy")
+  platformCiSpotSettingUpdated     PlatformCiSpotSetting[]             @relation("PlatformCiSpotSettingUpdatedBy")
   ideaResearchRuns                 IdeaResearchRun[]
   // Organizations this platform operator SUSPENDED and that are still suspended
   // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
@@ -588,6 +589,32 @@ model PlatformFleetKindSwitch {
 
   @@index([updatedByUserId])
   @@map("platform_fleet_kind_switch")
+}
+
+/// The CI runner Spot setting (MOTIR-11725) — one platform-wide row, keyed by
+/// `scope = 'ci_runner'` and written on its first save. No row ⇒ Spot OFF and
+/// the default instance types (`lib/ciFleet/ciSpotInstanceTypes.ts`). Read by
+/// system code on every CI runner launch, never cached; written only by a
+/// `superadmin` inside `withPlatformWrite`, with its `fleet.ci_spot.update` audit
+/// row in the same transaction.
+model PlatformCiSpotSetting {
+  id              String   @id @default(cuid())
+  /// The setting's singleton key — `ci_runner`, the one scope offered.
+  scope           String   @unique
+  enabled         Boolean  @default(false)
+  /// The ORDERED instance types a CI runner may launch on; every entry is in
+  /// `CI_SPOT_ALLOWED_INSTANCE_TYPES`, checked on every write.
+  instanceTypes   String[] @map("instance_types")
+  /// The reason the last save was given — the same text its audit row carries.
+  lastReason      String?  @map("last_reason")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  updatedBy User? @relation("PlatformCiSpotSettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
+  @@map("platform_ci_spot_setting")
 }
 
 /// The last SUCCESSFUL read of one AWS figure the console shows live (MOTIR-10890):

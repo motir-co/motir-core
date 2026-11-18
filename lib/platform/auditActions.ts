@@ -378,6 +378,19 @@ export const PLATFORM_AUDIT_ACTIONS = {
   'fleet.agent_hosting.enable': { kind: 'write', reason: 'required' },
   'fleet.agent_hosting.disable': { kind: 'write', reason: 'required' },
   /**
+   * The CI runner Spot setting was saved (MOTIR-11725): whether CI runners on an
+   * AWS pool account launch as Spot, and the ORDERED instance types a launch may
+   * walk. Saved through `PUT /api/platform/fleet/ci-spot`; there is no screen.
+   *
+   * `required`, at the `superadmin` degree of ADR §7: it moves what Motir pays for
+   * every tenant's CI, and whether a CI job can be interrupted. Target is
+   * `platform` with the setting's scope (`ci_runner`) as `targetId`; `metadata`
+   * carries `{ from: { enabled, instanceTypes }, to: { enabled, instanceTypes } }`.
+   * Written only for a save that changed something — a reorder of the list is a
+   * change, because the launch walks it in order.
+   */
+  'fleet.ci_spot.update': { kind: 'write', reason: 'required' },
+  /**
    * PUBLISH LATEST was pressed on /admin/fleet-status (MOTIR-10886): a
    * superadmin dispatched the publish workflow of one image Motir boots — the
    * hosted-agent pin, the runner pin, or the sandbox release re-run. The row is

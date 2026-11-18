@@ -310,3 +310,29 @@ export class FleetCapacityRequestLinkMismatchError extends Error {
     this.name = 'FleetCapacityRequestLinkMismatchError';
   }
 }
+
+// ── The CI Spot setting (MOTIR-11725) ───────────────────────────────────────
+
+/** Which rule an asked CI Spot instance-type list broke: `empty` — no type at all;
+ *  `duplicate` — a type named twice; `not_allowed` — a type outside
+ *  `CI_SPOT_ALLOWED_INSTANCE_TYPES`, the 2 vCPU / 8 GiB x86 class the fleet's one
+ *  runner size maps to. */
+export type CiSpotInstanceTypesRule = 'empty' | 'duplicate' | 'not_allowed';
+
+/** A save of the CI Spot setting whose instance-type list breaks a rule — refused
+ *  BEFORE any transaction, so nothing is written and no audit row exists.
+ *  `instanceType` names the offending type (`null` for `empty`). */
+export class InvalidCiSpotInstanceTypesError extends Error {
+  readonly code = 'INVALID_CI_SPOT_INSTANCE_TYPES' as const;
+  constructor(
+    readonly rule: CiSpotInstanceTypesRule,
+    readonly instanceType: string | null = null,
+  ) {
+    super(
+      instanceType === null
+        ? `invalid CI Spot instance-type list: ${rule}`
+        : `invalid CI Spot instance-type list: ${rule} (${instanceType})`,
+    );
+    this.name = 'InvalidCiSpotInstanceTypesError';
+  }
+}

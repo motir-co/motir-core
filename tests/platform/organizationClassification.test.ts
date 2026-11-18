@@ -133,7 +133,8 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // `platform_run_model_list` marker are MOTIR-7525's hosted-run model list —
     // platform configuration, written solely from this tier, and so is
     // `platform_fleet_org_ci`, MOTIR-8714's fleet org CI switch, and so is
-    // `platform_fleet_kind_switch`, MOTIR-9503's per-fleet-kind Fly↔AWS switch.
+    // `platform_fleet_kind_switch`, MOTIR-9503's per-fleet-kind Fly↔AWS switch,
+    // and so is `platform_ci_spot_setting`, MOTIR-11725's CI runner Spot setting.
     // The five `idea*`
     // tables are MOTIR-7662's idea store — Motir's own content, readable by
     // anyone and written solely from this tier (`20261007100000_idea_store`);
@@ -179,6 +180,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'plan',
       'platform_audit_log',
       'platform_aws_read',
+      'platform_ci_spot_setting',
       'platform_fleet_kind_switch',
       'platform_fleet_org_ci',
       'platform_run_model',

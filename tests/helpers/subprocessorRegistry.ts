@@ -185,6 +185,8 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   // trust it. Nothing resolves the string at runtime.
   'docs.github.com':
     'documentation URL cited in a code comment (MOTIR-5595); never rendered and never requested',
+  'docs.aws.amazon.com':
+    'documentation URL cited in a code comment (MOTIR-11725, the CI Spot instance-type allowlist); never rendered and never requested',
   'docs.claude.com': 'documentation link shown to the user',
   'developers.openai.com': 'documentation link shown to the user',
   'developers.google.com': 'documentation link shown to the user',

@@ -11284,6 +11284,9 @@
               "enable": "Enviou novos agentes para a AWS",
               "disable": "Devolveu novos agentes ao Fly"
             },
+            "ci_spot": {
+              "update": "Alterou a configuração de Spot da CI"
+            },
             "shard": {
               "add": "Adicionou uma conta da frota",
               "limits": "Atualizou os limites de uma conta da frota",
