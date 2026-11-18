@@ -1,6 +1,7 @@
 import type { ApprovalGate, Prisma, ReviewVerdictRecord } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
+import { ownDeliveriesOf } from '@/lib/approvalGates/ownDeliveries';
 import { liveCheckRows } from '@/lib/github/checkSuites';
 import { foldHeadCheckRows } from '@/lib/github/prCiState';
 import { pullRequestHead } from '@/lib/github/pullRequestHead';
@@ -50,8 +51,14 @@ export interface StandingReviewRefusal {
 
 /**
  * The card's standing review refusal, or null. `deliveries` is the card's WHOLE delivery
- * set (merged and closed rows included) as `listByWorkItemWithChecks` reads it — the set
- * whose version the refusal was stamped with.
+ * set (merged and closed rows included) as `listByWorkItemWithChecks` reads it; the version
+ * is measured over the card's OWN members of it — the set the review gates are raised over
+ * and so the set whose version the refusal was stamped with.
+ *
+ * ⚠️ OWN, NOT EVERY LINKED ROW (Bug MOTIR-11693). A pull request an ancestor also delivers is
+ * the ancestor's (`ownDeliveries.ts`), and the gates leave it out. Measured over every row, a
+ * child sharing one with its story read a version no refusal of its own could ever carry —
+ * so its send-back never stood, on To fix or for the repair claim, and could not be dismissed.
  *
  * ⚠️ TWO SOURCES, THE NEWER WINS (MOTIR-10333; §12.14). The decided gate is read as
  * before; a gate-off send-back record at the CURRENT version is the second source — the
@@ -68,7 +75,8 @@ export async function readStandingReviewRefusal(
   deliveries: readonly WorkItemDeliveryWithChecks[],
   tx: Prisma.TransactionClient,
 ): Promise<StandingReviewRefusal | null> {
-  const currentVersion = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
+  const own = await ownDeliveriesOf(workItemId, deliveries, tx);
+  const currentVersion = deliverySetVersion(own.map((d) => deliveryMemberVersion(d)));
   const [latest, record, dismissal] = await Promise.all([
     approvalGateRepository.findLatestDecidedByWorkItem(workItemId, tx),
     currentVersion === null
@@ -167,7 +175,9 @@ export async function readAnsweredReviewRefusal(
   deliveries: readonly WorkItemDeliveryWithChecks[],
   tx: Prisma.TransactionClient,
 ): Promise<AnsweredReviewRefusal | null> {
-  const currentVersion = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
+  // The card's OWN members, as the standing read measures them (Bug MOTIR-11693).
+  const own = await ownDeliveriesOf(workItemId, deliveries, tx);
+  const currentVersion = deliverySetVersion(own.map((d) => deliveryMemberVersion(d)));
   const [latest, record] = await Promise.all([
     approvalGateRepository.findLatestDecidedByWorkItem(workItemId, tx),
     reviewVerdictRecordRepository.findLatestRecordedSendBack(workItemId, tx),
@@ -190,7 +200,7 @@ export async function readAnsweredReviewRefusal(
     recordDismissed: dismissedRecord !== null,
     gateDismissed: dismissedGate !== null,
     currentVersion,
-    deliveries,
+    deliveries: own,
   });
 }
 

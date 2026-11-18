@@ -7,6 +7,7 @@ import {
   type GateSet,
   type GateSetMember,
 } from '@/lib/approvalGates/gateSet';
+import { withoutAncestorDeliveries } from '@/lib/approvalGates/ownDeliveries';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import {
@@ -328,47 +329,6 @@ export async function gateSetFor(
     deliversPullRequests: deliveries.length > 0,
     ridesAncestorPullRequestsOnly: deliveries.length === 0 && ancestorOwned > 0,
   };
-}
-
-/**
- * The card's delivery rows WITHOUT the ones an ANCESTOR also delivers (Bug MOTIR-11624),
- * and how many it left out.
- *
- * A pull request linked both to a card and to one of its ancestors is the ancestor's: it
- * is the parent run's branch, and only the parent's approval may ask to merge it — the
- * merge cascades down and closes every child, built or not. Two reads, and only for a
- * child that delivers something: the ancestor chain (one recursive CTE) and every
- * delivery row of the card's pull requests (one indexed read).
- *
- * ⚠️ EXPORTED FOR THE VERDICT DOOR (Bug MOTIR-11673). `reviewVerdictService` asks the same
- * question — *does this card deliver pull requests of its own?* — to decide whether a child
- * tested through its story is still its own review subject. One definition, so the card a
- * verdict may land on and the card the review gate is raised on cannot disagree.
- */
-export async function withoutAncestorDeliveries<T extends { githubPullRequestId: string }>(
-  item: Pick<WorkItem, 'id' | 'parentId' | 'workspaceId'>,
-  deliveries: readonly T[],
-  tx: Prisma.TransactionClient,
-): Promise<{ own: T[]; ancestorOwned: number }> {
-  if (item.parentId === null || deliveries.length === 0) {
-    return { own: [...deliveries], ancestorOwned: 0 };
-  }
-  const [chains, rows] = await Promise.all([
-    workItemRepository.findAncestorIdsForItems([item.id], item.workspaceId, tx),
-    workItemDeliveryRepository.listByPullRequests(
-      deliveries.map((delivery) => delivery.githubPullRequestId),
-      tx,
-    ),
-  ]);
-  // The batch walk seeds every id it is asked about, so the card's chain is always present.
-  const ancestorIds = new Set(chains.get(item.id)!);
-  const ancestorPullRequests = new Set(
-    rows.filter((row) => ancestorIds.has(row.workItemId)).map((row) => row.githubPullRequestId),
-  );
-  const own = deliveries.filter(
-    (delivery) => !ancestorPullRequests.has(delivery.githubPullRequestId),
-  );
-  return { own, ancestorOwned: deliveries.length - own.length };
 }
 
 /**
