@@ -266,6 +266,24 @@ const nextConfig: NextConfig = {
   // normal `pnpm dev` session's indicator untouched.
   ...(process.env['E2E_DISABLE_DEV_INDICATOR'] ? { devIndicators: false as const } : {}),
   output: 'standalone',
+  // The AWS SDK is required from node_modules at run time, not bundled. At
+  // d2e70c1 Turbopack emitted two different lazy chunks of the SDK's
+  // credential providers under one name (`server/chunks/node_modules__pnpm_…`)
+  // and refused to build ("Two or more assets with different content were
+  // emitted to the same output path"). Kept external, the SDK is traced into
+  // `.next/standalone/node_modules` like any other server package.
+  serverExternalPackages: [
+    '@aws-sdk/client-cloudformation',
+    '@aws-sdk/client-cloudwatch-logs',
+    '@aws-sdk/client-ecr',
+    '@aws-sdk/client-ecs',
+    '@aws-sdk/client-s3',
+    '@aws-sdk/client-secrets-manager',
+    '@aws-sdk/client-service-quotas',
+    '@aws-sdk/client-sesv2',
+    '@aws-sdk/client-ssm',
+    '@aws-sdk/s3-request-presigner',
+  ],
 
   // ⚠️ A TAB LEFT OPEN ACROSS A DEPLOY (MOTIR-11241). In the production IMAGE
   // build only: `assetPrefix` serves `/_next/static` from static.motir.co, which
