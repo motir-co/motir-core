@@ -14,6 +14,7 @@ import type {
 // and the version the card was approved at are comparable (MOTIR-5613). It lives beside
 // the set version since MOTIR-5616 retired the handler it was written in.
 import { pullRequestSubjectVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { listOwnDeliveriesWithChecks } from '@/lib/approvalGates/ownDeliveries';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateAlreadyRequeuedError,
@@ -771,6 +772,12 @@ export const PRESS_READ_RETRY_WAITS_MS = [1_000, 1_000] as const;
  * refused by the decide door with its own true reason (Panel 5b's stale tab), and reading
  * the host first would only make that refusal slower.
  *
+ * ⚠️ THE CARD'S OWN MEMBERS ONLY (Bug MOTIR-11698). The press merges `membersOf` the gate's
+ * version, and that gate is raised over the card's OWN deliveries — a pull request an
+ * ancestor also delivers is the story's (`lib/approvalGates/ownDeliveries.ts`). Reading the
+ * whole linked set here refused a child's press over a conflict on its story's pull request,
+ * one the press would never merge.
+ *
  * ⚠️ THIS IS THE DIRECT PRESS ONLY. A press on a PRIMARY that carries this gate with it is
  * read by {@link refusePrimaryPressOnConflict} (Bug MOTIR-7006), which ends in the same
  * {@link refuseIfMembersConflict}.
@@ -788,10 +795,7 @@ async function refuseAtPressOnConflict(gateId: string, ctx: ServiceContext): Pro
       tx,
     );
     if (awaiting.some((row) => isPrimaryKind(row.kind))) return null;
-    return workItemDeliveryRepository.listByWorkItemWithChecks(
-      requireGateCard(gate, 'pullRequestMergeService'),
-      tx,
-    );
+    return listOwnDeliveriesWithChecks(requireGateCard(gate, 'pullRequestMergeService'), tx);
   });
   if (target) await refuseIfMembersConflict(gateId, target, ctx);
 }
@@ -808,6 +812,9 @@ async function refuseAtPressOnConflict(gateId: string, ctx: ServiceContext): Pro
  * Implemented, so a press once the conflict is resolved answers the primary over the
  * next green, the ordinary way.
  *
+ * It reads the card's OWN members, as the direct press does, for the same reason (Bug
+ * MOTIR-11698): the merge gate it decides is raised over them alone.
+ *
  * ⚠️ NO COMPANION, NO READ. With no awaiting merge gate the press merges nothing (the
  * merge is HELD, `design-result.md` AMENDMENT 6 Q4), and whether a primary may be
  * approved over a set that cannot land yet is the design / acceptance ADRs' question,
@@ -821,7 +828,7 @@ async function refusePrimaryPressOnConflict(gateId: string, ctx: ServiceContext)
     const card = requireGateCard(gate, 'pullRequestMergeService');
     const awaiting = await approvalGateRepository.findAwaitingByWorkItem(card, tx);
     if (!awaiting.some((row) => row.kind === APPROVAL_KIND)) return null;
-    return workItemDeliveryRepository.listByWorkItemWithChecks(card, tx);
+    return listOwnDeliveriesWithChecks(card, tx);
   });
   if (target) await refuseIfMembersConflict(gateId, target, ctx);
 }
