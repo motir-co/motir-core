@@ -106,7 +106,9 @@ function planHeldResult(err: PlanTargetHeldError): CallToolResult {
         ? 'is waiting for approval'
         : err.planStatus === 'approving'
           ? 'is being approved — its approval releases this card when it finishes'
-          : 'is stale and needs attention before it can be approved';
+          : err.planStatus === 'stopped'
+            ? 'stopped before every card was written — resume it to finish, or decline it to release this card'
+            : 'is stale and needs attention before it can be approved';
   return toolError(err.code, `${err.message} Plan ${err.planId} ${state}.`);
 }
 

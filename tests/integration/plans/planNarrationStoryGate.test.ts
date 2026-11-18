@@ -818,7 +818,13 @@ describe('F. sentences and step words outlive the step and the decision', () => 
     });
     const before = await reviewRead(fx, planId);
     await mcpOk(client, { planId, sessionKey: 'p1', step: 'end' });
-    return { fx, planId, before };
+    return { fx, planId, before, addIds };
+  }
+
+  /** The author's own word that the card is written (MOTIR-10496): without it the walk
+   *  is owed the card and the close lands `stopped`, not `planned` (Bug MOTIR-11701). */
+  async function written(t: { fx: WorkItemFixture; planId: string; addIds: string[] }) {
+    await plansService.deepenProposal(t.planId, t.addIds[0]!, { authorFinished: true }, t.fx.ctx);
   }
 
   async function bothReadsKeep(fx: WorkItemFixture, planId: string, before: PlanReviewDto) {
@@ -839,12 +845,14 @@ describe('F. sentences and step words outlive the step and the decision', () => 
 
   it('F15 — after planned and approved, and on a declined plan, both reads keep them unchanged', async () => {
     const t = await ended('PNL');
+    await written(t);
     await plansService.markPlanned(t.planId, t.fx.ctx);
     await bothReadsKeep(t.fx, t.planId, t.before);
     await plansService.approvePlan(t.planId, t.fx.ctx);
     expect((await bothReadsKeep(t.fx, t.planId, t.before)).status).toBe('approved');
 
     const d = await ended('PNM');
+    await written(d);
     await plansService.markPlanned(d.planId, d.fx.ctx);
     await plansService.declinePlan(d.planId, d.fx.ctx);
     expect((await bothReadsKeep(d.fx, d.planId, d.before)).status).toBe('declined');
@@ -1010,6 +1018,8 @@ describe('H. the Visitor read', () => {
     await same();
     await mcpOk(client, { planId, sessionKey: 'p1', step: 'end' });
     await same();
+    // Written by its author (MOTIR-10496), so the close is `planned` (Bug MOTIR-11701).
+    await plansService.deepenProposal(planId, addIds[0]!, { authorFinished: true }, fx.ctx);
     await plansService.markPlanned(planId, fx.ctx);
     await plansService.approvePlan(planId, fx.ctx);
     await same();

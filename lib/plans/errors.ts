@@ -135,6 +135,35 @@ export class PlanNotInExpectedStatusError extends Error {
 }
 
 /**
+ * APPROVE WAS ASKED OF A PLAN WHOSE WALK IS NOT COMPLETE (Bug MOTIR-11701). A plan
+ * can be approved only once every card its walk owes is written: every `add`
+ * proposal and every committed card the walk re-authors reads `authored`. A
+ * `stopped` plan is refused by its status, and a `planned` one that closed before
+ * this rule shipped is refused by the same read under the plan lock — so no door
+ * (the rail, `POST /api/v1/work-items/{key}/plan-approval`, the gate's decide over
+ * MCP) commits a half-written plan. Nothing is written. → 409
+ *
+ * `unwritten` names what is still owed, so a caller can say which cards a Resume
+ * will write; `actual` is the plan's status, as {@link PlanNotInExpectedStatusError}
+ * carries it, for the loop that reads `planStatus` (MOTIR-3025).
+ */
+export class PlanWalkIncompleteError extends Error {
+  readonly code = 'PLAN_WALK_INCOMPLETE' as const;
+  constructor(
+    readonly planId: string,
+    readonly actual: string,
+    readonly unwritten: readonly { ref: string; key: string | null; title: string | null }[],
+  ) {
+    super(
+      `Plan ${planId} cannot be approved: its walk ended before every card was written ` +
+        `(${unwritten.length} not written yet). Nothing has been changed; resume the plan ` +
+        `to write the rest, or decline it.`,
+    );
+    this.name = 'PlanWalkIncompleteError';
+  }
+}
+
+/**
  * APPROVE WAS ASKED TO MATERIALIZE A PLAN THAT PROPOSES NOTHING (MOTIR-4146).
  *
  * `approvePlan`'s only status gate is `planned`, and `planned` is orthogonal to

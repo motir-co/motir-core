@@ -378,7 +378,7 @@ export async function submitJob(
   context: JobContextBag,
   actor: RequestActor,
   opts: {
-    resume?: { planId: string; fromJobId: string };
+    resume?: { planId: string; fromJobId: string; stoppedWalk?: true };
     /** One job per key (MOTIR-9255): a keyed submit is re-sent within
      *  {@link MOTIR_AI_SUBMIT_BUDGET_MS}, and a repeat answers the first job. */
     idempotencyKey?: string;

@@ -7,6 +7,7 @@ import { PLAN_NARRATION_BATCH_MAX, PLAN_NARRATION_SENTENCE_MAX } from '@/lib/pla
 import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { markEveryAddWritten } from '../../helpers/walkWritten';
 import { truncateAuthTables } from '../../helpers/db';
 import { RLS_DENIAL, isRlsDenial } from '../../helpers/sqlstate';
 
@@ -146,6 +147,8 @@ describe('recordPlanNarration — appends the session’s sentences, in order', 
       fx.ctx,
     );
     await plansService.endPlanStep(planId, 's1', fx.ctx);
+    // The walk's author sessions finished every card (Bug MOTIR-11701: else it closes `stopped`).
+    await markEveryAddWritten(planId);
     await plansService.markPlanned(planId, fx.ctx);
     await plansService.approvePlan(planId, fx.ctx);
 

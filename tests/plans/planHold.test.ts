@@ -15,6 +15,7 @@ const EXPECTED: Record<PlanStatusDto, boolean> = {
   planned: true,
   approving: true,
   stale: true,
+  stopped: true,
   approved: false,
   declined: false,
 };

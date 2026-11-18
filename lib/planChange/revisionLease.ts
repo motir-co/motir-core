@@ -189,19 +189,21 @@ export const REVISION_REOPENED_FROM_KEY = 'reopenedFrom';
  * settle and the abandoned-plan sweep exist for. `rows` is oldest first, as
  * {@link revisionLeaseOf} requires.
  */
-export function revisionReopenedFrom(rows: readonly RevisionLeaseRow[]): 'planned' | null {
+export function revisionReopenedFrom(
+  rows: readonly RevisionLeaseRow[],
+): 'planned' | 'stopped' | null {
   for (let i = rows.length - 1; i >= 0; i -= 1) {
     const row = rows[i]!;
     if (row.changeKind === REVISION_ENDED_KIND) return null;
     if (row.changeKind !== REVISION_STARTED_KIND) continue;
     const diff = row.diff;
-    if (
-      diff !== null &&
-      typeof diff === 'object' &&
-      (diff as Record<string, unknown>)[REVISION_REOPENED_FROM_KEY] === 'planned'
-    ) {
-      return 'planned';
-    }
+    const from =
+      diff !== null && typeof diff === 'object'
+        ? (diff as Record<string, unknown>)[REVISION_REOPENED_FROM_KEY]
+        : undefined;
+    // A `stopped` plan (Bug MOTIR-11701) is re-opened too — the hold an MCP walk's
+    // resume takes — and is given back `stopped` unless its close finished the walk.
+    if (from === 'planned' || from === 'stopped') return from;
   }
   return null;
 }

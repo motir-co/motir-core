@@ -446,7 +446,9 @@
       "checking": "检查中",
       "editing": "编辑中",
       "fixing": "修复中"
-    }
+    },
+    "status_stopped": "已停止",
+    "stoppedHint": "这份计划在所有工作项写完之前就停止了。在它的对话中继续以完成它，或者丢弃它 —— 你的待办列表不会有任何变化。"
   },
   "projectAccess": {
     "noAccessTitle": "你无权访问此项目",
@@ -8664,7 +8666,8 @@
       "approving": "正在批准…",
       "stale": "已过期",
       "approved": "已批准",
-      "declined": "已拒绝"
+      "declined": "已拒绝",
+      "stopped": "已停止"
     },
     "loadingMore": "加载中…",
     "generation": {
@@ -8714,7 +8717,8 @@
         "approved": "已批准",
         "declined": "已拒绝",
         "closed": "已关闭",
-        "waiting": "待继续"
+        "waiting": "待继续",
+        "stopped": "已停止"
       },
       "origin": {
         "mcp": "智能体计划",
@@ -8909,7 +8913,8 @@
         "linkRefused": "Motir 无法批准这份计划：其中一个依赖会形成循环，或重复一条已存在的关联。没有添加任何内容 —— 需要先修正计划的依赖，才能批准。",
         "notAuthorised": "你无法决定这份计划 —— 批准或拒绝它需要你在这个项目中没有的权限。没有任何改动。",
         "refused": "Motir 拒绝了{hasItem, select, yes {关于提议的工作项“{item}”的} other {}}这项决定，因此没有任何改动 —— 仅再次点击无法解决。",
-        "refusalReason": "给出的原因：{reason}"
+        "refusalReason": "给出的原因：{reason}",
+        "walkIncomplete": "这份计划暂时还不能批准 —— 它在所有工作项写完之前就停止了。继续它以写完其余部分。没有任何改动。"
       },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
       "correctToAsk": "改为回答这个问题",
@@ -10971,7 +10976,8 @@
         "prompt_too_large": "计划的上下文对该模型来说过大",
         "job_failed": "规划任务执行失败",
         "stalled": "规划长时间没有进展",
-        "internal": "我们这边出了故障"
+        "internal": "我们这边出了故障",
+        "stopped": "计划在所有工作项写完之前就停止了"
       },
       "refusal": {
         "credits": "你的组织的 Motir AI 额度已用完。补充额度后再继续。",
@@ -16597,7 +16603,8 @@
         "generating": "Motir AI 正在撰写该计划。",
         "planned": "该计划正在等待审批。",
         "approving": "该计划正在批准中。",
-        "stale": "该计划需要先处理，然后才能批准。"
+        "stale": "该计划需要先处理，然后才能批准。",
+        "stopped": "这份计划在所有工作项写完之前就停止了。继续它以完成。"
       },
       "reviewPlan": "审阅计划",
       "planHeldOption": "计划占用中",

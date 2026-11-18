@@ -1260,5 +1260,17 @@
  *   Additive: a new code for a new condition (§8's allowed list).
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.86.0` after `1.85.0` above.
+ *
+ * - `1.87.0` — Bug MOTIR-11701 adds `stopped` to `PlanStatus` (every `planStatusSchema`
+ *   read, the plan list's `status` filter, and a work item's held-by-plan status): a plan
+ *   whose walk ended before every card was written. It is undecided and holds its cards,
+ *   but it is not approvable — `POST /api/v1/work-items/{key}/plan-approval` refuses it
+ *   `409 PLAN_WALK_INCOMPLETE` with `planStatus` and the `unwritten` cards, as it does a
+ *   legacy `planned` plan whose walk is owed a card. A person resumes it.
+ *
+ *   Additive: a new member of an enum every client must tolerate unknown members of, and
+ *   a new code for a new condition (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.87.0` after `1.86.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.86.0';
+export const V1_CONTRACT_VERSION = '1.87.0';

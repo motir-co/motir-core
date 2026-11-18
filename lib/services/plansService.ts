@@ -204,6 +204,7 @@ import {
   PlanHasNoProposalsError,
   PlanItemFieldRejectedError,
   PlanNotInExpectedStatusError,
+  PlanWalkIncompleteError,
   PlanPersistenceError,
   PlanGateAwaitingError,
   PlanRevisionInFlightError,
@@ -313,6 +314,8 @@ import {
 } from '@/lib/mappers/planMappers';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { planWalkCompletenessService } from '@/lib/services/planWalkCompletenessService';
+import type { WalkCompleteness } from '@/lib/plans/walkCompleteness';
 import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { buildScope } from '@/lib/planChange/scope';
 import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
@@ -3557,7 +3560,9 @@ function assertPlanProposalsEditable(
   // A plan being approved is refused in its own words (Bug MOTIR-9006): the
   // reader is told to wait for an outcome, not that the plan is decided.
   if (plan.status === 'approving') throw new PlanApprovingError(plan.id, plan.approvingAt ?? null);
-  if (plan.status !== 'generating' && plan.status !== 'planned') {
+  // `stopped` (Bug MOTIR-11701) is undecided and still being finished: its proposals
+  // take a correction exactly as a `planned` plan's do.
+  if (plan.status !== 'generating' && plan.status !== 'planned' && plan.status !== 'stopped') {
     throw new PlanNotEditableError(plan.id, plan.status);
   }
 }
@@ -3613,9 +3618,20 @@ async function claimApprovalWithin(
   if (!fresh) throw new PlanNotFoundError(planId);
   await assertNoRevisionInFlight(planId, tx);
   if (fresh.status === 'approving') throw new PlanApprovingError(planId, fresh.approvingAt);
+  // ⚠️ AN UNFINISHED WALK IS REFUSED BY NAME, through every door (Bug MOTIR-11701):
+  // the rail, `POST …/plan-approval`, the MCP and the gate's decide door all claim
+  // here. A `stopped` plan is refused outright; a `planned` one is refused when its
+  // walk is owed a card under this lock — a legacy close from before `stopped`
+  // existed — so nothing is committed from a walk that never finished.
+  if (fresh.status === 'stopped') {
+    const walk = await planWalkCompletenessService.readWithin(fresh, tx);
+    throw new PlanWalkIncompleteError(planId, fresh.status, walk.unwritten);
+  }
   if (fresh.status !== 'planned') {
     throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
   }
+  const walk = await planWalkCompletenessService.readWithin(fresh, tx);
+  if (!walk.complete) throw new PlanWalkIncompleteError(planId, fresh.status, walk.unwritten);
   // The stamp the reader pressed with, against the proposals as they are under the
   // lock — the same comparison the door makes for a plan gate (§11.3: the live
   // digest; a card-less gate has no companion and no card body).
@@ -3663,7 +3679,14 @@ async function releaseApprovalClaim(
 async function restoreReopenedPlanWithin(
   planId: string,
   tx: Prisma.TransactionClient,
+  to: 'planned' | 'stopped' = 'planned',
 ): Promise<void> {
+  // A re-opened `stopped` plan (Bug MOTIR-11701) whose revision died is given back
+  // `stopped`: nothing finished its walk, so there is still no question to ask.
+  if (to === 'stopped') {
+    await planRepository.update(planId, { status: 'stopped' }, tx);
+    return;
+  }
   const restored = await planRepository.update(planId, { status: 'planned' }, tx);
   await planGateService.raise(restored, tx);
 }
@@ -3689,18 +3712,19 @@ async function settleLapsedRevisionWithin(
   const fresh = await planRepository.findById(planId, workspaceId, tx);
   if (!fresh || fresh.status !== 'generating') return false;
   const rows = await planRevisionRepository.listByPlan(planId, tx);
-  if (!revisionReopenedFrom(rows) || revisionLeaseOf(rows, now)) return false;
+  const reopenedFrom = revisionReopenedFrom(rows);
+  if (!reopenedFrom || revisionLeaseOf(rows, now)) return false;
   await planRevisionsService.recordRevision(
     {
       planId,
       changeKind: REVISION_ENDED_KIND,
       changedById: null,
       actor: { source: 'native', harness: 'Motir', model: null },
-      diff: { revision: true, lapsed: true, restoredTo: 'planned' },
+      diff: { revision: true, lapsed: true, restoredTo: reopenedFrom },
     },
     tx,
   );
-  await restoreReopenedPlanWithin(planId, tx);
+  await restoreReopenedPlanWithin(planId, tx, reopenedFrom);
   return true;
 }
 
@@ -7493,6 +7517,20 @@ export const plansService = {
       revision?: boolean;
       /** The job's resolved planning model (Bug MOTIR-8420); see the write below. */
       authorModel?: string | null;
+      /**
+       * The producer's word that its walk ended before every card was written (Bug
+       * MOTIR-11701) — the person's Stop, a failed author session, a limit, a level
+       * never laid. `true` closes the plan `stopped` whatever the authoring state
+       * reads; absent, the authoring state alone decides (see the close below).
+       */
+      walkIncomplete?: boolean;
+      /**
+       * The walk RETURNED to its conversation with a question (Bug MOTIR-11701). The
+       * plan still closes `stopped` when it is owed cards, but no failure is recorded
+       * on its session: the person's answer is the next turn, which revises the plan
+       * and writes what is owed — Resume would refuse that turn.
+       */
+      walkReturned?: boolean;
     } = {},
   ): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -7654,6 +7692,88 @@ export const plansService = {
           return { row: discarded, count: 0 };
         }
 
+        // ⚠️ AN UNFINISHED WALK IS NOT A QUESTION (Bug MOTIR-11701). `planned` hands a
+        // person an Approve, so it must not be reachable by a plan whose walk ended
+        // before every card was written: approving it commits title-only cards and
+        // the committed cards the walk never re-authored. Read under the plan lock,
+        // over the plan as it stands now (`planWalkCompletenessService`, whose verdict
+        // is the authoring state's). A plan that had no walk — one written by hand
+        // over the MCP — is complete by construction and closes as it always did.
+        //
+        // `stopped` is UNDECIDED: the plan keeps its proposals and its held cards,
+        // no gate is raised (a re-opened plan's gate is withdrawn — its subject is no
+        // longer a question), and the plan's session records a resumable failure with
+        // reason `stopped`, which is what offers the person Resume — the failed
+        // attempt's own Resume (MOTIR-7905), continuing the SAME plan.
+        const walk = await planWalkCompletenessService.readWithin(fresh, tx);
+        if (opts.walkIncomplete === true || !walk.complete) {
+          const stopped = await planRepository.update(
+            planId,
+            {
+              status: 'stopped',
+              ...(productName != null ? { productName } : {}),
+              ...(summary != null ? { summary } : {}),
+              ...modelWrite,
+            },
+            tx,
+          );
+          await planGateService.supersede(planId, 'subject_gone', tx);
+          // No session of a stopped walk is running: a step it left behind (a crash, a
+          // close racing its last session) would read its card as being written once the
+          // walk resumes, and so owe it forever.
+          await planStepRepository.deleteForPlan(planId, tx);
+          await planRevisionsService.recordRevision(
+            {
+              planId,
+              changeKind: 'stopped',
+              ...generationActor(fresh, ctx),
+              diff: {
+                itemCount: proposals.length,
+                unwrittenCount: walk.unwritten.length,
+                ...(opts.walkIncomplete === true ? { reportedIncomplete: true } : {}),
+                ...(opts.walkReturned === true ? { returnedWithQuestion: true } : {}),
+                ...(productName != null ? { productName } : {}),
+                ...(stopped.summary != null ? { summary: stopped.summary } : {}),
+              },
+            },
+            tx,
+          );
+          if (fresh.sessionId && opts.walkReturned !== true) {
+            const first = walk.unwritten[0] ?? null;
+            await planChangeSessionRepository.markFailed(
+              fresh.sessionId,
+              {
+                failedAt: new Date(),
+                failedJobId: fresh.sourceJobId,
+                failureReason: 'stopped',
+                failureStopPhase: first ? 'author' : null,
+                failureStopRef: first ? (first.key ?? first.ref) : null,
+                failureStopTitle: first?.title ?? null,
+                failureResumable: true,
+                failureNotPlannedYet: walk.unwritten.map((u) =>
+                  u.key ? `${u.key} ${u.title ?? ''}`.trim() : (u.title ?? u.ref),
+                ),
+              },
+              tx,
+            );
+          }
+          return { row: stopped, count: proposals.length };
+        }
+
+        // A resumed walk that now closes COMPLETE leaves the stop behind it: the
+        // session's `stopped` record (if a write did not already clear it) is cleared
+        // with the close, so the session reads as the plan does — waiting on Approve.
+        if (fresh.sessionId) {
+          const session = await planChangeSessionRepository.findWaitingState(
+            fresh.sessionId,
+            ctx.workspaceId,
+            tx,
+          );
+          if (session?.failureReason === 'stopped') {
+            await planChangeSessionRepository.clearFailure(fresh.sessionId, tx);
+          }
+        }
+
         const updated = await planRepository.update(
           planId,
           {
@@ -7729,7 +7849,7 @@ export const plansService = {
     // is the same plan, not a second one waiting.
     if (row.status === 'planned') {
       if (!opts.revision) await recordSubmittedPlanFinding(row, count, ctx);
-    } else {
+    } else if (row.status === 'declined') {
       // A discarded close is as terminal as a decline, so it releases the
       // planning-target locks the same way `declinePlan` does. A plan with zero
       // proposals usually holds none — but a `modify` that was appended and
@@ -10361,7 +10481,10 @@ export const plansService = {
         // it back. The plan's `plan_approval` gate is untouched: it stays
         // `awaiting` and HELD (the lease is what holds it), so the question a
         // person was asked is the same question when the plan closes again.
-        const reopens = fresh.status === 'planned';
+        // A `stopped` plan re-opens the same way (Bug MOTIR-11701): the MCP walk's
+        // resume (`plan.py --resume`) holds it, finishes its cards, and closes it
+        // through `markPlanned` — `planned` when the walk is now complete.
+        const reopens = fresh.status === 'planned' || fresh.status === 'stopped';
         if (opts.jobId || reopens) {
           await planRepository.update(
             planId,
@@ -10402,7 +10525,7 @@ export const plansService = {
             diff: {
               revision: true,
               ...(opts.jobId ? { jobId: opts.jobId } : {}),
-              ...(reopens ? { [REVISION_REOPENED_FROM_KEY]: 'planned' } : {}),
+              ...(reopens ? { [REVISION_REOPENED_FROM_KEY]: fresh.status } : {}),
             },
           },
           tx,
@@ -10432,6 +10555,20 @@ export const plansService = {
    * ACQUIRE remains the authority and re-checks under the lock, because anything
    * read outside the lock is a courtesy rather than a guarantee.
    */
+  /**
+   * IS THIS PLAN'S WALK COMPLETE? (Bug MOTIR-11701) — the read the approve entrance
+   * asks before it reaches the door, so a plan nobody can approve is refused by name
+   * rather than as a status. A READ: the claim re-asks it under the plan lock.
+   */
+  async readWalkCompleteness(
+    plan: { id: string; workspaceId: string; projectId: string; plannerRecord: unknown },
+    ctx: ServiceContext,
+  ): Promise<WalkCompleteness> {
+    return withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planWalkCompletenessService.readWithin(plan, tx),
+    );
+  },
+
   async readRevisionLease(
     planId: string,
     ctx: ServiceContext,
@@ -10508,7 +10645,7 @@ export const plansService = {
       },
       tx,
     );
-    if (reopened) await restoreReopenedPlanWithin(planId, tx);
+    if (reopened) await restoreReopenedPlanWithin(planId, tx, reopened);
     return { planId, released: true };
   },
 
@@ -10517,8 +10654,12 @@ export const plansService = {
    * re-opening revision itself (`planSessionEndService.releaseRevisionForFailedJob`),
    * in its transaction and under its plan lock.
    */
-  async restoreReopenedPlanWithin(tx: Prisma.TransactionClient, planId: string): Promise<void> {
-    await restoreReopenedPlanWithin(planId, tx);
+  async restoreReopenedPlanWithin(
+    tx: Prisma.TransactionClient,
+    planId: string,
+    to: 'planned' | 'stopped' = 'planned',
+  ): Promise<void> {
+    await restoreReopenedPlanWithin(planId, tx, to);
   },
 
   /** {@link settleLapsedRevisionWithin}, for a caller outside this service holding the
@@ -10560,6 +10701,10 @@ export const plansService = {
       authorModel?: string | null;
       /** Extra keys for the `revision_ended` row on the plan's trail. */
       trailDiff?: Record<string, unknown>;
+      /** The revision's walk ended unfinished (Bug MOTIR-11701), for `markPlanned`. */
+      walkIncomplete?: boolean;
+      /** …by returning with a question (Bug MOTIR-11701), for `markPlanned`. */
+      walkReturned?: boolean;
     } = {},
   ): Promise<{ planId: string; released: boolean; planned: boolean; status: string }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -10579,6 +10724,8 @@ export const plansService = {
           summary: opts.summary ?? null,
           authorModel: opts.authorModel ?? null,
           revision: true,
+          ...(opts.walkIncomplete ? { walkIncomplete: true } : {}),
+          ...(opts.walkReturned ? { walkReturned: true } : {}),
         });
         status = closed.status;
       } catch (err) {
@@ -11442,12 +11589,22 @@ async function declineWithin(
   await settleLapsedRevisionWithin(planId, ctx.workspaceId, tx);
   const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
   if (!fresh) throw new PlanNotFoundError(planId);
-  if (fresh.status !== 'planned' && fresh.status !== 'generating' && fresh.status !== 'stale') {
+  if (
+    fresh.status !== 'planned' &&
+    fresh.status !== 'generating' &&
+    fresh.status !== 'stale' &&
+    // Bug MOTIR-11701: a stopped walk is declined (discarded) instead of resumed.
+    fresh.status !== 'stopped'
+  ) {
     // `approved` / `declined` — already decided. The message names both
     // legal origins so the 409 says what would have worked, and `actual`
     // still rides the field for a caller that has to branch on it
     // (MOTIR-3025).
-    throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned, stale or generating');
+    throw new PlanNotInExpectedStatusError(
+      planId,
+      fresh.status,
+      'planned, stale, stopped or generating',
+    );
   }
   // A DECLINE is refused under the lease too, and for a reason of its own:
   // `declined` is a closed decision, so a revision that finishes writing

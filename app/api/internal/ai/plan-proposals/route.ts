@@ -182,6 +182,16 @@ export async function POST(req: Request): Promise<Response> {
   // it may carry the model when no caller-facing door does.
   const rawAuthorModel = (body as { authorModel?: unknown })?.authorModel;
   const authorModel = typeof rawAuthorModel === 'string' ? rawAuthorModel : null;
+  // THE WALK ENDED UNFINISHED (Bug MOTIR-11701). motir-ai's engine knows things the
+  // plan's rows cannot say — the person pressed Stop, an author session failed, a
+  // level was never laid — and says so on the FINAL append. `true` closes the plan
+  // `stopped` (Resume, never Approve) whatever its authoring state reads; anything
+  // else leaves the verdict to the authoring state alone. Read only with `final`.
+  const walkIncomplete = final && (body as { walkIncomplete?: unknown })?.walkIncomplete === true;
+  // …and `walkReturned`: it ended by RETURNING to the conversation with a question.
+  // The plan still closes `stopped` when owed cards, but no failure is recorded on
+  // its session — the person's answer is the next turn, which revises the plan.
+  const walkReturned = final && (body as { walkReturned?: unknown })?.walkReturned === true;
   const rawTitle = (body as { title?: unknown })?.title;
   const trimmedTitle = typeof rawTitle === 'string' ? rawTitle.trim() : '';
   const title = trimmedTitle.length > 0 ? trimmedTitle.slice(0, PLAN_TITLE_MAX).trim() : null;
@@ -228,6 +238,8 @@ export async function POST(req: Request): Promise<Response> {
         ...(title !== null ? { title } : {}),
         ...(final && summary !== null ? { summary } : {}),
         ...(final && authorModel !== null ? { authorModel } : {}),
+        ...(walkIncomplete ? { walkIncomplete: true } : {}),
+        ...(walkReturned ? { walkReturned: true } : {}),
         ...(actor ? { actor } : {}),
       },
     );

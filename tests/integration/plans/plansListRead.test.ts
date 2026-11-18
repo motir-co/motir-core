@@ -161,6 +161,7 @@ describe('plansService.countPlansByStatus', () => {
       planned: 2,
       approving: 0,
       stale: 0,
+      stopped: 0,
       approved: 0,
       declined: 0,
     });
@@ -179,6 +180,7 @@ describe('plansService.countPlansByStatus', () => {
       planned: 0,
       approving: 0,
       stale: 0,
+      stopped: 0,
       approved: 0,
       declined: 0,
     });
@@ -223,6 +225,7 @@ describe('the two reads are workspace-scoped', () => {
       planned: 0,
       approving: 0,
       stale: 0,
+      stopped: 0,
       approved: 0,
       declined: 0,
     });

@@ -446,7 +446,9 @@
       "checking": "Wird geprüft",
       "editing": "Wird bearbeitet",
       "fixing": "Wird korrigiert"
-    }
+    },
+    "status_stopped": "Angehalten",
+    "stoppedHint": "Dieser Plan wurde angehalten, bevor alle Elemente geschrieben waren. Setzen Sie ihn in seiner Unterhaltung fort, um ihn fertigzustellen, oder verwerfen Sie ihn – an Ihrem Backlog ändert sich nichts."
   },
   "projectAccess": {
     "noAccessTitle": "Sie haben keinen Zugriff auf dieses Projekt",
@@ -8673,7 +8675,8 @@
       "approving": "Wird genehmigt…",
       "stale": "Veraltet",
       "approved": "Genehmigt",
-      "declined": "Abgelehnt"
+      "declined": "Abgelehnt",
+      "stopped": "Angehalten"
     },
     "loadingMore": "Wird geladen…",
     "generation": {
@@ -8723,7 +8726,8 @@
         "approved": "Genehmigt",
         "declined": "Abgelehnt",
         "closed": "Geschlossen",
-        "waiting": "Wartet auf Fortsetzung"
+        "waiting": "Wartet auf Fortsetzung",
+        "stopped": "Angehalten"
       },
       "origin": {
         "mcp": "Agentenplan",
@@ -8918,7 +8922,8 @@
         "linkRefused": "Motir konnte diesen Plan nicht genehmigen: Eine seiner Abhängigkeiten würde einen Kreis bilden oder eine bereits vorhandene Verknüpfung wiederholen. Es wurde nichts hinzugefügt – die Abhängigkeiten des Plans müssen korrigiert werden, bevor er genehmigt werden kann.",
         "notAuthorised": "Sie können über diesen Plan nicht entscheiden – zum Genehmigen oder Ablehnen fehlt Ihnen in diesem Projekt eine Berechtigung. Es wurde nichts geändert.",
         "refused": "Motir hat diese Entscheidung{hasItem, select, yes { zum vorgeschlagenen Arbeitselement „{item}“} other {}} abgelehnt, daher wurde nichts geändert – erneutes Drücken allein hilft nicht.",
-        "refusalReason": "Angegebener Grund: {reason}"
+        "refusalReason": "Angegebener Grund: {reason}",
+        "walkIncomplete": "Dieser Plan kann noch nicht genehmigt werden – er wurde angehalten, bevor alle Elemente geschrieben waren. Setzen Sie ihn fort, um den Rest zu schreiben. Es wurde nichts geändert."
       },
       "answeredFrom": "{count, plural, =0 {Ohne Quellenangabe beantwortet} one {Anhand von # Arbeitselement beantwortet} other {Anhand von # Arbeitselementen beantwortet}}",
       "correctToAsk": "Stattdessen beantworten",
@@ -10980,7 +10985,8 @@
         "prompt_too_large": "der Kontext des Plans für das Modell zu groß war",
         "job_failed": "der Planungsauftrag fehlgeschlagen ist",
         "stalled": "der Plan nicht mehr vorankam",
-        "internal": "auf unserer Seite etwas schiefgelaufen ist"
+        "internal": "auf unserer Seite etwas schiefgelaufen ist",
+        "stopped": "der Plan angehalten wurde, bevor alle Elemente geschrieben waren"
       },
       "refusal": {
         "credits": "Ihrer Organisation sind die Credits für Motir AI ausgegangen. Fügen Sie Credits hinzu und setzen Sie dann fort.",
@@ -16606,7 +16612,8 @@
         "generating": "Motir AI schreibt diesen Plan noch.",
         "planned": "Dieser Plan wartet auf Genehmigung.",
         "approving": "Dieser Plan wird genehmigt.",
-        "stale": "Dieser Plan muss überarbeitet werden, bevor er genehmigt werden kann."
+        "stale": "Dieser Plan muss überarbeitet werden, bevor er genehmigt werden kann.",
+        "stopped": "Dieser Plan wurde angehalten, bevor alle Elemente geschrieben waren. Setzen Sie ihn fort, um ihn fertigzustellen."
       },
       "reviewPlan": "Plan prüfen",
       "planHeldOption": "durch Plan gesperrt",

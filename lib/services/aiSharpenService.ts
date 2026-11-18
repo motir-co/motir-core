@@ -146,7 +146,7 @@ interface Grounding {
 // write-back's legal-write set (`EDITABLE_PLAN_STATUSES` in
 // `planSharpeningService.ts`) and must agree with it; the run's PHASE is the
 // control's to judge, not the door's, which cannot see it.
-const OPEN_PLAN_STATUSES = new Set(['generating', 'planned', 'stale']);
+const OPEN_PLAN_STATUSES = new Set(['generating', 'stopped', 'planned', 'stale']);
 const ENDING_KINDS = new Set(['nothing_to_ask', 'finished', 'stopped']);
 const UNIQUE_VIOLATION = '23505';
 

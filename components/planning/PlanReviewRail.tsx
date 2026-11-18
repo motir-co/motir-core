@@ -34,6 +34,8 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 const STATUS_TINT: Record<PlanStatusDto, string> = {
   generating: 'bg-(--el-tint-sky) text-(--el-text-strong)',
+  // Stopped before every card was written (Bug MOTIR-11701) — waiting on a Resume.
+  stopped: 'bg-(--el-tint-peach) text-(--el-text-strong)',
   planned: 'bg-(--el-tint-lavender) text-(--el-text-strong)',
   // Being approved (Bug MOTIR-9006) — the hue it lands on, mint, on its way there.
   approving: 'bg-(--el-tint-mint) text-(--el-text-strong)',
@@ -154,7 +156,12 @@ export function PlanReviewRail({
   // have read; a plan that never finished is being ENDED. `decisionReason`
   // already tells the two apart on the row, and this button is where a reader
   // learns which one they are doing.
-  const generating = review.status === 'generating';
+  // ⚠️ A `stopped` PLAN IS ENDED THE SAME WAY (Bug MOTIR-11701): its walk closed before
+  // every card was written, so it can be Resumed (from its conversation) or discarded —
+  // never approved. It takes `generating`'s Discard, and its Approve is NOT RENDERED:
+  // no wait turns it approvable, only a Resume that finishes its walk.
+  const stoppedPlan = review.status === 'stopped';
+  const generating = review.status === 'generating' || stoppedPlan;
   // ⚠️ THE PLAN PROPOSES NOTHING, SO THERE IS NOTHING TO APPROVE (MOTIR-4146).
   //
   // The gate below branches on DECIDED and has never branched on EMPTY, so an
@@ -477,7 +484,7 @@ export function PlanReviewRail({
           <DecidedOutcome review={review} t={t} codeOutcome={codeOutcome ?? null} />
         ) : (
           <>
-            {empty ? null : (
+            {empty || stoppedPlan ? null : (
               <Button
                 variant="primary"
                 onClick={onApprove}
@@ -607,11 +614,13 @@ export function PlanReviewRail({
                         : review.stale
                           ? t('approveHintStale', { n: review.staleCount })
                           : t('approveHint')
-                      : generating
-                        ? t('discardHint')
-                        : stalePlan
-                          ? t('staleReviewHint')
-                          : t('reviewLocked')}
+                      : stoppedPlan
+                        ? t('stoppedHint')
+                        : generating
+                          ? t('discardHint')
+                          : stalePlan
+                            ? t('staleReviewHint')
+                            : t('reviewLocked')}
               </p>
             )}
           </>

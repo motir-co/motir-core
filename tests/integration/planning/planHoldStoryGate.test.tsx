@@ -246,6 +246,8 @@ const MCP_STATE: Record<PlanHeldByPlanDTO['planStatus'], string> = {
   planned: 'is waiting for approval',
   approving: 'is being approved — its approval releases this card when it finishes',
   stale: 'is stale and needs attention before it can be approved',
+  stopped:
+    'stopped before every card was written — resume it to finish, or decline it to release this card',
 };
 
 /** Render the shipped notice for a plan and return the Review plan door's href. */

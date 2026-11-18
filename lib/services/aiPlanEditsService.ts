@@ -675,6 +675,9 @@ export const aiPlanEditsService = {
     // The session the resumed plan belongs to (MOTIR-11294), which the caller resumes
     // by id: the resume is a turn of that conversation and names it on the envelope.
     sessionId: string,
+    // Bug MOTIR-11701: the plan is `stopped` — its walk closed unfinished, so the job it
+    // continues SUCCEEDED. motir-ai continues a succeeded job only when told so.
+    stoppedWalk = false,
   ): Promise<{ jobId: string }> {
     await assertCanPlan(ctx);
     const { tenant, planningFields } = await buildPlanningJobContext(
@@ -690,7 +693,7 @@ export const aiPlanEditsService = {
       // and a resume continues a WALK — the plan it continues rides `resume`, not the bag.
       planningFields,
       { userId: ctx.userId },
-      { resume: { planId, fromJobId } },
+      { resume: { planId, fromJobId, ...(stoppedWalk ? { stoppedWalk: true as const } : {}) } },
     );
   },
 
@@ -737,7 +740,10 @@ async function dispatchRevision(
   if (plan.status === 'approving') {
     throw new PlanApprovingError(planId, plan.approvingAt ? new Date(plan.approvingAt) : null);
   }
-  if (plan.status !== 'generating' && plan.status !== 'planned') {
+  // `stopped` (Bug MOTIR-11701) is revisable too: a walk that returned to the
+  // conversation with a question closes `stopped`, and the answer is its revision —
+  // which re-opens it and writes every card still owed.
+  if (plan.status !== 'generating' && plan.status !== 'planned' && plan.status !== 'stopped') {
     throw new PlanNotEditableError(planId, plan.status);
   }
   const held = await plansService.readRevisionLease(planId, ctx);

@@ -52,7 +52,7 @@ const ACCEPTANCE_PARTS = [
 /** The plan statuses a write-back lands on: the editable pair every other plan
  *  edit uses, plus `stale`, which the Sharpen door opens on (design MOTIR-8173:
  *  "Sharpening still writes to it"). A decided plan is refused. */
-const EDITABLE_PLAN_STATUSES = new Set(['generating', 'planned', 'stale']);
+const EDITABLE_PLAN_STATUSES = new Set(['generating', 'stopped', 'planned', 'stale']);
 
 /** Write both blocks into a proposal body; a block with no content is not written (a
  *  cumulative call never removes what an earlier one settled). */

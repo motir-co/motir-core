@@ -5,7 +5,8 @@
 // and which undecided plans it holds. So a list, its count and a drop-out all fall out of the
 // same predicates and nothing writes a flag.
 //
-//   - `failed_walk`                → an OPEN failed session holding a `generating` plan. The
+//   - `failed_walk`                → an OPEN failed session holding a `generating` (or, Bug
+//                                    MOTIR-11701, `stopped`) plan. The
 //                                    entry opens on that plan (Resume continues the walk) and
 //                                    names the session's newest `planned` / `stale` plan, if
 //                                    there is one, as its second line.
@@ -21,11 +22,13 @@
 // `null` is a session that takes no form (an ended session holding only a `generating` plan:
 // it cannot be approved and the abandoned-plan sweep declines it).
 
+import { isUnfinishedWalkStatus } from '@/lib/planChange/sessionWaitingState';
+
 export type ToResumeForm = 'failed_walk' | 'failed_beside_waiting_plan' | 'ended_with_waiting_plan';
 
 export interface ToResumeFormPlan {
   id: string;
-  status: 'generating' | 'planned' | 'stale';
+  status: 'generating' | 'stopped' | 'planned' | 'stale';
   createdAt: Date;
 }
 
@@ -61,7 +64,7 @@ export function toResumeFormOf(
     if (session.endReason !== 'failed' || !waiting) return null;
     return { form: 'ended_with_waiting_plan', entryPlanId: waiting.id, waitingPlanId: waiting.id };
   }
-  const walking = newest(undecided.filter((p) => p.status === 'generating'));
+  const walking = newest(undecided.filter((p) => isUnfinishedWalkStatus(p.status)));
   if (walking) {
     return { form: 'failed_walk', entryPlanId: walking.id, waitingPlanId: waiting?.id ?? null };
   }

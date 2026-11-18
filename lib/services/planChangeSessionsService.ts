@@ -1144,7 +1144,7 @@ async function lockWaitingPlanWithin(
 // ── THE TURN ON A WAITING PLAN (MOTIR-7945) ──────────────────────────────────
 
 function undecidedStatus(status: string): SessionTurnPlanStatus {
-  return status === 'planned' || status === 'stale' ? status : 'generating';
+  return status === 'planned' || status === 'stale' || status === 'stopped' ? status : 'generating';
 }
 
 /**

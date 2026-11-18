@@ -446,7 +446,9 @@
       "checking": "Sprawdzanie",
       "editing": "Edytowanie",
       "fixing": "Poprawianie"
-    }
+    },
+    "status_stopped": "Zatrzymany",
+    "stoppedHint": "Ten plan zatrzymał się, zanim wszystkie elementy zostały napisane. Wznów go z jego rozmowy, aby go dokończyć, albo go odrzuć — w backlogu nic się nie zmieni."
   },
   "projectAccess": {
     "noAccessTitle": "Nie masz dostępu do tego projektu",
@@ -8673,7 +8675,8 @@
       "approving": "Zatwierdzanie…",
       "stale": "Nieaktualny",
       "approved": "Zatwierdzony",
-      "declined": "Odrzucony"
+      "declined": "Odrzucony",
+      "stopped": "Zatrzymany"
     },
     "loadingMore": "Wczytywanie…",
     "generation": {
@@ -8723,7 +8726,8 @@
         "approved": "Zatwierdzony",
         "declined": "Odrzucony",
         "closed": "Zamknięta",
-        "waiting": "Do wznowienia"
+        "waiting": "Do wznowienia",
+        "stopped": "Zatrzymany"
       },
       "origin": {
         "mcp": "Plan agenta",
@@ -8918,7 +8922,8 @@
         "linkRefused": "Motir nie mógł zatwierdzić tego planu: jedna z jego zależności utworzyłaby pętlę lub powtórzyła istniejące już powiązanie. Nic nie zostało dodane — zależności planu trzeba poprawić, zanim będzie można go zatwierdzić.",
         "notAuthorised": "Nie możesz decydować o tym planie — do zatwierdzenia lub odrzucenia potrzebne jest uprawnienie, którego nie masz w tym projekcie. Nic nie zostało zmienione.",
         "refused": "Motir odrzucił tę decyzję{hasItem, select, yes { dotyczącą proponowanego elementu roboczego „{item}”} other {}}, więc nic nie zostało zmienione — samo ponowne kliknięcie nie pomoże.",
-        "refusalReason": "Podany powód: {reason}"
+        "refusalReason": "Podany powód: {reason}",
+        "walkIncomplete": "Tego planu nie można jeszcze zatwierdzić — zatrzymał się, zanim wszystkie elementy zostały napisane. Wznów go, aby napisać resztę. Nic nie zostało zmienione."
       },
       "answeredFrom": "{count, plural, =0 {Odpowiedź bez powoływania się na źródła} one {Odpowiedź na podstawie # elementu roboczego} few {Odpowiedź na podstawie # elementów roboczych} many {Odpowiedź na podstawie # elementów roboczych} other {Odpowiedź na podstawie # elementu roboczego}}",
       "correctToAsk": "Zamiast tego odpowiedz na to",
@@ -10980,7 +10985,8 @@
         "prompt_too_large": "kontekst planu był zbyt duży dla modelu",
         "job_failed": "zadanie planowania nie powiodło się",
         "stalled": "plan przestał posuwać się naprzód",
-        "internal": "po naszej stronie wystąpił problem"
+        "internal": "po naszej stronie wystąpił problem",
+        "stopped": "plan zatrzymał się, zanim wszystkie elementy zostały napisane"
       },
       "refusal": {
         "credits": "W Twojej organizacji skończyły się kredyty Motir AI. Dodaj kredyty, a potem wznów.",
@@ -16606,7 +16612,8 @@
         "generating": "Motir AI nadal pisze ten plan.",
         "planned": "Ten plan czeka na zatwierdzenie.",
         "approving": "Ten plan jest zatwierdzany.",
-        "stale": "Ten plan wymaga uwagi, zanim będzie można go zatwierdzić."
+        "stale": "Ten plan wymaga uwagi, zanim będzie można go zatwierdzić.",
+        "stopped": "Ten plan zatrzymał się, zanim wszystkie elementy zostały napisane. Wznów go, aby go dokończyć."
       },
       "reviewPlan": "Przejrzyj plan",
       "planHeldOption": "wstrzymane przez plan",

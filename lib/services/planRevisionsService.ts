@@ -86,6 +86,8 @@ export type PlanRevisionChangeKind =
   | 'edited'
   | 'withdrawn'
   | 'planned'
+  // Bug MOTIR-11701: the close of a walk that ended before every card was written.
+  | 'stopped'
   | 'approved'
   | 'declined'
   | 'revision_started'

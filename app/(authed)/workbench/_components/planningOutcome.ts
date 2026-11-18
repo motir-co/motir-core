@@ -54,6 +54,9 @@ export function planningOutcomeOf(plan: {
 }): PlanningRowOutcome | null {
   switch (plan.status) {
     case 'generating':
+    // Bug MOTIR-11701: a stopped walk has not been written either — it waits in To
+    // resume beside its session's failure line, exactly as a failed `generating` one does.
+    case 'stopped':
       return null;
     case 'planned':
     case 'stale':

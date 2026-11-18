@@ -852,6 +852,12 @@ const addPlanItemsInputSchema = {
         'Send it with an EMPTY `proposals` array to close a plan you have nothing left to ' +
         'append to.',
     ),
+  walkIncomplete: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set true together with `final: true` when your walk ENDED BEFORE EVERY CARD WAS WRITTEN — the person stopped it, an author session failed, a limit or an interruption cut it short. The plan then closes `stopped` instead of `planned`: it keeps every proposal, offers Resume and never Approve, and no approval gate is raised. Without it the close still writes `stopped` when a walked plan holds a card that is not written yet. Ignored without `final`.',
+    ),
   revision: z
     .boolean()
     .optional()
@@ -1632,6 +1638,8 @@ interface AddPlanItemsArgs {
   planId: string;
   proposals: z.infer<typeof proposalSchema>[];
   final?: boolean;
+  /** Bug MOTIR-11701: the walk ended unfinished — close `stopped`, never `planned`. */
+  walkIncomplete?: boolean;
   revision?: boolean;
 }
 
@@ -1695,6 +1703,19 @@ function summarizeCreate(plan: PlanDto, projectKey: string): string {
  * PLAN is that it closed. The text block is the half a human watching the
  * session reads, so it says what changed.
  */
+function summarizeStopped(plan: PlanWithItemsDto): string {
+  return [
+    `Closed plan ${plan.id} — stopped, ${plan.itemCount} proposal(s) in total. Its walk ended ` +
+      'before every card was written, so it is NOT in the review queue: nobody is asked to ' +
+      'approve it, and approving it is refused (`PLAN_WALK_INCOMPLETE`) until it is finished.',
+    '',
+    'Its proposals and held cards are kept. Resume it to write the cards still owed — from the ' +
+      'planning rail, or with `plan.py --resume <run dir>`, which takes ' +
+      '`hold_plan_revision` on it, writes only the unfinished cards and closes it again. ' +
+      'Decline it to discard it instead.',
+  ].join('\n');
+}
+
 function summarizeClose(plan: PlanWithItemsDto): string {
   // ⚠️ A CLOSE OVER NOTHING DOES NOT REACH THE REVIEW QUEUE (MOTIR-4124), so
   // this note must not say it did. `markPlanned` DISCARDS a plan holding zero
@@ -1702,6 +1723,9 @@ function summarizeClose(plan: PlanWithItemsDto): string {
   // being asked to decide, and there is nothing here to decide. An agent
   // reading "it is in the review queue now" would report a plan as submitted
   // that nobody will ever be shown.
+  // Bug MOTIR-11701: the walk ended before every card was written, so the plan is
+  // `stopped` — it keeps its proposals, offers Resume, and asks nobody to approve it.
+  if (plan.status === 'stopped') return summarizeStopped(plan);
   if (plan.status !== 'planned') {
     return [
       `Closed plan ${plan.id} — ${plan.status}, and it proposed NOTHING. Nothing was appended ` +
@@ -1785,6 +1809,7 @@ function summarizeAppend(plan: PlanWithItemsDto, planItemIds: string[], revision
         'after they started reading. It did NOT re-open: the plan was `planned` before this ' +
         `call and is \`planned\` after it. Read it back with \`${GET_PLAN_TOOL_NAME}\`.`
       );
+    if (plan.status === 'stopped') return summarizeStopped(plan);
     if (plan.status === 'planned')
       return (
         'This plan is now `planned` — it is in the review queue. A further append needs ' +
@@ -2102,7 +2127,14 @@ export async function runAddPlanItems(
   // close. `markPlanned` re-locks and re-reads, so a racing append is refused
   // rather than silently landing on a `planned` plan.
   const plan = args.final
-    ? { ...(await plansService.markPlanned(args.planId, ctx)), items: appended.items }
+    ? {
+        ...(await plansService.markPlanned(
+          args.planId,
+          ctx,
+          args.walkIncomplete === true ? { walkIncomplete: true } : {},
+        )),
+        items: appended.items,
+      }
     : appended;
 
   return toolOk(
@@ -2609,6 +2641,14 @@ const holdPlanRevisionInputSchema = {
     .max(200)
     .optional()
     .describe('The model you are running on, by its id. Omit it when you do not know it.'),
+  walkIncomplete: z
+    .boolean()
+    .optional()
+    .describe(
+      "With `action: 'end'` only: `true` when your walk ended before every card was written " +
+        '(you stopped it, an author session failed, a limit was hit). The plan then closes ' +
+        '`stopped` — Resume, never Approve — instead of back in front of a reviewer.',
+    ),
 };
 
 interface HoldPlanRevisionArgs {
@@ -2616,6 +2656,7 @@ interface HoldPlanRevisionArgs {
   action: HoldPlanRevisionAction;
   harness?: string;
   model?: string;
+  walkIncomplete?: boolean;
 }
 
 /**
@@ -2667,14 +2708,18 @@ export async function runHoldPlanRevision(
   // same close a generation takes — and then gives the lease back.
   const released = await plansService.closeRevision(args.planId, ctx, actor, {
     trailDiff: { via: HOLD_PLAN_REVISION_TOOL_NAME },
+    ...(args.walkIncomplete === true ? { walkIncomplete: true } : {}),
   });
   return toolOk(
     released.status === 'declined'
       ? `Ended the revision of plan ${args.planId}: it holds no proposals, so it was discarded ` +
           'rather than put in front of a reviewer.'
-      : released.released
-        ? `Released plan ${args.planId}: it is back in Waiting on you and can be decided.`
-        : `Plan ${args.planId} was not held; nothing was written.`,
+      : released.status === 'stopped'
+        ? `Ended the revision of plan ${args.planId}: its walk is still owed a card, so it ` +
+          'closed `stopped` — not in front of a reviewer. Resume it to write the rest.'
+        : released.released
+          ? `Released plan ${args.planId}: it is back in Waiting on you and can be decided.`
+          : `Plan ${args.planId} was not held; nothing was written.`,
     exempt(HOLD_PLAN_REVISION_TOOL_NAME, {
       planId: args.planId,
       action: args.action,

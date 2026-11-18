@@ -24,6 +24,8 @@ export const RESUME_REASON_CODES = [
   'job_failed',
   'stalled',
   'internal',
+  // Core's own too (Bug MOTIR-11701): the walk CLOSED before every item was written.
+  'stopped',
 ] as const;
 export type ResumeReasonCode = (typeof RESUME_REASON_CODES)[number];
 

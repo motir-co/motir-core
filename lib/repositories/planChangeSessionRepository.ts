@@ -84,7 +84,7 @@ function failedOpenForOwnerWhere(args: {
     OR: [
       { failureResumable: null },
       { failureResumable: true },
-      { plans: { some: { status: { in: ['generating', 'planned', 'stale'] } } } },
+      { plans: { some: { status: { in: ['generating', 'stopped', 'planned', 'stale'] } } } },
     ],
   };
 }
@@ -1361,7 +1361,8 @@ function rowPlanSql(column: 'id' | 'status' | 'title' | 'summary'): Prisma.Sql {
 export const sessionStateSql = Prisma.sql`(CASE
     WHEN s."ended_at" IS NULL THEN
       CASE
-        WHEN s."failed_at" IS NOT NULL AND (lp."status" IS NULL OR lp."status" = 'generating')
+        WHEN s."failed_at" IS NOT NULL
+          AND (lp."status" IS NULL OR lp."status" IN ('generating', 'stopped'))
           THEN 'waiting'
         ELSE COALESCE(lp."status"::text, 'none')
       END

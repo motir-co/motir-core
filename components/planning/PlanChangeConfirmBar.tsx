@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Check, LoaderCircle, Lock, RefreshCw } from 'lucide-react';
+import { Check, CirclePause, LoaderCircle, Lock, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
@@ -82,6 +82,9 @@ export interface PlanChangeConfirmBarProps {
   /** The plan is OUT OF DATE (MOTIR-7932; design state 10): the bar keeps its
    *  place, loses its verbs, and says why on the warning role. */
   stale?: boolean;
+  /** The plan STOPPED before every card was written (Bug MOTIR-11701): the bar keeps
+   *  Discard, drops Approve, and says a Resume is what finishes it. */
+  stopped?: boolean;
 }
 
 export function PlanChangeConfirmBar({
@@ -97,10 +100,28 @@ export function PlanChangeConfirmBar({
   staleRefused = false,
   approveProgress = null,
   stale = false,
+  stopped = false,
 }: PlanChangeConfirmBarProps) {
   const t = useTranslations('planningWorkspace.conversation');
   const tp = useTranslations('approvalGate.planApproval.surface');
   const tReview = useTranslations('planReview');
+  const tHeld = useTranslations('approvalGate.statusHeld');
+  if (stopped) {
+    return (
+      <div
+        data-testid="plan-change-confirm-bar"
+        data-plan-state="stopped"
+        className="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-tint-peach) px-4 py-2.5 text-xs leading-relaxed text-(--el-text-strong)"
+        style={{ minHeight: PLAN_CONFIRM_BAR_HEIGHT }}
+      >
+        <CirclePause className="size-3.5 flex-none" aria-hidden="true" />
+        <span className="min-w-0 flex-1">{tHeld('planState.stopped')}</span>
+        <Button variant="ghost" size="sm" onClick={onDiscard} disabled={deciding}>
+          {t('discard')}
+        </Button>
+      </div>
+    );
+  }
   if (stale) {
     return (
       <div

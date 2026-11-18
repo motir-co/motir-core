@@ -484,7 +484,7 @@ async function toResumeSessionEntries(
       { endedAt: ended ? row.endedAt : null, endReason: ended ? 'failed' : null },
       (bySession.get(row.id) ?? []).map((p) => ({
         id: p.id,
-        status: p.status as 'generating' | 'planned' | 'stale',
+        status: p.status as 'generating' | 'stopped' | 'planned' | 'stale',
         createdAt: p.createdAt,
       })),
     );

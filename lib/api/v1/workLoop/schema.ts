@@ -1199,9 +1199,16 @@ export function planStatusUrl(planId: string): string {
  *  `approving` (Bug MOTIR-9006) is an approve IN PROGRESS: a person approved the
  *  plan and its proposals are being written into work items. Not decided yet and no
  *  longer a proposal — a loop waits on it as it waits on `generating`; it ends at
- *  `approved`, or back at `planned` if the approval failed. */
+ *  `approved`, or back at `planned` if the approval failed.
+ *
+ *  `stopped` (Bug MOTIR-11701) is a walk that ENDED before every card was written —
+ *  the person's Stop, a failed author session, a limit. Undecided and NOT approvable
+ *  (an approve is refused `PLAN_WALK_INCOMPLETE`): a person resumes it, which returns
+ *  it to `generating`, or declines it. A loop must not wait on it as on `generating` —
+ *  nothing is writing it. */
 export const planStatusSchema = z.enum([
   'generating',
+  'stopped',
   'planned',
   'approving',
   'stale',

@@ -22,6 +22,10 @@ export const PLAN_SESSION_STATE_VALUES = [
   'none',
   'generating',
   'waiting',
+  // Bug MOTIR-11701: the latest plan's walk ended unfinished. A session whose failure
+  // record says so reads `waiting` (Waiting to resume) instead; this is the state of one
+  // with no record — an ended session, or an MCP author's plan.
+  'stopped',
   'planned',
   'approving',
   'stale',

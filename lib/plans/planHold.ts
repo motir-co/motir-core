@@ -14,7 +14,7 @@ import { PLANNING_STATUS_KEY, isExpired } from '@/lib/planChange/targetLock';
 // A card is HELD when all three are true:
 //   1. its status is `planning`;
 //   2. a `plan_target_lock` row names it with a NON-NULL `planId`;
-//   3. that plan is UNDECIDED — `generating`, `planned` or `stale`.
+//   3. that plan is UNDECIDED — `generating`, `stopped`, `planned` or `stale`.
 //
 // A SESSION-held lock (`planId` null) holds too since AMENDMENT 23 §5 — while
 // its session is OPEN, which is {@link sessionHoldFor}'s rule below. It replaced
@@ -29,7 +29,7 @@ import { PLANNING_STATUS_KEY, isExpired } from '@/lib/planChange/targetLock';
 /** The plan statuses that HOLD their parked cards — AMENDMENT 21 §1's third clause.
  *  Derived from {@link holdsWhile}, so it cannot disagree with the predicate. */
 export const UNDECIDED_PLAN_STATUSES = (
-  ['generating', 'planned', 'approving', 'stale'] as const
+  ['generating', 'stopped', 'planned', 'approving', 'stale'] as const
 ).filter((status) => holdsWhile(status) !== 'never');
 
 /**
@@ -46,6 +46,10 @@ export function holdsWhile(status: PlanStatusDto): 'lease' | 'always' | 'never' 
     case 'stale':
       // Waiting for a PERSON. `stale` is NOT decided (the schema's own
       // `PlanStatus` comment), and a review queue has no deadline.
+      return 'always';
+    case 'stopped':
+      // Bug MOTIR-11701: the walk ended unfinished and waits for a PERSON to
+      // Resume or Decline it — no author is writing, so there is no lease to lapse.
       return 'always';
     case 'approving':
       // Being materialized (Bug MOTIR-9006): the approve's own commit releases the
@@ -79,7 +83,7 @@ export interface PlanHoldInput {
 export interface PlanHold {
   held: true;
   planId: string;
-  planStatus: 'generating' | 'planned' | 'approving' | 'stale';
+  planStatus: 'generating' | 'stopped' | 'planned' | 'approving' | 'stale';
 }
 
 /** Whether the card is held by an undecided plan — AMENDMENT 21 §1, and nothing else. */

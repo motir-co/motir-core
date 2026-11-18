@@ -21,6 +21,8 @@ const COUNTS = {
   none: 2,
   generating: 1,
   waiting: 2,
+  // Bug MOTIR-11701: a walk that ended unfinished with no failure record to resume from.
+  stopped: 1,
   planned: 3,
   // Bug MOTIR-9006: a row state, never a segment — All does not add it either.
   approving: 6,
@@ -40,16 +42,17 @@ const option = (name: string) => screen.getByRole('button', { name: new RegExp(`
 const group = () => screen.getByRole('group', { name: 'Filter conversations by plan state' });
 
 describe('the filter’s a11y contract', () => {
-  it('is a LABELLED group of eight real buttons — All first, then every listable state', () => {
+  it('is a LABELLED group of nine real buttons — All first, then every listable state', () => {
     renderWithIntl(<PlanStatusTabs value={null} counts={COUNTS} />);
 
     const labels = within(group())
       .getAllByRole('button')
       .map((b) => b.textContent);
     expect(labels).toEqual([
-      'All24',
+      'All25',
       'Writing1',
       'Waiting to resume2',
+      'Stopped1',
       'Waiting for approval3',
       'Stale0',
       'Approved9',
@@ -62,14 +65,14 @@ describe('the filter’s a11y contract', () => {
 
   // MOTIR-9301: the list admits only a conversation holding a plan (MOTIR-9300), so no
   // listed row can be `none` — the strip draws no segment for it, and All sums only
-  // the seven it draws (a stray `none` count in the payload is not added).
-  it('draws no "No plan yet" segment, and All sums only the seven segments drawn', () => {
+  // the eight it draws (a stray `none` count in the payload is not added).
+  it('draws no "No plan yet" segment, and All sums only the eight segments drawn', () => {
     renderWithIntl(<PlanStatusTabs value={null} counts={COUNTS} />);
     const labels = within(group())
       .getAllByRole('button')
       .map((b) => b.textContent ?? '');
     expect(labels.some((l) => l.startsWith('No plan'))).toBe(false);
-    expect(within(option('All')).getByText('24')).toBeTruthy();
+    expect(within(option('All')).getByText('25')).toBeTruthy();
   });
 
   // Bug MOTIR-9006: `approving` lasts the seconds an approve takes — a row state the chip

@@ -1158,6 +1158,9 @@ function PlanWorkspaceHost({
     Boolean(state.stalePlan) &&
     !state.stalePlan?.outcome &&
     state.stalePlan?.planId === (state.review?.id ?? state.planId);
+  // The plan in hand STOPPED before every card was written (Bug MOTIR-11701): the bar
+  // keeps its place, offers Discard and no Approve, and says Resume is what finishes it.
+  const planIsStopped = state.review?.status === 'stopped';
 
   // WHAT APPROVE SAYS WHILE IT RUNS (MOTIR-5249; design Part XXV), derived ONCE and
   // handed to both doors. Running: both doors show it, and only the pressed one is the
@@ -1438,6 +1441,7 @@ function PlanWorkspaceHost({
                   staleRefused={staleRefusedAt === 'bar'}
                   approveProgress={approveProgressAt('bar')}
                   stale={planIsStale}
+                  stopped={planIsStopped}
                 />
               </div>
             ) : null}

@@ -388,7 +388,12 @@ describe('the stamp — a card written by hand is marked written as its body lan
       { sessionKey: 'dead-session', kind: 'author', targetRef: `planItem:${itemId}` },
       fx.ctx,
     );
-    await plansService.markPlanned(plan.id, fx.ctx);
+    // A `planned` plan holding UNWRITTEN cards — today's close lands that `stopped` (Bug
+    // MOTIR-11701), so this is the LEGACY row a close before that rule left, written as such.
+    await adminDb.plan.update({
+      where: { id: plan.id },
+      data: { status: 'planned', plannedAt: new Date() },
+    });
     // The step outlived its plan's `generating` window.
     await adminDb.planStep.create({
       data: { planId: plan.id, sessionKey: 'stale', kind: 'author', startedAt: new Date() },

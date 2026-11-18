@@ -14076,5 +14076,12 @@
   "previewGate.notFound.pill": "Not available",
   "previewGate.notFound.title": "There is no preview here",
   "previewGate.notFound.body": "This address doesn't belong to a running preview. It may have been shut down, or the link may be mistyped.",
-  "previewGate.notFound.home": "Go to Motir"
+  "previewGate.notFound.home": "Go to Motir",
+  "planReview.status_stopped": "Stopped",
+  "aiPlanning.status.stopped": "Stopped",
+  "aiPlanning.sessions.planState.stopped": "Stopped",
+  "approvalGate.statusHeld.planState.stopped": "This plan stopped before every item was written. Resume it to finish.",
+  "planningWorkspace.conversation.error.walkIncomplete": "This plan can’t be approved yet — it stopped before every item was written. Resume it to write the rest. Nothing was changed.",
+  "workbench.planningSession.reason.stopped": "the plan stopped before every item was written",
+  "planReview.stoppedHint": "This plan stopped before every item was written. Resume it from its conversation to finish it, or discard it — nothing in your backlog changes."
 }

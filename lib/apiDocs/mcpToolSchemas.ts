@@ -590,6 +590,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'Set true on the LAST batch to close the plan (`generating` → `planned`), which is what puts it in front of a person for review. After that, an append needs `revision: true`. Send it with an EMPTY `proposals` array to close a plan you have nothing left to append to.',
       },
+      walkIncomplete: {
+        type: 'boolean',
+        description:
+          'Set true together with `final: true` when your walk ENDED BEFORE EVERY CARD WAS WRITTEN — the person stopped it, an author session failed, a limit or an interruption cut it short. The plan then closes `stopped` instead of `planned`: it keeps every proposal, offers Resume and never Approve, and no approval gate is raised. Without it the close still writes `stopped` when a walked plan holds a card that is not written yet. Ignored without `final`.',
+      },
       revision: {
         type: 'boolean',
         description:
@@ -2103,6 +2108,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         maxLength: 200,
         description: 'The model you are running on, by its id. Omit it when you do not know it.',
       },
+      walkIncomplete: {
+        type: 'boolean',
+        description:
+          "With `action: 'end'` only: `true` when your walk ended before every card was written (you stopped it, an author session failed, a limit was hit). The plan then closes `stopped` — Resume, never Approve — instead of back in front of a reviewer.",
+      },
     },
     required: ['planId', 'action'],
     additionalProperties: false,
@@ -3574,7 +3584,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'array',
         items: {
           type: 'string',
-          enum: ['generating', 'planned', 'approving', 'stale', 'approved', 'declined'],
+          enum: ['generating', 'stopped', 'planned', 'approving', 'stale', 'approved', 'declined'],
         },
         description:
           'OPTIONAL. Only plans in these statuses. A declined plan carries its `decisionReason` (`reviewed`, `discarded` or `abandoned`).',
