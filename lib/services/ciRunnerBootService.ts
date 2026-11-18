@@ -58,6 +58,7 @@ import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { fleetCodeScanningCatchUpService } from '@/lib/services/fleetCodeScanningCatchUpService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
+import { ciSpotSettingService } from '@/lib/services/ciSpotSettingService';
 import {
   githubRunnerCallLedgerService as runnerCallLedger,
   runnerCallReachedGithub,
@@ -79,6 +80,7 @@ import {
 } from '@/lib/repositories/ciFleetAdmissionLockRepository';
 import {
   FLEET_CONTAINER_SIZE,
+  type ContainerCapacity,
   type ContainerHandle,
   type ContainerOrchestrator,
   type ContainerSpec,
@@ -1040,6 +1042,9 @@ export const ciRunnerBootService = {
     /** The region to boot in — the account's (MOTIR-8964). Absent = the
      *  process-wide fleet's; empty = the orchestrator's own default. */
     region?: string;
+    /** The capacity to ask for (MOTIR-11716): `spot` while the CI Spot setting
+     *  is on. Absent or `on_demand` = the spec asks for none, as before. */
+    capacity?: ContainerCapacity;
   }): ContainerSpec {
     const { intent, workflowJobId, projectId, encodedJitConfig, timeoutSeconds } = input;
     // Provider-neutral: the image is the fleet's, whichever account boots it, and
@@ -1066,6 +1071,9 @@ export const ciRunnerBootService = {
       // rootfs it can only use `vfs`, which fills the disk on the first
       // `services:` job.
       dockerVolumeGb: ciDockerVolumeGb(),
+      // Only ever `spot` here: an on-demand spec carries no capacity at all, so
+      // its shape is the one it had before Spot (MOTIR-11716).
+      ...(input.capacity === 'spot' ? { capacity: 'spot' as const } : {}),
       env: {
         // The credential, injected at boot and never baked into the image (§4).
         ACTIONS_RUNNER_INPUT_JITCONFIG: encodedJitConfig,
@@ -1401,6 +1409,10 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   );
 
   // ── 2 · Boot exactly one container ────────────────────────────────────────
+  // SPOT (MOTIR-11716): while the CI Spot setting is on, the spec asks for Spot;
+  // the adapter walks the setting's types and falls back to on-demand itself. A
+  // setting that cannot be read is OFF — a runner never fails because of Spot.
+  const capacity = await requestedCapacity(intentId);
   const specFor = (shard: FleetShardDTO | null, through: ContainerOrchestrator) =>
     ciRunnerBootService.buildSpec({
       intent,
@@ -1409,6 +1421,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       encodedJitConfig: jit.encodedJitConfig,
       timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
       orchestrator: through,
+      capacity,
       ...(shard ? { region: shard.fly?.region ?? shard.aws?.region ?? '' } : {}),
       ...(installRegion !== null ? { region: installRegion } : {}),
     });
@@ -1571,6 +1584,9 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         runnerName: jit.runnerName,
         bootedAt,
         fleetShardId: bootShardId,
+        // What the launch GOT: a handle that reports none never asked for Spot,
+        // or came from a provider with no Spot — on-demand either way.
+        capacity: handle.capacity ?? 'on_demand',
       },
       tx,
     ),
@@ -1615,6 +1631,23 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       },
     },
   };
+}
+
+/**
+ * The capacity a CI runner's spec asks for (MOTIR-11716): `spot` while the CI
+ * Spot setting is on, `on_demand` otherwise. Read per boot, never cached, so a
+ * saved setting reaches the next launch. A read that fails asks for on-demand.
+ */
+async function requestedCapacity(intentId: string): Promise<ContainerCapacity> {
+  try {
+    return (await ciSpotSettingService.read()).enabled ? 'spot' : 'on_demand';
+  } catch (err) {
+    console.warn('[ciRunnerBootService] the CI Spot setting could not be read — on-demand', {
+      intentId,
+      detail: detailOf(err),
+    });
+    return 'on_demand';
+  }
 }
 
 /**

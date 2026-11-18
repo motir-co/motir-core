@@ -8,6 +8,7 @@ import { sparedByCaller } from '../../reap';
 import { buildContainerUsage } from '../../usage';
 import { FLEET_METADATA_INTENT_KEY, FLEET_METADATA_KEY, FLEET_METADATA_VALUES } from '../fly';
 import type {
+  ContainerCapacity,
   ContainerHandle,
   ContainerOrchestrator,
   ContainerSpec,
@@ -21,8 +22,9 @@ import type {
 import { Ec2ApiError, type Ec2Api, type Ec2Instance, type Ec2Tag } from './ec2Client';
 import {
   awsApiError as apiError,
-  awsCapacityReason,
+  awsSpotRefusal,
   classifyAwsLaunchError,
+  isAwsCapacityCode,
 } from './capacityErrors';
 import { AWS_INDEX_IAM_ROLE } from './management';
 import { AWS_SHARD_TAG_KEY } from './network';
@@ -61,6 +63,12 @@ export * from './inventory';
 //   3. THE LAUNCH CARRIES A CREDENTIAL (the JIT config, in user-data). No log
 //      line, error or return value holds the payload; an EC2 failure surfaces as
 //      its error CODE only (`Ec2ApiError` never copies AWS's message).
+//
+// A CI RUNNER MAY LAUNCH AS SPOT (MOTIR-11716). A `ci_runner` spec asking
+// `capacity: 'spot'` walks the adapter's ordered Spot instance types first — each
+// with the zone walk, on the Spot market — and launches on-demand, exactly as
+// without Spot, the moment no Spot is to be had. Every other launch sends the
+// request it always sent. The type names live in this config, never on the port.
 //
 // ⚠️ SHARD-BLIND AND ENVIRONMENT-BLIND. The composition root reads the account's
 // key and the AMI id and hands this a plain config.
@@ -193,8 +201,17 @@ export interface AwsOrchestratorConfig {
   /** The Docker-host AMI an index VM boots (`MOTIR_AWS_INDEXER_AMI_ID`). Unset
    *  refuses a `code_graph_index` spec before any EC2 call. */
   readonly indexerAmiId?: string;
-  /** Overrides {@link AWS_DEFAULT_INSTANCE_TYPE}. */
+  /** Overrides {@link AWS_DEFAULT_INSTANCE_TYPE}. The ON-DEMAND type: every
+   *  launch that is not Spot, and a Spot launch's fallback. */
   readonly instanceType?: string;
+  /**
+   * The ORDERED instance types a CI runner asking for Spot walks (MOTIR-11716),
+   * first to last — or a read of them, called once per such launch so a changed
+   * setting applies to the next launch without rebuilding the adapter. Unset, or
+   * an empty list, means this account launches no Spot: such a spec goes
+   * straight to on-demand.
+   */
+  readonly spotInstanceTypes?: readonly string[] | (() => Promise<readonly string[]>);
   /** Overrides {@link AWS_REAP_PAGE_SIZE}. */
   readonly reapPageSize?: number;
   /** A fresh idempotency token per provision — the test seam. */
@@ -309,6 +326,12 @@ function hostedAgentTagsFor(spec: ContainerSpec, shardTag: string, runId: string
     { key: AWS_DISPATCH_RUN_TAG_KEY, value: runId },
     { key: 'Name', value: `${NAME_PREFIXES.hosted_agent}-${runId}` },
   ];
+}
+
+/** The market and type ONE attempt launches on. No `market` = on-demand. */
+interface LaunchMarket {
+  readonly instanceType: string;
+  readonly market?: 'spot';
 }
 
 /** What one launch sends: the base64 user-data and the tags, and — for a
@@ -439,7 +462,8 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
    * made, so an ambiguous timeout cannot make two. A capacity refusal is never
    * resent here — it is the zone walk's (`provision`) — even when EC2 marks it
    * retryable (InsufficientInstanceCapacity is a 500, RequestLimitExceeded a 503).
-   * A refusal throws classified, naming the zone.
+   * A refusal throws AS EC2 ANSWERED IT: the on-demand walk classifies it, the
+   * Spot walk reads its code.
    */
   async function launchInSubnet(
     spec: ContainerSpec,
@@ -452,8 +476,9 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       instanceProfileName,
       instanceProfileArn,
     }: LaunchPayload,
-    { subnetId, zone }: { subnetId: string; zone: string },
+    { subnetId }: { subnetId: string; zone: string },
     securityGroupId: string,
+    launch: LaunchMarket,
   ): Promise<Ec2Instance> {
     const token = clientToken();
     for (let attempt = 1; ; attempt += 1) {
@@ -461,7 +486,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
         return await ec2.runInstances({
           clientToken: token,
           imageId: imageId ?? amiId,
-          instanceType,
+          instanceType: launch.instanceType,
           subnetId,
           securityGroupIds: [securityGroupId],
           userData,
@@ -493,24 +518,128 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
             : instanceProfileName
               ? { iamInstanceProfileName: instanceProfileName }
               : {}),
+          // Only a Spot attempt names a market; on-demand sends none, as ever.
+          ...(launch.market ? { market: launch.market } : {}),
         });
       } catch (err) {
-        const retryable = err instanceof Ec2ApiError && err.retryable && !awsCapacityReason(err);
+        const retryable =
+          err instanceof Ec2ApiError && err.retryable && !isAwsCapacityCode(err.code);
         if (!retryable || attempt >= AWS_LAUNCH_ATTEMPTS) {
           if (err instanceof Ec2ApiError && STALE_NETWORK_CODES.has(err.code)) network = null;
-          throw classifyAwsLaunchError(err, zone);
+          throw err;
         }
       }
     }
   }
 
-  function toHandle(instance: Ec2Instance): ContainerHandle {
+  /**
+   * THE ZONE WALK (MOTIR-9277): from `start` around the list once, one
+   * RunInstances per zone, each with its own token (a refused call created
+   * nothing). Only `out_of_stock` is zone-local and moves on; quota and
+   * throttling are account-wide, so they — and any other refusal — stop the walk
+   * at once, classified. No zone is remembered as out of stock between calls:
+   * capacity recovers in minutes, and a stale blacklist would hide it.
+   */
+  async function zoneWalk(
+    spec: ContainerSpec,
+    payload: LaunchPayload,
+    { subnets, securityGroupId }: ShardNetwork,
+    start: number,
+    launch: LaunchMarket,
+  ): Promise<Ec2Instance> {
+    const tried = new Set<string>();
+    let outOfStock: OrchestratorCapacityError | null = null;
+    for (let i = 0; i < subnets.length; i += 1) {
+      const subnet = subnets[(start + i) % subnets.length]!;
+      if (tried.has(subnet.zone)) continue;
+      tried.add(subnet.zone);
+      try {
+        return await launchInSubnet(spec, payload, subnet, securityGroupId, launch);
+      } catch (raw) {
+        const err = classifyAwsLaunchError(raw, subnet.zone);
+        if (!(err instanceof OrchestratorCapacityError) || err.reason !== 'out_of_stock') throw err;
+        outOfStock = err;
+      }
+    }
+    throw outOfStock!;
+  }
+
+  /** The ordered Spot types for this launch; a read that fails is no Spot. */
+  async function spotTypes(): Promise<readonly string[]> {
+    const source = config.spotInstanceTypes;
+    if (!source) return [];
+    if (typeof source !== 'function') return source;
+    try {
+      return await source();
+    } catch {
+      console.warn('[awsOrchestrator] the Spot instance types could not be read — on-demand', {
+        shardTag,
+      });
+      return [];
+    }
+  }
+
+  /**
+   * THE SPOT TYPE WALK (MOTIR-11716): each type in order, each with the zone walk
+   * on the Spot market and its own token per attempt. A zone with no spare
+   * capacity moves to the next zone, a type refused in every zone to the next
+   * type. The instance, or null when no Spot is to be had — every type refused,
+   * the account's Spot limit, or a refusal that is no capacity code — and the
+   * caller then launches on-demand at once: no wait, and nothing remembered
+   * between calls. A throttled attempt throws `throttled`: the rate limit is the
+   * account's, and an on-demand call would only add to it.
+   */
+  async function spotWalk(
+    spec: ContainerSpec,
+    payload: LaunchPayload,
+    { subnets, securityGroupId }: ShardNetwork,
+    start: number,
+  ): Promise<Ec2Instance | null> {
+    const types = await spotTypes();
+    for (const type of types) {
+      const tried = new Set<string>();
+      for (let i = 0; i < subnets.length; i += 1) {
+        const subnet = subnets[(start + i) % subnets.length]!;
+        if (tried.has(subnet.zone)) continue;
+        tried.add(subnet.zone);
+        try {
+          return await launchInSubnet(spec, payload, subnet, securityGroupId, {
+            instanceType: type,
+            market: 'spot',
+          });
+        } catch (err) {
+          // The CODE only — never AWS's message, which can echo user-data.
+          const code = err instanceof Ec2ApiError ? err.code : 'UnknownError';
+          const move = awsSpotRefusal(code);
+          if (move === 'next_zone') continue;
+          if (move === 'throttled') throw classifyAwsLaunchError(err, subnet.zone);
+          console.warn('[awsOrchestrator] Spot refused — launching on-demand', {
+            shardTag,
+            instanceType: type,
+            zone: subnet.zone,
+            code,
+          });
+          return null;
+        }
+      }
+    }
+    if (types.length > 0) {
+      console.warn('[awsOrchestrator] no Spot capacity of any type — launching on-demand', {
+        shardTag,
+        instanceTypes: types,
+      });
+    }
+    return null;
+  }
+
+  function toHandle(instance: Ec2Instance, capacity?: ContainerCapacity): ContainerHandle {
     return {
       provider: 'aws',
       id: instance.instanceId,
       region,
       // A handle with no instant cannot be reaped by age; now is the honest floor.
       createdAt: instance.launchTime ?? now(),
+      ...(capacity ? { capacity } : {}),
     };
   }
 
@@ -673,30 +802,20 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
           ? { ...base, instanceProfileArn: config.indexInstanceProfileArn }
           : base;
 
-      // THE ZONE WALK (MOTIR-9277): from this call's rotation index around the
-      // list once, one RunInstances per zone, each with its own token (a refused
-      // call created nothing). Only `out_of_stock` is zone-local and moves on;
-      // quota and throttling are account-wide, so they — and any other refusal —
-      // stop the walk at once. No zone is remembered as out of stock between
-      // calls: capacity recovers in minutes, and a stale blacklist would hide it.
-      const { subnets, securityGroupId } = await shardNetwork();
+      // From this call's rotation index around the zones, for every walk below.
+      const shard = await shardNetwork();
       const start = rotation;
       rotation += 1;
-      const tried = new Set<string>();
-      let outOfStock: OrchestratorCapacityError | null = null;
-      for (let i = 0; i < subnets.length; i += 1) {
-        const subnet = subnets[(start + i) % subnets.length]!;
-        if (tried.has(subnet.zone)) continue;
-        tried.add(subnet.zone);
-        try {
-          return toHandle(await launchInSubnet(spec, payload, subnet, securityGroupId));
-        } catch (err) {
-          if (!(err instanceof OrchestratorCapacityError) || err.reason !== 'out_of_stock')
-            throw err;
-          outOfStock = err;
-        }
+      const onDemand: LaunchMarket = { instanceType };
+      // Only a CI runner is ever Spot: every other workload, and a runner not
+      // asking for it, sends exactly the request it sent before Spot existed.
+      if (spec.workload !== 'ci_runner' || spec.capacity !== 'spot') {
+        return toHandle(await zoneWalk(spec, payload, shard, start, onDemand));
       }
-      throw outOfStock!;
+      const spot = await spotWalk(spec, payload, shard, start);
+      if (spot) return toHandle(spot, 'spot');
+      // No Spot to be had: ONE on-demand launch, today's walk, at once.
+      return toHandle(await zoneWalk(spec, payload, shard, start, onDemand), 'on_demand');
     },
 
     async describe(handle: ContainerHandle): Promise<ContainerStatus> {

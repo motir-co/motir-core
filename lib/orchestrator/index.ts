@@ -74,6 +74,7 @@ import { indexFleetOnPool } from '@/lib/ciFleet/limits';
 import { agentRunnerOnPool } from '@/lib/ciFleet/fleetKindSwitches';
 import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { ciSpotSettingService } from '@/lib/services/ciSpotSettingService';
 import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
 import { observeHostingDestroyApp } from './hosting';
 import { observeDatabaseBranchDelete } from './database';
@@ -579,8 +580,13 @@ function runnerRoleManagement(): AwsManagementApi | null {
 
 /** An AWS account's orchestrator (MOTIR-9276): its EC2 client, the fleet's AMI
  *  and its region. The shard tag is the account's name — what its network is
- *  tagged with. */
-
+ *  tagged with.
+ *
+ *  THE SPOT TYPES (MOTIR-11716) are the CI Spot setting's ordered list, read on
+ *  every launch that asks for Spot — never at build time, because this adapter
+ *  is cached per account and a saved setting must reach the next launch. Only a
+ *  CI runner whose boot asked for Spot (the setting is on) reads them; the
+ *  adapter never makes any other launch Spot. */
 function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
   const { ec2, region, values } = awsShardClient(shard, [AWS_RUNNER_AMI_ENV_VAR]);
   return createAwsOrchestrator({
@@ -589,6 +595,7 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     shardTag: shard.name,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
     indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
+    spotInstanceTypes: async () => (await ciSpotSettingService.read()).instanceTypes,
   });
 }
 
