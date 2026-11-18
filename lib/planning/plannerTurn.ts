@@ -16,6 +16,13 @@
 // that is not a non-empty string reads as "did not ask" (which merely means the
 // rail does not wait for an answer — the safe direction), and both bodies are
 // bounded so a runaway generation cannot write an unbounded row.
+//
+// A question's OPTIONS (MOTIR-11700) are read the same way: `turn.options` is a list
+// of `{ id, label, means }` the person clicks, read by `readQuestionOptions` and kept
+// only beside a question — a malformed list, or options on a turn that did not ask,
+// read as none, so the question is drawn with only the box for the person's words.
+
+import { readQuestionOptions, type QuestionOption } from '@/lib/planning/questionOptions';
 
 /** The shape of `PlanningTurn` (motir-ai `src/llm/planningTurn.ts`) that the
  *  plan-change thread actually consumes: what the planner SAID, and whether it
@@ -25,6 +32,8 @@ export interface PlannerUtterance {
   message: string;
   /** The ONE Gate-2 question, or null when the turn did not ask. */
   question: string | null;
+  /** That question's 2 to 4 options (MOTIR-11700), or null when none were readable. */
+  options: QuestionOption[] | null;
 }
 
 // Bounds applied on READ, not merely trusted from the producer. motir-ai caps its
@@ -62,5 +71,6 @@ export function readPlanningTurn(result: unknown): PlannerUtterance | null {
   const message = boundedString(turn['message'], PLANNER_MESSAGE_MAX_CHARS);
   if (message === null) return null;
 
-  return { message, question: boundedString(turn['question'], PLANNER_QUESTION_MAX_CHARS) };
+  const question = boundedString(turn['question'], PLANNER_QUESTION_MAX_CHARS);
+  return { message, question, options: question ? readQuestionOptions(turn['options']) : null };
 }

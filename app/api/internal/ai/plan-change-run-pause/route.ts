@@ -82,6 +82,8 @@ export async function POST(req: Request): Promise<Response> {
         reason: typeof bag['reason'] === 'string' ? bag['reason'] : null,
         question: typeof bag['question'] === 'string' ? bag['question'] : null,
         repos: bag['repos'],
+        // The `unclear` question's options (MOTIR-11700) — checked by the service.
+        options: bag['options'],
         idempotencyKey,
       },
       { userId: auth.ctx.userId, workspaceId: auth.ctx.workspaceId, projectId: auth.projectId },

@@ -2865,9 +2865,16 @@ export function usePlanChangeConversation({
        * set — the turn stays on the project thread — and it is ignored on an
        * anchored (item) thread, which has no ask door.
        */
-      options: { anchorKey?: string | null } = {},
+      /**
+       * `answerOptionId` (MOTIR-11700) — the person CLICKED one of the waiting
+       * question's options rather than typing; `text` is then that option's label.
+       * Sent beside the answer so the planner reads the option it offered, never a
+       * re-reading of the words. Ignored on a turn that answers no question.
+       */
+      options: { anchorKey?: string | null; answerOptionId?: string | null } = {},
     ) => {
       const body = text.trim();
+      const answerOptionId = options.answerOptionId ?? null;
       if (!body) return;
       // An ENDED session accepts no turn (AMENDMENT 23 §3): the composer is not
       // drawn for one, and a stale click must not reach the server either — unless
@@ -2932,7 +2939,8 @@ export function usePlanChangeConversation({
         // turn IS its answer, sent to the pause door — never given a verdict by the
         // answering session, never a second run, and `midRunAsk` is not set.
         if (isOpenUnclear(pauseOf(stateRef.current))) {
-          await answerRunPause('reply', body);
+          if (answerOptionId) await answerRunPause('reply', body, answerOptionId);
+          else await answerRunPause('reply', body);
           return;
         }
         const midRunPlanId = stateRef.current.planId;
@@ -3182,14 +3190,26 @@ export function usePlanChangeConversation({
                   }
                   throw err;
                 })
-              : submitContextualPlan(
-                  anchor.anchorId,
-                  body,
-                  anchor.targetKeys,
-                  signal,
-                  isAnswer,
-                  heldSession,
-                ),
+              : isAnswer && answerOptionId
+                ? submitContextualPlan(
+                    anchor.anchorId,
+                    body,
+                    anchor.targetKeys,
+                    signal,
+                    isAnswer,
+                    heldSession,
+                    null,
+                    null,
+                    answerOptionId,
+                  )
+                : submitContextualPlan(
+                    anchor.anchorId,
+                    body,
+                    anchor.targetKeys,
+                    signal,
+                    isAnswer,
+                    heldSession,
+                  ),
         );
         return;
       }
@@ -3240,7 +3260,17 @@ export function usePlanChangeConversation({
                 }
                 throw err;
               })
-            : submitAskTurn(body, signal, isAnswer, heldProjectSession, null, askAnchor),
+            : isAnswer && answerOptionId
+              ? submitAskTurn(
+                  body,
+                  signal,
+                  isAnswer,
+                  heldProjectSession,
+                  null,
+                  askAnchor,
+                  answerOptionId,
+                )
+              : submitAskTurn(body, signal, isAnswer, heldProjectSession, null, askAnchor),
         askAnchor,
       );
     },

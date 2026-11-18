@@ -8862,6 +8862,10 @@
       "send": "送信",
       "answer": "回答",
       "awaitingAnswer": "あなたの回答を待っています",
+      "questionOptions": {
+        "group": "回答の選択肢",
+        "ownWords": "自分の言葉で答える"
+      },
       "seeQuestion": "表示",
       "retry": "もう一度試す",
       "discard": "破棄",

@@ -1,4 +1,5 @@
 import type { Prisma, SharpenSession, SharpenTurn } from '@/generated/prisma/client';
+import { plannerReadTexts, type OptionTurn } from '@/lib/planning/questionOptions';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { MotirAiConfigError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { cancelJob, getJob, submitJob } from '@/lib/ai/motirAiClient';
@@ -431,13 +432,13 @@ const CONVERSATION_TURN_BODY_WIRE_MAX = 4_000;
  * well as the person's turns. Blank bodies are left out — motir-ai refuses a turn with
  * no body.
  */
-export function conversationTurnsOf(
-  turns: readonly { role: string; body: string }[],
-): SharpenConversationTurn[] {
+export function conversationTurnsOf(turns: readonly OptionTurn[]): SharpenConversationTurn[] {
+  // A question's options, and which one an answer picked, read as words (MOTIR-11700).
+  const read = plannerReadTexts(turns);
   return turns
-    .flatMap((t): SharpenConversationTurn[] => {
+    .flatMap((t, i): SharpenConversationTurn[] => {
       if (t.body.trim().length === 0) return [];
-      const body = t.body.slice(0, CONVERSATION_TURN_BODY_WIRE_MAX);
+      const body = read[i]!.slice(0, CONVERSATION_TURN_BODY_WIRE_MAX);
       if (t.role === 'user') return [{ role: 'person', body }];
       if (t.role === 'assistant') return [{ role: 'planner', body }];
       return [];

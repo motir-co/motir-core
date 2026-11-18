@@ -8856,6 +8856,10 @@
       "send": "发送",
       "answer": "回答",
       "awaitingAnswer": "等待你的回答",
+      "questionOptions": {
+        "group": "回答选项",
+        "ownWords": "用我自己的话回答"
+      },
       "seeQuestion": "查看",
       "retry": "重试",
       "discard": "放弃",

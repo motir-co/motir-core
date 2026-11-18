@@ -90,6 +90,8 @@ export interface ContextualPlanRequest {
    *  thread carries it: the anchored entrance renders the same rail, so a question
    *  answered on an item's thread must read as answered there too. */
   isAnswer?: boolean;
+  /** An answer that PICKED one of the waiting question's options (MOTIR-11700): its id. */
+  answerOptionId?: string | null;
   /**
    * The SESSION the client holds (MOTIR-6023; AMENDMENT 17 §2). When given,
    * every write lands on exactly that session. When absent, the caller's own
@@ -275,6 +277,7 @@ export const contextualPlanningService = {
             { sessionId: target },
             {
               isAnswer: req.isAnswer === true,
+              answerOptionId: req.answerOptionId ?? null,
             },
           )
         ).id

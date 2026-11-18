@@ -49,6 +49,13 @@ import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
+import {
+  findQuestionOption,
+  plannerReadTexts,
+  questionOptionJson,
+  waitingQuestionOptions,
+  type QuestionOption,
+} from '@/lib/planning/questionOptions';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { readCodeUnsearchable, type CodeUnsearchableRepo } from '@/lib/planning/codeUnsearchable';
 import { getJob } from '@/lib/ai/motirAiClient';
@@ -93,6 +100,7 @@ import {
   GuideReplanOfferAlreadyConfirmedError,
   GuideReplanOfferNotFoundError,
   GuideReplanOfferNotOpenError,
+  PlanChangeAnswerOptionUnknownError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
@@ -172,9 +180,17 @@ export type PlanChangeSessionAddress = { sessionId: string };
  * and the engine meet on.
  */
 export function buildAccumulatedIntent(
-  turns: Array<Pick<PlanChangeTurn, 'role' | 'body'>>,
+  turns: Array<
+    Pick<PlanChangeTurn, 'role' | 'body'> &
+      Partial<Pick<PlanChangeTurn, 'question' | 'questionOptions' | 'isAnswer' | 'answerOption'>>
+  >,
 ): string {
-  const userTurns = turns.filter((t) => t.role === 'user').map((t) => t.body.trim());
+  // An answer to a question that offered options is read as the option it PICKED, or
+  // marked as the person's own words (MOTIR-11700); every other turn is its body.
+  const read = plannerReadTexts(turns);
+  const userTurns = turns
+    .map((t, i) => (t.role === 'user' ? read[i]!.trim() : null))
+    .filter((t): t is string => t !== null);
   if (userTurns.length === 0) return '';
   if (userTurns.length === 1) return userTurns[0]!;
   const numbered = userTurns.map((body, i) => `${i + 1}. ${body}`).join('\n');
@@ -487,7 +503,11 @@ interface AppendTurn {
   jobId?: string | null;
   authorId?: string | null;
   question?: string | null;
+  /** That question's options (MOTIR-11700), on an `assistant` turn that asked. */
+  questionOptions?: QuestionOption[] | null;
   isAnswer?: boolean;
+  /** The option an answer picked, BY ID (MOTIR-11700) — resolved under the lock. */
+  answerOptionId?: string | null;
   intent?: PlanChangeTurnIntent | null;
   citations?: string[];
   /** A `user` turn's resolved anchor identifier (MOTIR-7064). */
@@ -566,6 +586,17 @@ export async function appendWithin(
   if (fresh.endedAt && turn.role === 'user') throw new PlanSessionEndedError(fresh.id);
 
   const seq = fresh.turnCount;
+  // THE PICK (MOTIR-11700), resolved UNDER the lock against the question this answer
+  // closes — the thread's latest planner turn, when no user turn came after it. A pick
+  // the question did not offer (a stale click, or no question waiting) is refused
+  // rather than recorded as words, because the planner would then act on an option it
+  // never offered.
+  let answerOption: QuestionOption | null = null;
+  if (turn.role === 'user' && turn.isAnswer && turn.answerOptionId) {
+    const prior = await planChangeTurnRepository.listBySessionId(fresh.id, pctx.workspaceId, tx);
+    answerOption = findQuestionOption(waitingQuestionOptions(prior), turn.answerOptionId);
+    if (!answerOption) throw new PlanChangeAnswerOptionUnknownError(turn.answerOptionId);
+  }
   try {
     await planChangeTurnRepository.create(
       {
@@ -576,7 +607,11 @@ export async function appendWithin(
         body: turn.body,
         jobId: turn.jobId ?? null,
         question: turn.question ?? null,
+        ...(turn.question && turn.questionOptions
+          ? { questionOptions: turn.questionOptions.map(questionOptionJson) }
+          : {}),
         isAnswer: turn.isAnswer ?? false,
+        ...(answerOption ? { answerOption: questionOptionJson(answerOption) } : {}),
         intent: turn.intent ?? null,
         citations: turn.citations ?? [],
         anchorKey: turn.anchorKey ?? null,
@@ -2358,6 +2393,12 @@ export const planChangeSessionsService = {
        * turn with neither.
        */
       attachmentIds?: readonly string[];
+      /**
+       * An answer that PICKED one of the waiting question's options (MOTIR-11700): the
+       * option's id. Resolved under the session lock against the question the turn
+       * answers, and refused when that question did not offer it. Only with `isAnswer`.
+       */
+      answerOptionId?: string | null;
     } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
@@ -2369,6 +2410,9 @@ export const planChangeSessionsService = {
       body: trimmed,
       authorId: pctx.userId,
       isAnswer: opts.isAnswer === true,
+      ...(opts.isAnswer === true && opts.answerOptionId
+        ? { answerOptionId: opts.answerOptionId }
+        : {}),
       // ⚠️ SERVER-RESOLVED (ADR §1). `opts.intent` is what the ASK SERVICE
       // decided after motir-ai classified the turn — never a value parsed off a
       // request body. The shipped plan-change append passes nothing and its
@@ -3314,6 +3358,7 @@ export const planChangeSessionsService = {
         body: typeof normalized === 'string' ? normalized : utterance.message,
         jobId,
         question: utterance.question,
+        questionOptions: utterance.options,
       },
       {},
       // (1) Under the lock, so two concurrent replays cannot both pass it.

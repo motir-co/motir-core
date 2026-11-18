@@ -10,6 +10,7 @@ import { adminDb } from '../helpers/adminDb';
 import { addressOf, openTestSession } from '../helpers/planSession';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { PlanChangeAnswerOptionUnknownError } from '@/lib/planChange/errors';
 
 // The PLANNER'S TURN in the plan-change thread (MOTIR-2226) — the consuming half
 // of MOTIR-2222's boundary contract, against a REAL Postgres (the motir-core
@@ -417,5 +418,81 @@ describe('appendTurn — the answer flag', () => {
 
     const rows = await threadRows(fx);
     expect(rows[0]!.isAnswer).toBe(false);
+  });
+});
+
+// A QUESTION'S OPTIONS (MOTIR-11700): the planner's question carries 2 to 4 options as
+// data; an answer that CLICKED one is resolved, under the session lock, against the
+// question it answers, and is read back to the planner as that option.
+describe('a question with options, and the answer that picks one', () => {
+  const OPTIONS = [
+    { id: 'o1', label: 'Taking money in', means: 'Customers pay us.' },
+    { id: 'o2', label: 'Paying suppliers', means: 'We pay suppliers out.' },
+  ];
+
+  async function askedThread(ctx: ProjectContext) {
+    await submittedThread(ctx);
+    getJobMock.mockResolvedValue(
+      jobWithTurn({
+        action: 'ask',
+        message: 'Which direction?',
+        question: 'Taking money in, or paying suppliers out?',
+        options: OPTIONS,
+      }),
+    );
+    return planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
+  }
+
+  it('stores the question’s options on the planner turn', async () => {
+    const ctx = projectCtx(fx);
+    const dto = await askedThread(ctx);
+    const asked = dto.turns.find((t) => t.role === 'assistant');
+    expect(asked!.questionOptions).toEqual(OPTIONS);
+  });
+
+  it('a pick is stored as the option it names, with its meaning', async () => {
+    const ctx = projectCtx(fx);
+    await askedThread(ctx);
+    const dto = await planChangeSessionsService.appendTurn('Paying suppliers', ctx, current, {
+      isAnswer: true,
+      answerOptionId: 'o2',
+    });
+    const answer = dto.turns.at(-1)!;
+    expect(answer.answerOption).toEqual(OPTIONS[1]);
+    const rows = await threadRows(fx);
+    expect(rows.at(-1)!.answerOption).toEqual(OPTIONS[1]);
+  });
+
+  it('refuses an id the waiting question did not offer, and writes nothing', async () => {
+    const ctx = projectCtx(fx);
+    await askedThread(ctx);
+    const before = (await threadRows(fx)).length;
+    await expect(
+      planChangeSessionsService.appendTurn('Something', ctx, current, {
+        isAnswer: true,
+        answerOptionId: 'o9',
+      }),
+    ).rejects.toBeInstanceOf(PlanChangeAnswerOptionUnknownError);
+    expect(await threadRows(fx)).toHaveLength(before);
+  });
+
+  it('an option id on a turn that is not an answer is ignored', async () => {
+    const ctx = projectCtx(fx);
+    await askedThread(ctx);
+    const dto = await planChangeSessionsService.appendTurn('change of subject', ctx, current, {
+      answerOptionId: 'o9',
+    });
+    expect(dto.turns.at(-1)!.answerOption ?? null).toBeNull();
+  });
+
+  it('the accumulated intent reads a pick as the option, and typed words as own words', async () => {
+    const { buildAccumulatedIntent } = await import('@/lib/services/planChangeSessionsService');
+    const ctx = projectCtx(fx);
+    await askedThread(ctx);
+    await planChangeSessionsService.appendTurn('only card payments', ctx, current, {
+      isAnswer: true,
+    });
+    const intent = buildAccumulatedIntent(await threadRows(fx));
+    expect(intent).toContain('In my own words, none of your options: only card payments');
   });
 });

@@ -25,6 +25,7 @@ import {
   PlanChangeRunPauseNotFoundError,
   PlanChangeRunPausePlanDecidedError,
   PlanChangeRunPauseShapeError,
+  PlanChangeAnswerOptionUnknownError,
   GuideReplanOfferAlreadyConfirmedError,
   GuideReplanOfferNotFoundError,
   GuideReplanOfferNotOpenError,
@@ -90,6 +91,12 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   if (err instanceof PlanChangeRunPauseShapeError) {
     return NextResponse.json(
       { code: err.code, error: err.message, reason: err.reason },
+      { status: 400 },
+    );
+  }
+  if (err instanceof PlanChangeAnswerOptionUnknownError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, optionId: err.optionId },
       { status: 400 },
     );
   }

@@ -19,6 +19,13 @@ import {
   type CodeUnsearchableRepo,
 } from '@/lib/planning/codeUnsearchable';
 import { PLANNER_QUESTION_MAX_CHARS } from '@/lib/planning/plannerTurn';
+import {
+  findQuestionOption,
+  questionOptionJson,
+  readQuestionOption,
+  readQuestionOptions,
+  type QuestionOption,
+} from '@/lib/planning/questionOptions';
 import { planChangeMailboxRepository } from '@/lib/repositories/planChangeMailboxRepository';
 import { planChangeRunPauseRepository } from '@/lib/repositories/planChangeRunPauseRepository';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
@@ -62,9 +69,14 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 // `assistant` turn with `question` set — that would put the shipped answer bar in
 // front of the person, and its send would open a second run beside the paused one.
 //
-// ⚠️ THE PERSON'S WORDS ONLY. Every body written to the mailbox is assembled from
-// core's stored mailbox rows or the person's typed reply. The planner's `reason` and
-// `question` are shown to the person and NEVER sent back.
+// ⚠️ THE PERSON'S WORDS — OR THE PERSON'S PICK. Every body written to the mailbox is
+// assembled from core's stored mailbox rows or the person's reply. The planner's
+// `reason` and `question` are shown to the person and NEVER sent back. An `unclear`
+// question carries 2 to 4 OPTIONS (MOTIR-11700), drawn as choices beside the reply
+// box: a click answers with that option — its id is checked against the options THIS
+// pause stored, and the option travels to the walk as `answerOption` — and a typed
+// reply to a question that offered options travels marked `ownWords`, so the walk
+// reads it as the person's instruction rather than as one of the options.
 //
 // CLAIM, THEN DELIVER. An answer is claimed under the SESSION row lock (the lock the
 // mailbox and the transcript share) before the motir-ai round-trip, then delivered
@@ -93,6 +105,8 @@ export interface RecordPauseInput {
   changeTurnIds: readonly string[];
   reason?: string | null;
   question?: string | null;
+  /** The `unclear` question's options (MOTIR-11700) — `[{ id, label, means }]`, optional. */
+  options?: unknown;
   /** The blocked target repositories — required, and only, on `code_unsearchable`. */
   repos?: unknown;
   idempotencyKey: string;
@@ -109,6 +123,8 @@ export interface AnswerPauseInput {
   pauseId: string;
   choice: PauseChoice;
   text?: string | null;
+  /** A reply that PICKED one of the question's options (MOTIR-11700): its id. */
+  optionId?: string | null;
 }
 
 export type AnswerPauseResult =
@@ -141,10 +157,15 @@ function nonBlank(value: unknown): string | null {
 function assertRecordShape(input: RecordPauseInput): {
   reason: string | null;
   question: string | null;
+  options: QuestionOption[] | null;
   repos: CodeUnsearchableRepo[] | null;
 } {
   const reason = nonBlank(input.reason);
   const question = nonBlank(input.question);
+  const hasOptions = input.options !== undefined && input.options !== null;
+  if (input.kind !== 'unclear' && hasOptions) {
+    throw new PlanChangeRunPauseShapeError(`a ${input.kind} pause takes no \`options\``);
+  }
   const repos = input.repos === undefined || input.repos === null ? null : parseRepos(input.repos);
   if (input.kind !== 'code_unsearchable' && input.repos !== undefined && input.repos !== null) {
     throw new PlanChangeRunPauseShapeError(`a ${input.kind} pause takes no \`repos\``);
@@ -160,7 +181,7 @@ function assertRecordShape(input: RecordPauseInput): {
     if (question) {
       throw new PlanChangeRunPauseShapeError('a code_unsearchable pause takes no `question`');
     }
-    return { reason: null, question: null, repos };
+    return { reason: null, question: null, options: null, repos };
   }
   if (input.kind === 'replan') {
     if (!reason) throw new PlanChangeRunPauseShapeError('a replan pause needs a `reason`');
@@ -173,7 +194,7 @@ function assertRecordShape(input: RecordPauseInput): {
     if (input.changeTurnIds.length === 0) {
       throw new PlanChangeRunPauseShapeError('a replan pause names the change turns it is about');
     }
-    return { reason, question: null, repos: null };
+    return { reason, question: null, options: null, repos: null };
   }
   if (input.kind === 'unclear') {
     if (!question) throw new PlanChangeRunPauseShapeError('an unclear pause needs a `question`');
@@ -183,7 +204,13 @@ function assertRecordShape(input: RecordPauseInput): {
         `\`question\` is over ${PLANNER_QUESTION_MAX_CHARS} characters`,
       );
     }
-    return { reason: null, question, repos: null };
+    const options = hasOptions ? readQuestionOptions(input.options) : null;
+    if (hasOptions && !options) {
+      throw new PlanChangeRunPauseShapeError(
+        '`options` must be a list of 2 to 4 { id, label, means }, each id unique',
+      );
+    }
+    return { reason: null, question, options, repos: null };
   }
   throw new PlanChangeRunPauseShapeError(
     '`kind` must be `replan`, `unclear` or `code_unsearchable`',
@@ -200,10 +227,19 @@ function parseRepos(value: unknown): CodeUnsearchableRepo[] {
   return repos;
 }
 
-function assertChoiceFits(kind: string, choice: PauseChoice, text: string | null): void {
+function assertChoiceFits(
+  kind: string,
+  choice: PauseChoice,
+  text: string | null,
+  optionId: string | null,
+): void {
+  if (optionId && !(kind === 'unclear' && choice === 'reply')) {
+    throw new PlanChangeRunPauseShapeError('only a reply to an unclear question picks an option');
+  }
   if (kind === 'replan' && (choice === 'start_over' || choice === 'apply')) return;
   if (kind === 'code_unsearchable' && choice === 'resume') return;
   if (kind === 'unclear' && choice === 'reply') {
+    if (optionId) return;
     if (!text) throw new PlanChangeRunPauseShapeError('a reply needs non-blank `text`');
     if (text.length > REPLY_MAX_CHARS) {
       throw new PlanChangeRunPauseShapeError(`\`text\` is over ${REPLY_MAX_CHARS} characters`);
@@ -225,7 +261,7 @@ export const planChangeRunPauseService = {
     if (!input.idempotencyKey) {
       throw new PlanChangeRunPauseShapeError('`idempotencyKey` is required');
     }
-    const { reason, question, repos } = assertRecordShape(input);
+    const { reason, question, options, repos } = assertRecordShape(input);
     // The thread that is RUNNING this job (the mailbox mismatch error otherwise).
     const { sessionId } = await requireThreadForJob(input.jobId, mctx);
 
@@ -284,6 +320,7 @@ export const planChangeRunPauseService = {
           changeTurnIds: ids,
           reason,
           question,
+          ...(options ? { options: options.map(questionOptionJson) } : {}),
           ...(repos ? { unsearchableRepos: repos.map((r) => ({ ...r })) } : {}),
           idempotencyKey: input.idempotencyKey,
         },
@@ -299,10 +336,14 @@ export const planChangeRunPauseService = {
   async answer(input: AnswerPauseInput, pctx: MailboxContext): Promise<AnswerPauseResult> {
     await projectAccessService.assertPermission(pctx.projectId, pctx, 'ai:plan');
     const { sessionId } = await requireThreadForJob(input.jobId, pctx, input.sessionId);
-    const text = nonBlank(input.text);
-    if (input.choice === 'reply' && !text) {
-      throw new PlanChangeRunPauseShapeError('a reply needs non-blank `text`');
+    const typed = nonBlank(input.text);
+    const optionId = nonBlank(input.optionId);
+    if (input.choice === 'reply' && !typed && !optionId) {
+      throw new PlanChangeRunPauseShapeError('a reply needs non-blank `text` or an `optionId`');
     }
+    // A picked option is resolved against THIS pause's stored options, under the lock.
+    let picked: QuestionOption | null = null;
+    let text = typed;
 
     // ── 1. CLAIM, under the session lock ──────────────────────────────────────
     const claimed = await withWorkspaceContext(ctxOf(pctx), async (tx) => {
@@ -316,12 +357,25 @@ export const planChangeRunPauseService = {
         tx,
       );
       if (!pause) throw new PlanChangeRunPauseNotFoundError(input.pauseId);
-      assertChoiceFits(pause.kind, input.choice, text);
+      assertChoiceFits(pause.kind, input.choice, text, optionId);
+      if (optionId) {
+        picked = findQuestionOption(readQuestionOptions(pause.options), optionId);
+        if (!picked) {
+          throw new PlanChangeRunPauseShapeError(
+            `\`optionId\` ${optionId} is not one of this question's options`,
+          );
+        }
+        // A click's words are the option's label: the reply is that option.
+        text = picked.label;
+      }
 
       if (pause.answer !== null) {
         const sameChoice = pause.answer === CHOICE_ANSWER[input.choice];
-        // A reply is the same answer only with the same words.
-        const sameText = input.choice !== 'reply' || pause.replyText === text;
+        // A reply is the same answer only with the same words and the same pick.
+        const sameText =
+          input.choice !== 'reply' ||
+          (pause.replyText === text &&
+            (readQuestionOption(pause.replyOption)?.id ?? null) === (picked?.id ?? null));
         if (!sameChoice || !sameText) {
           throw new PlanChangeRunPauseAnsweredError(pause.id, pause.answer);
         }
@@ -334,6 +388,7 @@ export const planChangeRunPauseService = {
           answeredAt: new Date(),
           answeredById: pctx.userId,
           replyText: input.choice === 'reply' ? text : null,
+          replyOption: input.choice === 'reply' && picked ? questionOptionJson(picked) : null,
         },
         tx,
       );
@@ -343,6 +398,7 @@ export const planChangeRunPauseService = {
         ...pause,
         answer: CHOICE_ANSWER[input.choice],
         replyText: text,
+        replyOption: picked ? questionOptionJson(picked) : null,
       } as PlanChangeRunPause;
     });
 
@@ -367,6 +423,11 @@ export const planChangeRunPauseService = {
           ...(input.choice === 'apply' ? { declinesPauseId: claimed.id } : {}),
           ...(input.choice === 'reply' || input.choice === 'resume'
             ? { answersPauseId: claimed.id }
+            : {}),
+          // The answer's kind (MOTIR-11700): the option picked, or — when the question
+          // offered options and none was picked — the person's own words.
+          ...(input.choice === 'reply'
+            ? answerKindOf(claimed, readQuestionOption(claimed.replyOption))
             : {}),
         },
         pctx,
@@ -436,6 +497,16 @@ export const planChangeRunPauseService = {
     });
   },
 };
+
+/** How a reply answered (MOTIR-11700): the option it picked, or its own words when
+ *  the question offered options; nothing for a question that offered none. */
+function answerKindOf(
+  pause: PlanChangeRunPause,
+  picked: QuestionOption | null,
+): { answerOption: QuestionOption } | { answerOwnWords: true } | Record<string, never> {
+  if (picked) return { answerOption: picked };
+  return readQuestionOptions(pause.options) ? { answerOwnWords: true } : {};
+}
 
 async function setDelivery(
   id: string,

@@ -176,13 +176,13 @@ describe('readPlanningTurn', () => {
   it('reads a report', () => {
     expect(
       readPlanningTurn({ turn: { action: 'draft', message: 'I searched.', question: null } }),
-    ).toEqual({ message: 'I searched.', question: null });
+    ).toEqual({ message: 'I searched.', question: null, options: null });
   });
 
   it('reads a question', () => {
     expect(
       readPlanningTurn({ turn: { action: 'ask', message: 'Which?', question: 'in or out?' } }),
-    ).toEqual({ message: 'Which?', question: 'in or out?' });
+    ).toEqual({ message: 'Which?', question: 'in or out?', options: null });
   });
 
   it.each([

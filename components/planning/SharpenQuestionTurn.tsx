@@ -1,10 +1,14 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Code, GitBranch, PenLine, Square } from 'lucide-react';
+import { Code, GitBranch, Square } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { Bubble } from '@/components/planning/PlanChangeRail';
+import {
+  QuestionOptionList,
+  QuestionOptionReplies,
+} from '@/components/planning/QuestionOptionPicker';
 import type { SharpenAction, SharpenQuestion } from '@/lib/ai/types';
 
 // THE GRILLING QUESTION ON THE RAIL'S OWN QUESTION SURFACE (Task MOTIR-1101 ·
@@ -14,7 +18,8 @@ import type { SharpenAction, SharpenQuestion } from '@/lib/ai/types';
 // question — `Bubble tone="asking"`, carrying the rail's pending-question anchor —
 // then the reply row: one button per reading (the recommended one `primary`, its
 // accessible name ending "(recommended)"), and Something else… · Skip · You
-// decide · Stop grilling. Every act is ONE act; all of them are disabled while one
+// decide · Stop grilling. The list and the reply row are `QuestionOptionPicker`'s
+// (MOTIR-11700), which every question Motir puts to a person draws its options with. Every act is ONE act; all of them are disabled while one
 // is in flight, except Stop grilling, which is always reachable.
 
 export interface SharpenQuestionTurnProps {
@@ -65,80 +70,49 @@ export function SharpenQuestionTurn({
           </p>
         ) : null}
         <p className="text-(--el-text)">{question.text}</p>
-        <ul className="mt-2 flex flex-col gap-1">
-          {question.readings.map((reading) => (
-            <li key={reading.id} className="text-sm text-(--el-text)">
-              <span className="font-semibold">{reading.label}</span>
-              {reading.detail ? (
-                <span className="text-(--el-text-secondary)"> — {reading.detail}</span>
-              ) : null}
-              {reading.recommended ? (
-                <span className="ml-1.5 inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11px] font-semibold text-(--el-text-strong)">
-                  {t('recommended')}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        <QuestionOptionList options={question.readings} recommendedLabel={t('recommended')} />
       </Bubble>
-      <div className="flex flex-col gap-1.5 pl-9" data-testid="sharpen-replies">
-        <div className="flex flex-wrap gap-1.5">
-          {question.readings.map((reading) => (
-            <Button
-              key={reading.id}
-              variant={reading.recommended ? 'primary' : 'secondary'}
-              size="sm"
-              data-testid={`sharpen-reading-${reading.id}`}
-              aria-label={
-                reading.recommended ? t('recommendedName', { label: reading.label }) : reading.label
-              }
-              disabled={pending}
-              onClick={() => onAct('answer', { readingId: reading.id })}
-            >
-              {reading.label}
-            </Button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          <Button
-            variant="secondary"
-            size="sm"
-            data-testid="sharpen-something-else"
-            leftIcon={<PenLine className="size-4" aria-hidden />}
-            disabled={pending}
-            onClick={onSomethingElse}
-          >
-            {t('somethingElse')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            data-testid="sharpen-skip"
-            disabled={pending}
-            onClick={() => onAct('skip')}
-          >
-            {t('skip')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            data-testid="sharpen-you-decide"
-            disabled={pending}
-            onClick={() => onAct('you_decide')}
-          >
-            {t('youDecide')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            data-testid="sharpen-stop"
-            leftIcon={<Square className="size-4" aria-hidden />}
-            onClick={onStop}
-          >
-            {t('stop')}
-          </Button>
-        </div>
-      </div>
+      <QuestionOptionReplies
+        testId="sharpen-replies"
+        options={question.readings}
+        disabled={pending}
+        onPick={(reading) => onAct('answer', { readingId: reading.id })}
+        optionTestId={(id) => `sharpen-reading-${id}`}
+        accessibleName={(reading) =>
+          reading.recommended ? t('recommendedName', { label: reading.label }) : reading.label
+        }
+        ownWordsLabel={t('somethingElse')}
+        ownWordsTestId="sharpen-something-else"
+        onOwnWords={onSomethingElse}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid="sharpen-skip"
+          disabled={pending}
+          onClick={() => onAct('skip')}
+        >
+          {t('skip')}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid="sharpen-you-decide"
+          disabled={pending}
+          onClick={() => onAct('you_decide')}
+        >
+          {t('youDecide')}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid="sharpen-stop"
+          leftIcon={<Square className="size-4" aria-hidden />}
+          onClick={onStop}
+        >
+          {t('stop')}
+        </Button>
+      </QuestionOptionReplies>
     </div>
   );
 }

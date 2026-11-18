@@ -16,8 +16,9 @@ import {
 //
 // GET  ?sessionId&jobId  → the session's latest pause, or `null`, so the rail can
 //                          poll while the run is paused.
-// POST { sessionId, jobId, pauseId, choice, text? }
-//        choice `start_over` | `apply` on a replan pause, `reply` (with `text`) on an
+// POST { sessionId, jobId, pauseId, choice, text?, optionId? }
+//        choice `start_over` | `apply` on a replan pause, `reply` (with `text`, or with
+//        `optionId` naming one of the question's options, MOTIR-11700) on an
 //        unclear pause, `resume` on a code_unsearchable pause (MOTIR-9167: the code can
 //        be searched now — the run re-checks on receipt) → `{ outcome: 'answered', pause, delivery }`, or, when the run
 //        ended before the answer could be delivered,
@@ -100,6 +101,8 @@ export async function POST(req: Request): Promise<Response> {
         pauseId,
         choice,
         text: typeof bag['text'] === 'string' ? bag['text'] : null,
+        // A reply that picked one of the question's options (MOTIR-11700).
+        ...(typeof bag['optionId'] === 'string' ? { optionId: bag['optionId'] } : {}),
       },
       ctx,
     );

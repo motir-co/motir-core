@@ -85,6 +85,8 @@ export interface PlanChangeRunPauseDto {
   changeTurnIds: string[];
   reason: string | null;
   question: string | null;
+  /** The `unclear` question's 2 to 4 options (MOTIR-11700), or null — drawn as choices. */
+  options?: QuestionOptionDto[] | null;
   /**
    * The blocked target repositories and why their code cannot be searched
    * (MOTIR-9167) — set on a `code_unsearchable` pause, null on the other two kinds
@@ -97,6 +99,8 @@ export interface PlanChangeRunPauseDto {
   answeredAt: string | null;
   /** The person's reply, verbatim, on `replied` only. */
   replyText: string | null;
+  /** The option the reply PICKED (MOTIR-11700), on `replied` only; null on own words. */
+  replyOption?: QuestionOptionDto | null;
   /** `pending` until the answer reached the run's mailbox; `refused` when the run ended first. */
   delivery: 'pending' | 'delivered' | 'refused';
   refusedCode: string | null;
@@ -125,6 +129,13 @@ export interface KeptFarRequestDto {
   requirement: string;
 }
 
+/** One option of a question put to a person (MOTIR-11700): `{ id, label, means }`. */
+export interface QuestionOptionDto {
+  id: string;
+  label: string;
+  means: string;
+}
+
 export interface PlanChangeTurnDto {
   id: string;
   seq: number;
@@ -139,11 +150,22 @@ export interface PlanChangeTurnDto {
    */
   question: string | null;
   /**
+   * That question's 2 to 4 OPTIONS (MOTIR-11700), drawn as choices the person
+   * clicks beside a box for their own words. Null on every other turn, and on a
+   * question from an engine that predates options (drawn with the box alone).
+   */
+  questionOptions?: QuestionOptionDto[] | null;
+  /**
    * A `user` turn that REPLIED to the pending question (sent through the answer
    * bar), as opposed to one that changed the subject and superseded it. The two
    * render different markers — design states C and E.
    */
   isAnswer: boolean;
+  /**
+   * The option an answer PICKED (MOTIR-11700), or null — on an answer typed in the
+   * person's own words, and on every other turn.
+   */
+  answerOption?: QuestionOptionDto | null;
   /**
    * What this turn asked for, on `user` turns — null on `system` / `assistant`,
    * and null on a `user` turn written before the intent model existed (no

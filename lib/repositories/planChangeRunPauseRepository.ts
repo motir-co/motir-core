@@ -72,12 +72,15 @@ export const planChangeRunPauseRepository = {
       answeredAt: Date;
       answeredById: string | null;
       replyText: string | null;
+      /** The option a reply picked (MOTIR-11700), or null on own words / no reply. */
+      replyOption?: { id: string; label: string; means: string } | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<number> {
+    const { replyOption, ...rest } = data;
     const { count } = await tx.planChangeRunPause.updateMany({
       where: { id, answer: null },
-      data,
+      data: { ...rest, ...(replyOption ? { replyOption } : {}) },
     });
     return count;
   },

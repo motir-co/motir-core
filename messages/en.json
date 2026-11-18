@@ -8862,6 +8862,10 @@
       "send": "Send",
       "answer": "Answer",
       "awaitingAnswer": "Waiting for your answer",
+      "questionOptions": {
+        "group": "Answer options",
+        "ownWords": "In my own words"
+      },
       "seeQuestion": "See it",
       "retry": "Try again",
       "discard": "Discard",
