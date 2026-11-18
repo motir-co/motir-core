@@ -324,8 +324,10 @@ const addFrames = (page: Page) => workspace(page).locator('[data-op="add"]');
 const viewButton = (page: Page, name: 'List' | 'Canvas') =>
   workspace(page).getByRole('button', { name, exact: true });
 /** A BREADCRUMB crumb on the overlay's canvas, by its `KEY · Title` label. The
- *  bar renders only once the canvas is drilled, which — since MOTIR-6154 — it is
- *  from the moment the surface opens inside its target. */
+ *  bar renders while the canvas is drilled, or at the root while it carries an
+ *  offer. An anchor WITH children opens inside itself (MOTIR-6154), so it is the
+ *  last crumb from the open; a CHILDLESS anchor opens on its parent level, and its
+ *  crumb exists only once the reader goes there (MOTIR-11696). */
 const crumb = (page: Page, label: string) =>
   workspace(page)
     .getByRole('navigation', { name: 'Breadcrumb' })
@@ -386,7 +388,9 @@ async function sendTurn(page: Page, text: string): Promise<void> {
 // MOTIR-6154 opens the surface INSIDE its target, and MOTIR-6155 mounts the plan
 // page's component, whose `arrivalLevel` lands on the container the plan fills —
 // so its one caller was drilling PAST its own subject either way. A breadcrumb
-// assertion at the arrival replaces it.
+// assertion at the arrival replaces it — and where the arrival is the anchor's
+// PARENT level (a childless anchor, since MOTIR-11513 kept the canvas mounted),
+// the bar's own "Go there" offer is the trip, never a hand-rolled drill.
 
 /** Approve the pending proposal, waiting on the approve's 200 before any re-read
  *  (never on the optimistic UI — `motir-core/CLAUDE.md` § authoritative signal). */
@@ -531,20 +535,33 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
   await dwell(page);
 
   await chapter('Nothing is written until you confirm', async () => {
-    // The proposal is reviewable ON THE CANVAS with NO drill: MOTIR-6154 opens the
-    // surface INSIDE the anchor, so the level the run proposed onto is the level
-    // already on screen. The anchor was childless, which is why that level was
-    // empty in the first chapter and carries the two proposals now.
+    // ⚠️ THE CANVAS DOES NOT MOVE WHEN THE PLAN LANDS — IT OFFERS THE TRIP
+    // (MOTIR-11696). The anchor is CHILDLESS, so the surface opens on its PARENT
+    // level — here the project root — with the anchor card ringed and centred
+    // (MOTIR-6160 / MOTIR-7621, MOTIR-11472). Since MOTIR-11513 the pane is ONE
+    // canvas from the open, and when the plan's first read lands that same canvas
+    // KEEPS its level and viewport (`design/ai-chat/design-notes.md` § *The reset
+    // on propose, after MOTIR-11513*). An item-anchored launch starts WITH a
+    // target, so no plan-follow is armed either (`PlanningWorkspaceHost`'s
+    // `startedWithNoTarget`): the plan sits one level below the reader, and the
+    // bar says so with MOTIR-6161's offer, "Plan is in {identifier} · Go there".
     //
-    // MOTIR-6155 lands on the same level from the other direction: the pane mounts
-    // the plan page's component, and its `arrivalLevel` → `fullestContainer` is the
-    // anchor too, because both subtasks are proposed under it. One container, so
-    // the component also opens on CANVAS rather than the list.
-    //
-    // (Before MOTIR-6154 the canvas opened BESIDE the anchor and this step drilled
-    // in by hand. Keeping the drill would hunt for a `Notifications` CARD that the
-    // arrival has already left behind — the same reason the sibling test below
-    // stopped drilling when MOTIR-2070 moved the arrival the first time.)
+    // This used to assert the anchor crumb straight away, because the pane was
+    // swapped for the plan page's component on the first read and that mount's
+    // `arrivalLevel` landed inside the anchor. That swap is gone, so the reader
+    // takes the trip themselves — the one act allowed to move them.
+    const goThere = workspace(page).getByRole('button', {
+      name: `Plan is in ${seed.notifKey} · Go there`,
+    });
+    await expect(goThere).toBeVisible();
+    // Still on the parent level: the anchor is a card here, not a crumb yet.
+    await expect(crumb(page, `${seed.notifKey} · Notifications`)).toHaveCount(0);
+    await goThere.click();
+
+    // Inside the anchor now, and the bar's offer has stopped arming: the reader
+    // stands where the plan is. The anchor was childless, which is why its level
+    // carries only the two proposals.
+    await expect(goThere).toHaveCount(0);
     await expect(crumb(page, `${seed.notifKey} · Notifications`)).toHaveAttribute(
       'aria-current',
       'page',
