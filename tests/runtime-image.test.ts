@@ -157,7 +157,9 @@ describe('Dockerfile — the runner image', () => {
     // `.next/static` and `public` are NOT part of the standalone bundle; Next
     // requires them to be copied alongside it, and a missing copy serves an
     // unstyled page rather than an error.
-    expect(runnerStage).toMatch(/COPY --from=builder[^\n]*\/app\/\.next\/standalone \.\//);
+    // The standalone tree comes from the `standalone` stage: the builder's own,
+    // with the target CPU's platform packages swapped in (MOTIR-11718).
+    expect(runnerStage).toMatch(/COPY --from=standalone[^\n]*\/app\/\.next\/standalone \.\//);
     expect(runnerStage).toMatch(
       /COPY --from=builder[^\n]*\/app\/\.next\/static \.\/\.next\/static/,
     );
@@ -296,8 +298,9 @@ describe('Dockerfile — the migration toolchain', () => {
       /COPY --from=builder[^\n]*\/app\/prisma\.config\.ts \.\/migrate\/prisma\.config\.ts/,
     );
     expect(runnerStage).toMatch(/COPY --from=builder[^\n]*\/app\/prisma \.\/migrate\/prisma/);
+    // Installed in the `migrate` stage, on the target CPU (MOTIR-11718).
     expect(runnerStage).toMatch(
-      /COPY --from=builder[^\n]*\/migrate\/node_modules \.\/migrate\/node_modules/,
+      /COPY --from=migrate[^\n]*\/migrate\/node_modules \.\/migrate\/node_modules/,
     );
   });
 
@@ -305,6 +308,70 @@ describe('Dockerfile — the migration toolchain', () => {
     // The two trees both contain `@prisma`, `react` and `react-dom`. Merging
     // them lets the CLI's copies shadow the ones the server was traced against.
     expect(runnerStage).not.toMatch(/\/migrate\/node_modules \.\/node_modules/);
+  });
+});
+
+/** The text of the stage named `name`, up to the next `FROM`. */
+function stage(name: string): string {
+  const start = dockerfile.search(new RegExp(`^FROM [^\\n]* AS ${name}$`, 'm'));
+  if (start === -1) throw new Error(`the Dockerfile has no '${name}' stage`);
+  const next = dockerfile.indexOf('\nFROM ', start + 1);
+  return dockerfile.slice(start, next === -1 ? undefined : next);
+}
+
+describe('Dockerfile — two CPUs, one compile (MOTIR-11718)', () => {
+  it('compiles on the BUILD machine, whatever the target', () => {
+    // `next build`, the esbuild bundles and `.next/static` are the same bytes for
+    // both CPUs: one compile gives both images one set of static files and one
+    // Sentry release, and keeps `next build` out of QEMU.
+    expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:22-slim AS deps$/m);
+    expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:22-slim AS builder$/m);
+  });
+
+  it('installs every Linux CPU per-platform package, in the image only', () => {
+    expect(stage('deps')).toMatch(/supportedArchitectures:[^\n]*cpu: \[x64, arm64\]/);
+    expect(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8')).not.toMatch(
+      /supportedArchitectures/,
+    );
+  });
+
+  it("swaps the traced platform packages for the target CPU's, per target", () => {
+    const swap = stage('standalone');
+    expect(swap).toMatch(/^FROM builder AS standalone$/m);
+    expect(swap).toMatch(/^ARG TARGETARCH$/m);
+    expect(swap).toContain(
+      'node scripts/imagePlatformPackages.mjs --arch "${TARGETARCH}" --store node_modules/.pnpm .next/standalone',
+    );
+  });
+
+  it('copies every Linux prebuild of a traced addon into the standalone tree', () => {
+    expect(builderStage).toMatch(/-type d -name prebuilds -prune/);
+    expect(builderStage).toContain('"$src"/linux-*');
+  });
+
+  it('installs the migration toolchain on the TARGET CPU, from a manifest the builder writes', () => {
+    const migrate = stage('migrate');
+    expect(migrate).toMatch(/^FROM node:22-slim AS migrate$/m);
+    expect(migrate).toContain('COPY --from=builder /migrate/package.json /migrate/package.json');
+    expect(migrate).toContain('RUN npm install --prefix /migrate');
+    expect(stage('builder')).not.toMatch(/npm install --prefix \/migrate/);
+  });
+
+  it('proves on the target CPU that every native file, sharp and the schema engine load', () => {
+    const runner = stage('runner');
+    expect(runner).toMatch(/^FROM node:22-slim AS runner$/m);
+    const check = runner.slice(
+      runner.indexOf('RUN --mount=type=bind,from=builder,source=/app/scripts/imageNativeCheck.mjs'),
+    );
+    expect(check).toMatch(/^RUN --mount/);
+    expect(check).toContain('node /tmp/imageNativeCheck.mjs /app');
+    expect(check).toContain(
+      'require.resolve("sharp", { paths: [require("path").dirname(require.resolve("next/package.json"))] })',
+    );
+    expect(check).toContain('node node_modules/prisma/build/index.js --version');
+    // The check runs after every COPY into /app, or a later file escapes it.
+    const lastCopy = runner.lastIndexOf('\nCOPY ');
+    expect(lastCopy).toBeLessThan(runner.indexOf('node /tmp/imageNativeCheck.mjs /app'));
   });
 });
 

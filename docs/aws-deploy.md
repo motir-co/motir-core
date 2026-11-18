@@ -15,10 +15,12 @@ Any failure leaves the previous tasks serving.
 The Services page names the commit each service runs by reading the ECR tags of
 the image its task definition pins (MOTIR-11112), so the digest a deploy hands
 ECS must be the image CI tagged with the full commit SHA. `docker/build-push-action`
-pushes an OCI image index under that tag, with an untagged linux/amd64 child and
-an attestation manifest beside it, and with `load: true` (MOTIR-11241) its
-`digest` output names the untagged child, not the index. Deploying that child
-left the page reading "Not known" for core's services (MOTIR-11274).
+pushes an OCI image index under that tag, with untagged platform children and
+attestation manifests beside them. While it pushed one platform with `load: true`
+(MOTIR-11241), its `digest` output named the untagged child, not the index, and
+deploying that child left the page reading "Not known" for core's services
+(MOTIR-11274). The index is the right digest to deploy: Fargate picks the child
+for each task's CPU (see below).
 
 So the workflow never deploys the push result's `digest`. Its "Resolve the digest
 ECR tags with this commit" step reads the digest back from ECR with
@@ -53,6 +55,39 @@ It carries the release guards that job carried (MOTIR-11059):
   `GET /api/0/projects/<org>/<project>/releases/<sha>/` from Sentry and turns
   the run red when it is not `200`. It runs after the roll, so an outage of
   Sentry's API never holds a release back.
+
+## One image, two CPUs
+
+The tag names an index listing a **linux/amd64** and a **linux/arm64** image
+(MOTIR-11718), so a service can run on x86 or on Graviton from the same digest,
+and moving a service between them is a task-definition change, not a new image.
+
+- **One compile.** The Dockerfile's `deps` and `builder` stages run on the build
+  machine (`--platform=$BUILDPLATFORM`) for both targets, so `next build`, the
+  esbuild bundles and `.next/static` are built once, under no emulation: both
+  images serve the same `/_next/static` files and report to one Sentry release.
+- **Each image's native code is its own CPU's.** The `migrate` stage installs
+  the Prisma CLI (its schema engine is native) on the target CPU; the builder
+  copies every Linux prebuild of a traced addon (`argon2`) beside it; and the
+  `standalone` stage swaps each per-platform package the trace took (sharp's
+  `@img/sharp-linux-*`, for `next/image`) for the target's
+  (`scripts/imagePlatformPackages.mjs`). The Prisma client has no native part:
+  its query compiler is WASM.
+- **The build proves it.** The runner stage runs on the target CPU (QEMU on the
+  amd64 runner for arm64) and stops on any ELF file built for another CPU, an
+  addon that does not load, sharp failing to load libvips, or a schema engine
+  that does not run (`scripts/imageNativeCheck.mjs`).
+- **The deploy proves it again, before anything rolls.** `pnpm deploy:image
+platforms` fails unless the index lists both CPUs. `pnpm deploy:image smoke`
+  then pulls each child by its own digest, checks it runs as that CPU, migrates
+  a throwaway Postgres in the job and starts web, worker and relay exactly as the
+  task definitions do: web's `/api/health/ready` must answer 200 (it opens the
+  Prisma pool with a query first), the relay's `/healthz` must answer 200 after
+  its start-up Prisma write, and the worker must log `[worker] started` and keep
+  running (`scripts/aws-deploy/imageSmoke.ts`). On a failure the run goes red
+  with each service's last log lines, while the old tasks still serve.
+- **Cost.** The arm64 half of the build and the smoke run under QEMU, so the
+  job's ceiling is 110 minutes.
 
 ## Static assets — a tab open across a release keeps working
 
