@@ -9,6 +9,7 @@ import {
 } from '@/lib/agentReview/reviewState';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { parseMemberVersion } from '@/lib/approvalGates/memberVersion';
+import { withoutAncestorDeliveriesForCards } from '@/lib/approvalGates/ownDeliveriesForCards';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import { reviewCommitsLabel } from '@/lib/agentReview/verdictActivity';
 import {
@@ -125,7 +126,7 @@ export async function readReviewStates(
   // its epics (2,751 on the MOTIR project) and ran `/items` past the 5 s transaction limit.
   // The count was dropped: a container wears no review state of its own.
   const allIds = [...new Set(workItemIds)];
-  const [cards, statuses, deliveries, agentGates, latestDecided, records, dismissals] =
+  const [cards, statuses, linkedDeliveries, agentGates, latestDecided, records, dismissals] =
     await Promise.all([
       reviewStateRepository.listCards(allIds, tx),
       workflowsService.listStatusesByProject(projectId, ctx.workspaceId, tx),
@@ -135,6 +136,14 @@ export async function readReviewStates(
       reviewStateRepository.listRecords(allIds, tx),
       reviewStateRepository.listDismissals(allIds, tx),
     ]);
+
+  // ⚠️ THE CARD'S OWN SET, NOT EVERY LINKED ROW (Bug MOTIR-11695). Every version this
+  // model compares — an agent gate's, a verdict's, a dismissal's — was measured over the
+  // card's own members: `gateSetFor` raises the gates without a pull request an ancestor
+  // also delivers (MOTIR-11624). Spelled over every linked row, a child sharing one pull
+  // request with its story read a version no gate of its carries, and so no answer at it.
+  // Two batch reads, whatever the page's size.
+  const deliveries = await withoutAncestorDeliveriesForCards(ctx.workspaceId, linkedDeliveries, tx);
 
   const finishedStatuses = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
   const isFinished = (card: ReviewStateCardRow) => finishedStatuses.has(card.status);

@@ -29,6 +29,7 @@ import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { componentsService } from '@/lib/services/componentsService';
 import { labelsService } from '@/lib/services/labelsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { AdvancedFilterProvider } from '../items/_components/AdvancedFilterContext';
 import { SavedFilterSessionProvider } from '../items/_components/SavedFilterContext';
@@ -116,6 +117,7 @@ export default async function BacklogPage({
     sprints,
     customFields,
     components,
+    folders,
     referencedLabels,
     savedFilterCaps,
     aiSettings,
@@ -142,6 +144,10 @@ export default async function BacklogPage({
       ctx: accessCtx,
     }),
     componentsService.listComponents(ctx.project.identifier, accessCtx),
+    // The builder's Folder field and the applied bar's folder paths
+    // (MOTIR-11668) — the same browse-gated read /items makes, bounded at
+    // FOLDER_PICKER_MAX.
+    foldersService.listProjectFolders({ projectId: ctx.projectId }, accessCtx),
     labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, accessCtx),
     projectAccessService.getSavedFilterCapabilities(ctx.projectId, accessCtx),
     // The AI sprint-planning switch (Subtask MOTIR-1750) — browse-gated, so it
@@ -201,6 +207,7 @@ export default async function BacklogPage({
                   sprints={sprints}
                   customFields={customFields}
                   components={components}
+                  folders={folders}
                   referencedLabels={referencedLabels}
                   projectKey={ctx.project.identifier}
                   viewer={viewer}
@@ -224,6 +231,7 @@ export default async function BacklogPage({
               sprints={sprints}
               customFields={customFields}
               components={components}
+              folders={folders}
               referencedLabels={referencedLabels}
             />
 

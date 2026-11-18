@@ -6,8 +6,8 @@ import type {
 } from '@/lib/approvalGates/registry';
 import type { ApprovalGateState } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { listOwnDeliveriesWithChecks } from '@/lib/approvalGates/ownDeliveries';
 import { routingTargetId } from '@/lib/approvalGates/routing';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import type { GateSettingsDoor } from './settingsDoor';
@@ -45,12 +45,16 @@ export const REVIEW_AGENT_SETTINGS_DOOR: GateSettingsDoor = {
 };
 
 export const agentReviewGateHandler: GateHandler<PullRequestApprovalSubject> = {
-  /** The run target's delivery SET — the approve-and-merge gate's own subject (§12.1). */
+  /**
+   * The run target's delivery SET — the approve-and-merge gate's own subject (§12.1) — less
+   * every pull request an ancestor also delivers. The gate is raised over the card's OWN
+   * members (`gateSetFor`, Bug MOTIR-11624), so the version a decision is checked against
+   * is measured over the same set: over every linked row, a child sharing one pull request
+   * with its story read a version that never matched its gate, and the review agent's
+   * verdict was refused as stale (Bug MOTIR-11693).
+   */
   async resolveSubject({ gate, tx }: GateEffectArgs): Promise<PullRequestApprovalSubject | null> {
-    const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(
-      gate.subjectId,
-      tx,
-    );
+    const deliveries = await listOwnDeliveriesWithChecks(gate.subjectId, tx);
     return deliveries.length > 0 ? deliveries : null;
   },
 

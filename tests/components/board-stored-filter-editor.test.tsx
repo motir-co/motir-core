@@ -43,6 +43,20 @@ const LOOKUPS: BoardStoredFilterLookups = {
     },
   ],
   components: [],
+  // The project's folders (MOTIR-11669): "Done" and a folder inside it.
+  folders: {
+    truncated: false,
+    folders: [
+      { id: 'f-done', parentFolderId: null, name: 'Done', position: 'a0', path: ['Done'] },
+      {
+        id: 'f-done-oct',
+        parentFolderId: 'f-done',
+        name: 'Oct 2026',
+        position: 'a0',
+        path: ['Done', 'Oct 2026'],
+      },
+    ],
+  },
   referencedLabels: [{ id: 'lab-mobile', name: 'mobile' } as never],
   projectKey: 'ACME',
 };
@@ -387,5 +401,126 @@ describe('BoardStoredFilterEditor — stale and unreadable stored filters', () =
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(patches).toEqual([{ filter: null }]);
     expect(editor().textContent).toContain(ts.none);
+  });
+});
+
+// The editor's Folder row (Story MOTIR-11666 · MOTIR-11669): the settings page
+// passes the project's folders, so a board admin can keep a Folder condition
+// as the board's own filter, with the shared row's path picker and every
+// non-happy state it ships with.
+describe('BoardStoredFilterEditor — the Folder condition (MOTIR-11669)', () => {
+  const NOT_DONE: FilterAst = {
+    combinator: 'and',
+    conditions: [{ field: 'folder', operator: 'is_none_of', value: ['f-done'] }],
+  };
+
+  function addFolderRow(): HTMLElement {
+    fireEvent.click(screen.getByTestId('board-stored-filter-add'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Folder' }));
+    return row;
+  }
+
+  function openValues(row: HTMLElement) {
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Folder values' }));
+  }
+
+  it('offers Folder with its four operators and the folders-inside note', () => {
+    render();
+    const row = addFolderRow();
+    expect(within(row).getByText('Folders inside a chosen folder are included.')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Operator' }));
+    expect(screen.getAllByRole('option').map((o) => (o.textContent ?? '').trim())).toEqual([
+      'is any of',
+      'is none of',
+      'is empty',
+      'is not empty',
+    ]);
+  });
+
+  it('saves Folder is none of “Done” through PATCH with Done’s id', async () => {
+    render();
+    const row = addFolderRow();
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Operator' }));
+    fireEvent.click(screen.getByRole('option', { name: 'is none of' }));
+    openValues(row);
+    expect(screen.getByRole('option', { name: 'Done ▸ Oct 2026' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('option', { name: 'Done' }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(patches).toEqual([{ filter: encodeFilterEnvelope(NOT_DONE) }]);
+  });
+
+  it('reopens a stored Folder condition with its row filled in by path', () => {
+    render({ storedFilter: stored(NOT_DONE) });
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).getByText('Done')).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('names a stored sub-folder by its full path, never its id', () => {
+    render({
+      storedFilter: stored({
+        combinator: 'and',
+        conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-done-oct'] }],
+      }),
+    });
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).getByText('Done ▸ Oct 2026')).toBeTruthy();
+    expect(editor().textContent).not.toContain('f-done-oct');
+  });
+
+  it('a project with no folders shows the same empty message as /items', () => {
+    render({ lookups: { ...LOOKUPS, folders: { folders: [], truncated: false } } });
+    const row = addFolderRow();
+    openValues(row);
+    expect(screen.getByText('This project has no folders yet.')).toBeTruthy();
+  });
+
+  it('a deleted folder shows the Unknown value chip and, read stale, the Folder line in the callout', () => {
+    render({
+      storedFilter: stored(
+        {
+          combinator: 'and',
+          conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-done', 'f-gone'] }],
+        },
+        [{ index: 0, field: 'folder', reason: 'unknown-value' }],
+      ),
+    });
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).getByText('Done')).toBeTruthy();
+    expect(within(row).getByText('Unknown value')).toBeTruthy();
+    expect(screen.getByTestId('board-stored-filter-stale').textContent).toContain(
+      'Condition 1 · Folder: a folder that was deleted',
+    );
+  });
+
+  it('a truncated folder list still lets a person pick, and marks no stored folder past it unknown', async () => {
+    render({
+      lookups: { ...LOOKUPS, folders: { ...LOOKUPS.folders, truncated: true } },
+      storedFilter: stored({
+        combinator: 'and',
+        conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-past-the-cap'] }],
+      }),
+    });
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).queryByText('Unknown value')).toBeNull();
+    openValues(row);
+    expect(screen.getByText('Showing the first 2 folders.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('option', { name: 'Done' }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(patches).toEqual([
+      {
+        filter: encodeFilterEnvelope({
+          combinator: 'and',
+          conditions: [
+            { field: 'folder', operator: 'is_any_of', value: ['f-past-the-cap', 'f-done'] },
+          ],
+        }),
+      },
+    ]);
   });
 });

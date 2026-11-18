@@ -9,6 +9,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { buildBacklogFilterHref } from '@/lib/backlog/backlogFilterHref';
@@ -41,6 +42,9 @@ export interface BacklogFilterControlsProps {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders by path (MOTIR-11668) — the Advanced builder's Folder field. Required, so a
+   * backlog host cannot silently drop it. */
+  folders: ProjectFoldersDto;
   referencedLabels: LabelDto[];
   projectKey: string;
   viewer: Viewer;
@@ -54,6 +58,7 @@ export function BacklogFilterControls({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
   projectKey,
   viewer,
@@ -84,6 +89,7 @@ export function BacklogFilterControls({
         sprints={sprints}
         customFields={customFields}
         components={components}
+        folders={folders}
         referencedLabels={referencedLabels}
         projectKey={projectKey}
         buildHref={buildHref}

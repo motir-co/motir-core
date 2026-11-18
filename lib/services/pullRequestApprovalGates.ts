@@ -7,6 +7,7 @@ import {
   approvalGateRepository,
   type LiveSupersedeCause,
 } from '@/lib/repositories/approvalGateRepository';
+import { listOwnDeliveriesWithChecks } from '@/lib/approvalGates/ownDeliveries';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 
 // RAISE and WITHDRAW the `pull_request_approval` gate (Story MOTIR-4909 · MOTIR-5482;
@@ -181,6 +182,13 @@ async function acceptanceNoLongerOwed(
  * its latest check run's commit — the rule the version was written with, so a late row for
  * an OLD commit withdraws nothing. Nothing is superseded while any member's head is unknown.
  * Returns the count.
+ *
+ * ⚠️ THE CURRENT VERSION IS MEASURED OVER THE CARD'S OWN SET (Bug MOTIR-11695) — the set
+ * `gateSetFor` raised both gates over, less every pull request an ancestor also delivers.
+ * Over every linked row, a child sharing one pull request with its story never matched its
+ * own gates' version, so every head move on ANY member — the story's pull request included
+ * — withdrew the child's review and merge questions and asked them again. The same holds
+ * for the CI-rerun retirement below.
  */
 export async function withdrawPullRequestApprovalGatesOnHeadMove(
   pullRequestId: string,
@@ -201,7 +209,7 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
     const review = awaitingRows.find((row) => row.kind === REVIEW_KIND);
     let reviewWithdrawn = false;
     if (review) {
-      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+      const deliveries = await listOwnDeliveriesWithChecks(workItemId, tx);
       const current = deliverySetVersion(
         deliveries.map((delivery) =>
           deliveryMemberVersion(
@@ -231,7 +239,7 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
       }
       continue;
     }
-    const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+    const deliveries = await listOwnDeliveriesWithChecks(workItemId, tx);
     const current = deliverySetVersion(
       deliveries.map((delivery) =>
         deliveryMemberVersion(
@@ -494,7 +502,7 @@ export async function withdrawPullRequestApprovalGatesOnCiRerun(
     // owed again at the same head).
     const review = awaiting.find((row) => row.kind === REVIEW_KIND);
     if (gate || review) {
-      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+      const deliveries = await listOwnDeliveriesWithChecks(workItemId, tx);
       const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
       let retired = 0;
       if (gate && current && current === gate.subjectVersion) {

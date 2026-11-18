@@ -9,6 +9,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { buildBacklogFilterHref } from '@/lib/backlog/backlogFilterHref';
@@ -39,6 +40,10 @@ export interface BacklogAppliedFilterBarProps {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders by path (MOTIR-11668) — a Folder chip names each
+   * folder by its path, never its id. Required, so a backlog host cannot
+   * silently drop it. */
+  folders: ProjectFoldersDto;
   referencedLabels: LabelDto[];
 }
 
@@ -52,6 +57,7 @@ export function BacklogAppliedFilterBar({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
 }: BacklogAppliedFilterBarProps) {
   const buildHref = useCallback(
@@ -77,6 +83,7 @@ export function BacklogAppliedFilterBar({
           sprints={sprints}
           customFields={customFields}
           components={components}
+          folders={folders}
           referencedLabels={referencedLabels}
         />
       ) : null}

@@ -13,6 +13,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import type {
   SavedFilterSummaryDto,
@@ -69,6 +70,10 @@ export interface BoardAppliedFilterBarProps {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders by path (MOTIR-11667) — every applied summary, the
+   * reset tooltip's sentence and the save confirmation name a Folder value by
+   * its path, never its id. */
+  folders: ProjectFoldersDto;
   referencedLabels: LabelDto[];
   /** `?boardFilter=off` — the reader removed every condition (MOTIR-11564). */
   boardFilterOff?: boolean;
@@ -103,6 +108,7 @@ export function BoardAppliedFilterBar({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
   boardFilterOff = false,
   canConfigure = false,
@@ -128,6 +134,7 @@ export function BoardAppliedFilterBar({
     sprints,
     customFields,
     components,
+    folders,
     referencedLabels: header.labels,
   };
   const text = useAdvancedConditionText(lookups);

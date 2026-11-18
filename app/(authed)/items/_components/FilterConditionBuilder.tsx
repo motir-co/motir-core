@@ -132,9 +132,11 @@ export function useFilterConditionModel(args: {
   ast: FilterAst | null;
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
-  /** The project's folders (Story MOTIR-5309 · MOTIR-5378). A host that passes
-   * none — the board and backlog bars — offers no Folder field, rather than one
-   * with nothing to pick. */
+  /** The project's folders (Story MOTIR-5309 · MOTIR-5378). Every project host
+   * loads them server-side and passes them — `/items`, automation rules, the
+   * board's toolbar, create-board and applied bars (MOTIR-11667). Leaving it out
+   * offers no Folder field, rather than one with nothing to pick, so a host
+   * without a project's folder list cannot offer a field it cannot fill. */
   folders?: ProjectFoldersDto;
   referencedLabels: LabelDto[];
   fields?: FilterFieldDef[];

@@ -8,6 +8,7 @@ import {
   ReviewVerdictSecondError,
 } from '@/lib/agentReview/errors';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { withoutAncestorDeliveries } from '@/lib/approvalGates/ownDeliveries';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateStaleSubjectError,
@@ -28,7 +29,10 @@ import {
   type ReviewVerdictRecordCreateRow,
 } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { reviewVerdictRecordService } from '@/lib/services/reviewVerdictRecordService';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import {
+  workItemDeliveryRepository,
+  type WorkItemDeliveryWithChecks,
+} from '@/lib/repositories/workItemDeliveryRepository';
 import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
@@ -170,6 +174,48 @@ async function applySendBack(workItemId: string, tx: Prisma.TransactionClient): 
   return awaiting.map((gate) => gate.id);
 }
 
+/**
+ * Refuse a card whose review belongs to an ancestor — {@link ReviewTargetNotRunTargetError},
+ * naming the ancestor that holds the run's How to test.
+ *
+ * ⚠️ A CARD THAT DELIVERS PULL REQUESTS OF ITS OWN IS ITS OWN REVIEW SUBJECT, WHOEVER HOLDS
+ * THE TEST RECORD (Bug MOTIR-11673). The run target (`resolveRunTarget`) answers *whose How
+ * to test is this*, and a story run writes that record once, onto the story. A child built
+ * in ANOTHER repository by its own run — a starter re-pin with its own pull request — then
+ * resolves to the story, but the story's delivery set is the story's own rows and never
+ * holds the child's pull request. Refusing the child sent the verdict to a card whose
+ * version cannot name that pull request, so no verdict could ever land on it.
+ *
+ * So the run target refuses only a card with NO pull request of its own: one that delivers
+ * nothing, or whose every pull request an ancestor also delivers (a child riding its parent
+ * run's branch, Bug MOTIR-11624). That is the same "own" set the review and approve-and-merge
+ * gates are raised on (`gateSetFor`), so the card the door accepts is the card the gate asks.
+ *
+ * ⚠️ AND IT RETURNS THAT OWN SET, BECAUSE THE VERSION IS MEASURED OVER IT (Bug MOTIR-11693).
+ * The review gate's `subjectVersion` names the card's own members only. A door that measured
+ * `current` over the whole linked set named one more pull request for a child that shares
+ * one with its story, so a verdict at `current` never matched the awaiting gate and a
+ * verdict at the gate's version was refused late — the gate was never decided.
+ */
+async function reviewSubjectDeliveries(
+  item: { id: string; identifier: string; parentId: string | null },
+  deliveries: readonly WorkItemDeliveryWithChecks[],
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<WorkItemDeliveryWithChecks[]> {
+  const { own } = await withoutAncestorDeliveries(
+    { id: item.id, parentId: item.parentId, workspaceId },
+    deliveries,
+    tx,
+  );
+  if (own.length > 0) return own;
+  const target = await resolveRunTargetFor({ id: item.id, workspaceId }, tx);
+  if (target.kind === 'ancestor') {
+    throw new ReviewTargetNotRunTargetError(item.identifier, target.holder.identifier);
+  }
+  return own;
+}
+
 /** Why a verdict was refused, once its record is stored. */
 type Refused = { refused: 'late'; currentVersion: string } | { refused: 'second' };
 
@@ -236,11 +282,12 @@ export const reviewVerdictService = {
     let first: FirstPass;
     try {
       first = await withWorkspaceContext(scope, async (tx): Promise<FirstPass> => {
-        const target = await resolveRunTargetFor({ id: item.id, workspaceId: ctx.workspaceId }, tx);
-        if (target.kind === 'ancestor') {
-          throw new ReviewTargetNotRunTargetError(item.identifier, target.holder.identifier);
-        }
-        const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
+        const deliveries = await reviewSubjectDeliveries(
+          item,
+          await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+          ctx.workspaceId,
+          tx,
+        );
         const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
         if (current === null) throw new ReviewNothingToReviewError(item.identifier);
 

@@ -446,6 +446,20 @@ const LOOKUPS: BoardFilterLookups = {
   sprints: [],
   customFields: [],
   components: [],
+  // The project's folders (MOTIR-11667): a root and a folder inside it.
+  folders: {
+    truncated: false,
+    folders: [
+      { id: 'f-todo', parentFolderId: null, name: 'To do', position: 'a0', path: ['To do'] },
+      {
+        id: 'f-todo-oct',
+        parentFolderId: 'f-todo',
+        name: 'Oct 2026',
+        position: 'a0',
+        path: ['To do', 'Oct 2026'],
+      },
+    ],
+  },
   referencedLabels: [],
   projectKey: 'ACME',
 };
@@ -460,6 +474,11 @@ const BUG_OR_MOBILE: FilterAst = {
 const GONE_LABEL: FilterAst = {
   combinator: 'and',
   conditions: [{ field: 'lbl', operator: 'is_any_of', value: ['lab-gone'] }],
+};
+// A Folder condition naming a folder that was deleted since it was saved.
+const GONE_FOLDER: FilterAst = {
+  combinator: 'and',
+  conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-todo', 'f-gone'] }],
 };
 // Two complete conditions; the server (stubbed) refuses the second by index.
 const BAD_SECOND: FilterAst = {
@@ -489,6 +508,7 @@ const SAVED = {
   'sf-gone': { summary: savedFilter('sf-gone', 'Old labels'), ast: GONE_LABEL },
   'sf-bad': { summary: savedFilter('sf-bad', 'Odd kinds'), ast: BAD_SECOND },
   'sf-broken': { summary: savedFilter('sf-broken', 'Broken'), ast: null },
+  'sf-folder': { summary: savedFilter('sf-folder', 'Old folders'), ast: GONE_FOLDER },
 } as const;
 
 type PostReply = { status: number; body: unknown };
@@ -514,7 +534,7 @@ function stubFilterFetch(post: PostReply = { status: 201, body: null }) {
       return ok({
         items: Object.values(SAVED).map((f) => f.summary),
         nextCursor: null,
-        total: 4,
+        total: 5,
         builtins: [],
       });
     }
@@ -792,6 +812,75 @@ describe('BoardSwitcher — the create dialog’s Board filter section (MOTIR-11
     );
     expect(screen.queryByTestId('board-filter-section')).toBeNull();
     expect(screen.getByTestId('board-switcher-live').textContent).toContain('Bugs');
+  });
+
+  // The Folder row in the create dialog (Story MOTIR-11666 · MOTIR-11667).
+  function addFolderRow(): HTMLElement {
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(tiv.advancedAddCondition) }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Folder' }));
+    return row;
+  }
+
+  it('offers the Folder row with its four operators and the folders by path', async () => {
+    stubFilterFetch();
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    const row = addFolderRow();
+    expect(within(row).getByText('Folders inside a chosen folder are included.')).toBeTruthy();
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Folder values' }));
+    expect(screen.getByRole('option', { name: 'To do ▸ Oct 2026' })).toBeTruthy();
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Operator' }));
+    expect(
+      ['is any of', 'is none of', 'is empty', 'is not empty'].map(
+        (name) => screen.getAllByRole('option', { name }).length,
+      ),
+    ).toEqual([1, 1, 1, 1]);
+  });
+
+  it('creates a board whose stored filter is Folder is any of “To do”, and opens it', async () => {
+    const posts = stubFilterFetch();
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    const row = addFolderRow();
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Folder values' }));
+    fireEvent.click(screen.getByRole('option', { name: 'To do' }));
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toEqual({
+      name: 'Bugs',
+      type: 'kanban',
+      filter: encodeFilterEnvelope({
+        combinator: 'and',
+        conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-todo'] }],
+      }),
+    });
+    // The new board opens selected; its read applies the stored filter.
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith('/boards?board=b-new', { scroll: false }),
+    );
+  });
+
+  it('in a project with no folders the Folder picker shows the empty message', async () => {
+    stubFilterFetch();
+    await openCreateDialog({ ...LOOKUPS, folders: { folders: [], truncated: false } });
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    const row = addFolderRow();
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Folder values' }));
+    expect(screen.getByText('This project has no folders yet.')).toBeTruthy();
+  });
+
+  it('a copied saved filter naming a deleted folder keeps the path of the live one and flags the gone one', async () => {
+    stubFilterFetch();
+    await openCreateDialog();
+    fireEvent.click(screen.getByTestId('board-filter-add'));
+    await copySaved('Old folders');
+    await screen.findByTestId('board-filter-copied');
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).getByText('To do')).toBeTruthy();
+    expect(within(row).getByText('Unknown value')).toBeTruthy();
+    expect(screen.getByText(tiv.advancedStaleNote)).toBeTruthy();
   });
 
   it('the rename dialog, and a switcher without lookups, show no Filter section', async () => {
