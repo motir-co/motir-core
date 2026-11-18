@@ -34,6 +34,7 @@ import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
+import { withoutAncestorDeliveries } from '@/lib/services/gateSetFor';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -170,6 +171,41 @@ async function applySendBack(workItemId: string, tx: Prisma.TransactionClient): 
   return awaiting.map((gate) => gate.id);
 }
 
+/**
+ * Refuse a card whose review belongs to an ancestor — {@link ReviewTargetNotRunTargetError},
+ * naming the ancestor that holds the run's How to test.
+ *
+ * ⚠️ A CARD THAT DELIVERS PULL REQUESTS OF ITS OWN IS ITS OWN REVIEW SUBJECT, WHOEVER HOLDS
+ * THE TEST RECORD (Bug MOTIR-11673). The run target (`resolveRunTarget`) answers *whose How
+ * to test is this*, and a story run writes that record once, onto the story. A child built
+ * in ANOTHER repository by its own run — a starter re-pin with its own pull request — then
+ * resolves to the story, but the story's delivery set is the story's own rows and never
+ * holds the child's pull request. Refusing the child sent the verdict to a card whose
+ * version cannot name that pull request, so no verdict could ever land on it.
+ *
+ * So the run target refuses only a card with NO pull request of its own: one that delivers
+ * nothing, or whose every pull request an ancestor also delivers (a child riding its parent
+ * run's branch, Bug MOTIR-11624). That is the same "own" set the review and approve-and-merge
+ * gates are raised on (`gateSetFor`), so the card the door accepts is the card the gate asks.
+ */
+async function assertReviewSubject(
+  item: { id: string; identifier: string; parentId: string | null },
+  deliveries: readonly { githubPullRequestId: string }[],
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const { own } = await withoutAncestorDeliveries(
+    { id: item.id, parentId: item.parentId, workspaceId },
+    deliveries,
+    tx,
+  );
+  if (own.length > 0) return;
+  const target = await resolveRunTargetFor({ id: item.id, workspaceId }, tx);
+  if (target.kind === 'ancestor') {
+    throw new ReviewTargetNotRunTargetError(item.identifier, target.holder.identifier);
+  }
+}
+
 /** Why a verdict was refused, once its record is stored. */
 type Refused = { refused: 'late'; currentVersion: string } | { refused: 'second' };
 
@@ -236,11 +272,8 @@ export const reviewVerdictService = {
     let first: FirstPass;
     try {
       first = await withWorkspaceContext(scope, async (tx): Promise<FirstPass> => {
-        const target = await resolveRunTargetFor({ id: item.id, workspaceId: ctx.workspaceId }, tx);
-        if (target.kind === 'ancestor') {
-          throw new ReviewTargetNotRunTargetError(item.identifier, target.holder.identifier);
-        }
         const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
+        await assertReviewSubject(item, deliveries, ctx.workspaceId, tx);
         const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
         if (current === null) throw new ReviewNothingToReviewError(item.identifier);
 
