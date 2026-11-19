@@ -270,16 +270,129 @@ export const ciRunnerProvisioningIntentRepository = {
   async countAwaitingRunnerForOwner(
     owner: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ onDemand: number; other: number }> {
+  ): Promise<{ onDemand: number; other: number; otherNotSpot: number }> {
     const rows = await tx.ciRunnerProvisioningIntent.findMany({
       where: {
         repoOwner: { equals: owner, mode: 'insensitive' },
         status: { in: [CI_RUNNER_INTENT_PENDING, CI_RUNNER_INTENT_PROVISIONING] },
+        // A runner withdrawn for an on-demand pin (MOTIR-11732) is coming to
+        // nobody: its registration is gone.
+        runnerWithdrawnAt: null,
       },
-      select: { requestedLabels: true },
+      select: { requestedLabels: true, capacity: true },
     });
-    const onDemand = rows.filter((row) => requestsOnDemandRunner(row.requestedLabels)).length;
-    return { onDemand, other: rows.length - onDemand };
+    const other = rows.filter((row) => !requestsOnDemandRunner(row.requestedLabels));
+    return {
+      onDemand: rows.length - other.length,
+      other: other.length,
+      // The ordinary intents whose machine is not KNOWN to be Spot (MOTIR-11732):
+      // not booted yet, or booted on-demand. While an on-demand pin is open in
+      // the org, a boot not yet made reads it and comes up on-demand, so these
+      // are the ordinary intents able to take a pinned job.
+      otherNotSpot: other.filter((row) => row.capacity !== 'spot').length,
+    };
+  },
+
+  /**
+   * The org's REGISTERED runners an on-demand pin must withdraw (MOTIR-11732):
+   * a runner GitHub knows (`githubRunnerId` set) on an intent still holding a
+   * claim or a container, that has taken no job and is not withdrawn yet, whose
+   * machine is Spot or not known yet (`capacity` NULL — minted, still launching,
+   * and it may come up Spot). An intent whose own job asked for the on-demand
+   * label, or carries `onDemandAtInterruptions` Spot interruptions, boots
+   * on-demand whatever the setting says, so it is left alone. Owner compared
+   * case-insensitively, as GitHub logins are.
+   */
+  async listWithdrawableRunnersForOwner(
+    owner: string,
+    onDemandAtInterruptions: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Pick<
+      CiRunnerProvisioningIntent,
+      'id' | 'githubRunnerId' | 'repoOwner' | 'installationId' | 'requestedLabels'
+    >[]
+  > {
+    const rows = await tx.ciRunnerProvisioningIntent.findMany({
+      where: {
+        repoOwner: { equals: owner, mode: 'insensitive' },
+        status: { in: [CI_RUNNER_INTENT_PROVISIONING, CI_RUNNER_INTENT_RUNNING] },
+        githubRunnerId: { not: null },
+        jobPickedUpAt: null,
+        runnerWithdrawnAt: null,
+        spotInterruptionCount: { lt: onDemandAtInterruptions },
+        OR: [{ capacity: null }, { capacity: 'spot' }],
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        githubRunnerId: true,
+        repoOwner: true,
+        installationId: true,
+        requestedLabels: true,
+      },
+    });
+    return rows.filter((row) => !requestsOnDemandRunner(row.requestedLabels));
+  },
+
+  /**
+   * Record that this intent's runner was WITHDRAWN from GitHub for an on-demand
+   * pin (MOTIR-11732). Write-once; supervision retires the container as idle.
+   */
+  async markRunnerWithdrawn(id: string, at: Date, tx: Prisma.TransactionClient): Promise<boolean> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, runnerWithdrawnAt: null },
+      data: { runnerWithdrawnAt: at },
+    });
+    return count === 1;
+  },
+
+  /**
+   * The CAPACITY each of these registered runners' machines got (MOTIR-11732),
+   * keyed by GitHub runner id — the reconcile's way to tell an idle on-demand
+   * machine, which may take a pinned job, from an idle Spot one. A runner with no
+   * intent here, or whose capacity was never recorded, is absent.
+   */
+  async findCapacityByRunnerIds(
+    runnerIds: number[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<number, 'spot' | 'on_demand'>> {
+    if (runnerIds.length === 0) return new Map();
+    const rows = await tx.ciRunnerProvisioningIntent.findMany({
+      where: { githubRunnerId: { in: runnerIds }, capacity: { not: null } },
+      select: { githubRunnerId: true, capacity: true },
+    });
+    const byRunner = new Map<number, 'spot' | 'on_demand'>();
+    for (const row of rows) {
+      if (row.githubRunnerId !== null && row.capacity !== null) {
+        byRunner.set(row.githubRunnerId, row.capacity);
+      }
+    }
+    return byRunner;
+  },
+
+  /**
+   * Whether a runner has TAKEN a later run attempt of this job (MOTIR-11732):
+   * an intent whose taken job is the same repository, run and job NAME at an
+   * attempt after `afterAttempt`. A re-run is a new attempt with a new job id,
+   * so the name is the key, exactly as the interruption count is carried.
+   */
+  async hasTakenLaterAttempt(
+    job: { repoOwner: string; repoName: string; runId: string; jobName: string },
+    afterAttempt: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const taken = await tx.ciRunnerProvisioningIntent.findFirst({
+      where: {
+        repoOwner: { equals: job.repoOwner, mode: 'insensitive' },
+        repoName: { equals: job.repoName, mode: 'insensitive' },
+        takenRunId: job.runId,
+        takenJobName: job.jobName,
+        takenRunAttempt: { gt: afterAttempt },
+      },
+      select: { id: true },
+    });
+    return taken !== null;
   },
 
   /**
@@ -333,10 +446,14 @@ export const ciRunnerProvisioningIntentRepository = {
   async findJobProgress(
     id: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ jobPickedUpAt: Date | null; jobCompletedAt: Date | null } | null> {
+  ): Promise<{
+    jobPickedUpAt: Date | null;
+    jobCompletedAt: Date | null;
+    runnerWithdrawnAt: Date | null;
+  } | null> {
     return tx.ciRunnerProvisioningIntent.findUnique({
       where: { id },
-      select: { jobPickedUpAt: true, jobCompletedAt: true },
+      select: { jobPickedUpAt: true, jobCompletedAt: true, runnerWithdrawnAt: true },
     });
   },
 
