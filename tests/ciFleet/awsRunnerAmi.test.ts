@@ -1150,37 +1150,71 @@ describe('the arm64 Graviton AMI (MOTIR-11783) — built beside the x86_64 one, 
       }
     }
 
-    // Packer appends builds as they FINISH: here the arm64 one finished first.
+    // The manifest Packer 1.14.2 (the workflow's PACKER_VERSION) really writes
+    // for this template (MOTIR-11843): both builds come from the one source
+    // `amazon-ebs.runner`, so BOTH entries are named `runner`, and only
+    // `custom_data.build` tells them apart. The shape is a Packer 1.14.2 run of
+    // the same build layout over a `null` source; the ids are release
+    // ci-runner-ami-v0.2.0's, read back from EC2 (x86_64 / arm64). Packer
+    // appends builds as they FINISH: here the arm64 one finished first.
+    const X86_AMI = 'ami-092d74c99b1dea7e1';
+    const ARM64_AMI = 'ami-0cb9266463a46a355';
+    const entry = (build: string, ami: string) => ({
+      name: 'runner',
+      builder_type: 'amazon-ebs',
+      build_time: 1795128600,
+      files: null,
+      artifact_id: `us-east-1:${ami}`,
+      packer_run_uuid: '605a0555-d14d-d2cd-79c9-d51d008f9a59',
+      custom_data: { build },
+    });
     const manifest = {
-      builds: [
-        {
-          name: 'runner-arm64',
-          builder_type: 'amazon-ebs',
-          artifact_id: 'us-east-1:ami-0a1b2c3d4e5f60718',
-        },
-        {
-          name: 'runner',
-          builder_type: 'amazon-ebs',
-          artifact_id: 'us-east-1:ami-0123456789abcdef0',
-        },
-      ],
+      builds: [entry('runner-arm64', ARM64_AMI), entry('runner', X86_AMI)],
+      last_run_uuid: '605a0555-d14d-d2cd-79c9-d51d008f9a59',
     };
 
-    it('takes each id by name, whatever order the builds finished in', () => {
-      expect(amiIdOf(manifest, 'runner')).toEqual({ id: 'ami-0123456789abcdef0' });
-      expect(amiIdOf(manifest, 'runner-arm64')).toEqual({ id: 'ami-0a1b2c3d4e5f60718' });
-      const reversed = { builds: [...manifest.builds].reverse() };
-      expect(amiIdOf(reversed, 'runner')).toEqual({ id: 'ami-0123456789abcdef0' });
+    it('takes each id by its build, whatever order the builds finished in', () => {
+      expect(amiIdOf(manifest, 'runner')).toEqual({ id: X86_AMI });
+      expect(amiIdOf(manifest, 'runner-arm64')).toEqual({ id: ARM64_AMI });
+      const reversed = { ...manifest, builds: [...manifest.builds].reverse() };
+      expect(amiIdOf(reversed, 'runner')).toEqual({ id: X86_AMI });
+      expect(amiIdOf(reversed, 'runner-arm64')).toEqual({ id: ARM64_AMI });
     });
 
-    it('stops when a build is missing or its id is not an AMI id', () => {
+    it('never reads the entry `name`, which Packer writes from the shared source', () => {
+      expect(manifest.builds.every((b) => b.name === 'runner')).toBe(true);
+      // A manifest with the build only in `name` (the old reading) is refused.
+      const byNameOnly = {
+        builds: [
+          { name: 'runner-arm64', artifact_id: `us-east-1:${ARM64_AMI}` },
+          { name: 'runner', artifact_id: `us-east-1:${X86_AMI}` },
+        ],
+      };
+      expect(amiIdOf(byNameOnly, 'runner').failed).toContain('0 manifest entries for build runner');
+    });
+
+    it('the template writes each build’s own name into custom_data.build', () => {
+      const pp = hclBlock(template, /post-processor "manifest" \{/);
+      expect(code(pp)).toMatch(/^\s+custom_data\s+= \{ build = source\.name \}$/m);
+      expect(code(pp)).toMatch(/^\s+output\s+= var\.manifest_path$/m);
+      expect(code(buildAmi)).not.toMatch(/select\(\.name ==/);
+    });
+
+    it('stops when a build is missing, doubled, or its id is not an AMI id', () => {
       const missing = amiIdOf({ builds: [manifest.builds[1]] }, 'runner-arm64');
-      expect(missing.failed).toContain('no AMI id for build runner-arm64');
-      const bad = amiIdOf(
-        { builds: [{ name: 'runner', artifact_id: 'us-east-1:snap-0123' }] },
+      expect(missing.failed).toContain('0 manifest entries for build runner-arm64');
+      const doubled = amiIdOf(
+        { builds: [entry('runner', ARM64_AMI), entry('runner', X86_AMI)] },
         'runner',
       );
+      expect(doubled.failed).toContain('2 manifest entries for build runner in ');
+      const bad = amiIdOf({ builds: [entry('runner', 'snap-0123')] }, 'runner');
       expect(bad.failed).toContain('no AMI id for build runner');
+      const noArtifact = amiIdOf(
+        { builds: [{ name: 'runner', custom_data: { build: 'runner' } }] },
+        'runner',
+      );
+      expect(noArtifact.failed).toContain('no AMI id for build runner');
     });
 
     it('publishes both ids, the arm64 one as MOTIR_AWS_RUNNER_ARM64_AMI_ID', () => {

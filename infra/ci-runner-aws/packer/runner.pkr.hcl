@@ -389,8 +389,13 @@ build {
   }
 
   # build-ami.sh reads both AMI ids out of this file, each by its build name.
+  # Not by the entry's `name`: Packer writes that from the SOURCE's name, so
+  # both builds of `amazon-ebs.runner` are written as `runner` (MOTIR-11843).
+  # `source.name` here is the build's own `name`, so `custom_data.build` is
+  # `runner` on the x86_64 entry and `runner-arm64` on the Graviton one.
   post-processor "manifest" {
-    output     = var.manifest_path
-    strip_path = true
+    output      = var.manifest_path
+    strip_path  = true
+    custom_data = { build = source.name }
   }
 }

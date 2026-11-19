@@ -102,10 +102,20 @@ summary() {
 # The AMI id of one named build in the manifest. Read by NAME, never by
 # position: the template makes two AMIs (`runner` x86_64, `runner-arm64`
 # Graviton) and Packer appends them in the order they finish.
+#
+# The name is the template's `custom_data.build`, NOT the entry's `name`. Both
+# builds come from one source, `amazon-ebs.runner`, and Packer writes `name`
+# from the source's name, so both entries say `runner`: selecting on `name`
+# found no `runner-arm64` and took whichever build finished last as the x86_64
+# AMI (MOTIR-11843). More than one entry for a build is refused for the same
+# reason: it means the manifest cannot tell the builds apart.
 ami_id_of() {
-  local manifest="$1" build="$2" id
-  id="$(jq -r --arg name "${build}" \
-    '[.builds[] | select(.name == $name)] | last | .artifact_id // ""' "${manifest}" | cut -d: -f2)"
+  local manifest="$1" build="$2" count id
+  count="$(jq --arg build "${build}" \
+    '[.builds[] | select(.custom_data.build? == $build)] | length' "${manifest}")"
+  [ "${count}" = 1 ] || die "${count} manifest entries for build ${build} in ${manifest}, expected 1"
+  id="$(jq -r --arg build "${build}" \
+    '.builds[] | select(.custom_data.build? == $build) | .artifact_id // ""' "${manifest}" | cut -d: -f2)"
   [[ "${id}" =~ ^ami-[0-9a-f]+$ ]] || die "no AMI id for build ${build} in ${manifest}"
   printf '%s' "${id}"
 }
