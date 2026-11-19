@@ -36,7 +36,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
-import { unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
+import { PRIMARY_GATE_KINDS, unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
 import { classOfMergeRefusal, classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
 import type {
@@ -933,17 +933,9 @@ async function approveAndMergeGate(
  * next green verdict with no second press — `settleGreenVerdict` carries it, because
  * the predicate has answered *no merge gate is owed* for the same reason.
  */
-/**
- * The PRIMARY kinds — a question a person answers ABOVE the merge, whose one press also
- * decides the approve-to-merge gate beside it: the design (`design-result.md` AMENDMENT
- * 6), the decision (`approval-gates.md` §8's FIFTH AMENDMENT) and a story's acceptance
- * (§1's MOTIR-5787 amendment, point 2). Named, never inferred.
- */
-const PRIMARY_KINDS: ReadonlySet<string> = new Set([
-  'design_result',
-  'decision_approval',
-  'acceptance_result',
-]);
+/** The PRIMARY kinds (`PRIMARY_GATE_KINDS`, `lib/approvalGates/gateSet.ts`) — the list the
+ *  To-approve queue's merge-blocked exclusion reads too (Bug MOTIR-11823). */
+const PRIMARY_KINDS: ReadonlySet<string> = new Set(PRIMARY_GATE_KINDS);
 
 function isPrimaryKind(kind: string): boolean {
   return PRIMARY_KINDS.has(kind);

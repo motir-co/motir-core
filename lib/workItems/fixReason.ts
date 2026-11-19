@@ -32,6 +32,24 @@ export const FIX_REASON_PRIORITY: readonly WorkItemFixReasonDto[] = [
   'changes_requested',
 ];
 
+/**
+ * The PULL-REQUEST reasons — the ones {@link pullRequestReasonOf} raises from the card's
+ * open members, each meaning a member cannot be merged as it stands. `run_died` is about a
+ * run, not a pull request, and `changes_requested` CLOSES the gate it refuses, so neither
+ * is here.
+ *
+ * ⚠️ THE TO-APPROVE QUEUE READS THIS LIST (Bug MOTIR-11823). While a card holds one of
+ * these, a gate on it whose Approve merges is not a decision anyone can carry out — the
+ * press is refused at the host — so it is listed under To fix only, never on Waiting on you
+ * as well (`approvalGateRepository`'s `MERGE_BLOCKED_GATE_EXCLUDED`).
+ */
+export const PULL_REQUEST_FIX_REASONS = [
+  'queue_failed',
+  'conflicted',
+  'out_of_date',
+  'ci_failed',
+] as const satisfies readonly WorkItemFixReasonDto[];
+
 /** How long a reviewer's note may run in the row's reason line. */
 export const FIX_NOTE_PREVIEW_MAX = 140;
 

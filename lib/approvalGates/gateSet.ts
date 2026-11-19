@@ -56,6 +56,25 @@ export type AwaitableGateKind =
    *  — asked INSTEAD of the merge question at a green version the agent has not passed. */
   | 'agent_review';
 
+/**
+ * The PRIMARY kinds — a question a person answers ABOVE the merge, whose one press also
+ * decides the approve-to-merge gate beside it: the design (`design-result.md` AMENDMENT
+ * 6), the decision (`approval-gates.md` §8's FIFTH AMENDMENT) and a story's acceptance
+ * (§1's MOTIR-5787 amendment, point 2). Named, never inferred.
+ *
+ * Stated ONCE, here, for its two readers: the press (`pullRequestMergeService`, which
+ * routes a primary's Approve through approve-and-merge) and the queue
+ * (`approvalGateRepository`'s merge-blocked exclusion, Bug MOTIR-11823), which must agree
+ * on which press merges or the queue offers a press the door then refuses.
+ */
+export const PRIMARY_GATE_KINDS = [
+  'design_result',
+  'decision_approval',
+  'acceptance_result',
+] as const satisfies readonly AwaitableGateKind[];
+
+export type PrimaryGateKind = (typeof PRIMARY_GATE_KINDS)[number];
+
 /** One member of the card's delivery set, reduced to what the answer depends on. */
 export interface GateSetMember {
   /**

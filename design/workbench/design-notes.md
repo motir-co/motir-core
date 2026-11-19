@@ -4193,3 +4193,36 @@ No tab and no workflow status is added, and no shipped card's criteria are contr
 - **A4** — the same rows at 390px.
 
 The element spec, tokens and copy keys are in **`design/github/design-notes.md` § 32.4, § 32.5 and § 32.9**; this section only indexes the surface.
+
+## 42 · A CARD ON TO FIX IS NOT ALSO WAITING ON YOU — a gate whose Approve merges leaves the queue while the card's pull requests cannot merge — MOTIR-11823
+
+**Amends § 28 (To approve — what is listed) and § 34 (To fix — one entry per run)**, and
+`docs/decisions/approval-gates.md` §2 (its 2026-11-19 amendment). **No panel changes, so there is no
+delta mock** — the same shape as § 37: Waiting on you draws the rows it already draws, To fix draws the
+entry it already draws, and only WHICH tab lists the card moves.
+
+- **What was wrong.** A story run's acceptance video waited on its requester while one of the story's
+  pull requests fell behind a base that requires branches to be up to date. The recompute stored
+  `fixReason = out_of_date`, so the card was listed under **To fix** — correctly — and its acceptance
+  gate was still listed under **Waiting on you**. The acceptance press on a card with pull requests IS
+  approve-and-merge, so Approve could only answer `MERGE_OUT_OF_DATE`. One card, two tabs, opposite
+  instructions: _decide now_ and _repair first_.
+- **The decision: exclude, do not draw a disabled row.** The card offered two options — leave the gate
+  off the queue and its count, or keep the row drawn as _fix first_ with Approve disabled and out of
+  the count. **The first is taken.** A tab is a list of things to do now (§ 28's own rule: the row is a
+  sentence saying what is waiting); a row whose one verb is disabled is not something to do, and a row
+  that is listed but not counted is the badge-says-2-list-shows-3 shape the shared `where` builder
+  exists to stop. To fix already names the card, its reason and the repair (§ 30, § 34), so nothing
+  the person needs is lost — and the question comes back on its own.
+- **The rule.** While a card holds a **pull-request** fix reason — `queue_failed`, `conflicted`,
+  `out_of_date` or `ci_failed` — every gate on it whose Approve merges is off Waiting on you: its list,
+  its count chip, the home count and the tab's watermark (one `where` builder,
+  `awaitingRoutedToWhere`). Those gates are the approve-to-merge gate, and a primary (design, decision,
+  acceptance) on a card that delivers pull requests of its own. When the recompute clears `fixReason`
+  the row is back, decidable, and the watermark's count moves both ways so the live tab follows.
+- **This is a LISTING rule, not a state.** The gate stays `awaiting`; nothing is superseded, withdrawn
+  or re-raised, and the item page's frame still shows it.
+- **Unchanged.** `run_died` (nothing about the pull requests) and `changes_requested` (it closes the
+  gate it refuses) leave the queue as it was. A gate that merges nothing — a choice, a plan, manual
+  work, a planning session, or a primary on a card with no pull request — is listed whatever the card's
+  fix reason.
