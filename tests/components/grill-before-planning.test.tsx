@@ -1085,6 +1085,27 @@ describe('switching Grill me on over a requirement already shown (MOTIR-11805)',
     expect(lastPane()).toBeNull();
   });
 
+  it('switched off and on again over the same requirement, it opens a round of its own', async () => {
+    client.settleSharpen.mockResolvedValue({
+      outcome: 'settled',
+      session: grilling({ status: 'ended', endReason: 'nothing_to_ask', pendingQuestion: null }),
+    });
+    await switchOn(writtenThread(), async () => {});
+    await screen.findByTestId('sharpen-nothing-to-ask');
+    await screen.findByTestId('plan-offer-confirm');
+    expect(client.openSharpen).toHaveBeenCalledTimes(1);
+    // Nothing is open, so off asks nothing; on again grills the same offer once more.
+    await act(async () => {
+      fireEvent.click(toggle());
+    });
+    expect(screen.queryByTestId('grill-off-confirm')).toBeNull();
+    await act(async () => {
+      fireEvent.click(toggle());
+    });
+    await waitFor(() => expect(client.openSharpen).toHaveBeenCalledTimes(2));
+    expect(client.openSharpen).toHaveBeenLastCalledWith({ conversationId: 's1' });
+  });
+
   it.each([
     ['confirmed', { state: 'confirmed' as const, confirmedAt: OFFER_AT }],
     ['declined', { state: 'declined' as const, declinedAt: OFFER_AT }],

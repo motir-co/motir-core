@@ -193,11 +193,15 @@ export function useGrillSession({
   const [switchStopped, setSwitchStopped] = useState<string | null>(null);
   // GRILL ME ON AGAIN (MOTIR-11805): the shown offer whose requirement the switch asked
   // to grill, the person-turn count it was asked at, and the session opened for it.
+  // `round` tells one switch-on from the next over the same offer and turn count, so a
+  // second re-grilling of a requirement (nothing left to ask, say) opens its own round.
   const [regrill, setRegrill] = useState<{
     offerId: string;
     at: number;
+    round: number;
     sessionId: string | null;
   } | null>(null);
+  const [regrillRounds, setRegrillRounds] = useState(0);
   // A Stop pressed before the session over a hand-off existed: the session is opened
   // and stopped as soon as it is, so the requirement is still written (MOTIR-11802).
   const [stopOnOpen, setStopOnOpen] = useState<string | null>(null);
@@ -224,7 +228,13 @@ export function useGrillSession({
       conversation?.enabled === true &&
       !(covered && session!.status === 'open')
     ) {
-      setRegrill({ offerId: offer.turnId, at: personTurns, sessionId: null });
+      setRegrill({
+        offerId: offer.turnId,
+        at: personTurns,
+        round: regrillRounds + 1,
+        sessionId: null,
+      });
+      setRegrillRounds(regrillRounds + 1);
       setStopOnOpen(null);
     }
     // Off before that grilling opened: nothing to end — unless its open is in flight,
@@ -499,7 +509,7 @@ export function useGrillSession({
       }),
     [run],
   );
-  const regrillKey = regrillPending && regrill ? `${offerId}:${regrill.at}` : null;
+  const regrillKey = regrillPending && regrill ? `${offerId}:${regrill.at}:${regrill.round}` : null;
   useEffect(() => {
     if (!regrillKey || !convId || !offerId || !on || !convEnabled || busyRef.current) return;
     if (!offerGrillable || offerDecided || readFor !== convId) return;
