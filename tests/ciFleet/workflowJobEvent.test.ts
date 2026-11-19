@@ -158,6 +158,7 @@ describe('parseWorkflowJobProgressEvent — a runner took the job, or it finishe
       runId: '7001',
       runAttempt: 1,
       jobId: '44001',
+      jobName: 'build',
       runnerId: 9001,
       repoOwner: 'motir-projects',
       repoName: 'acme-web',
@@ -181,6 +182,14 @@ describe('parseWorkflowJobProgressEvent — a runner took the job, or it finishe
       runnerId: 9002,
       completedAt: new Date('2026-08-01T09:07:00Z'),
     });
+  });
+
+  it('keeps the job NAME, a re-run’s carry key, and reads a missing or empty one as null (MOTIR-11728)', () => {
+    for (const name of [undefined, '', 7]) {
+      expect(
+        provider.parseWorkflowJobProgressEvent!(progressPayload('in_progress', { name })),
+      ).toMatchObject({ jobName: null });
+    }
   });
 
   it('a job cancelled while queued completes with NO runner', () => {

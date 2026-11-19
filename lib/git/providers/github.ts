@@ -2058,11 +2058,16 @@ export const githubProvider: GitProvider = {
       ? job['labels'].filter((label): label is string => typeof label === 'string')
       : [];
 
+    // The job's NAME survives a re-run, which gives it a new job id
+    // (MOTIR-11728): it is what carries a Spot-interruption count across.
+    const jobName = typeof job['name'] === 'string' && job['name'].length > 0 ? job['name'] : null;
+
     return {
       action,
       runId,
       runAttempt,
       jobId,
+      jobName,
       runnerId,
       repoOwner,
       repoName,

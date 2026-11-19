@@ -537,6 +537,9 @@ export interface NormalizedWorkflowJobProgressEvent {
   runId: string;
   runAttempt: number;
   jobId: string;
+  /** The job's name (`workflow_job.name`), or `null` when absent (MOTIR-11728).
+   *  A re-run gives the job a new id but keeps its name. */
+  jobName: string | null;
   /** The runner the job was assigned to, or `null` when none was (a job
    *  cancelled while still queued completes with no runner). */
   runnerId: number | null;

@@ -274,9 +274,29 @@ export const ciRunnerProvisioningService = {
     };
 
     try {
-      const intent = await withSystemContext((tx) =>
-        ciRunnerProvisioningIntentRepository.create(input, tx),
-      );
+      const intent = await withSystemContext(async (tx) => {
+        // A RE-RUN of a job a Spot reclaim cut off (MOTIR-11728) is a new run
+        // attempt with a new job id, so its interruption count is carried by
+        // repository + run + job NAME from the earlier attempt's interrupted
+        // runner. At 2, this intent boots on-demand.
+        const spotInterruptionCount =
+          event.runAttempt > 1
+            ? await ciRunnerProvisioningIntentRepository.findCarriedSpotInterruptions(
+                {
+                  repoOwner: event.repoOwner,
+                  repoName: event.repoName,
+                  runId: event.runId,
+                  jobName: event.jobName,
+                  runAttempt: event.runAttempt,
+                },
+                tx,
+              )
+            : 0;
+        return ciRunnerProvisioningIntentRepository.create(
+          spotInterruptionCount > 0 ? { ...input, spotInterruptionCount } : input,
+          tx,
+        );
+      });
       return {
         outcome: 'recorded',
         intentId: intent.id,
@@ -341,6 +361,20 @@ export const ciRunnerProvisioningService = {
               now,
               tx,
             );
+      // WHICH job the runner took (MOTIR-11728), write-once beside the pickup:
+      // a Spot reclaim re-runs that job, not the one the intent was booted for.
+      if (event.action === 'in_progress' && event.runnerId !== null) {
+        await ciRunnerProvisioningIntentRepository.markTakenJobByRunner(
+          event.runnerId,
+          {
+            runId: event.runId,
+            runAttempt: event.runAttempt,
+            jobId: event.jobId,
+            jobName: event.jobName,
+          },
+          tx,
+        );
+      }
       const completed =
         event.action === 'completed'
           ? await ciRunnerProvisioningIntentRepository.markJobCompleted(

@@ -433,16 +433,43 @@ export class AwsEc2Fake implements Ec2Api {
     this.releaseVolumes(instanceId);
   }
 
-  /** Move an instance to `state`, as a person in the console or AWS would. */
-  setState(instanceId: string, state: string, reason: string | null = null): void {
-    const { publicIpAddress, ...instance } = this.instance(instanceId);
+  /** Move an instance to `state`, as a person in the console or AWS would.
+   *  `code` is EC2's structured `StateReason.Code` for the move (MOTIR-11728);
+   *  omitted, the instance carries none. */
+  setState(instanceId: string, state: string, reason: string | null = null, code?: string): void {
+    const {
+      publicIpAddress,
+      stateReasonCode: _previousCode,
+      ...instance
+    } = this.instance(instanceId);
     // Only a running instance keeps its public address.
     this.instances.set(instanceId, {
       ...instance,
       ...(state === 'running' && publicIpAddress ? { publicIpAddress } : {}),
+      ...(code ? { stateReasonCode: code } : {}),
       state,
       stateTransitionReason: reason,
     });
+  }
+
+  /**
+   * EC2 RECLAIMS a Spot instance (MOTIR-11728): `terminated` — or, with
+   * `holdShuttingDown`, still `shutting-down` — with EC2's Spot termination
+   * state-reason code, its volumes released as any termination releases them.
+   * The instance keeps the lifecycle its launch gave it, so reclaiming an
+   * on-demand one yields the code without the `spot` lifecycle.
+   */
+  reclaimSpot(
+    instanceId: string,
+    { holdShuttingDown = false, code = SPOT_TERMINATION_CODE } = {},
+  ): void {
+    const reason = 'Server.SpotInstanceTermination: Spot instance termination';
+    if (holdShuttingDown) {
+      this.setState(instanceId, 'shutting-down', reason, code);
+      return;
+    }
+    this.setState(instanceId, 'terminated', reason, code);
+    this.releaseVolumes(instanceId);
   }
 
   /** The instance was launched at `launchTime`. */
@@ -498,7 +525,7 @@ export class AwsEc2Fake implements Ec2Api {
   /** A terminate held by {@link holdNextTerminate} completes: terminated, and its
    *  volumes taken or detached. */
   finishTermination(instanceId: string): void {
-    this.setState(instanceId, 'terminated', userInitiated(this.now()));
+    this.setState(instanceId, 'terminated', userInitiated(this.now()), USER_INITIATED_CODE);
     this.releaseVolumes(instanceId);
   }
 
@@ -791,6 +818,8 @@ export class AwsEc2Fake implements Ec2Api {
       launchTime: this.now(),
       stateTransitionReason: null,
       availabilityZone: subnet.availabilityZone,
+      // EC2 reports a Spot launch's lifecycle on every describe (MOTIR-11728).
+      ...(market === 'spot' ? { instanceLifecycle: 'spot' } : {}),
       tags: [...input.tags],
       ...(volumes.length > 0 ? { volumes } : {}),
       request: input,
@@ -879,7 +908,7 @@ export class AwsEc2Fake implements Ec2Api {
       if (instance.state === 'terminated') continue;
       if (this.holdNextTerminate) {
         this.holdNextTerminate = false;
-        this.setState(id, 'shutting-down', userInitiated(this.now()));
+        this.setState(id, 'shutting-down', userInitiated(this.now()), USER_INITIATED_CODE);
         continue;
       }
       this.finishTermination(id);
@@ -1047,6 +1076,12 @@ export class AwsEc2Fake implements Ec2Api {
     return { ...instance, tags: [...instance.tags] };
   }
 }
+
+/** EC2's `StateReason.Code` for a Spot reclaim (MOTIR-11728). */
+export const SPOT_TERMINATION_CODE = 'Server.SpotInstanceTermination';
+
+/** EC2's `StateReason.Code` for a terminate sent through the API. */
+export const USER_INITIATED_CODE = 'Client.UserInitiatedShutdown';
 
 /** EC2's `StateTransitionReason` for a user-initiated transition. */
 export function userInitiated(at: Date): string {

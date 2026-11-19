@@ -1,4 +1,5 @@
 import { mintInstallationToken } from '@/lib/github/appAuth';
+import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // The Actions-RUNS boundary (Story MOTIR-6906 · MOTIR-6908) — the one module that
 // lists a repository's live workflow runs and cancels them.
@@ -53,6 +54,37 @@ export interface ActionsRepoRef {
   repo: string;
 }
 
+/** A repository a job RE-RUN is asked on (MOTIR-11728), and the installation
+ *  the job's runner was registered through: `target` as
+ *  `fleetRunnerTargetFor(intent)` answers it — `undefined` for the provisioning
+ *  org, which `resolveOrgAuth` resolves to `provisioningAuth()`. */
+export interface ActionsRerunRef {
+  owner: string;
+  repo: string;
+  target: GithubOrgTarget | undefined;
+}
+
+/** The statuses `rerunJob` answers as a refusal rather than an error. */
+export const RERUN_REFUSAL_STATUSES = [403, 404, 409, 422] as const;
+export type RerunRefusalStatus = (typeof RERUN_REFUSAL_STATUSES)[number];
+
+/**
+ * GitHub declined to re-run a job (MOTIR-11728). `mayClear` says whether asking
+ * again later can succeed:
+ *   - `409` — a conflict with the run's current state: may clear.
+ *   - `403` — GitHub answers it both for a run still in progress and for an
+ *     installation without Actions write; the run's own status tells the two
+ *     apart, so it may clear only while the run is unfinished.
+ *   - `404` — the job, run or repository is gone: never clears.
+ *   - `422` — the request cannot be processed (GitHub's re-run limits): never clears.
+ * Carries GitHub's status only — never its body.
+ */
+export interface JobRerunRefusal {
+  readonly refused: true;
+  readonly status: RerunRefusalStatus;
+  readonly mayClear: boolean;
+}
+
 export interface ActiveWorkflowRun {
   id: number;
   status: string;
@@ -95,9 +127,73 @@ export const actionsRunsClient = {
     if (res.status === 409 || res.status === 404) return false;
     throw new ActionsRunsError(res.status, await errorDetail(res));
   },
+
+  /**
+   * Re-run ONE job of a workflow run (MOTIR-11728) — the job a Spot-reclaimed
+   * runner was working — through the installation its runner was registered
+   * through. `POST /repos/{owner}/{repo}/actions/jobs/{job_id}/rerun`; GitHub
+   * documents `201` and `403` (REST docs, Workflow runs › Re-run a job from a
+   * workflow run). Answers `true` on `201`, a {@link JobRerunRefusal} on
+   * 403/404/409/422, and throws {@link ActionsRunsError} on anything else or when
+   * GitHub cannot be reached. A `403` also reads the run's status (`runId`), so
+   * a run that has not finished yet reads as a refusal that may clear.
+   */
+  async rerunJob(
+    ref: ActionsRerunRef,
+    jobId: string,
+    runId: string,
+  ): Promise<true | JobRerunRefusal> {
+    const token = await rerunToken(ref.target);
+    const res = await call(
+      `${repoUrl(ref)}/actions/jobs/${encodeURIComponent(jobId)}/rerun`,
+      'POST',
+      token,
+    );
+    if (res.status === 201) return true;
+    if (res.status === 409) return { refused: true, status: 409, mayClear: true };
+    if (res.status === 404 || res.status === 422) {
+      return { refused: true, status: res.status, mayClear: false };
+    }
+    if (res.status === 403) {
+      return { refused: true, status: 403, mayClear: await runUnfinished(ref, runId, token) };
+    }
+    throw new ActionsRunsError(res.status, await errorDetail(res));
+  },
 };
 
-function repoUrl(ref: ActionsRepoRef): string {
+/** Whether a run has NOT finished (any status but `completed`). A run that
+ *  cannot be read answers `false`: a 403 is then taken at its word. */
+async function runUnfinished(
+  ref: Pick<ActionsRerunRef, 'owner' | 'repo'>,
+  runId: string,
+  token: string,
+): Promise<boolean> {
+  let res: Response;
+  try {
+    res = await call(`${repoUrl(ref)}/actions/runs/${encodeURIComponent(runId)}`, 'GET', token);
+  } catch {
+    return false;
+  }
+  if (res.status !== 200) return false;
+  try {
+    const body = (await res.json()) as { status?: unknown };
+    return typeof body.status === 'string' && body.status !== 'completed';
+  } catch {
+    return false;
+  }
+}
+
+/** A token for the runner's installation. A failed mint is an `ActionsRunsError`
+ *  with no status: it may clear, and never carries a token. */
+async function rerunToken(target: GithubOrgTarget | undefined): Promise<string> {
+  try {
+    return (await resolveOrgAuth(target)).token;
+  } catch (err) {
+    throw new ActionsRunsError(null, err instanceof Error ? err.message : 'unknown');
+  }
+}
+
+function repoUrl(ref: Pick<ActionsRepoRef, 'owner' | 'repo'>): string {
   return `${GITHUB_API}/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}`;
 }
 

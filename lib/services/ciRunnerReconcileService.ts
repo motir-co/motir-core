@@ -8,6 +8,7 @@ import { findProvisioningInstallationId } from '@/lib/github/repoProvisioning';
 import { dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 import { isCiFleetConfigured } from '@/lib/orchestrator';
+import { retryPendingSpotReruns } from '@/lib/services/ciSpotRerunService';
 import {
   fleetQueueClient,
   type QueuedFleetJob,
@@ -106,6 +107,15 @@ export const ciRunnerReconcileService = {
     // The CI fleet's own gate, which follows its Fly↔AWS switch (MOTIR-10625).
     if (!(await isCiFleetConfigured())) return { orgs: [], added: 0 };
     const now = (options.now ?? (() => new Date()))();
+
+    // A Spot-interrupted job whose re-run GitHub refused for a reason that may
+    // clear is asked for again here, until it is accepted, refused for good, or
+    // 24 hours pass (MOTIR-11728). It never throws, and it rides no outcome
+    // field: the memoised step's shape stays as it is.
+    const reruns = await retryPendingSpotReruns(now);
+    if (reruns.requested + reruns.refused + reruns.expired + reruns.pending > 0) {
+      console.warn('[ciRunnerReconcile] retried pending Spot re-runs', reruns);
+    }
 
     const since = new Date(now.getTime() - REPO_LOOKBACK_MS);
     const latest = await withSystemContext((tx) =>
@@ -403,6 +413,21 @@ async function mintReconcileIntent(
           requestedLabels: job.labels,
           queuedAt: job.createdAt,
           reconcileGeneration: generation,
+          // A reconcile generation of a re-run job carries its Spot-interruption
+          // count exactly as the delivery's intent does (MOTIR-11728).
+          spotInterruptionCount:
+            job.runAttempt > 1
+              ? await ciRunnerProvisioningIntentRepository.findCarriedSpotInterruptions(
+                  {
+                    repoOwner: base.repoOwner,
+                    repoName: base.repoName,
+                    runId: job.runId,
+                    jobName: job.jobName,
+                    runAttempt: job.runAttempt,
+                  },
+                  tx,
+                )
+              : 0,
         },
         tx,
       );
