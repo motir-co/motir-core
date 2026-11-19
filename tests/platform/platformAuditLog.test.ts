@@ -306,6 +306,9 @@ describe('the reason rule', () => {
     // A dead letter replayed from /admin/jobs (Story MOTIR-9980 · MOTIR-9985):
     // the screen has no reason field, so the service writes its default.
     'jobs.dlq_replay': 'inherited',
+    // A failed-usage group replayed from /admin/usage (MOTIR-11794): the confirm
+    // has no reason field, so the service writes its default.
+    'ai.gateway_usage.replay': 'inherited',
     // The seed registry's curation (Story MOTIR-704 · MOTIR-710; decision
     // MOTIR-706 v2 §3.6): reading the promoted row is a read; promoting and
     // retiring are writes that say why.

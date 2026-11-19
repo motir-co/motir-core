@@ -110,3 +110,38 @@ export const MOTIR_RUNNER_VARIABLE = 'MOTIR_RUNNER';
 export function isMotirFleetJob(requestedLabels: readonly string[]): boolean {
   return requestedLabels.some((label) => label.trim().toLowerCase() === MOTIR_RUNNER_LABEL);
 }
+
+/**
+ * The fleet's SECOND label (MOTIR-11727): "never Spot". A job asks for it BESIDE
+ * the fleet label — `runs-on: [motir-runner, motir-on-demand]` — and GitHub only
+ * gives a job to a runner carrying EVERY label it lists, so a job asking for both
+ * can only be taken by a runner registered with both.
+ *
+ * Only an intent whose job asked for this label boots a runner that carries it,
+ * and such a runner always boots on-demand, whatever the CI Spot setting says
+ * (`ciRunnerBootService`). No Spot runner ever carries it, so no Spot runner can
+ * take a job that asks for it — the one mechanism that holds, because a fleet
+ * runner is not bound to the job it was booted for.
+ *
+ * ⚠️ AN ADDITION, NOT A SECOND FLEET. A job asking for this label alone is no
+ * fleet job: no runner carries this label without the fleet label, so nothing
+ * could ever take it (`judgeJob` reports it). And an on-demand runner still
+ * carries the fleet label, so it can take an ordinary fleet job too — which is
+ * why the reconcile counts its coverage per label set.
+ *
+ * Same constraints as the fleet label (§M): it contains none of `ubuntu`,
+ * `linux`, `arm`, `windows`, `macos`, `osx` and does not match the
+ * larger-runner pattern, so a job carrying it still meters as `motir_fleet`.
+ */
+export const MOTIR_ON_DEMAND_RUNNER_LABEL = 'motir-on-demand';
+
+/**
+ * Does this label set ask for an on-demand runner? An EXACT label, compared
+ * case-insensitively and trimmed, as GitHub matches labels and as
+ * {@link isMotirFleetJob} compares: `motir-on-demand-x` is another label.
+ */
+export function requestsOnDemandRunner(requestedLabels: readonly string[]): boolean {
+  return requestedLabels.some(
+    (label) => label.trim().toLowerCase() === MOTIR_ON_DEMAND_RUNNER_LABEL,
+  );
+}

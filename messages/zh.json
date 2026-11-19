@@ -11280,6 +11280,9 @@
             },
             "run_model_default": {
               "set": "更改了运行侧默认模型"
+            },
+            "gateway_usage": {
+              "replay": "重放了一组记录失败的用量"
             }
           },
           "fleet": {
@@ -12800,6 +12803,50 @@
           "description": "保存对账记录的 AI 服务没有响应。本页其他内容不受影响，请稍后重试。"
         },
         "none": "无金额"
+      },
+      "failed": {
+        "title": "记录失败的用量",
+        "intro": "未能计入组织用量总计和点数的用量，按失败时的错误分组。这里列出当前所有待处理的用量，与上方选择的时段无关。",
+        "count": "{groups, plural, other {# 组}}，共 {rows, plural, other {# 行}}",
+        "caption": "记录失败的用量（按错误分组）",
+        "col": {
+          "error": "错误",
+          "rows": "行数",
+          "orgs": "组织数",
+          "oldest": "最早（UTC）",
+          "newest": "最新（UTC）",
+          "replay": "重放"
+        },
+        "showError": "显示完整错误",
+        "hideError": "收起完整错误",
+        "replay": "重放",
+        "replayAria": "重放因此错误失败的 {rows, plural, other {# 行}}",
+        "replaying": "正在重放…",
+        "replayingStatus": "正在重放 {rows, plural, other {# 行}}",
+        "replayed": "已重放",
+        "confirm": {
+          "title": "重放 {rows, plural, other {# 行}}记录失败的用量？",
+          "body": "因此错误失败的每一行都会重新记录，且只记录一次。已记录的行不会重复计算；再次失败的行会以新的错误继续列出。",
+          "error": "错误",
+          "scope": "{rows, plural, other {# 行}} · {orgs, plural, other {# 个组织}}",
+          "cancel": "取消",
+          "go": "重放 {rows, plural, other {# 行}}"
+        },
+        "result": {
+          "applied": "已重放：记录了 {count, plural, other {# 行}}。",
+          "none": "没有再次失败的行。",
+          "failedAgain": "{count, plural, other {# 行}}再次失败。",
+          "sameGroup": "它们仍在此组中。",
+          "newGroup": "它们已按新的错误列出。",
+          "unfinished": "重放未完成。未记录的行仍列在这里，再次重放时每行只会记录一次。"
+        },
+        "readOnly": "只读。重放记录失败的用量需要操作员角色。",
+        "empty": "没有记录失败的用量。",
+        "loading": "正在加载记录失败的用量",
+        "error": {
+          "title": "暂时无法显示记录失败的用量",
+          "description": "负责用量的 AI 服务没有响应。本页其他部分不受影响，请稍后重试。"
+        }
       }
     },
     "tenants": {

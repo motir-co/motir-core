@@ -11289,6 +11289,9 @@
             },
             "run_model_default": {
               "set": "Een standaardmodel aan de runkant gewijzigd"
+            },
+            "gateway_usage": {
+              "replay": "Groep mislukt gebruik opnieuw afgespeeld"
             }
           },
           "fleet": {
@@ -12809,6 +12812,50 @@
           "description": "De AI-dienst die de afstemming bijhoudt, heeft niet geantwoord. De rest van deze pagina werkt gewoon — probeer het zo opnieuw."
         },
         "none": "Geen bedrag"
+      },
+      "failed": {
+        "title": "Mislukt gebruik",
+        "intro": "Gebruik dat niet bij de totalen en credits van een organisatie kon worden opgeteld, gegroepeerd op de fout waarmee het mislukte. Dit is alles wat nu wacht, welke periode je hierboven ook kiest.",
+        "count": "{rows, plural, one {# rij} other {# rijen}} in {groups, plural, one {# groep} other {# groepen}}",
+        "caption": "Mislukt gebruik, gegroepeerd op fout",
+        "col": {
+          "error": "Fout",
+          "rows": "Rijen",
+          "orgs": "Organisaties",
+          "oldest": "Oudste (UTC)",
+          "newest": "Nieuwste (UTC)",
+          "replay": "Opnieuw afspelen"
+        },
+        "showError": "Volledige fout tonen",
+        "hideError": "Volledige fout verbergen",
+        "replay": "Opnieuw afspelen",
+        "replayAria": "{rows, plural, one {# rij} other {# rijen}} die met deze fout mislukten opnieuw afspelen",
+        "replaying": "Opnieuw afspelen…",
+        "replayingStatus": "{rows, plural, one {# rij wordt} other {# rijen worden}} opnieuw afgespeeld",
+        "replayed": "Opnieuw afgespeeld",
+        "confirm": {
+          "title": "{rows, plural, one {# rij} other {# rijen}} mislukt gebruik opnieuw afspelen?",
+          "body": "Elke rij die met deze fout mislukte, wordt opnieuw vastgelegd, precies één keer. Een rij die al is vastgelegd, wordt nooit dubbel geteld, en een rij die opnieuw mislukt, blijft vermeld met haar nieuwe fout.",
+          "error": "Fout",
+          "scope": "{rows, plural, one {# rij} other {# rijen}} · {orgs, plural, one {# organisatie} other {# organisaties}}",
+          "cancel": "Annuleren",
+          "go": "{rows, plural, one {# rij} other {# rijen}} opnieuw afspelen"
+        },
+        "result": {
+          "applied": "Opnieuw afgespeeld: {count, plural, one {# rij} other {# rijen}} vastgelegd.",
+          "none": "Geen enkele mislukte opnieuw.",
+          "failedAgain": "{count, plural, one {# rij mislukte} other {# rijen mislukten}} opnieuw.",
+          "sameGroup": "Ze blijven in deze groep.",
+          "newGroup": "Ze staan onder hun nieuwe fout.",
+          "unfinished": "Het opnieuw afspelen is niet afgerond. Rijen die niet zijn vastgelegd, staan hier nog, dus opnieuw afspelen legt elk ervan één keer vast."
+        },
+        "readOnly": "Alleen-lezen. Voor het opnieuw afspelen van mislukt gebruik is de operatorrol nodig.",
+        "empty": "Geen rijen met mislukt gebruik.",
+        "loading": "Mislukt gebruik laden",
+        "error": {
+          "title": "Mislukt gebruik kan nu niet worden getoond",
+          "description": "De AI-dienst die het gebruik bijhoudt, heeft niet geantwoord. De rest van deze pagina werkt gewoon — probeer het zo opnieuw."
+        }
       }
     },
     "tenants": {

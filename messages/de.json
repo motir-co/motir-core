@@ -11289,6 +11289,9 @@
             },
             "run_model_default": {
               "set": "Ein ausführungsseitiges Standardmodell geändert"
+            },
+            "gateway_usage": {
+              "replay": "Gruppe fehlgeschlagener Nutzung erneut ausgeführt"
             }
           },
           "fleet": {
@@ -12809,6 +12812,50 @@
           "description": "Der KI-Dienst, der den Abgleich führt, hat nicht geantwortet. Der Rest dieser Seite ist nicht betroffen – versuchen Sie es gleich noch einmal."
         },
         "none": "Kein Wert"
+      },
+      "failed": {
+        "title": "Fehlgeschlagene Nutzung",
+        "intro": "Nutzung, die nicht zu den Summen und Credits einer Organisation hinzugefügt werden konnte, gruppiert nach dem Fehler, mit dem sie fehlschlug. Hier steht alles, was gerade wartet – unabhängig vom oben gewählten Zeitraum.",
+        "count": "{rows, plural, one {# Zeile} other {# Zeilen}} in {groups, plural, one {# Gruppe} other {# Gruppen}}",
+        "caption": "Fehlgeschlagene Nutzung, nach Fehler gruppiert",
+        "col": {
+          "error": "Fehler",
+          "rows": "Zeilen",
+          "orgs": "Organisationen",
+          "oldest": "Älteste (UTC)",
+          "newest": "Neueste (UTC)",
+          "replay": "Erneut ausführen"
+        },
+        "showError": "Vollständigen Fehler anzeigen",
+        "hideError": "Vollständigen Fehler ausblenden",
+        "replay": "Erneut ausführen",
+        "replayAria": "{rows, plural, one {# Zeile} other {# Zeilen}}, die mit diesem Fehler fehlschlugen, erneut ausführen",
+        "replaying": "Wird erneut ausgeführt…",
+        "replayingStatus": "{rows, plural, one {# Zeile wird} other {# Zeilen werden}} erneut ausgeführt",
+        "replayed": "Erneut ausgeführt",
+        "confirm": {
+          "title": "{rows, plural, one {# Zeile} other {# Zeilen}} fehlgeschlagener Nutzung erneut ausführen?",
+          "body": "Jede Zeile, die mit diesem Fehler fehlschlug, wird erneut erfasst, genau einmal. Eine bereits erfasste Zeile wird nie doppelt gezählt, und eine Zeile, die erneut fehlschlägt, bleibt mit ihrem neuen Fehler aufgeführt.",
+          "error": "Fehler",
+          "scope": "{rows, plural, one {# Zeile} other {# Zeilen}} · {orgs, plural, one {# Organisation} other {# Organisationen}}",
+          "cancel": "Abbrechen",
+          "go": "{rows, plural, one {# Zeile} other {# Zeilen}} erneut ausführen"
+        },
+        "result": {
+          "applied": "Erneut ausgeführt: {count, plural, one {# Zeile} other {# Zeilen}} erfasst.",
+          "none": "Keine ist erneut fehlgeschlagen.",
+          "failedAgain": "{count, plural, one {# Zeile ist} other {# Zeilen sind}} erneut fehlgeschlagen.",
+          "sameGroup": "Sie bleiben in dieser Gruppe.",
+          "newGroup": "Sie stehen unter ihrem neuen Fehler.",
+          "unfinished": "Die erneute Ausführung wurde nicht abgeschlossen. Nicht erfasste Zeilen stehen weiterhin hier, sodass eine weitere Ausführung jede von ihnen genau einmal erfasst."
+        },
+        "readOnly": "Nur lesend. Für die erneute Ausführung fehlgeschlagener Nutzung ist die Rolle „Operator“ erforderlich.",
+        "empty": "Keine fehlgeschlagenen Nutzungszeilen.",
+        "loading": "Fehlgeschlagene Nutzung wird geladen",
+        "error": {
+          "title": "Fehlgeschlagene Nutzung kann gerade nicht angezeigt werden",
+          "description": "Der KI-Dienst, der die Nutzung führt, hat nicht geantwortet. Der Rest dieser Seite ist nicht betroffen – versuchen Sie es gleich noch einmal."
+        }
       }
     },
     "tenants": {

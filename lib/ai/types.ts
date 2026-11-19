@@ -713,6 +713,12 @@ export interface JobContextBag {
   // surface a person drives. motir-ai keys on it to open its question-free first session,
   // the only session that may answer "this cannot be planned".
   runReplan?: RunReplanOrigin;
+  // THE ASK TURN THIS PLAN WAS HANDED OFF FROM (MOTIR-11797 producer ↔ motir-ai
+  // `readAskHandOff` consumer) — the `ask_project` job whose conversation turn started
+  // this plan: an offer's confirm, an immediate "plan this", a turn the settle read as a
+  // plan change. That job already sent the message's quick reply (`conversation_ack`), so
+  // motir-ai's PART 1 sends no second one. Absent on every submit no ask turn started.
+  askHandOff?: AskHandOff;
 }
 
 /**
@@ -726,6 +732,11 @@ export interface RunReplanOrigin {
 }
 
 /** Which plan offer a confirmed requirement came from (MOTIR-10091). */
+/** The ask turn a plan job was handed off from (MOTIR-11797): its `ask_project` job. */
+export interface AskHandOff {
+  askJobId: string;
+}
+
 export interface RequirementConfirmation {
   conversationId: string;
   offerTurnId: string;

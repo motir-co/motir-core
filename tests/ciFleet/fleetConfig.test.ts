@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { MOTIR_RUNNER_LABEL, isMotirFleetJob } from '@/lib/ciFleet/config';
+import {
+  MOTIR_ON_DEMAND_RUNNER_LABEL,
+  MOTIR_RUNNER_LABEL,
+  isMotirFleetJob,
+  requestsOnDemandRunner,
+} from '@/lib/ciFleet/config';
 import { classifyRunner } from '@/lib/ciMetering/runnerRates';
 
 // The fleet's §O label gate, in isolation (Story MOTIR-1916 · MOTIR-1920). Pure
@@ -116,5 +121,28 @@ describe('isMotirFleetJob — the §O gate', () => {
     // for someone else's queue.
     expect(isMotirFleetJob(['motir-runner-staging'])).toBe(false);
     expect(isMotirFleetJob(['not-motir-runner'])).toBe(false);
+  });
+});
+
+describe('requestsOnDemandRunner — the "never Spot" label (MOTIR-11727)', () => {
+  it('is the one exported label', () => {
+    expect(MOTIR_ON_DEMAND_RUNNER_LABEL).toBe('motir-on-demand');
+  });
+
+  it('matches the label exactly, in any case and with surrounding spaces', () => {
+    expect(requestsOnDemandRunner([MOTIR_RUNNER_LABEL, 'motir-on-demand'])).toBe(true);
+    expect(requestsOnDemandRunner(['MOTIR-ON-DEMAND'])).toBe(true);
+    expect(requestsOnDemandRunner([MOTIR_RUNNER_LABEL, '  Motir-On-Demand  '])).toBe(true);
+  });
+
+  it('is false for a near-miss and for a set without it', () => {
+    expect(requestsOnDemandRunner(['motir-on-demand-x'])).toBe(false);
+    expect(requestsOnDemandRunner(['x-motir-on-demand'])).toBe(false);
+    expect(requestsOnDemandRunner([MOTIR_RUNNER_LABEL])).toBe(false);
+    expect(requestsOnDemandRunner([])).toBe(false);
+  });
+
+  it('a job asking for both labels is still a fleet job', () => {
+    expect(isMotirFleetJob([MOTIR_RUNNER_LABEL, MOTIR_ON_DEMAND_RUNNER_LABEL])).toBe(true);
   });
 });

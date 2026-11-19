@@ -3,6 +3,7 @@ import {
   judgeJob,
   judgeWorkflows,
   MAX_ACTION_DEPTH,
+  namesOnDemandLabel,
   parseActionRef,
   remoteActionKey,
   remoteActionsToRead,
@@ -56,6 +57,51 @@ describe('requestsFleetRunner', () => {
     expect(requestsFleetRunner('ubuntu-latest')).toBe(false);
     expect(requestsFleetRunner({ group: 'g' })).toBe(false);
     expect(requestsFleetRunner(null)).toBe(false);
+  });
+});
+
+describe('the on-demand label in runs-on (MOTIR-11727)', () => {
+  /** The deploy job's expression: both labels on the fleet, ubuntu-latest off it. */
+  const DEPLOY_SEAM =
+    '${{ vars.MOTIR_RUNNER && fromJSON(format(\'["{0}","motir-on-demand"]\', vars.MOTIR_RUNNER)) || \'ubuntu-latest\' }}';
+
+  it('names the label as a bare label, a list entry, a group or inside an expression, in any case', () => {
+    expect(namesOnDemandLabel('motir-on-demand')).toBe(true);
+    expect(namesOnDemandLabel(' MOTIR-ON-DEMAND ')).toBe(true);
+    expect(namesOnDemandLabel(['self-hosted', 'motir-on-demand'])).toBe(true);
+    expect(namesOnDemandLabel({ group: 'g', labels: ['motir-on-demand'] })).toBe(true);
+    expect(namesOnDemandLabel(DEPLOY_SEAM)).toBe(true);
+    expect(namesOnDemandLabel('motir-on-demand-x')).toBe(false);
+    expect(namesOnDemandLabel(['motir-runner'])).toBe(false);
+    expect(namesOnDemandLabel({ group: 'g' })).toBe(false);
+    expect(namesOnDemandLabel(null)).toBe(false);
+  });
+
+  it('a job asking for the label WITHOUT the fleet label or the variable is unverified, never github-hosted', () => {
+    for (const runsOn of ['motir-on-demand', ['self-hosted', 'motir-on-demand']]) {
+      const verdict = judge(job([run('echo hi')], { runsOn }));
+      expect(verdict.verdict).toBe('unverified');
+      expect(verdict.missing).toEqual([]);
+      expect(verdict.unjudged).toHaveLength(1);
+      expect(verdict.unjudged[0]).toContain('motir-on-demand');
+      expect(verdict.unjudged[0]).toContain('vars.MOTIR_RUNNER');
+    }
+  });
+
+  it('a job asking for both labels, or the deploy expression, is a fleet job judged by its steps', () => {
+    expect(requestsFleetRunner(['motir-runner', 'motir-on-demand'])).toBe(true);
+    expect(requestsFleetRunner(DEPLOY_SEAM)).toBe(true);
+    for (const runsOn of [['motir-runner', 'motir-on-demand'], DEPLOY_SEAM]) {
+      expect(judge(job([run('echo hi')], { runsOn })).verdict).toBe('runnable');
+      expect(judge(job([run('terraform apply')], { runsOn }))).toMatchObject({
+        verdict: 'needs-image',
+        missing: ['terraform'],
+      });
+    }
+  });
+
+  it('a job that never names either label stays github-hosted', () => {
+    expect(judge(job([run('echo hi')], { runsOn: 'ubuntu-latest' })).verdict).toBe('github-hosted');
   });
 });
 

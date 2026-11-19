@@ -106,6 +106,9 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.attribution.corpus',
     'platformAdmin.plannerFindings.col.plan',
     'platformAdmin.plannerFindings.detail.plan',
+    // Usage & cost · Failed usage (MOTIR-11794): « Error » is the Spanish word.
+    'platformAdmin.usage.failed.col.error',
+    'platformAdmin.usage.failed.confirm.error',
   ],
   pt: [
     'reports.workload.tableTotal', // « Total »

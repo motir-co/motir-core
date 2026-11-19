@@ -60,6 +60,7 @@ import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { readCodeUnsearchable, type CodeUnsearchableRepo } from '@/lib/planning/codeUnsearchable';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type {
+  AskHandOff,
   CarriedAnswers,
   RequirementConfirmation,
   RunReplanOrigin,
@@ -3500,6 +3501,10 @@ export const planChangeSessionsService = {
       /** THE RUN MARKER (MOTIR-10233): this submit is a run's re-plan. Rides the job as
        *  `context.runReplan`; set only by `submit_plan_session { fromRun: true }`. */
       runReplan?: RunReplanOrigin;
+      /** THE HAND-OFF (MOTIR-11797): the ask turn whose job started this plan, and already
+       *  sent the message's quick reply. Rides the job as `context.askHandOff`, so motir-ai
+       *  sends no second one. */
+      askHandOff?: AskHandOff;
     } = {},
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, address);
@@ -3601,6 +3606,7 @@ export const planChangeSessionsService = {
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(opts.requirementConfirmed ? { requirementConfirmed: opts.requirementConfirmed } : {}),
       ...(opts.runReplan ? { runReplan: opts.runReplan } : {}),
+      ...(opts.askHandOff ? { askHandOff: opts.askHandOff } : {}),
     };
     let submitted: { jobId: string; planId: string };
     try {

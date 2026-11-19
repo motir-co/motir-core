@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
+import { requestsFleetRunner } from '@/lib/ciFleet/jobCoverage';
+import { requestsOnDemandRunner } from '@/lib/ciFleet/config';
 
 // MOTIR-9928: the AWS deploy workflow. Workflow YAML is neither type-checked nor
 // executed by any suite, so the properties the card promises are pinned here by
@@ -363,5 +365,37 @@ describe('the two-CPU image in the AWS deploy (MOTIR-11718)', () => {
     expect(steps[smoke]!.run).toBe(
       'pnpm --silent deploy:image smoke --image "$IMAGE" --database-url postgresql://prodect:prodect@127.0.0.1:5432/prodect',
     );
+  });
+});
+
+describe('the deploy job never runs on a Spot runner (MOTIR-11727)', () => {
+  /**
+   * What GitHub resolves `runs-on` to, for the one expression shape the job uses:
+   * `vars.MOTIR_RUNNER && fromJSON(format('<template>', vars.MOTIR_RUNNER)) ||
+   * '<fallback>'`. An unset variable is `''`, which is falsy, so the fallback wins.
+   */
+  function resolveRunsOn(runsOn: string, motirRunner: string): unknown {
+    const match =
+      /^\$\{\{ vars\.MOTIR_RUNNER && fromJSON\(format\('(.+)', vars\.MOTIR_RUNNER\)\) \|\| '([^']+)' \}\}$/.exec(
+        runsOn,
+      );
+    expect(match, `runs-on is not the expected expression: ${runsOn}`).not.toBeNull();
+    if (motirRunner === '') return match![2];
+    return JSON.parse(match![1]!.replace('{0}', motirRunner)) as unknown;
+  }
+
+  it('asks for both fleet labels when vars.MOTIR_RUNNER is set, and ubuntu-latest when it is not', () => {
+    expect(resolveRunsOn(job['runs-on'], 'motir-runner')).toEqual([
+      'motir-runner',
+      'motir-on-demand',
+    ]);
+    expect(resolveRunsOn(job['runs-on'], '')).toBe('ubuntu-latest');
+    expect(requestsOnDemandRunner(resolveRunsOn(job['runs-on'], 'motir-runner') as string[])).toBe(
+      true,
+    );
+  });
+
+  it('is read as a fleet request by job coverage', () => {
+    expect(requestsFleetRunner(job['runs-on'])).toBe(true);
   });
 });

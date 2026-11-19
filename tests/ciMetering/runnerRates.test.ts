@@ -7,6 +7,7 @@ import {
   resolveRunnerRate,
   RUNNER_RATES,
 } from '@/lib/ciMetering/runnerRates';
+import { MOTIR_ON_DEMAND_RUNNER_LABEL } from '@/lib/ciFleet/config';
 
 // Runner normalization (Story MOTIR-1775 · MOTIR-1896; the Motir fleet family is
 // MOTIR-1923) — `docs/decisions/ci-minutes-allowance.md` §3 + amendment §M. Pure
@@ -106,6 +107,21 @@ describe('classifyRunner — the MOTIR FLEET family (MOTIR-1923 · ADR §M)', ()
     // If the label ever matched the larger-runner pattern, THIS would classify
     // as `unknown` instead of the fleet — the same guard, machine-checked.
     expect(classifyRunner([MOTIR_FLEET_RUNNER_LABEL])).toBe('motir_fleet');
+  });
+
+  it('the on-demand label satisfies §M.2 too, and a job asking for both labels meters as the fleet (MOTIR-11727)', () => {
+    for (const forbidden of ['ubuntu', 'linux', 'arm', 'windows', 'macos', 'osx']) {
+      expect(MOTIR_ON_DEMAND_RUNNER_LABEL).not.toContain(forbidden);
+    }
+    // Alone it is no family the meter prices — and, crucially, not the
+    // larger-runner `unknown` route. Read through the real `classifyRunner`:
+    // the label comes FIRST, so if it ever matched the larger-runner pattern
+    // the set would classify `unknown` before the OS label is reached.
+    expect(classifyRunner([MOTIR_ON_DEMAND_RUNNER_LABEL, 'ubuntu-latest'])).toBe('linux_x64');
+    expect(classifyRunner(['motir-runner', 'motir-on-demand'])).toBe('motir_fleet');
+    expect(classifyRunner([MOTIR_ON_DEMAND_RUNNER_LABEL, MOTIR_FLEET_RUNNER_LABEL])).toBe(
+      'motir_fleet',
+    );
   });
 });
 

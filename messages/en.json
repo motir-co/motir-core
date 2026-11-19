@@ -11286,6 +11286,9 @@
             },
             "run_model_default": {
               "set": "Changed a run-side default model"
+            },
+            "gateway_usage": {
+              "replay": "Replayed a group of failed usage"
             }
           },
           "fleet": {
@@ -12806,6 +12809,50 @@
           "description": "The AI service that keeps the reconciliation did not answer. The rest of this page is unaffected — try again in a moment."
         },
         "none": "No figure"
+      },
+      "failed": {
+        "title": "Failed usage",
+        "intro": "Usage that could not be added to an organization’s totals and credits, grouped by the error it failed with. This is everything waiting now, whatever period is chosen above.",
+        "count": "{rows, plural, one {# row} other {# rows}} in {groups, plural, one {# group} other {# groups}}",
+        "caption": "Failed usage, grouped by error",
+        "col": {
+          "error": "Error",
+          "rows": "Rows",
+          "orgs": "Organizations",
+          "oldest": "Oldest (UTC)",
+          "newest": "Newest (UTC)",
+          "replay": "Replay"
+        },
+        "showError": "Show the full error",
+        "hideError": "Hide the full error",
+        "replay": "Replay",
+        "replayAria": "Replay {rows, plural, one {# row} other {# rows}} that failed with this error",
+        "replaying": "Replaying…",
+        "replayingStatus": "Replaying {rows, plural, one {# row} other {# rows}}",
+        "replayed": "Replayed",
+        "confirm": {
+          "title": "Replay {rows, plural, one {# row} other {# rows}} of failed usage?",
+          "body": "Every row that failed with this error is recorded again, exactly once. A row already recorded is never counted twice, and a row that fails again stays listed with its new error.",
+          "error": "Error",
+          "scope": "{rows, plural, one {# row} other {# rows}} · {orgs, plural, one {# organization} other {# organizations}}",
+          "cancel": "Cancel",
+          "go": "Replay {rows, plural, one {# row} other {# rows}}"
+        },
+        "result": {
+          "applied": "Replayed: {count, plural, one {# row} other {# rows}} recorded.",
+          "none": "None failed again.",
+          "failedAgain": "{count, plural, one {# row} other {# rows}} failed again.",
+          "sameGroup": "They stay in this group.",
+          "newGroup": "They are listed under their new error.",
+          "unfinished": "The replay did not finish. Rows it did not record are still listed here, so replaying again records each of them once."
+        },
+        "readOnly": "Read-only. Replaying failed usage needs the operator role.",
+        "empty": "No failed usage rows.",
+        "loading": "Loading failed usage",
+        "error": {
+          "title": "Failed usage can't be shown right now",
+          "description": "The AI service that keeps usage did not answer. The rest of this page is unaffected. Try again in a moment."
+        }
       }
     },
     "tenants": {

@@ -16,6 +16,7 @@ import {
 } from '@/lib/ai/starterLibraryContext';
 import { MotirAiError } from '@/lib/ai/errors';
 import type {
+  AskHandOff,
   JobContextBag,
   JobStreamEvent,
   RequirementConfirmation,
@@ -157,6 +158,11 @@ export interface PlanEditSubmitOptions {
    * re-plan, which motir-ai plans with no question and may refuse.
    */
   runReplan?: RunReplanOrigin;
+  /**
+   * THE HAND-OFF (MOTIR-11797): `context.askHandOff`, only when present — the ask turn
+   * whose job already replied to the message this plan starts from.
+   */
+  askHandOff?: AskHandOff;
 }
 
 /**
@@ -507,13 +513,14 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { requirementConfirmed, runReplan, ...rest } = opts;
+    const { requirementConfirmed, runReplan, askHandOff, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
         ...(requirement ? { requirement } : {}),
         ...(requirementConfirmed ? { requirementConfirmed } : {}),
         ...(runReplan ? { runReplan } : {}),
+        ...(askHandOff ? { askHandOff } : {}),
       },
       ctx,
       rest,
@@ -557,7 +564,7 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { requirementConfirmed, runReplan, ...rest } = opts;
+    const { requirementConfirmed, runReplan, askHandOff, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
@@ -565,6 +572,7 @@ export const aiPlanEditsService = {
         ...(requirement ? { requirement } : {}),
         ...(requirementConfirmed ? { requirementConfirmed } : {}),
         ...(runReplan ? { runReplan } : {}),
+        ...(askHandOff ? { askHandOff } : {}),
       },
       ctx,
       rest,

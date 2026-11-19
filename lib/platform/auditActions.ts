@@ -536,6 +536,18 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'jobs.dlq_replay': { kind: 'write', reason: 'inherited' },
   /**
+   * One ERROR GROUP of the gateway usage motir-ai failed to apply was REPLAYED
+   * from /admin/usage (MOTIR-11794; design MOTIR-11793), by an `operator` or
+   * above: its failed rows put back to pending and applied, each exactly once.
+   * `targetKind: 'platform'`, no `targetId` (a group has no id), `targetLabel`
+   * the group's error text cut to 200 characters, `metadata` `{ error, failedRows, organizations, applied,
+   * failedAgain, pending }` — motir-ai's from → to record. Written after the
+   * replay answers and only when it reset a row (a group already empty writes
+   * none). `inherited`: the confirm has no reason field, so the service writes
+   * _Failed usage replayed from /admin/usage_.
+   */
+  'ai.gateway_usage.replay': { kind: 'write', reason: 'inherited' },
+  /**
    * An operator read the Motir-created repository row a STARTER PROMOTION names
    * (Story MOTIR-704 · MOTIR-710) — the one cross-tenant read promotion makes,
    * before anything is copied. `targetKind: 'platform'`, `targetId` the source

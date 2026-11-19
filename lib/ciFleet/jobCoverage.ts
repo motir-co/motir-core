@@ -1,4 +1,4 @@
-import { isMotirFleetJob, MOTIR_RUNNER_VARIABLE } from './config';
+import { isMotirFleetJob, MOTIR_ON_DEMAND_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from './config';
 import {
   scriptCommands,
   type ActionMetadata,
@@ -70,6 +70,21 @@ export function requestsFleetRunner(runsOn: unknown): boolean {
   if (Array.isArray(runsOn)) return runsOn.some(requestsFleetRunner);
   if (runsOn !== null && typeof runsOn === 'object' && 'labels' in runsOn) {
     return requestsFleetRunner((runsOn as { labels: unknown }).labels);
+  }
+  return false;
+}
+
+/** The on-demand label as a whole token: exact, case-insensitive, and not part
+ *  of a longer label (`motir-on-demand-x`), inside a bare label or an expression. */
+const ON_DEMAND_TOKEN = new RegExp(`(^|[^\\w-])${MOTIR_ON_DEMAND_RUNNER_LABEL}([^\\w-]|$)`, 'i');
+
+/** Does this `runs-on` name the on-demand label (MOTIR-11727)? A bare label, an
+ *  entry of a list, a `labels:` group, or a literal inside an expression. */
+export function namesOnDemandLabel(runsOn: unknown): boolean {
+  if (typeof runsOn === 'string') return ON_DEMAND_TOKEN.test(runsOn);
+  if (Array.isArray(runsOn)) return runsOn.some(namesOnDemandLabel);
+  if (runsOn !== null && typeof runsOn === 'object' && 'labels' in runsOn) {
+    return namesOnDemandLabel((runsOn as { labels: unknown }).labels);
   }
   return false;
 }
@@ -250,6 +265,20 @@ export function judgeJob(
     };
   }
   if (!requestsFleetRunner(job.runsOn)) {
+    // The on-demand label without the fleet label or its variable (MOTIR-11727):
+    // only a fleet runner ever carries it, and always beside the fleet label, so
+    // no runner — fleet or GitHub-hosted — can ever take this job. It is not
+    // GitHub-hosted; it is a job that will queue until GitHub expires it.
+    if (namesOnDemandLabel(job.runsOn)) {
+      return {
+        ...base,
+        verdict: 'unverified',
+        missing: [],
+        unjudged: [
+          `it asks for ${MOTIR_ON_DEMAND_RUNNER_LABEL} without the fleet label or vars.${MOTIR_RUNNER_VARIABLE}, so no runner can take it`,
+        ],
+      };
+    }
     return { ...base, verdict: 'github-hosted', missing: [], unjudged: [] };
   }
   const os = otherOs(job.runsOn);
