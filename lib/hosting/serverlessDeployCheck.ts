@@ -26,6 +26,7 @@ import {
   type FakeHostingControls,
   type HostingDeployPort,
   type HostingEnvironment,
+  type ServerlessRegistryLogin,
 } from '@motir/orchestrator';
 import {
   DeployCheckProbeFailedError,
@@ -92,6 +93,68 @@ export function fakeImageBuilder(registry: string): ServerlessDeployCheckDeps['b
     ref: `${registry}/${pushNamespace}`,
     digest: `sha256:${createHash('sha256').update(`${pushNamespace}:${label}`).digest('hex')}`,
   });
+}
+
+/** What the real image builder runs on the operator's machine. */
+export interface DockerImageBuilderDeps {
+  /** The registry login, taken under the serverless adapter's SCOPED ROLE
+   *  (`serverlessRegistryLogin`) — never the operator's ambient credentials,
+   *  which are a principal the `mh/*` repositories do not admit (MOTIR-11847). */
+  readonly login: () => Promise<ServerlessRegistryLogin>;
+  /** Runs a command with the operator's terminal attached; `stdin`, when set,
+   *  is written to the command's input and never put in an argument. */
+  readonly run: (
+    command: string,
+    args: readonly string[],
+    options?: { readonly stdin?: string },
+  ) => Promise<void>;
+  /** A fresh path for buildx's `--metadata-file`. */
+  readonly metadataPath: () => string;
+  readonly readFile: (path: string) => string;
+  /** The fixture's build context. */
+  readonly context: string;
+}
+
+/** Builds the fixture with its label baked in, pushes it after a registry login
+ *  under the scoped role, and reads the digest the registry gave it back from
+ *  buildx's metadata. Lambda takes a single-platform image with no attestation
+ *  manifest, hence `--provenance=false`. The password reaches `docker login`
+ *  on stdin only. */
+export function dockerImageBuilder(
+  deps: DockerImageBuilderDeps,
+): ServerlessDeployCheckDeps['buildAndPushImage'] {
+  return async ({ pushNamespace, label }) => {
+    const login = await deps.login();
+    await deps.run(
+      'docker',
+      ['login', '--username', login.username, '--password-stdin', login.registry],
+      {
+        stdin: login.password,
+      },
+    );
+    const ref = `${login.registry}/${pushNamespace}`;
+    const metadata = deps.metadataPath();
+    await deps.run('docker', [
+      'buildx',
+      'build',
+      '--platform',
+      'linux/amd64',
+      '--provenance=false',
+      '--build-arg',
+      `RELEASE_LABEL=${label}`,
+      '--tag',
+      `${ref}:${label}`,
+      '--metadata-file',
+      metadata,
+      '--push',
+      deps.context,
+    ]);
+    const digest = (JSON.parse(deps.readFile(metadata)) as Record<string, unknown>)[
+      'containerimage.digest'
+    ];
+    if (typeof digest !== 'string') throw new Error('buildx reported no image digest');
+    return { ref, digest };
+  };
 }
 
 /** For runs against the fake ports, whose addresses resolve nowhere: a
