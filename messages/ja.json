@@ -15022,6 +15022,54 @@
         "loading": {
           "install": "Motir 自身のアカウントを読み込み中",
           "shard": "add-shard プールを読み込み中"
+        },
+        "ciSpot": {
+          "heading": "CI ランナー · 過去 7 日間",
+          "scope": "過去 7 日間に起動した CI ランナーの数で、今動いているものではありません。今動いているものは上の「稼働中」です。",
+          "setting": {
+            "on": "Spot オン",
+            "off": "Spot オフ",
+            "notRead": "未読み込み",
+            "notReadLabel": "CI の Spot 設定は読み込まれていません"
+          },
+          "offNote": "CI の Spot がオフのため、新しい CI ランナーはオンデマンドで起動します。オンの間に起動したランナーは引き続きここに数えられます。",
+          "notReadNote": "CI の Spot 設定を読み込めなかったため、Spot がオンかどうかは表示されません。下の数は読み込めています。",
+          "share": {
+            "headline": "{percent}% が Spot",
+            "noPercent": "Spot の割合なし",
+            "of": "起動した CI ランナー {count, plural, other {# 台}} のうち",
+            "ofRecorded": "容量が記録された {recorded} 台のうち (起動は計 {total} 台)"
+          },
+          "barLabel": "過去 7 日間に起動した CI ランナー {total} 台のうち、Spot {spot} 台、オンデマンド {onDemand} 台",
+          "barLabelNotRecorded": "過去 7 日間に起動した CI ランナー {total} 台のうち、Spot {spot} 台、オンデマンド {onDemand} 台、未記録 {notRecorded} 台",
+          "legend": {
+            "spot": "Spot {count} 台",
+            "onDemand": "オンデマンド {count} 台",
+            "notRecorded": "未記録 {count} 台"
+          },
+          "notRecordedNote": "{count, plural, other {# 台のランナー}}は Motir が各ランナーの容量を記録する前に起動したため、Spot にもオンデマンドにも数えられず、Spot の割合からも除かれています。",
+          "interrupted": {
+            "label": "AWS による中断 · 7 日間",
+            "sub": "ジョブの途中で AWS が回収した Spot ランナー",
+            "none": "なし"
+          },
+          "allFellBack": "Spot はオンですが、過去 7 日間に起動した CI ランナー {count} 台のどれも Spot 容量を得られず、すべての起動がオンデマンドに切り替わりました。「CI ランナー」を開くと各アカウントの起動を確認できます。",
+          "allFellBackInstall": "Spot はオンですが、過去 7 日間に Motir 自身のアカウントで起動した CI ランナー {count} 台のどれも Spot 容量を得られず、すべての起動がオンデマンドに切り替わりました。",
+          "none": "過去 7 日間に起動した CI ランナーはないため、表示する Spot の割合はありません。",
+          "error": {
+            "title": "CI の Spot 使用状況を読み込めませんでした",
+            "body": "過去 7 日間の起動と中断を読み込めなかったため、数値は表示されず、どれも 0 ではありません。プールの行、そのアカウント、ページの他の部分には影響ありません。再読み込みしてもう一度お試しください。"
+          },
+          "accounts": {
+            "col": {
+              "spot": "Spot · 7 日",
+              "interrupted": "中断 · 7 日"
+            },
+            "spotOf": "{spot} / {total}",
+            "percent": "{percent}% が Spot",
+            "notRecorded": "未記録 {count} 台",
+            "none": "過去 7 日間に起動した CI ランナーはありません"
+          }
         }
       },
       "install": {

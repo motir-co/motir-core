@@ -15025,6 +15025,54 @@
         "loading": {
           "install": "Caricamento dell’account di Motir",
           "shard": "Caricamento dei pool add-shard"
+        },
+        "ciSpot": {
+          "heading": "Runner CI · ultimi 7 giorni",
+          "scope": "Conta i runner CI avviati negli ultimi 7 giorni, non quelli in esecuzione ora; In esecuzione, sopra, è ciò che gira ora.",
+          "setting": {
+            "on": "Spot attivo",
+            "off": "Spot disattivo",
+            "notRead": "Non letta",
+            "notReadLabel": "Impostazione Spot per la CI non letta"
+          },
+          "offNote": "Spot per la CI è disattivo, quindi i nuovi runner CI si avviano on-demand. I runner avviati mentre era attivo contano ancora qui.",
+          "notReadNote": "L’impostazione Spot per la CI non si è caricata, quindi non è indicato se Spot è attivo. I conteggi qui sotto sono stati letti.",
+          "share": {
+            "headline": "{percent}% su Spot",
+            "noPercent": "Nessuna quota Spot",
+            "of": "di {count, plural, one {# runner CI avviato} other {# runner CI avviati}}",
+            "ofRecorded": "dei {recorded} avviati con una capacità registrata ({total} avviati in tutto)"
+          },
+          "barLabel": "{spot} su Spot e {onDemand} on-demand, di {total} runner CI avviati negli ultimi 7 giorni",
+          "barLabelNotRecorded": "{spot} su Spot, {onDemand} on-demand e {notRecorded} non registrati, di {total} runner CI avviati negli ultimi 7 giorni",
+          "legend": {
+            "spot": "{count} su Spot",
+            "onDemand": "{count} on-demand",
+            "notRecorded": "{count} non registrati"
+          },
+          "notRecordedNote": "{count, plural, one {# runner è stato avviato} other {# runner sono stati avviati}} prima che Motir registrasse la capacità di ogni runner, quindi non {count, plural, one {è contato} other {sono contati}} né come Spot né come on-demand, e la quota Spot {count, plural, one {lo esclude} other {li esclude}}.",
+          "interrupted": {
+            "label": "Interrotti da AWS · 7 giorni",
+            "sub": "Runner Spot che AWS ha recuperato a metà job",
+            "none": "Nessuno"
+          },
+          "allFellBack": "Spot è attivo, ma nessuno dei {count} runner CI avviati negli ultimi 7 giorni ha ottenuto capacità Spot: ogni avvio è ripiegato su on-demand. Apri Runner CI per vedere gli avvii di ogni account.",
+          "allFellBackInstall": "Spot è attivo, ma nessuno dei {count} runner CI avviati nell’account di Motir negli ultimi 7 giorni ha ottenuto capacità Spot: ogni avvio è ripiegato su on-demand.",
+          "none": "Negli ultimi 7 giorni non è stato avviato alcun runner CI, quindi non c’è una quota Spot da mostrare.",
+          "error": {
+            "title": "Impossibile leggere l’uso di Spot nella CI",
+            "body": "Gli avvii e le interruzioni degli ultimi 7 giorni non si sono caricati, quindi non è mostrato alcun valore e nessuno di essi è zero. La riga del pool, i suoi account e il resto della pagina non ne risentono. Ricarica per riprovare."
+          },
+          "accounts": {
+            "col": {
+              "spot": "Su Spot · 7 g",
+              "interrupted": "Interrotti · 7 g"
+            },
+            "spotOf": "{spot} / {total}",
+            "percent": "{percent}% su Spot",
+            "notRecorded": "{count} non registrati",
+            "none": "Nessun runner CI avviato negli ultimi 7 giorni"
+          }
         }
       },
       "install": {

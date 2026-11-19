@@ -68,7 +68,14 @@ async function seedIntent(
 
 function delivery(
   action: string,
-  job: { jobId: string; runnerId?: number | null; completedAt?: string; labels?: string[] },
+  job: {
+    jobId: string;
+    runnerId?: number | null;
+    completedAt?: string;
+    labels?: string[];
+    name?: string;
+    conclusion?: string;
+  },
 ) {
   return {
     action,
@@ -78,7 +85,9 @@ function delivery(
       run_attempt: 1,
       labels: job.labels ?? [MOTIR_RUNNER_LABEL],
       runner_id: job.runnerId ?? null,
+      ...(job.name ? { name: job.name } : {}),
       ...(job.completedAt ? { completed_at: job.completedAt } : {}),
+      ...(job.conclusion ? { conclusion: job.conclusion } : {}),
     },
     repository: { id: 99001, name: 'acme-web', owner: { login: 'motir-projects' } },
     installation: { id: 556677 },
@@ -117,6 +126,42 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
     expect((await read(bootedFor.id)).jobCompletedAt).toBeNull();
   });
 
+  it('in_progress stores the TAKEN job on the runner’s intent, write-once (MOTIR-11728)', async () => {
+    const fx = await seedTenant();
+    const bootedFor = await seedIntent(fx, 9001);
+    const tookIt = await seedIntent(fx, 9002);
+
+    await githubWebhookService.handleWorkflowJob(
+      delivery('in_progress', { jobId: bootedFor.jobId, runnerId: 9002, name: 'build' }),
+    );
+    // A later delivery naming the same runner moves nothing.
+    await githubWebhookService.handleWorkflowJob(
+      delivery('in_progress', { jobId: '99999', runnerId: 9002, name: 'other' }),
+    );
+    await githubWebhookService.handleWorkflowJob(
+      delivery('completed', { jobId: '99998', runnerId: 9002, name: 'third' }),
+    );
+
+    expect(await read(tookIt.id)).toMatchObject({
+      takenRunId: '7001',
+      takenRunAttempt: 1,
+      takenJobId: bootedFor.jobId,
+      takenJobName: 'build',
+    });
+    expect(await read(bootedFor.id)).toMatchObject({ takenJobId: null, takenJobName: null });
+  });
+
+  it('a completed delivery alone stores no taken job', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx, 9001);
+
+    await githubWebhookService.handleWorkflowJob(
+      delivery('completed', { jobId: intent.jobId, runnerId: 9001, name: 'build' }),
+    );
+
+    expect((await read(intent.id)).takenJobId).toBeNull();
+  });
+
   it('completed stamps the job as done on the intent booted for it, with GitHub’s instant', async () => {
     const fx = await seedTenant();
     const bootedFor = await seedIntent(fx, 9001);
@@ -127,11 +172,13 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
         jobId: bootedFor.jobId,
         runnerId: 9002,
         completedAt: '2026-11-13T10:00:00Z',
+        conclusion: 'failure',
       }),
     );
 
     const done = await read(bootedFor.id);
     expect(done.jobCompletedAt).toEqual(new Date('2026-11-13T10:00:00Z'));
+    expect(done.jobConclusion).toBe('failure');
     expect(done.jobPickedUpAt).toBeNull();
     expect((await read(tookIt.id)).jobPickedUpAt).not.toBeNull();
   });
@@ -146,11 +193,13 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
         runId: '7001',
         runAttempt: 1,
         jobId: intent.jobId,
+        jobName: null,
         runnerId: 9001,
         repoOwner: 'motir-projects',
         repoName: 'acme-web',
         requestedLabels: [MOTIR_RUNNER_LABEL],
         completedAt: first,
+        conclusion: 'success',
       },
       first,
     );
@@ -160,11 +209,13 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
         runId: '7001',
         runAttempt: 1,
         jobId: intent.jobId,
+        jobName: null,
         runnerId: 9001,
         repoOwner: 'motir-projects',
         repoName: 'acme-web',
         requestedLabels: [MOTIR_RUNNER_LABEL],
         completedAt: null,
+        conclusion: null,
       },
       new Date('2026-11-13T11:00:00Z'),
     );
@@ -173,6 +224,7 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
     const row = await read(intent.id);
     expect(row.jobPickedUpAt).toEqual(first);
     expect(row.jobCompletedAt).toEqual(first);
+    expect(row.jobConclusion).toBe('success');
   });
 
   it('a completed job with no instant and no runner stamps the receipt time and no pickup', async () => {
@@ -186,11 +238,13 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
         runId: '7001',
         runAttempt: 1,
         jobId: intent.jobId,
+        jobName: null,
         runnerId: null,
         repoOwner: 'motir-projects',
         repoName: 'acme-web',
         requestedLabels: [MOTIR_RUNNER_LABEL],
         completedAt: null,
+        conclusion: null,
       },
       now,
     );

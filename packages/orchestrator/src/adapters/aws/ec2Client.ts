@@ -166,6 +166,20 @@ export interface Ec2Instance {
   /** AWS's free-text reason for the last transition, e.g.
    *  `User initiated (2026-10-22 12:00:00 GMT)`; null when it gives none. */
   readonly stateTransitionReason: string | null;
+  /**
+   * EC2's STRUCTURED reason for the last state change (`StateReason.Code`), e.g.
+   * `Server.SpotInstanceTermination` or `Client.UserInitiatedShutdown`
+   * (MOTIR-11728). Absent when the answer gives none. Read this, never the
+   * free-text `stateTransitionReason`, to learn WHY an instance ended.
+   * https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_StateReason.html
+   */
+  readonly stateReasonCode?: string;
+  /**
+   * `InstanceLifecycle` (MOTIR-11728): `spot`, `scheduled`, `capacity-block` or
+   * `interruptible-capacity-reservation`; absent for an on-demand instance.
+   * https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Instance.html
+   */
+  readonly instanceLifecycle?: string;
   readonly availabilityZone: string | null;
   readonly tags: readonly Ec2Tag[];
   /** The public IPv4 address (`PublicIpAddress`), present only while the instance
@@ -491,6 +505,8 @@ function toInstance(i: Instance): Ec2Instance {
     state: i.State?.Name ?? '',
     launchTime: i.LaunchTime ?? null,
     stateTransitionReason: i.StateTransitionReason || null,
+    ...(i.StateReason?.Code ? { stateReasonCode: i.StateReason.Code } : {}),
+    ...(i.InstanceLifecycle ? { instanceLifecycle: i.InstanceLifecycle } : {}),
     availabilityZone: i.Placement?.AvailabilityZone ?? null,
     tags: tagsOf(i.Tags),
     ...(i.PublicIpAddress ? { publicIpAddress: i.PublicIpAddress } : {}),

@@ -15022,6 +15022,54 @@
         "loading": {
           "install": "Loading Motir’s own account",
           "shard": "Loading the add-shard pools"
+        },
+        "ciSpot": {
+          "heading": "CI runners · last 7 days",
+          "scope": "Counts the CI runners launched in the last 7 days, not the ones running now; Running above is what runs now.",
+          "setting": {
+            "on": "Spot on",
+            "off": "Spot off",
+            "notRead": "Not read",
+            "notReadLabel": "CI Spot setting not read"
+          },
+          "offNote": "CI Spot is off, so new CI runners launch on on-demand. Runners launched while it was on still count here.",
+          "notReadNote": "The CI Spot setting didn’t load, so whether Spot is on is not shown. The counts below were read.",
+          "share": {
+            "headline": "{percent}% on Spot",
+            "noPercent": "No Spot share",
+            "of": "of {count, plural, one {# CI runner} other {# CI runners}} launched",
+            "ofRecorded": "of the {recorded} launched with a recorded capacity ({total} launched in all)"
+          },
+          "barLabel": "{spot} on Spot and {onDemand} on on-demand, of {total} CI runners launched in the last 7 days",
+          "barLabelNotRecorded": "{spot} on Spot, {onDemand} on on-demand and {notRecorded} not recorded, of {total} CI runners launched in the last 7 days",
+          "legend": {
+            "spot": "{count} on Spot",
+            "onDemand": "{count} on on-demand",
+            "notRecorded": "{count} not recorded"
+          },
+          "notRecordedNote": "{count, plural, one {# runner was} other {# runners were}} launched before Motir recorded each runner’s capacity, so {count, plural, one {it is} other {they are}} counted as neither Spot nor on-demand, and the Spot share leaves {count, plural, one {it} other {them}} out.",
+          "interrupted": {
+            "label": "Interrupted by AWS · 7 days",
+            "sub": "Spot runners AWS reclaimed mid-job",
+            "none": "None"
+          },
+          "allFellBack": "Spot is on, but none of the {count} CI runners launched in the last 7 days got Spot capacity: every launch fell back to on-demand. Open CI runner to see each account’s launches.",
+          "allFellBackInstall": "Spot is on, but none of the {count} CI runners launched in Motir’s own account in the last 7 days got Spot capacity: every launch fell back to on-demand.",
+          "none": "No CI runner was launched in the last 7 days, so there is no Spot share to show.",
+          "error": {
+            "title": "Couldn’t read CI Spot use",
+            "body": "The launches and interruptions of the last 7 days didn’t load, so no figure is shown and none of them is zero. The pool row, its accounts and the rest of the page are unaffected. Reload to try again."
+          },
+          "accounts": {
+            "col": {
+              "spot": "On Spot · 7d",
+              "interrupted": "Interrupted · 7d"
+            },
+            "spotOf": "{spot} / {total}",
+            "percent": "{percent}% on Spot",
+            "notRecorded": "{count} not recorded",
+            "none": "No CI runner launched in the last 7 days"
+          }
         }
       },
       "install": {

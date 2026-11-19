@@ -13,6 +13,7 @@ import {
   ciRunnerProvisioningIntentRepository,
   type CiRunnerProvisioningIntentCreateInput,
 } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { ciSpotRerunPinRepository } from '@/lib/repositories/ciSpotRerunPinRepository';
 import { isMotirFleetJob } from '@/lib/ciFleet/config';
 import {
   provisioningInstallationIdFor,
@@ -274,9 +275,29 @@ export const ciRunnerProvisioningService = {
     };
 
     try {
-      const intent = await withSystemContext((tx) =>
-        ciRunnerProvisioningIntentRepository.create(input, tx),
-      );
+      const intent = await withSystemContext(async (tx) => {
+        // A RE-RUN of a job a Spot reclaim cut off (MOTIR-11728) is a new run
+        // attempt with a new job id, so its interruption count is carried by
+        // repository + run + job NAME from the earlier attempt's interrupted
+        // runner. At 2, this intent boots on-demand.
+        const spotInterruptionCount =
+          event.runAttempt > 1
+            ? await ciRunnerProvisioningIntentRepository.findCarriedSpotInterruptions(
+                {
+                  repoOwner: event.repoOwner,
+                  repoName: event.repoName,
+                  runId: event.runId,
+                  jobName: event.jobName,
+                  runAttempt: event.runAttempt,
+                },
+                tx,
+              )
+            : 0;
+        return ciRunnerProvisioningIntentRepository.create(
+          spotInterruptionCount > 0 ? { ...input, spotInterruptionCount } : input,
+          tx,
+        );
+      });
       return {
         outcome: 'recorded',
         intentId: intent.id,
@@ -319,7 +340,9 @@ export const ciRunnerProvisioningService = {
    *     working another intent's job, and keep an idle one alive.
    *   - `jobCompletedAt` is stamped by job key on `completed`: the job this
    *     intent was booted for is finished, so if its runner has taken nothing
-   *     it never will take that job.
+   *     it never will take that job. The job's conclusion is stamped with it
+   *     (MOTIR-11728), so a Spot reclaim can tell a job that passed from one
+   *     the reclaim itself failed.
    *
    * Both stamps are write-once. A job outside the fleet's labels is ignored
    * before any read, exactly as {@link recordQueuedJob} gates it.
@@ -341,11 +364,42 @@ export const ciRunnerProvisioningService = {
               now,
               tx,
             );
+      // WHICH job the runner took (MOTIR-11728), write-once beside the pickup:
+      // a Spot reclaim re-runs that job, not the one the intent was booted for.
+      if (event.action === 'in_progress' && event.runnerId !== null) {
+        await ciRunnerProvisioningIntentRepository.markTakenJobByRunner(
+          event.runnerId,
+          {
+            runId: event.runId,
+            runAttempt: event.runAttempt,
+            jobId: event.jobId,
+            jobName: event.jobName,
+          },
+          tx,
+        );
+        // A runner took a later attempt of a job pinned to on-demand
+        // (MOTIR-11732): the re-run is picked up and the org's hold closes, so
+        // boots read the Spot setting again.
+        if (event.jobName !== null) {
+          await ciSpotRerunPinRepository.closePickedUp(
+            {
+              repoOwner: event.repoOwner,
+              repoName: event.repoName,
+              runId: event.runId,
+              jobName: event.jobName,
+              runAttempt: event.runAttempt,
+            },
+            now,
+            tx,
+          );
+        }
+      }
       const completed =
         event.action === 'completed'
           ? await ciRunnerProvisioningIntentRepository.markJobCompleted(
               job,
               event.completedAt ?? now,
+              event.conclusion,
               tx,
             )
           : 0;
