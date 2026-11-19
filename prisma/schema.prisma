@@ -11914,6 +11914,12 @@ model CiRunnerProvisioningIntent {
   rerunState                String?   @map("rerun_state")
   /// When the re-run was last asked for (MOTIR-11728). NULL = never asked.
   rerunAttemptedAt          DateTime? @map("rerun_attempted_at")
+  /// When this intent's REGISTERED runner was withdrawn from GitHub so it could
+  /// not take a job pinned to on-demand capacity (MOTIR-11732): the job's second
+  /// Spot re-run is requested only after every jobless Spot runner of its org is
+  /// removed. Supervision retires a withdrawn runner as `runner_idle`. NULL = not
+  /// withdrawn.
+  runnerWithdrawnAt         DateTime? @map("runner_withdrawn_at")
 
   /// How the container ended — the port's `TeardownReason`. Kept next to the
   /// status because "failed" alone cannot distinguish a provider refusal from a
@@ -11948,6 +11954,7 @@ model CiRunnerProvisioningIntent {
   githubRepo   GithubRepo?  @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
 
   liveAccruals CiLiveAccrual[]
+  spotRerunPin CiSpotRerunPin?
 
   /// The idempotency guarantee: a redelivered webhook produces no second intent,
   /// while a RE-RUN (a new attempt) and every sibling JOB of the same run each
@@ -11966,6 +11973,9 @@ model CiRunnerProvisioningIntent {
   /// ago must not be swept as an hour-old orphan.
   @@index([status, bootedAt])
   @@index([fleetShardId])
+  /// The Fleet status page's CI Spot read (MOTIR-11729): one account's intents
+  /// booted in the last 7 days, never every intent the account ever had.
+  @@index([fleetShardId, bootedAt])
   /// The `workflow_job` `in_progress` delivery finds its runner's intent by this (MOTIR-11230).
   @@index([githubRunnerId])
   /// The queued delivery's look-up of an earlier attempt's interrupted runner,
@@ -11974,6 +11984,46 @@ model CiRunnerProvisioningIntent {
   /// The reconcile pass's read of re-runs still to request (MOTIR-11728).
   @@index([rerunState, settledAt])
   @@map("ci_runner_provisioning_intent")
+}
+
+/// THE ON-DEMAND PIN HOLD of a job's SECOND Spot re-run (MOTIR-11732). A job
+/// Spot interrupted twice is re-run once more, and only an on-demand runner may
+/// take that re-run. A fleet runner takes the OLDEST queued job its labels match,
+/// so the re-run's own intent booting on-demand is not enough: any idle Spot
+/// runner of the org could take the job first. While a hold is OPEN, every boot
+/// in its runner target (the org) is on-demand, the jobless Spot runners there
+/// are withdrawn before the re-run is requested, and the reconcile counts the
+/// pinned job as on-demand demand.
+///
+/// One row per interrupted runner's intent (`sourceIntentId`), opened before the
+/// re-run is asked for. Open while `closedAt` is NULL and `openedAt` is under 24
+/// hours old; closed `picked_up` when a runner takes the re-run (a later run
+/// attempt of the same repo, run and job name), `rerun_refused` /
+/// `rerun_expired` with the re-run, or `aged_out` at 24 hours.
+model CiSpotRerunPin {
+  id             String    @id @default(cuid())
+  /// The runner target the hold pins: the job repository's owner, LOWER-CASED,
+  /// since GitHub logins compare case-insensitively.
+  targetOrg      String    @map("target_org")
+  repoOwner      String    @map("repo_owner")
+  repoName       String    @map("repo_name")
+  runId          String    @map("run_id")
+  /// The INTERRUPTED attempt; the re-run is any later attempt.
+  runAttempt     Int       @map("run_attempt")
+  jobName        String    @map("job_name")
+  sourceIntentId String    @unique @map("source_intent_id")
+  openedAt       DateTime  @default(now()) @map("opened_at")
+  closedAt       DateTime? @map("closed_at")
+  /// `picked_up` · `rerun_refused` · `rerun_expired` · `aged_out`.
+  closeReason    String?   @map("close_reason")
+
+  sourceIntent CiRunnerProvisioningIntent @relation(fields: [sourceIntentId], references: [id], onDelete: Cascade)
+
+  /// The boot's and the reconcile's read: a target's open holds.
+  @@index([targetOrg, closedAt])
+  /// The pickup's close: a job's holds by repository, run and name.
+  @@index([repoOwner, repoName, runId, jobName])
+  @@map("ci_spot_rerun_pin")
 }
 
 /// CI IS DEBITED WHILE IT RUNS (Story MOTIR-6906 · MOTIR-6910 ·

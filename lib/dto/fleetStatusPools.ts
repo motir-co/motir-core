@@ -20,6 +20,48 @@ import type { FleetWorkloadKind } from '@motir/orchestrator';
 /** vCPU of one fleet machine on an add-shard account (`FLEET_CONTAINER_SIZE`). */
 export const SHARD_MACHINE_VCPU = 2;
 
+// ── CI Spot use (MOTIR-11729; design MOTIR-11726) ─────────────────────────────
+//
+// The CI runners BOOTED in the last 7 days, by the capacity each boot recorded
+// and by how many EC2 reclaimed, beside the CI Spot setting's on/off. Three
+// sources, each read on its own: the counts, the setting, and the pool around
+// them. UNKNOWN, NONE AND ZERO ARE THREE DIFFERENT THINGS here:
+//
+//   - `{ status: 'unavailable' }` — the counts were not read: no figure at all;
+//   - `launched: 0` — read, and nothing launched in the window;
+//   - `interrupted: 0` with launches — a read zero;
+//   - an account's `ciSpot: null` — read, and that account launched nothing.
+
+/** The window the counts cover, in days. */
+export const CI_SPOT_WINDOW_DAYS = 7;
+
+/** One population's launches in the window. `notRecorded` is never on-demand. */
+export interface CiSpotCountsDTO {
+  /** Every CI runner booted in the window: `spot + onDemand + notRecorded`. */
+  launched: number;
+  spot: number;
+  onDemand: number;
+  /** Booted with no recorded capacity (before MOTIR-11716 recorded it). */
+  notRecorded: number;
+  /** Of `launched`, the ones that settled `spot_interrupted`. */
+  interrupted: number;
+}
+
+/** The CI Spot setting as this read found it — its own read, never inferred. */
+export type CiSpotSettingReadDTO = 'on' | 'off' | 'notRead';
+
+export type CiSpotBlockDTO =
+  /** The counts were not read. The setting is its own read, so its pill still shows. */
+  | { status: 'unavailable'; setting: CiSpotSettingReadDTO }
+  | {
+      status: 'ok';
+      windowDays: typeof CI_SPOT_WINDOW_DAYS;
+      setting: CiSpotSettingReadDTO;
+      counts: CiSpotCountsDTO;
+      /** Spot is on, something launched, and none of it got Spot. */
+      allFellBack: boolean;
+    };
+
 // ── The install fleet ─────────────────────────────────────────────────────────
 
 /** The account's EC2 vCPU quota, or when it was last read when AWS did not answer. */
@@ -43,6 +85,8 @@ export type InstallPoolDTO =
       vcpu: number | null;
       /** Whole percent of the quota; null when the quota is not read or vCPU unknown. */
       sharePercent: number | null;
+      /** CI Spot use on the install fleet — the `ci_runner` pool only. */
+      ciSpot?: CiSpotBlockDTO;
     };
 
 export type InstallFleetBlockDTO =
@@ -90,6 +134,12 @@ export interface ShardAccountDTO {
   /** Paused admission, when the pause has not passed yet. */
   pausedUntil: string | null;
   pausedReason: 'capacity_refused' | 'provider_unavailable' | null;
+  /**
+   * CI runner pool only: this account's launches in the window; null when it
+   * launched none. Absent on every other pool, and when the pool's CI Spot read
+   * failed.
+   */
+  ciSpot?: CiSpotCountsDTO | null;
 }
 
 export type ShardPoolDTO =
@@ -114,6 +164,8 @@ export type ShardPoolDTO =
       percent: number | null;
       /** `near` from 70%, `atSize` at 100%: admission defers new jobs. */
       flag: 'near' | 'atSize' | null;
+      /** CI Spot use over the pool's accounts — the `ci_runner` pool only. */
+      ciSpot?: CiSpotBlockDTO;
     };
 
 export type ShardBlockDTO =

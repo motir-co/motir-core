@@ -67,6 +67,7 @@ import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestr
 import { fleetCodeScanningCatchUpService } from '@/lib/services/fleetCodeScanningCatchUpService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
 import { ciSpotSettingReader } from '@/lib/services/ciSpotSettingReader';
+import { ciSpotRerunPinService } from '@/lib/services/ciSpotRerunPinService';
 import {
   ON_DEMAND_AT_SPOT_INTERRUPTIONS,
   planSpotRerun,
@@ -1467,7 +1468,12 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   // SPOT (MOTIR-11716): while the CI Spot setting is on, the spec asks for Spot;
   // the adapter walks the setting's types and falls back to on-demand itself. A
   // setting that cannot be read is OFF — a runner never fails because of Spot.
-  const capacity = await requestedCapacity(intent);
+  //
+  // ⚠️ READ HERE, AFTER THE RUNNER ID HAS COMMITTED, NOT BEFORE THE MINT
+  // (MOTIR-11732). Spot is a property of the launch, not of the registration,
+  // and this order is what makes an on-demand pin race-free: see
+  // `requestedCapacity`.
+  const capacity = await requestedCapacity(intent, now());
   const specFor = (shard: FleetShardDTO | null, through: ContainerOrchestrator) =>
     ciRunnerBootService.buildSpec({
       intent,
@@ -1715,16 +1721,35 @@ function jitLabelsFor(intent: Pick<CiRunnerProvisioningIntent, 'requestedLabels'
  * A job Spot has already interrupted twice (MOTIR-11728) — its carried count is
  * {@link ON_DEMAND_AT_SPOT_INTERRUPTIONS} — boots `on_demand` whatever the
  * setting says.
+ *
+ * And while an ON-DEMAND PIN is open in the intent's runner target (MOTIR-11732)
+ * — a job's second Spot re-run is waiting for a runner there — EVERY boot in that
+ * org is `on_demand`, whichever job its intent was booted for: a fleet runner
+ * takes the oldest queued job its labels match, so any runner of the org may be
+ * the one that takes the re-run. A hold that cannot be read asks for on-demand.
+ *
+ * ⚠️ THE RACE ARGUMENT. The caller reads this AFTER `recordMintedRunner` has
+ * committed the runner id; the re-run's sweep writes the hold, commits, and only
+ * then reads the org's registered runners (each in its own READ COMMITTED
+ * transaction). Either this read starts after the hold committed — and sees it,
+ * so the machine is on-demand — or it started before, in which case the runner
+ * id had committed earlier still, so the sweep's later read lists the runner
+ * and withdraws it before the re-run is requested. No Spot runner the sweep
+ * cannot see can exist when the re-run is queued.
  */
 async function requestedCapacity(
-  intent: Pick<CiRunnerProvisioningIntent, 'id' | 'requestedLabels' | 'spotInterruptionCount'>,
+  intent: Pick<
+    CiRunnerProvisioningIntent,
+    'id' | 'requestedLabels' | 'spotInterruptionCount' | 'repoOwner'
+  >,
+  at: Date,
 ): Promise<ContainerCapacity> {
   if (requestsOnDemandRunner(intent.requestedLabels)) return 'on_demand';
   // An arm64 runner is never Spot (MOTIR-11782): the Spot list is x86 only.
   if (requestsArm64Runner(intent.requestedLabels)) return 'on_demand';
   if (intent.spotInterruptionCount >= ON_DEMAND_AT_SPOT_INTERRUPTIONS) return 'on_demand';
   try {
-    return (await ciSpotSettingReader.read()).enabled ? 'spot' : 'on_demand';
+    if (!(await ciSpotSettingReader.read()).enabled) return 'on_demand';
   } catch (err) {
     console.warn('[ciRunnerBootService] the CI Spot setting could not be read — on-demand', {
       intentId: intent.id,
@@ -1732,6 +1757,22 @@ async function requestedCapacity(
     });
     return 'on_demand';
   }
+  try {
+    if (await ciSpotRerunPinService.isTargetPinned(intent.repoOwner, at)) {
+      console.warn('[ciRunnerBootService] an on-demand pin is open in the org — on-demand', {
+        intentId: intent.id,
+        org: intent.repoOwner,
+      });
+      return 'on_demand';
+    }
+  } catch (err) {
+    console.warn('[ciRunnerBootService] the on-demand pin could not be read — on-demand', {
+      intentId: intent.id,
+      detail: detailOf(err),
+    });
+    return 'on_demand';
+  }
+  return 'spot';
 }
 
 /**
@@ -1914,7 +1955,18 @@ async function retirementVerdict(
   const target = session.runnerTarget ?? undefined;
   try {
     const progress = await withSystemContext((tx) => intents.findJobProgress(session.intentId, tx));
-    if (!progress || progress.jobPickedUpAt) return null;
+    if (!progress) return null;
+    // WITHDRAWN FOR AN ON-DEMAND PIN (MOTIR-11732): GitHub already accepted the
+    // runner's removal, which it refuses for a runner running a job — so it was
+    // idle, and it is gone. Retire the container as an idle runner.
+    if (progress.runnerWithdrawnAt) {
+      console.warn('[ciRunnerBootService] retired a runner withdrawn for an on-demand pin', {
+        intentId: session.intentId,
+        runnerId,
+      });
+      return { done: true, reason: 'runner_idle', failureDetail: null, runnerRemoved: true };
+    }
+    if (progress.jobPickedUpAt) return null;
     const jobDone = progress.jobCompletedAt !== null;
     const idle = at.getTime() - new Date(session.bootedAt).getTime() >= idleTimeoutMs;
     if (!jobDone && !idle) return null;
