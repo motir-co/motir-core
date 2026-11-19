@@ -47,7 +47,11 @@ on:
 jobs:
   aws-deploy:
     name: Deploy to AWS
-    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # On the fleet the deploy also asks for `motir-on-demand` (MOTIR-11727): it
+    # migrates the database and rolls production, so a Spot reclaim mid-roll is
+    # worse than a re-run. Only an on-demand runner carries that label. With
+    # `vars.MOTIR_RUNNER` unset it stays on `ubuntu-latest`, exactly as before.
+    runs-on: ${{ vars.MOTIR_RUNNER && fromJSON(format('["{0}","motir-on-demand"]', vars.MOTIR_RUNNER)) || 'ubuntu-latest' }}
     # Until the seed card sets the variables, a merge skips this job rather than
     # failing it.
     if: vars.AWS_DEPLOY_ROLE_ARN != ''
