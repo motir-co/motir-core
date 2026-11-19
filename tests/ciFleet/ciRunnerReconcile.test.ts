@@ -10,10 +10,10 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { ciRunnerReconcileService } from '@/lib/services/ciRunnerReconcileService';
+import { ciRunnerReconcileService, coverPartitions } from '@/lib/services/ciRunnerReconcileService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
 import { fleetQueueClient } from '@/lib/github/fleetQueue';
-import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { MOTIR_ON_DEMAND_RUNNER_LABEL, MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { fakeOrchestrator } from '@motir/orchestrator';
@@ -175,6 +175,7 @@ async function seedIntent(
     runId?: number;
     status?: string;
     createdAt?: Date;
+    requestedLabels?: string[];
   },
 ) {
   const owner = data.owner ?? MOTIR_ORG;
@@ -191,7 +192,7 @@ async function seedIntent(
       workflowName: 'CI',
       repoOwner: owner,
       repoName: data.repo ?? 'acme-web',
-      requestedLabels: [MOTIR_RUNNER_LABEL],
+      requestedLabels: data.requestedLabels ?? [MOTIR_RUNNER_LABEL],
       queuedAt: new Date(NOW.getTime() - 3_600_000),
       status: data.status ?? 'completed',
       teardownReason: data.status ? null : 'job_completed',
@@ -241,6 +242,9 @@ afterAll(async () => {
 });
 
 const bootEvents = () => captured.events.filter((e) => e.name === 'system.ci-runner-boot');
+
+/** The labels of a job that asked never to run on Spot (MOTIR-11727). */
+const ON_DEMAND = [MOTIR_RUNNER_LABEL, MOTIR_ON_DEMAND_RUNNER_LABEL];
 
 describe('a job GitHub holds with no runner coming gets one', () => {
   it('mints a reconcile generation for a stranded job whose every intent is settled, and dispatches its boot', async () => {
@@ -1043,6 +1047,188 @@ describe('fleetQueueClient edges', () => {
           detail: 'GitHub could not be reached for the fleet queue (fetch failed).',
         },
       ],
+    });
+  });
+});
+
+describe('coverage is counted per label set (MOTIR-11727)', () => {
+  const minted = () =>
+    adminDb.ciRunnerProvisioningIntent.findMany({
+      where: { reconcileGeneration: { gt: 0 } },
+      orderBy: { jobId: 'asc' },
+    });
+
+  it('an idle ORDINARY runner does not cover a queued on-demand job: one intent is minted for it', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9101, requestedLabels: ON_DEMAND });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [{ ...stranded(9101), labels: ON_DEMAND }];
+    orgRunners[MOTIR_ORG] = [{ id: 1 }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs).toEqual([
+      {
+        org: MOTIR_ORG,
+        queued: 1,
+        idleRunners: 1,
+        awaiting: 0,
+        added: 1,
+        onDemand: { queued: 1, idleRunners: 0, awaiting: 0, added: 1 },
+      },
+    ]);
+    const rows = await minted();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ jobId: '9101', reconcileGeneration: 1 });
+    // The mint copies the job's labels, so the boot it dispatches is on-demand.
+    expect(rows[0]!.requestedLabels).toEqual(ON_DEMAND);
+    expect(bootEvents()).toHaveLength(1);
+  });
+
+  it('an idle ON-DEMAND runner covers a queued ordinary job when no on-demand job wants it: nothing minted', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9102 });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9102)];
+    orgRunners[MOTIR_ORG] = [{ id: 1, labels: ON_DEMAND }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs).toEqual([
+      {
+        org: MOTIR_ORG,
+        queued: 1,
+        idleRunners: 1,
+        awaiting: 0,
+        added: 0,
+        onDemand: { queued: 0, idleRunners: 1, awaiting: 0, added: 0 },
+      },
+    ]);
+    expect(await minted()).toEqual([]);
+    expect(bootEvents()).toEqual([]);
+  });
+
+  it('a pending ON-DEMAND intent covers a queued on-demand job: nothing minted', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9103, requestedLabels: ON_DEMAND, status: 'pending' });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [{ ...stranded(9103), labels: ON_DEMAND }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).toMatchObject({
+      queued: 1,
+      awaiting: 1,
+      added: 0,
+      onDemand: { queued: 1, idleRunners: 0, awaiting: 1, added: 0 },
+    });
+    expect(await minted()).toEqual([]);
+  });
+
+  it('only an ORDINARY intent pending: the on-demand job is minted for, carrying both labels', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9104, requestedLabels: ON_DEMAND });
+    await seedIntent(fx, { jobId: 9105, status: 'pending' });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [{ ...stranded(9104), labels: ON_DEMAND }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).toMatchObject({
+      queued: 1,
+      awaiting: 1,
+      added: 1,
+      onDemand: { queued: 1, idleRunners: 0, awaiting: 0, added: 1 },
+    });
+    const rows = await minted();
+    expect(rows.map((r) => r.jobId)).toEqual(['9104']);
+    expect(rows[0]!.requestedLabels).toEqual(['motir-runner', 'motir-on-demand']);
+  });
+
+  it('mixed queue: the on-demand surplus covers the OLDEST ordinary jobs, and each partition mints its youngest gaps', async () => {
+    const fx = await seedTenant();
+    const at = (minutesAgo: number) => new Date(NOW.getTime() - minutesAgo * 60_000).toISOString();
+    for (const id of [9201, 9202, 9203, 9204, 9205]) await seedIntent(fx, { jobId: id });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [
+      { id: 9201, run_id: 500, created_at: at(20), labels: ON_DEMAND },
+      { id: 9202, run_id: 500, created_at: at(19), labels: ON_DEMAND },
+      { id: 9203, run_id: 500, created_at: at(18) },
+      { id: 9204, run_id: 500, created_at: at(17) },
+      { id: 9205, run_id: 500, created_at: at(16) },
+    ];
+    // 1 idle on-demand runner (covers the older on-demand job), 1 idle ordinary
+    // runner (covers the oldest ordinary job) — no surplus is left.
+    orgRunners[MOTIR_ORG] = [{ id: 1, labels: ON_DEMAND }, { id: 2 }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).toMatchObject({
+      queued: 5,
+      idleRunners: 2,
+      awaiting: 0,
+      added: 3,
+      onDemand: { queued: 2, idleRunners: 1, awaiting: 0, added: 1 },
+    });
+    expect((await minted()).map((r) => r.jobId)).toEqual(['9202', '9204', '9205']);
+  });
+
+  it('jobs, runners and intents carrying only motir-runner report no on-demand counts', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9301 });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9301)];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).not.toHaveProperty('onDemand');
+    expect(outcome.orgs[0]).toMatchObject({ queued: 1, added: 1 });
+  });
+});
+
+describe('coverPartitions — the per-label-set arithmetic (MOTIR-11727)', () => {
+  const none = {
+    queuedOnDemand: 0,
+    queuedOther: 0,
+    idleOnDemand: 0,
+    idleOther: 0,
+    awaitingOnDemand: 0,
+    awaitingOther: 0,
+  };
+
+  it('ordinary capacity never covers an on-demand job', () => {
+    expect(coverPartitions({ ...none, queuedOnDemand: 2, idleOther: 3, awaitingOther: 3 })).toEqual(
+      { uncoveredOnDemand: 2, uncoveredOther: 0 },
+    );
+  });
+
+  it('on-demand capacity left over after the on-demand jobs covers ordinary ones', () => {
+    expect(
+      coverPartitions({
+        ...none,
+        queuedOnDemand: 1,
+        queuedOther: 4,
+        idleOnDemand: 2,
+        awaitingOnDemand: 1,
+        idleOther: 1,
+      }),
+    ).toEqual({ uncoveredOnDemand: 0, uncoveredOther: 1 });
+  });
+
+  it('a shortfall of on-demand capacity leaves no surplus for the ordinary jobs', () => {
+    expect(
+      coverPartitions({
+        ...none,
+        queuedOnDemand: 3,
+        idleOnDemand: 1,
+        queuedOther: 2,
+        idleOther: 1,
+      }),
+    ).toEqual({ uncoveredOnDemand: 2, uncoveredOther: 1 });
+  });
+
+  it('with no on-demand label anywhere it is the old single subtraction', () => {
+    expect(coverPartitions({ ...none, queuedOther: 5, idleOther: 1, awaitingOther: 2 })).toEqual({
+      uncoveredOnDemand: 0,
+      uncoveredOther: 2,
+    });
+    expect(coverPartitions({ ...none, queuedOther: 1, idleOther: 3 })).toEqual({
+      uncoveredOnDemand: 0,
+      uncoveredOther: 0,
     });
   });
 });

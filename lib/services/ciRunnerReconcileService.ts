@@ -7,6 +7,7 @@ import { attributeMirroredRepos } from '@/lib/services/ciRunnerProvisioningServi
 import { findProvisioningInstallationId } from '@/lib/github/repoProvisioning';
 import { dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
+import { requestsOnDemandRunner } from '@/lib/ciFleet/config';
 import { isCiFleetConfigured } from '@/lib/orchestrator';
 import {
   fleetQueueClient,
@@ -51,6 +52,23 @@ import {
 // count toward {@link MAX_RECONCILE_GENERATION}; {@link MAX_RECONCILE_GENERATION_CEILING}
 // still bounds the total.
 //
+// ⚠️ COVERAGE IS COUNTED PER LABEL SET (MOTIR-11727). A job that asked for the
+// on-demand label as well (`[motir-runner, motir-on-demand]`) can only be taken
+// by a runner carrying both, while a runner carrying both can take ANY fleet job.
+// So the on-demand partition is covered only by on-demand capacity, and the
+// ordinary partition by ordinary capacity plus whatever on-demand capacity the
+// on-demand jobs leave over:
+//
+//   uncovered on-demand = max(0, Q_od − I_od − A_od)
+//   surplus on-demand   = max(0, I_od + A_od − Q_od)
+//   uncovered other     = max(0, Q_other − I_other − A_other − surplus)
+//
+// One subtraction over the totals would let an idle ordinary runner "cover" a
+// deploy job it can never take (the deploy waits for ever), and counting the
+// partitions apart without the surplus would boot for an ordinary job an idle
+// on-demand runner is about to take. A minted intent copies its job's labels,
+// so a gap in the on-demand partition boots an on-demand runner on its own.
+//
 // ⚠️ IT NEVER BOOTS PAST THE GAP: coverage is counted before anything is minted,
 // the oldest jobs are the ones minted for, and the unique index on
 // `(run, attempt, job, reconcile_generation)` makes two racing sweeps collide
@@ -90,8 +108,21 @@ export interface ReconcileOrgOutcome {
   /** Linked `owner/repo`s the fleet's credential cannot read, named when jobs were
    *  left uncovered this tick (MOTIR-11437). Present only when there are any. */
   unreadableRepos?: string[];
+  /** The on-demand partition's share of the totals above (MOTIR-11727): queued
+   *  jobs that asked for the on-demand label, idle runners carrying it, intents
+   *  awaiting a runner that asked for it, and intents minted for such jobs.
+   *  Present only when any of them is non-zero. */
+  onDemand?: OnDemandCoverage;
   /** Set when the org could not be read; the other orgs are unaffected. */
   error?: string;
+}
+
+/** The on-demand partition of one org's reconcile (MOTIR-11727). */
+export interface OnDemandCoverage {
+  queued: number;
+  idleRunners: number;
+  awaiting: number;
+  added: number;
 }
 
 export interface ReconcileOutcome {
@@ -266,18 +297,39 @@ async function reconcileOrg(
     });
   }
   const runners = await fleetQueueClient.listFleetRunners(target);
-  const idleRunners = runners.filter((r) => r.online && !r.busy).length;
-  const awaiting = await withSystemContext((tx) =>
+  const idle = runners.filter((r) => r.online && !r.busy);
+  const idleOnDemand = idle.filter((r) => requestsOnDemandRunner(r.labels)).length;
+  const idleRunners = idle.length;
+  const awaitingSplit = await withSystemContext((tx) =>
     ciRunnerProvisioningIntentRepository.countAwaitingRunnerForOwner(org, tx),
   );
+  const awaiting = awaitingSplit.onDemand + awaitingSplit.other;
 
   // Oldest first: GitHub gives a runner to the oldest queued job, so the oldest
   // are the ones the available runners will serve and the uncovered are the rest.
   queued.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const uncovered = Math.max(0, queued.length - idleRunners - awaiting);
-  const gaps = queued.slice(queued.length - uncovered).filter((job) => pastGrace(job, now));
+  const queuedOnDemand = queued.filter((job) => requestsOnDemandRunner(job.labels));
+  const queuedOther = queued.filter((job) => !requestsOnDemandRunner(job.labels));
+  const coverage = coverPartitions({
+    queuedOnDemand: queuedOnDemand.length,
+    queuedOther: queuedOther.length,
+    idleOnDemand,
+    idleOther: idleRunners - idleOnDemand,
+    awaitingOnDemand: awaitingSplit.onDemand,
+    awaitingOther: awaitingSplit.other,
+  });
+  const onDemandGaps = youngest(queuedOnDemand, coverage.uncoveredOnDemand).filter((job) =>
+    pastGrace(job, now),
+  );
+  const otherGaps = youngest(queuedOther, coverage.uncoveredOther).filter((job) =>
+    pastGrace(job, now),
+  );
+  const gaps = [...onDemandGaps, ...otherGaps].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
 
   let added = 0;
+  let addedOnDemand = 0;
   for (const job of gaps) {
     const repo = repos.find(
       (r) => repoKey(r.base.repoOwner, r.base.repoName) === repoKey(job.repoOwner, job.repoName),
@@ -289,6 +341,7 @@ async function reconcileOrg(
     });
     if (intentId === null) continue;
     added += 1;
+    if (requestsOnDemandRunner(job.labels)) addedOnDemand += 1;
     // The ordinary boot path: `admit` is where the pool cap and the credit refusal
     // are decided, so a full pool defers this intent rather than exceeding it.
     await dispatchCiRunnerBoot(intentId, 'hot-path');
@@ -308,6 +361,13 @@ async function reconcileOrg(
     ...(undelivered.size > 0 ? { undeliveredRepos: [...undelivered] } : {}),
     ...(unreadableRepos.length > 0 ? { unreadableRepos } : {}),
   };
+  const onDemand: OnDemandCoverage = {
+    queued: queuedOnDemand.length,
+    idleRunners: idleOnDemand,
+    awaiting: awaitingSplit.onDemand,
+    added: addedOnDemand,
+  };
+  if (Object.values(onDemand).some((n) => n > 0)) outcome.onDemand = onDemand;
   if (added > 0) {
     console.warn(
       '[ciRunnerReconcile] queued fleet jobs had no runner coming — booted more',
@@ -323,6 +383,35 @@ async function reconcileOrg(
   reportBlindSpots(org, outcome);
   return outcome;
 }
+
+/**
+ * How many jobs of each label-set partition have no runner coming (MOTIR-11727),
+ * by the formula in the module header: the on-demand jobs are covered only by
+ * on-demand capacity, and the ordinary jobs by ordinary capacity plus the
+ * on-demand capacity the on-demand jobs leave over. Pure. Exported for the
+ * arithmetic's own tests.
+ */
+export function coverPartitions(counts: {
+  queuedOnDemand: number;
+  queuedOther: number;
+  idleOnDemand: number;
+  idleOther: number;
+  awaitingOnDemand: number;
+  awaitingOther: number;
+}): { uncoveredOnDemand: number; uncoveredOther: number } {
+  const onDemandCapacity = counts.idleOnDemand + counts.awaitingOnDemand;
+  const uncoveredOnDemand = Math.max(0, counts.queuedOnDemand - onDemandCapacity);
+  const surplus = Math.max(0, onDemandCapacity - counts.queuedOnDemand);
+  const uncoveredOther = Math.max(
+    0,
+    counts.queuedOther - counts.idleOther - counts.awaitingOther - surplus,
+  );
+  return { uncoveredOnDemand, uncoveredOther };
+}
+
+/** The `count` youngest of `oldestFirst` — the ones no runner will reach. */
+const youngest = (oldestFirst: QueuedFleetJob[], count: number) =>
+  count > 0 ? oldestFirst.slice(oldestFirst.length - count) : [];
 
 const pastGrace = (job: QueuedFleetJob, now: Date) =>
   now.getTime() - job.createdAt.getTime() > RECONCILE_GRACE_MS;
