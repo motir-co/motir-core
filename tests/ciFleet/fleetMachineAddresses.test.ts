@@ -130,6 +130,8 @@ describe('CI runner — ciRunnerBootService.buildSpec', () => {
         workspaceId: 'ws-1',
         repoOwner: 'motir-projects',
         repoName: 'demo',
+        // An ordinary fleet job's labels: the spec's capacity reads them (MOTIR-11727).
+        requestedLabels: ['motir-runner'],
       } as Parameters<typeof ciRunnerBootService.buildSpec>[0]['intent'],
       workflowJobId: 42,
       projectId: 'proj-1',
