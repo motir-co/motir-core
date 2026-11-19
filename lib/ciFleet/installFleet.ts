@@ -66,6 +66,8 @@ export const INSTALL_FLEET_ELIGIBLE_KINDS: readonly FleetWorkloadKind[] = [
  */
 export const EC2_INSTANCE_TYPE_VCPU: Readonly<Record<string, number>> = {
   'm6i.large': 2,
+  // The arm64 CI runner's Graviton type (MOTIR-11782), 2 vCPU like the x86 one.
+  'm7g.large': 2,
 };
 
 /**

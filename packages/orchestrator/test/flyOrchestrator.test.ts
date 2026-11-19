@@ -1341,3 +1341,14 @@ describe('createFlyOrchestrator — an account’s app and token, whatever FLY_F
     expect(JSON.parse(body)).toMatchObject({ region: 'sjc' });
   });
 });
+
+describe('an arm64 spec (MOTIR-11782)', () => {
+  it('is refused before any API call — Fly boots no arm64 machine, never one as x86', async () => {
+    const orchestrator = createFlyOrchestrator({ token: 't', app: APP, region: 'iad' });
+
+    await expect(orchestrator.provision({ ...SPEC, architecture: 'arm64' })).rejects.toBeInstanceOf(
+      OrchestratorNotConfiguredError,
+    );
+    expect(calls).toEqual([]);
+  });
+});

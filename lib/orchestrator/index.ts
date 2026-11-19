@@ -451,6 +451,24 @@ function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
 /** The env var naming the runner AMI every AWS account boots (MOTIR-9272). */
 export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
 
+/**
+ * The env var naming the ARM64 runner AMI an arm64 CI runner boots (MOTIR-11782),
+ * one value for the whole core deployment like {@link AWS_RUNNER_AMI_ENV_VAR}.
+ * Optional: unset, every x86 boot is unchanged and an arm64 intent is refused as
+ * not bootable (`arm64_runner_ami_not_pinned`).
+ */
+export const AWS_RUNNER_ARM64_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_ARM64_AMI_ID';
+
+/**
+ * THE ONE ARM64-READINESS READ (MOTIR-11782): the pinned arm64 runner AMI,
+ * trimmed, or null when unset or blank. Read straight from the environment —
+ * never through `awsShardClient`'s required values, so it is never required for
+ * an x86 boot and never filled with the acceptance lane's fake AMI.
+ */
+export function readArm64RunnerAmiId(): string | null {
+  return process.env[AWS_RUNNER_ARM64_AMI_ENV_VAR]?.trim() || null;
+}
+
 /** The env var naming the Docker-host AMI an AWS index VM boots (MOTIR-9446) —
  *  the ECS-optimized Amazon Linux 2023 AMI. Optional: unset, the account still
  *  boots runners and refuses an index spec as not configured. */
@@ -594,6 +612,7 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     region,
     shardTag: shard.name,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
+    arm64AmiId: readArm64RunnerAmiId() ?? undefined,
     indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
     spotInstanceTypes: async () => (await ciSpotSettingReader.read()).instanceTypes,
   });
@@ -796,6 +815,7 @@ export function installFleetOrchestrator(): ContainerOrchestrator {
     region: config.region,
     shardTag: INSTALL_FLEET_TAG,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
+    arm64AmiId: readArm64RunnerAmiId() ?? undefined,
     indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
     network: { subnetIds: config.subnetIds, securityGroupId: config.securityGroupId },
     // The VM profile grants only the indexer's ECR pull: an index VM takes it,

@@ -378,3 +378,13 @@ describe('createFakeOrchestrator — one fake per fleet account (MOTIR-8964)', (
     }
   });
 });
+
+describe('the architecture each spec asked for (MOTIR-11782)', () => {
+  it('is recorded in order, an absent architecture read as x86_64', async () => {
+    await fakeOrchestrator.provision(SPEC);
+    await fakeOrchestrator.provision({ ...SPEC, architecture: 'arm64' });
+    await fakeOrchestrator.provision({ ...SPEC, architecture: 'x86_64' });
+
+    expect(fakeOrchestrator.architectures()).toEqual(['x86_64', 'arm64', 'x86_64']);
+  });
+});

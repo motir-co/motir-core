@@ -10,6 +10,7 @@ import {
 import type {
   ContainerHandle,
   ContainerOrchestrator,
+  ContainerArchitecture,
   ContainerSpec,
   ContainerStatus,
   ContainerUsage,
@@ -103,6 +104,9 @@ export interface FakeOrchestratorControls {
   /** Every `provision` call's spec — how a test asserts what was ASKED for (the
    *  image, the size, the single label in the JIT env, the region). */
   readonly specs: ContainerSpec[];
+  /** The architecture each `provision` call ASKED for, in order (MOTIR-11782) —
+   *  an absent `architecture` read as the port's default, `x86_64`. */
+  architectures(): ContainerArchitecture[];
   /** Containers that still exist on the "provider" — the leak assertion. A test
    *  that ends with this non-empty has found a container the code did not
    *  destroy, which is the failure this whole card is about. */
@@ -264,6 +268,10 @@ export function createFakeOrchestrator(
     provisioned,
     specs,
     teardowns,
+
+    architectures() {
+      return specs.map((spec) => spec.architecture ?? 'x86_64');
+    },
 
     reset() {
       machines.clear();
