@@ -206,6 +206,9 @@ test('an unreadable code graph — no plan written, answers carry a notice, and 
 
   await chapter('Try again is on the turn, reachable by keyboard, and sends once', async () => {
     await expect(retry(page)).toBeVisible();
+    // Try again is disabled until the declined turn has finished settling (the rail's
+    // busy phase); a disabled button takes no focus, so the wait comes first.
+    await expect(retry(page)).toBeEnabled();
     await retry(page).focus();
     await expect(retry(page)).toBeFocused();
     const filed = page.waitForResponse(
