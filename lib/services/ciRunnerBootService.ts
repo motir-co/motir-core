@@ -4,6 +4,7 @@ import {
   ciRunnerProvisioningIntentRepository as intents,
   CI_RUNNER_INTENT_COMPLETED,
   CI_RUNNER_INTENT_FAILED,
+  type CiRunnerSettleRecord,
 } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import {
   ciContainerUsageRepository,
@@ -66,6 +67,11 @@ import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestr
 import { fleetCodeScanningCatchUpService } from '@/lib/services/fleetCodeScanningCatchUpService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
 import { ciSpotSettingReader } from '@/lib/services/ciSpotSettingReader';
+import {
+  ON_DEMAND_AT_SPOT_INTERRUPTIONS,
+  planSpotRerun,
+  requestSpotRerun,
+} from '@/lib/services/ciSpotRerunService';
 import {
   githubRunnerCallLedgerService as runnerCallLedger,
   runnerCallReachedGithub,
@@ -222,6 +228,9 @@ const SETTLED_AS_COMPLETED: ReadonlySet<TeardownReason> = new Set<TeardownReason
   'job_completed',
   'runner_idle',
   'job_done_elsewhere',
+  // EC2 reclaimed a Spot runner (MOTIR-11728): not a fault of the job, the
+  // account or the boot — the job it took, if any, is re-run.
+  'spot_interrupted',
 ]);
 
 /** How long a container has to reach a running state before it is written off as
@@ -1703,13 +1712,18 @@ function jitLabelsFor(intent: Pick<CiRunnerProvisioningIntent, 'requestedLabels'
  * An intent whose job asked for the on-demand label (MOTIR-11727) is on-demand
  * in either direction, without reading the setting: its runner carries that
  * label, and a Spot runner carrying it would break the label's one promise.
+ *
+ * A job Spot has already interrupted twice (MOTIR-11728) — its carried count is
+ * {@link ON_DEMAND_AT_SPOT_INTERRUPTIONS} — boots `on_demand` whatever the
+ * setting says.
  */
 async function requestedCapacity(
-  intent: Pick<CiRunnerProvisioningIntent, 'id' | 'requestedLabels'>,
+  intent: Pick<CiRunnerProvisioningIntent, 'id' | 'requestedLabels' | 'spotInterruptionCount'>,
 ): Promise<ContainerCapacity> {
   if (requestsOnDemandRunner(intent.requestedLabels)) return 'on_demand';
   // An arm64 runner is never Spot (MOTIR-11782): the Spot list is x86 only.
   if (requestsArm64Runner(intent.requestedLabels)) return 'on_demand';
+  if (intent.spotInterruptionCount >= ON_DEMAND_AT_SPOT_INTERRUPTIONS) return 'on_demand';
   try {
     return (await ciSpotSettingReader.read()).enabled ? 'spot' : 'on_demand';
   } catch (err) {
@@ -1834,7 +1848,13 @@ async function pollContainerOnce(
     const observed = startedAt ?? status.startedAt?.toISOString() ?? null;
     return {
       done: true,
-      reason: observed ? 'job_completed' : 'provision_failed',
+      // A Spot RECLAIM (MOTIR-11728) is its own verdict, whether or not the
+      // runner was seen starting: never a pass, and never a boot failure.
+      reason: status.reclaimed
+        ? 'spot_interrupted'
+        : observed
+          ? 'job_completed'
+          : 'provision_failed',
       startedAt: observed,
       bootLatencyMs,
       failureDetail: null,
@@ -2005,18 +2025,34 @@ async function settleSupervisedContainer(
 
   if (usage) {
     await recordContainerUsage(usage);
-    await settleIntent(intentId, session.attribution.projectId, {
+    const settledAt = now();
+    // A Spot reclaim's re-run is decided BEFORE the settle and written IN it
+    // (MOTIR-11728), so it lands only if this settle wins.
+    const spotRerun =
+      verdict.reason === 'spot_interrupted'
+        ? await planSpotRerunQuietly(intentId, settledAt)
+        : undefined;
+    const won = await settleIntent(intentId, session.attribution.projectId, {
       // A retired idle runner (MOTIR-11230) ended as designed, not as a fault:
       // its job ran elsewhere, or there was none for it.
       status: SETTLED_AS_COMPLETED.has(verdict.reason)
         ? CI_RUNNER_INTENT_COMPLETED
         : CI_RUNNER_INTENT_FAILED,
       teardownReason: verdict.reason,
-      settledAt: now(),
+      settledAt,
       failureDetail: verdict.failureDetail,
       startedAt: observedStartedAt,
       bootLatencyMs: verdict.bootLatencyMs,
+      ...(spotRerun ? { spotRerun } : {}),
     });
+    // ONE settle, one re-run: only the settle that won asks GitHub. An org stop
+    // or the reaper that settled first, or a replay of this step, asks nothing.
+    if (won && spotRerun?.rerunState === 'pending') {
+      const intent = await withSystemContext((tx) => intents.findById(intentId, tx)).catch(
+        () => null,
+      );
+      if (intent) await requestSpotRerun(intent);
+    }
     return {
       outcome: 'settled',
       reason: verdict.reason,
@@ -2148,25 +2184,38 @@ async function deregisterByNameQuietly(
 async function settleIntent(
   intentId: string,
   projectId: string | null,
-  record: {
-    status: string;
-    teardownReason: string | null;
-    settledAt: Date;
-    failureDetail: string | null;
-    startedAt?: Date | null;
-    bootLatencyMs?: number | null;
-  },
-): Promise<void> {
+  record: CiRunnerSettleRecord,
+): Promise<boolean> {
+  let won: boolean;
   try {
-    await withSystemContext((tx) => intents.settle(intentId, record, tx));
+    won = await withSystemContext((tx) => intents.settle(intentId, record, tx));
   } catch (err) {
     console.error('[ciRunnerBootService] could not settle an intent', {
       intentId,
       detail: detailOf(err),
     });
-    return;
+    return false;
   }
   await ciRunnerBootService.dispatchNextPendingForProject(projectId);
+  // Whether THIS settle moved the intent — first settle wins (MOTIR-6908).
+  return won;
+}
+
+/** {@link planSpotRerun}, with a read failure written down as no re-run rather
+ *  than thrown into the settle (MOTIR-11728). */
+async function planSpotRerunQuietly(
+  intentId: string,
+  settledAt: Date,
+): Promise<CiRunnerSettleRecord['spotRerun']> {
+  try {
+    return await withSystemContext((tx) => planSpotRerun(intentId, settledAt, tx));
+  } catch (err) {
+    console.error('[ciRunnerBootService] could not plan a Spot re-run — none requested', {
+      intentId,
+      detail: detailOf(err),
+    });
+    return undefined;
+  }
 }
 
 async function settleFailed(

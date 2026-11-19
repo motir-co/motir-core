@@ -8,8 +8,17 @@ import { mintInstallationToken } from '@/lib/github/appAuth';
 // convention `actionsPermissions.test.ts` established (a real mint needs a
 // private key the test env has no business carrying).
 
-vi.mock('@/lib/github/appAuth', () => ({
+vi.mock('@/lib/github/appAuth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github/appAuth')>()),
   mintInstallationToken: vi.fn(async () => ({ token: 'ghs_test', expiresAt: new Date() })),
+}));
+
+vi.mock('@/lib/github/repoProvisioning', () => ({
+  provisioningAuth: vi.fn(async () => ({
+    org: 'motir-projects',
+    installationId: '42',
+    token: 'ghs_provisioning',
+  })),
 }));
 
 const REPO = { installationId: '42', owner: 'motir-projects', repo: 'acme-web' };
@@ -140,5 +149,120 @@ describe('what escapes when GitHub misbehaves', () => {
     );
     const numeric = await actionsRunsClient.cancelRun(REPO, 1).catch((e: unknown) => e);
     expect((numeric as ActionsRunsError).detail).toBe('');
+  });
+});
+
+// A job RE-RUN (MOTIR-11728): the job a Spot-reclaimed runner was working, asked
+// through the installation its runner was registered through.
+describe('actionsRunsClient.rerunJob', () => {
+  const TARGET = { org: 'acme', installationId: '777', role: 'provisioning' as const };
+  const RERUN = { owner: 'acme', repo: 'web', target: TARGET };
+  const BODY_MARKER = 'BODY-MARKER-never-surfaces';
+
+  function answer(status: number): Response {
+    return new Response(JSON.stringify({ message: BODY_MARKER }), { status });
+  }
+
+  it('POSTs the job’s rerun endpoint with the target installation’s token, and answers true on 201', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 201 }));
+
+    expect(await actionsRunsClient.rerunJob(RERUN, '9901', '7001')).toBe(true);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.github.com/repos/acme/web/actions/jobs/9901/rerun');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['authorization']).toBe('Bearer ghs_test');
+    expect(vi.mocked(mintInstallationToken)).toHaveBeenCalledWith('777', 'provisioning');
+  });
+
+  it('authenticates through the provisioning installation when there is no target', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 201 }));
+
+    await actionsRunsClient.rerunJob({ ...RERUN, target: undefined }, '9901', '7001');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)['authorization']).toBe(
+      'Bearer ghs_provisioning',
+    );
+  });
+
+  it('answers 409 as a refusal that may clear', async () => {
+    fetchMock.mockResolvedValueOnce(answer(409));
+    expect(await actionsRunsClient.rerunJob(RERUN, '1', '7001')).toEqual({
+      refused: true,
+      status: 409,
+      mayClear: true,
+    });
+  });
+
+  it('answers 404 and 422 as refusals for good', async () => {
+    fetchMock.mockResolvedValueOnce(answer(404)).mockResolvedValueOnce(answer(422));
+    expect(await actionsRunsClient.rerunJob(RERUN, '1', '7001')).toEqual({
+      refused: true,
+      status: 404,
+      mayClear: false,
+    });
+    expect(await actionsRunsClient.rerunJob(RERUN, '1', '7001')).toEqual({
+      refused: true,
+      status: 422,
+      mayClear: false,
+    });
+  });
+
+  it('answers 403 on a run still in progress as a refusal that may clear', async () => {
+    fetchMock
+      .mockResolvedValueOnce(answer(403))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'in_progress' }), { status: 200 }),
+      );
+
+    expect(await actionsRunsClient.rerunJob(RERUN, '1', '7001')).toEqual({
+      refused: true,
+      status: 403,
+      mayClear: true,
+    });
+    expect(String(fetchMock.mock.calls[1]![0])).toBe(
+      'https://api.github.com/repos/acme/web/actions/runs/7001',
+    );
+  });
+
+  it('answers 403 on a finished run — or one it cannot read — as a refusal for good', async () => {
+    fetchMock
+      .mockResolvedValueOnce(answer(403))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'completed' }), { status: 200 }))
+      .mockResolvedValueOnce(answer(403))
+      .mockResolvedValueOnce(answer(404))
+      .mockResolvedValueOnce(answer(403))
+      .mockRejectedValueOnce(new Error('ECONNRESET'))
+      .mockResolvedValueOnce(answer(403))
+      .mockResolvedValueOnce(new Response('not json', { status: 200 }));
+
+    for (let i = 0; i < 4; i += 1) {
+      expect(await actionsRunsClient.rerunJob(RERUN, '1', '7001')).toEqual({
+        refused: true,
+        status: 403,
+        mayClear: false,
+      });
+    }
+  });
+
+  it('throws the typed error on any other status, carrying no raw body', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('<html>' + BODY_MARKER, { status: 500 }));
+
+    const err = await actionsRunsClient.rerunJob(RERUN, '1', '7001').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ActionsRunsError);
+    expect((err as ActionsRunsError).status).toBe(500);
+    expect((err as ActionsRunsError).message).not.toContain(BODY_MARKER);
+  });
+
+  it('throws the typed error, with no status, when the token cannot be minted', async () => {
+    vi.mocked(mintInstallationToken).mockRejectedValueOnce(new Error('mint failed'));
+
+    const err = await actionsRunsClient.rerunJob(RERUN, '1', '7001').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ActionsRunsError);
+    expect((err as ActionsRunsError).status).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
