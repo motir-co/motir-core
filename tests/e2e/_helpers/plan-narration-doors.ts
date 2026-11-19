@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import type { APIResponse, Page } from '@playwright/test';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { markEveryAddWritten } from '../../helpers/walkWritten';
+import { adminDb } from './db-reset';
 import { E2E_CORE_CALLBACK_SECRET } from './log-bug-as-ai';
 import type { SseFrameServer } from './sse-frame-server';
 import {
@@ -174,22 +176,27 @@ export async function hostedStep(
   }
 }
 
-/** The hosted walk's close: one `add` through the real proposals door, `final`. */
+/** The hosted walk's close: one `add` through the real proposals door, then the
+ *  `final` append. A walked plan closes `planned` only once every card it owes is
+ *  written (Bug MOTIR-11701), so between the two it stamps every add written, as
+ *  the author sessions this door stands in for would. */
 export async function hostedClose(page: Page, job: HostedJob, title: string): Promise<void> {
-  const res = await page.request.post('/api/internal/ai/plan-proposals', {
-    headers: {
-      authorization: `Bearer ${E2E_CORE_CALLBACK_SECRET}`,
-      'x-motir-job-token': job.token,
-    },
-    data: {
-      jobId: job.jobId,
-      proposals: [{ op: 'add', proposedFields: { title, kind: 'task' } }],
-      final: true,
-    },
-  });
-  if (res.status() !== 200) {
-    throw new Error(`plan-proposals answered ${res.status()}: ${await res.text()}`);
-  }
+  const append = async (proposals: unknown[], final: boolean) => {
+    const res = await page.request.post('/api/internal/ai/plan-proposals', {
+      headers: {
+        authorization: `Bearer ${E2E_CORE_CALLBACK_SECRET}`,
+        'x-motir-job-token': job.token,
+      },
+      data: { jobId: job.jobId, proposals, ...(final ? { final: true } : {}) },
+    });
+    if (res.status() !== 200) {
+      throw new Error(`plan-proposals answered ${res.status()}: ${await res.text()}`);
+    }
+  };
+  await append([{ op: 'add', proposedFields: { title, kind: 'task' } }], false);
+  const plan = await adminDb.plan.findFirstOrThrow({ where: { sourceJobId: job.jobId } });
+  await markEveryAddWritten(plan.id);
+  await append([], true);
 }
 
 // ── plan.py's door — the MCP SDK ─────────────────────────────────────────────
@@ -224,7 +231,10 @@ export async function mcpCreatePlan(
   return created.id;
 }
 
-/** Propose leaves under `parentRef`; `final` closes the plan (it goes `planned`). */
+/** Propose leaves under `parentRef`; `final` closes the plan (it goes `planned`).
+ *  A walked plan closes `planned` only once every card it owes is written (Bug
+ *  MOTIR-11701), so a `final` call stamps every add written before the close, as
+ *  plan.py's author sessions would. */
 export async function mcpAdd(
   agent: Client,
   planId: string,
@@ -239,8 +249,11 @@ export async function mcpAdd(
       proposedFields: { title, kind: 'subtask' },
       parentRef,
     })),
-    ...(final ? { final: true } : {}),
   });
+  if (final) {
+    await markEveryAddWritten(planId);
+    await tool(agent, ADD_PLAN_ITEMS_TOOL_NAME, { planId, proposals: [], final: true });
+  }
   return r.planItemIds;
 }
 

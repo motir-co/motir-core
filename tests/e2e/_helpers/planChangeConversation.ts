@@ -1,5 +1,6 @@
 import { plansService } from '@/lib/services/plansService';
 import { adminDb } from './db-reset';
+import { markEveryAddWritten } from '../../helpers/walkWritten';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { buildScope, PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -130,6 +131,7 @@ export async function finishSessionPlan(sessionId: string, title: string): Promi
     [{ op: 'add', proposedFields: { title, kind: 'task' } }],
     ctx,
   );
+  await markEveryAddWritten(plan.id);
   await plansService.markPlanned(plan.id, ctx);
   return plan.id;
 }
@@ -194,6 +196,7 @@ export async function finishSessionPlanWithEdge(
     ctx,
   );
 
+  await markEveryAddWritten(plan.id);
   await plansService.markPlanned(plan.id, ctx);
   return { planId: plan.id, blockerTitle: titles[0], blockedTitle: titles[1] };
 }
@@ -225,6 +228,7 @@ export async function finishSessionPlanWithCards(
     })),
     ctx,
   );
+  await markEveryAddWritten(plan.id);
   await plansService.markPlanned(plan.id, ctx);
   return plan.id;
 }
