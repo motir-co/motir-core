@@ -268,7 +268,10 @@ export const pullRequestReconcileService = {
 
         const { repo } = candidate;
         const token = await tokenFor(repo.installation.installationId, repo.owner);
-        const read = await readPullRequest(token, repo.owner, repo.name, candidate.number);
+        const read = await readPullRequest(token, repo.owner, repo.name, candidate.number, {
+          caller: 'pullRequestReconcile',
+          installationId: repo.installation.installationId,
+        });
 
         if (read.kind === 'gone') {
           summary.gone += 1;

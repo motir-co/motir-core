@@ -1,5 +1,14 @@
 import type { NormalizedChangeRequest } from '@/lib/git/types';
-import { MAX_ATTEMPTS, backoffMs, retryDelayMs, sleep } from './restRetry';
+import {
+  MAX_ATTEMPTS,
+  backoffMs,
+  noteGithubRequest,
+  observeGithubThrottle,
+  retryDelayMs,
+  sleep,
+  type GithubCallSite,
+  type GithubCallerContext,
+} from './restRetry';
 
 // Historical pull-request READ leaf (MOTIR-1965) — paginate a repository's
 // CLOSED pull requests off the REST API with an installation token, normalized
@@ -161,6 +170,7 @@ async function fetchPage(
   owner: string,
   name: string,
   page: number,
+  site: GithubCallSite,
 ): Promise<unknown[]> {
   const repoRef = `${owner}/${name}`;
   // `state=closed` — a merged PR is always closed, so this halves the scan
@@ -174,6 +184,7 @@ async function fetchPage(
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     let res: Response;
+    noteGithubRequest(site);
     try {
       res = await fetch(url, {
         headers: {
@@ -203,6 +214,7 @@ async function fetchPage(
       return body;
     }
 
+    observeGithubThrottle(site, res.status, res.headers, attempt);
     const delay = retryDelayMs(res.status, res.headers, attempt, Date.now());
     if (delay === null || attempt === MAX_ATTEMPTS)
       throw new HistoricalPullRequestReadError(
@@ -240,9 +252,11 @@ export async function* listMergedPullRequests(
   owner: string,
   name: string,
   providerRepoId: string,
+  context: GithubCallerContext,
 ): AsyncGenerator<HistoricalPullRequestPage & { truncated: boolean }> {
+  const site = { ...context, repository: `${owner}/${name}` };
   for (let page = 1; page <= MAX_PULL_REQUEST_PAGES; page += 1) {
-    const rows = await fetchPage(token, owner, name, page);
+    const rows = await fetchPage(token, owner, name, page, site);
     const merged: HistoricalPullRequest[] = [];
     for (const row of rows) {
       const pr = normalizeHistoricalPullRequest(row, providerRepoId);

@@ -1,3 +1,5 @@
+import { countGithubRequest } from '@/lib/monitoring/githubRequestMetrics';
+
 // Shared GitHub REST throttling policy for the read leaves (MOTIR-3034).
 //
 // Extracted from `historicalPullRequests.ts`, which owned it alone until a
@@ -32,21 +34,57 @@ export function backoffMs(attempt: number): number {
   return BASE_BACKOFF_MS * 2 ** (attempt - 1);
 }
 
+/** Any response's headers — a `Headers`, or a stub with the one method read. */
+export interface HeaderReader {
+  get(name: string): string | null;
+}
+
 /**
- * WHICH throttle a response is, when it is one (Bug MOTIR-11841) — or null for a
- * response GitHub did not throttle.
+ * The throttling signal a 403/429 carries, or null when it carries none.
  *
  * GitHub signals throttling three ways and this checks all three, because they
  * do not co-occur: a SECONDARY limit sends `retry-after` (seconds) on a 403; a
  * PRIMARY limit sends `x-ratelimit-remaining: 0` plus `x-ratelimit-reset` (unix
- * seconds) on a 403 or 429; and a bare 429 may carry neither. `waitMs` is the wait
- * the host NAMED — the retry-after, or the time left until the reset (never
- * negative) — and null for the bare 429, which names none.
+ * seconds) on a 403 or 429; and a bare 429 may carry neither. A 403 with no
+ * signal is an ACCESS failure (the installation lost the repo), not a rate limit.
  *
- * ⚠️ A 403 WITH NO THROTTLING SIGNAL IS NOT HERE. It is an ACCESS failure (the
- * installation lost the repository, or lacks a permission), and the merge path
- * reports it as one; reading it as a throttle would tell a person to wait for a
- * setting nobody changes.
+ * ⚠️ ONE READING FOR BOTH CONSUMERS (MOTIR-11842). {@link retryDelayMs} decides
+ * the wait from it and {@link classifyGithubThrottle} names the limit from it, so
+ * "what the retry loop treated as a throttle" and "what the log line reports as
+ * one" cannot drift apart.
+ */
+type ThrottleSignal =
+  | { readonly kind: 'retry_after'; readonly ms: number }
+  | { readonly kind: 'reset'; readonly resetMs: number }
+  | { readonly kind: 'bare_429' };
+
+function readThrottleSignal(status: number, headers: HeaderReader): ThrottleSignal | null {
+  if (status !== 403 && status !== 429) return null;
+
+  const retryAfter = Number(headers.get('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0)
+    return { kind: 'retry_after', ms: retryAfter * 1_000 };
+
+  const remaining = Number(headers.get('x-ratelimit-remaining'));
+  const reset = Number(headers.get('x-ratelimit-reset'));
+  if (remaining === 0 && Number.isFinite(reset) && reset > 0)
+    return { kind: 'reset', resetMs: reset * 1_000 };
+
+  return status === 429 ? { kind: 'bare_429' } : null;
+}
+
+/**
+ * WHICH throttle a response is, when it is one (Bug MOTIR-11841), with the wait
+ * the host NAMED — or null for a response GitHub did not throttle. Read from the
+ * same {@link readThrottleSignal} the retry loop uses, so the merge path and the
+ * retry loop cannot disagree on what a throttle is.
+ *
+ * `waitMs` is the retry-after, or the time left until the reset (never negative),
+ * and null for a bare 429, which names none.
+ *
+ * ⚠️ A 403 WITH NO THROTTLING SIGNAL IS NOT HERE. It is an ACCESS failure, and the
+ * merge path reports it as one; reading it as a throttle would tell a person to
+ * wait for a setting nobody changes.
  */
 export type GithubThrottle =
   | { signal: 'retry_after' | 'rate_limit_reset'; waitMs: number }
@@ -54,53 +92,184 @@ export type GithubThrottle =
 
 export function githubThrottle(
   status: number,
-  headers: { get(name: string): string | null },
+  headers: HeaderReader,
   nowMs: number,
 ): GithubThrottle | null {
-  if (status !== 403 && status !== 429) return null;
-
-  const retryAfter = Number(headers.get('retry-after'));
-  if (Number.isFinite(retryAfter) && retryAfter > 0) {
-    return { signal: 'retry_after', waitMs: retryAfter * 1_000 };
+  const signal = readThrottleSignal(status, headers);
+  if (!signal) return null;
+  if (signal.kind === 'retry_after') return { signal: 'retry_after', waitMs: signal.ms };
+  if (signal.kind === 'reset') {
+    return { signal: 'rate_limit_reset', waitMs: Math.max(signal.resetMs - nowMs, 0) };
   }
-
-  const remaining = Number(headers.get('x-ratelimit-remaining'));
-  const reset = Number(headers.get('x-ratelimit-reset'));
-  if (remaining === 0 && Number.isFinite(reset) && reset > 0) {
-    // `reset` is unix SECONDS; one already in the past is a wait of nothing.
-    return { signal: 'rate_limit_reset', waitMs: Math.max(reset * 1_000 - nowMs, 0) };
-  }
-
-  return status === 429 ? { signal: 'too_many_requests', waitMs: null } : null;
+  return { signal: 'too_many_requests', waitMs: null };
 }
 
 /**
  * How long to wait before retrying a response, or null when the response is not
  * retryable.
  *
- * A throttle ({@link githubThrottle}) waits what the host named: the `retry-after`
- * as given, a primary-limit reset with the backoff floor under it (so a reset
- * already in the past, or a clock skew, cannot spin the retry loop), and a bare 429
- * the plain backoff. A 5xx is retried on plain exponential backoff. Anything else —
- * 401, 404, 422, a 403 with no throttling signal — is a real failure the caller
- * must see, so it returns null.
+ * A throttled 403/429 waits as its signal says ({@link readThrottleSignal}); a 5xx
+ * is retried on plain exponential backoff. Anything else — 401, 404, 422, a 403
+ * with no throttling signal — is a real failure the caller must see, so it
+ * returns null.
  */
 export function retryDelayMs(
   status: number,
-  headers: { get(name: string): string | null },
+  headers: HeaderReader,
   attempt: number,
   nowMs: number,
 ): number | null {
   const backoff = backoffMs(attempt);
-
-  if (status === 403 || status === 429) {
-    const throttle = githubThrottle(status, headers, nowMs);
-    if (!throttle) return null;
-    if (throttle.signal === 'retry_after') return throttle.waitMs;
-    if (throttle.signal === 'rate_limit_reset') return Math.max(throttle.waitMs, backoff);
-    return backoff;
-  }
+  const signal = readThrottleSignal(status, headers);
+  if (signal?.kind === 'retry_after') return signal.ms;
+  // `reset` is unix SECONDS. A reset already in the past still gets the backoff
+  // floor rather than 0, so a clock skew cannot spin the retry loop.
+  if (signal?.kind === 'reset') return Math.max(signal.resetMs - nowMs, backoff);
+  if (signal?.kind === 'bare_429') return backoff;
 
   if (status >= 500) return backoff;
   return null;
+}
+
+// ── WHO TRIPPED IT (MOTIR-11842) ─────────────────────────────────────────────
+//
+// On 2026-11-19 GitHub secondary-limited the motir-co installation for ~40
+// minutes, and nothing Motir kept could say which limit it was or which part of
+// Motir made the burst: the retry loop read `retry-after` / `x-ratelimit-*` to
+// pick its wait and threw them away, and the merge path read none of them. So
+// every GitHub call site this module serves names ITSELF (a {@link GithubCallSite})
+// and:
+//   - counts each request it sends (`countGithubRequest`, one EMF series per
+//     caller per minute — `lib/monitoring/githubRequestMetrics.ts`), which answers
+//     who spent the minutes BEFORE a throttle; and
+//   - reports each throttled answer as ONE structured log line
+//     ({@link observeGithubThrottle}), which answers which limit it was.
+
+/**
+ * Every caller that names itself on a GitHub request. A CLOSED set, because each
+ * is a CloudWatch dimension value: an open string would let a typo or an
+ * interpolated id mint a new metric series per call.
+ */
+export const GITHUB_CALLERS = [
+  /** The pull-request reconcile sweep's `readPullRequest`. */
+  'pullRequestReconcile',
+  /** The base-branch backfill's `readPullRequestBaseRef`. */
+  'pullRequestBaseRefBackfill',
+  /** The historical merged-pull-request backfill's page walk. */
+  'historicalPullRequestBackfill',
+  /** The `pull_request` webhook's changed-path capture. */
+  'webhook.changedPaths',
+  /** The decision-document capture's changed-path read. */
+  'decisionDocumentCapture',
+  /** `GitProvider.mergeChangeRequest` — the reads and the merge itself. */
+  'mergeChangeRequest',
+  /** The merge-queue enqueue (and its already-queued read-back). */
+  'mergeQueueEnqueue',
+  /** `GitProvider.readChangeRequestMergeability`. */
+  'readChangeRequestMergeability',
+  /** `GitProvider.readReleaseContainsMerge`. */
+  'readReleaseContainsMerge',
+] as const;
+
+export type GithubCaller = (typeof GITHUB_CALLERS)[number];
+
+/** Which GitHub limit a throttled answer was. */
+export type GithubThrottleClass = 'primary' | 'secondary';
+
+/** Who is calling GitHub, for which installation and repository. */
+export interface GithubCallSite {
+  readonly caller: GithubCaller;
+  /** The HOST's numeric installation id, as Motir stores it. */
+  readonly installationId: string;
+  /** `owner/name`. */
+  readonly repository: string;
+}
+
+/** What a read leaf's CALLER supplies; the leaf adds the repository it reads. */
+export type GithubCallerContext = Omit<GithubCallSite, 'repository'>;
+
+/** Count one request `site` is about to send (`githubRequestMetrics`). */
+export function noteGithubRequest(site: GithubCallSite): void {
+  countGithubRequest(site.caller);
+}
+
+/**
+ * The rate-limit headers a throttle line carries — an ALLOWLIST, never a copy of
+ * the response's headers, so no credential can ride along (`authorization` is a
+ * REQUEST header, but an allowlist does not depend on knowing that).
+ * `x-github-request-id` is what GitHub Support asks for about one answer.
+ */
+export const GITHUB_THROTTLE_HEADERS = [
+  'retry-after',
+  'x-ratelimit-resource',
+  'x-ratelimit-limit',
+  'x-ratelimit-used',
+  'x-ratelimit-remaining',
+  'x-ratelimit-reset',
+  'x-github-request-id',
+] as const;
+
+/** The one structured line a throttled answer writes. */
+export interface GithubThrottleObservation {
+  readonly event: 'github.throttle';
+  readonly caller: GithubCaller;
+  readonly installationId: string;
+  readonly repository: string;
+  readonly status: number;
+  readonly classification: GithubThrottleClass;
+  /** Which try of the request this answer was (1-based), when the call retries. */
+  readonly attempt: number | null;
+  /** Only the {@link GITHUB_THROTTLE_HEADERS} the answer carried. */
+  readonly headers: Readonly<Partial<Record<(typeof GITHUB_THROTTLE_HEADERS)[number], string>>>;
+}
+
+/**
+ * Which limit a 403/429 hit, or null when it is not a throttle — exactly when
+ * {@link retryDelayMs} would not retry it as one.
+ *
+ * `x-ratelimit-remaining: 0` is the PRIMARY budget spent, whatever else came
+ * with it. Otherwise it is a SECONDARY limit: GitHub's documentation sends
+ * `retry-after` for those, and says an answer with no header at all is to be
+ * treated as one too (wait at least a minute), which is the bare 429.
+ */
+export function classifyGithubThrottle(
+  status: number,
+  headers: HeaderReader,
+): GithubThrottleClass | null {
+  if (readThrottleSignal(status, headers) === null) return null;
+  return headers.get('x-ratelimit-remaining')?.trim() === '0' ? 'primary' : 'secondary';
+}
+
+/**
+ * Report a GitHub answer that throttled `site`, as ONE structured log line (JSON,
+ * so CloudWatch Logs Insights reads its fields), and return what it wrote. An
+ * answer that is not a throttle writes nothing and returns null, so a caller may
+ * pass every non-2xx answer through it.
+ */
+export function observeGithubThrottle(
+  site: GithubCallSite,
+  status: number,
+  headers: HeaderReader,
+  attempt: number | null = null,
+): GithubThrottleObservation | null {
+  const classification = classifyGithubThrottle(status, headers);
+  if (classification === null) return null;
+
+  const present: Partial<Record<(typeof GITHUB_THROTTLE_HEADERS)[number], string>> = {};
+  for (const name of GITHUB_THROTTLE_HEADERS) {
+    const value = headers.get(name);
+    if (value !== null) present[name] = value;
+  }
+  const observation: GithubThrottleObservation = {
+    event: 'github.throttle',
+    caller: site.caller,
+    installationId: site.installationId,
+    repository: site.repository,
+    status,
+    classification,
+    attempt,
+    headers: present,
+  };
+  console.warn(JSON.stringify(observation));
+  return observation;
 }

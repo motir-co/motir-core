@@ -86,6 +86,12 @@ import type {
 } from '../types';
 import { DEPLOYMENT_STATES } from '../types';
 import { githubReadCodeBlame, githubReadCodeLog } from './githubCodeHistory';
+import {
+  noteGithubRequest,
+  observeGithubThrottle,
+  type GithubCallSite,
+  type GithubCaller,
+} from '@/lib/github/restRetry';
 import { githubBlobId } from './repoBlobId';
 
 // The GitHub implementation of the GitProvider seam (Story 7.10 · MOTIR-891) —
@@ -251,12 +257,25 @@ function mapConclusion(raw: string): CiConclusion {
 
 // ── MERGE (MOTIR-5514) ────────────────────────────────────────────────────────
 
-/** One host call of a merge, bounded — a hang or a dead host is a typed error. */
-async function githubMergeFetch(url: string, init: RequestInit): Promise<Response> {
+/**
+ * One host call of a merge, bounded — a hang or a dead host is a typed error.
+ *
+ * Every merge-side call goes through here, so this is where it is COUNTED for its
+ * caller and where a throttled answer is REPORTED with the limit it hit
+ * (MOTIR-11842) — before any arm below maps the 403 onto a refusal.
+ */
+async function githubMergeFetch(
+  site: GithubCallSite,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), MERGE_CHANGE_REQUEST_TIMEOUT_MS);
+  noteGithubRequest(site);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    observeGithubThrottle(site, res.status, res.headers);
+    return res;
   } catch (err) {
     throw controller.signal.aborted
       ? new MergeChangeRequestError('github', 'timeout')
@@ -278,11 +297,14 @@ async function githubMergeFetch(url: string, init: RequestInit): Promise<Respons
  *  auto-merge to its unreachable comment. A token endpoint answering 503 used to escape
  *  as `GithubAppTokenError`, which none of them maps, so an Approve-and-merge press
  *  crashed with a 500 AFTER its approval had committed. */
-async function githubMergeContext(input: {
-  installationId: string;
-  owner: string;
-  name: string;
-}): Promise<{ repoUrl: string; headers: Record<string, string> }> {
+async function githubMergeContext(
+  input: {
+    installationId: string;
+    owner: string;
+    name: string;
+  },
+  caller: GithubCaller,
+): Promise<{ repoUrl: string; headers: Record<string, string>; site: GithubCallSite }> {
   const role = githubAppRoleForRepo({ owner: input.owner }, await motirOwnedOrgLogins());
   let token: string;
   try {
@@ -298,6 +320,11 @@ async function githubMergeContext(input: {
   }
   return {
     repoUrl: `${GITHUB_API}/repos/${input.owner}/${input.name}`,
+    site: {
+      caller,
+      installationId: input.installationId,
+      repository: `${input.owner}/${input.name}`,
+    },
     headers: {
       authorization: `Bearer ${token}`,
       accept: 'application/vnd.github+json',
@@ -422,11 +449,12 @@ function rulesRequireMergeQueue(rules: unknown): boolean {
 
 /** One GraphQL call of a merge, bounded like every other host call it makes. */
 function githubMergeGraphql(
+  site: GithubCallSite,
   headers: Record<string, string>,
   query: string,
   variables: Record<string, unknown>,
 ): Promise<Response> {
-  return githubMergeFetch(`${GITHUB_API}/graphql`, {
+  return githubMergeFetch(site, `${GITHUB_API}/graphql`, {
     method: 'POST',
     headers: { ...headers, 'content-type': 'application/json' },
     body: JSON.stringify({ query, variables }),
@@ -446,6 +474,7 @@ function githubMergeGraphql(
  *   - anything else the queue refused → classified as the merge path classifies a 405.
  */
 async function githubEnqueue(
+  mergeSite: GithubCallSite,
   headers: Record<string, string>,
   pull: Record<string, unknown> | null,
   expectedHeadSha: string,
@@ -457,7 +486,8 @@ async function githubEnqueue(
     });
   }
 
-  const res = await githubMergeGraphql(headers, ENQUEUE_MUTATION, {
+  const site: GithubCallSite = { ...mergeSite, caller: 'mergeQueueEnqueue' };
+  const res = await githubMergeGraphql(site, headers, ENQUEUE_MUTATION, {
     pullRequestId: nodeId,
     expectedHeadOid: expectedHeadSha,
   });
@@ -484,7 +514,7 @@ async function githubEnqueue(
     return mergeRefused('app_permission_missing', permissionNamedBy(res));
   }
   if (ALREADY_QUEUED_MESSAGE.test(message)) {
-    const existing = await githubMergeGraphql(headers, QUEUE_ENTRY_QUERY, {
+    const existing = await githubMergeGraphql(site, headers, QUEUE_ENTRY_QUERY, {
       pullRequestId: nodeId,
     });
     const existingBody = existing.ok ? await mergeBodyOf(existing) : null;
@@ -735,11 +765,11 @@ export const githubProvider: GitProvider = {
    * through the provisioning App, an imported one through the user-facing App.
    */
   async mergeChangeRequest(input: MergeChangeRequestInput): Promise<MergeChangeRequestResult> {
-    const { repoUrl, headers } = await githubMergeContext(input);
+    const { repoUrl, headers, site } = await githubMergeContext(input, 'mergeChangeRequest');
 
     // 1. The allowed merge methods. A repository the App cannot see is a
     //    permission answer; one that is gone is a subject that changed.
-    const repoRes = await githubMergeFetch(repoUrl, { method: 'GET', headers });
+    const repoRes = await githubMergeFetch(site, repoUrl, { method: 'GET', headers });
     throwIfThrottled(repoRes);
     if (repoRes.status === 403) return refusedForPermission(repoRes);
     if (repoRes.status === 404) return mergeRefused('subject_changed');
@@ -749,7 +779,7 @@ export const githubProvider: GitProvider = {
     const mergeMethod = allowedMergeMethod(await mergeBodyOf(repoRes));
 
     // 2. The pull request as it stands now — and the three answers it gives alone.
-    const pullRes = await githubMergeFetch(`${repoUrl}/pulls/${input.number}`, {
+    const pullRes = await githubMergeFetch(site, `${repoUrl}/pulls/${input.number}`, {
       method: 'GET',
       headers,
     });
@@ -775,16 +805,17 @@ export const githubProvider: GitProvider = {
     const baseRef = objectOf(pull?.['base'])?.['ref'];
     if (typeof baseRef === 'string') {
       const rulesRes = await githubMergeFetch(
+        site,
         `${repoUrl}/rules/branches/${encodeURIComponent(baseRef)}`,
         { method: 'GET', headers },
       );
       if (rulesRes.ok && rulesRequireMergeQueue(await rulesRes.json().catch(() => null))) {
-        return githubEnqueue(headers, pull, input.expectedHeadSha);
+        return githubEnqueue(site, headers, pull, input.expectedHeadSha);
       }
     }
 
     // 4. The merge, pinned to the head the decision saw.
-    const mergeRes = await githubMergeFetch(`${repoUrl}/pulls/${input.number}/merge`, {
+    const mergeRes = await githubMergeFetch(site, `${repoUrl}/pulls/${input.number}/merge`, {
       method: 'PUT',
       headers: { ...headers, 'content-type': 'application/json' },
       body: JSON.stringify(
@@ -816,9 +847,9 @@ export const githubProvider: GitProvider = {
 
     // The branch must be merged through its queue: ENQUEUE it (MOTIR-5516).
     if (MERGE_QUEUE_MESSAGE.test(message))
-      return githubEnqueue(headers, pull, input.expectedHeadSha);
+      return githubEnqueue(site, headers, pull, input.expectedHeadSha);
 
-    const prRes = await githubMergeFetch(`${repoUrl}/pulls/${input.number}`, {
+    const prRes = await githubMergeFetch(site, `${repoUrl}/pulls/${input.number}`, {
       method: 'GET',
       headers,
     });
@@ -861,8 +892,11 @@ export const githubProvider: GitProvider = {
   async readChangeRequestMergeability(
     input: ChangeRequestMergeabilityInput,
   ): Promise<ChangeRequestMergeability> {
-    const { repoUrl, headers } = await githubMergeContext(input);
-    const res = await githubMergeFetch(`${repoUrl}/pulls/${input.number}`, {
+    const { repoUrl, headers, site } = await githubMergeContext(
+      input,
+      'readChangeRequestMergeability',
+    );
+    const res = await githubMergeFetch(site, `${repoUrl}/pulls/${input.number}`, {
       method: 'GET',
       headers,
     });
@@ -900,8 +934,11 @@ export const githubProvider: GitProvider = {
    */
   async readReleaseContainsMerge(input: ReleaseContainsMergeInput): Promise<ReleaseContainment> {
     try {
-      const { repoUrl, headers } = await githubMergeContext(input);
-      const prRes = await githubMergeFetch(`${repoUrl}/pulls/${input.number}`, {
+      const { repoUrl, headers, site } = await githubMergeContext(
+        input,
+        'readReleaseContainsMerge',
+      );
+      const prRes = await githubMergeFetch(site, `${repoUrl}/pulls/${input.number}`, {
         method: 'GET',
         headers,
       });
@@ -912,6 +949,7 @@ export const githubProvider: GitProvider = {
         return 'unknown';
       }
       const compareRes = await githubMergeFetch(
+        site,
         `${repoUrl}/compare/${encodeURIComponent(mergeSha)}...${encodeURIComponent(input.release)}`,
         { method: 'GET', headers },
       );

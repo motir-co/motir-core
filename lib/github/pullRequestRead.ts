@@ -1,4 +1,12 @@
-import { MAX_ATTEMPTS, backoffMs, retryDelayMs, sleep } from './restRetry';
+import {
+  MAX_ATTEMPTS,
+  backoffMs,
+  noteGithubRequest,
+  observeGithubThrottle,
+  retryDelayMs,
+  sleep,
+  type GithubCallerContext,
+} from './restRetry';
 
 // Single pull-request READ leaf (MOTIR-5390) — one authenticated
 // `GET /repos/{owner}/{name}/pulls/{number}`, returned as the RAW `pull_request`
@@ -55,12 +63,15 @@ export async function readPullRequest(
   owner: string,
   name: string,
   number: number,
+  context: GithubCallerContext,
 ): Promise<PullRequestRead> {
   const ref = `${owner}/${name}#${number}`;
   const url = `${GITHUB_API}/repos/${owner}/${name}/pulls/${number}`;
+  const site = { ...context, repository: `${owner}/${name}` };
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     let res: Response;
+    noteGithubRequest(site);
     try {
       res = await fetch(url, {
         headers: {
@@ -91,6 +102,7 @@ export async function readPullRequest(
 
     if (res.status === 404 || res.status === 410) return { kind: 'gone', status: res.status };
 
+    observeGithubThrottle(site, res.status, res.headers, attempt);
     const delay = retryDelayMs(res.status, res.headers, attempt, Date.now());
     if (delay === null || attempt === MAX_ATTEMPTS)
       throw new PullRequestReadError(

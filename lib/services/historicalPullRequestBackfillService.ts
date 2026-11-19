@@ -234,7 +234,10 @@ async function sweepRepo(
   }
 
   try {
-    for await (const page of listMergedPullRequests(token, repo.owner, repo.name, repo.repoId)) {
+    for await (const page of listMergedPullRequests(token, repo.owner, repo.name, repo.repoId, {
+      caller: 'historicalPullRequestBackfill',
+      installationId: repo.installation.installationId,
+    })) {
       report.scanned += page.scanned;
       report.pages += 1;
       if (page.truncated) report.truncated = true;

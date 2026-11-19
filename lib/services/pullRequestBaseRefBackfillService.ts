@@ -218,7 +218,10 @@ async function sweepRepo(
 
   try {
     for (const candidate of candidates) {
-      const read = await readPullRequestBaseRef(token, repo.owner, repo.name, candidate.number);
+      const read = await readPullRequestBaseRef(token, repo.owner, repo.name, candidate.number, {
+        caller: 'pullRequestBaseRefBackfill',
+        installationId: repo.installation.installationId,
+      });
       if (read.kind === 'unanswerable') {
         // The column stays NULL and the repository stays UNKNOWN. This is the
         // fail-closed doctrine holding, and the reason the count is reported.

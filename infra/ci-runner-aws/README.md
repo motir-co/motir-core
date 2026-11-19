@@ -60,7 +60,9 @@ fly secrets set -a motir-core MOTIR_AWS_RUNNER_ARM64_AMI_ID=ami-…
 ```
 
 `build-ami.sh` reads each id from Packer's manifest by its build name (`runner`,
-`runner-arm64`), never by position. Until `MOTIR_AWS_RUNNER_ARM64_AMI_ID` is set, the adapter
+`runner-arm64`), never by position. The name is the manifest's `custom_data.build`, which the
+template sets from each build's own `name`: the entries' `name` field is the shared source's name,
+`runner`, on both (MOTIR-11843). Until `MOTIR_AWS_RUNNER_ARM64_AMI_ID` is set, the adapter
 refuses arm64 jobs rather than launching them on an x86_64 image.
 
 `MOTIR_AWS_RUNNER_AMI_ID` is the AWS counterpart of `MOTIR_RUNNER_IMAGE`: the AWS
