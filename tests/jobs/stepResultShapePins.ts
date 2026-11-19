@@ -196,6 +196,13 @@ export interface RetiredStepId {
  * gained `spot_interrupted` (a CI runner EC2 reclaimed for Spot), which widens
  * the same `reason` / `usage.teardownReason` members again. A memo written before
  * it holds one of the older reasons, all still in the union.
+ *
+ * ⚠️ MOTIR-11782 KEPT `boot-runner` AND `settle-runner` ON PURPOSE. The boot's
+ * terminal outcome gained `not_bootable` (`arm64_runner_ami_not_pinned`: an arm64
+ * intent with no arm64 runner AMI pinned), which WIDENS both unions. Both steps
+ * provision or tear down, so a new id would re-provision on a resumed run. A memo
+ * written before the change carries one of the older outcomes, all of which the
+ * new union still holds, so a replay reads exactly as it did.
  */
 export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   '`head-settle-${pass}`': {
@@ -283,7 +290,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   'boot-runner': {
     file: 'lib/services/ciRunnerBootService.ts',
     shape:
-      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "plan_cap" | "plan_unknown" | "shard_capacity" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; region: string; shardId?: string | undefined; volumeId?: string | undefined }; image?: string | undefined; intentId: string; queuedAt: string; runnerTarget?: null | undefined | { installationId: string; org: string; role: "provisioning" | "user-facing" } } }',
+      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "plan_cap" | "plan_unknown" | "shard_capacity" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "not_bootable"; reason: "arm64_runner_ami_not_pinned" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; region: string; shardId?: string | undefined; volumeId?: string | undefined }; image?: string | undefined; intentId: string; queuedAt: string; runnerTarget?: null | undefined | { installationId: string; org: string; role: "provisioning" | "user-facing" } } }',
   },
   'build-archive': {
     file: 'lib/jobs/definitions/dataExportBuild.ts',
@@ -490,10 +497,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
     shape: 'Array<string>',
   },
-  'reconcile-github-queue-v4': {
+  'reconcile-github-queue-v5': {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
     shape:
-      '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; onDemand?: undefined | { added: number; awaiting: number; idleRunners: number; queued: number }; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined; undeliveredRepos?: Array<string> | undefined; unreadableRepos?: Array<string> | undefined }> }',
+      '{ added: number; error?: string | undefined; orgs: Array<{ added: number; arm64?: undefined | { added: number; awaiting: number; idleRunners: number; queued: number }; awaiting: number; error?: string | undefined; idleRunners: number; onDemand?: undefined | { added: number; awaiting: number; idleRunners: number; queued: number }; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined; undeliveredRepos?: Array<string> | undefined; unreadableRepos?: Array<string> | undefined }> }',
   },
   'mark-stale-for-terminal-target': {
     file: 'lib/jobs/definitions/planDrift.ts',
@@ -856,7 +863,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',
     shape:
-      '{ billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "plan_cap" | "plan_unknown" | "shard_capacity" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }',
+      '{ billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "plan_cap" | "plan_unknown" | "shard_capacity" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "not_bootable"; reason: "arm64_runner_ami_not_pinned" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }',
   },
   sweep: {
     file: 'lib/jobs/definitions/automationEngine.ts',
@@ -1017,23 +1024,30 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'reconcile-github-queue-v4': {
+    shape:
+      '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; onDemand?: undefined | { added: number; awaiting: number; idleRunners: number; queued: number }; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined; undeliveredRepos?: Array<string> | undefined; unreadableRepos?: Array<string> | undefined }> }',
+    supersededBy: 'reconcile-github-queue-v5',
+    reason:
+      'MOTIR-11781 added each org outcome’s `arm64` counts (queued jobs, idle runners, awaiting intents and mints that asked for the `motir-graviton` label), the partition the reconcile cuts before the x86 arithmetic. A memo under the old id carries none, so a resumed run would record an outcome without the partition the reconcile now judges by. Re-executing the reconcile on a resumed run is safe for the reason the v1 retirement gives: coverage is counted before anything is minted, and the unique index on `(run, attempt, job, reconcile_generation)` makes a second mint collide rather than double-boot.',
+  },
   'reconcile-github-queue-v3': {
     shape:
       '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined; undeliveredRepos?: Array<string> | undefined; unreadableRepos?: Array<string> | undefined }> }',
-    supersededBy: 'reconcile-github-queue-v4',
+    supersededBy: 'reconcile-github-queue-v5',
     reason:
       'MOTIR-11727 added each org outcome’s `onDemand` counts (queued jobs, idle runners, awaiting intents and mints that asked for the `motir-on-demand` label), counted per label set. A memo under the old id carries none, so a resumed run would record an outcome without the partition the reconcile now judges by. Re-executing the reconcile on a resumed run is safe for the reason the v1 retirement gives: coverage is counted before anything is minted, and the unique index on `(run, attempt, job, reconcile_generation)` makes a second mint collide rather than double-boot.',
   },
   'reconcile-github-queue-v2': {
     shape:
       '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined }> }',
-    supersededBy: 'reconcile-github-queue-v4',
+    supersededBy: 'reconcile-github-queue-v5',
     reason:
       'MOTIR-11437 added each org outcome’s `undeliveredRepos` and `unreadableRepos` (repos the fleet is blind to). A memo under the old id carries neither, so the blind spots a resumed run recorded would be lost. Re-executing the reconcile on a resumed run is safe for the reason the v1 retirement gives: coverage is counted before anything is minted, and the unique index on `(run, attempt, job, reconcile_generation)` makes a second mint collide rather than double-boot.',
   },
   'reconcile-github-queue': {
     shape: '{ added: number }',
-    supersededBy: 'reconcile-github-queue-v4',
+    supersededBy: 'reconcile-github-queue-v5',
     reason:
       'MOTIR-10790 made the step return the whole reconcile outcome (per org: queued, idle runners, awaiting, added, skipped runs, error) so the provision sweep can record it on `job_run`. A memo under the old id carries only `added`. Re-executing the reconcile on a resumed run is safe: it counts queued jobs against idle runners and pending intents before minting, and the unique index on `(run, attempt, job, reconcile_generation)` makes a second mint collide rather than double-boot.',
   },

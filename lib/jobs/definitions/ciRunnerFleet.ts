@@ -130,9 +130,9 @@ export const ciRunnerProvisionSweep = defineJob(
     // Its whole outcome — per org: queued, idle runners, awaiting, added, skipped
     // runs, the repos the fleet is blind to (MOTIR-11437), error — rides the
     // sweep's OUTPUT (MOTIR-10790), so a reconcile that keeps failing for an org
-    // shows on the `job_run` row, not only in the logs. `-v4` because the memo's
-    // shape changed again (MOTIR-11727 added each org's on-demand counts);
-    // re-executing it on a resumed run is safe, since the reconcile counts
+    // shows on the `job_run` row, not only in the logs. `-v5` because the memo's
+    // shape changed again (MOTIR-11727 added each org's on-demand counts,
+    // MOTIR-11781 its arm64 counts); re-executing it on a resumed run is safe, since the reconcile counts
     // coverage before it mints anything.
     //
     // The outcome is also KEPT as the latest blind-spot record (MOTIR-11439), the
@@ -140,7 +140,7 @@ export const ciRunnerProvisionSweep = defineJob(
     // step (whose memo holds the outcome) writes nothing, and with the time the
     // reconcile finished — the tick the page names.
     const reconcile = await ctx.step.run(
-      'reconcile-github-queue-v4',
+      'reconcile-github-queue-v5',
       async (): Promise<ReconcileOutcome> => {
         let outcome: ReconcileOutcome;
         try {
