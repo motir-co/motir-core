@@ -902,6 +902,9 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/guide/offer/[turnId]/planning-seed/route.ts',
     'app/api/ai/guide/settle/route.ts',
     'app/api/ai/jobs/[jobId]/route.ts',
+    // GRILL ME stored on the conversation (Story MOTIR-11799 · MOTIR-11801): one
+    // column write on the session, no model job.
+    'app/api/ai/plan-change/session/grill-me/route.ts',
     // The boundary MAILBOX (Story MOTIR-4054 · MOTIR-4067 / MOTIR-4068): a turn
     // or a stop attached to a job that is ALREADY running and already paid for —
     // one row each, no model job submitted, the `turns` precedent exactly.

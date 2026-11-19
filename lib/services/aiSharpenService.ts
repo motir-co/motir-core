@@ -139,6 +139,9 @@ interface Grounding {
   conversation?: SharpenConversationContext;
   /** What a plan no conversation produced is about (MOTIR-10284), so it can be researched. */
   subject?: string;
+  /** The research Grill me's read ran beside it (MOTIR-11798), carried on its hand-off:
+   *  the grilling's first job holds it, so it does not search again. */
+  handoffResearch?: SharpenResearchRecord;
 }
 
 // A plan is open while an answer may still be written to it. A planning run in
@@ -386,7 +389,7 @@ async function runContextFor(
 async function conversationContextFor(
   conversationId: string,
   ctx: ProjectContext,
-): Promise<SharpenConversationContext | undefined> {
+): Promise<{ context: SharpenConversationContext; research?: SharpenResearchRecord } | undefined> {
   return withWorkspaceContext(bindCtx(ctx), async (tx) => {
     const turns = await planChangeTurnRepository.listBySessionId(
       conversationId,
@@ -401,7 +404,9 @@ async function conversationContextFor(
     const card = cardKey
       ? await workItemRepository.findByIdentifier(ctx.projectId, cardKey, tx)
       : null;
-    // The undecided plan offer the grilling holds, whose requirement its end rewrites.
+    // The undecided plan offer the grilling holds, whose requirement its end rewrites —
+    // or Grill me's hand-off (MOTIR-11798), sent DEFERRED with what the read read, so
+    // the first question asks from it and the end always writes the requirement.
     const pending = pendingPlanOfferOf(offerTurns(turns));
     const offer =
       pending && pending.offer.kind === 'plan'
@@ -410,13 +415,27 @@ async function conversationContextFor(
             requestMd: pending.offer.requestMd,
             ...(pending.offer.requirement ? { requirement: pending.offer.requirement } : {}),
           }
-        : null;
+        : pending && pending.offer.kind === 'grill'
+          ? {
+              turnId: pending.turnId,
+              requestMd: pending.offer.requestMd,
+              deferred: true as const,
+              handoff: {
+                items: pending.offer.handoff?.items ?? [],
+                code: pending.offer.handoff?.code ?? [],
+              },
+            }
+          : null;
+    const research = pending?.offer.kind === 'grill' ? pending.offer.handoff?.research : undefined;
     return {
-      requests,
-      readAnswer: answer?.body ?? null,
-      card: card ? { key: card.identifier, title: card.title } : null,
-      turns: conversationTurnsOf(turns),
-      offer,
+      context: {
+        requests,
+        readAnswer: answer?.body ?? null,
+        card: card ? { key: card.identifier, title: card.title } : null,
+        turns: conversationTurnsOf(turns),
+        offer,
+      },
+      ...(research ? { research } : {}),
     };
   });
 }
@@ -470,11 +489,14 @@ async function groundingFor(target: Target, ctx: ProjectContext): Promise<Ground
     const subject = await planSubjectFor(target, ctx);
     return subject ? { subject } : {};
   }
-  const conversation = await conversationContextFor(target.conversationId, ctx);
-  if (!conversation) {
+  const read = await conversationContextFor(target.conversationId, ctx);
+  if (!read) {
     throw new SharpenActionInvalidError('Ask Motir AI something first: there is nothing to grill.');
   }
-  return { conversation };
+  return {
+    conversation: read.context,
+    ...(read.research ? { handoffResearch: read.research } : {}),
+  };
 }
 
 /** The `context.sharpen` a job reads — built from STORED state only. */
@@ -502,8 +524,13 @@ function jobContext(
     ...(grounding.conversation ? { conversation: grounding.conversation } : {}),
     ...(grounding.subject ? { subject: grounding.subject } : {}),
     // The shipped-product research an earlier turn returned (MOTIR-10284), so motir-ai
-    // holds it on every turn without searching again.
-    ...(isResearchRecord(row.research) ? { research: row.research } : {}),
+    // holds it on every turn without searching again — or, before any turn returned one,
+    // the research Grill me's read ran beside it (MOTIR-11798).
+    ...(isResearchRecord(row.research)
+      ? { research: row.research }
+      : grounding.handoffResearch
+        ? { research: grounding.handoffResearch }
+        : {}),
   };
 }
 
@@ -511,12 +538,35 @@ function isResearchRecord(v: unknown): v is SharpenResearchRecord {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** Submit ONE `sharpen_turn` job, then bind it to its person turn. */
+/**
+ * The GRILL ME switch of the conversation behind a target (Story MOTIR-11799 ·
+ * MOTIR-11801), read at submit from the stored session: a conversation's own, a plan's
+ * the conversation that wrote it. `false` for a plan no conversation stands behind.
+ */
+async function grillMeOf(target: Target, ctx: ProjectContext): Promise<boolean> {
+  return withWorkspaceContext(bindCtx(ctx), async (tx) => {
+    if (target.kind === 'conversation') {
+      const session = await planChangeSessionRepository.findById(
+        target.conversationId,
+        ctx.workspaceId,
+        tx,
+      );
+      return session?.grillMe === true;
+    }
+    const subject = await planRepository.findHoldSubject(target.planId, tx);
+    return subject?.session?.grillMe === true;
+  });
+}
+
+/** Submit ONE `sharpen_turn` job, then bind it to its person turn. The job carries the
+ *  conversation's Grill me switch beside the turn (`context.grillMe`, MOTIR-11801). */
 async function submitAndBind(
+  target: Target,
   context: SharpenJobContext,
   turnId: string,
   ctx: ProjectContext,
 ): Promise<string> {
+  const grillMe = await grillMeOf(target, ctx);
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg(actorOf(ctx));
   const { jobId } = await submitJob(
     'sharpen_turn',
@@ -528,7 +578,7 @@ async function submitAndBind(
       projectId: ctx.projectId,
       projectKey: ctx.project.identifier,
     },
-    { sharpen: context },
+    { sharpen: context, grillMe },
     { userId: ctx.userId },
   );
   await withWorkspaceContext(bindCtx(ctx), (tx) =>
@@ -780,12 +830,20 @@ async function land(
       },
       tx,
     );
-    // The requirement the grilling wrote lands on its offer as the session ends.
+    // The requirement the grilling wrote lands on its offer as the session ends — and a
+    // Grill me hand-off the end wrote none for is released as a plan offer without one
+    // (MOTIR-11798), so the conversation never ends the grilling with nothing to confirm.
     if (ends && row.planChangeSessionId && r.requirement) {
       await planOfferService.storeGrilledRequirementWithin(
         ctx,
         { sessionId: row.planChangeSessionId, offerTurnId: r.requirement.offerTurnId },
         r.requirement.requirement,
+        tx,
+      );
+    } else if (ends && row.planChangeSessionId) {
+      await planOfferService.releaseGrillHandoffWithin(
+        ctx,
+        { sessionId: row.planChangeSessionId },
         tx,
       );
     }
@@ -854,7 +912,12 @@ export const aiSharpenService = {
       return { outcome: 'resumed', jobId: null, turnId: null, session };
     }
     const { row, turn } = written;
-    const jobId = await submitAndBind(jobContext(target, row, [], turn, grounding), turn.id, ctx);
+    const jobId = await submitAndBind(
+      target,
+      jobContext(target, row, [], turn, grounding),
+      turn.id,
+      ctx,
+    );
     return { outcome: 'sharpening', jobId, turnId: turn.id, session: await loadDto(row.id, ctx) };
   },
 
@@ -875,6 +938,7 @@ export const aiSharpenService = {
     const { row, before, turn } = await actWrite(sessionId, action, opts, ctx);
     if (action === 'stop') await cancelSupersededJob(before, ctx);
     const jobId = await submitAndBind(
+      target,
       jobContext(target, row, before, turn, grounding),
       turn.id,
       ctx,
@@ -906,6 +970,7 @@ export const aiSharpenService = {
     await assertSharpenable(target, ctx, turn.action === 'stop');
     const before = turns.filter((t) => t.seq < turn.seq);
     const jobId = await submitAndBind(
+      target,
       jobContext(target, row, before, turn, await groundingFor(target, ctx)),
       turn.id,
       ctx,

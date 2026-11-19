@@ -312,6 +312,10 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       autoResumeCount: 0,
       lastAutoResumedAt: null,
       providerResumedAt: null,
+      // Grill me (MOTIR-11801): a new session starts off.
+      grillMe: false,
+      grillMeChangedAt: null,
+      grillMeChangedById: null,
       // The waiting state (MOTIR-7908): an unmarked session carries none of it.
       failedAt: null,
       failedJobId: null,

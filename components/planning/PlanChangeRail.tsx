@@ -32,6 +32,8 @@ import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer, PlanChangeRunningBar } from '@/components/planning/PlanChangeComposer';
 import { GrillMeControl } from '@/components/planning/GrillMeControl';
+import { GrillOffConfirmDialog } from '@/components/planning/GrillOffConfirmDialog';
+import type { GrillPaneState } from '@/lib/planning/requirementPane';
 import { SharpenThread } from '@/components/planning/SharpenThread';
 import { ConversationGrill } from '@/components/planning/ConversationGrill';
 import { useGrillOptIn } from '@/components/planning/useGrillOptIn';
@@ -314,7 +316,9 @@ export interface PlanChangeRailProps {
   targets: readonly PlanningTarget[];
   onAddTarget: (target: PlanningTarget) => void;
   onRemoveTarget: (identifier: string) => void;
-  onSend: (text: string) => void;
+  /** `opts.grillMe` (MOTIR-11801): the Grill me switch, on a send made before the
+   *  conversation exists — the session it starts is created with it on. */
+  onSend: (text: string, opts?: { grillMe?: boolean }) => void;
   onRetry: () => void;
   /**
    * RE-RUN the user turn `turnId` under the other intent — the correction
@@ -453,6 +457,10 @@ export interface PlanChangeRailProps {
    * Optional: absent, the offer is shown as soon as the grilling ends.
    */
   onConversationGrillEnded?: () => Promise<void>;
+  /** What the conversation's grilling is doing to the left pane (MOTIR-11802 ·
+   *  MOTIR-11805): the host draws the writing line, or the banner over the
+   *  requirement. Reported on every change; absent, the pane is drawn as before. */
+  onGrillPaneChange?: (state: GrillPaneState) => void;
   /** The offer whose answer is in flight — its controls are disabled. */
   offerAnsweringTurnId?: string | null;
   /** The last refused answer, on the offer it was for. */
@@ -514,6 +522,7 @@ export function PlanChangeRail({
   onConfirmPlanOffer,
   onDeclinePlanOffer,
   onConversationGrillEnded,
+  onGrillPaneChange,
   offerAnsweringTurnId = null,
   offerRefusal = null,
   providerLimit = null,
@@ -884,7 +893,7 @@ export function PlanChangeRail({
     !state.liveReview &&
     (state.phase === 'idle' || state.phase === 'streaming');
   const grillVisible = !state.readOnly && !ended && (conversing || beforeAnyRun);
-  const grillOptIn = useGrillOptIn(state.session?.id ?? null);
+  const grillOptIn = useGrillOptIn(state.session ?? null);
   const grill = useGrillSession({
     on: grillOptIn.on,
     planId: conversing ? (state.planId ?? state.liveReview?.id ?? null) : null,
@@ -895,9 +904,13 @@ export function PlanChangeRail({
   // before planning): a SECOND instance of the hook, over the conversation itself.
   // With the switch on, an answer carrying a plan offer opens a grilling and the
   // offer is HELD — drawn under the thread, with what was settled, once it ends.
-  // Its one input is the conversation's LATEST plan offer; the hold is the hook's.
+  // Its one input is the conversation's LATEST plan offer; the hold is the hook's. With
+  // Grill me on, the read offers nothing yet (MOTIR-11798): its `grill` hand-off opens
+  // the grilling in the plan offer's place, and the grilling's end turns it into the
+  // plan offer holding the requirement — so no requirement exists before the questions.
   const latestOfferIndex = turns.findLastIndex(
-    (turn) => turn.role === 'assistant' && turn.offer?.kind === 'plan',
+    (turn) =>
+      turn.role === 'assistant' && (turn.offer?.kind === 'plan' || turn.offer?.kind === 'grill'),
   );
   const latestOfferTurn = latestOfferIndex >= 0 ? turns[latestOfferIndex]! : null;
   const grillOffer: GrillOffer | null =
@@ -917,6 +930,9 @@ export function PlanChangeRail({
               hasActions: Boolean(onConfirmPlanOffer && onDeclinePlanOffer),
             }),
           decided: (latestOfferTurn.offer.state ?? 'undecided') !== 'undecided',
+          handoff: latestOfferTurn.offer.kind === 'grill',
+          requirement:
+            latestOfferTurn.offer.kind === 'plan' && Boolean(latestOfferTurn.offer.requirement),
         }
       : null;
   const convGrill = useGrillSession({
@@ -963,6 +979,53 @@ export function PlanChangeRail({
   const convGrillSession =
     convGrill.session?.scope.kind === 'conversation' && heldOfferTurnId ? convGrill.session : null;
   const [grillOwnWords, setGrillOwnWords] = useState(false);
+  // THE SWITCH-OFF CONFIRMATION (Story MOTIR-11799 · Subtask MOTIR-11802; design
+  // § Grill me — the switch-off confirmation). Switching Grill me off, or pressing Stop
+  // grilling, while a grilling is open or about to open asks first; only Confirm ends
+  // it, and the switch reads on until then. With nothing open or pending the switch
+  // simply goes off. "About to open" is a held offer whose session is not there yet,
+  // or the read itself still running with Grill me on — its hand-off then opens a
+  // grilling that ends at once and writes the requirement (MOTIR-11803).
+  const [offConfirm, setOffConfirm] = useState<'switch' | 'stop' | null>(null);
+  const grillEnding = convGrill.writing;
+  const grillOpenOrPending =
+    (convHold === 'held' && !grillEnding) ||
+    (beforeAnyRun && grillOptIn.on && state.phase === 'streaming' && !state.planId);
+  const changeGrillSwitch = (next: boolean) => {
+    if (!next && grillOptIn.on && grillOpenOrPending) {
+      setOffConfirm('switch');
+      return;
+    }
+    grillOptIn.setOn(next);
+  };
+  const confirmGrillOff = () => {
+    const how = offConfirm;
+    setOffConfirm(null);
+    if (how === 'switch') grillOptIn.setOn(false);
+    else if (how === 'stop') convGrill.stop();
+  };
+  const grillSettledCount = convGrillSession?.settled.length ?? 0;
+  // The pane follows the grilling: the writing line while the requirement is written;
+  // over a requirement already shown (MOTIR-11805), the updating banner while it is
+  // grilled and the updated one once its end rewrote it with answers.
+  const grillUpdated =
+    convGrill.overRequirement &&
+    convHold === 'shown' &&
+    convGrillSession?.status === 'ended' &&
+    convGrillSession.endReason !== 'nothing_to_ask' &&
+    (convGrillSession.settled.length > 0 || convGrillSession.assumptions.length > 0);
+  const grillPane: GrillPaneState = convGrill.overRequirement
+    ? convHold === 'held'
+      ? 'updating'
+      : grillUpdated
+        ? 'updated'
+        : null
+    : grillEnding
+      ? 'writing'
+      : null;
+  useEffect(() => {
+    onGrillPaneChange?.(grillPane);
+  }, [grillPane, onGrillPaneChange]);
   // The session's question, on the rail's question surface — only in the
   // conversation phase. The hand-off hides it; what was settled stays stored.
   // Before planning, the conversation grilling's own question takes that place.
@@ -1896,12 +1959,14 @@ export function PlanChangeRail({
                   pending={convGrill.pending}
                   error={convGrill.error}
                   endedBySwitch={convGrill.endedBySwitch}
+                  writing={convGrill.writing}
+                  overRequirement={convGrill.overRequirement}
                   {...(question || grillQuestion ? {} : { anchorId: PENDING_QUESTION_ID })}
                   onAct={(action, opts) => {
                     setGrillOwnWords(false);
                     convGrill.act(action, opts);
                   }}
-                  onStop={convGrill.stop}
+                  onStop={() => setOffConfirm('stop')}
                   onSomethingElse={() => {
                     setGrillOwnWords(true);
                     railRef.current?.querySelector('textarea')?.focus();
@@ -2342,7 +2407,8 @@ export function PlanChangeRail({
             }
             if (initialDraft && userTurns.length === 0) setSeededSend(text);
             setLastSent(text);
-            onSend(text);
+            if (!state.session && grillOptIn.on) onSend(text, { grillMe: true });
+            else onSend(text);
           }}
           placeholder={composerPlaceholder}
           // A held message stays in the field (the send above reached nobody).
@@ -2382,7 +2448,7 @@ export function PlanChangeRail({
             grillVisible ? (
               <GrillMeControl
                 on={grillOptIn.on}
-                onChange={grillOptIn.setOn}
+                onChange={changeGrillSwitch}
                 hint={grill.session?.status !== 'open' && !grill.pending && convHold !== 'held'}
                 beforePlanning={beforeAnyRun}
               />
@@ -2420,6 +2486,12 @@ export function PlanChangeRail({
           }}
         />
       )}
+      <GrillOffConfirmDialog
+        open={offConfirm !== null}
+        settledCount={grillSettledCount}
+        onKeep={() => setOffConfirm(null)}
+        onConfirm={confirmGrillOff}
+      />
     </aside>
   );
 }

@@ -9582,6 +9582,23 @@
         },
         "hint": "你的下一条消息会开始追问。",
         "hintBeforePlanning": "Motir AI 要提议规划时，会先提问。"
+      },
+      "offConfirm": {
+        "title": "停止追问并撰写需求？",
+        "bodySettled": "Motir AI 会立即停止提问，并根据你已确定的 {count, plural, other {# 个回答}}撰写需求。仍未确定的内容由规划者自行假设。",
+        "bodyNone": "目前还没有确定任何内容，所以 Motir AI 会立即停止提问，并按你的请求原样撰写需求。",
+        "keep": "继续追问",
+        "confirm": "停止并撰写"
+      },
+      "writing": "正在根据你确定的内容撰写需求…",
+      "writingNone": "正在根据你的请求撰写需求…",
+      "paneWriting": "需求写好后会显示在这里。",
+      "overRequirement": {
+        "opening": "追问我已开启——我只会问左侧需求中尚未确定的内容。",
+        "paneUpdating": "追问我已开启。提问结束后，你的回答会更新这份需求。",
+        "nothingLeft": "这份需求已经确定了我要问的所有内容，所以保持不变。",
+        "updated": "已用你的回答更新需求。",
+        "paneUpdated": "已根据追问中的回答更新。"
       }
     },
     "follow": {

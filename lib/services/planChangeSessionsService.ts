@@ -668,6 +668,14 @@ export async function appendWithin(
                       ) as Prisma.InputJsonObject,
                     }
                   : {}),
+                // Grill me's hand-off (MOTIR-11798): what the read read, for the grilling.
+                ...(turn.answerOffer.handoff
+                  ? {
+                      handoff: JSON.parse(
+                        JSON.stringify(turn.answerOffer.handoff),
+                      ) as Prisma.InputJsonObject,
+                    }
+                  : {}),
                 // The kept too-far request a decision offers (MOTIR-11521): which turn
                 // it came from, and its place among the conversation's kept requests.
                 ...(turn.answerOffer.farRequest
@@ -726,6 +734,28 @@ export async function appendWithin(
   return planChangeSessionRepository.update(
     fresh.id,
     { ...patch, turnCount: seq + 1, lastActivityAt: now },
+    tx,
+  );
+}
+
+/**
+ * GRILL ME chosen BEFORE the session existed (Story MOTIR-11799 · MOTIR-11801): the
+ * first message carries the composer's switch, and it is stored on the session that
+ * message lands on, in the same transaction. Only `true` writes: a new session starts
+ * off, and a session the turn RESUMES is never switched off by a choice made before
+ * the composer knew of it. `tx` is REQUIRED.
+ */
+async function adoptPreSessionGrillMeWithin(
+  sessionId: string,
+  grillMe: boolean | undefined,
+  pctx: ProjectContext,
+  now: Date,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (grillMe !== true) return;
+  await planChangeSessionRepository.setGrillMe(
+    sessionId,
+    { on: true, changedById: pctx.userId, changedAt: now },
     tx,
   );
 }
@@ -1767,7 +1797,14 @@ export const planChangeSessionsService = {
     pctx: ProjectContext,
     scope: PlanChangeScope,
     body: string,
-    opts: { isAnswer?: boolean; anchorKey?: string | null } = {},
+    opts: {
+      isAnswer?: boolean;
+      anchorKey?: string | null;
+      /** GRILL ME switched on BEFORE the session existed (MOTIR-11801): stored on the
+       *  session this turn lands on. Only `true` writes — a new session starts off, and
+       *  a resumed one is never switched off by a choice made before it was found. */
+      grillMe?: boolean;
+    } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
@@ -1779,6 +1816,7 @@ export const planChangeSessionsService = {
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       async (tx) => {
         const sessionId = await resumeOrStartWithin(pctx, scope, now, tx);
+        await adoptPreSessionGrillMeWithin(sessionId, opts.grillMe, pctx, now, tx);
 
         const row = await appendWithin(
           sessionId,
@@ -1794,6 +1832,45 @@ export const planChangeSessionsService = {
           tx,
         );
         return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * Switch GRILL ME on or off for the addressed conversation (Story MOTIR-11799 ·
+   * MOTIR-11801). The value lives on the session, so a reload, another tab and a
+   * reopened conversation read the same switch, and every `ask_project` and
+   * `sharpen_turn` job the session submits after it carries it as `context.grillMe`.
+   *
+   * Gated exactly as the conversation's other actions ({@link requireSession}:
+   * `ai:plan`, and a session of this project). An ENDED session accepts no change
+   * (`PLAN_SESSION_ENDED`), checked again under the row lock so an end racing the
+   * switch wins cleanly. Setting the value it already has writes nothing and keeps
+   * the earlier stamp. Returns the session as it now stands.
+   */
+  async setGrillMe(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+    on: boolean,
+  ): Promise<PlanChangeSessionDto> {
+    const session = await requireSession(pctx, address);
+    if (session.endedAt) throw new PlanSessionEndedError(session.id);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanSessionNotFoundError(session.id);
+        const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
+        if (!fresh) throw new PlanSessionNotFoundError(session.id);
+        if (fresh.endedAt) throw new PlanSessionEndedError(fresh.id);
+        if (fresh.grillMe === on) return toDto(fresh, pctx, tx);
+        await planChangeSessionRepository.setGrillMe(
+          fresh.id,
+          { on, changedById: pctx.userId, changedAt: new Date() },
+          tx,
+        );
+        const row = await planChangeSessionRepository.findById(fresh.id, pctx.workspaceId, tx);
+        return toDto(row!, pctx, tx);
       },
     );
   },
@@ -2142,7 +2219,7 @@ export const planChangeSessionsService = {
     scope: PlanChangeScope,
     body: string,
     seedGateId: string,
-    opts: { isAnswer?: boolean; anchorKey?: string | null } = {},
+    opts: { isAnswer?: boolean; anchorKey?: string | null; grillMe?: boolean } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
@@ -2154,6 +2231,7 @@ export const planChangeSessionsService = {
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       async (tx) => {
         const sessionId = await resumeSeededOrStartWithin(pctx, scope, seedGateId, now, tx);
+        await adoptPreSessionGrillMeWithin(sessionId, opts.grillMe, pctx, now, tx);
         const row = await appendWithin(
           sessionId,
           pctx,

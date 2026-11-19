@@ -567,6 +567,9 @@ export async function submitAskTurn(
   /** The option of the waiting question this answer PICKED (MOTIR-11700) — only
    *  with `isAnswer`; the server resolves it against that question. */
   answerOptionId: string | null = null,
+  /** Grill me switched on BEFORE the session existed (MOTIR-11801): rides only the
+   *  send with no `sessionId`, and the session that send starts is created on. */
+  grillMe = false,
 ): Promise<AskSubmitResponse | AskRedirectResponse> {
   return post<AskSubmitResponse | AskRedirectResponse>(
     '/api/ai/ask',
@@ -577,9 +580,27 @@ export async function submitAskTurn(
       ...(sessionId ? { sessionId } : {}),
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
       ...(anchorKey ? { anchorKey } : {}),
+      ...(grillMe && !sessionId ? { grillMe: true } : {}),
     },
     signal,
   );
+}
+
+/** Store the conversation's GRILL ME switch (Story MOTIR-11799 · MOTIR-11801) —
+ *  `PUT /api/ai/plan-change/session/grill-me`. Answers the session as it now stands. */
+export async function setPlanChangeGrillMe(
+  sessionId: string,
+  on: boolean,
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto> {
+  const res = await fetch('/api/ai/plan-change/session/grill-me', {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ sessionId, on }),
+    signal,
+  });
+  if (!res.ok) throw await clientError(res);
+  return (await res.json()) as PlanChangeSessionDto;
 }
 
 /** The planner's mid-run pause, as the rail reads it (MOTIR-8007). */

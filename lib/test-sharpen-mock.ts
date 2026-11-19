@@ -65,6 +65,9 @@ export interface SharpenSubmitRecord {
   jobId: string;
   readBackToken: string;
   context: SharpenJobContext;
+  /** The conversation's Grill me switch as core sent it beside the job (MOTIR-11801);
+   *  absent when core sent none. */
+  grillMe?: boolean;
 }
 
 /** One write-back the seam issued to core (written by the seam). */
@@ -249,6 +252,26 @@ function normaliseRequest(s: string): string {
   return s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
 }
 
+/** The questions a written requirement settled — its `- <question> — <answer>` lines and
+ *  its assumptions, as motir-ai's `writtenQuestions` reads them (MOTIR-11804). */
+function writtenQuestions(requirement: SubmittedRequirement | undefined): Set<string> {
+  const out = new Set<string>();
+  if (!requirement) return out;
+  const lines: string[] = [];
+  for (const field of ['outcome', 'behaviour', 'scopeEdge', 'constraints', 'acceptance'] as const) {
+    lines.push(...(requirement[field] ?? '').split('\n'));
+  }
+  const assumptions = requirement.assumptions;
+  for (const a of typeof assumptions === 'string' ? [assumptions] : (assumptions ?? [])) {
+    lines.push(`- ${typeof a === 'string' ? a : (a?.text ?? '')}`);
+  }
+  for (const line of lines) {
+    const m = /^\s*-\s+(.+?)\s+—\s+/.exec(line);
+    if (m) out.add(normaliseRequest(m[1]!));
+  }
+  return out;
+}
+
 /** Do the run's carried answers cover every one of its requests —
  *  `carriedCoversRequests`, as motir-ai reads it. */
 function carriedCoversRun(ctx: SharpenJobContext): boolean {
@@ -266,17 +289,21 @@ export function planSharpenTurn(
   fixture: SharpenTargetFixture,
   jobId: string,
   ctx: SharpenJobContext,
+  grillMe?: boolean,
 ): SharpenTurnPlan {
   if (fixture.mode === 'error') {
     return { failed: true, detail: fixture.detail ?? 'The fixture failed this sharpen turn.' };
   }
   const recorded = recordAction(ctx);
+  const offer = ctx.conversation?.offer;
+  // A Grill me hand-off holds no requirement until its grilling ends (MOTIR-11798), so
+  // every end of it writes one — nothing settled too (MOTIR-11803).
+  const deferred = offer?.deferred === true;
   const end = (kind: 'nothing_to_ask' | 'finished' | 'stopped'): SharpenTurnPlan => {
     const nothing = recorded.settled.length === 0 && recorded.assumptions.length === 0;
     // A conversation grilling that settled something writes its offer's requirement.
-    const offer = ctx.conversation?.offer;
     const requirement =
-      offer && !nothing
+      offer && (!nothing || deferred)
         ? {
             offerTurnId: offer.turnId,
             requirement: buildGrillingRequirement(offer, recorded.settled, recorded.assumptions),
@@ -299,6 +326,8 @@ export function planSharpenTurn(
     };
   };
   if (ctx.action === 'stop') return end('stopped');
+  // A turn over the hand-off with Grill me switched OFF ends as a Stop (MOTIR-11803).
+  if (deferred && grillMe === false) return end('stopped');
   // The conversation already grilled this very request (`carriedAnswersCoverRun`,
   // MOTIR-9313): nothing is left to ask.
   if (ctx.action === 'start' && carriedCoversRun(ctx)) return end('nothing_to_ask');
@@ -314,7 +343,12 @@ export function planSharpenTurn(
     ...recorded.settled.map((s) => s.questionId),
     ...recorded.assumptions.map((a) => a.questionId),
   ]);
-  const next = (fixture.questions ?? []).find((q) => !done.has(q.id));
+  // Over a requirement already written, its answer lines are decided: a question it
+  // settled is never asked again (`writtenQuestions`, MOTIR-11804).
+  const written = writtenQuestions(offer?.requirement);
+  const next = (fixture.questions ?? []).find(
+    (q) => !done.has(q.id) && !written.has(normaliseRequest(q.text)),
+  );
   if (!next) return end(ctx.action === 'start' ? 'nothing_to_ask' : 'finished');
   return {
     failed: false,
@@ -381,7 +415,7 @@ export function installSharpenBoundaryMock(agent: MockAgent): void {
     .reply<object>((req) => {
       const envelope = JSON.parse(String(req.body)) as {
         readBackToken?: string;
-        context?: { sharpen?: SharpenJobContext };
+        context?: { sharpen?: SharpenJobContext; grillMe?: unknown };
       };
       const control = readControl();
       const submitted = control.submitted ?? [];
@@ -392,6 +426,9 @@ export function installSharpenBoundaryMock(agent: MockAgent): void {
           jobId,
           readBackToken: envelope.readBackToken ?? '',
           context: envelope.context?.sharpen as SharpenJobContext,
+          ...(typeof envelope.context?.grillMe === 'boolean'
+            ? { grillMe: envelope.context.grillMe }
+            : {}),
         },
       ];
       writeControl(control);
@@ -425,6 +462,7 @@ export function installSharpenBoundaryMock(agent: MockAgent): void {
           fixtureFor(control, record.context.scope.ref),
           jobId,
           record.context,
+          record.grillMe,
         );
         if (plan.failed) {
           return JSON.stringify({

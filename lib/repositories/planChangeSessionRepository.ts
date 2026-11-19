@@ -934,6 +934,25 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.update({ where: { id }, data });
   },
 
+  /** Set an OPEN session's GRILL ME switch (Story MOTIR-11799 · MOTIR-11801), stamping
+   *  when and by whom. Writes only when the value CHANGES, so a repeated set keeps the
+   *  first stamp; an ended session is left as it ended. Answers whether it wrote. */
+  async setGrillMe(
+    id: string,
+    change: { on: boolean; changedById: string; changedAt: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.planChangeSession.updateMany({
+      where: { id, endedAt: null, grillMe: !change.on },
+      data: {
+        grillMe: change.on,
+        grillMeChangedAt: change.changedAt,
+        grillMeChangedById: change.changedById,
+      },
+    });
+    return count > 0;
+  },
+
   /** Move an OPEN session's `lastActivityAt` — a Grill me turn on the conversation
    *  (MOTIR-9314). An ended session is left as it ended. Answers whether it moved. */
   async touchOpen(id: string, at: Date, tx: Prisma.TransactionClient): Promise<boolean> {

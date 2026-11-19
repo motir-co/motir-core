@@ -9591,6 +9591,23 @@
         },
         "hint": "Tu próximo mensaje inicia las preguntas.",
         "hintBeforePlanning": "Cuando Motir AI vaya a proponer la planificación, primero hará sus preguntas."
+      },
+      "offConfirm": {
+        "title": "¿Dejar de preguntar y escribir el requisito?",
+        "bodySettled": "Motir AI deja de preguntar ahora y escribe el requisito a partir de {count, plural, one {la # respuesta} other {las # respuestas}} que fijaste. Lo que siga abierto queda en manos de las suposiciones del planificador.",
+        "bodyNone": "Todavía no hay nada fijado, así que Motir AI deja de preguntar ahora y escribe el requisito a partir de tu solicitud tal como está.",
+        "keep": "Seguir preguntando",
+        "confirm": "Parar y escribirlo"
+      },
+      "writing": "Escribiendo el requisito a partir de lo que fijaste…",
+      "writingNone": "Escribiendo el requisito a partir de tu solicitud…",
+      "paneWriting": "El requisito aparecerá aquí en cuanto esté escrito.",
+      "overRequirement": {
+        "opening": "Interrógame está activado: solo preguntaré por lo que el requisito de la izquierda aún no fija.",
+        "paneUpdating": "Interrógame está activado. Tus respuestas actualizarán este requisito cuando terminen las preguntas.",
+        "nothingLeft": "El requisito ya fija todo lo que preguntaría, así que se queda como está.",
+        "updated": "Requisito actualizado con tus respuestas.",
+        "paneUpdated": "Actualizado con tus respuestas de Interrógame."
       }
     },
     "follow": {

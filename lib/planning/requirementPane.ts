@@ -34,6 +34,19 @@ export function requirementPaneOf(turns: readonly PlanOfferTurn[]): RequirementP
   };
 }
 
+/**
+ * WHAT A GRILLING IS DOING TO THE LEFT PANE (Story MOTIR-11799; design
+ * § Grill me — the switch-off confirmation, and Grill me on again over a written
+ * requirement). The rail knows the grilling; the pane draws it:
+ *
+ * - `writing` — a Stop or a switch-off was confirmed and the requirement is being
+ *   written (MOTIR-11802): with none shown yet, the pane says where it will appear.
+ * - `updating` — Grill me is on over a requirement already shown (MOTIR-11805): it
+ *   stays readable under a banner saying the answers update it at the end.
+ * - `updated` — that grilling ended and rewrote it, until the next message.
+ */
+export type GrillPaneState = 'writing' | 'updating' | 'updated' | null;
+
 export interface AssumptionRow {
   id: string;
   text: string;

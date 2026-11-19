@@ -2921,7 +2921,16 @@ export function usePlanChangeConversation({
        * Sent beside the answer so the planner reads the option it offered, never a
        * re-reading of the words. Ignored on a turn that answers no question.
        */
-      options: { anchorKey?: string | null; answerOptionId?: string | null } = {},
+      /**
+       * `grillMe` (MOTIR-11801) — the composer's Grill me switch, chosen before the
+       * conversation existed. Rides only the PROJECT send that has no session yet, so
+       * the session it starts is created on; a held session reads its own switch.
+       */
+      options: {
+        anchorKey?: string | null;
+        answerOptionId?: string | null;
+        grillMe?: boolean;
+      } = {},
     ) => {
       const body = text.trim();
       const answerOptionId = options.answerOptionId ?? null;
@@ -3305,6 +3314,7 @@ export function usePlanChangeConversation({
       const heldProjectSession = stateRef.current.session?.id ?? null;
       const projectSeed = heldProjectSession ? null : seedRef.current;
       const askAnchor = options.anchorKey ?? null;
+      const preSessionGrill = !heldProjectSession && options.grillMe === true;
       await runAsk(
         (signal) =>
           projectSeed
@@ -3315,6 +3325,8 @@ export function usePlanChangeConversation({
                 heldProjectSession,
                 projectSeed,
                 askAnchor,
+                null,
+                preSessionGrill,
               ).catch((err: unknown) => {
                 if (err instanceof PlanEditsClientError && err.code === 'SEED_NOT_APPLICABLE') {
                   seedRef.current = null;
@@ -3330,8 +3342,18 @@ export function usePlanChangeConversation({
                   null,
                   askAnchor,
                   answerOptionId,
+                  preSessionGrill,
                 )
-              : submitAskTurn(body, signal, isAnswer, heldProjectSession, null, askAnchor),
+              : submitAskTurn(
+                  body,
+                  signal,
+                  isAnswer,
+                  heldProjectSession,
+                  null,
+                  askAnchor,
+                  null,
+                  preSessionGrill,
+                ),
         askAnchor,
       );
     },

@@ -567,3 +567,12 @@ Every spec in the lane belonged to a story that is done, so every one owed a dis
 | `acceptance-workbench-live.spec.ts`                           | MOTIR-5238 | **MOVED** → `regression-workbench-live.spec.ts`                                                                                                                          |
 | `acceptance-workbench-to-fix.spec.ts`                         | MOTIR-6588 | **MOVED** → `regression-workbench-to-fix.spec.ts`                                                                                                                        |
 | `acceptance-workspace-roles.spec.ts`                          | MOTIR-6168 | **MOVED** → `regression-workspace-roles.spec.ts`                                                                                                                         |
+
+## MOTIR-11806 — 2026-11-19
+
+Story MOTIR-11799 changed a step of a done story's receipt: Stop grilling, and switching Grill me off while a grilling is open, now ask first, and only the confirmation's "Stop and write it" ends the grilling (MOTIR-11802). The receipt stays a record of MOTIR-9221 as it was accepted; its spec moves to the regression lane, where the three steps that end a grilling press the confirmation. MOTIR-11799's own receipt is a new spec.
+
+| Spec                                       | Story       | Disposition                                                                                                                                                                                                            |
+| ------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `acceptance-grill-before-planning.spec.ts` | MOTIR-9221  | **MOVED** → `regression-grill-before-planning.spec.ts`. Every assertion kept; Stop (the recorded walk and zh) and the mid-grilling switch-off press the switch-off confirmation before the stop they assert.           |
+| `acceptance-grill-me-refined.spec.ts`      | MOTIR-11799 | **NEW.** Questions before any requirement and the stored switch across a reload; switch-off asks first (Keep grilling, then Stop and write it); on again over the requirement, then nothing left to ask; Grill me off. |

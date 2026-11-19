@@ -59,6 +59,8 @@ export interface PlanOfferRecord {
   confirmedSessionId: string | null;
   /** A `log_bug` offer's write (MOTIR-9322): where it goes, read to state it. */
   bug?: { target: { kind: string; key: string | null } };
+  /** A `grill` hand-off's reads (MOTIR-11798), sent on to its grilling. */
+  handoff?: { items: string[]; code: string[]; research?: Record<string, unknown> };
 }
 
 /** The slice of a thread turn this reads (a `PlanChangeTurnDto` fits). */

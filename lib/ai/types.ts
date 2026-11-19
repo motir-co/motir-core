@@ -357,7 +357,18 @@ export interface SharpenConversationContext {
    * (Bug MOTIR-10255). The grilling's end writes this offer's requirement from the
    * questions and answers and returns it for this offer alone.
    */
-  offer: { turnId: string; requestMd: string; requirement?: SubmittedRequirement } | null;
+  offer: {
+    turnId: string;
+    requestMd: string;
+    requirement?: SubmittedRequirement;
+    /** GRILL ME'S HAND-OFF (MOTIR-11798): the offer is a stored `grill` one — held with
+     *  no requirement until this grilling ends, so its end always writes one. Absent on
+     *  an offer made with Grill me off. */
+    deferred?: true;
+    /** What the read before the grilling already read, so the first question does not
+     *  read it again. Present only beside `deferred`. */
+    handoff?: { items: string[]; code: string[] };
+  } | null;
   /** The whole conversation, both sides, in order, blank bodies left out
    *  (MOTIR-10235). A person's agreement to a planner reply is part of their
    *  scope, so the grilling reads the replies too. Older motir-ai ignores it. */
@@ -678,6 +689,12 @@ export interface JobContextBag {
   // `carriedAnswers` above (no-run turns only) it lets the answering session compose
   // and re-compose a plan offer's requirement.
   conversationTurns?: AskConversationTurn[];
+  // GRILL ME (Story MOTIR-11799 · MOTIR-11801 producer ↔ motir-ai MOTIR-11798 / 11803 /
+  // 11804 consumers) — whether the conversation has Grill me switched on, read from its
+  // stored `plan_change_session.grill_me` at submit. Sent on EVERY `ask_project` job a
+  // conversation submits and EVERY `sharpen_turn` job, always as a boolean (`false`
+  // where no conversation stands behind the job). Older motir-ai ignores it.
+  grillMe?: boolean;
   // THE CONFIRMATION MARKER (MOTIR-10091 producer ↔ motir-ai `suppliedRequirementIsConfirmed`
   // consumer) — the plan offer whose requirement the person confirmed: set ONLY by the
   // offer's confirm, beside `requirement`. motir-ai keys on it to read the requirement as

@@ -414,6 +414,8 @@ describe('usePlanChangeConversation — a turn', () => {
       's1',
       null,
       null,
+      null,
+      false,
     );
     expect(append).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();

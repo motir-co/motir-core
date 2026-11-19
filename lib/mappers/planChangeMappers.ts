@@ -6,6 +6,7 @@ import type {
 import { readQuestionOption, readQuestionOptions } from '@/lib/planning/questionOptions';
 import type {
   AnswerOfferKindDto,
+  GrillHandoffDto,
   DebugLandingDto,
   LogBugOfferDto,
   PlanAnswerOfferDto,
@@ -55,7 +56,36 @@ function toDebugLandingDto(value: unknown): DebugLandingDto | null {
   };
 }
 
-const ANSWER_OFFER_KINDS: ReadonlySet<string> = new Set<AnswerOfferKindDto>(['plan', 'log_bug']);
+const ANSWER_OFFER_KINDS: ReadonlySet<string> = new Set<AnswerOfferKindDto>([
+  'plan',
+  'log_bug',
+  'grill',
+]);
+
+/** A stored list of non-blank strings, or null when it is not one. */
+function stringList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+}
+
+/** The stored hand-off of a `grill` offer (MOTIR-11798). Its reads are lists of
+ *  strings, each read alone (a list that does not read is empty); the research record
+ *  rides as stored when it is an object. Never refuses the offer: a hand-off that does
+ *  not read only costs the grilling a read it would have skipped. */
+function toGrillHandoffDto(value: unknown): GrillHandoffDto {
+  const v =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const research = v.research;
+  return {
+    items: stringList(v.items) ?? [],
+    code: stringList(v.code) ?? [],
+    ...(research && typeof research === 'object' && !Array.isArray(research)
+      ? { research: research as Record<string, unknown> }
+      : {}),
+  };
+}
 
 /** The stored bug of a `log_bug` offer → its DTO (MOTIR-9322), or null when any field
  *  is the wrong shape. The draft is re-read through `parseAuthoredBug`: a stored row
@@ -156,6 +186,7 @@ function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
     ...(requirementPage ? { requirementPage } : {}),
     ...(plan && v.requirementPageFailed === true ? { requirementPageFailed: true as const } : {}),
     ...(bug ? { bug } : {}),
+    ...(v.kind === 'grill' ? { handoff: toGrillHandoffDto(v.handoff) } : {}),
     ...(afterDecision ? { afterDecision } : {}),
   };
 }
@@ -291,6 +322,7 @@ export function toPlanChangeSessionDto(
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     endReason: row.endReason ?? null,
     copiedFromSessionId: row.copiedFromSessionId ?? null,
+    grillMe: row.grillMe,
     failure: toPlanSessionFailureDto(row),
     awaitingPerson: toPlanSessionAwaitingPersonDto(row),
     runPause: runPause ? toPlanChangeRunPauseDto(runPause, runPauseEntryRead) : null,

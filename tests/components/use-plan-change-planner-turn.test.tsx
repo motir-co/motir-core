@@ -325,7 +325,16 @@ describe('the answer flag is derived from the thread the user was looking at', (
     // is why routing the reply through a classifier does not cost the thread its
     // "Answered — planning resumed" marker.
     // …then no seed gate and no anchor (MOTIR-7050's optional trailing pair).
-    expect(submitAsk).toHaveBeenCalledWith('money in', expect.anything(), true, 's1', null, null);
+    expect(submitAsk).toHaveBeenCalledWith(
+      'money in',
+      expect.anything(),
+      true,
+      's1',
+      null,
+      null,
+      null,
+      false,
+    );
   });
 
   it('does NOT flag it when nothing is pending', async () => {
@@ -340,6 +349,8 @@ describe('the answer flag is derived from the thread the user was looking at', (
       's1',
       null,
       null,
+      null,
+      false,
     );
   });
 });

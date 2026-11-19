@@ -46,6 +46,10 @@ import { PlanSeedNotApplicableError } from '@/lib/planChange/errors';
 //   A3.2): DATA like `anchorKey`, legal only on a GUIDE conversation named by
 //   `sessionId` — anywhere else the whole turn is a 400 before anything is
 //   written. With files, `body` may be empty.
+//   A new turn with NO `sessionId` may carry `grillMe: true` (MOTIR-11801): Grill me
+//   switched on before the conversation existed, stored on the session the turn
+//   starts. Any other value, or a turn naming its session, leaves the switch to the
+//   session's own stored value (set through `PUT …/plan-change/session/grill-me`).
 //   { body, sessionId, runJobId, planId } — a MID-RUN turn (MOTIR-7996; ADR
 //                                  AMENDMENT 4): typed while a planning run is in
 //                                  progress. It is answered by an `ask_project` job
@@ -95,6 +99,7 @@ export async function POST(req: Request): Promise<Response> {
     attachmentIds?: unknown;
     runJobId?: unknown;
     planId?: unknown;
+    grillMe?: unknown;
   };
   // The conversation the client holds (MOTIR-6023; AMENDMENT 17 §2). Optional
   // here: with none, the caller's resumable project-wide session is used, and a
@@ -165,6 +170,7 @@ export async function POST(req: Request): Promise<Response> {
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
       ...(anchorKey ? { anchorKey } : {}),
       ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+      ...(body.grillMe === true && !sessionId ? { grillMe: true } : {}),
     });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {

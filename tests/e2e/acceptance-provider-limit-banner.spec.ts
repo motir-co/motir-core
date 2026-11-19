@@ -40,6 +40,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import type { Browser, Page } from '@playwright/test';
 import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
+import { markEveryAddWritten } from '../helpers/walkWritten';
 import { signIn } from './_helpers/shell-session';
 import { setReaderLanguage } from './_helpers/reader-language';
 import { seedPlanningAnchorTree, PLANNING_ANCHOR_PASSWORD } from './_helpers/planning-anchor-seed';
@@ -102,14 +103,25 @@ async function appendAsAi(
   proposals: unknown[],
   final = false,
 ): Promise<void> {
-  const res = await page.request.post('/api/internal/ai/plan-proposals', {
-    headers: {
-      authorization: `Bearer ${E2E_CORE_CALLBACK_SECRET}`,
-      'x-motir-job-token': job.readBackToken!,
-    },
-    data: { jobId: job.jobId, proposals, final },
-  });
-  if (res.status() !== 200) throw new Error(`plan-proposals ${res.status()}: ${await res.text()}`);
+  const post = async (body: unknown[], close: boolean) => {
+    const res = await page.request.post('/api/internal/ai/plan-proposals', {
+      headers: {
+        authorization: `Bearer ${E2E_CORE_CALLBACK_SECRET}`,
+        'x-motir-job-token': job.readBackToken!,
+      },
+      data: { jobId: job.jobId, proposals: body, final: close },
+    });
+    if (res.status() !== 200)
+      throw new Error(`plan-proposals ${res.status()}: ${await res.text()}`);
+  };
+  if (!final) return post(proposals, false);
+  // A walked plan closes `planned` only once every card it owes is written (Bug
+  // MOTIR-11701). This spec stands in for the author sessions, so between the last
+  // append and the close it stamps every add written, as they would.
+  await post(proposals, false);
+  const plan = await adminDb.plan.findFirstOrThrow({ where: { sourceJobId: job.jobId } });
+  await markEveryAddWritten(plan.id);
+  await post([], true);
 }
 
 const authoredAdd = (title: string, parentRef: string) => ({

@@ -9591,6 +9591,23 @@
         },
         "hint": "Sua próxima mensagem inicia as perguntas.",
         "hintBeforePlanning": "Quando o Motir AI for propor o planejamento, ele faz as perguntas primeiro."
+      },
+      "offConfirm": {
+        "title": "Parar as perguntas e escrever o requisito?",
+        "bodySettled": "O Motir AI para de perguntar agora e escreve o requisito a partir {count, plural, one {da # resposta} other {das # respostas}} que você definiu. O que ainda estiver em aberto fica para as suposições do planejador.",
+        "bodyNone": "Nada foi definido ainda, então o Motir AI para de perguntar agora e escreve o requisito a partir do seu pedido como está.",
+        "keep": "Continuar perguntando",
+        "confirm": "Parar e escrever"
+      },
+      "writing": "Escrevendo o requisito a partir do que você definiu…",
+      "writingNone": "Escrevendo o requisito a partir do seu pedido…",
+      "paneWriting": "O requisito aparece aqui assim que for escrito.",
+      "overRequirement": {
+        "opening": "Me questione está ativado: só vou perguntar o que o requisito à esquerda ainda não define.",
+        "paneUpdating": "Me questione está ativado. Suas respostas atualizam este requisito quando as perguntas terminarem.",
+        "nothingLeft": "O requisito já define tudo o que eu perguntaria, então ele fica como está.",
+        "updated": "Requisito atualizado com suas respostas.",
+        "paneUpdated": "Atualizado com suas respostas do Me questione."
       }
     },
     "follow": {

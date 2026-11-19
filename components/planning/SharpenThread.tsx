@@ -46,6 +46,9 @@ export interface SharpenThreadProps {
   onRetry: () => void;
   /** A conversation's grilling that ended because Grill me was switched off. */
   endedBySwitch?: boolean;
+  /** The grilling is over a requirement already shown (MOTIR-11805): its own opening
+   *  marker and nothing-left line. */
+  overRequirement?: boolean;
 }
 
 function Marker({
@@ -122,8 +125,10 @@ export function SharpenThread({
   onSomethingElse,
   onRetry,
   endedBySwitch = false,
+  overRequirement = false,
 }: SharpenThreadProps) {
   const t = useTranslations('sharpen');
+  const tg = useTranslations('planningWorkspace.grill');
   const conversationScope = session.scope.kind === 'conversation';
   const tc = useTranslations('planningWorkspace.conversation');
   // A question the person has answered is history, though the stored one lingers
@@ -226,7 +231,9 @@ export function SharpenThread({
 
   return (
     <div className="flex flex-col gap-3" data-testid="sharpen-thread">
-      <Marker testId="sharpen-opening">{t('markers.opening')}</Marker>
+      <Marker testId="sharpen-opening">
+        {overRequirement ? tg('overRequirement.opening') : t('markers.opening')}
+      </Marker>
       {rows}
 
       {pendingQuestion ? (
@@ -294,7 +301,11 @@ export function SharpenThread({
         <>
           {session.endReason === 'nothing_to_ask' ? (
             <Bubble role="assistant" testId="sharpen-nothing-to-ask">
-              {conversationScope ? t('conversation.nothingToAsk') : t('markers.nothingToAsk')}
+              {overRequirement
+                ? tg('overRequirement.nothingLeft')
+                : conversationScope
+                  ? t('conversation.nothingToAsk')
+                  : t('markers.nothingToAsk')}
             </Bubble>
           ) : session.endReason === 'stopped' ? (
             <Marker testId="sharpen-stopped" icon={<Square className="size-3.5" aria-hidden />}>

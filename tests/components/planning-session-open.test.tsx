@@ -179,7 +179,8 @@ describe('opening the overlay — the hook', () => {
       await result.current.send('add payments');
     });
     // The trailing `null, null` are the optional seed gate and anchor (MOTIR-7050)
-    // — absent here, and `submitAskTurn` leaves both off the wire.
+    // — absent here, and `submitAskTurn` leaves both off the wire. The last two are
+    // the answer option and the composer's Grill me switch (MOTIR-11801), off here.
     expect(submitAsk).toHaveBeenLastCalledWith(
       'add payments',
       expect.anything(),
@@ -187,6 +188,8 @@ describe('opening the overlay — the hook', () => {
       null,
       null,
       null,
+      null,
+      false,
     );
     await waitFor(() => expect(result.current.state.session?.id).toBe('s1'));
 
@@ -200,6 +203,8 @@ describe('opening the overlay — the hook', () => {
       's1',
       null,
       null,
+      null,
+      false,
     );
   });
 

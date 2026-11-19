@@ -209,11 +209,20 @@ export const planOfferService = {
   ): Promise<AnswerOfferInput | null> {
     if (!offer || offer.kind !== 'plan' || offer.immediate) return null;
     if (!(await planningAvailable(pctx))) return null;
+    // GRILL ME'S HAND-OFF (MOTIR-11798) is stored as a `grill` offer: nothing to confirm
+    // and no requirement — the conversation's grilling opens from it, and its end turns
+    // it into the `plan` offer holding the requirement. Its target is resolved below,
+    // exactly as a plan offer's, so the offer it becomes plans what a Confirm would.
+    const kind = offer.deferred ? ('grill' as const) : ('plan' as const);
     // The requirement the answering session composed rides the offer, target or not
     // (MOTIR-9878): a target is where the planning starts, not what it builds.
-    const requirement = offer.requirement ? { requirement: offer.requirement } : {};
+    const carried = offer.deferred
+      ? { handoff: offer.handoff ?? { items: [], code: [] } }
+      : offer.requirement
+        ? { requirement: offer.requirement }
+        : {};
     if (offer.targetKey === null) {
-      return { kind: 'plan', requestMd: offer.requestMd, targetKey: null, ...requirement };
+      return { kind, requestMd: offer.requestMd, targetKey: null, ...carried };
     }
     const target = await resolveTarget(offer.targetKey, pctx);
     if (target) {
@@ -224,10 +233,10 @@ export const planOfferService = {
       if (terminal.has(target.status)) return null;
     }
     return {
-      kind: 'plan',
+      kind,
       requestMd: offer.requestMd,
       targetKey: target?.identifier ?? null,
-      ...requirement,
+      ...carried,
     };
   },
 
@@ -367,11 +376,47 @@ export const planOfferService = {
     if (planOfferStateOf(offerTurns(rows), address.offerTurnId) !== 'undecided') return false;
     const row = rows.find((t) => t.id === address.offerTurnId)!;
     const offer = row.answerOffer as Record<string, unknown>;
-    if (offer['kind'] !== 'plan') return false;
+    if (offer['kind'] !== 'plan' && offer['kind'] !== 'grill') return false;
+    // A `grill` hand-off (MOTIR-11798) BECOMES the plan offer here: written once, with
+    // the requirement its grilling wrote, and its hand-off dropped — the reads served
+    // the questions and are not part of what is planned.
+    const { handoff: _handoff, ...kept } = offer;
     await planChangeTurnRepository.setAnswerOffer(
       row.id,
       pctx.workspaceId,
-      { ...offer, requirement } as unknown as Prisma.InputJsonValue,
+      { ...kept, kind: 'plan', requirement } as unknown as Prisma.InputJsonValue,
+      tx,
+    );
+    return true;
+  },
+
+  /**
+   * Release the conversation's `grill` hand-off as a `plan` offer with NO requirement
+   * (MOTIR-11798) — for a grilling that ended without writing one (a Stop the org's
+   * credits could not serve, a result from a motir-ai that does not write it yet). The
+   * person is never left with nothing to confirm: the offer shows, and its left pane
+   * says it carries no requirement, as a plan offer always has. Only the conversation's
+   * UNDECIDED live offer, only when it is a hand-off; answers whether it wrote.
+   */
+  async releaseGrillHandoffWithin(
+    pctx: ProjectContext,
+    address: { sessionId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    await lockOwnSession(pctx, address.sessionId, tx);
+    const rows = await planChangeTurnRepository.listBySessionId(
+      address.sessionId,
+      pctx.workspaceId,
+      tx,
+    );
+    const pending = pendingPlanOfferOf(offerTurns(rows));
+    if (!pending || pending.offer.kind !== 'grill') return false;
+    const row = rows.find((t) => t.id === pending.turnId)!;
+    const { handoff: _handoff, ...kept } = row.answerOffer as Record<string, unknown>;
+    await planChangeTurnRepository.setAnswerOffer(
+      row.id,
+      pctx.workspaceId,
+      { ...kept, kind: 'plan' } as unknown as Prisma.InputJsonValue,
       tx,
     );
     return true;
@@ -450,6 +495,14 @@ export const planOfferService = {
               : null,
         });
       }
+    }
+    // A `grill` hand-off (MOTIR-11798) is not a plan offer the person confirms: it opens
+    // the conversation's grilling, which turns it into the plan offer when it ends. It
+    // has no target and no reason it cannot start, but it carries the STATE every offer
+    // does — the rail grills only an `undecided` offer, so a hand-off served without one
+    // would never open its grilling.
+    for (const turn of all.filter((t) => t.offer!.kind === 'grill')) {
+      out.set(turn.id, { state: planOfferStateOf(turns, turn.id)!, cannotStart: null });
     }
     const offered = all.filter((t) => t.offer!.kind === 'plan');
     if (offered.length === 0) return out;
