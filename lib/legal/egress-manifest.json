@@ -12,6 +12,7 @@
       "basis": "repository-evidence",
       "evidence": [
         "package @aws-sdk/client-cloudwatch-logs",
+        "package @aws-sdk/client-cost-explorer",
         "package @aws-sdk/client-ecr",
         "package @aws-sdk/client-ecs",
         "package @aws-sdk/client-s3",
@@ -19,6 +20,7 @@
         "package @aws-sdk/client-service-quotas",
         "package @aws-sdk/client-sesv2",
         "package @aws-sdk/client-ssm",
+        "package @aws-sdk/client-sts",
         "package @aws-sdk/s3-request-presigner"
       ]
     },
