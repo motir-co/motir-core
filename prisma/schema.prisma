@@ -11881,6 +11881,39 @@ model CiRunnerProvisioningIntent {
   /// Supervision retires a runner whose own job is done and which has taken no
   /// job, instead of letting it idle until the timeout.
   jobCompletedAt DateTime? @map("job_completed_at")
+  /// The conclusion GitHub gave that job (MOTIR-11728), written with
+  /// `jobCompletedAt`: `success`, `failure`, `cancelled`, `skipped`, … or NULL
+  /// when the delivery carried none. A Spot reclaim spares a job its re-run only
+  /// when it concluded `success` / `skipped`.
+  jobConclusion  String?   @map("job_conclusion")
+
+  /// The job this intent's RUNNER actually took (MOTIR-11728) — its run id, run
+  /// attempt, job id and name, from the `workflow_job` `in_progress` delivery
+  /// that named this runner. Not necessarily the job the intent was booted for
+  /// (a fleet runner takes whichever queued job carries its label). Write-once,
+  /// beside `jobPickedUpAt`: it is what a Spot reclaim re-runs. NULL = the runner
+  /// took no job, or took it before these columns existed.
+  takenRunId      String? @map("taken_run_id")
+  takenRunAttempt Int?    @map("taken_run_attempt")
+  takenJobId      String? @map("taken_job_id")
+  takenJobName    String? @map("taken_job_name")
+
+  /// How many Spot interruptions the job this intent was BOOTED FOR has already
+  /// had (MOTIR-11728): copied at queue time from the earlier run attempt whose
+  /// interrupted runner had the job re-run. At 2 the boot forces `on_demand`.
+  spotInterruptionCount     Int       @default(0) @map("spot_interruption_count")
+  /// The TAKEN job's interruption count once this intent's runner was reclaimed
+  /// (MOTIR-11728): the taken job's own carried count plus this interruption.
+  /// Kept apart from `spotInterruptionCount` because the runner may have taken
+  /// another intent's job. NULL = not reclaimed with a taken job.
+  takenJobSpotInterruptions Int?      @map("taken_job_spot_interruptions")
+  /// The re-run of the taken job (MOTIR-11728): `pending` (to request, or
+  /// refused for a reason that may clear), `requested` (GitHub returned 201),
+  /// `refused` (403/404, or GitHub's re-run limits), `expired` (24 hours passed),
+  /// or `capped` (a third interruption — never re-run). NULL = no re-run.
+  rerunState                String?   @map("rerun_state")
+  /// When the re-run was last asked for (MOTIR-11728). NULL = never asked.
+  rerunAttemptedAt          DateTime? @map("rerun_attempted_at")
 
   /// How the container ended — the port's `TeardownReason`. Kept next to the
   /// status because "failed" alone cannot distinguish a provider refusal from a
@@ -11935,6 +11968,11 @@ model CiRunnerProvisioningIntent {
   @@index([fleetShardId])
   /// The `workflow_job` `in_progress` delivery finds its runner's intent by this (MOTIR-11230).
   @@index([githubRunnerId])
+  /// The queued delivery's look-up of an earlier attempt's interrupted runner,
+  /// by the job it took (MOTIR-11728).
+  @@index([repoOwner, repoName, takenRunId, takenJobName])
+  /// The reconcile pass's read of re-runs still to request (MOTIR-11728).
+  @@index([rerunState, settledAt])
   @@map("ci_runner_provisioning_intent")
 }
 

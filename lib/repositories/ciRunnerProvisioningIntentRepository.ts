@@ -60,6 +60,45 @@ export interface CiRunnerSettleRecord {
   failureDetail: string | null;
   startedAt?: Date | null;
   bootLatencyMs?: number | null;
+  /**
+   * A Spot reclaim's re-run bookkeeping (MOTIR-11728), written IN the settle so
+   * it lands only when this settle wins: the taken job's interruption count and
+   * the re-run's state (`pending`, or `capped` at a third interruption).
+   * `rerunAttemptedAt` marks the settling supervisor's own request as in hand,
+   * so the reconcile pass does not ask at the same moment.
+   */
+  spotRerun?: {
+    takenJobSpotInterruptions: number;
+    rerunState: CiRunnerRerunState;
+    rerunAttemptedAt: Date | null;
+  };
+}
+
+/**
+ * The state of a Spot-interrupted job's re-run (MOTIR-11728):
+ *   - `pending` — to request, or refused for a reason that may clear;
+ *   - `requested` — GitHub accepted it (201);
+ *   - `refused` — refused for good (403 on a finished run, 404, 422);
+ *   - `expired` — still refused 24 hours after the interruption;
+ *   - `capped` — a third interruption of the same job, never re-run.
+ */
+export type CiRunnerRerunState = 'pending' | 'requested' | 'refused' | 'expired' | 'capped';
+
+/** The `workflow_job` conclusions that mean the job FINISHED ITS WORK
+ *  (MOTIR-11728) — the only ones that spare a Spot-interrupted job its re-run.
+ *  A reclaimed runner's job completes `failure` or `cancelled`. */
+export const FINISHED_WORK_CONCLUSIONS = ['success', 'skipped'] as const;
+
+/** The re-run states the next run attempt's intent carries a count from: the
+ *  re-run was asked for (or is being asked for) — see `findCarriedSpotInterruptions`. */
+const RERUN_CARRIES_COUNT: readonly CiRunnerRerunState[] = ['pending', 'requested'];
+
+/** The job a runner took, as the `in_progress` delivery names it (MOTIR-11728). */
+export interface CiRunnerTakenJob {
+  runId: string;
+  runAttempt: number;
+  jobId: string;
+  jobName: string | null;
 }
 
 export interface CiRunnerProvisioningIntentCreateInput {
@@ -79,6 +118,8 @@ export interface CiRunnerProvisioningIntentCreateInput {
   queuedAt: Date;
   /** 0 for the intent a delivery records; N+1 for a reconcile (MOTIR-8976). */
   reconcileGeneration?: number;
+  /** The job's carried Spot-interruption count (MOTIR-11728); 0 when absent. */
+  spotInterruptionCount?: number;
 }
 
 export const ciRunnerProvisioningIntentRepository = {
@@ -111,6 +152,7 @@ export const ciRunnerProvisioningIntentRepository = {
         requestedLabels: data.requestedLabels,
         queuedAt: data.queuedAt,
         reconcileGeneration: data.reconcileGeneration ?? 0,
+        spotInterruptionCount: data.spotInterruptionCount ?? 0,
         status: CI_RUNNER_INTENT_PENDING,
       },
     });
@@ -635,6 +677,142 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
+   * Store the job a runner TOOK on its intent (MOTIR-11728) — run id, attempt,
+   * job id and name — keyed on the runner id alone, exactly as
+   * {@link markJobPickedUpByRunner} is, and WRITE-ONCE: an ephemeral runner runs
+   * one job, so a later delivery naming the same runner never moves it.
+   */
+  async markTakenJobByRunner(
+    githubRunnerId: number,
+    job: CiRunnerTakenJob,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { githubRunnerId, takenJobId: null },
+      data: {
+        takenRunId: job.runId,
+        takenRunAttempt: job.runAttempt,
+        takenJobId: job.jobId,
+        takenJobName: job.jobName,
+      },
+    });
+    return count;
+  },
+
+  /**
+   * The Spot-interruption count a newly queued job carries (MOTIR-11728): the
+   * taken-job count of the latest intent, at an EARLIER run attempt of the same
+   * repository, run and job NAME, whose runner was reclaimed while working it
+   * and whose re-run was asked for. A re-run gives the job a new id but keeps
+   * its name, so the name is the key. 0 when there is none, or no name.
+   *
+   * `pending` counts as asked for: the queued delivery of an accepted re-run can
+   * arrive before the supervisor has written `requested`.
+   */
+  async findCarriedSpotInterruptions(
+    job: {
+      repoOwner: string;
+      repoName: string;
+      runId: string;
+      jobName: string | null;
+      runAttempt: number;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (!job.jobName) return 0;
+    const earlier = await tx.ciRunnerProvisioningIntent.findFirst({
+      where: {
+        repoOwner: job.repoOwner,
+        repoName: job.repoName,
+        takenRunId: job.runId,
+        takenJobName: job.jobName,
+        takenRunAttempt: { lt: job.runAttempt },
+        rerunState: { in: [...RERUN_CARRIES_COUNT] },
+        takenJobSpotInterruptions: { not: null },
+      },
+      orderBy: [{ takenRunAttempt: 'desc' }, { settledAt: 'desc' }],
+      select: { takenJobSpotInterruptions: true },
+    });
+    return earlier?.takenJobSpotInterruptions ?? 0;
+  },
+
+  /**
+   * Whether GitHub has reported ONE job as having FINISHED ITS WORK — completed
+   * with a {@link FINISHED_WORK_CONCLUSIONS} conclusion — on any intent booted
+   * for it (MOTIR-11728). Only such a job is spared a Spot re-run. A job the
+   * reclaim cut off ALSO completes, usually before the supervisor settles, but
+   * as `failure` / `cancelled`; and a completion whose conclusion is unknown is
+   * not proof the work was done, so it is re-run too.
+   */
+  async isJobFinishedWork(
+    job: { runId: string; runAttempt: number; jobId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const row = await tx.ciRunnerProvisioningIntent.findFirst({
+      where: {
+        ...job,
+        jobCompletedAt: { not: null },
+        jobConclusion: { in: [...FINISHED_WORK_CONCLUSIONS] },
+      },
+      select: { id: true },
+    });
+    return row !== null;
+  },
+
+  /**
+   * Re-runs still to request (MOTIR-11728): `pending`, and not asked for since
+   * `askedBefore` — the reconcile pass's read, oldest interruption first.
+   */
+  async listPendingReruns(
+    askedBefore: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: {
+        rerunState: 'pending',
+        OR: [{ rerunAttemptedAt: null }, { rerunAttemptedAt: { lt: askedBefore } }],
+      },
+      orderBy: { settledAt: 'asc' },
+      take: limit,
+    });
+  },
+
+  /**
+   * Claim ONE pending re-run for a request (MOTIR-11728): stamps
+   * `rerunAttemptedAt` only while the row still reads as it was listed, so two
+   * passes that listed the same row cannot both ask GitHub.
+   */
+  async claimRerunAttempt(
+    id: string,
+    previousAttemptAt: Date | null,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, rerunState: 'pending', rerunAttemptedAt: previousAttemptAt },
+      data: { rerunAttemptedAt: at },
+    });
+    return count === 1;
+  },
+
+  /**
+   * Move a PENDING re-run to its outcome (MOTIR-11728). Only a `pending` row
+   * moves, so a settled outcome is never overwritten.
+   */
+  async recordRerunOutcome(
+    id: string,
+    state: Exclude<CiRunnerRerunState, 'pending' | 'capped'>,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, rerunState: 'pending' },
+      data: { rerunState: state },
+    });
+    return count === 1;
+  },
+
+  /**
    * Stamp `jobCompletedAt` on every intent booted for ONE job (MOTIR-11230) —
    * every reconcile generation, whatever its status, because the delivery can
    * arrive before an intent's container has even booted.
@@ -642,11 +820,12 @@ export const ciRunnerProvisioningIntentRepository = {
   async markJobCompleted(
     job: { runId: string; runAttempt: number; jobId: string },
     at: Date,
+    conclusion: string | null,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
       where: { ...job, jobCompletedAt: null },
-      data: { jobCompletedAt: at },
+      data: { jobCompletedAt: at, jobConclusion: conclusion },
     });
     return count;
   },
@@ -677,6 +856,7 @@ export const ciRunnerProvisioningIntentRepository = {
         failureDetail: data.failureDetail,
         ...(data.startedAt === undefined ? {} : { startedAt: data.startedAt }),
         ...(data.bootLatencyMs === undefined ? {} : { bootLatencyMs: data.bootLatencyMs }),
+        ...(data.spotRerun ? data.spotRerun : {}),
       },
     });
     return count === 1;

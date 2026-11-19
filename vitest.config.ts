@@ -1717,6 +1717,9 @@ export default defineConfig({
         // Story MOTIR-6906 · MOTIR-6908 — the org stop.
         'lib/services/fleetStopService.ts',
         'lib/github/actionsRuns.ts',
+        // MOTIR-11728 — the re-run of a job a Spot reclaim cut off. Its chain is
+        // `tests/ciFleet/spotInterruption.test.ts`; pinned at the fleet's 90 floor.
+        'lib/services/ciSpotRerunService.ts',
         // Story MOTIR-6906 · MOTIR-6909 — the paid-AI-plan gate.
         'lib/services/aiPlanGateService.ts',
         // Story MOTIR-6906 · MOTIR-6910 — CI debited while it runs.
@@ -6629,6 +6632,7 @@ export default defineConfig({
         'lib/services/fleetCeilingService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/fleetStopService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/github/actionsRuns.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/ciSpotRerunService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/aiPlanGateService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/ciLiveChargeService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/ciLiveAccrualRepository.ts': { branches: 90, functions: 90, lines: 90 },
