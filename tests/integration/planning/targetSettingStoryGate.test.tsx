@@ -242,9 +242,11 @@ describe('SEAM 1 — a bare number, through the REAL route, into the HOST’s ta
     // The HOST's set is what a turn carries — asserted where it leaves.
     fireEvent.change(message(), { target: { value: 'Split this.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(conversation.send).toHaveBeenCalledWith('Split this.', [
-      { id: twelfth.id, identifier: 'PROD-12', title: 'The twelfth story', kind: 'story' },
-    ]);
+    expect(conversation.send).toHaveBeenCalledWith(
+      'Split this.',
+      [{ id: twelfth.id, identifier: 'PROD-12', title: 'The twelfth story', kind: 'story' }],
+      {},
+    );
   });
 });
 
