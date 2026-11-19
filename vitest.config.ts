@@ -1840,6 +1840,15 @@ export default defineConfig({
         // v8-ignored, as awsDeploy's entry is). Pinned at the floor below.
         'scripts/aws-deploy/staticAssets.ts',
         'lib/build/versionSkew.ts',
+        // MOTIR-11718 — the two-CPU production image: the deploy's index and
+        // per-platform smoke, the image-time native check, and the per-target
+        // platform-package swap. MEASURED against `tests/awsDeploy/imageSmoke.test.ts`
+        // and `tests/scripts/image{NativeCheck,PlatformPackages}.test.ts` (numbers in
+        // the pull request; the process adapters and entries are v8-ignored or run
+        // only as a CLI). Pinned at the floor below.
+        'scripts/aws-deploy/imageSmoke.ts',
+        'scripts/imageNativeCheck.mjs',
+        'scripts/imagePlatformPackages.mjs',
         'scripts/fleet/fleetAdminCheckQuota.ts',
         // MOTIR-10264 — the fleet-admin bundle's entry and its Fargate database URL.
         // MEASURED against `tests/ciFleet/fleetAdminFargateEntry.test.ts`: both 100 on
@@ -4020,6 +4029,25 @@ export default defineConfig({
           statements: 90,
         },
         'lib/build/versionSkew.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-11718 — measured above, pinned at the floor.
+        'scripts/aws-deploy/imageSmoke.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/imageNativeCheck.mjs': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/imagePlatformPackages.mjs': {
           lines: 90,
           functions: 90,
           branches: 90,

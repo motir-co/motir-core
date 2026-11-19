@@ -13,6 +13,14 @@ name: AWS deploy
 # queue, whose required checks already include the CI workflow's `build` job and
 # its schema-drift guard.
 #
+# One image, two CPUs (MOTIR-11718): the tag names an image INDEX listing a
+# linux/amd64 and a linux/arm64 image, so a service may run on x86 or Graviton
+# from the same digest. The JavaScript is compiled once (the Dockerfile's
+# `--platform=$BUILDPLATFORM` stages) and each image's native code is its own
+# CPU's; before anything rolls, `pnpm deploy:image` checks the index lists both
+# and starts web, worker and relay from EACH child against a throwaway Postgres
+# (`scripts/aws-deploy/imageSmoke.ts`).
+#
 # A tab left open across a release keeps working (MOTIR-11241): the image is
 # built with `assetPrefix` pointing at the static-asset origin motir-infra
 # publishes (MOTIR-11240), this release's `_next/static` is uploaded there and
@@ -51,11 +59,14 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    # The image build takes single-digit minutes; the safety check waits up to 20
-    # minutes for a stack update, and the deploy script up to its default 20 for
-    # the migrate task and again for the roll. 80 bounds a hang without cutting
-    # off a slow-but-healthy deploy.
-    timeout-minutes: 80
+    # The image build took single-digit minutes for one CPU; the arm64 half adds
+    # its target-CPU stages under QEMU (the migration toolchain's install and the
+    # runner's native check — `next build` is not repeated), and the image smoke
+    # starts each CPU's services, arm64 under QEMU too, with up to 10 minutes per
+    # CPU. The safety check waits up to 20 minutes for a stack update, and the
+    # deploy script up to its default 20 for the migrate task and again for the
+    # roll. 110 bounds a hang without cutting off a slow-but-healthy deploy.
+    timeout-minutes: 110
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_DEPLOY_NAME_PREFIX: ${{ vars.AWS_DEPLOY_NAME_PREFIX }}
@@ -101,6 +112,14 @@ jobs:
           echo "the Server Action salt is pinned"
 
       - uses: actions/checkout@v6
+      # Register the arm64 emulator BEFORE the builder that will use it
+      # (MOTIR-11718): the image's target-CPU stages, and the arm64 half of the
+      # image smoke below, execute arm64 code on this amd64 runner. Mirror-first,
+      # like the builder (MOTIR-2018).
+      - uses: docker/setup-qemu-action@v3
+        with:
+          image: mirror.gcr.io/tonistiigi/binfmt:latest
+          platforms: arm64
       - uses: ./.github/actions/buildx
       - uses: ./.github/actions/pnpm
       - run: pnpm install --frozen-lockfile
@@ -161,17 +180,20 @@ jobs:
       # Dockerfile mounts each secret for the single `next build` command.
       #
       # `MOTIR_RELEASE` is also Next's `deploymentId` and `MOTIR_ASSET_PREFIX` its
-      # `assetPrefix` (MOTIR-11241, `lib/build/versionSkew.ts`). `load: true` keeps
-      # the image in the runner's Docker too, so the upload below copies this
-      # build's `.next/static` out of it without pulling it back from ECR.
+      # `assetPrefix` (MOTIR-11241, `lib/build/versionSkew.ts`).
+      #
+      # BOTH CPUs in one push, under one tag (MOTIR-11718). No `load: true`: the
+      # runner's Docker cannot hold a two-platform image, so the steps below pull
+      # what they need from ECR by digest. Both children carry the same
+      # `.next/static` (one compile), so the upload takes either.
       - name: Build and push the image
         id: build
         if: steps.existing.outputs.digest == ''
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
-          load: true
           tags: ${{ steps.ecr.outputs.registry }}/${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core:${{ github.sha }}
           build-args: |
             NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
@@ -185,10 +207,12 @@ jobs:
 
       # ⚠️ THE DEPLOY IS HANDED THE DIGEST ECR TAGS WITH THIS COMMIT, never the
       # push result's `digest` and never a tag (MOTIR-11274). With `load: true` the
-      # action's `digest` output is the untagged linux/amd64 CHILD of the image
-      # index it pushes under `$GITHUB_SHA`; deployed, ECS runs an image with no
-      # commit tag and the Services page cannot name the commit (MOTIR-11112).
-      # So the digest is read back from ECR by the tag, for a fresh push and a
+      # action's `digest` output was the untagged linux/amd64 CHILD of the image
+      # index it pushed under `$GITHUB_SHA`; deployed, ECS ran an image with no
+      # commit tag and the Services page could not name the commit (MOTIR-11112).
+      # Now that the push is two platforms the tag names the INDEX, whose digest
+      # is the one to deploy: Fargate picks the child for each task's CPU. The
+      # digest is still read back from ECR by the tag, for a fresh push and a
       # re-run alike, and nothing deploys unless it is well formed and ECR lists
       # `$GITHUB_SHA` among its tags. `deploy:aws --commit` checks the same again.
       - name: Resolve the digest ECR tags with this commit
@@ -219,6 +243,26 @@ jobs:
             echo "The push reported \`$PUSHED\`, a child of the tagged index; it is not deployed." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # ⚠️ BOTH CPUs, PROVEN BEFORE ANYTHING ROLLS (MOTIR-11718). The index must
+      # list linux/amd64 and linux/arm64; then each child, pulled by its own
+      # digest, migrates a throwaway database and starts web, worker and relay
+      # exactly as the task definitions do, and must answer: web's readiness
+      # (a Prisma query), the relay's health, the worker's started line. A native
+      # file built for the wrong CPU fails here, while the old tasks still serve.
+      # The push role session is still the active one, and it can pull.
+      - name: Check the image lists both CPUs
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core@${{ steps.digest.outputs.digest }}
+        run: pnpm --silent deploy:image platforms --image "$IMAGE"
+      - name: Start Postgres for the image smoke
+        uses: ./.github/actions/postgres
+      - name: Start each CPU's web, worker and relay against it
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core@${{ steps.digest.outputs.digest }}
+        run: >-
+          pnpm --silent deploy:image smoke --image "$IMAGE"
+          --database-url postgresql://prodect:prodect@127.0.0.1:5432/prodect
+
       - name: Assume the deploy role
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -229,9 +273,10 @@ jobs:
       # loaded from an earlier release keeps asking the origin for that release's
       # files; the bucket's lifecycle rule, not a deploy, expires them. Copying
       # the files out of the image (the runner's `/app/.next/static`) uploads
-      # exactly what the HTML will name. A re-run of a commit whose image was
-      # already pushed pulls that image by digest and uploads again, which is
-      # idempotent: every file is named by its content hash.
+      # exactly what the HTML will name. The amd64 child is the one copied from:
+      # both CPUs' images carry the same files (MOTIR-11718), and the smoke above
+      # already pulled it. A re-run uploads again, which is idempotent: every
+      # file is named by its content hash.
       - name: Upload this release's static files to the origin
         if: steps.static.outputs.url != ''
         env:
@@ -240,12 +285,9 @@ jobs:
           BUCKET: ${{ steps.static.outputs.bucket }}
         run: |
           set -euo pipefail
-          image="$REPOSITORY:$GITHUB_SHA"
-          if ! docker image inspect "$image" >/dev/null 2>&1; then
-            image="$REPOSITORY@$DIGEST"
-            docker pull --quiet "$image"
-          fi
-          cid="$(docker create "$image")"
+          image="$REPOSITORY@$DIGEST"
+          docker pull --quiet --platform linux/amd64 "$image"
+          cid="$(docker create --platform linux/amd64 "$image")"
           trap 'docker rm -f "$cid" >/dev/null' EXIT
           rm -rf "$RUNNER_TEMP/release-static"
           docker cp "$cid:/app/.next/static" "$RUNNER_TEMP/release-static"
