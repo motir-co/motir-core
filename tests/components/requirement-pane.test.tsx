@@ -467,3 +467,20 @@ describe('the layer over the pane', () => {
     expect(screen.getByTestId('plan-proposal-views').hasAttribute('inert')).toBe(false);
   });
 });
+
+describe('Grill me’s hand-off (MOTIR-11798)', () => {
+  it('shows no requirement, and no notice, while the read’s hand-off holds the questions', () => {
+    renderHost(thread(offer({ kind: 'grill', handoff: { items: ['ACME-1'], code: [] } })));
+    expect(region()).toBeNull();
+    expect(screen.queryByTestId('requirement-notice')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+  });
+
+  it('shows the requirement once the grilling’s end turned the hand-off into the plan offer', () => {
+    renderHost(thread(offer({ requirement: REQUIREMENT })));
+    expect(within(region()!).getByRole('heading', { level: 2 }).textContent).toBe(
+      'Export the board',
+    );
+    expect(screen.getByTestId('plan-offer-confirm')).toBeTruthy();
+  });
+});

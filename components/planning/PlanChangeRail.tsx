@@ -889,9 +889,13 @@ export function PlanChangeRail({
   // before planning): a SECOND instance of the hook, over the conversation itself.
   // With the switch on, an answer carrying a plan offer opens a grilling and the
   // offer is HELD — drawn under the thread, with what was settled, once it ends.
-  // Its one input is the conversation's LATEST plan offer; the hold is the hook's.
+  // Its one input is the conversation's LATEST plan offer; the hold is the hook's. With
+  // Grill me on, the read offers nothing yet (MOTIR-11798): its `grill` hand-off opens
+  // the grilling in the plan offer's place, and the grilling's end turns it into the
+  // plan offer holding the requirement — so no requirement exists before the questions.
   const latestOfferIndex = turns.findLastIndex(
-    (turn) => turn.role === 'assistant' && turn.offer?.kind === 'plan',
+    (turn) =>
+      turn.role === 'assistant' && (turn.offer?.kind === 'plan' || turn.offer?.kind === 'grill'),
   );
   const latestOfferTurn = latestOfferIndex >= 0 ? turns[latestOfferIndex]! : null;
   const grillOffer: GrillOffer | null =

@@ -130,3 +130,18 @@ describe('assumptionRowsOf', () => {
     expect(assumptionRowsOf([{ id: 'r1', text: ' ' }])).toEqual([]);
   });
 });
+
+describe('requirementPaneOf — Grill me’s hand-off (MOTIR-11798)', () => {
+  it('shows nothing while the live offer is a hand-off: no requirement exists before the questions', () => {
+    const handoff = offer({ kind: 'grill', handoff: { items: ['ACME-1'], code: [] } });
+    expect(requirementPaneOf([turn('a1', 1, { offer: handoff })])).toBeNull();
+    expect(
+      requirementPaneOf([turn('a1', 1, { offer: offer({ ...handoff, targetKey: 'ACME-1' }) })]),
+    ).toBeNull();
+  });
+
+  it('shows the requirement once the grilling turned the hand-off into a plan offer', () => {
+    const turned = offer({ kind: 'plan', requirement: REQUIREMENT });
+    expect(requirementPaneOf([turn('a1', 1, { offer: turned })])!.requirement).toEqual(REQUIREMENT);
+  });
+});

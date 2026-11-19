@@ -1,6 +1,7 @@
 import { readLogBugOffer, type LogBugOfferClaim } from '@/lib/ai/logBugOffer';
 import type { RequirementRecommendation, SubmittedRequirement } from '@/lib/ai/types';
 import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
+import type { GrillHandoffDto } from '@/lib/dto/planChange';
 
 // The CONSUMING half of MOTIR-1817's boundary contract (MOTIR-1819): reading an
 // `ask_project` job's ANSWER — and its REDIRECT — off a motir-ai job result.
@@ -118,6 +119,11 @@ export interface AskPlanOffer {
    *  only when the envelope carried one that reads. The landing keeps it on every
    *  stored plan offer, target or not (MOTIR-9878). */
   requirement?: SubmittedRequirement;
+  /** GRILL ME WAS ON (MOTIR-11798): the read's hand-off to the questions, with no
+   *  requirement and never `immediate`. The landing stores it as a `grill` offer. */
+  deferred?: true;
+  /** What the read read, present exactly with `deferred`. */
+  handoff?: GrillHandoffDto;
 }
 
 // Bounds applied on READ, not merely trusted from the producer — this text
@@ -181,6 +187,31 @@ function readRequirementField(value: unknown): SubmittedRequirement | undefined 
   return out;
 }
 
+/** The most entries of each hand-off list kept, and the longest entry (motir-ai's own
+ *  bounds, re-applied on read: this becomes a database row). */
+export const ASK_HANDOFF_LIST_MAX = 60;
+export const ASK_HANDOFF_ENTRY_MAX = 500;
+
+/** A hand-off list: its non-blank strings, trimmed and bounded; anything else is empty. */
+function readHandoffList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .flatMap((v) => (typeof v === 'string' && v.trim().length > 0 ? [v.trim()] : []))
+    .slice(0, ASK_HANDOFF_LIST_MAX)
+    .map((v) => v.slice(0, ASK_HANDOFF_ENTRY_MAX));
+}
+
+/** A deferred offer's hand-off, read loosely: a hand-off that does not read is an empty
+ *  one, never a dropped offer — the grilling then reads for itself. */
+function readHandoffField(value: unknown): GrillHandoffDto {
+  const v = isRecord(value) ? value : {};
+  return {
+    items: readHandoffList(v['items']),
+    code: readHandoffList(v['code']),
+    ...(isRecord(v['research']) ? { research: v['research'] } : {}),
+  };
+}
+
 /** The envelope's offer, or null when it is absent, of an unknown kind, or carries
  *  no request text. The target is kept only when it is key-shaped. A `log_bug`
  *  offer is read whole by `readLogBugOffer`, or not at all. */
@@ -190,11 +221,24 @@ function readOfferField(value: unknown): AskOffer | null {
   const requestMd = boundedString(value['requestText'], ASK_ANSWER_MAX_CHARS);
   if (!requestMd) return null;
   const target = typeof value['targetKey'] === 'string' ? value['targetKey'].trim() : '';
+  const targetKey = WORK_ITEM_KEY.test(target) ? target : null;
+  // GRILL ME'S HAND-OFF (MOTIR-11798): the read wrote no requirement and offers nothing
+  // to confirm. Whatever else the envelope carries, it never starts and holds none.
+  if (value['deferred'] === true) {
+    return {
+      kind: 'plan',
+      requestMd,
+      targetKey,
+      immediate: false,
+      deferred: true,
+      handoff: readHandoffField(value['handoff']),
+    };
+  }
   const requirement = readRequirementField(value['requirement']);
   return {
     kind: 'plan',
     requestMd,
-    targetKey: WORK_ITEM_KEY.test(target) ? target : null,
+    targetKey,
     immediate: value['immediate'] === true,
     ...(requirement ? { requirement } : {}),
   };

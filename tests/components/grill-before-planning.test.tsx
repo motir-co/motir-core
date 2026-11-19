@@ -731,3 +731,57 @@ describe('what the answering session said', () => {
     expect(screen.queryByTestId('conversation-notes')).toBeNull();
   });
 });
+
+describe('Grill me’s hand-off: no offer before the questions (MOTIR-11798)', () => {
+  /** The thread once the read with Grill me on answered: a hand-off, not an offer. */
+  const HANDED = conversation([
+    turn(0),
+    turn(1, 'assistant', {
+      offer: offer({ kind: 'grill', handoff: { items: ['ACME-1'], code: [] } }),
+      createdAt: OFFER_AT,
+    }),
+  ]);
+
+  it('opens the grilling from the hand-off, and nothing can be confirmed while it is open', async () => {
+    const view = renderWithIntl(rail({ session: conversation([]) }));
+    await act(async () => {
+      fireEvent.click(toggle());
+    });
+    await act(async () => {
+      view.rerender(rail({ session: HANDED }));
+    });
+    expect(client.openSharpen).toHaveBeenCalledTimes(1);
+    expect(client.openSharpen.mock.calls[0]![0]).toEqual({ conversationId: 's1' });
+    expect(await screen.findByTestId('sharpen-question')).toBeTruthy();
+    expect(screen.getByTestId('plan-offer-held').textContent).toBe(enOffer.held);
+    expect(screen.queryByTestId('plan-offer')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+  });
+
+  it('draws no offer row for a hand-off when nothing holds it', async () => {
+    renderWithIntl(rail({ session: HANDED }));
+    await act(async () => {});
+    expect(screen.queryByTestId('plan-offer')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+  });
+
+  it('shows the plan offer the grilling’s end turned the hand-off into, once the thread is re-read', async () => {
+    client.getLatestConversationSharpen.mockResolvedValue(grilling(ENDED));
+    let resolveRead: () => void = () => {};
+    const reread = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const view = renderWithIntl(rail({ session: HANDED }, reread));
+    await waitFor(() => expect(reread).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+    // The re-read brings the thread as the end left it: the same turn, now a plan offer.
+    await act(async () => {
+      view.rerender(rail({ session: OFFERED }, reread));
+      resolveRead();
+    });
+    await waitFor(() => expect(screen.getByTestId('plan-offer-confirm')).toBeTruthy());
+  });
+});

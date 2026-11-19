@@ -582,11 +582,26 @@ export interface CopyableSessionDto {
 }
 
 /**
- * What an answer turn can OFFER (MOTIR-9288). A closed union: `'plan'`, and the bug
- * offer's `'log_bug'` (MOTIR-9322). A stored kind outside the union reads as no
+ * What an answer turn can OFFER (MOTIR-9288). A closed union: `'plan'`, the bug
+ * offer's `'log_bug'` (MOTIR-9322), and Grill me's hand-off `'grill'` (MOTIR-11798) —
+ * the read's turn with Grill me on, which offers NOTHING to confirm: it carries no
+ * requirement, opens the conversation's grilling, and becomes a `'plan'` offer holding
+ * the requirement when the grilling ends. A stored kind outside the union reads as no
  * offer, never as a `plan` one.
  */
-export type AnswerOfferKindDto = 'plan' | 'log_bug';
+export type AnswerOfferKindDto = 'plan' | 'log_bug' | 'grill';
+
+/**
+ * What a `'grill'` hand-off carries to its grilling (MOTIR-11798): the work items and
+ * code paths the read opened, and the shipped-product research it ran beside the
+ * read, which seeds the grilling so its first turn does not search again.
+ */
+export interface GrillHandoffDto {
+  items: string[];
+  code: string[];
+  /** motir-ai's research record, stored as it arrived; absent when its pass failed. */
+  research?: Record<string, unknown>;
+}
 
 /**
  * Where a bug offer's ONE write goes (MOTIR-9322), re-resolved under the sender's
@@ -645,6 +660,8 @@ export interface PlanAnswerOfferDto {
   /** The bug a `log_bug` offer would write (MOTIR-9322); absent on a `plan` offer.
    *  On a `log_bug` offer, `requestMd` is the new bug's title. */
   bug?: LogBugOfferDto;
+  /** Present exactly on a `grill` hand-off (MOTIR-11798). */
+  handoff?: GrillHandoffDto;
   declinedAt: string | null;
   declinedById: string | null;
   confirmedAt: string | null;
@@ -683,6 +700,8 @@ export interface AnswerOfferInput {
   requirement?: SubmittedRequirement;
   /** Present exactly on a `log_bug` offer. */
   bug?: LogBugOfferDto;
+  /** Present exactly on a `grill` hand-off (MOTIR-11798). */
+  handoff?: GrillHandoffDto;
   /** A `plan` offer written after a decision for a kept too-far request (MOTIR-11521):
    *  the kept request's source turn, its position from 1 and the total kept. Stored as
    *  `farRequestTurnId` / `farRequestPosition` / `farRequestTotal` beside the store keys. */

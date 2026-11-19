@@ -450,3 +450,54 @@ describe('readAskOutcome — a request too far from the waiting plan (MOTIR-1151
     expect(out?.farRequest?.requirement).toHaveLength(ASK_ANSWER_MAX_CHARS);
   });
 });
+
+describe('readAskOutcome — Grill me’s deferred offer (MOTIR-11798)', () => {
+  const read = (offer: Record<string, unknown>) =>
+    readAskOutcome({ ask: { intent: 'ask', answer: 'Read.', citations: [], offer } })!
+      .offer as AskPlanOffer;
+
+  it('reads the hand-off: no requirement, never immediate, its reads and research kept', () => {
+    expect(
+      read({
+        kind: 'plan',
+        requestText: 'Export the list.',
+        targetKey: 'ABC-12',
+        immediate: true,
+        deferred: true,
+        requirement: { outcome: 'x', behaviour: 'y', acceptance: 'z' },
+        handoff: { items: ['ABC-12'], code: ['src/a.ts'], research: { version: 1 } },
+      }),
+    ).toEqual({
+      kind: 'plan',
+      requestMd: 'Export the list.',
+      targetKey: 'ABC-12',
+      immediate: false,
+      deferred: true,
+      handoff: { items: ['ABC-12'], code: ['src/a.ts'], research: { version: 1 } },
+    });
+  });
+
+  it('a hand-off that does not read is an empty one, never a dropped offer; lists are bounded', () => {
+    expect(read({ kind: 'plan', requestText: 'Export.', deferred: true }).handoff).toEqual({
+      items: [],
+      code: [],
+    });
+    const many = Array.from({ length: 80 }, (_, i) => `src/${'f'.repeat(600)}${i}.ts`);
+    const h = read({
+      kind: 'plan',
+      requestText: 'Export.',
+      deferred: true,
+      handoff: { items: [' ABC-1 ', '', 3], code: many, research: ['not', 'a', 'record'] },
+    }).handoff!;
+    expect(h.items).toEqual(['ABC-1']);
+    expect(h.code).toHaveLength(60);
+    expect(h.code[0]!.length).toBe(500);
+    expect(h).not.toHaveProperty('research');
+  });
+
+  it('deferred that is not exactly true is an ordinary offer', () => {
+    const o = read({ kind: 'plan', requestText: 'Export.', deferred: 'yes', handoff: {} });
+    expect(o).not.toHaveProperty('deferred');
+    expect(o).not.toHaveProperty('handoff');
+  });
+});

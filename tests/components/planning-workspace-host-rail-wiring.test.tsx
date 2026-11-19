@@ -125,8 +125,9 @@ describe('PlanningWorkspaceHost — the rail’s controls reach the hook', () =>
 
     expect(hook.send).toHaveBeenCalledTimes(1);
     // The composer's target set rides along, so the hook can tell a carry from a
-    // turn about a different card; this render has picked none.
-    expect(hook.send).toHaveBeenCalledWith('Carry this on.', []);
+    // turn about a different card; this render has picked none. The trailing options
+    // carry the composer's Grill me switch (MOTIR-11801), off here.
+    expect(hook.send).toHaveBeenCalledWith('Carry this on.', [], {});
   });
 
   it('Start a new session, Plan again and Show earlier each call their own method, once', () => {

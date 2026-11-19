@@ -667,6 +667,14 @@ export async function appendWithin(
                       ) as Prisma.InputJsonObject,
                     }
                   : {}),
+                // Grill me's hand-off (MOTIR-11798): what the read read, for the grilling.
+                ...(turn.answerOffer.handoff
+                  ? {
+                      handoff: JSON.parse(
+                        JSON.stringify(turn.answerOffer.handoff),
+                      ) as Prisma.InputJsonObject,
+                    }
+                  : {}),
                 // The kept too-far request a decision offers (MOTIR-11521): which turn
                 // it came from, and its place among the conversation's kept requests.
                 ...(turn.answerOffer.farRequest
