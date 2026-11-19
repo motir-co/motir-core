@@ -5,13 +5,19 @@ The machine image every AWS CI runner boots from (MOTIR-9272): x86_64 Ubuntu 24.
 image in [`infra/ci-runner/`](../ci-runner/), privileged Docker on its own 20 GB volume, and
 one systemd unit that runs ONE job and powers the VM off.
 
+Every build makes **two** AMIs from the same commit and the same pins (MOTIR-11783): the
+x86_64 one (`m6i.large`, Canonical's `amd64` base) and an arm64 Graviton one (`m7g.large`,
+Canonical's `arm64` base) for jobs labelled `motir-graviton`. `provision.sh` picks each
+download's architecture from the build VM's `uname -m` and checks it against that
+architecture's pinned checksum.
+
 It follows the Fly image rather than forking it. The three scripts the Fly container runs
 (`entrypoint.sh`, `start-dockerd.sh`, `job-started.sh`) are copied into the AMI byte for
 byte at build time. This directory adds only what a VM needs and a container does not.
 
 | File                                 | What it is                                                                                                                                                                                            |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packer/runner.pkr.hcl`              | The Packer template: the Ubuntu base from Canonical's SSM parameter, `m6i.large`, a 30 GB gp3 root, and a blank 20 GB gp3 `/dev/sdb` in the AMI's mapping.                                            |
+| `packer/runner.pkr.hcl`              | The Packer template: the Ubuntu base from Canonical's SSM parameter, `m6i.large` (x86_64) and `m7g.large` (arm64), a 30 GB gp3 root, and a blank 20 GB gp3 `/dev/sdb` in the AMI's mapping.           |
 | `provision.sh`                       | Runs once inside the build VM: the Dockerfile's apt packages, Node in the tool cache, the Docker static binaries, the Playwright libraries, the runner (with `config.sh` deleted), the `runner` user. |
 | `boot/motir-runner-prepare.sh`       | The unit's `ExecStartPre`: user-data → the entrypoint's environment, the data volume at `/var/lib/docker`, the metadata service closed.                                                               |
 | `boot/parse-user-data.sh`            | The user-data parser the hook calls: picks the boot mode and refuses anything that mode does not accept. Text in, files out, no network.                                                              |
@@ -25,7 +31,10 @@ byte at build time. This directory adds only what a VM needs and a container doe
 
 Only in [`infra/ci-runner/Dockerfile`](../ci-runner/Dockerfile), as the ARGs
 `RUNNER_VERSION`, `RUNNER_SHA256`, `NODE_VERSION`, `NODE_SHA256`, `DOCKER_VERSION`,
-`DOCKER_SHA256`, `AWSCLI_VERSION`, `AWSCLI_SHA256` and `PLAYWRIGHT_VERSION`. `build-ami.sh` reads them by grep and passes them
+`DOCKER_SHA256`, `AWSCLI_VERSION`, `AWSCLI_SHA256` and `PLAYWRIGHT_VERSION`, plus the arm64
+checksums of the same four downloads, `RUNNER_ARM64_SHA256`, `NODE_ARM64_SHA256`,
+`DOCKER_ARM64_SHA256` and `AWSCLI_ARM64_SHA256` (the versions are shared). A version bump
+updates both checksums of that download. `build-ami.sh` reads them by grep and passes them
 to Packer. Bump a version there and both the Fly image and the next AMI pick it up.
 `tests/ciFleet/awsRunnerAmi.test.ts` fails if a version or a checksum is written anywhere in
 this directory, or if `provision.sh`'s apt package list drifts from the Dockerfile's.
@@ -40,15 +49,24 @@ git tag ci-runner-ami-v<n> && git push origin ci-runner-ami-v<n>
 
 or run **Release CI runner AMI** from the Actions tab. The workflow
 (`.github/workflows/release-ci-runner-ami.yml`) validates, then builds in the build account
-over OIDC. Its job summary carries the AMI id and the command to set it:
+over OIDC. Its job summary carries both AMI ids and the commands to set them:
 
 ```sh
 fly secrets set -a motir-core MOTIR_AWS_RUNNER_AMI_ID=ami-…
 ```
 
+```sh
+fly secrets set -a motir-core MOTIR_AWS_RUNNER_ARM64_AMI_ID=ami-…
+```
+
+`build-ami.sh` reads each id from Packer's manifest by its build name (`runner`,
+`runner-arm64`), never by position. Until `MOTIR_AWS_RUNNER_ARM64_AMI_ID` is set, the adapter
+refuses arm64 jobs rather than launching them on an x86_64 image.
+
 `MOTIR_AWS_RUNNER_AMI_ID` is the AWS counterpart of `MOTIR_RUNNER_IMAGE`: the AWS
 orchestrator adapter launches runners from it. A rebuild is always a new, versioned AMI
-(`motir-ci-runner-<runnerVersion>-<yyyymmddHHMM>-<sha7>`), never an edit of an old one, so
+(`motir-ci-runner-<runnerVersion>-<yyyymmddHHMM>-<sha7>`, and
+`motir-ci-runner-arm64-<runnerVersion>-<yyyymmddHHMM>-<sha7>` for Graviton), never an edit of an old one, so
 the setting only moves when a person moves it.
 
 The code-graph indexer does not use this AMI. An AWS index VM boots the stock ECS-optimized
@@ -227,4 +245,4 @@ Check first that no setting still names the AMI (`MOTIR_AWS_RUNNER_AMI_ID`).
 
 Running the first build and setting the id (MOTIR-9282), measuring a boot (MOTIR-9274), the
 adapter (MOTIR-9276) and the network (MOTIR-9273) are their own cards. So are other regions,
-Graviton, spot, and AMI lifecycle automation.
+spot, and AMI lifecycle automation.

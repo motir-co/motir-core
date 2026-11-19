@@ -16,6 +16,13 @@
 #   RUNNER_VERSION RUNNER_SHA256 NODE_VERSION NODE_SHA256
 #   DOCKER_VERSION DOCKER_SHA256 AWSCLI_VERSION AWSCLI_SHA256
 #   PLAYWRIGHT_VERSION
+#   RUNNER_ARM64_SHA256 NODE_ARM64_SHA256 DOCKER_ARM64_SHA256 AWSCLI_ARM64_SHA256
+#
+# ── One script, two architectures (MOTIR-11783) ──────────────────────────────
+# The same script provisions the x86_64 AMI and the arm64 (Graviton) AMI. The
+# build VM's own `uname -m` picks the download names and the checksum set ONCE,
+# below; every download is still checked against a pinned checksum, and an
+# architecture this script does not know stops the build.
 #
 # ── The scripts: copied, never rewritten ─────────────────────────────────────
 # The Packer file provisioner uploads `infra/ci-runner/entrypoint.sh`,
@@ -32,9 +39,26 @@ export DEBIAN_FRONTEND=noninteractive
 log() { printf '[provision] %s\n' "$*"; }
 die() { printf '[provision] FATAL: %s\n' "$*" >&2; exit 1; }
 
-for pin in RUNNER_VERSION RUNNER_SHA256 NODE_VERSION NODE_SHA256 DOCKER_VERSION DOCKER_SHA256 AWSCLI_VERSION AWSCLI_SHA256 PLAYWRIGHT_VERSION; do
+for pin in RUNNER_VERSION RUNNER_SHA256 NODE_VERSION NODE_SHA256 DOCKER_VERSION DOCKER_SHA256 AWSCLI_VERSION AWSCLI_SHA256 PLAYWRIGHT_VERSION RUNNER_ARM64_SHA256 NODE_ARM64_SHA256 DOCKER_ARM64_SHA256 AWSCLI_ARM64_SHA256; do
   [ -n "${!pin:-}" ] || die "${pin} is not set — build-ami.sh passes it from infra/ci-runner/Dockerfile"
 done
+
+# The architecture of the VM being provisioned, chosen once. Each upstream names
+# its builds differently: the runner and Node say x64/arm64, Docker and the AWS
+# CLI say x86_64/aarch64.
+case "$(uname -m)" in
+  x86_64)
+    NODE_ARCH=x64 RUNNER_ARCH=x64 DOCKER_ARCH=x86_64 AWSCLI_ARCH=x86_64
+    RUNNER_SUM="${RUNNER_SHA256}" NODE_SUM="${NODE_SHA256}"
+    DOCKER_SUM="${DOCKER_SHA256}" AWSCLI_SUM="${AWSCLI_SHA256}"
+    ;;
+  aarch64)
+    NODE_ARCH=arm64 RUNNER_ARCH=arm64 DOCKER_ARCH=aarch64 AWSCLI_ARCH=aarch64
+    RUNNER_SUM="${RUNNER_ARM64_SHA256}" NODE_SUM="${NODE_ARM64_SHA256}"
+    DOCKER_SUM="${DOCKER_ARM64_SHA256}" AWSCLI_SUM="${AWSCLI_ARM64_SHA256}"
+    ;;
+  *) die "unsupported architecture $(uname -m): this AMI is built for x86_64 or aarch64 only" ;;
+esac
 
 # The Dockerfile's base package set, exactly. The test compares this array with
 # the Dockerfile's `apt-get install` block and fails on any difference.
@@ -80,11 +104,11 @@ install_base_packages() {
 # Node into the tool cache, so `actions/setup-node` is a cache hit (Dockerfile:
 # "Node.js — installed INTO THE TOOL CACHE"), and onto PATH.
 install_node() {
-  local tools="/opt/hostedtoolcache/node/${NODE_VERSION}/x64" b
+  local tools="/opt/hostedtoolcache/node/${NODE_VERSION}/${NODE_ARCH}" b
   log "node into ${tools}"
   mkdir -p "${tools}"
-  curl -fsSLo /tmp/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz"
-  echo "${NODE_SHA256}  /tmp/node.tar.xz" | sha256sum -c -
+  curl -fsSLo /tmp/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz"
+  echo "${NODE_SUM}  /tmp/node.tar.xz" | sha256sum -c -
   tar -xJf /tmp/node.tar.xz -C "${tools}" --strip-components=1
   rm /tmp/node.tar.xz
   touch "/opt/hostedtoolcache/node/${NODE_VERSION}.complete"
@@ -97,8 +121,8 @@ install_node() {
 # same way.
 install_docker() {
   log "docker static binaries"
-  curl -fsSLo /tmp/docker.tgz "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz"
-  echo "${DOCKER_SHA256}  /tmp/docker.tgz" | sha256sum -c -
+  curl -fsSLo /tmp/docker.tgz "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-${DOCKER_VERSION}.tgz"
+  echo "${DOCKER_SUM}  /tmp/docker.tgz" | sha256sum -c -
   tar -xzf /tmp/docker.tgz -C /usr/local/bin --strip-components=1
   rm /tmp/docker.tgz
   dockerd --version
@@ -111,8 +135,8 @@ install_docker() {
 # the CLI is absent or is not the pinned version, so no AMI ships without it.
 install_aws_cli() {
   log "aws cli ${AWSCLI_VERSION}"
-  curl -fsSLo /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"
-  echo "${AWSCLI_SHA256}  /tmp/awscliv2.zip" | sha256sum -c -
+  curl -fsSLo /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-${AWSCLI_ARCH}-${AWSCLI_VERSION}.zip"
+  echo "${AWSCLI_SUM}  /tmp/awscliv2.zip" | sha256sum -c -
   unzip -q /tmp/awscliv2.zip -d /tmp/awscliv2
   /tmp/awscliv2/aws/install
   rm -rf /tmp/awscliv2.zip /tmp/awscliv2
@@ -133,8 +157,8 @@ install_runner() {
   mkdir -p /home/runner/actions-runner
   (
     cd /home/runner/actions-runner
-    curl -fsSLo runner.tar.gz "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"
-    echo "${RUNNER_SHA256}  runner.tar.gz" | sha256sum -c -
+    curl -fsSLo runner.tar.gz "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz"
+    echo "${RUNNER_SUM}  runner.tar.gz" | sha256sum -c -
     tar -xzf runner.tar.gz
     rm runner.tar.gz
     ./bin/installdependencies.sh

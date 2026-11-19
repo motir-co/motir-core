@@ -1,6 +1,16 @@
-# The AWS CI runner AMI (MOTIR-9272): x86_64 Ubuntu 24.04 in us-east-1, with the
+# The AWS CI runner AMIs (MOTIR-9272): Ubuntu 24.04 in us-east-1, with the
 # Fly runner image's toolchain, privileged Docker, the GitHub runner and a
 # second 20 GB volume for Docker's data root.
+#
+# TWO AMIS, ONE BUILD (MOTIR-11783). Every build makes the x86_64 AMI (build
+# `runner`, on m6i.large) AND the arm64 Graviton AMI (build `runner-arm64`, on
+# m7g.large) from the same commit and the same pins. The shared settings live
+# once, in the top-level `runner` source; the build block's two nested sources
+# add only what differs by architecture: the base image, the build instance,
+# the name, the description and the tags. (Packer refuses a nested source that
+# sets a field the top-level one already sets, which is why the per-architecture
+# fields are set ONLY in the nested sources.) provision.sh picks its downloads
+# from the VM's own `uname -m`.
 #
 # Built by `infra/ci-runner-aws/build-ami.sh`, which reads every version and
 # checksum from `infra/ci-runner/Dockerfile` and passes them in as variables —
@@ -98,6 +108,44 @@ variable "awscli_sha256" {
   }
 }
 
+# The arm64 checksums of the same four downloads (MOTIR-11783). The versions are
+# shared: one runner, Node, Docker and AWS CLI release, two architectures.
+variable "runner_arm64_sha256" {
+  type        = string
+  description = "infra/ci-runner/Dockerfile ARG RUNNER_ARM64_SHA256."
+  validation {
+    condition     = can(regex("^[0-9a-f]{64}$", var.runner_arm64_sha256))
+    error_message = "The runner_arm64_sha256 must be 64 hex characters."
+  }
+}
+
+variable "node_arm64_sha256" {
+  type        = string
+  description = "infra/ci-runner/Dockerfile ARG NODE_ARM64_SHA256."
+  validation {
+    condition     = can(regex("^[0-9a-f]{64}$", var.node_arm64_sha256))
+    error_message = "The node_arm64_sha256 must be 64 hex characters."
+  }
+}
+
+variable "docker_arm64_sha256" {
+  type        = string
+  description = "infra/ci-runner/Dockerfile ARG DOCKER_ARM64_SHA256."
+  validation {
+    condition     = can(regex("^[0-9a-f]{64}$", var.docker_arm64_sha256))
+    error_message = "The docker_arm64_sha256 must be 64 hex characters."
+  }
+}
+
+variable "awscli_arm64_sha256" {
+  type        = string
+  description = "infra/ci-runner/Dockerfile ARG AWSCLI_ARM64_SHA256."
+  validation {
+    condition     = can(regex("^[0-9a-f]{64}$", var.awscli_arm64_sha256))
+    error_message = "The awscli_arm64_sha256 must be 64 hex characters."
+  }
+}
+
 variable "playwright_version" {
   type        = string
   description = "infra/ci-runner/Dockerfile ARG PLAYWRIGHT_VERSION."
@@ -153,6 +201,12 @@ data "amazon-parameterstore" "ubuntu_noble" {
   name   = "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
 }
 
+# The arm64 twin of the parameter above, for the Graviton AMI (MOTIR-11783).
+data "amazon-parameterstore" "ubuntu_noble_arm64" {
+  region = "us-east-1"
+  name   = "/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id"
+}
+
 locals {
   # The tag the build role keys on — motir-infra's BuildTagKey / BuildTagValue
   # stack outputs. See THE BUILD TAG at the top.
@@ -166,14 +220,26 @@ locals {
     GitSha        = var.git_sha
     BaseAmi       = data.amazon-parameterstore.ubuntu_noble.value
   }
+  # The Graviton AMI: the same name with `-arm64` after the product, so the two
+  # sort together and amiBuildCommitFrom reads both the same way.
+  arm64_ami_name = "motir-ci-runner-arm64-${var.runner_version}-${local.timestamp}-${substr(var.git_sha, 0, 7)}"
+  arm64_tags = {
+    Name          = local.arm64_ami_name
+    Version       = var.version
+    RunnerVersion = var.runner_version
+    GitSha        = var.git_sha
+    BaseAmi       = data.amazon-parameterstore.ubuntu_noble_arm64.value
+    Architecture  = "arm64"
+  }
 }
 
+# The settings both AMIs share. The per-architecture fields (source_ami,
+# instance_type, ami_name, ami_description and the tags) are set by the build
+# block's nested sources below.
 source "amazon-ebs" "runner" {
-  region        = "us-east-1"
-  source_ami    = data.amazon-parameterstore.ubuntu_noble.value
-  instance_type = "m6i.large"
-  subnet_id     = var.subnet_id
-  ssh_username  = "ubuntu"
+  region       = "us-east-1"
+  subnet_id    = var.subnet_id
+  ssh_username = "ubuntu"
 
   # Given: Packer launches into it and creates no group. Empty: Packer creates
   # a temporary group (an account whose role may create one).
@@ -181,24 +247,12 @@ source "amazon-ebs" "runner" {
 
   temporary_key_pair_type = "ed25519"
 
-  ami_name        = local.ami_name
-  # The full commit, because a shared AMI's tags (GitSha above) are visible only
-  # in this build account; the accounts it is shared with see the name and this
-  # description, and the daily health check reads the commit from here
-  # (MOTIR-10395, lib/ciFleet/runnerImageSources.ts amiBuildCommitFrom).
-  ami_description = "Motir CI runner: Ubuntu 24.04, GitHub runner ${var.runner_version}, Docker on a 20 GB data volume (commit ${var.git_sha})"
-  ami_org_arns    = var.org_arns
+  ami_org_arns = var.org_arns
   # Instances launched from the AMI accept IMDSv2 only.
   imds_support = "v2.0"
   ena_support  = true
   # Left unencrypted so it can be shared with member accounts; it holds no secret.
   encrypt_boot = false
-
-  # The build tag only at create (run_tags, run_volume_tags); see THE BUILD TAG.
-  tags            = local.tags
-  snapshot_tags   = local.tags
-  run_tags        = merge(local.build_tag, { Name = "packer-${local.ami_name}" })
-  run_volume_tags = merge(local.build_tag, { Name = "packer-${local.ami_name}" })
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -226,7 +280,42 @@ source "amazon-ebs" "runner" {
 }
 
 build {
-  sources = ["source.amazon-ebs.runner"]
+  # The x86_64 AMI, as it has always been built (MOTIR-9272).
+  source "amazon-ebs.runner" {
+    name          = "runner"
+    source_ami    = data.amazon-parameterstore.ubuntu_noble.value
+    instance_type = "m6i.large"
+
+    ami_name = local.ami_name
+    # The full commit, because a shared AMI's tags (GitSha above) are visible only
+    # in this build account; the accounts it is shared with see the name and this
+    # description, and the daily health check reads the commit from here
+    # (MOTIR-10395, lib/ciFleet/runnerImageSources.ts amiBuildCommitFrom).
+    ami_description = "Motir CI runner: Ubuntu 24.04, GitHub runner ${var.runner_version}, Docker on a 20 GB data volume (commit ${var.git_sha})"
+
+    # The build tag only at create (run_tags, run_volume_tags); see THE BUILD TAG.
+    tags            = local.tags
+    snapshot_tags   = local.tags
+    run_tags        = merge(local.build_tag, { Name = "packer-${local.ami_name}" })
+    run_volume_tags = merge(local.build_tag, { Name = "packer-${local.ami_name}" })
+  }
+
+  # The arm64 Graviton AMI (MOTIR-11783): Canonical's arm64 image, built on a
+  # Graviton m7g.large — the instance type the adapter launches arm64 runners on.
+  source "amazon-ebs.runner" {
+    name          = "runner-arm64"
+    source_ami    = data.amazon-parameterstore.ubuntu_noble_arm64.value
+    instance_type = "m7g.large"
+
+    ami_name = local.arm64_ami_name
+    # The same `(commit <sha>)` suffix as the x86_64 AMI, for the same reader.
+    ami_description = "Motir CI runner arm64: Ubuntu 24.04, GitHub runner ${var.runner_version}, Docker on a 20 GB data volume (commit ${var.git_sha})"
+
+    tags            = local.arm64_tags
+    snapshot_tags   = local.arm64_tags
+    run_tags        = merge(local.build_tag, { Name = "packer-${local.arm64_ami_name}" })
+    run_volume_tags = merge(local.build_tag, { Name = "packer-${local.arm64_ami_name}" })
+  }
 
   provisioner "shell" {
     inline = ["mkdir -p /tmp/motir-ci-runner"]
@@ -292,10 +381,14 @@ build {
       "AWSCLI_VERSION=${var.awscli_version}",
       "AWSCLI_SHA256=${var.awscli_sha256}",
       "PLAYWRIGHT_VERSION=${var.playwright_version}",
+      "RUNNER_ARM64_SHA256=${var.runner_arm64_sha256}",
+      "NODE_ARM64_SHA256=${var.node_arm64_sha256}",
+      "DOCKER_ARM64_SHA256=${var.docker_arm64_sha256}",
+      "AWSCLI_ARM64_SHA256=${var.awscli_arm64_sha256}",
     ]
   }
 
-  # build-ami.sh reads the AMI id out of this file.
+  # build-ami.sh reads both AMI ids out of this file, each by its build name.
   post-processor "manifest" {
     output     = var.manifest_path
     strip_path = true

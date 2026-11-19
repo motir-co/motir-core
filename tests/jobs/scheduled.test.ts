@@ -1294,7 +1294,9 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
       expect(error?.message).toContain(
         "v2.336.0 (RUNNER_VERSION in infra/ci-runner/Dockerfile on the default branch), is past GitHub's support window since 2026-09-24",
       );
-      expect(error?.message).toContain('Set RUNNER_VERSION and RUNNER_SHA256 to v2.338.2');
+      expect(error?.message).toContain(
+        'Set RUNNER_VERSION, RUNNER_SHA256 and RUNNER_ARM64_SHA256 to v2.338.2',
+      );
       // Every other probe still ran first, the freshness probe included.
       const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
       expect(stepIds).toEqual(

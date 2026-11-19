@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { amiBuildCommitFrom } from '@/lib/ciFleet/runnerImageSources';
 
 // THE AWS RUNNER AMI's sources, guarded against drift (MOTIR-9272).
 //
@@ -117,14 +118,16 @@ describe('the template — Ubuntu 24.04 x86_64 in us-east-1, with no AMI id writ
     expect(template).toContain(
       'name   = "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"',
     );
-    expect(template).toContain('source_ami    = data.amazon-parameterstore.ubuntu_noble.value');
+    expect(template).toContain('source_ami    = data.amazon-parameterstore.ubuntu_noble.value\n');
     expect(code(template)).not.toMatch(/\bami-[0-9a-f]{8,}/);
   });
 
   it('builds x86_64 on m6i.large in us-east-1', () => {
     const source = hclBlock(template, /source "amazon-ebs" "runner"/);
     expect(source).toMatch(/region\s+= "us-east-1"/);
-    expect(source).toMatch(/instance_type\s+= "m6i\.large"/);
+    const x86 = hclBlock(template, /source "amazon-ebs\.runner" \{\n\s+name\s+= "runner"\n/);
+    expect(x86).toMatch(/instance_type\s+= "m6i\.large"/);
+    expect(x86).toContain('source_ami    = data.amazon-parameterstore.ubuntu_noble.value');
     // The parameter is the amd64 one; m6i is an x86_64 family.
     expect(template).toContain('/amd64/');
   });
@@ -176,6 +179,10 @@ describe('the pins live once, in infra/ci-runner/Dockerfile', () => {
     'AWSCLI_VERSION',
     'AWSCLI_SHA256',
     'PLAYWRIGHT_VERSION',
+    'RUNNER_ARM64_SHA256',
+    'NODE_ARM64_SHA256',
+    'DOCKER_ARM64_SHA256',
+    'AWSCLI_ARM64_SHA256',
   ];
 
   it('no file in infra/ci-runner-aws/ carries a runner, Node, Docker or Playwright pin', () => {
@@ -224,13 +231,20 @@ describe('the pins live once, in infra/ci-runner/Dockerfile', () => {
 describe('the AWS CLI is in both images, from one pin (MOTIR-10293)', () => {
   const ZIP = '/tmp/awscliv2.zip';
   const URL = 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip';
+  // provision.sh serves both architectures (MOTIR-11783): the arch and the
+  // checksum are the ones its `uname -m` branch chose from the AWSCLI_* pins.
+  const AMI_URL =
+    'https://awscli.amazonaws.com/awscli-exe-linux-${AWSCLI_ARCH}-${AWSCLI_VERSION}.zip';
 
   /** Whether a source installs the CLI from the AWSCLI_* pins and checks the result. */
   function installsAwsCli(source: string): boolean {
     const body = code(source);
+    const ami = body.includes(AMI_URL);
     return [
-      `curl -fsSLo ${ZIP} "${URL}"`,
-      `echo "\${AWSCLI_SHA256}  ${ZIP}" | sha256sum -c -`,
+      `curl -fsSLo ${ZIP} "${ami ? AMI_URL : URL}"`,
+      ami
+        ? `echo "\${AWSCLI_SUM}  ${ZIP}" | sha256sum -c -`
+        : `echo "\${AWSCLI_SHA256}  ${ZIP}" | sha256sum -c -`,
       '/tmp/awscliv2/aws/install',
       'aws --version | grep -F "aws-cli/${AWSCLI_VERSION} "',
     ].every((line) => body.includes(line));
@@ -284,12 +298,12 @@ describe('the AWS CLI is in both images, from one pin (MOTIR-10293)', () => {
     // reads that variable from the Dockerfile. A version typed into provision.sh
     // is a second pin, and the check refuses it.
     const pinnedTwice = provision.replace(
-      URL,
+      AMI_URL,
       'https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.0.0.zip',
     );
     expect(pinnedTwice).not.toBe(provision);
     expect(installsAwsCli(pinnedTwice)).toBe(false);
-    expect(code(provision)).not.toMatch(/awscli-exe-linux-x86_64-\d/);
+    expect(code(provision)).not.toMatch(/awscli-exe-linux-(x86_64|aarch64)-\d/);
     expect(buildAmi).toContain('-var "awscli_version=$(pin AWSCLI_VERSION)"');
     expect(template).toContain('"AWSCLI_VERSION=${var.awscli_version}"');
   });
@@ -554,7 +568,8 @@ describe('build-ami.sh publishes the AMI id as MOTIR_AWS_RUNNER_AMI_ID', () => {
   it('writes the AMI id and the fly secrets set command to stdout and the job summary', () => {
     expect(buildAmi).toContain('fly secrets set -a motir-core MOTIR_AWS_RUNNER_AMI_ID=${ami_id}');
     expect(buildAmi).toContain('>>"${GITHUB_STEP_SUMMARY}"');
-    expect(buildAmi).toContain("jq -r '.builds[-1].artifact_id'");
+    expect(buildAmi).not.toContain('.builds[-1]');
+    expect(buildAmi).toContain('ami_id="$(ami_id_of "${manifest}" runner)"');
   });
 
   it('the README documents the key, the pins, the secrets and the user-data contract', () => {
@@ -631,18 +646,39 @@ describe('the services-account build role (MOTIR-10911) — the build tag at cre
     expect(code(template).match(/motir-ami-build/g)).toHaveLength(1);
   });
 
+  // The per-architecture builds (MOTIR-11783) each set their own tags, so the
+  // rule is held on both nested sources.
+  const BUILDS = [
+    { name: 'runner', tags: 'local.tags' },
+    { name: 'runner-arm64', tags: 'local.arm64_tags' },
+  ] as const;
+  const assignedIn = (build: string, name: string): string => {
+    const block = hclBlock(
+      template,
+      new RegExp(`source "amazon-ebs\\.runner" \\{\\n\\s+name\\s+= "${build}"\\n`),
+    );
+    const m = new RegExp(`^\\s+${name}\\s+= (.+)$`, 'm').exec(code(block));
+    if (!m) throw new Error(`build ${build} assigns no ${name}`);
+    return m[1]!;
+  };
+
   it('puts it on the build VM, its interface and key pair (run_tags) and its volumes (run_volume_tags)', () => {
-    expect(assigned('run_tags')).toMatch(/^merge\(local\.build_tag, \{/);
-    expect(assigned('run_volume_tags')).toMatch(/^merge\(local\.build_tag, \{/);
+    for (const build of BUILDS) {
+      expect(assignedIn(build.name, 'run_tags')).toMatch(/^merge\(local\.build_tag, \{/);
+      expect(assignedIn(build.name, 'run_volume_tags')).toMatch(/^merge\(local\.build_tag, \{/);
+    }
   });
 
   it('puts it on the AMI and its snapshots through CreateImage’s run tags, never a later CreateTags', () => {
     // Packer attaches run_tags to CreateImage (image + snapshot) unless this is set.
     expect(code(template)).not.toContain('skip_ami_run_tags');
     // tags / snapshot_tags go through CreateTags, which the role refuses for the build tag's key.
-    expect(assigned('tags')).toBe('local.tags');
-    expect(assigned('snapshot_tags')).toBe('local.tags');
+    for (const build of BUILDS) {
+      expect(assignedIn(build.name, 'tags')).toBe(build.tags);
+      expect(assignedIn(build.name, 'snapshot_tags')).toBe(build.tags);
+    }
     expect(hclBlock(template, /^\s+tags = \{/m)).not.toContain('motir-shard');
+    expect(hclBlock(template, /^\s+arm64_tags = \{/m)).not.toContain('motir-shard');
   });
 
   it('launches into the given security group, so Packer creates none', () => {
@@ -930,5 +966,229 @@ describe('the exit report — a runner that took no job says so before the VM po
     );
     expect(workflowSource).toContain('infra/ci-runner-aws/boot/motir-runner-report-exit.sh');
     expect(readme).toContain('`boot/motir-runner-report-exit.sh`');
+  });
+});
+
+describe('the arm64 Graviton AMI (MOTIR-11783) — built beside the x86_64 one, from the same pins', () => {
+  const ARM64_PINS = [
+    'RUNNER_ARM64_SHA256',
+    'NODE_ARM64_SHA256',
+    'DOCKER_ARM64_SHA256',
+    'AWSCLI_ARM64_SHA256',
+  ];
+  const arm64Source = () =>
+    hclBlock(template, /source "amazon-ebs\.runner" \{\n\s+name\s+= "runner-arm64"\n/);
+
+  it('takes Canonical’s arm64 Ubuntu 24.04 parameter and builds on m7g.large', () => {
+    expect(template).toContain('data "amazon-parameterstore" "ubuntu_noble_arm64"');
+    expect(template).toContain(
+      'name   = "/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id"',
+    );
+    const source = arm64Source();
+    expect(source).toContain('source_ami    = data.amazon-parameterstore.ubuntu_noble_arm64.value');
+    // m7g is a Graviton3 family, and the instance type the adapter launches arm64 on.
+    expect(source).toMatch(/instance_type\s+= "m7g\.large"/);
+  });
+
+  it('builds both AMIs in one build, the shared settings written once', () => {
+    const build = hclBlock(template, /^build \{/m);
+    expect(build.match(/source "amazon-ebs\.runner" \{/g)?.length).toBe(2);
+    // No `sources = [...]` list: the top-level source has no base image of its
+    // own, so building it bare would fail.
+    expect(build).not.toMatch(/^\s+sources\s+=/m);
+    const shared = hclBlock(template, /source "amazon-ebs" "runner"/);
+    for (const field of ['source_ami', 'instance_type', 'ami_name', 'ami_description', 'tags']) {
+      expect(shared, `the shared source sets ${field}`).not.toMatch(
+        new RegExp(`^\\s+${field}\\s+=`, 'm'),
+      );
+    }
+    for (const field of ['imds_support', 'encrypt_boot', 'ami_org_arns', 'security_group_id']) {
+      expect(shared).toMatch(new RegExp(`^\\s+${field}\\s+=`, 'm'));
+    }
+  });
+
+  it('names the AMI motir-ci-runner-arm64-<runner>-<timestamp>-<sha7>, and the health check reads its commit', () => {
+    expect(template).toContain(
+      'arm64_ami_name = "motir-ci-runner-arm64-${var.runner_version}-${local.timestamp}-${substr(var.git_sha, 0, 7)}"',
+    );
+    const source = arm64Source();
+    expect(source).toContain('ami_name = local.arm64_ami_name');
+    expect(source).toMatch(
+      /ami_description = "Motir CI runner arm64: .*\(commit \$\{var\.git_sha\}\)"/,
+    );
+    expect(source).toMatch(/^\s+tags\s+= local\.arm64_tags$/m);
+    expect(source).toMatch(/^\s+snapshot_tags\s+= local\.arm64_tags$/m);
+    // The build tag at create, exactly as the x86_64 build carries it.
+    expect(source).toContain(
+      'run_tags        = merge(local.build_tag, { Name = "packer-${local.arm64_ami_name}" })',
+    );
+    expect(source).toContain(
+      'run_volume_tags = merge(local.build_tag, { Name = "packer-${local.arm64_ami_name}" })',
+    );
+    const sha = 'abcdef0123456789abcdef0123456789abcdef01';
+    expect(
+      amiBuildCommitFrom({
+        name: `motir-ci-runner-arm64-2.330.0-202611190400-${sha.slice(0, 7)}`,
+        description: `Motir CI runner arm64: Ubuntu 24.04, GitHub runner 2.330.0, Docker on a 20 GB data volume (commit ${sha})`,
+      }),
+    ).toEqual({ commit: sha, source: 'description' });
+    expect(
+      amiBuildCommitFrom({
+        name: `motir-ci-runner-arm64-2.330.0-202611190400-${sha.slice(0, 7)}`,
+        description: null,
+      }),
+    ).toEqual({ commit: sha.slice(0, 7), source: 'name' });
+  });
+
+  it('pins the arm64 checksum of each download in the Dockerfile, and nowhere else', () => {
+    for (const name of ARM64_PINS) {
+      expect(arg(name)).toMatch(/^[0-9a-f]{64}$/);
+      // A different file from the x86_64 one, so never the same checksum.
+      expect(arg(name)).not.toBe(arg(name.replace('_ARM64', '')));
+    }
+  });
+
+  it('provision.sh refuses to start without the arm64 pins', () => {
+    const loop = /^for pin in (.*); do$/m.exec(provision)?.[1]?.split(' ') ?? [];
+    for (const name of ARM64_PINS) expect(loop).toContain(name);
+  });
+
+  /** Runs provision.sh's architecture branch as if `uname -m` printed `machine`. */
+  function chooseArch(machine: string): Record<string, string> | { failed: string } {
+    const branch = /^case "\$\(uname -m\)" in\n[\s\S]*?^esac$/m.exec(provision)?.[0];
+    if (!branch) throw new Error('no uname -m branch in provision.sh');
+    const env: Record<string, string> = {};
+    for (const name of ['RUNNER', 'NODE', 'DOCKER', 'AWSCLI']) {
+      env[`${name}_SHA256`] = `${name.toLowerCase()}-x86`;
+      env[`${name}_ARM64_SHA256`] = `${name.toLowerCase()}-arm64`;
+    }
+    const script = [
+      'set -euo pipefail',
+      `uname() { echo ${machine}; }`,
+      'die() { printf "%s" "$*" >&2; exit 1; }',
+      branch,
+      'printf "%s\\n" "$NODE_ARCH $RUNNER_ARCH $DOCKER_ARCH $AWSCLI_ARCH" "$RUNNER_SUM $NODE_SUM $DOCKER_SUM $AWSCLI_SUM"',
+    ].join('\n');
+    try {
+      const [arches, sums] = execFileSync('bash', ['-c', script], {
+        env: { ...process.env, ...env },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+        .trim()
+        .split('\n');
+      return { arches: arches!, sums: sums! };
+    } catch (error) {
+      return { failed: String((error as { stderr?: string }).stderr) };
+    }
+  }
+
+  it('provision.sh picks x64/x86_64 downloads and the x86_64 checksums on x86_64', () => {
+    expect(chooseArch('x86_64')).toEqual({
+      arches: 'x64 x64 x86_64 x86_64',
+      sums: 'runner-x86 node-x86 docker-x86 awscli-x86',
+    });
+  });
+
+  it('provision.sh picks arm64/aarch64 downloads and the arm64 checksums on aarch64', () => {
+    expect(chooseArch('aarch64')).toEqual({
+      arches: 'arm64 arm64 aarch64 aarch64',
+      sums: 'runner-arm64 node-arm64 docker-arm64 awscli-arm64',
+    });
+  });
+
+  it('provision.sh stops on any other architecture', () => {
+    const result = chooseArch('riscv64');
+    expect(result).toHaveProperty('failed');
+    expect((result as { failed: string }).failed).toContain('unsupported architecture riscv64');
+  });
+
+  it('provision.sh downloads every file under the chosen architecture and checks it against the chosen sum', () => {
+    const body = code(provision);
+    for (const url of [
+      'node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz',
+      'static/stable/${DOCKER_ARCH}/docker-${DOCKER_VERSION}.tgz',
+      'awscli-exe-linux-${AWSCLI_ARCH}-${AWSCLI_VERSION}.zip',
+      'actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz',
+    ]) {
+      expect(body).toContain(url);
+    }
+    for (const sum of ['NODE_SUM', 'DOCKER_SUM', 'AWSCLI_SUM', 'RUNNER_SUM']) {
+      expect(body).toMatch(new RegExp(`echo "\\$\\{${sum}\\}  \\S+" \\| sha256sum -c -`));
+    }
+    // Node lands in the tool-cache directory actions/setup-node looks in for this arch.
+    expect(body).toContain(
+      'local tools="/opt/hostedtoolcache/node/${NODE_VERSION}/${NODE_ARCH}" b',
+    );
+    // No download names one architecture outright any more.
+    expect(body).not.toMatch(/linux-x64-\$|static\/stable\/x86_64\/|awscli-exe-linux-x86_64-/);
+  });
+
+  describe('build-ami.sh reads each AMI id by its build name', () => {
+    /** Runs build-ami.sh's own ami_id_of over a manifest. */
+    function amiIdOf(manifest: unknown, build: string): { id?: string; failed?: string } {
+      const fn = /^ami_id_of\(\) \{\n[\s\S]*?^\}$/m.exec(buildAmi)?.[0];
+      if (!fn) throw new Error('no ami_id_of() in build-ami.sh');
+      const dir = mkdtempSync(join(tmpdir(), 'ami-manifest-'));
+      const file = join(dir, 'manifest.json');
+      writeFileSync(file, JSON.stringify(manifest));
+      const script = [
+        'set -euo pipefail',
+        'die() { printf "%s" "$*" >&2; exit 1; }',
+        fn,
+        'ami_id_of "$1" "$2"',
+      ].join('\n');
+      try {
+        return {
+          id: execFileSync('bash', ['-c', script, 'bash', file, build], {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          }),
+        };
+      } catch (error) {
+        return { failed: String((error as { stderr?: string }).stderr) };
+      }
+    }
+
+    // Packer appends builds as they FINISH: here the arm64 one finished first.
+    const manifest = {
+      builds: [
+        {
+          name: 'runner-arm64',
+          builder_type: 'amazon-ebs',
+          artifact_id: 'us-east-1:ami-0a1b2c3d4e5f60718',
+        },
+        {
+          name: 'runner',
+          builder_type: 'amazon-ebs',
+          artifact_id: 'us-east-1:ami-0123456789abcdef0',
+        },
+      ],
+    };
+
+    it('takes each id by name, whatever order the builds finished in', () => {
+      expect(amiIdOf(manifest, 'runner')).toEqual({ id: 'ami-0123456789abcdef0' });
+      expect(amiIdOf(manifest, 'runner-arm64')).toEqual({ id: 'ami-0a1b2c3d4e5f60718' });
+      const reversed = { builds: [...manifest.builds].reverse() };
+      expect(amiIdOf(reversed, 'runner')).toEqual({ id: 'ami-0123456789abcdef0' });
+    });
+
+    it('stops when a build is missing or its id is not an AMI id', () => {
+      const missing = amiIdOf({ builds: [manifest.builds[1]] }, 'runner-arm64');
+      expect(missing.failed).toContain('no AMI id for build runner-arm64');
+      const bad = amiIdOf(
+        { builds: [{ name: 'runner', artifact_id: 'us-east-1:snap-0123' }] },
+        'runner',
+      );
+      expect(bad.failed).toContain('no AMI id for build runner');
+    });
+
+    it('publishes both ids, the arm64 one as MOTIR_AWS_RUNNER_ARM64_AMI_ID', () => {
+      expect(buildAmi).toContain('arm64_ami_id="$(ami_id_of "${manifest}" runner-arm64)"');
+      expect(buildAmi).toContain(
+        'fly secrets set -a motir-core MOTIR_AWS_RUNNER_ARM64_AMI_ID=${arm64_ami_id}',
+      );
+      expect(readme).toContain('MOTIR_AWS_RUNNER_ARM64_AMI_ID');
+    });
   });
 });
