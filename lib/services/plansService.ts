@@ -155,6 +155,7 @@ import {
 import {
   assertReKindedAddKeepsNoLeafFields,
   isContainerKind,
+  leafFieldsForCreatedKind,
   validateProposedKindChange,
 } from '@/lib/plans/validateProposedKind';
 import {
@@ -3886,6 +3887,14 @@ async function materialize(
   for (const item of topoOrderAdds(adds)) {
     const pf = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
     const kind = (pf.kind as WorkItemKind | undefined) ?? 'task';
+    // The leaf fields the card is CREATED with (bug MOTIR-11838): a container
+    // keeps neither `type` nor `executor`. This insert bypasses
+    // `workItemsService` and its leaf-only rule, so the plan path drops them
+    // here — a story stored with an executor refused every later edit.
+    const leafFields = leafFieldsForCreatedKind(kind, {
+      type: (pf.type as WorkItemCreateInput['type']) ?? null,
+      executor: (pf.executor as WorkItemCreateInput['executor']) ?? null,
+    });
     // A `folder:<id>` placement (Story MOTIR-5310 · MOTIR-5423) is a FOLDER, not a
     // parent — branched on explicitly, so `resolveRef` keeps returning work-item
     // ids only and the insert is never handed a prefixed string as a `parentId`.
@@ -4027,8 +4036,8 @@ async function materialize(
       // the repository columns below stay exactly what the pin axis says, which
       // for an init card is nothing (the append refuses the pair).
       initRepositoryName: pf.initRepositoryName ?? null,
-      type: (pf.type as WorkItemCreateInput['type']) ?? null,
-      executor: (pf.executor as WorkItemCreateInput['executor']) ?? null,
+      type: leafFields.type,
+      executor: leafFields.executor,
       // Leaf sizing (MOTIR-1433): flow the validated point + minute estimates
       // onto the created item so the estimation gate satisfied on the proposal
       // survives materialize (Prisma accepts a number for the Decimal(6,2)
@@ -4140,9 +4149,9 @@ async function materialize(
     // What the service DOES own and is therefore reached for rather than
     // re-implemented: the three normalizers (`lib/workItemTodos/normalize.ts`,
     // lifted out for exactly this second writer) and the executor SEED rule,
-    // `todo.executor ?? pf.executor ?? 'human'` — the store's §2 rule, with the
-    // PROPOSAL's executor standing in for the card's, because at this point the
-    // card's own column was written from that same value one statement ago.
+    // `todo.executor ?? leafFields.executor ?? 'human'` — the store's §2 rule,
+    // with the executor the card was CREATED with standing in for the card's,
+    // because its own column was written from that same value one statement ago.
     //
     // ORDER is the array's (D1) — there is no `position` on a proposed row, so
     // each key is minted from the row before it with `keyForAppend`, `null` for
@@ -4161,7 +4170,9 @@ async function materialize(
           textLanguage: languageFor(pf.languages, 'todos', orgLanguage),
           notesLanguage: hasText(notesMd) ? languageFor(pf.languages, 'todos', orgLanguage) : null,
           commandText: normalizeCommand(todo.commandText),
-          executor: (todo.executor ?? pf.executor ?? 'human') as WorkItemCreateInput['executor'],
+          executor: (todo.executor ??
+            leafFields.executor ??
+            'human') as WorkItemCreateInput['executor'],
           position: keyForAppend(lastTodoPosition),
         },
         tx,
