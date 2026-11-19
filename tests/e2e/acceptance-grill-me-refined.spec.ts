@@ -239,8 +239,14 @@ test('Refine Grill me — questions before any requirement, switching off asks f
       await expect(offDialog(page)).toContainText(
         'writes the requirement from the 1 answer you settled',
       );
-      // The switch reads on until Confirm.
-      await expect(grillSwitch(page)).toHaveAttribute('aria-checked', 'true');
+      // The switch reads on until Confirm. The modal hides the rail from assistive tech
+      // while it is open, so the switch is read with the hidden tree included.
+      await expect(
+        page
+          .getByRole('complementary', { name: 'Motir AI', includeHidden: true })
+          .getByTestId('grill-me-toggle')
+          .getByRole('switch', { includeHidden: true }),
+      ).toHaveAttribute('aria-checked', 'true');
       await beat();
 
       await offDialog(page).getByTestId('grill-off-keep').click();
