@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Loader2, Pause, RefreshCw, Square } from 'lucide-react';
+import { CheckCircle2, Loader2, Pause, RefreshCw, Square } from 'lucide-react';
 
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +30,9 @@ export interface ConversationGrillProps {
   /** The grilling is ending and its requirement is being written (MOTIR-11802): the
    *  writing line stands in the held notice's place until the offer arrives. */
   writing?: boolean;
+  /** The grilling is over a requirement already shown (MOTIR-11805): its own opening
+   *  and nothing-left copy, and the updated line once its end rewrote the requirement. */
+  overRequirement?: boolean;
   /** The pending-question anchor, when the conversation is not waiting on one. */
   anchorId?: string;
   /** The plan offer to show once the grilling ended. */
@@ -75,6 +78,22 @@ function WritingRequirement({ nothingSettled }: { nothingSettled: boolean }) {
   );
 }
 
+/** The updated line (MOTIR-11805): a grilling over a shown requirement ended and
+ *  rewrote it with the answers. */
+function RequirementUpdated() {
+  const t = useTranslations('planningWorkspace.grill');
+  return (
+    <p
+      role="status"
+      data-testid="grill-requirement-updated"
+      className="flex items-start gap-1.5 pl-9 text-xs text-(--el-text-secondary)"
+    >
+      <CheckCircle2 className="mt-0.5 size-3.5 flex-none text-(--el-success)" aria-hidden />
+      <span>{t('overRequirement.updated')}</span>
+    </p>
+  );
+}
+
 /**
  * The way out of a held offer (Bug MOTIR-10255). A Stop writes the offer's requirement,
  * so it can fail, and a Stop that failed takes no other answer: without this the offer
@@ -101,10 +120,12 @@ function DeclineHeldOffer({ onDecline, disabled }: { onDecline: () => void; disa
 function Opening({
   pending,
   error,
+  overRequirement,
   onStop,
   onRetry,
-}: Pick<ConversationGrillProps, 'pending' | 'error' | 'onStop' | 'onRetry'>) {
+}: Pick<ConversationGrillProps, 'pending' | 'error' | 'overRequirement' | 'onStop' | 'onRetry'>) {
   const t = useTranslations('sharpen');
+  const tg = useTranslations('planningWorkspace.grill');
   const tc = useTranslations('planningWorkspace.conversation');
   const stop = (
     <Button
@@ -123,7 +144,7 @@ function Opening({
         className="flex items-center gap-1.5 pl-9 text-xs text-(--el-text-secondary)"
         data-testid="sharpen-opening"
       >
-        {t('markers.opening')}
+        {overRequirement ? tg('overRequirement.opening') : t('markers.opening')}
       </p>
       {error === 'outOfCredits' ? (
         <div className="flex flex-col items-start gap-2 pl-9" data-testid="sharpen-out-of-credits">
@@ -169,6 +190,7 @@ export function ConversationGrill({
   error,
   endedBySwitch,
   writing = false,
+  overRequirement = false,
   anchorId,
   offer,
   onAct,
@@ -182,6 +204,12 @@ export function ConversationGrill({
     session?.status === 'open' &&
     !pending &&
     (error !== null || session.turns.at(-1)?.failed === true);
+  // Over a shown requirement, an end that settled anything rewrote it with the answers.
+  const updated =
+    overRequirement &&
+    session?.status === 'ended' &&
+    session.endReason !== 'nothing_to_ask' &&
+    (session.settled.length > 0 || session.assumptions.length > 0);
   return (
     <div className="flex flex-col gap-3" data-testid="conversation-grill" data-hold={hold}>
       {session ? (
@@ -190,6 +218,7 @@ export function ConversationGrill({
           pending={pending}
           error={error}
           endedBySwitch={endedBySwitch}
+          overRequirement={overRequirement}
           {...(anchorId ? { anchorId } : {})}
           onAct={onAct}
           onStop={onStop}
@@ -197,8 +226,15 @@ export function ConversationGrill({
           onRetry={onRetry}
         />
       ) : hold === 'held' ? (
-        <Opening pending={pending} error={error} onStop={onStop} onRetry={onRetry} />
+        <Opening
+          pending={pending}
+          error={error}
+          overRequirement={overRequirement}
+          onStop={onStop}
+          onRetry={onRetry}
+        />
       ) : null}
+      {hold !== 'held' && updated ? <RequirementUpdated /> : null}
       {hold !== 'held' ? (
         <div className="pl-9">{offer}</div>
       ) : writing ? (

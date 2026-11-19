@@ -46,6 +46,7 @@ import type {
   PlanChangeTurnDto,
 } from '@/lib/dto/planChange';
 import type { SharpenSessionDto } from '@/lib/dto/sharpen';
+import type { GrillPaneState } from '@/lib/planning/requirementPane';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 
 // GRILL ME BEFORE PLANNING (Story MOTIR-9221 · Subtask MOTIR-9316; design
@@ -214,6 +215,7 @@ const onDeclinePlanOffer = vi.fn();
 function rail(
   state: Partial<PlanChangeConversationState> = {},
   onConversationGrillEnded?: () => Promise<void>,
+  onGrillPaneChange?: (state: GrillPaneState) => void,
 ): ReactElement {
   const merged = { ...BASE, ...state };
   return (
@@ -235,6 +237,7 @@ function rail(
       offerAnsweringTurnId={null}
       offerRefusal={null}
       {...(onConversationGrillEnded ? { onConversationGrillEnded } : {})}
+      {...(onGrillPaneChange ? { onGrillPaneChange } : {})}
     />
   );
 }
@@ -987,5 +990,181 @@ describe('switching Grill me off, or Stop, asks first (MOTIR-11802)', () => {
     await waitFor(() => expect(client.sharpenAct).toHaveBeenCalledTimes(1));
     expect(client.sharpenAct.mock.calls[0]!.slice(0, 2)).toEqual(['sh1', 'stop']);
     expect(screen.getByTestId('grill-writing')).toBeTruthy();
+  });
+});
+
+describe('switching Grill me on over a requirement already shown (MOTIR-11805)', () => {
+  const enGrill = enMessages.planningWorkspace.grill;
+  const REQUIREMENT = {
+    outcome: 'People take a report elsewhere as a file.',
+    behaviour: 'Export from the reports page.',
+    scopeEdge: '',
+    constraints: '',
+    acceptance: 'A CSV downloads.',
+    assumptions: [],
+  };
+  const writtenThread = (extra: Partial<PlanAnswerOfferDto> = {}) =>
+    conversation([
+      turn(0),
+      turn(1, 'assistant', {
+        offer: offer({ requirement: REQUIREMENT, ...extra }),
+        createdAt: OFFER_AT,
+      }),
+    ]);
+  const panes = vi.fn<(state: GrillPaneState) => void>();
+  const lastPane = () => panes.mock.calls.at(-1)?.[0] ?? null;
+
+  beforeEach(() => panes.mockReset());
+
+  async function switchOn(
+    session = writtenThread(),
+    onEnded?: () => Promise<void>,
+  ): Promise<ReturnType<typeof renderWithIntl>> {
+    const view = renderWithIntl(rail({ session }, onEnded, panes));
+    expect(screen.getByTestId('plan-offer-confirm')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(toggle());
+    });
+    return view;
+  }
+
+  it('opens exactly one grilling over the shown offer, holds it, and marks the pane as updating', async () => {
+    await switchOn();
+    expect(storeGrillMe).toHaveBeenCalledWith('s1', true);
+    await screen.findByTestId('sharpen-question');
+    expect(client.openSharpen).toHaveBeenCalledTimes(1);
+    expect(client.openSharpen).toHaveBeenCalledWith({ conversationId: 's1' });
+    expect(screen.getByTestId('sharpen-opening').textContent).toBe(enGrill.overRequirement.opening);
+    expect(screen.getByTestId('plan-offer-held')).toBeTruthy();
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+    expect(lastPane()).toBe('updating');
+  });
+
+  it('while the open is in flight the opening is the over-requirement one', async () => {
+    client.openSharpen.mockReturnValue(new Promise(() => {}));
+    await switchOn();
+    expect(screen.getByTestId('sharpen-opening').textContent).toBe(enGrill.overRequirement.opening);
+    expect(screen.getByTestId('plan-offer-held')).toBeTruthy();
+    expect(lastPane()).toBe('updating');
+  });
+
+  it('its end reads the thread again, and only then shows the offer, the updated line and the updated pane', async () => {
+    client.settleSharpen.mockResolvedValue({ outcome: 'settled', session: grilling(ENDED) });
+    let release!: () => void;
+    const onEnded = vi.fn(() => new Promise<void>((r) => (release = r)));
+    const view = await switchOn(writtenThread(), onEnded);
+    await waitFor(() => expect(onEnded).toHaveBeenCalledTimes(1));
+    // The requirement from before the answers is never shown with the offer.
+    expect(screen.getByTestId('plan-offer-held')).toBeTruthy();
+    expect(lastPane()).toBe('updating');
+    const rewritten = writtenThread({
+      requirement: { ...REQUIREMENT, behaviour: 'Export the columns on screen.' },
+    });
+    await act(async () => {
+      view.rerender(rail({ session: rewritten }, onEnded, panes));
+      release();
+    });
+    await screen.findByTestId('plan-offer-confirm');
+    expect(screen.getByTestId('grill-requirement-updated').textContent).toBe(
+      enGrill.overRequirement.updated,
+    );
+    expect(lastPane()).toBe('updated');
+  });
+
+  it('nothing left to ask shows the design’s line and releases the offer unchanged', async () => {
+    client.settleSharpen.mockResolvedValue({
+      outcome: 'settled',
+      session: grilling({ status: 'ended', endReason: 'nothing_to_ask', pendingQuestion: null }),
+    });
+    await switchOn(writtenThread(), async () => {});
+    expect((await screen.findByTestId('sharpen-nothing-to-ask')).textContent).toBe(
+      enGrill.overRequirement.nothingLeft,
+    );
+    await screen.findByTestId('plan-offer-confirm');
+    expect(screen.queryByTestId('grill-requirement-updated')).toBeNull();
+    expect(lastPane()).toBeNull();
+  });
+
+  it.each([
+    ['confirmed', { state: 'confirmed' as const, confirmedAt: OFFER_AT }],
+    ['declined', { state: 'declined' as const, declinedAt: OFFER_AT }],
+  ])('switching on after the offer was %s opens no grilling', async (_label, decided) => {
+    renderWithIntl(rail({ session: writtenThread(decided) }, undefined, panes));
+    await act(async () => {
+      fireEvent.click(toggle());
+    });
+    expect(storeGrillMe).toHaveBeenCalledWith('s1', true);
+    expect(client.openSharpen).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('plan-offer-held')).toBeNull();
+    expect(lastPane()).toBeNull();
+  });
+
+  it('an open that failed is tried again, and Stop before it opened leaves the requirement as it was', async () => {
+    client.openSharpen.mockRejectedValue(new Error('down'));
+    await switchOn();
+    expect(await screen.findByTestId('sharpen-error')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: enSharpen.retry }));
+    });
+    expect(client.openSharpen).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sharpen-stop'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('grill-off-confirm'));
+    });
+    expect(screen.getByTestId('plan-offer-confirm')).toBeTruthy();
+    expect(client.sharpenAct).not.toHaveBeenCalled();
+    expect(lastPane()).toBeNull();
+  });
+
+  it('switching off again before it opened asks first, and Confirm leaves the requirement as it was', async () => {
+    client.openSharpen.mockRejectedValue(new Error('down'));
+    await switchOn();
+    expect(await screen.findByTestId('sharpen-error')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(toggle());
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('grill-off-confirm'));
+    });
+    expect(storeGrillMe).toHaveBeenLastCalledWith('s1', false);
+    expect(screen.getByTestId('plan-offer-confirm')).toBeTruthy();
+    expect(client.sharpenAct).not.toHaveBeenCalled();
+  });
+
+  it('switching off while its open is in flight stops it the moment it lands', async () => {
+    let land!: (v: unknown) => void;
+    client.openSharpen.mockReturnValue(new Promise((r) => (land = r)));
+    client.sharpenAct.mockResolvedValue({
+      outcome: 'settled',
+      jobId: null,
+      turnId: 'st-stop',
+      session: grilling({ status: 'ended', endReason: 'stopped', pendingQuestion: null }),
+    });
+    await switchOn();
+    await act(async () => {
+      fireEvent.click(toggle());
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('grill-off-confirm'));
+    });
+    expect(client.sharpenAct).not.toHaveBeenCalled();
+    await act(async () => {
+      land({ outcome: 'sharpening', jobId: null, turnId: 'st1', session: grilling() });
+    });
+    await waitFor(() => expect(client.sharpenAct).toHaveBeenCalledTimes(1));
+    expect(client.sharpenAct.mock.calls[0]!.slice(0, 2)).toEqual(['sh1', 'stop']);
+  });
+
+  it('a grilling already open over the offer is not opened again', async () => {
+    client.getLatestConversationSharpen.mockResolvedValue(grilling());
+    renderWithIntl(rail({ session: writtenThread() }, undefined, panes));
+    await screen.findByTestId('sharpen-question');
+    await act(async () => {
+      fireEvent.click(toggle());
+    });
+    expect(storeGrillMe).toHaveBeenCalledWith('s1', true);
+    expect(client.openSharpen).not.toHaveBeenCalled();
   });
 });

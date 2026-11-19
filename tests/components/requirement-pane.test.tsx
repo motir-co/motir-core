@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
@@ -144,6 +144,21 @@ const { conversation } = vi.hoisted(() => ({
   },
 }));
 
+// The grilling's door is mocked at its boundary: nothing earlier over the conversation,
+// and an open that never lands — the pane reads only the rail's report (MOTIR-11805).
+vi.mock('@/lib/planning/sharpenClient', () => ({
+  openSharpen: vi.fn(() => new Promise(() => {})),
+  sharpenAct: vi.fn(),
+  settleSharpen: vi.fn(),
+  resubmitSharpen: vi.fn(),
+  getOpenSharpen: vi.fn(async () => null),
+  getLatestConversationSharpen: vi.fn(async () => null),
+}));
+vi.mock('@/lib/planning/planChangeClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/planning/planChangeClient')>()),
+  setPlanChangeGrillMe: vi.fn(async (id: string, on: boolean) => ({ id, grillMe: on })),
+}));
+
 vi.mock('@/lib/hooks/usePlanChangeConversation', () => ({
   usePlanChangeConversation: ({
     onApproved,
@@ -165,6 +180,7 @@ vi.mock('@/lib/hooks/usePlanChangeConversation', () => ({
 }));
 
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
+import { RequirementGrillBanner } from '@/components/planning/RequirementDocument';
 
 const IDLE: PlanChangeConversationState = {
   phase: 'idle',
@@ -487,5 +503,33 @@ describe('Grill me’s hand-off (MOTIR-11798)', () => {
       'Export the board',
     );
     expect(screen.getByTestId('plan-offer-confirm')).toBeTruthy();
+  });
+});
+
+describe('the grilling banners over the requirement (MOTIR-11805)', () => {
+  it.each([
+    ['updating', enMessages.planningWorkspace.grill.overRequirement.paneUpdating],
+    ['updated', enMessages.planningWorkspace.grill.overRequirement.paneUpdated],
+  ] as const)('%s reads as the design says, as a status', (state, copy) => {
+    renderWithIntl(<RequirementGrillBanner state={state} />);
+    const banner = screen.getByTestId(`requirement-pane-${state}`);
+    expect(banner.getAttribute('role')).toBe('status');
+    expect(banner.textContent).toBe(copy);
+  });
+});
+
+describe('Grill me switched on over the requirement shown (MOTIR-11805)', () => {
+  it('keeps the requirement readable under the updating banner', async () => {
+    renderHost(thread(offer({ requirement: REQUIREMENT })));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByTestId('grill-me-toggle')).getByRole('switch', { hidden: true }),
+      );
+    });
+    const pane = region()!;
+    expect(within(pane).getByTestId('requirement-pane-updating').textContent).toBe(
+      enMessages.planningWorkspace.grill.overRequirement.paneUpdating,
+    );
+    expect(within(pane).getByRole('heading', { level: 2 }).textContent).toBe('Export the board');
   });
 });

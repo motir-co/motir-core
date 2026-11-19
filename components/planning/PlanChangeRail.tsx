@@ -923,6 +923,8 @@ export function PlanChangeRail({
             }),
           decided: (latestOfferTurn.offer.state ?? 'undecided') !== 'undecided',
           handoff: latestOfferTurn.offer.kind === 'grill',
+          requirement:
+            latestOfferTurn.offer.kind === 'plan' && Boolean(latestOfferTurn.offer.requirement),
         }
       : null;
   const convGrill = useGrillSession({
@@ -995,8 +997,24 @@ export function PlanChangeRail({
     else if (how === 'stop') convGrill.stop();
   };
   const grillSettledCount = convGrillSession?.settled.length ?? 0;
-  // The pane follows the grilling: the writing line while the requirement is written.
-  const grillPane: GrillPaneState = grillEnding ? 'writing' : null;
+  // The pane follows the grilling: the writing line while the requirement is written;
+  // over a requirement already shown (MOTIR-11805), the updating banner while it is
+  // grilled and the updated one once its end rewrote it with answers.
+  const grillUpdated =
+    convGrill.overRequirement &&
+    convHold === 'shown' &&
+    convGrillSession?.status === 'ended' &&
+    convGrillSession.endReason !== 'nothing_to_ask' &&
+    (convGrillSession.settled.length > 0 || convGrillSession.assumptions.length > 0);
+  const grillPane: GrillPaneState = convGrill.overRequirement
+    ? convHold === 'held'
+      ? 'updating'
+      : grillUpdated
+        ? 'updated'
+        : null
+    : grillEnding
+      ? 'writing'
+      : null;
   useEffect(() => {
     onGrillPaneChange?.(grillPane);
   }, [grillPane, onGrillPaneChange]);
@@ -1919,6 +1937,7 @@ export function PlanChangeRail({
                   error={convGrill.error}
                   endedBySwitch={convGrill.endedBySwitch}
                   writing={convGrill.writing}
+                  overRequirement={convGrill.overRequirement}
                   {...(question || grillQuestion ? {} : { anchorId: PENDING_QUESTION_ID })}
                   onAct={(action, opts) => {
                     setGrillOwnWords(false);
