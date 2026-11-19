@@ -73,6 +73,15 @@ export type FleetWorkloadKind =
 export type OrchestratorProvider = 'fly' | 'aws' | 'runs_on' | 'arc' | 'fake';
 
 /**
+ * The CAPACITY a container runs on (MOTIR-11716) — provider-neutral on purpose:
+ * `spot` is spare capacity the provider may reclaim at short notice, at a lower
+ * price; `on_demand` is capacity that is held until the container ends. Which
+ * machine types a provider offers for either never crosses this port: an adapter
+ * holds that in its own config.
+ */
+export type ContainerCapacity = 'spot' | 'on_demand';
+
+/**
  * The machine class. Fixed by `ci-minutes-allowance.md` §M to be
  * Linux-2-core-EQUIVALENT — GitHub's `ubuntu-latest` on a PRIVATE repository is
  * 2 vCPU / 8 GB, and the ×1.00 multiplier is a parity PROMISE rather than a
@@ -139,6 +148,15 @@ export interface ContainerSpec {
    * created with the container, destroyed with it, swept if it is ever left.
    */
   readonly dockerVolumeGb?: number;
+  /**
+   * The capacity this container ASKS for (MOTIR-11716). Absent = `on_demand`.
+   *
+   * A request, never a promise: an adapter that can launch reclaimable capacity
+   * honours `spot` for a CI runner only, falls back to `on_demand` when none is
+   * to be had, and reports what it got on {@link ContainerHandle.capacity}. An
+   * adapter with no such notion (Fly, the fake) ignores it.
+   */
+  readonly capacity?: ContainerCapacity;
 }
 
 /** An opaque, provider-agnostic reference. Persisted; survives a process restart.
@@ -158,6 +176,12 @@ export interface ContainerHandle {
    * and teardown then reads the container's mounts instead.
    */
   readonly volumeId?: string;
+  /**
+   * The capacity the launch OBTAINED (MOTIR-11716), reported when the spec asked
+   * for `spot`: `spot`, or `on_demand` when the adapter fell back. Absent = the
+   * launch never asked, and ran on `on_demand`.
+   */
+  readonly capacity?: ContainerCapacity;
 }
 
 /**

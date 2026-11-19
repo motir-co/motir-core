@@ -1,4 +1,5 @@
 import {
+  type CiRunnerCapacity,
   type CiRunnerProvisioningIntent,
   type FleetShardMoveReason,
   type Prisma,
@@ -45,6 +46,9 @@ export interface CiRunnerBootRecord {
   /** The fleet account the container was booted in (MOTIR-8964); null or
    *  absent = the process-wide fleet. */
   fleetShardId?: string | null;
+  /** The capacity the container got (MOTIR-11716) — the handle's, `on_demand`
+   *  when it reported none. Absent leaves the column as it is. */
+  capacity?: CiRunnerCapacity;
 }
 
 /** What a provisioner records once the container is gone. */
@@ -564,6 +568,7 @@ export const ciRunnerProvisioningIntentRepository = {
         runnerName: data.runnerName,
         bootedAt: data.bootedAt,
         fleetShardId: data.fleetShardId ?? null,
+        capacity: data.capacity,
       },
     });
   },

@@ -8,6 +8,7 @@ import type {
   CiSpotSettingValue,
 } from '@/lib/dto/ciSpotSetting';
 import { toCiSpotSettingStateDTO, toCiSpotSettingValue } from '@/lib/mappers/ciSpotSettingMappers';
+import { ciSpotSettingReader } from '@/lib/services/ciSpotSettingReader';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { withPlatformWrite, type PlatformAuditEntry } from '@/lib/platform/context';
 import {
@@ -24,7 +25,7 @@ import { assertReasonSatisfied } from '@/lib/services/platformAuditService';
  * One persisted row (`scope = 'ci_runner'`). No row ⇒ Spot OFF and the default
  * types, so deploying this changes no launch until a person saves it. System code
  * (the CI runner boot and the CI shard's AWS adapter, MOTIR-11716) reads it
- * through {@link ciSpotSettingService.read} on every launch, never cached, so a
+ * through `ciSpotSettingReader.read` (the auth-free module `read` delegates to) on every launch, never cached, so a
  * save applies to the next launch with no restart.
  *
  * Only a `superadmin` reads the stored state or saves it, through
@@ -82,7 +83,7 @@ export const ciSpotSettingService = {
    * never throws for a missing row. Read from the database on every call.
    */
   async read(): Promise<CiSpotSettingValue> {
-    return toCiSpotSettingValue(await platformCiSpotSettingRepository.find());
+    return ciSpotSettingReader.read();
   },
 
   /**
