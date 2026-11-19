@@ -105,6 +105,19 @@ describe('toGateRefusal — the client reads the SERVER’s vocabulary (MOTIR-47
     });
   });
 
+  it('TRANSITION_REFUSED carries whether the card is closed, false when unsaid (MOTIR-11835)', () => {
+    expect(toGateRefusal('APPROVAL_GATE_TRANSITION_REFUSED', { closed: true })).toEqual({
+      tag: 'APPROVAL_GATE_TRANSITION_REFUSED',
+      closed: true,
+    });
+    for (const extra of [undefined, {}, { closed: null }] as const) {
+      expect(toGateRefusal('APPROVAL_GATE_TRANSITION_REFUSED', extra)).toEqual({
+        tag: 'APPROVAL_GATE_TRANSITION_REFUSED',
+        closed: false,
+      });
+    }
+  });
+
   it('SUPERSEDED carries the cause when the door read one, and null when it did not (MOTIR-5667)', () => {
     // A FIELD on an existing member, not a new tag: `REFUSAL_TAGS_ARE_TOTAL` is
     // unchanged, which is MOTIR-5232's deliberate compile-break to make.

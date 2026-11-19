@@ -88,6 +88,15 @@ export type GateRefusal =
        */
       primary: PendingPrimary;
     }
+  | {
+      tag: 'APPROVAL_GATE_TRANSITION_REFUSED';
+      /**
+       * The card is at a done-category status (MOTIR-11835) — closed by a parent's
+       * cascade, most often — so the copy names the two ways out: merge on the host,
+       * or move the card back. False when the workflow refuses some other move.
+       */
+      closed: boolean;
+    }
   | { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }
   // A pull request the card is delivered by that this reader cannot see (MOTIR-8236):
   // nothing is decided over a partly visible set.
@@ -189,6 +198,7 @@ export function toGateRefusal(
     supersedeCause?: string | null;
     moved?: readonly StampComponent[] | null;
     primary?: PendingPrimary | null;
+    closed?: boolean | null;
     atPress?: boolean | null;
     conflicts?: readonly { pullRequest: string; baseRef: string | null }[] | null;
   },
@@ -214,6 +224,8 @@ export function toGateRefusal(
       };
     case 'APPROVAL_GATE_PRIMARY_PENDING':
       return { tag: code, primary: extra?.primary ?? 'design' };
+    case 'APPROVAL_GATE_TRANSITION_REFUSED':
+      return { tag: code, closed: extra?.closed ?? false };
     case 'APPROVAL_GATE_NOT_AUTHORISED':
     case 'APPROVAL_GATE_NOT_FOUND':
     case 'APPROVAL_GATE_KIND_UNREGISTERED':

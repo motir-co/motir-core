@@ -82,6 +82,13 @@ async function makeScenario(email: string) {
     name: 'Acme',
     identifier: 'ACME',
   });
+  // These cases pin a child asked about its OWN pull request; with "Complete children when
+  // a parent is done" on, a link also writes it on the story (MOTIR-11835). Off, so the
+  // child keeps a set of its own.
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { autoCompleteChildrenOnParentDone: false },
+  });
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: {

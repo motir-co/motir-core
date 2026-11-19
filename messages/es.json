@@ -16511,6 +16511,14 @@
           "next": "El video de la Historia se devolvió. Cuando se grabe uno nuevo, aprobarlo los fusionará."
         }
       },
+      "transitionRefused": {
+        "title": "El flujo de trabajo de este elemento de trabajo no permite el cambio que hace esta decisión.",
+        "next": "No se ha decidido nada. Mueve el elemento de trabajo a un estado desde el que esta decisión pueda seguir, o pide a un administrador del proyecto que permita el cambio.",
+        "closed": {
+          "title": "Este elemento de trabajo ya está cerrado, así que esta decisión ya no puede moverlo.",
+          "next": "No se ha decidido nada. Su flujo de trabajo no tiene vuelta a este paso: fusiona su pull request directamente, o devuelve el elemento de trabajo y vuelve a decidir."
+        }
+      },
       "alreadyAwaiting": {
         "title": "Ya hay otra decisión sobre este tema esperando.",
         "next": "Recarga la página para verla."

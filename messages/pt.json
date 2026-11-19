@@ -16511,6 +16511,14 @@
           "next": "O vídeo da história foi devolvido. Quando um novo for gravado, aprová-lo fará o merge deles."
         }
       },
+      "transitionRefused": {
+        "title": "O fluxo de trabalho deste item de trabalho não permite a mudança que esta decisão faz.",
+        "next": "Nada foi decidido. Mova o item de trabalho para um status a partir do qual esta decisão possa seguir, ou peça a um administrador do projeto que permita a mudança.",
+        "closed": {
+          "title": "Este item de trabalho já está fechado, então esta decisão não pode mais movê-lo.",
+          "next": "Nada foi decidido. O fluxo de trabalho dele não tem caminho de volta para esta etapa: mescle o pull request diretamente, ou mova o item de trabalho de volta e decida novamente."
+        }
+      },
       "alreadyAwaiting": {
         "title": "Outra decisão sobre este objeto já está aguardando.",
         "next": "Recarregue a página para vê-la."

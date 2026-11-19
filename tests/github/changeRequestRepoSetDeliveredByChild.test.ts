@@ -68,6 +68,14 @@ async function scenario(email: string) {
     name: 'Acme',
     identifier: 'ACME',
   });
+  // These cases pin a child's OWN pull request that the story does NOT deliver. With
+  // "Complete children when a parent is done" on, a link writes it on the story as well
+  // (MOTIR-11835), so the switch is off here; the switch-on merge is pinned in
+  // `tests/integration/approvals/childDeliveryInheritance.test.ts`.
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { autoCompleteChildrenOnParentDone: false },
+  });
   const ctx = { userId: user.id, workspaceId: workspace.id };
   const web = await projectRepoSetService.addRow(project.id, { role: 'web', name: CORE.name }, ctx);
   const api = await projectRepoSetService.addRow(project.id, { role: 'api', name: AI.name }, ctx);

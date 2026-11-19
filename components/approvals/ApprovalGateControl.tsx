@@ -792,6 +792,10 @@ export function useRefusalCopy(
       // Names WHICH question the merge follows (MOTIR-5785) — the next action differs.
       headline = t(`primaryPending.${refusal.primary}.title`);
       break;
+    case 'APPROVAL_GATE_TRANSITION_REFUSED':
+      // A card the workflow cannot move (MOTIR-11835) — named, never the connection copy.
+      headline = t(refusal.closed ? 'transitionRefused.closed.title' : 'transitionRefused.title');
+      break;
     case 'APPROVAL_GATE_ALREADY_AWAITING':
       headline = t('alreadyAwaiting.title');
       break;
@@ -877,10 +881,12 @@ export function useRefusalCopy(
         : t('mergeAppPermissionMissing.nextUnnamed')
       : refusal.tag === 'APPROVAL_GATE_PRIMARY_PENDING'
         ? t(`primaryPending.${refusal.primary}.next`)
-        : refusal.tag === 'APPROVAL_GATE_VERB_NOT_OFFERED' &&
-            refusal.reason === 'refusal_verdict_not_offered'
-          ? t('verbNotOffered.verdict.next')
-          : t(`${nextActionKey}.next`);
+        : refusal.tag === 'APPROVAL_GATE_TRANSITION_REFUSED' && refusal.closed
+          ? t('transitionRefused.closed.next')
+          : refusal.tag === 'APPROVAL_GATE_VERB_NOT_OFFERED' &&
+              refusal.reason === 'refusal_verdict_not_offered'
+            ? t('verbNotOffered.verdict.next')
+            : t(`${nextActionKey}.next`);
 
   // ⚠️ A CONFLICT FOUND AT THE PRESS WROTE NOTHING, AND SAYS SO (MOTIR-5916; design/github
   // § 30 Panel 5a). The press-time host read refused before the decision write, so the
@@ -987,6 +993,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'verbNotOffered';
     case 'APPROVAL_GATE_PRIMARY_PENDING':
       return 'primaryPending';
+    case 'APPROVAL_GATE_TRANSITION_REFUSED':
+      return 'transitionRefused';
     case 'APPROVAL_GATE_ALREADY_AWAITING':
       return 'alreadyAwaiting';
     case 'APPROVAL_GATE_DELIVERY_UNREADABLE':

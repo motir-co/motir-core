@@ -16511,6 +16511,14 @@
           "next": "Wideo historii zostało odesłane. Gdy zostanie nagrane nowe, jego zatwierdzenie scali pull requesty."
         }
       },
+      "transitionRefused": {
+        "title": "Przepływ pracy tego elementu roboczego nie pozwala na zmianę statusu, której dokonuje ta decyzja.",
+        "next": "Nic nie zostało zdecydowane. Przenieś element roboczy do statusu, po którym ta decyzja może nastąpić, albo poproś administratora projektu o zezwolenie na tę zmianę.",
+        "closed": {
+          "title": "Ten element roboczy jest już zamknięty, więc ta decyzja nie może go już przenieść.",
+          "next": "Nic nie zostało zdecydowane. Jego przepływ pracy nie prowadzi z powrotem do tego kroku: scal jego pull request bezpośrednio albo cofnij element roboczy i zdecyduj ponownie."
+        }
+      },
       "alreadyAwaiting": {
         "title": "Inna decyzja w tej sprawie już czeka.",
         "next": "Odśwież stronę, aby ją zobaczyć."

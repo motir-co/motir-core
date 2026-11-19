@@ -16508,6 +16508,14 @@
           "next": "The story's video was sent back. Once a new one is recorded, approving it merges them."
         }
       },
+      "transitionRefused": {
+        "title": "This work item's workflow does not allow the move this decision makes.",
+        "next": "Nothing was decided. Move the work item to a status this decision can follow, or ask a project admin to allow the move.",
+        "closed": {
+          "title": "This work item is already closed, so this decision can no longer move it.",
+          "next": "Nothing was decided. Its workflow has no way back to this step: merge its pull request directly, or move the work item back and decide again."
+        }
+      },
       "alreadyAwaiting": {
         "title": "Another decision on this subject is already waiting.",
         "next": "Reload the page to see it."

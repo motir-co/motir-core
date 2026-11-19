@@ -46,6 +46,8 @@ import {
 } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { NO_ARTIFACT_MARKER } from '@/lib/workItems/artifactEvidence';
+import { childrenBelowClaimBar, ladderKeysFrom } from '@/lib/workItems/statusLadder';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
   DeliveredItemsTransitionFailedError,
   type DeliveredItemTransitionFailure,
@@ -202,6 +204,10 @@ interface ItemDecision {
   currentStatus: string;
   deliveryShortfall: DeliverySetShortfall;
   hasOtherOpenLinkedPr: boolean;
+  /** The container's children still below the claim bar, when this merge reaches it
+   *  only because a descendant's pull request was inherited into its set (MOTIR-11835).
+   *  Empty on every other card and every other merge. */
+  openChildrenOfInheritedMerge: string[];
 }
 
 /** The connection + repo + resolved author a provider hands the shared sync, once
@@ -510,12 +516,22 @@ async function syncOnce(
           ? (await workItemDeliveryRepository.countOtherOpenByWorkItem(item.id, prId, tx)) > 0
           : false;
 
+      // MOTIR-11835 — a container's set inherits its children's pull requests, so a
+      // child's pull request merged on its own (by hand, on the host) can be the last of
+      // the container's set while its siblings are unbuilt. Completing it there would
+      // cascade Done over work nobody built.
+      const openChildrenOfInheritedMerge =
+        lifecycle === 'done' && !mergedIntoNonDefaultBase
+          ? await openChildrenIfInherited(item, delivered, repo.workspaceId, tx)
+          : [];
+
       decisions.push({
         workItemId: item.id,
         projectId: item.projectId,
         currentStatus: item.status,
         deliveryShortfall,
         hasOtherOpenLinkedPr,
+        openChildrenOfInheritedMerge,
       });
     }
 
@@ -876,6 +892,22 @@ async function applyToDeliveredItem(
     provider: shared.provider,
     mergeAlreadyRecorded: shared.mergeAlreadyRecorded,
   };
+
+  // MOTIR-11835 — the merge that completes this container's set is a CHILD's pull request
+  // it inherited, while some of its children are not built. Held exactly as the
+  // container-completeness gate holds a claim (MOTIR-3229): the card stays where it is,
+  // and a later merge — or the container's own approval — completes it.
+  if (lifecycle === 'done' && decision.openChildrenOfInheritedMerge.length > 0) {
+    return toDeliveredItemResult(
+      workItemId,
+      await reportTransitionRefusal(
+        new ContainerHasOpenChildrenError(targetKey, decision.openChildrenOfInheritedMerge),
+        cr,
+        refusalContext,
+        targetKey,
+      ),
+    );
+  }
 
   try {
     await applyTransition(workItemId, targetKey, actorCtx);
@@ -1527,4 +1559,47 @@ export async function resyncLinkedPullRequest(
       authorBoundUserId: null,
     };
   });
+}
+
+/**
+ * The children of `item` still below the container claim bar — but ONLY when the pull
+ * request being merged reaches `item` because a DESCENDANT of it also delivers it, which
+ * is the delivery a link inherits into its ancestors (MOTIR-11835). A pull request the
+ * container carries in its own right answers `[]`, so every card's merge behaves as it
+ * did before inheritance existed.
+ */
+async function openChildrenIfInherited(
+  item: { id: string; projectId: string },
+  delivered: ReadonlyArray<{ id: string }>,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
+  let inherited = false;
+  for (const other of delivered) {
+    if (other.id !== item.id && (await isDescendantOf(other.id, item.id, tx))) {
+      inherited = true;
+      break;
+    }
+  }
+  if (!inherited) return [];
+  const children = await workItemRepository.findChildren(item.id, tx);
+  const statuses = await workflowsService.listStatusesByProject(item.projectId, workspaceId, tx);
+  return childrenBelowClaimBar(children, statuses, ladderKeysFrom(statuses)).map(
+    (child) => child.identifier,
+  );
+}
+
+/** Whether `ancestorId` is on `workItemId`'s parent chain. The tree is acyclic by
+ *  trigger (the cycle/depth check every parent move passes), so the walk ends. */
+async function isDescendantOf(
+  workItemId: string,
+  ancestorId: string,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  let row = await workItemRepository.findById(workItemId, tx);
+  while (row?.parentId) {
+    if (row.parentId === ancestorId) return true;
+    row = await workItemRepository.findById(row.parentId, tx);
+  }
+  return false;
 }

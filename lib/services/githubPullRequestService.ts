@@ -362,18 +362,23 @@ export const githubPullRequestService = {
       // A repository that ENTERED the set through this link routes the cards
       // waiting on the init card that declared it — after commit (MOTIR-11057).
       if (adoption === 'adopted') deferAdoptedRepoRouting(item.projectId, pr.repoId, ctx);
-      // A NEW member changes the set an approve-and-merge gate asked about.
-      if (!alreadyDelivered) await withdrawPullRequestApprovalGateOnSetChange(currentItemId, tx);
-      // …and it changes the set the card's own CI verdict is folded over, so the
-      // verdict is recomputed in the same transaction (MOTIR-5470). This is
-      // defect 4 of the four MOTIR-5469 enumerates: linking a red pull request to
-      // a card used to leave that card's `ciState` reading whatever it read
-      // before — green, or nothing at all — until the NEXT check event happened
-      // to fire, which for a pull request whose checks have already finished is
-      // never. The link is exactly the moment the answer changes.
-      if (!alreadyDelivered) await recomputeWorkItemCiState(currentItemId, tx);
-      // The same set is what the card's to-fix answer reads (MOTIR-6602).
-      if (!alreadyDelivered) await recomputeWorkItemFixReason(currentItemId, tx);
+      // The parent's merge set takes in the child's pull request when closing the
+      // parent closes the child (MOTIR-11835).
+      const ancestorsAdded = await inheritDeliveryToAncestors(
+        item,
+        { githubPullRequestId: pullRequestId, repoId: pr.repoId },
+        tx,
+      );
+      // A NEW member changes the set an approve-and-merge gate asked about, and
+      // the set the card's own CI verdict is folded over, so the verdict is
+      // recomputed in the same transaction (MOTIR-5470). This is defect 4 of the
+      // four MOTIR-5469 enumerates: linking a red pull request to a card used to
+      // leave that card's `ciState` reading whatever it read before — green, or
+      // nothing at all — until the NEXT check event happened to fire, which for a
+      // pull request whose checks have already finished is never. The link is
+      // exactly the moment the answer changes. The same set is what the card's
+      // to-fix answer reads (MOTIR-6602).
+      await settleDeliverySetChange(currentItemId, !alreadyDelivered, ancestorsAdded, tx);
       return toLinkedPullRequestDto(pr);
     }).then(async (dto) => {
       // MOTIR-3675 — turn the unlinked-pull-request check GREEN, now rather than
@@ -598,17 +603,20 @@ export const githubPullRequestService = {
       // The same post-commit routing the sibling arm registers (MOTIR-11057), for
       // the project the row was written into.
       if (adoption === 'adopted') deferAdoptedRepoRouting(item.projectId, repo.id, ctx);
-      if (!alreadyDelivered) {
-        await withdrawPullRequestApprovalGateOnSetChange(input.workItemId, tx);
-        // The AGENT's link door owes the recompute exactly as the picker's does
-        // (MOTIR-5470). It is the arm that matters MORE, not less: this is the
-        // call a run makes seconds after `gh pr create`, so it is the one that
-        // decides what a card's badge says for the whole life of that pull
-        // request — and the one that can write the FIRST delivery a card has
-        // ever had.
-        await recomputeWorkItemCiState(input.workItemId, tx);
-        await recomputeWorkItemFixReason(input.workItemId, tx);
-      }
+      // The same inheritance the sibling arm makes (MOTIR-11835) — and this is the
+      // arm a child's run calls, so the one where it matters.
+      const ancestorsAdded = await inheritDeliveryToAncestors(
+        item,
+        { githubPullRequestId: prId, repoId: repo.id },
+        tx,
+      );
+      // The AGENT's link door owes the withdrawal and the recompute exactly as the
+      // picker's does (MOTIR-5470). It is the arm that matters MORE, not less:
+      // this is the call a run makes seconds after `gh pr create`, so it is the
+      // one that decides what a card's badge says for the whole life of that pull
+      // request — and the one that can write the FIRST delivery a card has ever
+      // had.
+      await settleDeliverySetChange(input.workItemId, !alreadyDelivered, ancestorsAdded, tx);
 
       return {
         link: toLinkedPullRequestDto(updated),
@@ -908,4 +916,95 @@ async function readDeliveredWorkItems(
  *  spells it — the two converge on the same `(repo_id, number)` pair. */
 function isUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+}
+
+/**
+ * THE PARENT'S MERGE SET TAKES IN ITS CHILDREN'S PULL REQUESTS (MOTIR-11835).
+ *
+ * With the project's "Complete children when a parent is done"
+ * (`autoCompleteChildrenOnParentDone`) on, closing a parent closes its children —
+ * which is only true to the code when every child's pull request merged with
+ * the parent. A child shipped in another repository is linked to its OWN pull
+ * request, and nothing put that pull request in the parent's set: approving the
+ * story merged only the story's, the cascade closed the child, and the child's
+ * own approve-and-merge question was left awaiting on a Done card whose workflow
+ * has no way back to Approved.
+ *
+ * So a link writes the same delivery on every ancestor up to (not including) the
+ * epic — whether or not that ancestor has a pull request of its own. Since
+ * MOTIR-11624 a child delivery its ancestor also delivers owes no merge question
+ * on the child (`gateSetFor`), so the parent's ONE question covers every child's
+ * pull request and approving it merges them before the cascade closes the
+ * children. An epic is never a merge target — it is not a run target and owes
+ * no approve-and-merge question — so the walk stops below it.
+ *
+ * With the setting off a parent's close leaves its children alone, so nothing is
+ * inherited. Returns the ancestors whose set this call CHANGED (an ancestor that
+ * already delivered the pull request is not one), for the caller to withdraw and
+ * recompute exactly as it does for the card it linked.
+ */
+async function inheritDeliveryToAncestors(
+  item: { id: string; projectId: string; workspaceId: string; parentId: string | null },
+  delivery: { githubPullRequestId: string; repoId: string },
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
+  if (!item.parentId) return [];
+  const automation = await projectRepository.findStatusAutomation(item.projectId, tx);
+  if (!automation?.autoCompleteChildrenOnParentDone) return [];
+
+  const alreadyDelivering = new Set(
+    (await workItemDeliveryRepository.listByPullRequest(delivery.githubPullRequestId, tx)).map(
+      (row) => row.workItemId,
+    ),
+  );
+  const added: string[] = [];
+  // The tree is acyclic by trigger; the visited set only bounds the walk if that
+  // invariant were ever broken, rather than looping inside a transaction.
+  const visited = new Set<string>([item.id]);
+  let parentId: string | null = item.parentId;
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    const parent = await workItemRepository.findById(parentId, tx);
+    if (!parent || parent.workspaceId !== item.workspaceId || parent.kind === 'epic') break;
+    if (!alreadyDelivering.has(parent.id)) {
+      await workItemDeliveryRepository.add(
+        {
+          workspaceId: item.workspaceId,
+          workItemId: parent.id,
+          githubPullRequestId: delivery.githubPullRequestId,
+          repoId: delivery.repoId,
+        },
+        tx,
+      );
+      added.push(parent.id);
+    }
+    parentId = parent.parentId;
+  }
+  return added;
+}
+
+/**
+ * The set-change follow-up a link owes every card whose delivery set it changed
+ * (MOTIR-5482 · MOTIR-5470 · MOTIR-6602), in order: withdraw the gate that asked
+ * about the old set, then recompute the CI verdict and the to-fix answer folded
+ * over the new one. The linked card is owed it when its own row is new OR when an
+ * ancestor newly delivers the same pull request — the latter takes the pull
+ * request out of the card's own gate set (`gateSetFor`), so a question it already
+ * carries is no longer the right one (MOTIR-11835).
+ */
+async function settleDeliverySetChange(
+  linkedItemId: string,
+  linkedRowIsNew: boolean,
+  ancestorsAdded: string[],
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const changed = [
+    ...(linkedRowIsNew || ancestorsAdded.length > 0 ? [linkedItemId] : []),
+    ...ancestorsAdded,
+  ];
+  for (const id of changed) {
+    await withdrawPullRequestApprovalGateOnSetChange(id, tx);
+    await recomputeWorkItemCiState(id, tx);
+    await recomputeWorkItemFixReason(id, tx);
+  }
 }

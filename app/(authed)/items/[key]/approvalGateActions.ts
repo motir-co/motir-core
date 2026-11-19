@@ -14,6 +14,7 @@ import {
   ApprovalGateSupersededError,
   ApprovalGateStaleSubjectError,
   ApprovalGateVerbNotOfferedError,
+  ApprovalGateTransitionRefusedError,
 } from '@/lib/approvalGates/errors';
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
@@ -199,7 +200,17 @@ function refusalOf(err: unknown): GateRefusal | null {
     // ⚠️ And the VERB-NOT-OFFERED refusal says which input was missing (MOTIR-6427), so a
     // design band can answer a missing verdict under the verdict, not under the reason.
     const reason = err instanceof ApprovalGateVerbNotOfferedError ? err.reason : null;
-    return toGateRefusal(err.tag, { decidedByLabel, supersedeCause, moved, primary, reason });
+    // ⚠️ And the TRANSITION refusal says whether the card is already closed (MOTIR-11835),
+    // which is what decides the way out the frame names.
+    const closed = err instanceof ApprovalGateTransitionRefusedError ? err.closed : null;
+    return toGateRefusal(err.tag, {
+      decidedByLabel,
+      supersedeCause,
+      moved,
+      primary,
+      reason,
+      closed,
+    });
   }
   return null;
 }
