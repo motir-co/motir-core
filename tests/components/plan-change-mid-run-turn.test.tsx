@@ -97,6 +97,8 @@ vi.mock('@/lib/planning/planReviewClient', async (orig) => ({
 }));
 
 const { usePlanChangeConversation } = await import('@/lib/hooks/usePlanChangeConversation');
+
+type Frame = (event: string, data: unknown) => void;
 const { PlanEditsClientError } = await import('@/lib/planning/planEditsClient');
 
 const SESSION = {
@@ -207,13 +209,59 @@ describe('THE BRANCH — one control, two destinations, chosen by the phase', ()
     // and two runs then race for the same plan.
     expect(submitContextualPlan).not.toHaveBeenCalled();
     // The ask is streamed and settled as ITS OWN job.
+    // …with its frames read for the question's quick reply (MOTIR-11797).
     expect(streamAskJob).toHaveBeenCalledWith(
       'ask-1',
       expect.anything(),
       expect.any(Function),
       expect.any(Function),
+      expect.any(Function),
     );
     expect(settleAskJob).toHaveBeenCalledWith('ask-1', expect.anything(), 's1');
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('draws the question’s QUICK REPLY in its answering row until the answer settles (MOTIR-11797)', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    let settle!: (v: unknown) => void;
+    settleAskJob.mockImplementation(
+      () =>
+        new Promise((r) => {
+          settle = r;
+        }),
+    );
+    streamAskJob.mockImplementation(
+      async (_j: string, _s: AbortSignal, _e: unknown, _d: unknown, onFrame: Frame) => {
+        // A frame that carries no usable text, and one for another question, change nothing.
+        onFrame('conversation_ack', { text: '   ' });
+        onFrame('note', { text: 'Reading the plan.' });
+        onFrame('conversation_ack', { text: '  You want the narration card dropped.  ' });
+      },
+    );
+
+    let sent!: Promise<void>;
+    act(() => {
+      sent = hook.result.current.send('Also drop the narration card.', TARGETS);
+    });
+    await waitFor(() =>
+      expect(hook.result.current.state.midRunAsk).toEqual({
+        text: 'Also drop the narration card.',
+        ack: 'You want the narration card dropped.',
+      }),
+    );
+    // The planning run is untouched by it.
+    expect(hook.result.current.state.jobId).toBe('job-1');
+
+    await act(async () => {
+      settle(forwarded(['m1', 'Also drop the narration card.']));
+      await sent;
+    });
+    expect(hook.result.current.state.midRunAsk ?? null).toBeNull();
 
     await act(async () => {
       release();

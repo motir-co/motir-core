@@ -1142,7 +1142,11 @@ export const aiAskService = {
       // a second plan-edit job for one turn.
       if (turn.intent === 'plan_change') return { outcome: 'silent', session };
       await planChangeSessionsService.recordTurnIntent(turn.id, 'plan_change', ctx, {}, address);
-      const submitted = await planChangeSessionsService.submit(ctx, address);
+      // THE HAND-OFF (MOTIR-11797): this ask job already replied to the person's message,
+      // so the plan it starts says nothing back a second time.
+      const submitted = await planChangeSessionsService.submit(ctx, address, undefined, {
+        askHandOff: { askJobId: jobId },
+      });
       return {
         outcome: 'redirected',
         jobId: submitted.jobId,

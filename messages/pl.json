@@ -11273,6 +11273,9 @@
             },
             "run_model_default": {
               "set": "Zmieniono domyślny model po stronie uruchomień"
+            },
+            "gateway_usage": {
+              "replay": "Ponownie uruchomiono grupę nieudanego użycia"
             }
           },
           "fleet": {
@@ -12793,6 +12796,50 @@
           "description": "Usługa AI, która przechowuje uzgodnienia, nie odpowiedziała. Reszta tej strony działa normalnie — spróbuj ponownie za chwilę."
         },
         "none": "Brak kwoty"
+      },
+      "failed": {
+        "title": "Nieudane użycie",
+        "intro": "Użycie, którego nie udało się doliczyć do sum i kredytów organizacji, pogrupowane według błędu, z jakim się nie powiodło. To wszystko, co czeka teraz, niezależnie od okresu wybranego powyżej.",
+        "count": "{rows, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}} w {groups, plural, one {# grupie} few {# grupach} many {# grupach} other {# grupy}}",
+        "caption": "Nieudane użycie pogrupowane według błędu",
+        "col": {
+          "error": "Błąd",
+          "rows": "Wiersze",
+          "orgs": "Organizacje",
+          "oldest": "Najstarszy (UTC)",
+          "newest": "Najnowszy (UTC)",
+          "replay": "Uruchom ponownie"
+        },
+        "showError": "Pokaż pełny błąd",
+        "hideError": "Ukryj pełny błąd",
+        "replay": "Uruchom ponownie",
+        "replayAria": "Uruchom ponownie {rows, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}} z tym błędem",
+        "replaying": "Ponowne uruchamianie…",
+        "replayingStatus": "Ponowne uruchamianie: {rows, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}}",
+        "replayed": "Uruchomiono ponownie",
+        "confirm": {
+          "title": "Uruchomić ponownie {rows, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}} nieudanego użycia?",
+          "body": "Każdy wiersz, który nie powiódł się z tym błędem, zostanie zapisany ponownie, dokładnie raz. Wiersz już zapisany nigdy nie jest liczony dwa razy, a wiersz, który znów się nie powiedzie, pozostaje na liście z nowym błędem.",
+          "error": "Błąd",
+          "scope": "{rows, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}} · {orgs, plural, one {# organizacja} few {# organizacje} many {# organizacji} other {# organizacji}}",
+          "cancel": "Anuluj",
+          "go": "Uruchom ponownie {rows, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}}"
+        },
+        "result": {
+          "applied": "Uruchomiono ponownie: zapisano {count, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}}.",
+          "none": "Żaden nie zakończył się ponownie błędem.",
+          "failedAgain": "Ponownie nie powiodło się: {count, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}}.",
+          "sameGroup": "Pozostają w tej grupie.",
+          "newGroup": "Są wymienione pod nowym błędem.",
+          "unfinished": "Ponowne uruchomienie nie zakończyło się. Niezapisane wiersze nadal są tutaj, więc kolejne uruchomienie zapisze każdy z nich tylko raz."
+        },
+        "readOnly": "Tylko do odczytu. Ponowne uruchomienie nieudanego użycia wymaga roli operatora.",
+        "empty": "Brak wierszy nieudanego użycia.",
+        "loading": "Ładowanie nieudanego użycia",
+        "error": {
+          "title": "Nie można teraz pokazać nieudanego użycia",
+          "description": "Usługa AI, która przechowuje użycie, nie odpowiedziała. Reszta tej strony działa normalnie — spróbuj ponownie za chwilę."
+        }
       }
     },
     "costs": {

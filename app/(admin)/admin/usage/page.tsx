@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { getFormatter, getTranslations } from 'next-intl/server';
 import { Card } from '@/components/ui/Card';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -8,6 +9,7 @@ import { buildSpendSheet, parseSpendPeriod, recentMonths } from '@/lib/platform/
 import { platformReadService } from '@/lib/services/platformReadService';
 import { SpendPeriodSwitch } from '../_components/SpendPeriodSwitch';
 import { formatMicroUsd, formatUsage } from '../_components/spendFormat';
+import { FailedUsageLoading, FailedUsageSection } from './_components/FailedUsageSection';
 import { ProviderReconciliationSection } from './_components/ProviderReconciliationSection';
 
 /**
@@ -23,6 +25,11 @@ import { ProviderReconciliationSection } from './_components/ProviderReconciliat
  * delta mock `…--provider-bills.mock.html`): what each provider billed beside what
  * Motir recorded, per UTC day. Read by the same `getEstateUsage` call, so the view
  * stays one audited read; it renders even when the sheets' read failed.
+ *
+ * Last, FAILED USAGE (MOTIR-11794, design MOTIR-11793's delta mock
+ * `…--failed-usage.mock.html`): the usage motir-ai could not apply, by error,
+ * with Replay for an operator. Its read is its own, in a `<Suspense>`, so it
+ * loads and fails apart from everything above it; it is not period-scoped.
  */
 
 export const metadata: Metadata = {
@@ -93,6 +100,10 @@ export default async function AdminUsagePage({
       )}
 
       <ProviderReconciliationSection reconciliation={reconciliation} period={period} />
+
+      <Suspense fallback={<FailedUsageLoading />}>
+        <FailedUsageSection principal={principal} />
+      </Suspense>
     </div>
   );
 }

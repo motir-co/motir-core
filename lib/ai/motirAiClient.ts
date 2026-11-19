@@ -5095,3 +5095,108 @@ export async function setLessonRetention(
   }
   return body;
 }
+
+// ── FAILED gateway usage (MOTIR-11794 over motir-ai's same-named card) ─────────
+//
+// `/v1/admin/gateway-usage/failed-groups` — the usage rows motir-ai could not
+// apply, grouped by the error they failed with, and the replay of ONE group.
+// motir-ai answers the replay's from → to record as `audit` (null when the group
+// had no failed rows left) and writes none itself: core appends it to its own
+// platform log (`platformFailedUsageService`), the lessons-console split.
+//
+// The replay drains for at most 20 s on motir-ai's side, so it answers inside
+// this client's 30 s deadline; rows it did not reach are counted `pending` and
+// motir-ai finishes them without another request.
+
+/** One error group of the failed usage rows. */
+export interface RawFailedUsageGroup {
+  /** The error text as stored; `''` for a failed row that carries none. */
+  error: string;
+  rows: number;
+  organizations: number;
+  /** ISO 8601. */
+  oldestReceivedAt: string;
+  newestReceivedAt: string;
+}
+
+/** What one replay did to the group it named. */
+export interface RawFailedUsageReplay {
+  error: string;
+  /** Rows put back to pending — the group as it stood. */
+  reset: number;
+  applied: number;
+  failedAgain: number;
+  /** Not reached before the answer; motir-ai finishes them. */
+  pending: number;
+}
+
+export interface RawFailedUsageReplayAudit {
+  action: 'ai.gateway_usage.replay';
+  actorCoreUserId: string;
+  at: string;
+  before: { error: string; failedRows: number; organizations: number };
+  after: { applied: number; failedAgain: number; pending: number };
+}
+
+export interface RawFailedUsageReplayWrite {
+  replay: RawFailedUsageReplay;
+  audit: RawFailedUsageReplayAudit | null;
+}
+
+function isFailedUsageGroup(g: unknown): g is RawFailedUsageGroup {
+  if (!g || typeof g !== 'object') return false;
+  const r = g as Record<string, unknown>;
+  return (
+    typeof r.error === 'string' &&
+    typeof r.rows === 'number' &&
+    typeof r.organizations === 'number' &&
+    typeof r.oldestReceivedAt === 'string' &&
+    typeof r.newestReceivedAt === 'string'
+  );
+}
+
+function isFailedUsageReplay(r: unknown): r is RawFailedUsageReplay {
+  if (!r || typeof r !== 'object') return false;
+  const o = r as Record<string, unknown>;
+  return (
+    typeof o.error === 'string' &&
+    typeof o.reset === 'number' &&
+    typeof o.applied === 'number' &&
+    typeof o.failedAgain === 'number' &&
+    typeof o.pending === 'number'
+  );
+}
+
+// GET /v1/admin/gateway-usage/failed-groups
+export async function listFailedGatewayUsageGroups(): Promise<RawFailedUsageGroup[]> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/gateway-usage/failed-groups`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json().catch(() => null)) as { groups?: unknown } | null;
+  if (!body || !Array.isArray(body.groups) || !body.groups.every(isFailedUsageGroup)) {
+    throw new MotirAiUnavailableError('failed-usage read answered no `{ groups }`');
+  }
+  return body.groups;
+}
+
+// POST /v1/admin/gateway-usage/failed-groups/replay
+export async function replayFailedGatewayUsageGroup(
+  error: string,
+  actorCoreUserId: string,
+): Promise<RawFailedUsageReplayWrite> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/gateway-usage/failed-groups/replay`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({ error, actorCoreUserId }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json().catch(() => null)) as RawFailedUsageReplayWrite | null;
+  if (!body || !isFailedUsageReplay(body.replay) || body.audit === undefined) {
+    throw new MotirAiUnavailableError('failed-usage replay answered no `{ replay, audit }`');
+  }
+  return body;
+}

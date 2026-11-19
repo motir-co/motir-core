@@ -72,7 +72,7 @@ import {
   isKnownFrameKind,
 } from '@/lib/planning/planChangeFrames';
 import { unavailableCodeOf, whileStartingUp } from '@/lib/planning/submitStartingUp';
-import { reopenedPlanJobId } from '@/lib/planning/planRunPhase';
+import { reopenedAskJobId, reopenedPlanJobId } from '@/lib/planning/planRunPhase';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import {
   streamAskJob,
@@ -316,12 +316,13 @@ export interface PlanChangeConversationState {
    */
   settledTargetKey?: string | null;
   /**
-   * The quick reply PART 1 wrote to what the person sent (MOTIR-10738), from the
-   * job's `conversation_ack` frame. Keyed by JOB like `settledJobId`, so a new run
-   * shows its own reply or none — never the last run's — without every start
-   * reducer resetting it. Read through `conversationAckFor`
-   * (`lib/planning/planRunPhase.ts`). Optional so a state built by hand is one with
-   * no reply.
+   * The quick reply Motir AI wrote to what the person sent, from the job's
+   * `conversation_ack` frame: PART 1 of a plan run's (MOTIR-10738), or an ask turn's
+   * (MOTIR-11797) — kept on into the plan run that turn hands off to, which sends none of
+   * its own. Keyed by JOB like `settledJobId`, so a new run shows its own reply or none —
+   * never the last run's — without every start reducer resetting it. Read through
+   * `conversationAckFor` and `askAckFor` (`lib/planning/planRunPhase.ts`). Optional so a
+   * state built by hand is one with no reply.
    */
   conversationAck?: { jobId: string; text: string } | null;
   /** The last approve's result, so the rail can say what landed. */
@@ -400,7 +401,7 @@ export interface PlanChangeConversationState {
    * run's abort controller. The rail draws the question and the answering cue from
    * it. OPTIONAL (absent reads as null) so a state built by hand needs no change.
    */
-  midRunAsk?: { text: string } | null;
+  midRunAsk?: { text: string; ack?: string | null } | null;
   /**
    * The planner's latest mid-run PAUSE on this run (MOTIR-8010), as the poll last
    * read it; absent until it has read one, when the session DTO's own `runPause`
@@ -1161,6 +1162,8 @@ export function usePlanChangeConversation({
    *  re-runs THAT turn (no second user turn — ADR §3), and the correction
    *  affordance flips it. Null whenever the last run was a plan-change one. */
   const lastAskTurnRef = useRef<string | null>(null);
+  /** The ask jobs this screen streamed itself (MOTIR-11797): never replayed on reopen. */
+  const followedAskJobsRef = useRef<Set<string>>(new Set());
   /** The anchor that ask run was SENT with (MOTIR-7050), so its retry re-sends
    *  it: a debug turn's re-run must diagnose the same triage bug, not file a new
    *  one. Null for an unanchored turn, and whenever `lastAskTurnRef` is. */
@@ -1412,6 +1415,35 @@ export function usePlanChangeConversation({
     reopenedJob !== null && adoptableJob === null && reopenedJob !== (state.settledJobId ?? null)
       ? reopenedJob
       : null;
+  // A REOPENED ASK TURN'S QUICK REPLY (MOTIR-11797). A viewer who comes back while an
+  // ask turn is still being answered did not see its `conversation_ack` arrive, so the
+  // job's frames are replayed — the relay replays a job from its first frame — for that
+  // frame alone. Once the job's stream ends the turn is over, answered or not, and a
+  // reply saying Motir AI is about to look stops being true: it is taken down. A job this
+  // screen streamed itself is never replayed. Best-effort: a stream that cannot be
+  // opened leaves the turn as it was.
+  const reopenedAskJob = reopenedAskJobId(state);
+  useEffect(() => {
+    if (!reopenedAskJob || followedAskJobsRef.current.has(reopenedAskJob)) return;
+    const controller = new AbortController();
+    const over = () => {
+      if (controller.signal.aborted || !mountedRef.current) return;
+      setState((s) =>
+        s.conversationAck?.jobId === reopenedAskJob ? { ...s, conversationAck: null } : s,
+      );
+    };
+    void streamAskJob(reopenedAskJob, controller.signal, over, over, (event, data) => {
+      if (event !== 'conversation_ack' || controller.signal.aborted || !mountedRef.current) {
+        return;
+      }
+      const text = conversationAckText(data);
+      if (text !== null) {
+        setState((s) => ({ ...s, conversationAck: { jobId: reopenedAskJob, text } }));
+      }
+    });
+    return () => controller.abort();
+  }, [reopenedAskJob]);
+
   useEffect(() => {
     if (!unsettledReopenedJob) return;
     const controller = new AbortController();
@@ -2560,6 +2592,8 @@ export function usePlanChangeConversation({
         }
 
         lastAskTurnRef.current = submitted.turnId;
+        // Streamed here, so a reopen's replay never re-reads it (MOTIR-11797).
+        followedAskJobsRef.current.add(submitted.jobId);
         setState((s) => ({
           ...s,
           phase: 'streaming',
@@ -2624,6 +2658,15 @@ export function usePlanChangeConversation({
           // `retrieval_ready`) — a redirect's hand-off is drawn by the settle below.
           (event, data) => {
             if (!mountedRef.current) return;
+            // THE TURN'S QUICK REPLY (MOTIR-11797), kept by the ask job: the rail draws it
+            // as the turn's first assistant bubble until the answer lands.
+            if (event === 'conversation_ack') {
+              const text = conversationAckText(data);
+              if (text !== null) {
+                setState((s) => ({ ...s, conversationAck: { jobId: submitted.jobId, text } }));
+              }
+              return;
+            }
             const progress = narrateFrame(event, data);
             if (progress) setState((s) => ({ ...s, progress, acts: withAskAct(s.acts, progress) }));
           },
@@ -2657,6 +2700,13 @@ export function usePlanChangeConversation({
             // as replacing the live line (MOTIR-4069).
             progress: { kind: 'redirected' },
             acts: [...s.acts, { kind: 'redirected' }],
+            // ONE MESSAGE, ONE QUICK REPLY (MOTIR-11797): the plan this turn hands off to
+            // sends none of its own, so the reply the ask already wrote carries on in the
+            // run's conversation bubble rather than giving way to its keyed line.
+            conversationAck:
+              s.conversationAck && s.conversationAck.jobId === submitted.jobId
+                ? { jobId: redirect.jobId, text: s.conversationAck.text }
+                : s.conversationAck,
           }));
           if (carried) void raiseStop(redirect.session.id, redirect.jobId);
           resumedBy =
@@ -2990,6 +3040,17 @@ export function usePlanChangeConversation({
                 }));
               },
               () => {},
+              // THE QUICK REPLY (MOTIR-11797): drawn in this question's answering bubble.
+              (event, data) => {
+                if (event !== 'conversation_ack' || !mountedRef.current) return;
+                const text = conversationAckText(data);
+                if (text === null) return;
+                setState((s) =>
+                  s.midRunAsk?.text === body
+                    ? { ...s, midRunAsk: { ...s.midRunAsk, ack: text } }
+                    : s,
+                );
+              },
             );
             if (failed || !mountedRef.current) return;
             const settled = await settleAskJob(submitted.jobId, controller.signal, midRunSessionId);

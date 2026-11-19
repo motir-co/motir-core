@@ -322,12 +322,14 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
   contextual_scope: { quiet: NOT_AN_ACT },
   target_read: { quiet: NOT_AN_ACT },
   target_settled: { quiet: NOT_AN_ACT },
-  /** PART 1's quick reply to what the person sent (MOTIR-10738): one or two
-   *  sentences the model writes in the person's language. The hook keeps it by
-   *  job and the conversation bubble draws it in place of the keyed fallback, so
-   *  it is not an act line. Accepted here BEFORE motir-ai emits it. */
+  /** The quick reply to what the person sent: one or two sentences the model writes in
+   *  the person's language — PART 1 of a plan run's (MOTIR-10738) and every ask turn's
+   *  (MOTIR-11797). The hook keeps it by job; the conversation bubble draws it in place
+   *  of the keyed fallback, and an ask turn's own bubble draws it above the notes, so it
+   *  is not an act line. */
   conversation_ack: {
-    quiet: 'drawn as the conversation-phase bubble, in place of its keyed line — not an act',
+    quiet:
+      'drawn as the conversation-phase bubble, or an ask turn’s first bubble, in place of a keyed line — not an act',
   },
   /** The run planned nothing and its reply says why (MOTIR-10407): read by the settle. */
   empty_run_reply: { quiet: NOT_AN_ACT },

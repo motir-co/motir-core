@@ -50,6 +50,8 @@ const { renderToHtml } = await import('../helpers/serverPageHarness');
 
 const RECON_PATH = '/v1/platform/usage/provider-reconciliation';
 const USAGE_PATH = '/v1/platform/usage';
+/** The page's Failed usage section reads this on its own (MOTIR-11794). */
+const FAILED_PATH = '/v1/admin/gateway-usage/failed-groups';
 const copy = en.platformAdmin.usage;
 
 interface Seen {
@@ -88,6 +90,8 @@ function fakeMotirAi(input: string | URL | Request, init?: RequestInit): Respons
       return Response.json(withIds(USAGE, ids));
     case RECON_PATH:
       return Response.json(reconciliationBody);
+    case FAILED_PATH:
+      return Response.json({ groups: [] });
     default:
       return new Response('{}', { status: 404 });
   }
@@ -277,15 +281,20 @@ describe('2 · a failed read takes down the section, never the page', () => {
   });
 });
 
-describe('3 · read-only: the page and the read only ever GET a /v1/platform/usage path', () => {
+describe('3 · read-only: the page and the read only ever GET', () => {
+  // Since MOTIR-11794 the page also renders the Failed usage section, whose own
+  // read is the one GET outside /v1/platform/usage; its Replay is a POST that
+  // only an operator's press sends, never a render.
   it('every request recorded while staff render the page and call the read', async () => {
     await renderUsage('2026-09');
     await platformReadService.getEstateUsage(principal, '2026-09');
-    expect(seen.length).toBeGreaterThanOrEqual(4);
-    expect(new Set(seen.map((s) => s.path))).toEqual(new Set([USAGE_PATH, RECON_PATH]));
+    expect(seen.length).toBeGreaterThanOrEqual(5);
+    expect(new Set(seen.map((s) => s.path))).toEqual(
+      new Set([USAGE_PATH, RECON_PATH, FAILED_PATH]),
+    );
     for (const s of seen) {
       expect(s.method, s.path).toBe('GET');
-      expect(s.path.startsWith(USAGE_PATH), s.path).toBe(true);
+      expect(s.path.startsWith(USAGE_PATH) || s.path === FAILED_PATH, s.path).toBe(true);
     }
   });
 });

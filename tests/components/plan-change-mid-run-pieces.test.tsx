@@ -170,6 +170,14 @@ describe('the small pieces of a mid-run answer', () => {
     expect(screen.getByTestId('plan-change-answering')).toBeTruthy();
   });
 
+  it('PendingAsk draws the question’s quick reply in place of its spinner (MOTIR-11797)', () => {
+    const { rerender } = renderWithIntl(<PendingAsk text="how far along?" inThread />);
+    const answering = () => screen.getByTestId('plan-change-answering');
+    expect(answering().textContent).toBe('');
+    rerender(<PendingAsk text="how far along?" inThread ack="You want to know how far it got." />);
+    expect(answering().textContent).toBe('You want to know how far it got.');
+  });
+
   it('AnsweredAside is one passive line', () => {
     renderWithIntl(<AnsweredAside />);
     expect(screen.getByTestId('plan-change-answered-aside')).toBeTruthy();
