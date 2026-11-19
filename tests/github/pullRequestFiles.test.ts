@@ -6,6 +6,9 @@ import {
   PullRequestFilesReadError,
 } from '@/lib/github/pullRequestFiles';
 
+/** Who the read names itself as (MOTIR-11842); its throttle lines carry it. */
+const SITE = { caller: 'webhook.changedPaths', installationId: '144235820' } as const;
+
 // The pull-request FILES read leaf (MOTIR-2922) — the wire contract behind the
 // merge capture: WHICH endpoint is read, with WHICH credential, and what each cap
 // reports. `fetch` is stubbed (the convention every sibling GitHub vitest suite
@@ -56,7 +59,7 @@ describe('listPullRequestFiles — the endpoint and the credential', () => {
   it('reads /pulls/{number}/files with the INSTALLATION token, never the App JWT', async () => {
     fetchMock.mockResolvedValueOnce(jsonPage([ghFile('lib/services/workflowsService.ts')]));
 
-    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE);
 
     expect(result).toEqual({
       paths: ['lib/services/workflowsService.ts'],
@@ -81,7 +84,7 @@ describe('listPullRequestFiles — the endpoint and the credential', () => {
       .mockResolvedValueOnce(jsonPage(ghFiles(100)))
       .mockResolvedValueOnce(jsonPage(ghFiles(2, 100)));
 
-    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE);
 
     expect(result.truncated).toBe(false);
     expect(result.paths).toHaveLength(102);
@@ -95,7 +98,7 @@ describe('listPullRequestFiles — the endpoint and the credential', () => {
       jsonPage([ghFile('a.ts'), { status: 'removed' }, { filename: '' }, null, ghFile('b.ts')]),
     );
 
-    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE);
 
     expect(result.paths).toEqual(['a.ts', 'b.ts']);
     expect(result.truncated).toBe(false);
@@ -117,7 +120,7 @@ describe('listPullRequestFiles — each file at the HEAD (MOTIR-5674)', () => {
       ]),
     );
 
-    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE);
 
     expect(result.paths).toEqual(['docs/decisions/pages.md', 'lib/a.ts', 'lib/gone.ts']);
     expect(result.files).toEqual([
@@ -139,7 +142,7 @@ describe('listPullRequestFiles — each file at the HEAD (MOTIR-5674)', () => {
       ]),
     );
 
-    expect((await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER)).headSha).toBe(HEAD);
+    expect((await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE)).headSha).toBe(HEAD);
   });
 
   it('a contents_url that is missing, unparseable or refless names no head', async () => {
@@ -151,7 +154,7 @@ describe('listPullRequestFiles — each file at the HEAD (MOTIR-5674)', () => {
       ]),
     );
 
-    expect((await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER)).headSha).toBeNull();
+    expect((await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE)).headSha).toBeNull();
   });
 
   it('a truncated walk still reports the files it kept, in step with the paths', async () => {
@@ -160,7 +163,7 @@ describe('listPullRequestFiles — each file at the HEAD (MOTIR-5674)', () => {
       .mockResolvedValueOnce(jsonPage(ghFiles(100, 100)))
       .mockResolvedValueOnce(jsonPage(ghFiles(100, 200)));
 
-    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE);
 
     expect(result.truncated).toBe(true);
     expect(result.files.map((file) => file.path)).toEqual(result.paths);
@@ -176,7 +179,7 @@ describe('listPullRequestFiles — the caps REPORT themselves', () => {
       .mockResolvedValueOnce(jsonPage(ghFiles(100, 100)))
       .mockResolvedValueOnce(jsonPage(ghFiles(100, 200)));
 
-    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE);
 
     expect(result.paths).toHaveLength(MAX_CAPTURED_PR_PATHS);
     expect(result.truncated).toBe(true);
@@ -187,7 +190,7 @@ describe('listPullRequestFiles — the caps REPORT themselves', () => {
   it('a pull request UNDER the cap keeps every path and reports NOT truncated', async () => {
     fetchMock.mockResolvedValueOnce(jsonPage(ghFiles(7)));
 
-    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE);
 
     expect(result.paths).toHaveLength(7);
     expect(result.truncated).toBe(false);
@@ -206,7 +209,7 @@ describe('listPullRequestFiles — the caps REPORT themselves', () => {
       .mockResolvedValueOnce(jsonPage(mostlyJunk(2)))
       .mockResolvedValueOnce(jsonPage(mostlyJunk(3)));
 
-    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE);
 
     expect(result.paths).toEqual(['kept-1.ts', 'kept-2.ts', 'kept-3.ts']);
     expect(result.paths.length).toBeLessThan(MAX_CAPTURED_PR_PATHS);
@@ -218,7 +221,7 @@ describe('listPullRequestFiles — failure is TYPED, not silent', () => {
   it('a non-retryable status throws with the repo, number and status', async () => {
     fetchMock.mockResolvedValueOnce(new Response('nope', { status: 404 }));
 
-    await expect(listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER)).rejects.toBeInstanceOf(
+    await expect(listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE)).rejects.toBeInstanceOf(
       PullRequestFilesReadError,
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -234,7 +237,7 @@ describe('listPullRequestFiles — failure is TYPED, not silent', () => {
 
     // "The PR changed nothing" and "the host answered something else" must not be
     // the same result — the first is evidence, the second is the absence of it.
-    await expect(listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER)).rejects.toThrow(
+    await expect(listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE)).rejects.toThrow(
       /expected a JSON array/,
     );
   });
@@ -242,7 +245,9 @@ describe('listPullRequestFiles — failure is TYPED, not silent', () => {
   it('a transport failure exhausts the retry budget, then throws', async () => {
     fetchMock.mockRejectedValue(new Error('socket hang up'));
 
-    const err = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER).catch((e: unknown) => e);
+    const err = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE).catch(
+      (e: unknown) => e,
+    );
 
     expect(err).toBeInstanceOf(PullRequestFilesReadError);
     expect((err as PullRequestFilesReadError).status).toBeNull();
@@ -254,7 +259,7 @@ describe('listPullRequestFiles — failure is TYPED, not silent', () => {
       .mockResolvedValueOnce(new Response('boom', { status: 502 }))
       .mockResolvedValueOnce(jsonPage([ghFile('lib/db.ts')]));
 
-    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER, SITE);
 
     expect(result.paths).toEqual(['lib/db.ts']);
     expect(fetchMock).toHaveBeenCalledTimes(2);

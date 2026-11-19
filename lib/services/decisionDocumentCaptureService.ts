@@ -180,7 +180,10 @@ async function readHeadFiles(pr: {
       pr.repo.installation.installationId,
       { owner: pr.repo.owner },
     );
-    return await listPullRequestFiles(token, pr.repo.owner, pr.repo.name, pr.number);
+    return await listPullRequestFiles(token, pr.repo.owner, pr.repo.name, pr.number, {
+      caller: 'decisionDocumentCapture',
+      installationId: pr.repo.installation.installationId,
+    });
   } catch (err) {
     console.warn(
       '[decisionDocumentCapture] the file list could not be read, so the decision document is recorded as unreadable',

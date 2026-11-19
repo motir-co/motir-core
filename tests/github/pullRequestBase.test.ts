@@ -5,6 +5,9 @@ import {
   readPullRequestBaseRef,
 } from '@/lib/github/pullRequestBase';
 
+/** Who the read names itself as (MOTIR-11842); its throttle lines carry it. */
+const SITE = { caller: 'pullRequestBaseRefBackfill', installationId: '144235820' } as const;
+
 // The pull-request BASE-BRANCH read leaf (MOTIR-3034) — the wire contract behind
 // the `base_ref` backfill: which endpoint is read, what counts as an ANSWER, and
 // which failures are the caller's to see. `fetch` is stubbed; no database is
@@ -79,7 +82,9 @@ describe('readPullRequestBaseRef', () => {
   it('reads the SINGLE-pull-request endpoint with the installation token', async () => {
     fetchMock.mockResolvedValue(ok({ base: { ref: 'main' } }));
 
-    const read = await run(readPullRequestBaseRef('ghs_test', 'moooon-B-V', 'motir-core', 2121));
+    const read = await run(
+      readPullRequestBaseRef('ghs_test', 'moooon-B-V', 'motir-core', 2121, SITE),
+    );
 
     expect(read).toEqual({ kind: 'answered', baseRef: 'main' });
     const [url, init] = fetchMock.mock.calls[0]!;
@@ -94,7 +99,7 @@ describe('readPullRequestBaseRef', () => {
       fetchMock.mockReset();
       fetchMock.mockResolvedValue(new Response('{}', { status }));
 
-      const read = await run(readPullRequestBaseRef('t', 'o', 'n', 1));
+      const read = await run(readPullRequestBaseRef('t', 'o', 'n', 1, SITE));
 
       expect(read.kind).toBe('unanswerable');
       // One call: the row is not there, so retrying it is spending rate limit on
@@ -105,7 +110,7 @@ describe('readPullRequestBaseRef', () => {
 
   it('a 200 whose payload lost its base is unanswerable, not a guess', async () => {
     fetchMock.mockResolvedValue(ok({ number: 1 }));
-    expect((await run(readPullRequestBaseRef('t', 'o', 'n', 1))).kind).toBe('unanswerable');
+    expect((await run(readPullRequestBaseRef('t', 'o', 'n', 1, SITE))).kind).toBe('unanswerable');
   });
 
   it('retries a THROTTLED response and then answers', async () => {
@@ -113,7 +118,7 @@ describe('readPullRequestBaseRef', () => {
       .mockResolvedValueOnce(new Response('{}', { status: 403, headers: { 'retry-after': '1' } }))
       .mockResolvedValueOnce(ok({ base: { ref: 'main' } }));
 
-    const read = await run(readPullRequestBaseRef('t', 'o', 'n', 1));
+    const read = await run(readPullRequestBaseRef('t', 'o', 'n', 1, SITE));
 
     expect(read).toEqual({ kind: 'answered', baseRef: 'main' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -125,7 +130,7 @@ describe('readPullRequestBaseRef', () => {
     fetchMock.mockResolvedValue(new Response('{}', { status: 403 }));
 
     await expect(
-      run(readPullRequestBaseRef('t', 'moooon-B-V', 'motir-core', 9)),
+      run(readPullRequestBaseRef('t', 'moooon-B-V', 'motir-core', 9, SITE)),
     ).rejects.toBeInstanceOf(PullRequestBaseReadError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -133,7 +138,7 @@ describe('readPullRequestBaseRef', () => {
   it('retries a NETWORK failure and then throws with a null status', async () => {
     fetchMock.mockRejectedValue(new Error('ECONNRESET'));
 
-    const err = await run(readPullRequestBaseRef('t', 'o', 'n', 1).catch((e: unknown) => e));
+    const err = await run(readPullRequestBaseRef('t', 'o', 'n', 1, SITE).catch((e: unknown) => e));
 
     expect(err).toBeInstanceOf(PullRequestBaseReadError);
     // Null status is the tell that no response was ever received — the sweep's
@@ -148,13 +153,13 @@ describe('readPullRequestBaseRef', () => {
     // `SyntaxError` escaping here would abort a whole repository's repair.
     fetchMock.mockResolvedValue(new Response('<html>502</html>', { status: 200 }));
 
-    expect((await run(readPullRequestBaseRef('t', 'o', 'n', 1))).kind).toBe('unanswerable');
+    expect((await run(readPullRequestBaseRef('t', 'o', 'n', 1, SITE))).kind).toBe('unanswerable');
   });
 
   it('THROWS when throttling outlasts the retry budget', async () => {
     fetchMock.mockResolvedValue(new Response('{}', { status: 429 }));
 
-    const err = await run(readPullRequestBaseRef('t', 'o', 'n', 1).catch((e: unknown) => e));
+    const err = await run(readPullRequestBaseRef('t', 'o', 'n', 1, SITE).catch((e: unknown) => e));
 
     expect(err).toBeInstanceOf(PullRequestBaseReadError);
     expect((err as PullRequestBaseReadError).status).toBe(429);
