@@ -1,6 +1,6 @@
 import { readFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
-import type { RawProviderReconciliation } from '@/lib/ai/motirAiClient';
+import type { RawFailedUsageGroup, RawProviderReconciliation } from '@/lib/ai/motirAiClient';
 
 /**
  * The motir-ai PLATFORM USAGE boundary, faked for the E2E lanes (Story MOTIR-727 ·
@@ -18,6 +18,11 @@ import type { RawProviderReconciliation } from '@/lib/ai/motirAiClient';
  *     beside Motir's recorded cost, answered VERBATIM from the fixture's
  *     `providerReconciliation[period]` (an empty month when the period has none),
  *     or a 503 problem+json while `providerReconciliationError` is set
+ *
+ * and the Failed usage section's read (MOTIR-11794):
+ *
+ *   - GET /v1/admin/gateway-usage/failed-groups → the fixture's `failedUsageGroups`
+ *     verbatim (none when it has none)
  *
  * Answered from a JSON fixture the spec writes (`MOTIR_AI_PLATFORM_FIXTURE_PATH`):
  * the estate as orgs → workspaces → projects, each with a SCALE every figure is
@@ -59,6 +64,8 @@ export interface PlatformUsageFixture {
   providerReconciliation?: Record<string, RawProviderReconciliation>;
   /** When true, the reconciliation route answers a 503 problem+json instead. */
   providerReconciliationError?: boolean;
+  /** The failed gateway usage groups, as motir-ai's contract documents the read. */
+  failedUsageGroups?: RawFailedUsageGroup[];
 }
 
 const CHARGED = [
@@ -403,5 +410,17 @@ export function installPlatformUsageBoundaryMock(agent: MockAgent): void {
         responseOptions: json,
       };
     })
+    .persist();
+
+  pool
+    .intercept({
+      path: (p) => pathOnly(p) === '/v1/admin/gateway-usage/failed-groups',
+      method: 'GET',
+    })
+    .reply(() => ({
+      statusCode: 200,
+      data: { groups: readFixture().failedUsageGroups ?? [] },
+      responseOptions: json,
+    }))
     .persist();
 }
