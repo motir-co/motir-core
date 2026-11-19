@@ -813,6 +813,9 @@ test('case 9 — a refused sentence, through either door, changes nothing on scr
   await hostedStep(page, hosted.job, 'h1', { step: 'author', target: seed.taskId });
   await hostedStep(page, hosted.job, 'h1', { narration: [H1] });
   await stepped;
+  // The author session ends before the close: a walked plan whose committed card is
+  // still under a live author step closes `stopped`, not `planned` (Bug MOTIR-11701).
+  await hostedStep(page, hosted.job, 'h1', { step: 'end' });
   await hostedClose(page, hosted.job, 'Document the session lifetime');
   const late = await hostedPlanStep(page, hosted.job, 'h1', { narration: [H2] });
   expect(late.status()).toBe(409);

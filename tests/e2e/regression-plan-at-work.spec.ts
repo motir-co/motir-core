@@ -4,6 +4,7 @@ import type { Locator, Page, Route } from '@playwright/test';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
+import { markEveryAddWritten } from '../helpers/walkWritten';
 import { signIn } from './_helpers/shell-session';
 import { agentSession } from './_helpers/agent-authored-plan-seed';
 import {
@@ -148,7 +149,10 @@ const ring = (page: Page, title: string) => node(page, title).locator('.canvas-c
 const chip = (page: Page, title: string) => node(page, title).getByTestId('canvas-cue-drafting');
 const thinkingChip = (page: Page, title: string) =>
   node(page, title).getByTestId('canvas-cue-thinking');
-const mark = (page: Page) => rail(page).getByTestId('plan-at-work-mark');
+// The working row's mark: a finished run is drawn as its own block under its turn,
+// with a still mark of its own (Bug MOTIR-11487), so the rail can hold more than one.
+const mark = (page: Page) =>
+  rail(page).getByTestId('plan-work-row').getByTestId('plan-at-work-mark');
 
 /**
  * Is the mark FLOWING (MOTIR-9213)? Its motion is a frame loop rewriting the
@@ -394,6 +398,7 @@ async function openDoor(
         );
       },
       async close() {
+        await markEveryAddWritten(run.planId);
         await aiGenerationService.appendProposals(run.jobId, [], run.auth.ctx, { final: true });
       },
       async dispose() {
@@ -422,6 +427,7 @@ async function openDoor(
     drafts: false,
     draft: () => Promise.reject(new Error('the MCP door streams no draft')),
     async close() {
+      await markEveryAddWritten(planId);
       await tool(agent, ADD_PLAN_ITEMS_TOOL_NAME, { planId, proposals: [], final: true });
     },
     dispose: () => agent.close(),

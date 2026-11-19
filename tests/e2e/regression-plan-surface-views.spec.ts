@@ -258,8 +258,9 @@ test('with NO plan there is no switch, and no foot under the canvas', async ({ p
 
   await openFromCard(page, seed.storyKey);
 
-  // The roadmap canvas, exactly as shipped — and nothing else.
-  await expect(views(page)).toHaveCount(0);
+  // The roadmap canvas, exactly as shipped — and nothing else. The pane is the
+  // one PlanProposalViews from the open (MOTIR-11513), in its no-plan state.
+  await expect(views(page)).toHaveAttribute('data-pre-plan', 'true');
   await expect(viewSwitch(page)).toHaveCount(0);
   await expect(bar(page)).toHaveCount(0);
   // ⚠️ Part XXI 21.8 — the footer HIDES when there is nothing to show. The
