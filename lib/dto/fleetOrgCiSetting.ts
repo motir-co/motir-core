@@ -1,3 +1,4 @@
+import type { NotBootableReason } from '@/lib/services/ciRunnerBootService';
 import type { FleetReadiness } from '@/lib/services/fleetReadinessService';
 
 // The platform setting "Run Motir's private repositories' CI on the fleet"
@@ -45,10 +46,23 @@ export type FleetOrgCiCodeScanningDTO =
     }
   | { repo: string; state: 'unknown'; status: number | null };
 
+/** The arm64 Graviton pool's line for one pair (Story MOTIR-11779 · MOTIR-11786).
+ *  `ready` = an arm64 runner AMI is pinned on this deployment, so an ON flip also
+ *  writes `MOTIR_RUNNER_ARM64`; not ready never refuses the flip — it only skips
+ *  that write. `variable` is `MOTIR_RUNNER_ARM64` read back from GitHub. */
+export interface FleetOrgCiArm64DTO {
+  ready: boolean;
+  /** Why the pool is not ready; null when it is. */
+  reason: NotBootableReason | null;
+  variable: FleetOrgCiVariableDTO;
+}
+
 /** The console's full reading of one pair. */
 export interface FleetOrgCiStateDTO extends FleetOrgCiStoredStateDTO {
   readiness: FleetReadiness;
   variable: FleetOrgCiVariableDTO;
+  /** The arm64 pool and its variable (MOTIR-11786). */
+  arm64: FleetOrgCiArm64DTO;
   /** One entry per private repository of the pair, in name order. */
   codeScanning: FleetOrgCiCodeScanningDTO[];
 }

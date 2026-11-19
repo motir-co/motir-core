@@ -692,11 +692,14 @@ export class FleetOrgCiGithubWriteError extends Error {
     readonly org: string,
     readonly status: number | null,
     readonly operation: 'read' | 'set' | 'delete',
+    /** The variable GitHub refused — `MOTIR_RUNNER`, or `MOTIR_RUNNER_ARM64` for the
+     *  arm64 write the same flip makes (MOTIR-11786). For the log, not the page. */
+    readonly variable: string = 'MOTIR_RUNNER',
   ) {
     super(
       status === null
-        ? `GitHub could not be reached to ${operation} MOTIR_RUNNER on ${org}`
-        : `GitHub refused to ${operation} MOTIR_RUNNER on ${org} (HTTP ${status})`,
+        ? `GitHub could not be reached to ${operation} ${variable} on ${org}`
+        : `GitHub refused to ${operation} ${variable} on ${org} (HTTP ${status})`,
     );
     this.name = 'FleetOrgCiGithubWriteError';
   }

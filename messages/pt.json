@@ -13996,13 +13996,20 @@
         "auditLink": "Log de auditoria",
         "variable": "Variável do GitHub",
         "repositories": "Repositórios",
-        "codeScanning": "Configuração padrão do CodeQL"
+        "codeScanning": "Configuração padrão do CodeQL",
+        "arm64Variable": "Variável do GitHub arm64"
       },
       "variable": {
         "present": "{name} = {value} em {org} (repositórios privados): novos jobs solicitam a frota.",
         "absent": "{name} não está definida em {org}: os jobs voltam para runners hospedados pelo GitHub.",
         "unknown": "Não foi possível ler {name} em {org}: o GitHub respondeu HTTP {status}.",
-        "unreachable": "Não foi possível ler {name} em {org}: o GitHub não pôde ser alcançado."
+        "unreachable": "Não foi possível ler {name} em {org}: o GitHub não pôde ser alcançado.",
+        "arm64": {
+          "present": "{name} = {value} em {org} — novos jobs arm64 solicitam a frota arm64 do Motir.",
+          "absent": "{name} não está definida em {org} — jobs arm64 rodam nos runners arm do GitHub.",
+          "unknown": "Não foi possível ler {name} em {org} — o GitHub respondeu HTTP {status}.",
+          "unreachable": "Não foi possível ler {name} em {org} — o GitHub não pôde ser alcançado."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14215,6 +14222,14 @@
           "title": "Não foi possível carregar a hospedagem de agentes",
           "body": "Não foi possível ler onde novos agentes são criados, então nenhum estado é mostrado e nenhum interruptor é oferecido. É um erro de leitura — nada mudou e nenhum valor é presumido.",
           "retry": "Tentar novamente"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "Pool arm64 pronto",
+        "notReadyLabel": "Pool arm64 não pronto",
+        "ready": "Uma AMI de runner arm64 está fixada, então ativar a configuração escreve {name}.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "Nenhuma AMI de runner arm64 está fixada, então os jobs arm64 continuam rodando nos runners arm do GitHub."
         }
       }
     },

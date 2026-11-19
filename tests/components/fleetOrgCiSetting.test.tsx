@@ -59,6 +59,8 @@ const constants = {
   runnerLabel: 'motir-runner',
   fleetName: 'motir-fleet',
   killSwitchVariable: 'MOTIR_FLEET_MAX_IN_FLIGHT',
+  arm64VariableName: 'MOTIR_RUNNER_ARM64',
+  arm64RunnerLabel: 'motir-graviton',
 };
 
 function met(key: FleetReadinessKey): FleetReadinessCondition {
@@ -95,6 +97,7 @@ function state(
     updatedAt: '2026-10-13T12:00:00.000Z',
     lastReason: 'Back to hosted',
     variable: { state: 'absent' },
+    arm64: { ready: false, reason: 'arm64_runner_ami_not_pinned', variable: { state: 'absent' } },
     codeScanning: [],
     readiness: {
       ready: list.every((c) => c.state === 'met'),
@@ -693,5 +696,79 @@ describe('FleetOrgCiSetting — CodeQL default setup per repository (MOTIR-10289
     expect(screen.getByTestId('fleet-org-ci-code-scanning').textContent).toBe(
       'No private repository on acme-ci has CodeQL default setup configured.',
     );
+  });
+});
+
+describe('FleetOrgCiSetting — the arm64 line (MOTIR-11786)', () => {
+  const arm64Row = () => screen.getByTestId('fleet-org-ci-arm64-variable');
+  const readiness = () => screen.getByTestId('fleet-org-ci-arm64-readiness');
+
+  it('not ready: the variable is not set, and the reason is said in words', () => {
+    render(state());
+    expect(arm64Row().textContent).toContain(
+      "MOTIR_RUNNER_ARM64 is not set on acme-ci — arm64 jobs run on GitHub's arm runners.",
+    );
+    expect(readiness().getAttribute('data-ready')).toBe('false');
+    expect(readiness().getAttribute('data-reason')).toBe('arm64_runner_ami_not_pinned');
+    expect(readiness().textContent).toContain('arm64 pool not ready');
+    expect(screen.getByTestId('fleet-org-ci-arm64-not-ready-reason').textContent).toBe(
+      "No arm64 runner AMI is pinned, so arm64 jobs keep running on GitHub's arm runners.",
+    );
+  });
+
+  it('the row is labelled as the arm64 GitHub variable, beside the x86 one', () => {
+    render(state());
+    const labels = screen.getAllByText(/GitHub variable$/).map((n) => n.textContent);
+    expect(labels).toEqual(['GitHub variable', 'arm64 GitHub variable']);
+  });
+
+  it('ready and set: the value and the org, and the ready note', () => {
+    render(
+      state({
+        enabled: true,
+        arm64: {
+          ready: true,
+          reason: null,
+          variable: { state: 'present', value: 'motir-graviton', visibility: 'private' },
+        },
+      }),
+    );
+    expect(arm64Row().textContent).toContain(
+      "MOTIR_RUNNER_ARM64 = motir-graviton on acme-ci — new arm64 jobs request Motir's arm64 fleet.",
+    );
+    expect(arm64Row().querySelector('[data-state]')?.getAttribute('data-state')).toBe('present');
+    expect(readiness().getAttribute('data-ready')).toBe('true');
+    expect(readiness().textContent).toContain('arm64 pool ready');
+    expect(readiness().textContent).toContain(
+      'An arm64 runner AMI is pinned, so turning the setting on writes MOTIR_RUNNER_ARM64.',
+    );
+    expect(screen.queryByTestId('fleet-org-ci-arm64-not-ready-reason')).toBeNull();
+  });
+
+  it('unreadable: unreachable with no status, the status otherwise, while the x86 row keeps its own', () => {
+    render(
+      state({
+        variable: { state: 'present', value: 'motir-runner', visibility: 'private' },
+        arm64: { ready: true, reason: null, variable: { state: 'unknown', status: null } },
+      }),
+    );
+    expect(arm64Row().textContent).toContain(
+      "Couldn't read MOTIR_RUNNER_ARM64 on acme-ci — GitHub could not be reached.",
+    );
+    expect(screen.getByTestId('fleet-org-ci-variable').textContent).toContain(
+      'MOTIR_RUNNER = motir-runner on acme-ci',
+    );
+    cleanup();
+    render(
+      state({ arm64: { ready: true, reason: null, variable: { state: 'unknown', status: 502 } } }),
+    );
+    expect(arm64Row().textContent).toContain(
+      "Couldn't read MOTIR_RUNNER_ARM64 on acme-ci — GitHub answered HTTP 502.",
+    );
+  });
+
+  it('a pool that is not ready never disables the ON switch', () => {
+    render(state());
+    expect(theSwitch().hasAttribute('disabled')).toBe(false);
   });
 });

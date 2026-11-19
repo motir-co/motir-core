@@ -13987,13 +13987,20 @@
         "auditLink": "审计日志",
         "variable": "GitHub 变量",
         "repositories": "仓库",
-        "codeScanning": "CodeQL 默认设置"
+        "codeScanning": "CodeQL 默认设置",
+        "arm64Variable": "arm64 GitHub 变量"
       },
       "variable": {
         "present": "{org} 上的 {name} = {value}（私有仓库）—— 新作业会请求集群。",
         "absent": "{org} 上未设置 {name} —— 作业回退到 GitHub 托管的运行器。",
         "unknown": "无法读取 {org} 上的 {name} —— GitHub 返回 HTTP {status}。",
-        "unreachable": "无法读取 {org} 上的 {name} —— 无法连接到 GitHub。"
+        "unreachable": "无法读取 {org} 上的 {name} —— 无法连接到 GitHub。",
+        "arm64": {
+          "present": "{org} 上 {name} = {value} —— 新的 arm64 作业会请求 Motir 的 arm64 集群。",
+          "absent": "{org} 上未设置 {name} —— arm64 作业在 GitHub 的 arm 运行器上运行。",
+          "unknown": "无法读取 {org} 上的 {name} —— GitHub 返回 HTTP {status}。",
+          "unreachable": "无法读取 {org} 上的 {name} —— 无法连接 GitHub。"
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14206,6 +14213,14 @@
           "title": "无法加载智能体托管",
           "body": "无法读取新智能体的创建位置，因此不显示任何状态，也不提供开关。这是读取错误 —— 没有任何更改，也不会猜测任何值。",
           "retry": "重试"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64 资源池已就绪",
+        "notReadyLabel": "arm64 资源池未就绪",
+        "ready": "已固定 arm64 运行器 AMI，因此开启该设置会写入 {name}。",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "未固定 arm64 运行器 AMI，因此 arm64 作业继续在 GitHub 的 arm 运行器上运行。"
         }
       }
     },

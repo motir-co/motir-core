@@ -13996,13 +13996,20 @@
         "auditLink": "Audit-Log",
         "variable": "GitHub-Variable",
         "repositories": "Repositorys",
-        "codeScanning": "CodeQL-Standardeinrichtung"
+        "codeScanning": "CodeQL-Standardeinrichtung",
+        "arm64Variable": "arm64-GitHub-Variable"
       },
       "variable": {
         "present": "{name} = {value} auf {org} (private Repositorys) – neue Jobs fordern die Flotte an.",
         "absent": "{name} ist auf {org} nicht gesetzt – Jobs fallen auf GitHub-gehostete Runner zurück.",
         "unknown": "{name} auf {org} konnte nicht gelesen werden – GitHub antwortete mit HTTP {status}.",
-        "unreachable": "{name} auf {org} konnte nicht gelesen werden – GitHub war nicht erreichbar."
+        "unreachable": "{name} auf {org} konnte nicht gelesen werden – GitHub war nicht erreichbar.",
+        "arm64": {
+          "present": "{name} = {value} in {org} — neue arm64-Jobs fordern Motirs arm64-Flotte an.",
+          "absent": "{name} ist in {org} nicht gesetzt — arm64-Jobs laufen auf GitHubs arm-Runnern.",
+          "unknown": "{name} in {org} konnte nicht gelesen werden — GitHub antwortete mit HTTP {status}.",
+          "unreachable": "{name} in {org} konnte nicht gelesen werden — GitHub war nicht erreichbar."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14215,6 +14222,14 @@
           "title": "Agenten-Hosting konnte nicht geladen werden",
           "body": "Wo neue Agenten erstellt werden, konnte nicht gelesen werden, daher wird kein Zustand angezeigt und kein Schalter angeboten. Dies ist ein Lesefehler – nichts hat sich geändert, und kein Wert wird geraten.",
           "retry": "Erneut versuchen"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64-Pool bereit",
+        "notReadyLabel": "arm64-Pool nicht bereit",
+        "ready": "Ein arm64-Runner-AMI ist festgelegt, daher schreibt das Einschalten {name}.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "Es ist kein arm64-Runner-AMI festgelegt, daher laufen arm64-Jobs weiter auf GitHubs arm-Runnern."
         }
       }
     },

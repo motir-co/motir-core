@@ -3,7 +3,12 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
+import {
+  MOTIR_ARM64_RUNNER_LABEL,
+  MOTIR_RUNNER_ARM64_VARIABLE,
+  MOTIR_RUNNER_LABEL,
+  MOTIR_RUNNER_VARIABLE,
+} from '@/lib/ciFleet/config';
 import type { FleetOrgCiStateDTO, FleetOrgCiTargetDTO } from '@/lib/dto/fleetOrgCiSetting';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
@@ -40,6 +45,8 @@ export const dynamic = 'force-dynamic';
 const CONSTANTS: FleetOrgCiConstants = {
   variableName: MOTIR_RUNNER_VARIABLE,
   runnerLabel: MOTIR_RUNNER_LABEL,
+  arm64VariableName: MOTIR_RUNNER_ARM64_VARIABLE,
+  arm64RunnerLabel: MOTIR_ARM64_RUNNER_LABEL,
   fleetName: 'motir-fleet',
   killSwitchVariable: 'MOTIR_FLEET_MAX_IN_FLIGHT',
 };

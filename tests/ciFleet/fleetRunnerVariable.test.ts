@@ -8,7 +8,13 @@ import {
   actionsVariableClient,
 } from '@/lib/github/actionsVariables';
 import { fleetRunnerVariableService } from '@/lib/services/fleetRunnerVariableService';
-import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
+import {
+  MOTIR_ARM64_RUNNER_LABEL,
+  MOTIR_RUNNER_ARM64_VARIABLE,
+  MOTIR_RUNNER_LABEL,
+  MOTIR_RUNNER_VARIABLE,
+} from '@/lib/ciFleet/config';
+import { AWS_RUNNER_ARM64_AMI_ENV_VAR } from '@/lib/orchestrator';
 import { MOTIR_FLEET_RUNNER_LABEL } from '@/lib/ciMetering/runnerRates';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
@@ -247,7 +253,11 @@ describe('fleetRunnerVariableService', () => {
   it('ensures the org variable holds the fleet label', async () => {
     const result = await fleetRunnerVariableService.ensureForFleet();
 
-    expect(result).toEqual({ outcome: 'ensured', result: 'created' });
+    expect(result).toEqual({
+      outcome: 'ensured',
+      result: 'created',
+      arm64: { outcome: 'not_ready' },
+    });
     expect(variablesFake.variables.get(MOTIR_RUNNER_VARIABLE)?.value).toBe(MOTIR_RUNNER_LABEL);
   });
 
@@ -267,6 +277,79 @@ describe('fleetRunnerVariableService', () => {
     const result = await fleetRunnerVariableService.ensureForFleet();
 
     expect(result).toMatchObject({ outcome: 'ensure_failed' });
+  });
+
+  describe('the arm64 variable (MOTIR-11786)', () => {
+    it('with an arm64 runner AMI pinned, ensures BOTH variables', async () => {
+      vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, 'ami-0a1b2c3d4e5f60718');
+
+      const result = await fleetRunnerVariableService.ensureForFleet();
+
+      expect(result).toEqual({
+        outcome: 'ensured',
+        result: 'created',
+        arm64: { outcome: 'ensured', result: 'created' },
+      });
+      expect(variablesFake.variables.get(MOTIR_RUNNER_VARIABLE)?.value).toBe(MOTIR_RUNNER_LABEL);
+      expect(variablesFake.variables.get(MOTIR_RUNNER_ARM64_VARIABLE)?.value).toBe(
+        MOTIR_ARM64_RUNNER_LABEL,
+      );
+    });
+
+    it('with none pinned, ensures only MOTIR_RUNNER and reports arm64 not_ready', async () => {
+      vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, '');
+
+      const result = await fleetRunnerVariableService.ensureForFleet();
+
+      expect(result).toMatchObject({ outcome: 'ensured', arm64: { outcome: 'not_ready' } });
+      expect(variablesFake.variables.has(MOTIR_RUNNER_ARM64_VARIABLE)).toBe(false);
+      expect(variablesFake.calls.some((c) => c.url.includes(MOTIR_RUNNER_ARM64_VARIABLE))).toBe(
+        false,
+      );
+    });
+
+    it('an arm64 refusal reports arm64 ensure_failed and leaves the x86 outcome ensured', async () => {
+      vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, 'ami-0a1b2c3d4e5f60718');
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const real = actionsVariableClient.ensureOrgVariable.bind(actionsVariableClient);
+      vi.spyOn(actionsVariableClient, 'ensureOrgVariable').mockImplementation(
+        async (name, value, target) => {
+          if (name === MOTIR_RUNNER_ARM64_VARIABLE) {
+            throw new ActionsVariableApiError(403, 'refused');
+          }
+          return real(name, value, target);
+        },
+      );
+
+      const result = await fleetRunnerVariableService.ensureForFleet();
+
+      expect(result).toMatchObject({
+        outcome: 'ensured',
+        result: 'created',
+        arm64: { outcome: 'ensure_failed' },
+      });
+      expect(variablesFake.variables.get(MOTIR_RUNNER_VARIABLE)?.value).toBe(MOTIR_RUNNER_LABEL);
+    });
+
+    it('an x86 refusal still tries the arm64 write, and the method never throws', async () => {
+      vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, 'ami-0a1b2c3d4e5f60718');
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const real = actionsVariableClient.ensureOrgVariable.bind(actionsVariableClient);
+      vi.spyOn(actionsVariableClient, 'ensureOrgVariable').mockImplementation(
+        async (name, value, target) => {
+          if (name === MOTIR_RUNNER_VARIABLE) throw new Error('boom');
+          return real(name, value, target);
+        },
+      );
+
+      const result = await fleetRunnerVariableService.ensureForFleet();
+
+      expect(result).toMatchObject({
+        outcome: 'ensure_failed',
+        detail: 'boom',
+        arm64: { outcome: 'ensured', result: 'created' },
+      });
+    });
   });
 
   it('ensureQuietly swallows even an UNEXPECTED throw — it can never fail an establishment', async () => {
@@ -375,7 +458,11 @@ describe('fleetRunnerVariableService in the tenant’s assigned GitHub org (MOTI
       role: 'provisioning',
     });
 
-    expect(result).toEqual({ outcome: 'ensured', result: 'created' });
+    expect(result).toEqual({
+      outcome: 'ensured',
+      result: 'created',
+      arm64: { outcome: 'not_ready' },
+    });
     expect(hostFake.variables.get(MOTIR_RUNNER_VARIABLE)?.value).toBe(MOTIR_RUNNER_LABEL);
     expect(variablesFake.calls).toHaveLength(0);
     expect(calls.some((c) => c.url.includes('/app/installations/7788/access_tokens'))).toBe(true);

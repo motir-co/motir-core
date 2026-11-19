@@ -13996,13 +13996,20 @@
         "auditLink": "Journal d’audit",
         "variable": "Variable GitHub",
         "repositories": "Dépôts",
-        "codeScanning": "Configuration par défaut de CodeQL"
+        "codeScanning": "Configuration par défaut de CodeQL",
+        "arm64Variable": "Variable GitHub arm64"
       },
       "variable": {
         "present": "{name} = {value} sur {org} (dépôts privés) : les nouveaux jobs sollicitent la flotte.",
         "absent": "{name} n’est pas définie sur {org} : les jobs se rabattent sur les runners hébergés par GitHub.",
         "unknown": "Impossible de lire {name} sur {org} : GitHub a répondu HTTP {status}.",
-        "unreachable": "Impossible de lire {name} sur {org} : GitHub était injoignable."
+        "unreachable": "Impossible de lire {name} sur {org} : GitHub était injoignable.",
+        "arm64": {
+          "present": "{name} = {value} sur {org} — les nouveaux jobs arm64 demandent la flotte arm64 de Motir.",
+          "absent": "{name} n'est pas définie sur {org} — les jobs arm64 tournent sur les runners arm de GitHub.",
+          "unknown": "Impossible de lire {name} sur {org} — GitHub a répondu HTTP {status}.",
+          "unreachable": "Impossible de lire {name} sur {org} — GitHub est injoignable."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14215,6 +14222,14 @@
           "title": "Impossible de charger l’hébergement des agents",
           "body": "L’endroit où les nouveaux agents sont créés n’a pas pu être lu, donc aucun état n’est affiché et aucun interrupteur n’est proposé. Il s’agit d’une erreur de lecture : rien n’a changé, et aucune valeur n’est devinée.",
           "retry": "Réessayer"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "Pool arm64 prêt",
+        "notReadyLabel": "Pool arm64 pas prêt",
+        "ready": "Une AMI de runner arm64 est épinglée, donc activer le réglage écrit {name}.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "Aucune AMI de runner arm64 n'est épinglée, donc les jobs arm64 continuent de tourner sur les runners arm de GitHub."
         }
       }
     },

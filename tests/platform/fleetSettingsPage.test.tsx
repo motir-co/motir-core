@@ -70,6 +70,7 @@ function stateFor(org: string): FleetOrgCiStateDTO {
     updatedAt: null,
     lastReason: null,
     variable: { state: 'absent' },
+    arm64: { ready: false, reason: 'arm64_runner_ami_not_pinned', variable: { state: 'absent' } },
     codeScanning: [],
     readiness: {
       ready: true,

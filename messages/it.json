@@ -13996,13 +13996,20 @@
         "auditLink": "Registro di audit",
         "variable": "Variabile GitHub",
         "repositories": "Repository",
-        "codeScanning": "Configurazione predefinita di CodeQL"
+        "codeScanning": "Configurazione predefinita di CodeQL",
+        "arm64Variable": "Variabile GitHub arm64"
       },
       "variable": {
         "present": "{name} = {value} su {org} (repository privati): i nuovi job richiedono la flotta.",
         "absent": "{name} non è impostata su {org}: i job ripiegano sui runner ospitati da GitHub.",
         "unknown": "Impossibile leggere {name} su {org}: GitHub ha risposto HTTP {status}.",
-        "unreachable": "Impossibile leggere {name} su {org}: GitHub non è raggiungibile."
+        "unreachable": "Impossibile leggere {name} su {org}: GitHub non è raggiungibile.",
+        "arm64": {
+          "present": "{name} = {value} su {org} — i nuovi job arm64 richiedono la flotta arm64 di Motir.",
+          "absent": "{name} non è impostata su {org} — i job arm64 girano sui runner arm di GitHub.",
+          "unknown": "Impossibile leggere {name} su {org} — GitHub ha risposto HTTP {status}.",
+          "unreachable": "Impossibile leggere {name} su {org} — GitHub non è raggiungibile."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14215,6 +14222,14 @@
           "title": "Impossibile caricare l’hosting degli agenti",
           "body": "Non è stato possibile leggere dove vengono creati i nuovi agenti, quindi non viene mostrato alcuno stato né offerto alcun interruttore. È un errore di lettura: non è cambiato nulla e nessun valore viene indovinato.",
           "retry": "Riprova"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "Pool arm64 pronto",
+        "notReadyLabel": "Pool arm64 non pronto",
+        "ready": "È fissata un'AMI per runner arm64, quindi attivare l'impostazione scrive {name}.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "Non è fissata alcuna AMI per runner arm64, quindi i job arm64 continuano a girare sui runner arm di GitHub."
         }
       }
     },

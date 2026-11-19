@@ -13993,13 +13993,20 @@
         "auditLink": "Audit log",
         "variable": "GitHub variable",
         "repositories": "Repositories",
-        "codeScanning": "CodeQL default setup"
+        "codeScanning": "CodeQL default setup",
+        "arm64Variable": "arm64 GitHub variable"
       },
       "variable": {
         "present": "{name} = {value} on {org} (private repositories) — new jobs request the fleet.",
         "absent": "{name} is not set on {org} — jobs fall back to GitHub-hosted runners.",
         "unknown": "Couldn't read {name} on {org} — GitHub answered HTTP {status}.",
-        "unreachable": "Couldn't read {name} on {org} — GitHub could not be reached."
+        "unreachable": "Couldn't read {name} on {org} — GitHub could not be reached.",
+        "arm64": {
+          "present": "{name} = {value} on {org} — new arm64 jobs request Motir's arm64 fleet.",
+          "absent": "{name} is not set on {org} — arm64 jobs run on GitHub's arm runners.",
+          "unknown": "Couldn't read {name} on {org} — GitHub answered HTTP {status}.",
+          "unreachable": "Couldn't read {name} on {org} — GitHub could not be reached."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14212,6 +14219,14 @@
           "title": "Couldn't load agent hosting",
           "body": "Where new agents are created could not be read, so no state is shown and no switch is offered. This is a read error — nothing has changed, and no value is guessed.",
           "retry": "Retry"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64 pool ready",
+        "notReadyLabel": "arm64 pool not ready",
+        "ready": "An arm64 runner AMI is pinned, so turning the setting on writes {name}.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "No arm64 runner AMI is pinned, so arm64 jobs keep running on GitHub's arm runners."
         }
       }
     },

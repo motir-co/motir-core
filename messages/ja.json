@@ -13993,13 +13993,20 @@
         "auditLink": "監査ログ",
         "variable": "GitHub 変数",
         "repositories": "リポジトリ",
-        "codeScanning": "CodeQL の既定のセットアップ"
+        "codeScanning": "CodeQL の既定のセットアップ",
+        "arm64Variable": "arm64 の GitHub 変数"
       },
       "variable": {
         "present": "{org} の {name} = {value}（プライベートリポジトリ）— 新しいジョブはフリートを要求します。",
         "absent": "{org} に {name} は設定されていません — ジョブは GitHub ホストのランナーにフォールバックします。",
         "unknown": "{org} の {name} を読み取れませんでした — GitHub は HTTP {status} を返しました。",
-        "unreachable": "{org} の {name} を読み取れませんでした — GitHub に接続できませんでした。"
+        "unreachable": "{org} の {name} を読み取れませんでした — GitHub に接続できませんでした。",
+        "arm64": {
+          "present": "{org} の {name} = {value} — 新しい arm64 ジョブは Motir の arm64 フリートを要求します。",
+          "absent": "{org} に {name} は設定されていません — arm64 ジョブは GitHub の arm ランナーで実行されます。",
+          "unknown": "{org} の {name} を読み取れませんでした — GitHub が HTTP {status} を返しました。",
+          "unreachable": "{org} の {name} を読み取れませんでした — GitHub に接続できませんでした。"
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14212,6 +14219,14 @@
           "title": "エージェントのホスティングを読み込めませんでした",
           "body": "新しいエージェントの作成先を読み取れなかったため、状態は表示されず、スイッチも提供されません。これは読み取りエラーです — 何も変更されておらず、値も推測していません。",
           "retry": "再試行"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64 プール準備完了",
+        "notReadyLabel": "arm64 プール未準備",
+        "ready": "arm64 ランナー AMI が固定されているため、設定をオンにすると {name} が書き込まれます。",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "arm64 ランナー AMI が固定されていないため、arm64 ジョブは引き続き GitHub の arm ランナーで実行されます。"
         }
       }
     },

@@ -13990,13 +13990,20 @@
         "auditLink": "감사 로그",
         "variable": "GitHub 변수",
         "repositories": "리포지토리",
-        "codeScanning": "CodeQL 기본 설정"
+        "codeScanning": "CodeQL 기본 설정",
+        "arm64Variable": "arm64 GitHub 변수"
       },
       "variable": {
         "present": "{org}의 {name} = {value}(비공개 리포지토리) — 새 작업이 플릿을 요청합니다.",
         "absent": "{org}에 {name}이(가) 설정되어 있지 않습니다 — 작업이 GitHub 호스팅 러너로 돌아갑니다.",
         "unknown": "{org}의 {name}을(를) 읽을 수 없습니다 — GitHub가 HTTP {status}을(를) 반환했습니다.",
-        "unreachable": "{org}의 {name}을(를) 읽을 수 없습니다 — GitHub에 연결할 수 없습니다."
+        "unreachable": "{org}의 {name}을(를) 읽을 수 없습니다 — GitHub에 연결할 수 없습니다.",
+        "arm64": {
+          "present": "{org}의 {name} = {value} — 새 arm64 작업은 Motir의 arm64 플릿을 요청합니다.",
+          "absent": "{org}에 {name}이(가) 설정되어 있지 않습니다 — arm64 작업은 GitHub의 arm 러너에서 실행됩니다.",
+          "unknown": "{org}의 {name}을(를) 읽지 못했습니다 — GitHub가 HTTP {status}로 응답했습니다.",
+          "unreachable": "{org}의 {name}을(를) 읽지 못했습니다 — GitHub에 연결할 수 없습니다."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14209,6 +14216,14 @@
           "title": "에이전트 호스팅을 불러올 수 없습니다",
           "body": "새 에이전트가 생성되는 위치를 읽을 수 없어 상태를 표시하지 않고 스위치도 제공하지 않습니다. 읽기 오류입니다 — 아무것도 변경되지 않았으며 어떤 값도 추측하지 않습니다.",
           "retry": "다시 시도"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64 풀 준비됨",
+        "notReadyLabel": "arm64 풀 준비 안 됨",
+        "ready": "arm64 러너 AMI가 고정되어 있으므로 설정을 켜면 {name}이(가) 기록됩니다.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "고정된 arm64 러너 AMI가 없으므로 arm64 작업은 계속 GitHub의 arm 러너에서 실행됩니다."
         }
       }
     },

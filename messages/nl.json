@@ -13996,13 +13996,20 @@
         "auditLink": "Auditlogboek",
         "variable": "GitHub-variabele",
         "repositories": "Repository's",
-        "codeScanning": "Standaardinstelling van CodeQL"
+        "codeScanning": "Standaardinstelling van CodeQL",
+        "arm64Variable": "arm64-GitHub-variabele"
       },
       "variable": {
         "present": "{name} = {value} op {org} (privérepository's) — nieuwe jobs vragen de vloot aan.",
         "absent": "{name} is niet ingesteld op {org} — jobs vallen terug op door GitHub gehoste runners.",
         "unknown": "Kon {name} op {org} niet lezen — GitHub antwoordde met HTTP {status}.",
-        "unreachable": "Kon {name} op {org} niet lezen — GitHub was niet bereikbaar."
+        "unreachable": "Kon {name} op {org} niet lezen — GitHub was niet bereikbaar.",
+        "arm64": {
+          "present": "{name} = {value} op {org} — nieuwe arm64-jobs vragen om Motirs arm64-vloot.",
+          "absent": "{name} is niet ingesteld op {org} — arm64-jobs draaien op de arm-runners van GitHub.",
+          "unknown": "Kon {name} op {org} niet lezen — GitHub antwoordde HTTP {status}.",
+          "unreachable": "Kon {name} op {org} niet lezen — GitHub was niet bereikbaar."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14215,6 +14222,14 @@
           "title": "Kon agenthosting niet laden",
           "body": "Waar nieuwe agents worden aangemaakt, kon niet worden gelezen, dus er wordt geen status getoond en geen schakelaar aangeboden. Dit is een leesfout — er is niets veranderd en er wordt geen waarde geraden.",
           "retry": "Opnieuw proberen"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64-pool klaar",
+        "notReadyLabel": "arm64-pool niet klaar",
+        "ready": "Er is een arm64-runner-AMI vastgezet, dus inschakelen schrijft {name}.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "Er is geen arm64-runner-AMI vastgezet, dus arm64-jobs blijven draaien op de arm-runners van GitHub."
         }
       }
     },
