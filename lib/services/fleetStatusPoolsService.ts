@@ -15,24 +15,32 @@ import {
 } from '@/lib/ciFleet/installFleet';
 import { HEADROOM_ALERT_FRACTION, shardAdmissionCeiling } from '@/lib/ciFleet/shardTargets';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
-import type {
-  InstallFleetBlockDTO,
-  InstallPoolDTO,
-  InstallQuotaDTO,
-  ShardAccountDTO,
-  ShardBlockDTO,
-  ShardPoolDTO,
-  ShardSizeSourceDTO,
+import {
+  CI_SPOT_WINDOW_DAYS,
+  type CiSpotBlockDTO,
+  type CiSpotCountsDTO,
+  type CiSpotSettingReadDTO,
+  type InstallFleetBlockDTO,
+  type InstallPoolDTO,
+  type InstallQuotaDTO,
+  type ShardAccountDTO,
+  type ShardBlockDTO,
+  type ShardPoolDTO,
+  type ShardSizeSourceDTO,
 } from '@/lib/dto/fleetStatusPools';
 import type { PlatformPoolBlockDTO } from '@/lib/dto/platformFleetPools';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { withPlatformRead } from '@/lib/platform/context';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
-import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import {
+  ciRunnerProvisioningIntentRepository,
+  type CiSpotWindowCounts,
+} from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { platformAwsReadRepository } from '@/lib/repositories/platformAwsReadRepository';
+import { ciSpotSettingService } from '@/lib/services/ciSpotSettingService';
 import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import { platformFleetPoolsService } from '@/lib/services/platformFleetPoolsService';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -75,6 +83,15 @@ import { withSystemContext } from '@/lib/workspaces/context';
  *
  * ⚠️ SYSTEM CONTEXT for the counts. They span every tenant: under a workspace
  * context they would come back smaller and still look believable.
+ *
+ * CI SPOT USE (MOTIR-11729; design MOTIR-11726) — on the `ci_runner` pool of both
+ * blocks, the CI runners BOOTED in the last 7 days by recorded capacity and by
+ * Spot interruption, beside the CI Spot setting's on/off. Two more sources, each
+ * read in its own transaction and its own `try`: a count that fails is the
+ * pool's `ciSpot: { status: 'unavailable' }` and leaves every other figure of
+ * the pool as it was read; a setting that fails is `notRead` and the counts
+ * still show. No audit action of its own: the read sits inside the block's
+ * existing `fleet.status.read` / `estate.read`.
  */
 
 const QUOTA_SUBJECT = `servicequotas:${EC2_STANDARD_VCPU_QUOTA.serviceCode}/${EC2_STANDARD_VCPU_QUOTA.quotaCode}`;
@@ -89,6 +106,112 @@ function sizeFlag(running: number, size: number | null): 'near' | 'atSize' | nul
   if (size === null || size <= 0) return null;
   if (running >= size) return 'atSize';
   return running >= size * HEADROOM_ALERT_FRACTION ? 'near' : null;
+}
+
+// ── CI Spot use ───────────────────────────────────────────────────────────────
+
+const DAY_MS = 86_400_000;
+
+/** The window's start: `now − 7 days`. The window is `[since, now]`. */
+function ciSpotSince(now: Date): Date {
+  return new Date(now.getTime() - CI_SPOT_WINDOW_DAYS * DAY_MS);
+}
+
+/** The CI Spot setting, its own read: a failure is `notRead`, never `off`. */
+async function readCiSpotSetting(): Promise<CiSpotSettingReadDTO> {
+  try {
+    return (await ciSpotSettingService.read()).enabled ? 'on' : 'off';
+  } catch (err) {
+    logFailure('CI Spot setting', err);
+    return 'notRead';
+  }
+}
+
+function toCountsDTO(counts: CiSpotWindowCounts): CiSpotCountsDTO {
+  return {
+    launched: counts.launched,
+    spot: counts.spot,
+    onDemand: counts.onDemand,
+    notRecorded: counts.notRecorded,
+    interrupted: counts.interrupted,
+  };
+}
+
+/** The CI Spot block from its two reads. Exported for its tests. */
+export function judgeCiSpot(
+  setting: CiSpotSettingReadDTO,
+  counts: CiSpotCountsDTO,
+): Extract<CiSpotBlockDTO, { status: 'ok' }> {
+  return {
+    status: 'ok',
+    windowDays: CI_SPOT_WINDOW_DAYS,
+    setting,
+    counts,
+    // Only a setting READ as on can say Spot was asked for and never came.
+    allFellBack: setting === 'on' && counts.launched > 0 && counts.spot === 0,
+  };
+}
+
+/**
+ * The add-shard CI runner pool with its CI Spot use: each account's launches
+ * (null when it launched none) and the pool's, which is the SUM OF ITS ACCOUNT
+ * ROWS — shared and spares — so the two always add up.
+ */
+async function withShardCiSpot(
+  pool: Extract<ShardPoolDTO, { provider: 'aws' }>,
+  shardIdByName: ReadonlyMap<string, string>,
+  now: Date,
+): Promise<ShardPoolDTO> {
+  const settingRead = readCiSpotSetting();
+  const ids = pool.accounts.map((a) => shardIdByName.get(a.name)!);
+  let byShard: Map<string, CiSpotWindowCounts>;
+  try {
+    byShard = await withSystemContext((tx) =>
+      ciRunnerProvisioningIntentRepository.countCiSpotWindowByShardInTx(
+        ids,
+        ciSpotSince(now),
+        now,
+        tx,
+      ),
+    );
+  } catch (err) {
+    logFailure('CI Spot use', err);
+    return { ...pool, ciSpot: { status: 'unavailable', setting: await settingRead } };
+  }
+  const total: CiSpotCountsDTO = {
+    launched: 0,
+    spot: 0,
+    onDemand: 0,
+    notRecorded: 0,
+    interrupted: 0,
+  };
+  const accounts = pool.accounts.map((account, i): ShardAccountDTO => {
+    const counts = byShard.get(ids[i]!);
+    if (!counts) return { ...account, ciSpot: null };
+    for (const key of Object.keys(total) as (keyof CiSpotCountsDTO)[]) total[key] += counts[key];
+    return { ...account, ciSpot: toCountsDTO(counts) };
+  });
+  return { ...pool, accounts, ciSpot: judgeCiSpot(await settingRead, total) };
+}
+
+/** The install fleet's CI Spot use: its install-fleet intents of the install's own orgs. */
+async function readInstallCiSpot(now: Date): Promise<CiSpotBlockDTO> {
+  const settingRead = readCiSpotSetting();
+  try {
+    const counts = await withSystemContext(async (tx) => {
+      const orgIds = isCloud() ? await organizationRepository.listMetaIdsInTx(tx) : null;
+      return ciRunnerProvisioningIntentRepository.countCiSpotWindowOnInstallFleetInTx(
+        orgIds,
+        ciSpotSince(now),
+        now,
+        tx,
+      );
+    });
+    return judgeCiSpot(await settingRead, toCountsDTO(counts));
+  } catch (err) {
+    logFailure('install CI Spot use', err);
+    return { status: 'unavailable', setting: await settingRead };
+  }
 }
 
 export interface FleetStatusPoolsReadOptions {
@@ -225,7 +348,10 @@ async function shardPool(
   block: AwsPoolBlock,
   now: Date,
   tx: Prisma.TransactionClient,
-): Promise<ShardPoolDTO> {
+): Promise<{
+  pool: Extract<ShardPoolDTO, { provider: 'aws' }>;
+  shardIdByName: Map<string, string>;
+}> {
   const kind = block.fleetKind;
   const rows = await fleetShardRepository.listByRole(null, { fleetKind: kind }, tx);
   const byName = new Map(rows.map((row) => [row.name, row]));
@@ -269,17 +395,20 @@ async function shardPool(
     .reduce((n, a) => n + a.running, 0);
 
   return {
-    fleetKind: kind,
-    provider: 'aws',
-    accounts,
-    sharedCount: shared,
-    spareNames: block.spares.map((s) => s.name),
-    sizeMachines,
-    notReadCount,
-    running: runningShared,
-    percent:
-      sizeMachines !== null && sizeMachines > 0 ? percentOf(runningShared, sizeMachines) : null,
-    flag: sizeFlag(runningShared, sizeMachines),
+    pool: {
+      fleetKind: kind,
+      provider: 'aws',
+      accounts,
+      sharedCount: shared,
+      spareNames: block.spares.map((s) => s.name),
+      sizeMachines,
+      notReadCount,
+      running: runningShared,
+      percent:
+        sizeMachines !== null && sizeMachines > 0 ? percentOf(runningShared, sizeMachines) : null,
+      flag: sizeFlag(runningShared, sizeMachines),
+    },
+    shardIdByName: new Map(rows.map((row) => [row.name, row.id])),
   };
 }
 
@@ -299,12 +428,18 @@ export const fleetStatusPoolsService = {
 
     // The AWS call runs BEFORE the audited transaction, which holds the audit
     // chain lock until it commits (`platformServicesService`'s order).
+    // CI Spot use settles on its own and never rejects: a failure is its
+    // `unavailable` (MOTIR-11729).
+    const ciSpotRead = installFleetTakesKind('ci_runner')
+      ? readInstallCiSpot(now)
+      : Promise.resolve(null);
     const [countsRead, quotaRead] = await Promise.allSettled([
       readInstallCounts(now),
       reader.readStandardVcpuQuota(),
     ]);
     if (quotaRead.status === 'rejected') logFailure('install quota', quotaRead.reason);
     if (countsRead.status === 'rejected') {
+      await ciSpotRead;
       logFailure('install fleet', countsRead.reason);
       return { status: 'unavailable' };
     }
@@ -330,7 +465,15 @@ export const fleetStatusPoolsService = {
         quotaRead.status === 'fulfilled'
           ? { status: 'ok', vcpu: quotaRead.value, readAt: now.toISOString() }
           : { status: 'notRead', lastReadAt: mark?.readAt.toISOString() ?? null };
-      return judgeInstallBlock(countsRead.value, quota);
+      const judged = judgeInstallBlock(countsRead.value, quota);
+      const ciSpot = await ciSpotRead;
+      if (ciSpot === null) return judged;
+      return {
+        ...judged,
+        pools: judged.pools.map((pool) =>
+          pool.enabled && pool.fleetKind === 'ci_runner' ? { ...pool, ciSpot } : pool,
+        ),
+      };
     } catch (err) {
       logFailure('install fleet', err);
       return { status: 'unavailable' };
@@ -357,7 +500,16 @@ export const fleetStatusPoolsService = {
           continue;
         }
         try {
-          pools.push(await withSystemContext((tx) => shardPool(block, now, tx)));
+          const { pool, shardIdByName } = await withSystemContext((tx) =>
+            shardPool(block, now, tx),
+          );
+          // CI Spot use is its own read AFTER the pool's: a failure there is the
+          // strip's alone, never the pool's (MOTIR-11729).
+          pools.push(
+            block.fleetKind === 'ci_runner'
+              ? await withShardCiSpot(pool, shardIdByName, now)
+              : pool,
+          );
         } catch (err) {
           logFailure(`${block.fleetKind} add-shard pool`, err);
           pools.push({ fleetKind: block.fleetKind, provider: 'unavailable' });

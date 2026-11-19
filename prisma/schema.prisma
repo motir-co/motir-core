@@ -11966,6 +11966,9 @@ model CiRunnerProvisioningIntent {
   /// ago must not be swept as an hour-old orphan.
   @@index([status, bootedAt])
   @@index([fleetShardId])
+  /// The Fleet status page's CI Spot read (MOTIR-11729): one account's intents
+  /// booted in the last 7 days, never every intent the account ever had.
+  @@index([fleetShardId, bootedAt])
   /// The `workflow_job` `in_progress` delivery finds its runner's intent by this (MOTIR-11230).
   @@index([githubRunnerId])
   /// The queued delivery's look-up of an earlier attempt's interrupted runner,

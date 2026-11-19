@@ -11,6 +11,9 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
  * ⚠️ THIS ISLAND OWNS ONE BOOLEAN AND NOTHING ELSE. Every cell and the whole
  * account table are server-rendered and arrive as children, so what the row says
  * is decided where the data is; the island only shows or hides the second row.
+ *
+ * `strip` is a server-rendered row placed between the two and never hidden: the
+ * CI runner pool's CI Spot strip (MOTIR-11729), which a collapsed pool still shows.
  */
 export function PoolDisclosure({
   kind,
@@ -18,6 +21,7 @@ export function PoolDisclosure({
   controlsId,
   rail,
   cells,
+  strip = null,
   accounts,
   colSpan,
 }: {
@@ -27,6 +31,8 @@ export function PoolDisclosure({
   /** The 3px warning rail: the pool is at or past 70% of its size. */
   rail: boolean;
   cells: ReactNode;
+  /** A full-width row under the pool row, always shown. */
+  strip?: ReactNode;
   accounts: ReactNode;
   colSpan: number;
 }) {
@@ -56,6 +62,7 @@ export function PoolDisclosure({
         </td>
         {cells}
       </tr>
+      {strip}
       {/* Always in the document, so `aria-controls` names a real element. */}
       <tr id={controlsId} hidden={!open} className="border-b border-(--el-border-soft)">
         <td colSpan={colSpan} className="bg-(--el-surface-soft) p-(--spacing-card-padding-12)">

@@ -15008,6 +15008,54 @@
         "loading": {
           "install": "Motirs eigenes Konto wird geladen",
           "shard": "Die Add-Shard-Pools werden geladen"
+        },
+        "ciSpot": {
+          "heading": "CI-Runner · letzte 7 Tage",
+          "scope": "Zählt die in den letzten 7 Tagen gestarteten CI-Runner, nicht die jetzt laufenden; „Läuft“ oben zeigt, was jetzt läuft.",
+          "setting": {
+            "on": "Spot an",
+            "off": "Spot aus",
+            "notRead": "Nicht gelesen",
+            "notReadLabel": "CI-Spot-Einstellung nicht gelesen"
+          },
+          "offNote": "CI-Spot ist aus, daher starten neue CI-Runner auf On-Demand. Runner, die gestartet wurden, als es an war, zählen hier weiterhin.",
+          "notReadNote": "Die CI-Spot-Einstellung wurde nicht geladen, daher wird nicht angezeigt, ob Spot an ist. Die Zahlen unten wurden gelesen.",
+          "share": {
+            "headline": "{percent} % auf Spot",
+            "noPercent": "Kein Spot-Anteil",
+            "of": "von {count, plural, one {# gestarteten CI-Runner} other {# gestarteten CI-Runnern}}",
+            "ofRecorded": "von den {recorded} mit erfasster Kapazität gestarteten ({total} insgesamt gestartet)"
+          },
+          "barLabel": "{spot} auf Spot und {onDemand} auf On-Demand, von {total} in den letzten 7 Tagen gestarteten CI-Runnern",
+          "barLabelNotRecorded": "{spot} auf Spot, {onDemand} auf On-Demand und {notRecorded} nicht erfasst, von {total} in den letzten 7 Tagen gestarteten CI-Runnern",
+          "legend": {
+            "spot": "{count} auf Spot",
+            "onDemand": "{count} auf On-Demand",
+            "notRecorded": "{count} nicht erfasst"
+          },
+          "notRecordedNote": "{count, plural, one {# Runner wurde} other {# Runner wurden}} gestartet, bevor Motir die Kapazität jedes Runners erfasst hat, daher {count, plural, one {zählt er} other {zählen sie}} weder als Spot noch als On-Demand, und der Spot-Anteil lässt {count, plural, one {ihn} other {sie}} aus.",
+          "interrupted": {
+            "label": "Von AWS unterbrochen · 7 Tage",
+            "sub": "Spot-Runner, die AWS mitten im Job zurückgefordert hat",
+            "none": "Keine"
+          },
+          "allFellBack": "Spot ist an, aber keiner der {count} in den letzten 7 Tagen gestarteten CI-Runner hat Spot-Kapazität erhalten: Jeder Start ist auf On-Demand ausgewichen. Öffnen Sie „CI-Runner“, um die Starts jedes Kontos zu sehen.",
+          "allFellBackInstall": "Spot ist an, aber keiner der {count} in den letzten 7 Tagen im eigenen Konto von Motir gestarteten CI-Runner hat Spot-Kapazität erhalten: Jeder Start ist auf On-Demand ausgewichen.",
+          "none": "In den letzten 7 Tagen wurde kein CI-Runner gestartet, daher gibt es keinen Spot-Anteil anzuzeigen.",
+          "error": {
+            "title": "CI-Spot-Nutzung konnte nicht gelesen werden",
+            "body": "Die Starts und Unterbrechungen der letzten 7 Tage wurden nicht geladen, daher wird keine Zahl angezeigt und keine davon ist null. Die Pool-Zeile, ihre Konten und der Rest der Seite sind nicht betroffen. Laden Sie die Seite neu, um es erneut zu versuchen."
+          },
+          "accounts": {
+            "col": {
+              "spot": "Auf Spot · 7 T",
+              "interrupted": "Unterbrochen · 7 T"
+            },
+            "spotOf": "{spot} / {total}",
+            "percent": "{percent} % auf Spot",
+            "notRecorded": "{count} nicht erfasst",
+            "none": "In den letzten 7 Tagen kein CI-Runner gestartet"
+          }
         }
       },
       "install": {

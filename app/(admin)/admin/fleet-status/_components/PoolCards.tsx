@@ -32,6 +32,7 @@ import {
   ago,
   duration,
 } from '../../monitoring/_components/FleetSection';
+import { AccountSpotCells, CiSpotStripRow } from './CiSpotStrip';
 import { PoolDisclosure } from './PoolDisclosure';
 
 /**
@@ -49,6 +50,10 @@ import { PoolDisclosure } from './PoolDisclosure';
  *
  * ⚠️ READ-ONLY. Asking AWS for quota is the `fleet-admin request-quota` command,
  * named in plain text; nothing here writes.
+ *
+ * The CI runner pool of each card carries the CI Spot strip under its row, and
+ * the add-shard CI runner pool's accounts the two Account Spot columns
+ * (MOTIR-11729; design MOTIR-11726), drawn by `CiSpotStrip`.
  *
  * The kind names, account states, _Not read_, _Not available_, _Runs on AWS /
  * Fly_ and the read-only quota note are `platformAdmin.monitoring.pools.*`, so the
@@ -258,7 +263,8 @@ export async function InstallFleetCard({ block, now }: { block: InstallFleetBloc
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="overflow-x-auto">
+          {/* A container, so the CI Spot strip can stay within its visible width. */}
+          <div className="@container overflow-x-auto">
             <table className="w-full min-w-[40rem] border-collapse font-sans text-sm">
               <thead>
                 <tr className="border-b border-(--el-border) text-left">
@@ -339,7 +345,7 @@ function InstallPoolRow({
         ? t('install.awake', { count: pool.running })
         : t('install.machines', { count: pool.running });
 
-  return (
+  const row = (
     <tr
       data-install-pool={pool.fleetKind}
       data-enabled="true"
@@ -382,7 +388,24 @@ function InstallPoolRow({
       </Td>
     </tr>
   );
+  if (pool.ciSpot === undefined) return row;
+  // The install fleet has no accounts: the strip alone, no Account Spot columns.
+  return (
+    <>
+      {row}
+      <CiSpotStripRow
+        block={pool.ciSpot}
+        placement="install"
+        idPrefix="install"
+        colSpan={INSTALL_COLUMNS}
+        t={t}
+        format={format}
+      />
+    </>
+  );
 }
+
+const INSTALL_COLUMNS = 5;
 
 // ── Add-shard accounts · tenants' jobs ───────────────────────────────────────
 
@@ -435,7 +458,7 @@ export async function ShardPoolsCard({ block, now }: { block: ShardBlockDTO; now
         </ReadOnlyFoot>
       }
     >
-      <div className="overflow-x-auto">
+      <div className="@container overflow-x-auto">
         <table className="w-full min-w-[52rem] border-collapse font-sans text-sm">
           <thead>
             <tr className="border-b border-(--el-border) text-left">
@@ -642,6 +665,18 @@ function ShardPoolRow({
       rail={pool.flag !== null}
       colSpan={SHARD_COLUMNS}
       cells={cells}
+      strip={
+        pool.ciSpot === undefined ? null : (
+          <CiSpotStripRow
+            block={pool.ciSpot}
+            placement="shard"
+            idPrefix={`pool-${pool.fleetKind}`}
+            colSpan={SHARD_COLUMNS}
+            t={t}
+            format={format}
+          />
+        )
+      }
       accounts={
         <AccountTable pool={pool} name={name} t={t} mon={mon} ft={ft} format={format} now={now} />
       }
@@ -666,6 +701,8 @@ function AccountTable({
   format: Format;
   now: Date;
 }) {
+  // Only the CI runner pool carries CI Spot use, and with it the two columns.
+  const spot = pool.ciSpot !== undefined;
   return (
     <div className="flex flex-col gap-2" data-element="account-rows">
       <ListHead
@@ -673,7 +710,9 @@ function AccountTable({
         count={mon('accounts.count', { count: pool.accounts.length })}
       />
       <div className="overflow-x-auto rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg)">
-        <table className="w-full min-w-[44rem] border-collapse font-sans text-sm">
+        <table
+          className={`w-full ${spot ? 'min-w-[56rem]' : 'min-w-[44rem]'} border-collapse font-sans text-sm`}
+        >
           <thead>
             <tr className="border-b border-(--el-border) text-left">
               <Th scope="col">{mon('accounts.col.account')}</Th>
@@ -682,6 +721,12 @@ function AccountTable({
               <Th scope="col">{t('shard.accounts.col.size')}</Th>
               <Th scope="col">{t('shard.accounts.col.running')}</Th>
               <Th scope="col">{t('shard.accounts.col.paused')}</Th>
+              {spot ? (
+                <>
+                  <Th scope="col">{t('pools.ciSpot.accounts.col.spot')}</Th>
+                  <Th scope="col">{t('pools.ciSpot.accounts.col.interrupted')}</Th>
+                </>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -689,6 +734,7 @@ function AccountTable({
               <AccountRow
                 key={account.name}
                 account={account}
+                spot={spot}
                 t={t}
                 mon={mon}
                 ft={ft}
@@ -729,6 +775,7 @@ function pausedTime(iso: string, now: Date, format: Format): string {
 
 function AccountRow({
   account,
+  spot,
   t,
   mon,
   ft,
@@ -736,6 +783,8 @@ function AccountRow({
   now,
 }: {
   account: ShardAccountDTO;
+  /** The CI runner pool's two Account Spot columns. */
+  spot: boolean;
   t: T;
   mon: MonT;
   ft: FleetT;
@@ -816,6 +865,7 @@ function AccountRow({
           <span className="text-(--el-text-secondary)">{t('shard.notPaused')}</span>
         )}
       </Td>
+      {spot ? <AccountSpotCells counts={account.ciSpot} t={t} mon={mon} format={format} /> : null}
     </tr>
   );
 }
