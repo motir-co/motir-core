@@ -103,6 +103,12 @@ async function seedAndSignIn(page: Parameters<typeof signIn>[0]): Promise<PlanPr
   return seed;
 }
 
+/** The session's stored Grill me switch (MOTIR-11801) — the row every reload reads. */
+async function storedGrillMe(sessionId: string): Promise<boolean> {
+  const row = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } });
+  return row.grillMe;
+}
+
 test('off by default, the "?" explains it, and a request with it off asks nothing', async ({
   page,
 }) => {
@@ -322,9 +328,8 @@ test('re-entry restores the choice: a new run back in its conversation phase sho
   await expect(conversationPhase(page)).toBeVisible();
   await expect(grillToggle(page)).toBeVisible();
   await expect(grillSwitch(page)).toHaveAttribute('aria-checked', 'true');
-  expect(
-    await page.evaluate((id) => window.sessionStorage.getItem(`motir.grillMe.${id}`), sessionId),
-  ).toBe('on');
+  // The choice is STORED on that session (MOTIR-11801), not in the browser.
+  expect(await storedGrillMe(sessionId)).toBe(true);
 });
 
 test('a new planning session starts with Grill me off', async ({ page }) => {
@@ -338,10 +343,8 @@ test('a new planning session starts with Grill me off', async ({ page }) => {
   const { sessionId } = await ask(page, sse, seed.reader.email, ASK);
   await firstTurn;
   await expect(grillSwitch(page)).toHaveAttribute('aria-checked', 'true');
-  // The choice is held against THAT session.
-  expect(
-    await page.evaluate((id) => window.sessionStorage.getItem(`motir.grillMe.${id}`), sessionId),
-  ).toBe('on');
+  // The choice is stored on THAT session (MOTIR-11801).
+  expect(await storedGrillMe(sessionId)).toBe(true);
 
   // A fresh planning session — another card's overlay, in the same tab.
   await openPlanningFromCard(page, other.key, FIRST_PAINT_MS);

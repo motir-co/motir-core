@@ -291,6 +291,7 @@ export function toPlanChangeSessionDto(
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     endReason: row.endReason ?? null,
     copiedFromSessionId: row.copiedFromSessionId ?? null,
+    grillMe: row.grillMe,
     failure: toPlanSessionFailureDto(row),
     awaitingPerson: toPlanSessionAwaitingPersonDto(row),
     runPause: runPause ? toPlanChangeRunPauseDto(runPause, runPauseEntryRead) : null,

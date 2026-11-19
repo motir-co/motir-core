@@ -308,7 +308,9 @@ export interface PlanChangeRailProps {
   targets: readonly PlanningTarget[];
   onAddTarget: (target: PlanningTarget) => void;
   onRemoveTarget: (identifier: string) => void;
-  onSend: (text: string) => void;
+  /** `opts.grillMe` (MOTIR-11801): the Grill me switch, on a send made before the
+   *  conversation exists — the session it starts is created with it on. */
+  onSend: (text: string, opts?: { grillMe?: boolean }) => void;
   onRetry: () => void;
   /**
    * RE-RUN the user turn `turnId` under the other intent — the correction
@@ -876,7 +878,7 @@ export function PlanChangeRail({
     !state.liveReview &&
     (state.phase === 'idle' || state.phase === 'streaming');
   const grillVisible = !state.readOnly && !ended && (conversing || beforeAnyRun);
-  const grillOptIn = useGrillOptIn(state.session?.id ?? null);
+  const grillOptIn = useGrillOptIn(state.session ?? null);
   const grill = useGrillSession({
     on: grillOptIn.on,
     planId: conversing ? (state.planId ?? state.liveReview?.id ?? null) : null,
@@ -2318,7 +2320,8 @@ export function PlanChangeRail({
             }
             if (initialDraft && userTurns.length === 0) setSeededSend(text);
             setLastSent(text);
-            onSend(text);
+            if (!state.session && grillOptIn.on) onSend(text, { grillMe: true });
+            else onSend(text);
           }}
           placeholder={composerPlaceholder}
           // A held message stays in the field (the send above reached nobody).

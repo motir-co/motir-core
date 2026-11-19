@@ -20,6 +20,15 @@ const client = vi.hoisted(() => ({
   getSharpenSession: vi.fn(),
 }));
 vi.mock('@/lib/planning/sharpenClient', () => client);
+// The switch is STORED on the session (MOTIR-11801): its door answers the session as
+// it now stands, which is all the rail reads back.
+const storeGrillMe = vi.hoisted(() =>
+  vi.fn(async (sessionId: string, on: boolean) => ({ id: sessionId, grillMe: on })),
+);
+vi.mock('@/lib/planning/planChangeClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/planning/planChangeClient')>()),
+  setPlanChangeGrillMe: storeGrillMe,
+}));
 // The paywall reads the viewer's AI access itself; this suite has no server to ask.
 vi.mock('@/lib/hooks/useAiAccess', () => ({
   useAiAccess: () => ({ access: null, loading: false, refresh: () => {} }),

@@ -254,6 +254,8 @@ async function submitAsk(
   prompt: string,
   anchorKey: string | null,
   ctx: ProjectContext,
+  /** The conversation's stored Grill me switch (MOTIR-11801), sent on every submit. */
+  grillMe: boolean,
   /** MID-RUN (MOTIR-7996): the run snapshot, `ask_project` only. */
   run?: RunContext,
   /** The turn this job answers, and the job it held before (MOTIR-9255): the
@@ -299,6 +301,7 @@ async function submitAsk(
       ? { conversationTurns: conversation.turns }
       : {}),
     ...(conversation?.carriedAnswers ? { carriedAnswers: conversation.carriedAnswers } : {}),
+    grillMe,
   };
   return submitJob(
     'ask_project',
@@ -743,6 +746,10 @@ export const aiAskService = {
       /** Files on the turn (MOTIR-7484) — legal on a GUIDE conversation only
        *  (`guide-turn-files.md` A3.2 / A3.7), where the guide intake checks them. */
       attachmentIds?: readonly string[];
+      /** Grill me switched on before the conversation existed (MOTIR-11801): stored on
+       *  the session this turn STARTS, and so carried by its first job. Ignored on a
+       *  turn addressed at a session, which reads that session's own switch. */
+      grillMe?: boolean;
     } = {},
   ): Promise<AskSubmitResult | AskRedirectResult | GuideTurnResult> {
     const trimmed = body.trim();
@@ -798,16 +805,24 @@ export const aiAskService = {
             PROJECT_SCOPE,
             trimmed,
             seeded,
-            { isAnswer: opts.isAnswer === true, anchorKey: anchor },
+            { isAnswer: opts.isAnswer === true, anchorKey: anchor, grillMe: opts.grillMe },
           )
         : await planChangeSessionsService.startWithFirstTurn(ctx, PROJECT_SCOPE, trimmed, {
             isAnswer: opts.isAnswer === true,
             anchorKey: anchor,
+            grillMe: opts.grillMe,
           });
       const first = started.turns.at(-1);
       if (!first) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
       // A fresh session has no pending question, so this is the ask branch.
-      const { jobId } = await submitAsk(trimmed, anchor, ctx, undefined, attemptOf(first));
+      const { jobId } = await submitAsk(
+        trimmed,
+        anchor,
+        ctx,
+        started.grillMe === true,
+        undefined,
+        attemptOf(first),
+      );
       const session = await planChangeSessionsService.recordTurnIntent(
         first.id,
         'ask',
@@ -898,6 +913,7 @@ export const aiAskService = {
       trimmed,
       anchor,
       ctx,
+      current.grillMe === true,
       undefined,
       attemptOf(turn),
       pendingPlanOffer,
@@ -968,9 +984,18 @@ export const aiAskService = {
     );
     // The earlier turns, never the carried answers: a run in flight is past grilling, and
     // carrying them would suppress a grilling the person has not had (MOTIR-9442).
-    const { jobId } = await submitAsk(trimmed, null, ctx, run, attemptOf(turn), undefined, {
-      turns: conversationTurnsOf(current.turns),
-    });
+    const { jobId } = await submitAsk(
+      trimmed,
+      null,
+      ctx,
+      current.grillMe === true,
+      run,
+      attemptOf(turn),
+      undefined,
+      {
+        turns: conversationTurnsOf(current.turns),
+      },
+    );
     const session = await planChangeSessionsService.recordTurnIntent(
       turn.id,
       'ask',
@@ -1058,6 +1083,7 @@ export const aiAskService = {
       turn.body,
       anchor,
       ctx,
+      current.grillMe === true,
       undefined,
       opts.flip ? undefined : attemptOf(turn),
       // The offer that stood when this turn was first typed: the thread before it.

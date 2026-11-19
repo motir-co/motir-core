@@ -511,12 +511,35 @@ function isResearchRecord(v: unknown): v is SharpenResearchRecord {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** Submit ONE `sharpen_turn` job, then bind it to its person turn. */
+/**
+ * The GRILL ME switch of the conversation behind a target (Story MOTIR-11799 ·
+ * MOTIR-11801), read at submit from the stored session: a conversation's own, a plan's
+ * the conversation that wrote it. `false` for a plan no conversation stands behind.
+ */
+async function grillMeOf(target: Target, ctx: ProjectContext): Promise<boolean> {
+  return withWorkspaceContext(bindCtx(ctx), async (tx) => {
+    if (target.kind === 'conversation') {
+      const session = await planChangeSessionRepository.findById(
+        target.conversationId,
+        ctx.workspaceId,
+        tx,
+      );
+      return session?.grillMe === true;
+    }
+    const subject = await planRepository.findHoldSubject(target.planId, tx);
+    return subject?.session?.grillMe === true;
+  });
+}
+
+/** Submit ONE `sharpen_turn` job, then bind it to its person turn. The job carries the
+ *  conversation's Grill me switch beside the turn (`context.grillMe`, MOTIR-11801). */
 async function submitAndBind(
+  target: Target,
   context: SharpenJobContext,
   turnId: string,
   ctx: ProjectContext,
 ): Promise<string> {
+  const grillMe = await grillMeOf(target, ctx);
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg(actorOf(ctx));
   const { jobId } = await submitJob(
     'sharpen_turn',
@@ -528,7 +551,7 @@ async function submitAndBind(
       projectId: ctx.projectId,
       projectKey: ctx.project.identifier,
     },
-    { sharpen: context },
+    { sharpen: context, grillMe },
     { userId: ctx.userId },
   );
   await withWorkspaceContext(bindCtx(ctx), (tx) =>
@@ -854,7 +877,12 @@ export const aiSharpenService = {
       return { outcome: 'resumed', jobId: null, turnId: null, session };
     }
     const { row, turn } = written;
-    const jobId = await submitAndBind(jobContext(target, row, [], turn, grounding), turn.id, ctx);
+    const jobId = await submitAndBind(
+      target,
+      jobContext(target, row, [], turn, grounding),
+      turn.id,
+      ctx,
+    );
     return { outcome: 'sharpening', jobId, turnId: turn.id, session: await loadDto(row.id, ctx) };
   },
 
@@ -875,6 +903,7 @@ export const aiSharpenService = {
     const { row, before, turn } = await actWrite(sessionId, action, opts, ctx);
     if (action === 'stop') await cancelSupersededJob(before, ctx);
     const jobId = await submitAndBind(
+      target,
       jobContext(target, row, before, turn, grounding),
       turn.id,
       ctx,
@@ -906,6 +935,7 @@ export const aiSharpenService = {
     await assertSharpenable(target, ctx, turn.action === 'stop');
     const before = turns.filter((t) => t.seq < turn.seq);
     const jobId = await submitAndBind(
+      target,
       jobContext(target, row, before, turn, await groundingFor(target, ctx)),
       turn.id,
       ctx,

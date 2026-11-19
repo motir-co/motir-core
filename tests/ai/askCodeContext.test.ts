@@ -135,10 +135,14 @@ describe('a conversation job carries the project code context', () => {
     expect(contextOf(0)).toEqual({
       prompt: 'Which service owns the code-graph index fan-out?',
       code: CODE,
+      // The conversation's Grill me switch rides every ask (MOTIR-11801).
+      grillMe: false,
     });
     expect(contextOf(1)).toEqual({
       prompt: 'Which service owns the code-graph index fan-out?',
       code: CODE,
+      // The conversation's Grill me switch rides every ask (MOTIR-11801).
+      grillMe: false,
     });
     // Resolved for the ACTIVE project and the sender, once per submit.
     expect(resolvePlanningCodeContextMock).toHaveBeenCalledTimes(2);
@@ -155,7 +159,7 @@ describe('a conversation job carries the project code context', () => {
     await askThenRetry('Export hangs');
 
     for (const n of [0, 1]) {
-      expect(contextOf(n)).toEqual({ prompt: 'Export hangs' });
+      expect(contextOf(n)).toEqual({ prompt: 'Export hangs', grillMe: false });
       expect(contextOf(n)).not.toHaveProperty('code');
     }
   });

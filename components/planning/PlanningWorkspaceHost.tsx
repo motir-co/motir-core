@@ -625,7 +625,11 @@ function PlanWorkspaceHost({
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the
   // rail never has to know how a turn is scoped.
-  const sendTargeted = useCallback((text: string) => void send(text, targets), [send, targets]);
+  const sendTargeted = useCallback(
+    (text: string, opts?: { grillMe?: boolean }) =>
+      void send(text, targets, opts?.grillMe ? { grillMe: true } : {}),
+    [send, targets],
+  );
   // The widget's seeded send goes through the ASK DOOR on the project thread
   // (an empty target set), carrying the triage bug as its anchor — the one
   // route on which the server reads a turn as a report (ADR AMENDMENT 1, A1.2).

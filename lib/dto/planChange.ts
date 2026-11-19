@@ -329,6 +329,13 @@ export interface PlanChangeSessionDto {
   lastActivityAt: string;
   /** Which door opened the session (AMENDMENT 17 §4). */
   origin: PlanSessionOriginDto;
+  /**
+   * Whether GRILL ME is switched on for this conversation (Story MOTIR-11799 ·
+   * MOTIR-11801) — the stored value the composer's switch shows, so a reload, another
+   * tab and a reopened conversation agree. Optional so a hand-built thread (every rail
+   * test) is one with Grill me off; every server read fills it.
+   */
+  grillMe?: boolean;
   createdAt: string;
   updatedAt: string;
   turns: PlanChangeTurnDto[];

@@ -663,11 +663,15 @@ export const planRepository = {
   ): Promise<{
     status: Plan['status'];
     sessionId: string | null;
-    session: { targetKeys: string[] } | null;
+    session: { targetKeys: string[]; grillMe: boolean } | null;
   } | null> {
     return tx.plan.findUnique({
       where: { id },
-      select: { status: true, sessionId: true, session: { select: { targetKeys: true } } },
+      select: {
+        status: true,
+        sessionId: true,
+        session: { select: { targetKeys: true, grillMe: true } },
+      },
     });
   },
 

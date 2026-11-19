@@ -181,6 +181,7 @@ describe('a triage bug resolves where a conversation anchors', () => {
     expect(submitJobMock.mock.calls[0]![2]).toEqual({
       prompt: 'This is the bug I just filed',
       anchorKey: triaged.identifier,
+      grillMe: false,
     });
 
     // The turn is ANSWERED (AMENDMENT 5 · MOTIR-9231): no `debug_bug` follows it.

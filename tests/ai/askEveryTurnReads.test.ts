@@ -301,7 +301,11 @@ describe('the anchor — `anchorKey` on the ask door', () => {
     const submitted = (await (
       await ask(askReq({ body: 'This drops the mention', anchorKey: bug.identifier }))
     ).json()) as { jobId: string };
-    expect(contextOf(0)).toEqual({ prompt: 'This drops the mention', anchorKey: bug.identifier });
+    expect(contextOf(0)).toEqual({
+      prompt: 'This drops the mention',
+      anchorKey: bug.identifier,
+      grillMe: false,
+    });
 
     getJobMock.mockResolvedValue(answered('It is the sanitizer.', [bug.identifier]));
     await settle(settleReq({ jobId: submitted.jobId }));

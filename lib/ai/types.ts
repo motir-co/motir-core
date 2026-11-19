@@ -678,6 +678,12 @@ export interface JobContextBag {
   // `carriedAnswers` above (no-run turns only) it lets the answering session compose
   // and re-compose a plan offer's requirement.
   conversationTurns?: AskConversationTurn[];
+  // GRILL ME (Story MOTIR-11799 · MOTIR-11801 producer ↔ motir-ai MOTIR-11798 / 11803 /
+  // 11804 consumers) — whether the conversation has Grill me switched on, read from its
+  // stored `plan_change_session.grill_me` at submit. Sent on EVERY `ask_project` job a
+  // conversation submits and EVERY `sharpen_turn` job, always as a boolean (`false`
+  // where no conversation stands behind the job). Older motir-ai ignores it.
+  grillMe?: boolean;
   // THE CONFIRMATION MARKER (MOTIR-10091 producer ↔ motir-ai `suppliedRequirementIsConfirmed`
   // consumer) — the plan offer whose requirement the person confirmed: set ONLY by the
   // offer's confirm, beside `requirement`. motir-ai keys on it to read the requirement as

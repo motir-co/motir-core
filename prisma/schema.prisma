@@ -378,6 +378,7 @@ model User {
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   createdPlanChangeSessions        PlanChangeSession[]                 @relation("PlanChangeSessionCreatedBy")
   endedPlanChangeSessions          PlanChangeSession[]                 @relation("PlanChangeSessionEndedBy")
+  grillMeChangedPlanChangeSessions PlanChangeSession[]                 @relation("PlanChangeSessionGrillMeChangedBy")
   authoredPlanChangeTurns          PlanChangeTurn[]                    @relation("PlanChangeTurnAuthor")
   // Sharpen sessions this user opened (cascade: the session is theirs alone) and
   // the turns they authored (set null). Task MOTIR-1101 · MOTIR-8182.
@@ -10194,6 +10195,18 @@ model PlanChangeSession {
   /// bound holds over both causes. Set by `recordAutoResume` in the statement that
   /// bumps the count, which refuses when it is already set.
   providerResumedAt    DateTime?                 @map("provider_auto_resumed_at")
+  // ── GRILL ME (Story MOTIR-11799 · MOTIR-11801) ────────────────────────────────
+  /// Whether the person has GRILL ME switched on for this conversation: Motir AI asks
+  /// about what the request leaves open before it writes the requirement. Every
+  /// `ask_project` and `sharpen_turn` job the session submits carries it as
+  /// `context.grillMe`. A new session starts OFF; a choice made before the session
+  /// existed is written at its creation by the first message. Written otherwise only by
+  /// `planChangeSessionsService.setGrillMe`, with the two columns below.
+  grillMe              Boolean                   @default(false) @map("grill_me")
+  /// When `grillMe` last changed. Null while it has never been set.
+  grillMeChangedAt     DateTime?                 @map("grill_me_changed_at")
+  /// Who last changed it. SetNull — a departed member leaves the value unattributed.
+  grillMeChangedById   String?                   @map("grill_me_changed_by_id")
   createdAt            DateTime                  @default(now()) @map("created_at")
   updatedAt            DateTime                  @updatedAt @map("updated_at")
 
@@ -10203,6 +10216,7 @@ model PlanChangeSession {
   seedGate          ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
   seedGuideTurn     PlanChangeTurn?          @relation("PlanChangeSessionSeedGuideTurn", fields: [seedGuideTurnId], references: [id], onDelete: SetNull)
   endedBy           User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+  grillMeChangedBy  User?                    @relation("PlanChangeSessionGrillMeChangedBy", fields: [grillMeChangedById], references: [id], onDelete: SetNull)
   copiedFrom        PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
   copies            PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
   turns             PlanChangeTurn[]
