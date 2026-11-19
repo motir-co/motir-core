@@ -15008,6 +15008,54 @@
         "loading": {
           "install": "Cargando la cuenta propia de Motir",
           "shard": "Cargando los pools add-shard"
+        },
+        "ciSpot": {
+          "heading": "Runners de CI · últimos 7 días",
+          "scope": "Cuenta los runners de CI lanzados en los últimos 7 días, no los que se ejecutan ahora; En ejecución, arriba, es lo que se ejecuta ahora.",
+          "setting": {
+            "on": "Spot activado",
+            "off": "Spot desactivado",
+            "notRead": "No leída",
+            "notReadLabel": "Ajuste de Spot para CI no leído"
+          },
+          "offNote": "Spot para CI está desactivado, así que los nuevos runners de CI se lanzan bajo demanda. Los runners lanzados mientras estaba activado siguen contando aquí.",
+          "notReadNote": "El ajuste de Spot para CI no se cargó, así que no se muestra si Spot está activado. Los recuentos de abajo sí se leyeron.",
+          "share": {
+            "headline": "{percent} % en Spot",
+            "noPercent": "Sin cuota de Spot",
+            "of": "de {count, plural, one {# runner de CI lanzado} other {# runners de CI lanzados}}",
+            "ofRecorded": "de los {recorded} lanzados con una capacidad registrada ({total} lanzados en total)"
+          },
+          "barLabel": "{spot} en Spot y {onDemand} bajo demanda, de {total} runners de CI lanzados en los últimos 7 días",
+          "barLabelNotRecorded": "{spot} en Spot, {onDemand} bajo demanda y {notRecorded} sin registrar, de {total} runners de CI lanzados en los últimos 7 días",
+          "legend": {
+            "spot": "{count} en Spot",
+            "onDemand": "{count} bajo demanda",
+            "notRecorded": "{count} sin registrar"
+          },
+          "notRecordedNote": "{count, plural, one {# runner se lanzó} other {# runners se lanzaron}} antes de que Motir registrara la capacidad de cada runner, así que no {count, plural, one {cuenta} other {cuentan}} ni como Spot ni como bajo demanda, y la cuota de Spot {count, plural, one {lo} other {los}} deja fuera.",
+          "interrupted": {
+            "label": "Interrumpidos por AWS · 7 días",
+            "sub": "Runners Spot que AWS recuperó a mitad del job",
+            "none": "Ninguno"
+          },
+          "allFellBack": "Spot está activado, pero ninguno de los {count} runners de CI lanzados en los últimos 7 días obtuvo capacidad Spot: cada lanzamiento recurrió a bajo demanda. Abra Runner de CI para ver los lanzamientos de cada cuenta.",
+          "allFellBackInstall": "Spot está activado, pero ninguno de los {count} runners de CI lanzados en la cuenta propia de Motir en los últimos 7 días obtuvo capacidad Spot: cada lanzamiento recurrió a bajo demanda.",
+          "none": "No se lanzó ningún runner de CI en los últimos 7 días, así que no hay cuota de Spot que mostrar.",
+          "error": {
+            "title": "No se pudo leer el uso de Spot en CI",
+            "body": "Los lanzamientos e interrupciones de los últimos 7 días no se cargaron, así que no se muestra ninguna cifra y ninguna de ellas es cero. La fila del pool, sus cuentas y el resto de la página no se ven afectados. Recargue para intentarlo de nuevo."
+          },
+          "accounts": {
+            "col": {
+              "spot": "En Spot · 7 d",
+              "interrupted": "Interrumpidos · 7 d"
+            },
+            "spotOf": "{spot} / {total}",
+            "percent": "{percent} % en Spot",
+            "notRecorded": "{count} sin registrar",
+            "none": "Ningún runner de CI lanzado en los últimos 7 días"
+          }
         }
       },
       "install": {

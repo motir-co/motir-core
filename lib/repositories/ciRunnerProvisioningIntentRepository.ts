@@ -4,6 +4,7 @@ import {
   type FleetShardMoveReason,
   type Prisma,
 } from '@/generated/prisma/client';
+import type { TeardownReason } from '@motir/orchestrator';
 import { requestsOnDemandRunner } from '@/lib/ciFleet/config';
 
 // Data access for the runner-fleet provisioning INTENTS (Story MOTIR-1916 ·
@@ -120,6 +121,49 @@ export interface CiRunnerProvisioningIntentCreateInput {
   reconcileGeneration?: number;
   /** The job's carried Spot-interruption count (MOTIR-11728); 0 when absent. */
   spotInterruptionCount?: number;
+}
+
+/** The teardown reason a Spot-reclaimed CI runner settles with (MOTIR-11728). */
+export const SPOT_INTERRUPTED_REASON = 'spot_interrupted' satisfies TeardownReason;
+
+/**
+ * How the CI runners BOOTED in a window ran (MOTIR-11729): by the capacity the
+ * boot recorded (MOTIR-11716) and how many of them EC2 reclaimed. Raw counts;
+ * `launched` is every booted runner, `notRecorded` the ones with no capacity —
+ * never folded into `onDemand`.
+ */
+export interface CiSpotWindowCounts {
+  launched: number;
+  spot: number;
+  onDemand: number;
+  notRecorded: number;
+  interrupted: number;
+}
+
+type CiSpotWindowGroup = {
+  capacity: CiRunnerCapacity | null;
+  teardownReason: string | null;
+  _count: { _all: number };
+};
+
+/** Fold one population's `capacity × teardownReason` groups into its counts. */
+function foldCiSpotWindow(groups: readonly CiSpotWindowGroup[]): CiSpotWindowCounts {
+  const counts: CiSpotWindowCounts = {
+    launched: 0,
+    spot: 0,
+    onDemand: 0,
+    notRecorded: 0,
+    interrupted: 0,
+  };
+  for (const group of groups) {
+    const n = group._count._all;
+    counts.launched += n;
+    if (group.capacity === 'spot') counts.spot += n;
+    else if (group.capacity === 'on_demand') counts.onDemand += n;
+    else counts.notRecorded += n;
+    if (group.teardownReason === SPOT_INTERRUPTED_REASON) counts.interrupted += n;
+  }
+  return counts;
 }
 
 export const ciRunnerProvisioningIntentRepository = {
@@ -420,6 +464,63 @@ export const ciRunnerProvisioningIntentRepository = {
         ...(organizationIds === null ? {} : { organizationId: { in: [...organizationIds] } }),
       },
     });
+  },
+
+  /**
+   * The Fleet status page's CI Spot read for add-shard accounts (MOTIR-11729):
+   * every intent BOOTED in `[since, until]` on one of `fleetShardIds`, counted
+   * per account by capacity and by Spot interruption, in ONE grouped query
+   * (`[fleetShardId, bootedAt]` serves it). A runner that never booted has no
+   * capacity and is not a launch. An account with no booted intent in the
+   * window is ABSENT from the map — the caller says what that means.
+   *
+   * Reads every tenant's rows only under a system context; under a workspace
+   * context the counts come back smaller and still look believable.
+   */
+  async countCiSpotWindowByShardInTx(
+    fleetShardIds: readonly string[],
+    since: Date,
+    until: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, CiSpotWindowCounts>> {
+    if (fleetShardIds.length === 0) return new Map();
+    const groups = await tx.ciRunnerProvisioningIntent.groupBy({
+      by: ['fleetShardId', 'capacity', 'teardownReason'],
+      where: { fleetShardId: { in: [...fleetShardIds] }, bootedAt: { gte: since, lte: until } },
+      _count: { _all: true },
+    });
+    const byShard = new Map<string, CiSpotWindowGroup[]>();
+    for (const group of groups) {
+      if (group.fleetShardId === null) continue;
+      const list = byShard.get(group.fleetShardId) ?? [];
+      list.push(group);
+      byShard.set(group.fleetShardId, list);
+    }
+    return new Map([...byShard].map(([id, list]) => [id, foldCiSpotWindow(list)]));
+  },
+
+  /**
+   * The same read over the INSTALL FLEET (MOTIR-11729): intents carrying the
+   * install-fleet flag, booted in `[since, until]`, of the install's own orgs —
+   * the population `countInFlightOnInstallFleetInTx` counts in flight.
+   * `organizationIds` null counts every org (cloud off).
+   */
+  async countCiSpotWindowOnInstallFleetInTx(
+    organizationIds: readonly string[] | null,
+    since: Date,
+    until: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiSpotWindowCounts> {
+    const groups = await tx.ciRunnerProvisioningIntent.groupBy({
+      by: ['capacity', 'teardownReason'],
+      where: {
+        installFleet: true,
+        bootedAt: { gte: since, lte: until },
+        ...(organizationIds === null ? {} : { organizationId: { in: [...organizationIds] } }),
+      },
+      _count: { _all: true },
+    });
+    return foldCiSpotWindow(groups);
   },
 
   /** Move a claimed intent to another account mid-boot, with why it left its
