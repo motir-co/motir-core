@@ -15,7 +15,7 @@ import { appendWithin, planChangeSessionsService } from '@/lib/services/planChan
 import { planOfferService } from '@/lib/services/planOfferService';
 import { farRequestOfferService, farRequestTurnIdOf } from '@/lib/services/farRequestOfferService';
 import { requirementPageSaveService } from '@/lib/services/requirementPageSaveService';
-import type { RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/types';
+import type { AskHandOff, RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -219,12 +219,14 @@ async function landTargeted(
     /** A confirmed targeted offer's requirement (MOTIR-9878), submitted with the run
      *  exactly as a no-target one's is: the requirement and its confirmation. */
     composed?: ComposedStart;
+    /** The ask turn this plan was handed off from (MOTIR-11797). */
+    handOff: AskHandOff | null;
   },
 ): Promise<PlanOfferStartResult> {
   const scope = buildScope([input.target.identifier]);
   const landed = await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
   const last = landed?.turns.at(-1);
-  const submitWith = input.composed ? composedSubmit(input.composed) : undefined;
+  const submitWith = startSubmit(input.composed, input.handOff);
   if (landed && last?.role === 'user' && last.body === input.prompt.trim()) {
     return contextualPlanningService.resubmitFromWorkItem(
       { anchorId: input.target.id, sessionId: landed.id },
@@ -400,13 +402,23 @@ interface ComposedStart {
   confirmed: RequirementConfirmation;
 }
 
-/** What a composed start adds to the shipped submit: the requirement and its
- *  confirmation. Grill me's answers are inside the requirement — the grilling's end
- *  wrote them there (MOTIR-10255) — and no planning job carries them beside it. */
-function composedSubmit(composed: ComposedStart): ComposedSubmit {
+/** What a start adds to the shipped submit: a composed start's requirement and its
+ *  confirmation, and the ask turn the plan was handed off from (MOTIR-11797), whose job
+ *  already sent the message's quick reply — so the plan's PART 1 sends no second one.
+ *  Grill me's answers are inside the requirement — the grilling's end wrote them there
+ *  (MOTIR-10255) — and no planning job carries them beside it. `undefined` when there is
+ *  neither: the shipped bare submit. */
+function startSubmit(
+  composed: ComposedStart | undefined,
+  handOff: AskHandOff | null,
+): ComposedSubmit | undefined {
+  if (!composed && !handOff) return undefined;
   return {
-    requirement: composed.requirement,
-    opts: { requirementConfirmed: composed.confirmed },
+    ...(composed ? { requirement: composed.requirement } : {}),
+    opts: {
+      ...(composed ? { requirementConfirmed: composed.confirmed } : {}),
+      ...(handOff ? { askHandOff: handOff } : {}),
+    },
   };
 }
 
@@ -417,14 +429,16 @@ function composedSubmit(composed: ComposedStart): ComposedSubmit {
 async function submitOn(
   pctx: ProjectContext,
   sessionId: string,
-  composed?: ComposedStart,
+  composed: ComposedStart | undefined,
+  handOff: AskHandOff | null,
 ): Promise<PlanOfferStartResult> {
-  const submitted = composed
+  const submitWith = startSubmit(composed, handOff);
+  const submitted = submitWith
     ? await planChangeSessionsService.submit(
         pctx,
         { sessionId },
-        composed.requirement,
-        composedSubmit(composed).opts,
+        submitWith.requirement,
+        submitWith.opts,
       )
     : await planChangeSessionsService.submit(pctx, { sessionId });
   return {
@@ -582,6 +596,8 @@ export const planOfferStartService = {
         conversationId: input.conversationId,
         target,
         prompt: claimed.body,
+        // The person's turn was read by this ask job, which already replied to it.
+        handOff: { askJobId: input.askJobId },
       });
     } catch (err) {
       await withWorkspaceContext(txScope(pctx), async (tx) => {
@@ -627,8 +643,12 @@ async function confirm(
   // The offer as stored, for its request and target. Its state is the lifecycle's,
   // re-judged under the lock by the claim.
   const thread = await planChangeSessionsService.getById(pctx, input.conversationId);
-  const offer = thread.turns.find((t) => t.id === input.offerTurnId)?.offer;
+  const offerTurn = thread.turns.find((t) => t.id === input.offerTurnId);
+  const offer = offerTurn?.offer;
   if (!offer) throw new PlanChangeTurnNotFoundError(input.offerTurnId);
+  // THE HAND-OFF (MOTIR-11797): the offer was the answer of an ask turn, whose job already
+  // replied to the request it carries. An offer stored without its job has none to name.
+  const handOff: AskHandOff | null = offerTurn?.jobId ? { askJobId: offerTurn.jobId } : null;
   // A bug offer (MOTIR-9322) is never a plan to start: its confirm is its own door.
   if (offer.kind !== 'plan') throw new PlanOfferStartRefusedError('offer_not_open');
   if (offer.state === 'declined' || offer.state === 'superseded') {
@@ -678,7 +698,7 @@ async function confirm(
       if (!restarted.ownsStart || !restarted.session) {
         throw new PlanOfferStartRefusedError('offer_not_open');
       }
-      started = await submitOn(pctx, restarted.session.id, composed);
+      started = await submitOn(pctx, restarted.session.id, composed, handOff);
     } else if (claim.path === 'decided') {
       // A KEPT TOO-FAR REQUEST, offered after the plan decision (MOTIR-11521): it plans
       // on a NEW conversation of the decided one's scope, opened with the request as its
@@ -687,23 +707,24 @@ async function confirm(
         scope,
         requestMd: offer.requestMd,
       });
-      started = await submitOn(pctx, successor.id, composed);
+      started = await submitOn(pctx, successor.id, composed, handOff);
     } else if (claim.path === 'resume') {
       const successor = await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
       const last = successor?.turns.at(-1);
       if (!successor || last?.role !== 'user' || last.body !== offer.requestMd.trim()) {
         throw new PlanSessionEndedError(input.conversationId);
       }
-      started = await submitOn(pctx, successor.id, composed);
+      started = await submitOn(pctx, successor.id, composed, handOff);
     } else if (target) {
       started = await landTargeted(pctx, {
         conversationId: input.conversationId,
         target,
         prompt: offer.requestMd,
         ...(composed ? { composed } : {}),
+        handOff,
       });
     } else {
-      started = await submitOn(pctx, input.conversationId, composed);
+      started = await submitOn(pctx, input.conversationId, composed, handOff);
     }
   } catch (err) {
     await releaseOffer(pctx, input.conversationId, input.offerTurnId);

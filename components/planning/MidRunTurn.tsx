@@ -212,7 +212,17 @@ export function AnsweredAside() {
  * hold it); the answer is a bubble with its own spinner and a passive line. The
  * act rail and the running bar are the planner's, and stay untouched.
  */
-export function PendingAsk({ text, inThread }: { text: string; inThread: boolean }) {
+export function PendingAsk({
+  text,
+  inThread,
+  ack = null,
+}: {
+  text: string;
+  inThread: boolean;
+  /** The question's quick reply (MOTIR-11797), once it arrives: model output, plain text,
+   *  drawn in the answering bubble in place of its spinner. */
+  ack?: string | null;
+}) {
   const tm = useTranslations(`${NS}.midRun`);
   return (
     <>
@@ -222,7 +232,7 @@ export function PendingAsk({ text, inThread }: { text: string; inThread: boolean
         </Bubble>
       )}
       <Bubble role="assistant" testId="plan-change-answering">
-        <Spinner size="sm" aria-hidden="true" />
+        {ack ?? <Spinner size="sm" aria-hidden="true" />}
       </Bubble>
       <p
         className="text-center text-xs text-(--el-text-secondary)"
