@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import {
+  MOTIR_ARM64_RUNNER_LABEL,
   MOTIR_ON_DEMAND_RUNNER_LABEL,
+  MOTIR_RUNNER_ARM64_VARIABLE,
   MOTIR_RUNNER_LABEL,
   isMotirFleetJob,
+  requestsArm64Runner,
   requestsOnDemandRunner,
 } from '@/lib/ciFleet/config';
 import { classifyRunner } from '@/lib/ciMetering/runnerRates';
@@ -144,5 +149,57 @@ describe('requestsOnDemandRunner — the "never Spot" label (MOTIR-11727)', () =
 
   it('a job asking for both labels is still a fleet job', () => {
     expect(isMotirFleetJob([MOTIR_RUNNER_LABEL, MOTIR_ON_DEMAND_RUNNER_LABEL])).toBe(true);
+  });
+});
+
+describe('the arm64 fleet label (MOTIR-11781)', () => {
+  it('exports the label and the variable that carries it', () => {
+    expect(MOTIR_ARM64_RUNNER_LABEL).toBe('motir-graviton');
+    expect(MOTIR_RUNNER_ARM64_VARIABLE).toBe('MOTIR_RUNNER_ARM64');
+  });
+
+  it('isMotirFleetJob accepts it exactly, in any case, beside other labels — never a near miss', () => {
+    expect(isMotirFleetJob(['motir-graviton'])).toBe(true);
+    expect(isMotirFleetJob([' MOTIR-Graviton '])).toBe(true);
+    expect(isMotirFleetJob(['self-hosted', 'motir-graviton'])).toBe(true);
+    expect(isMotirFleetJob(['motir-graviton-large'])).toBe(false);
+  });
+
+  it('requestsArm64Runner is the exact, trimmed, case-insensitive label test', () => {
+    expect(requestsArm64Runner(['motir-graviton'])).toBe(true);
+    expect(requestsArm64Runner(['  MOTIR-GRAVITON  '])).toBe(true);
+    expect(requestsArm64Runner(['self-hosted', 'Motir-Graviton'])).toBe(true);
+    expect(requestsArm64Runner(['motir-runner'])).toBe(false);
+    expect(requestsArm64Runner(['motir-runner', 'motir-on-demand'])).toBe(false);
+    expect(requestsArm64Runner(['motir-graviton-x'])).toBe(false);
+    expect(requestsArm64Runner([])).toBe(false);
+  });
+
+  it('every label set the gate accepts for arm64 meters as the fleet', () => {
+    for (const labels of [
+      ['motir-graviton'],
+      ['self-hosted', 'motir-graviton'],
+      ['MOTIR-GRAVITON'],
+    ]) {
+      expect(isMotirFleetJob(labels)).toBe(true);
+      expect(classifyRunner(labels)).toBe('motir_fleet');
+    }
+  });
+
+  it('the literal is written once under lib/, in the meter — the provisioner re-exports it', () => {
+    const libRoot = join(process.cwd(), 'lib');
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const path = join(dir, entry);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/\.(ts|tsx)$/.test(entry)) {
+          const count = readFileSync(path, 'utf8').split('motir-graviton').length - 1;
+          for (let i = 0; i < count; i++) hits.push(path.slice(libRoot.length + 1));
+        }
+      }
+    };
+    walk(libRoot);
+    expect(hits).toEqual(['ciMetering/runnerRates.ts']);
   });
 });

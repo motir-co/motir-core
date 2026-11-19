@@ -10,10 +10,18 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { ciRunnerReconcileService, coverPartitions } from '@/lib/services/ciRunnerReconcileService';
+import {
+  ciRunnerReconcileService,
+  coverArm64Partition,
+  coverPartitions,
+} from '@/lib/services/ciRunnerReconcileService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
 import { fleetQueueClient } from '@/lib/github/fleetQueue';
-import { MOTIR_ON_DEMAND_RUNNER_LABEL, MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import {
+  MOTIR_ARM64_RUNNER_LABEL,
+  MOTIR_ON_DEMAND_RUNNER_LABEL,
+  MOTIR_RUNNER_LABEL,
+} from '@/lib/ciFleet/config';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { fakeOrchestrator } from '@motir/orchestrator';
@@ -1230,5 +1238,181 @@ describe('coverPartitions — the per-label-set arithmetic (MOTIR-11727)', () =>
       uncoveredOnDemand: 0,
       uncoveredOther: 0,
     });
+  });
+});
+
+describe('arm64 is its own partition (MOTIR-11781)', () => {
+  const ARM64 = [MOTIR_ARM64_RUNNER_LABEL];
+  const minted = () =>
+    adminDb.ciRunnerProvisioningIntent.findMany({
+      where: { reconcileGeneration: { gt: 0 } },
+      orderBy: { jobId: 'asc' },
+    });
+
+  it('an idle x86 runner does not cover a queued arm64 job: one arm64 intent is minted', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9401, requestedLabels: ARM64 });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [{ ...stranded(9401), labels: ARM64 }];
+    orgRunners[MOTIR_ORG] = [{ id: 1 }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs).toEqual([
+      {
+        org: MOTIR_ORG,
+        queued: 1,
+        idleRunners: 1,
+        awaiting: 0,
+        added: 1,
+        arm64: { queued: 1, idleRunners: 0, awaiting: 0, added: 1 },
+      },
+    ]);
+    const rows = await minted();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ jobId: '9401', reconcileGeneration: 1 });
+    expect(rows[0]!.requestedLabels).toContain('motir-graviton');
+    expect(bootEvents()).toHaveLength(1);
+  });
+
+  it('an idle arm64 runner does not cover a queued x86 job: one x86 intent is minted', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9402 });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9402)];
+    orgRunners[MOTIR_ORG] = [{ id: 1, labels: ARM64 }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs).toEqual([
+      {
+        org: MOTIR_ORG,
+        queued: 1,
+        idleRunners: 1,
+        awaiting: 0,
+        added: 1,
+        arm64: { queued: 0, idleRunners: 1, awaiting: 0, added: 0 },
+      },
+    ]);
+    const rows = await minted();
+    expect(rows.map((r) => r.jobId)).toEqual(['9402']);
+    expect(rows[0]!.requestedLabels).toEqual([MOTIR_RUNNER_LABEL]);
+  });
+
+  it('an idle arm64 runner does not cover a queued on-demand job either', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9403, requestedLabels: ON_DEMAND });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [{ ...stranded(9403), labels: ON_DEMAND }];
+    orgRunners[MOTIR_ORG] = [{ id: 1, labels: ARM64 }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).toMatchObject({
+      added: 1,
+      onDemand: { queued: 1, idleRunners: 0, awaiting: 0, added: 1 },
+      arm64: { queued: 0, idleRunners: 1, awaiting: 0, added: 0 },
+    });
+    expect((await minted()).map((r) => r.jobId)).toEqual(['9403']);
+  });
+
+  it('a pending arm64 intent covers a queued arm64 job: nothing minted', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9404, requestedLabels: ARM64, status: 'pending' });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [{ ...stranded(9404), labels: ARM64 }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).toMatchObject({
+      queued: 1,
+      awaiting: 1,
+      added: 0,
+      arm64: { queued: 1, idleRunners: 0, awaiting: 1, added: 0 },
+    });
+    expect(await minted()).toEqual([]);
+  });
+
+  it('only an x86 intent pending: the arm64 job is minted for, carrying the arm64 label', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9405, requestedLabels: ARM64 });
+    await seedIntent(fx, { jobId: 9406, status: 'pending' });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [{ ...stranded(9405), labels: ARM64 }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).toMatchObject({
+      queued: 1,
+      awaiting: 1,
+      added: 1,
+      arm64: { queued: 1, idleRunners: 0, awaiting: 0, added: 1 },
+    });
+    expect(outcome.orgs[0]).not.toHaveProperty('onDemand');
+    const rows = await minted();
+    expect(rows.map((r) => r.jobId)).toEqual(['9405']);
+    expect(rows[0]!.requestedLabels).toEqual(['motir-graviton']);
+  });
+
+  it('a pending arm64 intent does not cover a queued x86 job', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9407 });
+    await seedIntent(fx, { jobId: 9408, requestedLabels: ARM64, status: 'pending' });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9407)];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).toMatchObject({
+      queued: 1,
+      awaiting: 1,
+      added: 1,
+      arm64: { queued: 0, idleRunners: 0, awaiting: 1, added: 0 },
+    });
+    expect((await minted()).map((r) => r.jobId)).toEqual(['9407']);
+  });
+
+  it('jobs, runners and intents carrying only x86 labels report no arm64 counts', async () => {
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 9409 });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9409)];
+    orgRunners[MOTIR_ORG] = [{ id: 1, labels: ON_DEMAND, busy: true }];
+
+    const outcome = await reconcile();
+
+    expect(outcome.orgs[0]).not.toHaveProperty('arm64');
+    expect(outcome.orgs[0]).toMatchObject({ queued: 1, added: 1 });
+  });
+});
+
+describe('coverArm64Partition — the arm64 arithmetic (MOTIR-11781)', () => {
+  it('covers arm64 jobs with arm64 capacity only, and never goes below zero', () => {
+    expect(coverArm64Partition({ queued: 3, idle: 1, awaiting: 1 })).toBe(1);
+    expect(coverArm64Partition({ queued: 1, idle: 2, awaiting: 1 })).toBe(0);
+    expect(coverArm64Partition({ queued: 0, idle: 0, awaiting: 0 })).toBe(0);
+  });
+});
+
+describe('fleetQueueClient lists arm64 jobs and runners (MOTIR-11781)', () => {
+  it('returns a queued arm64 job and an arm64 runner with their labels, beside the x86 ones', async () => {
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [
+      { ...stranded(9501), labels: [MOTIR_ARM64_RUNNER_LABEL] },
+      stranded(9502),
+      { ...stranded(9503), labels: ['ubuntu-24.04-arm'] },
+    ];
+    orgRunners[MOTIR_ORG] = [
+      { id: 1, labels: [MOTIR_ARM64_RUNNER_LABEL] },
+      { id: 2 },
+      { id: 3, labels: ['self-hosted', 'linux'] },
+    ];
+
+    const { jobs } = await fleetQueueClient.listQueuedFleetJobs({
+      owner: MOTIR_ORG,
+      repo: 'acme-web',
+    });
+    expect(jobs.map((j) => [j.jobId, j.labels])).toEqual([
+      ['9501', ['motir-graviton']],
+      ['9502', [MOTIR_RUNNER_LABEL]],
+    ]);
+
+    const runners = await fleetQueueClient.listFleetRunners();
+    expect(runners.map((r) => [r.id, r.labels])).toEqual([
+      [1, ['motir-graviton']],
+      [2, [MOTIR_RUNNER_LABEL]],
+    ]);
   });
 });

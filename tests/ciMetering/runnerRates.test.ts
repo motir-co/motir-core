@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyRunner,
   LINUX_EQUIVALENT_MULTIPLIER,
+  MOTIR_FLEET_ARM64_RUNNER_LABEL,
   MOTIR_FLEET_RUNNER_LABEL,
   multiplierForLabels,
   resolveRunnerRate,
@@ -121,6 +122,40 @@ describe('classifyRunner — the MOTIR FLEET family (MOTIR-1923 · ADR §M)', ()
     expect(classifyRunner(['motir-runner', 'motir-on-demand'])).toBe('motir_fleet');
     expect(classifyRunner([MOTIR_ON_DEMAND_RUNNER_LABEL, MOTIR_FLEET_RUNNER_LABEL])).toBe(
       'motir_fleet',
+    );
+  });
+});
+
+describe('classifyRunner — the ARM64 fleet label (MOTIR-11781)', () => {
+  it('meters the arm64 fleet label as `motir_fleet`, alone or beside OS and arch labels', () => {
+    expect(MOTIR_FLEET_ARM64_RUNNER_LABEL).toBe('motir-graviton');
+    expect(classifyRunner(['motir-graviton'])).toBe('motir_fleet');
+    expect(classifyRunner(['motir-graviton', 'linux', 'ARM64'])).toBe('motir_fleet');
+    expect(classifyRunner(['  MOTIR-Graviton '])).toBe('motir_fleet');
+  });
+
+  it('the label satisfies §M.2 against the real patterns — no OS substring, no larger-runner match', () => {
+    for (const forbidden of ['ubuntu', 'linux', 'arm', 'windows', 'macos', 'osx']) {
+      expect(MOTIR_FLEET_ARM64_RUNNER_LABEL).not.toContain(forbidden);
+    }
+    // Read through the real classifier with the exact pre-pass missed: a near
+    // miss falls past it into the substring scan, and must land on `unknown` —
+    // neither an OS family (an OS substring) nor the larger-runner route ahead
+    // of the OS label beside it.
+    expect(classifyRunner([`${MOTIR_FLEET_ARM64_RUNNER_LABEL}-x`])).toBe('unknown');
+    expect(classifyRunner([`${MOTIR_FLEET_ARM64_RUNNER_LABEL}-x`, 'ubuntu-latest'])).toBe(
+      'linux_x64',
+    );
+  });
+
+  it('meters at the existing ×1.00 fleet parity row — no new rate row', () => {
+    expect(multiplierForLabels(['motir-graviton'], AFTER_FLEET_PRICED)).toEqual({
+      family: 'motir_fleet',
+      multiplier: 1,
+      priced: true,
+    });
+    expect(multiplierForLabels(['motir-graviton'], AFTER_FLEET_PRICED)).toEqual(
+      multiplierForLabels([MOTIR_FLEET_RUNNER_LABEL], AFTER_FLEET_PRICED),
     );
   });
 });

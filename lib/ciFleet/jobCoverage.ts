@@ -1,4 +1,11 @@
-import { isMotirFleetJob, MOTIR_ON_DEMAND_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from './config';
+import {
+  isMotirFleetJob,
+  MOTIR_ARM64_RUNNER_LABEL,
+  MOTIR_ON_DEMAND_RUNNER_LABEL,
+  MOTIR_RUNNER_ARM64_VARIABLE,
+  MOTIR_RUNNER_LABEL,
+  MOTIR_RUNNER_VARIABLE,
+} from './config';
 import {
   scriptCommands,
   type ActionMetadata,
@@ -62,10 +69,17 @@ export const SETUP_ACTION_TOOLS: Readonly<Record<string, readonly string[]>> = {
 export const MAX_ACTION_DEPTH = 4;
 
 /** Does this `runs-on` request the Motir fleet? A job that follows the switch
- *  (`${{ vars.MOTIR_RUNNER || … }}`) or names the fleet label (MOTIR-8813). */
+ *  (`${{ vars.MOTIR_RUNNER || … }}`), follows the arm64 switch
+ *  (`${{ vars.MOTIR_RUNNER_ARM64 || … }}`, MOTIR-11781), or names either fleet
+ *  label (MOTIR-8813). The arm64 variable is checked by name rather than left to
+ *  pass because its name happens to start with the x86 one's. */
 export function requestsFleetRunner(runsOn: unknown): boolean {
   if (typeof runsOn === 'string') {
-    return runsOn.includes(`vars.${MOTIR_RUNNER_VARIABLE}`) || isMotirFleetJob([runsOn]);
+    return (
+      runsOn.includes(`vars.${MOTIR_RUNNER_ARM64_VARIABLE}`) ||
+      runsOn.includes(`vars.${MOTIR_RUNNER_VARIABLE}`) ||
+      isMotirFleetJob([runsOn])
+    );
   }
   if (Array.isArray(runsOn)) return runsOn.some(requestsFleetRunner);
   if (runsOn !== null && typeof runsOn === 'object' && 'labels' in runsOn) {
@@ -87,6 +101,41 @@ export function namesOnDemandLabel(runsOn: unknown): boolean {
     return namesOnDemandLabel((runsOn as { labels: unknown }).labels);
   }
   return false;
+}
+
+/** A label as a whole token: exact, case-insensitive, and not part of a longer
+ *  label, inside a bare label or an expression. */
+const labelToken = (label: string) => new RegExp(`(^|[^\\w-])${label}([^\\w-]|$)`, 'i');
+const ARM64_TOKEN = labelToken(MOTIR_ARM64_RUNNER_LABEL);
+const FLEET_TOKEN = labelToken(MOTIR_RUNNER_LABEL);
+/** `vars.MOTIR_RUNNER_ARM64`, and `vars.MOTIR_RUNNER` NOT followed by more of a
+ *  variable name — so the arm64 variable never reads as the x86 one. */
+const ARM64_VARIABLE = new RegExp(`vars\\.${MOTIR_RUNNER_ARM64_VARIABLE}(?![\\w])`);
+const X86_VARIABLE = new RegExp(`vars\\.${MOTIR_RUNNER_VARIABLE}(?![\\w])`);
+
+/** Every string of a `runs-on`: a bare label, a list's entries, a `labels:` group. */
+function runsOnStrings(runsOn: unknown): string[] {
+  if (typeof runsOn === 'string') return [runsOn];
+  if (Array.isArray(runsOn)) return runsOn.flatMap(runsOnStrings);
+  if (runsOn !== null && typeof runsOn === 'object' && 'labels' in runsOn) {
+    return runsOnStrings((runsOn as { labels: unknown }).labels);
+  }
+  return [];
+}
+
+/**
+ * Does this `runs-on` ask for the ARM64 pool AND an x86 fleet label at once
+ * (MOTIR-11781)? An arm64 runner carries only the arm64 label and an x86 runner
+ * never carries it, so GitHub — which gives a job only to a runner carrying
+ * EVERY label it lists — can never find a runner for such a job.
+ */
+export function mixesArm64WithX86Fleet(runsOn: unknown): boolean {
+  const strings = runsOnStrings(runsOn);
+  const arm64 = strings.some((s) => ARM64_TOKEN.test(s) || ARM64_VARIABLE.test(s));
+  const x86 = strings.some(
+    (s) => FLEET_TOKEN.test(s) || ON_DEMAND_TOKEN.test(s) || X86_VARIABLE.test(s),
+  );
+  return arm64 && x86;
 }
 
 /** A `uses:` reference, classified. */
@@ -280,6 +329,18 @@ export function judgeJob(
       };
     }
     return { ...base, verdict: 'github-hosted', missing: [], unjudged: [] };
+  }
+  // The arm64 label beside an x86 fleet label (MOTIR-11781): the two pools are
+  // disjoint, so no runner carries both and the job queues until GitHub expires it.
+  if (mixesArm64WithX86Fleet(job.runsOn)) {
+    return {
+      ...base,
+      verdict: 'unverified',
+      missing: [],
+      unjudged: [
+        `it asks for ${MOTIR_ARM64_RUNNER_LABEL} beside an x86 fleet label (${MOTIR_RUNNER_LABEL} or ${MOTIR_ON_DEMAND_RUNNER_LABEL}), and no runner carries both, so no runner can take it`,
+      ],
+    };
   }
   const os = otherOs(job.runsOn);
   if (os) {

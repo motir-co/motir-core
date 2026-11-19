@@ -217,6 +217,17 @@ describe('the §O LABEL GATE — the whole point of the card', () => {
     expect(intent.requestedLabels).toEqual(['self-hosted', MOTIR_RUNNER_LABEL]);
     expect(intent.organizationId).toBe(fx.organizationId);
   });
+
+  it('provisions for a job asking for the ARM64 fleet label, its intent carrying it (MOTIR-11781)', async () => {
+    const fx = await seedTenant();
+    expect(await handle(delivery({ labels: ['motir-graviton'] }))).toEqual({
+      event: 'workflow_job',
+      outcome: 'recorded',
+    });
+    const intent = await adminDb.ciRunnerProvisioningIntent.findFirstOrThrow();
+    expect(intent.requestedLabels).toContain('motir-graviton');
+    expect(intent.organizationId).toBe(fx.organizationId);
+  });
 });
 
 describe('the happy path — one attributed, persisted intent', () => {

@@ -4,7 +4,7 @@ import {
   type FleetShardMoveReason,
   type Prisma,
 } from '@/generated/prisma/client';
-import { requestsOnDemandRunner } from '@/lib/ciFleet/config';
+import { requestsArm64Runner, requestsOnDemandRunner } from '@/lib/ciFleet/config';
 
 // Data access for the runner-fleet provisioning INTENTS (Story MOTIR-1916 ·
 // MOTIR-1920). Single-op methods only (CLAUDE.md 4-layer); every write requires
@@ -224,11 +224,15 @@ export const ciRunnerProvisioningIntentRepository = {
    * {@link requestsOnDemandRunner} — the same exact, case-insensitive comparison
    * the boot makes — rather than an array filter in SQL, which would compare
    * case-sensitively and could disagree with what the boot registers.
+   *
+   * An intent whose job asked for the ARM64 label (MOTIR-11781) is counted in
+   * `arm64` and in neither x86 bucket: its runner carries only that label, so
+   * it can serve no x86 job, and no x86 runner can serve its job.
    */
   async countAwaitingRunnerForOwner(
     owner: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ onDemand: number; other: number }> {
+  ): Promise<{ arm64: number; onDemand: number; other: number }> {
     const rows = await tx.ciRunnerProvisioningIntent.findMany({
       where: {
         repoOwner: { equals: owner, mode: 'insensitive' },
@@ -236,8 +240,13 @@ export const ciRunnerProvisioningIntentRepository = {
       },
       select: { requestedLabels: true },
     });
-    const onDemand = rows.filter((row) => requestsOnDemandRunner(row.requestedLabels)).length;
-    return { onDemand, other: rows.length - onDemand };
+    const x86 = rows.filter((row) => !requestsArm64Runner(row.requestedLabels));
+    const onDemand = x86.filter((row) => requestsOnDemandRunner(row.requestedLabels)).length;
+    return {
+      arm64: rows.length - x86.length,
+      onDemand,
+      other: x86.length - onDemand,
+    };
   },
 
   /**
