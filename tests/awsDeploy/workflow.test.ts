@@ -73,11 +73,12 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     expect(code).not.toMatch(/ci\.yml|needs:/);
   });
 
-  // 80: the 20-minute stack wait of MOTIR-10436 on top of the deploy's 60.
-  it('has no environment, a non-cancelling concurrency group and an 80-minute ceiling', () => {
+  // 80: the 20-minute stack wait of MOTIR-10436 on top of the deploy's 60;
+  // 110 since MOTIR-11718, for the arm64 half built and smoked under QEMU.
+  it('has no environment, a non-cancelling concurrency group and a 110-minute ceiling', () => {
     expect(job.environment).toBeUndefined();
     expect(job.concurrency).toEqual({ group: 'aws-deploy', 'cancel-in-progress': false });
-    expect(job['timeout-minutes']).toBe(80);
+    expect(job['timeout-minutes']).toBe(110);
   });
 
   it('reads no AWS key or secret: role ARNs, region and prefix come from vars', () => {
@@ -257,7 +258,8 @@ describe('the static-asset origin in the AWS deploy (MOTIR-11241)', () => {
     expect(args).toContain('MOTIR_ASSET_PREFIX=${{ steps.static.outputs.url }}');
     // The commit SHA is both the Sentry release and Next's deploymentId.
     expect(args).toContain('MOTIR_RELEASE=${{ github.sha }}');
-    expect(String(steps[build]!.with!['load'])).toBe('true');
+    // MOTIR-11718: two platforms in one push, so nothing is loaded locally.
+    expect(steps[build]!.with!['load']).toBeUndefined();
   });
 
   it('uploads and checks the files after the digest and before the gate and the roll', () => {
@@ -282,12 +284,15 @@ describe('the static-asset origin in the AWS deploy (MOTIR-11241)', () => {
     expect(steps[upload]!.env?.['BUCKET']).toBe('${{ steps.static.outputs.bucket }}');
   });
 
-  it('uploads again on a re-run whose image was already pushed, pulling it by digest', () => {
+  it("copies from the amd64 child of the commit's index, pulled by digest, on a fresh push and a re-run alike", () => {
+    // MOTIR-11718: the runner's Docker holds no two-platform image, and both
+    // children carry the same `.next/static`, so the amd64 one is pulled.
     const run = steps[upload]!.run!;
     expect(steps[upload]!.env?.['DIGEST']).toBe('${{ steps.digest.outputs.digest }}');
-    expect(run).toContain('docker image inspect "$image"');
     expect(run).toContain('image="$REPOSITORY@$DIGEST"');
-    expect(run).toContain('docker pull');
+    expect(run).toContain('docker pull --quiet --platform linux/amd64 "$image"');
+    expect(run).toContain('cid="$(docker create --platform linux/amd64 "$image")"');
+    expect(run).not.toContain('docker image inspect');
   });
 
   it('checks the origin serves the upload before the roll', () => {
@@ -309,5 +314,54 @@ describe('the static-asset origin in the AWS deploy (MOTIR-11241)', () => {
     expect(step.run).toContain('deploy:static verify-release');
     expect(step.run).toContain('--previous "$PREVIOUS"');
     expect(step['continue-on-error' as keyof typeof step]).toBeUndefined();
+  });
+});
+
+// MOTIR-11718: one image index for linux/amd64 and linux/arm64, so the services
+// may run on Graviton from the same digest, and each CPU's image is started
+// against a database before anything rolls.
+describe('the two-CPU image in the AWS deploy (MOTIR-11718)', () => {
+  const at = (id: string) => stepIndex((s) => s.id === id);
+  const named = (name: string) => stepIndex((s) => s.name === name);
+  const build = stepIndex((s) => !!s.uses?.startsWith('docker/build-push-action'));
+  const qemu = stepIndex((s) => !!s.uses?.startsWith('docker/setup-qemu-action'));
+  const buildx = stepIndex((s) => s.uses === './.github/actions/buildx');
+  const platforms = named('Check the image lists both CPUs');
+  const postgres = named('Start Postgres for the image smoke');
+  const smoke = named("Start each CPU's web, worker and relay against it");
+  const IMAGE =
+    '${{ steps.ecr.outputs.registry }}/${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core@${{ steps.digest.outputs.digest }}';
+
+  it('pushes both platforms from one build', () => {
+    expect(steps[build]!.with!['platforms']).toBe('linux/amd64,linux/arm64');
+    expect(String(steps[build]!.with!['push'])).toBe('true');
+  });
+
+  it('registers the arm64 emulator from the mirror before the builder boots', () => {
+    expect(qemu).toBeLessThan(buildx);
+    expect(steps[qemu]!.with!['image']).toBe('mirror.gcr.io/tonistiigi/binfmt:latest');
+    expect(steps[qemu]!.with!['platforms']).toBe('arm64');
+  });
+
+  it("checks the commit's index and smokes each child after the digest is resolved, before anything rolls", () => {
+    expect(at('digest')).toBeLessThan(platforms);
+    expect(platforms).toBeLessThan(postgres);
+    expect(postgres).toBeLessThan(smoke);
+    expect(smoke).toBeLessThan(named("Upload this release's static files to the origin"));
+    expect(smoke).toBeLessThan(at('gate'));
+    // The push role (which can pull) is still the active session.
+    const deployRole = named('Assume the deploy role');
+    expect(smoke).toBeLessThan(deployRole);
+    for (const i of [platforms, postgres, smoke]) expect(steps[i]!.if).toBeUndefined();
+  });
+
+  it('addresses the image by the digest ECR tags with this commit, and smokes it against the job Postgres', () => {
+    expect(steps[platforms]!.env?.['IMAGE']).toBe(IMAGE);
+    expect(steps[platforms]!.run).toBe('pnpm --silent deploy:image platforms --image "$IMAGE"');
+    expect(steps[postgres]!.uses).toBe('./.github/actions/postgres');
+    expect(steps[smoke]!.env?.['IMAGE']).toBe(IMAGE);
+    expect(steps[smoke]!.run).toBe(
+      'pnpm --silent deploy:image smoke --image "$IMAGE" --database-url postgresql://prodect:prodect@127.0.0.1:5432/prodect',
+    );
   });
 });

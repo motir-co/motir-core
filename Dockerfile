@@ -27,9 +27,35 @@
 # and builds @motir/design-system, and `next build` needs devDependencies. The
 # runner takes only the standalone output plus the migration toolchain below, so
 # none of the builder's tree reaches the shipped image.
+#
+# ── Two CPUs, ONE compile (MOTIR-11718) ─────────────────────────────────────
+# aws-deploy.yml builds this file for linux/amd64 AND linux/arm64 in one push,
+# under ONE tag, so the Fargate services can run on either CPU (Graviton). The
+# split that makes that cheap and correct:
+#
+#   * `deps` and `builder` run on the BUILD machine (`--platform=$BUILDPLATFORM`)
+#     whatever the target. Everything they produce — `next build`'s output, the
+#     esbuild bundles, `.next/static` — is JavaScript and data, the same bytes for
+#     both CPUs. So both images serve ONE set of `/_next/static` files (the deploy
+#     uploads them once, from either image, to the static origin) and ONE Sentry
+#     release with ONE set of source maps, and `next build` never runs under
+#     emulation, where it would take many times as long.
+#   * NATIVE code is built or fetched for the TARGET: the `migrate` stage installs
+#     the Prisma CLI (its schema engine is a native executable) on the target
+#     CPU; the builder adds every CPU's Linux prebuild to each traced native
+#     addon (`argon2`), whose loader picks this CPU's at run time; and the
+#     `standalone` stage swaps each per-platform package the trace took
+#     (`sharp`'s `@img/sharp-linux-*`) for the target CPU's.
+#   * The runner PROVES it: it runs `scripts/imageNativeCheck.mjs` on the target
+#     CPU, and the build stops on any native file built for another one.
+#
+# The Prisma CLIENT has no native part at all: the `prisma-client` generator with
+# the `pg` driver adapter runs its query compiler as WASM, so there is no query
+# engine to pick per CPU (`scripts/build-worker.mjs` carries that argument).
 
 # ── deps ────────────────────────────────────────────────────────────────────
-FROM node:22-slim AS deps
+# On the build machine: see "Two CPUs, ONE compile" above.
+FROM --platform=$BUILDPLATFORM node:22-slim AS deps
 WORKDIR /app
 RUN corepack enable
 # openssl: Prisma's client probes for it at generate time even on the WASM path.
@@ -44,12 +70,20 @@ COPY patches ./patches
 COPY packages/design-system/package.json packages/design-system/
 COPY packages/cli/package.json packages/cli/
 COPY prisma ./prisma
+# Install the per-platform optional packages for BOTH Linux CPUs, not only the
+# build machine's (MOTIR-11718): `sharp`, which `next/image` optimises with,
+# ships its native code as `@img/sharp-linux-x64` / `-linux-arm64`, and the
+# `standalone` stage below hands each image its own CPU's. Appended here, in the
+# image only, so a developer's install stays one platform; the lockfile already
+# lists every platform's package, so `--frozen-lockfile` is unaffected.
+RUN printf '\nsupportedArchitectures:\n  os: [linux]\n  cpu: [x64, arm64]\n  libc: [glibc]\n' >> pnpm-workspace.yaml
 # --ignore-scripts here: postinstall needs the full source tree (it builds the
 # design-system package), which is not copied yet. It runs in the builder below.
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ── build ───────────────────────────────────────────────────────────────────
-FROM node:22-slim AS builder
+# On the build machine too: its output is the same for every target CPU.
+FROM --platform=$BUILDPLATFORM node:22-slim AS builder
 WORKDIR /app
 RUN corepack enable
 RUN apt-get update \
@@ -320,7 +354,26 @@ RUN set -eu; \
     done; \
     echo "no never-served directory reached the standalone output"
 
-# ── the migration toolchain ─────────────────────────────────────────────────
+# ── every CPU's prebuild for the native addons the server traced ───────────
+# `next build` traced each native addon into the standalone tree from the BUILD
+# machine's install, and a node-gyp-build package (`argon2` is the one today)
+# may arrive carrying only that machine's `prebuilds/linux-<arch>/`. Copy every
+# Linux prebuild the installed package ships beside it, so the addon's own loader
+# finds the target CPU's binary at run time. Only packages the trace already
+# took are touched, and only `linux-*`: nothing new reaches the image but the
+# other CPU's build of what is already there. The runner's native check below is
+# what proves the result.
+RUN find node_modules/.pnpm -type d -name prebuilds -prune | while read -r src; do \
+      [ -d ".next/standalone/$(dirname "$src")" ] || continue; \
+      for platform in "$src"/linux-*; do \
+        [ -d "$platform" ] || continue; \
+        mkdir -p ".next/standalone/$src"; \
+        cp -R "$platform" ".next/standalone/$src/"; \
+        echo "prebuild: .next/standalone/$src/$(basename "$platform")"; \
+      done; \
+    done
+
+# ── the migration toolchain's MANIFEST ──────────────────────────────────────
 # `fly.toml`'s release_command runs `prisma migrate deploy` inside THIS image,
 # and the pnpm tree above cannot come with it. Two reasons, both verified rather
 # than assumed (MOTIR-2387):
@@ -335,16 +388,42 @@ RUN set -eu; \
 #
 # So the toolchain is a FLAT, relocatable npm tree, pinned to the exact versions
 # pnpm resolved (read from the installed packages, so it cannot drift from the
-# lockfile behind a `^` range), installed HERE so any platform-specific artifact
-# matches the runner's architecture. `dotenv` is in the set because
-# `prisma.config.ts` imports it. It is not small (~225 MB, nearly all of it
-# @prisma/studio-core, which the CLI bundle requires eagerly — pruning it breaks
-# `migrate deploy` with `Cannot find module '@prisma/studio-core/data/bff'`), and
-# it is the price of a migration lane that runs from the app's own image.
+# lockfile behind a `^` range). The builder only WRITES its manifest: the install
+# itself runs in the `migrate` stage below, on the TARGET CPU, because the CLI's
+# postinstall downloads the schema engine — a native executable — for the
+# machine it runs on, and this stage runs on the build machine (MOTIR-11718).
 RUN PRISMA_VERSION="$(node -p "require('prisma/package.json').version")" \
  && DOTENV_VERSION="$(node -p "require('dotenv/package.json').version")" \
- && npm install --prefix /migrate --no-audit --no-fund --save-exact \
-      "prisma@${PRISMA_VERSION}" "dotenv@${DOTENV_VERSION}"
+ && mkdir -p /migrate \
+ && node -e 'require("fs").writeFileSync("/migrate/package.json", JSON.stringify({ private: true, dependencies: { prisma: process.argv[1], dotenv: process.argv[2] } }, null, 2) + "\n")' \
+      "${PRISMA_VERSION}" "${DOTENV_VERSION}" \
+ && cat /migrate/package.json
+
+# ── standalone — the traced server with the TARGET CPU's platform packages ──
+# On the build machine (it inherits the builder's platform), once per target: a
+# file shuffle, no compile. `next build` traced the build machine's per-platform
+# packages (sharp's `@img/sharp-linux-x64` pair on an amd64 runner);
+# `scripts/imagePlatformPackages.mjs` swaps each for the target's twin from the
+# full install, and stops the build when the install has none. The builder's own
+# tree is left alone, so `next build` is not repeated.
+FROM builder AS standalone
+ARG TARGETARCH
+RUN node scripts/imagePlatformPackages.mjs --arch "${TARGETARCH}" --store node_modules/.pnpm .next/standalone
+
+# ── migrate — the migration toolchain, installed on the TARGET CPU ──────────
+# No `--platform`: this stage is built once per target, natively or under QEMU.
+# `dotenv` is in the set because `prisma.config.ts` imports it. It is not small
+# (~225 MB, nearly all of it @prisma/studio-core, which the CLI bundle requires
+# eagerly — pruning it breaks `migrate deploy` with `Cannot find module
+# '@prisma/studio-core/data/bff'`), and it is the price of a migration lane that
+# runs from the app's own image. openssl: the engine download picks its build by
+# the OpenSSL it finds (`debian-openssl-3.0.x` on this base).
+FROM node:22-slim AS migrate
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /migrate/package.json /migrate/package.json
+RUN npm install --prefix /migrate --no-audit --no-fund
 
 # ── runner ──────────────────────────────────────────────────────────────────
 FROM node:22-slim AS runner
@@ -366,7 +445,7 @@ RUN groupadd --system --gid 1001 nodejs \
 
 # The standalone bundle carries its own minimal node_modules; static and public
 # are NOT included by Next and must be copied alongside it.
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=standalone --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
@@ -397,7 +476,7 @@ COPY --chown=nextjs:nodejs certs/rds-global-bundle.pem ./certs/rds-global-bundle
 # release lane must not inherit them from that: it is a tracing side effect a
 # Next upgrade could withdraw without a word. Everything it reads is copied here
 # explicitly.
-COPY --from=builder --chown=nextjs:nodejs /migrate/node_modules ./migrate/node_modules
+COPY --from=migrate --chown=nextjs:nodejs /migrate/node_modules ./migrate/node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./migrate/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./migrate/prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-deploy.mjs ./migrate/migrate-deploy.mjs
@@ -449,6 +528,22 @@ COPY --from=builder --chown=nextjs:nodejs /app/.breach/breach.mjs.map ./breach/b
 # the map is copied so a failed sweep's stack names a source line.
 COPY --from=builder --chown=nextjs:nodejs /app/.data-script/data-script.mjs ./data/data-script.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/.data-script/data-script.mjs.map ./data/data-script.mjs.map
+
+# ── every native file is built for THIS CPU (MOTIR-11718) ───────────────────
+# The runner is built once per target CPU, natively or under QEMU, so these run
+# AS the image will: `scripts/imageNativeCheck.mjs` reads every ELF file under
+# /app and stops the build on one built for another CPU, then `require`s each
+# native addon; `sharp` is loaded the way `next/image` resolves it (from
+# `next`'s own directory), which links libvips; `prisma --version` runs the
+# schema engine the release lane migrates with. The script is bind-mounted from
+# the builder, so it is not in the image. An amd64 binary in the arm64 image would still RUN here — QEMU's
+# host is amd64 — which is why the check reads the ELF header instead of
+# trusting an exit code.
+RUN --mount=type=bind,from=builder,source=/app/scripts/imageNativeCheck.mjs,target=/tmp/imageNativeCheck.mjs \
+    node /tmp/imageNativeCheck.mjs /app \
+ && node -e 'const s = require(require.resolve("sharp", { paths: [require("path").dirname(require.resolve("next/package.json"))] })); console.log("sharp", s.versions.sharp, "libvips", s.versions.vips)' \
+ && cd /app/migrate \
+ && CHECKPOINT_DISABLE=1 PRISMA_HIDE_UPDATE_MESSAGE=1 node node_modules/prisma/build/index.js --version
 
 # ── the RUNNING process must be able to name its own build (MOTIR-3760) ─────
 # ⚠️ THE BUILDER STAGE'S `MOTIR_RELEASE` DOES NOT REACH HERE, AND FOR MONTHS
