@@ -231,6 +231,40 @@ describe('FailedUsageGroups — order and dismissal', () => {
     expect(tableRows().map((r) => r.getAttribute('data-replayed'))).toEqual(['true', null]);
   });
 
+  it('a group still replaying stays busy when another replay’s re-read no longer lists it', async () => {
+    let finishB!: (value: unknown) => void;
+    replayFailedUsageAction
+      .mockReturnValueOnce(new Promise((resolve) => (finishB = resolve)))
+      .mockResolvedValueOnce({ ok: true, replay: replayDTO({}) });
+    const view = renderWithIntl(<FailedUsageGroups groups={GROUPS} canReplay />);
+    await confirmReplay(tableRows()[1]!); // B: still running
+    await confirmReplay(tableRows()[0]!); // A: answers, the page re-reads
+
+    // The re-read lists neither: A was recorded, B's rows are pending mid-replay.
+    view.rerender(<FailedUsageGroups groups={[GROUPS[2]!]} canReplay />);
+    const rows = tableRows();
+    expect(rows).toHaveLength(3);
+    const busy = rows[1]!;
+    expect(busy.getAttribute('aria-busy')).toBe('true');
+    expect(busy.getAttribute('data-replayed')).toBeNull();
+    expect(within(busy).getByText('Replaying 18 rows')).toBeTruthy();
+
+    await act(async () =>
+      finishB({ ok: true, replay: replayDTO({ error: NO_RATE, reset: 18, applied: 18 }) }),
+    );
+    expect(tableRows()[1]!.getAttribute('data-replayed')).toBe('true');
+  });
+
+  it('a replay that did not finish keeps its group and Replay after a re-read drops it', async () => {
+    replayFailedUsageAction.mockResolvedValueOnce({ ok: false, code: 'FAILED' });
+    const view = renderWithIntl(<FailedUsageGroups groups={GROUPS} canReplay />);
+    await confirmReplay(tableRows()[0]!);
+    view.rerender(<FailedUsageGroups groups={GROUPS.slice(1)} canReplay />);
+    const row = tableRows()[0]!;
+    expect(row.getAttribute('data-replayed')).toBeNull();
+    expect(replayIn(row).hasAttribute('disabled')).toBe(false);
+  });
+
   it('Escape closes the confirm without replaying', async () => {
     renderWithIntl(<FailedUsageGroups groups={GROUPS} canReplay />);
     fireEvent.click(replayIn(tableRows()[0]!));

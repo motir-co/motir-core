@@ -29,13 +29,13 @@ import { replayFailedUsageAction } from '../actions';
  */
 
 type Outcome =
-  | { kind: 'busy' }
+  | { kind: 'busy'; was: FailedUsageGroupDTO }
   | { kind: 'done'; replay: FailedUsageReplayDTO; was: FailedUsageGroupDTO }
-  | { kind: 'unfinished' };
+  | { kind: 'unfinished'; was: FailedUsageGroupDTO };
 
 interface Shown {
   group: FailedUsageGroupDTO;
-  /** Not in the latest read: every row of it was recorded (or left pending). */
+  /** Replayed and no longer in the latest read: drawn as Replayed. */
   replayed: boolean;
 }
 
@@ -70,8 +70,12 @@ export function FailedUsageGroups({
   const listed = new Set(groups.map((g) => g.error));
   const shown: Shown[] = groups.map((group) => ({ group, replayed: false }));
   for (const [error, outcome] of Object.entries(outcomes)) {
-    if (outcome.kind === 'done' && !listed.has(error)) {
-      shown.push({ group: outcome.was, replayed: true });
+    // A group the latest read no longer lists stays where it was: a replayed
+    // group as Replayed; one still replaying (its rows are pending while a
+    // re-read lands from ANOTHER group's replay) or one whose replay did not
+    // finish, as itself with its busy state or its Replay.
+    if (!listed.has(error)) {
+      shown.push({ group: outcome.was, replayed: outcome.kind === 'done' });
     }
   }
   shown.sort(byWeight);
@@ -102,15 +106,15 @@ export function FailedUsageGroups({
 
   const replay = async (group: FailedUsageGroupDTO) => {
     setConfirming(null);
-    setOutcomes((prev) => ({ ...prev, [group.error]: { kind: 'busy' } }));
+    setOutcomes((prev) => ({ ...prev, [group.error]: { kind: 'busy', was: group } }));
     let outcome: Outcome;
     try {
       const answer = await replayFailedUsageAction(group.error);
       outcome = answer.ok
         ? { kind: 'done', replay: answer.replay, was: group }
-        : { kind: 'unfinished' };
+        : { kind: 'unfinished', was: group };
     } catch {
-      outcome = { kind: 'unfinished' };
+      outcome = { kind: 'unfinished', was: group };
     }
     setOutcomes((prev) => ({ ...prev, [group.error]: outcome }));
     // The counts above and every group move with the replay: re-read the page.
