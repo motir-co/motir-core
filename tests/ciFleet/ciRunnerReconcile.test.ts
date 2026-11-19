@@ -1192,7 +1192,7 @@ describe('coverPartitions — the per-label-set arithmetic (MOTIR-11727)', () =>
 
   it('ordinary capacity never covers an on-demand job', () => {
     expect(coverPartitions({ ...none, queuedOnDemand: 2, idleOther: 3, awaitingOther: 3 })).toEqual(
-      { uncoveredOnDemand: 2, uncoveredOther: 0 },
+      { uncoveredOnDemand: 2, uncoveredOther: 0, uncoveredPinned: 0 },
     );
   });
 
@@ -1206,7 +1206,7 @@ describe('coverPartitions — the per-label-set arithmetic (MOTIR-11727)', () =>
         awaitingOnDemand: 1,
         idleOther: 1,
       }),
-    ).toEqual({ uncoveredOnDemand: 0, uncoveredOther: 1 });
+    ).toEqual({ uncoveredOnDemand: 0, uncoveredOther: 1, uncoveredPinned: 0 });
   });
 
   it('a shortfall of on-demand capacity leaves no surplus for the ordinary jobs', () => {
@@ -1218,17 +1218,19 @@ describe('coverPartitions — the per-label-set arithmetic (MOTIR-11727)', () =>
         queuedOther: 2,
         idleOther: 1,
       }),
-    ).toEqual({ uncoveredOnDemand: 2, uncoveredOther: 1 });
+    ).toEqual({ uncoveredOnDemand: 2, uncoveredOther: 1, uncoveredPinned: 0 });
   });
 
   it('with no on-demand label anywhere it is the old single subtraction', () => {
     expect(coverPartitions({ ...none, queuedOther: 5, idleOther: 1, awaitingOther: 2 })).toEqual({
       uncoveredOnDemand: 0,
       uncoveredOther: 2,
+      uncoveredPinned: 0,
     });
     expect(coverPartitions({ ...none, queuedOther: 1, idleOther: 3 })).toEqual({
       uncoveredOnDemand: 0,
       uncoveredOther: 0,
+      uncoveredPinned: 0,
     });
   });
 });
