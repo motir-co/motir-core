@@ -103,6 +103,11 @@ export interface AskJobOutcome {
          *  shape a no-target plan offer carries. Passed onto `result.ask.offer` only
          *  when declared, so every other offer is byte-identical to before. */
         requirement?: SubmittedRequirement;
+        /** GRILL ME'S HAND-OFF (MOTIR-11798): with Grill me on, the read defers the
+         *  offer to the grilling — no requirement, never `immediate` — and names what it
+         *  read. Passed onto `result.ask.offer` only when declared. */
+        deferred?: true;
+        handoff?: { items: string[]; code: string[] };
       }
     | AskLogBugOfferFixture
     | null;

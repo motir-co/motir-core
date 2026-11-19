@@ -7,7 +7,11 @@ import { getGlobalDispatcher, MockAgent, setGlobalDispatcher, type Dispatcher } 
 import { parseSharpenTurn, type SharpenTurnResult } from '@/lib/ai/sharpenTurn';
 import type { SharpenAction, SharpenJobContext, SharpenQuestion } from '@/lib/ai/types';
 import { installAiJobsBoundaryMock } from '@/lib/test-ai-jobs-mock';
-import { installSharpenBoundaryMock, type SharpenControl } from '@/lib/test-sharpen-mock';
+import {
+  installSharpenBoundaryMock,
+  planSharpenTurn,
+  type SharpenControl,
+} from '@/lib/test-sharpen-mock';
 
 // Task MOTIR-1101 · Subtask MOTIR-8180 — the Sharpen E2E seam, driven over the
 // wire through every mode: determinate, scripted (pick / skip / you-decide /
@@ -419,5 +423,87 @@ describe('ownership', () => {
     });
     expect(((await res.json()) as { jobId: string }).jobId).toMatch(/^e2e-augment-/);
     expect(control().submitted ?? []).toEqual([]);
+  });
+});
+
+// Story MOTIR-11799 · Subtask MOTIR-11806: the seam mirrors motir-ai's MOTIR-11803 (a
+// hand-off's grilling always ends with a requirement, and a turn over it with the switch
+// OFF ends as a Stop) and MOTIR-11804 (over a written requirement, a question it settled
+// is never asked again). Pure: the turn as a function of the fixture and the context.
+describe('Grill me refined (MOTIR-11806)', () => {
+  const HANDOFF = {
+    turnId: 't-offer',
+    requestMd: 'Plan an export.',
+    deferred: true as const,
+    handoff: { items: [], code: [] },
+  };
+  const conv = (
+    offer: NonNullable<SharpenJobContext['conversation']>['offer'],
+    over: Partial<SharpenJobContext> = {},
+  ): SharpenJobContext => ({
+    scope: { kind: 'conversation', ref: 'conv-1' },
+    turns: [],
+    settled: [],
+    assumptions: [],
+    pendingQuestion: null,
+    action: 'start',
+    conversation: { requests: ['Plan an export.'], readAnswer: null, card: null, offer, turns: [] },
+    ...over,
+  });
+  const fixture = { mode: 'scripted' as const, questions: SCRIPT };
+
+  it('a start over the hand-off with the switch off ends as a Stop, with a requirement', () => {
+    const plan = planSharpenTurn(fixture, 'job-1', conv(HANDOFF), false);
+    expect(plan.failed).toBe(false);
+    if (plan.failed) return;
+    expect(plan.turn.kind).toBe('stopped');
+    expect(plan.turn.question).toBeNull();
+    expect(plan.turn.requirement?.offerTurnId).toBe('t-offer');
+    expect(plan.turn.requirement?.requirement.outcome).toBe('Plan an export.');
+  });
+
+  it('with the switch on, or absent, the hand-off is asked as before', () => {
+    for (const grillMe of [true, undefined]) {
+      const plan = planSharpenTurn(fixture, 'job-1', conv(HANDOFF), grillMe);
+      expect(!plan.failed && plan.turn.question?.id).toBe('q1');
+    }
+  });
+
+  it('a Stop on the hand-off with nothing settled still writes the requirement', () => {
+    const plan = planSharpenTurn(
+      fixture,
+      'job-1',
+      conv(HANDOFF, { action: 'stop', pendingQuestion: SCRIPT[0]! }),
+      true,
+    );
+    expect(!plan.failed && plan.turn.kind).toBe('stopped');
+    expect(!plan.failed && plan.turn.requirement?.offerTurnId).toBe('t-offer');
+  });
+
+  it('over a written requirement it skips what the requirement settled, and ends nothing_to_ask once all are', () => {
+    const written = {
+      turnId: 't-offer',
+      requestMd: 'Plan an export.',
+      requirement: {
+        outcome: 'Exports.',
+        behaviour: 'Export.\n- Who starts the export? — Any member',
+        assumptions: [{ id: 'q2', text: 'What happens when the export is empty? — A header row' }],
+      },
+    };
+    const next = planSharpenTurn(fixture, 'job-1', conv(written));
+    expect(!next.failed && next.turn.question?.id).toBe('q3');
+
+    const all = {
+      ...written,
+      requirement: {
+        ...written.requirement,
+        scopeEdge: '- Is a scheduled export in scope? — No',
+        assumptions: 'What happens when the export is empty? — A header row',
+      },
+    };
+    const none = planSharpenTurn(fixture, 'job-1', conv(all));
+    expect(!none.failed && none.turn.kind).toBe('nothing_to_ask');
+    // Nothing was settled over a requirement that was written already: it is not rewritten.
+    expect(!none.failed && none.turn.requirement).toBeUndefined();
   });
 });

@@ -1,4 +1,11 @@
-// Acceptance E2E — Grill me works in this conversation: with it on, a vague request
+// PROMOTED from `acceptance-grill-before-planning.spec.ts` (MOTIR-11806): the story it
+// recorded (MOTIR-9221) is done, and Story MOTIR-11799 changed one of its steps — Stop
+// grilling and switching Grill me off while a grilling is open now ask first, and only
+// the confirmation's "Stop and write it" ends the grilling. Every assertion is kept; the
+// three steps that end a grilling press that confirmation. MOTIR-11799's own receipt is
+// `acceptance-grill-me-refined.spec.ts`.
+//
+// Formerly: Acceptance E2E — Grill me works in this conversation: with it on, a vague request
 // gets a sharpening question before any plan offer is made (Story MOTIR-9221 ·
 // MOTIR-9319; design `design/ai-chat/grill-before-planning.mock.html`). The receipt a
 // person watches to accept the story, walking its Verification recipe:
@@ -32,7 +39,7 @@
 // cannot pass vacuously. `beat()` and the chapter hold are pacing, taken after the
 // assertion that proved the step.
 import type { Page, Request, Response } from '@playwright/test';
-import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
+import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
@@ -197,6 +204,13 @@ async function act(page: Page, press: ReturnType<Page['getByTestId']>) {
   return settled;
 }
 
+/** Stop grilling asks first (MOTIR-11802): Stop opens the confirmation, and its
+ *  "Stop and write it" sends the stop — the act whose stored turn this returns. */
+async function stopGrilling(page: Page) {
+  await question(page).getByTestId('sharpen-stop').click();
+  return act(page, page.getByRole('alertdialog').getByTestId('grill-off-confirm'));
+}
+
 /** The offer's Confirm and Decline are not in the DOM — asserted once the question shows. */
 async function expectHeld(page: Page) {
   await expect(question(page)).toBeVisible();
@@ -302,7 +316,7 @@ test('Grill me before planning — a vague request is grilled, Stop shows the of
     await expectHeld(page);
     await beat();
 
-    await act(page, question(page).getByTestId('sharpen-stop'));
+    await stopGrilling(page);
     await expect(thread(page).getByTestId('sharpen-stopped')).toHaveText(
       sharpenCopy.markers.stopped,
     );
@@ -482,6 +496,8 @@ test('switching Grill me off mid-grilling shows the offer with what was settled 
 
   const stopped = sharpenTurnSettled(page);
   await grillSwitch(page).click();
+  // Switching off while a grilling is open asks first (MOTIR-11802).
+  await page.getByRole('alertdialog').getByTestId('grill-off-confirm').click();
   expect((await stopped).outcome).toBe('settled');
   await expect(grillSwitch(page)).toHaveAttribute('aria-checked', 'false');
   await expect(thread(page)).toContainText(sharpenCopy.conversation.switchedOff);
@@ -514,7 +530,7 @@ test('in Chinese, the grilling, the Held notice and the written requirement rend
   await expect(confirmButton(page)).toHaveCount(0);
 
   await act(page, readingButton(page, Q1.readings[0]!.id));
-  await act(page, question(page).getByTestId('sharpen-stop'));
+  await stopGrilling(page);
   const zPane = zh.planningWorkspace.requirementPane;
   await expect(requirementDoc(page)).toContainText(answerLine(Q1, Q1.readings[0]!.label));
   await expect(requirementDoc(page)).toContainText(zPane.headings.behaviour);
