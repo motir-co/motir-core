@@ -8,6 +8,13 @@ import type { HostingEnvironment } from '../../hosting/types';
 // `mh/<rid>/production` and `mh/<rid>/preview` (every preview of a repository
 // shares one, never production's); the GitHub-OIDC push role per repository;
 // the overflow secret; and the tags the adapter keeps its state in.
+//
+// ⚠️ EVERY ECR REPOSITORY LIVES UNDER THE FIXED `mh/` ROOT, whatever the app
+// prefix. The scoped role grants ECR writes on `repository/mh/*` only (MOTIR-9970),
+// and that grant is the security boundary. A prefix that extends `mh-` — the
+// deploy check's `mh-deploy-check-` — carries its extension into the repository
+// segment (`mh/deploy-check-<rid>/production`), never into the root, which would
+// put it outside the grant (MOTIR-11829).
 
 export type ServerlessNamespaceKind = 'preview' | 'production';
 
@@ -30,12 +37,35 @@ function kindOf(environment: HostingEnvironment): ServerlessNamespaceKind {
   return environment.kind === 'production' ? 'production' : 'preview';
 }
 
-/** `mh-` → `mh`: the prefix as the first path segment of an ECR name. A loop,
- *  not `/-+$/`, which is quadratic on a long run of dashes (CodeQL). */
-function prefixSegment(prefix: string): string {
-  let end = prefix.length;
-  while (end > 0 && prefix[end - 1] === '-') end -= 1;
-  return prefix.slice(0, end);
+/** The ECR root every serverless repository sits under: the scoped role's
+ *  `repository/mh/*` grant (MOTIR-9970). Never derived from the app prefix. */
+export const SERVERLESS_ECR_ROOT = 'mh';
+
+/** Strip `char` from both ends. Loops, not `/^-+|-+$/`, which is quadratic on a
+ *  long run of dashes (CodeQL). */
+function trimChar(value: string, char: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === char) start += 1;
+  while (end > start && value[end - 1] === char) end -= 1;
+  return value.slice(start, end);
+}
+
+/** What the prefix adds past the `mh` root, without its dashes: `mh-` → `''`,
+ *  `mh-deploy-check-` → `deploy-check`. A prefix that does not start at the root
+ *  is carried whole (`acme-` → `acme`), so its repositories stay under it too. */
+function prefixExtension(prefix: string): string {
+  const root = SERVERLESS_ECR_ROOT;
+  const rest =
+    prefix === root || prefix.startsWith(`${root}-`) ? prefix.slice(root.length) : prefix;
+  return trimChar(rest, '-');
+}
+
+/** The ECR repository's middle segment for one repository id: the id itself
+ *  under the plain `mh-` prefix, `<extension>-<rid>` under an extended one. */
+function repositorySegment(prefix: string, repositoryId: string): string {
+  const extension = prefixExtension(prefix);
+  return extension ? `${extension}-${repositoryId}` : repositoryId;
 }
 
 export interface ServerlessAppNames {
@@ -50,7 +80,7 @@ export function serverlessPushNamespace(
   repositoryId: string,
   kind: ServerlessNamespaceKind,
 ): string {
-  return `${prefixSegment(prefix)}/${repositoryId}/${kind}`;
+  return `${SERVERLESS_ECR_ROOT}/${repositorySegment(prefix, repositoryId)}/${kind}`;
 }
 
 export function serverlessAppNames(
@@ -65,12 +95,19 @@ export function serverlessAppNames(
   };
 }
 
-/** The repository and namespace kind an ECR repository name was built from. */
+/** The repository and namespace kind an ECR repository name was built from,
+ *  under this prefix — or null for a name that is not one of its repositories. */
 export function namespaceOf(
+  prefix: string,
   pushNamespace: string,
 ): { repositoryId: string; kind: ServerlessNamespaceKind } | null {
-  const match = /^[a-z0-9-]+\/([a-z0-9-]+)\/(preview|production)$/.exec(pushNamespace);
-  return match ? { repositoryId: match[1]!, kind: match[2] as ServerlessNamespaceKind } : null;
+  const match = /^([a-z0-9-]+)\/([a-z0-9-]+)\/(preview|production)$/.exec(pushNamespace);
+  if (!match || match[1] !== SERVERLESS_ECR_ROOT) return null;
+  const extension = prefixExtension(prefix);
+  const segment = match[2]!;
+  const lead = extension ? `${extension}-` : '';
+  if (!segment.startsWith(lead) || segment.length === lead.length) return null;
+  return { repositoryId: segment.slice(lead.length), kind: match[3] as ServerlessNamespaceKind };
 }
 
 /** The (repository, environment) a function name was built from, or null for a
@@ -93,7 +130,7 @@ export function unitOf(
 
 /** The GitHub-OIDC role that may push to one ECR repository (MOTIR-5769 §4). */
 export function pushRoleArn(accountId: string, prefix: string, pushNamespace: string): string {
-  const namespace = namespaceOf(pushNamespace);
+  const namespace = namespaceOf(prefix, pushNamespace);
   if (!namespace) throw new HostingAppNameInvalidError(pushNamespace);
   return `arn:aws:iam::${accountId}:role/${prefix}${namespace.repositoryId}-${namespace.kind}-push`;
 }
