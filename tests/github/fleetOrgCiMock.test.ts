@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateKeyPairSync } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -19,6 +19,7 @@ import {
   findProvisioningInstallationId,
 } from '@/lib/github/repoProvisioning';
 import { repoVisibilityClient } from '@/lib/github/repoVisibility';
+import { readArm64RunnerAmiId, setArm64RunnerAmiOverrideForTests } from '@/lib/orchestrator';
 import {
   CodeScanningDefaultSetupApiError,
   codeScanningDefaultSetupClient,
@@ -113,6 +114,10 @@ beforeEach(() => {
   agent.disableNetConnect();
   installGithubFleetOrgCiMock(agent);
   setGlobalDispatcher(agent);
+});
+
+afterEach(() => {
+  setArm64RunnerAmiOverrideForTests(null);
 });
 
 afterAll(() => {
@@ -350,5 +355,35 @@ describe('an org the control does not name is refused, never answered', () => {
     await expect(
       listInstallationRepositoryIds({ ...target, installationId: '1' }),
     ).rejects.toMatchObject({ name: 'OrgTargetAuthError' });
+  });
+});
+
+describe('the arm64 runner AMI pin answers from the control (MOTIR-11790)', () => {
+  const ARMED = 'ami-0e2e0000000000000';
+
+  it('a control naming the key pins that AMI, re-read on every call', () => {
+    vi.stubEnv('MOTIR_AWS_RUNNER_ARM64_AMI_ID', '');
+    expect(readArm64RunnerAmiId()).toBeNull();
+    control({ ...READY, arm64RunnerAmiId: ARMED });
+    expect(readArm64RunnerAmiId()).toBe(ARMED);
+    // Rewritten without the key: the next call falls back to the env.
+    control(READY);
+    expect(readArm64RunnerAmiId()).toBeNull();
+    vi.stubEnv('MOTIR_AWS_RUNNER_ARM64_AMI_ID', 'ami-0env000000000000a');
+    expect(readArm64RunnerAmiId()).toBe('ami-0env000000000000a');
+  });
+
+  it('null or blank in the control means not pinned, even with the env set', () => {
+    vi.stubEnv('MOTIR_AWS_RUNNER_ARM64_AMI_ID', 'ami-0env000000000000a');
+    control({ ...READY, arm64RunnerAmiId: null });
+    expect(readArm64RunnerAmiId()).toBeNull();
+    control({ ...READY, arm64RunnerAmiId: '   ' });
+    expect(readArm64RunnerAmiId()).toBeNull();
+  });
+
+  it('no control file reads as the env', () => {
+    rmSync(CONTROL, { force: true });
+    vi.stubEnv('MOTIR_AWS_RUNNER_ARM64_AMI_ID', ` ${ARMED} `);
+    expect(readArm64RunnerAmiId()).toBe(ARMED);
   });
 });

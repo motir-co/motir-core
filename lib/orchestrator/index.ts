@@ -466,7 +466,43 @@ export const AWS_RUNNER_ARM64_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_ARM64_AMI_ID';
  * an x86 boot and never filled with the acceptance lane's fake AMI.
  */
 export function readArm64RunnerAmiId(): string | null {
+  const override = arm64RunnerAmiOverride();
+  if (override) {
+    const read = override();
+    if (read.armed) return read.amiId?.trim() || null;
+  }
   return process.env[AWS_RUNNER_ARM64_AMI_ENV_VAR]?.trim() || null;
+}
+
+/**
+ * THE ACCEPTANCE LANE'S ARM64 AMI PIN (MOTIR-11790): a reader the fleet-org-ci
+ * mock (`lib/test-github-fleet-org-ci-mock.ts`) installs under
+ * `E2E_TEST_GITHUB_FLEET_ORG_CI=1`, so a browser spec can choose per test whether
+ * an arm64 runner AMI is pinned — a spec cannot change the server's env, and the
+ * one lane server cannot restart mid-walk. Armed, its `amiId` is the answer
+ * (trimmed; null or blank → not pinned, even with the env set); not armed, the
+ * env read above stands. Re-asked on every call, never cached.
+ *
+ * Held on `globalThis` for the same reason the EC2 override below is: the
+ * instrumentation hook and the route / server-action bundles hold separate
+ * module copies. Unset in every real deployment, and with it unset
+ * `readArm64RunnerAmiId` is the env read byte for byte.
+ */
+export type Arm64RunnerAmiOverride = () => { armed: false } | { armed: true; amiId: string | null };
+
+const ARM64_RUNNER_AMI_OVERRIDE_KEY = Symbol.for('motir.orchestrator.e2eArm64RunnerAmi');
+type Arm64RunnerAmiOverrideHolder = {
+  [ARM64_RUNNER_AMI_OVERRIDE_KEY]?: Arm64RunnerAmiOverride;
+};
+
+function arm64RunnerAmiOverride(): Arm64RunnerAmiOverride | null {
+  return (globalThis as Arm64RunnerAmiOverrideHolder)[ARM64_RUNNER_AMI_OVERRIDE_KEY] ?? null;
+}
+
+/** Install (or with `null`, remove) the lane's arm64 AMI pin reader — tests and the lane only. */
+export function setArm64RunnerAmiOverrideForTests(reader: Arm64RunnerAmiOverride | null): void {
+  if (reader) (globalThis as Arm64RunnerAmiOverrideHolder)[ARM64_RUNNER_AMI_OVERRIDE_KEY] = reader;
+  else delete (globalThis as Arm64RunnerAmiOverrideHolder)[ARM64_RUNNER_AMI_OVERRIDE_KEY];
 }
 
 /** The env var naming the Docker-host AMI an AWS index VM boots (MOTIR-9446) —

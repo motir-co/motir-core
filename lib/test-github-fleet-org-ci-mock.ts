@@ -74,6 +74,13 @@
 // store records the `id` it spent, so re-arming the same control does not fail a second
 // write; arm a new `id` for another failure.
 //
+// THE ARM64 RUNNER AMI PIN (MOTIR-11790). Beside the intercepts, the control's optional
+// `arm64RunnerAmiId` answers `readArm64RunnerAmiId()` (`lib/orchestrator/index.ts`) in this
+// process: a string → that AMI is pinned; `null` or blank → not pinned, even with
+// `MOTIR_AWS_RUNNER_ARM64_AMI_ID` set; the key absent (or no control file) → the env, as in
+// production. Re-read per call like every other control value, so a spec moves the console's
+// arm64 readiness and the flip's arm64 variable between two page loads.
+//
 // No org login is spelled in this file: every org arrives as control data.
 
 import {
@@ -81,6 +88,7 @@ import {
   readFixtureFileSync,
   writeFixtureFileSync,
 } from '@/lib/test-fixture-file';
+import { setArm64RunnerAmiOverrideForTests } from '@/lib/orchestrator';
 import type { MockAgent } from 'undici';
 
 const GITHUB_ORIGIN = 'https://api.github.com';
@@ -163,6 +171,10 @@ export interface FleetOrgCiOrgControl {
  *  no org. */
 export interface FleetOrgCiControl {
   orgs?: Record<string, FleetOrgCiOrgControl>;
+  /** The arm64 runner AMI pin `readArm64RunnerAmiId()` answers with (MOTIR-11790): a
+   *  string → pinned (trimmed); `null` or blank → not pinned, whatever the env says;
+   *  absent → `MOTIR_AWS_RUNNER_ARM64_AMI_ID`, as in production. */
+  arm64RunnerAmiId?: string | null;
 }
 
 /** An org variable as the store holds it. */
@@ -380,6 +392,14 @@ function spendFailure(store: FleetOrgCiStore, entry: FleetOrgCiOrgControl): numb
 
 export function installGithubFleetOrgCiMock(agent: MockAgent): void {
   const pool = agent.get(GITHUB_ORIGIN);
+
+  // ── The arm64 runner AMI pin, answered from the control per call ───────────
+  setArm64RunnerAmiOverrideForTests(() => {
+    const control = readControl();
+    return 'arm64RunnerAmiId' in control
+      ? { armed: true, amiId: control.arm64RunnerAmiId ?? null }
+      : { armed: false };
+  });
 
   // ── The installation-token mint, for an installation the control names ─────
   pool
