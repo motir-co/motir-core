@@ -48,6 +48,7 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 import { NO_ARTIFACT_MARKER } from '@/lib/workItems/artifactEvidence';
 import { childrenBelowClaimBar, ladderKeysFrom } from '@/lib/workItems/statusLadder';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
   DeliveredItemsTransitionFailedError,
   type DeliveredItemTransitionFailure,
@@ -522,7 +523,7 @@ async function syncOnce(
       // cascade Done over work nobody built.
       const openChildrenOfInheritedMerge =
         lifecycle === 'done' && !mergedIntoNonDefaultBase
-          ? await openChildrenIfInherited(item, delivered, repo.workspaceId, tx)
+          ? await openChildrenIfInherited(item, prId, repo.workspaceId, tx)
           : [];
 
       decisions.push({
@@ -1567,21 +1568,44 @@ export async function resyncLinkedPullRequest(
  * is the delivery a link inherits into its ancestors (MOTIR-11835). A pull request the
  * container carries in its own right answers `[]`, so every card's merge behaves as it
  * did before inheritance existed.
+ *
+ * Two facts decide "inherited", and both must hold:
+ *
+ * 1. The project's "Complete children when a parent is done"
+ *    (`autoCompleteChildrenOnParentDone`) is ON. With it off a link inherits nothing
+ *    (`inheritDeliveryToAncestors`), so every container row is its own.
+ * 2. The container's row for this pull request is NOT OLDER than the earliest
+ *    descendant's. An inherited row is written in the same transaction as, and after,
+ *    the descendant's row it copies; a row the container holds in its own right was
+ *    written by its own link, before a child rode the same pull request — the
+ *    parent-run shape (MOTIR-11624), where a child is linked beside its story to the
+ *    story's pull request. Holding THAT story would leave it short of Done with its
+ *    own code merged and nothing left to merge.
+ *
+ * The second is a proxy: the delivery table records no provenance. A story linked to a
+ * pull request only AFTER a child already rode it reads as inherited — the same gap as
+ * MOTIR-11839, which a provenance column on the row would settle for both.
  */
 async function openChildrenIfInherited(
   item: { id: string; projectId: string },
-  delivered: ReadonlyArray<{ id: string }>,
+  prId: string,
   workspaceId: string,
   tx: Prisma.TransactionClient,
 ): Promise<string[]> {
-  let inherited = false;
-  for (const other of delivered) {
-    if (other.id !== item.id && (await isDescendantOf(other.id, item.id, tx))) {
-      inherited = true;
-      break;
-    }
+  const automation = await projectRepository.findStatusAutomation(item.projectId, tx);
+  if (!automation?.autoCompleteChildrenOnParentDone) return [];
+
+  const rows = await workItemDeliveryRepository.listByPullRequest(prId, tx);
+  const own = rows.find((row) => row.workItemId === item.id);
+  if (!own) return [];
+  let earliestDescendant: Date | null = null;
+  for (const row of rows) {
+    if (row.workItemId === item.id) continue;
+    if (earliestDescendant && row.createdAt >= earliestDescendant) continue;
+    if (await isDescendantOf(row.workItemId, item.id, tx)) earliestDescendant = row.createdAt;
   }
-  if (!inherited) return [];
+  if (!earliestDescendant || own.createdAt < earliestDescendant) return [];
+
   const children = await workItemRepository.findChildren(item.id, tx);
   const statuses = await workflowsService.listStatusesByProject(item.projectId, workspaceId, tx);
   return childrenBelowClaimBar(children, statuses, ladderKeysFrom(statuses)).map(

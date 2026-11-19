@@ -479,4 +479,30 @@ describe('a child pull request merged on its own, outside the story’s approval
 
     expect(await statusOf(parent.id)).toBe('done');
   });
+
+  // Review of core#4359: the parent-run shape (MOTIR-11624) links a built child BESIDE its
+  // story to the story's OWN pull request. That merge is the story's, not an inherited one,
+  // so an unbuilt sibling (a manual child a parent run stops at) must not hold it — with the
+  // cascade switch on or off, exactly as on main.
+  for (const cascade of [true, false]) {
+    it(`completes the story on its OWN pull request's merge when a built child rides it and a sibling is unbuilt (cascade ${cascade ? 'on' : 'off'})`, async () => {
+      const s = await makeScenario(`11835-own-ridden-${cascade}@example.com`, { cascade });
+      const {
+        parent,
+        kids: [a, b],
+      } = await story(s, 2);
+      const number = cascade ? 100 : 101;
+      const ref = `story/${parent.identifier}`;
+      await link(parent.identifier, number, ref);
+      await opened(number, ref);
+      await link(a!.identifier, number, ref);
+      await workItemsService.updateStatus(a!.id, 'implemented', s.ctx);
+      expect(await statusOf(b!.id)).toBe('in_progress');
+
+      await merged(number, ref);
+
+      expect(await statusOf(parent.id)).toBe('done');
+      expect(await statusOf(a!.id)).toBe('done');
+    });
+  }
 });
