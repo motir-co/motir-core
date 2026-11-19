@@ -1582,6 +1582,21 @@ gate but not decide it sees its state and no control.
 > more widely, which is now possible, and never by re-widening the relationship
 > arms.
 
+**AMENDMENT (2026-11-19, Bug MOTIR-11823) — a gate whose Approve MERGES is not
+listed while its card's pull requests cannot merge.** The queue this section
+routes is a list of decisions a person can carry out now. A card holding a
+pull-request fix reason (`queue_failed`, `conflicted`, `out_of_date`,
+`ci_failed`) is on To fix, and a press on its approve-to-merge gate — or on a
+primary (design, decision, acceptance) of a card that delivers pull requests of
+its own, which is approve-and-merge (§8, `pullRequestMergeService.decideGate`) —
+is refused at the host for the same reason. So that gate is EXCLUDED from the
+routed queue, its count and the watermark (`awaitingRoutedToWhere`'s
+`MERGE_BLOCKED_GATE_EXCLUDED`) until the recompute clears `fixReason`. Routing is
+untouched: the gate stays `awaiting` and routed to the same person, and the row
+returns, decidable, with nothing re-raised. `run_died` and `changes_requested`
+do not exclude, and a gate that merges nothing is never excluded. The surface
+half is `design/workbench/design-notes.md` § 42.
+
 ### 3. What approving a DESIGN result does — DECIDED BY THE PLANNER (rung 3: the story's own stated intent)
 
 **Approve** records the decision, performs §6c's pin, and transitions the design

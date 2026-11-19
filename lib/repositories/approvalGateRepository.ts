@@ -18,6 +18,8 @@ import {
   ApprovalGateDecidedImmutableError,
 } from '@/lib/approvalGates/errors';
 import { REVIEW_CARRYING_GATE_KINDS } from '@/lib/dto/reviewState';
+import { PRIMARY_GATE_KINDS } from '@/lib/approvalGates/gateSet';
+import { PULL_REQUEST_FIX_REASONS } from '@/lib/workItems/fixReason';
 
 // Single-op data access for the `approval_gate` table (Story MOTIR-4778 ·
 // Subtask MOTIR-4788; ADR docs/decisions/approval-gates.md). Writes require `tx`
@@ -1586,6 +1588,10 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
     AND: [
       // …a planning-session row is listed only while its session still waits (MOTIR-7913)…
       planningSessionLiveWhere(scope),
+      // ⚠️ …A MERGE THE CARD'S OWN PULL REQUESTS CANNOT TAKE IS NOT A DECISION TO MAKE NOW
+      // (Bug MOTIR-11823; `design/workbench/design-notes.md` § 42). The card is To fix
+      // instead, and it comes back here when its `fixReason` clears.
+      MERGE_BLOCKED_GATE_EXCLUDED,
       // ⚠️ …and A PLAN BEING REWRITTEN IS NOT WAITING ON ANYBODY (Bug MOTIR-7988;
       // `approval-gates.md` §11.5c's 2026-10-09 amendment). Its gate stays `awaiting`
       // and HELD — the decide door refuses it — but the person has nothing to decide
@@ -1636,6 +1642,55 @@ const CARRIED_MERGE_GATE_EXCLUDED = {
     },
   },
 } as const satisfies Prisma.ApprovalGateWhereInput;
+
+/**
+ * A GATE WHOSE APPROVE MERGES, ON A CARD WHOSE PULL REQUESTS CANNOT MERGE (Bug MOTIR-11823;
+ * `design/workbench/design-notes.md` § 42, amending § 28 and § 34; `approval-gates.md` §2's
+ * 2026-11-19 amendment) — off Waiting on you.
+ *
+ * A card holding a PULL-REQUEST fix reason ({@link PULL_REQUEST_FIX_REASONS}: the queue threw
+ * a member out, a member conflicts, is behind a base that requires it, or is red) is listed
+ * under To fix. A gate on that card whose Approve runs approve-and-merge is refused at the
+ * press for the same reason (`MERGE_CONFLICT`, `MERGE_OUT_OF_DATE`, …), so listing it here
+ * too put one card in two tabs saying opposite things — *decide now* and *repair first* —
+ * with a press that can only be refused. Those gates are:
+ *
+ *   · the approve-to-merge gate itself;
+ *   · a PRIMARY ({@link PRIMARY_GATE_KINDS} — design, decision, acceptance) on a card that
+ *     delivers pull requests of its own, whose one press also decides the merge
+ *     (`pullRequestMergeService.decideGate` → `approvePrimaryAndMerge`). On a card with no
+ *     delivery it merges nothing and stays listed.
+ *
+ * Every other kind (choice, plan, manual work, planning session) merges nothing and is
+ * untouched, and so is every gate while the card's `fixReason` is `run_died` or
+ * `changes_requested` (the latter closes the gate anyway).
+ *
+ * ⚠️ A LISTING RULE, NOT A STATE — the gate stays `awaiting`, and the recompute that
+ * clears `fixReason` (`fixReasonService`) brings the row back with nothing re-raised. The
+ * list, its count, the home count and the watermark all read `awaitingRoutedToWhere`, so a
+ * count can never disagree with its rows, and a `fixReason` set or cleared changes the
+ * watermark's count — the live stream moves the row both ways.
+ *
+ * ⚠️ WRITTEN AS WHAT STAYS, NEVER AS `NOT (what leaves)` — and that is SQL's three-valued
+ * logic, measured rather than assumed. `fixReason` is NULL on nearly every card and the
+ * whole relation is NULL on a card-less gate, so `NOT (… fixReason IN (…) …)` is NULL —
+ * not TRUE — for exactly the rows that must stay, and the first draft of this clause
+ * emptied the queue of every card that was NOT stuck. Each arm below is TRUE or FALSE on
+ * every row: a gate stays when it does not merge, when its card holds no pull-request
+ * reason (the explicit `null` arm), or when it is a primary on a card that delivers
+ * nothing.
+ */
+const MERGE_BLOCKED_GATE_EXCLUDED: Prisma.ApprovalGateWhereInput = {
+  OR: [
+    { kind: { notIn: ['pull_request_approval', ...PRIMARY_GATE_KINDS] } },
+    {
+      workItem: {
+        OR: [{ fixReason: null }, { fixReason: { notIn: [...PULL_REQUEST_FIX_REASONS] } }],
+      },
+    },
+    { kind: { in: [...PRIMARY_GATE_KINDS] }, workItem: { deliveries: { none: {} } } },
+  ],
+};
 
 /**
  * The decision-waiting marker's predicate (MOTIR-5876): every `awaiting` gate on
