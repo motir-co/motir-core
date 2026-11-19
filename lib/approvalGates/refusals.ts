@@ -145,6 +145,16 @@ export type GateRefusal =
        */
       permission: string | null;
     }
+  | {
+      // GitHub THROTTLED the merge (Bug MOTIR-11841): the host did not refuse it, so
+      // nothing was recorded and the approval stands. Not a server `ApprovalGateErrorTag`
+      // — it is the one host non-answer the frame can name, read off
+      // `MergeChangeRequestError`'s `rate_limited` reason by {@link hostNonAnswerRefusal}.
+      tag: 'MERGE_RATE_LIMITED';
+      /** The wait GitHub named, in seconds. Null is a real answer — a bare 429 names
+       *  none — so the copy has an unnamed arm rather than a guessed number. */
+      retryAfterSeconds: number | null;
+    }
   | { tag: 'UNEXPECTED' };
 
 /** Every tag the frame handles. */
@@ -191,6 +201,7 @@ export function toGateRefusal(
     primary?: PendingPrimary | null;
     atPress?: boolean | null;
     conflicts?: readonly { pullRequest: string; baseRef: string | null }[] | null;
+    retryAfterSeconds?: number | null;
   },
 ): GateRefusal {
   switch (code) {
@@ -248,7 +259,25 @@ export function toGateRefusal(
       return extra?.reason ? { tag: code, reason: extra.reason } : { tag: code };
     case 'MERGE_APP_PERMISSION_MISSING':
       return { tag: code, permission: extra?.permission || null };
+    case 'MERGE_RATE_LIMITED':
+      return { tag: code, retryAfterSeconds: extra?.retryAfterSeconds ?? null };
     default:
       return { tag: 'UNEXPECTED' };
   }
+}
+
+/**
+ * The refusal a person is shown when the HOST DID NOT ANSWER a merge
+ * (`MergeChangeRequestError`, read structurally so this client-safe module imports no
+ * server code). A throttle is named, with the wait GitHub gave (Bug MOTIR-11841); every
+ * other non-answer — a timeout, an unreachable host, an unnamed status — stays the
+ * frame's unexpected arm.
+ */
+export function hostNonAnswerRefusal(err: {
+  reason: string;
+  retryAfterSeconds: number | null;
+}): GateRefusal {
+  return err.reason === 'rate_limited'
+    ? toGateRefusal('MERGE_RATE_LIMITED', { retryAfterSeconds: err.retryAfterSeconds })
+    : toGateRefusal('UNEXPECTED');
 }

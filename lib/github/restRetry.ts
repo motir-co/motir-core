@@ -33,15 +33,57 @@ export function backoffMs(attempt: number): number {
 }
 
 /**
- * How long to wait before retrying a response, or null when the response is not
- * retryable.
+ * WHICH throttle a response is, when it is one (Bug MOTIR-11841) — or null for a
+ * response GitHub did not throttle.
  *
  * GitHub signals throttling three ways and this checks all three, because they
  * do not co-occur: a SECONDARY limit sends `retry-after` (seconds) on a 403; a
  * PRIMARY limit sends `x-ratelimit-remaining: 0` plus `x-ratelimit-reset` (unix
- * seconds) on a 403 or 429; and a bare 429 may carry neither. A 5xx is retried
- * on plain exponential backoff. Anything else — 401, 404, 422 — is a real
- * failure the caller must see, so it returns null.
+ * seconds) on a 403 or 429; and a bare 429 may carry neither. `waitMs` is the wait
+ * the host NAMED — the retry-after, or the time left until the reset (never
+ * negative) — and null for the bare 429, which names none.
+ *
+ * ⚠️ A 403 WITH NO THROTTLING SIGNAL IS NOT HERE. It is an ACCESS failure (the
+ * installation lost the repository, or lacks a permission), and the merge path
+ * reports it as one; reading it as a throttle would tell a person to wait for a
+ * setting nobody changes.
+ */
+export type GithubThrottle =
+  | { signal: 'retry_after' | 'rate_limit_reset'; waitMs: number }
+  | { signal: 'too_many_requests'; waitMs: null };
+
+export function githubThrottle(
+  status: number,
+  headers: { get(name: string): string | null },
+  nowMs: number,
+): GithubThrottle | null {
+  if (status !== 403 && status !== 429) return null;
+
+  const retryAfter = Number(headers.get('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return { signal: 'retry_after', waitMs: retryAfter * 1_000 };
+  }
+
+  const remaining = Number(headers.get('x-ratelimit-remaining'));
+  const reset = Number(headers.get('x-ratelimit-reset'));
+  if (remaining === 0 && Number.isFinite(reset) && reset > 0) {
+    // `reset` is unix SECONDS; one already in the past is a wait of nothing.
+    return { signal: 'rate_limit_reset', waitMs: Math.max(reset * 1_000 - nowMs, 0) };
+  }
+
+  return status === 429 ? { signal: 'too_many_requests', waitMs: null } : null;
+}
+
+/**
+ * How long to wait before retrying a response, or null when the response is not
+ * retryable.
+ *
+ * A throttle ({@link githubThrottle}) waits what the host named: the `retry-after`
+ * as given, a primary-limit reset with the backoff floor under it (so a reset
+ * already in the past, or a clock skew, cannot spin the retry loop), and a bare 429
+ * the plain backoff. A 5xx is retried on plain exponential backoff. Anything else —
+ * 401, 404, 422, a 403 with no throttling signal — is a real failure the caller
+ * must see, so it returns null.
  */
 export function retryDelayMs(
   status: number,
@@ -52,19 +94,11 @@ export function retryDelayMs(
   const backoff = backoffMs(attempt);
 
   if (status === 403 || status === 429) {
-    const retryAfter = Number(headers.get('retry-after'));
-    if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter * 1_000;
-
-    const remaining = Number(headers.get('x-ratelimit-remaining'));
-    const reset = Number(headers.get('x-ratelimit-reset'));
-    if (remaining === 0 && Number.isFinite(reset) && reset > 0) {
-      // `reset` is unix SECONDS. A reset already in the past still gets the
-      // backoff floor rather than 0, so a clock skew cannot spin the retry loop.
-      return Math.max(reset * 1_000 - nowMs, backoff);
-    }
-    // A 403 with no throttling signal is an ACCESS failure (the installation
-    // lost the repo), not a rate limit — do not retry it.
-    return status === 429 ? backoff : null;
+    const throttle = githubThrottle(status, headers, nowMs);
+    if (!throttle) return null;
+    if (throttle.signal === 'retry_after') return throttle.waitMs;
+    if (throttle.signal === 'rate_limit_reset') return Math.max(throttle.waitMs, backoff);
+    return backoff;
   }
 
   if (status >= 500) return backoff;

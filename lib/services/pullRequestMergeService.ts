@@ -35,7 +35,11 @@ import { OUT_OF_DATE_MERGEABLE_STATE } from '@/lib/github/mergeability';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
+import {
+  hostNonAnswerRefusal,
+  toGateRefusal,
+  type GateRefusal,
+} from '@/lib/approvalGates/refusals';
 import { PRIMARY_GATE_KINDS, unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
 import { classOfMergeRefusal, classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
@@ -276,6 +280,8 @@ async function mergeOrEnqueue(
           approvalGateId,
           pullRequestId: target.pullRequestId,
           reason: err.reason,
+          status: err.status,
+          retryAfterSeconds: err.retryAfterSeconds,
         },
       );
     }
@@ -1347,7 +1353,9 @@ function memberRefusal(err: unknown): GateRefusal | null {
   if (err instanceof ApprovalGateError) return toGateRefusal(err.tag);
   if (err instanceof PermissionDeniedError) return toGateRefusal('APPROVAL_GATE_NOT_AUTHORISED');
   if (err instanceof ProjectNotFoundError) return toGateRefusal('APPROVAL_GATE_NOT_FOUND');
-  // The host did not answer: nothing was decided, and there is no host refusal to draw.
-  if (err instanceof MergeChangeRequestError) return toGateRefusal('UNEXPECTED');
+  // The host did not answer: nothing was decided, and there is no host refusal to draw —
+  // unless the host THROTTLED it, which is named so the person waits rather than
+  // looking for a setting (Bug MOTIR-11841).
+  if (err instanceof MergeChangeRequestError) return hostNonAnswerRefusal(err);
   return null;
 }

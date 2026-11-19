@@ -18,7 +18,11 @@ import {
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
-import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
+import {
+  hostNonAnswerRefusal,
+  toGateRefusal,
+  type GateRefusal,
+} from '@/lib/approvalGates/refusals';
 import type {
   ApprovalGateDTO,
   ApprovalGateRefusalVerdictDTO,
@@ -178,8 +182,9 @@ function refusalOf(err: unknown): GateRefusal | null {
     });
   }
   // The host did not answer the merge: nothing was decided, and there is no refusal
-  // of the host's to draw — the frame's unexpected arm, logged by the service.
-  if (err instanceof MergeChangeRequestError) return toGateRefusal('UNEXPECTED');
+  // of the host's to draw — the frame's unexpected arm, logged by the service; or the
+  // host THROTTLED it, named with GitHub's wait (Bug MOTIR-11841).
+  if (err instanceof MergeChangeRequestError) return hostNonAnswerRefusal(err);
   if (err instanceof ApprovalGateError) {
     // ⚠️ The already-decided refusal is the one that can NAME the winner, and
     // that is the whole reason the door locks and re-reads rather than

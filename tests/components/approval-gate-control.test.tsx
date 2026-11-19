@@ -300,6 +300,25 @@ describe('H · refused — every member of the union renders in place, with a ne
       refusal: { tag: 'MERGE_QUEUE_FAILED_NEEDS_FIX', reason: 'CI_FAILURE' },
       expect: /failed in the merge queue\..*nothing was queued.*motir fix/,
     },
+    // GitHub THROTTLED the merge (Bug MOTIR-11841): the wait GitHub named, in minutes
+    // rounded up — and never the permission message a throttle used to be read as.
+    {
+      refusal: { tag: 'MERGE_RATE_LIMITED', retryAfterSeconds: 60 },
+      expect:
+        /rate-limiting Motir, so nothing was merged\..*still stands: press again in 1 minute\./,
+    },
+    {
+      refusal: { tag: 'MERGE_RATE_LIMITED', retryAfterSeconds: 125 },
+      expect: /rate-limiting Motir.*press again in 3 minutes\./,
+    },
+    {
+      refusal: { tag: 'MERGE_RATE_LIMITED', retryAfterSeconds: 0 },
+      expect: /rate-limiting Motir.*press again in 1 minute\./,
+    },
+    {
+      refusal: { tag: 'MERGE_RATE_LIMITED', retryAfterSeconds: null },
+      expect: /rate-limiting Motir.*press again in a few minutes\./,
+    },
     { refusal: { tag: 'UNEXPECTED' }, expect: /could not be recorded/ },
   ];
 

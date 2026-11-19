@@ -16556,6 +16556,11 @@
         "next": "조직 소유자가 GitHub에서 Motir의 GitHub App에 {permission} 권한을 부여한 후 다시 승인하세요.",
         "nextUnnamed": "조직 소유자가 GitHub에서 요청한 권한을 Motir의 GitHub App에 부여한 후 다시 승인하세요."
       },
+      "mergeRateLimited": {
+        "title": "GitHub가 Motir의 요청 속도를 제한하고 있어 아무것도 병합되지 않았습니다.",
+        "next": "{minutes, plural, other {승인은 그대로 유효합니다. #분 후에 다시 눌러 주세요.}}",
+        "nextUnnamed": "승인은 그대로 유효합니다. 몇 분 후에 다시 눌러 주세요."
+      },
       "unexpected": {
         "title": "결정을 기록하지 못했습니다.",
         "next": "연결을 확인하고 다시 시도하세요."

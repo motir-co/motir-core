@@ -16562,6 +16562,11 @@
         "next": "Een eigenaar van de organisatie verleent {permission} aan de GitHub App van Motir op GitHub, en daarna keur je opnieuw goed.",
         "nextUnnamed": "Een eigenaar van de organisatie verleent de GitHub App van Motir het recht waar GitHub om vroeg, en daarna keur je opnieuw goed."
       },
+      "mergeRateLimited": {
+        "title": "GitHub beperkt het aantal verzoeken van Motir, dus er is niets gemerged.",
+        "next": "{minutes, plural, one {Je goedkeuring blijft staan: probeer het over # minuut opnieuw.} other {Je goedkeuring blijft staan: probeer het over # minuten opnieuw.}}",
+        "nextUnnamed": "Je goedkeuring blijft staan: probeer het over een paar minuten opnieuw."
+      },
       "unexpected": {
         "title": "Je beslissing kon niet worden vastgelegd.",
         "next": "Controleer je verbinding en probeer het opnieuw."

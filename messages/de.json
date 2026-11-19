@@ -16562,6 +16562,11 @@
         "next": "Ein Inhaber der Organisation erteilt der GitHub-App von Motir auf GitHub die Berechtigung {permission}, dann genehmigen Sie erneut.",
         "nextUnnamed": "Ein Inhaber der Organisation erteilt der GitHub-App von Motir die von GitHub angeforderte Berechtigung, dann genehmigen Sie erneut."
       },
+      "mergeRateLimited": {
+        "title": "GitHub drosselt Motir gerade, daher wurde nichts gemergt.",
+        "next": "{minutes, plural, one {Ihre Genehmigung gilt weiterhin: Versuchen Sie es in # Minute erneut.} other {Ihre Genehmigung gilt weiterhin: Versuchen Sie es in # Minuten erneut.}}",
+        "nextUnnamed": "Ihre Genehmigung gilt weiterhin: Versuchen Sie es in ein paar Minuten erneut."
+      },
       "unexpected": {
         "title": "Ihre Entscheidung konnte nicht erfasst werden.",
         "next": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."

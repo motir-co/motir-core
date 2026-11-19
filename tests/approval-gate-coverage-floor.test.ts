@@ -11,7 +11,7 @@ import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateNotFoundError,
 } from '@/lib/approvalGates/errors';
-import { toGateRefusal } from '@/lib/approvalGates/refusals';
+import { hostNonAnswerRefusal, toGateRefusal } from '@/lib/approvalGates/refusals';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -143,6 +143,27 @@ describe('toGateRefusal — the client reads the SERVER’s vocabulary (MOTIR-47
     expect(toGateRefusal('MERGE_BRANCH_PROTECTED')).toStrictEqual({
       tag: 'MERGE_BRANCH_PROTECTED',
     });
+  });
+
+  it('carries the wait a THROTTLE named, and reads the host non-answers (Bug MOTIR-11841)', () => {
+    expect(toGateRefusal('MERGE_RATE_LIMITED', { retryAfterSeconds: 60 })).toEqual({
+      tag: 'MERGE_RATE_LIMITED',
+      retryAfterSeconds: 60,
+    });
+    // No wait named is the unnamed arm, never a guessed number.
+    expect(toGateRefusal('MERGE_RATE_LIMITED')).toEqual({
+      tag: 'MERGE_RATE_LIMITED',
+      retryAfterSeconds: null,
+    });
+    expect(hostNonAnswerRefusal({ reason: 'rate_limited', retryAfterSeconds: 90 })).toEqual({
+      tag: 'MERGE_RATE_LIMITED',
+      retryAfterSeconds: 90,
+    });
+    for (const reason of ['timeout', 'unreachable', 'unexpected_status']) {
+      expect(hostNonAnswerRefusal({ reason, retryAfterSeconds: null })).toEqual({
+        tag: 'UNEXPECTED',
+      });
+    }
   });
 
   it('has NO member for a changed subject — that is the shipped SUPERSEDED, not a sixth merge refusal (MOTIR-5512)', () => {

@@ -16559,6 +16559,11 @@
         "next": "組織のオーナーが GitHub で Motir の GitHub App に {permission} を付与してから、もう一度承認してください。",
         "nextUnnamed": "組織のオーナーが、GitHub が求めた権限を Motir の GitHub App に付与してから、もう一度承認してください。"
       },
+      "mergeRateLimited": {
+        "title": "GitHub が Motir のリクエストを制限しているため、何もマージされませんでした。",
+        "next": "{minutes, plural, other {承認はそのまま有効です。# 分後にもう一度押してください。}}",
+        "nextUnnamed": "承認はそのまま有効です。数分後にもう一度押してください。"
+      },
       "unexpected": {
         "title": "あなたの判断を記録できませんでした。",
         "next": "接続を確認して、もう一度お試しください。"
