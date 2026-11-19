@@ -84,6 +84,15 @@ function matches(filters: readonly Ec2Filter[], tags: readonly Ec2Tag[], attrs: 
   });
 }
 
+/** One arranged RunInstances refusal: the code, and — each optional — the zone,
+ *  the market and the instance type a call must match to be refused. */
+interface RunRefusal {
+  readonly code: string;
+  readonly zone?: string;
+  readonly market?: 'spot' | 'on_demand';
+  readonly instanceType?: string;
+}
+
 /** The HTTP status EC2 answers each arranged code with. */
 const STATUS_BY_CODE: Record<string, number> = {
   InsufficientInstanceCapacity: 500,
@@ -134,10 +143,20 @@ export class AwsEc2Fake implements Ec2Api {
   /** The next RunInstances creates its instance and THEN fails — an ambiguous
    *  timeout. */
   private failNextAfterCreate: string | null = null;
-  /** Every RunInstances the fake refused for capacity: where, with which token. */
-  readonly refusals: Array<{ zone: string; clientToken: string; code: string }> = [];
+  /** Every RunInstances the fake refused: where, with which token, the type and
+   *  the market it asked for (MOTIR-11716). */
+  readonly refusals: Array<{
+    zone: string;
+    clientToken: string;
+    code: string;
+    instanceType: string;
+    market: 'spot' | 'on_demand';
+  }> = [];
   /** Arranged RunInstances refusals, each consumed by the first call it matches. */
-  private readonly arrangedRefusals: Array<{ code: string; zone?: string }> = [];
+  private readonly arrangedRefusals: RunRefusal[] = [];
+  /** Standing Spot refusals (MOTIR-11716): every Spot launch of the type (in the
+   *  zone, when named) is refused with the code until cleared. */
+  private readonly spotRefusals: Array<{ instanceType: string; zone?: string; code: string }> = [];
   /** Zones refusing every launch with InsufficientInstanceCapacity until cleared. */
   private readonly outOfStockZones = new Set<string>();
   private seq = 0;
@@ -191,6 +210,7 @@ export class AwsEc2Fake implements Ec2Api {
     this.now = () => new Date();
     this.failNextAfterCreate = null;
     this.arrangedRefusals.length = 0;
+    this.spotRefusals.length = 0;
     this.outOfStockZones.clear();
     this.refusals.length = 0;
     this.seq = 0;
@@ -263,8 +283,47 @@ export class AwsEc2Fake implements Ec2Api {
    * named. Each call queues one refusal; the HTTP status is the one EC2 sends for
    * that code (InsufficientInstanceCapacity 500, RequestLimitExceeded 503).
    */
-  failNextRunInstances(refusal: { code: string; zone?: string }): void {
+  failNextRunInstances(refusal: RunRefusal): void {
     this.arrangedRefusals.push(refusal);
+  }
+
+  /**
+   * Refuse every SPOT RunInstances of `instanceType` — in `zone` only, when
+   * named — with `code` (default InsufficientInstanceCapacity), until
+   * {@link clear}. An on-demand launch of the same type is not refused.
+   */
+  refuseSpot(refusal: { instanceType: string; zone?: string; code?: string }): void {
+    this.spotRefusals.push({ ...refusal, code: refusal.code ?? 'InsufficientInstanceCapacity' });
+  }
+
+  /** The market and type of every RunInstances sent, in order — what a Spot
+   *  walk tried. `market` is `spot` when the request carried the Spot option;
+   *  `taggedResources` are the resource types `createEc2Api` writes a tag
+   *  specification for from that request (`instance` and `volume`, plus
+   *  `network-interface` when asked) — never a `spot-instances-request`. */
+  launchAttempts(): Array<{
+    instanceType: string;
+    market: 'spot' | 'on_demand';
+    subnetId: string;
+    clientToken: string;
+    taggedResources: string[];
+  }> {
+    return this.calls
+      .filter((c) => c.method === 'runInstances')
+      .map((c) => {
+        const input = c.input as Ec2RunInstanceInput;
+        return {
+          instanceType: input.instanceType,
+          market: input.market === 'spot' ? ('spot' as const) : ('on_demand' as const),
+          subnetId: input.subnetId,
+          clientToken: input.clientToken,
+          taggedResources: [
+            'instance',
+            'volume',
+            ...(input.tagNetworkInterface ? ['network-interface'] : []),
+          ],
+        };
+      });
   }
 
   /** Every launch in `zone` is InsufficientInstanceCapacity until cleared. */
@@ -677,15 +736,35 @@ export class AwsEc2Fake implements Ec2Api {
     }
     const subnet = this.subnets.get(input.subnetId)!;
     const zone = subnet.availabilityZone;
-    const arranged = this.arrangedRefusals.findIndex((r) => !r.zone || r.zone === zone);
+    const market = input.market === 'spot' ? ('spot' as const) : ('on_demand' as const);
+    const arranged = this.arrangedRefusals.findIndex(
+      (r) =>
+        (!r.zone || r.zone === zone) &&
+        (!r.market || r.market === market) &&
+        (!r.instanceType || r.instanceType === input.instanceType),
+    );
+    const spotRefusal =
+      market === 'spot'
+        ? this.spotRefusals.find(
+            (r) => r.instanceType === input.instanceType && (!r.zone || r.zone === zone),
+          )
+        : undefined;
     const code =
       arranged >= 0
         ? this.arrangedRefusals.splice(arranged, 1)[0]!.code
-        : this.outOfStockZones.has(zone)
-          ? 'InsufficientInstanceCapacity'
-          : null;
+        : spotRefusal
+          ? spotRefusal.code
+          : this.outOfStockZones.has(zone)
+            ? 'InsufficientInstanceCapacity'
+            : null;
     if (code) {
-      this.refusals.push({ zone, clientToken: input.clientToken, code });
+      this.refusals.push({
+        zone,
+        clientToken: input.clientToken,
+        code,
+        instanceType: input.instanceType,
+        market,
+      });
       const status = STATUS_BY_CODE[code] ?? 400;
       throw new Ec2ApiError(code, status, status >= 500);
     }

@@ -238,6 +238,16 @@ export interface Ec2RunInstanceInput {
   /** The instance profile by ARN, in place of a name — the install fleet's,
    *  which its infrastructure passes as an ARN (MOTIR-10794). */
   readonly iamInstanceProfileArn?: string;
+  /**
+   * Launch as a Spot Instance (MOTIR-11716), sent as `InstanceMarketOptions`
+   * `{ MarketType: 'spot', SpotOptions: { SpotInstanceType: 'one-time',
+   * InstanceInterruptionBehavior: 'terminate' } }` with no `MaxPrice`, so the
+   * price is capped at the On-Demand price. Absent = On-Demand, and the request
+   * carries no market option at all. `tags` still go on the instance and its
+   * volumes only: no `spot-instances-request` tag specification is ever sent,
+   * so the launch needs no `ec2:CreateTags` on that resource.
+   */
+  readonly market?: 'spot';
 }
 
 export interface Ec2DescribeInstancesInput {
@@ -532,6 +542,19 @@ function instanceCalls(send: Send): InstanceCalls {
             HttpEndpoint: input.metadataOptions.httpEndpoint,
           },
           InstanceInitiatedShutdownBehavior: input.instanceInitiatedShutdownBehavior,
+          // `InstanceMarketOptionsRequest` / `SpotMarketOptions`: one-time, ended
+          // (never stopped or hibernated) on interruption, and no MaxPrice.
+          ...(input.market === 'spot'
+            ? {
+                InstanceMarketOptions: {
+                  MarketType: 'spot' as const,
+                  SpotOptions: {
+                    SpotInstanceType: 'one-time' as const,
+                    InstanceInterruptionBehavior: 'terminate' as const,
+                  },
+                },
+              }
+            : {}),
           ...(input.iamInstanceProfileArn
             ? { IamInstanceProfile: { Arn: input.iamInstanceProfileArn } }
             : input.iamInstanceProfileName

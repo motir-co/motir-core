@@ -385,6 +385,7 @@ describe('createEc2Api — the instance calls (MOTIR-9276)', () => {
     });
     expect(sent[0]!.input).not.toHaveProperty('IamInstanceProfile');
     expect(sent[0]!.input).not.toHaveProperty('KeyName');
+    expect(sent[0]!.input).not.toHaveProperty('InstanceMarketOptions');
   });
 
   it('omits BlockDeviceMappings when there is no Docker disk, and refuses an empty answer', async () => {
@@ -393,6 +394,24 @@ describe('createEc2Api — the instance calls (MOTIR-9276)', () => {
       createEc2Api(CONFIG, factory).runInstances({ ...LAUNCH, blockDeviceMappings: [] }),
     ).rejects.toMatchObject({ code: 'MissingField.Instances' });
     expect(sent[0]!.input).not.toHaveProperty('BlockDeviceMappings');
+  });
+
+  it('asks for Spot as a one-time, terminate-on-interruption market with no MaxPrice, tagging no Spot request (MOTIR-11716)', async () => {
+    const { sent, factory } = stub({
+      RunInstancesCommand: { Instances: [{ InstanceId: 'i-1', State: { Name: 'pending' } }] },
+    });
+    await createEc2Api(CONFIG, factory).runInstances({ ...LAUNCH, market: 'spot' });
+
+    expect(sent[0]!.input).toMatchObject({
+      InstanceType: 'm6i.large',
+      InstanceMarketOptions: {
+        MarketType: 'spot',
+        SpotOptions: { SpotInstanceType: 'one-time', InstanceInterruptionBehavior: 'terminate' },
+      },
+    });
+    expect(sent[0]!.input).not.toHaveProperty('InstanceMarketOptions.SpotOptions.MaxPrice');
+    const input = sent[0]!.input as { TagSpecifications: Array<{ ResourceType: string }> };
+    expect(input.TagSpecifications.map((t) => t.ResourceType)).toEqual(['instance', 'volume']);
   });
 
   it('sends an instance profile by name only when the launch names one (MOTIR-10123)', async () => {

@@ -11821,6 +11821,11 @@ model CiRunnerProvisioningIntent {
   /// claim, under the admission lock, with `fleetShardId`; cleared with it when
   /// the claim is released.
   installFleet            Boolean               @default(false) @map("install_fleet")
+  /// The CAPACITY the container got (MOTIR-11716): `spot` when the launch asked
+  /// for Spot and got it, `on_demand` otherwise — Spot off, Spot refused for
+  /// every type, or a provider with no Spot. Written with the handle at boot.
+  /// NULL = never booted, or booted before the column existed.
+  capacity                CiRunnerCapacity?     @map("capacity")
   /// Why the job left the account admission first chose for it (MOTIR-8968).
   /// NULL when it booted on its first choice, or on Fly. The headroom reading
   /// (MOTIR-8969) counts moves from it.
@@ -12604,6 +12609,15 @@ enum FleetShardPauseReason {
 }
 
 /// Why a CI job left the account admission first chose for it (MOTIR-8968).
+/// The capacity a CI runner's container ran on (MOTIR-11716) — the port's
+/// provider-neutral `ContainerCapacity`.
+enum CiRunnerCapacity {
+  spot
+  on_demand
+
+  @@map("ci_runner_capacity")
+}
+
 enum FleetShardMoveReason {
   capacity_refused
   provider_unavailable
