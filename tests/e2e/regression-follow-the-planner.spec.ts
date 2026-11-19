@@ -1,6 +1,7 @@
 import type { Locator, Page, Response } from '@playwright/test';
 import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
+import { markEveryAddWritten } from '../helpers/walkWritten';
 import { signIn } from './_helpers/shell-session';
 import { agentSession } from './_helpers/agent-authored-plan-seed';
 import {
@@ -540,6 +541,10 @@ test('the canvas follows the planner while a plan is written, stops when the rea
     );
 
     await chapter('The plan is proposed — the control goes, and the canvas stays put', async () => {
+      // A walked plan closes `planned` only once every card it owes is written
+      // (MOTIR-11701); this spec stands in for the author sessions, so it stamps
+      // each add's `authorFinished` the way they would before the close.
+      await markEveryAddWritten(planId);
       const proposed = polled(page, planId, (b) => b.status !== 'generating');
       await tool(agent, ADD_PLAN_ITEMS_TOOL_NAME, { planId, proposals: [], final: true });
       const body = (await ((await proposed) as Response).json()) as PlanReviewDto;

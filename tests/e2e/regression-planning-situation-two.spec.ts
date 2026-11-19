@@ -18,7 +18,12 @@ import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanningAnchorTree, PLANNING_ANCHOR_PASSWORD } from './_helpers/planning-anchor-seed';
 import { E2E_CORE_CALLBACK_SECRET } from './_helpers/log-bug-as-ai';
-import type { AiJobsFixture, PlanJobOutcome, SubmittedJob } from '@/lib/test-ai-jobs-mock';
+import type {
+  AiJobsFixture,
+  AskJobOutcome,
+  PlanJobOutcome,
+  SubmittedJob,
+} from '@/lib/test-ai-jobs-mock';
 import en from '@/messages/en.json';
 
 test.describe.configure({ timeout: 300_000 });
@@ -42,6 +47,21 @@ function queuePlan(outcome: PlanJobOutcome): void {
   f.plan = [...(f.plan ?? []), outcome];
   writeFileSync(JOBS_FIXTURE, JSON.stringify(f, null, 2));
 }
+
+/** APPEND the next ask job's outcome — what the planner answers a follow-up to the
+ *  waiting plan with (MOTIR-11488): an answer, or a revision of that plan. */
+function queueAsk(outcome: AskJobOutcome): void {
+  const f = readJobsFixture();
+  f.ask = [...(f.ask ?? []), outcome];
+  writeFileSync(JOBS_FIXTURE, JSON.stringify(f, null, 2));
+}
+
+/** The planner decides a follow-up is a change to the waiting plan, restated. */
+const reviseWaiting = (requirement: string): AskJobOutcome => ({
+  intent: 'plan_change',
+  answer: `I'll revise the plan: ${requirement}`,
+  revision: { requirement },
+});
 
 const planSubmits = (): SubmittedJob[] =>
   (readJobsFixture().submitted ?? []).filter((s) => s.kind === 'plan' && !s.refused);
@@ -132,6 +152,26 @@ async function sendFromCard(page: Page, text: string): Promise<void> {
   expect((await sent).status()).toBe(200);
 }
 
+/**
+ * Send a FOLLOW-UP while a plan waits. Since MOTIR-11488 it is asked through the ask
+ * door against the waiting plan, and the planner decides on a revision; the settle
+ * hands a `plan_change` over to a revision of THAT plan (`redirected`).
+ */
+async function sendFollowUp(page: Page, text: string): Promise<void> {
+  const asked = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/api/ai/ask' && r.request().method() === 'POST',
+  );
+  const settled = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/api/ai/ask/settle' && r.request().method() === 'POST',
+  );
+  await composer(page).fill(text);
+  await rail(page).getByRole('button', { name: 'Send' }).click();
+  expect((await asked).status()).toBe(200);
+  const res = await settled;
+  expect(res.status(), await res.text()).toBe(200);
+  expect(((await res.json()) as { outcome?: string }).outcome).toBe('redirected');
+}
+
 test.beforeEach(async () => {
   await resetDatabase();
   writeFileSync(JOBS_FIXTURE, JSON.stringify({ submitted: [] }, null, 2));
@@ -177,11 +217,13 @@ test('a failed change of a waiting plan keeps the session; a turn revises the sa
       .poll(async () => (await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status)
       .toBe('planned');
 
-    // Second turn asks a change; that run FAILS.
+    // Second turn asks a change; the planner revises the waiting plan, and that
+    // revision run FAILS.
     queuePlan({ status: 'failed' });
+    queueAsk(reviseWaiting('Split the canvas tests out of the canvas seam.'));
     await page.reload();
     await expect(rail(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-    await sendFromCard(page, 'Also split out the tests.');
+    await sendFollowUp(page, 'Also split out the tests.');
     await expect
       .poll(
         async () =>
@@ -219,20 +261,13 @@ test('a failed change of a waiting plan keeps the session; a turn revises the sa
 
   await chapter('A turn revises the same plan in the same session', async () => {
     queuePlan({ status: 'succeeded' });
-    const sent = page.waitForResponse(
-      (r) => new URL(r.url()).pathname.endsWith('/ai/plan') && r.request().method() === 'POST',
-    );
-    await composer(page).fill('Please try that change again.');
-    await rail(page).getByRole('button', { name: 'Send' }).click();
-    const res = await sent;
-    expect(res.status()).toBe(200);
-    const { planId: revisedPlanId, jobId } = (await res.json()) as {
-      planId: string;
-      jobId: string;
-    };
-    expect(revisedPlanId).toBe(planId);
-
-    const job = planSubmits().find((s) => s.jobId === jobId)!;
+    queueAsk(reviseWaiting('Split the canvas tests out of the canvas seam.'));
+    const before = planSubmits().length;
+    await sendFollowUp(page, 'Please try that change again.');
+    // ONE revision run follows, and it revises the SAME plan.
+    await expect.poll(() => planSubmits().length).toBe(before + 1);
+    const job = planSubmits().at(-1)!;
+    expect(job.planId).toBe(planId);
     await appendAsAi(
       page,
       job,
