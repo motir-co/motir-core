@@ -73,9 +73,49 @@
 // order (87626130152 < 87626227873 for the two CI runs above; 87626129473 <
 // 87626226092 for the two CodeQL ones), so it says what we actually mean.
 
+//
+// ── A RE-RUN ATTEMPT IS NOT A NEW SUITE (MOTIR-11827) ───────────────────────
+// Everything above supersedes by SUITE, and that is only half of GitHub's
+// re-run model. "Re-run jobs" and "Re-run failed jobs" do not mint a suite: every
+// attempt of one workflow run reports its check runs under the SAME
+// `check_suite.id`. So the trap this module closed for two RUNS reopens for two
+// ATTEMPTS of one run — on motir-core#4353 @ `b50389ac` attempt 1 was cancelled
+// (template-named matrix rows, gated jobs, all `cancelled` → `failure`),
+// attempt 3 went green with the gated jobs `skipped`, and every attempt-1 failure
+// stayed live for good, under suite 120570907095, while GitHub showed 72 green
+// and 11 skipped.
+//
+// The check-run payload names no attempt (`details_url` names the job, and the
+// `run_attempt` the Actions API carries needs `actions: read`, which the
+// user-facing App does not hold — see `readCommitActionsSuites`). What the
+// rows DO carry is the suite's own roll-up, and GitHub forms a suite's
+// conclusion over its LATEST attempt. A roll-up that reads `success` therefore
+// says no check of the latest attempt failed; a `failure` row in that suite that
+// finished no later than the roll-up did can only be an earlier attempt's. That
+// row is retired. A failure that finished AFTER the green roll-up — a newer
+// attempt already running and red before its own roll-up lands — keeps its vote,
+// and so does every row with no time on it (it cannot be ordered).
+//
+// The mirror half lives at ingestion: a `skipped` (neutral) delivery used to be
+// dropped before it reached the row, so a gated job skipped by the later attempt
+// never cleared the failure the cancelled attempt left at the SAME key. It now
+// settles that row when it is newer (`changeRequestCiFeedback.applyOneCiDelivery`).
+// Successes from an earlier attempt are left alone: "Re-run failed jobs" carries
+// them into the new attempt rather than running them again.
+
 /** The row fields the supersession rule reads — a slice both call sites have. */
 export interface SuiteScopedCheckRow {
   checkName: string;
+  /** The normalized conclusion (`success` · `failure` · `pending` · `neutral`).
+   *  Read by the attempt rule (MOTIR-11827): only a `failure` is retired by a
+   *  green roll-up, and only a `success` roll-up retires anything. */
+  conclusion: string;
+  /** WHEN, by the provider's clock, the row reached `conclusion` — its finish for
+   *  a terminal row, its start for a pending one (MOTIR-10456). `null` = unknown:
+   *  such a row cannot be ordered and is never retired by the attempt rule.
+   *  Required rather than optional so a reader cannot leave it out of its select
+   *  and quietly read the old, attempt-blind verdict (MOTIR-11827). */
+  conclusionAt: Date | null;
   /** The CI run this check belongs to. `''` means NO run identity: a row
    *  written before the column existed, or a provider that reports none (a
    *  legacy commit-`status` event). Such rows form ONE group, which supersedes
@@ -100,6 +140,12 @@ export interface SuiteScopedCheckRow {
  * Order is preserved, so a caller's `orderBy` still holds.
  */
 export function liveCheckRows<T extends SuiteScopedCheckRow>(rows: T[]): T[] {
+  return withoutEarlierAttempts(liveSuites(rows));
+}
+
+/** The run-level rule (MOTIR-3209 · MOTIR-6274): drop every suite a later suite
+ *  at the commit replaced. */
+function liveSuites<T extends SuiteScopedCheckRow>(rows: T[]): T[] {
   if (rows.length === 0) return rows;
 
   // Every suite at the commit gets an entry — a suite whose only row is its
@@ -131,6 +177,41 @@ export function liveCheckRows<T extends SuiteScopedCheckRow>(rows: T[]): T[] {
   if (superseded.size === 0) return rows;
 
   return rows.filter((row) => !superseded.has(row.checkSuiteId));
+}
+
+/**
+ * The attempt-level rule (MOTIR-11827): inside a suite whose OWN roll-up is a
+ * green it reached at a known time, a `failure` row that finished no later than
+ * that roll-up is an EARLIER ATTEMPT's, and it does not vote.
+ *
+ * Applied to the suites `liveSuites` kept, never across suites: a roll-up speaks
+ * for its own workflow run and nothing else, so CodeQL's red is never retired by
+ * CI's green (MOTIR-6274). A row that cannot be ordered — no time on it, or none
+ * on the roll-up — keeps its vote, which is the behaviour before this rule.
+ */
+function withoutEarlierAttempts<T extends SuiteScopedCheckRow>(rows: T[]): T[] {
+  const greenAt = new Map<string, number>();
+  for (const row of rows) {
+    if (
+      row.suiteAggregate === true &&
+      row.checkSuiteId !== '' &&
+      row.conclusion === 'success' &&
+      row.conclusionAt != null
+    ) {
+      const at = row.conclusionAt.getTime();
+      const known = greenAt.get(row.checkSuiteId);
+      if (known === undefined || at > known) greenAt.set(row.checkSuiteId, at);
+    }
+  }
+  if (greenAt.size === 0) return rows;
+
+  const kept = rows.filter((row) => {
+    if (row.suiteAggregate === true || row.conclusion !== 'failure') return true;
+    if (row.conclusionAt == null) return true;
+    const green = greenAt.get(row.checkSuiteId);
+    return green === undefined || row.conclusionAt.getTime() > green;
+  });
+  return kept.length === rows.length ? rows : kept;
 }
 
 /**

@@ -98,11 +98,10 @@ export function isCiUndecidedAtHead(pr: PullRequestHeadSlice): boolean {
   return pr.checkRuns.length > 0;
 }
 
-/** A check row with the time its current run started or finished (`conclusionAt`, MOTIR-10456). */
-export interface CheckRunWithStart extends PrCheckRunSlice {
-  /** The provider's time for the row's conclusion: a pending row's START. Null when unknown. */
-  conclusionAt?: Date | null;
-}
+/** A check row with the time its current run started or finished (`conclusionAt`, MOTIR-10456).
+ *  Every check slice carries that time since MOTIR-11827 — the supersession rule reads it — so
+ *  this is the slice itself, kept as a name for the readers that are about the START. */
+export type CheckRunWithStart = PrCheckRunSlice;
 
 /**
  * Whether CI at the pull request's head is a RE-RUN — the head had already DECIDED before the

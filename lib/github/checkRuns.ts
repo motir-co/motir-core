@@ -538,7 +538,11 @@ export async function readCommitActionsSuites(
       // raw conclusion is read for (`pickFailingCheck` skips a null one).
       rawConclusion: null,
       url: null,
-      completedAt: null,
+      // A finished suite's `updated_at`, the same clock the `check_suite` webhook
+      // dates its roll-up by. The lost-completion settle writes it onto the row, and
+      // the attempt rule needs a GREEN roll-up's time to retire an earlier attempt's
+      // failures under it (MOTIR-11827); without one the green orders nothing.
+      completedAt: status === 'completed' ? completedAtOf(suite['updated_at']) : null,
       suiteAggregate: true,
     });
   }
