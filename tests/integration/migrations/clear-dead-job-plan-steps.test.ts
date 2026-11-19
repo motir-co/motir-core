@@ -44,7 +44,11 @@ type SessionShape = 'running' | 'failed' | 'ended' | 'none';
 /** A plan written by `sourceJobId`, in a session of the given shape, holding the given steps. */
 async function planWith(
   fx: WorkItemFixture,
-  opts: { sourceJobId: string | null; session: SessionShape; status?: 'generating' | 'planned' },
+  opts: {
+    sourceJobId: string | null;
+    session: SessionShape;
+    status?: 'generating' | 'planned' | 'declined' | 'approved';
+  },
   stepKeys: string[],
 ) {
   let sessionId: string | null = null;
@@ -119,6 +123,15 @@ async function seedEstate() {
     // An ENDED session carries no failure (`plan_change_session_one_wait`): only a job that is
     // not the plan's current one is judged, so its current job's step stays.
     ended: await planWith(a, { sourceJobId: 'job-e', session: 'ended' }, ['ai:job-e:1']),
+    // DECIDED plans: no session of them runs, so every step goes, whoever wrote it — the
+    // card's follow-up (an ended session declined its plan `abandoned` with 18 rows on it).
+    declined: await planWith(a, { sourceJobId: 'job-d', session: 'ended', status: 'declined' }, [
+      'ai:job-d:1',
+      'plan-py-5',
+    ]),
+    approved: await planWith(b, { sourceJobId: 'job-a', session: 'ended', status: 'approved' }, [
+      'ai:job-a:1',
+    ]),
     // No session, no hosted job: an `ai:` key names no current job, so it is dead.
     sessionless: await planWith(b, { sourceJobId: null, session: 'none' }, [
       'ai:job-x:1',
@@ -134,6 +147,8 @@ async function expectCleared(plans: Awaited<ReturnType<typeof seedEstate>>) {
   expect(await keysOf(plans.healthy)).toEqual(['ai:job-h:1', 'plan-py-3']);
   expect(await keysOf(plans.ended)).toEqual(['ai:job-e:1']);
   expect(await keysOf(plans.sessionless)).toEqual(['plan-py-4']);
+  expect(await keysOf(plans.declined)).toEqual([]);
+  expect(await keysOf(plans.approved)).toEqual([]);
 }
 
 describe('the migration file', () => {

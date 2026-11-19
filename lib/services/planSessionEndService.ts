@@ -160,6 +160,8 @@ export async function endSessionWithin(
           { status: 'declined', decidedAt: now, decidedById: null, decisionReason: 'abandoned' },
           tx,
         );
+        // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+        await planStepRepository.deleteForPlan(plan.id, tx);
       }
       if (plan && (plan.status === 'generating' || plan.status === 'declined')) {
         await planTargetLockService.releaseForPlanWithin(plan.id, by.actor, tx, { system: true });
@@ -204,6 +206,8 @@ export async function endSessionWithin(
         },
         tx,
       );
+      // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+      await planStepRepository.deleteForPlan(plan.id, tx);
       // A person's discard is a decision and goes on the trail, as
       // `declineWithin` records one. Motir's is not — the abandoned sweep has
       // never recorded its `abandoned` either; the reason on the row says it.
@@ -566,6 +570,8 @@ export async function releaseUnresumableAttempt(
           },
           tx,
         );
+        // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+        await planStepRepository.deleteForPlan(plan.id, tx);
         await planTargetLockService.releaseForPlanWithin(plan.id, actor, tx, { system: true });
       }
       await planTargetLockService.releaseForSessionWithin(sessionId, actor, tx, { system: true });

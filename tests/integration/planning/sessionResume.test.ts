@@ -15,6 +15,7 @@ import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionEndService } from '@/lib/services/planSessionEndService';
+import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -296,6 +297,48 @@ describe('the dead job’s steps (Bug MOTIR-11833)', () => {
     expect(await stepKeys(f.planId)).toEqual([]);
     await authorStep(f.planId, 'job-new-1', 1);
     expect(await stepKeys(f.planId)).toEqual(['ai:job-new-1:1']);
+  });
+
+  // Every TERMINAL path takes the steps with it too (the card's 21:48 follow-up: a session
+  // ended `failed` declined its plan `abandoned` and kept the first job's 18 rows).
+  it('a session ended `failed` declines its plan with no step left', T, async () => {
+    const f = await failedSession();
+    await authorStep(f.planId, 'job-1', 5);
+
+    await planSessionEndService.endSession(f.sessionId, 'failed', { workspaceId: fx.workspaceId });
+
+    expect(await planRow(f.planId)).toMatchObject({
+      status: 'declined',
+      decisionReason: 'abandoned',
+    });
+    expect(await stepKeys(f.planId)).toEqual([]);
+  });
+
+  it('a person declining the generating plan leaves no step', T, async () => {
+    const f = await failedSession();
+    await authorStep(f.planId, 'job-1', 6);
+
+    await plansService.declinePlan(f.planId, fx.ctx);
+
+    expect((await planRow(f.planId)).status).toBe('declined');
+    expect(await stepKeys(f.planId)).toEqual([]);
+  });
+
+  it('an attempt released as unresumable leaves no step', T, async () => {
+    const f = await failedSession();
+    await authorStep(f.planId, 'job-1', 7);
+    await adminDb.planChangeSession.update({
+      where: { id: f.sessionId },
+      data: { failureResumable: false },
+    });
+
+    await planSessionEndService.releaseUnresumableAttempt(f.sessionId, fx.workspaceId);
+
+    expect(await planRow(f.planId)).toMatchObject({
+      status: 'declined',
+      decisionReason: 'abandoned',
+    });
+    expect(await stepKeys(f.planId)).toEqual([]);
   });
 
   it('the OLD job’s late failure frame deletes none of the resumed job’s steps', T, async () => {

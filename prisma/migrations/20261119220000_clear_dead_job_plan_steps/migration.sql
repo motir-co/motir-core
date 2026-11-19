@@ -5,12 +5,14 @@
 -- as still being written: the overlay's spinner, an `authoring` card to the
 -- authoring state and an unwritten one to the walk's completeness check. The code
 -- now deletes a plan's steps when its failure is recorded
--- (`planSessionEndService.recordFailureWithin`) and again when a Resume binds the
--- new job (`planSessionResumeService.bindWithin`). The rows already left behind
--- before that shipped are deleted ONCE, here, at deploy. This file keys on the
--- RULE, never on a plan or job id, so it is a no-op wherever no such row exists.
+-- (`planSessionEndService.recordFailureWithin`), when a Resume binds the new job
+-- (`planSessionResumeService.bindWithin`), and on every write that decides the
+-- plan (`declined` / `approved`, held by `tests/guards/decided-plan-steps.test.ts`).
+-- The rows already left behind before that shipped are deleted ONCE, here, at
+-- deploy. This file keys on the RULE, never on a plan or job id, so it is a no-op
+-- wherever no such row exists.
 --
--- THE TWO ARMS — a step is dead when:
+-- THE THREE ARMS — a step is dead when:
 --   1. its plan's attempt is RECORDED FAILED and not yet resumed: the plan's
 --      session is open, carries a failure, and `failed_job_id` is the plan's
 --      `source_job_id`. The same rule the failure record now applies — every
@@ -20,6 +22,9 @@
 --      `planStepReporter` / `planEntryRecorder`), and a job prefix other than the
 --      plan's `source_job_id` is an attempt a Resume (or a revision) replaced.
 --      Only `ai:` keys are judged — every other planner's keys are opaque.
+--   3. its plan is DECIDED — `declined` (a person's decline, a discard, the
+--      abandoned sweep, an ended session) or `approved`: no session of a
+--      decided plan is running.
 --   ⚠️ `IS DISTINCT FROM`, not `<>`: a NULL `source_job_id` (a plan no hosted job
 --   writes) makes every `ai:` row on it dead, and `<>` would yield NULL and keep it.
 --
@@ -53,6 +58,7 @@ BEGIN
             AND c."failed_job_id" = p."source_job_id")
         OR (s."session_key" LIKE 'ai:%'
             AND split_part(s."session_key", ':', 2) IS DISTINCT FROM p."source_job_id")
+        OR p."status" IN ('declined', 'approved')
   LOOP
     PERFORM set_config('app.workspace_id', ws, true);
 
@@ -65,7 +71,8 @@ BEGIN
              AND c."failed_at" IS NOT NULL
              AND c."failed_job_id" = p."source_job_id")
          OR (s."session_key" LIKE 'ai:%'
-             AND split_part(s."session_key", ':', 2) IS DISTINCT FROM p."source_job_id"));
+             AND split_part(s."session_key", ':', 2) IS DISTINCT FROM p."source_job_id")
+         OR p."status" IN ('declined', 'approved'));
     GET DIAGNOSTICS n = ROW_COUNT;
     cleared := cleared + n;
   END LOOP;

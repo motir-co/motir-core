@@ -7676,6 +7676,8 @@ export const plansService = {
             },
             tx,
           );
+          // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+          await planStepRepository.deleteForPlan(planId, tx);
           await planRevisionsService.recordRevision(
             {
               planId,
@@ -8772,6 +8774,8 @@ export const plansService = {
             },
             tx,
           );
+          // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+          await planStepRepository.deleteForPlan(planId, tx);
           // The question ends with the plan (MOTIR-6036; §11.7): its awaiting gate
           // is withdrawn as `plan_discarded`, under the plan lock this transaction
           // already holds. A withdrawal SHORT of the last supersedes nothing — the
@@ -11306,6 +11310,8 @@ async function approveWithin(
     { status: 'approved', approvingAt: null, decidedAt: new Date(), decidedById: ctx.userId },
     tx,
   );
+  // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+  await planStepRepository.deleteForPlan(planId, tx);
   // The decision ENDS the conversation that produced it (AMENDMENT 23 §2).
   await endDecidedSession(tx, updated, 'approved', ctx);
   // The approval, on the plan's content trail (MOTIR-3535), inside the
@@ -11635,6 +11641,8 @@ async function declineWithin(
     },
     tx,
   );
+  // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+  await planStepRepository.deleteForPlan(planId, tx);
   // A person's decline ENDS the conversation that produced it (AMENDMENT 23 §2).
   await endDecidedSession(tx, updated, 'declined', ctx);
   // The real count, read inside the same transaction — `markPlanned` above

@@ -11,6 +11,7 @@ import {
   settleFailedJob,
 } from '@/lib/services/planSessionEndService';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
+import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import {
   isReopenedByRevision,
   revisionLeaseOf,
@@ -793,6 +794,8 @@ export const abandonedPlanService = {
           { status: 'declined', decidedAt: now, decisionReason: 'abandoned' },
           tx,
         );
+        // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+        await planStepRepository.deleteForPlan(plan.id, tx);
         return true;
       });
 
