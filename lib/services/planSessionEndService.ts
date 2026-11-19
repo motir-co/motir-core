@@ -25,6 +25,7 @@ import {
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
+import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
@@ -486,6 +487,13 @@ export async function recordFailureWithin(
     return 'activity_moved';
   }
   if (!(await planChangeSessionRepository.markFailed(sessionId, record, tx))) return 'ended';
+  // The failed attempt is DEAD, so no session of it is still on a step (Bug MOTIR-11833): a job
+  // that dies sends no `end`, and since MOTIR-11184 a step never ages out, so every row it left
+  // would read its card as being written — the spinner on a plan nothing is writing, an
+  // `authoring` card to the authoring state, and an unwritten one to the walk's completeness
+  // check — until a Resume binds, and on a card the resumed job never targets, for good. The
+  // plan is locked above, so no step report lands between the record and this delete.
+  await planStepRepository.deleteForPlan(plan.id, tx);
   // The failure write nulls the awaiting-person marker (a session never waits for both), so the
   // planning-session gate that marker raised would be left `awaiting` with nothing behind it:
   // withdraw it, so the wait that turned into a failure leaves Waiting on you for good and the

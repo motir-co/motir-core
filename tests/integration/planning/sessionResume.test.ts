@@ -223,6 +223,92 @@ describe('the happy path — the SAME plan in the SAME session', () => {
   );
 });
 
+// BUG MOTIR-11833 — a dead job's `plan_step` rows. A job that dies mid-walk sends no `end` for its
+// sessions, and since MOTIR-11184 a step never ages out, so each row it left read its card as being
+// written for good. The failure record deletes them, and the Resume bind deletes whatever is there.
+describe('the dead job’s steps (Bug MOTIR-11833)', () => {
+  /** An author step the way the hosted planner keys it, `ai:<jobId>:<n>`, holding a draft. */
+  async function authorStep(planId: string, jobId: string, n: number) {
+    const item = await adminDb.planItem.findFirstOrThrow({ where: { planId } });
+    await adminDb.planStep.create({
+      data: {
+        planId,
+        sessionKey: `ai:${jobId}:${n}`,
+        kind: 'author',
+        targetRef: `planItem:${item.id}`,
+        startedAt: new Date(),
+        draftPlanItemId: item.id,
+        draftSeq: 1,
+        draftTitle: 'Half a title',
+        draftUpdatedAt: new Date(),
+      },
+    });
+  }
+  const stepKeys = async (planId: string) =>
+    (await adminDb.planStep.findMany({ where: { planId }, orderBy: { sessionKey: 'asc' } })).map(
+      (row) => row.sessionKey,
+    );
+  const settle = (jobId: string) =>
+    planSessionEndService.settleFailedJob(
+      jobId,
+      { ...fx.ctx, projectId: fx.projectId },
+      { status: 'failed' },
+      {
+        readJob: async () => ({
+          error: null,
+          walkStop: {
+            phase: 'author',
+            target: null,
+            targetTitle: null,
+            depth: 1,
+            reasonCode: 'out_of_credits',
+          },
+        }),
+      },
+    );
+
+  it('recording the failure deletes every step the dead job left', T, async () => {
+    const f = await failedSession();
+    // The walk is still RUNNING on job-1 when it dies: no failure is recorded yet.
+    await adminDb.planChangeSession.update({
+      where: { id: f.sessionId },
+      data: { failedAt: null, failedJobId: null, failureReason: null, failureStopPhase: null },
+    });
+    await authorStep(f.planId, 'job-1', 1);
+    await authorStep(f.planId, 'job-1', 2);
+    expect(await stepKeys(f.planId)).toEqual(['ai:job-1:1', 'ai:job-1:2']);
+
+    const out = await settle('job-1');
+
+    expect(out).toMatchObject({ settled: 'recorded' });
+    expect((await sessionRow(f.sessionId)).failedJobId).toBe('job-1');
+    expect(await stepKeys(f.planId)).toEqual([]);
+  });
+
+  it('a resumed plan keeps no step a dead job left — only the new job’s own', T, async () => {
+    // The production shape: the rows were left by a failure recorded BEFORE the fix shipped.
+    const f = await failedSession();
+    await authorStep(f.planId, 'job-1', 3);
+    await authorStep(f.planId, 'job-1', 4);
+
+    await planSessionResumeService.resume(me(), f.sessionId);
+
+    expect(await stepKeys(f.planId)).toEqual([]);
+    await authorStep(f.planId, 'job-new-1', 1);
+    expect(await stepKeys(f.planId)).toEqual(['ai:job-new-1:1']);
+  });
+
+  it('the OLD job’s late failure frame deletes none of the resumed job’s steps', T, async () => {
+    const f = await failedSession();
+    await planSessionResumeService.resume(me(), f.sessionId);
+    await authorStep(f.planId, 'job-new-1', 1);
+
+    expect(await settle('job-1')).toBeNull();
+
+    expect(await stepKeys(f.planId)).toEqual(['ai:job-new-1:1']);
+  });
+});
+
 describe('every refusal costs nothing', () => {
   async function expectRefusal(
     run: () => Promise<unknown>,
