@@ -8,6 +8,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleQuestionMark,
+  Cpu,
   Info,
   Server,
   ServerCog,
@@ -306,6 +307,18 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
               {t('drift.offPresent.body', { name, org })}
             </Band>
           ) : null}
+          {enabled && arm64.ready && arm64.variable.state === 'absent' ? (
+            <Band tone="warning" role="status" testId="fleet-org-ci-arm64-drift">
+              <strong className="font-semibold">{t('drift.arm64OnAbsent.title')}</strong>{' '}
+              {t('drift.arm64OnAbsent.body', { name: arm64Name, org })}
+            </Band>
+          ) : null}
+          {!enabled && arm64.variable.state === 'present' ? (
+            <Band tone="warning" role="status" testId="fleet-org-ci-arm64-drift">
+              <strong className="font-semibold">{t('drift.arm64OffPresent.title')}</strong>{' '}
+              {t('drift.arm64OffPresent.body', { name: arm64Name, org })}
+            </Band>
+          ) : null}
 
           {answer ? (
             <AnswerBand answer={answer} t={t} name={name} direction={directionWord} />
@@ -419,6 +432,19 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
         size="md"
       >
         <Modal.Body className="gap-4">
+          <p
+            data-testid="fleet-org-ci-confirm-arm64"
+            className="flex items-start gap-2 font-sans text-sm text-(--el-text-secondary)"
+          >
+            <Cpu aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-(--el-icon-muted)" />
+            <span>
+              {asking
+                ? arm64.ready
+                  ? t('confirm.arm64.onReady', { name, arm64Name, org })
+                  : t('confirm.arm64.onNotReady', { name, arm64Name, org })
+                : t('confirm.arm64.off', { name, arm64Name, org })}
+            </span>
+          </p>
           <Input
             id={reasonFieldId}
             label={t('confirm.reasonLabel')}

@@ -14019,6 +14019,14 @@
         "offPresent": {
           "title": "Salva como desativada, mas o GitHub discorda.",
           "body": "{name} ainda está definida em {org}, então novos jobs ainda solicitam a frota. Ative e desative a configuração novamente para removê-la."
+        },
+        "arm64OnAbsent": {
+          "title": "Salvo como ativado, mas o GitHub não tem a variável arm64.",
+          "body": "{name} não está definida em {org} embora o pool arm64 esteja pronto, então os jobs arm64 ainda rodam nos runners arm do GitHub. Desative e ative a configuração de novo para escrevê-la."
+        },
+        "arm64OffPresent": {
+          "title": "Salvo como desativado, mas a variável arm64 ainda está definida.",
+          "body": "{name} ainda está definida em {org}, então novos jobs arm64 ainda solicitam a frota arm64 do Motir. Ative e desative a configuração de novo para removê-la."
         }
       },
       "repositories": {
@@ -14127,7 +14135,12 @@
         "reasonHintEmpty": "O botão fica desativado até que um motivo seja digitado — a mesma regra que o servidor aplica.",
         "cancel": "Cancelar",
         "confirmOn": "Ativar",
-        "confirmOff": "Desativar"
+        "confirmOff": "Desativar",
+        "arm64": {
+          "onReady": "arm64: o pool arm64 está pronto, então isto escreve {name} e {arm64Name} em {org}.",
+          "onNotReady": "arm64: nenhuma AMI de runner arm64 está fixada, então isto escreve apenas {name}. Os jobs arm64 ficam nos runners arm do GitHub.",
+          "off": "arm64: isto exclui {name} e {arm64Name} de {org}."
+        }
       },
       "refused": {
         "reasonMissing": "Não {direction}: um motivo é obrigatório e é gravado no log de auditoria com esta alteração. Nada mudou.",

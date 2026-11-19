@@ -14019,6 +14019,14 @@
         "offPresent": {
           "title": "Enregistré comme désactivé, mais GitHub n’est pas d’accord.",
           "body": "{name} est toujours définie sur {org}, donc les nouveaux jobs sollicitent toujours la flotte. Activez puis désactivez le paramètre pour la supprimer."
+        },
+        "arm64OnAbsent": {
+          "title": "Enregistré activé, mais GitHub n'a pas de variable arm64.",
+          "body": "{name} n'est pas définie sur {org} alors que le pool arm64 est prêt, donc les jobs arm64 tournent toujours sur les runners arm de GitHub. Désactivez puis réactivez le réglage pour l'écrire."
+        },
+        "arm64OffPresent": {
+          "title": "Enregistré désactivé, mais la variable arm64 est toujours définie.",
+          "body": "{name} est toujours définie sur {org}, donc les nouveaux jobs arm64 demandent toujours la flotte arm64 de Motir. Activez puis désactivez le réglage pour la supprimer."
         }
       },
       "repositories": {
@@ -14127,7 +14135,12 @@
         "reasonHintEmpty": "Le bouton reste désactivé tant qu’aucun motif n’est saisi — la même règle que celle appliquée par le serveur.",
         "cancel": "Annuler",
         "confirmOn": "Activer",
-        "confirmOff": "Désactiver"
+        "confirmOff": "Désactiver",
+        "arm64": {
+          "onReady": "arm64 : le pool arm64 est prêt, donc ceci écrit {name} et {arm64Name} sur {org}.",
+          "onNotReady": "arm64 : aucune AMI de runner arm64 n'est épinglée, donc ceci n'écrit que {name}. Les jobs arm64 restent sur les runners arm de GitHub.",
+          "off": "arm64 : ceci supprime {name} et {arm64Name} de {org}."
+        }
       },
       "refused": {
         "reasonMissing": "Non {direction} : un motif est obligatoire, et il est consigné dans le journal d’audit avec ce changement. Rien n’a changé.",

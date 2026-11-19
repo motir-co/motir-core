@@ -14019,6 +14019,14 @@
         "offPresent": {
           "title": "Als deaktiviert gespeichert, aber GitHub weicht ab.",
           "body": "{name} ist auf {org} noch gesetzt, daher fordern neue Jobs weiterhin die Flotte an. Aktivieren Sie die Einstellung und deaktivieren Sie sie erneut, um sie zu entfernen."
+        },
+        "arm64OnAbsent": {
+          "title": "Als an gespeichert, aber GitHub hat keine arm64-Variable.",
+          "body": "{name} ist in {org} nicht gesetzt, obwohl der arm64-Pool bereit ist, daher laufen arm64-Jobs weiter auf GitHubs arm-Runnern. Schalte die Einstellung aus und wieder ein, um sie zu schreiben."
+        },
+        "arm64OffPresent": {
+          "title": "Als aus gespeichert, aber die arm64-Variable ist noch gesetzt.",
+          "body": "{name} ist in {org} noch gesetzt, daher fordern neue arm64-Jobs weiter Motirs arm64-Flotte an. Schalte die Einstellung ein und wieder aus, um sie zu entfernen."
         }
       },
       "repositories": {
@@ -14127,7 +14135,12 @@
         "reasonHintEmpty": "Die Schaltfläche bleibt deaktiviert, bis ein Grund eingegeben ist – dieselbe Regel, die der Server anwendet.",
         "cancel": "Abbrechen",
         "confirmOn": "Aktivieren",
-        "confirmOff": "Deaktivieren"
+        "confirmOff": "Deaktivieren",
+        "arm64": {
+          "onReady": "arm64: Der arm64-Pool ist bereit, daher schreibt dies {name} und {arm64Name} in {org}.",
+          "onNotReady": "arm64: Es ist kein arm64-Runner-AMI festgelegt, daher schreibt dies nur {name}. arm64-Jobs bleiben auf GitHubs arm-Runnern.",
+          "off": "arm64: Dies löscht {name} und {arm64Name} aus {org}."
+        }
       },
       "refused": {
         "reasonMissing": "Nicht {direction}: Ein Grund ist erforderlich und wird mit dieser Änderung ins Audit-Log geschrieben. Nichts wurde geändert.",

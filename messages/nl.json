@@ -14019,6 +14019,14 @@
         "offPresent": {
           "title": "Opgeslagen als uit, maar GitHub is het er niet mee eens.",
           "body": "{name} is nog ingesteld op {org}, dus nieuwe jobs vragen nog de vloot aan. Zet de instelling aan en weer uit om hem te verwijderen."
+        },
+        "arm64OnAbsent": {
+          "title": "Opgeslagen als aan, maar GitHub heeft geen arm64-variabele.",
+          "body": "{name} is niet ingesteld op {org} hoewel de arm64-pool klaar is, dus arm64-jobs draaien nog op de arm-runners van GitHub. Zet de instelling uit en weer aan om hem te schrijven."
+        },
+        "arm64OffPresent": {
+          "title": "Opgeslagen als uit, maar de arm64-variabele is nog ingesteld.",
+          "body": "{name} is nog ingesteld op {org}, dus nieuwe arm64-jobs vragen nog om Motirs arm64-vloot. Zet de instelling aan en weer uit om hem te verwijderen."
         }
       },
       "repositories": {
@@ -14127,7 +14135,12 @@
         "reasonHintEmpty": "De knop blijft uitgeschakeld tot er een reden is getypt — dezelfde regel die de server toepast.",
         "cancel": "Annuleren",
         "confirmOn": "Aanzetten",
-        "confirmOff": "Uitzetten"
+        "confirmOff": "Uitzetten",
+        "arm64": {
+          "onReady": "arm64: de arm64-pool is klaar, dus dit schrijft zowel {name} als {arm64Name} op {org}.",
+          "onNotReady": "arm64: er is geen arm64-runner-AMI vastgezet, dus dit schrijft alleen {name}. arm64-jobs blijven op de arm-runners van GitHub.",
+          "off": "arm64: dit verwijdert zowel {name} als {arm64Name} van {org}."
+        }
       },
       "refused": {
         "reasonMissing": "Niet {direction}: een reden is verplicht en wordt met deze wijziging in het auditlogboek geschreven. Er is niets veranderd.",

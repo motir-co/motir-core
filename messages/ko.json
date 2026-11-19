@@ -14013,6 +14013,14 @@
         "offPresent": {
           "title": "꺼짐으로 저장되었지만 GitHub와 일치하지 않습니다.",
           "body": "{org}에 {name}이(가) 아직 설정되어 있어 새 작업이 여전히 플릿을 요청합니다. 설정을 켰다가 다시 끄면 제거됩니다."
+        },
+        "arm64OnAbsent": {
+          "title": "켜짐으로 저장되었지만 GitHub에 arm64 변수가 없습니다.",
+          "body": "arm64 풀이 준비되었는데도 {org}에 {name}이(가) 설정되어 있지 않아 arm64 작업은 계속 GitHub의 arm 러너에서 실행됩니다. 설정을 껐다가 다시 켜서 기록하세요."
+        },
+        "arm64OffPresent": {
+          "title": "꺼짐으로 저장되었지만 arm64 변수가 아직 설정되어 있습니다.",
+          "body": "{org}에 {name}이(가) 아직 설정되어 있어 새 arm64 작업은 계속 Motir의 arm64 플릿을 요청합니다. 설정을 켰다가 다시 꺼서 제거하세요."
         }
       },
       "repositories": {
@@ -14121,7 +14129,12 @@
         "reasonHintEmpty": "사유를 입력할 때까지 버튼은 비활성화된 상태로 유지됩니다 — 서버가 적용하는 것과 같은 규칙입니다.",
         "cancel": "취소",
         "confirmOn": "켜기",
-        "confirmOff": "끄기"
+        "confirmOff": "끄기",
+        "arm64": {
+          "onReady": "arm64: arm64 풀이 준비되었으므로 {org}에 {name}과(와) {arm64Name}을(를) 모두 기록합니다.",
+          "onNotReady": "arm64: 고정된 arm64 러너 AMI가 없으므로 {name}만 기록합니다. arm64 작업은 GitHub의 arm 러너에 남습니다.",
+          "off": "arm64: {org}에서 {name}과(와) {arm64Name}을(를) 모두 삭제합니다."
+        }
       },
       "refused": {
         "reasonMissing": "{direction} 처리되지 않았습니다: 사유가 필요하며 이 변경과 함께 감사 로그에 기록됩니다. 아무것도 변경되지 않았습니다.",

@@ -772,3 +772,110 @@ describe('FleetOrgCiSetting — the arm64 line (MOTIR-11786)', () => {
     expect(theSwitch().hasAttribute('disabled')).toBe(false);
   });
 });
+
+describe('FleetOrgCiSetting — the arm64 drift band and confirm sentence (MOTIR-11791)', () => {
+  const PRESENT = { state: 'present' as const, value: 'motir-graviton', visibility: 'private' };
+  const X86_ON = { state: 'present' as const, value: 'motir-runner', visibility: 'private' };
+  const arm64Drift = () => screen.queryByTestId('fleet-org-ci-arm64-drift');
+  const x86Drift = () => screen.queryByTestId('fleet-org-ci-drift');
+
+  it('ON, ready, arm64 variable absent ⇒ the ON-absent warning band, naming the variable and org', () => {
+    render(
+      state({
+        enabled: true,
+        variable: X86_ON,
+        arm64: { ready: true, reason: null, variable: { state: 'absent' } },
+      }),
+    );
+    const band = arm64Drift()!;
+    expect(band.textContent).toContain('Stored on, but GitHub has no arm64 variable.');
+    expect(band.textContent).toContain(
+      "MOTIR_RUNNER_ARM64 is not set on acme-ci although the arm64 pool is ready, so arm64 jobs still run on GitHub's arm runners.",
+    );
+    expect(band.getAttribute('role')).toBe('status');
+    // The x86 variable agrees with the switch: its own band stays away.
+    expect(x86Drift()).toBeNull();
+  });
+
+  it('ON, NOT ready, arm64 variable absent ⇒ no arm64 band (that is the not-ready reason)', () => {
+    render(state({ enabled: true, variable: X86_ON }));
+    expect(arm64Drift()).toBeNull();
+    expect(screen.getByTestId('fleet-org-ci-arm64-not-ready-reason')).toBeTruthy();
+  });
+
+  it('OFF with the arm64 variable present ⇒ the OFF-present warning band', () => {
+    render(
+      state({ arm64: { ready: false, reason: 'arm64_runner_ami_not_pinned', variable: PRESENT } }),
+    );
+    const band = arm64Drift()!;
+    expect(band.textContent).toContain('Stored off, but the arm64 variable is still set.');
+    expect(band.textContent).toContain(
+      "MOTIR_RUNNER_ARM64 is still set on acme-ci, so new arm64 jobs still request Motir's arm64 fleet.",
+    );
+    expect(x86Drift()).toBeNull();
+  });
+
+  it('the switch and the arm64 variable agreeing ⇒ no arm64 band, either way', () => {
+    render(
+      state({
+        enabled: true,
+        variable: X86_ON,
+        arm64: { ready: true, reason: null, variable: PRESENT },
+      }),
+    );
+    expect(arm64Drift()).toBeNull();
+    cleanup();
+    render(state());
+    expect(arm64Drift()).toBeNull();
+  });
+
+  it('the x86 drift band renders exactly as before beside an arm64 one', () => {
+    render(
+      state({
+        enabled: true,
+        variable: { state: 'absent' },
+        arm64: { ready: true, reason: null, variable: { state: 'absent' } },
+      }),
+    );
+    expect(x86Drift()!.textContent).toContain('Stored on, but GitHub disagrees.');
+    expect(arm64Drift()).not.toBeNull();
+  });
+
+  it('the ON confirm while ready says both variables will be written', async () => {
+    render(state({ arm64: { ready: true, reason: null, variable: { state: 'absent' } } }));
+    const dialog = await openConfirm();
+    expect(within(dialog).getByTestId('fleet-org-ci-confirm-arm64').textContent).toBe(
+      'arm64: the arm64 pool is ready, so this writes both MOTIR_RUNNER and MOTIR_RUNNER_ARM64 on acme-ci.',
+    );
+    expect(dialog.textContent).toContain('Turn on fleet CI for acme-ci?');
+    expect(within(dialog).getByLabelText(/Reason/)).toBeTruthy();
+  });
+
+  it('the ON confirm while not ready says only MOTIR_RUNNER is written', async () => {
+    render(state());
+    const dialog = await openConfirm();
+    expect(within(dialog).getByTestId('fleet-org-ci-confirm-arm64').textContent).toBe(
+      "arm64: no arm64 runner AMI is pinned, so this writes only MOTIR_RUNNER. arm64 jobs stay on GitHub's arm runners.",
+    );
+  });
+
+  it('the OFF confirm says both variables will be deleted, whatever the pool', async () => {
+    render(state({ enabled: true, variable: X86_ON }));
+    const dialog = await openConfirm();
+    expect(within(dialog).getByTestId('fleet-org-ci-confirm-arm64').textContent).toBe(
+      'arm64: this deletes both MOTIR_RUNNER and MOTIR_RUNNER_ARM64 from acme-ci.',
+    );
+    expect(dialog.textContent).toContain('Turn off fleet CI for acme-ci?');
+    expect(within(dialog).getByRole('button', { name: /^Turn off$/ })).toBeTruthy();
+  });
+
+  it('the island spells neither the arm64 label nor the arm64 variable name', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(
+      'app/(admin)/admin/fleet-settings/_components/FleetOrgCiSetting.tsx',
+      'utf8',
+    );
+    expect(source).not.toContain("'motir-graviton'");
+    expect(source).not.toContain("'MOTIR_RUNNER_ARM64'");
+  });
+});

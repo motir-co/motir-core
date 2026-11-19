@@ -14019,6 +14019,14 @@
         "offPresent": {
           "title": "Guardado como desactivado, pero GitHub no coincide.",
           "body": "{name} sigue definida en {org}, así que los nuevos jobs siguen solicitando la flota. Activa y vuelve a desactivar el ajuste para eliminarla."
+        },
+        "arm64OnAbsent": {
+          "title": "Guardado como activado, pero GitHub no tiene la variable arm64.",
+          "body": "{name} no está definida en {org} aunque el pool arm64 está listo, así que los trabajos arm64 siguen en los runners arm de GitHub. Desactiva y vuelve a activar el ajuste para escribirla."
+        },
+        "arm64OffPresent": {
+          "title": "Guardado como desactivado, pero la variable arm64 sigue definida.",
+          "body": "{name} sigue definida en {org}, así que los nuevos trabajos arm64 siguen solicitando la flota arm64 de Motir. Activa y vuelve a desactivar el ajuste para eliminarla."
         }
       },
       "repositories": {
@@ -14127,7 +14135,12 @@
         "reasonHintEmpty": "El botón sigue desactivado hasta que escribas un motivo: la misma regla que aplica el servidor.",
         "cancel": "Cancelar",
         "confirmOn": "Activar",
-        "confirmOff": "Desactivar"
+        "confirmOff": "Desactivar",
+        "arm64": {
+          "onReady": "arm64: el pool arm64 está listo, así que esto escribe {name} y {arm64Name} en {org}.",
+          "onNotReady": "arm64: no hay ninguna AMI de runner arm64 fijada, así que esto solo escribe {name}. Los trabajos arm64 se quedan en los runners arm de GitHub.",
+          "off": "arm64: esto elimina {name} y {arm64Name} de {org}."
+        }
       },
       "refused": {
         "reasonMissing": "No se ha {direction}: el motivo es obligatorio y se escribe en el registro de auditoría con este cambio. No ha cambiado nada.",
