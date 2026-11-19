@@ -1,6 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { liveRowsAtLatestSha, type PrCheckRunSlice } from '@/lib/github/prCiState';
-import { liveCheckRows } from '@/lib/github/checkSuites';
+import { liveCheckRows, type SuiteScopedCheckRow } from '@/lib/github/checkSuites';
 import {
   readCommitActionsSuites,
   readCommitCheckRuns,
@@ -158,9 +158,7 @@ export function shaToReReadFromHost(
 
 /** The same question asked about ONE known sha rather than the latest recorded
  *  one — what the CI-feedback consumer has, since a delivery names its commit. */
-export function shaSetClaimsComplete(
-  rows: { checkName: string; checkSuiteId: string; conclusion: string }[],
-): boolean {
+export function shaSetClaimsComplete(rows: SuiteScopedCheckRow[]): boolean {
   const live = liveCheckRows(rows);
   return live.length > 0 && live.every((row) => row.conclusion !== 'pending');
 }

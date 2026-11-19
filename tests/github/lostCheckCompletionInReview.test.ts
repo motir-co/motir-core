@@ -417,6 +417,7 @@ describe('MOTIR-11638 — what the status-independent re-read costs', () => {
       checkName: `lane ${i}`,
       checkSuiteId: String(CHECK_SUITE_ID),
       conclusion,
+      conclusionAt: null,
       createdAt: ROW_AT,
       updatedAt: ROW_AT,
     }));

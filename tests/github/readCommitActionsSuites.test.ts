@@ -123,6 +123,31 @@ describe('readCommitActionsSuites — every Actions workflow run, and nothing el
     expect(rows!.every((r) => r.rawConclusion === null)).toBe(true);
   });
 
+  it('dates a FINISHED suite by its `updated_at` and a running one by nothing (MOTIR-11827)', async () => {
+    suitesAnswer = () =>
+      new Response(
+        JSON.stringify({
+          total_count: 2,
+          check_suites: [
+            {
+              ...suite(1, 'github-actions', 'completed', 'success', 3),
+              updated_at: '2026-11-19T15:12:10Z',
+            },
+            {
+              ...suite(2, 'github-actions', 'in_progress', null, 0),
+              updated_at: '2026-11-19T15:20:00Z',
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    const rows = await readCommitActionsSuites('inst-suites', 'moooon-B-V', 'motir-core', HEAD_SHA);
+    expect(rows!.map((r) => r.completedAt?.toISOString() ?? null)).toEqual([
+      '2026-11-19T15:12:10.000Z',
+      null,
+    ]);
+  });
+
   it('answers `null` — not an empty set — when the host refuses', async () => {
     suitesAnswer = () => new Response('{"message":"Resource not accessible"}', { status: 403 });
     expect(

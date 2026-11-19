@@ -25,6 +25,7 @@ function run(
     createdAt: new Date(createdAt),
     checkName,
     checkSuiteId: suite,
+    conclusionAt: null,
   };
 }
 

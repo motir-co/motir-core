@@ -45,6 +45,7 @@ type Row = {
   checkName: string;
   checkSuiteId: string;
   conclusion: FixtureConclusion;
+  conclusionAt: Date | null;
   suiteAggregate?: boolean;
 };
 
@@ -56,11 +57,17 @@ function actionsSuite(
   rollUp: FixtureConclusion,
 ): Row[] {
   return [
-    ...runs.map(([checkName, conclusion]) => ({ checkName, checkSuiteId: suiteId, conclusion })),
+    ...runs.map(([checkName, conclusion]) => ({
+      checkName,
+      checkSuiteId: suiteId,
+      conclusion,
+      conclusionAt: null,
+    })),
     {
       checkName: 'github-actions',
       checkSuiteId: suiteId,
       conclusion: rollUp,
+      conclusionAt: null,
       suiteAggregate: true,
     },
   ];
@@ -81,8 +88,14 @@ function recordedSet(
       checkName,
       checkSuiteId: ADVANCED_SECURITY_SUITE,
       conclusion,
+      conclusionAt: null,
     })),
-    { checkName: 'license/cla', checkSuiteId: '', conclusion: 'success' as const },
+    {
+      checkName: 'license/cla',
+      checkSuiteId: '',
+      conclusion: 'success' as const,
+      conclusionAt: null,
+    },
   ];
 }
 
@@ -212,7 +225,7 @@ describe("MOTIR-3209's own case still holds — a real re-run retires the run it
 describe('the rows the roll-up rule does NOT touch', () => {
   it('a row with no suite identity supersedes nothing and is superseded by nothing', () => {
     const rows: Row[] = [
-      { checkName: 'license/cla', checkSuiteId: '', conclusion: 'failure' },
+      { checkName: 'license/cla', checkSuiteId: '', conclusion: 'failure', conclusionAt: null },
       ...actionsSuite('1', [['TypeScript', 'failure']], 'failure'),
       ...actionsSuite('2', [['TypeScript', 'success']], 'success'),
     ];
@@ -224,8 +237,8 @@ describe('the rows the roll-up rule does NOT touch', () => {
 
   it('a GitLab pipeline row is NOT a roll-up — its shared `pipeline` name still retires the retried pipeline', () => {
     const rows: Row[] = [
-      { checkName: 'pipeline', checkSuiteId: '501', conclusion: 'failure' },
-      { checkName: 'pipeline', checkSuiteId: '502', conclusion: 'success' },
+      { checkName: 'pipeline', checkSuiteId: '501', conclusion: 'failure', conclusionAt: null },
+      { checkName: 'pipeline', checkSuiteId: '502', conclusion: 'success', conclusionAt: null },
     ];
     expect(liveCheckRows(rows)).toEqual([rows[1]]);
   });

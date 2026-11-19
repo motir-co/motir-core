@@ -39,6 +39,7 @@ function run(commitSha: string, conclusion: string, checkName = 'ci / vitest') {
     checkSuiteId: '1',
     suiteAggregate: false,
     conclusion,
+    conclusionAt: null as Date | null,
     createdAt: at,
     updatedAt: at,
   };

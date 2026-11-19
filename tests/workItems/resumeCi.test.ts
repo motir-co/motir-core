@@ -21,7 +21,15 @@ let n = 0;
 /** One check row; each gets its own name, so none supersedes another. */
 function row(commitSha: string, conclusion: string, createdAt: Date, updatedAt = createdAt) {
   n += 1;
-  return { commitSha, conclusion, createdAt, updatedAt, checkName: `ci ${n}`, checkSuiteId: '' };
+  return {
+    commitSha,
+    conclusion,
+    conclusionAt: null,
+    createdAt,
+    updatedAt,
+    checkName: `ci ${n}`,
+    checkSuiteId: '',
+  };
 }
 
 function pr(id: string, headSha: string | null, rows: ReturnType<typeof row>[]): ResumeCiMember {

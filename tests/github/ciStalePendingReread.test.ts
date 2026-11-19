@@ -238,6 +238,7 @@ describe('MOTIR-5838 — a stale `pending` row is re-read from the host', () => 
         checkName: LOST_LANE,
         checkSuiteId: SUITE_ID,
         conclusion,
+        conclusionAt: null,
         createdAt: ROW_WRITTEN_AT,
         updatedAt,
       },

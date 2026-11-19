@@ -80,8 +80,10 @@ export { feedbackCommentBody, summarizeChecks, type CheckSetSummary } from './ci
 //
 // A pending conclusion is RECORDED as a row (so the Development surface can derive
 // "Checks running", MOTIR-1579) with NONE of the terminal side-effects; a neutral
-// conclusion, a check for a change request we don't track, or one with no linked
-// work item are all clean no-ops.
+// conclusion with no earlier verdict at its key, a check for a change request we
+// don't track, or one with no linked work item are all clean no-ops. (A neutral
+// that IS newer than a verdict at its key replaces it — a re-run attempt skipping
+// a job the cancelled attempt failed, MOTIR-11827.)
 //
 // ⚠️ AND THE VERDICT READS ONLY THE RUNS THAT HAVE NOT BEEN REPLACED
 // (MOTIR-3209). Two workflow runs at one head commit is ordinary —
@@ -89,9 +91,11 @@ export { feedbackCommentBody, summarizeChecks, type CheckSetSummary } from './ci
 // cancel the run in flight — and the cancelled one's rows must decide nothing:
 // its matrix legs are named `Vitest (${{ matrix.shard }}/…)` because GitHub had
 // not expanded them yet, and `cancelled` maps to `failure`. `liveCheckRows`
-// retires them, and the `neutral`-records-nothing rule below needs no exception
-// for the mirror case (`Deploy to Fly`: cancelled in the loser, skipped in the
-// winner) because the loser is no longer consulted at all. BOTH derivations
+// retires them, and the mirror case (`Deploy to Fly`: cancelled in the loser,
+// skipped in the winner) needs nothing from the neutral because the loser is no
+// longer consulted at all. A re-run ATTEMPT of one run is different — it shares
+// the suite, so `liveCheckRows` also reads the suite's roll-up to retire an
+// earlier attempt's failures (MOTIR-11827). BOTH derivations
 // share that one function — the comment's and the promotion's — since two
 // opinions about one commit is exactly what MOTIR-2946 removed.
 
@@ -114,7 +118,8 @@ export type CiFeedbackResult = {
     | 'pending_recorded' // an in-flight check RECORDED as a pending row (MOTIR-1579) — no comment, no ciState
     | 'stale_pending' // a pending delivery older than the terminal conclusion its row holds (MOTIR-10456) — nothing written
     | 'stale_terminal' // a terminal delivery reached before the pending state its row holds started (MOTIR-10461), or before the terminal conclusion it holds finished (MOTIR-10467) — nothing written, no comment, no promotion
-    | 'ignored_pending' // a neutral (skipped / stale) conclusion — a clean no-op
+    | 'ignored_pending' // a neutral (skipped / stale) conclusion with nothing older to clear — a clean no-op
+    | 'neutral_settled' // a neutral conclusion that replaced an EARLIER attempt's on its row (MOTIR-11827) — verdict re-derived
     | 'no_pull_request' // no stored change request matches the event's PR/MR list / branch
     | 'no_work_item' // the change request carries no linked work item — a clean no-op
     | 'unknown_installation'
@@ -217,9 +222,16 @@ async function applyOneCiDelivery(
   event: NormalizedStatusEvent,
   resolveContext: (tx: Prisma.TransactionClient) => Promise<CiFeedbackContextResolution>,
 ): Promise<CiFeedbackResult> {
-  // `neutral` (skipped / stale / manual) carries no signal at all — a logged no-op,
-  // BEFORE any resolution (nothing to record for it either).
-  if (event.conclusion === 'neutral') {
+  // `neutral` (skipped / stale / manual) carries no verdict of its own, and with no
+  // time it cannot be ordered against anything — a no-op BEFORE any resolution.
+  //
+  // ⚠️ A TIMED NEUTRAL MAY STILL CLEAR A ROW (MOTIR-11827). A re-run attempt reports
+  // under the SAME suite, so a job the later attempt SKIPS lands on the very key the
+  // cancelled attempt's `failure` holds. Dropped here, that failure outlived the
+  // green re-run for good. Such a delivery is now resolved, and it settles an
+  // EXISTING row it is newer than (below); it never creates one, so a skipped
+  // check with nothing before it still records nothing.
+  if (event.conclusion === 'neutral' && (event.occurredAt ?? null) === null) {
     return { event: 'ci', outcome: 'ignored_pending' };
   }
 
@@ -427,6 +439,20 @@ async function applyOneCiDelivery(
     };
   }
 
+  // A neutral settles only a row that already holds a verdict (MOTIR-11827): with
+  // none, or with a neutral already there, it has nothing to clear and stays the
+  // no-op it always was.
+  if (
+    event.conclusion === 'neutral' &&
+    (resolved.existing === null || resolved.existing.conclusion === 'neutral')
+  ) {
+    return {
+      event: 'ci',
+      outcome: 'ignored_pending',
+      ...(reportedWorkItemId(resolved.deliveredWorkItemIds) ?? {}),
+    };
+  }
+
   if (!resolved.actorUserId)
     // No workspace owner to author the feedback comment — nothing to attribute.
     return {
@@ -521,8 +547,12 @@ async function applyOneCiDelivery(
       // The finish time the next pending delivery is ordered against (MOTIR-10456).
       conclusionAt: event.occurredAt ?? null,
     };
+    // A neutral never CREATES a row (MOTIR-11827): it only replaces the older
+    // conclusion an earlier attempt left at this key, ordered by the same finish
+    // times every terminal write is.
     const written =
-      (await githubCheckRunRepository.createMissing([terminalRow], tx)) > 0 ||
+      (event.conclusion !== 'neutral' &&
+        (await githubCheckRunRepository.createMissing([terminalRow], tx)) > 0) ||
       (await githubCheckRunRepository.settleAsTerminal(terminalRow, tx)) > 0;
     if (!written) return null;
     // A check row for a NEW head is how Motir learns the head moved, so it
@@ -536,7 +566,8 @@ async function applyOneCiDelivery(
   if (recordedAtSha === null) {
     return {
       event: 'ci',
-      outcome: 'stale_terminal',
+      // A neutral older than the row it would replace is the no-op it always was.
+      outcome: event.conclusion === 'neutral' ? 'ignored_pending' : 'stale_terminal',
       ...(reportedWorkItemId(resolved.deliveredWorkItemIds) ?? {}),
     };
   }
@@ -714,7 +745,9 @@ async function applyOneCiDelivery(
     outcome: firstDelivered
       ? event.conclusion === 'success'
         ? 'verified'
-        : 'failed'
+        : event.conclusion === 'neutral'
+          ? 'neutral_settled'
+          : 'failed'
       : 'no_work_item',
     ...(firstDelivered ? { workItemId: firstDelivered, ciState } : {}),
     ...(promoted.length > 0 ? { promoted } : {}),
