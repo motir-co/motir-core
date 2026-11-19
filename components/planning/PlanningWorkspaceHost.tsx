@@ -29,8 +29,13 @@ import {
   type PlanReviewCanvasPrePlan,
 } from '@/components/planning/PlanProposalViews';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
-import { RequirementDocument, RequirementNotice } from '@/components/planning/RequirementDocument';
-import { requirementPaneOf } from '@/lib/planning/requirementPane';
+import {
+  RequirementDocument,
+  RequirementGrillBanner,
+  RequirementNotice,
+  RequirementWriting,
+} from '@/components/planning/RequirementDocument';
+import { requirementPaneOf, type GrillPaneState } from '@/lib/planning/requirementPane';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { FollowPlannerControl } from '@/components/planning/FollowPlannerControl';
 import type { ProjectRoadmapCanvasProps } from '@/components/planning/ProjectRoadmapCanvas';
@@ -888,8 +893,17 @@ function PlanWorkspaceHost({
     () => requirementPaneOf(state.session?.turns ?? []),
     [state.session?.turns],
   );
+  // What the conversation's grilling is doing to the pane, as the rail reports it
+  // (MOTIR-11802 · MOTIR-11805): with no requirement to show yet, a confirmed Stop or
+  // switch-off puts up the layer with the line saying where it will appear.
+  const [grillPane, setGrillPane] = useState<GrillPaneState>(null);
+  const paneWriting = grillPane === 'writing' && !requirementPane?.requirement;
+  const paneBanner =
+    requirementPane?.requirement && (grillPane === 'updating' || grillPane === 'updated')
+      ? grillPane
+      : null;
   const paneRef = useRef<HTMLDivElement>(null);
-  const layerUp = requirementPane !== null;
+  const layerUp = requirementPane !== null || paneWriting;
   // While the layer is up, what it covers is `inert` and hidden from assistive tech, so
   // keyboard focus and the canvas's own shortcuts stay out of it. Set on the pane's
   // direct children rather than a wrapper, so the pane's structure is unchanged; it
@@ -1450,21 +1464,26 @@ function PlanWorkspaceHost({
               </div>
             ) : null}
 
-            {requirementPane ? (
+            {requirementPane || paneWriting ? (
               <div
-                key={requirementPane.turnId}
+                key={requirementPane?.turnId ?? 'writing'}
                 role="region"
                 aria-label={t('requirementPane.label')}
                 data-layer="requirement"
                 data-testid="requirement-pane"
                 className="absolute inset-0 z-30 overflow-y-auto bg-(--el-page-bg) px-8 py-6"
               >
-                {requirementPane.requirement ? (
-                  <RequirementDocument
-                    requestMd={requirementPane.requestMd}
-                    requirement={requirementPane.requirement}
-                    workItemRefs={state.session?.workItemRefs ?? {}}
-                  />
+                {paneWriting ? (
+                  <RequirementWriting />
+                ) : requirementPane?.requirement ? (
+                  <>
+                    {paneBanner ? <RequirementGrillBanner state={paneBanner} /> : null}
+                    <RequirementDocument
+                      requestMd={requirementPane.requestMd}
+                      requirement={requirementPane.requirement}
+                      workItemRefs={state.session?.workItemRefs ?? {}}
+                    />
+                  </>
                 ) : (
                   <RequirementNotice />
                 )}
@@ -1530,6 +1549,7 @@ function PlanWorkspaceHost({
           onConfirmPlanOffer={(turnId) => void confirmPlanOffer(turnId)}
           onDeclinePlanOffer={(turnId) => void declinePlanOffer(turnId)}
           onConversationGrillEnded={refreshThread}
+          onGrillPaneChange={setGrillPane}
           offerAnsweringTurnId={state.offerAnsweringTurnId ?? null}
           offerRefusal={state.offerRefusal ?? null}
           providerLimit={railProviderLimit}

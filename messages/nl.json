@@ -9591,6 +9591,23 @@
         },
         "hint": "Je volgende bericht start het ondervragen.",
         "hintBeforePlanning": "Wanneer Motir AI zou aanbieden te plannen, stelt het eerst zijn vragen."
+      },
+      "offConfirm": {
+        "title": "Stoppen met vragen en de vereiste schrijven?",
+        "bodySettled": "Motir AI stopt nu met vragen en schrijft de vereiste op basis van {count, plural, one {het # antwoord} other {de # antwoorden}} dat je hebt vastgelegd. Wat nog open is, wordt aan de aannames van de planner overgelaten.",
+        "bodyNone": "Er is nog niets vastgelegd, dus Motir AI stopt nu met vragen en schrijft de vereiste op basis van je verzoek zoals het is.",
+        "keep": "Doorgaan met vragen",
+        "confirm": "Stoppen en schrijven"
+      },
+      "writing": "De vereiste wordt geschreven op basis van wat je hebt vastgelegd…",
+      "writingNone": "De vereiste wordt geschreven op basis van je verzoek…",
+      "paneWriting": "De vereiste verschijnt hier zodra hij is geschreven.",
+      "overRequirement": {
+        "opening": "Ondervraag me staat aan: ik vraag alleen naar wat de vereiste links nog niet vastlegt.",
+        "paneUpdating": "Ondervraag me staat aan. Je antwoorden werken deze vereiste bij als de vragen voorbij zijn.",
+        "nothingLeft": "De vereiste legt al alles vast wat ik zou vragen, dus hij blijft zoals hij is.",
+        "updated": "De vereiste is bijgewerkt met je antwoorden.",
+        "paneUpdated": "Bijgewerkt met je antwoorden uit Ondervraag me."
       }
     },
     "follow": {

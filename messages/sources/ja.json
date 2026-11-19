@@ -14086,5 +14086,18 @@
   "approvalGate.statusHeld.planState.stopped": "This plan stopped before every item was written. Resume it to finish.",
   "planningWorkspace.conversation.error.walkIncomplete": "This plan can’t be approved yet — it stopped before every item was written. Resume it to write the rest. Nothing was changed.",
   "workbench.planningSession.reason.stopped": "the plan stopped before every item was written",
-  "planReview.stoppedHint": "This plan stopped before every item was written. Resume it from its conversation to finish it, or discard it — nothing in your backlog changes."
+  "planReview.stoppedHint": "This plan stopped before every item was written. Resume it from its conversation to finish it, or discard it — nothing in your backlog changes.",
+  "planningWorkspace.grill.offConfirm.title": "Stop grilling and write the requirement?",
+  "planningWorkspace.grill.offConfirm.bodySettled": "Motir AI stops asking now and writes the requirement from {count, plural, one {the # answer} other {the # answers}} you settled. Anything still open is left to the planner's assumptions.",
+  "planningWorkspace.grill.offConfirm.bodyNone": "Nothing is settled yet, so Motir AI stops asking now and writes the requirement from your request as it stands.",
+  "planningWorkspace.grill.offConfirm.keep": "Keep grilling",
+  "planningWorkspace.grill.offConfirm.confirm": "Stop and write it",
+  "planningWorkspace.grill.writing": "Writing the requirement from what you settled…",
+  "planningWorkspace.grill.writingNone": "Writing the requirement from your request…",
+  "planningWorkspace.grill.paneWriting": "The requirement appears here once it is written.",
+  "planningWorkspace.grill.overRequirement.opening": "Grill me is on — I'll ask only about what the requirement on the left doesn't settle yet.",
+  "planningWorkspace.grill.overRequirement.paneUpdating": "Grill me is on. Your answers update this requirement when the questions end.",
+  "planningWorkspace.grill.overRequirement.nothingLeft": "The requirement already settles everything I would ask, so it stays as it is.",
+  "planningWorkspace.grill.overRequirement.updated": "Updated the requirement with your answers.",
+  "planningWorkspace.grill.overRequirement.paneUpdated": "Updated with your answers from Grill me."
 }

@@ -9591,6 +9591,23 @@
         },
         "hint": "Votre prochain message lance les questions.",
         "hintBeforePlanning": "Quand Motir AI s’apprête à proposer de planifier, il pose d’abord ses questions."
+      },
+      "offConfirm": {
+        "title": "Arrêter les questions et rédiger l'exigence ?",
+        "bodySettled": "Motir AI arrête de poser des questions maintenant et rédige l'exigence à partir {count, plural, one {de la # réponse} other {des # réponses}} que vous avez fixées. Ce qui reste ouvert est laissé aux hypothèses du planificateur.",
+        "bodyNone": "Rien n'est encore fixé, donc Motir AI arrête de poser des questions maintenant et rédige l'exigence à partir de votre requête telle qu'elle est.",
+        "keep": "Continuer les questions",
+        "confirm": "Arrêter et rédiger"
+      },
+      "writing": "Rédaction de l'exigence à partir de ce que vous avez fixé…",
+      "writingNone": "Rédaction de l'exigence à partir de votre requête…",
+      "paneWriting": "L'exigence apparaîtra ici une fois rédigée.",
+      "overRequirement": {
+        "opening": "Cuisine-moi est activé : je ne poserai des questions que sur ce que l'exigence à gauche ne fixe pas encore.",
+        "paneUpdating": "Cuisine-moi est activé. Vos réponses mettront à jour cette exigence à la fin des questions.",
+        "nothingLeft": "L'exigence fixe déjà tout ce que je demanderais, elle reste donc telle quelle.",
+        "updated": "Exigence mise à jour avec vos réponses.",
+        "paneUpdated": "Mise à jour avec vos réponses de Cuisine-moi."
       }
     },
     "follow": {

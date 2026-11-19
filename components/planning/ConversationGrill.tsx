@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Pause, RefreshCw, Square } from 'lucide-react';
+import { Loader2, Pause, RefreshCw, Square } from 'lucide-react';
 
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { Button } from '@/components/ui/Button';
@@ -27,6 +27,9 @@ export interface ConversationGrillProps {
   pending: boolean;
   error: GrillError;
   endedBySwitch: boolean;
+  /** The grilling is ending and its requirement is being written (MOTIR-11802): the
+   *  writing line stands in the held notice's place until the offer arrives. */
+  writing?: boolean;
   /** The pending-question anchor, when the conversation is not waiting on one. */
   anchorId?: string;
   /** The plan offer to show once the grilling ended. */
@@ -52,6 +55,22 @@ function HeldOfferNotice() {
     >
       <Pause className="mt-0.5 size-3.5 flex-none" aria-hidden />
       <span>{t('held')}</span>
+    </p>
+  );
+}
+
+/** The writing line (MOTIR-11802): after a Stop or a switch-off is confirmed, until
+ *  the offer holding the requirement arrives. */
+function WritingRequirement({ nothingSettled }: { nothingSettled: boolean }) {
+  const t = useTranslations('planningWorkspace.grill');
+  return (
+    <p
+      role="status"
+      data-testid="grill-writing"
+      className="flex items-start gap-1.5 pl-9 text-xs text-(--el-text-secondary)"
+    >
+      <Loader2 className="mt-0.5 size-3.5 flex-none animate-spin" aria-hidden />
+      <span>{t(nothingSettled ? 'writingNone' : 'writing')}</span>
     </p>
   );
 }
@@ -149,6 +168,7 @@ export function ConversationGrill({
   pending,
   error,
   endedBySwitch,
+  writing = false,
   anchorId,
   offer,
   onAct,
@@ -179,7 +199,17 @@ export function ConversationGrill({
       ) : hold === 'held' ? (
         <Opening pending={pending} error={error} onStop={onStop} onRetry={onRetry} />
       ) : null}
-      {hold === 'held' ? <HeldOfferNotice /> : <div className="pl-9">{offer}</div>}
+      {hold !== 'held' ? (
+        <div className="pl-9">{offer}</div>
+      ) : writing ? (
+        <WritingRequirement
+          nothingSettled={
+            !session || (session.settled.length === 0 && session.assumptions.length === 0)
+          }
+        />
+      ) : (
+        <HeldOfferNotice />
+      )}
       {hold === 'held' && failed && onDecline ? (
         <DeclineHeldOffer onDecline={onDecline} disabled={declining} />
       ) : null}

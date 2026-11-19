@@ -9591,6 +9591,23 @@
         },
         "hint": "Ihre nächste Nachricht startet die Befragung.",
         "hintBeforePlanning": "Bevor Motir AI eine Planung anbietet, stellt es zuerst seine Fragen."
+      },
+      "offConfirm": {
+        "title": "Befragung beenden und die Anforderung schreiben?",
+        "bodySettled": "Motir AI hört jetzt auf zu fragen und schreibt die Anforderung aus {count, plural, one {der # Antwort} other {den # Antworten}}, die Sie festgelegt haben. Was noch offen ist, bleibt den Annahmen des Planers überlassen.",
+        "bodyNone": "Noch ist nichts festgelegt, daher hört Motir AI jetzt auf zu fragen und schreibt die Anforderung aus Ihrer Anfrage, wie sie ist.",
+        "keep": "Weiter befragen",
+        "confirm": "Beenden und schreiben"
+      },
+      "writing": "Die Anforderung wird aus dem geschrieben, was Sie festgelegt haben…",
+      "writingNone": "Die Anforderung wird aus Ihrer Anfrage geschrieben…",
+      "paneWriting": "Die Anforderung erscheint hier, sobald sie geschrieben ist.",
+      "overRequirement": {
+        "opening": "„Löchere mich“ ist an – ich frage nur nach dem, was die Anforderung links noch nicht festlegt.",
+        "paneUpdating": "„Löchere mich“ ist an. Ihre Antworten aktualisieren diese Anforderung, wenn die Fragen enden.",
+        "nothingLeft": "Die Anforderung legt schon alles fest, was ich fragen würde, daher bleibt sie, wie sie ist.",
+        "updated": "Die Anforderung wurde mit Ihren Antworten aktualisiert.",
+        "paneUpdated": "Mit Ihren Antworten aus „Löchere mich“ aktualisiert."
       }
     },
     "follow": {

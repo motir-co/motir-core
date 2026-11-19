@@ -9591,6 +9591,23 @@
         },
         "hint": "Twoja następna wiadomość rozpocznie przepytywanie.",
         "hintBeforePlanning": "Zanim Motir AI zaproponuje planowanie, najpierw zada pytania."
+      },
+      "offConfirm": {
+        "title": "Zakończyć przepytywanie i napisać wymaganie?",
+        "bodySettled": "Motir AI przestaje teraz pytać i pisze wymaganie na podstawie {count, plural, one {# ustalonej odpowiedzi} few {# ustalonych odpowiedzi} many {# ustalonych odpowiedzi} other {# ustalonej odpowiedzi}}. To, co jest jeszcze otwarte, zostaje założeniom planisty.",
+        "bodyNone": "Nic nie jest jeszcze ustalone, więc Motir AI przestaje teraz pytać i pisze wymaganie na podstawie Twojej prośby w obecnej postaci.",
+        "keep": "Przepytuj dalej",
+        "confirm": "Zakończ i napisz"
+      },
+      "writing": "Piszemy wymaganie na podstawie tego, co ustalono…",
+      "writingNone": "Piszemy wymaganie na podstawie Twojej prośby…",
+      "paneWriting": "Wymaganie pojawi się tutaj, gdy zostanie napisane.",
+      "overRequirement": {
+        "opening": "Przepytaj mnie jest włączone — zapytam tylko o to, czego wymaganie po lewej jeszcze nie ustala.",
+        "paneUpdating": "Przepytaj mnie jest włączone. Twoje odpowiedzi zaktualizują to wymaganie po zakończeniu pytań.",
+        "nothingLeft": "Wymaganie ustala już wszystko, o co bym zapytał, więc zostaje bez zmian.",
+        "updated": "Zaktualizowano wymaganie Twoimi odpowiedziami.",
+        "paneUpdated": "Zaktualizowano odpowiedziami z Przepytaj mnie."
       }
     },
     "follow": {

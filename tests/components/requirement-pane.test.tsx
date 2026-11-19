@@ -471,7 +471,12 @@ describe('the layer over the pane', () => {
 describe('Grill me’s hand-off (MOTIR-11798)', () => {
   it('shows no requirement, and no notice, while the read’s hand-off holds the questions', () => {
     renderHost(thread(offer({ kind: 'grill', handoff: { items: ['ACME-1'], code: [] } })));
-    expect(region()).toBeNull();
+    // Grill me reads off here, so the hand-off's grilling ends at once and writes the
+    // requirement (MOTIR-11802 · MOTIR-11803): the pane says where it will appear.
+    expect(within(region()!).getByTestId('requirement-pane-writing').textContent).toBe(
+      enMessages.planningWorkspace.grill.paneWriting,
+    );
+    expect(screen.queryByTestId('requirement-document')).toBeNull();
     expect(screen.queryByTestId('requirement-notice')).toBeNull();
     expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
   });

@@ -827,7 +827,7 @@ describe('PlanningWorkspaceHost — the TARGET set is shared by both panes (MOTI
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Expand this.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(conversation.send).toHaveBeenCalledWith('Expand this.', [TARGET]);
+    expect(conversation.send).toHaveBeenCalledWith('Expand this.', [TARGET], {});
   });
 
   it('a project-scoped launch opens with NO target — the picker is opt-in', () => {

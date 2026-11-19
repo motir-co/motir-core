@@ -64,6 +64,10 @@ export interface GrillSession {
   hold: OfferHold;
   /** The ended session was stopped by switching Grill me off (this tab only). */
   endedBySwitch: boolean;
+  /** The grilling over the held offer is ending — a Stop or a switch-off was confirmed,
+   *  or it ended and its requirement is not read yet — so the requirement is being
+   *  written (MOTIR-11802). The rail draws the writing line in the held notice's place. */
+  writing: boolean;
 }
 
 /** The latest plan offer in the conversation, as the before-planning grilling reads it. */
@@ -79,6 +83,11 @@ export interface GrillOffer {
   /** The offer was answered. A decided offer is never held, and its decline ended the
    *  grilling over it (MOTIR-10255). */
   decided?: boolean;
+  /** THE READ'S HAND-OFF (MOTIR-11798): a `grill` offer, made because Grill me was on.
+   *  It holds no requirement and nothing to confirm, so it is ALWAYS grilled — with the
+   *  switch since turned off too, when the grilling ends at once and writes the
+   *  requirement (MOTIR-11802 · MOTIR-11803) — and never shown until that ends. */
+  handoff?: boolean;
 }
 
 export type OfferHold = 'held' | 'shown' | null;
@@ -187,8 +196,13 @@ export function useGrillSession({
   const convId = !planId && conversation ? conversation.id : null;
   const offer = convId ? (conversation?.offer ?? null) : null;
   const covered = offer !== null && coversOffer(session, offer);
+  // A hand-off was made with Grill me on, so it is armed whatever the switch says now.
+  const offerHandoff = offer?.handoff === true;
   const armedForOffer =
-    offer !== null && convArmedAt !== null && offer.personTurnsBefore > convArmedAt;
+    offer !== null &&
+    (offerHandoff || (convArmedAt !== null && offer.personTurnsBefore > convArmedAt));
+  // The switch or a hand-off — either opens the grilling over the offer.
+  const grillsOffer = on || offerHandoff;
   // Primitives for the effects: the caller builds `offer` afresh every render.
   const hasOffer = offer !== null;
   const offerId = offer?.turnId ?? null;
@@ -211,6 +225,12 @@ export function useGrillSession({
   const mountedRef = useRef(true);
   const resumeTriedRef = useRef<string | null>(null);
   const openedForOfferRef = useRef<string | null>(null);
+  // A hand-off grilled with the switch already off ends at once (MOTIR-11803): its
+  // ending is the switch's, as a session stopped by the switch is.
+  const [openedOff, setOpenedOff] = useState<string | null>(null);
+  // A Stop pressed before the session over a hand-off existed: the session is opened
+  // and stopped as soon as it is, so the requirement is still written (MOTIR-11802).
+  const [stopOnOpen, setStopOnOpen] = useState<string | null>(null);
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
@@ -398,16 +418,21 @@ export function useGrillSession({
   // BEFORE PLANNING — OPEN A ROUND: on, over a grillable offer that arrived after the
   // switch, once the latest session is read and none covers it yet.
   useEffect(() => {
-    if (!convId || !offerId || !convEnabled || !on || busyRef.current) return;
+    if (!convId || !offerId || !convEnabled || !grillsOffer || busyRef.current) return;
     if (!offerGrillable || !armedForOffer || readFor !== convId) return;
     if (covered || dismissedOffer === offerId) return;
     if (openedForOfferRef.current === offerId) return;
     openedForOfferRef.current = offerId;
-    queueMicrotask(() => void run(() => openSharpen({ conversationId: convId })));
+    const off = !on;
+    queueMicrotask(() => {
+      if (off) setOpenedOff(offerId);
+      void run(() => openSharpen({ conversationId: convId }));
+    });
   }, [
     convId,
     offerId,
     convEnabled,
+    grillsOffer,
     on,
     offerGrillable,
     armedForOffer,
@@ -444,6 +469,18 @@ export function useGrillSession({
 
   const stop = useCallback(() => {
     const open = sessionRef.current;
+    // A HAND-OFF has no offer to show until a grilling over it ends (MOTIR-11802): a
+    // Stop before its session exists opens it — or waits for the open in flight — and
+    // stops it the moment it is there, so the requirement is written all the same.
+    if (offerId && offerHandoff && !covered) {
+      setStopOnOpen(offerId);
+      setError(null);
+      if (convId && !busyRef.current) {
+        openedForOfferRef.current = offerId;
+        void run(() => openSharpen({ conversationId: convId }));
+      }
+      return;
+    }
     // Before planning, a round whose open failed has no session to stop: Stop gives
     // up on grilling that offer, and the offer is shown as planned.
     if ((!open || open.status !== 'open') && offerId && !covered) {
@@ -454,7 +491,15 @@ export function useGrillSession({
     if (!open || open.status !== 'open') return;
     // Stop is reachable while an act is in flight: the walk ends at its boundary.
     stopSession(open);
-  }, [stopSession, offerId, covered]);
+  }, [stopSession, offerId, covered, offerHandoff, convId, run]);
+
+  // The Stop asked before the session existed, carried out once it does.
+  useEffect(() => {
+    if (!stopOnOpen || stopOnOpen !== offerId || !covered) return;
+    const open = sessionRef.current;
+    if (!open || open.status !== 'open' || stopAsked(open)) return;
+    stopSession(open);
+  }, [stopOnOpen, offerId, covered, session, stopSession]);
 
   const retry = useCallback(() => {
     const open = sessionRef.current;
@@ -479,9 +524,23 @@ export function useGrillSession({
         ? session!.status === 'open' && !offerDecided
           ? 'held'
           : 'shown'
-        : convEnabled && on && offerGrillable && armedForOffer && dismissedOffer !== offerId
+        : convEnabled &&
+            grillsOffer &&
+            offerGrillable &&
+            armedForOffer &&
+            dismissedOffer !== offerId
           ? 'held'
           : null;
+
+  // THE WRITING STATE (MOTIR-11802): the held offer's grilling is ending, so its
+  // requirement is being written — a Stop or a switch-off confirmed, a hand-off grilled
+  // with the switch off, or an end whose requirement is not read yet.
+  const writing =
+    hold === 'held' &&
+    offer !== null &&
+    (covered
+      ? session!.status === 'ended' || stopAsked(session!) || openedOff === offerId
+      : offerHandoff && (!on || stopOnOpen === offerId));
 
   // Credits ending a read is told from the stored turn, not only from a poll that saw
   // it happen: the person may have been away, or reloaded, when it did (MOTIR-10235).
@@ -500,6 +559,9 @@ export function useGrillSession({
     stop,
     retry,
     hold,
-    endedBySwitch: session !== null && switchStopped === session.id,
+    endedBySwitch:
+      session !== null &&
+      (switchStopped === session.id || (covered && openedOff !== null && openedOff === offerId)),
+    writing,
   };
 }

@@ -9588,6 +9588,23 @@
         },
         "hint": "Your next message starts the grilling.",
         "hintBeforePlanning": "When Motir AI would offer to plan, it asks its questions first."
+      },
+      "offConfirm": {
+        "title": "Stop grilling and write the requirement?",
+        "bodySettled": "Motir AI stops asking now and writes the requirement from {count, plural, one {the # answer} other {the # answers}} you settled. Anything still open is left to the planner's assumptions.",
+        "bodyNone": "Nothing is settled yet, so Motir AI stops asking now and writes the requirement from your request as it stands.",
+        "keep": "Keep grilling",
+        "confirm": "Stop and write it"
+      },
+      "writing": "Writing the requirement from what you settled…",
+      "writingNone": "Writing the requirement from your request…",
+      "paneWriting": "The requirement appears here once it is written.",
+      "overRequirement": {
+        "opening": "Grill me is on — I'll ask only about what the requirement on the left doesn't settle yet.",
+        "paneUpdating": "Grill me is on. Your answers update this requirement when the questions end.",
+        "nothingLeft": "The requirement already settles everything I would ask, so it stays as it is.",
+        "updated": "Updated the requirement with your answers.",
+        "paneUpdated": "Updated with your answers from Grill me."
       }
     },
     "follow": {

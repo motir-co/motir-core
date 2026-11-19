@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { CheckCircle2, Info, Loader2 } from 'lucide-react';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { assumptionRowsOf } from '@/lib/planning/requirementPane';
 import type { SubmittedRequirement } from '@/lib/ai/types';
@@ -103,4 +104,41 @@ export function RequirementNotice() {
 function firstLine(md: string): string {
   const line = md.split('\n').find((l) => l.trim().length > 0) ?? '';
   return line.replace(/^[#>*\-\s]+/, '').trim();
+}
+
+/** The pane while the requirement is being written (MOTIR-11802): it appears here. */
+export function RequirementWriting() {
+  const t = useTranslations('planningWorkspace.grill');
+  return (
+    <p
+      role="status"
+      className="mx-auto flex w-full max-w-[720px] items-center gap-2 text-sm text-(--el-text-secondary)"
+      data-testid="requirement-pane-writing"
+    >
+      <Loader2 className="size-4 flex-none animate-spin" aria-hidden />
+      <span>{t('paneWriting')}</span>
+    </p>
+  );
+}
+
+/** The banner over a requirement a grilling is updating, or has updated (MOTIR-11805). */
+export function RequirementGrillBanner({ state }: { state: 'updating' | 'updated' }) {
+  const t = useTranslations('planningWorkspace.grill.overRequirement');
+  const updated = state === 'updated';
+  const Glyph = updated ? CheckCircle2 : Info;
+  return (
+    <p
+      role="status"
+      data-testid={`requirement-pane-${state}`}
+      className={`mx-auto mb-4 flex w-full max-w-[720px] gap-2 rounded-(--radius-control) px-(--spacing-control-x-12) py-(--spacing-control-y) text-[13px] text-(--el-text-strong) ${
+        updated ? 'bg-(--el-tint-mint)' : 'bg-(--el-tint-sky)'
+      }`}
+    >
+      <Glyph
+        className={`mt-px size-4 shrink-0 ${updated ? 'text-(--el-success)' : 'text-(--el-info)'}`}
+        aria-hidden
+      />
+      <span>{t(updated ? 'paneUpdated' : 'paneUpdating')}</span>
+    </p>
+  );
 }
