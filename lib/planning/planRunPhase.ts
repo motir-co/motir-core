@@ -48,6 +48,58 @@ export function conversationAckFor(
 }
 
 /**
+ * The quick reply an ASK turn's job wrote (MOTIR-11797), while this screen streams that
+ * turn and it is not a plan run: the rail draws it as the turn's first assistant bubble,
+ * above the progress notes, until the answer lands — the settle ends the stream and
+ * clears the job, and the bubble with it. `null` before the frame arrives, when it never
+ * does, when the stored reply belongs to another job, and whenever a plan run is on
+ * screen: its conversation bubble draws the reply itself (`conversationAckFor`), which
+ * is where an ask's reply carries on when the turn hands off to one.
+ */
+export function askAckFor(
+  state: PlanRunState & Pick<PlanChangeConversationState, 'conversationAck'>,
+): string | null {
+  const ack = state.conversationAck ?? null;
+  if (ack === null || state.phase !== 'streaming' || state.jobId !== ack.jobId) return null;
+  return planRunPhase(state) === null ? ack.text : null;
+}
+
+/**
+ * The ask job of an UNANSWERED conversation turn a REOPENED viewer is looking at
+ * (MOTIR-11797): the thread's last person turn, read by an `ask_project` job whose answer
+ * is not on the thread yet. `null` while this screen streams a turn of its own (it draws
+ * that one live), on an ended session, when the last turn is answered, ran as a plan
+ * change, or was typed mid-run (a mid-run question draws its own answering row).
+ * The hook replays that job's frames for its `conversation_ack`, so the reply the person
+ * missed is drawn under their turn, above its notes, until the answer lands.
+ */
+export function reopenedAskJobId(
+  state: Pick<PlanChangeConversationState, 'phase' | 'session'>,
+): string | null {
+  if (state.phase === 'streaming') return null;
+  const session = state.session;
+  if (!session || session.endedAt) return null;
+  const last = [...session.turns].reverse().find((t) => t.role === 'user');
+  if (!last?.jobId || last.intent === 'plan_change' || last.runJobId) return null;
+  const answered = session.turns.some((t) => t.role === 'assistant' && t.jobId === last.jobId);
+  return answered ? null : last.jobId;
+}
+
+/**
+ * The quick reply drawn under an unanswered turn on a REOPENED thread (MOTIR-11797): the
+ * replayed `conversation_ack` of `jobId`, while that turn is still the one
+ * {@link reopenedAskJobId} names. `null` otherwise.
+ */
+export function reopenedAskAckFor(
+  state: Pick<PlanChangeConversationState, 'phase' | 'session' | 'conversationAck'>,
+  jobId: string | null | undefined,
+): string | null {
+  const ack = state.conversationAck ?? null;
+  if (ack === null || !jobId || ack.jobId !== jobId) return null;
+  return reopenedAskJobId(state) === jobId ? ack.text : null;
+}
+
+/**
  * The job a REOPENED viewer is watching (MOTIR-8203): the session's latest job,
  * while the plan on screen is a `generating` plan Motir itself is writing.
  * `undefined` when there is no such run — an agent writing over MCP has no job

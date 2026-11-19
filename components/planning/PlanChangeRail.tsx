@@ -133,7 +133,13 @@ import type {
   PlanChangeProgress,
   QueuedTurn,
 } from '@/lib/hooks/usePlanChangeConversation';
-import { conversationAckFor, planRunPhase, reopenedPlanJobId } from '@/lib/planning/planRunPhase';
+import {
+  askAckFor,
+  conversationAckFor,
+  planRunPhase,
+  reopenedAskAckFor,
+  reopenedPlanJobId,
+} from '@/lib/planning/planRunPhase';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
@@ -532,6 +538,8 @@ export function PlanChangeRail({
   const writing = runPhase === 'planning';
   const conversing = runPhase === 'conversation';
   const conversationAck = conversationAckFor(state);
+  // An ASK turn's quick reply (MOTIR-11797), while the turn on screen is not a plan run.
+  const askAck = askAckFor(state);
   // …and it is REWRITING the plan in hand rather than writing a first one.
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
@@ -1402,6 +1410,15 @@ export function PlanChangeRail({
           {conversationAck ?? tp('handoff.conversing')}
         </Bubble>
       ) : null}
+      {/* AN ASK TURN'S QUICK REPLY (MOTIR-11797): every message the person sends gets
+            one, so the turn being read answers within seconds — the turn's first
+            assistant bubble, above the progress notes, gone once the answer lands. Model
+            output, so plain text; nothing is drawn until it arrives. */}
+      {askAck ? (
+        <Bubble role="assistant" testId="plan-ask-ack">
+          {askAck}
+        </Bubble>
+      ) : null}
       {/* THE WORKING TURN IS ONE ROW (MOTIR-9213; design § _The Motir mark at
             work_ › _Where the mark sits_, `planning-workspace--mark-at-work.mock.html`
             panels 1–4): the turn Motir AI is working on gathers the hand-off, the
@@ -1852,6 +1869,12 @@ export function PlanChangeRail({
                     : null
                 }
               />
+              {/* A REOPENED unanswered turn's quick reply (MOTIR-11797), above its notes. */}
+              {turn.role === 'user' && reopenedAskAckFor(state, turn.jobId) ? (
+                <Bubble role="assistant" testId="plan-ask-ack-reopened">
+                  {reopenedAskAckFor(state, turn.jobId)}
+                </Bubble>
+              ) : null}
               {/* An answer that settled with no reply keeps what it said (MOTIR-10235). */}
               {turn.role === 'user' ? (
                 <ConversationNotes
@@ -1940,6 +1963,7 @@ export function PlanChangeRail({
         {state.midRunAsk ? (
           <PendingAsk
             text={state.midRunAsk.text}
+            ack={state.midRunAsk.ack ?? null}
             inThread={
               lastTurn?.role === 'user' &&
               Boolean(lastTurn.runJobId) &&
