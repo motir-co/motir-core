@@ -4,6 +4,7 @@ import {
   type FleetShardMoveReason,
   type Prisma,
 } from '@/generated/prisma/client';
+import type { TeardownReason } from '@motir/orchestrator';
 import { requestsArm64Runner, requestsOnDemandRunner } from '@/lib/ciFleet/config';
 
 // Data access for the runner-fleet provisioning INTENTS (Story MOTIR-1916 ·
@@ -120,6 +121,49 @@ export interface CiRunnerProvisioningIntentCreateInput {
   reconcileGeneration?: number;
   /** The job's carried Spot-interruption count (MOTIR-11728); 0 when absent. */
   spotInterruptionCount?: number;
+}
+
+/** The teardown reason a Spot-reclaimed CI runner settles with (MOTIR-11728). */
+export const SPOT_INTERRUPTED_REASON = 'spot_interrupted' satisfies TeardownReason;
+
+/**
+ * How the CI runners BOOTED in a window ran (MOTIR-11729): by the capacity the
+ * boot recorded (MOTIR-11716) and how many of them EC2 reclaimed. Raw counts;
+ * `launched` is every booted runner, `notRecorded` the ones with no capacity —
+ * never folded into `onDemand`.
+ */
+export interface CiSpotWindowCounts {
+  launched: number;
+  spot: number;
+  onDemand: number;
+  notRecorded: number;
+  interrupted: number;
+}
+
+type CiSpotWindowGroup = {
+  capacity: CiRunnerCapacity | null;
+  teardownReason: string | null;
+  _count: { _all: number };
+};
+
+/** Fold one population's `capacity × teardownReason` groups into its counts. */
+function foldCiSpotWindow(groups: readonly CiSpotWindowGroup[]): CiSpotWindowCounts {
+  const counts: CiSpotWindowCounts = {
+    launched: 0,
+    spot: 0,
+    onDemand: 0,
+    notRecorded: 0,
+    interrupted: 0,
+  };
+  for (const group of groups) {
+    const n = group._count._all;
+    counts.launched += n;
+    if (group.capacity === 'spot') counts.spot += n;
+    else if (group.capacity === 'on_demand') counts.onDemand += n;
+    else counts.notRecorded += n;
+    if (group.teardownReason === SPOT_INTERRUPTED_REASON) counts.interrupted += n;
+  }
+  return counts;
 }
 
 export const ciRunnerProvisioningIntentRepository = {
@@ -274,21 +318,133 @@ export const ciRunnerProvisioningIntentRepository = {
   async countAwaitingRunnerForOwner(
     owner: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ arm64: number; onDemand: number; other: number }> {
+  ): Promise<{ arm64: number; onDemand: number; other: number; otherNotSpot: number }> {
     const rows = await tx.ciRunnerProvisioningIntent.findMany({
       where: {
         repoOwner: { equals: owner, mode: 'insensitive' },
         status: { in: [CI_RUNNER_INTENT_PENDING, CI_RUNNER_INTENT_PROVISIONING] },
+        // A runner withdrawn for an on-demand pin (MOTIR-11732) is coming to
+        // nobody: its registration is gone.
+        runnerWithdrawnAt: null,
       },
-      select: { requestedLabels: true },
+      select: { requestedLabels: true, capacity: true },
     });
+    // Arm64 intents are their own partition (MOTIR-11781): neither x86 pool
+    // covers them, so they are cut out before the on-demand / ordinary split.
     const x86 = rows.filter((row) => !requestsArm64Runner(row.requestedLabels));
-    const onDemand = x86.filter((row) => requestsOnDemandRunner(row.requestedLabels)).length;
+    const other = x86.filter((row) => !requestsOnDemandRunner(row.requestedLabels));
     return {
       arm64: rows.length - x86.length,
-      onDemand,
-      other: x86.length - onDemand,
+      onDemand: x86.length - other.length,
+      other: other.length,
+      // The ordinary intents whose machine is not KNOWN to be Spot (MOTIR-11732):
+      // not booted yet, or booted on-demand. While an on-demand pin is open in
+      // the org, a boot not yet made reads it and comes up on-demand, so these
+      // are the ordinary intents able to take a pinned job.
+      otherNotSpot: other.filter((row) => row.capacity !== 'spot').length,
     };
+  },
+
+  /**
+   * The org's REGISTERED runners an on-demand pin must withdraw (MOTIR-11732):
+   * a runner GitHub knows (`githubRunnerId` set) on an intent still holding a
+   * claim or a container, that has taken no job and is not withdrawn yet, whose
+   * machine is Spot or not known yet (`capacity` NULL — minted, still launching,
+   * and it may come up Spot). An intent whose own job asked for the on-demand
+   * label, or carries `onDemandAtInterruptions` Spot interruptions, boots
+   * on-demand whatever the setting says, so it is left alone. Owner compared
+   * case-insensitively, as GitHub logins are.
+   */
+  async listWithdrawableRunnersForOwner(
+    owner: string,
+    onDemandAtInterruptions: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Pick<
+      CiRunnerProvisioningIntent,
+      'id' | 'githubRunnerId' | 'repoOwner' | 'installationId' | 'requestedLabels'
+    >[]
+  > {
+    const rows = await tx.ciRunnerProvisioningIntent.findMany({
+      where: {
+        repoOwner: { equals: owner, mode: 'insensitive' },
+        status: { in: [CI_RUNNER_INTENT_PROVISIONING, CI_RUNNER_INTENT_RUNNING] },
+        githubRunnerId: { not: null },
+        jobPickedUpAt: null,
+        runnerWithdrawnAt: null,
+        spotInterruptionCount: { lt: onDemandAtInterruptions },
+        OR: [{ capacity: null }, { capacity: 'spot' }],
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        githubRunnerId: true,
+        repoOwner: true,
+        installationId: true,
+        requestedLabels: true,
+      },
+    });
+    return rows.filter((row) => !requestsOnDemandRunner(row.requestedLabels));
+  },
+
+  /**
+   * Record that this intent's runner was WITHDRAWN from GitHub for an on-demand
+   * pin (MOTIR-11732). Write-once; supervision retires the container as idle.
+   */
+  async markRunnerWithdrawn(id: string, at: Date, tx: Prisma.TransactionClient): Promise<boolean> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, runnerWithdrawnAt: null },
+      data: { runnerWithdrawnAt: at },
+    });
+    return count === 1;
+  },
+
+  /**
+   * The CAPACITY each of these registered runners' machines got (MOTIR-11732),
+   * keyed by GitHub runner id — the reconcile's way to tell an idle on-demand
+   * machine, which may take a pinned job, from an idle Spot one. A runner with no
+   * intent here, or whose capacity was never recorded, is absent.
+   */
+  async findCapacityByRunnerIds(
+    runnerIds: number[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<number, 'spot' | 'on_demand'>> {
+    if (runnerIds.length === 0) return new Map();
+    const rows = await tx.ciRunnerProvisioningIntent.findMany({
+      where: { githubRunnerId: { in: runnerIds }, capacity: { not: null } },
+      select: { githubRunnerId: true, capacity: true },
+    });
+    const byRunner = new Map<number, 'spot' | 'on_demand'>();
+    for (const row of rows) {
+      if (row.githubRunnerId !== null && row.capacity !== null) {
+        byRunner.set(row.githubRunnerId, row.capacity);
+      }
+    }
+    return byRunner;
+  },
+
+  /**
+   * Whether a runner has TAKEN a later run attempt of this job (MOTIR-11732):
+   * an intent whose taken job is the same repository, run and job NAME at an
+   * attempt after `afterAttempt`. A re-run is a new attempt with a new job id,
+   * so the name is the key, exactly as the interruption count is carried.
+   */
+  async hasTakenLaterAttempt(
+    job: { repoOwner: string; repoName: string; runId: string; jobName: string },
+    afterAttempt: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const taken = await tx.ciRunnerProvisioningIntent.findFirst({
+      where: {
+        repoOwner: { equals: job.repoOwner, mode: 'insensitive' },
+        repoName: { equals: job.repoName, mode: 'insensitive' },
+        takenRunId: job.runId,
+        takenJobName: job.jobName,
+        takenRunAttempt: { gt: afterAttempt },
+      },
+      select: { id: true },
+    });
+    return taken !== null;
   },
 
   /**
@@ -342,10 +498,14 @@ export const ciRunnerProvisioningIntentRepository = {
   async findJobProgress(
     id: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ jobPickedUpAt: Date | null; jobCompletedAt: Date | null } | null> {
+  ): Promise<{
+    jobPickedUpAt: Date | null;
+    jobCompletedAt: Date | null;
+    runnerWithdrawnAt: Date | null;
+  } | null> {
     return tx.ciRunnerProvisioningIntent.findUnique({
       where: { id },
-      select: { jobPickedUpAt: true, jobCompletedAt: true },
+      select: { jobPickedUpAt: true, jobCompletedAt: true, runnerWithdrawnAt: true },
     });
   },
 
@@ -429,6 +589,63 @@ export const ciRunnerProvisioningIntentRepository = {
         ...(organizationIds === null ? {} : { organizationId: { in: [...organizationIds] } }),
       },
     });
+  },
+
+  /**
+   * The Fleet status page's CI Spot read for add-shard accounts (MOTIR-11729):
+   * every intent BOOTED in `[since, until]` on one of `fleetShardIds`, counted
+   * per account by capacity and by Spot interruption, in ONE grouped query
+   * (`[fleetShardId, bootedAt]` serves it). A runner that never booted has no
+   * capacity and is not a launch. An account with no booted intent in the
+   * window is ABSENT from the map — the caller says what that means.
+   *
+   * Reads every tenant's rows only under a system context; under a workspace
+   * context the counts come back smaller and still look believable.
+   */
+  async countCiSpotWindowByShardInTx(
+    fleetShardIds: readonly string[],
+    since: Date,
+    until: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, CiSpotWindowCounts>> {
+    if (fleetShardIds.length === 0) return new Map();
+    const groups = await tx.ciRunnerProvisioningIntent.groupBy({
+      by: ['fleetShardId', 'capacity', 'teardownReason'],
+      where: { fleetShardId: { in: [...fleetShardIds] }, bootedAt: { gte: since, lte: until } },
+      _count: { _all: true },
+    });
+    const byShard = new Map<string, CiSpotWindowGroup[]>();
+    for (const group of groups) {
+      if (group.fleetShardId === null) continue;
+      const list = byShard.get(group.fleetShardId) ?? [];
+      list.push(group);
+      byShard.set(group.fleetShardId, list);
+    }
+    return new Map([...byShard].map(([id, list]) => [id, foldCiSpotWindow(list)]));
+  },
+
+  /**
+   * The same read over the INSTALL FLEET (MOTIR-11729): intents carrying the
+   * install-fleet flag, booted in `[since, until]`, of the install's own orgs —
+   * the population `countInFlightOnInstallFleetInTx` counts in flight.
+   * `organizationIds` null counts every org (cloud off).
+   */
+  async countCiSpotWindowOnInstallFleetInTx(
+    organizationIds: readonly string[] | null,
+    since: Date,
+    until: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiSpotWindowCounts> {
+    const groups = await tx.ciRunnerProvisioningIntent.groupBy({
+      by: ['capacity', 'teardownReason'],
+      where: {
+        installFleet: true,
+        bootedAt: { gte: since, lte: until },
+        ...(organizationIds === null ? {} : { organizationId: { in: [...organizationIds] } }),
+      },
+      _count: { _all: true },
+    });
+    return foldCiSpotWindow(groups);
   },
 
   /** Move a claimed intent to another account mid-boot, with why it left its

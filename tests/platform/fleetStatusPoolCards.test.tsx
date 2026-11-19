@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client';
 import { renderToHtml } from '../helpers/serverPageHarness';
 import en from '@/messages/en.json';
 import type {
+  CiSpotBlockDTO,
+  CiSpotCountsDTO,
   InstallFleetBlockDTO,
   InstallPoolDTO,
   ShardAccountDTO,
@@ -548,5 +550,263 @@ describe('PoolDisclosure', () => {
     await act(async () => button.click());
     expect(row.hidden).toBe(true);
     root.unmount();
+  });
+});
+
+// ── CI Spot use (MOTIR-11729; design MOTIR-11726 Panels 1–11) ─────────────────
+
+describe('the CI Spot strip', () => {
+  const cs = en.platformAdmin.fleetStatus.pools.ciSpot;
+  const okSpot = (
+    counts: CiSpotCountsDTO,
+    setting: 'on' | 'off' | 'notRead' = 'on',
+    allFellBack = false,
+  ): CiSpotBlockDTO => ({ status: 'ok', windowDays: 7, setting, counts, allFellBack });
+  const mixed: CiSpotCountsDTO = {
+    launched: 180,
+    spot: 142,
+    onDemand: 38,
+    notRecorded: 0,
+    interrupted: 12,
+  };
+  const shard = (ciSpot: CiSpotBlockDTO, accounts?: ShardAccountDTO[]) =>
+    shardCard({
+      status: 'ok',
+      pools: [awsPool({ ciSpot, ...(accounts ? { accounts } : {}) })],
+      nearCount: 0,
+    });
+  const strip = (root: HTMLElement) =>
+    root.querySelector<HTMLElement>('[data-element="ci-spot-strip"]')!;
+
+  it('shows the pill, the Spot share with its counts and percentage, and the interruptions under the CI runner row (Panels 1–2)', async () => {
+    const root = await shard(okSpot(mixed));
+    const section = strip(root);
+    expect(section.getAttribute('data-state')).toBe('ok');
+    // Its own always-shown row, right after the pool row and before the accounts.
+    const row = section.closest('tr')!;
+    expect(row.previousElementSibling?.getAttribute('data-shard-pool')).toBe('ci_runner');
+    expect(row.nextElementSibling?.id).toBe('pool-ci_runner-accounts');
+    expect(row.hasAttribute('hidden')).toBe(false);
+    // Labelled by its heading.
+    expect(section.getAttribute('aria-labelledby')).toBe('pool-ci_runner-ci-spot-heading');
+    expect(text(section.querySelector('h4'))).toBe(cs.heading);
+    expect(text(section)).toContain(cs.scope);
+    const pill = section.querySelector('[data-element="spot-status-pill"]')!;
+    expect(pill.getAttribute('data-setting')).toBe('on');
+    expect(text(pill)).toBe(cs.setting.on);
+    expect(text(section.querySelector('[data-element="spot-percent"]'))).toBe('79% on Spot');
+    expect(text(section)).toContain('of 180 CI runners launched');
+    // The bar's text alternative, and a legend in words — never colour alone.
+    const bar = section.querySelector('[role="img"]')!;
+    expect(bar.getAttribute('aria-label')).toBe(
+      '142 on Spot and 38 on on-demand, of 180 CI runners launched in the last 7 days',
+    );
+    expect(
+      [...bar.querySelectorAll('[data-segment]')].map((s) => s.getAttribute('data-segment')),
+    ).toEqual(['spot', 'on-demand']);
+    expect(
+      [...section.querySelectorAll('[data-element="spot-legend"] li')].map((li) => text(li)),
+    ).toEqual(['142 on Spot', '38 on on-demand']);
+    const figure = text(section.querySelector('[data-element="interruptions-figure"]'));
+    expect(figure).toBe(`12${cs.interrupted.label}${cs.interrupted.sub}`);
+    expect(section.querySelector('[data-element="all-fell-back-note"]')).toBeNull();
+    expect(section.querySelector('[data-element="ci-spot-warning-rail"]')).toBeNull();
+  });
+
+  it('keeps not-recorded launches their own segment, legend and note, never on-demand, and the share over the recorded (Panel 7)', async () => {
+    const root = await shard(
+      okSpot({ launched: 195, spot: 140, onDemand: 30, notRecorded: 25, interrupted: 9 }),
+    );
+    const section = strip(root);
+    expect(text(section.querySelector('[data-element="spot-percent"]'))).toBe('82% on Spot');
+    expect(text(section)).toContain(
+      'of the 170 launched with a recorded capacity (195 launched in all)',
+    );
+    expect(section.querySelector('[role="img"]')!.getAttribute('aria-label')).toBe(
+      '140 on Spot, 30 on on-demand and 25 not recorded, of 195 CI runners launched in the last 7 days',
+    );
+    expect(
+      [...section.querySelectorAll('[data-element="spot-legend"] li')].map((li) => text(li)),
+    ).toEqual(['140 on Spot', '30 on on-demand', '25 not recorded']);
+    expect(text(section.querySelector('[data-element="not-recorded-note"]'))).toBe(
+      '25 runners were launched before Motir recorded each runner’s capacity, so they are counted as neither Spot nor on-demand, and the Spot share leaves them out.',
+    );
+    expect(text(section)).not.toContain('55 on on-demand');
+  });
+
+  it('has no share when nothing launched was recorded', async () => {
+    const root = await shard(
+      okSpot({ launched: 1, spot: 0, onDemand: 0, notRecorded: 1, interrupted: 0 }),
+    );
+    expect(text(strip(root).querySelector('[data-element="spot-percent"]'))).toBe(
+      cs.share.noPercent,
+    );
+    expect(text(strip(root).querySelector('[data-element="not-recorded-note"]'))).toContain(
+      '1 runner was launched',
+    );
+  });
+
+  it('reads a real zero as 0 (Panel 3)', async () => {
+    const root = await shard(okSpot({ ...mixed, interrupted: 0 }));
+    expect(
+      text(strip(root).querySelector('[data-element="interruptions-figure"] .font-serif')),
+    ).toBe('0');
+  });
+
+  it('with no launches: the sentence, no bar, no percentage, None, and account dashes (Panel 8)', async () => {
+    const root = await shard(
+      okSpot({ ...mixed, launched: 0, spot: 0, onDemand: 0, interrupted: 0 }),
+      [acct({ ciSpot: null })],
+    );
+    const section = strip(root);
+    expect(section.getAttribute('data-state')).toBe('none');
+    expect(text(section.querySelector('[data-element="ci-spot-none"]'))).toBe(cs.none);
+    expect(section.querySelector('[role="img"]')).toBeNull();
+    expect(section.querySelector('[data-element="spot-percent"]')).toBeNull();
+    expect(text(section)).not.toMatch(/%/);
+    expect(text(section.querySelector('[data-element="interruptions-figure"]'))).toBe(
+      `${cs.interrupted.none}${cs.interrupted.label}`,
+    );
+    const spotCell = root.querySelector('[data-element="account-spot"]')!;
+    expect(spotCell.querySelector('[aria-hidden]')?.textContent).toBe('—');
+    expect(text(spotCell)).toBe(`—${cs.accounts.none}`);
+    expect(text(root.querySelector('[data-element="account-interrupted"]'))).toBe(
+      `—${cs.accounts.none}`,
+    );
+  });
+
+  it('every launch fell back: the warning rail and the note pointing at the accounts (Panel 4)', async () => {
+    const counts = { launched: 47, spot: 0, onDemand: 47, notRecorded: 0, interrupted: 0 };
+    const root = await shard(okSpot(counts, 'on', true));
+    const section = strip(root);
+    expect(section.getAttribute('data-state')).toBe('all-fell-back');
+    expect(section.querySelector('[data-element="ci-spot-warning-rail"]')).not.toBeNull();
+    expect(text(section.querySelector('[data-element="all-fell-back-note"]'))).toBe(
+      'Spot is on, but none of the 47 CI runners launched in the last 7 days got Spot capacity: every launch fell back to on-demand. Open CI runner to see each account’s launches.',
+    );
+    expect(text(section.querySelector('[data-element="spot-percent"]'))).toBe('0% on Spot');
+    // Only when the read says so.
+    const quiet = await shard(okSpot(counts, 'on', false));
+    expect(quiet.querySelector('[data-element="all-fell-back-note"]')).toBeNull();
+  });
+
+  it('Spot off and the setting not read each carry their pill and note, and the counts still show (Panels 5–6)', async () => {
+    let root = await shard(okSpot(mixed, 'off'));
+    let pill = root.querySelector('[data-element="spot-status-pill"]')!;
+    expect([pill.getAttribute('data-setting'), text(pill)]).toEqual(['off', cs.setting.off]);
+    expect(text(root.querySelector('[data-element="spot-off-note"]'))).toBe(cs.offNote);
+    expect(text(root.querySelector('[data-element="spot-percent"]'))).toBe('79% on Spot');
+
+    root = await shard(okSpot(mixed, 'notRead'));
+    pill = root.querySelector('[data-element="spot-status-pill"]')!;
+    expect([pill.getAttribute('data-setting'), text(pill)]).toEqual([
+      'not-read',
+      cs.setting.notRead,
+    ]);
+    expect(pill.getAttribute('aria-label')).toBe(cs.setting.notReadLabel);
+    expect(text(root.querySelector('[data-element="spot-not-read-note"]'))).toBe(cs.notReadNote);
+    expect(root.querySelector('[data-element="spot-off-note"]')).toBeNull();
+    expect(text(root.querySelector('[data-element="spot-percent"]'))).toBe('79% on Spot');
+  });
+
+  it('a failed read is the inset in the strip alone: no number, the pill still shows, the pool row whole, accounts Not available (Panel 9)', async () => {
+    const root = await shard({ status: 'unavailable', setting: 'on' });
+    const section = strip(root);
+    expect(section.getAttribute('data-state')).toBe('failed');
+    const inset = section.querySelector('[data-element="ci-spot-read-failed"] [role="alert"]')!;
+    expect(text(inset)).toContain(cs.error.title);
+    expect(text(inset)).toContain(cs.error.body);
+    expect(section.querySelector('[role="img"]')).toBeNull();
+    expect(section.querySelector('[data-element="interruptions-figure"]')).toBeNull();
+    // No figure: the only digits left are the window's "7 days" in the fixed copy.
+    expect(
+      text(section).replace(text(inset), '').replace(cs.heading, '').replace(cs.scope, ''),
+    ).not.toMatch(/\d/);
+    expect(
+      section.querySelector('[data-element="spot-status-pill"]')?.getAttribute('data-setting'),
+    ).toBe('on');
+    // The pool row's own figures are untouched.
+    const poolCells = cells(root.querySelector('tr[data-shard-pool="ci_runner"]')!);
+    expect(poolCells.slice(1)).toEqual([
+      '320 machines640 vCPU',
+      '3 sharedspare ci-iad-4, not counted',
+      '41 machines82 vCPU',
+      '13%',
+    ]);
+    expect([...root.querySelectorAll('[data-element="account-spot"]')].map((c) => text(c))).toEqual(
+      Array(5).fill(mon.notAvailable),
+    );
+  });
+
+  it('adds the On Spot · 7d and Interrupted · 7d columns to the CI runner pool’s accounts only', async () => {
+    const accounts = [
+      acct({ ciSpot: { launched: 80, spot: 71, onDemand: 9, notRecorded: 0, interrupted: 7 } }),
+      acct({
+        name: 'ci-iad-2',
+        ciSpot: { launched: 92, spot: 70, onDemand: 8, notRecorded: 14, interrupted: 5 },
+      }),
+      acct({ name: 'ci-iad-4', role: 'spare', ciSpot: null }),
+    ];
+    const root = await shard(okSpot(mixed), accounts);
+    const table = root.querySelector('[data-element="account-rows"] table')!;
+    expect(table.className).toContain('min-w-[56rem]');
+    expect([...table.querySelectorAll('thead th')].map(text).slice(-2)).toEqual([
+      cs.accounts.col.spot,
+      cs.accounts.col.interrupted,
+    ]);
+    const row = (name: string) => table.querySelector(`tr[data-account="${name}"]`)!;
+    expect(cells(row('ci-iad-1')).slice(-2)).toEqual(['71 / 8089% on Spot', '7']);
+    expect(cells(row('ci-iad-2')).slice(-2)).toEqual(['70 / 9214 not recorded', '5']);
+    expect(cells(row('ci-iad-4')).slice(-2)).toEqual([
+      `—${cs.accounts.none}`,
+      `—${cs.accounts.none}`,
+    ]);
+
+    // A pool with no CI Spot read has neither the strip nor the columns.
+    const plain = await shardCard({ status: 'ok', pools: [awsPool()], nearCount: 0 });
+    expect(plain.querySelector('[data-element="ci-spot-strip"]')).toBeNull();
+    expect(plain.querySelector('[data-element="account-spot"]')).toBeNull();
+    expect(
+      [...plain.querySelectorAll('[data-element="account-rows"] thead th')].map(text),
+    ).not.toContain(cs.accounts.col.spot);
+  });
+
+  it('sits under the install fleet’s CI runner row with its own wording and no account columns (Panel 11)', async () => {
+    const ci: InstallPoolDTO = {
+      fleetKind: 'ci_runner',
+      enabled: true,
+      running: 3,
+      hibernated: null,
+      machineVcpu: 2,
+      vcpu: 6,
+      sharePercent: 2,
+      ciSpot: okSpot(
+        { launched: 12, spot: 0, onDemand: 12, notRecorded: 0, interrupted: 0 },
+        'on',
+        true,
+      ),
+    };
+    const base = install();
+    const root = await installCard(install({ pools: [ci, ...base.pools] }));
+    const section = strip(root);
+    expect(section.id).toBe('install-ci-spot');
+    expect(section.closest('tr')!.previousElementSibling?.getAttribute('data-install-pool')).toBe(
+      'ci_runner',
+    );
+    expect(section.closest('td')!.getAttribute('colspan')).toBe('5');
+    expect(text(section.querySelector('[data-element="all-fell-back-note"]'))).toBe(
+      'Spot is on, but none of the 12 CI runners launched in Motir’s own account in the last 7 days got Spot capacity: every launch fell back to on-demand.',
+    );
+    expect(root.querySelector('[data-element="account-spot"]')).toBeNull();
+    // Its pool row is unchanged.
+    expect(cells(poolRow(root, 'ci_runner'))).toEqual([
+      'CI runner',
+      'Yes',
+      '3 machines',
+      '6 vCPU',
+      '2%',
+    ]);
+    // No strip on any other install pool.
+    expect(root.querySelectorAll('[data-element="ci-spot-strip"]')).toHaveLength(1);
   });
 });

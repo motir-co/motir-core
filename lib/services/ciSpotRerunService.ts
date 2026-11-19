@@ -5,7 +5,15 @@ import {
   type CiRunnerSettleRecord,
 } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { actionsRunsClient, ActionsRunsError } from '@/lib/github/actionsRuns';
+import { runnerJitConfigClient, RunnerJitApiError } from '@/lib/github/runnerJitConfig';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
+import { ciSpotRerunPinRepository as pins } from '@/lib/repositories/ciSpotRerunPinRepository';
+import { ciSpotRerunPinService } from '@/lib/services/ciSpotRerunPinService';
+import { ciSpotSettingReader } from '@/lib/services/ciSpotSettingReader';
+import {
+  githubRunnerCallLedgerService as runnerCallLedger,
+  runnerCallReachedGithub,
+} from '@/lib/services/githubRunnerCallLedgerService';
 
 // THE RE-RUN OF A JOB A SPOT RECLAIM CUT OFF (MOTIR-11728).
 //
@@ -25,6 +33,14 @@ import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 //   3 · {@link retryPendingSpotReruns}, on the reconcile pass, asks again for a
 //       re-run GitHub refused for a reason that may clear (the run not finished
 //       yet), until it accepts, refuses for good, or 24 hours pass.
+//
+// THE SECOND RE-RUN IS PINNED TO ON-DEMAND (MOTIR-11732). Before it is asked
+// for, {@link pinAndWithdraw} writes the org's on-demand pin hold and withdraws
+// every jobless Spot runner registered there — in that order, so no Spot
+// runner can be registered after the sweep without its boot having read the
+// hold (see `ciRunnerBootService`'s `requestedCapacity` for the race argument).
+// A withdrawal that failed for any reason but the runner having gone busy
+// leaves the re-run `pending`, to be asked for again with a fresh sweep.
 //
 // Nothing here throws into supervision or the reconcile, and nothing logged or
 // stored carries GitHub's response body — only its status.
@@ -123,8 +139,14 @@ export async function planSpotRerun(
  * reconcile pass) on a refusal that may clear or on a call that failed. NEVER
  * THROWS.
  */
-export async function requestSpotRerun(intent: RerunIntent): Promise<SpotRerunAsk> {
+export async function requestSpotRerun(
+  intent: RerunIntent,
+  now: Date = new Date(),
+): Promise<SpotRerunAsk> {
   if (!intent.takenJobId || !intent.takenRunId) return 'refused';
+  if (pinsTheRerun(intent) && (await pinAndWithdraw(intent, now)) === 'blocked') {
+    return 'pending';
+  }
   let answer: Awaited<ReturnType<typeof actionsRunsClient.rerunJob>>;
   try {
     answer = await actionsRunsClient.rerunJob(
@@ -162,6 +184,7 @@ export async function requestSpotRerun(intent: RerunIntent): Promise<SpotRerunAs
     return 'pending';
   }
   await recordOutcome(intent.id, 'refused');
+  await ciSpotRerunPinService.closePinForRerun(intent.id, 'rerun_refused', now);
   console.warn('[ciSpotRerun] GitHub refused the re-run — not retried', {
     intentId: intent.id,
     status: answer.status,
@@ -206,6 +229,7 @@ export async function retryPendingSpotReruns(now: Date): Promise<SpotRerunRetryO
     if (now.getTime() - interruptedAt.getTime() >= SPOT_RERUN_RETRY_WINDOW_MS) {
       if (await recordOutcome(intent.id, 'expired')) {
         outcome.expired += 1;
+        await ciSpotRerunPinService.closePinForRerun(intent.id, 'rerun_expired', now);
         console.warn('[ciSpotRerun] a re-run was still refused 24 hours on — given up', {
           intentId: intent.id,
           ...jobLabel(intent),
@@ -225,9 +249,136 @@ export async function retryPendingSpotReruns(now: Date): Promise<SpotRerunRetryO
       });
     }
     if (!claimed) continue;
-    outcome[await requestSpotRerun(intent)] += 1;
+    outcome[await requestSpotRerun(intent, now)] += 1;
   }
   return outcome;
+}
+
+/** Whether this re-run is the one pinned to on-demand capacity: the taken job's
+ *  count has reached {@link ON_DEMAND_AT_SPOT_INTERRUPTIONS}. A job with no name
+ *  never carries a count, so it never gets here. */
+function pinsTheRerun(intent: RerunIntent): boolean {
+  return (
+    (intent.takenJobSpotInterruptions ?? 0) >= ON_DEMAND_AT_SPOT_INTERRUPTIONS &&
+    intent.takenJobName !== null &&
+    intent.takenRunAttempt !== null
+  );
+}
+
+/**
+ * THE PIN, THEN THE SWEEP (MOTIR-11732) — what must have happened before the
+ * second re-run is asked for:
+ *
+ *   1 · the org's on-demand pin hold is written (or found, on a retry);
+ *   2 · every jobless registered Spot runner there — idle, or minted with its
+ *       machine still starting — is withdrawn from GitHub, and its intent marked
+ *       so supervision settles it as an idle runner.
+ *
+ * A DELETE GitHub refuses with 422 is a runner that took a job a moment ago: it
+ * is left alone and does not hold the re-run back. Any other failure — the hold
+ * or the runners unreadable, a DELETE that failed otherwise — answers `blocked`,
+ * and the re-run stays pending: asking for it with a Spot runner still
+ * registered is exactly what the pin exists to prevent. With the Spot setting
+ * OFF every boot is on-demand already, so nothing is pinned or withdrawn; a
+ * setting that cannot be read counts as ON here, the safe direction for the job.
+ * NEVER THROWS.
+ */
+async function pinAndWithdraw(intent: RerunIntent, now: Date): Promise<'clear' | 'blocked'> {
+  let spotOn: boolean;
+  try {
+    spotOn = (await ciSpotSettingReader.read()).enabled;
+  } catch (err) {
+    console.warn('[ciSpotRerun] the CI Spot setting could not be read — pinning anyway', {
+      intentId: intent.id,
+      detail: detailOf(err),
+    });
+    spotOn = true;
+  }
+  if (!spotOn) return 'clear';
+
+  let candidates: Awaited<ReturnType<typeof intents.listWithdrawableRunnersForOwner>>;
+  try {
+    await withSystemContext((tx) =>
+      pins.open(
+        {
+          sourceIntentId: intent.id,
+          repoOwner: intent.repoOwner,
+          repoName: intent.repoName,
+          runId: intent.takenRunId!,
+          runAttempt: intent.takenRunAttempt!,
+          jobName: intent.takenJobName!,
+        },
+        now,
+        tx,
+      ),
+    );
+    // Read in its OWN transaction, after the hold's has committed: a boot that
+    // recorded its runner before this read is withdrawn by it, and one that
+    // records later reads the hold first.
+    candidates = await withSystemContext((tx) =>
+      intents.listWithdrawableRunnersForOwner(
+        intent.repoOwner,
+        ON_DEMAND_AT_SPOT_INTERRUPTIONS,
+        tx,
+      ),
+    );
+  } catch (err) {
+    console.error('[ciSpotRerun] could not pin the re-run to on-demand — left pending', {
+      intentId: intent.id,
+      detail: detailOf(err),
+      ...jobLabel(intent),
+    });
+    return 'blocked';
+  }
+
+  let withdrawn = 0;
+  let busy = 0;
+  let failed = 0;
+  for (const runner of candidates) {
+    const target = fleetRunnerTargetFor(runner);
+    let removed: 'removed' | 'gone';
+    try {
+      removed = await runnerJitConfigClient.removeRunner(runner.githubRunnerId!, target);
+    } catch (err) {
+      if (runnerCallReachedGithub(err)) {
+        await runnerCallLedger.recordForTargetQuietly(target, 'delete', null);
+      }
+      if (err instanceof RunnerJitApiError && err.status === 422) {
+        busy += 1;
+        continue;
+      }
+      failed += 1;
+      console.warn('[ciSpotRerun] could not withdraw a Spot runner', {
+        intentId: runner.id,
+        runnerId: runner.githubRunnerId,
+        status: err instanceof RunnerJitApiError ? err.status : null,
+      });
+      continue;
+    }
+    await runnerCallLedger.recordForTargetQuietly(target, 'delete', null);
+    // 'gone': GitHub no longer knows the runner — it can take nothing.
+    if (removed !== 'removed') continue;
+    try {
+      await withSystemContext((tx) => intents.markRunnerWithdrawn(runner.id, now, tx));
+      withdrawn += 1;
+    } catch (err) {
+      // The runner is gone from GitHub whatever this row says; supervision
+      // retires its container when the runner never comes up.
+      console.error('[ciSpotRerun] could not record a withdrawn runner', {
+        intentId: runner.id,
+        detail: detailOf(err),
+      });
+      withdrawn += 1;
+    }
+  }
+  console.warn('[ciSpotRerun] pinned a second re-run to on-demand', {
+    intentId: intent.id,
+    withdrawn,
+    busy,
+    failed,
+    ...jobLabel(intent),
+  });
+  return failed > 0 ? 'blocked' : 'clear';
 }
 
 async function recordOutcome(

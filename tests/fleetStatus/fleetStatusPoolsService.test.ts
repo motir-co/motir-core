@@ -39,8 +39,11 @@ vi.mock('@/lib/platform/auth', async (importOriginal) => {
   };
 });
 
-const { fleetStatusPoolsService: service, judgeInstallBlock } =
-  await import('@/lib/services/fleetStatusPoolsService');
+const {
+  fleetStatusPoolsService: service,
+  judgeCiSpot,
+  judgeInstallBlock,
+} = await import('@/lib/services/fleetStatusPoolsService');
 const { platformFleetPoolsService } = await import('@/lib/services/platformFleetPoolsService');
 
 const NOW = new Date('2026-11-11T12:00:00.000Z');
@@ -161,7 +164,14 @@ async function account(
 async function ciJob(
   fx: WorkItemFixture,
   shardId: string | null,
-  options: { installFleet?: boolean; status?: string } = {},
+  options: {
+    installFleet?: boolean;
+    status?: string;
+    /** When it booted; null = never booted. Default: 2 minutes before NOW. */
+    bootedAt?: Date | null;
+    capacity?: 'spot' | 'on_demand' | null;
+    teardownReason?: string;
+  } = {},
 ) {
   seq += 1;
   await adminDb.ciRunnerProvisioningIntent.create({
@@ -179,8 +189,10 @@ async function ciJob(
       status: options.status ?? 'running',
       fleetShardId: shardId,
       installFleet: options.installFleet ?? false,
-      bootedAt: earlier(2 * MIN),
+      bootedAt: options.bootedAt === undefined ? earlier(2 * MIN) : options.bootedAt,
       startedAt: earlier(2 * MIN),
+      capacity: options.capacity ?? null,
+      teardownReason: options.teardownReason ?? null,
     },
   });
 }
@@ -297,6 +309,15 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
         machineVcpu: 2,
         vcpu: 4,
         sharePercent: 1,
+        // CI Spot use (MOTIR-11729): the meta org's three booted install-fleet
+        // runners, the settled one included; none recorded a capacity.
+        ciSpot: {
+          status: 'ok',
+          windowDays: 7,
+          setting: 'off',
+          counts: { launched: 3, spot: 0, onDemand: 0, notRecorded: 3, interrupted: 0 },
+          allFellBack: false,
+        },
       },
       {
         fleetKind: 'hosted_agent',
@@ -655,5 +676,295 @@ describe('fleetStatusPoolsService.readAddShard', () => {
     const pool = awsPool(await service.readAddShard(currentPrincipal, { now: NOW }), 'ci_runner');
     expect(pool.accounts.map((a) => a.name)).toEqual(['ci-iad-1']);
     expect(pool).toMatchObject({ sharedCount: 1, spareNames: ['ci-gone-spare'], sizeMachines: 32 });
+  });
+});
+
+// ── CI Spot use (MOTIR-11729; design MOTIR-11726) ─────────────────────────────
+
+const DAY = 24 * 60 * MIN;
+const NONE = { launched: 0, spot: 0, onDemand: 0, notRecorded: 0, interrupted: 0 };
+
+async function spotSettingOn() {
+  const { ciSpotSettingService } = await import('@/lib/services/ciSpotSettingService');
+  return vi
+    .spyOn(ciSpotSettingService, 'read')
+    .mockResolvedValue({ enabled: true, instanceTypes: ['m7i.large'] });
+}
+
+describe('fleetStatusPoolsService.readAddShard — CI Spot use', () => {
+  it('counts each account’s launches of the last 7 days by capacity across workspaces, and the pool is the sum of its accounts', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    // TWO workspaces: a read under either one's context would miss the other's.
+    const a = await tenant(false);
+    const b = await tenant(false);
+    const iad1 = await account('ci-iad-1', { granted: 256 });
+    const iad2 = await account('ci-iad-2', { granted: 64 });
+    const spare = await account('ci-iad-spare', { granted: 64, role: 'spare' });
+    await account('ci-iad-3', { granted: 64 });
+    // ci-iad-1: Spot, on-demand and not recorded in workspace A; a Spot runner
+    // EC2 reclaimed in workspace B. Out of the window: one booted 8 days ago,
+    // one that never booted.
+    await ciJob(a, iad1.id, { capacity: 'spot', status: 'completed' });
+    await ciJob(a, iad1.id, { capacity: 'on_demand', bootedAt: earlier(6 * DAY) });
+    await ciJob(a, iad1.id, { capacity: null });
+    await ciJob(b, iad1.id, {
+      capacity: 'spot',
+      status: 'completed',
+      teardownReason: 'spot_interrupted',
+    });
+    await ciJob(a, iad1.id, { capacity: 'spot', bootedAt: earlier(8 * DAY) });
+    await ciJob(b, iad1.id, { capacity: 'spot', bootedAt: null, status: 'pending' });
+    // ci-iad-2 and the spare launched in workspace B; an install-fleet runner
+    // is no account's.
+    await ciJob(b, iad2.id, { capacity: 'on_demand', teardownReason: 'job_completed' });
+    await ciJob(b, spare.id, { capacity: 'spot' });
+    await ciJob(a, null, { installFleet: true, capacity: 'spot' });
+
+    const pool = awsPool(await service.readAddShard(currentPrincipal, { now: NOW }), 'ci_runner');
+
+    expect(pool.accounts.map((acct) => [acct.name, acct.ciSpot])).toEqual([
+      ['ci-iad-1', { launched: 4, spot: 2, onDemand: 1, notRecorded: 1, interrupted: 1 }],
+      ['ci-iad-2', { launched: 1, spot: 0, onDemand: 1, notRecorded: 0, interrupted: 0 }],
+      ['ci-iad-3', null],
+      ['ci-iad-spare', { launched: 1, spot: 1, onDemand: 0, notRecorded: 0, interrupted: 0 }],
+    ]);
+    expect(pool.ciSpot).toEqual({
+      status: 'ok',
+      windowDays: 7,
+      setting: 'off',
+      counts: { launched: 6, spot: 3, onDemand: 2, notRecorded: 1, interrupted: 1 },
+      allFellBack: false,
+    });
+    // The pool figure is the sum of its account rows.
+    const sum = { ...NONE };
+    for (const acct of pool.accounts) {
+      for (const key of Object.keys(sum) as (keyof typeof sum)[])
+        sum[key] += acct.ciSpot?.[key] ?? 0;
+    }
+    expect(pool.ciSpot).toMatchObject({ counts: sum });
+    // The pool's own figures are as they were.
+    expect(pool).toMatchObject({ sharedCount: 3, spareNames: ['ci-iad-spare'] });
+  });
+
+  it('reads a pool with no launch in the window as zero launches, each account a null', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    const fx = await tenant(false);
+    const iad1 = await account('ci-iad-1', { granted: 64 });
+    await ciJob(fx, iad1.id, { capacity: 'spot', bootedAt: earlier(7 * DAY + MIN) });
+    // A boot after `now` is outside `[now − 7 days, now]` too.
+    await ciJob(fx, iad1.id, { capacity: 'spot', bootedAt: later(MIN) });
+
+    const pool = awsPool(await service.readAddShard(currentPrincipal, { now: NOW }), 'ci_runner');
+    expect(pool.ciSpot).toEqual({
+      status: 'ok',
+      windowDays: 7,
+      setting: 'off',
+      counts: NONE,
+      allFellBack: false,
+    });
+    expect(pool.accounts.map((acct) => acct.ciSpot)).toEqual([null]);
+  });
+
+  it('is unavailable alone when the window count fails: the pool’s figures and the setting still read', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    const fx = await tenant(false);
+    const iad1 = await account('ci-iad-1', { granted: 64 });
+    await ciJob(fx, iad1.id, { capacity: 'spot' });
+    await spotSettingOn();
+    const { ciRunnerProvisioningIntentRepository } =
+      await import('@/lib/repositories/ciRunnerProvisioningIntentRepository');
+    vi.spyOn(
+      ciRunnerProvisioningIntentRepository,
+      'countCiSpotWindowByShardInTx',
+    ).mockRejectedValueOnce(
+      Object.assign(new Error('arn:aws:secret in a message'), {
+        name: 'PrismaClientKnownRequestError',
+      }),
+    );
+
+    const pool = awsPool(await service.readAddShard(currentPrincipal, { now: NOW }), 'ci_runner');
+    expect(pool.ciSpot).toEqual({ status: 'unavailable', setting: 'on' });
+    expect(pool).toMatchObject({ running: 1, sizeMachines: 32, percent: 3 });
+    expect(pool.accounts).toHaveLength(1);
+    expect(pool.accounts[0]).not.toHaveProperty('ciSpot');
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).toContain(
+      'PrismaClientKnownRequestError',
+    );
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain('arn:aws');
+  });
+
+  it('reads the setting as notRead when it fails, and still returns the counts', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    const fx = await tenant(false);
+    const iad1 = await account('ci-iad-1', { granted: 64 });
+    await ciJob(fx, iad1.id, { capacity: 'on_demand' });
+    const { ciSpotSettingService } = await import('@/lib/services/ciSpotSettingService');
+    vi.spyOn(ciSpotSettingService, 'read').mockRejectedValueOnce(new Error('connection reset'));
+
+    const pool = awsPool(await service.readAddShard(currentPrincipal, { now: NOW }), 'ci_runner');
+    expect(pool.ciSpot).toEqual({
+      status: 'ok',
+      windowDays: 7,
+      setting: 'notRead',
+      counts: { launched: 1, spot: 0, onDemand: 1, notRecorded: 0, interrupted: 0 },
+      // Every launch on-demand, but nobody read Spot as on.
+      allFellBack: false,
+    });
+  });
+
+  it('says every launch fell back when Spot is on and none got Spot', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    const fx = await tenant(false);
+    const iad1 = await account('ci-iad-1', { granted: 64 });
+    await ciJob(fx, iad1.id, { capacity: 'on_demand' });
+    await ciJob(fx, iad1.id, { capacity: null });
+    await spotSettingOn();
+
+    const pool = awsPool(await service.readAddShard(currentPrincipal, { now: NOW }), 'ci_runner');
+    expect(pool.ciSpot).toMatchObject({ status: 'ok', setting: 'on', allFellBack: true });
+  });
+
+  it('puts no ciSpot on a pool other than the CI runner’s', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    wireFleetKindSwitch('code_graph_index', () => true);
+    await account('ci-iad-1', { granted: 64 });
+    await account('cgi-iad-1', { granted: 64, fleetKind: 'code_graph_index' });
+    const block = await service.readAddShard(currentPrincipal, { now: NOW });
+    expect(awsPool(block, 'ci_runner')).toHaveProperty('ciSpot');
+    const cgi = awsPool(block, 'code_graph_index');
+    expect(cgi).not.toHaveProperty('ciSpot');
+    expect(cgi.accounts[0]).not.toHaveProperty('ciSpot');
+  });
+});
+
+describe('judgeCiSpot', () => {
+  const counts = { launched: 3, spot: 0, onDemand: 2, notRecorded: 1, interrupted: 0 };
+  it.each([
+    ['on', counts, true],
+    ['off', counts, false],
+    ['notRead', counts, false],
+    ['on', NONE, false],
+    ['on', { ...counts, spot: 1, launched: 4 }, false],
+  ] as const)('setting %s with %o → allFellBack %s', (setting, c, expected) => {
+    expect(judgeCiSpot(setting, c)).toEqual({
+      status: 'ok',
+      windowDays: 7,
+      setting,
+      counts: c,
+      allFellBack: expected,
+    });
+  });
+});
+
+describe('fleetStatusPoolsService.readInstallFleet — CI Spot use', () => {
+  it('counts the install fleet’s launches of the install’s own orgs, and no other pool carries it', async () => {
+    process.env.MOTIR_INSTALL_FLEET_KINDS = 'ci_runner,code_graph_index';
+    const meta = await tenant(true);
+    const other = await tenant(false);
+    const shard = await account('ci-iad-1', { fleetKind: 'ci_runner' });
+    await ciJob(meta, null, { installFleet: true, capacity: 'spot', status: 'completed' });
+    await ciJob(meta, null, {
+      installFleet: true,
+      capacity: 'spot',
+      status: 'completed',
+      teardownReason: 'spot_interrupted',
+    });
+    await ciJob(meta, null, { installFleet: true, capacity: 'on_demand', status: 'completed' });
+    // Not counted: another org's, an account's, one booted 8 days ago.
+    await ciJob(other, null, { installFleet: true, capacity: 'spot' });
+    await ciJob(meta, shard.id, { capacity: 'spot' });
+    await ciJob(meta, null, { installFleet: true, capacity: 'spot', bootedAt: earlier(8 * DAY) });
+    await spotSettingOn();
+
+    const block = okInstall(
+      await service.readInstallFleet(currentPrincipal, { now: NOW, reader: quota(64) }),
+    );
+    expect(block.pools.find((p) => p.fleetKind === 'ci_runner')).toMatchObject({
+      enabled: true,
+      ciSpot: {
+        status: 'ok',
+        windowDays: 7,
+        setting: 'on',
+        counts: { launched: 3, spot: 2, onDemand: 1, notRecorded: 0, interrupted: 1 },
+        allFellBack: false,
+      },
+    });
+    expect(block.pools.find((p) => p.fleetKind === 'code_graph_index')).not.toHaveProperty(
+      'ciSpot',
+    );
+  });
+
+  it('is unavailable alone when the count fails, and absent when the install fleet takes no CI runner', async () => {
+    process.env.MOTIR_INSTALL_FLEET_KINDS = 'ci_runner';
+    const meta = await tenant(true);
+    await ciJob(meta, null, { installFleet: true, capacity: 'spot' });
+    const { ciRunnerProvisioningIntentRepository } =
+      await import('@/lib/repositories/ciRunnerProvisioningIntentRepository');
+    vi.spyOn(
+      ciRunnerProvisioningIntentRepository,
+      'countCiSpotWindowOnInstallFleetInTx',
+    ).mockRejectedValueOnce(new Error('timeout'));
+
+    let block = okInstall(
+      await service.readInstallFleet(currentPrincipal, { now: NOW, reader: quota(64) }),
+    );
+    expect(block.pools.find((p) => p.fleetKind === 'ci_runner')).toMatchObject({
+      running: 1,
+      vcpu: 2,
+      ciSpot: { status: 'unavailable', setting: 'off' },
+    });
+
+    process.env.MOTIR_INSTALL_FLEET_KINDS = 'code_graph_index';
+    block = okInstall(
+      await service.readInstallFleet(currentPrincipal, { now: NOW, reader: quota(64) }),
+    );
+    expect(block.pools.every((p) => !('ciSpot' in p))).toBe(true);
+  });
+
+  it('settles the CI Spot read before answering an install block whose records did not read', async () => {
+    process.env.MOTIR_INSTALL_FLEET_KINDS = 'ci_runner';
+    const { ciRunnerProvisioningIntentRepository } =
+      await import('@/lib/repositories/ciRunnerProvisioningIntentRepository');
+    vi.spyOn(
+      ciRunnerProvisioningIntentRepository,
+      'countInFlightOnInstallFleetInTx',
+    ).mockRejectedValueOnce(new Error('connection reset'));
+    expect(
+      await service.readInstallFleet(currentPrincipal, { now: NOW, reader: quota(8) }),
+    ).toEqual({ status: 'unavailable' });
+  });
+});
+
+describe('ciRunnerProvisioningIntentRepository — the CI Spot window count', () => {
+  it('groups by account in one read, leaves an account with no launch absent, and answers an empty list without a query', async () => {
+    const { ciRunnerProvisioningIntentRepository: repo } =
+      await import('@/lib/repositories/ciRunnerProvisioningIntentRepository');
+    const { withSystemContext } = await import('@/lib/workspaces/context');
+    const fx = await tenant(false);
+    const iad1 = await account('ci-iad-1');
+    const iad2 = await account('ci-iad-2');
+    const quiet = await account('ci-iad-3');
+    await ciJob(fx, iad1.id, { capacity: 'spot', teardownReason: 'spot_interrupted' });
+    await ciJob(fx, iad1.id, { capacity: 'spot', teardownReason: 'job_completed' });
+    await ciJob(fx, iad2.id, { capacity: null, teardownReason: 'spot_interrupted' });
+
+    const since = earlier(7 * DAY);
+    const counts = await withSystemContext((tx) =>
+      repo.countCiSpotWindowByShardInTx([iad1.id, iad2.id, quiet.id], since, NOW, tx),
+    );
+    expect(Object.fromEntries(counts)).toEqual({
+      [iad1.id]: { launched: 2, spot: 2, onDemand: 0, notRecorded: 0, interrupted: 1 },
+      [iad2.id]: { launched: 1, spot: 0, onDemand: 0, notRecorded: 1, interrupted: 1 },
+    });
+    expect(
+      await withSystemContext((tx) => repo.countCiSpotWindowByShardInTx([], since, NOW, tx)),
+    ).toEqual(new Map());
+    // With cloud off the install-fleet read counts every org.
+    await ciJob(fx, null, { installFleet: true, capacity: 'on_demand' });
+    expect(
+      await withSystemContext((tx) =>
+        repo.countCiSpotWindowOnInstallFleetInTx(null, since, NOW, tx),
+      ),
+    ).toEqual({ launched: 1, spot: 0, onDemand: 1, notRecorded: 0, interrupted: 0 });
   });
 });

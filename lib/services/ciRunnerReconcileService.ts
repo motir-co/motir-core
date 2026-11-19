@@ -1,5 +1,9 @@
 import * as Sentry from '@sentry/nextjs';
-import { Prisma, type CiRunnerProvisioningIntent } from '@/generated/prisma/client';
+import {
+  Prisma,
+  type CiRunnerProvisioningIntent,
+  type CiSpotRerunPin,
+} from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
@@ -10,6 +14,7 @@ import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 import { requestsArm64Runner, requestsOnDemandRunner } from '@/lib/ciFleet/config';
 import { isCiFleetConfigured } from '@/lib/orchestrator';
 import { retryPendingSpotReruns } from '@/lib/services/ciSpotRerunService';
+import { ciSpotRerunPinService, isPinnedJob } from '@/lib/services/ciSpotRerunPinService';
 import {
   fleetQueueClient,
   type QueuedFleetJob,
@@ -69,6 +74,22 @@ import {
 // partitions apart without the surplus would boot for an ordinary job an idle
 // on-demand runner is about to take. A minted intent copies its job's labels,
 // so a gap in the on-demand partition boots an on-demand runner on its own.
+//
+// ⚠️ A JOB PINNED TO ON-DEMAND IS ITS OWN PARTITION (MOTIR-11732). The second
+// Spot re-run of a job holds an on-demand pin in its org, and only a runner on an
+// on-demand MACHINE may take it — whatever its labels. So the pinned jobs are
+// taken out of the ordinary partition and covered first by the ordinary capacity
+// known not to be Spot (an idle runner whose machine was booted on-demand, an
+// intent not yet booted or booted on-demand — under the pin every new boot is
+// on-demand), then by the on-demand surplus; what is left of either covers the
+// ordinary jobs. An idle Spot runner covers ordinary jobs only:
+//
+//   pinned capacity  = I_pin + A_pin (+ the on-demand surplus)
+//   uncovered pinned = max(0, Q_pin − pinned capacity)
+//   uncovered other  = max(0, Q_other − (I_other + A_other − used by pinned)
+//                                     − surplus left)
+//
+// With no pin open, Q_pin is 0 and the formula above is the one before it.
 //
 // ⚠️ ARM64 IS ITS OWN PARTITION, CUT BEFORE THE ARITHMETIC ABOVE (MOTIR-11781).
 // A Graviton runner carries only the arm64 label and an x86 runner never carries
@@ -167,6 +188,10 @@ export const ciRunnerReconcileService = {
     if (reruns.requested + reruns.refused + reruns.expired + reruns.pending > 0) {
       console.warn('[ciRunnerReconcile] retried pending Spot re-runs', reruns);
     }
+    // An on-demand pin whose re-run a runner took, or which is 24 hours old,
+    // closes here (MOTIR-11732) — before any org reads its pins below. Never
+    // throws, and rides no outcome field either.
+    await ciSpotRerunPinService.closeSettledPins(now);
 
     const since = new Date(now.getTime() - REPO_LOOKBACK_MS);
     const latest = await withSystemContext((tx) =>
@@ -344,14 +369,27 @@ async function reconcileOrg(
   const queuedArm64 = queued.filter((job) => requestsArm64Runner(job.labels));
   const queuedX86 = queued.filter((job) => !requestsArm64Runner(job.labels));
   const queuedOnDemand = queuedX86.filter((job) => requestsOnDemandRunner(job.labels));
-  const queuedOther = queuedX86.filter((job) => !requestsOnDemandRunner(job.labels));
+  const pins = await openPinsQuietly(org, now);
+  const queuedPinned = queuedX86.filter(
+    (job) => !requestsOnDemandRunner(job.labels) && isPinnedJob(job, pins),
+  );
+  const queuedOther = queuedX86.filter(
+    (job) => !requestsOnDemandRunner(job.labels) && !isPinnedJob(job, pins),
+  );
+  // Only read which idle machines are on-demand when a pinned job needs one.
+  const idleOrdinary = idleX86.filter((r) => !requestsOnDemandRunner(r.labels));
+  const idlePinnedCapable =
+    queuedPinned.length === 0 ? 0 : await countOnDemandMachines(idleOrdinary.map((r) => r.id));
   const coverage = coverPartitions({
     queuedOnDemand: queuedOnDemand.length,
     queuedOther: queuedOther.length,
+    queuedPinned: queuedPinned.length,
     idleOnDemand,
     idleOther: idleX86.length - idleOnDemand,
+    idlePinnedCapable,
     awaitingOnDemand: awaitingSplit.onDemand,
     awaitingOther: awaitingSplit.other,
+    awaitingPinnedCapable: awaitingSplit.otherNotSpot,
   });
   const uncoveredArm64 = coverArm64Partition({
     queued: queuedArm64.length,
@@ -362,12 +400,26 @@ async function reconcileOrg(
   const onDemandGaps = youngest(queuedOnDemand, coverage.uncoveredOnDemand).filter((job) =>
     pastGrace(job, now),
   );
+  const pinnedGaps = youngest(queuedPinned, coverage.uncoveredPinned).filter((job) =>
+    pastGrace(job, now),
+  );
   const otherGaps = youngest(queuedOther, coverage.uncoveredOther).filter((job) =>
     pastGrace(job, now),
   );
-  const gaps = [...arm64Gaps, ...onDemandGaps, ...otherGaps].sort(
+  const gaps = [...arm64Gaps, ...onDemandGaps, ...pinnedGaps, ...otherGaps].sort(
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
   );
+  if (queuedPinned.length > 0) {
+    // Logged rather than carried on the outcome: the memoised step's shape is
+    // pinned (`reconcile-github-queue-v4`).
+    console.warn('[ciRunnerReconcile] a job pinned to on-demand is queued', {
+      org,
+      queued: queuedPinned.length,
+      idleOnDemandMachines: idlePinnedCapable,
+      awaitingNotSpot: awaitingSplit.otherNotSpot,
+      added: pinnedGaps.length,
+    });
+  }
 
   let added = 0;
   let addedOnDemand = 0;
@@ -448,15 +500,57 @@ export function coverPartitions(counts: {
   idleOther: number;
   awaitingOnDemand: number;
   awaitingOther: number;
-}): { uncoveredOnDemand: number; uncoveredOther: number } {
+  /** Ordinary jobs pinned to on-demand capacity (MOTIR-11732), NOT in `queuedOther`. */
+  queuedPinned?: number;
+  /** The part of `idleOther` whose machine is on-demand (MOTIR-11732). */
+  idlePinnedCapable?: number;
+  /** The part of `awaitingOther` not known to be Spot (MOTIR-11732). */
+  awaitingPinnedCapable?: number;
+}): { uncoveredOnDemand: number; uncoveredOther: number; uncoveredPinned: number } {
   const onDemandCapacity = counts.idleOnDemand + counts.awaitingOnDemand;
   const uncoveredOnDemand = Math.max(0, counts.queuedOnDemand - onDemandCapacity);
   const surplus = Math.max(0, onDemandCapacity - counts.queuedOnDemand);
+
+  // The pinned jobs take the ordinary capacity that is not Spot first, then the
+  // on-demand surplus; neither can serve an ordinary job once it has.
+  const queuedPinned = counts.queuedPinned ?? 0;
+  const pinnedCapable = Math.min(
+    (counts.idlePinnedCapable ?? 0) + (counts.awaitingPinnedCapable ?? 0),
+    counts.idleOther + counts.awaitingOther,
+  );
+  const pinnedFromOrdinary = Math.min(queuedPinned, pinnedCapable);
+  const pinnedFromSurplus = Math.min(queuedPinned - pinnedFromOrdinary, surplus);
+  const uncoveredPinned = queuedPinned - pinnedFromOrdinary - pinnedFromSurplus;
+
   const uncoveredOther = Math.max(
     0,
-    counts.queuedOther - counts.idleOther - counts.awaitingOther - surplus,
+    counts.queuedOther -
+      (counts.idleOther + counts.awaitingOther - pinnedFromOrdinary) -
+      (surplus - pinnedFromSurplus),
   );
-  return { uncoveredOnDemand, uncoveredOther };
+  return { uncoveredOnDemand, uncoveredOther, uncoveredPinned };
+}
+
+/** The org's open on-demand pins (MOTIR-11732), or none when they cannot be
+ *  read — the reconcile then counts as it did before pins existed. */
+async function openPinsQuietly(org: string, now: Date): Promise<CiSpotRerunPin[]> {
+  try {
+    return await ciSpotRerunPinService.listOpenForOrg(org, now);
+  } catch (err) {
+    console.error('[ciRunnerReconcile] could not read the on-demand pins', {
+      org,
+      detail: err instanceof Error ? err.message : 'unknown',
+    });
+    return [];
+  }
+}
+
+/** How many of these idle runners run on an on-demand machine (MOTIR-11732). */
+async function countOnDemandMachines(runnerIds: number[]): Promise<number> {
+  const capacity = await withSystemContext((tx) =>
+    ciRunnerProvisioningIntentRepository.findCapacityByRunnerIds(runnerIds, tx),
+  );
+  return runnerIds.filter((id) => capacity.get(id) === 'on_demand').length;
 }
 
 /**

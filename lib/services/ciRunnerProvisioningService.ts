@@ -13,6 +13,7 @@ import {
   ciRunnerProvisioningIntentRepository,
   type CiRunnerProvisioningIntentCreateInput,
 } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { ciSpotRerunPinRepository } from '@/lib/repositories/ciSpotRerunPinRepository';
 import { isMotirFleetJob } from '@/lib/ciFleet/config';
 import {
   provisioningInstallationIdFor,
@@ -376,6 +377,22 @@ export const ciRunnerProvisioningService = {
           },
           tx,
         );
+        // A runner took a later attempt of a job pinned to on-demand
+        // (MOTIR-11732): the re-run is picked up and the org's hold closes, so
+        // boots read the Spot setting again.
+        if (event.jobName !== null) {
+          await ciSpotRerunPinRepository.closePickedUp(
+            {
+              repoOwner: event.repoOwner,
+              repoName: event.repoName,
+              runId: event.runId,
+              jobName: event.jobName,
+              runAttempt: event.runAttempt,
+            },
+            now,
+            tx,
+          );
+        }
       }
       const completed =
         event.action === 'completed'

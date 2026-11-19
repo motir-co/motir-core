@@ -15027,6 +15027,54 @@
         "loading": {
           "install": "正在加载 Motir 自己的账户",
           "shard": "正在加载 add-shard 池"
+        },
+        "ciSpot": {
+          "heading": "CI 运行器 · 最近 7 天",
+          "scope": "统计最近 7 天启动的 CI 运行器，而不是现在运行的；上方的“运行中”才是现在运行的。",
+          "setting": {
+            "on": "Spot 已开启",
+            "off": "Spot 已关闭",
+            "notRead": "未读取",
+            "notReadLabel": "CI Spot 设置未读取"
+          },
+          "offNote": "CI Spot 已关闭，因此新的 CI 运行器以按需方式启动。开启期间启动的运行器仍计入此处。",
+          "notReadNote": "CI Spot 设置未能加载，因此不显示 Spot 是否开启。下方的数字已读取。",
+          "share": {
+            "headline": "{percent}% 使用 Spot",
+            "noPercent": "无 Spot 占比",
+            "of": "共启动 {count, plural, other {# 个 CI 运行器}}",
+            "ofRecorded": "记录了容量的 {recorded} 个中（共启动 {total} 个）"
+          },
+          "barLabel": "最近 7 天启动的 {total} 个 CI 运行器中，{spot} 个使用 Spot，{onDemand} 个使用按需",
+          "barLabelNotRecorded": "最近 7 天启动的 {total} 个 CI 运行器中，{spot} 个使用 Spot，{onDemand} 个使用按需，{notRecorded} 个未记录",
+          "legend": {
+            "spot": "{count} 个使用 Spot",
+            "onDemand": "{count} 个使用按需",
+            "notRecorded": "{count} 个未记录"
+          },
+          "notRecordedNote": "{count, plural, other {# 个运行器}}在 Motir 记录每个运行器的容量之前启动，因此既不计为 Spot 也不计为按需，Spot 占比也不包含它们。",
+          "interrupted": {
+            "label": "被 AWS 中断 · 7 天",
+            "sub": "AWS 在作业中途回收的 Spot 运行器",
+            "none": "无"
+          },
+          "allFellBack": "Spot 已开启，但最近 7 天启动的 {count} 个 CI 运行器都没有获得 Spot 容量：每次启动都回退到了按需。打开“CI 运行器”查看每个账号的启动。",
+          "allFellBackInstall": "Spot 已开启，但最近 7 天在 Motir 自己的账号中启动的 {count} 个 CI 运行器都没有获得 Spot 容量：每次启动都回退到了按需。",
+          "none": "最近 7 天没有启动 CI 运行器，因此没有可显示的 Spot 占比。",
+          "error": {
+            "title": "无法读取 CI Spot 使用情况",
+            "body": "最近 7 天的启动和中断未能加载，因此不显示任何数字，也没有一个是零。池的行、它的账号和页面的其余部分不受影响。请重新加载再试。"
+          },
+          "accounts": {
+            "col": {
+              "spot": "Spot · 7 天",
+              "interrupted": "中断 · 7 天"
+            },
+            "spotOf": "{spot} / {total}",
+            "percent": "{percent}% 使用 Spot",
+            "notRecorded": "{count} 个未记录",
+            "none": "最近 7 天没有启动 CI 运行器"
+          }
         }
       },
       "install": {
