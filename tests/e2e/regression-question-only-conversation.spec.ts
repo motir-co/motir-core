@@ -401,8 +401,9 @@ test('a question-only conversation is never waiting on you, ends on the lease, a
     await beat();
   });
 
-  await chapter('Eight segments, no "No plan yet", and All adds up', async () => {
-    await expect(tabStrip(page).getByRole('button')).toHaveCount(8);
+  await chapter('Nine segments, no "No plan yet", and All adds up', async () => {
+    // Bug MOTIR-11701 added the Stopped segment.
+    await expect(tabStrip(page).getByRole('button')).toHaveCount(9);
     await expect(tabStrip(page).getByRole('button', { name: sessions.planState.none })).toHaveCount(
       0,
     );

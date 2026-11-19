@@ -24,6 +24,7 @@ import {
   Shield,
   Sparkles,
   UserSearch,
+  Wallet,
   Workflow,
   Route,
 } from 'lucide-react';
@@ -60,6 +61,8 @@ export interface AdminShellLabels {
   groupOperations: string;
   navOverview: string;
   navUsage: string;
+  /** Platform → Costs (MOTIR-11712): AWS and model cost, every staff role. */
+  navCosts: string;
   navTenants: string;
   navUsers: string;
   navMonitoring: string;
@@ -133,6 +136,13 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           href: '/admin/usage',
           // LIVE since MOTIR-732: the estate's spend by category and model.
           active: pathname.startsWith('/admin/usage'),
+        },
+        {
+          icon: <Wallet />,
+          label: labels.navCosts,
+          href: '/admin/costs',
+          // MOTIR-11712: what running Motir cost — AWS beside model cost.
+          active: pathname.startsWith('/admin/costs'),
         },
         // The TENANT hierarchy, LIVE at its org level since MOTIR-4566. The row
         // has pointed at `/admin/tenants` since this shell was written and was

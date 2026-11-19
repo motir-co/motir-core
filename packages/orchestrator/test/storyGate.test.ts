@@ -346,7 +346,10 @@ describe('the port boundary', () => {
         // `send` to fail the image read those `lib/awsServices/` reads make, so
         // it names the client too (MOTIR-11252). The index-fleet boot
         // preflight's test (MOTIR-11277) spies on the same client to fake the
-        // ECR login it mints before probing a private ECR image.
+        // ECR login it mints before probing a private ECR image. The Costs
+        // page's Cost Explorer read (MOTIR-11712) assumes the management
+        // account's read role through STS, held to `lib/awsCost/` by the same
+        // boundary test.
         allowed: [
           SERVERLESS,
           `${ORCHESTRATOR}/adapters/aws/`,
@@ -354,6 +357,8 @@ describe('the port boundary', () => {
           'tests/awsDeploy/',
           'lib/awsServices/',
           'tests/awsServices/',
+          'lib/awsCost/',
+          'tests/awsCost/',
           'tests/platform/platformServicesService.test.ts',
           'tests/ciFleet/fleetImagePull.test.ts',
         ],

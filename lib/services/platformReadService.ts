@@ -9,6 +9,7 @@ import type {
   PlatformOverviewPeriod,
 } from '@/lib/dto/platform';
 import {
+  getPlatformModelCostDays,
   getPlatformProviderReconciliation,
   getPlatformRuns,
   getPlatformUsage,
@@ -25,6 +26,23 @@ import {
   toPlatformOrganizationSummaryDTO,
   toPlatformWorkspaceSummaryDTO,
 } from '@/lib/mappers/platformMappers';
+import type { Prisma } from '@/generated/prisma/client';
+import type { CostsPageDTO, CostsView } from '@/lib/dto/platformCosts';
+import {
+  buildCosts,
+  candidatePeriods,
+  firstDayHeld,
+  intersectRange,
+  modelRangeFor,
+  modelYearRanges,
+  periodRange,
+  utcDayOf,
+  type AwsPeriodLine,
+  type AwsSource,
+  type ModelsSource,
+} from '@/lib/platform/costs';
+import { awsCostDayRepository } from '@/lib/repositories/awsCostDayRepository';
+import { awsCostFetchRepository } from '@/lib/repositories/awsCostFetchRepository';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { withPlatformRead } from '@/lib/platform/context';
 import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
@@ -63,6 +81,84 @@ import { platformOrganizationRepository } from '@/lib/repositories/platformOrgan
 
 /** How many workspaces one organization read returns. A cap, with `hasMoreWorkspaces`. */
 export const PLATFORM_ORG_WORKSPACE_LIMIT = 100;
+
+/**
+ * The Costs page's model read (MOTIR-11712): the view's range, and on the Year
+ * view every earlier year from the first recorded one — each call one year at
+ * most, motir-ai's limit. Outside any transaction; any call failing makes the
+ * whole Models column unavailable, because a column missing a year would read as
+ * a smaller figure.
+ */
+async function readModelCosts(view: CostsView, today: string): Promise<ModelsSource> {
+  try {
+    const range = modelRangeFor(view, today);
+    if (!range) return { status: 'ok', firstRecordedDay: null, days: [] };
+    const first = await getPlatformModelCostDays({ from: range.fromDay, to: range.toDay });
+    const earlier =
+      view.kind === 'year'
+        ? await Promise.all(
+            modelYearRanges(first.firstRecordedDay, today).map((r) =>
+              getPlatformModelCostDays({ from: r.fromDay, to: r.toDay }),
+            ),
+          )
+        : [];
+    return {
+      status: 'ok',
+      firstRecordedDay: first.firstRecordedDay,
+      days: [...earlier.flatMap((read) => read.days), ...first.days],
+    };
+  } catch (err) {
+    console.error('[platformReadService] the model cost read failed', {
+      error: err instanceof Error ? err.name : 'unknown',
+    });
+    return { status: 'unavailable' };
+  }
+}
+
+/**
+ * The Costs page's AWS read (MOTIR-11712), from what the fetch job stored. AWS is
+ * unavailable until the first fetch; after it, a period inside the stored span
+ * reads its lines (a covered day with none cost nothing), and a period outside it
+ * has no figure.
+ */
+async function readAwsCosts(
+  view: CostsView,
+  today: string,
+  modelFirstDay: string | null,
+  tx: Prisma.TransactionClient,
+): Promise<AwsSource> {
+  const coverage = await awsCostFetchRepository.findCoverage(tx);
+  if (!coverage) return { status: 'unavailable' };
+  const span = { fromDay: coverage.fromDay, toDay: coverage.toDay };
+  const lines = new Map<string, AwsPeriodLine[]>();
+  const periods = candidatePeriods(view, today, firstDayHeld(span, modelFirstDay));
+  if (view.kind === 'day') {
+    const month = periodRange(view.month, today);
+    const covered = month && intersectRange(month, span);
+    if (covered) {
+      for (const period of periods)
+        if (period >= covered.fromDay && period <= covered.toDay) lines.set(period, []);
+      for (const row of await awsCostDayRepository.findInRange(covered, tx)) {
+        lines
+          .get(row.day)
+          ?.push({ kind: row.kind, service: row.service, amountMicroUsd: row.amountMicroUsd });
+      }
+    }
+  } else {
+    for (const period of periods) {
+      const range = periodRange(period, today);
+      const covered = range && intersectRange(range, span);
+      if (covered) lines.set(period, await awsCostDayRepository.sumByLineInRange(covered, tx));
+    }
+  }
+  return { status: 'ok', coverage: span, fetchedAt: coverage.fetchedAt.toISOString(), lines };
+}
+
+function costsAuditLabel(view: CostsView): string {
+  if (view.kind === 'day') return `costs ${view.month} by day`;
+  if (view.kind === 'month') return `costs ${view.year} by month`;
+  return 'costs by year';
+}
 
 export const platformReadService = {
   /**
@@ -218,6 +314,50 @@ export const platformReadService = {
       { action: 'estate.read', targetKind: 'platform', targetLabel: `estate usage ${period}` },
       async () => ({ period, usage, reconciliation }),
     );
+  },
+
+  /**
+   * The Costs page (MOTIR-11712, design MOTIR-11711): Motir's AWS bill as the
+   * fetch job stored it, beside the model cost motir-ai recorded, for one view.
+   *
+   * ONE audited `estate.read` per view, written whether or not either source
+   * answered. The model reads run first, outside the transaction (they name the
+   * first recorded day the Year view starts from). The AWS read runs inside the
+   * audited transaction; if it throws, that transaction rolls back with its audit
+   * row, so the view is audited again with AWS marked unavailable — the operator
+   * still looked, and the Models column still renders.
+   */
+  async getCosts(
+    principal: PlatformPrincipal,
+    view: CostsView,
+    now: Date = new Date(),
+  ): Promise<CostsPageDTO> {
+    await requirePlatformStaff('support');
+    const today = utcDayOf(now);
+    const models = await readModelCosts(view, today);
+    const modelFirstDay = models.status === 'ok' ? models.firstRecordedDay : null;
+    const entry = {
+      action: 'estate.read',
+      targetKind: 'platform',
+      targetLabel: costsAuditLabel(view),
+    } as const;
+
+    let aws: AwsSource;
+    try {
+      aws = await withPlatformRead(principal, entry, (tx) =>
+        readAwsCosts(view, today, modelFirstDay, tx),
+      );
+    } catch (err) {
+      console.error('[platformReadService] the stored AWS cost read failed', {
+        error: err instanceof Error ? err.name : 'unknown',
+      });
+      aws = await withPlatformRead(
+        principal,
+        entry,
+        async () => ({ status: 'unavailable' }) as const,
+      );
+    }
+    return buildCosts({ view, today, aws, models });
   },
 
   /**

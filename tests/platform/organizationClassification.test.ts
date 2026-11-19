@@ -160,7 +160,12 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // `ci_fleet_blind_spots` is MOTIR-11439's record of the provision sweep's last
     // reconcile outcome (`20261116210000_ci_fleet_blind_spots`): platform-only,
     // written by the sweep under `app.system_admin` and read from this tier.
+    // `aws_cost_day` and `aws_cost_fetch` are MOTIR-11712's store of Motir's AWS
+    // bill (`20261118235000_aws_cost_days`): platform-only, written by the fetch
+    // job and the backfill under `app.system_admin`, read by the Costs page.
     expect(rows.map((r) => r.tablename)).toEqual([
+      'aws_cost_day',
+      'aws_cost_fetch',
       'capacity_alert_setting',
       'capacity_raised_alert',
       'ci_fleet_blind_spots',

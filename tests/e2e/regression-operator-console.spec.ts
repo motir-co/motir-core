@@ -110,6 +110,7 @@ test('platform staff walk the console end to end; a tenant member and owner are 
   const consoleRoutes = [
     '/admin',
     '/admin/usage',
+    '/admin/costs',
     '/admin/tenants',
     `/admin/tenants/${acme.organizationId}`,
   ];

@@ -28,6 +28,7 @@ closest existing usage surface.
 | **PLANNER FINDINGS · RECORDS — a third view, Records, on `/admin/planner-findings`: one row per plan check with its verdict, filters, pager and every list state; the record page with its plan context, findings and the copyable command; the Record link on the finding detail** (AMENDMENT 2026-11-16) | **`console--planner-findings--records.mock.html`** (delta, Panels 1–12) | A display-only Records view and record page added to the shipped Planner findings console. |
 | **PLANNER FINDINGS · RECORDS · RUN-THROUGH — the record page's run-through block: the check's own answer to whether a run could build the plan through, in three readings (builds through; does not build through, with the cards to fix; no answer recorded), on an open and an attributed record, with no card, with eleven cards, and narrow** (AMENDMENT 2026-11-17) | **`console--planner-findings--records--run-through.mock.html`** (delta, Panels 1–7) | One display-only block on the record page, between the plan-context header and the findings table. |
 | **PLANNER FINDINGS · RECORDS · FINDING KEY — the record page's findings table gains a last Planning bug column: each finding's own planning-bug key, and for an operator on an attributed record the row's Link and Remove controls with every refusal and notice, the reader and open-record forms, a replace and a clear, one key on two findings, dark and narrow** (AMENDMENT 2026-11-17) | **`console--planner-findings--records--finding-key.mock.html`** (delta, Panels 1–10) | One column and one row-link rule on the record page's findings table: each finding's key, set, replaced and cleared from its own row. |
+| **COSTS — the rail row · `/admin/costs`: what running Motir cost, AWS and model providers, per day, month and year; range totals; a drill-down per row (AWS by service with tax, credits and refunds; models by provider) with shares; partial and estimate marks; the AWS fetch time; one-source and both-sources unavailable, empty, loading, dark** (AMENDMENT 2026-11-18) | **`console--costs.mock.html`** (new surface, Panels 1–9) | A new read-only Platform page directly after Usage & cost. **Gates MOTIR-11712.** |
 
 ## What this area is
 
@@ -4545,3 +4546,209 @@ namespace.
 - A confirmation step on Remove, a marker over a key whose work item is gone, or a per-record list of keys.
 - An open-record refusal: on an open record no control is rendered, so nothing can produce one.
 - What the key means, how it is resolved or stored, or which route answers the write.
+
+# AMENDMENT 2026-11-18 — Costs (MOTIR-11711)
+
+**Mock:** [`console--costs.mock.html`](./console--costs.mock.html) — a NEW surface, Panels 1–9. No mock drew a
+costs page before, so this is a full mock of the new page rather than a delta; it amends no earlier panel. The one
+change to an existing surface is the rail: the console shell gains a **Costs** row in the Platform group directly
+after **Usage & cost**, drawn in Panel 1. Every other rail row, the operator top bar and Usage & cost itself stand as
+they ship. **Gates MOTIR-11712** (the card that builds the page, its two reads and its copy keys).
+
+**Design system (step 1 of the design lane).** Files read: `package.json` (depends on `@motir/design-system`
+`workspace:*`, the in-repo `packages/design-system`) and `app/globals.css` (imports
+`@motir/design-system/theme.css`). **Verdict: on Motir Design, branch (a).** Axes `warm-editorial` · `motir` ·
+`motir`, which the mock wears. The mock is rendered with `renderMock` (`boardWidth: 'full'`) from the REAL shipped
+parts: the console shell `app/(admin)/_components/AdminShell.tsx` (two board-only changes: the proposed Costs row,
+and its root `h-dvh` read as a minimum height so a long page is not clipped), the page grammar of Usage & cost
+(`app/(admin)/admin/usage/page.tsx`: the serif `h1`, the secondary subtitle, the "Showing …" line, the figure
+`Card`s, the `Card` table with `px-3 py-2`-sized cells), the select recipe of `SpendPeriodSwitch`
+(`app/(admin)/admin/_components/SpendPeriodSwitch.tsx`), the disclosure row of `ReconciliationDayRow`
+(`app/(admin)/admin/usage/_components/ReconciliationDayRow.tsx`), the money formatter `formatMicroUsd`
+(`app/(admin)/admin/_components/spendFormat.ts`), `providerDisplayName` (`lib/models/displayNames.ts`), and the
+design system's `Card`, `Pill`, `Segmented` and `ErrorState`. The loading bars are the shipped `PageSkeleton`
+`Block` recipe. **No part the package lacks is needed**: the cost row, its drill-down and the breakdown table are
+product-local compositions of those parts, because they are this page's vocabulary, not primitives.
+
+## Where it sits, and who reads it
+
+- **Route** `/admin/costs`, inside the console shell. **Rail row** _Costs_ (lucide `Wallet`), Platform group,
+  directly after _Usage & cost_; lit on the page (`startsWith('/admin/costs')`). Model spend has lived beside tenant
+  usage on Usage & cost; Costs is the one place that adds AWS to it, so the two rows sit together.
+- **Every platform staff role** reads it, as Usage & cost (`requirePlatformStaffPage('support')`); the row shows for
+  every role. **Read-only**: nothing on the page writes.
+- The period lives in the URL — `?view=day&month=YYYY-MM`, `?view=month&year=YYYY`, `?view=year` — so a view is
+  linkable and survives a reload, as Usage & cost's `?period=` does. No parameter means **Day** for the current UTC
+  month.
+
+## The data — two sources, one page
+
+| Column     | Source                                                                                                                                                                                                                                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AWS**    | AWS Cost Explorer for the management account, unblended cost in USD per UTC day and per service, with the record types Tax, Credit and Refund kept as their own lines. Fetched on a schedule and stored by Motir; the page reads the stored figures and the time they were last fetched. AWS revises the newest day for a day or two. |
+| **Models** | What Motir recorded as model cost (the same cost Usage & cost shows per model), summed per UTC day and per provider id.                                                                                                                                                                                                               |
+| **Total**  | AWS + Models for the row, computed on the page only when both sources answered.                                                                                                                                                                                                                                                       |
+
+How each is fetched and stored is MOTIR-11712's. The page needs, per row: the AWS lines (service name, amount, kind
+`service · tax · credit · refund`), the model lines (provider id, amount), and once per page the AWS fetch time.
+
+## Elements — each named once
+
+| Element                | What it is                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Header**             | Usage & cost's grammar: `h1` _Costs_ (serif), the subtitle, then a toolbar row: on the left the **Showing line** (`aria-live="polite"`) with the **Fetched line** under it; on the right the **Period switch** and the **Range picker**.                                                                                                                      |
+| **Period switch**      | The shipped `Segmented` (`role="group"`, label _Period_): **Day · Month · Year**, the active one `aria-pressed`.                                                                                                                                                                                                                                              |
+| **Range picker**       | A native `<select>` in `SpendPeriodSwitch`'s recipe, with a visually hidden label. Day view: a **month** picker, newest first, from the current month back to the first month AWS reports. Month view: a **year** picker. Year view: **no picker**.                                                                                                           |
+| **Fetched line**       | `RefreshCw` glyph (`--el-info`) + "AWS figures fetched {time} UTC". Absent while AWS is unavailable or loading.                                                                                                                                                                                                                                               |
+| **Range totals**       | Three `Card` figures above the rows: **AWS**, **Models**, **Total**, each the sum over every row of the selected range, with a sub-line naming the range ("November 2026", "2026", "All years") and "· so far" when the range includes a partial period. An unavailable source's figure is an em dash with **Unavailable** under it, and Total follows it.    |
+| **Rows**               | A `Card` table under an `h2` (_By day · By month · By year_): **Day (UTC) / Month / Year · AWS · Models · Total**, money right-aligned, Total in semibold. Day rows run oldest first through today; month rows January through the current month; year rows every year with any recorded cost, oldest first.                                                  |
+| **Partial mark**       | A neutral `Pill` with `Clock` and **Partial** beside the period of a row that is not over: today, this month, this year.                                                                                                                                                                                                                                      |
+| **Estimate mark**      | An info `Pill` with `Info` and **Estimate** under the AWS figure of the current day (Day view), the current month (Month view) and the current year (Year view, which contains that month).                                                                                                                                                                   |
+| **Row disclosure**     | `ReconciliationDayRow`'s pattern: the period cell is a `<button aria-expanded>` with a chevron, labelled "Show what made up {period}". Every row has one. Open, a following row on `--el-surface-soft` holds the drill-down; several rows may be open at once.                                                                                                |
+| **Drill-down**         | Two breakdown tables side by side (stacked below `lg`): **AWS by service** and **Models by provider**, each captioned with its title and the row's figure. A source that is unavailable draws no breakdown.                                                                                                                                                   |
+| **Breakdown line**     | Name · **Amount** · **Share**. AWS lines use AWS's own service names (`Amazon Elastic Container Service`, `EC2 - Other`, `AmazonCloudWatch` …), largest first, then **Tax**, then **Credits**, then **Refund** as their own lines (medium weight). Model lines use `providerDisplayName`, largest first. Share is the line ÷ that row's AWS or Models figure. |
+| **Share bar**          | Decorative (`aria-hidden`): a `--el-muted` track with an `--el-info` fill at the share's width, beside the percent. Negative lines (credits, refunds) draw no bar; their amount and share carry a U+2212 minus.                                                                                                                                               |
+| **Source error**       | The shipped `ErrorState` with **Try again**, between the range totals and the rows, for the source that did not answer.                                                                                                                                                                                                                                       |
+| **Both-sources error** | One `ErrorState` with **Try again** in place of the totals and the rows.                                                                                                                                                                                                                                                                                      |
+| **Empty card**         | A `Card` with the `Wallet` glyph, "No costs recorded for {range}" and one line, in place of the totals and the rows.                                                                                                                                                                                                                                          |
+| **Loading**            | The header renders; three figure bars and six row bars pulse (`motion-safe:animate-pulse`, `aria-busy`, a visually hidden `role="status"` _Loading costs_).                                                                                                                                                                                                   |
+
+## The panels
+
+1. **Access path and the Day view** — a support operator, the rail with **Costs** lit under Usage & cost; November
+   2026 by day, read on 18 Nov at 06:12 UTC: 1–17 Nov closed, **18 Nov Partial with an AWS Estimate**; **17 Nov open**,
+   showing AWS by service and Models by provider.
+2. **The Month view** — 2026 by month; November Partial + Estimate; **October open**: the **AWS drill-down with
+   Tax, Credits and Refund** as their own lines after the services, beside Models by provider.
+3. **The Year view** — 2025 and 2026; 2026 Partial + Estimate; no picker; 2025 open (its Credits line).
+4. **AWS unavailable** — Day view: AWS and Total figures read an em dash and _Unavailable_; the AWS error with Try
+   again above the rows; every AWS and Total cell an em dash; Models renders; no Fetched line.
+5. **Models unavailable** — the mirror, Month view, October open with AWS by service only.
+6. **Both sources unavailable** — one error, no totals, no rows.
+7. **Empty** — Day view on February 2025, a month with no recorded cost.
+8. **Loading.**
+9. **Dark** — Panel 2 in the dark theme.
+
+## Rules the drawing holds
+
+- **A missing figure is never a zero.** An unavailable source's cells, its range total and every Total read an em
+  dash; a zero is drawn only when a source answered zero.
+- **Total needs both sources.** A Total from one source would read as the whole cost, so it is drawn only when AWS
+  and Models both answered.
+- **Partial and Estimate are different facts.** Partial says the period is not over (it applies to the whole row);
+  Estimate says AWS will still revise its figure (it applies to the AWS cell only). The current day or month carries
+  both; a closed past day carries neither.
+- **One source failing never hides the other.** Each source is read on its own; its failure shows its own error and
+  the other column renders.
+- **Empty** is drawn when both sources answered and the range has no row with any cost. A range is never padded with
+  zero rows: days after today are not listed, nor years with no cost.
+- **Shares add up to 100% of the row's figure**, credits and refunds included (they are negative shares), so the
+  services' shares can sum past 100% in a credited month.
+- **Read-only.** The only controls are the period switch, the range picker, the row disclosures and Try again — all
+  view changes or re-reads.
+- **Width.** The rows sit in a `Card` with `overflow-x-auto`, as Usage & cost's sheets do; the figures stack to one
+  column below `sm`; the drill-down stacks below `lg`.
+
+## Copy (en · zh; the build adds every locale)
+
+| Key                                           | en                                                                                                                                                          | zh                                                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `platformAdmin.nav.costs`                     | Costs                                                                                                                                                       | 成本                                                                                                    |
+| `platformAdmin.costs.title`                   | Costs                                                                                                                                                       | 成本                                                                                                    |
+| `platformAdmin.costs.subtitle`                | What running Motir cost, in US dollars: the AWS bill and what model providers charged, by day, month or year. Tenant usage and credits are on Usage & cost. | 运行 Motir 的成本（美元）：AWS 账单与模型供应商的收费，按日、月或年查看。租户用量与积分见“用量与成本”。 |
+| `platformAdmin.costs.period.label`            | Period                                                                                                                                                      | 周期                                                                                                    |
+| `platformAdmin.costs.period.day`              | Day                                                                                                                                                         | 日                                                                                                      |
+| `platformAdmin.costs.period.month`            | Month                                                                                                                                                       | 月                                                                                                      |
+| `platformAdmin.costs.period.year`             | Year                                                                                                                                                        | 年                                                                                                      |
+| `platformAdmin.costs.picker.month`            | Month                                                                                                                                                       | 月份                                                                                                    |
+| `platformAdmin.costs.picker.year`             | Year                                                                                                                                                        | 年份                                                                                                    |
+| `platformAdmin.costs.showing.day`             | Showing {month}, by day (UTC)                                                                                                                               | 显示 {month}，按日 (UTC)                                                                                |
+| `platformAdmin.costs.showing.month`           | Showing {year}, by month                                                                                                                                    | 显示 {year}，按月                                                                                       |
+| `platformAdmin.costs.showing.year`            | Showing every year with recorded cost                                                                                                                       | 显示所有有成本记录的年份                                                                                |
+| `platformAdmin.costs.fetched`                 | AWS figures fetched {time} UTC                                                                                                                              | AWS 数据获取于 {time} UTC                                                                               |
+| `platformAdmin.costs.figures.aws`             | AWS                                                                                                                                                         | AWS                                                                                                     |
+| `platformAdmin.costs.figures.models`          | Models                                                                                                                                                      | 模型                                                                                                    |
+| `platformAdmin.costs.figures.total`           | Total                                                                                                                                                       | 合计                                                                                                    |
+| `platformAdmin.costs.figures.allYears`        | All years                                                                                                                                                   | 所有年份                                                                                                |
+| `platformAdmin.costs.figures.soFar`           | {range} · so far                                                                                                                                            | {range} · 截至目前                                                                                      |
+| `platformAdmin.costs.figures.unavailable`     | Unavailable                                                                                                                                                 | 不可用                                                                                                  |
+| `platformAdmin.costs.rows.day`                | By day                                                                                                                                                      | 按日                                                                                                    |
+| `platformAdmin.costs.rows.month`              | By month                                                                                                                                                    | 按月                                                                                                    |
+| `platformAdmin.costs.rows.year`               | By year                                                                                                                                                     | 按年                                                                                                    |
+| `platformAdmin.costs.col.day`                 | Day (UTC)                                                                                                                                                   | 日期 (UTC)                                                                                              |
+| `platformAdmin.costs.col.month`               | Month                                                                                                                                                       | 月份                                                                                                    |
+| `platformAdmin.costs.col.year`                | Year                                                                                                                                                        | 年份                                                                                                    |
+| `platformAdmin.costs.col.aws`                 | AWS                                                                                                                                                         | AWS                                                                                                     |
+| `platformAdmin.costs.col.models`              | Models                                                                                                                                                      | 模型                                                                                                    |
+| `platformAdmin.costs.col.total`               | Total                                                                                                                                                       | 合计                                                                                                    |
+| `platformAdmin.costs.partial`                 | Partial                                                                                                                                                     | 未结束                                                                                                  |
+| `platformAdmin.costs.estimate`                | Estimate                                                                                                                                                    | 估算                                                                                                    |
+| `platformAdmin.costs.open`                    | Show what made up {period}                                                                                                                                  | 显示 {period} 的构成                                                                                    |
+| `platformAdmin.costs.breakdown.aws`           | AWS by service                                                                                                                                              | AWS 按服务                                                                                              |
+| `platformAdmin.costs.breakdown.models`        | Models by provider                                                                                                                                          | 模型按供应商                                                                                            |
+| `platformAdmin.costs.breakdown.service`       | Service                                                                                                                                                     | 服务                                                                                                    |
+| `platformAdmin.costs.breakdown.provider`      | Provider                                                                                                                                                    | 供应商                                                                                                  |
+| `platformAdmin.costs.breakdown.amount`        | Amount                                                                                                                                                      | 金额                                                                                                    |
+| `platformAdmin.costs.breakdown.share`         | Share                                                                                                                                                       | 占比                                                                                                    |
+| `platformAdmin.costs.breakdown.tax`           | Tax                                                                                                                                                         | 税费                                                                                                    |
+| `platformAdmin.costs.breakdown.credits`       | Credits                                                                                                                                                     | 抵扣额度                                                                                                |
+| `platformAdmin.costs.breakdown.refund`        | Refund                                                                                                                                                      | 退款                                                                                                    |
+| `platformAdmin.costs.awsError.title`          | AWS costs can’t be shown right now                                                                                                                          | 暂时无法显示 AWS 成本                                                                                   |
+| `platformAdmin.costs.awsError.description`    | AWS Cost Explorer did not answer. Model costs are unaffected and still shown; the AWS and Total columns fill in once it answers.                            | AWS Cost Explorer 没有响应。模型成本不受影响，仍正常显示；它响应后，AWS 和合计列会补全。                |
+| `platformAdmin.costs.modelsError.title`       | Model costs can’t be shown right now                                                                                                                        | 暂时无法显示模型成本                                                                                    |
+| `platformAdmin.costs.modelsError.description` | The AI service that records model costs did not answer. AWS costs are unaffected and still shown; the Models and Total columns fill in once it answers.     | 记录模型成本的 AI 服务没有响应。AWS 成本不受影响，仍正常显示；它响应后，模型和合计列会补全。            |
+| `platformAdmin.costs.bothError.title`         | Costs can’t be shown right now                                                                                                                              | 暂时无法显示成本                                                                                        |
+| `platformAdmin.costs.bothError.description`   | Neither AWS Cost Explorer nor the AI service that records model costs answered. Try again in a moment.                                                      | AWS Cost Explorer 和记录模型成本的 AI 服务都没有响应。请稍后重试。                                      |
+| `platformAdmin.costs.retry`                   | Try again                                                                                                                                                   | 重试                                                                                                    |
+| `platformAdmin.costs.empty.title`             | No costs recorded for {range}                                                                                                                               | {range} 没有成本记录                                                                                    |
+| `platformAdmin.costs.empty.body`              | Nothing was charged by AWS or a model provider in this range. Choose another month to see its costs.                                                        | 此范围内 AWS 和模型供应商均未产生费用。请选择其他月份查看成本。                                         |
+| `platformAdmin.costs.loading`                 | Loading costs                                                                                                                                               | 正在加载成本                                                                                            |
+
+Formatting: money through the page's `formatMicroUsd` (cents; more places below a cent), a negative line with a
+U+2212 minus (`−$500.00`); days as `Tue, Nov 17` in UTC; months as `October 2026`; years as `2026`; shares as a
+percent with at most one decimal (`34.4%`, `−7.9%`); the fetch time as `Nov 18, 06:12` UTC. AWS service names are
+shown exactly as AWS returns them and are not translated.
+
+## Colour and shape roles (`--el-*` and shape tokens only)
+
+| Element                               | Colour                                                                                                      | Shape                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Rail row _Costs_                      | the shipped `Sidebar` row (active: the sidebar's active tokens)                                             | the shipped `Sidebar` row                                             |
+| `h1` · subtitle · Showing line        | `--el-text` · `--el-text-secondary` · `--el-text-secondary`                                                 | —                                                                     |
+| Fetched line                          | words `--el-text-secondary`, glyph `--el-info`                                                              | —                                                                     |
+| Period switch                         | the shipped `Segmented` (`--el-tabnav-track`, active `--el-page-bg`)                                        | `--radius-btn`, `--height-control`, `--spacing-control-x`             |
+| Range picker                          | `--el-page-bg` fill, `--el-accent-on-surface` border, `--el-text`                                           | `--radius-input`, `--height-input`, `px-(--spacing-control-x-8)`      |
+| Figure cards                          | shipped `Card`; label and sub-line `--el-text-secondary`, figure `--el-text`; em dash `--el-text-secondary` | `--radius-card`, default card padding                                 |
+| Rows card · header cells · body cells | shipped `Card` · `--el-text-secondary` · `--el-text`                                                        | `p-0`; cells `px-(--spacing-control-x-12) py-(--spacing-control-y-8)` |
+| Row rule                              | `--el-border`; breakdown lines `--el-border-soft`                                                           | —                                                                     |
+| Disclosure chevron                    | `--el-text-secondary`                                                                                       | button `--radius-control`                                             |
+| Partial                               | `Pill tone="neutral"`                                                                                       | `--radius-badge`                                                      |
+| Estimate                              | `Pill severity="info"` (hue in the tint, `--el-text-strong` ink)                                            | `--radius-badge`                                                      |
+| Drill-down row                        | `--el-surface-soft` fill; inks `--el-text` and `--el-text-secondary` only                                   | breakdown cells `py-(--spacing-control-y-4)`                          |
+| Share bar                             | track `--el-muted`, fill `--el-info`                                                                        | `rounded-full`, 6px high (decorative)                                 |
+| Errors                                | the shipped `ErrorState`                                                                                    | the shipped `ErrorState`                                              |
+| Empty card glyph                      | `--el-text-secondary`                                                                                       | default card padding                                                  |
+| Skeleton bars                         | `--el-muted`                                                                                                | `--radius-control`                                                    |
+
+No `--el-text-muted` or `--el-text-faint` on the page's own elements; `--el-danger-text` is not used.
+
+## Accessibility contract
+
+- The rows are a real `<table>` with `scope="col"` headers; each breakdown is a `<table>` whose `<caption>` names it
+  and carries the row's figure.
+- Each row's disclosure is a `<button aria-expanded>` with the label "Show what made up {period}"; the drill-down
+  row follows it in reading order.
+- Partial and Estimate are words with a glyph, never colour alone; every glyph and the share bars are `aria-hidden`
+  (the percent carries the share).
+- An unavailable figure's em dash carries `aria-label` _Unavailable_.
+- The period switch is the shipped `Segmented` (a labelled group of `aria-pressed` buttons); the range picker has a
+  visually hidden label; the Showing line is `aria-live="polite"`, so a change of view is announced.
+- Loading sets `aria-busy` and announces _Loading costs_ through a `role="status"` label.
+
+## What this amendment does NOT draw
+
+- Per-tenant cost or revenue: tenant usage and credits stay on Usage & cost.
+- Provider-bill reconciliation, which stays on Usage & cost (MOTIR-11376).
+- Budgets, alerts, forecasts or anomaly marks.
+- Any change to Usage & cost, Model serving or the rest of the rail.
+- How the AWS figures are fetched, scheduled or stored, or which route serves the page (MOTIR-11712).

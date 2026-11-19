@@ -44,6 +44,7 @@
     "db:backfill:author-finished": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts backfill-author-finished",
     "db:backfill:page-embeddings": "tsx --tsconfig tsconfig.node.json scripts/backfill-page-embeddings.ts",
     "db:backfill:run-discrepancy": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts backfill-run-discrepancy",
+    "db:backfill:aws-costs": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts backfill-aws-costs",
     "db:converge:unlanded-cards": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts converge-unlanded-cards",
     "db:converge:ejected-cards": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts converge-unlanded-cards",
     "db:reevaluate:repo-set": "tsx --tsconfig tsconfig.node.json scripts/reevaluate-repo-set-completion.ts",
@@ -129,6 +130,7 @@
   "dependencies": {
     "@aws-sdk/client-cloudformation": "^3.1157.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.1157.0",
+    "@aws-sdk/client-cost-explorer": "^3.1157.0",
     "@aws-sdk/client-ecr": "^3.1157.0",
     "@aws-sdk/client-ecs": "^3.1157.0",
     "@aws-sdk/client-s3": "^3.1104.0",
@@ -136,6 +138,7 @@
     "@aws-sdk/client-service-quotas": "^3.1156.0",
     "@aws-sdk/client-sesv2": "^3.1157.0",
     "@aws-sdk/client-ssm": "^3.1157.0",
+    "@aws-sdk/client-sts": "^3.1157.0",
     "@aws-sdk/s3-request-presigner": "^3.1104.0",
     "@better-auth/cimd": "1.7.7",
     "@better-auth/oauth-provider": "1.7.7",

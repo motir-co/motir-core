@@ -11091,6 +11091,7 @@
     "nav": {
       "overview": "Vue d'ensemble",
       "usage": "Utilisation et coûts",
+      "costs": "Coûts",
       "tenants": "Tenants",
       "users": "Utilisateurs",
       "monitoring": "Supervision",
@@ -12840,6 +12841,79 @@
           "description": "Le service d’IA qui conserve l’utilisation n’a pas répondu. Le reste de cette page n’est pas concerné — réessayez dans un instant."
         }
       }
+    },
+    "costs": {
+      "title": "Coûts",
+      "subtitle": "Ce qu’a coûté le fonctionnement de Motir, en dollars américains : la facture AWS et ce que les fournisseurs de modèles ont facturé, par jour, mois ou année. L’utilisation et les crédits des locataires figurent dans « Utilisation et coûts ».",
+      "period": {
+        "label": "Période",
+        "day": "Jour",
+        "month": "Mois",
+        "year": "Année"
+      },
+      "picker": {
+        "month": "Mois",
+        "year": "Année"
+      },
+      "showing": {
+        "day": "Affichage : {month}, par jour (UTC)",
+        "month": "Affichage : {year}, par mois",
+        "year": "Affichage : chaque année avec des coûts enregistrés"
+      },
+      "fetched": "Chiffres AWS récupérés le {time} UTC",
+      "figures": {
+        "aws": "AWS",
+        "models": "Modèles",
+        "total": "Total",
+        "allYears": "Toutes les années",
+        "soFar": "{range} · jusqu’à présent",
+        "unavailable": "Indisponible"
+      },
+      "rows": {
+        "day": "Par jour",
+        "month": "Par mois",
+        "year": "Par année"
+      },
+      "col": {
+        "day": "Jour (UTC)",
+        "month": "Mois",
+        "year": "Année",
+        "aws": "AWS",
+        "models": "Modèles",
+        "total": "Total"
+      },
+      "partial": "Partiel",
+      "estimate": "Estimation",
+      "open": "Afficher la composition de {period}",
+      "breakdown": {
+        "aws": "AWS par service",
+        "models": "Modèles par fournisseur",
+        "service": "Service",
+        "provider": "Fournisseur",
+        "amount": "Montant",
+        "share": "Part",
+        "tax": "Taxes",
+        "credits": "Crédits",
+        "refund": "Remboursement"
+      },
+      "awsError": {
+        "title": "Impossible d’afficher les coûts AWS pour le moment",
+        "description": "AWS Cost Explorer n’a pas répondu. Les coûts des modèles ne sont pas concernés et restent affichés ; les colonnes AWS et Total se rempliront dès qu’il répondra."
+      },
+      "modelsError": {
+        "title": "Impossible d’afficher les coûts des modèles pour le moment",
+        "description": "Le service d’IA qui enregistre les coûts des modèles n’a pas répondu. Les coûts AWS ne sont pas concernés et restent affichés ; les colonnes Modèles et Total se rempliront dès qu’il répondra."
+      },
+      "bothError": {
+        "title": "Impossible d’afficher les coûts pour le moment",
+        "description": "Ni AWS Cost Explorer ni le service d’IA qui enregistre les coûts des modèles n’ont répondu. Réessayez dans un instant."
+      },
+      "retry": "Réessayer",
+      "empty": {
+        "title": "Aucun coût enregistré pour {range}",
+        "body": "Ni AWS ni aucun fournisseur de modèles n’a rien facturé sur cette période. Choisissez un autre mois pour voir ses coûts."
+      },
+      "loading": "Chargement des coûts"
     },
     "tenants": {
       "title": "Tenants",

@@ -11088,6 +11088,7 @@
     "nav": {
       "overview": "概要",
       "usage": "使用量とコスト",
+      "costs": "コスト",
       "tenants": "テナント",
       "users": "ユーザー",
       "monitoring": "モニタリング",
@@ -12837,6 +12838,79 @@
           "description": "使用量を管理している AI サービスが応答しませんでした。このページの他の部分には影響ありません。しばらくしてから再試行してください。"
         }
       }
+    },
+    "costs": {
+      "title": "コスト",
+      "subtitle": "Motir の運用にかかったコスト（米ドル）です。AWS の請求額とモデルプロバイダーの請求額を、日・月・年ごとに表示します。テナントの使用量とクレジットは「使用量とコスト」にあります。",
+      "period": {
+        "label": "期間",
+        "day": "日",
+        "month": "月",
+        "year": "年"
+      },
+      "picker": {
+        "month": "月",
+        "year": "年"
+      },
+      "showing": {
+        "day": "{month}を日別に表示しています (UTC)",
+        "month": "{year}年を月別に表示しています",
+        "year": "コストが記録されたすべての年を表示しています"
+      },
+      "fetched": "AWS の数値の取得日時: {time} UTC",
+      "figures": {
+        "aws": "AWS",
+        "models": "モデル",
+        "total": "合計",
+        "allYears": "すべての年",
+        "soFar": "{range} · 現時点まで",
+        "unavailable": "利用できません"
+      },
+      "rows": {
+        "day": "日別",
+        "month": "月別",
+        "year": "年別"
+      },
+      "col": {
+        "day": "日付 (UTC)",
+        "month": "月",
+        "year": "年",
+        "aws": "AWS",
+        "models": "モデル",
+        "total": "合計"
+      },
+      "partial": "途中",
+      "estimate": "見積もり",
+      "open": "{period}の内訳を表示",
+      "breakdown": {
+        "aws": "サービス別 AWS",
+        "models": "プロバイダー別モデル",
+        "service": "サービス",
+        "provider": "プロバイダー",
+        "amount": "金額",
+        "share": "割合",
+        "tax": "税金",
+        "credits": "クレジット",
+        "refund": "返金"
+      },
+      "awsError": {
+        "title": "AWS のコストを現在表示できません",
+        "description": "AWS Cost Explorer から応答がありませんでした。モデルのコストには影響がなく、引き続き表示されます。応答があれば AWS 列と合計列が表示されます。"
+      },
+      "modelsError": {
+        "title": "モデルのコストを現在表示できません",
+        "description": "モデルのコストを記録する AI サービスから応答がありませんでした。AWS のコストには影響がなく、引き続き表示されます。応答があればモデル列と合計列が表示されます。"
+      },
+      "bothError": {
+        "title": "コストを現在表示できません",
+        "description": "AWS Cost Explorer とモデルのコストを記録する AI サービスのどちらからも応答がありませんでした。しばらくしてからもう一度お試しください。"
+      },
+      "retry": "再試行",
+      "empty": {
+        "title": "{range}のコスト記録はありません",
+        "body": "この期間に AWS やモデルプロバイダーからの請求はありませんでした。別の月を選ぶとそのコストを表示できます。"
+      },
+      "loading": "コストを読み込んでいます"
     },
     "tenants": {
       "title": "テナント",

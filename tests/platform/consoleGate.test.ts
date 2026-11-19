@@ -134,6 +134,14 @@ function fakeMotirAi(input: string | URL): Response {
         findings: [],
         unreconciledProviders: [],
       });
+    case '/v1/platform/usage/model-cost-days':
+      return json({
+        from: url.searchParams.get('from'),
+        to: url.searchParams.get('to'),
+        today: url.searchParams.get('to'),
+        firstRecordedDay: null,
+        days: [],
+      });
     case '/v1/usage':
       return json({
         balance: 0,
@@ -224,6 +232,9 @@ function storyReads(e: Estate, userId: string) {
     // A month adds the provider-bill reconciliation read (MOTIR-11376) to the same view.
     'platformReadService.getEstateUsage (month, provider bills)': () =>
       platformReadService.getEstateUsage(p, '2026-09'),
+    // The Costs page (MOTIR-11712): the stored AWS bill beside the model cost.
+    'platformReadService.getCosts': () =>
+      platformReadService.getCosts(p, { kind: 'day', month: '2026-09' }),
     'platformUsageService.listTenants': () =>
       platformUsageService.listTenants(p, { period: 'all', sort: 'cost' }),
     'platformUsageService.listTenants (filtered)': () =>
@@ -246,6 +257,7 @@ async function storyRoutes(e: Estate) {
     m.default(props as never);
   const overview = await import('@/app/(admin)/admin/page');
   const usage = await import('@/app/(admin)/admin/usage/page');
+  const costs = await import('@/app/(admin)/admin/costs/page');
   const tenants = await import('@/app/(admin)/admin/tenants/page');
   const org = await import('@/app/(admin)/admin/tenants/[orgId]/page');
   const ws = await import('@/app/(admin)/admin/tenants/[orgId]/workspaces/[workspaceId]/page');
@@ -258,6 +270,7 @@ async function storyRoutes(e: Estate) {
     '/admin': page(overview, sp({})),
     '/admin/usage': page(usage, sp({ period: 'all' })),
     '/admin/usage?period=2026-09 (provider bills)': page(usage, sp({ period: '2026-09' })),
+    '/admin/costs': page(costs, sp({ view: 'year' })),
     '/admin/tenants': page(tenants, sp({})),
     '/admin/tenants/[orgId] (Overview)': page(org, sp({})),
     '/admin/tenants/[orgId]?tab=usage': page(org, sp({ tab: 'usage' })),

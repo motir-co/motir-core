@@ -11091,6 +11091,7 @@
     "nav": {
       "overview": "Overzicht",
       "usage": "Gebruik en kosten",
+      "costs": "Kosten",
       "tenants": "Tenants",
       "users": "Gebruikers",
       "monitoring": "Monitoring",
@@ -12840,6 +12841,79 @@
           "description": "De AI-dienst die het gebruik bijhoudt, heeft niet geantwoord. De rest van deze pagina werkt gewoon — probeer het zo opnieuw."
         }
       }
+    },
+    "costs": {
+      "title": "Kosten",
+      "subtitle": "Wat het draaien van Motir kostte, in Amerikaanse dollars: de AWS-rekening en wat modelaanbieders in rekening brachten, per dag, maand of jaar. Gebruik en tegoed van tenants staan onder ‘Gebruik en kosten’.",
+      "period": {
+        "label": "Periode",
+        "day": "Dag",
+        "month": "Maand",
+        "year": "Jaar"
+      },
+      "picker": {
+        "month": "Maand",
+        "year": "Jaar"
+      },
+      "showing": {
+        "day": "Weergave: {month}, per dag (UTC)",
+        "month": "Weergave: {year}, per maand",
+        "year": "Weergave: elk jaar met geregistreerde kosten"
+      },
+      "fetched": "AWS-cijfers opgehaald op {time} UTC",
+      "figures": {
+        "aws": "AWS",
+        "models": "Modellen",
+        "total": "Totaal",
+        "allYears": "Alle jaren",
+        "soFar": "{range} · tot nu toe",
+        "unavailable": "Niet beschikbaar"
+      },
+      "rows": {
+        "day": "Per dag",
+        "month": "Per maand",
+        "year": "Per jaar"
+      },
+      "col": {
+        "day": "Dag (UTC)",
+        "month": "Maand",
+        "year": "Jaar",
+        "aws": "AWS",
+        "models": "Modellen",
+        "total": "Totaal"
+      },
+      "partial": "Gedeeltelijk",
+      "estimate": "Schatting",
+      "open": "Samenstelling van {period} tonen",
+      "breakdown": {
+        "aws": "AWS per dienst",
+        "models": "Modellen per aanbieder",
+        "service": "Dienst",
+        "provider": "Aanbieder",
+        "amount": "Bedrag",
+        "share": "Aandeel",
+        "tax": "Belasting",
+        "credits": "Tegoeden",
+        "refund": "Terugbetaling"
+      },
+      "awsError": {
+        "title": "AWS-kosten kunnen nu niet worden getoond",
+        "description": "AWS Cost Explorer gaf geen antwoord. De modelkosten worden niet beïnvloed en blijven zichtbaar; de kolommen AWS en Totaal vullen zich zodra het antwoordt."
+      },
+      "modelsError": {
+        "title": "Modelkosten kunnen nu niet worden getoond",
+        "description": "De AI-dienst die modelkosten registreert, gaf geen antwoord. De AWS-kosten worden niet beïnvloed en blijven zichtbaar; de kolommen Modellen en Totaal vullen zich zodra hij antwoordt."
+      },
+      "bothError": {
+        "title": "Kosten kunnen nu niet worden getoond",
+        "description": "Noch AWS Cost Explorer noch de AI-dienst die modelkosten registreert, gaf antwoord. Probeer het zo opnieuw."
+      },
+      "retry": "Opnieuw proberen",
+      "empty": {
+        "title": "Geen kosten geregistreerd voor {range}",
+        "body": "AWS en modelaanbieders hebben in deze periode niets in rekening gebracht. Kies een andere maand om de kosten ervan te zien."
+      },
+      "loading": "Kosten laden"
     },
     "tenants": {
       "title": "Tenants",

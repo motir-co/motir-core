@@ -11088,6 +11088,7 @@
     "nav": {
       "overview": "Overview",
       "usage": "Usage & cost",
+      "costs": "Costs",
       "tenants": "Tenants",
       "users": "Users",
       "monitoring": "Monitoring",
@@ -12837,6 +12838,79 @@
           "description": "The AI service that keeps usage did not answer. The rest of this page is unaffected. Try again in a moment."
         }
       }
+    },
+    "costs": {
+      "title": "Costs",
+      "subtitle": "What running Motir cost, in US dollars: the AWS bill and what model providers charged, by day, month or year. Tenant usage and credits are on Usage & cost.",
+      "period": {
+        "label": "Period",
+        "day": "Day",
+        "month": "Month",
+        "year": "Year"
+      },
+      "picker": {
+        "month": "Month",
+        "year": "Year"
+      },
+      "showing": {
+        "day": "Showing {month}, by day (UTC)",
+        "month": "Showing {year}, by month",
+        "year": "Showing every year with recorded cost"
+      },
+      "fetched": "AWS figures fetched {time} UTC",
+      "figures": {
+        "aws": "AWS",
+        "models": "Models",
+        "total": "Total",
+        "allYears": "All years",
+        "soFar": "{range} · so far",
+        "unavailable": "Unavailable"
+      },
+      "rows": {
+        "day": "By day",
+        "month": "By month",
+        "year": "By year"
+      },
+      "col": {
+        "day": "Day (UTC)",
+        "month": "Month",
+        "year": "Year",
+        "aws": "AWS",
+        "models": "Models",
+        "total": "Total"
+      },
+      "partial": "Partial",
+      "estimate": "Estimate",
+      "open": "Show what made up {period}",
+      "breakdown": {
+        "aws": "AWS by service",
+        "models": "Models by provider",
+        "service": "Service",
+        "provider": "Provider",
+        "amount": "Amount",
+        "share": "Share",
+        "tax": "Tax",
+        "credits": "Credits",
+        "refund": "Refund"
+      },
+      "awsError": {
+        "title": "AWS costs can’t be shown right now",
+        "description": "AWS Cost Explorer did not answer. Model costs are unaffected and still shown; the AWS and Total columns fill in once it answers."
+      },
+      "modelsError": {
+        "title": "Model costs can’t be shown right now",
+        "description": "The AI service that records model costs did not answer. AWS costs are unaffected and still shown; the Models and Total columns fill in once it answers."
+      },
+      "bothError": {
+        "title": "Costs can’t be shown right now",
+        "description": "Neither AWS Cost Explorer nor the AI service that records model costs answered. Try again in a moment."
+      },
+      "retry": "Try again",
+      "empty": {
+        "title": "No costs recorded for {range}",
+        "body": "Nothing was charged by AWS or a model provider in this range. Choose another month to see its costs."
+      },
+      "loading": "Loading costs"
     },
     "tenants": {
       "title": "Tenants",

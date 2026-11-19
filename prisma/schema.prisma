@@ -632,6 +632,43 @@ model PlatformAwsRead {
   @@map("platform_aws_read")
 }
 
+/// One UTC day's AWS cost for one line of the console's Costs page (MOTIR-11712):
+/// AWS Cost Explorer's UNBLENDED cost across every linked account of the
+/// Organization, in micro-USD. `kind` is `service` (one row per AWS service,
+/// `service` its name as AWS returns it), or `tax` / `credit` / `refund` (one
+/// row each, `service` empty), so a day's rows sum to Cost Explorer's total for
+/// it. Written only by the fetch job (`system.aws-cost-fetch`), which replaces
+/// every day of the range it read in one transaction (AWS revises recent days);
+/// read by platform staff inside the Costs page's audited read. Not a
+/// workspace's data: it is Motir's own bill, so it carries no `workspace_id`.
+model AwsCostDay {
+  day            DateTime @db.Date
+  kind           String
+  service        String
+  amountMicroUsd BigInt   @map("amount_micro_usd")
+  /// The fetch that wrote the row.
+  fetchedAt      DateTime @map("fetched_at")
+
+  @@id([day, kind, service])
+  @@map("aws_cost_day")
+}
+
+/// One successful Cost Explorer read (MOTIR-11712): the inclusive UTC day range
+/// it replaced in `aws_cost_day` and when. The days between the earliest
+/// `from_day` and the latest `to_day` are the days Motir holds an AWS figure
+/// for — a day inside them with no `aws_cost_day` row cost nothing, a day
+/// outside them has no figure. The latest `fetched_at` is the page's
+/// "AWS figures fetched" time. A failed read writes no row.
+model AwsCostFetch {
+  id        String   @id @default(cuid())
+  fromDay   DateTime @map("from_day") @db.Date
+  toDay     DateTime @map("to_day") @db.Date
+  fetchedAt DateTime @map("fetched_at")
+
+  @@index([fetchedAt])
+  @@map("aws_cost_fetch")
+}
+
 /// THE CI FLEET'S BLIND SPOTS, as the provision sweep's last reconcile computed
 /// them (MOTIR-11439; design MOTIR-11467). ONE row (`id = 'latest'`), replaced on
 /// every tick whose reconcile ran, so the console's Fleet status page reads the

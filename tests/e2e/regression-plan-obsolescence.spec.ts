@@ -358,7 +358,9 @@ test('a plan marks a done story outdated, superseded by the story it adds — re
     // Not locked: a mark-only change to a finished card is the one a plan may make.
     await expect(oldCard).toContainText(/Mark\s*Current\s*›?\s*Outdated/);
     const newCard = page.locator('[data-node-id]').filter({ hasText: NEW_STORY });
-    await expect(newCard.getByTestId('plan-item-supersedes')).toHaveText('Supersedes 1');
+    // The chip is its glyph alone on a plan card (MOTIR-11549), a labelled image
+    // whose name carries the count.
+    await expect(newCard.getByTestId('plan-item-supersedes')).toHaveAccessibleName('Supersedes 1');
     await beat();
   });
 

@@ -11085,6 +11085,7 @@
     "nav": {
       "overview": "개요",
       "usage": "사용량 및 비용",
+      "costs": "비용",
       "tenants": "테넌트",
       "users": "사용자",
       "monitoring": "모니터링",
@@ -12834,6 +12835,79 @@
           "description": "사용량을 보관하는 AI 서비스가 응답하지 않았습니다. 이 페이지의 나머지 부분은 영향을 받지 않습니다. 잠시 후 다시 시도하세요."
         }
       }
+    },
+    "costs": {
+      "title": "비용",
+      "subtitle": "Motir 운영에 든 비용(미국 달러)입니다. AWS 청구액과 모델 제공업체가 청구한 금액을 일, 월 또는 연 단위로 보여 줍니다. 테넌트 사용량과 크레딧은 “사용량 및 비용”에 있습니다.",
+      "period": {
+        "label": "기간",
+        "day": "일",
+        "month": "월",
+        "year": "연"
+      },
+      "picker": {
+        "month": "월",
+        "year": "연도"
+      },
+      "showing": {
+        "day": "{month}, 일별 표시 (UTC)",
+        "month": "{year}년, 월별 표시",
+        "year": "비용이 기록된 모든 연도 표시"
+      },
+      "fetched": "AWS 수치 가져온 시각: {time} UTC",
+      "figures": {
+        "aws": "AWS",
+        "models": "모델",
+        "total": "합계",
+        "allYears": "모든 연도",
+        "soFar": "{range} · 현재까지",
+        "unavailable": "사용할 수 없음"
+      },
+      "rows": {
+        "day": "일별",
+        "month": "월별",
+        "year": "연도별"
+      },
+      "col": {
+        "day": "날짜 (UTC)",
+        "month": "월",
+        "year": "연도",
+        "aws": "AWS",
+        "models": "모델",
+        "total": "합계"
+      },
+      "partial": "진행 중",
+      "estimate": "추정치",
+      "open": "{period} 구성 보기",
+      "breakdown": {
+        "aws": "서비스별 AWS",
+        "models": "제공업체별 모델",
+        "service": "서비스",
+        "provider": "제공업체",
+        "amount": "금액",
+        "share": "비중",
+        "tax": "세금",
+        "credits": "크레딧",
+        "refund": "환불"
+      },
+      "awsError": {
+        "title": "지금은 AWS 비용을 표시할 수 없습니다",
+        "description": "AWS Cost Explorer가 응답하지 않았습니다. 모델 비용은 영향을 받지 않으며 계속 표시됩니다. 응답이 오면 AWS 열과 합계 열이 채워집니다."
+      },
+      "modelsError": {
+        "title": "지금은 모델 비용을 표시할 수 없습니다",
+        "description": "모델 비용을 기록하는 AI 서비스가 응답하지 않았습니다. AWS 비용은 영향을 받지 않으며 계속 표시됩니다. 응답이 오면 모델 열과 합계 열이 채워집니다."
+      },
+      "bothError": {
+        "title": "지금은 비용을 표시할 수 없습니다",
+        "description": "AWS Cost Explorer와 모델 비용을 기록하는 AI 서비스 모두 응답하지 않았습니다. 잠시 후 다시 시도하십시오."
+      },
+      "retry": "다시 시도",
+      "empty": {
+        "title": "{range}에 기록된 비용이 없습니다",
+        "body": "이 기간에는 AWS나 모델 제공업체가 청구한 금액이 없습니다. 다른 달을 선택하면 해당 비용을 볼 수 있습니다."
+      },
+      "loading": "비용을 불러오는 중"
     },
     "tenants": {
       "title": "테넌트",

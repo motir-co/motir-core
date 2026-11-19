@@ -49,6 +49,7 @@ import { fleetShardHeadroomService } from '@/lib/services/fleetShardHeadroomServ
 import { capacityAlertJobService } from '@/lib/services/capacityAlertJobService';
 import { fleetPoolGrowthPassService } from '@/lib/services/fleetPoolGrowthPassService';
 import { hostAccountReconcileService } from '@/lib/services/hostAccountReconcileService';
+import { awsCostService } from '@/lib/services/awsCostService';
 import { hostAccountStateService } from '@/lib/services/hostAccountStateService';
 import { hostingTenantAccountService } from '@/lib/services/hostingTenantAccountService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
@@ -157,6 +158,7 @@ export const jobServices = {
   fleetPoolGrowthPass: fleetPoolGrowthPassService,
   // The Host account reconcile (Story MOTIR-9365 · MOTIR-9582).
   hostAccountReconcile: hostAccountReconcileService,
+  awsCost: awsCostService,
   hostAccountState: hostAccountStateService,
   // The enterprise tenant account reconcile (Story MOTIR-9792 · MOTIR-9942).
   hostingTenantAccountReconcile: hostingTenantAccountService,

@@ -69,6 +69,7 @@ export const DATA_SCRIPTS = {
   'backfill-author-finished': () => import('./backfill-plan-author-finished'),
   'converge-unlanded-cards': () => import('./converge-ejected-cards'),
   'backfill-run-discrepancy': () => import('./backfill-run-discrepancy-records'),
+  'backfill-aws-costs': () => import('./backfill-aws-costs'),
 } satisfies Record<string, () => Promise<DataScript>>;
 
 export type DataScriptName = keyof typeof DATA_SCRIPTS;

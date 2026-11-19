@@ -4230,6 +4230,64 @@ export async function getPlatformProviderReconciliation(query: {
   return (await res.json()) as RawProviderReconciliation;
 }
 
+// ── Recorded model cost per day (MOTIR-11712 over motir-ai MOTIR-11734) ────────
+//
+// `GET /v1/platform/usage/model-cost-days` — Motir's RECORDED upstream model cost
+// per serving provider for every UTC day of an inclusive range of at most 366
+// days, today included. Field names are exactly the route's (`docs/contract.md`).
+
+/** One provider's recorded cost on one day. */
+export interface RawModelCostProviderDay {
+  provider: string;
+  recordedMicroUsd: number;
+}
+
+/** One UTC day of the range. */
+export interface RawModelCostDay {
+  /** `YYYY-MM-DD`, UTC. */
+  day: string;
+  /** True only for today, whose figure is the cost recorded so far. */
+  partial: boolean;
+  /** Null on a day with no record at all — never draw it as 0. */
+  recordedMicroUsd: number | null;
+  /** Ordered by provider; `[]` on a day with no record. */
+  providers: RawModelCostProviderDay[];
+}
+
+/** `GET /v1/platform/usage/model-cost-days` — every day of `[from, to]`, ascending. */
+export interface RawModelCostDays {
+  from: string;
+  to: string;
+  /** The current UTC day, as motir-ai sees it. */
+  today: string;
+  /** The earliest day holding any record, whatever the range; null on an empty store. */
+  firstRecordedDay: string | null;
+  days: RawModelCostDay[];
+}
+
+/** The longest range one model-cost-days call may ask for. */
+export const MODEL_COST_DAYS_MAX_RANGE = 366;
+
+/**
+ * GET /v1/platform/usage/model-cost-days — the recorded model cost of every UTC day
+ * of `[from, to]` (inclusive, at most 366 days, `to` not after today). Read-through:
+ * the caller is a `platform*Service` method that has already passed the
+ * platform-staff gate.
+ */
+export async function getPlatformModelCostDays(query: {
+  from: string;
+  to: string;
+}): Promise<RawModelCostDays> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ from: query.from, to: query.to });
+  const res = await aiFetch(`${url}/v1/platform/usage/model-cost-days?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawModelCostDays;
+}
+
 // ── The PLATFORM lessons console (MOTIR-1411 over motir-ai MOTIR-1410) ─────────
 //
 // `/v1/admin/lessons` — every tenant's lessons and the global corpus in one list,

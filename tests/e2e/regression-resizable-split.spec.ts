@@ -33,9 +33,10 @@
 // FINISHED by the shipped services the planner's handler calls (`addProposals` →
 // `markPlanned`, via `finishSessionPlan`) — the same seam
 // `acceptance-plan-approval-gate.spec.ts` uses. What is different here is WHEN:
-// the reset fires on the workspace's own transition into "a plan is proposed",
-// so the plan has to arrive while the surface is OPEN and WIDE, not on a later
-// reload. The workspace learns what a settled run proposed by reading
+// the plan has to arrive while the surface is OPEN and WIDE, not on a later
+// reload: a plan started on the overlay leaves the divider where the person put
+// it (MOTIR-11513 — the reset fires only for a named session's open), and that
+// is what case 7 holds. The workspace learns what a settled run proposed by reading
 // `GET /api/plans/{id}`; this spec routes that read at the browser layer,
 // finishes the plan on the first one, and only then lets the request through.
 // What stays real: the send, the job dispatch, the stream, the plan row, the
@@ -267,7 +268,7 @@ test.afterAll(async () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('the planning split opens at a third, drags within its bounds, takes the keyboard, and gives the canvas back when a plan is proposed', async ({
+test('the planning split opens at a third, drags within its bounds, takes the keyboard, and keeps the divider where it was put when a plan is proposed', async ({
   page,
   chapter,
   beat,
@@ -475,8 +476,8 @@ test('the planning split opens at a third, drags within its bounds, takes the ke
     },
   );
 
-  // ── 7 · a proposed plan gives the canvas back ────────────────────────────
-  await chapter('Ask for a plan while it is wide — the canvas returns to two-thirds', async () => {
+  // ── 7 · a proposed plan keeps the person's divider ───────────────────────
+  await chapter('Ask for a plan while it is wide — the divider stays put', async () => {
     const wide = await measure(page);
     expect(wide.chat, 'the conversation is wider than the default').toBeGreaterThan(
       defaultRailWidth(framePx) + TOLERANCE_PX,
@@ -498,13 +499,10 @@ test('the planning split opens at a third, drags within its bounds, takes the ke
     await expect(confirmBar(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
     await expect(confirmBar(page)).toContainText('1 added');
 
-    // The reset animates, so the box is POLLED to its settled width — never a
-    // sleep sized to the animation.
-    const settled = await expectSplit(page, defaultRailWidth(framePx), framePx);
-    expect(
-      Math.abs(settled.canvas / settled.frame - (1 - RAIL_DEFAULT_FRACTION)),
-      'the canvas holds two-thirds of the frame',
-    ).toBeLessThanOrEqual(TOLERANCE_PX / framePx);
+    // A plan started on the overlay arrives on the same canvas instance, so the
+    // split is not reset (MOTIR-11513): the conversation keeps the width the
+    // person dragged it to.
+    await expectSplit(page, wide.chat, framePx);
     await beat();
   });
 

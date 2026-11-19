@@ -91,6 +91,8 @@ export default defineConfig({
       'tests/ciFleet/fleetMonitorStoryGate.test.ts',
       'tests/ciFleet/fleetAdminStopStoryGate.test.ts',
       'tests/platform/fleetConsoleGate.test.ts',
+      // The Costs page's audited read (MOTIR-11712) extended platformReadService.
+      'tests/platform/platformCosts.test.ts',
     ],
     coverage: {
       provider: 'v8',

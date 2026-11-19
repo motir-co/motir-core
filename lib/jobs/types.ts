@@ -803,6 +803,10 @@ export interface JobEventDataMap {
    *  plan reads `host` gets its three AWS accounts and their quota raises.
    *  Cross-tenant by design: it walks every Host org. */
   'system.host-account-reconcile': SystemScheduledData;
+  /** The AWS cost fetch (MOTIR-11712) — Cost Explorer's daily cost for the
+   *  current and previous month, stored for the console's Costs page.
+   *  Cross-tenant by design: the bill is Motir's, not a tenant's. */
+  'system.aws-cost-fetch': SystemScheduledData;
   /** The Host account state pass (Story MOTIR-9365 · MOTIR-9585) — every own AWS
    *  account's state and entry times. Cross-tenant by design: it walks every
    *  Host org's accounts. */

@@ -137,6 +137,20 @@ interface RecordedJob {
   kind: string;
   jobId?: string;
   readBackToken?: string;
+  planId?: string;
+}
+
+/** The `plan` jobs the mock accepted, in order — a revision's carries its `planId`. */
+function planSubmits(): RecordedJob[] {
+  const fixture = JSON.parse(readFileSync(JOBS_FIXTURE, 'utf8')) as { submitted?: RecordedJob[] };
+  return (fixture.submitted ?? []).filter((s) => s.kind === 'plan');
+}
+
+/** Append the next ask job's outcome (the mock consumes them in order). */
+function queueAsk(outcome: Record<string, unknown>): void {
+  const fixture = JSON.parse(readFileSync(JOBS_FIXTURE, 'utf8')) as { ask?: unknown[] };
+  fixture.ask = [...(fixture.ask ?? []), outcome];
+  writeFileSync(JOBS_FIXTURE, JSON.stringify(fixture, null, 2));
 }
 
 function declareJobs(plan: Array<{ status: 'succeeded' | 'failed' }> = []): void {
@@ -252,6 +266,35 @@ const isTurnSubmit = (r: Response) =>
   r.request().method() === 'POST' &&
   (/\/api\/work-items\/[^/]+\/ai\/plan$/.test(new URL(r.url()).pathname) ||
     new URL(r.url()).pathname === '/api/ai/plan-change/session/submit');
+
+/**
+ * A FOLLOW-UP while a plan WAITS. Since MOTIR-11488 it is asked through the ask door
+ * against the waiting plan, and the planner decides on a revision: the spec plays it
+ * declaring the turn a change, restated, and the settle hands that over to ONE
+ * revision of the waiting plan (`redirected`). Resolves with that revision's submit.
+ */
+async function sendRevision(page: Page, text: string): Promise<RecordedJob> {
+  queueAsk({
+    intent: 'plan_change',
+    answer: `I'll revise the plan: ${text}`,
+    revision: { requirement: text },
+  });
+  const before = planSubmits().length;
+  const isPost = (r: Response, pathname: string) =>
+    r.request().method() === 'POST' && new URL(r.url()).pathname === pathname;
+  const asked = page.waitForResponse((r) => isPost(r, '/api/ai/ask'));
+  const settled = page.waitForResponse((r) => isPost(r, '/api/ai/ask/settle'));
+  await composer(page).fill(text);
+  await sendButton(page).click();
+  const askRes = await asked;
+  expect(askRes.status(), await askRes.text()).toBe(200);
+  const res = await settled;
+  expect(res.status(), await res.text()).toBe(200);
+  expect(((await res.json()) as { outcome?: string }).outcome).toBe('redirected');
+  await expect(rail(page).getByText(text).first()).toBeVisible();
+  await expect.poll(() => planSubmits().length).toBe(before + 1);
+  return planSubmits().at(-1)!;
+}
 
 /** Type and send; resolves with the turn-submit response. */
 async function sendTurn(page: Page, text: string): Promise<Response> {
@@ -592,9 +635,7 @@ test('a waiting plan under a Closed session is carried by its first turn, revise
 
   await chapter('A second turn revises the same plan again', async () => {
     const sessionsBefore = await adminDb.planChangeSession.count();
-    const res = await sendTurn(page, SECOND);
-    expect(res.status(), await res.text()).toBe(200);
-    const run = (await res.json()) as { jobId: string; planId?: string };
+    const run = await sendRevision(page, SECOND);
     expect(run.planId).toBe(planId);
 
     const started = await trail(planId, 'revision_started');
@@ -603,7 +644,7 @@ test('a waiting plan under a Closed session is carried by its first turn, revise
     expect((await planRow(planId)).sourceJobId).toBe(run.jobId);
     expect((await sessionRow(s2)).lastJobId).toBe(run.jobId);
 
-    await answerAsPlanner(page, run.jobId, SECOND_PROPOSAL, { revision: true });
+    await answerAsPlanner(page, run.jobId!, SECOND_PROPOSAL, { revision: true });
     expect(await plansIn(s2)).toBe(1);
     expect(await adminDb.planChangeSession.count()).toBe(sessionsBefore);
     expect(await adminDb.planItem.count({ where: { planId, op: 'add' } })).toBe(3);
@@ -741,9 +782,7 @@ test('a waiting plan under a Closed session is carried by its first turn, revise
       await page.reload();
       await expect(rail(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
       await expect(bar(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-      const next = await sendTurn(page, LATER);
-      expect(next.status(), await next.text()).toBe(200);
-      expect(((await next.json()) as { planId?: string }).planId).toBe(r);
+      expect((await sendRevision(page, LATER)).planId).toBe(r);
       expect(await trail(r, 'revision_started')).toHaveLength(1);
       await beat();
     },
