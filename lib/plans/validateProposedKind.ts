@@ -70,6 +70,33 @@ export function leafFieldsOnContainer(
 }
 
 /**
+ * The `type` and `executor` an `add` of `kind` is CREATED with (bug MOTIR-11838):
+ * the proposed values on a leaf kind, and `null` for both on a container.
+ *
+ * `materialize` writes the created row directly — it never goes through
+ * `workItemsService`, whose `assertTypeKindConsistent` is the leaf-only rule —
+ * so before this it copied a proposed `executor` (or `type`) onto a fresh
+ * `story` / `epic` add. Nothing on the way refused it: the re-kind refusal above
+ * runs only when an edit SUPPLIES a kind, and the approve gate checks the
+ * executor's membership, not where it sits. The stored value then made every
+ * later edit of the card fail TYPE_NOT_ALLOWED_ON_KIND, because `updateWorkItem`
+ * checks the post-patch state with the stored executor carried over.
+ *
+ * DROPPED, not refused, deliberately: a container's executor carries no meaning
+ * (who executes a story is decided on its leaves), the planners that author
+ * plans send one routinely, and refusing it would fail a whole approve over a
+ * field nobody reads. The plan-review rail reads the same function, so the card
+ * a reviewer approves is the card approve creates.
+ */
+export function leafFieldsForCreatedKind<T, E>(
+  kind: string,
+  fields: { type: T | null; executor: E | null },
+): { type: T | null; executor: E | null } {
+  if (isContainerKind(kind)) return { type: null, executor: null };
+  return { type: fields.type, executor: fields.executor };
+}
+
+/**
  * Refuse a RE-KINDED `add` that would keep a leaf field on a container kind —
  * the correction / deepen half of AMENDMENT 25 §3. Called only when the edit
  * SUPPLIES a kind, so a proposal written before this rule is not refused for an

@@ -93,6 +93,7 @@ import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { isProposalWritten } from '@/lib/plans/proposalWritten';
+import { leafFieldsForCreatedKind } from '@/lib/plans/validateProposedKind';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { folderRefId, isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
@@ -1811,6 +1812,17 @@ export const planReviewService = {
         ? (targetById.get(committedParentId) ?? ancestorById.get(committedParentId))
         : undefined;
 
+      // The `type` / `executor` an `add` is CREATED with — the proposed values on
+      // a leaf, none on a container (bug MOTIR-11838). The same function
+      // `materialize` writes through, so the rail and the created card agree.
+      const addLeafFields =
+        item.op === 'add'
+          ? leafFieldsForCreatedKind(proposed?.kind ?? 'task', {
+              type: proposed?.type ?? null,
+              executor: proposed?.executor ?? null,
+            })
+          : null;
+
       return {
         planItemId: item.id,
         op: item.op,
@@ -1867,7 +1879,9 @@ export const planReviewService = {
           proposed?.priority ?? null,
           target?.priority ?? null,
         ),
-        type: proposedValue('type', item, proposed?.type ?? null, target?.type ?? null),
+        // A container `add` is CREATED with no type (bug MOTIR-11838 — see
+        // `leafFieldsForCreatedKind`), so the rail reports none for it.
+        type: proposedValue('type', item, addLeafFields?.type ?? null, target?.type ?? null),
         // THE BODY THE PROPOSAL IS ASKING FOR, ON EVERY OP (bug MOTIR-4134) —
         // see `proposedBody` for why this is not `op === 'add' ? … : null`.
         descriptionMd: proposedBody('descriptionMd', item, proposed, target),
@@ -1959,7 +1973,7 @@ export const planReviewService = {
         // patch key.
         executor:
           item.op === 'add'
-            ? (proposed?.executor ?? null)
+            ? (addLeafFields?.executor ?? null)
             : item.op === 'modify'
               ? seededExecutor(item.patch as PlanItemPatch | null, target)
               : (target?.executor ?? null),
