@@ -173,7 +173,14 @@ describe('the read’s hand-off is stored as nothing to confirm', () => {
     });
     const thread = await planChangeSessionsService.getById(pctx, conversationId);
     const turn = thread.turns.find((t) => t.id === offerTurnId)!;
-    expect(turn.offer).toMatchObject({ kind: 'grill', handoff: HANDOFF });
+    // Served with its state like every offer, so the rail grills it (it opens only an
+    // `undecided` offer); a hand-off has no reason it cannot start.
+    expect(turn.offer).toMatchObject({
+      kind: 'grill',
+      handoff: HANDOFF,
+      state: 'undecided',
+      cannotStart: null,
+    });
     expect(turn.offer).not.toHaveProperty('requirement');
     // The left pane shows no requirement, and the next ask states no pending offer.
     expect(requirementPaneOf(thread.turns)).toBeNull();

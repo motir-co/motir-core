@@ -496,6 +496,14 @@ export const planOfferService = {
         });
       }
     }
+    // A `grill` hand-off (MOTIR-11798) is not a plan offer the person confirms: it opens
+    // the conversation's grilling, which turns it into the plan offer when it ends. It
+    // has no target and no reason it cannot start, but it carries the STATE every offer
+    // does — the rail grills only an `undecided` offer, so a hand-off served without one
+    // would never open its grilling.
+    for (const turn of all.filter((t) => t.offer!.kind === 'grill')) {
+      out.set(turn.id, { state: planOfferStateOf(turns, turn.id)!, cannotStart: null });
+    }
     const offered = all.filter((t) => t.offer!.kind === 'plan');
     if (offered.length === 0) return out;
 
