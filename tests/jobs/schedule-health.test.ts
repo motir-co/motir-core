@@ -1,5 +1,5 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { JobTestEngine } from '../helpers/jobs';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { JobTestEngine, seedHealthyJobSchedules } from '../helpers/jobs';
 import { db } from '@/lib/db';
 // Importing the registry is what evaluates every definition module, which is
 // what populates the schedule table via `defineJob`. The coverage test below
@@ -202,21 +202,49 @@ describe('jobScheduleHealthService.check', () => {
 });
 
 describe('system.daily-health-check', () => {
-  it('resolves with the schedule report when every cron is firing', async () => {
-    // Give every registered cron a run in the very recent past so nothing is
-    // overdue, then drive the real job.
-    const justNow = new Date(Date.now() - 60_000);
-    for (const { functionId } of jobSchedules()) {
-      await recordScheduledRun(functionId, justNow);
-    }
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
+  /** Drive the real job and assert it resolved clean, with nothing overdue. */
+  async function expectHealthyRun(): Promise<void> {
     const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result } = await engine.execute();
+    const { result, error } = (await engine.execute()) as {
+      result?: unknown;
+      error?: { message?: string };
+    };
 
+    // Assert the error FIRST: when the run throws, `result` is undefined and a
+    // payload assertion fails as a bare TypeError that hides the offenders.
+    expect(error?.message).toBeUndefined();
     const payload = result as { ok: boolean; check: string; schedules: { overdue: unknown[] } };
     expect(payload.ok).toBe(DAILY_HEALTH_CHECK_PAYLOAD.ok);
     expect(payload.check).toBe(DAILY_HEALTH_CHECK_PAYLOAD.check);
     expect(payload.schedules.overdue).toEqual([]);
+  }
+
+  it('resolves with the schedule report when every cron is firing', async () => {
+    // Give every registered cron a run "just now" through the shared fixture,
+    // then drive the real job. The fixture seeds at `now`, not `now - 60s`
+    // (MOTIR-2013): an every-minute cron is held to `floor_to_minute(check) -
+    // 60s`, so a run seeded a minute back misses that deadline whenever a
+    // minute boundary falls between the seed and the check (MOTIR-11822).
+    await seedHealthyJobSchedules();
+
+    await expectHealthyRun();
+  });
+
+  it('stays green when a minute boundary falls between the seed and the check', async () => {
+    // The CI failure MOTIR-11822 was filed from, made deterministic: the seed
+    // lands at hh:mm:59.900 and the check reads the clock at hh:(mm+1):00.920 —
+    // the instant the failing shard finished. A seed at `now - 60s` sits before
+    // the every-minute crons' deadline (hh:mm:00) here and turns the run red;
+    // the shared fixture's seed at `now` clears it with the full margin.
+    vi.setSystemTime(new Date('2026-11-19T12:41:59.900Z'));
+    await seedHealthyJobSchedules();
+
+    vi.setSystemTime(new Date('2026-11-19T12:42:00.920Z'));
+    await expectHealthyRun();
   });
 
   it('FAILS the run when a cron job has stopped firing', async () => {
