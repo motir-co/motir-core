@@ -8,6 +8,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleQuestionMark,
+  Cpu,
   Info,
   Server,
   ServerCog,
@@ -20,6 +21,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
 import { Switch } from '@/components/ui/Switch';
 import type {
+  FleetOrgCiArm64DTO,
   FleetOrgCiCodeScanningDTO,
   FleetOrgCiStateDTO,
   FleetOrgCiTargetDTO,
@@ -69,6 +71,10 @@ export interface FleetOrgCiConstants {
   runnerLabel: string;
   fleetName: string;
   killSwitchVariable: string;
+  /** `MOTIR_RUNNER_ARM64_VARIABLE` (MOTIR-11786). */
+  arm64VariableName: string;
+  /** `MOTIR_ARM64_RUNNER_LABEL` (MOTIR-11786). */
+  arm64RunnerLabel: string;
 }
 
 export interface FleetOrgCiSettingProps {
@@ -117,7 +123,7 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
   const [isPending, startTransition] = useTransition();
   const [isRechecking, startRecheck] = useTransition();
 
-  const { enabled, readiness, variable } = state;
+  const { enabled, readiness, variable, arm64 } = state;
   const ready = readiness.ready;
   const blocked = !enabled && !ready;
   const degraded = enabled && !ready;
@@ -125,6 +131,7 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
   const repositories = privateRepositories(readiness.conditions);
   const org = target.org;
   const name = constants.variableName;
+  const arm64Name = constants.arm64VariableName;
 
   function closeConfirm() {
     setConfirming(false);
@@ -300,6 +307,18 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
               {t('drift.offPresent.body', { name, org })}
             </Band>
           ) : null}
+          {enabled && arm64.ready && arm64.variable.state === 'absent' ? (
+            <Band tone="warning" role="status" testId="fleet-org-ci-arm64-drift">
+              <strong className="font-semibold">{t('drift.arm64OnAbsent.title')}</strong>{' '}
+              {t('drift.arm64OnAbsent.body', { name: arm64Name, org })}
+            </Band>
+          ) : null}
+          {!enabled && arm64.variable.state === 'present' ? (
+            <Band tone="warning" role="status" testId="fleet-org-ci-arm64-drift">
+              <strong className="font-semibold">{t('drift.arm64OffPresent.title')}</strong>{' '}
+              {t('drift.arm64OffPresent.body', { name: arm64Name, org })}
+            </Band>
+          ) : null}
 
           {answer ? (
             <AnswerBand answer={answer} t={t} name={name} direction={directionWord} />
@@ -335,6 +354,27 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
                   : variable.status === null
                     ? t('variable.unreachable', { name, org })
                     : t('variable.unknown', { name, org, status: variable.status })}
+            </dd>
+            <dt className="text-(--el-text-secondary)">{t('meta.arm64Variable')}</dt>
+            <dd className="flex flex-col gap-1.5" data-testid="fleet-org-ci-arm64-variable">
+              <span className="text-(--el-text)" data-state={arm64.variable.state}>
+                {arm64.variable.state === 'present'
+                  ? t('variable.arm64.present', {
+                      name: arm64Name,
+                      value: arm64.variable.value,
+                      org,
+                    })
+                  : arm64.variable.state === 'absent'
+                    ? t('variable.arm64.absent', { name: arm64Name, org })
+                    : arm64.variable.status === null
+                      ? t('variable.arm64.unreachable', { name: arm64Name, org })
+                      : t('variable.arm64.unknown', {
+                          name: arm64Name,
+                          org,
+                          status: arm64.variable.status,
+                        })}
+              </span>
+              <Arm64Readiness arm64={arm64} t={t} name={arm64Name} />
             </dd>
             <dt className="text-(--el-text-secondary)">{t('meta.codeScanning')}</dt>
             <dd data-testid="fleet-org-ci-code-scanning">
@@ -392,6 +432,19 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
         size="md"
       >
         <Modal.Body className="gap-4">
+          <p
+            data-testid="fleet-org-ci-confirm-arm64"
+            className="flex items-start gap-2 font-sans text-sm text-(--el-text-secondary)"
+          >
+            <Cpu aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-(--el-icon-muted)" />
+            <span>
+              {asking
+                ? arm64.ready
+                  ? t('confirm.arm64.onReady', { name, arm64Name, org })
+                  : t('confirm.arm64.onNotReady', { name, arm64Name, org })
+                : t('confirm.arm64.off', { name, arm64Name, org })}
+            </span>
+          </p>
           <Input
             id={reasonFieldId}
             label={t('confirm.reasonLabel')}
@@ -888,4 +941,44 @@ function privateRepositories(conditions: FleetReadinessCondition[]): string[] | 
 function shortName(fullName: string): string {
   const i = fullName.lastIndexOf('/');
   return i === -1 ? fullName : fullName.slice(i + 1);
+}
+
+/**
+ * The arm64 pool's readiness note (MOTIR-11785 design, MOTIR-11786): READY is the
+ * met grammar; NOT READY is the readiness rows' unmet grammar — warning word,
+ * glyph and hue — with the reason in words. Never part of the x86 verdict, and
+ * never a reason to disable the switch: not ready only skips the arm64 write.
+ */
+function Arm64Readiness({ arm64, t, name }: { arm64: FleetOrgCiArm64DTO; t: T; name: string }) {
+  if (arm64.ready) {
+    return (
+      <span
+        data-testid="fleet-org-ci-arm64-readiness"
+        data-ready="true"
+        className="flex flex-wrap items-center gap-2 font-sans text-xs text-(--el-text-secondary)"
+      >
+        <Pill severity="success" className="gap-1">
+          <CircleCheck aria-hidden className="h-3.5 w-3.5" />
+          {t('arm64Readiness.readyLabel')}
+        </Pill>
+        {t('arm64Readiness.ready', { name })}
+      </span>
+    );
+  }
+  return (
+    <span
+      data-testid="fleet-org-ci-arm64-readiness"
+      data-ready="false"
+      data-reason={arm64.reason ?? undefined}
+      className="flex flex-wrap items-center gap-2 font-sans text-xs text-(--el-text-secondary)"
+    >
+      <Pill tone="awaiting" className="gap-1">
+        <TriangleAlert aria-hidden className="h-3.5 w-3.5" />
+        {t('arm64Readiness.notReadyLabel')}
+      </Pill>
+      <span data-testid="fleet-org-ci-arm64-not-ready-reason">
+        {t('arm64Readiness.reasons.arm64_runner_ami_not_pinned')}
+      </span>
+    </span>
+  );
 }

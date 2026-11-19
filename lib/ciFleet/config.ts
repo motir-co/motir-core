@@ -1,4 +1,7 @@
-import { MOTIR_FLEET_RUNNER_LABEL } from '@/lib/ciMetering/runnerRates';
+import {
+  MOTIR_FLEET_ARM64_RUNNER_LABEL,
+  MOTIR_FLEET_RUNNER_LABEL,
+} from '@/lib/ciMetering/runnerRates';
 
 // The runner FLEET's scoping seam (Story MOTIR-1916 · MOTIR-1920) — WHICH
 // queued CI jobs Motir boots an ephemeral runner for.
@@ -93,6 +96,38 @@ export const MOTIR_RUNNER_LABEL = MOTIR_FLEET_RUNNER_LABEL;
 export const MOTIR_RUNNER_VARIABLE = 'MOTIR_RUNNER';
 
 /**
+ * The fleet's ARM64 label (Story MOTIR-11779): the one label a Graviton fleet
+ * runner registers with, and the value {@link MOTIR_RUNNER_ARM64_VARIABLE}
+ * carries. Aliased from the meter's `MOTIR_FLEET_ARM64_RUNNER_LABEL` exactly as
+ * {@link MOTIR_RUNNER_LABEL} is (MOTIR-1964): the meter owns the one literal, so
+ * this gate and `classifyRunner` cannot drift.
+ *
+ * ⚠️ A SEPARATE POOL, NOT AN ADDITION. Unlike {@link MOTIR_ON_DEMAND_RUNNER_LABEL},
+ * which rides BESIDE the fleet label, an arm64 runner carries this label ALONE
+ * and never {@link MOTIR_RUNNER_LABEL}: GitHub gives a runner any queued job
+ * whose labels it carries, so sharing a label would let an x86 job land on a
+ * Graviton runner. A job asking for this label is a fleet job in its own right.
+ */
+export const MOTIR_ARM64_RUNNER_LABEL = MOTIR_FLEET_ARM64_RUNNER_LABEL;
+
+/**
+ * The GitHub Actions VARIABLE NAME an arm64 job's `runs-on` reads the arm64
+ * label out of — `runs-on: ${{ vars.MOTIR_RUNNER_ARM64 || 'ubuntu-24.04-arm' }}`
+ * (motir-codegraph's arm64 image leg, MOTIR-11721). The KEY, never the value:
+ * {@link MOTIR_ARM64_RUNNER_LABEL} is what it carries.
+ */
+export const MOTIR_RUNNER_ARM64_VARIABLE = 'MOTIR_RUNNER_ARM64';
+
+/**
+ * Does this label set ask for an arm64 fleet runner? An EXACT label, compared
+ * case-insensitively and trimmed, as GitHub matches labels and as
+ * {@link isMotirFleetJob} compares: a near miss with a suffix is another label.
+ */
+export function requestsArm64Runner(requestedLabels: readonly string[]): boolean {
+  return requestedLabels.some((label) => label.trim().toLowerCase() === MOTIR_ARM64_RUNNER_LABEL);
+}
+
+/**
  * Does this job's REQUESTED runner labels name the Motir fleet? The §O gate,
  * and the only question that decides whether an intent is emitted.
  *
@@ -106,9 +141,17 @@ export const MOTIR_RUNNER_VARIABLE = 'MOTIR_RUNNER';
  * carrying ALL the labels it lists, so `runs-on: [self-hosted, motir-runner]`
  * still selects the fleet. Requiring the fleet label to be the SOLE entry would
  * refuse to provision for a workflow that is unambiguously asking for it.
+ *
+ * EITHER fleet label (MOTIR-11781): the x86 label or the arm64 one
+ * ({@link MOTIR_ARM64_RUNNER_LABEL}). The two pools are disjoint, but both are
+ * the fleet's, so the webhook mints, the reconcile counts and the meter
+ * attributes a job asking for either.
  */
 export function isMotirFleetJob(requestedLabels: readonly string[]): boolean {
-  return requestedLabels.some((label) => label.trim().toLowerCase() === MOTIR_RUNNER_LABEL);
+  return requestedLabels.some((label) => {
+    const normalized = label.trim().toLowerCase();
+    return normalized === MOTIR_RUNNER_LABEL || normalized === MOTIR_ARM64_RUNNER_LABEL;
+  });
 }
 
 /**

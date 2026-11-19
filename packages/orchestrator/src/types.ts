@@ -82,6 +82,16 @@ export type OrchestratorProvider = 'fly' | 'aws' | 'runs_on' | 'arc' | 'fake';
 export type ContainerCapacity = 'spot' | 'on_demand';
 
 /**
+ * The CPU architecture a container ASKS for (MOTIR-11782). Absent = `x86_64`.
+ *
+ * Provider-neutral, like {@link ContainerCapacity}: the instance type and the
+ * image that realise an architecture never cross this port. An adapter holds
+ * them in its own config, chooses both together, and REFUSES an architecture it
+ * cannot boot, never booting another one in its place.
+ */
+export type ContainerArchitecture = 'x86_64' | 'arm64';
+
+/**
  * The machine class. Fixed by `ci-minutes-allowance.md` §M to be
  * Linux-2-core-EQUIVALENT — GitHub's `ubuntu-latest` on a PRIVATE repository is
  * 2 vCPU / 8 GB, and the ×1.00 multiplier is a parity PROMISE rather than a
@@ -157,6 +167,13 @@ export interface ContainerSpec {
    * adapter with no such notion (Fly, the fake) ignores it.
    */
   readonly capacity?: ContainerCapacity;
+  /**
+   * The CPU architecture this container must run on (MOTIR-11782). Absent =
+   * `x86_64`. Unlike {@link capacity} it is a REQUIREMENT, not a request: an
+   * adapter that cannot boot it throws `OrchestratorNotConfiguredError` before
+   * any provider call, so an arm64 job is never booted on an x86 machine.
+   */
+  readonly architecture?: ContainerArchitecture;
 }
 
 /** An opaque, provider-agnostic reference. Persisted; survives a process restart.

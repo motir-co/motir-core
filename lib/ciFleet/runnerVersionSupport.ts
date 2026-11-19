@@ -143,9 +143,10 @@ export function runnerVersionSentence(
     `came out ${supersededBy.publishedAt.slice(0, 10)}, and GitHub stops serving jobs to a runner ` +
     `with self-update off ${RUNNER_SUPPORT_WINDOW_DAYS} days after a newer release. A refused ` +
     `runner connects, logs "is deprecated and cannot receive messages", and exits without its ` +
-    `job (MOTIR-10706). Set RUNNER_VERSION and RUNNER_SHA256 to v${latest.version} from its ` +
-    `release body (https://github.com/actions/runner/releases/tag/v${latest.version}), then ` +
-    `release runner-v<next> and ci-runner-ami-v<next> and pin MOTIR_RUNNER_IMAGE and ` +
-    `MOTIR_AWS_RUNNER_AMI_ID to what they publish.`
+    `job (MOTIR-10706). Set RUNNER_VERSION, RUNNER_SHA256 and RUNNER_ARM64_SHA256 to ` +
+    `v${latest.version} from its release body ` +
+    `(https://github.com/actions/runner/releases/tag/v${latest.version}), then release ` +
+    `runner-v<next> and ci-runner-ami-v<next> and pin MOTIR_RUNNER_IMAGE, ` +
+    `MOTIR_AWS_RUNNER_AMI_ID and MOTIR_AWS_RUNNER_ARM64_AMI_ID to what they publish.`
   );
 }

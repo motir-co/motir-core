@@ -10,8 +10,17 @@ import {
   MissingAuditReasonError,
   NotPlatformStaffError,
 } from '@/lib/platform/errors';
-import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
-import { ORG_VARIABLE_VISIBILITY } from '@/lib/github/actionsVariables';
+import {
+  MOTIR_ARM64_RUNNER_LABEL,
+  MOTIR_RUNNER_ARM64_VARIABLE,
+  MOTIR_RUNNER_LABEL,
+  MOTIR_RUNNER_VARIABLE,
+} from '@/lib/ciFleet/config';
+import {
+  AWS_RUNNER_ARM64_AMI_ENV_VAR,
+  setArm64RunnerAmiOverrideForTests,
+} from '@/lib/orchestrator';
+import { ActionsVariableApiError, ORG_VARIABLE_VISIBILITY } from '@/lib/github/actionsVariables';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { platformFleetOrgCiRepository } from '@/lib/repositories/platformFleetOrgCiRepository';
@@ -31,7 +40,6 @@ import { truncateAuthTables } from '../helpers/db';
 const ORG = 'acme-connected';
 const PROVISIONING_ORG = 'motir-projects';
 const INSTALLATION = '880011';
-const VARIABLE_PATH = `/orgs/${ORG}/actions/variables/MOTIR_RUNNER`;
 
 vi.mock('@/lib/github/repoProvisioning', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/github/repoProvisioning')>()),
@@ -72,10 +80,15 @@ const { actionsVariableClient } = await import('@/lib/github/actionsVariables');
 
 interface World {
   variable: { value: string; visibility: string } | null;
-  /** Fail the next write of this method with this status (`null` = unreachable). */
-  failWrite: { method: string; status: number | null } | null;
+  /** `MOTIR_RUNNER_ARM64` (MOTIR-11786), kept apart so every x86 assertion reads as before. */
+  arm64Variable: { value: string; visibility: string } | null;
+  /** Fail the next write of this method with this status (`null` = unreachable) —
+   *  on `MOTIR_RUNNER` unless `variable` names the arm64 one. */
+  failWrite: { method: string; status: number | null; variable?: string } | null;
   failRead: number | null;
   calls: string[];
+  /** The arm64 variable's calls, by method. */
+  arm64Calls: string[];
   /** Each repository's CodeQL default setup, by name; absent → not configured. */
   setups: Record<string, GithubDefaultSetup>;
   /** Fail the next default-setup call of this method on this repository. */
@@ -133,31 +146,42 @@ function installGitHub(): void {
       const repo = /^\/repos\/([^/]+)\/([^/]+)$/.exec(u.pathname);
       if (repo) return json(200, { private: !repo[2]!.startsWith('site') });
       if (u.pathname.startsWith(`/orgs/${ORG}/actions/variables`)) {
-        world.calls.push(method);
+        const body = init?.body ? (JSON.parse(init.body) as Record<string, string>) : {};
+        const named = u.pathname.split('/actions/variables/')[1] ?? body['name'] ?? '';
+        const arm64 = decodeURIComponent(named) === MOTIR_RUNNER_ARM64_VARIABLE;
+        const name = arm64 ? MOTIR_RUNNER_ARM64_VARIABLE : MOTIR_RUNNER_VARIABLE;
+        const get = () => (arm64 ? world.arm64Variable : world.variable);
+        const set = (v: World['variable']) => {
+          if (arm64) world.arm64Variable = v;
+          else world.variable = v;
+        };
+        (arm64 ? world.arm64Calls : world.calls).push(method);
         if (method === 'GET') {
-          if (world.failRead !== null) return json(world.failRead, { message: 'nope' });
-          return world.variable
-            ? json(200, { name: 'MOTIR_RUNNER', ...world.variable })
-            : json(404, { message: 'Not Found' });
+          if (world.failRead !== null && !arm64) return json(world.failRead, { message: 'nope' });
+          const current = get();
+          return current ? json(200, { name, ...current }) : json(404, { message: 'Not Found' });
         }
-        if (world.failWrite && world.failWrite.method === method) {
+        if (
+          world.failWrite &&
+          world.failWrite.method === method &&
+          (world.failWrite.variable ?? MOTIR_RUNNER_VARIABLE) === name
+        ) {
           if (world.failWrite.status === null) throw new TypeError('fetch failed');
           return json(world.failWrite.status, { message: 'Resource not accessible' });
         }
-        const body = init?.body ? (JSON.parse(init.body) as Record<string, string>) : {};
         if (method === 'POST') {
-          if (world.variable) return json(409, { message: 'exists' });
-          world.variable = { value: body['value']!, visibility: body['visibility']! };
+          if (get()) return json(409, { message: 'exists' });
+          set({ value: body['value']!, visibility: body['visibility']! });
           return json(201, {});
         }
-        if (method === 'PATCH' && u.pathname === VARIABLE_PATH) {
-          if (!world.variable) return json(404, { message: 'Not Found' });
-          world.variable = { value: body['value']!, visibility: body['visibility']! };
+        if (method === 'PATCH') {
+          if (!get()) return json(404, { message: 'Not Found' });
+          set({ value: body['value']!, visibility: body['visibility']! });
           return new Response(null, { status: 204 });
         }
-        if (method === 'DELETE' && u.pathname === VARIABLE_PATH) {
-          if (!world.variable) return json(404, { message: 'Not Found' });
-          world.variable = null;
+        if (method === 'DELETE') {
+          if (!get()) return json(404, { message: 'Not Found' });
+          set(null);
           return new Response(null, { status: 204 });
         }
       }
@@ -315,9 +339,11 @@ beforeEach(async () => {
   _resetInstallationTokenCache();
   world = {
     variable: null,
+    arm64Variable: null,
     failWrite: null,
     failRead: null,
     calls: [],
+    arm64Calls: [],
     setups: {},
     failSetup: null,
     setupCalls: [],
@@ -1114,8 +1140,10 @@ describe('a flip whose GitHub writes are slow (MOTIR-10972)', () => {
 
 describe('flipTransactionTimeoutMs', () => {
   it('covers the variable write and one request per move, on top of the fixed work', () => {
+    // Two variables (MOTIR_RUNNER and MOTIR_RUNNER_ARM64, MOTIR-11786), each up to
+    // three requests.
     expect(flipTransactionTimeoutMs(0)).toBe(
-      FLIP_TRANSACTION_BASE_MS + 3 * FLIP_GITHUB_REQUEST_BUDGET_MS,
+      FLIP_TRANSACTION_BASE_MS + 6 * FLIP_GITHUB_REQUEST_BUDGET_MS,
     );
     expect(flipTransactionTimeoutMs(3) - flipTransactionTimeoutMs(0)).toBe(
       3 * FLIP_GITHUB_REQUEST_BUDGET_MS,
@@ -1148,5 +1176,155 @@ describe('plannedDefaultSetupMoves', () => {
     expect(plannedDefaultSetupMoves(reads, false).map((m) => [m.repo.name, m.to])).toEqual([
       ['b', { type: 'standard' }],
     ]);
+  });
+});
+
+describe('the arm64 variable rides the same flip (MOTIR-11786)', () => {
+  const PINNED = 'ami-0a1b2c3d4e5f60718';
+  const ARM64_ON = { value: MOTIR_ARM64_RUNNER_LABEL, visibility: ORG_VARIABLE_VISIBILITY };
+
+  afterEach(() => {
+    setArm64RunnerAmiOverrideForTests(null);
+  });
+
+  it('ready: ON leaves MOTIR_RUNNER and MOTIR_RUNNER_ARM64 on the org; OFF deletes both', async () => {
+    vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, PINNED);
+    const on = await service.setEnabled(superadmin, pair(), true, 'move CI onto the fleet');
+    expect(on.outcome).toBe('changed');
+    expect(world.variable).toEqual({
+      value: MOTIR_RUNNER_LABEL,
+      visibility: ORG_VARIABLE_VISIBILITY,
+    });
+    expect(world.arm64Variable).toEqual(ARM64_ON);
+    expect((await auditRows())[0]!.metadata).toMatchObject({
+      variableOutcome: 'created',
+      arm64VariableOutcome: 'created',
+    });
+
+    const off = await service.setEnabled(superadmin, pair(), false, 'back to GitHub');
+    expect(off.outcome).toBe('changed');
+    expect(world.variable).toBeNull();
+    expect(world.arm64Variable).toBeNull();
+    expect((await auditRows())[1]!.metadata).toMatchObject({
+      variableOutcome: 'deleted',
+      arm64VariableOutcome: 'deleted',
+    });
+  });
+
+  it('not ready: ON writes only MOTIR_RUNNER, still changes, and getState says why', async () => {
+    vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, '');
+    const on = await service.setEnabled(superadmin, pair(), true, 'move CI onto the fleet');
+    expect(on.outcome).toBe('changed');
+    expect(world.variable).toMatchObject({ value: MOTIR_RUNNER_LABEL });
+    expect(world.arm64Variable).toBeNull();
+    expect(world.arm64Calls.filter((m) => m !== 'GET')).toEqual([]);
+    expect((await auditRows())[0]!.metadata).toMatchObject({
+      arm64VariableOutcome: 'skipped_not_ready',
+    });
+
+    const state = await service.getState(superadmin, pair());
+    expect(state.enabled).toBe(true);
+    expect(state.arm64).toEqual({
+      ready: false,
+      reason: 'arm64_runner_ami_not_pinned',
+      variable: { state: 'absent' },
+    });
+  });
+
+  it('getState reads the arm64 variable back: present, and unknown on a failed read', async () => {
+    vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, PINNED);
+    world.arm64Variable = ARM64_ON;
+    expect((await service.getState(superadmin, pair())).arm64).toEqual({
+      ready: true,
+      reason: null,
+      variable: { state: 'present', ...ARM64_ON },
+    });
+
+    vi.spyOn(actionsVariableClient, 'getOrgVariable').mockImplementation(async (name) => {
+      if (name === MOTIR_RUNNER_ARM64_VARIABLE) throw new ActionsVariableApiError(502, 'bad');
+      return null;
+    });
+    expect((await service.getState(superadmin, pair())).arm64.variable).toEqual({
+      state: 'unknown',
+      status: 502,
+    });
+  });
+
+  it('OFF with the arm64 variable absent completes, and never reads arm64 readiness', async () => {
+    vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, '');
+    await service.setEnabled(superadmin, pair(), true, 'on first');
+    // A readiness read on OFF would throw here.
+    setArm64RunnerAmiOverrideForTests(() => {
+      throw new Error('arm64 readiness must not be read on OFF');
+    });
+    const off = await service.setEnabled(superadmin, pair(), false, 'fleet broke');
+    expect(off.outcome).toBe('changed');
+    expect((await storedRow())?.enabled).toBe(false);
+    expect((await auditRows())[1]!.metadata).toMatchObject({
+      variableOutcome: 'deleted',
+      arm64VariableOutcome: 'absent',
+    });
+  });
+
+  it('a GitHub refusal on the arm64 write refuses the flip and restores BOTH variables', async () => {
+    vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, PINNED);
+    world.variable = { value: 'ubuntu-latest', visibility: 'private' };
+    world.arm64Variable = { value: 'ubuntu-24.04-arm', visibility: 'private' };
+    world.failWrite = { method: 'PATCH', status: 403, variable: MOTIR_RUNNER_ARM64_VARIABLE };
+    const chainBefore = await adminDb.platformAuditLog.count();
+
+    const err = await service.setEnabled(superadmin, pair(), true, 'x').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(FleetOrgCiGithubWriteError);
+    expect(err).toMatchObject({
+      org: ORG,
+      status: 403,
+      operation: 'set',
+      variable: MOTIR_RUNNER_ARM64_VARIABLE,
+    });
+    expect((err as Error).message).toContain(MOTIR_RUNNER_ARM64_VARIABLE);
+    expect(await storedRow()).toBeNull();
+    expect(await adminDb.platformAuditLog.count()).toBe(chainBefore);
+    // x86: written, then put back. arm64: refused, then restored — the restore's
+    // read finds the value it would write, so it ends without a second PATCH.
+    expect(writes()).toEqual(['PATCH', 'PATCH']);
+    expect(world.variable).toEqual({ value: 'ubuntu-latest', visibility: 'private' });
+    expect(world.arm64Calls).toEqual(['GET', 'GET', 'PATCH', 'GET']);
+    expect(world.arm64Variable).toEqual({ value: 'ubuntu-24.04-arm', visibility: 'private' });
+  });
+
+  it('a skipped arm64 write is not put back when the commit fails', async () => {
+    vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, '');
+    world.arm64Variable = { value: 'ubuntu-24.04-arm', visibility: 'private' };
+    vi.spyOn(platformFleetOrgCiRepository, 'upsert').mockRejectedValueOnce(
+      new Error('commit failed'),
+    );
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toThrow(
+      'commit failed',
+    );
+    expect(world.variable).toBeNull();
+    expect(world.arm64Calls.filter((m) => m !== 'GET')).toEqual([]);
+    expect(world.arm64Variable).toEqual({ value: 'ubuntu-24.04-arm', visibility: 'private' });
+  });
+
+  it('a failed restore of the arm64 variable is logged with its name, never thrown over the cause', async () => {
+    vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, PINNED);
+    vi.spyOn(platformFleetOrgCiRepository, 'upsert').mockRejectedValueOnce(
+      new Error('commit failed'),
+    );
+    const realDelete = actionsVariableClient.deleteOrgVariable.bind(actionsVariableClient);
+    vi.spyOn(actionsVariableClient, 'deleteOrgVariable').mockImplementation(
+      async (name, target) => {
+        if (name === MOTIR_RUNNER_ARM64_VARIABLE) throw new ActionsVariableApiError(500, 'down');
+        return realDelete(name, target);
+      },
+    );
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toThrow(
+      'commit failed',
+    );
+    expect(world.variable).toBeNull();
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).toContain(
+      MOTIR_RUNNER_ARM64_VARIABLE,
+    );
   });
 });

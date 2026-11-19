@@ -208,6 +208,20 @@ ARG PLAYWRIGHT_VERSION=1.62.1
 ARG AWSCLI_VERSION=2.38.6
 ARG AWSCLI_SHA256=66974301c11f8116a6cb96bf72acae57453734b61fa8dd3f56422de9eaab0e42
 
+# The ARM64 checksums of the SAME four versions (MOTIR-11783), for the arm64
+# machine image built from these pins. This image is linux/amd64 only and does
+# not read them; they live here because this file is the one home of every pin.
+# They move in step with the x86 checksums above on every version bump — a bump
+# that forgets one fails the arm64 build at its checksum check, never installs an
+# unverified binary. Sources: Node's as nodejs.org lists it (SHASUMS256.txt); the
+# runner's, Docker's static aarch64 tarball's and the aarch64 AWS CLI zip's
+# hashed from the published download (the same method reproduces the x86
+# DOCKER_SHA256 above exactly).
+ARG RUNNER_ARM64_SHA256=670adb2f268fe21dcbb58b3db0e0aa9d5b3bddfe2c651481336e561ff86de945
+ARG NODE_ARM64_SHA256=fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8
+ARG DOCKER_ARM64_SHA256=4eb4d1b21131897ed3990aac31039161bf4bdd07fcfb733e996010319ff4e069
+ARG AWSCLI_ARM64_SHA256=a9f355189a5a25834c015fc07d65e1834f0dbbee1d9bd1c418176f43a463067f
+
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8

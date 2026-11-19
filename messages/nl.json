@@ -14087,13 +14087,20 @@
         "auditLink": "Auditlogboek",
         "variable": "GitHub-variabele",
         "repositories": "Repository's",
-        "codeScanning": "Standaardinstelling van CodeQL"
+        "codeScanning": "Standaardinstelling van CodeQL",
+        "arm64Variable": "arm64-GitHub-variabele"
       },
       "variable": {
         "present": "{name} = {value} op {org} (privérepository's) — nieuwe jobs vragen de vloot aan.",
         "absent": "{name} is niet ingesteld op {org} — jobs vallen terug op door GitHub gehoste runners.",
         "unknown": "Kon {name} op {org} niet lezen — GitHub antwoordde met HTTP {status}.",
-        "unreachable": "Kon {name} op {org} niet lezen — GitHub was niet bereikbaar."
+        "unreachable": "Kon {name} op {org} niet lezen — GitHub was niet bereikbaar.",
+        "arm64": {
+          "present": "{name} = {value} op {org} — nieuwe arm64-jobs vragen om Motirs arm64-vloot.",
+          "absent": "{name} is niet ingesteld op {org} — arm64-jobs draaien op de arm-runners van GitHub.",
+          "unknown": "Kon {name} op {org} niet lezen — GitHub antwoordde HTTP {status}.",
+          "unreachable": "Kon {name} op {org} niet lezen — GitHub was niet bereikbaar."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14103,6 +14110,14 @@
         "offPresent": {
           "title": "Opgeslagen als uit, maar GitHub is het er niet mee eens.",
           "body": "{name} is nog ingesteld op {org}, dus nieuwe jobs vragen nog de vloot aan. Zet de instelling aan en weer uit om hem te verwijderen."
+        },
+        "arm64OnAbsent": {
+          "title": "Opgeslagen als aan, maar GitHub heeft geen arm64-variabele.",
+          "body": "{name} is niet ingesteld op {org} hoewel de arm64-pool klaar is, dus arm64-jobs draaien nog op de arm-runners van GitHub. Zet de instelling uit en weer aan om hem te schrijven."
+        },
+        "arm64OffPresent": {
+          "title": "Opgeslagen als uit, maar de arm64-variabele is nog ingesteld.",
+          "body": "{name} is nog ingesteld op {org}, dus nieuwe arm64-jobs vragen nog om Motirs arm64-vloot. Zet de instelling aan en weer uit om hem te verwijderen."
         }
       },
       "repositories": {
@@ -14211,7 +14226,12 @@
         "reasonHintEmpty": "De knop blijft uitgeschakeld tot er een reden is getypt — dezelfde regel die de server toepast.",
         "cancel": "Annuleren",
         "confirmOn": "Aanzetten",
-        "confirmOff": "Uitzetten"
+        "confirmOff": "Uitzetten",
+        "arm64": {
+          "onReady": "arm64: de arm64-pool is klaar, dus dit schrijft zowel {name} als {arm64Name} op {org}.",
+          "onNotReady": "arm64: er is geen arm64-runner-AMI vastgezet, dus dit schrijft alleen {name}. arm64-jobs blijven op de arm-runners van GitHub.",
+          "off": "arm64: dit verwijdert zowel {name} als {arm64Name} van {org}."
+        }
       },
       "refused": {
         "reasonMissing": "Niet {direction}: een reden is verplicht en wordt met deze wijziging in het auditlogboek geschreven. Er is niets veranderd.",
@@ -14306,6 +14326,14 @@
           "title": "Kon agenthosting niet laden",
           "body": "Waar nieuwe agents worden aangemaakt, kon niet worden gelezen, dus er wordt geen status getoond en geen schakelaar aangeboden. Dit is een leesfout — er is niets veranderd en er wordt geen waarde geraden.",
           "retry": "Opnieuw proberen"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64-pool klaar",
+        "notReadyLabel": "arm64-pool niet klaar",
+        "ready": "Er is een arm64-runner-AMI vastgezet, dus inschakelen schrijft {name}.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "Er is geen arm64-runner-AMI vastgezet, dus arm64-jobs blijven draaien op de arm-runners van GitHub."
         }
       }
     },

@@ -1,4 +1,4 @@
-import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { isMotirFleetJob } from '@/lib/ciFleet/config';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // WHAT GITHUB HOLDS QUEUED FOR THE FLEET (Bug MOTIR-8976) — the read side of the
@@ -156,7 +156,7 @@ export const fleetQueueClient = {
         const job = asRecord(entry);
         if (!job || job['status'] !== 'queued') continue;
         const labels = asArray(job['labels']).filter((l): l is string => typeof l === 'string');
-        if (!labels.some((l) => l.trim().toLowerCase() === MOTIR_RUNNER_LABEL)) continue;
+        if (!isMotirFleetJob(labels)) continue;
         const id = job['id'];
         const createdAt = new Date(String(job['created_at'] ?? ''));
         if (typeof id !== 'number' || Number.isNaN(createdAt.getTime())) continue;
@@ -176,7 +176,8 @@ export const fleetQueueClient = {
     return { jobs, skippedRuns };
   },
 
-  /** Every runner registered in the target's org that carries the fleet label. */
+  /** Every runner registered in the target's org that carries a fleet label — the
+   *  x86 one or the arm64 one (MOTIR-11781), each listed with its labels. */
   async listFleetRunners(target?: GithubOrgTarget): Promise<OrgRunner[]> {
     const { org, token } = await resolveOrgAuth(target);
     const runners: OrgRunner[] = [];
@@ -194,7 +195,7 @@ export const fleetQueueClient = {
         const labels = asArray(runner['labels'])
           .map((l) => asRecord(l)?.['name'])
           .filter((n): n is string => typeof n === 'string');
-        if (!labels.some((l) => l.trim().toLowerCase() === MOTIR_RUNNER_LABEL)) continue;
+        if (!isMotirFleetJob(labels)) continue;
         runners.push({
           id: runner['id'],
           name: String(runner['name'] ?? ''),

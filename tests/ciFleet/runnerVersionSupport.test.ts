@@ -216,10 +216,14 @@ describe('the DLQ sentence', () => {
       "v2.336.0 (RUNNER_VERSION in infra/ci-runner/Dockerfile on the default branch), is past GitHub's support window since 2026-09-24: v2.337.0 came out 2026-08-25",
     );
     expect(message).toContain('"is deprecated and cannot receive messages"');
-    expect(message).toContain('Set RUNNER_VERSION and RUNNER_SHA256 to v2.338.2');
+    expect(message).toContain(
+      'Set RUNNER_VERSION, RUNNER_SHA256 and RUNNER_ARM64_SHA256 to v2.338.2',
+    );
     expect(message).toContain('https://github.com/actions/runner/releases/tag/v2.338.2');
     expect(message).toContain('release runner-v<next> and ci-runner-ami-v<next>');
-    expect(message).toContain('MOTIR_RUNNER_IMAGE and MOTIR_AWS_RUNNER_AMI_ID');
+    expect(message).toContain(
+      'MOTIR_RUNNER_IMAGE, MOTIR_AWS_RUNNER_AMI_ID and MOTIR_AWS_RUNNER_ARM64_AMI_ID',
+    );
   });
 
   it('counts the days left while expiring, singular on the last day', () => {

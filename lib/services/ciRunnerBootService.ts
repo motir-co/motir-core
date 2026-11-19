@@ -40,8 +40,10 @@ import {
   type SupervisionTerminalReason,
 } from '@/lib/jobs/supervision/driver';
 import {
+  MOTIR_ARM64_RUNNER_LABEL,
   MOTIR_ON_DEMAND_RUNNER_LABEL,
   MOTIR_RUNNER_LABEL,
+  requestsArm64Runner,
   requestsOnDemandRunner,
 } from '@/lib/ciFleet/config';
 import { ciDockerVolumeGb } from '@/lib/ciFleet/limits';
@@ -57,6 +59,7 @@ import {
   ciFleetMissingConfig,
   isCiFleetConfigured,
   isOrchestratorConfigured,
+  readArm64RunnerAmiId,
   recordContainerUsage,
 } from '@/lib/orchestrator';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
@@ -569,6 +572,12 @@ export const INITIAL_POLL_STATE: Extract<PollResult, { done: false }> = {
   consecutiveReadFailures: 0,
 };
 
+/** Why an intent is {@link RunIntentOutcome} `not_bootable` (MOTIR-11782). */
+export type NotBootableReason = 'arm64_runner_ami_not_pinned';
+
+/** The not-bootable detail for an arm64 intent with no arm64 AMI pinned. */
+export const ARM64_RUNNER_AMI_NOT_PINNED_DETAIL = `arm64_runner_ami_not_pinned: the job asked for ${MOTIR_ARM64_RUNNER_LABEL}, but no arm64 runner AMI is pinned (MOTIR_AWS_RUNNER_ARM64_AMI_ID is unset), so it is not booted`;
+
 export type RunIntentOutcome =
   /** No such intent — it was deleted, or the id was stale. */
   | { outcome: 'unknown_intent' }
@@ -616,6 +625,14 @@ export type RunIntentOutcome =
    * first; this is the case where it was pullable then and is not now.
    */
   | { outcome: 'image_unpullable'; detail: string }
+  /**
+   * THE INTENT CANNOT BE BOOTED HERE AT ALL (MOTIR-11782): its job asked for an
+   * architecture this deployment has no image for. Refused before the JIT mint,
+   * so no runner is left registered and no launch is sent; settled failed. Never
+   * a fallback to another architecture. One reason today: an arm64 job with no
+   * arm64 runner AMI pinned.
+   */
+  | { outcome: 'not_bootable'; reason: NotBootableReason; detail: string }
   /** A container ran and was torn down. `reason` says how it ended. */
   | {
       outcome: 'settled';
@@ -1066,6 +1083,7 @@ export const ciRunnerBootService = {
     // service names no adapter's config (MOTIR-8964).
     const image = fleetRunnerImage();
     const region = input.region ?? fleetRunnerRegion();
+    const arm64 = requestsArm64Runner(intent.requestedLabels);
 
     return {
       orgId: intent.organizationId,
@@ -1089,11 +1107,16 @@ export const ciRunnerBootService = {
       // one it had before Spot (MOTIR-11716). An intent whose job asked for the
       // on-demand label (MOTIR-11727) says `on_demand` outright, whatever it was
       // handed: the label is a promise that no Spot runner takes the job.
-      ...(requestsOnDemandRunner(intent.requestedLabels)
-        ? { capacity: 'on_demand' as const }
-        : input.capacity === 'spot'
-          ? { capacity: 'spot' as const }
-          : {}),
+      //
+      // AN ARM64 INTENT (MOTIR-11782) asks for the arm64 architecture and never
+      // for Spot: the Spot list is x86 only, so its spec carries no capacity.
+      ...(arm64
+        ? { architecture: 'arm64' as const }
+        : requestsOnDemandRunner(intent.requestedLabels)
+          ? { capacity: 'on_demand' as const }
+          : input.capacity === 'spot'
+            ? { capacity: 'spot' as const }
+            : {}),
       env: {
         // The credential, injected at boot and never baked into the image (§4).
         ACTIONS_RUNNER_INPUT_JITCONFIG: encodedJitConfig,
@@ -1106,7 +1129,9 @@ export const ciRunnerBootService = {
         // `self-hosted`/`Linux`/`X64` and a fleet runner would start matching
         // other tenants' `runs-on: self-hosted`.
         ACTIONS_RUNNER_CONFIG_ARGS: '--no-default-labels',
-        MOTIR_RUNNER_LABEL,
+        // The fleet label the runner carries — logged by the image, never used to
+        // register (the JIT config is). An arm64 runner carries the arm64 label.
+        MOTIR_RUNNER_LABEL: arm64 ? MOTIR_ARM64_RUNNER_LABEL : MOTIR_RUNNER_LABEL,
         MOTIR_INTENT_ID: intent.id,
         MOTIR_WORKFLOW_JOB_ID: String(workflowJobId),
       },
@@ -1329,6 +1354,17 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     } catch (err) {
       accountUnreachable = err;
     }
+  }
+
+  // ── 0 · An arm64 job needs an arm64 image (MOTIR-11782) ───────────────────
+  // Refused BEFORE the mint, so no runner is left registered to de-register and
+  // no launch is sent. Never booted on the x86 AMI or an x86 type in its place;
+  // the adapter's own refusal for a missing arm64 AMI is the second guard.
+  if (requestsArm64Runner(intent.requestedLabels) && readArm64RunnerAmiId() === null) {
+    const detail = ARM64_RUNNER_AMI_NOT_PINNED_DETAIL;
+    console.warn('[ciRunnerBootService] an arm64 intent is not bootable', { intentId, detail });
+    await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
+    return terminal({ outcome: 'not_bootable', reason: 'arm64_runner_ami_not_pinned', detail });
   }
 
   // ── 1 · Mint the JIT config ───────────────────────────────────────────────
@@ -1665,6 +1701,9 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
  * booted as, it cannot take a job that asked never to run on Spot.
  */
 function jitLabelsFor(intent: Pick<CiRunnerProvisioningIntent, 'requestedLabels'>): string[] {
+  // An arm64 runner (MOTIR-11782) carries ONLY the arm64 label, so it never takes
+  // an x86 job, and no x86 runner ever carries it.
+  if (requestsArm64Runner(intent.requestedLabels)) return [MOTIR_ARM64_RUNNER_LABEL];
   return requestsOnDemandRunner(intent.requestedLabels)
     ? [MOTIR_RUNNER_LABEL, MOTIR_ON_DEMAND_RUNNER_LABEL]
     : [MOTIR_RUNNER_LABEL];
@@ -1706,6 +1745,8 @@ async function requestedCapacity(
   at: Date,
 ): Promise<ContainerCapacity> {
   if (requestsOnDemandRunner(intent.requestedLabels)) return 'on_demand';
+  // An arm64 runner is never Spot (MOTIR-11782): the Spot list is x86 only.
+  if (requestsArm64Runner(intent.requestedLabels)) return 'on_demand';
   if (intent.spotInterruptionCount >= ON_DEMAND_AT_SPOT_INTERRUPTIONS) return 'on_demand';
   try {
     if (!(await ciSpotSettingReader.read()).enabled) return 'on_demand';

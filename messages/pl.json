@@ -14087,13 +14087,20 @@
         "auditLink": "Dziennik audytu",
         "variable": "Zmienna GitHub",
         "repositories": "Repozytoria",
-        "codeScanning": "Domyślna konfiguracja CodeQL"
+        "codeScanning": "Domyślna konfiguracja CodeQL",
+        "arm64Variable": "Zmienna GitHub arm64"
       },
       "variable": {
         "present": "{name} = {value} w {org} (prywatne repozytoria) — nowe zadania żądają floty.",
         "absent": "{name} nie jest ustawiona w {org} — zadania wracają na runnery hostowane przez GitHub.",
         "unknown": "Nie udało się odczytać {name} w {org} — GitHub odpowiedział HTTP {status}.",
-        "unreachable": "Nie udało się odczytać {name} w {org} — nie można połączyć się z GitHubem."
+        "unreachable": "Nie udało się odczytać {name} w {org} — nie można połączyć się z GitHubem.",
+        "arm64": {
+          "present": "{name} = {value} w {org} — nowe zadania arm64 żądają floty arm64 Motira.",
+          "absent": "{name} nie jest ustawiona w {org} — zadania arm64 działają na runnerach arm GitHuba.",
+          "unknown": "Nie udało się odczytać {name} w {org} — GitHub odpowiedział HTTP {status}.",
+          "unreachable": "Nie udało się odczytać {name} w {org} — brak połączenia z GitHubem."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14103,6 +14110,14 @@
         "offPresent": {
           "title": "Zapisano jako wyłączone, ale GitHub się nie zgadza.",
           "body": "{name} jest nadal ustawiona w {org}, więc nowe zadania nadal żądają floty. Włącz i ponownie wyłącz ustawienie, aby ją usunąć."
+        },
+        "arm64OnAbsent": {
+          "title": "Zapisane jako włączone, ale GitHub nie ma zmiennej arm64.",
+          "body": "{name} nie jest ustawiona w {org}, choć pula arm64 jest gotowa, więc zadania arm64 nadal działają na runnerach arm GitHuba. Wyłącz i ponownie włącz ustawienie, aby ją zapisać."
+        },
+        "arm64OffPresent": {
+          "title": "Zapisane jako wyłączone, ale zmienna arm64 jest nadal ustawiona.",
+          "body": "{name} jest nadal ustawiona w {org}, więc nowe zadania arm64 nadal żądają floty arm64 Motira. Włącz i ponownie wyłącz ustawienie, aby ją usunąć."
         }
       },
       "repositories": {
@@ -14211,7 +14226,12 @@
         "reasonHintEmpty": "Przycisk pozostaje nieaktywny, dopóki nie wpiszesz powodu — ta sama zasada, którą stosuje serwer.",
         "cancel": "Anuluj",
         "confirmOn": "Włącz",
-        "confirmOff": "Wyłącz"
+        "confirmOff": "Wyłącz",
+        "arm64": {
+          "onReady": "arm64: pula arm64 jest gotowa, więc to zapisze {name} oraz {arm64Name} w {org}.",
+          "onNotReady": "arm64: żadne AMI runnera arm64 nie jest przypięte, więc to zapisze tylko {name}. Zadania arm64 zostają na runnerach arm GitHuba.",
+          "off": "arm64: to usunie {name} oraz {arm64Name} z {org}."
+        }
       },
       "refused": {
         "reasonMissing": "Nie {direction}: powód jest wymagany i zostaje zapisany w dzienniku audytu razem z tą zmianą. Nic się nie zmieniło.",
@@ -14306,6 +14326,14 @@
           "title": "Nie udało się załadować hostingu agentów",
           "body": "Nie udało się odczytać, gdzie tworzone są nowe agenty, więc nie jest wyświetlany żaden stan ani przełącznik. To błąd odczytu — nic się nie zmieniło i żadna wartość nie jest zgadywana.",
           "retry": "Ponów"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "Pula arm64 gotowa",
+        "notReadyLabel": "Pula arm64 niegotowa",
+        "ready": "AMI runnera arm64 jest przypięte, więc włączenie ustawienia zapisze {name}.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "Żadne AMI runnera arm64 nie jest przypięte, więc zadania arm64 nadal działają na runnerach arm GitHuba."
         }
       }
     },

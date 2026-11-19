@@ -5,7 +5,7 @@ import {
   type Prisma,
 } from '@/generated/prisma/client';
 import type { TeardownReason } from '@motir/orchestrator';
-import { requestsOnDemandRunner } from '@/lib/ciFleet/config';
+import { requestsArm64Runner, requestsOnDemandRunner } from '@/lib/ciFleet/config';
 
 // Data access for the runner-fleet provisioning INTENTS (Story MOTIR-1916 ·
 // MOTIR-1920). Single-op methods only (CLAUDE.md 4-layer); every write requires
@@ -310,11 +310,15 @@ export const ciRunnerProvisioningIntentRepository = {
    * {@link requestsOnDemandRunner} — the same exact, case-insensitive comparison
    * the boot makes — rather than an array filter in SQL, which would compare
    * case-sensitively and could disagree with what the boot registers.
+   *
+   * An intent whose job asked for the ARM64 label (MOTIR-11781) is counted in
+   * `arm64` and in neither x86 bucket: its runner carries only that label, so
+   * it can serve no x86 job, and no x86 runner can serve its job.
    */
   async countAwaitingRunnerForOwner(
     owner: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ onDemand: number; other: number; otherNotSpot: number }> {
+  ): Promise<{ arm64: number; onDemand: number; other: number; otherNotSpot: number }> {
     const rows = await tx.ciRunnerProvisioningIntent.findMany({
       where: {
         repoOwner: { equals: owner, mode: 'insensitive' },
@@ -325,9 +329,12 @@ export const ciRunnerProvisioningIntentRepository = {
       },
       select: { requestedLabels: true, capacity: true },
     });
-    const other = rows.filter((row) => !requestsOnDemandRunner(row.requestedLabels));
+    // The arm64 partition is cut first (MOTIR-11781): what is left is x86.
+    const x86 = rows.filter((row) => !requestsArm64Runner(row.requestedLabels));
+    const other = x86.filter((row) => !requestsOnDemandRunner(row.requestedLabels));
     return {
-      onDemand: rows.length - other.length,
+      arm64: rows.length - x86.length,
+      onDemand: x86.length - other.length,
       other: other.length,
       // The ordinary intents whose machine is not KNOWN to be Spot (MOTIR-11732):
       // not booted yet, or booted on-demand. While an on-demand pin is open in
@@ -376,7 +383,13 @@ export const ciRunnerProvisioningIntentRepository = {
         requestedLabels: true,
       },
     });
-    return rows.filter((row) => !requestsOnDemandRunner(row.requestedLabels));
+    // An arm64 runner is never Spot and never takes an x86 job (MOTIR-11781), so a
+    // pin has nothing to gain from withdrawing one: it is left alone, as an
+    // on-demand-label runner is.
+    return rows.filter(
+      (row) =>
+        !requestsOnDemandRunner(row.requestedLabels) && !requestsArm64Runner(row.requestedLabels),
+    );
   },
 
   /**

@@ -3,6 +3,7 @@ import {
   judgeJob,
   judgeWorkflows,
   MAX_ACTION_DEPTH,
+  mixesArm64WithX86Fleet,
   namesOnDemandLabel,
   parseActionRef,
   remoteActionKey,
@@ -102,6 +103,50 @@ describe('the on-demand label in runs-on (MOTIR-11727)', () => {
 
   it('a job that never names either label stays github-hosted', () => {
     expect(judge(job([run('echo hi')], { runsOn: 'ubuntu-latest' })).verdict).toBe('github-hosted');
+  });
+});
+
+describe('the arm64 fleet in runs-on (MOTIR-11781)', () => {
+  /** motir-codegraph's arm64 image leg (MOTIR-11721). */
+  const ARM64_SEAM = "${{ vars.MOTIR_RUNNER_ARM64 || 'ubuntu-24.04-arm' }}";
+
+  it('the arm64 variable and the arm64 label each request the fleet', () => {
+    expect(requestsFleetRunner(ARM64_SEAM)).toBe(true);
+    expect(requestsFleetRunner('motir-graviton')).toBe(true);
+    expect(requestsFleetRunner(['self-hosted', 'MOTIR-GRAVITON'])).toBe(true);
+    expect(requestsFleetRunner({ group: 'g', labels: ['motir-graviton'] })).toBe(true);
+    expect(requestsFleetRunner('ubuntu-24.04-arm')).toBe(false);
+    expect(requestsFleetRunner('motir-graviton-x')).toBe(false);
+  });
+
+  it('an arm64 job is judged by its steps like any fleet job', () => {
+    for (const runsOn of [ARM64_SEAM, 'motir-graviton', ['motir-graviton']]) {
+      expect(judge(job([run('echo hi')], { runsOn })).verdict).toBe('runnable');
+    }
+  });
+
+  it('a runs-on asking for the arm64 label beside an x86 fleet label is unverified, naming the label', () => {
+    for (const runsOn of [
+      ['motir-runner', 'motir-graviton'],
+      ['motir-graviton', 'motir-on-demand'],
+      { group: 'g', labels: ['MOTIR-RUNNER', 'motir-graviton'] },
+      ['${{ vars.MOTIR_RUNNER_ARM64 }}', '${{ vars.MOTIR_RUNNER }}'],
+    ]) {
+      expect(mixesArm64WithX86Fleet(runsOn)).toBe(true);
+      const verdict = judge(job([run('echo hi')], { runsOn }));
+      expect(verdict.verdict).toBe('unverified');
+      expect(verdict.missing).toEqual([]);
+      expect(verdict.unjudged).toHaveLength(1);
+      expect(verdict.unjudged[0]).toContain('motir-graviton');
+    }
+  });
+
+  it('the arm64 seam alone, or an x86 seam alone, is not a mix', () => {
+    expect(mixesArm64WithX86Fleet(ARM64_SEAM)).toBe(false);
+    expect(mixesArm64WithX86Fleet(SEAM)).toBe(false);
+    expect(mixesArm64WithX86Fleet(['motir-runner', 'motir-on-demand'])).toBe(false);
+    expect(mixesArm64WithX86Fleet(['motir-graviton-x', 'motir-runner'])).toBe(false);
+    expect(mixesArm64WithX86Fleet(null)).toBe(false);
   });
 });
 

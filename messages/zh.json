@@ -14078,13 +14078,20 @@
         "auditLink": "审计日志",
         "variable": "GitHub 变量",
         "repositories": "仓库",
-        "codeScanning": "CodeQL 默认设置"
+        "codeScanning": "CodeQL 默认设置",
+        "arm64Variable": "arm64 GitHub 变量"
       },
       "variable": {
         "present": "{org} 上的 {name} = {value}（私有仓库）—— 新作业会请求集群。",
         "absent": "{org} 上未设置 {name} —— 作业回退到 GitHub 托管的运行器。",
         "unknown": "无法读取 {org} 上的 {name} —— GitHub 返回 HTTP {status}。",
-        "unreachable": "无法读取 {org} 上的 {name} —— 无法连接到 GitHub。"
+        "unreachable": "无法读取 {org} 上的 {name} —— 无法连接到 GitHub。",
+        "arm64": {
+          "present": "{org} 上 {name} = {value} —— 新的 arm64 作业会请求 Motir 的 arm64 集群。",
+          "absent": "{org} 上未设置 {name} —— arm64 作业在 GitHub 的 arm 运行器上运行。",
+          "unknown": "无法读取 {org} 上的 {name} —— GitHub 返回 HTTP {status}。",
+          "unreachable": "无法读取 {org} 上的 {name} —— 无法连接 GitHub。"
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14094,6 +14101,14 @@
         "offPresent": {
           "title": "已存储为关闭，但 GitHub 不一致。",
           "body": "{org} 上仍设置着 {name}，因此新作业仍会请求集群。将此设置开启后再关闭即可移除。"
+        },
+        "arm64OnAbsent": {
+          "title": "已存为开启，但 GitHub 上没有 arm64 变量。",
+          "body": "arm64 资源池已就绪，但 {org} 上未设置 {name}，因此 arm64 作业仍在 GitHub 的 arm 运行器上运行。关闭再开启该设置即可写入。"
+        },
+        "arm64OffPresent": {
+          "title": "已存为关闭，但 arm64 变量仍已设置。",
+          "body": "{org} 上仍设置了 {name}，因此新的 arm64 作业仍会请求 Motir 的 arm64 集群。开启再关闭该设置即可删除。"
         }
       },
       "repositories": {
@@ -14202,7 +14217,12 @@
         "reasonHintEmpty": "填写原因之前按钮保持禁用 —— 与服务器执行的规则相同。",
         "cancel": "取消",
         "confirmOn": "开启",
-        "confirmOff": "关闭"
+        "confirmOff": "关闭",
+        "arm64": {
+          "onReady": "arm64：arm64 资源池已就绪，因此会在 {org} 上同时写入 {name} 和 {arm64Name}。",
+          "onNotReady": "arm64：未固定 arm64 运行器 AMI，因此只写入 {name}。arm64 作业留在 GitHub 的 arm 运行器上。",
+          "off": "arm64：会从 {org} 同时删除 {name} 和 {arm64Name}。"
+        }
       },
       "refused": {
         "reasonMissing": "未{direction}：必须填写原因，它会随此更改写入审计日志。没有任何更改。",
@@ -14297,6 +14317,14 @@
           "title": "无法加载智能体托管",
           "body": "无法读取新智能体的创建位置，因此不显示任何状态，也不提供开关。这是读取错误 —— 没有任何更改，也不会猜测任何值。",
           "retry": "重试"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64 资源池已就绪",
+        "notReadyLabel": "arm64 资源池未就绪",
+        "ready": "已固定 arm64 运行器 AMI，因此开启该设置会写入 {name}。",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "未固定 arm64 运行器 AMI，因此 arm64 作业继续在 GitHub 的 arm 运行器上运行。"
         }
       }
     },

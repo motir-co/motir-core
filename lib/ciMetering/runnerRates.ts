@@ -115,6 +115,39 @@ const GITHUB_2026_REPRICING = new Date('2026-01-01T00:00:00.000Z');
 export const MOTIR_FLEET_RUNNER_LABEL = 'motir-runner';
 
 /**
+ * The fleet's ARM64 label (Story MOTIR-11779 · MOTIR-11781): the one label a
+ * Graviton fleet runner registers with, and the value `vars.MOTIR_RUNNER_ARM64`
+ * carries. A SECOND fleet pool, disjoint from {@link MOTIR_FLEET_RUNNER_LABEL}:
+ * an arm64 runner carries only this label and an x86 runner never carries it,
+ * so GitHub can never hand an x86 job to a Graviton runner or the other way
+ * round.
+ *
+ * ⚠️ THE SAME §M.2 CONSTRAINTS, AND THEY ARE WHY IT NAMES THE MACHINE FAMILY
+ * RATHER THAN THE ARCHITECTURE. `classifyRunner` falls through to substring
+ * matching once the exact fleet pre-pass misses, and `label.includes('arm')`
+ * answers `linux_arm64` — so a name like `motir-runner-arm64` would be metered
+ * as a GitHub-hosted arm64 minute the moment it missed the pre-pass. This value
+ * contains none of `ubuntu` / `linux` / `arm` / `windows` / `macos` / `osx` and
+ * does not match the larger-runner pattern; `runnerRates.test.ts` asserts both
+ * against the real patterns.
+ *
+ * Metered as `motir_fleet` at the existing ×1.00 parity row: the default arm64
+ * machine (m7g.large) is the same 2 vCPU / 8 GiB class as the x86 one, so no
+ * new rate row is decided here.
+ *
+ * ⚠️ THE ONE LITERAL. `lib/ciFleet/config.ts` re-exports it as
+ * `MOTIR_ARM64_RUNNER_LABEL` (the MOTIR-1964 alias pattern), and every other
+ * module imports that name — the meter and the provisioner cannot drift.
+ */
+export const MOTIR_FLEET_ARM64_RUNNER_LABEL = 'motir-graviton';
+
+/** Both fleet labels, lower-case — the set the exact pre-pass compares against. */
+const MOTIR_FLEET_LABELS: ReadonlySet<string> = new Set([
+  MOTIR_FLEET_RUNNER_LABEL,
+  MOTIR_FLEET_ARM64_RUNNER_LABEL,
+]);
+
+/**
  * The FAMILY name a fleet job's metered minutes are stored under, in the
  * `runner_breakdown` JSON every metered row carries (§3.3).
  *
@@ -240,7 +273,8 @@ const LARGER_RUNNER = /(^|-)(\d+-?core|xlarge|large)(-|$)/i;
  * `ubuntu-latest-4-core` job is Linux, but it is NOT the Linux the ×1.00 rate
  * prices, and silently charging it as one would be a priced guess.
  *
- * The MOTIR FLEET is matched first of all, and by EXACT label rather than by
+ * The MOTIR FLEET is matched first of all — either of its two labels, the x86
+ * one or the arm64 one (MOTIR-11781) — and by EXACT label rather than by
  * substring (§M.3). Exact is the safe direction twice over: a near-miss variant
  * like `motir-runner-large` is NOT the 2-core-equivalent spec the ×1.00 parity
  * rate was decided for, so it correctly falls through to `unknown` and warns
@@ -252,7 +286,7 @@ const LARGER_RUNNER = /(^|-)(\d+-?core|xlarge|large)(-|$)/i;
  */
 export function classifyRunner(labels: readonly string[]): RunnerFamily {
   for (const raw of labels) {
-    if (raw.trim().toLowerCase() === MOTIR_FLEET_RUNNER_LABEL) return 'motir_fleet';
+    if (MOTIR_FLEET_LABELS.has(raw.trim().toLowerCase())) return 'motir_fleet';
   }
   for (const raw of labels) {
     const label = raw.trim().toLowerCase();

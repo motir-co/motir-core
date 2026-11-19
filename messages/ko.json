@@ -14081,13 +14081,20 @@
         "auditLink": "감사 로그",
         "variable": "GitHub 변수",
         "repositories": "리포지토리",
-        "codeScanning": "CodeQL 기본 설정"
+        "codeScanning": "CodeQL 기본 설정",
+        "arm64Variable": "arm64 GitHub 변수"
       },
       "variable": {
         "present": "{org}의 {name} = {value}(비공개 리포지토리) — 새 작업이 플릿을 요청합니다.",
         "absent": "{org}에 {name}이(가) 설정되어 있지 않습니다 — 작업이 GitHub 호스팅 러너로 돌아갑니다.",
         "unknown": "{org}의 {name}을(를) 읽을 수 없습니다 — GitHub가 HTTP {status}을(를) 반환했습니다.",
-        "unreachable": "{org}의 {name}을(를) 읽을 수 없습니다 — GitHub에 연결할 수 없습니다."
+        "unreachable": "{org}의 {name}을(를) 읽을 수 없습니다 — GitHub에 연결할 수 없습니다.",
+        "arm64": {
+          "present": "{org}의 {name} = {value} — 새 arm64 작업은 Motir의 arm64 플릿을 요청합니다.",
+          "absent": "{org}에 {name}이(가) 설정되어 있지 않습니다 — arm64 작업은 GitHub의 arm 러너에서 실행됩니다.",
+          "unknown": "{org}의 {name}을(를) 읽지 못했습니다 — GitHub가 HTTP {status}로 응답했습니다.",
+          "unreachable": "{org}의 {name}을(를) 읽지 못했습니다 — GitHub에 연결할 수 없습니다."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14097,6 +14104,14 @@
         "offPresent": {
           "title": "꺼짐으로 저장되었지만 GitHub와 일치하지 않습니다.",
           "body": "{org}에 {name}이(가) 아직 설정되어 있어 새 작업이 여전히 플릿을 요청합니다. 설정을 켰다가 다시 끄면 제거됩니다."
+        },
+        "arm64OnAbsent": {
+          "title": "켜짐으로 저장되었지만 GitHub에 arm64 변수가 없습니다.",
+          "body": "arm64 풀이 준비되었는데도 {org}에 {name}이(가) 설정되어 있지 않아 arm64 작업은 계속 GitHub의 arm 러너에서 실행됩니다. 설정을 껐다가 다시 켜서 기록하세요."
+        },
+        "arm64OffPresent": {
+          "title": "꺼짐으로 저장되었지만 arm64 변수가 아직 설정되어 있습니다.",
+          "body": "{org}에 {name}이(가) 아직 설정되어 있어 새 arm64 작업은 계속 Motir의 arm64 플릿을 요청합니다. 설정을 켰다가 다시 꺼서 제거하세요."
         }
       },
       "repositories": {
@@ -14205,7 +14220,12 @@
         "reasonHintEmpty": "사유를 입력할 때까지 버튼은 비활성화된 상태로 유지됩니다 — 서버가 적용하는 것과 같은 규칙입니다.",
         "cancel": "취소",
         "confirmOn": "켜기",
-        "confirmOff": "끄기"
+        "confirmOff": "끄기",
+        "arm64": {
+          "onReady": "arm64: arm64 풀이 준비되었으므로 {org}에 {name}과(와) {arm64Name}을(를) 모두 기록합니다.",
+          "onNotReady": "arm64: 고정된 arm64 러너 AMI가 없으므로 {name}만 기록합니다. arm64 작업은 GitHub의 arm 러너에 남습니다.",
+          "off": "arm64: {org}에서 {name}과(와) {arm64Name}을(를) 모두 삭제합니다."
+        }
       },
       "refused": {
         "reasonMissing": "{direction} 처리되지 않았습니다: 사유가 필요하며 이 변경과 함께 감사 로그에 기록됩니다. 아무것도 변경되지 않았습니다.",
@@ -14300,6 +14320,14 @@
           "title": "에이전트 호스팅을 불러올 수 없습니다",
           "body": "새 에이전트가 생성되는 위치를 읽을 수 없어 상태를 표시하지 않고 스위치도 제공하지 않습니다. 읽기 오류입니다 — 아무것도 변경되지 않았으며 어떤 값도 추측하지 않습니다.",
           "retry": "다시 시도"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64 풀 준비됨",
+        "notReadyLabel": "arm64 풀 준비 안 됨",
+        "ready": "arm64 러너 AMI가 고정되어 있으므로 설정을 켜면 {name}이(가) 기록됩니다.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "고정된 arm64 러너 AMI가 없으므로 arm64 작업은 계속 GitHub의 arm 러너에서 실행됩니다."
         }
       }
     },

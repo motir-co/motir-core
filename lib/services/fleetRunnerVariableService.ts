@@ -1,4 +1,10 @@
-import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
+import {
+  MOTIR_ARM64_RUNNER_LABEL,
+  MOTIR_RUNNER_ARM64_VARIABLE,
+  MOTIR_RUNNER_LABEL,
+  MOTIR_RUNNER_VARIABLE,
+} from '@/lib/ciFleet/config';
+import { readArm64RunnerAmiId } from '@/lib/orchestrator';
 import { isRepoProvisioningConfigured } from '@/lib/github/repoProvisioning';
 import {
   actionsVariableClient,
@@ -44,6 +50,18 @@ import type { GithubOrgTarget } from '@/lib/github/orgTarget';
 // `|| 'ubuntu-latest'` fallback is for — until the next establishment re-runs the
 // ensure.
 
+/** What the establish path did to `MOTIR_RUNNER_ARM64` (Story MOTIR-11779 ·
+ *  MOTIR-11786). Independent of the x86 outcome: an arm64 refusal never changes
+ *  it, and never fails an establishment. */
+export type FleetRunnerArm64VariableOutcome =
+  /** The org variable now holds the arm64 fleet label. */
+  | { outcome: 'ensured'; result: EnsureOrgVariableOutcome }
+  /** No arm64 runner AMI is pinned on this deployment, so nothing was written:
+   *  arm64 jobs keep their GitHub fallback. */
+  | { outcome: 'not_ready' }
+  /** GitHub refused or was unreachable. */
+  | { outcome: 'ensure_failed'; detail: string };
+
 export type FleetRunnerVariableOutcome =
   /** This deployment never provisions repositories (self-hosted, or the Studio App
    *  / provisioning org is unwired), so there is no fleet and no variable to
@@ -51,10 +69,44 @@ export type FleetRunnerVariableOutcome =
    *  `projectRunnerGroupService` opens with. */
   | { outcome: 'not_configured' }
   /** The org variable now holds the fleet label. */
-  | { outcome: 'ensured'; result: EnsureOrgVariableOutcome }
+  | {
+      outcome: 'ensured';
+      result: EnsureOrgVariableOutcome;
+      arm64: FleetRunnerArm64VariableOutcome;
+    }
   /** GitHub refused or was unreachable. Repositories still establish; their CI
    *  runs GitHub-hosted until a later pass succeeds. */
-  | { outcome: 'ensure_failed'; detail: string };
+  | { outcome: 'ensure_failed'; detail: string; arm64: FleetRunnerArm64VariableOutcome };
+
+/** A constant message + a structured context object, never a template literal
+ *  carrying a value — `console.*`'s first argument is a FORMAT string, and the
+ *  sibling fleet services hold the same posture. */
+function logEnsureFailure(variable: string, org: string | null, detail: string): void {
+  console.error(
+    '[fleetRunnerVariableService] could not ensure the fleet runner variable — ' +
+      'repositories still establish and their CI runs GitHub-hosted',
+    { variable, org, detail },
+  );
+}
+
+const detailOf = (err: unknown): string => (err instanceof Error ? err.message : 'unknown');
+
+/** `MOTIR_RUNNER_ARM64` = the arm64 fleet label, when the arm64 pool is ready. */
+async function ensureArm64(target?: GithubOrgTarget): Promise<FleetRunnerArm64VariableOutcome> {
+  if (readArm64RunnerAmiId() === null) return { outcome: 'not_ready' };
+  try {
+    const result = await actionsVariableClient.ensureOrgVariable(
+      MOTIR_RUNNER_ARM64_VARIABLE,
+      MOTIR_ARM64_RUNNER_LABEL,
+      target,
+    );
+    return { outcome: 'ensured', result };
+  } catch (err) {
+    const detail = detailOf(err);
+    logEnsureFailure(MOTIR_RUNNER_ARM64_VARIABLE, target?.org ?? null, detail);
+    return { outcome: 'ensure_failed', detail };
+  }
+}
 
 export const fleetRunnerVariableService = {
   /**
@@ -70,28 +122,30 @@ export const fleetRunnerVariableService = {
    * ensure's read short-circuits when the value is already right), and the benefit
    * is self-healing — a variable deleted or edited by hand comes back on the next
    * establishment instead of at the next incident.
+   *
+   * THE ARM64 VARIABLE (MOTIR-11786) is ensured beside it, on the same readiness
+   * condition the console's flip uses — an arm64 runner AMI pinned
+   * (`readArm64RunnerAmiId()`). The two writes are independent: each is tried,
+   * and neither's failure changes the other's outcome.
    */
   async ensureForFleet(target?: GithubOrgTarget): Promise<FleetRunnerVariableOutcome> {
     if (!isRepoProvisioningConfigured()) return { outcome: 'not_configured' };
+    let x86:
+      | { outcome: 'ensured'; result: EnsureOrgVariableOutcome }
+      | { outcome: 'ensure_failed'; detail: string };
     try {
       const result = await actionsVariableClient.ensureOrgVariable(
         MOTIR_RUNNER_VARIABLE,
         MOTIR_RUNNER_LABEL,
         target,
       );
-      return { outcome: 'ensured', result };
+      x86 = { outcome: 'ensured', result };
     } catch (err) {
-      const detail = err instanceof Error ? err.message : 'unknown';
-      // A constant message + a structured context object, never a template literal
-      // carrying a value — `console.*`'s first argument is a FORMAT string, and the
-      // sibling fleet services hold the same posture.
-      console.error(
-        '[fleetRunnerVariableService] could not ensure the fleet runner variable — ' +
-          'repositories still establish and their CI runs GitHub-hosted',
-        { variable: MOTIR_RUNNER_VARIABLE, org: target?.org ?? null, detail },
-      );
-      return { outcome: 'ensure_failed', detail };
+      const detail = detailOf(err);
+      logEnsureFailure(MOTIR_RUNNER_VARIABLE, target?.org ?? null, detail);
+      x86 = { outcome: 'ensure_failed', detail };
     }
+    return { ...x86, arm64: await ensureArm64(target) };
   },
 
   /**

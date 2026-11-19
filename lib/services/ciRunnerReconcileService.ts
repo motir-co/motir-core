@@ -11,7 +11,7 @@ import { attributeMirroredRepos } from '@/lib/services/ciRunnerProvisioningServi
 import { findProvisioningInstallationId } from '@/lib/github/repoProvisioning';
 import { dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
-import { requestsOnDemandRunner } from '@/lib/ciFleet/config';
+import { requestsArm64Runner, requestsOnDemandRunner } from '@/lib/ciFleet/config';
 import { isCiFleetConfigured } from '@/lib/orchestrator';
 import { retryPendingSpotReruns } from '@/lib/services/ciSpotRerunService';
 import { ciSpotRerunPinService, isPinnedJob } from '@/lib/services/ciSpotRerunPinService';
@@ -91,6 +91,17 @@ import {
 //
 // With no pin open, Q_pin is 0 and the formula above is the one before it.
 //
+// ⚠️ ARM64 IS ITS OWN PARTITION, CUT BEFORE THE ARITHMETIC ABOVE (MOTIR-11781).
+// A Graviton runner carries only the arm64 label and an x86 runner never carries
+// it, so neither pool can take the other's jobs and there is no surplus to share
+// in either direction. Jobs, idle runners and awaiting intents asking for the
+// arm64 label are split off first; the x86 formulas above run on what is left,
+// and the arm64 slice is covered on its own:
+//
+//   uncovered arm64 = max(0, Q_arm64 − I_arm64 − A_arm64)
+//
+// A minted arm64 intent copies its job's labels, so it boots an arm64 runner.
+//
 // ⚠️ IT NEVER BOOTS PAST THE GAP: coverage is counted before anything is minted,
 // the oldest jobs are the ones minted for, and the unique index on
 // `(run, attempt, job, reconcile_generation)` makes two racing sweeps collide
@@ -135,17 +146,26 @@ export interface ReconcileOrgOutcome {
    *  awaiting a runner that asked for it, and intents minted for such jobs.
    *  Present only when any of them is non-zero. */
   onDemand?: OnDemandCoverage;
+  /** The arm64 partition's share of the totals above (MOTIR-11781): queued jobs
+   *  that asked for the arm64 label, idle runners carrying it, intents awaiting
+   *  a runner that asked for it, and intents minted for such jobs. Present only
+   *  when any of them is non-zero. */
+  arm64?: PartitionCoverage;
   /** Set when the org could not be read; the other orgs are unaffected. */
   error?: string;
 }
 
-/** The on-demand partition of one org's reconcile (MOTIR-11727). */
-export interface OnDemandCoverage {
+/** One label-set partition of one org's reconcile — the on-demand one
+ *  (MOTIR-11727) or the arm64 one (MOTIR-11781). */
+export interface PartitionCoverage {
   queued: number;
   idleRunners: number;
   awaiting: number;
   added: number;
 }
+
+/** The on-demand partition of one org's reconcile (MOTIR-11727). */
+export type OnDemandCoverage = PartitionCoverage;
 
 export interface ReconcileOutcome {
   orgs: ReconcileOrgOutcome[];
@@ -333,26 +353,31 @@ async function reconcileOrg(
   }
   const runners = await fleetQueueClient.listFleetRunners(target);
   const idle = runners.filter((r) => r.online && !r.busy);
-  const idleOnDemand = idle.filter((r) => requestsOnDemandRunner(r.labels)).length;
   const idleRunners = idle.length;
+  // The arm64 partition is cut first (MOTIR-11781): what is left is x86.
+  const idleArm64 = idle.filter((r) => requestsArm64Runner(r.labels)).length;
+  const idleX86 = idle.filter((r) => !requestsArm64Runner(r.labels));
+  const idleOnDemand = idleX86.filter((r) => requestsOnDemandRunner(r.labels)).length;
   const awaitingSplit = await withSystemContext((tx) =>
     ciRunnerProvisioningIntentRepository.countAwaitingRunnerForOwner(org, tx),
   );
-  const awaiting = awaitingSplit.onDemand + awaitingSplit.other;
+  const awaiting = awaitingSplit.arm64 + awaitingSplit.onDemand + awaitingSplit.other;
 
   // Oldest first: GitHub gives a runner to the oldest queued job, so the oldest
   // are the ones the available runners will serve and the uncovered are the rest.
   queued.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const queuedOnDemand = queued.filter((job) => requestsOnDemandRunner(job.labels));
+  const queuedArm64 = queued.filter((job) => requestsArm64Runner(job.labels));
+  const queuedX86 = queued.filter((job) => !requestsArm64Runner(job.labels));
+  const queuedOnDemand = queuedX86.filter((job) => requestsOnDemandRunner(job.labels));
   const pins = await openPinsQuietly(org, now);
-  const queuedPinned = queued.filter(
+  const queuedPinned = queuedX86.filter(
     (job) => !requestsOnDemandRunner(job.labels) && isPinnedJob(job, pins),
   );
-  const queuedOther = queued.filter(
+  const queuedOther = queuedX86.filter(
     (job) => !requestsOnDemandRunner(job.labels) && !isPinnedJob(job, pins),
   );
   // Only read which idle machines are on-demand when a pinned job needs one.
-  const idleOrdinary = idle.filter((r) => !requestsOnDemandRunner(r.labels));
+  const idleOrdinary = idleX86.filter((r) => !requestsOnDemandRunner(r.labels));
   const idlePinnedCapable =
     queuedPinned.length === 0 ? 0 : await countOnDemandMachines(idleOrdinary.map((r) => r.id));
   const coverage = coverPartitions({
@@ -360,12 +385,18 @@ async function reconcileOrg(
     queuedOther: queuedOther.length,
     queuedPinned: queuedPinned.length,
     idleOnDemand,
-    idleOther: idleRunners - idleOnDemand,
+    idleOther: idleX86.length - idleOnDemand,
     idlePinnedCapable,
     awaitingOnDemand: awaitingSplit.onDemand,
     awaitingOther: awaitingSplit.other,
     awaitingPinnedCapable: awaitingSplit.otherNotSpot,
   });
+  const uncoveredArm64 = coverArm64Partition({
+    queued: queuedArm64.length,
+    idle: idleArm64,
+    awaiting: awaitingSplit.arm64,
+  });
+  const arm64Gaps = youngest(queuedArm64, uncoveredArm64).filter((job) => pastGrace(job, now));
   const onDemandGaps = youngest(queuedOnDemand, coverage.uncoveredOnDemand).filter((job) =>
     pastGrace(job, now),
   );
@@ -375,12 +406,12 @@ async function reconcileOrg(
   const otherGaps = youngest(queuedOther, coverage.uncoveredOther).filter((job) =>
     pastGrace(job, now),
   );
-  const gaps = [...onDemandGaps, ...pinnedGaps, ...otherGaps].sort(
+  const gaps = [...arm64Gaps, ...onDemandGaps, ...pinnedGaps, ...otherGaps].sort(
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
   );
   if (queuedPinned.length > 0) {
     // Logged rather than carried on the outcome: the memoised step's shape is
-    // pinned (`reconcile-github-queue-v4`).
+    // pinned (`reconcile-github-queue-v5`).
     console.warn('[ciRunnerReconcile] a job pinned to on-demand is queued', {
       org,
       queued: queuedPinned.length,
@@ -392,6 +423,7 @@ async function reconcileOrg(
 
   let added = 0;
   let addedOnDemand = 0;
+  let addedArm64 = 0;
   for (const job of gaps) {
     const repo = repos.find(
       (r) => repoKey(r.base.repoOwner, r.base.repoName) === repoKey(job.repoOwner, job.repoName),
@@ -403,7 +435,8 @@ async function reconcileOrg(
     });
     if (intentId === null) continue;
     added += 1;
-    if (requestsOnDemandRunner(job.labels)) addedOnDemand += 1;
+    if (requestsArm64Runner(job.labels)) addedArm64 += 1;
+    else if (requestsOnDemandRunner(job.labels)) addedOnDemand += 1;
     // The ordinary boot path: `admit` is where the pool cap and the credit refusal
     // are decided, so a full pool defers this intent rather than exceeding it.
     await dispatchCiRunnerBoot(intentId, 'hot-path');
@@ -430,6 +463,13 @@ async function reconcileOrg(
     added: addedOnDemand,
   };
   if (Object.values(onDemand).some((n) => n > 0)) outcome.onDemand = onDemand;
+  const arm64: PartitionCoverage = {
+    queued: queuedArm64.length,
+    idleRunners: idleArm64,
+    awaiting: awaitingSplit.arm64,
+    added: addedArm64,
+  };
+  if (Object.values(arm64).some((n) => n > 0)) outcome.arm64 = arm64;
   if (added > 0) {
     console.warn(
       '[ciRunnerReconcile] queued fleet jobs had no runner coming — booted more',
@@ -511,6 +551,20 @@ async function countOnDemandMachines(runnerIds: number[]): Promise<number> {
     ciRunnerProvisioningIntentRepository.findCapacityByRunnerIds(runnerIds, tx),
   );
   return runnerIds.filter((id) => capacity.get(id) === 'on_demand').length;
+}
+
+/**
+ * How many arm64 jobs have no runner coming (MOTIR-11781). The arm64 partition
+ * is disjoint from both x86 ones — its runners carry only the arm64 label — so
+ * it is covered only by its own idle runners and awaiting intents, and lends or
+ * borrows no surplus. Pure. Exported for the arithmetic's own tests.
+ */
+export function coverArm64Partition(counts: {
+  queued: number;
+  idle: number;
+  awaiting: number;
+}): number {
+  return Math.max(0, counts.queued - counts.idle - counts.awaiting);
 }
 
 /** The `count` youngest of `oldestFirst` — the ones no runner will reach. */

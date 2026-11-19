@@ -36,7 +36,11 @@ import { ciSpotRerunPinRepository } from '@/lib/repositories/ciSpotRerunPinRepos
 import { CI_SPOT_SETTING_SCOPE } from '@/lib/repositories/platformCiSpotSettingRepository';
 import { actionsRunsClient } from '@/lib/github/actionsRuns';
 import { fleetQueueClient, type QueuedFleetJob } from '@/lib/github/fleetQueue';
-import { MOTIR_ON_DEMAND_RUNNER_LABEL, MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import {
+  MOTIR_ARM64_RUNNER_LABEL,
+  MOTIR_ON_DEMAND_RUNNER_LABEL,
+  MOTIR_RUNNER_LABEL,
+} from '@/lib/ciFleet/config';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -544,6 +548,29 @@ describe('the second re-run: hold, then withdraw every jobless Spot runner, then
     await interrupted(second.session);
 
     expect(deletes()).toEqual([]);
+    expect((await read(second.intentId)).rerunState).toBe('requested');
+  });
+
+  it('an arm64 runner still launching is never withdrawn: it boots on-demand and takes no x86 job (MOTIR-11781)', async () => {
+    await seedTenant();
+    await spotSetting(true);
+    const second = await secondAttemptRunning();
+    // Minted and recorded, its launch not made yet: capacity unknown, exactly the
+    // x86 runner the starting-machine case above withdraws.
+    const graviton = await queue(1, {
+      name: 'docker-arm64',
+      runId: '8805',
+      labels: [MOTIR_ARM64_RUNNER_LABEL],
+    });
+    await adminDb.ciRunnerProvisioningIntent.update({
+      where: { id: graviton.intentId },
+      data: { status: 'provisioning', githubRunnerId: 77_005, runnerName: 'motir-runner-77005' },
+    });
+
+    await interrupted(second.session);
+
+    expect(deletes()).toEqual([]);
+    expect((await read(graviton.intentId)).runnerWithdrawnAt).toBeNull();
     expect((await read(second.intentId)).rerunState).toBe('requested');
   });
 });

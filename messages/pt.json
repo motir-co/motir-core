@@ -14087,13 +14087,20 @@
         "auditLink": "Log de auditoria",
         "variable": "Variável do GitHub",
         "repositories": "Repositórios",
-        "codeScanning": "Configuração padrão do CodeQL"
+        "codeScanning": "Configuração padrão do CodeQL",
+        "arm64Variable": "Variável do GitHub arm64"
       },
       "variable": {
         "present": "{name} = {value} em {org} (repositórios privados): novos jobs solicitam a frota.",
         "absent": "{name} não está definida em {org}: os jobs voltam para runners hospedados pelo GitHub.",
         "unknown": "Não foi possível ler {name} em {org}: o GitHub respondeu HTTP {status}.",
-        "unreachable": "Não foi possível ler {name} em {org}: o GitHub não pôde ser alcançado."
+        "unreachable": "Não foi possível ler {name} em {org}: o GitHub não pôde ser alcançado.",
+        "arm64": {
+          "present": "{name} = {value} em {org} — novos jobs arm64 solicitam a frota arm64 do Motir.",
+          "absent": "{name} não está definida em {org} — jobs arm64 rodam nos runners arm do GitHub.",
+          "unknown": "Não foi possível ler {name} em {org} — o GitHub respondeu HTTP {status}.",
+          "unreachable": "Não foi possível ler {name} em {org} — o GitHub não pôde ser alcançado."
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14103,6 +14110,14 @@
         "offPresent": {
           "title": "Salva como desativada, mas o GitHub discorda.",
           "body": "{name} ainda está definida em {org}, então novos jobs ainda solicitam a frota. Ative e desative a configuração novamente para removê-la."
+        },
+        "arm64OnAbsent": {
+          "title": "Salvo como ativado, mas o GitHub não tem a variável arm64.",
+          "body": "{name} não está definida em {org} embora o pool arm64 esteja pronto, então os jobs arm64 ainda rodam nos runners arm do GitHub. Desative e ative a configuração de novo para escrevê-la."
+        },
+        "arm64OffPresent": {
+          "title": "Salvo como desativado, mas a variável arm64 ainda está definida.",
+          "body": "{name} ainda está definida em {org}, então novos jobs arm64 ainda solicitam a frota arm64 do Motir. Ative e desative a configuração de novo para removê-la."
         }
       },
       "repositories": {
@@ -14211,7 +14226,12 @@
         "reasonHintEmpty": "O botão fica desativado até que um motivo seja digitado — a mesma regra que o servidor aplica.",
         "cancel": "Cancelar",
         "confirmOn": "Ativar",
-        "confirmOff": "Desativar"
+        "confirmOff": "Desativar",
+        "arm64": {
+          "onReady": "arm64: o pool arm64 está pronto, então isto escreve {name} e {arm64Name} em {org}.",
+          "onNotReady": "arm64: nenhuma AMI de runner arm64 está fixada, então isto escreve apenas {name}. Os jobs arm64 ficam nos runners arm do GitHub.",
+          "off": "arm64: isto exclui {name} e {arm64Name} de {org}."
+        }
       },
       "refused": {
         "reasonMissing": "Não {direction}: um motivo é obrigatório e é gravado no log de auditoria com esta alteração. Nada mudou.",
@@ -14306,6 +14326,14 @@
           "title": "Não foi possível carregar a hospedagem de agentes",
           "body": "Não foi possível ler onde novos agentes são criados, então nenhum estado é mostrado e nenhum interruptor é oferecido. É um erro de leitura — nada mudou e nenhum valor é presumido.",
           "retry": "Tentar novamente"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "Pool arm64 pronto",
+        "notReadyLabel": "Pool arm64 não pronto",
+        "ready": "Uma AMI de runner arm64 está fixada, então ativar a configuração escreve {name}.",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "Nenhuma AMI de runner arm64 está fixada, então os jobs arm64 continuam rodando nos runners arm do GitHub."
         }
       }
     },

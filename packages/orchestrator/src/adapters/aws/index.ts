@@ -87,6 +87,15 @@ export * from './inventory';
 /** The machine class the fleet's one size maps to — 2 vCPU / 8 GiB, x86. */
 export const AWS_DEFAULT_INSTANCE_TYPE = 'm6i.large';
 
+/**
+ * The ON-DEMAND instance type an ARM64 CI runner boots (MOTIR-11782): Graviton3,
+ * 2 vCPU / 8 GiB — the same size class `ci-minutes-allowance.md` §M fixes for the
+ * x86 runner. Overridden by {@link AwsOrchestratorConfig.arm64InstanceType}. An
+ * arm64 launch is never Spot: the Spot list is x86 only, so a Spot walk could
+ * only ever send an arm64 image to an x86 type.
+ */
+export const AWS_DEFAULT_ARM64_INSTANCE_TYPE = 'm7g.large';
+
 /** Where the AMI's Docker data disk is mapped. */
 export const AWS_DOCKER_DEVICE_NAME = '/dev/sdb';
 
@@ -226,6 +235,12 @@ export interface AwsOrchestratorConfig {
   readonly shardTag: string;
   /** The runner AMI (`MOTIR_AWS_RUNNER_AMI_ID`). */
   readonly amiId: string;
+  /** The ARM64 runner AMI (`MOTIR_AWS_RUNNER_ARM64_AMI_ID`, MOTIR-11782). Unset
+   *  refuses an arm64 `ci_runner` spec before any EC2 call — never a fallback to
+   *  {@link amiId}, which is an x86 image. */
+  readonly arm64AmiId?: string;
+  /** Overrides {@link AWS_DEFAULT_ARM64_INSTANCE_TYPE}. */
+  readonly arm64InstanceType?: string;
   /** The Docker-host AMI an index VM boots (`MOTIR_AWS_INDEXER_AMI_ID`). Unset
    *  refuses a `code_graph_index` spec before any EC2 call. */
   readonly indexerAmiId?: string;
@@ -369,6 +384,12 @@ interface LaunchPayload {
   readonly tags: Ec2Tag[];
   /** The AMI; omitted means the runner AMI (`amiId`). */
   readonly imageId?: string;
+  /**
+   * The on-demand instance type; omitted means the adapter's x86 type. Set only
+   * TOGETHER with {@link imageId} by an architecture branch (MOTIR-11782), so no
+   * path can pair an arm64 image with an x86 type or the reverse.
+   */
+  readonly instanceType?: string;
   /** Omitted means `terminate`. */
   readonly shutdownBehavior?: 'terminate' | 'stop';
   /** Tag the network interface too (an index VM's attribution tags). */
@@ -389,13 +410,27 @@ const LAUNCH_PAYLOADS: Record<
   (
     spec: ContainerSpec,
     shardTag: string,
-    config: Pick<AwsOrchestratorConfig, 'indexerAmiId'>,
+    config: Pick<AwsOrchestratorConfig, 'indexerAmiId' | 'arm64AmiId' | 'arm64InstanceType'>,
   ) => LaunchPayload
 > = {
-  ci_runner: (spec, shardTag) => ({
-    userData: encodeUserData(buildRunnerUserData(spec.env)),
-    tags: tagsFor(spec, shardTag),
-  }),
+  ci_runner: (spec, shardTag, { arm64AmiId, arm64InstanceType }) => {
+    const base = {
+      userData: encodeUserData(buildRunnerUserData(spec.env)),
+      tags: tagsFor(spec, shardTag),
+    };
+    if (spec.architecture !== 'arm64') return base;
+    // ONE branch picks the arm64 image and the arm64 type together (MOTIR-11782).
+    if (!arm64AmiId) {
+      throw new OrchestratorNotConfiguredError(
+        'this aws account has no arm64 runner AMI (set MOTIR_AWS_RUNNER_ARM64_AMI_ID)',
+      );
+    }
+    return {
+      ...base,
+      imageId: arm64AmiId,
+      instanceType: arm64InstanceType ?? AWS_DEFAULT_ARM64_INSTANCE_TYPE,
+    };
+  },
   hosted_agent: (spec, shardTag) => {
     const userData = buildContainerUserData({ image: spec.image, env: spec.env });
     // The builder has refused a spec with no run id, so this is set.
@@ -824,6 +859,13 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       if (spec.size.cpus !== 2 || spec.size.memoryMb !== 8192) {
         throw new AwsInstanceSizeError(spec.size.cpus, spec.size.memoryMb);
       }
+      // Only a CI runner has an arm64 image; every other workload refuses one
+      // rather than boot it on x86 (MOTIR-11782).
+      if (spec.architecture === 'arm64' && spec.workload !== 'ci_runner') {
+        throw new OrchestratorNotConfiguredError(
+          `the aws orchestrator boots no arm64 ${spec.workload}`,
+        );
+      }
       const base = LAUNCH_PAYLOADS[spec.workload](spec, shardTag, config);
       const payload =
         config.indexInstanceProfileArn && base.instanceProfileName
@@ -834,10 +876,15 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       const shard = await shardNetwork();
       const start = rotation;
       rotation += 1;
-      const onDemand: LaunchMarket = { instanceType };
-      // Only a CI runner is ever Spot: every other workload, and a runner not
-      // asking for it, sends exactly the request it sent before Spot existed.
-      if (spec.workload !== 'ci_runner' || spec.capacity !== 'spot') {
+      const onDemand: LaunchMarket = { instanceType: payload.instanceType ?? instanceType };
+      // Only an x86 CI runner is ever Spot: every other workload, an arm64 runner
+      // (the Spot list is x86 only — MOTIR-11782) and a runner not asking for it
+      // send exactly the request they sent before Spot existed.
+      if (
+        spec.workload !== 'ci_runner' ||
+        spec.capacity !== 'spot' ||
+        spec.architecture === 'arm64'
+      ) {
         return toHandle(await zoneWalk(spec, payload, shard, start, onDemand));
       }
       const spot = await spotWalk(spec, payload, shard, start);

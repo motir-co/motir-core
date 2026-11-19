@@ -451,6 +451,60 @@ function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
 /** The env var naming the runner AMI every AWS account boots (MOTIR-9272). */
 export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
 
+/**
+ * The env var naming the ARM64 runner AMI an arm64 CI runner boots (MOTIR-11782),
+ * one value for the whole core deployment like {@link AWS_RUNNER_AMI_ENV_VAR}.
+ * Optional: unset, every x86 boot is unchanged and an arm64 intent is refused as
+ * not bootable (`arm64_runner_ami_not_pinned`).
+ */
+export const AWS_RUNNER_ARM64_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_ARM64_AMI_ID';
+
+/**
+ * THE ONE ARM64-READINESS READ (MOTIR-11782): the pinned arm64 runner AMI,
+ * trimmed, or null when unset or blank. Read straight from the environment —
+ * never through `awsShardClient`'s required values, so it is never required for
+ * an x86 boot and never filled with the acceptance lane's fake AMI.
+ */
+export function readArm64RunnerAmiId(): string | null {
+  const override = arm64RunnerAmiOverride();
+  if (override) {
+    const read = override();
+    if (read.armed) return read.amiId?.trim() || null;
+  }
+  return process.env[AWS_RUNNER_ARM64_AMI_ENV_VAR]?.trim() || null;
+}
+
+/**
+ * THE ACCEPTANCE LANE'S ARM64 AMI PIN (MOTIR-11790): a reader the fleet-org-ci
+ * mock (`lib/test-github-fleet-org-ci-mock.ts`) installs under
+ * `E2E_TEST_GITHUB_FLEET_ORG_CI=1`, so a browser spec can choose per test whether
+ * an arm64 runner AMI is pinned — a spec cannot change the server's env, and the
+ * one lane server cannot restart mid-walk. Armed, its `amiId` is the answer
+ * (trimmed; null or blank → not pinned, even with the env set); not armed, the
+ * env read above stands. Re-asked on every call, never cached.
+ *
+ * Held on `globalThis` for the same reason the EC2 override below is: the
+ * instrumentation hook and the route / server-action bundles hold separate
+ * module copies. Unset in every real deployment, and with it unset
+ * `readArm64RunnerAmiId` is the env read byte for byte.
+ */
+export type Arm64RunnerAmiOverride = () => { armed: false } | { armed: true; amiId: string | null };
+
+const ARM64_RUNNER_AMI_OVERRIDE_KEY = Symbol.for('motir.orchestrator.e2eArm64RunnerAmi');
+type Arm64RunnerAmiOverrideHolder = {
+  [ARM64_RUNNER_AMI_OVERRIDE_KEY]?: Arm64RunnerAmiOverride;
+};
+
+function arm64RunnerAmiOverride(): Arm64RunnerAmiOverride | null {
+  return (globalThis as Arm64RunnerAmiOverrideHolder)[ARM64_RUNNER_AMI_OVERRIDE_KEY] ?? null;
+}
+
+/** Install (or with `null`, remove) the lane's arm64 AMI pin reader — tests and the lane only. */
+export function setArm64RunnerAmiOverrideForTests(reader: Arm64RunnerAmiOverride | null): void {
+  if (reader) (globalThis as Arm64RunnerAmiOverrideHolder)[ARM64_RUNNER_AMI_OVERRIDE_KEY] = reader;
+  else delete (globalThis as Arm64RunnerAmiOverrideHolder)[ARM64_RUNNER_AMI_OVERRIDE_KEY];
+}
+
 /** The env var naming the Docker-host AMI an AWS index VM boots (MOTIR-9446) —
  *  the ECS-optimized Amazon Linux 2023 AMI. Optional: unset, the account still
  *  boots runners and refuses an index spec as not configured. */
@@ -594,6 +648,7 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     region,
     shardTag: shard.name,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
+    arm64AmiId: readArm64RunnerAmiId() ?? undefined,
     indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
     spotInstanceTypes: async () => (await ciSpotSettingReader.read()).instanceTypes,
   });
@@ -796,6 +851,7 @@ export function installFleetOrchestrator(): ContainerOrchestrator {
     region: config.region,
     shardTag: INSTALL_FLEET_TAG,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
+    arm64AmiId: readArm64RunnerAmiId() ?? undefined,
     indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
     network: { subnetIds: config.subnetIds, securityGroupId: config.securityGroupId },
     // The VM profile grants only the indexer's ECR pull: an index VM takes it,

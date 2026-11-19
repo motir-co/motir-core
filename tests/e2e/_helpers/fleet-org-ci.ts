@@ -122,7 +122,9 @@ export function withoutVariablesWrite(org: FleetOrgCiOrgControl): FleetOrgCiOrgC
   return { ...org, permissions };
 }
 
-/** Write the control the seam reads on every request. */
+/** Write the control the seam reads on every request. Besides the orgs, the control's
+ *  `arm64RunnerAmiId` arms the server's arm64 runner AMI pin (MOTIR-11790): an id →
+ *  pinned, `null` → not pinned, absent → the server's env. */
 export function armFleetControl(control: FleetOrgCiControl): void {
   if (!CONTROL) throw new Error('E2E_GITHUB_FLEET_ORG_CI_CONTROL is not set on the runner.');
   writeFileSync(CONTROL, JSON.stringify(control));

@@ -95,6 +95,28 @@ describe('setFleetOrgCiAction', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/admin/fleet-settings');
   });
 
+  it('changed — an ON the arm64 pool is not ready for still answers changed (MOTIR-11786)', async () => {
+    // The service skips the MOTIR_RUNNER_ARM64 write and succeeds; it never
+    // raises NOT_READY for arm64, so the action carries the plain success.
+    setEnabled.mockResolvedValueOnce({ outcome: 'changed', state: stored(true) });
+    const result = await setFleetOrgCiAction(PROJECT, ORG, true, 'Moving CI');
+    expect(result).toEqual({ ok: true, outcome: 'changed' });
+    expect(revalidatePath).toHaveBeenCalledWith('/admin/fleet-settings');
+  });
+
+  it('GITHUB_WRITE_FAILED — an arm64 refusal reaches the page as the same code', async () => {
+    setEnabled.mockRejectedValueOnce(
+      new FleetOrgCiGithubWriteError(ORG, 403, 'set', 'MOTIR_RUNNER_ARM64'),
+    );
+    expect(await setFleetOrgCiAction(PROJECT, ORG, true, 'x')).toEqual({
+      ok: false,
+      code: 'GITHUB_WRITE_FAILED',
+      org: ORG,
+      status: 403,
+      operation: 'set',
+    });
+  });
+
   it('unchanged — information, carrying the state the pair already holds', async () => {
     setEnabled.mockResolvedValueOnce({ outcome: 'unchanged', state: stored(false) });
     expect(await setFleetOrgCiAction(PROJECT, ORG, false, 'x')).toEqual({

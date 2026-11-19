@@ -9,7 +9,7 @@ import {
   type FlyMachine,
   type FlyMachinesClient,
 } from './flyMachines';
-import { OrchestratorApiError } from '../../errors';
+import { OrchestratorApiError, OrchestratorNotConfiguredError } from '../../errors';
 import { buildContainerUsage } from '../../usage';
 import { sparedByCaller } from '../../reap';
 import type { FleetWorkloadKind } from '../../types';
@@ -318,6 +318,11 @@ function orchestratorOver(
      * is a normal `provision_failed` teardown rather than a leak.
      */
     async provision(spec: ContainerSpec): Promise<ContainerHandle> {
+      // Fly boots one machine class, x86 (MOTIR-11782): an arm64 spec is refused
+      // before any API call rather than booted as x86.
+      if (spec.architecture === 'arm64') {
+        throw new OrchestratorNotConfiguredError('the fly orchestrator boots no arm64 machine');
+      }
       const region = spec.region || defaultRegion();
       // The Docker volume FIRST, in the machine's region: Fly places a machine on
       // the host that holds the volume it mounts (MOTIR-8839).

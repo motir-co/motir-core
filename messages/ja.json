@@ -14084,13 +14084,20 @@
         "auditLink": "監査ログ",
         "variable": "GitHub 変数",
         "repositories": "リポジトリ",
-        "codeScanning": "CodeQL の既定のセットアップ"
+        "codeScanning": "CodeQL の既定のセットアップ",
+        "arm64Variable": "arm64 の GitHub 変数"
       },
       "variable": {
         "present": "{org} の {name} = {value}（プライベートリポジトリ）— 新しいジョブはフリートを要求します。",
         "absent": "{org} に {name} は設定されていません — ジョブは GitHub ホストのランナーにフォールバックします。",
         "unknown": "{org} の {name} を読み取れませんでした — GitHub は HTTP {status} を返しました。",
-        "unreachable": "{org} の {name} を読み取れませんでした — GitHub に接続できませんでした。"
+        "unreachable": "{org} の {name} を読み取れませんでした — GitHub に接続できませんでした。",
+        "arm64": {
+          "present": "{org} の {name} = {value} — 新しい arm64 ジョブは Motir の arm64 フリートを要求します。",
+          "absent": "{org} に {name} は設定されていません — arm64 ジョブは GitHub の arm ランナーで実行されます。",
+          "unknown": "{org} の {name} を読み取れませんでした — GitHub が HTTP {status} を返しました。",
+          "unreachable": "{org} の {name} を読み取れませんでした — GitHub に接続できませんでした。"
+        }
       },
       "drift": {
         "onAbsent": {
@@ -14100,6 +14107,14 @@
         "offPresent": {
           "title": "オフとして保存されていますが、GitHub と一致しません。",
           "body": "{org} に {name} がまだ設定されているため、新しいジョブは引き続きフリートを要求します。設定をオンにしてから再びオフにすると削除されます。"
+        },
+        "arm64OnAbsent": {
+          "title": "オンとして保存されていますが、GitHub に arm64 変数がありません。",
+          "body": "arm64 プールは準備完了ですが {org} に {name} が設定されていないため、arm64 ジョブは引き続き GitHub の arm ランナーで実行されます。設定をオフにしてから再度オンにすると書き込まれます。"
+        },
+        "arm64OffPresent": {
+          "title": "オフとして保存されていますが、arm64 変数がまだ設定されています。",
+          "body": "{org} に {name} がまだ設定されているため、新しい arm64 ジョブは引き続き Motir の arm64 フリートを要求します。設定をオンにしてから再度オフにすると削除されます。"
         }
       },
       "repositories": {
@@ -14208,7 +14223,12 @@
         "reasonHintEmpty": "理由を入力するまでボタンは無効のままです — サーバーが適用するのと同じルールです。",
         "cancel": "キャンセル",
         "confirmOn": "オンにする",
-        "confirmOff": "オフにする"
+        "confirmOff": "オフにする",
+        "arm64": {
+          "onReady": "arm64: arm64 プールは準備完了のため、{org} に {name} と {arm64Name} の両方を書き込みます。",
+          "onNotReady": "arm64: arm64 ランナー AMI が固定されていないため、{name} のみを書き込みます。arm64 ジョブは GitHub の arm ランナーに残ります。",
+          "off": "arm64: {org} から {name} と {arm64Name} の両方を削除します。"
+        }
       },
       "refused": {
         "reasonMissing": "{direction}にしませんでした: 理由は必須で、この変更とともに監査ログに記録されます。何も変更されていません。",
@@ -14303,6 +14323,14 @@
           "title": "エージェントのホスティングを読み込めませんでした",
           "body": "新しいエージェントの作成先を読み取れなかったため、状態は表示されず、スイッチも提供されません。これは読み取りエラーです — 何も変更されておらず、値も推測していません。",
           "retry": "再試行"
+        }
+      },
+      "arm64Readiness": {
+        "readyLabel": "arm64 プール準備完了",
+        "notReadyLabel": "arm64 プール未準備",
+        "ready": "arm64 ランナー AMI が固定されているため、設定をオンにすると {name} が書き込まれます。",
+        "reasons": {
+          "arm64_runner_ami_not_pinned": "arm64 ランナー AMI が固定されていないため、arm64 ジョブは引き続き GitHub の arm ランナーで実行されます。"
         }
       }
     },

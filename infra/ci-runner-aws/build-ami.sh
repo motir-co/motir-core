@@ -26,7 +26,8 @@
 #
 # On `build` it prints the AMI id and the command that sets it as
 # MOTIR_AWS_RUNNER_AMI_ID on motir-core — the AWS counterpart of
-# MOTIR_RUNNER_IMAGE — to stdout and to the job summary.
+# MOTIR_RUNNER_IMAGE — to stdout and to the job summary, and the same for the
+# arm64 Graviton AMI as MOTIR_AWS_RUNNER_ARM64_AMI_ID (MOTIR-11783).
 
 set -euo pipefail
 
@@ -81,6 +82,10 @@ packer_vars() {
     -var "awscli_version=$(pin AWSCLI_VERSION)"
     -var "awscli_sha256=$(pin AWSCLI_SHA256)"
     -var "playwright_version=$(pin PLAYWRIGHT_VERSION)"
+    -var "runner_arm64_sha256=$(pin RUNNER_ARM64_SHA256)"
+    -var "node_arm64_sha256=$(pin NODE_ARM64_SHA256)"
+    -var "docker_arm64_sha256=$(pin DOCKER_ARM64_SHA256)"
+    -var "awscli_arm64_sha256=$(pin AWSCLI_ARM64_SHA256)"
     -var "git_sha=${sha}"
     -var "version=$(release_version "${sha}")"
     -var "org_arns=${org_arns}"
@@ -94,10 +99,21 @@ summary() {
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$*" >>"${GITHUB_STEP_SUMMARY}"; fi
 }
 
+# The AMI id of one named build in the manifest. Read by NAME, never by
+# position: the template makes two AMIs (`runner` x86_64, `runner-arm64`
+# Graviton) and Packer appends them in the order they finish.
+ami_id_of() {
+  local manifest="$1" build="$2" id
+  id="$(jq -r --arg name "${build}" \
+    '[.builds[] | select(.name == $name)] | last | .artifact_id // ""' "${manifest}" | cut -d: -f2)"
+  [[ "${id}" =~ ^ami-[0-9a-f]+$ ]] || die "no AMI id for build ${build} in ${manifest}"
+  printf '%s' "${id}"
+}
+
 publish_result() {
-  local manifest="$1" ami_id
-  ami_id="$(jq -r '.builds[-1].artifact_id' "${manifest}" | cut -d: -f2)"
-  [[ "${ami_id}" =~ ^ami-[0-9a-f]+$ ]] || die "no AMI id in ${manifest}"
+  local manifest="$1" ami_id arm64_ami_id
+  ami_id="$(ami_id_of "${manifest}" runner)"
+  arm64_ami_id="$(ami_id_of "${manifest}" runner-arm64)"
   summary "## AWS CI runner AMI"
   summary ""
   summary "- AMI: \`${ami_id}\` (us-east-1)"
@@ -108,6 +124,17 @@ publish_result() {
   summary ""
   summary '```sh'
   summary "fly secrets set -a motir-core MOTIR_AWS_RUNNER_AMI_ID=${ami_id}"
+  summary '```'
+  summary ""
+  summary "## AWS CI runner AMI — arm64 (Graviton)"
+  summary ""
+  summary "- AMI: \`${arm64_ami_id}\` (us-east-1, arm64)"
+  summary "- Runner: $(pin RUNNER_VERSION) · commit \`$(git_sha)\`"
+  summary ""
+  summary "Set it on motir-core (the adapter reads \`MOTIR_AWS_RUNNER_ARM64_AMI_ID\`; without it, arm64 jobs are refused, never launched on x86_64):"
+  summary ""
+  summary '```sh'
+  summary "fly secrets set -a motir-core MOTIR_AWS_RUNNER_ARM64_AMI_ID=${arm64_ami_id}"
   summary '```'
 }
 

@@ -1,9 +1,15 @@
 import 'server-only';
 
-import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
+import {
+  MOTIR_ARM64_RUNNER_LABEL,
+  MOTIR_RUNNER_ARM64_VARIABLE,
+  MOTIR_RUNNER_LABEL,
+  MOTIR_RUNNER_VARIABLE,
+} from '@/lib/ciFleet/config';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import type {
+  FleetOrgCiArm64DTO,
   FleetOrgCiCodeScanningDTO,
   FleetOrgCiFlipDTO,
   FleetOrgCiStateDTO,
@@ -31,6 +37,7 @@ import {
 } from '@/lib/github/repoProvisioning';
 import { RepoVisibilityApiError, repoVisibilityClient } from '@/lib/github/repoVisibility';
 import { toFleetOrgCiStoredStateDTO } from '@/lib/mappers/fleetOrgCiSettingMappers';
+import { readArm64RunnerAmiId } from '@/lib/orchestrator';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { withPlatformWrite, type PlatformAuditEntry } from '@/lib/platform/context';
 import {
@@ -114,6 +121,23 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
  * `pending_fleet`), and the boot that next registers a runner for it makes the
  * move (`fleetCodeScanningCatchUpService`). Nothing is stored for it: pending is
  * read as "the pair is ON and the repository is still on another runner".
+ *
+ * ---------------------------------------------------------------------------
+ * THE ARM64 VARIABLE RIDES THE SAME FLIP (Story MOTIR-11779 · MOTIR-11786)
+ * ---------------------------------------------------------------------------
+ * One switch per pair moves TWO variables. ON writes `MOTIR_RUNNER` exactly as
+ * before and, right after it in the same transaction, `MOTIR_RUNNER_ARM64` =
+ * `MOTIR_ARM64_RUNNER_LABEL` — but only when the arm64 pool is READY (an arm64
+ * runner AMI is pinned, `readArm64RunnerAmiId()`). Not ready skips that write
+ * and the flip still succeeds: arm64 readiness is never one of
+ * `fleetReadinessService`'s conditions, so a missing pin can never turn ON into
+ * `FleetOrgCiNotReadyError` — arm64 jobs simply keep their GitHub fallback.
+ * OFF deletes both and never reads arm64 readiness (a never-written arm64
+ * variable deletes as `absent`). A GitHub refusal on the arm64 write refuses the
+ * whole flip, and the compensation puts BOTH variables back to what was read
+ * before the transaction. Readiness is read at flip time, never stored: a pin
+ * set after the pair is ON reaches GitHub on the next ON flip or establishment,
+ * and until then the console shows the arm64 variable absent beside a ready pool.
  *
  * ⚠️ BOOT IS NOT GATED HERE. A job that requests `motir-runner` still boots
  * whatever the switch says (`lib/ciFleet/config.ts`, "AND NOT BY TENANT FLAG");
@@ -240,17 +264,24 @@ async function storedState(target: FleetOrgCiTargetDTO): Promise<FleetOrgCiStore
  *  setup. What cannot be put back is logged with the pair — never the token. */
 async function compensate(
   target: FleetOrgCiTargetDTO,
-  previous: OrgVariable | null,
+  previous: PreviousVariables,
   moved: DefaultSetupMove[],
   context: Record<string, unknown>,
 ): Promise<void> {
-  try {
-    await restoreVariable(previous, orgTargetFor(target));
-  } catch (restoreErr) {
-    console.error(
-      `${LOG} GitHub and the stored state now disagree: the flip's commit failed and the variable could not be restored`,
-      { ...context, restoreStatus: statusOf(restoreErr) },
-    );
+  const restores: Array<{ name: string; value: OrgVariable | null }> = [
+    { name: MOTIR_RUNNER_VARIABLE, value: previous.x86 },
+  ];
+  if (previous.arm64Touched)
+    restores.push({ name: MOTIR_RUNNER_ARM64_VARIABLE, value: previous.arm64 });
+  for (const { name, value } of restores) {
+    try {
+      await restoreVariable(name, value, orgTargetFor(target));
+    } catch (restoreErr) {
+      console.error(
+        `${LOG} GitHub and the stored state now disagree: the flip's commit failed and the variable could not be restored`,
+        { ...context, variable: name, restoreStatus: statusOf(restoreErr) },
+      );
+    }
   }
   const unrestored = await restoreDefaultSetups(target, moved);
   if (unrestored.length > 0) {
@@ -261,15 +292,48 @@ async function compensate(
   }
 }
 
-/** Put the variable back to what it was before a flip whose commit failed. */
+/** The variables as a flip read them before its transaction, kept for
+ *  compensation. `arm64Touched` = the flip attempted the arm64 write or delete,
+ *  so that variable is put back too; a skipped arm64 write is left alone. */
+interface PreviousVariables {
+  x86: OrgVariable | null;
+  arm64: OrgVariable | null;
+  arm64Touched: boolean;
+}
+
+/** Put one variable back to what it was before a flip whose commit failed. */
 async function restoreVariable(
+  name: string,
   previous: OrgVariable | null,
   target: GithubOrgTarget,
 ): Promise<void> {
   if (previous) {
-    await actionsVariableClient.ensureOrgVariable(MOTIR_RUNNER_VARIABLE, previous.value, target);
+    await actionsVariableClient.ensureOrgVariable(name, previous.value, target);
   } else {
-    await actionsVariableClient.deleteOrgVariable(MOTIR_RUNNER_VARIABLE, target);
+    await actionsVariableClient.deleteOrgVariable(name, target);
+  }
+}
+
+/** The arm64 pool's readiness — the one arm64-readiness read, at call time. */
+function arm64Readiness(): Pick<FleetOrgCiArm64DTO, 'ready' | 'reason'> {
+  return readArm64RunnerAmiId() !== null
+    ? { ready: true, reason: null }
+    : { ready: false, reason: 'arm64_runner_ami_not_pinned' };
+}
+
+/** One org variable read back for the console; a failed read is `unknown`. */
+async function readVariableState(
+  name: string,
+  target: FleetOrgCiTargetDTO,
+): Promise<FleetOrgCiVariableDTO> {
+  try {
+    const read = await actionsVariableClient.getOrgVariable(name, orgTargetFor(target));
+    return read
+      ? { state: 'present', value: read.value, visibility: read.visibility }
+      : { state: 'absent' };
+  } catch (err) {
+    if (!isGithubFailure(err)) throw err;
+    return { state: 'unknown', status: statusOf(err) };
   }
 }
 
@@ -297,8 +361,9 @@ export const FLIP_TRANSACTION_BASE_MS = 10_000;
  *  default-setup write well inside a second; this leaves room for a slow one. */
 export const FLIP_GITHUB_REQUEST_BUDGET_MS = 5_000;
 /** `ensureOrgVariable` reads, then creates or patches, and a lost create race
- *  patches again: three requests at most. `deleteOrgVariable` is one. */
-const VARIABLE_WRITE_REQUESTS = 3;
+ *  patches again: three requests at most. `deleteOrgVariable` is one. A flip
+ *  writes two variables, `MOTIR_RUNNER` and `MOTIR_RUNNER_ARM64` (MOTIR-11786). */
+const VARIABLE_WRITE_REQUESTS = 3 * 2;
 
 /** The flip transaction's deadline: its fixed work plus every GitHub request it
  *  makes while it holds the locks — the variable write and one PATCH per move. */
@@ -517,24 +582,16 @@ export const fleetOrgCiSettingService = {
         org: target.org,
       }),
     ]);
-    let variable: FleetOrgCiVariableDTO;
-    try {
-      const read = await actionsVariableClient.getOrgVariable(
-        MOTIR_RUNNER_VARIABLE,
-        orgTargetFor(target),
-      );
-      variable = read
-        ? { state: 'present', value: read.value, visibility: read.visibility }
-        : { state: 'absent' };
-    } catch (err) {
-      if (!isGithubFailure(err)) throw err;
-      variable = { state: 'unknown', status: statusOf(err) };
-    }
+    const variable = await readVariableState(MOTIR_RUNNER_VARIABLE, target);
+    const arm64: FleetOrgCiArm64DTO = {
+      ...arm64Readiness(),
+      variable: await readVariableState(MOTIR_RUNNER_ARM64_VARIABLE, target),
+    };
     const repos = await privateReposOf(target);
     const codeScanning = await Promise.all(
       repos.map((repo) => codeScanningStateOf(target, repo, stored.enabled)),
     );
-    return { ...stored, readiness, variable, codeScanning };
+    return { ...stored, readiness, variable, arm64, codeScanning };
   },
 
   /**
@@ -545,12 +602,13 @@ export const fleetOrgCiSettingService = {
    *   3. The REASON, before any transaction.
    *   4. The stored state: already as asked ⇒ `unchanged`, nothing written.
    *   5. ON only: the readiness verdict. OFF never reads it.
-   *   6. The variable and each private repository's CodeQL default setup as
-   *      they are, kept for compensation.
-   *   7. The audited transaction: lock, re-read, the variable write, the
+   *   6. Both variables and each private repository's CodeQL default setup as
+   *      they are, kept for compensation; ON only: the arm64 pool's readiness.
+   *   7. The audited transaction: lock, re-read, the `MOTIR_RUNNER` write, the
+   *      `MOTIR_RUNNER_ARM64` write (ON and ready) or delete (OFF), the
    *      default-setup moves, upsert, audit row — under a deadline sized to the
    *      GitHub writes it makes ({@link flipTransactionTimeoutMs}).
-   *   8. A failure after GitHub wrote ⇒ restore the variable and every default
+   *   8. A failure after GitHub wrote ⇒ restore both variables and every default
    *      setup read in step 6.
    *
    * @throws NotPlatformStaffError below `superadmin`.
@@ -607,13 +665,19 @@ export const fleetOrgCiSettingService = {
     }
 
     const ghTarget = orgTargetFor(target);
-    let previous: OrgVariable | null;
+    const previous: PreviousVariables = { x86: null, arm64: null, arm64Touched: false };
     try {
-      previous = await actionsVariableClient.getOrgVariable(MOTIR_RUNNER_VARIABLE, ghTarget);
+      previous.x86 = await actionsVariableClient.getOrgVariable(MOTIR_RUNNER_VARIABLE, ghTarget);
+      previous.arm64 = await actionsVariableClient.getOrgVariable(
+        MOTIR_RUNNER_ARM64_VARIABLE,
+        ghTarget,
+      );
     } catch (err) {
       if (!isGithubFailure(err)) throw err;
       throw new FleetOrgCiGithubWriteError(org, statusOf(err), 'read');
     }
+    // ON only, read once before the transaction: OFF deletes both whatever the pin.
+    const writeArm64 = !enabled || arm64Readiness().ready;
     const moves = plannedDefaultSetupMoves(
       await readDefaultSetups(target, await privateReposOf(target), enabled),
       enabled,
@@ -648,6 +712,31 @@ export const fleetOrgCiSettingService = {
             throw new FleetOrgCiGithubWriteError(org, statusOf(err), operation);
           }
           applied = true;
+
+          let arm64VariableOutcome: string = 'skipped_not_ready';
+          if (writeArm64) {
+            previous.arm64Touched = true;
+            try {
+              arm64VariableOutcome = enabled
+                ? await actionsVariableClient.ensureOrgVariable(
+                    MOTIR_RUNNER_ARM64_VARIABLE,
+                    MOTIR_ARM64_RUNNER_LABEL,
+                    ghTarget,
+                  )
+                : await actionsVariableClient.deleteOrgVariable(
+                    MOTIR_RUNNER_ARM64_VARIABLE,
+                    ghTarget,
+                  );
+            } catch (err) {
+              if (!isGithubFailure(err)) throw err;
+              throw new FleetOrgCiGithubWriteError(
+                org,
+                statusOf(err),
+                operation,
+                MOTIR_RUNNER_ARM64_VARIABLE,
+              );
+            }
+          }
           deferred.length = 0;
           await applyDefaultSetupMoves(target, moves, moved, deferred, enabled);
 
@@ -670,6 +759,7 @@ export const fleetOrgCiSettingService = {
               from: !enabled,
               to: enabled,
               variableOutcome,
+              arm64VariableOutcome,
               codeScanningMoved: moved.map((m) => m.repo.name),
               codeScanningDeferred: deferred.map((m) => m.repo.name),
             },
