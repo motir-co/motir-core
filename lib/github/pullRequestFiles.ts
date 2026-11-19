@@ -2,7 +2,13 @@
 // backoff budget below (it runs inside a post-commit side effect, not an operator
 // sweep). `retryDelayMs` moved to the shared leaf when a third reader needed it
 // (MOTIR-3034); the import target changed, the behaviour did not.
-import { retryDelayMs } from '@/lib/github/restRetry';
+import {
+  noteGithubRequest,
+  observeGithubThrottle,
+  retryDelayMs,
+  type GithubCallSite,
+  type GithubCallerContext,
+} from '@/lib/github/restRetry';
 
 // Pull-request FILES read leaf (MOTIR-2922) — walk one pull request's changed
 // paths off `GET /repos/{owner}/{name}/pulls/{number}/files` with an installation
@@ -158,6 +164,7 @@ async function fetchPage(
   name: string,
   number: number,
   page: number,
+  site: GithubCallSite,
 ): Promise<unknown[]> {
   const repoRef = `${owner}/${name}`;
   const url =
@@ -166,6 +173,7 @@ async function fetchPage(
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     let res: Response;
+    noteGithubRequest(site);
     try {
       res = await fetch(url, {
         headers: {
@@ -204,6 +212,7 @@ async function fetchPage(
     // three signals — so this imports that decision rather than restating it; two
     // copies would drift on the next GitHub change and only one of them would be
     // fixed.
+    observeGithubThrottle(site, res.status, res.headers, attempt);
     const delay = retryDelayMs(res.status, res.headers, attempt, Date.now());
     if (delay === null || attempt === MAX_ATTEMPTS)
       throw new PullRequestFilesReadError(
@@ -240,14 +249,16 @@ export async function listPullRequestFiles(
   owner: string,
   name: string,
   number: number,
+  context: GithubCallerContext,
 ): Promise<PullRequestFiles> {
+  const site = { ...context, repository: `${owner}/${name}` };
   const paths: string[] = [];
   const files: PullRequestFile[] = [];
   let headSha: string | null = null;
   const result = (truncated: boolean): PullRequestFiles => ({ paths, truncated, files, headSha });
 
   for (let page = 1; page <= MAX_PULL_REQUEST_FILE_PAGES; page += 1) {
-    const rows = await fetchPage(token, owner, name, number, page);
+    const rows = await fetchPage(token, owner, name, number, page, site);
     for (const row of rows) {
       const filename = readFilename(row);
       if (!filename) continue;

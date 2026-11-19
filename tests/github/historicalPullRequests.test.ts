@@ -10,6 +10,9 @@ import {
 // rule is pinned for every GitHub read leaf.
 import { retryDelayMs } from '@/lib/github/restRetry';
 
+/** Who the read names itself as (MOTIR-11842); its throttle lines carry it. */
+const SITE = { caller: 'historicalPullRequestBackfill', installationId: '144235820' } as const;
+
 // The historical-PR READ leaf (MOTIR-1965) — the wire contract behind the
 // mirror backfill: WHICH endpoint is walked, which rows survive normalization,
 // and what each throttling signal means. `fetch` is stubbed (the convention the
@@ -183,7 +186,7 @@ describe('listMergedPullRequests', () => {
   it('walks CLOSED pull requests in stable creation order, 100 per page', async () => {
     fetchMock.mockImplementation(async () => jsonPage([ghPull(1)]));
 
-    await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID));
+    await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE));
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(
@@ -198,7 +201,7 @@ describe('listMergedPullRequests', () => {
       jsonPage([ghPull(1), ghPull(2, { mergedAt: null }), ghPull(3)]),
     );
 
-    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID));
+    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE));
 
     expect(pages).toHaveLength(1);
     expect(pages[0]!.scanned).toBe(3);
@@ -211,7 +214,7 @@ describe('listMergedPullRequests', () => {
       .mockImplementationOnce(async () => jsonPage(full))
       .mockImplementationOnce(async () => jsonPage([ghPull(101)]));
 
-    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID));
+    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(pages.map((p) => p.page)).toEqual([1, 2]);
@@ -220,7 +223,7 @@ describe('listMergedPullRequests', () => {
 
   it('stops on an EMPTY page without asking for another', async () => {
     fetchMock.mockImplementationOnce(async () => jsonPage([]));
-    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID));
+    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE));
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(pages[0]!.scanned).toBe(0);
   });
@@ -236,7 +239,7 @@ describe('listMergedPullRequests', () => {
       )
       .mockImplementationOnce(async () => jsonPage([ghPull(9)]));
 
-    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID));
+    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(pages[0]!.merged.map((p) => p.changeRequest.number)).toEqual([9]);
@@ -245,10 +248,12 @@ describe('listMergedPullRequests', () => {
   it('throws a typed, repo-named error on a non-retryable status', async () => {
     fetchMock.mockImplementation(async () => new Response('{}', { status: 404 }));
 
-    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID))).rejects.toThrow(
+    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE))).rejects.toThrow(
       HistoricalPullRequestReadError,
     );
-    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID))).rejects.toMatchObject({
+    await expect(
+      drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE)),
+    ).rejects.toMatchObject({
       repoRef: `${OWNER}/${NAME}`,
       status: 404,
     });
@@ -259,7 +264,7 @@ describe('listMergedPullRequests', () => {
       async () => new Response('{}', { status: 429, headers: { 'retry-after': '1' } }),
     );
 
-    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID))).rejects.toThrow(
+    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE))).rejects.toThrow(
       /still throttled after the retry budget/,
     );
   });
@@ -269,7 +274,9 @@ describe('listMergedPullRequests', () => {
       throw new Error('ECONNRESET');
     });
 
-    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID))).rejects.toMatchObject({
+    await expect(
+      drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE)),
+    ).rejects.toMatchObject({
       repoRef: `${OWNER}/${NAME}`,
       status: null,
     });
@@ -280,7 +287,7 @@ describe('listMergedPullRequests', () => {
     fetchMock.mockImplementation(async () =>
       jsonPage({ message: 'Not Found' } as unknown as unknown[]),
     );
-    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID))).rejects.toThrow(
+    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE))).rejects.toThrow(
       /expected a JSON array/,
     );
   });
@@ -294,7 +301,7 @@ describe('listMergedPullRequests', () => {
     fetchMock.mockImplementation(
       async () => new Response('<html>502 Bad Gateway</html>', { status: 200 }),
     );
-    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID))).rejects.toThrow(
+    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE))).rejects.toThrow(
       /expected a JSON array/,
     );
   });
@@ -303,7 +310,7 @@ describe('listMergedPullRequests', () => {
     const full = Array.from({ length: 100 }, (_, i) => ghPull(i + 1));
     fetchMock.mockImplementation(async () => jsonPage(full));
 
-    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID));
+    const pages = await drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID, SITE));
 
     expect(pages).toHaveLength(MAX_PULL_REQUEST_PAGES);
     expect(pages.at(-1)!.truncated).toBe(true);

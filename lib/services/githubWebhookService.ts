@@ -1662,7 +1662,10 @@ export async function capturePullRequestFiles(
       const { token } = await getGitProvider(PROVIDER).mintInstallationToken(installationId, {
         owner: repo.owner,
       });
-      files = await listPullRequestFiles(token, repo.owner, repo.name, cr.number);
+      files = await listPullRequestFiles(token, repo.owner, repo.name, cr.number, {
+        caller: 'webhook.changedPaths',
+        installationId,
+      });
     } catch (err) {
       console.error(
         `[githubWebhookService] changed-path capture failed for ${repo.owner}/${repo.name}` +
