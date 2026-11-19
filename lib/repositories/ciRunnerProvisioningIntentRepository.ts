@@ -4,6 +4,7 @@ import {
   type FleetShardMoveReason,
   type Prisma,
 } from '@/generated/prisma/client';
+import { requestsOnDemandRunner } from '@/lib/ciFleet/config';
 
 // Data access for the runner-fleet provisioning INTENTS (Story MOTIR-1916 ·
 // MOTIR-1920). Single-op methods only (CLAUDE.md 4-layer); every write requires
@@ -215,14 +216,28 @@ export const ciRunnerProvisioningIntentRepository = {
    * visible as an idle runner there: `pending` (awaiting admission or dispatch)
    * and `provisioning` (booting). Owner compared case-insensitively, as GitHub
    * logins are (MOTIR-8976).
+   *
+   * Split by whether the intent's job asked for the on-demand label
+   * (MOTIR-11727): such an intent boots a runner carrying that label, which can
+   * serve either kind of job, while any other intent's runner cannot serve a job
+   * that asked for it. The split is read off the stored `requestedLabels` with
+   * {@link requestsOnDemandRunner} — the same exact, case-insensitive comparison
+   * the boot makes — rather than an array filter in SQL, which would compare
+   * case-sensitively and could disagree with what the boot registers.
    */
-  async countAwaitingRunnerForOwner(owner: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.ciRunnerProvisioningIntent.count({
+  async countAwaitingRunnerForOwner(
+    owner: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ onDemand: number; other: number }> {
+    const rows = await tx.ciRunnerProvisioningIntent.findMany({
       where: {
         repoOwner: { equals: owner, mode: 'insensitive' },
         status: { in: [CI_RUNNER_INTENT_PENDING, CI_RUNNER_INTENT_PROVISIONING] },
       },
+      select: { requestedLabels: true },
     });
+    const onDemand = rows.filter((row) => requestsOnDemandRunner(row.requestedLabels)).length;
+    return { onDemand, other: rows.length - onDemand };
   },
 
   /**
