@@ -168,6 +168,12 @@ describe('with "Complete children when a parent is done" ON', () => {
 
     expect(await deliveredNumbers(parent.id)).toEqual([80, 81]);
     expect(await deliveredNumbers(child!.id)).toEqual([81]);
+    // Only the row the link door wrote on the parent is marked inherited.
+    const rows = await adminDb.workItemDelivery.findMany({
+      select: { workItemId: true, inherited: true, githubPullRequestId: true },
+    });
+    const inheritedOn = rows.filter((r) => r.inherited).map((r) => r.workItemId);
+    expect(inheritedOn).toEqual([parent.id]);
   });
 
   it('writes it when the parent has none, so one question on the story covers every child', async () => {
@@ -480,29 +486,68 @@ describe('a child pull request merged on its own, outside the story’s approval
     expect(await statusOf(parent.id)).toBe('done');
   });
 
-  // Review of core#4359: the parent-run shape (MOTIR-11624) links a built child BESIDE its
-  // story to the story's OWN pull request. That merge is the story's, not an inherited one,
-  // so an unbuilt sibling (a manual child a parent run stops at) must not hold it — with the
-  // cascade switch on or off, exactly as on main.
+  // A parent run's story-branch pull request, a built child linked beside the story and a
+  // sibling still unbuilt (MOTIR-11624's shape): the story carries the pull request in its
+  // OWN right, so its merge completes it exactly as on main — with the switch on or off.
   for (const cascade of [true, false]) {
-    it(`completes the story on its OWN pull request's merge when a built child rides it and a sibling is unbuilt (cascade ${cascade ? 'on' : 'off'})`, async () => {
-      const s = await makeScenario(`11835-own-ridden-${cascade}@example.com`, { cascade });
+    it(`completes a story on its own pull request that a built child shares (switch ${cascade ? 'on' : 'off'})`, async () => {
+      const s = await makeScenario(`11835-shared-${cascade}@example.com`, { cascade });
       const {
         parent,
         kids: [a, b],
       } = await story(s, 2);
-      const number = cascade ? 100 : 101;
-      const ref = `story/${parent.identifier}`;
-      await link(parent.identifier, number, ref);
-      await opened(number, ref);
-      await link(a!.identifier, number, ref);
+      const ref = `parent/${parent.identifier}`;
+      await link(parent.identifier, 70, ref);
+      await link(a!.identifier, 70, ref);
+      await opened(70, ref);
       await workItemsService.updateStatus(a!.id, 'implemented', s.ctx);
-      expect(await statusOf(b!.id)).toBe('in_progress');
 
-      await merged(number, ref);
+      await merged(70, ref);
 
-      expect(await statusOf(parent.id)).toBe('done');
-      expect(await statusOf(a!.id)).toBe('done');
+      expect([await statusOf(parent.id), await statusOf(a!.id), await statusOf(b!.id)]).toEqual([
+        'done',
+        'done',
+        'in_progress',
+      ]);
     });
   }
+
+  it('an explicit link on the story clears the inheritance, so its merge completes it', async () => {
+    const s = await makeScenario('11835-explicit-after@example.com');
+    const {
+      parent,
+      kids: [a],
+    } = await story(s, 2);
+    const ref = `subtask/${a!.identifier}`;
+    // The child is linked first, so the story inherits the pull request…
+    await link(a!.identifier, 71, ref);
+    // …and then someone links the story to it explicitly.
+    await link(parent.identifier, 71, ref);
+    await opened(71, ref);
+    await workItemsService.updateStatus(a!.id, 'implemented', s.ctx);
+
+    await merged(71, ref);
+
+    expect(await statusOf(parent.id)).toBe('done');
+  });
+
+  it('holds nothing once the switch is turned off, though the story inherited the pull request', async () => {
+    const s = await makeScenario('11835-switched-off@example.com');
+    const {
+      parent,
+      kids: [a],
+    } = await story(s, 2);
+    const ref = `subtask/${a!.identifier}`;
+    await link(a!.identifier, 72, ref);
+    await opened(72, ref);
+    await workItemsService.updateStatus(a!.id, 'implemented', s.ctx);
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { autoCompleteChildrenOnParentDone: false },
+    });
+
+    await merged(72, ref);
+
+    expect(await statusOf(parent.id)).toBe('done');
+  });
 });

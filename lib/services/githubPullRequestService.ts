@@ -973,6 +973,9 @@ async function inheritDeliveryToAncestors(
           workItemId: parent.id,
           githubPullRequestId: delivery.githubPullRequestId,
           repoId: delivery.repoId,
+          // Marked, so the merge sync can tell it from a pull request the parent
+          // carries in its own right (`changeRequestStatusSync`).
+          inherited: true,
         },
         tx,
       );

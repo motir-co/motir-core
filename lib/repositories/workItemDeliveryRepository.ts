@@ -525,6 +525,10 @@ export const workItemDeliveryRepository = {
    *
    * `repoId` is stored rather than derived so the completion gate can compare each
    * member against its own repository's default branch without a join per member.
+   *
+   * `inherited` marks a row the link door writes on an ANCESTOR because a descendant
+   * was linked (MOTIR-11835). An explicit link always wins: it clears the mark on a row
+   * that was inherited, and an inherited write never touches a row that exists.
    */
   async add(
     data: {
@@ -532,9 +536,11 @@ export const workItemDeliveryRepository = {
       workItemId: string;
       githubPullRequestId: string;
       repoId: string;
+      inherited?: boolean;
     },
     tx: Prisma.TransactionClient,
   ): Promise<WorkItemDelivery> {
+    const inherited = data.inherited ?? false;
     return tx.workItemDelivery.upsert({
       where: {
         workItemId_githubPullRequestId: {
@@ -542,8 +548,8 @@ export const workItemDeliveryRepository = {
           githubPullRequestId: data.githubPullRequestId,
         },
       },
-      create: data,
-      update: {},
+      create: { ...data, inherited },
+      update: inherited ? {} : { inherited: false },
     });
   },
 
