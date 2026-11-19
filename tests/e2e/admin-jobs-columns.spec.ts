@@ -109,8 +109,10 @@ test('at 1280px every Dead letters Replay button and every Runs row end inside t
   await expectNoSidewaysScroll(dlqFrame);
   for (const button of await replay.all()) await expectInsideFrame(dlqFrame, button);
 
-  // ── Runs: the same check on every row's last cell.
-  expect((await page.goto('/admin/jobs'))?.status()).toBe(200);
+  // ── Runs: the same check on every row's last cell. Filtered to the seeded
+  // run's status: the e2e lane's live job worker enqueues ~50 scheduled runs at
+  // a tick, which push an unfiltered page-of-50 past the seeded row (MOTIR-11822).
+  expect((await page.goto('/admin/jobs?status=abandoned'))?.status()).toBe(200);
   const runsFrame = frameOf(page);
   await expect(runsFrame.locator('tbody tr').filter({ hasText: LONG_FUNCTION })).toHaveCount(1);
   await expectNoSidewaysScroll(runsFrame);
