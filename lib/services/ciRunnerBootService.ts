@@ -575,8 +575,7 @@ export const INITIAL_POLL_STATE: Extract<PollResult, { done: false }> = {
 export type NotBootableReason = 'arm64_runner_ami_not_pinned';
 
 /** The not-bootable detail for an arm64 intent with no arm64 AMI pinned. */
-export const ARM64_RUNNER_AMI_NOT_PINNED_DETAIL =
-  'arm64_runner_ami_not_pinned: the job asked for motir-graviton, but no arm64 runner AMI is pinned (MOTIR_AWS_RUNNER_ARM64_AMI_ID is unset), so it is not booted';
+export const ARM64_RUNNER_AMI_NOT_PINNED_DETAIL = `arm64_runner_ami_not_pinned: the job asked for ${MOTIR_ARM64_RUNNER_LABEL}, but no arm64 runner AMI is pinned (MOTIR_AWS_RUNNER_ARM64_AMI_ID is unset), so it is not booted`;
 
 export type RunIntentOutcome =
   /** No such intent — it was deleted, or the id was stale. */
@@ -1130,7 +1129,7 @@ export const ciRunnerBootService = {
         // other tenants' `runs-on: self-hosted`.
         ACTIONS_RUNNER_CONFIG_ARGS: '--no-default-labels',
         // The fleet label the runner carries — logged by the image, never used to
-        // register (the JIT config is). An arm64 runner carries `motir-graviton`.
+        // register (the JIT config is). An arm64 runner carries the arm64 label.
         MOTIR_RUNNER_LABEL: arm64 ? MOTIR_ARM64_RUNNER_LABEL : MOTIR_RUNNER_LABEL,
         MOTIR_INTENT_ID: intent.id,
         MOTIR_WORKFLOW_JOB_ID: String(workflowJobId),
