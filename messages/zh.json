@@ -11082,6 +11082,7 @@
     "nav": {
       "overview": "总览",
       "usage": "用量与成本",
+      "costs": "成本",
       "tenants": "租户",
       "users": "用户",
       "monitoring": "监控",
@@ -12784,6 +12785,79 @@
         },
         "none": "无金额"
       }
+    },
+    "costs": {
+      "title": "成本",
+      "subtitle": "运行 Motir 的成本（美元）：AWS 账单与模型供应商的收费，按日、月或年查看。租户用量与积分见“用量与成本”。",
+      "period": {
+        "label": "周期",
+        "day": "日",
+        "month": "月",
+        "year": "年"
+      },
+      "picker": {
+        "month": "月份",
+        "year": "年份"
+      },
+      "showing": {
+        "day": "显示 {month}，按日 (UTC)",
+        "month": "显示 {year}，按月",
+        "year": "显示所有有成本记录的年份"
+      },
+      "fetched": "AWS 数据获取于 {time} UTC",
+      "figures": {
+        "aws": "AWS",
+        "models": "模型",
+        "total": "合计",
+        "allYears": "所有年份",
+        "soFar": "{range} · 截至目前",
+        "unavailable": "不可用"
+      },
+      "rows": {
+        "day": "按日",
+        "month": "按月",
+        "year": "按年"
+      },
+      "col": {
+        "day": "日期 (UTC)",
+        "month": "月份",
+        "year": "年份",
+        "aws": "AWS",
+        "models": "模型",
+        "total": "合计"
+      },
+      "partial": "未结束",
+      "estimate": "估算",
+      "open": "显示 {period} 的构成",
+      "breakdown": {
+        "aws": "AWS 按服务",
+        "models": "模型按供应商",
+        "service": "服务",
+        "provider": "供应商",
+        "amount": "金额",
+        "share": "占比",
+        "tax": "税费",
+        "credits": "抵扣额度",
+        "refund": "退款"
+      },
+      "awsError": {
+        "title": "暂时无法显示 AWS 成本",
+        "description": "AWS Cost Explorer 没有响应。模型成本不受影响，仍正常显示；它响应后，AWS 和合计列会补全。"
+      },
+      "modelsError": {
+        "title": "暂时无法显示模型成本",
+        "description": "记录模型成本的 AI 服务没有响应。AWS 成本不受影响，仍正常显示；它响应后，模型和合计列会补全。"
+      },
+      "bothError": {
+        "title": "暂时无法显示成本",
+        "description": "AWS Cost Explorer 和记录模型成本的 AI 服务都没有响应。请稍后重试。"
+      },
+      "retry": "重试",
+      "empty": {
+        "title": "{range} 没有成本记录",
+        "body": "此范围内 AWS 和模型供应商均未产生费用。请选择其他月份查看成本。"
+      },
+      "loading": "正在加载成本"
     },
     "tenants": {
       "title": "租户",

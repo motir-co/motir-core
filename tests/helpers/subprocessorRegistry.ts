@@ -97,6 +97,7 @@ export const VENDOR_SIGNATURES: readonly VendorSignature[] = [
     vendor: 'Amazon Web Services',
     packages: [
       '@aws-sdk/client-cloudwatch-logs',
+      '@aws-sdk/client-cost-explorer',
       '@aws-sdk/client-ecr',
       '@aws-sdk/client-ecs',
       '@aws-sdk/client-s3',
@@ -104,6 +105,7 @@ export const VENDOR_SIGNATURES: readonly VendorSignature[] = [
       '@aws-sdk/client-service-quotas',
       '@aws-sdk/client-sesv2',
       '@aws-sdk/client-ssm',
+      '@aws-sdk/client-sts',
       '@aws-sdk/s3-request-presigner',
     ],
   },

@@ -11091,6 +11091,7 @@
     "nav": {
       "overview": "Przegląd",
       "usage": "Użycie i koszty",
+      "costs": "Koszty",
       "tenants": "Dzierżawcy",
       "users": "Użytkownicy",
       "monitoring": "Monitorowanie",
@@ -12793,6 +12794,79 @@
         },
         "none": "Brak kwoty"
       }
+    },
+    "costs": {
+      "title": "Koszty",
+      "subtitle": "Ile kosztowało utrzymanie Motir, w dolarach amerykańskich: rachunek AWS i opłaty dostawców modeli, według dnia, miesiąca lub roku. Użycie i kredyty dzierżawców są w sekcji „Użycie i koszty”.",
+      "period": {
+        "label": "Okres",
+        "day": "Dzień",
+        "month": "Miesiąc",
+        "year": "Rok"
+      },
+      "picker": {
+        "month": "Miesiąc",
+        "year": "Rok"
+      },
+      "showing": {
+        "day": "Widok: {month}, według dnia (UTC)",
+        "month": "Widok: {year}, według miesiąca",
+        "year": "Widok: każdy rok z zarejestrowanymi kosztami"
+      },
+      "fetched": "Dane AWS pobrane {time} UTC",
+      "figures": {
+        "aws": "AWS",
+        "models": "Modele",
+        "total": "Łącznie",
+        "allYears": "Wszystkie lata",
+        "soFar": "{range} · do tej pory",
+        "unavailable": "Niedostępne"
+      },
+      "rows": {
+        "day": "Według dnia",
+        "month": "Według miesiąca",
+        "year": "Według roku"
+      },
+      "col": {
+        "day": "Dzień (UTC)",
+        "month": "Miesiąc",
+        "year": "Rok",
+        "aws": "AWS",
+        "models": "Modele",
+        "total": "Łącznie"
+      },
+      "partial": "Częściowe",
+      "estimate": "Szacunek",
+      "open": "Pokaż, z czego składa się {period}",
+      "breakdown": {
+        "aws": "AWS według usługi",
+        "models": "Modele według dostawcy",
+        "service": "Usługa",
+        "provider": "Dostawca",
+        "amount": "Kwota",
+        "share": "Udział",
+        "tax": "Podatek",
+        "credits": "Kredyty",
+        "refund": "Zwrot"
+      },
+      "awsError": {
+        "title": "Nie można teraz pokazać kosztów AWS",
+        "description": "AWS Cost Explorer nie odpowiedział. Nie wpływa to na koszty modeli, które są nadal widoczne; kolumny AWS i Łącznie uzupełnią się, gdy odpowie."
+      },
+      "modelsError": {
+        "title": "Nie można teraz pokazać kosztów modeli",
+        "description": "Usługa AI rejestrująca koszty modeli nie odpowiedziała. Nie wpływa to na koszty AWS, które są nadal widoczne; kolumny Modele i Łącznie uzupełnią się, gdy odpowie."
+      },
+      "bothError": {
+        "title": "Nie można teraz pokazać kosztów",
+        "description": "Ani AWS Cost Explorer, ani usługa AI rejestrująca koszty modeli nie odpowiedziały. Spróbuj ponownie za chwilę."
+      },
+      "retry": "Spróbuj ponownie",
+      "empty": {
+        "title": "Brak zarejestrowanych kosztów: {range}",
+        "body": "W tym okresie ani AWS, ani żaden dostawca modeli nic nie naliczył. Wybierz inny miesiąc, aby zobaczyć jego koszty."
+      },
+      "loading": "Wczytywanie kosztów"
     },
     "tenants": {
       "title": "Dzierżawcy",

@@ -7,7 +7,7 @@ import type { PlatformRole } from '@/generated/prisma/client';
  * The console rail's PLATFORM group after the Contact-sales removal (Story
  * MOTIR-9385 · MOTIR-9386): Motir has no Enterprise plan, so the rail carries no
  * row for the requests that plan's card used to send. Platform is Overview,
- * Usage & cost, Tenants and Users — the same for every staff role — and no link
+ * Usage & cost, Costs (MOTIR-11712), Tenants and Users — the same for every staff role — and no link
  * anywhere on the rail leads to the removed console pages.
  */
 
@@ -22,6 +22,7 @@ const LABELS = {
   groupOperations: 'Operations',
   navOverview: 'Overview',
   navUsage: 'Usage & cost',
+  navCosts: 'Costs',
   navTenants: 'Tenants',
   navUsers: 'Users',
   navMonitoring: 'Monitoring',
@@ -65,9 +66,10 @@ describe('the Platform group', () => {
       const hrefs = within(rail)
         .getAllByRole('link')
         .map((a) => a.getAttribute('href') ?? '');
-      expect(hrefs.slice(0, 4)).toEqual([
+      expect(hrefs.slice(0, 5)).toEqual([
         '/admin',
         '/admin/usage',
+        '/admin/costs',
         '/admin/tenants',
         '/admin/users',
       ]);

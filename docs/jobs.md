@@ -1242,6 +1242,12 @@ cluster bought nothing. The why is
 | `system.ci-actions-gate-sweep`      | `30 * * * *` |
 | `system.work-item-embedding-sweep`  | `17 * * * *` |
 
+**Every 6 hours (UTC)**
+
+| job                     | cron           |
+| ----------------------- | -------------- |
+| `system.aws-cost-fetch` | `20 */6 * * *` |
+
 **Daily (UTC)**
 
 | job                                        | cron         |

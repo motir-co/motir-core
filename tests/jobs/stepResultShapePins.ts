@@ -589,6 +589,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ failures: number; organizations: Array<{ host: boolean; organizationId: string; slots: { agent_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; ci_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; merged?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined } }>; ran: boolean }',
   },
+  // MOTIR-11712 — the AWS cost fetch for the console's Costs page.
+  'fetch-aws-costs': {
+    file: 'lib/jobs/definitions/awsCostFetch.ts',
+    shape:
+      '{ fetchedAt: string; fromDay: string; lines: number; status: "fetched"; toDay: string } | { status: "not_configured" }',
+  },
   // Story MOTIR-9792 · MOTIR-9942 — the tenant account reconcile.
   'hosting-tenant-account-reconcile': {
     file: 'lib/jobs/definitions/hostingTenantAccountReconcile.ts',

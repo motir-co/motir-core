@@ -20,6 +20,7 @@ const LABELS = {
   groupOperations: 'Operations',
   navOverview: 'Overview',
   navUsage: 'Usage & cost',
+  navCosts: 'Costs',
   navTenants: 'Tenants',
   navUsers: 'Users',
   navMonitoring: 'Monitoring',

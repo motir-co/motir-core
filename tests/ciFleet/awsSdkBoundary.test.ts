@@ -93,12 +93,26 @@ const DEPLOYMENT_STATUS = {
   modules: new Set(['@aws-sdk/client-ecs']),
 };
 
+/**
+ * The console's Costs page (MOTIR-11712) shows Motir's AWS bill, which only Cost
+ * Explorer in the MANAGEMENT account sees whole. The fetch job and the backfill
+ * reach it through `lib/awsCost/costExplorerReader.ts` and nothing else — an STS
+ * AssumeRole into the management account's read-only role, then
+ * GetCostAndUsage — so the service storing what it read sees plain lines and is
+ * tested offline, the `lib/ses` shape.
+ */
+const COST_READ = {
+  dir: join('lib', 'awsCost'),
+  modules: new Set(['@aws-sdk/client-cost-explorer', '@aws-sdk/client-sts']),
+};
+
 const EXCEPTIONS = [
   BLOB_STORE,
   SERVERLESS_HOSTING,
   EMAIL_TRANSPORT,
   SERVICES_READ,
   DEPLOYMENT_STATUS,
+  COST_READ,
 ];
 
 const SDK_IMPORT =

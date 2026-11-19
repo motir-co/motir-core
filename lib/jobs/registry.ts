@@ -49,6 +49,7 @@ import { fleetDebitMonitor } from './definitions/fleetDebitMonitor';
 import { fleetShardHeadroom } from './definitions/fleetShardHeadroom';
 import { capacityAlertEvaluation } from './definitions/capacityAlertEvaluation';
 import { fleetPoolGrowth } from './definitions/fleetPoolGrowth';
+import { awsCostFetch } from './definitions/awsCostFetch';
 import { hostAccountReconcile } from './definitions/hostAccountReconcile';
 import { hostAccountState } from './definitions/hostAccountState';
 import { hostingTenantAccountReconcile } from './definitions/hostingTenantAccountReconcile';
@@ -182,6 +183,7 @@ export const jobDefinitions = [
   capacityAlertEvaluation,
   fleetPoolGrowth,
   hostAccountReconcile,
+  awsCostFetch,
   hostAccountState,
   hostingTenantAccountReconcile,
   hostedRunAdmit,

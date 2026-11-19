@@ -11091,6 +11091,7 @@
     "nav": {
       "overview": "Übersicht",
       "usage": "Nutzung & Kosten",
+      "costs": "Kosten",
       "tenants": "Mandanten",
       "users": "Benutzer",
       "monitoring": "Monitoring",
@@ -12793,6 +12794,79 @@
         },
         "none": "Kein Wert"
       }
+    },
+    "costs": {
+      "title": "Kosten",
+      "subtitle": "Was der Betrieb von Motir gekostet hat, in US-Dollar: die AWS-Rechnung und was Modellanbieter berechnet haben, nach Tag, Monat oder Jahr. Nutzung und Credits der Mandanten stehen unter „Nutzung & Kosten“.",
+      "period": {
+        "label": "Zeitraum",
+        "day": "Tag",
+        "month": "Monat",
+        "year": "Jahr"
+      },
+      "picker": {
+        "month": "Monat",
+        "year": "Jahr"
+      },
+      "showing": {
+        "day": "Anzeige: {month}, nach Tag (UTC)",
+        "month": "Anzeige: {year}, nach Monat",
+        "year": "Anzeige: jedes Jahr mit erfassten Kosten"
+      },
+      "fetched": "AWS-Zahlen abgerufen {time} UTC",
+      "figures": {
+        "aws": "AWS",
+        "models": "Modelle",
+        "total": "Gesamt",
+        "allYears": "Alle Jahre",
+        "soFar": "{range} · bisher",
+        "unavailable": "Nicht verfügbar"
+      },
+      "rows": {
+        "day": "Nach Tag",
+        "month": "Nach Monat",
+        "year": "Nach Jahr"
+      },
+      "col": {
+        "day": "Tag (UTC)",
+        "month": "Monat",
+        "year": "Jahr",
+        "aws": "AWS",
+        "models": "Modelle",
+        "total": "Gesamt"
+      },
+      "partial": "Unvollständig",
+      "estimate": "Schätzung",
+      "open": "Zusammensetzung von {period} anzeigen",
+      "breakdown": {
+        "aws": "AWS nach Dienst",
+        "models": "Modelle nach Anbieter",
+        "service": "Dienst",
+        "provider": "Anbieter",
+        "amount": "Betrag",
+        "share": "Anteil",
+        "tax": "Steuer",
+        "credits": "Gutschriften",
+        "refund": "Erstattung"
+      },
+      "awsError": {
+        "title": "AWS-Kosten können gerade nicht angezeigt werden",
+        "description": "AWS Cost Explorer hat nicht geantwortet. Die Modellkosten sind nicht betroffen und werden weiter angezeigt; die Spalten AWS und Gesamt füllen sich, sobald es antwortet."
+      },
+      "modelsError": {
+        "title": "Modellkosten können gerade nicht angezeigt werden",
+        "description": "Der KI-Dienst, der die Modellkosten erfasst, hat nicht geantwortet. Die AWS-Kosten sind nicht betroffen und werden weiter angezeigt; die Spalten Modelle und Gesamt füllen sich, sobald er antwortet."
+      },
+      "bothError": {
+        "title": "Kosten können gerade nicht angezeigt werden",
+        "description": "Weder AWS Cost Explorer noch der KI-Dienst, der die Modellkosten erfasst, hat geantwortet. Versuchen Sie es gleich noch einmal."
+      },
+      "retry": "Erneut versuchen",
+      "empty": {
+        "title": "Keine Kosten erfasst für {range}",
+        "body": "In diesem Zeitraum wurde weder von AWS noch von einem Modellanbieter etwas berechnet. Wählen Sie einen anderen Monat, um dessen Kosten zu sehen."
+      },
+      "loading": "Kosten werden geladen"
     },
     "tenants": {
       "title": "Mandanten",

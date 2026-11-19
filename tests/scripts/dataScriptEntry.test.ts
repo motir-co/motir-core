@@ -21,6 +21,7 @@ import { main as backfillCiState } from '@/scripts/backfill-work-item-ci-state';
 import { main as backfillFixReason } from '@/scripts/backfill-fix-reason';
 import { main as backfillAuthorFinished } from '@/scripts/backfill-plan-author-finished';
 import { main as backfillRunDiscrepancy } from '@/scripts/backfill-run-discrepancy-records';
+import { main as backfillAwsCosts } from '@/scripts/backfill-aws-costs';
 import { main as convergeUnlanded } from '@/scripts/converge-ejected-cards';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -196,7 +197,7 @@ describe('runDataScriptEntry', () => {
 });
 
 describe('the script registry', () => {
-  it('names exactly the six production data scripts', () => {
+  it('names exactly the seven production data scripts', () => {
     expect(Object.keys(DATA_SCRIPTS)).toEqual([
       'backfill-boards',
       'backfill-ci-state',
@@ -204,6 +205,7 @@ describe('the script registry', () => {
       'backfill-author-finished',
       'converge-unlanded-cards',
       'backfill-run-discrepancy',
+      'backfill-aws-costs',
     ]);
     expect(isDataScriptName('backfill-boards')).toBe(true);
     expect(isDataScriptName(undefined)).toBe(false);
@@ -221,6 +223,7 @@ describe('the script registry', () => {
     expect(pkg.scripts['db:backfill:author-finished']).toBe(`${entry} backfill-author-finished`);
     expect(pkg.scripts['db:converge:unlanded-cards']).toBe(`${entry} converge-unlanded-cards`);
     expect(pkg.scripts['db:backfill:run-discrepancy']).toBe(`${entry} backfill-run-discrepancy`);
+    expect(pkg.scripts['db:backfill:aws-costs']).toBe(`${entry} backfill-aws-costs`);
     expect(pkg.scripts['db:converge:ejected-cards']).toBe(`${entry} converge-unlanded-cards`);
     expect(pkg.scripts['build:data-script']).toBe('node scripts/build-data-script.mjs');
 
@@ -258,6 +261,7 @@ describe('the data scripts, run through loadDataScript', () => {
     expect((await DATA_SCRIPTS['backfill-author-finished']()).main).toBe(backfillAuthorFinished);
     expect((await DATA_SCRIPTS['converge-unlanded-cards']()).main).toBe(convergeUnlanded);
     expect((await DATA_SCRIPTS['backfill-run-discrepancy']()).main).toBe(backfillRunDiscrepancy);
+    expect((await DATA_SCRIPTS['backfill-aws-costs']()).main).toBe(backfillAwsCosts);
   });
 
   it.each([
@@ -266,6 +270,7 @@ describe('the data scripts, run through loadDataScript', () => {
     ['converge-unlanded-cards', '[converge-unlanded-cards] done — scanned 0'],
     ['backfill-author-finished', '[backfill-author-finished] done. Re-run without --dry-run'],
     ['backfill-run-discrepancy', '[backfill-run-discrepancy] done. Re-run without --dry-run'],
+    ['backfill-aws-costs', '[backfill-aws-costs] done. Re-run without --dry-run'],
   ] as const)('%s --dry-run sweeps an empty database and answers 0', async (name, done) => {
     capture();
     const script = await loadDataScript(name);
@@ -280,6 +285,7 @@ describe('the data scripts, run through loadDataScript', () => {
     'backfill-author-finished',
     'converge-unlanded-cards',
     'backfill-run-discrepancy',
+    'backfill-aws-costs',
   ] as const)('%s refuses an unknown flag by throwing', async (name) => {
     const script = await loadDataScript(name);
     await expect(script.main(['--apply'])).rejects.toThrow('unknown argument: --apply');

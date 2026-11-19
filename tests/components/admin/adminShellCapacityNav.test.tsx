@@ -24,6 +24,7 @@ const LABELS = {
   groupOperations: shell.groupOperations,
   navOverview: en.platformAdmin.nav.overview,
   navUsage: en.platformAdmin.nav.usage,
+  navCosts: en.platformAdmin.nav.costs,
   navTenants: en.platformAdmin.nav.tenants,
   navUsers: en.platformAdmin.nav.users,
   navMonitoring: en.platformAdmin.nav.monitoring,
