@@ -246,6 +246,61 @@ describe('platformReadService.getCosts', () => {
     });
   });
 
+  it('Day view: a month the fetches never covered has no AWS figure; a partly covered one has some', async () => {
+    await storeAws([['2026-11-12', 'Amazon S3', 1_000_000]]);
+    const before = await platformReadService.getCosts(
+      currentPrincipal!,
+      { kind: 'day', month: '2026-09' },
+      NOW,
+    );
+    expect(before.awsAvailable).toBe(true);
+    expect(before.rows.every((r) => r.awsMicroUsd === null)).toBe(true);
+
+    // The stored span starting mid-month: the days before it have no figure.
+    const spy = vi.spyOn(awsCostFetchRepository, 'findCoverage').mockResolvedValueOnce({
+      fromDay: '2026-11-10',
+      toDay: '2026-11-18',
+      fetchedAt: NOW,
+    });
+    const partly = await platformReadService.getCosts(
+      currentPrincipal!,
+      { kind: 'day', month: '2026-11' },
+      NOW,
+    );
+    spy.mockRestore();
+    expect(partly.rows.find((r) => r.period === '2026-11-09')!.awsMicroUsd).toBeNull();
+    expect(partly.rows.find((r) => r.period === '2026-11-10')!.awsMicroUsd).toBe(0);
+    expect(partly.rows.find((r) => r.period === '2026-11-12')!.awsMicroUsd).toBe(1_000_000);
+  });
+
+  it('a month still to come reads no model range; non-Error failures are logged as unknown', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const future = await platformReadService.getCosts(
+      currentPrincipal!,
+      { kind: 'day', month: '2027-01' },
+      NOW,
+    );
+    expect(modelCostMock).not.toHaveBeenCalled();
+    expect(future.modelsAvailable).toBe(true);
+
+    await storeAws([['2026-11-02', 'Amazon S3', 2_000_000]]);
+    modelCostMock.mockRejectedValue('down');
+    const spy = vi.spyOn(awsCostFetchRepository, 'findCoverage').mockRejectedValueOnce('reset');
+    const failed = await platformReadService.getCosts(
+      currentPrincipal!,
+      { kind: 'day', month: '2026-11' },
+      NOW,
+    );
+    spy.mockRestore();
+    expect(failed.awsAvailable).toBe(false);
+    expect(failed.modelsAvailable).toBe(false);
+    expect(errors.mock.calls.map(([, ctx]) => ctx)).toEqual([
+      { error: 'unknown' },
+      { error: 'unknown' },
+    ]);
+    errors.mockRestore();
+  });
+
   it('reads the clock when no time is given', async () => {
     const costs = await platformReadService.getCosts(currentPrincipal!, { kind: 'year' });
     expect(costs.today).toBe(new Date().toISOString().slice(0, 10));
