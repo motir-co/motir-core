@@ -39,7 +39,11 @@ import {
   type SupervisionStore,
   type SupervisionTerminalReason,
 } from '@/lib/jobs/supervision/driver';
-import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import {
+  MOTIR_ON_DEMAND_RUNNER_LABEL,
+  MOTIR_RUNNER_LABEL,
+  requestsOnDemandRunner,
+} from '@/lib/ciFleet/config';
 import { ciDockerVolumeGb } from '@/lib/ciFleet/limits';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 import { OrgTargetAuthError, type GithubOrgTarget } from '@/lib/github/orgTarget';
@@ -1080,9 +1084,15 @@ export const ciRunnerBootService = {
       // rootfs it can only use `vfs`, which fills the disk on the first
       // `services:` job.
       dockerVolumeGb: ciDockerVolumeGb(),
-      // Only ever `spot` here: an on-demand spec carries no capacity at all, so
-      // its shape is the one it had before Spot (MOTIR-11716).
-      ...(input.capacity === 'spot' ? { capacity: 'spot' as const } : {}),
+      // An ordinary on-demand spec carries no capacity at all, so its shape is the
+      // one it had before Spot (MOTIR-11716). An intent whose job asked for the
+      // on-demand label (MOTIR-11727) says `on_demand` outright, whatever it was
+      // handed: the label is a promise that no Spot runner takes the job.
+      ...(requestsOnDemandRunner(intent.requestedLabels)
+        ? { capacity: 'on_demand' as const }
+        : input.capacity === 'spot'
+          ? { capacity: 'spot' as const }
+          : {}),
       env: {
         // The credential, injected at boot and never baked into the image (§4).
         ACTIONS_RUNNER_INPUT_JITCONFIG: encodedJitConfig,
@@ -1333,11 +1343,11 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       {
         name: runnerName,
         runnerGroupId,
-        // EXACTLY the one §M-compliant label. Not `self-hosted`, not `linux`, not
-        // `x64`: a runner carrying GitHub's defaults would match some unrelated
-        // tenant's `runs-on: self-hosted`, which is §7.3's cross-tenant pickup
-        // arriving through the label axis instead of the group axis.
-        labels: [MOTIR_RUNNER_LABEL],
+        // EXACTLY the §M-compliant fleet labels. Not `self-hosted`, not `linux`,
+        // not `x64`: a runner carrying GitHub's defaults would match some
+        // unrelated tenant's `runs-on: self-hosted`, which is §7.3's cross-tenant
+        // pickup arriving through the label axis instead of the group axis.
+        labels: jitLabelsFor(intent),
       },
       runnerTarget,
     );
@@ -1643,24 +1653,40 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
 }
 
 /**
+ * The labels a runner is registered with (MOTIR-11727): the fleet label, and the
+ * on-demand label beside it only when the intent's job asked for it. A runner
+ * booted for an ordinary job never carries the second label, so whatever it is
+ * booted as, it cannot take a job that asked never to run on Spot.
+ */
+function jitLabelsFor(intent: Pick<CiRunnerProvisioningIntent, 'requestedLabels'>): string[] {
+  return requestsOnDemandRunner(intent.requestedLabels)
+    ? [MOTIR_RUNNER_LABEL, MOTIR_ON_DEMAND_RUNNER_LABEL]
+    : [MOTIR_RUNNER_LABEL];
+}
+
+/**
  * The capacity a CI runner's spec asks for (MOTIR-11716): `spot` while the CI
  * Spot setting is on, `on_demand` otherwise. Read per boot, never cached, so a
  * saved setting reaches the next launch. A read that fails asks for on-demand.
+ *
+ * An intent whose job asked for the on-demand label (MOTIR-11727) is on-demand
+ * in either direction, without reading the setting: its runner carries that
+ * label, and a Spot runner carrying it would break the label's one promise.
  *
  * A job Spot has already interrupted twice (MOTIR-11728) — its carried count is
  * {@link ON_DEMAND_AT_SPOT_INTERRUPTIONS} — boots `on_demand` whatever the
  * setting says.
  */
 async function requestedCapacity(
-  intent: Pick<CiRunnerProvisioningIntent, 'id' | 'spotInterruptionCount'>,
+  intent: Pick<CiRunnerProvisioningIntent, 'id' | 'requestedLabels' | 'spotInterruptionCount'>,
 ): Promise<ContainerCapacity> {
-  const intentId = intent.id;
+  if (requestsOnDemandRunner(intent.requestedLabels)) return 'on_demand';
   if (intent.spotInterruptionCount >= ON_DEMAND_AT_SPOT_INTERRUPTIONS) return 'on_demand';
   try {
     return (await ciSpotSettingReader.read()).enabled ? 'spot' : 'on_demand';
   } catch (err) {
     console.warn('[ciRunnerBootService] the CI Spot setting could not be read — on-demand', {
-      intentId,
+      intentId: intent.id,
       detail: detailOf(err),
     });
     return 'on_demand';

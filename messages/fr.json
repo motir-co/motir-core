@@ -11272,6 +11272,9 @@
             },
             "run_model_default": {
               "set": "A modifié un modèle par défaut côté exécution"
+            },
+            "gateway_usage": {
+              "replay": "A rejoué un groupe d’utilisation en échec"
             }
           },
           "fleet": {
@@ -12792,6 +12795,50 @@
           "description": "Le service d’IA qui conserve le rapprochement n’a pas répondu. Le reste de cette page n’est pas concerné — réessayez dans un instant."
         },
         "none": "Aucun montant"
+      },
+      "failed": {
+        "title": "Utilisation en échec",
+        "intro": "L’utilisation qui n’a pas pu être ajoutée aux totaux et aux crédits d’une organisation, regroupée par l’erreur qui l’a fait échouer. Tout ce qui attend maintenant est listé ici, quelle que soit la période choisie ci-dessus.",
+        "count": "{rows, plural, one {# ligne} other {# lignes}} dans {groups, plural, one {# groupe} other {# groupes}}",
+        "caption": "Utilisation en échec, regroupée par erreur",
+        "col": {
+          "error": "Erreur",
+          "rows": "Lignes",
+          "orgs": "Organisations",
+          "oldest": "Plus ancienne (UTC)",
+          "newest": "Plus récente (UTC)",
+          "replay": "Rejouer"
+        },
+        "showError": "Afficher l’erreur complète",
+        "hideError": "Masquer l’erreur complète",
+        "replay": "Rejouer",
+        "replayAria": "Rejouer {rows, plural, one {# ligne} other {# lignes}} en échec avec cette erreur",
+        "replaying": "Relecture…",
+        "replayingStatus": "Relecture de {rows, plural, one {# ligne} other {# lignes}}",
+        "replayed": "Rejouée",
+        "confirm": {
+          "title": "Rejouer {rows, plural, one {# ligne} other {# lignes}} d’utilisation en échec ?",
+          "body": "Chaque ligne en échec avec cette erreur est enregistrée de nouveau, une seule fois. Une ligne déjà enregistrée n’est jamais comptée deux fois, et une ligne qui échoue de nouveau reste listée avec sa nouvelle erreur.",
+          "error": "Erreur",
+          "scope": "{rows, plural, one {# ligne} other {# lignes}} · {orgs, plural, one {# organisation} other {# organisations}}",
+          "cancel": "Annuler",
+          "go": "Rejouer {rows, plural, one {# ligne} other {# lignes}}"
+        },
+        "result": {
+          "applied": "Rejouée : {count, plural, one {# ligne enregistrée} other {# lignes enregistrées}}.",
+          "none": "Aucune n’a échoué de nouveau.",
+          "failedAgain": "{count, plural, one {# ligne a} other {# lignes ont}} échoué de nouveau.",
+          "sameGroup": "Elles restent dans ce groupe.",
+          "newGroup": "Elles sont listées sous leur nouvelle erreur.",
+          "unfinished": "La relecture n’est pas allée à son terme. Les lignes qu’elle n’a pas enregistrées restent listées ici : rejouer de nouveau enregistre chacune d’elles une seule fois."
+        },
+        "readOnly": "Lecture seule. Rejouer l’utilisation en échec nécessite le rôle d’opérateur.",
+        "empty": "Aucune ligne d’utilisation en échec.",
+        "loading": "Chargement de l’utilisation en échec",
+        "error": {
+          "title": "L’utilisation en échec ne peut pas être affichée pour le moment",
+          "description": "Le service d’IA qui conserve l’utilisation n’a pas répondu. Le reste de cette page n’est pas concerné — réessayez dans un instant."
+        }
       }
     },
     "tenants": {

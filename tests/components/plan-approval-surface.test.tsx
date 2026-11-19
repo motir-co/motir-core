@@ -612,6 +612,88 @@ describe('the conversation bubble draws the run’s QUICK REPLY (MOTIR-10738)', 
   });
 });
 
+// AN ASK TURN'S QUICK REPLY (MOTIR-11797). Every message the person sends gets one: an
+// answering `ask_project` turn's reply is the turn's first assistant bubble, above the
+// work row that carries the progress notes, until the answer lands; and a viewer who
+// reopens the thread mid-answer sees it under the turn, above that turn's notes.
+describe('an ASK turn draws its QUICK REPLY (MOTIR-11797)', () => {
+  const ACK = 'You want to know whether export does CSV. I’ll look at the project first.';
+  const asking = (over: Partial<PlanChangeConversationState> = {}) =>
+    stateWith({
+      phase: 'streaming',
+      review: null,
+      planId: null,
+      jobId: 'ask_1',
+      conversationAck: { jobId: 'ask_1', text: ACK },
+      ...over,
+    });
+
+  it('draws the reply above the work row while the turn is read', () => {
+    conversation.state = asking();
+    renderHost();
+    const bubble = screen.getByTestId('plan-ask-ack');
+    expect(bubble.textContent).toBe(ACK);
+    const row = screen.getByTestId('plan-work-row');
+    expect(bubble.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Not a plan run, so there is no conversation-phase bubble to draw it twice.
+    expect(screen.queryByTestId('plan-conversation-phase')).toBeNull();
+  });
+
+  it('draws nothing before the reply arrives, or once the answer has landed', () => {
+    conversation.state = asking({ conversationAck: null });
+    const first = renderHost();
+    expect(screen.queryByTestId('plan-ask-ack')).toBeNull();
+    first.view.unmount();
+    conversation.state = asking({ phase: 'idle', jobId: null });
+    renderHost();
+    expect(screen.queryByTestId('plan-ask-ack')).toBeNull();
+  });
+
+  it('draws the reply as plain text', () => {
+    conversation.state = asking({ conversationAck: { jobId: 'ask_1', text: '<b>tag</b>' } });
+    renderHost();
+    const bubble = screen.getByTestId('plan-ask-ack');
+    expect(bubble.textContent).toBe('<b>tag</b>');
+    expect(bubble.querySelector('b')).toBeNull();
+  });
+
+  it('a REOPENED viewer sees the reply under the unanswered turn, above its notes', () => {
+    conversation.state = stateWith({
+      phase: 'idle',
+      review: null,
+      planId: null,
+      session: {
+        ...session(),
+        turnCount: 1,
+        turns: [
+          {
+            id: 't1',
+            seq: 0,
+            role: 'user',
+            body: 'Does export do CSV?',
+            jobId: 'ask_1',
+            question: null,
+            isAnswer: false,
+            intent: 'ask',
+            intentCorrected: false,
+            citations: [],
+            authorId: 'u1',
+            createdAt: '2026-09-23T10:00:00.000Z',
+          },
+        ],
+        notes: [{ jobId: 'ask_1', body: 'Reading the export service.' }],
+      },
+      conversationAck: { jobId: 'ask_1', text: ACK },
+    });
+    renderHost();
+    const bubble = screen.getByTestId('plan-ask-ack-reopened');
+    expect(bubble.textContent).toBe(ACK);
+    const notes = screen.getByTestId('conversation-notes');
+    expect(bubble.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByTestId('plan-ask-ack')).toBeNull();
+  });
+});
+
 describe('a REOPENED overlay mid-run shows what a live viewer sees (MOTIR-8203)', () => {
   const generating = (over: Partial<PlanReviewDto> = {}) =>
     review(null, { id: 'plan_9', status: 'generating', authorSource: 'native', ...over });

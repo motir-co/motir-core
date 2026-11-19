@@ -20,17 +20,18 @@ import type {
   PlanChangeSessionDto,
   PlanTargetHeldByDto,
 } from '@/lib/dto/planChange';
-import type { RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/types';
+import type { AskHandOff, RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/types';
 
 /**
- * What a CONFIRMED targeted plan offer submits beside its turn (MOTIR-9878): the
- * requirement the person read in the pane, the offer that confirmed it (MOTIR-10091), and
- * the submit's options — the same supply a no-target offer's start sends (MOTIR-9436). The
+ * What a plan a conversation STARTED submits beside its turn: a CONFIRMED targeted offer's
+ * requirement the person read in the pane and the offer that confirmed it (MOTIR-9878 ·
+ * MOTIR-10091) — the same supply a no-target offer's start sends (MOTIR-9436) — and the ask
+ * turn it was handed off from (MOTIR-11797), whose job already replied to the message. The
  * anchored door otherwise submits the bare accumulated intent, exactly as before.
  */
 export interface ComposedSubmit {
-  requirement: SubmittedRequirement;
-  opts: { requirementConfirmed: RequirementConfirmation };
+  requirement?: SubmittedRequirement;
+  opts: { requirementConfirmed?: RequirementConfirmation; askHandOff?: AskHandOff };
 }
 
 /** The shipped submit, with a confirmed offer's requirement when there is one. */

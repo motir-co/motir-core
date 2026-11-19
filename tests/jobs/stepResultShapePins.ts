@@ -490,10 +490,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
     shape: 'Array<string>',
   },
-  'reconcile-github-queue-v3': {
+  'reconcile-github-queue-v4': {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
     shape:
-      '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined; undeliveredRepos?: Array<string> | undefined; unreadableRepos?: Array<string> | undefined }> }',
+      '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; onDemand?: undefined | { added: number; awaiting: number; idleRunners: number; queued: number }; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined; undeliveredRepos?: Array<string> | undefined; unreadableRepos?: Array<string> | undefined }> }',
   },
   'mark-stale-for-terminal-target': {
     file: 'lib/jobs/definitions/planDrift.ts',
@@ -1017,16 +1017,23 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'reconcile-github-queue-v3': {
+    shape:
+      '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined; undeliveredRepos?: Array<string> | undefined; unreadableRepos?: Array<string> | undefined }> }',
+    supersededBy: 'reconcile-github-queue-v4',
+    reason:
+      'MOTIR-11727 added each org outcome’s `onDemand` counts (queued jobs, idle runners, awaiting intents and mints that asked for the `motir-on-demand` label), counted per label set. A memo under the old id carries none, so a resumed run would record an outcome without the partition the reconcile now judges by. Re-executing the reconcile on a resumed run is safe for the reason the v1 retirement gives: coverage is counted before anything is minted, and the unique index on `(run, attempt, job, reconcile_generation)` makes a second mint collide rather than double-boot.',
+  },
   'reconcile-github-queue-v2': {
     shape:
       '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined }> }',
-    supersededBy: 'reconcile-github-queue-v3',
+    supersededBy: 'reconcile-github-queue-v4',
     reason:
       'MOTIR-11437 added each org outcome’s `undeliveredRepos` and `unreadableRepos` (repos the fleet is blind to). A memo under the old id carries neither, so the blind spots a resumed run recorded would be lost. Re-executing the reconcile on a resumed run is safe for the reason the v1 retirement gives: coverage is counted before anything is minted, and the unique index on `(run, attempt, job, reconcile_generation)` makes a second mint collide rather than double-boot.',
   },
   'reconcile-github-queue': {
     shape: '{ added: number }',
-    supersededBy: 'reconcile-github-queue-v3',
+    supersededBy: 'reconcile-github-queue-v4',
     reason:
       'MOTIR-10790 made the step return the whole reconcile outcome (per org: queued, idle runners, awaiting, added, skipped runs, error) so the provision sweep can record it on `job_run`. A memo under the old id carries only `added`. Re-executing the reconcile on a resumed run is safe: it counts queued jobs against idle runners and pending intents before minting, and the unique index on `(run, attempt, job, reconcile_generation)` makes a second mint collide rather than double-boot.',
   },

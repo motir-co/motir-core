@@ -11272,6 +11272,9 @@
             },
             "run_model_default": {
               "set": "Cambió un modelo predeterminado de ejecución"
+            },
+            "gateway_usage": {
+              "replay": "Volvió a ejecutar un grupo de uso fallido"
             }
           },
           "fleet": {
@@ -12792,6 +12795,50 @@
           "description": "El servicio de IA que guarda la conciliación no respondió. El resto de esta página no se ve afectado; inténtelo de nuevo en un momento."
         },
         "none": "Sin cifra"
+      },
+      "failed": {
+        "title": "Uso fallido",
+        "intro": "Uso que no se pudo sumar a los totales y créditos de una organización, agrupado por el error con el que falló. Aquí está todo lo que espera ahora, sea cual sea el período elegido arriba.",
+        "count": "{rows, plural, one {# fila} other {# filas}} en {groups, plural, one {# grupo} other {# grupos}}",
+        "caption": "Uso fallido, agrupado por error",
+        "col": {
+          "error": "Error",
+          "rows": "Filas",
+          "orgs": "Organizaciones",
+          "oldest": "Más antigua (UTC)",
+          "newest": "Más reciente (UTC)",
+          "replay": "Volver a ejecutar"
+        },
+        "showError": "Mostrar el error completo",
+        "hideError": "Ocultar el error completo",
+        "replay": "Volver a ejecutar",
+        "replayAria": "Volver a ejecutar {rows, plural, one {# fila} other {# filas}} que fallaron con este error",
+        "replaying": "Volviendo a ejecutar…",
+        "replayingStatus": "Volviendo a ejecutar {rows, plural, one {# fila} other {# filas}}",
+        "replayed": "Vuelto a ejecutar",
+        "confirm": {
+          "title": "¿Volver a ejecutar {rows, plural, one {# fila} other {# filas}} de uso fallido?",
+          "body": "Cada fila que falló con este error se vuelve a registrar, exactamente una vez. Una fila ya registrada nunca se cuenta dos veces, y una fila que vuelve a fallar sigue en la lista con su nuevo error.",
+          "error": "Error",
+          "scope": "{rows, plural, one {# fila} other {# filas}} · {orgs, plural, one {# organización} other {# organizaciones}}",
+          "cancel": "Cancelar",
+          "go": "Volver a ejecutar {rows, plural, one {# fila} other {# filas}}"
+        },
+        "result": {
+          "applied": "Vuelto a ejecutar: {count, plural, one {# fila registrada} other {# filas registradas}}.",
+          "none": "Ninguna volvió a fallar.",
+          "failedAgain": "{count, plural, one {# fila volvió} other {# filas volvieron}} a fallar.",
+          "sameGroup": "Siguen en este grupo.",
+          "newGroup": "Aparecen bajo su nuevo error.",
+          "unfinished": "La ejecución no terminó. Las filas que no registró siguen aquí, así que volver a ejecutarla registra cada una de ellas una sola vez."
+        },
+        "readOnly": "Solo lectura. Para volver a ejecutar el uso fallido se necesita el rol de operador.",
+        "empty": "No hay filas de uso fallido.",
+        "loading": "Cargando el uso fallido",
+        "error": {
+          "title": "Ahora mismo no se puede mostrar el uso fallido",
+          "description": "El servicio de IA que guarda el uso no respondió. El resto de esta página no se ve afectado; inténtelo de nuevo en un momento."
+        }
       }
     },
     "tenants": {
