@@ -25,6 +25,7 @@ import {
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
+import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
@@ -159,6 +160,8 @@ export async function endSessionWithin(
           { status: 'declined', decidedAt: now, decidedById: null, decisionReason: 'abandoned' },
           tx,
         );
+        // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+        await planStepRepository.deleteForPlan(plan.id, tx);
       }
       if (plan && (plan.status === 'generating' || plan.status === 'declined')) {
         await planTargetLockService.releaseForPlanWithin(plan.id, by.actor, tx, { system: true });
@@ -203,6 +206,8 @@ export async function endSessionWithin(
         },
         tx,
       );
+      // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+      await planStepRepository.deleteForPlan(plan.id, tx);
       // A person's discard is a decision and goes on the trail, as
       // `declineWithin` records one. Motir's is not — the abandoned sweep has
       // never recorded its `abandoned` either; the reason on the row says it.
@@ -486,6 +491,13 @@ export async function recordFailureWithin(
     return 'activity_moved';
   }
   if (!(await planChangeSessionRepository.markFailed(sessionId, record, tx))) return 'ended';
+  // The failed attempt is DEAD, so no session of it is still on a step (Bug MOTIR-11833): a job
+  // that dies sends no `end`, and since MOTIR-11184 a step never ages out, so every row it left
+  // would read its card as being written — the spinner on a plan nothing is writing, an
+  // `authoring` card to the authoring state, and an unwritten one to the walk's completeness
+  // check — until a Resume binds, and on a card the resumed job never targets, for good. The
+  // plan is locked above, so no step report lands between the record and this delete.
+  await planStepRepository.deleteForPlan(plan.id, tx);
   // The failure write nulls the awaiting-person marker (a session never waits for both), so the
   // planning-session gate that marker raised would be left `awaiting` with nothing behind it:
   // withdraw it, so the wait that turned into a failure leaves Waiting on you for good and the
@@ -558,6 +570,8 @@ export async function releaseUnresumableAttempt(
           },
           tx,
         );
+        // A decided plan has no session running: its steps go with the decision (Bug MOTIR-11833).
+        await planStepRepository.deleteForPlan(plan.id, tx);
         await planTargetLockService.releaseForPlanWithin(plan.id, actor, tx, { system: true });
       }
       await planTargetLockService.releaseForSessionWithin(sessionId, actor, tx, { system: true });
