@@ -74,6 +74,7 @@ function delivery(
     completedAt?: string;
     labels?: string[];
     name?: string;
+    conclusion?: string;
   },
 ) {
   return {
@@ -86,6 +87,7 @@ function delivery(
       runner_id: job.runnerId ?? null,
       ...(job.name ? { name: job.name } : {}),
       ...(job.completedAt ? { completed_at: job.completedAt } : {}),
+      ...(job.conclusion ? { conclusion: job.conclusion } : {}),
     },
     repository: { id: 99001, name: 'acme-web', owner: { login: 'motir-projects' } },
     installation: { id: 556677 },
@@ -170,11 +172,13 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
         jobId: bootedFor.jobId,
         runnerId: 9002,
         completedAt: '2026-11-13T10:00:00Z',
+        conclusion: 'failure',
       }),
     );
 
     const done = await read(bootedFor.id);
     expect(done.jobCompletedAt).toEqual(new Date('2026-11-13T10:00:00Z'));
+    expect(done.jobConclusion).toBe('failure');
     expect(done.jobPickedUpAt).toBeNull();
     expect((await read(tookIt.id)).jobPickedUpAt).not.toBeNull();
   });
@@ -195,6 +199,7 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
         repoName: 'acme-web',
         requestedLabels: [MOTIR_RUNNER_LABEL],
         completedAt: first,
+        conclusion: 'success',
       },
       first,
     );
@@ -210,6 +215,7 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
         repoName: 'acme-web',
         requestedLabels: [MOTIR_RUNNER_LABEL],
         completedAt: null,
+        conclusion: null,
       },
       new Date('2026-11-13T11:00:00Z'),
     );
@@ -218,6 +224,7 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
     const row = await read(intent.id);
     expect(row.jobPickedUpAt).toEqual(first);
     expect(row.jobCompletedAt).toEqual(first);
+    expect(row.jobConclusion).toBe('success');
   });
 
   it('a completed job with no instant and no runner stamps the receipt time and no pickup', async () => {
@@ -237,6 +244,7 @@ describe('workflow_job progress stamps the intents supervision reads', () => {
         repoName: 'acme-web',
         requestedLabels: [MOTIR_RUNNER_LABEL],
         completedAt: null,
+        conclusion: null,
       },
       now,
     );

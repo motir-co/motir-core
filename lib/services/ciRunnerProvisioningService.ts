@@ -339,7 +339,9 @@ export const ciRunnerProvisioningService = {
    *     working another intent's job, and keep an idle one alive.
    *   - `jobCompletedAt` is stamped by job key on `completed`: the job this
    *     intent was booted for is finished, so if its runner has taken nothing
-   *     it never will take that job.
+   *     it never will take that job. The job's conclusion is stamped with it
+   *     (MOTIR-11728), so a Spot reclaim can tell a job that passed from one
+   *     the reclaim itself failed.
    *
    * Both stamps are write-once. A job outside the fleet's labels is ignored
    * before any read, exactly as {@link recordQueuedJob} gates it.
@@ -380,6 +382,7 @@ export const ciRunnerProvisioningService = {
           ? await ciRunnerProvisioningIntentRepository.markJobCompleted(
               job,
               event.completedAt ?? now,
+              event.conclusion,
               tx,
             )
           : 0;

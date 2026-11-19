@@ -83,6 +83,11 @@ export interface CiRunnerSettleRecord {
  */
 export type CiRunnerRerunState = 'pending' | 'requested' | 'refused' | 'expired' | 'capped';
 
+/** The `workflow_job` conclusions that mean the job FINISHED ITS WORK
+ *  (MOTIR-11728) — the only ones that spare a Spot-interrupted job its re-run.
+ *  A reclaimed runner's job completes `failure` or `cancelled`. */
+export const FINISHED_WORK_CONCLUSIONS = ['success', 'skipped'] as const;
+
 /** The re-run states the next run attempt's intent carries a count from: the
  *  re-run was asked for (or is being asked for) — see `findCarriedSpotInterruptions`. */
 const RERUN_CARRIES_COUNT: readonly CiRunnerRerunState[] = ['pending', 'requested'];
@@ -717,16 +722,23 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
-   * Whether GitHub has reported ONE job completed on any intent booted for it
-   * (MOTIR-11728) — a job that finished before its runner was reclaimed is never
-   * re-run.
+   * Whether GitHub has reported ONE job as having FINISHED ITS WORK — completed
+   * with a {@link FINISHED_WORK_CONCLUSIONS} conclusion — on any intent booted
+   * for it (MOTIR-11728). Only such a job is spared a Spot re-run. A job the
+   * reclaim cut off ALSO completes, usually before the supervisor settles, but
+   * as `failure` / `cancelled`; and a completion whose conclusion is unknown is
+   * not proof the work was done, so it is re-run too.
    */
-  async isJobCompleted(
+  async isJobFinishedWork(
     job: { runId: string; runAttempt: number; jobId: string },
     tx: Prisma.TransactionClient,
   ): Promise<boolean> {
     const row = await tx.ciRunnerProvisioningIntent.findFirst({
-      where: { ...job, jobCompletedAt: { not: null } },
+      where: {
+        ...job,
+        jobCompletedAt: { not: null },
+        jobConclusion: { in: [...FINISHED_WORK_CONCLUSIONS] },
+      },
       select: { id: true },
     });
     return row !== null;
@@ -793,11 +805,12 @@ export const ciRunnerProvisioningIntentRepository = {
   async markJobCompleted(
     job: { runId: string; runAttempt: number; jobId: string },
     at: Date,
+    conclusion: string | null,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
       where: { ...job, jobCompletedAt: null },
-      data: { jobCompletedAt: at },
+      data: { jobCompletedAt: at, jobConclusion: conclusion },
     });
     return count;
   },

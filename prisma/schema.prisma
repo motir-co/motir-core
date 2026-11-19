@@ -11881,6 +11881,11 @@ model CiRunnerProvisioningIntent {
   /// Supervision retires a runner whose own job is done and which has taken no
   /// job, instead of letting it idle until the timeout.
   jobCompletedAt DateTime? @map("job_completed_at")
+  /// The conclusion GitHub gave that job (MOTIR-11728), written with
+  /// `jobCompletedAt`: `success`, `failure`, `cancelled`, `skipped`, … or NULL
+  /// when the delivery carried none. A Spot reclaim spares a job its re-run only
+  /// when it concluded `success` / `skipped`.
+  jobConclusion  String?   @map("job_conclusion")
 
   /// The job this intent's RUNNER actually took (MOTIR-11728) — its run id, run
   /// attempt, job id and name, from the `workflow_job` `in_progress` delivery

@@ -141,6 +141,28 @@ async function takes(session: SupervisionSession, job: NormalizedWorkflowJobEven
     repoName: job.repoName,
     requestedLabels: job.requestedLabels,
     completedAt: null,
+    conclusion: null,
+  });
+}
+
+/** GitHub reports `job` COMPLETED with `conclusion` on the session's runner. */
+async function completes(
+  session: SupervisionSession,
+  job: NormalizedWorkflowJobEvent,
+  conclusion: string | null,
+) {
+  await ciRunnerProvisioningService.recordJobProgress({
+    action: 'completed',
+    runId: job.runId,
+    runAttempt: job.runAttempt,
+    jobId: job.jobId,
+    jobName: job.jobName,
+    runnerId: session.githubRunnerId,
+    repoOwner: job.repoOwner,
+    repoName: job.repoName,
+    requestedLabels: job.requestedLabels,
+    completedAt: new Date(),
+    conclusion,
   });
 }
 
@@ -596,33 +618,51 @@ describe('the retry pass throws nowhere', () => {
 });
 
 describe('what the plan reads', () => {
-  it('a taken job GitHub already reported completed is not re-run', async () => {
-    await seedTenant();
-    const { intentId, job } = await queue(1);
-    const session = await boot(intentId);
-    await takes(session, job);
-    await ciRunnerProvisioningService.recordJobProgress({
-      action: 'completed',
-      runId: job.runId,
-      runAttempt: job.runAttempt,
-      jobId: job.jobId,
-      jobName: job.jobName,
-      runnerId: session.githubRunnerId,
-      repoOwner: job.repoOwner,
-      repoName: job.repoName,
-      requestedLabels: job.requestedLabels,
-      completedAt: new Date(),
-    });
-    containerEnds({ reclaimed: true, started: true });
+  it.each(['success', 'skipped'])(
+    'a taken job GitHub already reported %s is not re-run',
+    async (conclusion) => {
+      await seedTenant();
+      const { intentId, job } = await queue(1);
+      const session = await boot(intentId);
+      await takes(session, job);
+      await completes(session, job, conclusion);
+      containerEnds({ reclaimed: true, started: true });
 
-    await superviseToEnd(session);
+      await superviseToEnd(session);
 
-    expect(rerunJob).not.toHaveBeenCalled();
-    expect(await read(intentId)).toMatchObject({
-      teardownReason: 'spot_interrupted',
-      rerunState: null,
-    });
-  });
+      expect(rerunJob).not.toHaveBeenCalled();
+      expect(await read(intentId)).toMatchObject({
+        teardownReason: 'spot_interrupted',
+        rerunState: null,
+      });
+      expect(logged()).toContain('already passed');
+    },
+  );
+
+  // The usual order of a reclaim: the runner gets its shutdown signal, GitHub
+  // fails the job and its `completed` delivery lands BEFORE the supervisor's
+  // next poll sees the instance gone. The job is still re-run, once.
+  it.each(['failure', 'cancelled', null])(
+    'a taken job GitHub reported completed as %s before the settle is still re-run once',
+    async (conclusion) => {
+      await seedTenant();
+      const { intentId, job } = await queue(1);
+      const session = await boot(intentId);
+      await takes(session, job);
+      await completes(session, job, conclusion);
+      containerEnds({ reclaimed: true, started: true });
+
+      await superviseToEnd(session);
+
+      expect(rerunJob).toHaveBeenCalledTimes(1);
+      expect(rerunJob.mock.calls[0]![1]).toBe(job.jobId);
+      expect(await read(intentId)).toMatchObject({
+        teardownReason: 'spot_interrupted',
+        takenJobSpotInterruptions: 1,
+        rerunState: 'requested',
+      });
+    },
+  );
 
   it('a job with no name is re-run with count 1, and its missing name is logged', async () => {
     await seedTenant();

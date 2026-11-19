@@ -164,6 +164,7 @@ describe('parseWorkflowJobProgressEvent — a runner took the job, or it finishe
       repoName: 'acme-web',
       requestedLabels: ['motir-runner'],
       completedAt: null,
+      conclusion: null,
     });
   });
 
@@ -189,6 +190,24 @@ describe('parseWorkflowJobProgressEvent — a runner took the job, or it finishe
       expect(
         provider.parseWorkflowJobProgressEvent!(progressPayload('in_progress', { name })),
       ).toMatchObject({ jobName: null });
+    }
+  });
+
+  it('carries a completed job’s conclusion, and none on in_progress or when absent (MOTIR-11728)', () => {
+    expect(
+      provider.parseWorkflowJobProgressEvent!(
+        progressPayload('completed', { conclusion: 'failure' }),
+      ),
+    ).toMatchObject({ conclusion: 'failure' });
+    expect(
+      provider.parseWorkflowJobProgressEvent!(
+        progressPayload('in_progress', { conclusion: 'success' }),
+      ),
+    ).toMatchObject({ conclusion: null });
+    for (const conclusion of [undefined, null, '', 3]) {
+      expect(
+        provider.parseWorkflowJobProgressEvent!(progressPayload('completed', { conclusion })),
+      ).toMatchObject({ conclusion: null });
     }
   });
 

@@ -551,6 +551,12 @@ export interface NormalizedWorkflowJobProgressEvent {
    *  and on a `completed` delivery that carries no instant. The reader stamps
    *  its own receipt time then: this is a supervision signal, not a meter. */
   completedAt: Date | null;
+  /** The job's RAW conclusion on `completed` (`success`, `failure`,
+   *  `cancelled`, `skipped`, …), or `null` — on `in_progress`, and on a
+   *  `completed` delivery that carries none (MOTIR-11728). A job whose runner a
+   *  Spot reclaim cut off completes `failure` / `cancelled`, and only a job that
+   *  did NOT is spared its re-run. */
+  conclusion: string | null;
 }
 
 /** One job of a completed workflow run, normalized across providers. The meter

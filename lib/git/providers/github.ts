@@ -2073,6 +2073,12 @@ export const githubProvider: GitProvider = {
       repoName,
       requestedLabels,
       completedAt: action === 'completed' ? parseDate(job['completed_at']) : null,
+      conclusion:
+        action === 'completed' &&
+        typeof job['conclusion'] === 'string' &&
+        job['conclusion'].length > 0
+          ? job['conclusion']
+          : null,
     };
   },
 

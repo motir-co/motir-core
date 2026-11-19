@@ -65,7 +65,8 @@ export type SpotRerunAsk = 'requested' | 'refused' | 'pending';
  * The re-run bookkeeping a `spot_interrupted` settle writes, or `undefined` when
  * the runner took no job (the job it was booted for is still queued, and the
  * reconcile covers it like any lost runner) or the job it took had already
- * completed. A third interruption is written `capped` and warned about.
+ * finished its work (`success` / `skipped`). A job GitHub reported `failure` or
+ * `cancelled` is the one the reclaim cut off, and is re-run. A third interruption is written `capped` and warned about.
  */
 export async function planSpotRerun(
   intentId: string,
@@ -81,8 +82,8 @@ export async function planSpotRerun(
     runAttempt: intent.takenRunAttempt,
     jobId: intent.takenJobId,
   };
-  if (await intents.isJobCompleted(taken, tx)) {
-    console.warn('[ciSpotRerun] the reclaimed runner’s job had already completed — no re-run', {
+  if (await intents.isJobFinishedWork(taken, tx)) {
+    console.warn('[ciSpotRerun] the reclaimed runner’s job had already passed — no re-run', {
       intentId,
       ...jobLabel(intent),
     });
