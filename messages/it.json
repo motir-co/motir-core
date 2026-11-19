@@ -11272,6 +11272,9 @@
             },
             "run_model_default": {
               "set": "Ha modificato un modello predefinito lato esecuzione"
+            },
+            "gateway_usage": {
+              "replay": "Ha rieseguito un gruppo di utilizzo non registrato"
             }
           },
           "fleet": {
@@ -12792,6 +12795,50 @@
           "description": "Il servizio di IA che conserva la riconciliazione non ha risposto. Il resto della pagina non è interessato: riprova tra un momento."
         },
         "none": "Nessun importo"
+      },
+      "failed": {
+        "title": "Utilizzo non registrato",
+        "intro": "Utilizzo che non è stato possibile aggiungere ai totali e ai crediti di un’organizzazione, raggruppato per l’errore con cui è fallito. Qui c’è tutto ciò che è in attesa ora, qualunque sia il periodo scelto sopra.",
+        "count": "{rows, plural, one {# riga} other {# righe}} in {groups, plural, one {# gruppo} other {# gruppi}}",
+        "caption": "Utilizzo non registrato, raggruppato per errore",
+        "col": {
+          "error": "Errore",
+          "rows": "Righe",
+          "orgs": "Organizzazioni",
+          "oldest": "Più vecchia (UTC)",
+          "newest": "Più recente (UTC)",
+          "replay": "Riesegui"
+        },
+        "showError": "Mostra l’errore completo",
+        "hideError": "Nascondi l’errore completo",
+        "replay": "Riesegui",
+        "replayAria": "Riesegui {rows, plural, one {# riga fallita} other {# righe fallite}} con questo errore",
+        "replaying": "Riesecuzione…",
+        "replayingStatus": "Riesecuzione di {rows, plural, one {# riga} other {# righe}}",
+        "replayed": "Rieseguito",
+        "confirm": {
+          "title": "Rieseguire {rows, plural, one {# riga} other {# righe}} di utilizzo non registrato?",
+          "body": "Ogni riga fallita con questo errore viene registrata di nuovo, esattamente una volta. Una riga già registrata non viene mai contata due volte, e una riga che fallisce di nuovo resta elencata con il suo nuovo errore.",
+          "error": "Errore",
+          "scope": "{rows, plural, one {# riga} other {# righe}} · {orgs, plural, one {# organizzazione} other {# organizzazioni}}",
+          "cancel": "Annulla",
+          "go": "Riesegui {rows, plural, one {# riga} other {# righe}}"
+        },
+        "result": {
+          "applied": "Rieseguito: {count, plural, one {# riga registrata} other {# righe registrate}}.",
+          "none": "Nessuna è fallita di nuovo.",
+          "failedAgain": "{count, plural, one {# riga è fallita} other {# righe sono fallite}} di nuovo.",
+          "sameGroup": "Restano in questo gruppo.",
+          "newGroup": "Sono elencate sotto il loro nuovo errore.",
+          "unfinished": "La riesecuzione non è terminata. Le righe non registrate restano elencate qui, quindi rieseguire registra ciascuna di esse una sola volta."
+        },
+        "readOnly": "Sola lettura. Per rieseguire l’utilizzo non registrato serve il ruolo di operatore.",
+        "empty": "Nessuna riga di utilizzo non registrato.",
+        "loading": "Caricamento dell’utilizzo non registrato",
+        "error": {
+          "title": "Al momento non è possibile mostrare l’utilizzo non registrato",
+          "description": "Il servizio di IA che conserva l’utilizzo non ha risposto. Il resto della pagina non è interessato: riprova tra un momento."
+        }
       }
     },
     "tenants": {

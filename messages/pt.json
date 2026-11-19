@@ -11272,6 +11272,9 @@
             },
             "run_model_default": {
               "set": "Alterou um modelo padrão do lado da execução"
+            },
+            "gateway_usage": {
+              "replay": "Reprocessou um grupo de uso com falha"
             }
           },
           "fleet": {
@@ -12792,6 +12795,50 @@
           "description": "O serviço de IA que mantém a conciliação não respondeu. O resto desta página não é afetado — tente novamente em instantes."
         },
         "none": "Sem valor"
+      },
+      "failed": {
+        "title": "Uso com falha",
+        "intro": "Uso que não pôde ser somado aos totais e créditos de uma organização, agrupado pelo erro com que falhou. Aqui está tudo o que aguarda agora, seja qual for o período escolhido acima.",
+        "count": "{rows, plural, one {# linha} other {# linhas}} em {groups, plural, one {# grupo} other {# grupos}}",
+        "caption": "Uso com falha, agrupado por erro",
+        "col": {
+          "error": "Erro",
+          "rows": "Linhas",
+          "orgs": "Organizações",
+          "oldest": "Mais antiga (UTC)",
+          "newest": "Mais recente (UTC)",
+          "replay": "Reprocessar"
+        },
+        "showError": "Mostrar o erro completo",
+        "hideError": "Ocultar o erro completo",
+        "replay": "Reprocessar",
+        "replayAria": "Reprocessar {rows, plural, one {# linha} other {# linhas}} que falharam com este erro",
+        "replaying": "Reprocessando…",
+        "replayingStatus": "Reprocessando {rows, plural, one {# linha} other {# linhas}}",
+        "replayed": "Reprocessado",
+        "confirm": {
+          "title": "Reprocessar {rows, plural, one {# linha} other {# linhas}} de uso com falha?",
+          "body": "Cada linha que falhou com este erro é registrada novamente, exatamente uma vez. Uma linha já registrada nunca é contada duas vezes, e uma linha que falhar de novo continua listada com o novo erro.",
+          "error": "Erro",
+          "scope": "{rows, plural, one {# linha} other {# linhas}} · {orgs, plural, one {# organização} other {# organizações}}",
+          "cancel": "Cancelar",
+          "go": "Reprocessar {rows, plural, one {# linha} other {# linhas}}"
+        },
+        "result": {
+          "applied": "Reprocessado: {count, plural, one {# linha registrada} other {# linhas registradas}}.",
+          "none": "Nenhuma falhou de novo.",
+          "failedAgain": "{count, plural, one {# linha falhou} other {# linhas falharam}} de novo.",
+          "sameGroup": "Elas continuam neste grupo.",
+          "newGroup": "Elas aparecem sob o novo erro.",
+          "unfinished": "O reprocessamento não terminou. As linhas que ele não registrou continuam listadas aqui, então reprocessar de novo registra cada uma delas uma única vez."
+        },
+        "readOnly": "Somente leitura. Reprocessar o uso com falha exige a função de operador.",
+        "empty": "Nenhuma linha de uso com falha.",
+        "loading": "Carregando o uso com falha",
+        "error": {
+          "title": "Não é possível mostrar o uso com falha agora",
+          "description": "O serviço de IA que mantém o uso não respondeu. O resto desta página não é afetado — tente novamente em instantes."
+        }
       }
     },
     "tenants": {
