@@ -107,6 +107,34 @@ const LIVE_STATES = ['pending', 'running', 'stopping', 'stopped'];
 const TERMINAL_STATES = new Set(['shutting-down', 'stopping', 'stopped']);
 
 /**
+ * EC2's `StateReason.Code` for a Spot instance it terminated to take the capacity
+ * back (MOTIR-11728): "The instance was terminated because the number of Spot
+ * requests with a maximum price equal to or higher than the Spot price exceeded
+ * available capacity or because of an increase in the Spot price."
+ * https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_StateReason.html
+ */
+const SPOT_TERMINATION_CODE = 'Server.SpotInstanceTermination';
+
+/** `InstanceLifecycle` of a Spot instance (absent on an on-demand one).
+ *  https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Instance.html */
+const SPOT_LIFECYCLE = 'spot';
+
+/**
+ * Whether EC2 RECLAIMED this instance for Spot capacity (MOTIR-11728): it was a
+ * Spot instance AND its state-reason code is the Spot termination code. Read
+ * from the structured fields only, never from the free-text reason; our own
+ * terminate (`Client.UserInitiatedShutdown`), a health check, or an on-demand
+ * instance never qualify. Only a `shutting-down` or `terminated` instance can be.
+ */
+function reclaimedBySpot(instance: Ec2Instance): boolean {
+  return (
+    (instance.state === 'terminated' || instance.state === 'shutting-down') &&
+    instance.instanceLifecycle === SPOT_LIFECYCLE &&
+    instance.stateReasonCode === SPOT_TERMINATION_CODE
+  );
+}
+
+/**
  * How long a STOPPED index VM whose console carries no marker yet is held
  * non-terminal, measured from its stop (MOTIR-10805). EC2 posts an instance's
  * buffered console output a few minutes AFTER a state transition — 4½ to 7
@@ -849,9 +877,13 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       // live above.
       const read = stopped && index ? await indexOutcome(instance) : { exitCode: null };
       const { markerMissing, ...outcome } = read as typeof read & { markerMissing?: true };
+      // EC2 keeps a terminated instance describable for a while after it ends,
+      // and supervision polls far more often than that — so WHY it ended is read
+      // here, while it still can be (MOTIR-11728).
+      const reclaim = reclaimedBySpot(instance) ? { reclaimed: true } : {};
       if (instance.state === 'terminated') {
         firstSeenStopped.delete(instance.instanceId);
-        return { ...gone(handle), ...outcome };
+        return { ...gone(handle), ...outcome, ...reclaim };
       }
       // A stopped index VM whose console holds no marker YET is not finished
       // being read: EC2 posts the buffer minutes after the stop (MOTIR-10805).
@@ -872,6 +904,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       if (terminal) firstSeenStopped.delete(instance.instanceId);
       return {
         ...outcome,
+        ...reclaim,
         handleId: handle.id,
         exists: true,
         state: instance.state,

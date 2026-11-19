@@ -537,6 +537,9 @@ export interface NormalizedWorkflowJobProgressEvent {
   runId: string;
   runAttempt: number;
   jobId: string;
+  /** The job's name (`workflow_job.name`), or `null` when absent (MOTIR-11728).
+   *  A re-run gives the job a new id but keeps its name. */
+  jobName: string | null;
   /** The runner the job was assigned to, or `null` when none was (a job
    *  cancelled while still queued completes with no runner). */
   runnerId: number | null;
@@ -548,6 +551,12 @@ export interface NormalizedWorkflowJobProgressEvent {
    *  and on a `completed` delivery that carries no instant. The reader stamps
    *  its own receipt time then: this is a supervision signal, not a meter. */
   completedAt: Date | null;
+  /** The job's RAW conclusion on `completed` (`success`, `failure`,
+   *  `cancelled`, `skipped`, …), or `null` — on `in_progress`, and on a
+   *  `completed` delivery that carries none (MOTIR-11728). A job whose runner a
+   *  Spot reclaim cut off completes `failure` / `cancelled`, and only a job that
+   *  did NOT is spared its re-run. */
+  conclusion: string | null;
 }
 
 /** One job of a completed workflow run, normalized across providers. The meter

@@ -199,7 +199,11 @@ export type TeardownReason =
   | 'runner_idle'
   /** A CI runner took no job, and the job it was booted for was already done on
    *  GitHub — run by another runner, or finished before this one booted (MOTIR-11230). */
-  | 'job_done_elsewhere';
+  | 'job_done_elsewhere'
+  /** The provider RECLAIMED the container for capacity while it ran (MOTIR-11728):
+   *  a Spot-style interruption. Not a pass, a failure, a boot failure or a dead
+   *  host — the job it was running, if any, is re-run. */
+  | 'spot_interrupted';
 
 /**
  * Provider-truth status, for the reaper and for diagnostics (§4's `describe`).
@@ -255,6 +259,14 @@ export interface ContainerStatus {
    * worked.
    */
   readonly imagePullFailed?: boolean;
+  /**
+   * True only when the provider reports that IT reclaimed the container for
+   * capacity (MOTIR-11728) — on AWS, a Spot instance EC2 terminated to take its
+   * capacity back. Our own teardown, a user, a health check, or any container
+   * that was not interruptible never sets it. Absent means no reclaim is known.
+   * Provider-neutral: no provider's lifecycle or reason code crosses the port.
+   */
+  readonly reclaimed?: boolean;
 }
 
 /**
