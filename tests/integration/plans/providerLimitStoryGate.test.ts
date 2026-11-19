@@ -379,14 +379,16 @@ describe('B. exhausted: rate_limited in To resume, and Resume', () => {
       const body = (await res.json()) as { jobId: string };
       expect(res.status, JSON.stringify(body)).toBe(200);
 
-      // The resume re-bound the session: the dead job's wait is gone from the step and the
-      // reading, and the step itself is left for the quiet drop to judge.
+      // The dead job's wait is gone from the reading, and so is its step (Bug MOTIR-11833): the
+      // failure record and the resume bind both delete every step a dead job left.
       const resumed = await progressOf(walk);
-      expect(resumed.steps.map((s) => s.sessionKey)).toEqual(['author-1']);
-      expect(resumed.steps[0]!.providerWait).toBeNull();
+      expect(resumed.steps).toEqual([]);
       expect(readAtObserved(resumed).providerWait).toBeNull();
 
-      // The resumed job's OWN wait is reported exactly as before.
+      // The resumed job's OWN wait is reported exactly as before, on the step it reports first.
+      await accepted(
+        hostedStep(routes, walk, { sessionKey: 'author-1', step: 'author' }, body.jobId),
+      );
       const retryAt = new Date(Date.now() + 30_000);
       await accepted(
         hostedStep(routes, walk, { sessionKey: 'author-1', ...waiting(1, 5, retryAt) }, body.jobId),

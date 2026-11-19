@@ -107,24 +107,6 @@ export const planStepRepository = {
   },
 
   /**
-   * Clear EVERY session's provider-retry wait on one plan (MOTIR-9642) — the
-   * Resume bind's sweep of a dead job's waits. Leaves the steps themselves alone.
-   * Returns how many rows it touched.
-   */
-  async clearProviderWaitsForPlan(planId: string, tx: Prisma.TransactionClient): Promise<number> {
-    const r = await tx.planStep.updateMany({
-      where: { planId, providerWaitUntil: { not: null } },
-      data: {
-        providerWaitSince: null,
-        providerWaitUntil: null,
-        providerWaitAttempt: null,
-        providerWaitMaxAttempts: null,
-      },
-    });
-    return r.count;
-  },
-
-  /**
    * Store a session's in-flight card (MOTIR-11199), REPLACING its previous draft
    * whole — ONE `updateMany` whose `WHERE` carries the sequence guard, so the
    * compare and the write are a single statement under the caller's plan lock.
@@ -191,9 +173,10 @@ export const planStepRepository = {
     return r.count;
   },
 
-  /** Clear EVERY step of a plan — a walk that closed `stopped` (Bug MOTIR-11701) has no
-   *  session running, so a step it left behind would read its card as being written
-   *  after the walk resumes. Returns how many rows went. */
+  /** Clear EVERY step of a plan — a walk that closed `stopped` (Bug MOTIR-11701), an
+   *  attempt recorded failed, or one a Resume replaces (Bug MOTIR-11833) has no session
+   *  running, so a step it left behind would read its card as being written after the
+   *  walk resumes. Returns how many rows went. */
   async deleteForPlan(planId: string, tx: Prisma.TransactionClient): Promise<number> {
     const r = await tx.planStep.deleteMany({ where: { planId } });
     return r.count;

@@ -83,6 +83,10 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `git ls-files` outside `design/`, every file read once for one word. No
   // database, nothing imported from `lib/` or `app/`.
   'tests/guards/retired-replay-word.test.ts',
+  // ── tests/guards/ — a decided plan takes its steps with it (MOTIR-11833) ──
+  // Its own `readdirSync` over `lib/services/`, text-matching every terminal
+  // `planRepository.update(…)`. No database, nothing imported from `lib/` or `app/`.
+  'tests/guards/decided-plan-steps.test.ts',
   // ── tests/ — the coverage gate's own guard (MOTIR-3497) ───────────────────
   // The instance the IMPORT-shaped membership predicate could not see. It pays
   // one memoised `tinyglobby` resolution of the whole `coverage.include` set —

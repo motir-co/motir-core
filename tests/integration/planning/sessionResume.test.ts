@@ -15,6 +15,7 @@ import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionEndService } from '@/lib/services/planSessionEndService';
+import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -221,6 +222,134 @@ describe('the happy path — the SAME plan in the SAME session', () => {
       expect((await sessionRow(f.sessionId)).failedJobId).toBe('job-new-1');
     },
   );
+});
+
+// BUG MOTIR-11833 — a dead job's `plan_step` rows. A job that dies mid-walk sends no `end` for its
+// sessions, and since MOTIR-11184 a step never ages out, so each row it left read its card as being
+// written for good. The failure record deletes them, and the Resume bind deletes whatever is there.
+describe('the dead job’s steps (Bug MOTIR-11833)', () => {
+  /** An author step the way the hosted planner keys it, `ai:<jobId>:<n>`, holding a draft. */
+  async function authorStep(planId: string, jobId: string, n: number) {
+    const item = await adminDb.planItem.findFirstOrThrow({ where: { planId } });
+    await adminDb.planStep.create({
+      data: {
+        planId,
+        sessionKey: `ai:${jobId}:${n}`,
+        kind: 'author',
+        targetRef: `planItem:${item.id}`,
+        startedAt: new Date(),
+        draftPlanItemId: item.id,
+        draftSeq: 1,
+        draftTitle: 'Half a title',
+        draftUpdatedAt: new Date(),
+      },
+    });
+  }
+  const stepKeys = async (planId: string) =>
+    (await adminDb.planStep.findMany({ where: { planId }, orderBy: { sessionKey: 'asc' } })).map(
+      (row) => row.sessionKey,
+    );
+  const settle = (jobId: string) =>
+    planSessionEndService.settleFailedJob(
+      jobId,
+      { ...fx.ctx, projectId: fx.projectId },
+      { status: 'failed' },
+      {
+        readJob: async () => ({
+          error: null,
+          walkStop: {
+            phase: 'author',
+            target: null,
+            targetTitle: null,
+            depth: 1,
+            reasonCode: 'out_of_credits',
+          },
+        }),
+      },
+    );
+
+  it('recording the failure deletes every step the dead job left', T, async () => {
+    const f = await failedSession();
+    // The walk is still RUNNING on job-1 when it dies: no failure is recorded yet.
+    await adminDb.planChangeSession.update({
+      where: { id: f.sessionId },
+      data: { failedAt: null, failedJobId: null, failureReason: null, failureStopPhase: null },
+    });
+    await authorStep(f.planId, 'job-1', 1);
+    await authorStep(f.planId, 'job-1', 2);
+    expect(await stepKeys(f.planId)).toEqual(['ai:job-1:1', 'ai:job-1:2']);
+
+    const out = await settle('job-1');
+
+    expect(out).toMatchObject({ settled: 'recorded' });
+    expect((await sessionRow(f.sessionId)).failedJobId).toBe('job-1');
+    expect(await stepKeys(f.planId)).toEqual([]);
+  });
+
+  it('a resumed plan keeps no step a dead job left — only the new job’s own', T, async () => {
+    // The production shape: the rows were left by a failure recorded BEFORE the fix shipped.
+    const f = await failedSession();
+    await authorStep(f.planId, 'job-1', 3);
+    await authorStep(f.planId, 'job-1', 4);
+
+    await planSessionResumeService.resume(me(), f.sessionId);
+
+    expect(await stepKeys(f.planId)).toEqual([]);
+    await authorStep(f.planId, 'job-new-1', 1);
+    expect(await stepKeys(f.planId)).toEqual(['ai:job-new-1:1']);
+  });
+
+  // Every TERMINAL path takes the steps with it too (the card's 21:48 follow-up: a session
+  // ended `failed` declined its plan `abandoned` and kept the first job's 18 rows).
+  it('a session ended `failed` declines its plan with no step left', T, async () => {
+    const f = await failedSession();
+    await authorStep(f.planId, 'job-1', 5);
+
+    await planSessionEndService.endSession(f.sessionId, 'failed', { workspaceId: fx.workspaceId });
+
+    expect(await planRow(f.planId)).toMatchObject({
+      status: 'declined',
+      decisionReason: 'abandoned',
+    });
+    expect(await stepKeys(f.planId)).toEqual([]);
+  });
+
+  it('a person declining the generating plan leaves no step', T, async () => {
+    const f = await failedSession();
+    await authorStep(f.planId, 'job-1', 6);
+
+    await plansService.declinePlan(f.planId, fx.ctx);
+
+    expect((await planRow(f.planId)).status).toBe('declined');
+    expect(await stepKeys(f.planId)).toEqual([]);
+  });
+
+  it('an attempt released as unresumable leaves no step', T, async () => {
+    const f = await failedSession();
+    await authorStep(f.planId, 'job-1', 7);
+    await adminDb.planChangeSession.update({
+      where: { id: f.sessionId },
+      data: { failureResumable: false },
+    });
+
+    await planSessionEndService.releaseUnresumableAttempt(f.sessionId, fx.workspaceId);
+
+    expect(await planRow(f.planId)).toMatchObject({
+      status: 'declined',
+      decisionReason: 'abandoned',
+    });
+    expect(await stepKeys(f.planId)).toEqual([]);
+  });
+
+  it('the OLD job’s late failure frame deletes none of the resumed job’s steps', T, async () => {
+    const f = await failedSession();
+    await planSessionResumeService.resume(me(), f.sessionId);
+    await authorStep(f.planId, 'job-new-1', 1);
+
+    expect(await settle('job-1')).toBeNull();
+
+    expect(await stepKeys(f.planId)).toEqual(['ai:job-new-1:1']);
+  });
 });
 
 describe('every refusal costs nothing', () => {
