@@ -114,8 +114,10 @@ describe('classifyRunner — the MOTIR FLEET family (MOTIR-1923 · ADR §M)', ()
       expect(MOTIR_ON_DEMAND_RUNNER_LABEL).not.toContain(forbidden);
     }
     // Alone it is no family the meter prices — and, crucially, not the
-    // larger-runner `unknown` route with its warning either way it is read.
-    expect(MOTIR_ON_DEMAND_RUNNER_LABEL).not.toMatch(/(^|-)(\d+-?core|xlarge|large)(-|$)/i);
+    // larger-runner `unknown` route. Read through the real `classifyRunner`:
+    // the label comes FIRST, so if it ever matched the larger-runner pattern
+    // the set would classify `unknown` before the OS label is reached.
+    expect(classifyRunner([MOTIR_ON_DEMAND_RUNNER_LABEL, 'ubuntu-latest'])).toBe('linux_x64');
     expect(classifyRunner(['motir-runner', 'motir-on-demand'])).toBe('motir_fleet');
     expect(classifyRunner([MOTIR_ON_DEMAND_RUNNER_LABEL, MOTIR_FLEET_RUNNER_LABEL])).toBe(
       'motir_fleet',
