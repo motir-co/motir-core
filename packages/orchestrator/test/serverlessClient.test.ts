@@ -5,7 +5,15 @@ import {
   defaultServerlessClientFactory,
   serverlessCredentialProvider,
 } from '../src/adapters/serverless/client';
-import { environmentOfLabel, serverlessAppNames, unitOf } from '../src/adapters/serverless/names';
+import {
+  environmentOfLabel,
+  namespaceOf,
+  pushRoleArn,
+  SERVERLESS_ECR_ROOT,
+  serverlessAppNames,
+  serverlessPushNamespace,
+  unitOf,
+} from '../src/adapters/serverless/names';
 import { computeSecondsOf, metricPeriodSeconds } from '../src/adapters/serverless/usage';
 import {
   OrchestratorApiError,
@@ -295,14 +303,66 @@ describe('serverless names and usage arithmetic', () => {
     expect(environmentOfLabel('pr-12')).toEqual({ kind: 'preview', pullRequest: 12 });
   });
 
-  it('names the ECR repository from the prefix without its trailing dashes', () => {
+  it('names the ECR repository under the fixed mh root, whatever the prefix', () => {
     const production = { kind: 'production' } as const;
     expect(serverlessAppNames('mh-', 'r1', production).pushNamespace).toBe('mh/r1/production');
     expect(serverlessAppNames('mh-deploy-check-', 'r1', production).pushNamespace).toBe(
-      'mh-deploy-check/r1/production',
+      'mh/deploy-check-r1/production',
     );
     expect(serverlessAppNames('mh', 'r1', production).pushNamespace).toBe('mh/r1/production');
     expect(serverlessAppNames('mh---', 'r1', production).pushNamespace).toBe('mh/r1/production');
+    expect(serverlessAppNames('acme-', 'r1', production).pushNamespace).toBe(
+      'mh/acme-r1/production',
+    );
+    expect(serverlessPushNamespace('-mh-x--', 'r1', 'preview')).toBe('mh/mh-x-r1/preview');
+  });
+
+  // MOTIR-11829: the scoped role grants ECR writes on `repository/mh/*` only
+  // (MOTIR-9970), so every repository the adapter can name must sit under it.
+  it('keeps every ECR name the deploy check and production derive inside the mh/* grant', () => {
+    const grant = /^mh\/[a-z0-9-]+\/(preview|production)$/;
+    for (const prefix of ['mh-', 'mh-deploy-check-']) {
+      for (const rid of ['default', 'x', 'r1']) {
+        for (const kind of ['production', 'preview'] as const) {
+          const name = serverlessPushNamespace(prefix, rid, kind);
+          expect(name.startsWith(`${SERVERLESS_ECR_ROOT}/`), name).toBe(true);
+          expect(name).toMatch(grant);
+        }
+      }
+    }
+    expect(serverlessPushNamespace('mh-deploy-check-', 'default', 'production')).toBe(
+      'mh/deploy-check-default/production',
+    );
+    // Production apps are unchanged.
+    expect(serverlessAppNames('mh-', 'r1', { kind: 'production' })).toEqual({
+      appRef: 'mh-r1',
+      pushNamespace: 'mh/r1/production',
+    });
+    expect(serverlessAppNames('mh-', 'r1', { kind: 'preview', pullRequest: 2 })).toEqual({
+      appRef: 'mh-r1-pr2',
+      pushNamespace: 'mh/r1/preview',
+    });
+  });
+
+  it('reads the repository id back from an ECR name under its own prefix only', () => {
+    expect(namespaceOf('mh-', 'mh/r1/production')).toEqual({
+      repositoryId: 'r1',
+      kind: 'production',
+    });
+    expect(namespaceOf('mh-deploy-check-', 'mh/deploy-check-default/preview')).toEqual({
+      repositoryId: 'default',
+      kind: 'preview',
+    });
+    expect(namespaceOf('mh-deploy-check-', 'mh/default/production')).toBeNull();
+    expect(namespaceOf('mh-deploy-check-', 'mh/deploy-check-/production')).toBeNull();
+    expect(namespaceOf('mh-', 'mh-deploy-check/default/production')).toBeNull();
+    expect(namespaceOf('mh-', 'mh-r1')).toBeNull();
+    expect(
+      pushRoleArn('111122223333', 'mh-deploy-check-', 'mh/deploy-check-default/production'),
+    ).toBe('arn:aws:iam::111122223333:role/mh-deploy-check-default-production-push');
+    expect(pushRoleArn('111122223333', 'mh-', 'mh/r1/preview')).toBe(
+      'arn:aws:iam::111122223333:role/mh-r1-preview-push',
+    );
   });
 
   it('picks a period CloudWatch still holds at the window’s start', () => {

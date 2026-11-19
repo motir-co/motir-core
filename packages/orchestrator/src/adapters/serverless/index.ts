@@ -40,7 +40,12 @@ import { computeSecondsOf, metricPeriodSeconds } from './usage';
 
 export * from './config';
 export * from './sign';
-export { SERVERLESS_TAGS, SERVERLESS_LIVE_ALIAS } from './names';
+export {
+  SERVERLESS_ECR_ROOT,
+  SERVERLESS_LIVE_ALIAS,
+  SERVERLESS_TAGS,
+  serverlessPushNamespace,
+} from './names';
 export { LAMBDA_ENV_LIMIT_BYTES, SERVERLESS_ENV_SECRET_VAR } from './env';
 export { SERVERLESS_WARM_INSTANCES } from './idle';
 export { parseStartCommand, type ParsedStartCommand } from './startCommand';

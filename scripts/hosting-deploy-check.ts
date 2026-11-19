@@ -69,7 +69,8 @@
  *
  * `--target serverless` (MOTIR-9975) runs the serverless target instead, on
  * Motir's own serverless account and Neon organisation, with its app named
- * `mh-deploy-check-<name>` (inside the scoped role's `mh-*`):
+ * `mh-deploy-check-<name>` (inside the scoped role's `mh-*`) and its ECR
+ * repository `mh/deploy-check-<name>/production` (inside its `mh/*` grant):
  *   database  create the app's database; print its provider, ref and pair NAMES
  *   image     build tests/fixtures/hosting/serverless for release 1 and push it
  *             to the app's ECR repository; print the digest
@@ -82,7 +83,9 @@
  *   refuse    deploy the worker fixture (requires.backgroundWork) and pass only
  *             on the target's refusal naming that field and Fly
  *   destroy   destroy the release, the app and the database, printing both
- *             usages, then fail unless nothing is left
+ *             usages, then fail unless nothing is left; the database is
+ *             deleted even when an earlier call is refused, and the step then
+ *             fails naming that call
  *   all       refuse, database, deploy, probe, release2, probe, rollback,
  *             probe, status, destroy
  * It needs `MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN` (assumed from the operator's

@@ -339,7 +339,7 @@ describe('refuse', () => {
     await h.run('refuse');
     expect(spy.mock.calls[0]![0].artifact).toEqual({
       kind: 'image',
-      ref: `${FAKE_SERVERLESS_REGISTRY}/mh-deploy-check/default/production`,
+      ref: `${FAKE_SERVERLESS_REGISTRY}/mh/deploy-check-default/production`,
       digest: SERVERLESS_DEPLOY_CHECK_PLACEHOLDER_DIGEST,
     });
   });
@@ -451,6 +451,60 @@ describe('destroy', () => {
     expect(h.block('destroyed')).toMatchObject({ releases: 1 });
     expect(h.block('refused')).toMatchObject({
       message: expect.stringMatching(/still holds a release or a database/),
+    });
+  });
+
+  it('deletes the database even when destroyApp is refused, and exits 1 naming the call', async () => {
+    const denied = Object.assign(new Error('ecr: AccessDeniedException'), {
+      code: 'ORCHESTRATOR_API_FAILED',
+    });
+    const h = harness({
+      portOverrides: {
+        destroyApp: async () => {
+          throw denied;
+        },
+      },
+    });
+    await h.run('database');
+    const deleteDatabase = vi.spyOn(h.databases, 'deleteDatabase');
+    expect(await h.run('destroy')).toBe(1);
+    expect(deleteDatabase).toHaveBeenCalledTimes(1);
+    expect(h.block('destroyApp')).toMatchObject({
+      app: APP,
+      failed: 'ORCHESTRATOR_API_FAILED',
+      message: 'ecr: AccessDeniedException',
+    });
+    expect(h.block('destroyed')).toMatchObject({ releases: 0, databases: 0 });
+    expect(h.block('refused')).toMatchObject({
+      message: expect.stringMatching(/destroyApp \(ORCHESTRATOR_API_FAILED\) refused/),
+    });
+  });
+
+  it('still removes the app and the database when the release destroy throws', async () => {
+    const h = harness();
+    await h.run('database');
+    await h.run('deploy');
+    const destroyApp = vi.spyOn(h.port, 'destroyApp');
+    const deleteDatabase = vi.spyOn(h.databases, 'deleteDatabase');
+    vi.spyOn(h.fake, 'destroy').mockRejectedValue(new TypeError('lambda: throttled'));
+    expect(await h.run('destroy')).toBe(1);
+    expect(destroyApp).toHaveBeenCalled();
+    expect(deleteDatabase).toHaveBeenCalledTimes(1);
+    expect(h.block('destroy')).toMatchObject({ failed: 'TypeError', message: 'lambda: throttled' });
+    expect(h.block('refused')).toMatchObject({
+      message: expect.stringMatching(/destroy \(TypeError\) refused/),
+    });
+  });
+
+  it('names a refused database delete too, and a non-Error throw', async () => {
+    const h = harness();
+    await h.run('database');
+    vi.spyOn(h.databases, 'deleteDatabase').mockRejectedValue('neon: 500');
+    expect(await h.run('destroy')).toBe(1);
+    expect(h.block('deleteDatabase')).toMatchObject({ failed: 'neon: 500', message: 'neon: 500' });
+    expect(h.block('destroyed')).toMatchObject({ databases: 1 });
+    expect(h.block('refused')).toMatchObject({
+      message: expect.stringMatching(/deleteDatabase \(neon: 500\) refused/),
     });
   });
 

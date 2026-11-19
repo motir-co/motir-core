@@ -20,6 +20,7 @@ import type { HostingManifest } from '@/lib/hosting/manifest';
 import {
   hostingAppNames,
   ReleaseRuntimeRefusedError,
+  serverlessPushNamespace,
   type DatabaseHandle,
   type DatabasePort,
   type FakeHostingControls,
@@ -277,9 +278,14 @@ async function refuse(deps: Deps, options: DeployCheckOptions): Promise<void> {
   const worker: HostingManifest = readManifest(deps, SERVERLESS_DEPLOY_CHECK_WORKER_MANIFEST);
   const { repositoryId, appRef } = serverlessCheckApp(options.appName);
   const port = deps.serverless.port();
-  // The repository the adapter names for the app; any one in the account's own
-  // registry passes the artifact check, which is all the placeholder must do.
-  const repository = `${SERVERLESS_DEPLOY_CHECK_APP_PREFIX.slice(0, -1)}/${repositoryId}/production`;
+  // The repository the adapter names for the app, from the adapter's own naming
+  // so the two can never drift; any one in the account's own registry passes the
+  // artifact check, which is all the placeholder must do.
+  const repository = serverlessPushNamespace(
+    SERVERLESS_DEPLOY_CHECK_APP_PREFIX,
+    repositoryId,
+    'production',
+  );
   let refusal: unknown = null;
   try {
     await port.deploy({
@@ -321,26 +327,72 @@ async function refuse(deps: Deps, options: DeployCheckOptions): Promise<void> {
   }
 }
 
+/** A destroy call that was refused: which call, and what it threw. */
+interface FailedCall {
+  readonly call: 'destroy' | 'destroyApp' | 'deleteDatabase';
+  readonly error: unknown;
+}
+
+const errorCode = (error: unknown): string =>
+  error instanceof Error ? ((error as { code?: string }).code ?? error.name) : String(error);
+
+/** Run one destroy call; a refusal is printed under the call's own label and
+ *  collected, never thrown, so the calls after it still run. */
+async function attempt<T>(
+  deps: Deps,
+  appRef: string,
+  call: FailedCall['call'],
+  failed: FailedCall[],
+  run: () => Promise<T>,
+): Promise<T | null> {
+  try {
+    return await run();
+  } catch (error) {
+    failed.push({ call, error });
+    deps.print(call, {
+      app: appRef,
+      failed: errorCode(error),
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/** Remove the release, the app's remaining units and the database — the
+ *  database whatever happened before it, so a refused release or repository
+ *  call never leaves a database billing behind (MOTIR-11829). Exits non-zero
+ *  naming every call that was refused. */
 async function destroy(deps: Deps, options: DeployCheckOptions): Promise<void> {
   const { appRef } = serverlessCheckApp(options.appName);
   const port = deps.serverless.port();
   const databasePort = deps.serverless.databasePort();
+  const failed: FailedCall[] = [];
   // The release's usage is read by `destroy` itself, before anything goes.
   const handle = await servingHandle(port, appRef);
   const usage = handle
-    ? await port.destroy(handle, 'operator')
+    ? await attempt(deps, appRef, 'destroy', failed, () => port.destroy(handle, 'operator'))
     : { appRef, runningSeconds: 0, invocations: 0 };
-  deps.print('destroy', { app: appRef, usage: JSON.stringify(usage) });
-  const remaining = await port.destroyApp({ appRef });
-  deps.print('destroyApp', { app: appRef, usage: JSON.stringify(remaining) });
+  if (usage) deps.print('destroy', { app: appRef, usage: JSON.stringify(usage) });
+  const remaining = await attempt(deps, appRef, 'destroyApp', failed, () =>
+    port.destroyApp({ appRef }),
+  );
+  if (remaining) deps.print('destroyApp', { app: appRef, usage: JSON.stringify(remaining) });
   const database = await findDatabase(databasePort, appRef);
   const databaseUsage = database
-    ? await databasePort.deleteDatabase(database)
+    ? await attempt(deps, appRef, 'deleteDatabase', failed, () =>
+        databasePort.deleteDatabase(database),
+      )
     : { applicationRef: appRef, computeSeconds: 0, storageBytes: 0 };
-  deps.print('deleteDatabase', { app: appRef, usage: JSON.stringify(databaseUsage) });
+  if (databaseUsage) {
+    deps.print('deleteDatabase', { app: appRef, usage: JSON.stringify(databaseUsage) });
+  }
   const releases = await port.listReleases({ appRef });
   const left = await findDatabase(databasePort, appRef);
   deps.print('destroyed', { app: appRef, releases: releases.length, databases: left ? 1 : 0 });
+  if (failed.length > 0) {
+    const named = failed.map((f) => `${f.call} (${errorCode(f.error)})`).join(', ');
+    throw new ServerlessDeployCheckFailedError(`${appRef}: ${named} refused`);
+  }
   if (releases.length > 0 || left) {
     throw new ServerlessDeployCheckFailedError(`${appRef} still holds a release or a database`);
   }
