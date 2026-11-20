@@ -3,7 +3,7 @@ import type { AwsSessionCredentials } from '@motir/orchestrator';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import {
   TENANT_ACCOUNT_REGION,
-  tenantDeployPolicyDocument,
+  tenantDeployPolicies,
   type HostingTenantAccountState,
 } from '@/lib/ciFleet/hostingTenantAccounts';
 import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
@@ -36,7 +36,7 @@ const OLD_POLICY = JSON.stringify({
   Version: '2012-10-17',
   Statement: [{ Effect: 'Allow', Action: 'ecs:*', Resource: '*' }],
 });
-const NEW_POLICY = JSON.stringify(tenantDeployPolicyDocument());
+const NEW_POLICY = JSON.stringify(tenantDeployPolicies());
 
 let organization: FakeOrganization;
 let logs: string[];

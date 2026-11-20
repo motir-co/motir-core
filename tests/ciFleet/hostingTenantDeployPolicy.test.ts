@@ -1,4 +1,6 @@
-// MOTIR-10005 — the tenant deploy role's policy, read as data. A permission
+// MOTIR-10005 — the tenant deploy role's policy, read as data: its four managed
+// policies (MOTIR-11878) read together as what the role may do, and each
+// measured on its own against IAM's managed-policy size limit. A permission
 // that is too narrow fails only on a live stack, and one that is too wide breaks
 // the tenant boundary silently, so both directions are asserted here: what the
 // six templates and the four modules need is granted, under the right tag
@@ -10,14 +12,18 @@ import { describe, expect, it } from 'vitest';
 import {
   AWS_CONTAINER_DEPLOY_ACTIONS,
   AWS_FUNCTION_DEPLOY_ACTIONS,
+  AWS_MANAGED_POLICY_MAX_CHARS,
   AWS_NETWORK_DEPLOY_ACTIONS,
   AWS_REGISTRY_DEPLOY_ACTIONS,
+  AWS_ROLE_MANAGED_POLICIES_MAX,
   AWS_TENANT_STACKS_DIR,
+  managedPolicySetProblems,
 } from '@motir/orchestrator';
 import {
   TENANT_ACCOUNT_REGION,
   TENANT_DEPLOY_ROLE_NAME,
   TENANT_MODULE_ACTIONS,
+  tenantDeployPolicies,
   tenantDeployPolicyDocument,
 } from '@/lib/ciFleet/hostingTenantAccounts';
 
@@ -30,6 +36,7 @@ interface Statement {
   Condition?: Record<string, Record<string, unknown>>;
 }
 
+const POLICIES = tenantDeployPolicies();
 const DOCUMENT = tenantDeployPolicyDocument();
 const STATEMENTS = DOCUMENT.Statement as unknown as Statement[];
 const ALLOWS = STATEMENTS.filter((s) => s.Effect === 'Allow');
@@ -165,9 +172,78 @@ describe('the tenant deploy policy — what it grants', () => {
       },
     ]);
   });
+});
 
-  it('fits the 10,240-character limit AWS sets on a role’s inline policies', () => {
-    expect(JSON.stringify(DOCUMENT).length).toBeLessThanOrEqual(10_240);
+// MOTIR-11878: the grants are four customer-managed policies, never one inline
+// policy, so each is measured against IAM's 6,144-character managed limit.
+describe('the tenant deploy policy — its managed policies', () => {
+  it('is four policies, motir-tenant-deploy-<family>, within the ten a role may hold', () => {
+    expect(POLICIES.map((p) => p.name)).toEqual([
+      `${TENANT_DEPLOY_ROLE_NAME}-compute`,
+      `${TENANT_DEPLOY_ROLE_NAME}-network`,
+      `${TENANT_DEPLOY_ROLE_NAME}-data`,
+      `${TENANT_DEPLOY_ROLE_NAME}-identity`,
+    ]);
+    expect(POLICIES.length).toBeLessThanOrEqual(AWS_ROLE_MANAGED_POLICIES_MAX);
+    expect(managedPolicySetProblems(POLICIES)).toEqual([]);
+    for (const policy of POLICIES) {
+      expect(policy.description, policy.name).toMatch(/^Motir tenant deploys: .+\.$/);
+      expect(policy.document.Version).toBe('2012-10-17');
+      expect(policy.document.Statement.length, policy.name).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(tenantDeployPolicies().map((p) => [p.name, p] as const))(
+    '%s fits the 6,144-character limit AWS sets on a managed policy',
+    (_name, policy) => {
+      expect(AWS_MANAGED_POLICY_MAX_CHARS).toBe(6_144);
+      expect(JSON.stringify(policy.document).length).toBeLessThanOrEqual(6_144);
+    },
+  );
+
+  it('splits the statements by service family, each statement in exactly one policy', () => {
+    const familyOf = (sid: string) =>
+      POLICIES.filter((p) => p.document.Statement.some((s) => s['Sid'] === sid)).map((p) =>
+        p.name.replace(`${TENANT_DEPLOY_ROLE_NAME}-`, ''),
+      );
+    const sids = STATEMENTS.map((s) => s.Sid!);
+    expect(new Set(sids).size).toBe(sids.length);
+    expect(DOCUMENT.Statement).toEqual(POLICIES.flatMap((p) => p.document.Statement));
+    const expected: Array<[string, string]> = [
+      ['CloudFormationMotirStacks', 'compute'],
+      ['LambdaCreate', 'compute'],
+      ['EcsChange', 'compute'],
+      ['RegistryCreate', 'compute'],
+      ['NetworkCreate', 'network'],
+      ['LoadBalancingChange', 'network'],
+      ['FrontDoorCreate', 'network'],
+      ['DatabaseCreate', 'data'],
+      ['SecretsChange', 'data'],
+      ['LogsCreate', 'data'],
+      ['UsageParameters', 'data'],
+      ['OnlyTheTenantRegion', 'identity'],
+      ['ReleaseRoles', 'identity'],
+      ['NeverTheDeployRoleItself', 'identity'],
+    ];
+    for (const [sid, family] of expected) expect(familyOf(sid), sid).toEqual([family]);
+  });
+
+  it('names a policy over the limit, a set over ten and a repeated name as problems', () => {
+    const big = {
+      name: 'big',
+      description: 'd',
+      document: {
+        Version: '2012-10-17' as const,
+        Statement: [{ Effect: 'Allow', Action: 'x'.repeat(6_200), Resource: '*' }],
+      },
+    };
+    const small = { ...big, name: 'small', document: { ...big.document, Statement: [] } };
+    expect(managedPolicySetProblems([big])).toEqual([
+      expect.stringMatching(/^big is \d+ characters, over 6144$/),
+    ]);
+    expect(managedPolicySetProblems([small, small])).toEqual(['small is named twice']);
+    const eleven = Array.from({ length: 11 }, (_, i) => ({ ...small, name: `p${i}` }));
+    expect(managedPolicySetProblems(eleven)).toEqual(['11 policies, over the 10 a role may hold']);
   });
 });
 
@@ -275,6 +351,58 @@ describe('the tenant deploy policy — its tag conditions', () => {
       `arn:aws:cloudformation:${TENANT_ACCOUNT_REGION}:111122223333:stack/${name}/abc`;
     expect(grantedOn('cloudformation:CreateStack', stack('motir-release-mh-x'))).toBe(true);
     expect(grantedOn('cloudformation:CreateStack', stack('someone-else'))).toBe(false);
+  });
+});
+
+describe('the tenant deploy policy — the load balancer (MOTIR-11878)', () => {
+  const elb = (resource: string) =>
+    `arn:aws:elasticloadbalancing:${TENANT_ACCOUNT_REGION}:*:${resource}`;
+
+  it('lists every load-balancer change action explicitly, with no wildcard', () => {
+    const change = ALLOWS.find((s) => s.Sid === 'LoadBalancingChange')!;
+    expect(list(change.Action)).toEqual([
+      'elasticloadbalancing:DeleteLoadBalancer',
+      'elasticloadbalancing:ModifyLoadBalancerAttributes',
+      'elasticloadbalancing:SetSecurityGroups',
+      'elasticloadbalancing:SetSubnets',
+      'elasticloadbalancing:DeleteListener',
+      'elasticloadbalancing:ModifyListener',
+      'elasticloadbalancing:DeleteTargetGroup',
+      'elasticloadbalancing:ModifyTargetGroup',
+      'elasticloadbalancing:ModifyTargetGroupAttributes',
+      'elasticloadbalancing:AddTags',
+      'elasticloadbalancing:RemoveTags',
+    ]);
+    expect(tagKeys(change)).toEqual([RESOURCE_TAG]);
+    for (const s of ALLOWS) {
+      for (const action of list(s.Action).filter((a) => a.startsWith('elasticloadbalancing:'))) {
+        expect(action === 'elasticloadbalancing:Describe*' || !action.includes('*'), action).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  it('names the load balancer, listener, rule and target group ARNs one by one', () => {
+    for (const sid of ['LoadBalancingCreate', 'LoadBalancingChange']) {
+      expect(list(ALLOWS.find((s) => s.Sid === sid)!.Resource), sid).toEqual([
+        elb('loadbalancer/app/motir-*/*'),
+        elb('listener/app/motir-*/*'),
+        elb('targetgroup/*/*'),
+      ]);
+    }
+    expect(list(ALLOWS.find((s) => s.Sid === 'LoadBalancingChild')!.Resource)).toEqual([
+      elb('listener/app/motir-*/*'),
+      elb('listener-rule/app/motir-*/*'),
+    ]);
+    const lb = `arn:aws:elasticloadbalancing:${TENANT_ACCOUNT_REGION}:111122223333:loadbalancer/app/motir-net/abc`;
+    expect(grantedOn('elasticloadbalancing:DeleteLoadBalancer', lb)).toBe(true);
+    expect(
+      grantedOn('elasticloadbalancing:DeleteLoadBalancer', lb.replace('motir-net', 'other')),
+    ).toBe(false);
+    // An action the deploys never call is no longer granted by a wildcard.
+    expect(grantsOf('elasticloadbalancing:DeleteSharedTrustStoreAssociation')).toEqual([]);
+    expect(grantsOf('elasticloadbalancing:ModifyTrustStore')).toEqual([]);
   });
 });
 

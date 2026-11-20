@@ -4,6 +4,7 @@ import {
   AWS_NETWORK_DEPLOY_ACTIONS,
   AWS_REGISTRY_DEPLOY_ACTIONS,
   AWS_TENANT_DEPLOY_ROLE,
+  type AwsManagedPolicy,
   type AwsPolicyDocument,
   type AwsQuotaTarget,
 } from '@motir/orchestrator';
@@ -140,6 +141,14 @@ export const TENANT_QUOTA_TARGETS: readonly TenantQuotaTarget[] = [
 // management reaches only `motir-*` roles and the two `mh-*-push` roles, PassRole
 // only `motir-*` roles to Lambda and ECS tasks, and the deploy role can never
 // touch itself.
+//
+// FOUR MANAGED POLICIES, ONE PER SERVICE FAMILY (MOTIR-11878). The grants were
+// one inline policy, and AWS caps a role's inline policies at 10,240 characters
+// in total; MOTIR-11846 left 122 of them. A customer-managed policy holds 6,144
+// characters each and a role takes ten, so the statements are split by family —
+// compute, network, data, identity — and each family is measured on its own
+// (`tests/ciFleet/hostingTenantDeployPolicy.test.ts`). The two denies sit in the
+// identity policy; a deny in any attached policy binds the whole role.
 
 /** The tag every tenant resource carries. */
 const ORG_TAG = TENANT_ORGANIZATION_TAG_KEY;
@@ -277,10 +286,8 @@ function ecsStatements(): Statement[] {
 
 function loadBalancingStatements(): Statement[] {
   const elb = (resource: string) => arn('elasticloadbalancing', resource);
-  // `*/app/motir-*/*` is the load balancer and everything under it (its
-  // listeners and their rules); the inline policy's 10,240-character budget
-  // is why the three are one pattern.
-  const own = [elb('*/app/motir-*/*'), elb('targetgroup/*/*')];
+  const listeners = elb('listener/app/motir-*/*');
+  const own = [elb('loadbalancer/app/motir-*/*'), listeners, elb('targetgroup/*/*')];
   return [
     allow(
       'LoadBalancingCreate',
@@ -296,12 +303,15 @@ function loadBalancingStatements(): Statement[] {
     allow(
       'LoadBalancingChange',
       [
-        // Every Delete and Modify on the account's own tagged load balancer,
-        // listeners and target groups (the policy's size budget, MOTIR-11846).
-        'elasticloadbalancing:Delete*',
-        'elasticloadbalancing:Modify*',
+        'elasticloadbalancing:DeleteLoadBalancer',
+        'elasticloadbalancing:ModifyLoadBalancerAttributes',
         'elasticloadbalancing:SetSecurityGroups',
         'elasticloadbalancing:SetSubnets',
+        'elasticloadbalancing:DeleteListener',
+        'elasticloadbalancing:ModifyListener',
+        'elasticloadbalancing:DeleteTargetGroup',
+        'elasticloadbalancing:ModifyTargetGroup',
+        'elasticloadbalancing:ModifyTargetGroupAttributes',
         'elasticloadbalancing:AddTags',
         'elasticloadbalancing:RemoveTags',
       ],
@@ -317,7 +327,7 @@ function loadBalancingStatements(): Statement[] {
         'elasticloadbalancing:DeleteRule',
         'elasticloadbalancing:SetRulePriorities',
       ],
-      elb('listener*/app/motir-*/*'),
+      [listeners, elb('listener-rule/app/motir-*/*')],
     ),
     allow('LoadBalancingRead', ['elasticloadbalancing:Describe*'], '*'),
   ];
@@ -612,24 +622,59 @@ export const TENANT_MODULE_ACTIONS: readonly string[] = [
   ]),
 ];
 
-/** The deploy role's permissions (see above). */
-export function tenantDeployPolicyDocument(): AwsPolicyDocument {
-  return {
-    Version: '2012-10-17',
-    Statement: [
-      ...regionStatements(),
+/** A family of the deploy role's grants: its policy's name suffix, what it
+ *  covers, and its statements. */
+interface TenantDeployFamily {
+  family: 'compute' | 'network' | 'data' | 'identity';
+  covers: string;
+  statements: () => Statement[];
+}
+
+const TENANT_DEPLOY_FAMILIES: readonly TenantDeployFamily[] = [
+  {
+    family: 'compute',
+    covers: 'CloudFormation stacks, Lambda functions, ECS and the image registry',
+    statements: () => [
       ...cloudFormationStatements(),
       ...lambdaStatements(),
       ...ecsStatements(),
-      ...loadBalancingStatements(),
-      ...ec2Statements(),
-      ...cloudFrontStatements(),
-      ...rdsStatements(),
       ...ecrStatements(),
-      ...secretsStatements(),
-      ...logsAndMetricsStatements(),
-      ...iamStatements(),
     ],
+  },
+  {
+    family: 'network',
+    covers: 'the VPC, its load balancer and the CloudFront front door',
+    statements: () => [...ec2Statements(), ...loadBalancingStatements(), ...cloudFrontStatements()],
+  },
+  {
+    family: 'data',
+    covers: 'the database, secrets, logs, metrics and usage parameters',
+    statements: () => [...rdsStatements(), ...secretsStatements(), ...logsAndMetricsStatements()],
+  },
+  {
+    family: 'identity',
+    covers: 'release roles, the GitHub OIDC provider and the role-wide denies',
+    statements: () => [...regionStatements(), ...iamStatements()],
+  },
+];
+
+/** The deploy role's managed policies (see above), `motir-tenant-deploy-<family>`
+ *  each — the set `ensureTenantDeployRole` converges the role on. */
+export function tenantDeployPolicies(): AwsManagedPolicy[] {
+  return TENANT_DEPLOY_FAMILIES.map(({ family, covers, statements }) => ({
+    name: `${TENANT_DEPLOY_ROLE_NAME}-${family}`,
+    description: `Motir tenant deploys: ${covers}.`,
+    document: { Version: '2012-10-17', Statement: statements() },
+  }));
+}
+
+/** Every statement of the deploy role, across its managed policies, as one
+ *  document: what the role may do in total, for reading the grants as data.
+ *  Never installed as one policy. */
+export function tenantDeployPolicyDocument(): AwsPolicyDocument {
+  return {
+    Version: '2012-10-17',
+    Statement: tenantDeployPolicies().flatMap((policy) => policy.document.Statement),
   };
 }
 
