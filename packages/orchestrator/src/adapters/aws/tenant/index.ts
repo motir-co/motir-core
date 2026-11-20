@@ -10,6 +10,7 @@ export {
   createTenantSdkClient,
   sdkTenantCloudFormation,
   sdkTenantCloudWatch,
+  sdkTenantEc2,
   sdkTenantEcs,
   sdkTenantElb,
   sdkTenantLambda,

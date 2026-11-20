@@ -202,11 +202,11 @@ export function awsHarness(shape: ReleaseShape): HostingHarness {
     // door (MOTIR-10129), a container through the load balancer's rule.
     originCredential: 'origin_secret',
     // A function's front door URL is a host AWS generates; a container answers
-    // on the account's load balancer.
+    // at the account network's CloudFront front door (MOTIR-11846), over TLS.
     upstream: () =>
       shape === 'function'
         ? new RegExp(`^https://[0-9a-f]{32}\\.lambda-url\\.${AWS_REGION}\\.on\\.aws/$`)
-        : new RegExp(`^https?://motir-tenant-1\\.${AWS_REGION}\\.elb\\.amazonaws\\.com`),
+        : /^https:\/\/[a-z0-9]+\.cloudfront\.net$/,
     runsImage: `${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/mh/${R}/production@${IMAGE.digest}`,
     advanceSeconds: (s) => h.advanceSeconds(s),
     failNextDestroy: () => h.fakes.cloudformation.failAt('deleteStack', 1),

@@ -44,8 +44,9 @@ and no profile.
   it at a repository anyone uses. Note its id and its organisation's id.
 - **The worker task carries the hosting values.** The adapter reads
   `MOTIR_HOSTING_ORIGIN_SECRET_KEY` (a secret) when it is built, for every step,
-  and `MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN` and `MOTIR_HOSTING_AWS_APP_DOMAIN`.
-  The two plain values are given on each command below. The key is a secret, and
+  and `MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN`. The plain value is given on
+  each command below. There is no apps domain (MOTIR-11846): a container release
+  is reached at its tenant network's front door, by its origin secret alone. The key is a secret, and
   an ECS Exec command line is recorded in CloudTrail, so it must reach the task
   from Secrets Manager, never from the command. motir-infra creates that entry
   (`<prefix>/core/motir-hosting-origin-secret-key`) with a random placeholder.
@@ -111,7 +112,7 @@ Set the values once, in the services account's CloudShell:
 export TASK="$(aws ecs list-tasks --region us-east-1 --cluster motir-core \
   --service-name motir-core-worker --desired-status RUNNING \
   --query 'taskArns[0]' --output text)"
-export HOSTING="MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN=arn:aws:iam::944842271421:role/motir-core-worker-task MOTIR_HOSTING_AWS_APP_DOMAIN=<apps domain>"
+export HOSTING="MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN=arn:aws:iam::944842271421:role/motir-core-worker-task"
 export CHECK="--target aws --repository <repository id> --organization <organization id>"
 check() {
   aws ecs execute-command --region us-east-1 --cluster motir-core --task "$TASK" \
@@ -256,17 +257,22 @@ In the **tenant account**, region `us-east-1`, while a release is up:
   accounts.
 - **Container shape:** ECS shows the Fargate service `mh-<id>` in the account's
   cluster; EC2 › Target groups shows its target group, and the account's load
-  balancer has a host rule for the app that checks `X-Motir-Origin-Secret`.
+  balancer (internal) has a rule for the app that checks `X-Motir-Origin-Secret`
+  and nothing else; CloudFront shows the account's one distribution, _Motir
+  tenant front door_, whose `*.cloudfront.net` name is the address `deploy`
+  prints.
 - **Both:** ECR holds `mh/<id>/production` with `release-1` and `release-2`;
   CloudFormation shows the release stack and, after `destroy`, none.
 
 After `destroy`, the release stack is gone and `check status` prints
 `state: none`.
 
-## Known open item
+## The container's front door
 
-A container release's upstream is the load balancer's `*.elb.amazonaws.com`
-name, which cannot carry a public ACM certificate, so HTTPS to it is unsettled.
-The check uses the address the adapter returns as given and never disables TLS
-verification. If the container `page` fails on TLS, record it against that open
-item rather than working around it.
+A container release's upstream is its tenant network's front door,
+`https://<id>.cloudfront.net` (MOTIR-11846): CloudFront's own certificate, a VPC
+origin onto the internal load balancer. The check reads that address as given
+and never disables TLS verification. Every container release in the account
+shares it, and the origin secret is what picks the app: with the right secret
+`probe` reaches the app, and with none or a wrong one the load balancer's 403
+comes back through CloudFront.

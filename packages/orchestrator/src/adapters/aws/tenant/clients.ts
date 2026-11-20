@@ -64,6 +64,14 @@ export interface TenantSecretsManager {
   putSecretValue(secretId: string, value: string, versionId?: string): Promise<void>;
 }
 
+/** The EC2 reads the network makes (MOTIR-11846). No create or change: every
+ *  network resource is the network stack's. */
+export interface TenantEc2 {
+  /** The id of the AWS-managed prefix list of that name in the client's region,
+   *  or null when the region has none. */
+  managedPrefixListId(name: string): Promise<string | null>;
+}
+
 /** Every client of one tenant account, all under its deploy role. */
 export interface TenantClients {
   readonly accountId: string;
@@ -78,4 +86,6 @@ export interface TenantClients {
   readonly ecs: TenantEcs;
   readonly elb: TenantElb;
   readonly ssm: TenantSsm;
+  /** The network's (MOTIR-11846). */
+  readonly ec2: TenantEc2;
 }

@@ -78,7 +78,6 @@ function harness(options: { ready?: boolean } = {}) {
     isCustomerRepository: async (repositoryId) => repositoryId === CUSTOMER,
     githubIdsOf: async () => GITHUB,
     forwarderPrincipalArn: FORWARDER,
-    appHostOf: (appRef) => `${appRef}.apps.motir.test`,
     originSecretKey: KEY,
     now,
     sleep: async (ms) => {
@@ -631,14 +630,14 @@ describe('the function front door (MOTIR-10129, to MOTIR-10128)', () => {
     expectNoSecret(h, handle, await h.port.describe(handle));
   });
 
-  it('leaves a container release described exactly as before', async () => {
+  it("describes a container release at its network's https front door (MOTIR-11846)", async () => {
     const h = harness();
     const handle = await h.port.deploy(release('container'));
     expect(await h.port.describe(handle)).toEqual({
       state: 'healthy',
       releaseId: awsReleaseId(APP, 1),
       previousReleaseId: null,
-      upstreamAddress: expect.stringMatching(/^http:\/\//),
+      upstreamAddress: expect.stringMatching(/^https:\/\/[a-z0-9]+\.cloudfront\.net$/),
       originCredential: 'origin_secret',
     });
   });

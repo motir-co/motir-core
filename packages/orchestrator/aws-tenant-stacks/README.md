@@ -111,13 +111,25 @@ replaces, so a rollback points the `live` alias back at it. A container release
 RETAINS the task-definition revision it replaces, so a rollback moves the
 service back to it.
 
-## Open item: TLS to the load balancer
+## The container's front door
 
-The load balancer's `*.elb.amazonaws.com` name cannot carry a public ACM
-certificate, and MOTIR-5769 does not say how a forwarder reaches it over TLS.
-The listener is plain HTTP on port 80 and admits a request only through an app's
-rule, which matches its host AND its `X-Motir-Origin-Secret` header. No
-certificate is issued here.
+A container release is reached through the network's FRONT DOOR (MOTIR-11846):
+one CloudFront distribution per account, `https://<id>.cloudfront.net` with
+CloudFront's own certificate, whose VPC origin is the account's load balancer.
+The load balancer's `*.elb.amazonaws.com` name cannot carry a public
+certificate, so TLS terminates at the distribution, and the hop on to the
+load balancer runs over the AWS network to its plain-HTTP listener. The load
+balancer is internal, in the private subnets, and its security group admits only
+CloudFront's origin-facing prefix list, whose id the caller looks up and passes
+as `CloudFrontOriginFacingPrefixListId`.
+
+The distribution caches nothing and passes every viewer header but `Host` on, so
+the load balancer sees the forwarder's `X-Motir-Origin-Secret`. A release's
+listener rule matches that header ALONE: the secret is derived from the app's
+name, so it picks the app as well as admitting it, and there is no app host and
+no apps domain. Every container release in the account shares the one address;
+the secret is what tells them apart. An answer slower than 60 seconds (the
+origin read timeout, matching the load balancer's idle timeout) is a 504.
 
 ## Copying the directory
 

@@ -32,6 +32,7 @@ const SERVICES = [
   'ecs',
   'elb',
   'ssm',
+  'ec2',
 ] as const;
 
 /** Every adapter call, in order, as `service.operation`, and the one fault. */
@@ -109,7 +110,6 @@ export function awsAdapterHarness(options: { start?: Date; ready?: boolean } = {
     isCustomerRepository: async (repositoryId) => repositoryId === AWS_CUSTOMER,
     githubIdsOf: async () => GITHUB,
     forwarderPrincipalArn: AWS_FORWARDER,
-    appHostOf: (appRef) => `${appRef}.apps.motir.test`,
     originSecretKey: AWS_ORIGIN_KEY,
     now,
     sleep: async (ms) => {

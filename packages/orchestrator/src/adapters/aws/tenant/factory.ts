@@ -4,6 +4,7 @@ import {
   createTenantSdkClient,
   sdkTenantCloudFormation,
   sdkTenantCloudWatch,
+  sdkTenantEc2,
   sdkTenantEcs,
   sdkTenantElb,
   sdkTenantLambda,
@@ -47,6 +48,7 @@ export function createTenantClients(options: TenantClientsOptions): TenantClient
     ecs: sdkTenantEcs(factory('ecs', config)),
     elb: sdkTenantElb(factory('elasticloadbalancing', config)),
     ssm: sdkTenantSsm(factory('ssm', config)),
+    ec2: sdkTenantEc2(factory('ec2', config)),
   };
 }
 

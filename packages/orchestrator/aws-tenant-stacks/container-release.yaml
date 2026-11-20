@@ -5,8 +5,9 @@ Description: >-
   release's appRef, its task definition (replaced revisions RETAINED, the
   rollback target), a target group with the manifest's health check, and ONE
   listener rule on the network's shared listener that forwards only a request
-  carrying the app's host AND its X-Motir-Origin-Secret header. It creates no
-  load balancer and no listener: there is one per account, the network's.
+  carrying the app's X-Motir-Origin-Secret header - derived per app, so it names
+  the app as well as admitting it. It creates no load balancer and no listener:
+  there is one per account, the network's, reached through its front door.
   The release's plain variables are task `environment` entries and its secret
   ones task `secrets` entries, one per variable, reading the stack's own
   environment secret at the version ConfigHash names; the caller writes both
@@ -72,9 +73,6 @@ Parameters:
     Description: The rule's priority on the shared listener, unique per app.
     MinValue: 1
     MaxValue: 50000
-  AppHost:
-    Type: String
-    Description: The host the rule matches.
   OriginSecret:
     Type: String
     NoEcho: true
@@ -235,17 +233,17 @@ Resources:
         - { Key: 'motir:organization', Value: !Ref OrganizationId }
         - { Key: 'motir:repository', Value: !Ref RepositoryId }
 
-  # Forward only the app's host AND its origin secret; everything else falls to
-  # the listener's fixed 403.
+  # Forward only a request carrying the app's origin secret; everything else
+  # falls to the listener's fixed 403. No host condition (MOTIR-11846): every
+  # request arrives from the network's front door with the load balancer's own
+  # name as Host, and the secret, HMAC-derived from the app's name, already
+  # tells one app from every other.
   ListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       ListenerArn: !Ref AlbListenerArn
       Priority: !Ref ListenerRulePriority
       Conditions:
-        - Field: host-header
-          HostHeaderConfig:
-            Values: [!Ref AppHost]
         - Field: http-header
           HttpHeaderConfig:
             HttpHeaderName: X-Motir-Origin-Secret

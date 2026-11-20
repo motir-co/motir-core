@@ -26,7 +26,6 @@ function stubAwsEnv() {
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
   vi.stubEnv('MOTIR_HOSTING_ORIGIN_SECRET_KEY', 'k');
   vi.stubEnv('MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN', 'arn:aws:iam::1:role/forwarder');
-  vi.stubEnv('MOTIR_HOSTING_AWS_APP_DOMAIN', 'apps.motir.test');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::1:role/motir-org-admin');
 }
 
@@ -62,13 +61,15 @@ describe('getHostingDeployPort', () => {
     expect(aws).not.toBe(getHostingDeployPort('aws'));
     for (const name of [
       'MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN',
-      'MOTIR_HOSTING_AWS_APP_DOMAIN',
       'MOTIR_HOSTING_ORIGIN_SECRET_KEY',
     ]) {
       vi.stubEnv(name, '');
       expect(() => getHostingDeployPort('aws')).toThrow(new RegExp(name));
       stubAwsEnv();
     }
+    // No apps domain (MOTIR-11846): the adapter builds without one.
+    vi.stubEnv('MOTIR_HOSTING_AWS_APP_DOMAIN', '');
+    expect(getHostingDeployPort('aws').target).toBe('aws');
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
     expect(getHostingDeployPort('aws')).toBe(getHostingDeployPort('aws'));
   });

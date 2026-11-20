@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AwsTenantApiError,
+  CLOUDFRONT_ORIGIN_FACING_PREFIX_LIST,
   ConnectionSecretUnreadableError,
   DATABASE_URL_VARIABLE,
   DatabaseNameInvalidError,
   DatabaseResumeTimeoutError,
   DatabaseStatementError,
+  FAKE_CLOUDFRONT_PREFIX_LIST_ID,
+  TenantPrefixListMissingError,
   TenantStackOutputMissingError,
   buildDatabaseUrl,
   createFakeTenantClients,
@@ -21,6 +24,7 @@ import {
   environmentDatabaseNames,
   readGeneratedPassword,
   readTenantStackTemplate,
+  sdkTenantEc2,
   sdkTenantRdsData,
   sdkTenantSecretsManager,
   stackOutput,
@@ -64,10 +68,18 @@ describe('ensureTenantNetwork', () => {
       albArn: expect.stringContaining('loadbalancer/app/motir-tenant'),
       albListenerArn: expect.stringContaining('listener/app/motir-tenant'),
       albDnsName: expect.stringContaining('.elb.amazonaws.com'),
+      frontDoorDomainName: expect.stringMatching(/\.cloudfront\.net$/),
     });
     const stack = a.cloudformation.stacks.get('motir-network')!;
     expect(stack.tags).toEqual({ 'motir:organization': ORG, 'motir:repository': 'shared' });
     expect(stack.templateBody).toBe(readTenantStackTemplate('network.yaml'));
+    // The load balancer admits CloudFront's origin-facing servers: the managed
+    // list, looked up by name in the account's region (MOTIR-11846).
+    expect(stack.parameters).toEqual({
+      OrganizationId: ORG,
+      CloudFrontOriginFacingPrefixListId: FAKE_CLOUDFRONT_PREFIX_LIST_ID,
+    });
+    expect(a.ec2.calls).toContain(`managedPrefixListId:${CLOUDFRONT_ORIGIN_FACING_PREFIX_LIST}`);
 
     a.cloudformation.calls.length = 0;
     await ensureApplicationDatabase(a.context, { repositoryId: RID });
@@ -93,6 +105,67 @@ describe('ensureTenantNetwork', () => {
 
   it('names a missing output', () => {
     expect(() => stackOutput('motir-network', {}, 'VpcId')).toThrow(TenantStackOutputMissingError);
+  });
+
+  it('refuses, before any stack call, a region with no CloudFront origin-facing list', async () => {
+    const a = account();
+    a.ec2.prefixLists.clear();
+    const err = await ensureTenantNetwork(a.context).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TenantPrefixListMissingError);
+    expect(err).toMatchObject({
+      code: 'AWS_TENANT_PREFIX_LIST_MISSING',
+      prefixList: CLOUDFRONT_ORIGIN_FACING_PREFIX_LIST,
+    });
+    expect(a.cloudformation.calls).toEqual([]);
+  });
+
+  it('carries a lost prefix-list answer to the caller, and the replay applies the network', async () => {
+    for (const when of ['before', 'after'] as const) {
+      const a = account();
+      a.ec2.failAt('managedPrefixListId', 1, when);
+      await expect(ensureTenantNetwork(a.context)).rejects.toBeInstanceOf(AwsTenantApiError);
+      await ensureTenantNetwork(a.context);
+      expect([...a.cloudformation.stacks.keys()]).toEqual(['motir-network']);
+    }
+  });
+
+  it('the EC2 client finds a managed prefix list by its exact name, or answers null', async () => {
+    const sent: Array<{ name: string; input: Record<string, unknown> }> = [];
+    const answers: Array<() => unknown> = [
+      () => ({
+        PrefixLists: [
+          {
+            PrefixListName: 'com.amazonaws.global.cloudfront.origin-facing-other',
+            PrefixListId: 'pl-0',
+          },
+          { PrefixListName: CLOUDFRONT_ORIGIN_FACING_PREFIX_LIST, PrefixListId: 'pl-3b927c52' },
+        ],
+      }),
+      () => ({}),
+      () => {
+        throw Object.assign(new Error('denied'), {
+          name: 'UnauthorizedOperation',
+          $metadata: { httpStatusCode: 403 },
+        });
+      },
+    ];
+    const client: AwsSdkClient = {
+      send: async (command: unknown) => {
+        const c = command as { constructor: { name: string }; input: Record<string, unknown> };
+        sent.push({ name: c.constructor.name, input: c.input });
+        return answers.shift()!();
+      },
+    } as unknown as AwsSdkClient;
+    const ec2 = sdkTenantEc2(client);
+    expect(await ec2.managedPrefixListId(CLOUDFRONT_ORIGIN_FACING_PREFIX_LIST)).toBe('pl-3b927c52');
+    expect(sent[0]).toEqual({
+      name: 'DescribeManagedPrefixListsCommand',
+      input: {
+        Filters: [{ Name: 'prefix-list-name', Values: [CLOUDFRONT_ORIGIN_FACING_PREFIX_LIST] }],
+      },
+    });
+    expect(await ec2.managedPrefixListId(CLOUDFRONT_ORIGIN_FACING_PREFIX_LIST)).toBeNull();
+    await expect(ec2.managedPrefixListId('x')).rejects.toBeInstanceOf(AwsTenantApiError);
   });
 });
 

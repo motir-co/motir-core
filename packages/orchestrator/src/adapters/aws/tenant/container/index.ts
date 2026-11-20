@@ -39,7 +39,10 @@ import { accrueStoppedTasks, parseAccrual, windowUsage, type UsageAccrual } from
 // THE CONTAINER SHAPE (MOTIR-10009, to MOTIR-5769 §4 "AWS containers"): a
 // release is the ECS Fargate service `mh-<rid>` / `mh-<rid>-pr<n>` behind the
 // tenant network's ONE load balancer, reached through a listener rule that
-// matches the app's host AND its `X-Motir-Origin-Secret`.
+// matches its `X-Motir-Origin-Secret`. Its upstream is the network's FRONT DOOR
+// (MOTIR-11846), `https://<id>.cloudfront.net`, shared by every container
+// release in the account: the load balancer's own name cannot carry a public
+// certificate, and the secret, derived from the app's name, picks the app.
 //
 // The release stack (`container-release.yaml`, `motir-release-<appRef>`) owns the
 // cluster, service, task definition, target group, listener rule and the
@@ -99,10 +102,8 @@ export interface DeployContainerReleaseInput extends ContainerReleaseTarget {
   readonly env: readonly ReleaseEnvVar[];
   readonly network: Pick<
     TenantNetwork,
-    'vpcId' | 'privateSubnetIds' | 'appSecurityGroupId' | 'albListenerArn' | 'albDnsName'
+    'vpcId' | 'privateSubnetIds' | 'appSecurityGroupId' | 'albListenerArn' | 'frontDoorDomainName'
   >;
-  /** The host the listener rule matches. */
-  readonly appHost: string;
   /** The key the app's origin secret is derived from (`deriveOriginSecret`). */
   readonly originSecretKey: string;
   /** The environment's database secret, passed by ARN only. */
@@ -115,7 +116,7 @@ export interface ContainerRelease {
   readonly appRef: string;
   readonly stackName: string;
   readonly releaseId: string;
-  /** The load balancer, reached with the app's host and its origin secret. */
+  /** The network's front door, reached with the app's origin secret. */
   readonly upstreamAddress: string;
   readonly liveTaskDefinition: string;
   readonly previousTaskDefinition: string | null;
@@ -135,7 +136,8 @@ export interface ContainerUsageInput extends ContainerReleaseTarget {
 }
 
 const clock = (target: ContainerReleaseTarget) => target.now ?? (() => new Date());
-const upstreamOf = (albDnsName: string) => `http://${albDnsName}`;
+/** The front door's `https` origin; TLS terminates at CloudFront. */
+const upstreamOf = (frontDoorDomainName: string) => `https://${frontDoorDomainName}`;
 const tagsOf = (account: TenantAccountContext, repositoryId: string) => ({
   [TAG_ORGANIZATION]: account.organizationId,
   [TAG_REPOSITORY]: repositoryId,
@@ -308,7 +310,6 @@ export async function deployContainerRelease(
     AppSecurityGroupId: input.network.appSecurityGroupId,
     AlbListenerArn: input.network.albListenerArn,
     ListenerRulePriority: priority,
-    AppHost: input.appHost,
     OriginSecret: deriveOriginSecret(input.originSecretKey, appRef),
     DatabaseSecretArn: input.database?.secretArn ?? '',
     ConfigHash: hash,
@@ -347,7 +348,7 @@ export async function deployContainerRelease(
     appRef,
     stackName,
     releaseId: live,
-    upstreamAddress: upstreamOf(input.network.albDnsName),
+    upstreamAddress: upstreamOf(input.network.frontDoorDomainName),
     liveTaskDefinition: live,
     previousTaskDefinition: rollbackTarget(revisions, live),
   };
@@ -370,9 +371,9 @@ export async function describeContainerRelease(
   const stack = await runner.describeStack(names.stackName);
   if (!stack || stack.status.startsWith('DELETE_IN_PROGRESS')) return DESTROYED;
   const network = await runner.describeStack(NETWORK_STACK_NAME);
-  const albDnsName = network?.outputs['AlbDnsName'];
-  const address = albDnsName
-    ? { upstreamAddress: upstreamOf(albDnsName), originCredential: 'origin_secret' as const }
+  const frontDoor = network?.outputs['FrontDoorDomainName'];
+  const address = frontDoor
+    ? { upstreamAddress: upstreamOf(frontDoor), originCredential: 'origin_secret' as const }
     : { upstreamAddress: null, originCredential: 'none' as const };
   const stackRevision = stack.outputs['TaskDefinitionArn'];
   const failed = stack.status.endsWith('_FAILED') || stack.status === 'ROLLBACK_COMPLETE';
@@ -450,7 +451,7 @@ export async function rollbackContainerRelease(
     stackName: names.stackName,
     releaseId: previous,
     upstreamAddress: upstreamOf(
-      stackOutput(NETWORK_STACK_NAME, network?.outputs ?? {}, 'AlbDnsName'),
+      stackOutput(NETWORK_STACK_NAME, network?.outputs ?? {}, 'FrontDoorDomainName'),
     ),
     liveTaskDefinition: previous,
     previousTaskDefinition: stackRevision,

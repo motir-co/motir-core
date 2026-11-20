@@ -1,6 +1,7 @@
 import {
   AWS_CONTAINER_DEPLOY_ACTIONS,
   AWS_FUNCTION_DEPLOY_ACTIONS,
+  AWS_NETWORK_DEPLOY_ACTIONS,
   AWS_REGISTRY_DEPLOY_ACTIONS,
   AWS_TENANT_DEPLOY_ROLE,
   type AwsPolicyDocument,
@@ -119,8 +120,8 @@ export const TENANT_QUOTA_TARGETS: readonly TenantQuotaTarget[] = [
 // ── THE DEPLOY ROLE'S POLICY (MOTIR-10005) ──────────────────────────────────
 //
 // What the six tenant stacks and the registry, function and container modules
-// need, and no wider, in the tenant region only (one deny refuses every non-IAM
-// action elsewhere). Built from one small statement per service and KIND of
+// need, and no wider, in the tenant region only (one deny refuses every action
+// elsewhere but IAM's and CloudFront's, the two global services). Built from one small statement per service and KIND of
 // action, so a test can ask what is granted under which condition:
 //
 //   create        a taggable resource is created only carrying
@@ -177,14 +178,15 @@ const LOG_GROUPS = [arn('logs', 'log-group:/aws/lambda/mh-*'), arn('logs', 'log-
 const ROLES = ['arn:aws:iam::*:role/motir-*', 'arn:aws:iam::*:role/mh-*-push'];
 const GITHUB_OIDC = 'arn:aws:iam::*:oidc-provider/token.actions.githubusercontent.com';
 
-/** Every action but IAM's (which AWS serves from us-east-1) is refused outside
- *  the tenant region, so no allow below needs to repeat it. */
+/** Every action but IAM's and CloudFront's (global services AWS serves from
+ *  us-east-1) is refused outside the tenant region, so no allow below needs to
+ *  repeat it. */
 function regionStatements(): Statement[] {
   return [
     {
       Sid: 'OnlyTheTenantRegion',
       Effect: 'Deny',
-      NotAction: 'iam:*',
+      NotAction: ['iam:*', 'cloudfront:*'],
       Resource: '*',
       Condition: { StringNotEquals: { 'aws:RequestedRegion': REGION } },
     },
@@ -275,11 +277,10 @@ function ecsStatements(): Statement[] {
 
 function loadBalancingStatements(): Statement[] {
   const elb = (resource: string) => arn('elasticloadbalancing', resource);
-  const own = [
-    elb('loadbalancer/app/motir-*/*'),
-    elb('listener/app/motir-*/*'),
-    elb('targetgroup/*/*'),
-  ];
+  // `*/app/motir-*/*` is the load balancer and everything under it (its
+  // listeners and their rules); the inline policy's 10,240-character budget
+  // is why the three are one pattern.
+  const own = [elb('*/app/motir-*/*'), elb('targetgroup/*/*')];
   return [
     allow(
       'LoadBalancingCreate',
@@ -295,15 +296,12 @@ function loadBalancingStatements(): Statement[] {
     allow(
       'LoadBalancingChange',
       [
-        'elasticloadbalancing:DeleteLoadBalancer',
-        'elasticloadbalancing:ModifyLoadBalancerAttributes',
+        // Every Delete and Modify on the account's own tagged load balancer,
+        // listeners and target groups (the policy's size budget, MOTIR-11846).
+        'elasticloadbalancing:Delete*',
+        'elasticloadbalancing:Modify*',
         'elasticloadbalancing:SetSecurityGroups',
         'elasticloadbalancing:SetSubnets',
-        'elasticloadbalancing:DeleteListener',
-        'elasticloadbalancing:ModifyListener',
-        'elasticloadbalancing:DeleteTargetGroup',
-        'elasticloadbalancing:ModifyTargetGroup',
-        'elasticloadbalancing:ModifyTargetGroupAttributes',
         'elasticloadbalancing:AddTags',
         'elasticloadbalancing:RemoveTags',
       ],
@@ -319,7 +317,7 @@ function loadBalancingStatements(): Statement[] {
         'elasticloadbalancing:DeleteRule',
         'elasticloadbalancing:SetRulePriorities',
       ],
-      [elb('listener/app/motir-*/*'), elb('listener-rule/app/motir-*/*')],
+      elb('listener*/app/motir-*/*'),
     ),
     allow('LoadBalancingRead', ['elasticloadbalancing:Describe*'], '*'),
   ];
@@ -380,6 +378,32 @@ function ec2Statements(): Statement[] {
       RESOURCE_TAG,
     ),
     allow('NetworkRead', ['ec2:Describe*'], '*'),
+  ];
+}
+
+/** The network's front door (MOTIR-11846): one CloudFront distribution and its
+ *  VPC origin per account. CloudFront ARNs carry no region. */
+function cloudFrontStatements(): Statement[] {
+  return [
+    // A create names no resource yet; a distribution created with tags is also
+    // a TagResource on the new resource.
+    allow(
+      'FrontDoorCreate',
+      ['cloudfront:CreateDistribution', 'cloudfront:CreateVpcOrigin', 'cloudfront:TagResource'],
+      '*',
+      REQUEST_TAG,
+    ),
+    // TagResource on a resource that exists is the create statement's, which
+    // asks for the tag in the request.
+    allow(
+      'FrontDoorChange',
+      ['cloudfront:Update*', 'cloudfront:Delete*', 'cloudfront:UntagResource'],
+      '*',
+      RESOURCE_TAG,
+    ),
+    // A distribution's create and update read its VPC origin and the managed
+    // cache and origin-request policies its behaviour names.
+    allow('FrontDoorRead', ['cloudfront:Get*', 'cloudfront:List*'], '*'),
   ];
 }
 
@@ -562,6 +586,8 @@ function iamStatements(): Statement[] {
             'ecs.amazonaws.com',
             'elasticloadbalancing.amazonaws.com',
             'rds.amazonaws.com',
+            // The front door's VPC origin (AWSServiceRoleForCloudFrontVPCOrigin).
+            'vpcorigin.cloudfront.amazonaws.com',
           ],
         },
       },
@@ -576,9 +602,10 @@ function iamStatements(): Statement[] {
 }
 
 /** The actions the tenant modules call outside CloudFormation, as each module
- *  exports them (registry, function shape, container shape). */
+ *  exports them (network, registry, function shape, container shape). */
 export const TENANT_MODULE_ACTIONS: readonly string[] = [
   ...new Set([
+    ...AWS_NETWORK_DEPLOY_ACTIONS,
     ...AWS_REGISTRY_DEPLOY_ACTIONS,
     ...AWS_FUNCTION_DEPLOY_ACTIONS,
     ...AWS_CONTAINER_DEPLOY_ACTIONS,
@@ -596,6 +623,7 @@ export function tenantDeployPolicyDocument(): AwsPolicyDocument {
       ...ecsStatements(),
       ...loadBalancingStatements(),
       ...ec2Statements(),
+      ...cloudFrontStatements(),
       ...rdsStatements(),
       ...ecrStatements(),
       ...secretsStatements(),

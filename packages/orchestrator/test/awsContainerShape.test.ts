@@ -111,7 +111,6 @@ function input(
       { name: 'STRIPE_KEY', value: SECRET_VALUE, secret: true },
     ],
     network,
-    appHost: 'mh-cmrepo1.apps.motir.test',
     originSecretKey: KEY,
     database: { secretArn: DATABASE_ARN, variable: 'DATABASE_URL' },
     ...overrides,
@@ -141,14 +140,14 @@ describe('deployContainerRelease', () => {
     expect(allCalls(a)).toHaveLength(before);
   });
 
-  it('applies the release stack tagged, with the image, size, network, host and origin secret', async () => {
+  it('applies the release stack tagged, with the image, size, network and origin secret', async () => {
     const a = await account();
     const release = await deployContainerRelease(input(a));
     expect(release).toEqual({
       appRef: APP,
       stackName: STACK,
       releaseId: revision(1),
-      upstreamAddress: `http://${a.network.albDnsName}`,
+      upstreamAddress: `https://${a.network.frontDoorDomainName}`,
       liveTaskDefinition: revision(1),
       previousTaskDefinition: null,
     });
@@ -169,7 +168,6 @@ describe('deployContainerRelease', () => {
       PrivateSubnetIds: a.network.privateSubnetIds.join(','),
       AppSecurityGroupId: a.network.appSecurityGroupId,
       AlbListenerArn: a.network.albListenerArn,
-      AppHost: 'mh-cmrepo1.apps.motir.test',
       OriginSecret: deriveOriginSecret(KEY, APP),
       DatabaseSecretArn: DATABASE_ARN,
     });
@@ -499,7 +497,7 @@ describe('describeContainerRelease', () => {
     expect(await describeContainerRelease(target(a))).toMatchObject({
       state: 'deploying',
       originCredential: 'origin_secret',
-      upstreamAddress: `http://${a.network.albDnsName}`,
+      upstreamAddress: `https://${a.network.frontDoorDomainName}`,
     });
 
     await deployContainerRelease(input(a));
