@@ -87,6 +87,10 @@ export type ApprovalGateErrorTag =
   // sent to a kind that asks no choice, `approve` sent to a choice, or an option the
   // choice does not hold. A request-shape refusal — nothing was written.
   | 'APPROVAL_GATE_VERB_NOT_OFFERED'
+  // The STATUS HOP the decision makes is one the card's workflow does not allow (Bug
+  // MOTIR-11835) — most often a card a parent's cascade already closed, whose workflow
+  // has no way back to Approved. Nothing was decided.
+  | 'APPROVAL_GATE_TRANSITION_REFUSED'
   // MERGE tier — the HOST refused a merge the card's approve-to-merge gate
   // performs (Story MOTIR-4882 · MOTIR-5512; `approval-gates.md` §4, second
   // amendment decision 8, and §8's SECOND AMENDMENT, which keeps this union whole
@@ -662,5 +666,35 @@ export class ApprovalGateHasNoCardError extends ApprovalGateError {
       `Approval gate ${gateId} (kind \`${kind}\`) belongs to no work item, and ${where} reads its card. Only a \`plan_approval\` gate is card-less.`,
     );
     this.name = 'ApprovalGateHasNoCardError';
+  }
+}
+
+/**
+ * A gate decision whose status hop the card's workflow refuses (Bug MOTIR-11835).
+ *
+ * Approve on an approve-and-merge gate moves the card to `approved`; a card that a
+ * parent's "Complete children when a parent is done" cascade already closed sits at
+ * Done, and a restricted workflow has no Done → Approved edge. The status funnel raises
+ * its own `IllegalTransitionError`, which the decide door had no arm for, so the press
+ * drew the transport-failure copy — *check your connection* — on a request that had
+ * arrived and been refused. `applyGateTransition` translates it into this, under the
+ * door's transaction, so the decision rolls back and the frame names the refusal.
+ *
+ * `closed` says the card is at a done-category status: the case a person can only
+ * resolve by merging on the host or moving the card back, which the copy names.
+ */
+export class ApprovalGateTransitionRefusedError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_TRANSITION_REFUSED' as const;
+  readonly code = 'APPROVAL_GATE_TRANSITION_REFUSED' as const;
+  constructor(
+    readonly workItemId: string,
+    readonly fromStatusKey: string,
+    readonly toStatusKey: string,
+    readonly closed: boolean,
+  ) {
+    super(
+      `The workflow of work item ${workItemId} does not allow the move "${fromStatusKey}" → "${toStatusKey}" this decision makes.`,
+    );
+    this.name = 'ApprovalGateTransitionRefusedError';
   }
 }

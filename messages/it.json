@@ -16511,6 +16511,14 @@
           "next": "Il video della storia è stato rimandato indietro. Quando ne verrà registrato uno nuovo, approvarlo le unirà."
         }
       },
+      "transitionRefused": {
+        "title": "Il flusso di lavoro di questo elemento di lavoro non consente lo spostamento che fa questa decisione.",
+        "next": "Non è stato deciso nulla. Sposta l’elemento di lavoro in uno stato da cui questa decisione possa proseguire, oppure chiedi a un amministratore del progetto di consentire lo spostamento.",
+        "closed": {
+          "title": "Questo elemento di lavoro è già chiuso, quindi questa decisione non può più spostarlo.",
+          "next": "Non è stato deciso nulla. Il suo flusso di lavoro non torna a questo passaggio: unisci direttamente la sua pull request, oppure riporta indietro l’elemento di lavoro e decidi di nuovo."
+        }
+      },
       "alreadyAwaiting": {
         "title": "Un’altra decisione su questo oggetto è già in attesa.",
         "next": "Ricarica la pagina per vederla."

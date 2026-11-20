@@ -9511,6 +9511,10 @@ model WorkItemDelivery {
   workItemId          String   @map("work_item_id")
   githubPullRequestId String   @map("github_pull_request_id")
   repoId              String   @map("repo_id")
+  /// Written by the link door on an ANCESTOR because a descendant was linked, with
+  /// "Complete children when a parent is done" on (MOTIR-11835) — not linked to this
+  /// card in its own right. An explicit link on the same pair clears it.
+  inherited           Boolean  @default(false) @map("inherited")
   createdAt           DateTime @default(now()) @map("created_at")
 
   workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

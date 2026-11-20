@@ -14235,5 +14235,9 @@
   "platformAdmin.fleetStatus.pools.ciSpot.accounts.spotOf": "{spot} / {total}",
   "platformAdmin.fleetStatus.pools.ciSpot.accounts.percent": "{percent}% on Spot",
   "platformAdmin.fleetStatus.pools.ciSpot.accounts.notRecorded": "{count} not recorded",
-  "platformAdmin.fleetStatus.pools.ciSpot.accounts.none": "No CI runner launched in the last 7 days"
+  "platformAdmin.fleetStatus.pools.ciSpot.accounts.none": "No CI runner launched in the last 7 days",
+  "approvalGate.refusal.transitionRefused.title": "This work item's workflow does not allow the move this decision makes.",
+  "approvalGate.refusal.transitionRefused.next": "Nothing was decided. Move the work item to a status this decision can follow, or ask a project admin to allow the move.",
+  "approvalGate.refusal.transitionRefused.closed.title": "This work item is already closed, so this decision can no longer move it.",
+  "approvalGate.refusal.transitionRefused.closed.next": "Nothing was decided. Its workflow has no way back to this step: merge its pull request directly, or move the work item back and decide again."
 }

@@ -16511,6 +16511,14 @@
           "next": "Das Video der Story wurde zurückgewiesen. Sobald ein neues aufgenommen ist, mergt das Genehmigen sie."
         }
       },
+      "transitionRefused": {
+        "title": "Der Workflow dieses Arbeitselements erlaubt den Statuswechsel nicht, den diese Entscheidung vornimmt.",
+        "next": "Es wurde nichts entschieden. Verschieben Sie das Arbeitselement in einen Status, auf den diese Entscheidung folgen kann, oder bitten Sie eine Projektadministration, den Wechsel zu erlauben.",
+        "closed": {
+          "title": "Dieses Arbeitselement ist bereits abgeschlossen, daher kann diese Entscheidung es nicht mehr verschieben.",
+          "next": "Es wurde nichts entschieden. Sein Workflow führt nicht zu diesem Schritt zurück: Mergen Sie den Pull Request direkt, oder verschieben Sie das Arbeitselement zurück und entscheiden Sie erneut."
+        }
+      },
       "alreadyAwaiting": {
         "title": "Eine andere Entscheidung zu diesem Gegenstand wartet bereits.",
         "next": "Laden Sie die Seite neu, um sie zu sehen."

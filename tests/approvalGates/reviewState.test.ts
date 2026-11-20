@@ -175,7 +175,14 @@ async function makeScenario(slug: string) {
   });
   await adminDb.project.update({
     where: { id: project.id },
-    data: { prMergeMode: 'manual', reviewAgentEnabled: true },
+    // A child's OWN pull request is what these cases pin, and with "Complete children when
+    // a parent is done" on a link also writes it on the story (MOTIR-11835), which takes it
+    // out of the child's own set. The switch is off so the child keeps a set of its own.
+    data: {
+      prMergeMode: 'manual',
+      reviewAgentEnabled: true,
+      autoCompleteChildrenOnParentDone: false,
+    },
   });
   const ctx = { userId: user.id, workspaceId: workspace.id };
   await githubInstallationService.persistInstallation({

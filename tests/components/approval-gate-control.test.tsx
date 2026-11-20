@@ -319,6 +319,16 @@ describe('H · refused — every member of the union renders in place, with a ne
       refusal: { tag: 'MERGE_RATE_LIMITED', retryAfterSeconds: null },
       expect: /rate-limiting Motir.*press again in a few minutes\./,
     },
+    // A status hop the workflow refuses (MOTIR-11835): named, never the connection copy —
+    // and a card the cascade already closed names the two ways out.
+    {
+      refusal: { tag: 'APPROVAL_GATE_TRANSITION_REFUSED', closed: true },
+      expect: /already closed.*Nothing was decided.*merge its pull request directly/,
+    },
+    {
+      refusal: { tag: 'APPROVAL_GATE_TRANSITION_REFUSED', closed: false },
+      expect: /does not allow the move.*Nothing was decided.*ask a project admin/,
+    },
     { refusal: { tag: 'UNEXPECTED' }, expect: /could not be recorded/ },
   ];
 

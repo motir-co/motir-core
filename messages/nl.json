@@ -16511,6 +16511,14 @@
           "next": "De video van de story is teruggestuurd. Zodra er een nieuwe is opgenomen, merget het goedkeuren ervan ze."
         }
       },
+      "transitionRefused": {
+        "title": "De workflow van dit werkitem staat de statuswijziging die deze beslissing maakt niet toe.",
+        "next": "Er is niets besloten. Zet het werkitem in een status waarop deze beslissing kan volgen, of vraag een projectbeheerder de wijziging toe te staan.",
+        "closed": {
+          "title": "Dit werkitem is al gesloten, dus deze beslissing kan het niet meer verplaatsen.",
+          "next": "Er is niets besloten. De workflow kent geen weg terug naar deze stap: merge de pull request rechtstreeks, of zet het werkitem terug en beslis opnieuw."
+        }
+      },
       "alreadyAwaiting": {
         "title": "Er wacht al een andere beslissing over dit onderwerp.",
         "next": "Laad de pagina opnieuw om hem te zien."

@@ -191,6 +191,13 @@ describe("a child linked beside its story to the story's pull request", () => {
 
   it("still asks about the child's OWN pull request, and only about that one", async () => {
     const { s, story, built, headRef } = await storyWithChildren('11624-own@example.com');
+    // With "Complete children when a parent is done" on, the child's own pull request is
+    // the story's too (MOTIR-11835, pinned in childDeliveryInheritance.test.ts). Off, the
+    // child keeps a set of its own — the case this pins.
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { autoCompleteChildrenOnParentDone: false },
+    });
     await link(story.identifier, 72, headRef);
     await link(built.identifier, 72, headRef);
     await opened(72, headRef);
@@ -218,6 +225,13 @@ describe("a child linked beside its story to the story's pull request", () => {
 describe('a child of a parent that does NOT deliver the pull request', () => {
   it('is asked the merge question exactly as before', async () => {
     const { s, built } = await storyWithChildren('11624-plain@example.com');
+    // With "Complete children when a parent is done" on, the child's own pull request is
+    // the story's too (MOTIR-11835, pinned in childDeliveryInheritance.test.ts). Off, the
+    // child keeps a set of its own — the case this pins.
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { autoCompleteChildrenOnParentDone: false },
+    });
     const ownRef = `subtask/${built.identifier}-alone`;
     await link(built.identifier, 74, ownRef);
     await opened(74, ownRef);

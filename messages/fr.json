@@ -16511,6 +16511,14 @@
           "next": "La vidéo de la Story a été renvoyée. Dès qu'une nouvelle sera enregistrée, l'approuver les fusionnera."
         }
       },
+      "transitionRefused": {
+        "title": "Le workflow de cet élément de travail n’autorise pas le changement que fait cette décision.",
+        "next": "Rien n’a été décidé. Déplacez l’élément de travail vers un statut que cette décision peut suivre, ou demandez à un administrateur du projet d’autoriser le changement.",
+        "closed": {
+          "title": "Cet élément de travail est déjà clos, cette décision ne peut donc plus le déplacer.",
+          "next": "Rien n’a été décidé. Son workflow ne permet pas de revenir à cette étape : fusionnez sa pull request directement, ou ramenez l’élément de travail en arrière et décidez à nouveau."
+        }
+      },
       "alreadyAwaiting": {
         "title": "Une autre décision sur ce sujet est déjà en attente.",
         "next": "Rechargez la page pour la voir."
