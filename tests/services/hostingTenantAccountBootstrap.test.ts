@@ -7,6 +7,7 @@ import {
   TENANT_ACCOUNT_REGION,
   TENANT_ORGANIZATION_TAG_KEY,
   TENANT_QUOTA_TARGETS,
+  tenantDeployPolicies,
   tenantDeployPolicyDocument,
 } from '@/lib/ciFleet/hostingTenantAccounts';
 import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
@@ -101,9 +102,7 @@ describe('bootstrapTenantAccount', () => {
       quotaRaisesFiled: TENANT_QUOTA_TARGETS.length,
       quotaRaisesPending: TENANT_QUOTA_TARGETS.length,
     });
-    expect(organization.tenantRoles.get(ACCOUNT_ID)).toBe(
-      JSON.stringify(tenantDeployPolicyDocument()),
-    );
+    expect(organization.tenantRoles.get(ACCOUNT_ID)).toBe(JSON.stringify(tenantDeployPolicies()));
     expect(organization.accountTags.get(ACCOUNT_ID)?.get(TENANT_ORGANIZATION_TAG_KEY)).toBe(org.id);
     expect([...organization.openQuotaRaises.keys()].sort()).toEqual(
       TENANT_QUOTA_TARGETS.map((t) => `${ACCOUNT_ID}:${t.quotaCode}`).sort(),
@@ -134,9 +133,7 @@ describe('bootstrapTenantAccount', () => {
     const result = await run(org.id);
     expect(result.quotaRaisesPending).toBe(TENANT_QUOTA_TARGETS.length);
     expect(organization.tenantRoles.size).toBe(1);
-    expect(organization.tenantRoles.get(ACCOUNT_ID)).toBe(
-      JSON.stringify(tenantDeployPolicyDocument()),
-    );
+    expect(organization.tenantRoles.get(ACCOUNT_ID)).toBe(JSON.stringify(tenantDeployPolicies()));
     expect(organization.accountTags.get(ACCOUNT_ID)?.size).toBe(1);
     expect(organization.openQuotaRaises.size).toBe(TENANT_QUOTA_TARGETS.length);
     expect(await run(org.id)).toMatchObject({

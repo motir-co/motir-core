@@ -6,6 +6,7 @@ import {
   awsRunnerPolicyDocument,
   type AwsManagementApi,
   type AwsOrganizationAccount,
+  type AwsManagedPolicy,
   type AwsPolicyDocument,
   type AwsQuotaTarget,
   type AwsSessionCredentials,
@@ -161,8 +162,8 @@ export class FakeOrganization implements AwsManagementApi {
   /** Per step: an error thrown ONCE after the step's effect lands, as a pass cut
    *  off after AWS answered would see it (MOTIR-9940). */
   readonly failAfter = new Map<FakeOrganizationStep, Error>();
-  /** Per member account: the tenant deploy role's policy, null before it is put
-   *  (MOTIR-9941). */
+  /** Per member account: the tenant deploy role's managed policy set as JSON,
+   *  null before it is put (MOTIR-9941 · MOTIR-11878). */
   readonly tenantRoles = new Map<string, string | null>();
   /** Per account: its Organizations tags. */
   readonly accountTags = new Map<string, Map<string, string>>();
@@ -387,7 +388,10 @@ export class FakeOrganization implements AwsManagementApi {
     return { ouId, created: true };
   }
 
-  async ensureTenantDeployRole(credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {
+  async ensureTenantDeployRole(
+    credentials: AwsSessionCredentials,
+    policies: readonly AwsManagedPolicy[],
+  ) {
     const accountId = this.sessionAccount.get(credentials) ?? 'unknown';
     this.calls.push(`ensureTenantDeployRole:${accountId}`);
     let created = false;
@@ -396,7 +400,7 @@ export class FakeOrganization implements AwsManagementApi {
       created = true;
       this.failOnceAfter('tenantRoleCreated');
     }
-    const wanted = JSON.stringify(policy);
+    const wanted = JSON.stringify(policies);
     let policyChanged = false;
     if (this.tenantRoles.get(accountId) !== wanted) {
       this.tenantRoles.set(accountId, wanted);
