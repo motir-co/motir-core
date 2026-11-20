@@ -13,6 +13,7 @@ import {
   type DeployCheckDeps,
 } from '@/lib/hosting/deployCheck';
 import {
+  dockerImageBuilder,
   FAKE_SERVERLESS_REGISTRY,
   fakeFunctionUrlFetch,
   fakeImageBuilder,
@@ -616,5 +617,105 @@ describe('the fake function URL', () => {
     );
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ database: 'unreachable' });
+  });
+});
+
+// MOTIR-11847 — the real image builder signs in to the registry with the login
+// the serverless adapter takes under the scoped role. Its first live run pushed
+// after `aws ecr get-login-password` — the operator's own user — and the `mh/*`
+// repository refused it.
+describe('dockerImageBuilder', () => {
+  const LOGIN = {
+    registry: '212859366014.dkr.ecr.us-east-1.amazonaws.com',
+    username: 'AWS',
+    password: 'scoped-role-token',
+  };
+
+  function builder(metadata = '{"containerimage.digest":"sha256:abc"}') {
+    const runs: { command: string; args: readonly string[]; stdin?: string }[] = [];
+    const login = vi.fn(async () => LOGIN);
+    const build = dockerImageBuilder({
+      login,
+      run: async (command, args, options = {}) => {
+        runs.push({
+          command,
+          args,
+          ...(options.stdin !== undefined ? { stdin: options.stdin } : {}),
+        });
+      },
+      metadataPath: () => '/tmp/deploy-check-x/metadata.json',
+      readFile: (path) => (path === '/tmp/deploy-check-x/metadata.json' ? metadata : ''),
+      context: 'tests/fixtures/hosting/serverless',
+    });
+    return { build, runs, login };
+  }
+
+  it('signs in with the scoped-role login, password on stdin only, then builds and pushes', async () => {
+    const { build, runs, login } = builder();
+    const pushed = await build({
+      pushNamespace: 'mh/deploy-check-default/production',
+      label: 'release-1',
+    });
+
+    expect(login).toHaveBeenCalledTimes(1);
+    expect(runs.map((r) => r.command)).toEqual(['docker', 'docker']);
+    expect(runs[0]).toEqual({
+      command: 'docker',
+      args: ['login', '--username', 'AWS', '--password-stdin', LOGIN.registry],
+      stdin: LOGIN.password,
+    });
+    for (const run of runs) expect(run.args.join(' ')).not.toContain(LOGIN.password);
+    expect(runs[1]!.stdin).toBeUndefined();
+    expect(runs[1]!.args).toEqual([
+      'buildx',
+      'build',
+      '--platform',
+      'linux/amd64',
+      '--provenance=false',
+      '--build-arg',
+      'RELEASE_LABEL=release-1',
+      '--tag',
+      `${LOGIN.registry}/mh/deploy-check-default/production:release-1`,
+      '--metadata-file',
+      '/tmp/deploy-check-x/metadata.json',
+      '--push',
+      'tests/fixtures/hosting/serverless',
+    ]);
+    expect(pushed).toEqual({
+      ref: `${LOGIN.registry}/mh/deploy-check-default/production`,
+      digest: 'sha256:abc',
+    });
+  });
+
+  it('never shells out to the AWS CLI for the login', async () => {
+    const { build, runs } = builder();
+    await build({ pushNamespace: 'mh/x/production', label: 'release-2' });
+    expect(runs.some((r) => r.command === 'aws')).toBe(false);
+  });
+
+  it('fails when buildx reports no digest', async () => {
+    const { build } = builder('{}');
+    await expect(build({ pushNamespace: 'mh/x/production', label: 'release-1' })).rejects.toThrow(
+      'buildx reported no image digest',
+    );
+  });
+
+  it('pushes nothing when the login is refused', async () => {
+    const runs: string[] = [];
+    const build = dockerImageBuilder({
+      login: async () => {
+        throw new Error('ecr: AccessDeniedException');
+      },
+      run: async (command) => {
+        runs.push(command);
+      },
+      metadataPath: () => 'unused',
+      readFile: () => '',
+      context: '.',
+    });
+    await expect(build({ pushNamespace: 'mh/x/production', label: 'release-1' })).rejects.toThrow(
+      'ecr: AccessDeniedException',
+    );
+    expect(runs).toEqual([]);
   });
 });

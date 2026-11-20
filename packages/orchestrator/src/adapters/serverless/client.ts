@@ -117,7 +117,9 @@ export function awsErrorCode(err: unknown): string {
   return typeof shape.name === 'string' && shape.name ? shape.name : 'UnknownError';
 }
 
-function toApiError(service: ServerlessAwsService, err: unknown): OrchestratorApiError {
+/** A failure as the adapter's error, carrying the service and the AWS error
+ *  code only — shared with `./registry`, not exported from the package. */
+export function toApiError(service: ServerlessAwsService, err: unknown): OrchestratorApiError {
   if (err instanceof OrchestratorApiError) return err;
   const shape = (typeof err === 'object' && err !== null ? err : {}) as SdkErrorShape;
   const status =

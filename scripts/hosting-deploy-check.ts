@@ -90,8 +90,9 @@
  *             probe, status, destroy
  * It needs `MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN` (assumed from the operator's
  * own AWS credentials), `MOTIR_HOSTING_NEON_API_KEY`, `MOTIR_HOSTING_NEON_ORG_ID`,
- * Docker with buildx, and the AWS CLI for the registry login. Pair values are
- * never printed.
+ * and Docker with buildx; the registry login is taken under that same role
+ * (MOTIR-11847), never the operator's own credentials. Pair values and the
+ * registry password are never printed.
  */
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
 import { execFileSync, spawn } from 'node:child_process';
@@ -106,6 +107,7 @@ import {
   type DeployCheckDeps,
 } from '@/lib/hosting/deployCheck';
 import {
+  dockerImageBuilder,
   FAKE_SERVERLESS_REGISTRY,
   fakeFunctionUrlFetch,
   fakeImageBuilder,
@@ -119,6 +121,7 @@ import { selectedOrchestratorProvider } from '@/lib/orchestrator/provider';
 import {
   createSigV4Fetch,
   serverlessHostingConfig,
+  serverlessRegistryLogin,
   signFunctionUrlRequest,
   type FakeHostingControls,
 } from '@motir/orchestrator';
@@ -134,49 +137,23 @@ function serverlessRegistry(): string {
   return `${accountId}.dkr.ecr.${region}.amazonaws.com`;
 }
 
-/** Build the fixture with its label baked in, push it, and read the digest the
- *  registry gave it back from buildx's metadata. Lambda takes a single-platform
- *  image with no attestation manifest, hence `--provenance=false`. */
-async function buildAndPushImage(input: {
-  pushNamespace: string;
-  label: string;
-}): Promise<{ ref: string; digest: string }> {
-  const { region } = serverlessHostingConfig();
-  const registry = serverlessRegistry();
-  const password = execFileSync('aws', ['ecr', 'get-login-password', '--region', region], {
-    encoding: 'utf8',
-  });
-  execFileSync('docker', ['login', '--username', 'AWS', '--password-stdin', registry], {
-    input: password,
-    stdio: ['pipe', 'inherit', 'inherit'],
-  });
-  const ref = `${registry}/${input.pushNamespace}`;
-  const metadata = join(mkdtempSync(join(tmpdir(), 'deploy-check-')), 'metadata.json');
-  execFileSync(
-    'docker',
-    [
-      'buildx',
-      'build',
-      '--platform',
-      'linux/amd64',
-      '--provenance=false',
-      '--build-arg',
-      `RELEASE_LABEL=${input.label}`,
-      '--tag',
-      `${ref}:${input.label}`,
-      '--metadata-file',
-      metadata,
-      '--push',
-      SERVERLESS_DEPLOY_CHECK_IMAGE_CONTEXT,
-    ],
-    { stdio: 'inherit' },
-  );
-  const digest = (JSON.parse(readFileSync(metadata, 'utf8')) as Record<string, unknown>)[
-    'containerimage.digest'
-  ];
-  if (typeof digest !== 'string') throw new Error('buildx reported no image digest');
-  return { ref, digest };
-}
+/** The real image builder: Docker on the operator's machine, signed in to the
+ *  registry under the serverless adapter's scoped role (MOTIR-11847). */
+const buildAndPushImage = dockerImageBuilder({
+  login: () => serverlessRegistryLogin(),
+  run: async (command, args, options = {}) => {
+    execFileSync(
+      command,
+      [...args],
+      options.stdin === undefined
+        ? { stdio: 'inherit' }
+        : { input: options.stdin, stdio: ['pipe', 'inherit', 'inherit'] },
+    );
+  },
+  metadataPath: () => join(mkdtempSync(join(tmpdir(), 'deploy-check-')), 'metadata.json'),
+  readFile: (path) => readFileSync(path, 'utf8'),
+  context: SERVERLESS_DEPLOY_CHECK_IMAGE_CONTEXT,
+});
 
 function serverlessDeps(): ServerlessDeployCheckDeps {
   if (selectedOrchestratorProvider() === 'fake') {

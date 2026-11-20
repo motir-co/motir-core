@@ -40,6 +40,7 @@ import { computeSecondsOf, metricPeriodSeconds } from './usage';
 
 export * from './config';
 export * from './sign';
+export * from './registry';
 export {
   SERVERLESS_ECR_ROOT,
   SERVERLESS_LIVE_ALIAS,
