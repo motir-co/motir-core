@@ -1,4 +1,7 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
+import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { listOwnDeliveriesWithChecks } from '@/lib/approvalGates/ownDeliveries';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -155,11 +158,45 @@ export async function settleDeliverySetChanges(
   }
 }
 
+/** The awaiting gates that name the card's OWN delivery set by its version. */
+const SET_VERSION_KINDS: ReadonlySet<string> = new Set(['pull_request_approval', 'agent_review']);
+
+/**
+ * Is the card still asked about exactly the set it delivers now? True only when it holds an
+ * awaiting approve-and-merge (or review-agent) question and every such question names the
+ * version of its CURRENT own set — the set `withoutAncestorDeliveries` leaves it after the
+ * move. A card asked nothing answers false: a question it is now owed is raised by the settle.
+ */
+async function stillAskedAboutOwnSet(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const asked = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).filter(
+    (gate) => SET_VERSION_KINDS.has(gate.kind),
+  );
+  if (asked.length === 0) return false;
+  const own = await listOwnDeliveriesWithChecks(workItemId, tx);
+  const current = deliverySetVersion(own.map((delivery) => deliveryMemberVersion(delivery)));
+  return asked.every((gate) => gate.subjectVersion === current);
+}
+
 /**
  * After a card MOVED in the tree — a re-parent, a move to the top level, a filing into a
  * folder: reconcile every pull request the card or anything under it delivers, and settle
  * whatever changed. The rows the OLD ancestors inherited are found through those pull
  * requests, so both chains are covered from the moved card alone.
+ *
+ * ⚠️ A MOVE CHANGES GATE SETS EVEN WHEN NO ROW MOVES (Bug MOTIR-11902). A card's own set
+ * leaves out every pull request an ancestor also delivers, so a re-parent re-draws it for
+ * every card in the moved subtree whenever the old or the new chain delivers one of its pull
+ * requests — through an EXPLICIT row the reconcile never writes (a story linked to the
+ * shared pull request its children ride), or with the switch off, when the reconcile writes
+ * nothing at all. So every card in the subtree that delivers a pull request is settled
+ * whatever the reconcile answered: moved out from under such a story it is asked about the
+ * pull request it now owns, moved under one its awaiting question is withdrawn as
+ * `set_changed`. The one card skipped is one still asked about exactly its current set — a
+ * move that left its set alone must not withdraw a question (and cancel a review run) only
+ * to ask the same one again.
  */
 export async function reconcileInheritedDeliveriesAfterMove(
   movedItemId: string,
@@ -172,19 +209,22 @@ export async function reconcileInheritedDeliveriesAfterMove(
     [...subtreeIds],
     tx,
   );
-  const changed = await reconcileInheritedDeliveries(pullRequestIds, tx);
-  if (changed.length === 0) return;
+  if (pullRequestIds.length === 0) return;
+  const changed = new Set(await reconcileInheritedDeliveries(pullRequestIds, tx));
   // The reconcile reads the tree AFTER the move, so it cannot see that a card in the
-  // moved subtree USED to sit under an ancestor whose set just changed: a child moved to
-  // the top level has no ancestors left to compare. Its own gate set changed all the same
-  // (the pull request the old parent covered is its own again), so every card in the
-  // subtree that delivers one of these pull requests is settled too.
-  const subtreeHolders = (
-    await workItemDeliveryRepository.listInheritanceRowsByPullRequests(pullRequestIds, tx)
-  )
-    .map((row) => row.workItemId)
-    .filter((id) => subtreeIds.has(id));
-  await settleDeliverySetChanges([...changed, ...subtreeHolders], tx);
+  // moved subtree USED to sit under an ancestor that delivered its pull request: a child
+  // moved to the top level has no ancestors left to compare. Its own gate set changed all
+  // the same, so the subtree's holders are measured against what they are asked about.
+  const subtreeHolders = new Set(
+    (await workItemDeliveryRepository.listInheritanceRowsByPullRequests(pullRequestIds, tx))
+      .map((row) => row.workItemId)
+      .filter((id) => subtreeIds.has(id) && !changed.has(id)),
+  );
+  const owed = [...changed];
+  for (const id of subtreeHolders) {
+    if (!(await stillAskedAboutOwnSet(id, tx))) owed.push(id);
+  }
+  await settleDeliverySetChanges(owed, tx);
 }
 
 /**
