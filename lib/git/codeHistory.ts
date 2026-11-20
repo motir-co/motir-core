@@ -57,11 +57,15 @@ async function readCappedBody(res: Response): Promise<Uint8Array | null> {
  * detail never includes the URL or the headers, so nothing credential-shaped can reach
  * a result through it.
  */
-export async function fetchWithinDeadline(url: string, init: RequestInit): Promise<HostCall> {
+export async function fetchWithinDeadline(
+  url: string,
+  init: RequestInit,
+  send: (url: string, init: RequestInit) => Promise<Response> = fetch,
+): Promise<HostCall> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CODE_HISTORY_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal });
+    const res = await send(url, { ...init, signal: controller.signal });
     const body = await readCappedBody(res);
     if (body === null) {
       return {

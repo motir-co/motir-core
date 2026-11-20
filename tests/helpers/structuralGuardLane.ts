@@ -195,6 +195,7 @@ export const STRUCTURAL_GUARD_SPECS = [
   // and nothing reaches past a package barrel. No database, no render, and it
   // imports only `node:fs` / `node:path`.
   'tests/packages/importDirection.test.ts',
+  'tests/github/githubFetchGuard.test.ts',
   // MOTIR-10875 — the page-comment PACKAGE BOUNDARY: the same walk over `app/`,
   // `lib/`, `packages/` and `components/`, comment-stripped, asserting the comment
   // routes and service never reach the table except through `@motir/pages`. No

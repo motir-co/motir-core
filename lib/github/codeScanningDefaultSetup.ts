@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // THE CODEQL DEFAULT-SETUP RUNNER boundary (MOTIR-10289) — the one module that
@@ -108,7 +109,7 @@ async function request(
   init: { method: string; token: string; body?: string },
 ): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await githubFetch('codeScanningDefaultSetup', url, {
       method: init.method,
       headers: {
         accept: 'application/vnd.github+json',

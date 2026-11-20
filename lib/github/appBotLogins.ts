@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { createAppJwt, isGithubAppConfigured, type GithubAppRole } from '@/lib/github/appAuth';
 
 // MOTIR'S OWN APP BOTS, by login (Story MOTIR-10327 · MOTIR-10335; `approval-gates.md` §12
@@ -23,7 +24,7 @@ function slugOf(role: GithubAppRole): Promise<string | null> {
   if (cached) return cached;
   const pending = (async () => {
     if (!isGithubAppConfigured(role)) return null;
-    const res = await fetch(`${GITHUB_API}/app`, {
+    const res = await githubFetch('app.botLogins', `${GITHUB_API}/app`, {
       headers: {
         authorization: `Bearer ${createAppJwt(undefined, role)}`,
         accept: 'application/vnd.github+json',

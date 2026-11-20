@@ -14,6 +14,8 @@
 // App's installations; the `app_id` filter below is a second fence for a token
 // minted by a different App. Same fetch-boundary shape as `userOrgs.ts`.
 
+import { githubFetch } from '@/lib/github/githubFetch';
+
 const GITHUB_API = 'https://api.github.com';
 const PER_PAGE = 100;
 
@@ -57,15 +59,19 @@ export const userInstallationsClient = {
   async listForToken(accessToken: string): Promise<GithubUserInstallation[]> {
     let res: Response;
     try {
-      res = await fetch(`${GITHUB_API}/user/installations?per_page=${PER_PAGE}`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
+      res = await githubFetch(
+        'user.installations',
+        `${GITHUB_API}/user/installations?per_page=${PER_PAGE}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+          cache: 'no-store',
         },
-        cache: 'no-store',
-      });
+      );
     } catch (err) {
       throw new GithubUserInstallationsError(
         null,

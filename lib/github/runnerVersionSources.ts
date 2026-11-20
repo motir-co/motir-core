@@ -7,6 +7,7 @@
 // or null for an ANONYMOUS read. Both repositories read here are public, so an
 // anonymous read answers too, within GitHub's 60 requests an hour per address.
 
+import { githubFetch } from '@/lib/github/githubFetch';
 import type { RepoRef } from '@/lib/github/repoCommitHistory';
 
 const GITHUB_API = 'https://api.github.com';
@@ -33,7 +34,10 @@ async function get(path: string, accept: string, token: string | null): Promise<
   if (token) headers['authorization'] = `Bearer ${token}`;
   let res: Response;
   try {
-    res = await fetch(`${GITHUB_API}${path}`, { method: 'GET', headers });
+    res = await githubFetch('runnerVersionSources', `${GITHUB_API}${path}`, {
+      method: 'GET',
+      headers,
+    });
   } catch (err) {
     throw new RunnerVersionSourceError(null, err instanceof Error ? err.message : 'unknown');
   }

@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import type { ProjectRepoState, ProjectRepoTakeoverState } from '@/generated/prisma/client';
 import {
   createAppJwt,
@@ -157,7 +158,7 @@ async function github(
   init: { method?: string; authorization?: string; body?: unknown },
 ): Promise<Response> {
   try {
-    return await fetch(`${GITHUB_API}${path}`, {
+    return await githubFetch('runGitCredential', `${GITHUB_API}${path}`, {
       method: init.method ?? 'GET',
       headers: {
         ...(init.authorization ? { authorization: init.authorization } : {}),
@@ -649,7 +650,7 @@ export async function revokeRunGitCredentials(
       continue;
     }
     try {
-      const res = await fetch(`${GITHUB_API}/installation/token`, {
+      const res = await githubFetch('runGitCredential.revoke', `${GITHUB_API}/installation/token`, {
         method: 'DELETE',
         headers: {
           authorization: `token ${decryptToken(row.tokenEncrypted)}`,

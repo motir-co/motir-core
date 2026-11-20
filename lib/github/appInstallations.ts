@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { createAppJwt } from '@/lib/github/appAuth';
 import { errorDetail } from '@/lib/github/repoDeletion';
 
@@ -45,14 +46,18 @@ export const appInstallationsClient = {
     }
     let res: Response;
     try {
-      res = await fetch(`${GITHUB_API}/app/installations/${encodeURIComponent(installationId)}`, {
-        method: 'DELETE',
-        headers: {
-          accept: 'application/vnd.github+json',
-          'user-agent': 'motir',
-          authorization: `Bearer ${jwt}`,
+      res = await githubFetch(
+        'app.uninstall',
+        `${GITHUB_API}/app/installations/${encodeURIComponent(installationId)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            accept: 'application/vnd.github+json',
+            'user-agent': 'motir',
+            authorization: `Bearer ${jwt}`,
+          },
         },
-      });
+      );
     } catch (err) {
       throw new AppUninstallError(null, err instanceof Error ? err.message : 'unknown');
     }

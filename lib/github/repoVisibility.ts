@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // Is this repository PRIVATE? (Story MOTIR-8699 · MOTIR-8712) — the one read the
@@ -41,7 +42,8 @@ export const repoVisibilityClient = {
     const { token } = await resolveOrgAuth(target);
     let res: Response;
     try {
-      res = await fetch(
+      res = await githubFetch(
+        'repoVisibility',
         `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
         {
           method: 'GET',

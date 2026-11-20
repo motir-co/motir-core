@@ -15,7 +15,10 @@ import type { GithubRepoAccess } from '@/lib/github/seedPromotion';
 
 const GITHUB_API = 'https://api.github.com';
 
-const { request, readJson, errorDetail } = provisioningTransport;
+const { readJson, errorDetail } = provisioningTransport;
+/** The shared transport's request, counted under this module's caller (MOTIR-11844). */
+const request: typeof provisioningTransport.request = (url, init) =>
+  provisioningTransport.request(url, { ...init, caller: 'repoDeployments' });
 
 function repoPath(access: Pick<GithubRepoAccess, 'owner' | 'repo'>): string {
   return `${GITHUB_API}/repos/${encodeURIComponent(access.owner)}/${encodeURIComponent(access.repo)}`;

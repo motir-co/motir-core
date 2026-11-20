@@ -30,8 +30,10 @@ const GITHUB_API = 'https://api.github.com';
  *  few enough to stay inside GitHub's secondary rate limit on content creation. */
 const BLOB_COPY_CONCURRENCY = 8;
 
-const { request, readJson, asRecord, errorDetail, isNameCollision, awaitReady } =
-  provisioningTransport;
+const { readJson, asRecord, errorDetail, isNameCollision, awaitReady } = provisioningTransport;
+/** The shared transport's request, counted under this module's caller (MOTIR-11844). */
+const request: typeof provisioningTransport.request = (url, init) =>
+  provisioningTransport.request(url, { ...init, caller: 'seedPromotion' });
 
 /** A repository on GitHub and the token that reaches it. */
 export interface GithubRepoAccess {

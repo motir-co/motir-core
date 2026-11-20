@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { createAppJwt, type GithubAppRole } from '@/lib/github/appAuth';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
@@ -50,7 +51,7 @@ export interface WorkflowCommit {
 async function getJson(url: string, token: string): Promise<{ res: Response; body: unknown }> {
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await githubFetch('orgInstallation', url, {
       method: 'GET',
       headers: {
         accept: 'application/vnd.github+json',

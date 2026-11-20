@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { mintInstallationToken } from '@/lib/github/appAuth';
 
 // The Actions-PERMISSIONS boundary (Story MOTIR-1775 · MOTIR-1907) — the one
@@ -84,7 +85,7 @@ export const actionsPermissionsClient = {
 
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('actionsPermissions', url, {
         method: 'PUT',
         headers: {
           accept: 'application/vnd.github+json',

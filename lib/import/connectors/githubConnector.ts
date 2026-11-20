@@ -14,6 +14,7 @@
 // (ADR §2, assignee "by login"); the resolver's unmatched-user policy handles
 // the rest. No DB, no Prisma — an external API read only.
 
+import { githubRequestHooks } from '@/lib/github/githubFetch';
 import { ConnectorConfigError } from './errors';
 import {
   fetchWithRetry,
@@ -111,6 +112,12 @@ export class GithubConnector implements IssueSourceConnector {
       ...this.config.retry,
       source: 'github',
       fetchImpl: this.config.fetchImpl ?? this.config.retry?.fetchImpl,
+      // Counted and throttle-reported like every GitHub call (MOTIR-11844).
+      ...githubRequestHooks({
+        caller: 'import.github',
+        installationId: null,
+        repository: this.repoRef(),
+      }),
     };
   }
 

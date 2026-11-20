@@ -2,9 +2,8 @@
 // backoff budget below (it runs inside a post-commit side effect, not an operator
 // sweep). `retryDelayMs` moved to the shared leaf when a third reader needed it
 // (MOTIR-3034); the import target changed, the behaviour did not.
+import { githubFetch } from '@/lib/github/githubFetch';
 import {
-  noteGithubRequest,
-  observeGithubThrottle,
   retryDelayMs,
   type GithubCallSite,
   type GithubCallerContext,
@@ -173,21 +172,25 @@ async function fetchPage(
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     let res: Response;
-    noteGithubRequest(site);
     try {
-      res = await fetch(url, {
-        headers: {
-          // The INSTALLATION token, never the App JWT: the JWT authenticates the
-          // App and cannot read a repository's contents at all, so a capture that
-          // reached for it would 403 on every private repo and look like a
-          // permissions problem in the installation.
-          authorization: `Bearer ${token}`,
-          accept: 'application/vnd.github+json',
-          'x-github-api-version': '2022-11-28',
-          'user-agent': 'motir',
+      res = await githubFetch(
+        site,
+        url,
+        {
+          headers: {
+            // The INSTALLATION token, never the App JWT: the JWT authenticates the
+            // App and cannot read a repository's contents at all, so a capture that
+            // reached for it would 403 on every private repo and look like a
+            // permissions problem in the installation.
+            authorization: `Bearer ${token}`,
+            accept: 'application/vnd.github+json',
+            'x-github-api-version': '2022-11-28',
+            'user-agent': 'motir',
+          },
+          signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
         },
-        signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
-      });
+        attempt,
+      );
     } catch (err) {
       // Network / timeout: retryable on the same budget as a 5xx.
       if (attempt === MAX_ATTEMPTS)
@@ -212,7 +215,6 @@ async function fetchPage(
     // three signals — so this imports that decision rather than restating it; two
     // copies would drift on the next GitHub change and only one of them would be
     // fixed.
-    observeGithubThrottle(site, res.status, res.headers, attempt);
     const delay = retryDelayMs(res.status, res.headers, attempt, Date.now());
     if (delay === null || attempt === MAX_ATTEMPTS)
       throw new PullRequestFilesReadError(

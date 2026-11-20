@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import sodium from 'libsodium-wrappers';
 import { mintInstallationToken } from '@/lib/github/appAuth';
 
@@ -78,7 +79,7 @@ async function request(
   init: { method: string; token: string; body?: unknown },
 ): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await githubFetch('repositoryActionsConfig', url, {
       method: init.method,
       headers: {
         accept: 'application/vnd.github+json',

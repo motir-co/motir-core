@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { mintInstallationToken } from '@/lib/github/appAuth';
 
 // The repository-DELETE boundary (Story MOTIR-6306 · MOTIR-6397) — the one module
@@ -71,7 +72,7 @@ export const repoDeletionClient = {
 
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('repoDeletion', url, {
         method: 'DELETE',
         headers: {
           accept: 'application/vnd.github+json',
