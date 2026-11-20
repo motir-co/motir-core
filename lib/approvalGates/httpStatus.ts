@@ -45,6 +45,9 @@ export const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   // A verb this gate does not offer (MOTIR-5893) — the REQUEST is malformed for this
   // kind, not the resource in the wrong state, so `400` rather than `409`.
   APPROVAL_GATE_VERB_NOT_OFFERED: 400,
+  // The card's workflow refuses the status hop the decision makes (MOTIR-11835) — a
+  // well-formed request against a card no longer in a state that admits it.
+  APPROVAL_GATE_TRANSITION_REFUSED: 409,
   APPROVAL_GATE_ALREADY_AWAITING: 409,
   // A delivery the card cannot read (MOTIR-8236) — the request is well-formed and the
   // gate is live; its SET is not in a state anyone can decide over until the pull

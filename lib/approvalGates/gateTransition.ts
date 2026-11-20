@@ -1,5 +1,7 @@
 import type { AppliedGateTransition, GateEffectArgs } from '@/lib/approvalGates/registry';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { ApprovalGateTransitionRefusedError } from '@/lib/approvalGates/errors';
+import { IllegalTransitionError } from '@/lib/workItems/errors';
 import type { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -38,14 +40,53 @@ export async function applyGateTransition(
   // LAZY: the status funnel reaches back into the gate registry this module serves, and
   // a static import closes that cycle at module load (the handlers' own lazy imports).
   const { workItemsService } = await import('@/lib/services/workItemsService');
-  const { transition } = await workItemsService.applyStatusTransition(
+  let applied: Awaited<ReturnType<typeof workItemsService.applyStatusTransition>>;
+  try {
+    applied = await workItemsService.applyStatusTransition(
+      workItemId,
+      toStatusKey,
+      args.ctx,
+      args.tx,
+      opts,
+    );
+  } catch (err) {
+    if (err instanceof IllegalTransitionError) throw await transitionRefused(args, workItemId, err);
+    throw err;
+  }
+  if (applied.transition) args.appliedTransitions?.push({ workItemId, ...applied.transition });
+}
+
+/**
+ * A HOP THE WORKFLOW REFUSES IS A NAMED REFUSAL (Bug MOTIR-11835). The status funnel's own
+ * `IllegalTransitionError` is a work-item error the decide door has no arm for, so it
+ * reached the frame as `UNEXPECTED` — *check your connection* — on a request that had
+ * arrived and been refused. Translated here, the one place every handler's hop passes,
+ * so no handler can let it through. The door's transaction rolls back on the throw, so
+ * nothing is decided; the card's status category says whether it is already closed.
+ */
+async function transitionRefused(
+  args: Pick<GateEffectArgs, 'ctx' | 'tx'>,
+  workItemId: string,
+  err: IllegalTransitionError,
+): Promise<ApprovalGateTransitionRefusedError> {
+  // LAZY for the same reason as the funnel above.
+  const { workflowsService } = await import('@/lib/services/workflowsService');
+  const { workItemRepository } = await import('@/lib/repositories/workItemRepository');
+  // The funnel read this row under its lock before it judged the move, so it exists here.
+  const item = (await workItemRepository.findById(workItemId, args.tx))!;
+  const terminal = (
+    await workflowsService.getTerminalStatusKeysByProjects(
+      [item.projectId],
+      args.ctx.workspaceId,
+      args.tx,
+    )
+  ).get(item.projectId)!;
+  return new ApprovalGateTransitionRefusedError(
     workItemId,
-    toStatusKey,
-    args.ctx,
-    args.tx,
-    opts,
+    err.fromKey,
+    err.toKey,
+    terminal.has(err.fromKey),
   );
-  if (transition) args.appliedTransitions?.push({ workItemId, ...transition });
 }
 
 /**
