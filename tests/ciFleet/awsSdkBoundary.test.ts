@@ -36,6 +36,9 @@ const BLOB_STORE = {
  * the services it deploys to and the STS client it assumes its one role with.
  * It reads its role and region from the environment like the Fly hosting
  * adapter, so the no-environment case below still covers only `adapters/aws/`.
+ * IAM is imported by `roleConvergence.ts` alone (MOTIR-11921): the operator
+ * converge of the account's two roles, run as the account's administrator —
+ * never by the deploy path, whose scoped role holds no IAM action.
  */
 const SERVERLESS_HOSTING = {
   dir: join('packages', 'orchestrator', 'src', 'adapters', 'serverless'),
@@ -46,6 +49,7 @@ const SERVERLESS_HOSTING = {
     '@aws-sdk/client-cloudwatch',
     '@aws-sdk/client-cloudwatch-logs',
     '@aws-sdk/client-sts',
+    '@aws-sdk/client-iam',
   ]),
 };
 

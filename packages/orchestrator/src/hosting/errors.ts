@@ -106,3 +106,26 @@ export class ReleaseCommandUnsupportedError extends Error {
     this.name = 'ReleaseCommandUnsupportedError';
   }
 }
+
+/** A serverless IAM role the converge expects does not exist in the account
+ *  (MOTIR-11921). The converge never creates a role, it only converges one. */
+export class ServerlessRoleMissingError extends Error {
+  readonly code = 'HOSTING_SERVERLESS_ROLE_MISSING' as const;
+  constructor(readonly roleName: string) {
+    super(`The serverless role ${roleName} does not exist in the account.`);
+    this.name = 'ServerlessRoleMissingError';
+  }
+}
+
+/** A serverless role read back after its write still differs from its
+ *  definition (MOTIR-11921) — the write did not take. */
+export class ServerlessRoleReadBackMismatchError extends Error {
+  readonly code = 'HOSTING_SERVERLESS_ROLE_READ_BACK_MISMATCH' as const;
+  constructor(
+    readonly roleName: string,
+    readonly part: 'trust' | 'policy',
+  ) {
+    super(`The serverless role ${roleName}'s ${part} read back differs from its definition.`);
+    this.name = 'ServerlessRoleReadBackMismatchError';
+  }
+}

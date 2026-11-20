@@ -41,8 +41,11 @@ import { computeSecondsOf, metricPeriodSeconds } from './usage';
 export * from './config';
 export * from './sign';
 export * from './registry';
+export * from './roles';
+export * from './roleConvergence';
 export {
   SERVERLESS_ECR_ROOT,
+  SERVERLESS_EXEC_ROLE,
   SERVERLESS_LIVE_ALIAS,
   SERVERLESS_TAGS,
   serverlessPushNamespace,

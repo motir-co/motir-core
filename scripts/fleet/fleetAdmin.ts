@@ -118,6 +118,7 @@ import {
   capacityRequests,
 } from './fleetAdminCapacityRequestCommands';
 import { checkQuota, type FleetAdminCheckDeps } from './fleetAdminCheckQuota';
+import { hostingServerless } from './fleetAdminHostingServerlessCommands';
 import { hostingTenant } from './fleetAdminHostingTenantCommands';
 
 export const EXIT_OK = 0;
@@ -150,6 +151,9 @@ const USAGE = [
   '  fleet-admin capacity-request-close <request> <note> --operator <email>',
   '  fleet-admin hosting-tenant ensure <organization id>',
   '  fleet-admin hosting-tenant converge-deploy-policy [--organization <id>]',
+  '  fleet-admin hosting-serverless converge-roles [--dry-run]',
+  "    the serverless hosting account's deploy and execution roles onto their definitions;",
+  '    --trust names every principal that may assume the deploy role (it replaces the trust)',
   '  fleet-admin check-quota --account-id <12-digit AWS account id> [--region <region>]',
 ].join('\n');
 
@@ -350,6 +354,9 @@ export async function runFleetAdmin(
     if (command === 'capacity-request-link') return await capacityRequestLink(args, io);
     if (command === 'capacity-request-close') return await capacityRequestClose(args, io);
     if (command === 'hosting-tenant') return await hostingTenant(args, io, pool.hostingTenant);
+    if (command === 'hosting-serverless') {
+      return await hostingServerless(args, io, pool.hostingServerless);
+    }
     if (command === 'add-shard') return await addShard(args, io);
     if (command === 'add-spare') return await addSpare(args, io, pool.addSpare);
     if (command === 'refresh-limits') return await refreshLimits(args, io);
