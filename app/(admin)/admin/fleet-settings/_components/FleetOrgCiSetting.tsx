@@ -23,6 +23,8 @@ import { Switch } from '@/components/ui/Switch';
 import type {
   FleetOrgCiArm64DTO,
   FleetOrgCiCodeScanningDTO,
+  FleetOrgCiFlipCodeScanningDTO,
+  FleetOrgCiReadBackDTO,
   FleetOrgCiStateDTO,
   FleetOrgCiTargetDTO,
 } from '@/lib/dto/fleetOrgCiSetting';
@@ -87,7 +89,7 @@ export interface FleetOrgCiSettingProps {
 const JOBS_SHOWN = 5;
 
 type Answer =
-  | { kind: 'changed'; enabled: boolean }
+  | { kind: 'changed'; enabled: boolean; codeScanning?: FleetOrgCiFlipCodeScanningDTO }
   | { kind: 'unchanged'; enabled: boolean }
   | { kind: 'notReady'; conditions: FleetOrgCiNotMetCondition[] }
   | {
@@ -150,7 +152,7 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
       setAnswer(
         result.outcome === 'unchanged'
           ? { kind: 'unchanged', enabled: result.enabled }
-          : { kind: 'changed', enabled: asked },
+          : { kind: 'changed', enabled: asked, codeScanning: result.codeScanning },
       );
       return;
     }
@@ -380,6 +382,7 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
             <dd data-testid="fleet-org-ci-code-scanning">
               <CodeScanningList
                 entries={state.codeScanning}
+                flip={answer?.kind === 'changed' ? answer.codeScanning : undefined}
                 t={t}
                 org={org}
                 label={constants.runnerLabel}
@@ -537,7 +540,15 @@ function AnswerBand({
 }) {
   switch (answer.kind) {
     case 'changed':
-      return (
+      // A flip that skipped a repository or could not confirm a move is still
+      // done, but owes a look: the warning role, and the repository's own
+      // CodeQL line says what happened to it (MOTIR-11933).
+      return answer.codeScanning ? (
+        <Band tone="warning" role="status" testId="fleet-org-ci-answer">
+          <p>{t(answer.enabled ? 'done.on' : 'done.off')}</p>
+          <p>{t('done.codeScanningAttention')}</p>
+        </Band>
+      ) : (
         <Band tone="info" role="status" testId="fleet-org-ci-answer">
           {t(answer.enabled ? 'done.on' : 'done.off')}
         </Band>
@@ -628,19 +639,37 @@ function AnswerBand({
  * a repository with default setup CONFIGURED is listed — one without it has no
  * CodeQL job to place — plus any whose setting could not be read, which says so
  * rather than guessing.
+ *
+ * Right after a flip, `flip` names the repositories it skipped and the moves
+ * GitHub does not confirm on read-back (MOTIR-11933): that repository's line says
+ * so in place of its read-back state, and is listed whatever that state is.
  */
 function CodeScanningList({
   entries,
+  flip,
   t,
   org,
   label,
 }: {
   entries: FleetOrgCiCodeScanningDTO[];
+  flip: FleetOrgCiFlipCodeScanningDTO | undefined;
   t: T;
   org: string;
   label: string;
 }) {
-  const shown = entries.filter((e) => e.state !== 'not_configured' && e.state !== 'unavailable');
+  const flagged = new Map<string, ReactNode>();
+  for (const s of flip?.skipped ?? []) {
+    flagged.set(
+      s.repo,
+      s.status === null
+        ? t('codeScanning.skippedUnreachable')
+        : t('codeScanning.skippedStatus', { status: s.status }),
+    );
+  }
+  for (const u of flip?.unverified ?? []) flagged.set(u.repo, readBackLine(u, t));
+  const shown = entries.filter(
+    (e) => flagged.has(e.repo) || (e.state !== 'not_configured' && e.state !== 'unavailable'),
+  );
   if (shown.length === 0) {
     return <span className="text-(--el-text-secondary)">{t('codeScanning.none', { org })}</span>;
   }
@@ -654,19 +683,44 @@ function CodeScanningList({
           data-state={entry.state}
         >
           <span className="font-mono text-xs text-(--el-text-strong)">{entry.repo}</span> —{' '}
-          {entry.state === 'fleet'
-            ? t('codeScanning.fleet', { label })
-            : entry.state === 'pending_fleet'
-              ? t('codeScanning.pendingFleet', { label })
-              : entry.state === 'github_hosted'
-                ? t('codeScanning.githubHosted')
-                : entry.state === 'unknown' && entry.status !== null
-                  ? t('codeScanning.unknownStatus', { status: entry.status })
-                  : t('codeScanning.unknownUnreachable')}
+          {flagged.has(entry.repo) ? (
+            <span data-testid={`fleet-org-ci-code-scanning-${entry.repo}-flip`}>
+              {flagged.get(entry.repo)}
+            </span>
+          ) : entry.state === 'fleet' ? (
+            t('codeScanning.fleet', { label })
+          ) : entry.state === 'pending_fleet' ? (
+            t('codeScanning.pendingFleet', { label })
+          ) : entry.state === 'github_hosted' ? (
+            t('codeScanning.githubHosted')
+          ) : entry.state === 'unknown' && entry.status !== null ? (
+            t('codeScanning.unknownStatus', { status: entry.status })
+          ) : (
+            t('codeScanning.unknownUnreachable')
+          )}
         </li>
       ))}
     </ul>
   );
+}
+
+/** One move GitHub does not confirm, as its CodeQL line words it. */
+function readBackLine(entry: FleetOrgCiReadBackDTO, t: T): string {
+  const runner = t(entry.to === 'fleet' ? 'runner.fleet' : 'runner.githubHosted');
+  if (entry.problem === 'read_failed') {
+    return entry.status === null
+      ? t('codeScanning.readBackUnreachable', { runner })
+      : t('codeScanning.readBackStatus', { runner, status: entry.status });
+  }
+  const found =
+    entry.found.state === 'standard'
+      ? t('codeScanning.found.standard')
+      : entry.found.state === 'labeled'
+        ? t('codeScanning.found.labeled', { label: entry.found.label })
+        : entry.found.state === 'not_configured'
+          ? t('codeScanning.found.notConfigured')
+          : t('codeScanning.found.unavailable');
+  return t('codeScanning.readBackMismatch', { runner, found });
 }
 
 function ReadinessCard({

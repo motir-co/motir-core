@@ -14129,7 +14129,18 @@
         "pendingFleet": "op door GitHub gehoste runners tot de volgende job op de vloot — de runner van die job laat het naar de vloot gaan ({label})",
         "unknownStatus": "kon niet worden gelezen — GitHub antwoordde met HTTP {status}",
         "unknownUnreachable": "kon niet worden gelezen — GitHub was niet bereikbaar",
-        "none": "Geen enkele privérepository op {org} heeft de standaardinstelling van CodeQL geconfigureerd."
+        "none": "Geen enkele privérepository op {org} heeft de standaardinstelling van CodeQL geconfigureerd.",
+        "skippedStatus": "overgeslagen bij deze wijziging — GitHub antwoordde met HTTP {status} bij het lezen van de instelling, dus de runner bleef zoals hij was",
+        "skippedUnreachable": "overgeslagen bij deze wijziging — GitHub was niet bereikbaar om de instelling te lezen, dus de runner bleef zoals hij was",
+        "readBackStatus": "verplaatst naar {runner}, maar GitHub antwoordt nu met HTTP {status} als de instelling opnieuw wordt gelezen",
+        "readBackUnreachable": "verplaatst naar {runner}, maar GitHub was niet bereikbaar om de instelling opnieuw te lezen",
+        "readBackMismatch": "verplaatst naar {runner}, maar GitHub meldt nu {found}",
+        "found": {
+          "standard": "door GitHub gehoste runners",
+          "labeled": "het runnerlabel {label}",
+          "notConfigured": "standaardinstelling niet geconfigureerd",
+          "unavailable": "codescanning niet beschikbaar"
+        }
       },
       "monitoringLine": "De machines van Motir verschijnen onder moooon B.V. in Monitoring › Vloot",
       "onCallout": {
@@ -14254,7 +14265,8 @@
       },
       "done": {
         "on": "Aangezet. Nieuwe jobs vragen vanaf nu de vloot aan.",
-        "off": "Uitgezet. Nieuwe jobs gaan terug naar door GitHub gehoste runners."
+        "off": "Uitgezet. Nieuwe jobs gaan terug naar door GitHub gehoste runners.",
+        "codeScanningAttention": "Bij sommige repository's verdient de standaardinstelling van CodeQL een blik — zie Standaardinstelling van CodeQL hieronder."
       },
       "direction": {
         "on": "aangezet",

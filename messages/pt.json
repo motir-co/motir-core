@@ -14129,7 +14129,18 @@
         "pendingFleet": "em runners hospedados pelo GitHub até o próximo job da frota — o runner desse job permite movê-lo para a frota ({label})",
         "unknownStatus": "não foi possível ler: o GitHub respondeu HTTP {status}",
         "unknownUnreachable": "não foi possível ler: o GitHub não pôde ser contatado",
-        "none": "Nenhum repositório privado em {org} tem a configuração padrão do CodeQL ativada."
+        "none": "Nenhum repositório privado em {org} tem a configuração padrão do CodeQL ativada.",
+        "skippedStatus": "ignorado nesta mudança: o GitHub respondeu HTTP {status} ao ler a configuração, então o runner ficou como estava",
+        "skippedUnreachable": "ignorado nesta mudança: o GitHub não pôde ser contatado para ler a configuração, então o runner ficou como estava",
+        "readBackStatus": "movido para {runner}, mas o GitHub agora responde HTTP {status} ao reler a configuração",
+        "readBackUnreachable": "movido para {runner}, mas o GitHub não pôde ser contatado para reler a configuração",
+        "readBackMismatch": "movido para {runner}, mas o GitHub agora informa {found}",
+        "found": {
+          "standard": "runners hospedados pelo GitHub",
+          "labeled": "o rótulo de runner {label}",
+          "notConfigured": "configuração padrão não configurada",
+          "unavailable": "varredura de código indisponível"
+        }
       },
       "monitoringLine": "As máquinas do Motir aparecem sob moooon B.V. em Monitoramento › Frota",
       "onCallout": {
@@ -14254,7 +14265,8 @@
       },
       "done": {
         "on": "Ativada. A partir de agora, novos jobs solicitam a frota.",
-        "off": "Desativada. Novos jobs voltam para runners hospedados pelo GitHub."
+        "off": "Desativada. Novos jobs voltam para runners hospedados pelo GitHub.",
+        "codeScanningAttention": "A configuração padrão do CodeQL de alguns repositórios precisa de atenção: veja Configuração padrão do CodeQL abaixo."
       },
       "direction": {
         "on": "ativada",

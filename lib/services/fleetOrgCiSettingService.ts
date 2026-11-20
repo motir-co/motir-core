@@ -11,7 +11,10 @@ import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import type {
   FleetOrgCiArm64DTO,
   FleetOrgCiCodeScanningDTO,
+  FleetOrgCiFlipCodeScanningDTO,
   FleetOrgCiFlipDTO,
+  FleetOrgCiReadBackDTO,
+  FleetOrgCiSkippedRepoDTO,
   FleetOrgCiStateDTO,
   FleetOrgCiStoredStateDTO,
   FleetOrgCiTargetDTO,
@@ -109,9 +112,34 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
  * flip wants it, one whose default setup is not configured, and one without code
  * scanning are left exactly as they are — the flip never configures CodeQL.
  * The settings are read before the transaction (with the variable, for
- * compensation) and written inside it after the variable, under the same rule: a
- * failed read or write refuses the flip, nothing is stored, and whatever was
- * already moved on GitHub is put back.
+ * compensation) and written inside it after the variable. A failed WRITE refuses
+ * the flip: nothing is stored, and whatever was already moved on GitHub is put
+ * back.
+ *
+ * ⚠️ A FAILED READ SKIPS THAT REPOSITORY, IT DOES NOT REFUSE THE FLIP
+ * (MOTIR-11933). GitHub can break one repository's default setup on its own
+ * side, so that every GET of it answers 500 while the rest of the org reads
+ * fine. Refusing the flip on that read locked the switch in BOTH directions for
+ * the whole org — OFF included, which is the recovery path above. So a
+ * repository whose setting cannot be read is left exactly as it is, the flip
+ * goes ahead for both variables and every repository that did read, and the
+ * repository comes back on the flip's answer (`codeScanning.skipped`, with
+ * GitHub's status) and in the audit row (`codeScanningSkipped`). ON skips the
+ * same way: a repository whose setting GitHub cannot serve has no CodeQL job
+ * that could run on any runner, so moving the others loses nothing, and a
+ * refusal would only hold every other repository off the fleet. Nothing is
+ * compensated for a skipped repository, because nothing was written to it.
+ *
+ * ⚠️ EVERY MOVE IS READ BACK (MOTIR-11933). A PATCH GitHub accepted is not proof
+ * the setting now holds: a move once left a repository whose setting GitHub
+ * answered 500 to from then on, and the flip reported success while that
+ * repository's CodeQL silently stopped for a week. After the transaction
+ * commits, each repository the flip moved is read again; a read that fails, or
+ * a runner other than the one written, comes back on the flip's answer
+ * (`codeScanning.unverified`) for the console to show on that repository's line.
+ * The read-back reports and never undoes: the flip is committed by then, and
+ * putting a setting back onto a runner GitHub is not honouring would not make it
+ * honour the old one either.
  *
  * ⚠️ ONE REFUSAL IS NOT A FAILURE: NO RUNNER WITH THE LABEL. GitHub moves a
  * default setup onto a label only while a registered runner carries it, and the
@@ -402,13 +430,18 @@ async function privateReposOf(target: FleetOrgCiTargetDTO): Promise<PairRepo[]> 
   return repos.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Each repository's default setup, read for the flip. A failed read refuses it. */
+/** Each repository's default setup, read for the flip. A repository GitHub
+ *  cannot serve the setting of goes in `skipped` with its status, and the flip
+ *  leaves it alone (MOTIR-11933); a failure that is not GitHub's re-throws. */
 async function readDefaultSetups(
   target: FleetOrgCiTargetDTO,
   repos: PairRepo[],
-  enabled: boolean,
-): Promise<Array<{ repo: PairRepo; setup: DefaultSetup }>> {
+): Promise<{
+  reads: Array<{ repo: PairRepo; setup: DefaultSetup }>;
+  skipped: FleetOrgCiSkippedRepoDTO[];
+}> {
   const reads: Array<{ repo: PairRepo; setup: DefaultSetup }> = [];
+  const skipped: FleetOrgCiSkippedRepoDTO[] = [];
   for (const repo of repos) {
     try {
       const setup = await codeScanningDefaultSetupClient.get(
@@ -419,16 +452,68 @@ async function readDefaultSetups(
       reads.push({ repo, setup });
     } catch (err) {
       if (!isGithubFailure(err)) throw err;
-      throw new FleetOrgCiCodeScanningError(
-        target.org.toLowerCase(),
-        repo.name,
-        statusOf(err),
-        'read',
-        direction(enabled),
-      );
+      console.warn(`${LOG} GitHub could not serve a CodeQL default setup; the flip skips it`, {
+        org: target.org.toLowerCase(),
+        repo: repo.name,
+        status: statusOf(err),
+      });
+      skipped.push({ repo: repo.name, status: statusOf(err) });
     }
   }
-  return reads;
+  return { reads, skipped };
+}
+
+/** The runner a read-back found, in the flip answer's terms. */
+function foundSetup(
+  setup: DefaultSetup,
+): Extract<FleetOrgCiReadBackDTO, { problem: 'mismatch' }>['found'] {
+  if (setup.state === 'unavailable') return { state: 'unavailable' };
+  if (setup.state === 'not-configured') return { state: 'not_configured' };
+  return setup.runner.type === 'labeled'
+    ? { state: 'labeled', label: setup.runner.label }
+    : { state: 'standard' };
+}
+
+const runnerTo = (runner: DefaultSetupRunner): 'fleet' | 'github_hosted' =>
+  runnerRequests(runner, MOTIR_RUNNER_LABEL) ? 'fleet' : 'github_hosted';
+
+function sameRunner(a: DefaultSetupRunner, b: DefaultSetupRunner): boolean {
+  return a.type === 'labeled' ? runnerRequests(b, a.label) : b.type === 'standard';
+}
+
+/** Read every move back after the flip committed (MOTIR-11933). Returns the
+ *  moves GitHub does not now confirm: a failed read, or a setting that is not
+ *  the configured runner the flip wrote. A failure that is not GitHub's
+ *  re-throws. */
+async function readBackMoves(
+  target: FleetOrgCiTargetDTO,
+  moved: DefaultSetupMove[],
+): Promise<FleetOrgCiReadBackDTO[]> {
+  const unverified: FleetOrgCiReadBackDTO[] = [];
+  for (const move of moved) {
+    const to = runnerTo(move.to);
+    let setup: DefaultSetup;
+    try {
+      setup = await codeScanningDefaultSetupClient.get(
+        move.repo.owner,
+        move.repo.name,
+        orgTargetFor(target),
+      );
+    } catch (err) {
+      if (!isGithubFailure(err)) throw err;
+      unverified.push({ repo: move.repo.name, to, problem: 'read_failed', status: statusOf(err) });
+      continue;
+    }
+    if (setup.state === 'configured' && sameRunner(move.to, setup.runner)) continue;
+    unverified.push({ repo: move.repo.name, to, problem: 'mismatch', found: foundSetup(setup) });
+  }
+  if (unverified.length > 0) {
+    console.warn(`${LOG} GitHub does not confirm a CodeQL default setup the flip moved`, {
+      org: target.org.toLowerCase(),
+      repositories: unverified.map((u) => u.repo),
+    });
+  }
+  return unverified;
 }
 
 /** The moves a flip to `enabled` makes: configured repositories not yet where
@@ -610,14 +695,17 @@ export const fleetOrgCiSettingService = {
    *      GitHub writes it makes ({@link flipTransactionTimeoutMs}).
    *   8. A failure after GitHub wrote ⇒ restore both variables and every default
    *      setup read in step 6.
+   *   9. After the commit: read every moved default setup back, and answer the
+   *      repositories step 6 skipped and the moves GitHub does not confirm.
    *
    * @throws NotPlatformStaffError below `superadmin`.
    * @throws FleetOrgCiTargetUnknownError for a pair the console does not offer.
    * @throws MissingAuditReasonError for a blank reason.
    * @throws FleetOrgCiNotReadyError when turning ON a pair that is not ready.
    * @throws FleetOrgCiGithubWriteError when GitHub refuses or cannot be reached.
-   * @throws FleetOrgCiCodeScanningError when a repository's CodeQL default setup
-   *         cannot be read or moved.
+   * @throws FleetOrgCiCodeScanningError when GitHub refuses to move a
+   *         repository's CodeQL default setup. A setup GitHub cannot READ is
+   *         skipped and answered instead (MOTIR-11933).
    */
   async setEnabled(
     principal: PlatformPrincipal,
@@ -678,10 +766,8 @@ export const fleetOrgCiSettingService = {
     }
     // ON only, read once before the transaction: OFF deletes both whatever the pin.
     const writeArm64 = !enabled || arm64Readiness().ready;
-    const moves = plannedDefaultSetupMoves(
-      await readDefaultSetups(target, await privateReposOf(target), enabled),
-      enabled,
-    );
+    const { reads, skipped } = await readDefaultSetups(target, await privateReposOf(target));
+    const moves = plannedDefaultSetupMoves(reads, enabled);
     const moved: DefaultSetupMove[] = [];
     const deferred: DefaultSetupMove[] = [];
 
@@ -762,6 +848,7 @@ export const fleetOrgCiSettingService = {
               arm64VariableOutcome,
               codeScanningMoved: moved.map((m) => m.repo.name),
               codeScanningDeferred: deferred.map((m) => m.repo.name),
+              codeScanningSkipped: skipped.map((s) => ({ repo: s.repo, status: s.status })),
             },
           };
           await record(entry);
@@ -784,6 +871,10 @@ export const fleetOrgCiSettingService = {
       }
       throw err;
     }
-    return { outcome: 'changed', state: await storedState(target) };
+    const codeScanning: FleetOrgCiFlipCodeScanningDTO = {
+      skipped,
+      unverified: await readBackMoves(target, moved),
+    };
+    return { outcome: 'changed', state: await storedState(target), codeScanning };
   },
 };

@@ -14126,7 +14126,18 @@
         "pendingFleet": "次のフリートのジョブまでは GitHub ホストのランナー上 — そのジョブのランナーがあればフリートへ移せます ({label})",
         "unknownStatus": "読み取れませんでした — GitHub は HTTP {status} を返しました",
         "unknownUnreachable": "読み取れませんでした — GitHub に接続できませんでした",
-        "none": "{org} のプライベートリポジトリで CodeQL の既定のセットアップが構成されているものはありません。"
+        "none": "{org} のプライベートリポジトリで CodeQL の既定のセットアップが構成されているものはありません。",
+        "skippedStatus": "この変更ではスキップしました — 設定の読み取り時に GitHub が HTTP {status} を返したため、ランナーはそのままです",
+        "skippedUnreachable": "この変更ではスキップしました — 設定を読み取るために GitHub に接続できなかったため、ランナーはそのままです",
+        "readBackStatus": "{runner} に移しましたが、設定を読み直すと GitHub は HTTP {status} を返します",
+        "readBackUnreachable": "{runner} に移しましたが、設定を読み直すために GitHub に接続できませんでした",
+        "readBackMismatch": "{runner} に移しましたが、GitHub は現在 {found} と報告しています",
+        "found": {
+          "standard": "GitHub ホストのランナー",
+          "labeled": "ランナーラベル {label}",
+          "notConfigured": "既定のセットアップは未構成",
+          "unavailable": "コードスキャンは利用不可"
+        }
       },
       "monitoringLine": "Motir のマシンは モニタリング › フリート の moooon B.V. の下に表示されます",
       "onCallout": {
@@ -14251,7 +14262,8 @@
       },
       "done": {
         "on": "オンにしました。今後、新しいジョブはフリートを要求します。",
-        "off": "オフにしました。新しいジョブは GitHub ホストのランナーに戻ります。"
+        "off": "オフにしました。新しいジョブは GitHub ホストのランナーに戻ります。",
+        "codeScanningAttention": "一部のリポジトリの CodeQL の既定のセットアップを確認してください — 下の「CodeQL の既定のセットアップ」を参照。"
       },
       "direction": {
         "on": "オン",

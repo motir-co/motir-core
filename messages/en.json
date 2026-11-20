@@ -14126,7 +14126,18 @@
         "pendingFleet": "on GitHub-hosted runners until the next fleet job — that job's runner lets it move onto the fleet ({label})",
         "unknownStatus": "couldn't read — GitHub answered HTTP {status}",
         "unknownUnreachable": "couldn't read — GitHub could not be reached",
-        "none": "No private repository on {org} has CodeQL default setup configured."
+        "none": "No private repository on {org} has CodeQL default setup configured.",
+        "skippedStatus": "skipped by this change — GitHub answered HTTP {status} when its setting was read, so its runner was left as it was",
+        "skippedUnreachable": "skipped by this change — GitHub could not be reached to read its setting, so its runner was left as it was",
+        "readBackStatus": "moved to {runner}, but GitHub now answers HTTP {status} when the setting is read back",
+        "readBackUnreachable": "moved to {runner}, but GitHub could not be reached to read the setting back",
+        "readBackMismatch": "moved to {runner}, but GitHub now reports {found}",
+        "found": {
+          "standard": "GitHub-hosted runners",
+          "labeled": "the runner label {label}",
+          "notConfigured": "default setup not configured",
+          "unavailable": "code scanning unavailable"
+        }
       },
       "monitoringLine": "Motir's machines appear under moooon B.V. in Monitoring › Fleet",
       "onCallout": {
@@ -14251,7 +14262,8 @@
       },
       "done": {
         "on": "Turned on. New jobs request the fleet from now on.",
-        "off": "Turned off. New jobs go back to GitHub-hosted runners."
+        "off": "Turned off. New jobs go back to GitHub-hosted runners.",
+        "codeScanningAttention": "Some repositories' CodeQL default setup needs a look — see CodeQL default setup below."
       },
       "direction": {
         "on": "on",

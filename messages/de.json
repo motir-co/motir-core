@@ -14129,7 +14129,18 @@
         "pendingFleet": "auf GitHub-gehosteten Runnern bis zum nächsten Flotten-Job — dessen Runner lässt es auf die Flotte wechseln ({label})",
         "unknownStatus": "konnte nicht gelesen werden – GitHub antwortete mit HTTP {status}",
         "unknownUnreachable": "konnte nicht gelesen werden – GitHub war nicht erreichbar",
-        "none": "Kein privates Repository auf {org} hat die CodeQL-Standardeinrichtung konfiguriert."
+        "none": "Kein privates Repository auf {org} hat die CodeQL-Standardeinrichtung konfiguriert.",
+        "skippedStatus": "bei dieser Änderung übersprungen – GitHub antwortete beim Lesen der Einstellung mit HTTP {status}, daher blieb der Runner unverändert",
+        "skippedUnreachable": "bei dieser Änderung übersprungen – GitHub war zum Lesen der Einstellung nicht erreichbar, daher blieb der Runner unverändert",
+        "readBackStatus": "auf {runner} verschoben, aber GitHub antwortet beim erneuten Lesen der Einstellung jetzt mit HTTP {status}",
+        "readBackUnreachable": "auf {runner} verschoben, aber GitHub war zum erneuten Lesen der Einstellung nicht erreichbar",
+        "readBackMismatch": "auf {runner} verschoben, aber GitHub meldet jetzt {found}",
+        "found": {
+          "standard": "GitHub-gehostete Runner",
+          "labeled": "das Runner-Label {label}",
+          "notConfigured": "Standardeinrichtung nicht konfiguriert",
+          "unavailable": "Code-Scanning nicht verfügbar"
+        }
       },
       "monitoringLine": "Motirs Maschinen erscheinen unter moooon B.V. in Monitoring › Flotte",
       "onCallout": {
@@ -14254,7 +14265,8 @@
       },
       "done": {
         "on": "Aktiviert. Neue Jobs fordern ab jetzt die Flotte an.",
-        "off": "Deaktiviert. Neue Jobs laufen wieder auf GitHub-gehosteten Runnern."
+        "off": "Deaktiviert. Neue Jobs laufen wieder auf GitHub-gehosteten Runnern.",
+        "codeScanningAttention": "Bei einigen Repositorys braucht die CodeQL-Standardeinrichtung einen Blick – siehe CodeQL-Standardeinrichtung unten."
       },
       "direction": {
         "on": "aktiviert",

@@ -14120,7 +14120,18 @@
         "pendingFleet": "在下一个集群作业之前在 GitHub 托管的运行器上运行——该作业的运行器出现后即可移到集群上（{label}）",
         "unknownStatus": "无法读取 —— GitHub 返回 HTTP {status}",
         "unknownUnreachable": "无法读取 —— 无法连接到 GitHub",
-        "none": "{org} 上没有任何私有仓库配置了 CodeQL 默认设置。"
+        "none": "{org} 上没有任何私有仓库配置了 CodeQL 默认设置。",
+        "skippedStatus": "本次更改已跳过——读取其设置时 GitHub 返回 HTTP {status}，因此其运行器保持不变",
+        "skippedUnreachable": "本次更改已跳过——无法连接到 GitHub 读取其设置，因此其运行器保持不变",
+        "readBackStatus": "已移到{runner}，但回读设置时 GitHub 现在返回 HTTP {status}",
+        "readBackUnreachable": "已移到{runner}，但回读设置时无法连接到 GitHub",
+        "readBackMismatch": "已移到{runner}，但 GitHub 现在报告为{found}",
+        "found": {
+          "standard": "GitHub 托管的运行器",
+          "labeled": "运行器标签 {label}",
+          "notConfigured": "未配置默认设置",
+          "unavailable": "代码扫描不可用"
+        }
       },
       "monitoringLine": "Motir 的机器显示在 监控 › 集群 中的 moooon B.V. 名下",
       "onCallout": {
@@ -14245,7 +14256,8 @@
       },
       "done": {
         "on": "已开启。从现在起新作业会请求集群。",
-        "off": "已关闭。新作业回到 GitHub 托管的运行器。"
+        "off": "已关闭。新作业回到 GitHub 托管的运行器。",
+        "codeScanningAttention": "部分仓库的 CodeQL 默认设置需要查看——见下方的 CodeQL 默认设置。"
       },
       "direction": {
         "on": "开启",

@@ -67,9 +67,46 @@ export interface FleetOrgCiStateDTO extends FleetOrgCiStoredStateDTO {
   codeScanning: FleetOrgCiCodeScanningDTO[];
 }
 
+/** A private repository whose CodeQL default setup GitHub could not serve when
+ *  the flip read it (MOTIR-11933). The flip left it exactly as it was and went
+ *  ahead for everything else. `status` = GitHub's HTTP status, `null` when
+ *  GitHub could not be reached. */
+export interface FleetOrgCiSkippedRepoDTO {
+  repo: string;
+  status: number | null;
+}
+
+/** A default-setup move GitHub accepted but does not confirm when it is read
+ *  back after the flip (MOTIR-11933). `to` = where the flip moved it;
+ *  `read_failed` = the read-back failed (`status` as above); `mismatch` = the
+ *  setting GitHub now holds is not the configured runner the flip wrote. */
+export type FleetOrgCiReadBackDTO =
+  | { repo: string; to: 'fleet' | 'github_hosted'; problem: 'read_failed'; status: number | null }
+  | {
+      repo: string;
+      to: 'fleet' | 'github_hosted';
+      problem: 'mismatch';
+      found:
+        | { state: 'standard' }
+        | { state: 'labeled'; label: string }
+        | { state: 'not_configured' }
+        | { state: 'unavailable' };
+    };
+
+/** What a changed flip did to CodeQL beyond the moves it audited: the
+ *  repositories it skipped and the moves GitHub does not confirm. Both empty is
+ *  a flip whose every repository read and every move held. */
+export interface FleetOrgCiFlipCodeScanningDTO {
+  skipped: FleetOrgCiSkippedRepoDTO[];
+  unverified: FleetOrgCiReadBackDTO[];
+}
+
 /** What a flip answers. `unchanged` = the pair already held the asked state;
  *  nothing was written and no audit row exists. */
-export interface FleetOrgCiFlipDTO {
-  outcome: 'changed' | 'unchanged';
-  state: FleetOrgCiStoredStateDTO;
-}
+export type FleetOrgCiFlipDTO =
+  | {
+      outcome: 'changed';
+      state: FleetOrgCiStoredStateDTO;
+      codeScanning: FleetOrgCiFlipCodeScanningDTO;
+    }
+  | { outcome: 'unchanged'; state: FleetOrgCiStoredStateDTO };

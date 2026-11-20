@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { reportActionFault } from '@/lib/actions/actionFault';
+import type { FleetOrgCiFlipCodeScanningDTO } from '@/lib/dto/fleetOrgCiSetting';
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import {
   FleetOrgCiCodeScanningError,
@@ -44,7 +45,10 @@ export interface FleetOrgCiNotMetCondition {
 }
 
 export type FleetOrgCiActionResult =
-  | { ok: true; outcome: 'changed' }
+  /** `codeScanning` rides a changed flip only when it skipped a repository or
+   *  GitHub does not confirm a move (MOTIR-11933): the island shows each on
+   *  that repository's CodeQL line. */
+  | { ok: true; outcome: 'changed'; codeScanning?: FleetOrgCiFlipCodeScanningDTO }
   | { ok: true; outcome: 'unchanged'; enabled: boolean }
   | { ok: false; code: 'NOT_READY'; conditions: FleetOrgCiNotMetCondition[] }
   | {
@@ -86,7 +90,10 @@ export async function setFleetOrgCiAction(
     if (flip.outcome === 'unchanged') {
       return { ok: true, outcome: 'unchanged', enabled: flip.state.enabled };
     }
-    return { ok: true, outcome: 'changed' };
+    const { skipped, unverified } = flip.codeScanning;
+    return skipped.length > 0 || unverified.length > 0
+      ? { ok: true, outcome: 'changed', codeScanning: { skipped, unverified } }
+      : { ok: true, outcome: 'changed' };
   } catch (err) {
     if (err instanceof FleetOrgCiNotReadyError) {
       // The verdict moved since the page loaded; the readiness card re-reads.

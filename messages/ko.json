@@ -14123,7 +14123,18 @@
         "pendingFleet": "다음 플릿 작업 전까지 GitHub 호스팅 러너에서 실행 — 그 작업의 러너가 있으면 플릿으로 옮길 수 있습니다 ({label})",
         "unknownStatus": "읽을 수 없습니다 — GitHub가 HTTP {status}을(를) 반환했습니다",
         "unknownUnreachable": "읽을 수 없습니다 — GitHub에 연결할 수 없습니다",
-        "none": "{org}의 비공개 리포지토리 중 CodeQL 기본 설정이 구성된 곳이 없습니다."
+        "none": "{org}의 비공개 리포지토리 중 CodeQL 기본 설정이 구성된 곳이 없습니다.",
+        "skippedStatus": "이번 변경에서 건너뜀 — 설정을 읽을 때 GitHub가 HTTP {status}을(를) 반환해 러너를 그대로 두었습니다",
+        "skippedUnreachable": "이번 변경에서 건너뜀 — 설정을 읽으려 했지만 GitHub에 연결할 수 없어 러너를 그대로 두었습니다",
+        "readBackStatus": "{runner}(으)로 옮겼지만, 설정을 다시 읽으면 GitHub가 이제 HTTP {status}을(를) 반환합니다",
+        "readBackUnreachable": "{runner}(으)로 옮겼지만, 설정을 다시 읽으려 할 때 GitHub에 연결할 수 없었습니다",
+        "readBackMismatch": "{runner}(으)로 옮겼지만, GitHub가 이제 {found}(이)라고 보고합니다",
+        "found": {
+          "standard": "GitHub 호스팅 러너",
+          "labeled": "러너 레이블 {label}",
+          "notConfigured": "기본 설정이 구성되지 않음",
+          "unavailable": "코드 스캐닝을 사용할 수 없음"
+        }
       },
       "monitoringLine": "Motir의 머신은 모니터링 › 플릿의 moooon B.V. 아래에 표시됩니다",
       "onCallout": {
@@ -14248,7 +14259,8 @@
       },
       "done": {
         "on": "켰습니다. 이제부터 새 작업이 플릿을 요청합니다.",
-        "off": "껐습니다. 새 작업은 GitHub 호스팅 러너로 돌아갑니다."
+        "off": "껐습니다. 새 작업은 GitHub 호스팅 러너로 돌아갑니다.",
+        "codeScanningAttention": "일부 리포지토리의 CodeQL 기본 설정을 확인해야 합니다 — 아래 CodeQL 기본 설정을 보세요."
       },
       "direction": {
         "on": "켜기",
