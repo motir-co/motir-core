@@ -10,9 +10,11 @@ import type {
   PlatformCapacityStoredEntryDTO,
   PlatformCapacityUnavailableReason,
   PlatformCapacityViewDTO,
+  PlatformGatewaySaturationDTO,
 } from '@/lib/dto/platformCapacity';
 import { CAPACITY_LIMIT_UNITS } from '@/lib/capacity/alertKeys';
 import type { CapacityEvaluation, CapacityLimitEvaluation } from '@/lib/capacity/threshold';
+import type { GatewaySaturationEvaluation } from '@/lib/capacity/gatewaySaturation';
 import type {
   CapacityEntry,
   CapacityLimit,
@@ -120,6 +122,35 @@ function toReadDTO(
   };
 }
 
+/** The gateway-saturation row (MOTIR-9675), fixed fields only. */
+export function toPlatformGatewaySaturationDTO(
+  saturation: GatewaySaturationEvaluation,
+): PlatformGatewaySaturationDTO {
+  const { reading, judgement, raised } = saturation;
+  const figures =
+    reading.outcome === 'answered'
+      ? reading
+      : { connectionsInUse: null, createdMachines: null, hardLimit: null };
+  return {
+    state: judgement.state,
+    unavailableReason: reading.outcome === 'unavailable' ? reading.reason : null,
+    connectionsInUse: figures.connectionsInUse,
+    createdMachines: figures.createdMachines,
+    hardLimit: figures.hardLimit,
+    capacityConnections: judgement.capacityConnections,
+    sharePercent: judgement.sharePercent,
+    alertPercent: saturation.alertPercent,
+    raised: raised
+      ? {
+          raisedAt: raised.raisedAt.toISOString(),
+          observedValue: raised.observedValue,
+          limitValue: raised.limitValue,
+          alertSharePercent: raised.alertSharePercent,
+        }
+      : null,
+  };
+}
+
 /** The whole screen, from one read and the evaluation of that same read. */
 export function toPlatformCapacityViewDTO(input: {
   read: CapacityRead;
@@ -127,12 +158,14 @@ export function toPlatformCapacityViewDTO(input: {
   raised: CapacityRaisedAlertDTO[];
   alertShare: CapacityAlertShareDTO;
   canEdit: boolean;
+  saturation: GatewaySaturationEvaluation;
 }): PlatformCapacityViewDTO {
   return {
     alertShare: toPlatformCapacityAlertShareDTO(input.alertShare),
     canEdit: input.canEdit,
     raised: input.raised.map(toPlatformCapacityRaisedDTO),
     capacity: toReadDTO(input.read, input.evaluation),
+    saturation: toPlatformGatewaySaturationDTO(input.saturation),
   };
 }
 

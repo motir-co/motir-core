@@ -2,6 +2,7 @@ import type {
   PlatformCapacityEntryDTO,
   PlatformCapacityLimitRowDTO,
   PlatformCapacityViewDTO,
+  PlatformGatewaySaturationDTO,
 } from '@/lib/dto/platformCapacity';
 
 // The capacity SCREEN's view-model fixtures (MOTIR-9614): plain DTOs shaped as
@@ -105,6 +106,41 @@ export function deepseekEntry(): PlatformCapacityEntryDTO {
   };
 }
 
+/** The gateway-saturation row with no source wired — the default reader (MOTIR-9675). */
+export function saturationNotConfigured(): PlatformGatewaySaturationDTO {
+  return {
+    state: 'unavailable',
+    unavailableReason: 'not_configured',
+    connectionsInUse: null,
+    createdMachines: null,
+    hardLimit: null,
+    capacityConnections: null,
+    sharePercent: null,
+    alertPercent: 70,
+    raised: null,
+  };
+}
+
+/** The gateway-saturation row over its share: 6,300 of 12 × 750, raised. */
+export function saturationOver(): PlatformGatewaySaturationDTO {
+  return {
+    state: 'over_share',
+    unavailableReason: null,
+    connectionsInUse: 6300,
+    createdMachines: 12,
+    hardLimit: 750,
+    capacityConnections: 9000,
+    sharePercent: 70,
+    alertPercent: 70,
+    raised: {
+      raisedAt: '2026-10-25T11:58:00.000Z',
+      observedValue: 6300,
+      limitValue: 9000,
+      alertSharePercent: 70,
+    },
+  };
+}
+
 export function liveView(
   overrides: Partial<PlatformCapacityViewDTO> = {},
 ): PlatformCapacityViewDTO {
@@ -118,6 +154,7 @@ export function liveView(
       counterStore: { state: 'live', scope: 'shared' },
       entries: [claudeEntry(), qwenEntry(), deepseekEntry()],
     },
+    saturation: saturationNotConfigured(),
     ...overrides,
   };
 }
