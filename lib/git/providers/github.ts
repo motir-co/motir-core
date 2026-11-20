@@ -9,6 +9,7 @@ import {
 import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { mergeCommitFacts } from '@/lib/hosting/mergeCommit';
+import { githubThrottle } from '@/lib/github/restRetry';
 import {
   CHANGED_FILES_MAX,
   CHANGED_FILES_TIMEOUT_MS,
@@ -345,6 +346,22 @@ function mergeRefused(code: MergeRefusal['code'], extra: Omit<MergeRefusal, 'cod
 }
 
 /**
+ * A THROTTLED answer is not a refusal (Bug MOTIR-11841): throw it as the `rate_limited`
+ * non-answer, carrying the wait GitHub named, BEFORE any status is read as a refusal.
+ * GitHub throttles with a 403 — the status a missing permission answers too — so every
+ * merge-path call asks this first, and a 403 with no throttling signal falls through to
+ * the permission arm unchanged. A response GitHub did not throttle returns normally.
+ */
+function throwIfThrottled(res: Response, signalled = false): void {
+  const throttle = githubThrottle(signalled ? 429 : res.status, res.headers, Date.now());
+  if (!throttle) return;
+  throw new MergeChangeRequestError('github', 'rate_limited', {
+    status: res.status,
+    retryAfterSeconds: throttle.waitMs === null ? null : Math.ceil(throttle.waitMs / 1_000),
+  });
+}
+
+/**
  * A 403 names the permission GitHub wanted in `X-Accepted-GitHub-Permissions`
  * (`contents=write; pull_requests=write`). Its FIRST entry is reported in the form a
  * person reads on the App's settings page. The header is not guaranteed, and a merge
@@ -474,6 +491,7 @@ async function githubEnqueue(
     pullRequestId: nodeId,
     expectedHeadOid: expectedHeadSha,
   });
+  throwIfThrottled(res);
   if (res.status === 403) return mergeRefused('app_permission_missing', permissionNamedBy(res));
   if (!res.ok) {
     throw new MergeChangeRequestError('github', 'unexpected_status', { status: res.status });
@@ -489,6 +507,9 @@ async function githubEnqueue(
   const type = typeof first?.['type'] === 'string' ? first['type'] : '';
   const message = typeof first?.['message'] === 'string' ? first['message'] : '';
 
+  // GraphQL's PRIMARY limit answers 200 with a `RATE_LIMITED` error and the reset in the
+  // headers — a throttle, read as one rather than as the protection rule it is not.
+  if (type === 'RATE_LIMITED') throwIfThrottled(res, true);
   if (type === 'FORBIDDEN' || PERMISSION_MESSAGE.test(message)) {
     return mergeRefused('app_permission_missing', permissionNamedBy(res));
   }
@@ -749,6 +770,7 @@ export const githubProvider: GitProvider = {
     // 1. The allowed merge methods. A repository the App cannot see is a
     //    permission answer; one that is gone is a subject that changed.
     const repoRes = await githubMergeFetch(site, repoUrl, { method: 'GET', headers });
+    throwIfThrottled(repoRes);
     if (repoRes.status === 403) return refusedForPermission(repoRes);
     if (repoRes.status === 404) return mergeRefused('subject_changed');
     if (!repoRes.ok) {
@@ -761,6 +783,7 @@ export const githubProvider: GitProvider = {
       method: 'GET',
       headers,
     });
+    throwIfThrottled(pullRes);
     if (pullRes.status === 404) return mergeRefused('subject_changed');
     if (pullRes.status === 403) {
       return mergeRefused('app_permission_missing', permissionNamedBy(pullRes));
@@ -811,6 +834,7 @@ export const githubProvider: GitProvider = {
         message: 'the merge answered 200 without merged: true',
       });
     }
+    throwIfThrottled(mergeRes);
     if (mergeRes.status === 409 || mergeRes.status === 404) return mergeRefused('subject_changed');
     if (mergeRes.status === 403) return refusedForPermission(mergeRes);
     if (mergeRes.status !== 405) {
@@ -829,6 +853,7 @@ export const githubProvider: GitProvider = {
       method: 'GET',
       headers,
     });
+    throwIfThrottled(prRes);
     if (prRes.status === 404) return mergeRefused('subject_changed');
     if (prRes.status === 403) return refusedForPermission(prRes);
     if (!prRes.ok) {
@@ -875,6 +900,7 @@ export const githubProvider: GitProvider = {
       method: 'GET',
       headers,
     });
+    throwIfThrottled(res);
     if (!res.ok) {
       throw new MergeChangeRequestError('github', 'unexpected_status', { status: res.status });
     }

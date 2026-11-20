@@ -16567,6 +16567,11 @@
         "next": "An organisation owner grants {permission} to Motir's GitHub App on GitHub, then you approve again.",
         "nextUnnamed": "An organisation owner grants Motir's GitHub App the permission GitHub asked for, then you approve again."
       },
+      "mergeRateLimited": {
+        "title": "GitHub is rate-limiting Motir, so nothing was merged.",
+        "next": "{minutes, plural, one {Your approval still stands: press again in # minute.} other {Your approval still stands: press again in # minutes.}}",
+        "nextUnnamed": "Your approval still stands: press again in a few minutes."
+      },
       "unexpected": {
         "title": "Your decision could not be recorded.",
         "next": "Check your connection and try again."

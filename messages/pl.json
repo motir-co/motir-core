@@ -16570,6 +16570,11 @@
         "next": "Właściciel organizacji nadaje w GitHubie uprawnienie {permission} aplikacji GitHub Motir, a potem zatwierdzasz ponownie.",
         "nextUnnamed": "Właściciel organizacji nadaje aplikacji GitHub Motir uprawnienie, o które poprosił GitHub, a potem zatwierdzasz ponownie."
       },
+      "mergeRateLimited": {
+        "title": "GitHub ogranicza teraz liczbę żądań Motir, więc nic nie zostało scalone.",
+        "next": "{minutes, plural, one {Twoje zatwierdzenie nadal obowiązuje: spróbuj ponownie za # minutę.} few {Twoje zatwierdzenie nadal obowiązuje: spróbuj ponownie za # minuty.} many {Twoje zatwierdzenie nadal obowiązuje: spróbuj ponownie za # minut.} other {Twoje zatwierdzenie nadal obowiązuje: spróbuj ponownie za # minuty.}}",
+        "nextUnnamed": "Twoje zatwierdzenie nadal obowiązuje: spróbuj ponownie za kilka minut."
+      },
       "unexpected": {
         "title": "Nie udało się zapisać Twojej decyzji.",
         "next": "Sprawdź połączenie i spróbuj ponownie."

@@ -844,6 +844,10 @@ export function useRefusalCopy(
     case 'MERGE_APP_PERMISSION_MISSING':
       headline = t('mergeAppPermissionMissing.title');
       break;
+    // GitHub throttled the merge (Bug MOTIR-11841) — never a permission message.
+    case 'MERGE_RATE_LIMITED':
+      headline = t('mergeRateLimited.title');
+      break;
     case 'UNEXPECTED':
       headline = t('unexpected.title');
       break;
@@ -875,18 +879,20 @@ export function useRefusalCopy(
   // The one next action that names something: the permission the host asked for.
   // Unnamed when the host did not say, so the sentence never carries a blank.
   const nextAction =
-    refusal.tag === 'MERGE_APP_PERMISSION_MISSING'
-      ? refusal.permission
-        ? t('mergeAppPermissionMissing.next', { permission: refusal.permission })
-        : t('mergeAppPermissionMissing.nextUnnamed')
-      : refusal.tag === 'APPROVAL_GATE_PRIMARY_PENDING'
-        ? t(`primaryPending.${refusal.primary}.next`)
-        : refusal.tag === 'APPROVAL_GATE_TRANSITION_REFUSED' && refusal.closed
-          ? t('transitionRefused.closed.next')
-          : refusal.tag === 'APPROVAL_GATE_VERB_NOT_OFFERED' &&
-              refusal.reason === 'refusal_verdict_not_offered'
-            ? t('verbNotOffered.verdict.next')
-            : t(`${nextActionKey}.next`);
+    refusal.tag === 'MERGE_RATE_LIMITED'
+      ? rateLimitedNextAction(t, refusal.retryAfterSeconds)
+      : refusal.tag === 'MERGE_APP_PERMISSION_MISSING'
+        ? refusal.permission
+          ? t('mergeAppPermissionMissing.next', { permission: refusal.permission })
+          : t('mergeAppPermissionMissing.nextUnnamed')
+        : refusal.tag === 'APPROVAL_GATE_PRIMARY_PENDING'
+          ? t(`primaryPending.${refusal.primary}.next`)
+          : refusal.tag === 'APPROVAL_GATE_TRANSITION_REFUSED' && refusal.closed
+            ? t('transitionRefused.closed.next')
+            : refusal.tag === 'APPROVAL_GATE_VERB_NOT_OFFERED' &&
+                refusal.reason === 'refusal_verdict_not_offered'
+              ? t('verbNotOffered.verdict.next')
+              : t(`${nextActionKey}.next`);
 
   // ⚠️ A CONFLICT FOUND AT THE PRESS WROTE NOTHING, AND SAYS SO (MOTIR-5916; design/github
   // § 30 Panel 5a). The press-time host read refused before the decision write, so the
@@ -1023,7 +1029,22 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'mergeQueueFailedNeedsFix';
     case 'MERGE_APP_PERMISSION_MISSING':
       return 'mergeAppPermissionMissing';
+    case 'MERGE_RATE_LIMITED':
+      return 'mergeRateLimited';
   }
+}
+
+/**
+ * The wait GitHub named, in whole minutes rounded UP (a 60-second `retry-after` reads
+ * *1 minute*, never *0*), or the unnamed sentence when it named none (Bug MOTIR-11841).
+ */
+function rateLimitedNextAction(
+  t: (key: string, values?: Record<string, number>) => string,
+  retryAfterSeconds: number | null,
+): string {
+  return retryAfterSeconds === null
+    ? t('mergeRateLimited.nextUnnamed')
+    : t('mergeRateLimited.next', { minutes: Math.max(1, Math.ceil(retryAfterSeconds / 60)) });
 }
 
 export function ApprovalGateControl({

@@ -461,7 +461,10 @@ describe('the merge seam reports a throttled answer before it maps the 403', () 
 
   it('the repository read answering a secondary limit names mergeChangeRequest', async () => {
     stubMergeHost({ repo: { status: 403, headers: { 'retry-after': '60' } } });
-    await github.mergeChangeRequest!(MERGE_INPUT);
+    // A throttle is the `rate_limited` non-answer, thrown (MOTIR-11841).
+    await expect(github.mergeChangeRequest!(MERGE_INPUT)).rejects.toMatchObject({
+      reason: 'rate_limited',
+    });
     expect(throttleLines()).toMatchObject([{ caller: 'mergeChangeRequest', status: 403 }]);
   });
 
@@ -472,7 +475,9 @@ describe('the merge seam reports a throttled answer before it maps the 403', () 
       rules: { status: 200, body: [{ type: 'merge_queue' }] },
       graphql: { status: 403, headers: { 'retry-after': '60', 'x-ratelimit-resource': 'graphql' } },
     });
-    await github.mergeChangeRequest!(MERGE_INPUT);
+    await expect(github.mergeChangeRequest!(MERGE_INPUT)).rejects.toMatchObject({
+      reason: 'rate_limited',
+    });
     expect(throttleLines()).toEqual([
       expect.objectContaining({
         caller: 'mergeQueueEnqueue',

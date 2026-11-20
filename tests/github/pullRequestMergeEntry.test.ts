@@ -291,6 +291,86 @@ describe('a host REFUSAL writes nothing — and the APPROVAL still stands', () =
   });
 });
 
+describe('a THROTTLED merge spends nothing (Bug MOTIR-11841)', () => {
+  // GitHub's rate limit answers with the 403 a missing permission answers too. Read as a
+  // refusal, each press during the throttle was recorded as `app_permission_missing`,
+  // spent the approval and named a permission the App already had. As the seam's
+  // `rate_limited` non-answer it records nothing: the approval stands, and the next press
+  // merges on it.
+  const refusalRows = (pullRequestId: string) =>
+    adminDb.githubPullRequestMergeRefusal.count({ where: { pullRequestId } });
+
+  it.each([
+    { name: 'a named wait', retryAfterSeconds: 60 },
+    { name: 'no named wait', retryAfterSeconds: null },
+  ])(
+    'with $name: the member names the rate limit, no refusal row is written, and the NEXT press merges without a new approval',
+    async ({ retryAfterSeconds }) => {
+      const assignee = await seatedOn('member');
+      const { item, pr, gate } = await cardWithGate(assignee.user.id);
+      stubSeam(
+        new MergeChangeRequestError('github', 'rate_limited', { status: 403, retryAfterSeconds }),
+        { outcome: 'merged', commitSha: 'f00dfeedcafe' },
+      );
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
+        assignee.ctx,
+      );
+
+      expect(result.members[0]).toEqual({
+        subjectVersion: `acme/web#7@${HEAD}`,
+        pullRequestId: pr.id,
+        outcome: 'refused',
+        refusal: { tag: 'MERGE_RATE_LIMITED', retryAfterSeconds },
+      });
+      expect(await refusalRows(pr.id)).toBe(0);
+      expect((await gateRow(gate.id)).state).toBe('approved');
+      // Not settled back by a refusal class: the card still carries the approval.
+      expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(
+        'approved',
+      );
+      expect(logged).toHaveBeenCalledWith(
+        expect.stringContaining('did not answer'),
+        expect.objectContaining({ reason: 'rate_limited', status: 403, retryAfterSeconds }),
+      );
+
+      // The throttle lifted: the retry presses the SAME standing approval.
+      const retried = await pullRequestMergeService.retryApproveAndMergeMember(
+        {
+          approvalGateId: gate.id,
+          pullRequestId: pr.id,
+          source: 'ui',
+          stamp: DECIDED_WITHOUT_A_READER,
+        },
+        assignee.ctx,
+      );
+      expect(retried).toMatchObject({ outcome: 'merged', pullRequestId: pr.id });
+      expect((await prRow(pr.id)).mergeOutcomeRef).toBe('f00dfeedcafe');
+      expect(await adminDb.approvalGate.findMany({ where: { workItemId: item.id } })).toHaveLength(
+        1,
+      );
+      expect(await refusalRows(pr.id)).toBe(0);
+    },
+  );
+
+  it('a PERMISSION refusal, by contrast, is recorded — the line the throttle must not cross', async () => {
+    const assignee = await seatedOn('member');
+    const { pr, gate } = await cardWithGate(assignee.user.id);
+    stubSeam({
+      outcome: 'refused',
+      refusal: { code: 'app_permission_missing', permission: 'contents: write' },
+    });
+
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
+      assignee.ctx,
+    );
+    expect(await refusalRows(pr.id)).toBe(1);
+  });
+});
+
 describe('a member the card no longer delivers at the approved head is NOT merged', () => {
   it('the pull request CLOSED → nothing to merge, zero seam calls, approval intact', async () => {
     const assignee = await seatedOn('member');

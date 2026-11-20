@@ -346,6 +346,35 @@ describe('nobody is watching an auto merge, so a failure is never silent', () =>
   });
 });
 
+describe('a THROTTLED auto merge says so (Bug MOTIR-11841)', () => {
+  it('is retried quietly like any non-answer, and the FINAL comment names the rate limit, not a permission', async () => {
+    const s = await makeScenario('am-throttle@example.com', 'auto');
+    const item = await cardWithPrs(s, [11]);
+    await ci('success', 'sha-a', 11);
+    const [data] = autoMerges();
+    const throttled = () =>
+      new MergeChangeRequestError('github', 'rate_limited', { status: 403, retryAfterSeconds: 60 });
+    stubSeam(throttled(), throttled(), throttled());
+
+    for (let attempt = 0; attempt < AUTO_MERGE_MAX_ATTEMPTS; attempt += 1) {
+      const outcome = await runJob(data!, attempt);
+      expect(outcome.error).toMatchObject({ reason: 'rate_limited' });
+    }
+
+    const comments = await commentsOn(item.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]!.bodyMd).toContain(
+      'Motir could not merge moooon/acme#11 automatically: GitHub is rate-limiting it.',
+    );
+    expect(comments[0]!.bodyMd).not.toContain('permission');
+    expect(
+      await adminDb.githubPullRequestMergeRefusal.count({
+        where: { pullRequestId: (await prRow(11)).id },
+      }),
+    ).toBe(0);
+  });
+});
+
 describe('the job is registered', () => {
   it('joins the job registry with its dedup key and the transient retry budget', () => {
     expect(jobDefinitions).toContain(pullRequestAutoMerge);

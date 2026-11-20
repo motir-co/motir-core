@@ -79,6 +79,18 @@ export function autoMergeUnreachableCommentBody(pullRequest: string): string {
   );
 }
 
+/**
+ * The comment the final attempt posts when GitHub THROTTLED every try (Bug MOTIR-11841) —
+ * not *could not reach*, because the host answered: it asked Motir to wait.
+ */
+export function autoMergeRateLimitedCommentBody(pullRequest: string): string {
+  return (
+    `**Motir could not merge ${pullRequest} automatically: GitHub is rate-limiting it.** ` +
+    'It tried several times and gave up. The work item stays in review; merge the pull ' +
+    'request on GitHub, or push a new commit and Motir tries again once it is green.'
+  );
+}
+
 export const pullRequestAutoMergeService = {
   /**
    * Merge or enqueue ONE pull request for an auto-mode project, if it is still the
@@ -121,7 +133,11 @@ export const pullRequestAutoMergeService = {
       });
     } catch (err) {
       if (err instanceof MergeChangeRequestError && opts.finalAttempt) {
-        await comment(autoMergeUnreachableCommentBody(name));
+        await comment(
+          err.reason === 'rate_limited'
+            ? autoMergeRateLimitedCommentBody(name)
+            : autoMergeUnreachableCommentBody(name),
+        );
       }
       throw err;
     }

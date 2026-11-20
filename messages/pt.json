@@ -16570,6 +16570,11 @@
         "next": "Um proprietário da organização concede {permission} ao GitHub App do Motir no GitHub, e então você aprova novamente.",
         "nextUnnamed": "Um proprietário da organização concede ao GitHub App do Motir a permissão que o GitHub pediu, e então você aprova novamente."
       },
+      "mergeRateLimited": {
+        "title": "O GitHub está limitando as solicitações do Motir, então nada foi integrado.",
+        "next": "{minutes, plural, one {Sua aprovação continua valendo: tente novamente em # minuto.} other {Sua aprovação continua valendo: tente novamente em # minutos.}}",
+        "nextUnnamed": "Sua aprovação continua valendo: tente novamente em alguns minutos."
+      },
       "unexpected": {
         "title": "Não foi possível registrar sua decisão.",
         "next": "Verifique sua conexão e tente novamente."

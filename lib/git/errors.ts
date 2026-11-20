@@ -153,30 +153,54 @@ export class RepoFileReadError extends Error {
 // did not respond in time, could not be reached, or replied with a status no
 // refusal names. It stays loud on purpose — a timeout reported as "the host
 // refused" would send a person off to satisfy a rule that does not exist.
+//
+// ⚠️ A THROTTLE IS ONE OF THESE, NEVER A REFUSAL (Bug MOTIR-11841). GitHub answers a
+// rate-limited call with a 403 (or 429) carrying `retry-after` or
+// `x-ratelimit-remaining: 0` — the same status as a missing permission. Read as a
+// refusal it was recorded as `app_permission_missing`, spent the approval, and sent
+// a person to GitHub's settings for a permission the App already had. As
+// `rate_limited` it records nothing, the approval stands, and the person is told how
+// long GitHub asked us to wait (`retryAfterSeconds`; null when it named no wait).
+
+/** Why a merge call produced no answer the seam can name. */
+export type MergeChangeRequestErrorReason =
+  | 'timeout'
+  | 'unreachable'
+  | 'unexpected_status'
+  | 'rate_limited';
 
 /** A merge call that produced no answer the seam can name. RETRYABLE. */
 export class MergeChangeRequestError extends Error {
   readonly code = 'MERGE_CHANGE_REQUEST_FAILED' as const;
   readonly providerId: string;
-  readonly reason: 'timeout' | 'unreachable' | 'unexpected_status';
+  readonly reason: MergeChangeRequestErrorReason;
   readonly status: number | null;
+  /** The wait the host named on a `rate_limited` answer, in whole seconds — null when it
+   *  named none, and on every other reason. */
+  readonly retryAfterSeconds: number | null;
 
   constructor(
     providerId: string,
-    reason: 'timeout' | 'unreachable' | 'unexpected_status',
-    detail: { status?: number; message?: string } = {},
+    reason: MergeChangeRequestErrorReason,
+    detail: { status?: number; message?: string; retryAfterSeconds?: number | null } = {},
   ) {
     const what =
       reason === 'timeout'
         ? 'did not answer in time'
         : reason === 'unreachable'
           ? 'could not be reached'
-          : `answered ${detail.status ?? 'an unexpected status'}`;
+          : reason === 'rate_limited'
+            ? `was rate-limited (${detail.status ?? 'throttled'}` +
+              (detail.retryAfterSeconds != null
+                ? `; retry after ${detail.retryAfterSeconds}s)`
+                : ')')
+            : `answered ${detail.status ?? 'an unexpected status'}`;
     super(`the ${providerId} merge ${what}` + (detail.message ? ` (${detail.message})` : ''));
     this.name = 'MergeChangeRequestError';
     this.providerId = providerId;
     this.reason = reason;
     this.status = detail.status ?? null;
+    this.retryAfterSeconds = reason === 'rate_limited' ? (detail.retryAfterSeconds ?? null) : null;
   }
 }
 

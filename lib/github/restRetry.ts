@@ -74,6 +74,37 @@ function readThrottleSignal(status: number, headers: HeaderReader): ThrottleSign
 }
 
 /**
+ * WHICH throttle a response is, when it is one (Bug MOTIR-11841), with the wait
+ * the host NAMED — or null for a response GitHub did not throttle. Read from the
+ * same {@link readThrottleSignal} the retry loop uses, so the merge path and the
+ * retry loop cannot disagree on what a throttle is.
+ *
+ * `waitMs` is the retry-after, or the time left until the reset (never negative),
+ * and null for a bare 429, which names none.
+ *
+ * ⚠️ A 403 WITH NO THROTTLING SIGNAL IS NOT HERE. It is an ACCESS failure, and the
+ * merge path reports it as one; reading it as a throttle would tell a person to
+ * wait for a setting nobody changes.
+ */
+export type GithubThrottle =
+  | { signal: 'retry_after' | 'rate_limit_reset'; waitMs: number }
+  | { signal: 'too_many_requests'; waitMs: null };
+
+export function githubThrottle(
+  status: number,
+  headers: HeaderReader,
+  nowMs: number,
+): GithubThrottle | null {
+  const signal = readThrottleSignal(status, headers);
+  if (!signal) return null;
+  if (signal.kind === 'retry_after') return { signal: 'retry_after', waitMs: signal.ms };
+  if (signal.kind === 'reset') {
+    return { signal: 'rate_limit_reset', waitMs: Math.max(signal.resetMs - nowMs, 0) };
+  }
+  return { signal: 'too_many_requests', waitMs: null };
+}
+
+/**
  * How long to wait before retrying a response, or null when the response is not
  * retryable.
  *

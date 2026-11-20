@@ -16561,6 +16561,11 @@
         "next": "请由组织所有者在 GitHub 上为 Motir 的 GitHub App 授予 {permission} 权限，然后再次批准。",
         "nextUnnamed": "请由组织所有者在 GitHub 上为 Motir 的 GitHub App 授予 GitHub 所要求的权限，然后再次批准。"
       },
+      "mergeRateLimited": {
+        "title": "GitHub 正在限制 Motir 的请求频率，因此没有合并任何内容。",
+        "next": "{minutes, plural, other {你的批准仍然有效：请在 # 分钟后再按一次。}}",
+        "nextUnnamed": "你的批准仍然有效：请在几分钟后再按一次。"
+      },
       "unexpected": {
         "title": "无法记录你的决定。",
         "next": "请检查网络连接后重试。"
