@@ -527,6 +527,98 @@ describe('each removal re-asks the parent over its new set (AC 3)', () => {
   });
 });
 
+describe('a parent that delivers the pull request EXPLICITLY (Bug MOTIR-11902)', () => {
+  // A card's own gate set leaves out every pull request an ancestor also delivers, so a
+  // re-parent re-draws it even when the reconcile moves no row: the story is linked to the
+  // shared pull request in its own right, or the switch is off and nothing is inherited.
+
+  /** A task in review whose pull request #31 is green, and the stories around it. */
+  async function greenTask(
+    email: string,
+    opts: { cascade: boolean; under?: 'story'; storyLinked?: boolean } = { cascade: true },
+  ) {
+    const s = await makeScenario(email, { cascade: opts.cascade });
+    const story = await create(s, 'story', 'The story');
+    const task = await create(s, 'task', 'The task', opts.under ? story.id : undefined);
+    for (const item of [story, task]) {
+      await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    }
+    const ref = `story/${story.identifier}`;
+    // The story delivers #31 in its own right: its children ride its branch.
+    if (opts.storyLinked ?? true) await link(story.identifier, 31, ref);
+    await link(task.identifier, 31, ref);
+    await pullRequestEvent(31, ref);
+    await workItemsService.updateStatus(task.id, 'implemented', s.ctx);
+    await ci('sha-31', 31);
+    return { s, story, task };
+  }
+
+  for (const cascade of [true, false]) {
+    const switchLabel = cascade ? 'on' : 'off';
+
+    it(`reproduction (switch ${switchLabel}): moved out from under the story, the child is asked about #31 (AC 1)`, async () => {
+      const { s, task } = await greenTask(`11902-out-${switchLabel}@example.com`, {
+        cascade,
+        under: 'story',
+      });
+      // Under the story the pull request is the story's to merge: the child is asked nothing.
+      expect(await mergeGatesOf(task.id)).toEqual([]);
+
+      await workItemsService.moveWorkItem(task.id, { newParentId: null }, s.ctx);
+
+      expect((await awaitingOf(task.id)).map((g) => g.subjectVersion)).toEqual([
+        'moooon/acme#31@sha-31',
+      ]);
+    });
+
+    it(`reproduction (switch ${switchLabel}): moved under the story, the child's awaiting question is withdrawn as \`set_changed\` (AC 2)`, async () => {
+      const { s, story, task } = await greenTask(`11902-in-${switchLabel}@example.com`, {
+        cascade,
+      });
+      const [before] = await awaitingOf(task.id);
+      expect(before!.subjectVersion).toBe('moooon/acme#31@sha-31');
+
+      await workItemsService.moveWorkItem(task.id, { newParentId: story.id }, s.ctx);
+
+      expect(await mergeGatesOf(task.id)).toEqual([
+        expect.objectContaining({
+          id: before!.id,
+          state: 'superseded',
+          supersededCause: 'set_changed',
+        }),
+      ]);
+    });
+  }
+
+  it("follows the edit door's re-parent too (`updateWorkItem`)", async () => {
+    const { s, story, task } = await greenTask('11902-patch@example.com');
+    const [before] = await awaitingOf(task.id);
+
+    await workItemsService.updateWorkItem(task.id, { parentId: story.id }, s.ctx);
+
+    expect(await mergeGatesOf(task.id)).toEqual([
+      expect.objectContaining({ id: before!.id, supersededCause: 'set_changed' }),
+    ]);
+  });
+
+  it('leaves a question alone when the move did not change the set it asks about', async () => {
+    // The switch off and neither story delivering #31: the child's set is #31 before and after.
+    const { s, task } = await greenTask('11902-same@example.com', {
+      cascade: false,
+      storyLinked: false,
+    });
+    const to = await create(s, 'story', 'To');
+    const [before] = await awaitingOf(task.id);
+    expect(before).toBeDefined();
+
+    await workItemsService.moveWorkItem(task.id, { newParentId: to.id }, s.ctx);
+
+    expect(await mergeGatesOf(task.id)).toEqual([
+      expect.objectContaining({ id: before!.id, state: 'awaiting' }),
+    ]);
+  });
+});
+
 describe('deleting a child (Bug MOTIR-11901)', () => {
   it('reproduction: the story stops delivering the pull request its deleted child delivered', async () => {
     const s = await makeScenario('11901-delete@example.com');
