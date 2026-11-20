@@ -380,6 +380,7 @@ import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { writeDerivedRepoSet, writeRepoRefs } from '@/lib/workItems/repoSetWrites';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { reconcileInheritedDeliveriesAfterMove } from './inheritedDeliveryService';
 import { recomputeWorkItemResumeState } from './resumeStateService';
 import {
   fixGroupPointersFor,
@@ -3241,6 +3242,9 @@ export const workItemsService = {
           await recomputeContainerAndAncestors(current.parentId, ctx.workspaceId, tx);
         }
         await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
+        // The pull requests the moved subtree delivers leave the old parent's merge
+        // set and join the new one's (MOTIR-11839).
+        await reconcileInheritedDeliveriesAfterMove(id, tx);
       }
 
       // Link-on-write (Subtask 5.2.3): a body edit re-resolves the
@@ -5149,6 +5153,9 @@ export const workItemsService = {
           await recomputeContainerAndAncestors(current.parentId, ctx.workspaceId, tx);
         }
         await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
+        // The pull requests the moved subtree delivers leave the old parent's merge
+        // set and join the new one's (MOTIR-11839).
+        await reconcileInheritedDeliveriesAfterMove(id, tx);
       }
 
       return {
@@ -5243,6 +5250,9 @@ export const workItemsService = {
       if (current.parentId !== null) {
         await recomputeContainerAndAncestors(current.parentId, ctx.workspaceId, tx);
         await recomputeAncestorRepoSets(workItemId, ctx.workspaceId, tx);
+        // Filed out from under its parent: that parent no longer delivers what this
+        // subtree ships (MOTIR-11839).
+        await reconcileInheritedDeliveriesAfterMove(workItemId, tx);
       }
       return {
         result: {

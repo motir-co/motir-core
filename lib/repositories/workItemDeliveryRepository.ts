@@ -571,4 +571,81 @@ export const workItemDeliveryRepository = {
     });
     return result.count;
   },
+
+  /**
+   * Remove ONE delivery only if it is INHERITED (MOTIR-11839) — a row the link door
+   * wrote on an ancestor because a descendant was linked. A row someone linked to the
+   * card in its own right is never reached, whatever the caller believed about it.
+   */
+  async removeInherited(
+    workItemId: string,
+    githubPullRequestId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.workItemDelivery.deleteMany({
+      where: { workItemId, githubPullRequestId, inherited: true },
+    });
+    return result.count;
+  },
+
+  /**
+   * Every delivery row of the given pull requests, with the two facts the
+   * inheritance reconcile decides on: whether the row was inherited, and its
+   * repository (MOTIR-11839).
+   */
+  async listInheritanceRowsByPullRequests(
+    githubPullRequestIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Pick<
+      WorkItemDelivery,
+      'workItemId' | 'githubPullRequestId' | 'repoId' | 'workspaceId' | 'inherited'
+    >[]
+  > {
+    if (githubPullRequestIds.length === 0) return [];
+    return tx.workItemDelivery.findMany({
+      where: { githubPullRequestId: { in: [...githubPullRequestIds] } },
+      select: {
+        workItemId: true,
+        githubPullRequestId: true,
+        repoId: true,
+        workspaceId: true,
+        inherited: true,
+      },
+      orderBy: [{ githubPullRequestId: 'asc' }, { createdAt: 'asc' }],
+    });
+  },
+
+  /** The distinct pull requests the given cards deliver (MOTIR-11839). */
+  async listPullRequestIdsByWorkItems(
+    workItemIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (workItemIds.length === 0) return [];
+    const rows = await tx.workItemDelivery.findMany({
+      where: { workItemId: { in: [...workItemIds] } },
+      select: { githubPullRequestId: true },
+      distinct: ['githubPullRequestId'],
+      orderBy: { githubPullRequestId: 'asc' },
+    });
+    return rows.map((r) => r.githubPullRequestId);
+  },
+
+  /**
+   * The distinct OPEN pull requests delivering any card of one project — what the
+   * inheritance reconcile walks when the project's "Complete children when a parent
+   * is done" switch flips (MOTIR-11839).
+   */
+  async listOpenPullRequestIdsByProject(
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.workItemDelivery.findMany({
+      where: { workItem: { projectId }, pullRequest: { state: 'open' } },
+      select: { githubPullRequestId: true },
+      distinct: ['githubPullRequestId'],
+      orderBy: { githubPullRequestId: 'asc' },
+    });
+    return rows.map((r) => r.githubPullRequestId);
+  },
 };

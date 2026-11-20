@@ -1,6 +1,7 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { reconcileInheritedDeliveriesForProject } from '@/lib/services/inheritedDeliveryService';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { InvalidStatusAutomationSettingsError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { toProjectStatusAutomationDto } from '@/lib/mappers/projectStatusAutomationMappers';
@@ -84,7 +85,14 @@ export const projectStatusAutomationService = {
     return withWorkspaceContext(ctx, async (tx) => {
       const project = await resolveProjectByKeyInTx(key, ctx.workspaceId, tx);
       await projectAccessService.assertPermission(project.id, ctx, 'automation:manage', tx);
+      const before = await projectRepository.findStatusAutomation(project.id, tx);
       const updated = await projectRepository.updateStatusAutomation(project.id, data, tx);
+      // The switch is the rule a parent's inherited deliveries follow, so flipping it
+      // writes them or takes them back across the project's open pull requests, in
+      // this transaction (MOTIR-11839).
+      if (before?.autoCompleteChildrenOnParentDone !== updated.autoCompleteChildrenOnParentDone) {
+        await reconcileInheritedDeliveriesForProject(project.id, tx);
+      }
       return toProjectStatusAutomationDto(updated);
     });
   },
