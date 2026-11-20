@@ -251,10 +251,14 @@ export interface PullRequestLinkCandidateDto {
  * up, at the schema. So `merged` is `pullRequest.state === 'merged'` and the CI
  * verdict is `pullRequest.ci`; there is no copy of either here.
  *
- * ⚠️ `ci` therefore comes from `derivePrCiState` and from nothing else. It is
- * the one verdict `ciPromotion` reads and the one the Development pill shows, so
- * a lane that watches CI through this DTO cannot drift from what a person sees
- * (MOTIR-3685's own acceptance criterion forbids a second one).
+ * ⚠️ `ci` therefore comes from `prCiStateAtHead` and from nothing else — the
+ * verdict over the check rows AT the stored host head (`lib/github/pullRequestHead.ts`,
+ * MOTIR-7005), `null` while nothing has reported there. It is the one verdict
+ * `ciPromotion` reads and the one the Development pill shows, so a lane that
+ * watches CI through this DTO cannot drift from what a person sees (MOTIR-3685's
+ * own acceptance criterion forbids a second one). Until MOTIR-11932 it was
+ * `derivePrCiState` at the newest check-row sha, which named the PREVIOUS
+ * commit's verdict beside the new `headSha` for the minutes after a push.
  *
  * ── What the two extra fields are FOR ─────────────────────────────────────
  * `baseRef` and `defaultBranch` exist so a consumer can tell the three shortfall

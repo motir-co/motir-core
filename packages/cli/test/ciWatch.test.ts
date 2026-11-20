@@ -144,6 +144,20 @@ describe('the loop', () => {
     expect(fixes).toBe(0);
   });
 
+  it("a pushed fix whose new head has not reported reads PENDING, not the old commit's red (MOTIR-11932)", async () => {
+    // The server reads `ci` at the pull request's stored head (`prCiStateAtHead`), so
+    // right after the fixing push it answers `ci: null` — the previous commit's red is
+    // not this head's. That must WAIT, not count a second attempt the fix was never
+    // judged on. (Before the fix the server sent `failing` here, and the loop spent one.)
+    const unreported = [delivery({ ci: null })];
+    expect(ciVerdict(unreported)).toBe('pending');
+
+    const { outcome, fixes } = await drive([red, unreported, unreported, green]);
+
+    expect(outcome).toEqual({ kind: 'green', attempts: 1 });
+    expect(fixes).toBe(1);
+  });
+
   it('fixes a red and reports green after it', async () => {
     const { outcome, fixes, lines } = await drive([red, green]);
 

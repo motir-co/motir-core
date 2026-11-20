@@ -758,8 +758,8 @@ const repairPullRequestSchema = z.object({
   /** The branch the pull request targets; the agent merges it first. Null on a
    *  row mirrored before base branches were recorded. */
   baseRef: z.string().nullable(),
-  /** From `derivePrCiState`, the verdict the Development pill shows — the pull
-   *  request's OWN checks. It may be `passing` when `queueExit` is set: the merge
+  /** From `prCiStateAtHead`, the verdict the Development pill shows — the pull
+   *  request's OWN checks at its stored head (`null` while none has reported there). It may be `passing` when `queueExit` is set: the merge
    *  queue failed on its merge group, not on its own checks. */
   ci: z.enum(['passing', 'failing', 'running']).nullable(),
   /** The checks failing at that verdict's commit, by name, sorted. A repair that

@@ -438,9 +438,10 @@ const workItemDeliverySchema = z.object({
    *  reported as `closed`, which is what makes this field alone sufficient to say
    *  whether the delivery landed. */
   state: z.enum(['open', 'merged', 'closed']),
-  /** The pull request's CI at its latest recorded commit, from `derivePrCiState` —
+  /** The pull request's CI at its stored head commit, from `prCiStateAtHead` —
    *  the SAME verdict `ciPromotion` acts on and the Development pill shows. `null`
-   *  is the absence of CI, which is not a state and not a failure. */
+   *  is the absence of CI at that commit — none configured, or none reported there
+   *  yet after a push — which is not a state and not a failure. */
   ci: z.enum(['passing', 'failing', 'running']).nullable(),
   /** The branch the pull request TARGETS; null on a row mirrored before base
    *  branches were recorded. */

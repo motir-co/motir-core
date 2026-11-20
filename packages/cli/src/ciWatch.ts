@@ -24,8 +24,10 @@ import type { MotirClient, WorkItemDelivery } from './client.js';
 //
 // ── The verdict is the SERVER'S, not the CLI's ────────────────────────────
 // Every state read here comes from `deliveries[].ci`, which is
-// `derivePrCiState` at the latest recorded sha (MOTIR-3697 published it for
-// exactly this consumer). Shelling to `gh pr checks` would be a SECOND verdict —
+// `prCiStateAtHead` — the verdict at the pull request's stored head, `null` while
+// nothing has reported there (MOTIR-3697 published it for exactly this consumer;
+// MOTIR-11932 moved it from the newest check-row sha, which read the previous
+// commit's red as a pushed fix's own). Shelling to `gh pr checks` would be a SECOND verdict —
 // different inputs, different rules — and it would drift from the pill a person
 // reads on the same card. There is no `gh` in this file and there must not be.
 //
