@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { createSign } from 'node:crypto';
 import type { InstallationToken } from '@/lib/git/types';
 
@@ -174,14 +175,18 @@ export async function mintInstallationToken(
   const jwt = createAppJwt(undefined, role);
   let res: Response;
   try {
-    res = await fetch(`${GITHUB_API}/app/installations/${installationId}/access_tokens`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${jwt}`,
-        accept: 'application/vnd.github+json',
-        'user-agent': 'motir',
+    res = await githubFetch(
+      'app.installationToken',
+      `${GITHUB_API}/app/installations/${installationId}/access_tokens`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${jwt}`,
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+        },
       },
-    });
+    );
   } catch (err) {
     throw new GithubAppTokenError(
       `token endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,

@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // The RUNNER-GROUP boundary (Story MOTIR-1916 · MOTIR-1972) — the one module
@@ -127,7 +128,7 @@ async function request(
   init: { method: string; token: string; body?: string },
 ): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await githubFetch('runnerGroups', url, {
       method: init.method,
       headers: {
         accept: 'application/vnd.github+json',

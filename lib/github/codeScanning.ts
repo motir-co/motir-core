@@ -13,6 +13,8 @@
 // access, network/timeout, a non-JSON body) returns null — "source absent",
 // never an error. §10.3 detection is NEVER a gate.
 
+import { githubFetch } from '@/lib/github/githubFetch';
+
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_TIMEOUT_MS = 10_000;
 // One page is plenty: we only need "does code scanning exist" + the newest
@@ -57,7 +59,7 @@ export function parseRepoRef(repoRef: string): { owner: string; name: string } |
 
 async function ghRequest(token: string, path: string, accept: string): Promise<Response | null> {
   try {
-    return await fetch(`${GITHUB_API}${path}`, {
+    return await githubFetch('codeScanning', `${GITHUB_API}${path}`, {
       headers: {
         accept,
         'x-github-api-version': '2022-11-28',

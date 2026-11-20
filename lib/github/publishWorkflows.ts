@@ -13,6 +13,7 @@
 // status and GitHub's own one-line `message`, which the page shows verbatim on
 // a failed dispatch.
 
+import { githubFetch } from '@/lib/github/githubFetch';
 import type { RepoRef } from '@/lib/github/repoCommitHistory';
 
 const GITHUB_API = 'https://api.github.com';
@@ -103,7 +104,7 @@ async function call(
   if (body !== undefined) headers['content-type'] = 'application/json';
   let res: Response;
   try {
-    res = await fetch(`${GITHUB_API}${path}`, {
+    res = await githubFetch('publishWorkflows', `${GITHUB_API}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),

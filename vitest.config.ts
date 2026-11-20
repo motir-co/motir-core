@@ -1963,6 +1963,10 @@ export default defineConfig({
         // indistinguishable from a missing one, and what it would silently do is
         // complete work items nobody shipped.
         'lib/github/restRetry.ts',
+        // MOTIR-11844 — the one counted door every GitHub request goes through:
+        // an untested branch here is a request that is silently not counted, or
+        // a throttle that writes no line.
+        'lib/github/githubFetch.ts',
         'lib/github/pullRequestBase.ts',
         'lib/services/pullRequestBaseRefBackfillService.ts',
         'lib/services/repoSetCompletionService.ts',
@@ -7464,6 +7468,7 @@ export default defineConfig({
         //   pullRequestBaseRefBackfillService 100 /  95  / 100
         //   repoSetCompletionService.ts        93 /  86  / 100   (lines/branches/functions)
         'lib/github/restRetry.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/githubFetch.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/github/pullRequestBase.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/pullRequestBaseRefBackfillService.ts': {
           branches: 90,

@@ -227,6 +227,10 @@ const SELF_WALKING_MEMBERS = [
   // `packages/`; it imports only `importGraph`'s `stripComments` — so nothing
   // derives it.
   'tests/theme/switchPrimitiveOnly.test.ts',
+  // MOTIR-11844. Its own `readdirSync` over `lib/` and `app/`; it imports no
+  // scanner and reads the caller set off `restRetry.ts` as text — so nothing
+  // derives it.
+  'tests/github/githubFetchGuard.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {

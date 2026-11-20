@@ -1,3 +1,4 @@
+import { githubFetchFor } from '@/lib/github/githubFetch';
 import { CODE_HISTORY_MAX_COMMITS, CODE_HISTORY_MAX_RANGES } from '../provider';
 import {
   capRanges,
@@ -31,6 +32,12 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+/** The counted send for one code-history read (MOTIR-11844). The token is the
+ *  caller's, so the installation is not known here. */
+function countedFor(caller: 'codeHistory.log' | 'codeHistory.blame', owner: string, name: string) {
+  return githubFetchFor({ caller, installationId: null, repository: `${owner}/${name}` });
 }
 
 function githubHeaders(token: string): Record<string, string> {
@@ -79,10 +86,11 @@ async function github404(
   name: string,
   asked: CodeHistoryAsked,
 ): Promise<CodeHistoryResult> {
-  const call = await fetchWithinDeadline(`${GITHUB_API}/repos/${owner}/${name}`, {
-    method: 'GET',
-    headers: githubHeaders(token),
-  });
+  const call = await fetchWithinDeadline(
+    `${GITHUB_API}/repos/${owner}/${name}`,
+    { method: 'GET', headers: githubHeaders(token) },
+    countedFor('codeHistory.log', owner, name),
+  );
   if (!call.ok) return hostCallFailure(asked, call);
   if (call.res.status === 404) return { outcome: 'revoked', ...asked };
   if (call.res.ok) return { outcome: 'no_such_ref', ...asked };
@@ -109,7 +117,11 @@ export async function githubReadCodeLog(
     `${GITHUB_API}/repos/${owner}/${name}/commits` +
     `?sha=${encodeURIComponent(asked.ref)}&path=${encodeURIComponent(asked.path)}` +
     `&per_page=${CODE_HISTORY_MAX_COMMITS}`;
-  const call = await fetchWithinDeadline(url, { method: 'GET', headers: githubHeaders(token) });
+  const call = await fetchWithinDeadline(
+    url,
+    { method: 'GET', headers: githubHeaders(token) },
+    countedFor('codeHistory.log', owner, name),
+  );
   if (!call.ok) return hostCallFailure(asked, call);
   const { res } = call;
 
@@ -240,14 +252,18 @@ export async function githubReadCodeBlame(
   name: string,
   asked: CodeHistoryAsked,
 ): Promise<CodeHistoryResult> {
-  const call = await fetchWithinDeadline(`${GITHUB_API}/graphql`, {
-    method: 'POST',
-    headers: { ...githubHeaders(token), 'content-type': 'application/json' },
-    body: JSON.stringify({
-      query: BLAME_QUERY,
-      variables: { owner, name, expression: asked.ref, path: asked.path },
-    }),
-  });
+  const call = await fetchWithinDeadline(
+    `${GITHUB_API}/graphql`,
+    {
+      method: 'POST',
+      headers: { ...githubHeaders(token), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        query: BLAME_QUERY,
+        variables: { owner, name, expression: asked.ref, path: asked.path },
+      }),
+    },
+    countedFor('codeHistory.blame', owner, name),
+  );
   if (!call.ok) return hostCallFailure(asked, call);
   const { res } = call;
 

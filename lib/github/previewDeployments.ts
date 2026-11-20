@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { mintInstallationToken } from '@/lib/github/appAuth';
 import type { RepositoryCoordinates } from '@/lib/github/repositoryActionsConfig';
 
@@ -61,7 +62,7 @@ async function post(
   let res: Response;
   try {
     const { token } = await mintInstallationToken(coordinates.installationId, 'provisioning');
-    res = await fetch(url, {
+    res = await githubFetch('previewDeployments', url, {
       method: 'POST',
       headers: {
         accept: 'application/vnd.github+json',
@@ -148,7 +149,8 @@ export const previewDeploymentsClient = {
     let res: Response;
     try {
       const { token } = await mintInstallationToken(coordinates.installationId, 'provisioning');
-      res = await fetch(
+      res = await githubFetch(
+        'previewDeployments',
         `${GITHUB_API}/repos/${encodeURIComponent(coordinates.owner)}/` +
           `${encodeURIComponent(coordinates.repo)}/pulls/${pullRequestNumber}`,
         {

@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // The ORG ACTIONS-VARIABLE boundary (Story MOTIR-1916 · MOTIR-2015) — the one
@@ -119,7 +120,7 @@ async function request(
   init: { method: string; token: string; body?: string },
 ): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await githubFetch('actionsVariables', url, {
       method: init.method,
       headers: {
         accept: 'application/vnd.github+json',

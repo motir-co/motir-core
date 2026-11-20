@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { mintInstallationToken } from './appAuth';
 import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
@@ -144,7 +145,8 @@ async function findExistingRun(
   if (base === null || !COMMIT_SHA.test(headSha)) return null;
   let res: Response;
   try {
-    res = await fetch(
+    res = await githubFetch(
+      'checkRuns.write',
       `${base}/commits/${headSha}/check-runs` +
         `?check_name=${encodeURIComponent(LINK_CHECK_NAME)}&per_page=1`,
       { headers: headers(token) },
@@ -208,7 +210,8 @@ export async function writeCheckRun(spec: CheckRunSpec): Promise<CheckRunWriteOu
 
   let res: Response;
   try {
-    res = await fetch(
+    res = await githubFetch(
+      'checkRuns.write',
       existingId === null ? `${base}/check-runs` : `${base}/check-runs/${existingId}`,
       {
         method: existingId === null ? 'POST' : 'PATCH',
@@ -264,7 +267,7 @@ export async function readPullRequestHeadSha(
   if (url === null) return null;
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await githubFetch('checkRuns.pullRequestHead', url, {
       headers: headers(token),
     });
   } catch {
@@ -385,7 +388,8 @@ export async function readCommitCheckRuns(
   for (let page = 1; page * PER_PAGE <= MAX_CHECK_RUNS + PER_PAGE; page++) {
     let res: Response;
     try {
-      res = await fetch(
+      res = await githubFetch(
+        'checkRuns.read',
         `${base}/commits/${headSha}/check-runs?filter=all&per_page=${PER_PAGE}&page=${page}`,
         { headers: headers(token) },
       );
@@ -500,9 +504,13 @@ export async function readCommitActionsSuites(
     // One page: a commit carries one suite per triggered workflow run plus one per
     // App — a handful, never a hundred. More than one page is "no answer", like
     // the check-run cap, rather than a truncated set.
-    res = await fetch(`${base}/commits/${headSha}/check-suites?per_page=${PER_PAGE}`, {
-      headers: headers(token),
-    });
+    res = await githubFetch(
+      'checkRuns.read',
+      `${base}/commits/${headSha}/check-suites?per_page=${PER_PAGE}`,
+      {
+        headers: headers(token),
+      },
+    );
   } catch {
     return null;
   }

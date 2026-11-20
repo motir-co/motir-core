@@ -1,3 +1,5 @@
+import { githubFetch } from '@/lib/github/githubFetch';
+import type { GithubCaller } from '@/lib/github/restRetry';
 import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { OrgTargetAuthError, resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
@@ -473,13 +475,16 @@ export async function findProvisioningInstallationId(
   }
 }
 
-/** One GitHub call, with transport failures normalized to the typed error. */
+/** One GitHub call, with transport failures normalized to the typed error.
+ *  `caller` names the module sending it (MOTIR-11844): this transport is shared
+ *  by seed promotion, repository Actions config and deployments, and each counts
+ *  under its own name. */
 async function request(
   url: string,
-  init: { method: string; headers: Record<string, string>; body?: string },
+  init: { method: string; headers: Record<string, string>; body?: string; caller?: GithubCaller },
 ): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await githubFetch(init.caller ?? 'repoProvisioning', url, {
       method: init.method,
       headers: {
         accept: 'application/vnd.github+json',

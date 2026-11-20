@@ -16,6 +16,8 @@
 // line is where the tests fake, the same shape `repoTransfer.ts` /
 // `repoCollaborators.ts` hold.
 
+import { githubFetch } from '@/lib/github/githubFetch';
+
 const GITHUB_API = 'https://api.github.com';
 
 /** One page is plenty: the picker lists organizations a human chooses between,
@@ -71,7 +73,7 @@ export const userOrgsClient = {
   async listForToken(accessToken: string): Promise<GithubUserOrg[]> {
     let res: Response;
     try {
-      res = await fetch(`${GITHUB_API}/user/orgs?per_page=${PER_PAGE}`, {
+      res = await githubFetch('user.orgs', `${GITHUB_API}/user/orgs?per_page=${PER_PAGE}`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${accessToken}`,

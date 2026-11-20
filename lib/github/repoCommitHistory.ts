@@ -11,6 +11,8 @@
 // repository answers (60 requests an hour per address — the step makes a
 // handful a day).
 
+import { githubFetch } from '@/lib/github/githubFetch';
+
 const GITHUB_API = 'https://api.github.com';
 
 /** A read GitHub refused or that never reached it. `status` is null on a
@@ -80,7 +82,10 @@ async function getJson(
   if (token) headers['authorization'] = `Bearer ${token}`;
   let res: Response;
   try {
-    res = await fetch(`${GITHUB_API}${path}`, { method: 'GET', headers });
+    res = await githubFetch('repoCommitHistory', `${GITHUB_API}${path}`, {
+      method: 'GET',
+      headers,
+    });
   } catch (err) {
     throw new RepoCommitHistoryError(null, err instanceof Error ? err.message : 'unknown');
   }

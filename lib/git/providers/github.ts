@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { registerGitProvider } from '../registry';
 import { FULL_COMMIT_SHA } from '../commitSha';
 import {
@@ -86,12 +87,7 @@ import type {
 } from '../types';
 import { DEPLOYMENT_STATES } from '../types';
 import { githubReadCodeBlame, githubReadCodeLog } from './githubCodeHistory';
-import {
-  noteGithubRequest,
-  observeGithubThrottle,
-  type GithubCallSite,
-  type GithubCaller,
-} from '@/lib/github/restRetry';
+import type { GithubCallSite, GithubCaller } from '@/lib/github/restRetry';
 import { githubBlobId } from './repoBlobId';
 
 // The GitHub implementation of the GitProvider seam (Story 7.10 · MOTIR-891) —
@@ -271,11 +267,8 @@ async function githubMergeFetch(
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), MERGE_CHANGE_REQUEST_TIMEOUT_MS);
-  noteGithubRequest(site);
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal });
-    observeGithubThrottle(site, res.status, res.headers);
-    return res;
+    return await githubFetch(site, url, { ...init, signal: controller.signal });
   } catch (err) {
     throw controller.signal.aborted
       ? new MergeChangeRequestError('github', 'timeout')
@@ -631,7 +624,7 @@ async function reviewWrite(
     `${GITHUB_API}/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}` +
     path;
   try {
-    return await fetch(url, {
+    return await githubFetch('provider.reviewWrite', url, {
       method,
       headers: {
         authorization: `Bearer ${token}`,
@@ -667,13 +660,17 @@ export const githubProvider: GitProvider = {
     const { token } = await mintInstallationToken(installationId);
     let res: Response;
     try {
-      res = await fetch(`${GITHUB_API}/installation/repositories?per_page=100`, {
-        headers: {
-          authorization: `Bearer ${token}`,
-          accept: 'application/vnd.github+json',
-          'user-agent': 'motir',
+      res = await githubFetch(
+        'provider.fetchInstallationRepos',
+        `${GITHUB_API}/installation/repositories?per_page=100`,
+        {
+          headers: {
+            authorization: `Bearer ${token}`,
+            accept: 'application/vnd.github+json',
+            'user-agent': 'motir',
+          },
         },
-      });
+      );
     } catch (err) {
       throw new Error(
         `GitHub repositories endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
@@ -713,16 +710,20 @@ export const githubProvider: GitProvider = {
     const timer = setTimeout(() => controller.abort(), REPO_TARBALL_TIMEOUT_MS);
     let res: Response;
     try {
-      res = await fetch(`${GITHUB_API}/repos/${owner}/${name}/tarball/${ref}`, {
-        method: 'GET',
-        redirect: 'manual',
-        headers: {
-          authorization: `Bearer ${token}`,
-          accept: 'application/vnd.github+json',
-          'user-agent': 'motir',
+      res = await githubFetch(
+        'provider.resolveRepoTarballUrl',
+        `${GITHUB_API}/repos/${owner}/${name}/tarball/${ref}`,
+        {
+          method: 'GET',
+          redirect: 'manual',
+          headers: {
+            authorization: `Bearer ${token}`,
+            accept: 'application/vnd.github+json',
+            'user-agent': 'motir',
+          },
+          signal: controller.signal,
         },
-        signal: controller.signal,
-      });
+      );
     } catch (err) {
       throw controller.signal.aborted
         ? new RepoTarballUrlTimeoutError(REPO_TARBALL_TIMEOUT_MS)
@@ -1003,7 +1004,7 @@ export const githubProvider: GitProvider = {
     const timer = setTimeout(() => controller.abort(), COMMIT_COMPARE_TIMEOUT_MS);
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('provider.compareCommits', url, {
         method: 'GET',
         headers: {
           authorization: `Bearer ${token}`,
@@ -1075,7 +1076,7 @@ export const githubProvider: GitProvider = {
     const timer = setTimeout(() => controller.abort(), CHANGED_FILES_TIMEOUT_MS);
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('provider.listChangedFiles', url, {
         method: 'GET',
         headers: {
           authorization: `Bearer ${token}`,
@@ -1198,7 +1199,7 @@ export const githubProvider: GitProvider = {
     const timer = setTimeout(() => controller.abort(), REPO_FILE_READ_TIMEOUT_MS);
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('provider.readFileAtRef', url, {
         method: 'GET',
         headers: {
           authorization: `Bearer ${token}`,
@@ -1325,7 +1326,7 @@ export const githubProvider: GitProvider = {
     const timer = setTimeout(() => controller.abort(), REPO_FILE_READ_TIMEOUT_MS);
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('provider.resolveRef', url, {
         method: 'GET',
         headers: {
           authorization: `Bearer ${token}`,
@@ -1366,13 +1367,17 @@ export const githubProvider: GitProvider = {
     const jwt = createAppJwt();
     let res: Response;
     try {
-      res = await fetch(`${GITHUB_API}/app/installations/${installationId}`, {
-        headers: {
-          authorization: `Bearer ${jwt}`,
-          accept: 'application/vnd.github+json',
-          'user-agent': 'motir',
+      res = await githubFetch(
+        'provider.fetchInstallation',
+        `${GITHUB_API}/app/installations/${installationId}`,
+        {
+          headers: {
+            authorization: `Bearer ${jwt}`,
+            accept: 'application/vnd.github+json',
+            'user-agent': 'motir',
+          },
         },
-      });
+      );
     } catch (err) {
       throw new Error(
         `GitHub installation endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
@@ -1533,7 +1538,7 @@ export const githubProvider: GitProvider = {
 
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('provider.getRepositoryPermission', url, {
         headers: {
           authorization: `Bearer ${token}`,
           accept: 'application/vnd.github+json',
@@ -2171,7 +2176,7 @@ export const githubProvider: GitProvider = {
       `/attempts/${attempt}/jobs?per_page=100`;
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('provider.fetchWorkflowRunJobs', url, {
         headers: {
           authorization: `Bearer ${token}`,
           accept: 'application/vnd.github+json',
@@ -2203,7 +2208,7 @@ export const githubProvider: GitProvider = {
     const url = `${GITHUB_API}/organizations/${org}/settings/billing/usage?year=${year}&month=${month}`;
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('provider.fetchOrgComputeUsage', url, {
         headers: {
           authorization: `Bearer ${token}`,
           accept: 'application/vnd.github+json',

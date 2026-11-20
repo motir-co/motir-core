@@ -169,6 +169,69 @@ export const GITHUB_CALLERS = [
   'readChangeRequestMergeability',
   /** `GitProvider.readReleaseContainsMerge`. */
   'readReleaseContainsMerge',
+
+  // ── Every other GitHub call site (MOTIR-11844), one per module or operation.
+  //    Each sends through `githubFetch` (`lib/github/githubFetch.ts`).
+
+  /** The rest of `GitProvider` (`lib/git/providers/github.ts`), by method. */
+  'provider.reviewWrite',
+  'provider.fetchInstallationRepos',
+  'provider.resolveRepoTarballUrl',
+  'provider.compareCommits',
+  'provider.listChangedFiles',
+  'provider.readFileAtRef',
+  'provider.resolveRef',
+  'provider.fetchInstallation',
+  'provider.getRepositoryPermission',
+  'provider.fetchWorkflowRunJobs',
+  'provider.fetchOrgComputeUsage',
+  /** The code-history reads (`githubCodeHistory.ts`): the commit log, blame. */
+  'codeHistory.log',
+  'codeHistory.blame',
+  /** The App itself (its JWT): installation tokens, its bot logins, uninstall. */
+  'app.installationToken',
+  'app.botLogins',
+  'app.uninstall',
+  /** As the signed-in user: their installations and organisations. */
+  'user.installations',
+  'user.orgs',
+  /** The GitHub sign-in (`githubIdentityService`): token grant and the user read. */
+  'identity.oauthToken',
+  'identity.user',
+  /** Check runs: writing Motir's own, the head-SHA read, reading a commit's. */
+  'checkRuns.write',
+  'checkRuns.pullRequestHead',
+  'checkRuns.read',
+  /** One module each, named for it. */
+  'actionsPermissions',
+  'actionsRuns',
+  'actionsVariables',
+  'codeScanning',
+  'codeScanningDefaultSetup',
+  'enterpriseOrganizations',
+  'fleetQueue',
+  'orgInstallation',
+  'previewDeployments',
+  'publishWorkflows',
+  'rateLimit',
+  'repoActionsConfig',
+  'repoCollaborators',
+  'repoCommitHistory',
+  'repoDeletion',
+  'repoDeployments',
+  'repoProvisioning',
+  'repoTransfer',
+  'repoVisibility',
+  'repositoryActionsConfig',
+  'repositoryOwnerId',
+  'runGitCredential',
+  'runGitCredential.revoke',
+  'runnerGroups',
+  'runnerJitConfig',
+  'runnerVersionSources',
+  'seedPromotion',
+  /** The GitHub Issues import connector (a user-supplied token, Cloud or GHES). */
+  'import.github',
 ] as const;
 
 export type GithubCaller = (typeof GITHUB_CALLERS)[number];
@@ -179,10 +242,13 @@ export type GithubThrottleClass = 'primary' | 'secondary';
 /** Who is calling GitHub, for which installation and repository. */
 export interface GithubCallSite {
   readonly caller: GithubCaller;
-  /** The HOST's numeric installation id, as Motir stores it. */
-  readonly installationId: string;
-  /** `owner/name`. */
-  readonly repository: string;
+  /** The HOST's numeric installation id, as Motir stores it — `null` for a call
+   *  made as the App itself (its JWT), as a user (OAuth), or with a token whose
+   *  installation the call site does not know (MOTIR-11844). */
+  readonly installationId: string | null;
+  /** `owner/name` — `null` for a call that is not about one repository (an org,
+   *  an installation, the App, the user). */
+  readonly repository: string | null;
 }
 
 /** What a read leaf's CALLER supplies; the leaf adds the repository it reads. */
@@ -213,8 +279,8 @@ export const GITHUB_THROTTLE_HEADERS = [
 export interface GithubThrottleObservation {
   readonly event: 'github.throttle';
   readonly caller: GithubCaller;
-  readonly installationId: string;
-  readonly repository: string;
+  readonly installationId: string | null;
+  readonly repository: string | null;
   readonly status: number;
   readonly classification: GithubThrottleClass;
   /** Which try of the request this answer was (1-based), when the call retries. */

@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // The JIT-CONFIG boundary (Story MOTIR-1916 · MOTIR-1921) — the one module that
@@ -199,7 +200,7 @@ async function request(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), RUNNER_JIT_REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(url, {
+    return await githubFetch('runnerJitConfig', url, {
       method: init.method,
       headers: {
         accept: 'application/vnd.github+json',

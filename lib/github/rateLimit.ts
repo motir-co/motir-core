@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // AN INSTALLATION'S OWN REST BUDGET (Story MOTIR-8953 · MOTIR-8969) — the
@@ -40,7 +41,7 @@ export async function readInstallationRateLimit(
   const { token } = await resolveOrgAuth(target);
   let res: Response;
   try {
-    res = await fetch(`${GITHUB_API}/rate_limit`, {
+    res = await githubFetch('rateLimit', `${GITHUB_API}/rate_limit`, {
       method: 'GET',
       headers: {
         accept: 'application/vnd.github+json',

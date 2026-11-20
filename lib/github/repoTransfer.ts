@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { mintInstallationToken } from '@/lib/github/appAuth';
 
 // The repository-TRANSFER boundary (Story MOTIR-1775 · MOTIR-711) — the one module
@@ -101,7 +102,7 @@ export const repoTransferClient = {
 
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await githubFetch('repoTransfer', url, {
         method: 'POST',
         headers: {
           accept: 'application/vnd.github+json',

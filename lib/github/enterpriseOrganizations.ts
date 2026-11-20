@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { createAppJwt, mintInstallationToken, type GithubAppRole } from '@/lib/github/appAuth';
 
 // THE GITHUB ENTERPRISE HALF OF ADD-SHARD (Story MOTIR-8953 · MOTIR-8967) — the
@@ -112,7 +113,7 @@ async function request(
   init: { method: string; bearer: string; body?: unknown },
 ): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await githubFetch('enterpriseOrganizations', url, {
       method: init.method,
       headers: {
         accept: 'application/vnd.github+json',

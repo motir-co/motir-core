@@ -1,8 +1,7 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import {
   MAX_ATTEMPTS,
   backoffMs,
-  noteGithubRequest,
-  observeGithubThrottle,
   retryDelayMs,
   sleep,
   type GithubCallerContext,
@@ -71,17 +70,21 @@ export async function readPullRequest(
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     let res: Response;
-    noteGithubRequest(site);
     try {
-      res = await fetch(url, {
-        headers: {
-          authorization: `Bearer ${token}`,
-          accept: 'application/vnd.github+json',
-          'x-github-api-version': '2022-11-28',
-          'user-agent': 'motir',
+      res = await githubFetch(
+        site,
+        url,
+        {
+          headers: {
+            authorization: `Bearer ${token}`,
+            accept: 'application/vnd.github+json',
+            'x-github-api-version': '2022-11-28',
+            'user-agent': 'motir',
+          },
+          signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
         },
-        signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
-      });
+        attempt,
+      );
     } catch (err) {
       if (attempt === MAX_ATTEMPTS)
         throw new PullRequestReadError(
@@ -102,7 +105,6 @@ export async function readPullRequest(
 
     if (res.status === 404 || res.status === 410) return { kind: 'gone', status: res.status };
 
-    observeGithubThrottle(site, res.status, res.headers, attempt);
     const delay = retryDelayMs(res.status, res.headers, attempt, Date.now());
     if (delay === null || attempt === MAX_ATTEMPTS)
       throw new PullRequestReadError(

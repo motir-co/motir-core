@@ -29,6 +29,11 @@ export interface RetryOptions {
   /** The source label, threaded into thrown errors' messages. */
   source?: string;
   signal?: AbortSignal;
+  /** Called before each attempt is sent — a host that meters its own requests
+   *  counts them here (GitHub, MOTIR-11844). */
+  beforeRequest?: () => void;
+  /** Called with each answer an attempt got, before it is judged. */
+  afterResponse?: (res: Response, attempt: number) => void;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 4;
@@ -98,6 +103,7 @@ export async function fetchWithRetry(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let res: Response;
     try {
+      opts.beforeRequest?.();
       res = await doFetch(url, { ...init, signal: opts.signal ?? init.signal });
     } catch (err) {
       // Network-level throw (DNS, reset, abort-less transient). Retry with
@@ -114,6 +120,7 @@ export async function fetchWithRetry(
       continue;
     }
 
+    opts.afterResponse?.(res, attempt);
     if (res.ok) return res;
     lastStatus = res.status;
 

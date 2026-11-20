@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { resolveOrgAuth } from '@/lib/github/orgTarget';
 
 // The OWNER ID of a GitHub repository (Story MOTIR-9794 · MOTIR-10010) — what an
@@ -33,14 +34,18 @@ export async function githubRepositoryOwnerId(repositoryId: string): Promise<str
   const { token } = await resolveOrgAuth();
   let res: Response;
   try {
-    res = await fetch(`${GITHUB_API}/repositories/${encodeURIComponent(repositoryId)}`, {
-      method: 'GET',
-      headers: {
-        accept: 'application/vnd.github+json',
-        'user-agent': 'motir',
-        authorization: `Bearer ${token}`,
+    res = await githubFetch(
+      'repositoryOwnerId',
+      `${GITHUB_API}/repositories/${encodeURIComponent(repositoryId)}`,
+      {
+        method: 'GET',
+        headers: {
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+          authorization: `Bearer ${token}`,
+        },
       },
-    });
+    );
   } catch (err) {
     throw new RepositoryOwnerIdApiError(null, err instanceof Error ? err.message : 'unknown');
   }

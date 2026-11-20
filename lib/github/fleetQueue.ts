@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { isMotirFleetJob } from '@/lib/ciFleet/config';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
@@ -212,7 +213,7 @@ export const fleetQueueClient = {
 
 async function call(url: string, token: string): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await githubFetch('fleetQueue', url, {
       method: 'GET',
       headers: {
         accept: 'application/vnd.github+json',

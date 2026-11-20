@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { mintInstallationToken } from '@/lib/github/appAuth';
 import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
@@ -199,7 +200,7 @@ function repoUrl(ref: Pick<ActionsRepoRef, 'owner' | 'repo'>): string {
 
 async function call(url: string, method: 'GET' | 'POST', token: string): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await githubFetch('actionsRuns', url, {
       method,
       headers: {
         accept: 'application/vnd.github+json',

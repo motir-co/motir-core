@@ -1,9 +1,8 @@
 import type { NormalizedChangeRequest } from '@/lib/git/types';
+import { githubFetch } from '@/lib/github/githubFetch';
 import {
   MAX_ATTEMPTS,
   backoffMs,
-  noteGithubRequest,
-  observeGithubThrottle,
   retryDelayMs,
   sleep,
   type GithubCallSite,
@@ -184,17 +183,21 @@ async function fetchPage(
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     let res: Response;
-    noteGithubRequest(site);
     try {
-      res = await fetch(url, {
-        headers: {
-          authorization: `Bearer ${token}`,
-          accept: 'application/vnd.github+json',
-          'x-github-api-version': '2022-11-28',
-          'user-agent': 'motir',
+      res = await githubFetch(
+        site,
+        url,
+        {
+          headers: {
+            authorization: `Bearer ${token}`,
+            accept: 'application/vnd.github+json',
+            'x-github-api-version': '2022-11-28',
+            'user-agent': 'motir',
+          },
+          signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
         },
-        signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
-      });
+        attempt,
+      );
     } catch (err) {
       // Network / timeout: retryable on the same budget as a 5xx.
       if (attempt === MAX_ATTEMPTS)
@@ -214,7 +217,6 @@ async function fetchPage(
       return body;
     }
 
-    observeGithubThrottle(site, res.status, res.headers, attempt);
     const delay = retryDelayMs(res.status, res.headers, attempt, Date.now());
     if (delay === null || attempt === MAX_ATTEMPTS)
       throw new HistoricalPullRequestReadError(

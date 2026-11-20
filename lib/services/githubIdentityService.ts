@@ -1,3 +1,4 @@
+import { githubFetch } from '@/lib/github/githubFetch';
 import { withUserContext } from '@/lib/workspaces/context';
 import {
   githubIdentityRepository,
@@ -330,7 +331,7 @@ async function exchangeCodeForToken(args: {
   const startedAt = Date.now();
   let res: Response;
   try {
-    res = await fetch(ACCESS_TOKEN_URL, {
+    res = await githubFetch('identity.oauthToken', ACCESS_TOKEN_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({
@@ -423,7 +424,7 @@ async function requestRefreshGrant(refreshToken: string): Promise<RefreshAnswer>
   const startedAt = Date.now();
   let res: Response;
   try {
-    res = await fetch(ACCESS_TOKEN_URL, {
+    res = await githubFetch('identity.oauthToken', ACCESS_TOKEN_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({
@@ -522,7 +523,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 async function fetchGithubUser(accessToken: string): Promise<GithubUser> {
   let res: Response;
   try {
-    res = await fetch(USER_API_URL, {
+    res = await githubFetch('identity.user', USER_API_URL, {
       headers: {
         authorization: `Bearer ${accessToken}`,
         accept: 'application/vnd.github+json',
