@@ -16,6 +16,9 @@ import type { RawPreplanStateResponse } from '@/lib/ai/types';
 // one never did, and turning the switch off left every row standing. The inherited rows
 // are now reconciled against the rule wherever its inputs move — and a row an ancestor was
 // linked to in its own right is never touched.
+//
+// Deleting the child is one more such input (Bug MOTIR-11901): the FK cascade took the
+// child's own row, but not the row its parent inherited from it.
 
 vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 vi.mock('@/lib/ai/motirAiClient', () => ({ getPreplanState: vi.fn() }));
@@ -475,6 +478,22 @@ describe('each removal re-asks the parent over its new set (AC 3)', () => {
     });
   }
 
+  it('on a delete: the question over both is withdrawn as `set_changed` and asked again over #30 alone', async () => {
+    const { s, parent, child, before } = await askedOverBoth('11901-gate-delete@example.com');
+
+    await workItemsService.deleteWorkItem(child.id, s.ctx);
+
+    expect(await deliveries(parent.id)).toEqual(['#30']);
+    const gates = await mergeGatesOf(parent.id);
+    expect(gates.find((g) => g.id === before.id)).toMatchObject({
+      state: 'superseded',
+      supersededCause: 'set_changed',
+    });
+    expect(gates.filter((g) => g.state === 'awaiting').map((g) => g.subjectVersion)).toEqual([
+      'moooon/acme#30@sha-story',
+    ]);
+  });
+
   it("unlinking the story's inherited row while the child delivers it leaves the question alone", async () => {
     const { s, parent, before } = await askedOverBoth('11839-gate-noop@example.com');
 
@@ -504,6 +523,89 @@ describe('each removal re-asks the parent over its new set (AC 3)', () => {
     ]);
     expect((await awaitingOf(child.id)).map((g) => g.subjectVersion)).toEqual([
       'moooon/acme#31@sha-child',
+    ]);
+  });
+});
+
+describe('deleting a child (Bug MOTIR-11901)', () => {
+  it('reproduction: the story stops delivering the pull request its deleted child delivered', async () => {
+    const s = await makeScenario('11901-delete@example.com');
+    const {
+      parent,
+      kids: [child],
+    } = await story(s);
+    await link(child!.identifier, 60);
+    expect(await deliveries(parent.id)).toEqual(['#60 inherited']);
+
+    await workItemsService.deleteWorkItem(child!.id, s.ctx);
+
+    expect(await deliveries(parent.id)).toEqual([]);
+    expect(await adminDb.workItemDelivery.count()).toBe(0);
+  });
+
+  it('keeps a delivery the story was linked to explicitly', async () => {
+    const s = await makeScenario('11901-explicit@example.com');
+    const {
+      parent,
+      kids: [child],
+    } = await story(s);
+    await link(child!.identifier, 61);
+    await link(parent.identifier, 61);
+
+    await workItemsService.deleteWorkItem(child!.id, s.ctx);
+
+    expect(await deliveries(parent.id)).toEqual(['#61']);
+  });
+
+  it('keeps it while another child still delivers the same pull request', async () => {
+    const s = await makeScenario('11901-sibling@example.com');
+    const {
+      parent,
+      kids: [a, b],
+    } = await story(s, 'The story', 2);
+    await link(a!.identifier, 62);
+    await link(b!.identifier, 62);
+
+    await workItemsService.deleteWorkItem(a!.id, s.ctx);
+    expect(await deliveries(parent.id)).toEqual(['#62 inherited']);
+
+    await workItemsService.deleteWorkItem(b!.id, s.ctx);
+    expect(await deliveries(parent.id)).toEqual([]);
+  });
+
+  it('deleting a task retracts what its story inherited from the subtask under it, and leaves the rest', async () => {
+    const s = await makeScenario('11901-subtree@example.com');
+    const epic = await create(s, 'epic', 'The epic');
+    const top = await create(s, 'story', 'The story', epic.id);
+    const gone = await create(s, 'task', 'The deleted task', top.id);
+    const sub = await create(s, 'subtask', 'Its subtask', gone.id);
+    const kept = await create(s, 'task', 'The kept task', top.id);
+    await link(sub.identifier, 63);
+    await link(kept.identifier, 64);
+    expect(await deliveries(top.id)).toEqual(['#63 inherited', '#64 inherited']);
+
+    await workItemsService.deleteWorkItem(gone.id, s.ctx);
+
+    expect(await deliveries(top.id)).toEqual(['#64 inherited']);
+    expect(await deliveries(epic.id)).toEqual([]);
+  });
+
+  it('a deleted top-level card, or one that delivered nothing, leaves every other row alone', async () => {
+    const s = await makeScenario('11901-noop@example.com');
+    const {
+      parent,
+      kids: [child, quiet],
+    } = await story(s, 'The story', 2);
+    const lone = await create(s, 'task', 'A lone task');
+    await link(child!.identifier, 65);
+    await link(lone.identifier, 66);
+
+    await workItemsService.deleteWorkItem(quiet!.id, s.ctx);
+    await workItemsService.deleteWorkItem(lone.id, s.ctx);
+
+    expect([await deliveries(child!.id), await deliveries(parent.id)]).toEqual([
+      ['#65'],
+      ['#65 inherited'],
     ]);
   });
 });
