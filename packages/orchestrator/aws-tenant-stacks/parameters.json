@@ -11,6 +11,10 @@
         {
           "name": "VpcCidr",
           "required": false
+        },
+        {
+          "name": "CloudFrontOriginFacingPrefixListId",
+          "required": true
         }
       ],
       "outputs": [
@@ -21,7 +25,8 @@
         "AppSecurityGroupId",
         "AlbArn",
         "AlbListenerArn",
-        "AlbDnsName"
+        "AlbDnsName",
+        "FrontDoorDomainName"
       ]
     },
     "registry.yaml": {
@@ -235,10 +240,6 @@
         },
         {
           "name": "ListenerRulePriority",
-          "required": true
-        },
-        {
-          "name": "AppHost",
           "required": true
         },
         {

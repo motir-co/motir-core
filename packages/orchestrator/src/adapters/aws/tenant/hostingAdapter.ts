@@ -117,9 +117,6 @@ export interface AwsHostingDeps {
   readonly githubIdsOf: GithubRepositoryIdLookup;
   /** The forwarder's IAM principal, the one identity a function URL admits. */
   readonly forwarderPrincipalArn: string;
-  /** The host the forwarder sends for an app, which a container's listener
-   *  rule matches. */
-  readonly appHostOf: (appRef: string) => string;
   /** The key an app's origin secret is derived from (`deriveOriginSecret`). */
   readonly originSecretKey: string;
   readonly now?: () => Date;
@@ -375,7 +372,6 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
                 ...rollout,
                 ...(input.size ? { size: input.size } : {}),
                 network,
-                appHost: deps.appHostOf(appRef),
                 originSecretKey: deps.originSecretKey,
               })
             ).releaseId;

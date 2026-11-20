@@ -1,11 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   Motir tenant NETWORK — one per tenant account (stack motir-network). The VPC,
-  its private (database, functions, tasks) and public (load balancer) subnets,
-  the private subnets' egress, the database and app security groups, the
-  account's GitHub OIDC identity provider, and the account's ONE Application
-  Load Balancer with its ONE listener, whose default action is a fixed 403: a
-  request reaches an app only through that app's own listener rule.
+  its private (database, functions, tasks, load balancer) and public (NAT)
+  subnets, the private subnets' egress, the database and app security groups,
+  the account's GitHub OIDC identity provider, the account's ONE internal
+  Application Load Balancer with its ONE listener, whose default action is a
+  fixed 403 (a request reaches an app only through that app's own listener
+  rule), and the account's ONE front door: a CloudFront distribution whose VPC
+  origin is that load balancer, the https address every forwarder reaches a
+  container release at (MOTIR-11846).
 
 Parameters:
   OrganizationId:
@@ -16,6 +19,12 @@ Parameters:
     Type: String
     Default: 10.64.0.0/16
     Description: The VPC's address range; the four subnets are /20s carved from it.
+  CloudFrontOriginFacingPrefixListId:
+    Type: String
+    Description: >-
+      The id of the AWS-managed prefix list com.amazonaws.global.cloudfront.origin-facing
+      in this region, looked up by the caller - the only source the load balancer admits.
+    AllowedPattern: '^pl-[0-9a-f]+$'
 
 Resources:
   Vpc:
@@ -171,10 +180,15 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Motir tenant load balancer - the forwarders' entry
+      GroupDescription: Motir tenant load balancer - reached only from the front door
       VpcId: !Ref Vpc
+      # CloudFront's origin-facing servers only. The list weighs 55 of the
+      # group's 60 rule entries, so this group carries no other ingress.
       SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourcePrefixListId: !Ref CloudFrontOriginFacingPrefixListId
       Tags:
         - { Key: Name, Value: motir-network-alb }
         - { Key: 'motir:organization', Value: !Ref OrganizationId }
@@ -240,17 +254,20 @@ Resources:
     Properties:
       Name: motir-tenant
       Type: application
-      Scheme: internet-facing
+      # Internal, in the private subnets: the front door's VPC origin is the
+      # only way in from outside the VPC.
+      Scheme: internal
       Subnets:
-        - !Ref PublicSubnetA
-        - !Ref PublicSubnetB
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
       SecurityGroups:
         - !Ref LoadBalancerSecurityGroup
       Tags:
         - { Key: 'motir:organization', Value: !Ref OrganizationId }
         - { Key: 'motir:repository', Value: shared }
 
-  # HTTP only: TLS to the load balancer is an OPEN ITEM (README).
+  # HTTP inside the VPC: TLS terminates at the front door, whose VPC origin
+  # reaches this listener over the AWS network, never the public internet.
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -263,6 +280,57 @@ Resources:
             StatusCode: '403'
             ContentType: text/plain
             MessageBody: Forbidden
+
+  # THE FRONT DOOR (MOTIR-11846). The load balancer's own name cannot carry a
+  # public certificate, so every forwarder reaches a container release over TLS
+  # at this distribution's https://<id>.cloudfront.net, which CloudFront
+  # certifies. It caches nothing and passes every viewer header but Host on to
+  # the load balancer, so a release's rule sees the X-Motir-Origin-Secret the
+  # forwarder sent - which is how the rule picks the app. Websockets pass.
+  FrontDoorOrigin:
+    Type: AWS::CloudFront::VpcOrigin
+    Properties:
+      VpcOriginEndpointConfig:
+        Name: motir-tenant
+        Arn: !Ref LoadBalancer
+        HTTPPort: 80
+        OriginProtocolPolicy: http-only
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: shared }
+
+  FrontDoor:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Motir tenant front door - container releases
+        PriceClass: PriceClass_100
+        HttpVersion: http2
+        Origins:
+          - Id: load-balancer
+            DomainName: !GetAtt LoadBalancer.DNSName
+            VpcOriginConfig:
+              VpcOriginId: !GetAtt FrontDoorOrigin.Id
+              # The load balancer's idle timeout, so a slow answer is the app's.
+              OriginReadTimeout: 60
+              OriginKeepaliveTimeout: 60
+        DefaultCacheBehavior:
+          TargetOriginId: load-balancer
+          ViewerProtocolPolicy: https-only
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+          CachedMethods: [GET, HEAD]
+          Compress: false
+          # Managed CachingDisabled: the application decides its own caching.
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          # Managed AllViewerExceptHostHeader: every header, cookie and query
+          # string, and the load balancer's own name as Host.
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: shared }
 
 Outputs:
   VpcId:
@@ -281,3 +349,5 @@ Outputs:
     Value: !Ref Listener
   AlbDnsName:
     Value: !GetAtt LoadBalancer.DNSName
+  FrontDoorDomainName:
+    Value: !GetAtt FrontDoor.DomainName

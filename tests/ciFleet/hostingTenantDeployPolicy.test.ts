@@ -1,7 +1,7 @@
 // MOTIR-10005 — the tenant deploy role's policy, read as data. A permission
 // that is too narrow fails only on a live stack, and one that is too wide breaks
 // the tenant boundary silently, so both directions are asserted here: what the
-// six templates and the three modules need is granted, under the right tag
+// six templates and the four modules need is granted, under the right tag
 // condition for its kind of action, and nothing a tenant deploy must never reach
 // is. No AWS call.
 import { readdirSync, readFileSync } from 'node:fs';
@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AWS_CONTAINER_DEPLOY_ACTIONS,
   AWS_FUNCTION_DEPLOY_ACTIONS,
+  AWS_NETWORK_DEPLOY_ACTIONS,
   AWS_REGISTRY_DEPLOY_ACTIONS,
   AWS_TENANT_STACKS_DIR,
 } from '@motir/orchestrator';
@@ -62,6 +63,8 @@ const tagKeys = (s: Statement) => Object.keys(s.Condition?.['Null'] ?? {});
 /** Each template resource type and an action CloudFormation calls to create it
  *  under the deploy role. A new resource type fails until it is mapped here. */
 const RESOURCE_TYPE_ACTIONS: Record<string, string> = {
+  'AWS::CloudFront::Distribution': 'cloudfront:CreateDistribution',
+  'AWS::CloudFront::VpcOrigin': 'cloudfront:CreateVpcOrigin',
   'AWS::EC2::EIP': 'ec2:AllocateAddress',
   'AWS::EC2::InternetGateway': 'ec2:CreateInternetGateway',
   'AWS::EC2::NatGateway': 'ec2:CreateNatGateway',
@@ -118,8 +121,9 @@ describe('the tenant deploy policy — what it grants', () => {
     }
   });
 
-  it('grants every action the registry, function and container modules export', () => {
+  it('grants every action the network, registry, function and container modules export', () => {
     const exported = [
+      ...AWS_NETWORK_DEPLOY_ACTIONS,
       ...AWS_REGISTRY_DEPLOY_ACTIONS,
       ...AWS_FUNCTION_DEPLOY_ACTIONS,
       ...AWS_CONTAINER_DEPLOY_ACTIONS,
@@ -155,7 +159,7 @@ describe('the tenant deploy policy — what it grants', () => {
       {
         Sid: 'OnlyTheTenantRegion',
         Effect: 'Deny',
-        NotAction: 'iam:*',
+        NotAction: ['iam:*', 'cloudfront:*'],
         Resource: '*',
         Condition: { StringNotEquals: { 'aws:RequestedRegion': TENANT_ACCOUNT_REGION } },
       },
@@ -221,11 +225,18 @@ describe('the tenant deploy policy — its tag conditions', () => {
       ['DatabaseChange', 'rds:DeleteDBCluster', RESOURCE_TAG],
       ['LoadBalancingCreate', 'elasticloadbalancing:CreateLoadBalancer', REQUEST_TAG],
       ['LoadBalancingChange', 'elasticloadbalancing:DeleteLoadBalancer', RESOURCE_TAG],
+      ['FrontDoorCreate', 'cloudfront:CreateDistribution', REQUEST_TAG],
+      ['FrontDoorCreate', 'cloudfront:CreateVpcOrigin', REQUEST_TAG],
+      ['FrontDoorChange', 'cloudfront:UpdateDistribution', RESOURCE_TAG],
+      ['FrontDoorChange', 'cloudfront:DeleteVpcOrigin', RESOURCE_TAG],
     ];
     for (const [sid, action, tag] of expected) {
       const statement = ALLOWS.find((s) => s.Sid === sid);
       expect(statement, sid).toBeDefined();
-      expect(list(statement!.Action)).toContain(action);
+      expect(
+        list(statement!.Action).some((p) => iamMatches(p, action, true)),
+        `${sid} grants ${action}`,
+      ).toBe(true);
       expect(tagKeys(statement!)).toEqual([tag]);
     }
   });
@@ -267,6 +278,50 @@ describe('the tenant deploy policy — its tag conditions', () => {
   });
 });
 
+describe('the tenant deploy policy — the front door (MOTIR-11846)', () => {
+  const distribution = 'arn:aws:cloudfront::111122223333:distribution/E1ABCDEF';
+  const vpcOrigin = 'arn:aws:cloudfront::111122223333:vpcorigin/vo_1';
+
+  it('reads the managed policies and changes only its own tagged distribution and VPC origin', () => {
+    for (const action of [
+      'cloudfront:UpdateDistribution',
+      'cloudfront:DeleteDistribution',
+      'cloudfront:GetDistribution',
+      'cloudfront:TagResource',
+    ]) {
+      expect(grantedOn(action, distribution), action).toBe(true);
+    }
+    for (const action of [
+      'cloudfront:UpdateVpcOrigin',
+      'cloudfront:DeleteVpcOrigin',
+      'cloudfront:GetVpcOrigin',
+    ]) {
+      expect(grantedOn(action, vpcOrigin), action).toBe(true);
+    }
+    expect(
+      grantedOn(
+        'cloudfront:GetCachePolicy',
+        'arn:aws:cloudfront::111122223333:cache-policy/4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+      ),
+    ).toBe(true);
+    // A change reaches only a resource carrying the organisation tag, which
+    // the managed policies and anything Motir did not create do not.
+    for (const action of ['cloudfront:UpdateDistribution', 'cloudfront:DeleteVpcOrigin']) {
+      for (const s of grantsOf(action)) expect(tagKeys(s), action).toEqual([RESOURCE_TAG]);
+    }
+    for (const action of ['cloudfront:CreateDistribution', 'cloudfront:CreateVpcOrigin']) {
+      for (const s of grantsOf(action)) expect(tagKeys(s), action).toEqual([REQUEST_TAG]);
+    }
+    expect(grantsOf('cloudfront:CreateInvalidation')).toHaveLength(0);
+    expect(grantsOf('cloudfront:CreateCachePolicy')).toHaveLength(0);
+  });
+
+  it('exempts CloudFront, a global service, from the tenant-region deny', () => {
+    const deny = STATEMENTS.find((s) => s.Sid === 'OnlyTheTenantRegion')!;
+    expect(list(deny.NotAction)).toContain('cloudfront:*');
+  });
+});
+
 describe('the tenant deploy policy — its narrow IAM', () => {
   it('grants SSM only on the usage parameters', () => {
     for (const action of [
@@ -299,7 +354,7 @@ describe('the tenant deploy policy — its narrow IAM', () => {
     }
   });
 
-  it('grants service-linked roles only for ECS, load balancing and RDS', () => {
+  it('grants service-linked roles only for ECS, load balancing, RDS and the VPC origin', () => {
     const grants = grantsOf('iam:CreateServiceLinkedRole');
     expect(grants).toHaveLength(1);
     expect(list(grants[0]!.Resource)).toEqual(['arn:aws:iam::*:role/aws-service-role/*']);
@@ -309,6 +364,7 @@ describe('the tenant deploy policy — its narrow IAM', () => {
           'ecs.amazonaws.com',
           'elasticloadbalancing.amazonaws.com',
           'rds.amazonaws.com',
+          'vpcorigin.cloudfront.amazonaws.com',
         ],
       },
     });

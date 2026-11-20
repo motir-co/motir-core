@@ -13,6 +13,11 @@ import {
   type MetricDataResult,
 } from '@aws-sdk/client-cloudwatch';
 import {
+  DescribeManagedPrefixListsCommand,
+  EC2Client,
+  type ManagedPrefixList,
+} from '@aws-sdk/client-ec2';
+import {
   DeregisterTaskDefinitionCommand,
   DescribeServicesCommand,
   DescribeTasksCommand,
@@ -54,6 +59,7 @@ import {
 import type { AwsSdkClient } from '../management';
 import type {
   TenantCloudFormation,
+  TenantEc2,
   TenantRdsData,
   TenantSecretsManager,
   TenantSqlValue,
@@ -90,6 +96,8 @@ import type { TenantCloudWatch, TenantFunctionState, TenantLambda } from './func
 //   API_DescribeRules.html
 //   https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_GetParameter.html,
 //   API_PutParameter.html, API_AddTagsToResource.html, API_DeleteParameter.html
+//   https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeManagedPrefixLists.html
+//   (read 2026-11-20)
 
 /** The services a tenant client bundle builds. Later cards add theirs. */
 export type TenantSdkService =
@@ -100,7 +108,8 @@ export type TenantSdkService =
   | 'cloudwatch'
   | 'ecs'
   | 'elasticloadbalancing'
-  | 'ssm';
+  | 'ssm'
+  | 'ec2';
 
 /** Temporary credentials, as the SDK's credential provider answers them. */
 export interface TenantSdkCredentials {
@@ -136,6 +145,8 @@ export const createTenantSdkClient: TenantSdkClientFactory = (service, config) =
       return new ElasticLoadBalancingV2Client(config);
     case 'ssm':
       return new SSMClient(config);
+    case 'ec2':
+      return new EC2Client(config);
   }
 };
 
@@ -634,6 +645,22 @@ export function sdkTenantSsm(client: AwsSdkClient): TenantSsm {
       } catch (err) {
         if (!named(err, 'ParameterNotFound')) throw err;
       }
+    },
+  };
+}
+
+/** `TenantEc2` over an SDK client: an AWS-managed prefix list, found by its
+ *  name — its id differs by region, so it is never written down. */
+export function sdkTenantEc2(client: AwsSdkClient): TenantEc2 {
+  const send = sender('ec2', client);
+  return {
+    async managedPrefixListId(name) {
+      const { PrefixLists = [] } = await send<{ PrefixLists?: ManagedPrefixList[] }>(
+        new DescribeManagedPrefixListsCommand({
+          Filters: [{ Name: 'prefix-list-name', Values: [name] }],
+        }),
+      );
+      return PrefixLists.find((list) => list.PrefixListName === name)?.PrefixListId ?? null;
     },
   };
 }

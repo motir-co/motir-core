@@ -3,7 +3,7 @@
 // infrastructure, and a mistake in one only shows when a stack is applied — so
 // the rules they must all agree on (the two tags, the parameters, the outputs the
 // adapter reads back, stack and role names, the OIDC trust, the shared listener,
-// the retained versions) are asserted here, by parsing the YAML. No AWS call.
+// the front door, the retained versions) are asserted here, by parsing the YAML. No AWS call.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -89,6 +89,8 @@ const one = (t: Template, type: string) => {
 // all. A template using a type in neither list fails, so a new resource is
 // classified before it ships.
 const TAGGABLE = new Set([
+  'AWS::CloudFront::Distribution',
+  'AWS::CloudFront::VpcOrigin',
   'AWS::EC2::VPC',
   'AWS::EC2::InternetGateway',
   'AWS::EC2::Subnet',
@@ -276,8 +278,67 @@ describe('network.yaml', () => {
         'AlbArn',
         'AlbListenerArn',
         'AlbDnsName',
+        'FrontDoorDomainName',
       ].sort(),
     );
+  });
+
+  // MOTIR-11846: a forwarder reaches a container release over TLS at CloudFront's
+  // own name; the load balancer is internal and admits CloudFront alone.
+  it('keeps the load balancer internal, in the private subnets, admitting CloudFront only', () => {
+    const lb = one(t, 'AWS::ElasticLoadBalancingV2::LoadBalancer').Properties!;
+    expect(lb['Scheme']).toBe('internal');
+    expect(lb['Subnets']).toEqual([{ Ref: 'PrivateSubnetA' }, { Ref: 'PrivateSubnetB' }]);
+    const group = resourcesOf(t, 'AWS::EC2::SecurityGroup').find((r) =>
+      (r.Properties!['GroupDescription'] as string).includes('load balancer'),
+    )!;
+    expect(group.Properties!['SecurityGroupIngress']).toEqual([
+      {
+        IpProtocol: 'tcp',
+        FromPort: 80,
+        ToPort: 80,
+        SourcePrefixListId: { Ref: 'CloudFrontOriginFacingPrefixListId' },
+      },
+    ]);
+    expect(t.Parameters!['CloudFrontOriginFacingPrefixListId']).toMatchObject({
+      AllowedPattern: '^pl-[0-9a-f]+$',
+    });
+    expect(t.Parameters!['CloudFrontOriginFacingPrefixListId']!['Default']).toBeUndefined();
+  });
+
+  it('fronts the load balancer with one https-only, uncached CloudFront distribution', () => {
+    const origin = one(t, 'AWS::CloudFront::VpcOrigin').Properties!;
+    expect(origin['VpcOriginEndpointConfig']).toMatchObject({
+      Arn: { Ref: 'LoadBalancer' },
+      HTTPPort: 80,
+      OriginProtocolPolicy: 'http-only',
+    });
+    const config = one(t, 'AWS::CloudFront::Distribution').Properties!['DistributionConfig'] as Obj;
+    expect(config['Enabled']).toBe(true);
+    expect(config['Origins']).toEqual([
+      expect.objectContaining({
+        Id: 'load-balancer',
+        DomainName: { 'Fn::GetAtt': ['LoadBalancer', 'DNSName'] },
+        VpcOriginConfig: expect.objectContaining({
+          VpcOriginId: { 'Fn::GetAtt': ['FrontDoorOrigin', 'Id'] },
+        }),
+      }),
+    ]);
+    const behavior = config['DefaultCacheBehavior'] as Obj;
+    expect(behavior).toMatchObject({
+      TargetOriginId: 'load-balancer',
+      ViewerProtocolPolicy: 'https-only',
+      // Managed CachingDisabled and AllViewerExceptHostHeader.
+      CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+      OriginRequestPolicyId: 'b689b0a8-53d0-40ab-baf2-68738e2966ac',
+    });
+    expect([...(behavior['AllowedMethods'] as string[])].sort()).toEqual(
+      ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'].sort(),
+    );
+    expect(config['ViewerCertificate']).toEqual({ CloudFrontDefaultCertificate: true });
+    expect(t.Outputs!['FrontDoorDomainName']).toEqual({
+      Value: { 'Fn::GetAtt': ['FrontDoor', 'DomainName'] },
+    });
   });
 });
 
@@ -511,14 +572,13 @@ describe('function-release.yaml', () => {
 describe('container-release.yaml', () => {
   const t = T['container-release.yaml'];
 
-  it('creates no load balancer and no listener — only a target group and one rule on the given listener', () => {
+  it('creates no load balancer and no listener — only a target group and one rule on the given listener, matching the origin secret alone', () => {
     expect(resourcesOf(t, 'AWS::ElasticLoadBalancingV2::LoadBalancer')).toEqual([]);
     expect(resourcesOf(t, 'AWS::ElasticLoadBalancingV2::Listener')).toEqual([]);
     one(t, 'AWS::ElasticLoadBalancingV2::TargetGroup');
     const rule = one(t, 'AWS::ElasticLoadBalancingV2::ListenerRule').Properties!;
     expect(rule['ListenerArn']).toEqual({ Ref: 'AlbListenerArn' });
     expect(rule['Conditions']).toEqual([
-      { Field: 'host-header', HostHeaderConfig: { Values: [{ Ref: 'AppHost' }] } },
       {
         Field: 'http-header',
         HttpHeaderConfig: {
@@ -528,6 +588,8 @@ describe('container-release.yaml', () => {
       },
     ]);
     expect(t.Parameters!['OriginSecret']!['NoEcho']).toBe(true);
+    // No app host and no apps domain (MOTIR-11846).
+    expect(t.Parameters!['AppHost']).toBeUndefined();
   });
 
   it('retains replaced task definitions and always runs at least one task', () => {

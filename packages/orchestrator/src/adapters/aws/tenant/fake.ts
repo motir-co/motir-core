@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type {
   TenantClients,
   TenantCloudFormation,
+  TenantEc2,
   TenantRdsData,
   TenantSecretsManager,
   TenantSqlValue,
@@ -443,7 +444,8 @@ export function fakeTenantStackOutputs(
         AppSecurityGroupId: 'sg-app',
         AlbArn: `arn:aws:elasticloadbalancing:${region}:${accountId}:loadbalancer/app/motir-tenant/1`,
         AlbListenerArn: `arn:aws:elasticloadbalancing:${region}:${accountId}:listener/app/motir-tenant/1/2`,
-        AlbDnsName: `motir-tenant-1.${region}.elb.amazonaws.com`,
+        AlbDnsName: `internal-motir-tenant-1.${region}.elb.amazonaws.com`,
+        FrontDoorDomainName: 'd1fake0frontdoor.cloudfront.net',
       };
     }
     let m = /^motir-database-([a-z0-9]+)$/.exec(name);
@@ -947,6 +949,36 @@ export function createFakeTenantSsm(): FakeTenantSsm {
   };
 }
 
+export interface FakeTenantEc2 extends TenantEc2 {
+  /** The AWS-managed prefix lists of the region, by name. */
+  readonly prefixLists: Map<string, string>;
+  readonly calls: string[];
+  failAt(operation: keyof TenantEc2, n: number, when?: 'before' | 'after'): void;
+}
+
+/** The fake region carries CloudFront's origin-facing list, as every real one does. */
+export const FAKE_CLOUDFRONT_PREFIX_LIST_ID = 'pl-0fa4e0cf';
+
+export function createFakeTenantEc2(): FakeTenantEc2 {
+  const prefixLists = new Map([
+    ['com.amazonaws.global.cloudfront.origin-facing', FAKE_CLOUDFRONT_PREFIX_LIST_ID],
+  ]);
+  const calls: string[] = [];
+  const counter = faultCounter('ec2');
+  return {
+    prefixLists,
+    calls,
+    failAt: (operation, n, when) => counter.failAt(operation, n, when),
+    managedPrefixListId: async (name) => {
+      calls.push(`managedPrefixListId:${name}`);
+      const lost = counter.enter('managedPrefixListId');
+      const answer = prefixLists.get(name) ?? null;
+      if (lost) throw counter.injected();
+      return answer;
+    },
+  };
+}
+
 /** A container release stack: the release template's parameters. */
 const isContainerRelease = (name: string, parameters: Readonly<Record<string, string>>) =>
   name.startsWith('motir-release-') && 'TaskCpu' in parameters;
@@ -968,6 +1000,7 @@ export function createFakeTenantClients(
   readonly ecs: FakeTenantEcs;
   readonly elb: FakeTenantElb;
   readonly ssm: FakeTenantSsm;
+  readonly ec2: FakeTenantEc2;
 } {
   const accountId = options.accountId ?? '210987654321';
   const region = options.region ?? 'us-east-1';
@@ -1009,5 +1042,6 @@ export function createFakeTenantClients(
     ecs,
     elb,
     ssm: createFakeTenantSsm(),
+    ec2: createFakeTenantEc2(),
   };
 }
