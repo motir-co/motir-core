@@ -130,6 +130,13 @@ describe('githubFetch — count, send, report, return unchanged', () => {
     expect(throttleLines()).toEqual([]);
   });
 
+  it('an answer with no headers goes back untouched, never a throw from the observation', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(undefined));
+    await expect(githubFetch('fleetQueue', 'https://api.github.com/x')).resolves.toBeUndefined();
+    expect(counts()).toEqual({ fleetQueue: 1 });
+    expect(throttleLines()).toEqual([]);
+  });
+
   it('a network failure is still a request sent, and the same error comes back', async () => {
     const boom = new TypeError('fetch failed');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(boom));

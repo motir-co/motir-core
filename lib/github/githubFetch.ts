@@ -49,7 +49,12 @@ export async function githubFetch(
   const resolved = siteOf(site);
   noteGithubRequest(resolved);
   const res = await fetch(input, init);
-  observeGithubThrottle(resolved, res.status, res.headers, attempt);
+  // The observation only READS an answer; it must never be what fails a call.
+  // An answer without headers (a stub that resolves to nothing) goes back to the
+  // caller untouched, so the caller's own handling sees exactly what `fetch`
+  // gave it — and not a TypeError thrown here, inside the caller's network-error
+  // `catch`, that would be retried as an outage.
+  if (res?.headers) observeGithubThrottle(resolved, res.status, res.headers, attempt);
   return res;
 }
 
