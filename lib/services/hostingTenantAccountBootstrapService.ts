@@ -8,7 +8,7 @@ import {
   TENANT_ACCOUNT_REGION,
   TENANT_ORGANIZATION_TAG_KEY,
   TENANT_QUOTA_TARGETS,
-  tenantDeployPolicyDocument,
+  tenantDeployPolicies,
 } from '@/lib/ciFleet/hostingTenantAccounts';
 import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -18,7 +18,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // true inside it, each read before it is written so a replay does nothing twice:
 //
 //   1. the `motir-tenant-deploy` role, trusted only by Motir's management role,
-//      its inline policy converged on `tenantDeployPolicyDocument()`;
+//      its managed policies converged on `tenantDeployPolicies()` (MOTIR-11878);
 //   2. `motir:organization=<id>` on the account in Organizations, for cost
 //      allocation;
 //   3. each `TENANT_QUOTA_TARGETS` quota at target, or a raise filed (an open
@@ -73,7 +73,7 @@ export async function bootstrapTenantAccount(
   const { accountId, credentials } = await memberSession(organizationId, management);
   const { created: roleCreated } = await management.ensureTenantDeployRole(
     credentials,
-    tenantDeployPolicyDocument(),
+    tenantDeployPolicies(),
   );
   const { tagged } = await management.ensureAccountTag(
     accountId,
@@ -92,17 +92,20 @@ export async function bootstrapTenantAccount(
 
 /** What converging one account's deploy-role policy did. */
 export interface TenantDeployPolicyConvergence {
-  /** Whether the live inline policy differed and was rewritten. */
+  /** Whether the role's policies differed and anything was written: a managed
+   *  policy created, versioned, attached, detached or deleted, or the legacy
+   *  inline policy deleted. */
   policyChanged: boolean;
 }
 
 /**
  * Bring an existing tenant account's deploy role onto today's
- * `tenantDeployPolicyDocument()` (MOTIR-10005). A `ready` account never re-runs
- * the bootstrap, so a policy change reaches it only through this: assume the
- * member role and make the same `ensureTenantDeployRole` call, which reads the
- * inline policy and writes it only when it differs. Writes no record state, and
- * a replay changes nothing.
+ * `tenantDeployPolicies()` (MOTIR-10005 · MOTIR-11878). A `ready` account never
+ * re-runs the bootstrap, so a policy change reaches it only through this: assume
+ * the member role and make the same `ensureTenantDeployRole` call, which reads
+ * each managed policy and writes only what differs — and, on an account still
+ * carrying the inline policy, attaches the managed set first and then deletes
+ * it. Writes no record state, and a replay changes nothing.
  */
 export async function convergeTenantDeployPolicy(
   organizationId: string,
@@ -112,7 +115,7 @@ export async function convergeTenantDeployPolicy(
   const { credentials } = await memberSession(organizationId, management);
   const { policyChanged } = await management.ensureTenantDeployRole(
     credentials,
-    tenantDeployPolicyDocument(),
+    tenantDeployPolicies(),
   );
   return { policyChanged };
 }

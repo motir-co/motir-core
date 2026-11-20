@@ -10,8 +10,11 @@ import {
   AWS_MANAGEMENT_ENV,
   AWS_RUNNER_IAM_POLICY,
   AWS_RUNNER_IAM_ROLE,
+  AWS_MANAGED_POLICY_MAX_CHARS,
+  AWS_TENANT_DEPLOY_POLICY_PATH,
   AWS_TENANT_DEPLOY_ROLE,
   AwsAccountCreationRefusedError,
+  AwsManagedPolicySetInvalidError,
   AwsManagementApiError,
   OrchestratorNotConfiguredError,
   awsManagementCredentials,
@@ -21,6 +24,7 @@ import {
   awsRunnerTrustPolicy,
   createAwsManagementApi,
   createAwsManagementSdkClient,
+  type AwsManagedPolicy,
   type AwsManagementClientFactory,
   type AwsManagementCredentials,
   type AwsManagementService,
@@ -868,73 +872,7 @@ describe('the Tenants organizational unit (MOTIR-9940)', () => {
 });
 
 describe('the tenant account bootstrap calls (MOTIR-9941)', () => {
-  const POLICY = {
-    Version: '2012-10-17' as const,
-    Statement: [{ Effect: 'Allow', Action: 'ecs:*' }],
-  };
   const FARGATE = { serviceCode: 'fargate', quotaCode: 'L-3032A538', desiredValue: 64 };
-
-  it('creates the deploy role trusting only the management role, with its policy', async () => {
-    const { api, calls } = harness({
-      GetRoleCommand: () => {
-        throw sdkError('NoSuchEntity', 404);
-      },
-      CreateRoleCommand: () => ({}),
-      GetRolePolicyCommand: () => {
-        throw sdkError('NoSuchEntity', 404);
-      },
-      PutRolePolicyCommand: () => ({}),
-    });
-
-    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({
-      created: true,
-      policyChanged: true,
-    });
-    const create = calls.find((c) => c.command === 'CreateRoleCommand')!;
-    expect(create).toMatchObject({ service: 'iam', accessKeyId: MEMBER.accessKeyId });
-    expect(create.input['RoleName']).toBe(AWS_TENANT_DEPLOY_ROLE);
-    const trust = JSON.parse(String(create.input['AssumeRolePolicyDocument'])) as {
-      Statement: Array<{ Principal: unknown }>;
-    };
-    expect(trust.Statement.map((s) => s.Principal)).toEqual([{ AWS: MANAGEMENT.roleArn }]);
-    expect(calls.find((c) => c.command === 'PutRolePolicyCommand')!.input).toEqual({
-      RoleName: AWS_TENANT_DEPLOY_ROLE,
-      PolicyName: AWS_TENANT_DEPLOY_ROLE,
-      PolicyDocument: JSON.stringify(POLICY),
-    });
-  });
-
-  it('finds the role and its policy in place and writes nothing', async () => {
-    const { api, calls } = harness({
-      GetRoleCommand: () => ({ Role: { RoleName: AWS_TENANT_DEPLOY_ROLE } }),
-      GetRolePolicyCommand: () => ({ PolicyDocument: encodeURIComponent(JSON.stringify(POLICY)) }),
-    });
-
-    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({
-      created: false,
-      policyChanged: false,
-    });
-    expect(calls.map((c) => c.command)).toEqual(['GetRoleCommand', 'GetRolePolicyCommand']);
-  });
-
-  it('treats EntityAlreadyExists on create as found, and still converges the policy', async () => {
-    const { api, calls } = harness({
-      GetRoleCommand: () => {
-        throw sdkError('NoSuchEntity', 404);
-      },
-      CreateRoleCommand: () => {
-        throw sdkError('EntityAlreadyExists', 409);
-      },
-      GetRolePolicyCommand: () => ({ PolicyDocument: encodeURIComponent('{"old":true}') }),
-      PutRolePolicyCommand: () => ({}),
-    });
-
-    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({
-      created: false,
-      policyChanged: true,
-    });
-    expect(calls.map((c) => c.command)).toContain('PutRolePolicyCommand');
-  });
 
   it('tags the account only when the value differs', async () => {
     const tagged = harness({
@@ -1041,6 +979,599 @@ describe('the tenant account bootstrap calls (MOTIR-9941)', () => {
       name: 'AwsManagementApiError',
       awsCode: 'AccessDeniedException',
     });
+  });
+});
+
+// MOTIR-11878 — the tenant deploy role's grants are customer-managed policies.
+// The IAM below is a small stateful stand-in, so a test can converge an account,
+// look at what it holds, and converge it again to see that nothing is written.
+describe('the tenant deploy role’s managed policies (MOTIR-11878)', () => {
+  const ACCOUNT = '400000000101';
+  const PATH = AWS_TENANT_DEPLOY_POLICY_PATH;
+  const doc = (action: string) => ({
+    Version: '2012-10-17' as const,
+    Statement: [{ Effect: 'Allow', Action: action, Resource: '*' }],
+  });
+  const policy = (name: string, action: string): AwsManagedPolicy => ({
+    name,
+    description: `Motir tenant deploys: ${name}.`,
+    document: doc(action),
+  });
+  const WANTED = [
+    policy('motir-tenant-deploy-compute', 'ecs:*'),
+    policy('motir-tenant-deploy-network', 'ec2:Describe*'),
+  ];
+  const arnOf = (name: string, path = PATH) => `arn:aws:iam::${ACCOUNT}:policy${path}${name}`;
+  const WRITES = new Set([
+    'CreateRoleCommand',
+    'CreatePolicyCommand',
+    'CreatePolicyVersionCommand',
+    'DeletePolicyVersionCommand',
+    'AttachRolePolicyCommand',
+    'DetachRolePolicyCommand',
+    'DeletePolicyCommand',
+    'DeleteRolePolicyCommand',
+    'PutRolePolicyCommand',
+  ]);
+
+  interface StoredPolicy {
+    name: string;
+    path: string;
+    versions: Array<{ id: string; document: string; created: number }>;
+    defaultId: string;
+    next: number;
+  }
+
+  /** IAM, as far as the convergence reads and writes it. `pageSize` pages
+   *  every list, so the markers are followed. */
+  function iamState(seed: { role?: boolean; inline?: string[]; pageSize?: number } = {}) {
+    const state = {
+      role: seed.role ?? false,
+      inline: new Set(seed.inline ?? []),
+      policies: new Map<string, StoredPolicy>(),
+      attached: new Set<string>(),
+      clock: 0,
+    };
+    const pageSize = seed.pageSize ?? 100;
+    const page = <T>(items: T[], input: Record<string, unknown>) => {
+      const start = Number(input['Marker'] ?? 0);
+      const slice = items.slice(start, start + pageSize);
+      const more = start + pageSize < items.length;
+      return { slice, IsTruncated: more, ...(more ? { Marker: String(start + pageSize) } : {}) };
+    };
+    const byArn = (arn: unknown) => {
+      const found = state.policies.get(String(arn));
+      if (!found) throw sdkError('NoSuchEntity', 404);
+      return found;
+    };
+    const handlers: Record<string, Handler> = {
+      GetRoleCommand: () => {
+        if (!state.role) throw sdkError('NoSuchEntity', 404);
+        return { Role: { RoleName: AWS_TENANT_DEPLOY_ROLE } };
+      },
+      CreateRoleCommand: () => {
+        state.role = true;
+        return {};
+      },
+      ListPoliciesCommand: (input) => {
+        expect(input['Scope']).toBe('Local');
+        const all = [...state.policies.entries()]
+          .filter(([, p]) => p.path.startsWith(String(input['PathPrefix'])))
+          .map(([arn, p]) => ({ PolicyName: p.name, Arn: arn, DefaultVersionId: p.defaultId }));
+        const { slice, ...rest } = page(all, input);
+        return { Policies: slice, ...rest };
+      },
+      CreatePolicyCommand: (input) => {
+        const arn = arnOf(String(input['PolicyName']), String(input['Path']));
+        if (state.policies.has(arn)) throw sdkError('EntityAlreadyExists', 409);
+        state.policies.set(arn, {
+          name: String(input['PolicyName']),
+          path: String(input['Path']),
+          versions: [
+            { id: 'v1', document: String(input['PolicyDocument']), created: state.clock++ },
+          ],
+          defaultId: 'v1',
+          next: 2,
+        });
+        return { Policy: { Arn: arn } };
+      },
+      GetPolicyVersionCommand: (input) => {
+        const p = byArn(input['PolicyArn']);
+        const v = p.versions.find((x) => x.id === input['VersionId'])!;
+        return { PolicyVersion: { Document: encodeURIComponent(v.document) } };
+      },
+      ListPolicyVersionsCommand: (input) => {
+        const p = byArn(input['PolicyArn']);
+        const all = p.versions.map((v) => ({
+          VersionId: v.id,
+          IsDefaultVersion: v.id === p.defaultId,
+          CreateDate: new Date(v.created),
+        }));
+        const { slice, ...rest } = page(all, input);
+        return { Versions: slice, ...rest };
+      },
+      DeletePolicyVersionCommand: (input) => {
+        const p = byArn(input['PolicyArn']);
+        expect(input['VersionId']).not.toBe(p.defaultId);
+        p.versions = p.versions.filter((v) => v.id !== input['VersionId']);
+        return {};
+      },
+      CreatePolicyVersionCommand: (input) => {
+        const p = byArn(input['PolicyArn']);
+        if (p.versions.length >= 5) throw sdkError('LimitExceeded', 409);
+        const id = `v${p.next++}`;
+        p.versions.push({ id, document: String(input['PolicyDocument']), created: state.clock++ });
+        if (input['SetAsDefault']) p.defaultId = id;
+        return {};
+      },
+      DeletePolicyCommand: (input) => {
+        const p = byArn(input['PolicyArn']);
+        expect(state.attached.has(String(input['PolicyArn']))).toBe(false);
+        expect(p.versions).toHaveLength(1);
+        state.policies.delete(String(input['PolicyArn']));
+        return {};
+      },
+      ListAttachedRolePoliciesCommand: (input) => {
+        const all = [...state.attached]
+          .filter((arn) => arn.includes(`:policy${String(input['PathPrefix'])}`))
+          .map((arn) => ({ PolicyArn: arn }));
+        const { slice, ...rest } = page(all, input);
+        return { AttachedPolicies: slice, ...rest };
+      },
+      AttachRolePolicyCommand: (input) => {
+        byArn(input['PolicyArn']);
+        state.attached.add(String(input['PolicyArn']));
+        return {};
+      },
+      DetachRolePolicyCommand: (input) => {
+        state.attached.delete(String(input['PolicyArn']));
+        return {};
+      },
+      ListRolePoliciesCommand: (input) => {
+        const { slice, ...rest } = page([...state.inline], input);
+        return { PolicyNames: slice, ...rest };
+      },
+      DeleteRolePolicyCommand: (input) => {
+        if (!state.inline.delete(String(input['PolicyName']))) throw sdkError('NoSuchEntity', 404);
+        return {};
+      },
+    };
+    /** What the role holds, as names and default documents. */
+    const held = () =>
+      [...state.attached].sort().map((arn) => {
+        const p = state.policies.get(arn)!;
+        return { name: p.name, document: p.versions.find((v) => v.id === p.defaultId)!.document };
+      });
+    return { state, handlers, held };
+  }
+
+  const writesOf = (calls: SentCall[]) => calls.filter((c) => WRITES.has(c.command));
+  const asHeld = (policies: readonly AwsManagedPolicy[]) =>
+    [...policies]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((p) => ({ name: p.name, document: JSON.stringify(p.document) }));
+
+  it('creates the role, its policies under the path, and attaches each, with the member session', async () => {
+    const iam = iamState();
+    const { api, calls } = harness(iam.handlers);
+
+    expect(await api.ensureTenantDeployRole(MEMBER, WANTED)).toEqual({
+      created: true,
+      policyChanged: true,
+    });
+    expect(iam.held()).toEqual(asHeld(WANTED));
+    expect(iam.state.inline.size).toBe(0);
+    expect(calls.every((c) => c.service === 'iam' && c.accessKeyId === MEMBER.accessKeyId)).toBe(
+      true,
+    );
+    const creates = calls.filter((c) => c.command === 'CreatePolicyCommand').map((c) => c.input);
+    expect(creates).toEqual(
+      WANTED.map((p) => ({
+        PolicyName: p.name,
+        Path: PATH,
+        PolicyDocument: JSON.stringify(p.document),
+        Description: p.description,
+        Tags: [{ Key: 'motir-role', Value: 'tenant-deploy' }],
+      })),
+    );
+    const trust = JSON.parse(
+      String(
+        calls.find((c) => c.command === 'CreateRoleCommand')!.input['AssumeRolePolicyDocument'],
+      ),
+    ) as { Statement: Array<{ Principal: unknown }> };
+    expect(trust.Statement.map((s) => s.Principal)).toEqual([{ AWS: MANAGEMENT.roleArn }]);
+    expect(calls.map((c) => c.command)).not.toContain('PutRolePolicyCommand');
+  });
+
+  it('replaces the legacy inline policy: attaches the managed set first, deletes the inline last, and a replay writes nothing', async () => {
+    const iam = iamState({ role: true, inline: [AWS_TENANT_DEPLOY_ROLE, 'someone-elses'] });
+    const first = harness(iam.handlers);
+
+    expect(await first.api.ensureTenantDeployRole(MEMBER, WANTED)).toEqual({
+      created: false,
+      policyChanged: true,
+    });
+    const order = writesOf(first.calls).map((c) => c.command);
+    expect(order).toEqual([
+      'CreatePolicyCommand',
+      'CreatePolicyCommand',
+      'AttachRolePolicyCommand',
+      'AttachRolePolicyCommand',
+      'DeleteRolePolicyCommand',
+    ]);
+    expect(first.calls.find((c) => c.command === 'DeleteRolePolicyCommand')!.input).toEqual({
+      RoleName: AWS_TENANT_DEPLOY_ROLE,
+      PolicyName: AWS_TENANT_DEPLOY_ROLE,
+    });
+    // Only the legacy policy goes; an inline policy it does not own stays.
+    expect([...iam.state.inline]).toEqual(['someone-elses']);
+    expect(iam.held()).toEqual(asHeld(WANTED));
+
+    const replay = harness(iam.handlers);
+    expect(await replay.api.ensureTenantDeployRole(MEMBER, WANTED)).toEqual({
+      created: false,
+      policyChanged: false,
+    });
+    expect(writesOf(replay.calls)).toEqual([]);
+  });
+
+  it('gives a policy whose document differs a new default version, and leaves the same one alone', async () => {
+    const iam = iamState({ role: true });
+    await harness(iam.handlers).api.ensureTenantDeployRole(MEMBER, WANTED);
+    const changed = [WANTED[0]!, policy('motir-tenant-deploy-network', 'ec2:*')];
+
+    const { api, calls } = harness(iam.handlers);
+    expect(await api.ensureTenantDeployRole(MEMBER, changed)).toEqual({
+      created: false,
+      policyChanged: true,
+    });
+    expect(writesOf(calls).map((c) => [c.command, c.input])).toEqual([
+      [
+        'CreatePolicyVersionCommand',
+        {
+          PolicyArn: arnOf('motir-tenant-deploy-network'),
+          PolicyDocument: JSON.stringify(changed[1]!.document),
+          SetAsDefault: true,
+        },
+      ],
+    ]);
+    expect(iam.held()).toEqual(asHeld(changed));
+  });
+
+  it('compares documents by meaning, not by spelling', async () => {
+    const iam = iamState({ role: true });
+    await harness(iam.handlers).api.ensureTenantDeployRole(MEMBER, WANTED);
+    // IAM hands a document back URL-encoded and may re-space it.
+    for (const p of iam.state.policies.values()) {
+      p.versions[0]!.document = JSON.stringify(JSON.parse(p.versions[0]!.document), null, 2);
+    }
+    const { api, calls } = harness(iam.handlers);
+    expect((await api.ensureTenantDeployRole(MEMBER, WANTED)).policyChanged).toBe(false);
+    expect(writesOf(calls)).toEqual([]);
+  });
+
+  it('deletes the oldest non-default version first when IAM’s five are taken', async () => {
+    const iam = iamState({ role: true, pageSize: 2 });
+    await harness(iam.handlers).api.ensureTenantDeployRole(MEMBER, WANTED);
+    for (let i = 0; i < 4; i += 1) {
+      await harness(iam.handlers).api.ensureTenantDeployRole(MEMBER, [
+        WANTED[0]!,
+        policy('motir-tenant-deploy-network', `ec2:Step${i}`),
+      ]);
+    }
+    const network = iam.state.policies.get(arnOf('motir-tenant-deploy-network'))!;
+    expect(network.versions.map((v) => v.id)).toEqual(['v1', 'v2', 'v3', 'v4', 'v5']);
+
+    const { api, calls } = harness(iam.handlers);
+    await api.ensureTenantDeployRole(MEMBER, WANTED);
+    expect(writesOf(calls).map((c) => [c.command, c.input['VersionId'] ?? null])).toEqual([
+      ['DeletePolicyVersionCommand', 'v1'],
+      ['CreatePolicyVersionCommand', null],
+    ]);
+    expect(network.versions.map((v) => v.id)).toEqual(['v2', 'v3', 'v4', 'v5', 'v6']);
+    expect(iam.held()).toEqual(asHeld(WANTED));
+  });
+
+  it('attaches a policy that exists but is not attached', async () => {
+    const iam = iamState({ role: true });
+    await harness(iam.handlers).api.ensureTenantDeployRole(MEMBER, WANTED);
+    iam.state.attached.delete(arnOf('motir-tenant-deploy-compute'));
+
+    const { api, calls } = harness(iam.handlers);
+    expect((await api.ensureTenantDeployRole(MEMBER, WANTED)).policyChanged).toBe(true);
+    expect(writesOf(calls).map((c) => [c.command, c.input])).toEqual([
+      [
+        'AttachRolePolicyCommand',
+        { RoleName: AWS_TENANT_DEPLOY_ROLE, PolicyArn: arnOf('motir-tenant-deploy-compute') },
+      ],
+    ]);
+  });
+
+  it('detaches and deletes a policy under the path the role no longer wants, and only after attaching the rest', async () => {
+    const iam = iamState({ role: true });
+    const retired = policy('motir-tenant-deploy-retired', 'sqs:*');
+    await harness(iam.handlers).api.ensureTenantDeployRole(MEMBER, [WANTED[0]!, retired]);
+    // Two versions, so the non-default one must go before the policy can.
+    await harness(iam.handlers).api.ensureTenantDeployRole(MEMBER, [
+      WANTED[0]!,
+      policy('motir-tenant-deploy-retired', 'sqs:Get*'),
+    ]);
+    // A policy under another path is not the role's to remove.
+    await iam.handlers['CreatePolicyCommand']!(
+      { PolicyName: 'elsewhere', Path: '/other/', PolicyDocument: '{}' },
+      {} as SentCall,
+    );
+
+    const { api, calls } = harness(iam.handlers);
+    expect((await api.ensureTenantDeployRole(MEMBER, WANTED)).policyChanged).toBe(true);
+    expect(writesOf(calls).map((c) => [c.command, c.input['PolicyArn'] ?? null])).toEqual([
+      ['CreatePolicyCommand', null],
+      ['AttachRolePolicyCommand', arnOf('motir-tenant-deploy-network')],
+      ['DetachRolePolicyCommand', arnOf('motir-tenant-deploy-retired')],
+      ['DeletePolicyVersionCommand', arnOf('motir-tenant-deploy-retired')],
+      ['DeletePolicyCommand', arnOf('motir-tenant-deploy-retired')],
+    ]);
+    expect(iam.held()).toEqual(asHeld(WANTED));
+    expect(iam.state.policies.has(arnOf('elsewhere', '/other/'))).toBe(true);
+  });
+
+  it('deletes a stale policy that is not attached, and tolerates one a concurrent pass deleted', async () => {
+    const iam = iamState({ role: true });
+    await iam.handlers['CreatePolicyCommand']!(
+      { PolicyName: 'motir-tenant-deploy-old', Path: PATH, PolicyDocument: '{}' },
+      {} as SentCall,
+    );
+    const deletePolicy = iam.handlers['DeletePolicyCommand']!;
+    iam.handlers['DeletePolicyCommand'] = (input, call) => {
+      deletePolicy(input, call);
+      throw sdkError('NoSuchEntity', 404);
+    };
+    const { api, calls } = harness(iam.handlers);
+    expect((await api.ensureTenantDeployRole(MEMBER, WANTED)).policyChanged).toBe(true);
+    expect(calls.map((c) => c.command)).not.toContain('DetachRolePolicyCommand');
+    expect(iam.state.policies.has(arnOf('motir-tenant-deploy-old'))).toBe(false);
+  });
+
+  it('converges the policy a concurrent pass created between the list and the create', async () => {
+    const iam = iamState({ role: true });
+    const create = iam.handlers['CreatePolicyCommand']!;
+    let raced = false;
+    iam.handlers['CreatePolicyCommand'] = (input, call) => {
+      if (!raced) {
+        raced = true;
+        create({ ...input, PolicyDocument: JSON.stringify(doc('ecs:Old')) }, call);
+        throw sdkError('EntityAlreadyExists', 409);
+      }
+      return create(input, call);
+    };
+    const { api, calls } = harness(iam.handlers);
+    expect((await api.ensureTenantDeployRole(MEMBER, WANTED)).policyChanged).toBe(true);
+    expect(calls.filter((c) => c.command === 'CreatePolicyVersionCommand')).toHaveLength(1);
+    expect(iam.held()).toEqual(asHeld(WANTED));
+  });
+
+  it('rethrows EntityAlreadyExists on a policy create when the relist does not find it', async () => {
+    const iam = iamState({ role: true });
+    iam.handlers['CreatePolicyCommand'] = () => {
+      throw sdkError('EntityAlreadyExists', 409);
+    };
+    const { api } = harness(iam.handlers);
+    await expect(api.ensureTenantDeployRole(MEMBER, WANTED)).rejects.toMatchObject({
+      name: 'AwsManagementApiError',
+      awsCode: 'EntityAlreadyExists',
+    });
+  });
+
+  it('rethrows any other refusal of a policy create', async () => {
+    const iam = iamState({ role: true });
+    iam.handlers['CreatePolicyCommand'] = () => {
+      throw sdkError('LimitExceeded', 409);
+    };
+    const { api } = harness(iam.handlers);
+    await expect(api.ensureTenantDeployRole(MEMBER, WANTED)).rejects.toMatchObject({
+      awsCode: 'LimitExceeded',
+    });
+  });
+
+  it('treats EntityAlreadyExists on the role create as found', async () => {
+    const iam = iamState();
+    iam.handlers['CreateRoleCommand'] = () => {
+      throw sdkError('EntityAlreadyExists', 409);
+    };
+    const { api } = harness(iam.handlers);
+    expect(await api.ensureTenantDeployRole(MEMBER, WANTED)).toEqual({
+      created: false,
+      policyChanged: true,
+    });
+  });
+
+  it('tolerates the inline policy a concurrent pass deleted, and rethrows any other refusal', async () => {
+    const gone = iamState({ role: true, inline: [AWS_TENANT_DEPLOY_ROLE] });
+    gone.handlers['DeleteRolePolicyCommand'] = () => {
+      throw sdkError('NoSuchEntity', 404);
+    };
+    expect(
+      (await harness(gone.handlers).api.ensureTenantDeployRole(MEMBER, WANTED)).policyChanged,
+    ).toBe(true);
+
+    const denied = iamState({ role: true, inline: [AWS_TENANT_DEPLOY_ROLE] });
+    denied.handlers['DeleteRolePolicyCommand'] = () => {
+      throw sdkError('AccessDenied', 403);
+    };
+    await expect(
+      harness(denied.handlers).api.ensureTenantDeployRole(MEMBER, WANTED),
+    ).rejects.toMatchObject({ awsCode: 'AccessDenied' });
+    // The managed set landed before the refusal: the role was never left bare.
+    expect(denied.held()).toEqual(asHeld(WANTED));
+  });
+
+  it('follows every list’s marker', async () => {
+    const iam = iamState({ role: true, inline: ['a', 'b', AWS_TENANT_DEPLOY_ROLE], pageSize: 1 });
+    const { api, calls } = harness(iam.handlers);
+    await api.ensureTenantDeployRole(MEMBER, WANTED);
+    expect(calls.filter((c) => c.command === 'ListRolePoliciesCommand')).toHaveLength(3);
+    expect([...iam.state.inline]).toEqual(['a', 'b']);
+
+    const replay = harness(iam.handlers);
+    await replay.api.ensureTenantDeployRole(MEMBER, WANTED);
+    expect(writesOf(replay.calls)).toEqual([]);
+    expect(replay.calls.filter((c) => c.command === 'ListPoliciesCommand')).toHaveLength(2);
+    expect(
+      replay.calls.filter((c) => c.command === 'ListAttachedRolePoliciesCommand'),
+    ).toHaveLength(2);
+  });
+
+  it('refuses a set IAM would refuse before making any call', async () => {
+    const { api, calls } = harness({});
+    const big = policy('motir-tenant-deploy-big', 'x'.repeat(AWS_MANAGED_POLICY_MAX_CHARS));
+    await expect(api.ensureTenantDeployRole(MEMBER, [big])).rejects.toBeInstanceOf(
+      AwsManagedPolicySetInvalidError,
+    );
+    await expect(
+      api.ensureTenantDeployRole(MEMBER, [WANTED[0]!, WANTED[0]!]),
+    ).rejects.toMatchObject({
+      code: 'AWS_MANAGED_POLICY_SET_INVALID',
+      problems: ['motir-tenant-deploy-compute is named twice'],
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it('rethrows a refusal of the role create or a stale policy delete', async () => {
+    const role = iamState();
+    role.handlers['CreateRoleCommand'] = () => {
+      throw sdkError('AccessDenied', 403);
+    };
+    await expect(
+      harness(role.handlers).api.ensureTenantDeployRole(MEMBER, WANTED),
+    ).rejects.toMatchObject({ awsCode: 'AccessDenied' });
+
+    const stale = iamState({ role: true });
+    await stale.handlers['CreatePolicyCommand']!(
+      { PolicyName: 'motir-tenant-deploy-old', Path: PATH, PolicyDocument: '{}' },
+      {} as SentCall,
+    );
+    stale.handlers['DeletePolicyCommand'] = () => {
+      throw sdkError('DeleteConflict', 409);
+    };
+    await expect(
+      harness(stale.handlers).api.ensureTenantDeployRole(MEMBER, WANTED),
+    ).rejects.toMatchObject({ awsCode: 'DeleteConflict' });
+  });
+
+  it('refuses eleven policies, over the ten a role may hold', async () => {
+    const eleven = Array.from({ length: 11 }, (_, i) =>
+      policy(`motir-tenant-deploy-${i}`, 'ec2:*'),
+    );
+    await expect(harness({}).api.ensureTenantDeployRole(MEMBER, eleven)).rejects.toMatchObject({
+      problems: ['11 policies, over the 10 a role may hold'],
+    });
+  });
+
+  it('reads sparse IAM answers — no list bodies, no marker, no version dates — without failing', async () => {
+    const versions = Array.from({ length: 5 }, (_, i) => ({
+      VersionId: `v${i + 1}`,
+      IsDefaultVersion: true,
+    }));
+    const { api, calls } = harness({
+      GetRoleCommand: () => ({}),
+      // A truncated page with no marker ends the walk rather than looping.
+      ListPoliciesCommand: () => ({ IsTruncated: true }),
+      CreatePolicyCommand: (input) => ({
+        Policy: { Arn: arnOf(String(input['PolicyName'])) },
+      }),
+      ListAttachedRolePoliciesCommand: () => ({}),
+      AttachRolePolicyCommand: () => ({}),
+      ListRolePoliciesCommand: () => ({}),
+    });
+    expect((await api.ensureTenantDeployRole(MEMBER, WANTED)).policyChanged).toBe(true);
+    expect(calls.filter((c) => c.command === 'AttachRolePolicyCommand')).toHaveLength(2);
+
+    const versioned = harness({
+      GetRoleCommand: () => ({}),
+      ListPoliciesCommand: () => ({
+        Policies: WANTED.map((p) => ({
+          PolicyName: p.name,
+          Arn: arnOf(p.name),
+          DefaultVersionId: 'v5',
+        })),
+      }),
+      GetPolicyVersionCommand: () => ({ PolicyVersion: {} }),
+      // Five versions, none of them dated and none deletable: the new version
+      // is still asked for, and IAM's own refusal would be the answer.
+      ListPolicyVersionsCommand: () => ({ Versions: versions }),
+      CreatePolicyVersionCommand: () => ({}),
+      ListAttachedRolePoliciesCommand: () => ({
+        AttachedPolicies: WANTED.map((p) => ({ PolicyArn: arnOf(p.name) })),
+      }),
+      ListRolePoliciesCommand: () => ({ PolicyNames: [] }),
+    });
+    await versioned.api.ensureTenantDeployRole(MEMBER, WANTED);
+    expect(writesOf(versioned.calls).map((c) => c.command)).toEqual([
+      'CreatePolicyVersionCommand',
+      'CreatePolicyVersionCommand',
+    ]);
+
+    const empty = harness({
+      GetRoleCommand: () => ({}),
+      ListPoliciesCommand: () => ({
+        Policies: [
+          {
+            PolicyName: 'motir-tenant-deploy-old',
+            Arn: arnOf('motir-tenant-deploy-old'),
+            DefaultVersionId: 'v1',
+          },
+        ],
+      }),
+      CreatePolicyCommand: (input) => ({ Policy: { Arn: arnOf(String(input['PolicyName'])) } }),
+      ListAttachedRolePoliciesCommand: () => ({}),
+      AttachRolePolicyCommand: () => ({}),
+      ListPolicyVersionsCommand: () => ({}),
+      DeletePolicyCommand: () => ({}),
+      ListRolePoliciesCommand: () => ({}),
+    });
+    await empty.api.ensureTenantDeployRole(MEMBER, WANTED);
+    expect(empty.calls.map((c) => c.command)).toContain('DeletePolicyCommand');
+  });
+
+  it('sorts undated versions as the oldest when it must make room', async () => {
+    const { api, calls } = harness({
+      GetRoleCommand: () => ({}),
+      ListPoliciesCommand: () => ({
+        Policies: [
+          { PolicyName: WANTED[0]!.name, Arn: arnOf(WANTED[0]!.name), DefaultVersionId: 'v5' },
+        ],
+      }),
+      GetPolicyVersionCommand: () => ({
+        PolicyVersion: { Document: encodeURIComponent('{"old":true}') },
+      }),
+      ListPolicyVersionsCommand: () => ({
+        Versions: [
+          { VersionId: 'v3', CreateDate: new Date(3) },
+          { VersionId: 'v1' },
+          { VersionId: 'v4', CreateDate: new Date(4) },
+          { VersionId: 'v2' },
+          { VersionId: 'v5', IsDefaultVersion: true, CreateDate: new Date(5) },
+        ],
+      }),
+      DeletePolicyVersionCommand: () => ({}),
+      CreatePolicyVersionCommand: () => ({}),
+      ListAttachedRolePoliciesCommand: () => ({
+        AttachedPolicies: [{ PolicyArn: arnOf(WANTED[0]!.name) }],
+      }),
+      ListRolePoliciesCommand: () => ({ PolicyNames: [] }),
+    });
+    await api.ensureTenantDeployRole(MEMBER, [WANTED[0]!]);
+    expect(calls.find((c) => c.command === 'DeletePolicyVersionCommand')!.input['VersionId']).toBe(
+      'v1',
+    );
+  });
+
+  it('answers a missing field in an IAM answer as MissingField', async () => {
+    const iam = iamState({ role: true });
+    iam.handlers['ListPoliciesCommand'] = () => ({ Policies: [{ PolicyName: 'x' }] });
+    await expect(
+      harness(iam.handlers).api.ensureTenantDeployRole(MEMBER, WANTED),
+    ).rejects.toMatchObject({ awsCode: 'MissingField:Policy.Arn' });
   });
 });
 

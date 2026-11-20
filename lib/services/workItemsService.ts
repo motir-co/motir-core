@@ -380,7 +380,11 @@ import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { writeDerivedRepoSet, writeRepoRefs } from '@/lib/workItems/repoSetWrites';
 import { recomputeWorkItemFixReason } from './fixReasonService';
-import { reconcileInheritedDeliveriesAfterMove } from './inheritedDeliveryService';
+import {
+  reconcileInheritedDeliveries,
+  reconcileInheritedDeliveriesAfterMove,
+  settleDeliverySetChanges,
+} from './inheritedDeliveryService';
 import { recomputeWorkItemResumeState } from './resumeStateService';
 import {
   fixGroupPointersFor,
@@ -4919,7 +4923,10 @@ export const workItemsService = {
    *     entry — a project-scoped audit log is a separate capability (not in 2.8),
    *     noted for a follow-up.
    *  5. `deleteSubtree` removes the rows in one statement; every other inbound FK
-   *     is `Cascade`/`SetNull` so no orphaned links or rows survive.
+   *     is `Cascade`/`SetNull` so no orphaned links or rows survive. The one
+   *     DERIVED row a cascade cannot reach — a surviving ancestor's inherited
+   *     delivery of a pull request the subtree delivered — is reconciled after it,
+   *     and each card whose delivery set changed is re-asked (MOTIR-11901).
    *
    * Idempotent-safe: a missing id throws `WorkItemNotFoundError` (→ 404), never a
    * raw Prisma error. Returns nothing — the rows are gone, there is no DTO to map.
@@ -4962,8 +4969,26 @@ export const workItemsService = {
         );
       }
 
+      // The pull requests the subtree delivers, read BEFORE the delete: its own
+      // delivery rows go with it by FK cascade, and they are the only way back to
+      // the rows its surviving ancestors INHERITED from it (MOTIR-11901).
+      const deliveredPullRequestIds =
+        await workItemDeliveryRepository.listPullRequestIdsByWorkItems(ids, tx);
+
       // 5. Delete the subtree; links / comments / etc. cascade at the DB layer.
       await workItemRepository.deleteSubtree(ids, tx);
+
+      // 5b. An inherited delivery follows its child (MOTIR-11839) — out of the tree
+      //     too. The cascade took the subtree's explicit rows but not the
+      //     `inherited = true` rows its ancestors carry for the same pull requests,
+      //     so the surviving parent kept merging a pull request nothing under it
+      //     delivers any more. Reconcile them against the tree as it now stands
+      //     (an explicit row, or another descendant's, still justifies one), then
+      //     re-ask every surviving card whose set changed (MOTIR-11901).
+      await settleDeliverySetChanges(
+        await reconcileInheritedDeliveries(deliveredPullRequestIds, tx),
+        tx,
+      );
 
       // 6. The container ROLLUP (MOTIR-2978, §A6). The deleted rows' references
       //    went with them (the join table cascades on `work_item`), so the union

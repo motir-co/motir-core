@@ -8,11 +8,26 @@ import {
   type StackInstance,
 } from '@aws-sdk/client-cloudformation';
 import {
+  AttachRolePolicyCommand,
+  CreatePolicyCommand,
+  CreatePolicyVersionCommand,
   CreateRoleCommand,
+  DeletePolicyCommand,
+  DeletePolicyVersionCommand,
+  DeleteRolePolicyCommand,
+  DetachRolePolicyCommand,
+  GetPolicyVersionCommand,
   GetRoleCommand,
   GetRolePolicyCommand,
   IAMClient,
+  ListAttachedRolePoliciesCommand,
+  ListPoliciesCommand,
+  ListPolicyVersionsCommand,
+  ListRolePoliciesCommand,
   PutRolePolicyCommand,
+  type AttachedPolicy,
+  type Policy,
+  type PolicyVersion,
 } from '@aws-sdk/client-iam';
 import {
   CreateAccountCommand,
@@ -85,6 +100,12 @@ import {
 //     (MOTIR-9459: the fleet's own quota raises)
 //   IAM — https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetRole.html, API_CreateRole.html,
 //     API_GetRolePolicy.html, API_PutRolePolicy.html
+//   IAM, managed policies (MOTIR-11878) — API_ListPolicies.html, API_CreatePolicy.html,
+//     API_GetPolicyVersion.html, API_ListPolicyVersions.html, API_CreatePolicyVersion.html,
+//     API_DeletePolicyVersion.html, API_DeletePolicy.html, API_ListAttachedRolePolicies.html,
+//     API_AttachRolePolicy.html, API_DetachRolePolicy.html, API_ListRolePolicies.html,
+//     API_DeleteRolePolicy.html; the size and count limits —
+//     https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-quotas.html
 //   Organizations, the unit (MOTIR-9844) — API_ListParents.html, API_MoveAccount.html
 //   CloudFormation StackSets (MOTIR-9844) — see `./stackSet.ts`
 //
@@ -117,8 +138,23 @@ export const AWS_RUNNER_IAM_POLICY = 'motir-fleet-runner-ec2';
 export const AWS_INDEX_IAM_ROLE = 'motir-fleet-index';
 
 /** The role an enterprise tenant's deploys run as, in its own account, trusted
- *  only by the management role (MOTIR-9941); its inline policy shares the name. */
+ *  only by the management role (MOTIR-9941). Its grants are customer-managed
+ *  policies under `AWS_TENANT_DEPLOY_POLICY_PATH` (MOTIR-11878); the inline
+ *  policy it carried before, named like the role, is deleted on convergence. */
 export const AWS_TENANT_DEPLOY_ROLE = 'motir-tenant-deploy';
+
+/** The IAM path every managed policy of the tenant deploy role sits under. A
+ *  policy under it that the role no longer wants is detached and deleted. */
+export const AWS_TENANT_DEPLOY_POLICY_PATH = '/motir-tenant-deploy/';
+
+/** IAM's limit on one customer-managed policy document, whitespace excluded. */
+export const AWS_MANAGED_POLICY_MAX_CHARS = 6_144;
+
+/** IAM's default limit on the managed policies attached to one role. */
+export const AWS_ROLE_MANAGED_POLICIES_MAX = 10;
+
+/** IAM keeps at most five versions of a managed policy. */
+const POLICY_VERSIONS_MAX = 5;
 
 /** Organizations, STS and IAM are global; their endpoints answer in us-east-1. */
 const GLOBAL_REGION = 'us-east-1';
@@ -200,6 +236,16 @@ export class AwsAccountCreationRefusedError extends Error {
   ) {
     super(`AWS refused to create the account ${accountName}: ${reason}`);
     this.name = 'AwsAccountCreationRefusedError';
+  }
+}
+
+/** A set of managed policies IAM would refuse — one over its size limit, too
+ *  many for one role, or two of one name — named before any call is made. */
+export class AwsManagedPolicySetInvalidError extends Error {
+  readonly code = 'AWS_MANAGED_POLICY_SET_INVALID';
+  constructor(readonly problems: readonly string[]) {
+    super(`the managed policy set is not one IAM accepts: ${problems.join('; ')}`);
+    this.name = 'AwsManagedPolicySetInvalidError';
   }
 }
 
@@ -325,13 +371,16 @@ export interface AwsManagementApi {
   /** The organizational unit `name` directly under the Organization root,
    *  created only when absent (MOTIR-9940). */
   ensureOrganizationalUnit(name: string): Promise<AwsOrganizationalUnitResult>;
-  /** The tenant deploy role and its inline policy, trusting only the management
-   *  role (MOTIR-9941); `created` when the role was made by this call,
-   *  `policyChanged` when the inline policy was written because it differed
-   *  (MOTIR-10005). */
+  /** The tenant deploy role, trusting only the management role (MOTIR-9941),
+   *  with exactly `policies` attached as customer-managed policies
+   *  (MOTIR-11878): each created, or given a new default version when its
+   *  document differs; any missing one attached; any other policy under the
+   *  role's path detached and deleted; and the legacy inline policy deleted.
+   *  `created` when the role was made by this call, `policyChanged` when any of
+   *  that wrote something. Refuses, before any call, a set IAM would refuse. */
   ensureTenantDeployRole(
     credentials: AwsSessionCredentials,
-    policyDocument: AwsPolicyDocument,
+    policies: readonly AwsManagedPolicy[],
   ): Promise<{ created: boolean; policyChanged: boolean }>;
   /** `key=value` on the account in Organizations, written only when it differs. */
   ensureAccountTag(accountId: string, key: string, value: string): Promise<{ tagged: boolean }>;
@@ -667,6 +716,37 @@ export function createAwsManagementApi(
     return null;
   }
 
+  /** An IAM role trusting the management role, read before it is created;
+   *  `created` when this call made it. */
+  async function ensureRole(
+    iam: AwsSdkClient,
+    role: { roleName: string; maxSessionSeconds: number; tag: string },
+  ): Promise<boolean> {
+    try {
+      await call('iam', iam, new GetRoleCommand({ RoleName: role.roleName }));
+      return false;
+    } catch (err) {
+      if (!iamAbsent(err)) throw err;
+    }
+    try {
+      await call(
+        'iam',
+        iam,
+        new CreateRoleCommand({
+          RoleName: role.roleName,
+          AssumeRolePolicyDocument: JSON.stringify(awsRunnerTrustPolicy(management.roleArn)),
+          MaxSessionDuration: role.maxSessionSeconds,
+          Tags: [{ Key: 'motir-role', Value: role.tag }],
+        }),
+      );
+      return true;
+    } catch (createErr) {
+      // A concurrent pass made it between the read and the create.
+      if (!iamAlreadyExists(createErr)) throw createErr;
+      return false;
+    }
+  }
+
   /** An IAM role trusting the management role, with one inline policy that
    *  converges on `policyDocument`. Each half reads before it writes. */
   async function ensureRoleWithPolicy(
@@ -680,33 +760,7 @@ export function createAwsManagementApi(
     },
   ): Promise<{ roleCreated: boolean; policyPut: boolean }> {
     const iam = client('iam', credentials);
-    let roleCreated = false;
-    try {
-      await call('iam', iam, new GetRoleCommand({ RoleName: role.roleName }));
-    } catch (err) {
-      if (!iamAbsent(err)) throw err;
-      try {
-        await call(
-          'iam',
-          iam,
-          new CreateRoleCommand({
-            RoleName: role.roleName,
-            AssumeRolePolicyDocument: JSON.stringify(awsRunnerTrustPolicy(management.roleArn)),
-            MaxSessionDuration: role.maxSessionSeconds,
-            Tags: [{ Key: 'motir-role', Value: role.tag }],
-          }),
-        );
-        roleCreated = true;
-      } catch (createErr) {
-        // A concurrent pass made it between the read and the create.
-        if (
-          !(createErr instanceof AwsManagementApiError) ||
-          createErr.awsCode !== 'EntityAlreadyExists'
-        ) {
-          throw createErr;
-        }
-      }
-    }
+    const roleCreated = await ensureRole(iam, role);
     const wanted = JSON.stringify(role.policyDocument);
     let current: string | null = null;
     try {
@@ -730,6 +784,270 @@ export function createAwsManagementApi(
       }),
     );
     return { roleCreated, policyPut: true };
+  }
+
+  /** Every customer-managed policy under `path`, by name. */
+  async function localPoliciesUnder(
+    iam: AwsSdkClient,
+    path: string,
+  ): Promise<Map<string, { arn: string; defaultVersionId: string }>> {
+    const found = new Map<string, { arn: string; defaultVersionId: string }>();
+    let marker: string | undefined;
+    do {
+      const page = await call<{ Policies?: Policy[]; IsTruncated?: boolean; Marker?: string }>(
+        'iam',
+        iam,
+        new ListPoliciesCommand({
+          Scope: 'Local',
+          PathPrefix: path,
+          ...(marker ? { Marker: marker } : {}),
+        }),
+      );
+      for (const policy of page.Policies ?? []) {
+        found.set(required(policy.PolicyName, 'Policy.PolicyName'), {
+          arn: required(policy.Arn, 'Policy.Arn'),
+          defaultVersionId: required(policy.DefaultVersionId, 'Policy.DefaultVersionId'),
+        });
+      }
+      marker = page.IsTruncated ? (page.Marker ?? undefined) : undefined;
+    } while (marker);
+    return found;
+  }
+
+  /** The ARNs of the managed policies under `path` attached to the role. */
+  async function attachedUnder(
+    iam: AwsSdkClient,
+    roleName: string,
+    path: string,
+  ): Promise<Set<string>> {
+    const attached = new Set<string>();
+    let marker: string | undefined;
+    do {
+      const page = await call<{
+        AttachedPolicies?: AttachedPolicy[];
+        IsTruncated?: boolean;
+        Marker?: string;
+      }>(
+        'iam',
+        iam,
+        new ListAttachedRolePoliciesCommand({
+          RoleName: roleName,
+          PathPrefix: path,
+          ...(marker ? { Marker: marker } : {}),
+        }),
+      );
+      for (const policy of page.AttachedPolicies ?? []) {
+        attached.add(required(policy.PolicyArn, 'AttachedPolicy.PolicyArn'));
+      }
+      marker = page.IsTruncated ? (page.Marker ?? undefined) : undefined;
+    } while (marker);
+    return attached;
+  }
+
+  /** A managed policy's versions. IAM keeps at most five and lists them in
+   *  one page at that size; the marker is followed regardless. */
+  async function policyVersions(iam: AwsSdkClient, arn: string): Promise<PolicyVersion[]> {
+    const versions: PolicyVersion[] = [];
+    let marker: string | undefined;
+    do {
+      const page = await call<{
+        Versions?: PolicyVersion[];
+        IsTruncated?: boolean;
+        Marker?: string;
+      }>(
+        'iam',
+        iam,
+        new ListPolicyVersionsCommand({ PolicyArn: arn, ...(marker ? { Marker: marker } : {}) }),
+      );
+      versions.push(...(page.Versions ?? []));
+      marker = page.IsTruncated ? (page.Marker ?? undefined) : undefined;
+    } while (marker);
+    return versions;
+  }
+
+  /** Make `document` the policy's default version, when it is not already:
+   *  the oldest non-default version is deleted first when IAM's five are
+   *  taken. Answers whether it wrote. */
+  async function convergePolicyVersion(
+    iam: AwsSdkClient,
+    found: { arn: string; defaultVersionId: string },
+    document: string,
+  ): Promise<boolean> {
+    const answer = await call<{ PolicyVersion?: PolicyVersion }>(
+      'iam',
+      iam,
+      new GetPolicyVersionCommand({ PolicyArn: found.arn, VersionId: found.defaultVersionId }),
+    );
+    const current = answer.PolicyVersion?.Document;
+    if (current && samePolicy(decodeURIComponent(current), document)) return false;
+    const versions = await policyVersions(iam, found.arn);
+    if (versions.length >= POLICY_VERSIONS_MAX) {
+      const oldest = versions
+        .filter((v) => !v.IsDefaultVersion)
+        .sort((a, b) => (a.CreateDate?.getTime() ?? 0) - (b.CreateDate?.getTime() ?? 0))[0];
+      if (oldest) {
+        await call(
+          'iam',
+          iam,
+          new DeletePolicyVersionCommand({
+            PolicyArn: found.arn,
+            VersionId: required(oldest.VersionId, 'PolicyVersion.VersionId'),
+          }),
+        );
+      }
+    }
+    await call(
+      'iam',
+      iam,
+      new CreatePolicyVersionCommand({
+        PolicyArn: found.arn,
+        PolicyDocument: document,
+        SetAsDefault: true,
+      }),
+    );
+    return true;
+  }
+
+  /** Delete a managed policy no role should hold any more: its non-default
+   *  versions first, as IAM requires. */
+  async function deleteManagedPolicy(iam: AwsSdkClient, arn: string): Promise<void> {
+    for (const version of await policyVersions(iam, arn)) {
+      if (version.IsDefaultVersion) continue;
+      await call(
+        'iam',
+        iam,
+        new DeletePolicyVersionCommand({
+          PolicyArn: arn,
+          VersionId: required(version.VersionId, 'PolicyVersion.VersionId'),
+        }),
+      );
+    }
+    try {
+      await call('iam', iam, new DeletePolicyCommand({ PolicyArn: arn }));
+    } catch (err) {
+      // A concurrent pass deleted it first.
+      if (!iamAbsent(err)) throw err;
+    }
+  }
+
+  /**
+   * An IAM role trusting the management role whose grants are exactly
+   * `policies`, as customer-managed policies under `policyPath` (MOTIR-11878).
+   * Every step reads before it writes, and the order leaves no gap in what the
+   * role may do: each wanted policy is converged and attached BEFORE anything
+   * is taken away — a stale policy under the path detached and deleted, then
+   * the legacy inline policy deleted. A replay writes nothing.
+   */
+  async function ensureRoleWithManagedPolicies(
+    credentials: AwsSessionCredentials,
+    role: {
+      roleName: string;
+      policyPath: string;
+      policies: readonly AwsManagedPolicy[];
+      legacyInlinePolicyName: string;
+      maxSessionSeconds: number;
+      tag: string;
+    },
+  ): Promise<{ roleCreated: boolean; changed: boolean }> {
+    const problems = managedPolicySetProblems(role.policies);
+    if (problems.length > 0) throw new AwsManagedPolicySetInvalidError(problems);
+    const iam = client('iam', credentials);
+    const roleCreated = await ensureRole(iam, role);
+    let changed = false;
+
+    let existing = await localPoliciesUnder(iam, role.policyPath);
+    const wantedArns = new Set<string>();
+    for (const policy of role.policies) {
+      const document = JSON.stringify(policy.document);
+      let found = existing.get(policy.name);
+      if (!found) {
+        try {
+          const created = await call<{ Policy?: Policy }>(
+            'iam',
+            iam,
+            new CreatePolicyCommand({
+              PolicyName: policy.name,
+              Path: role.policyPath,
+              PolicyDocument: document,
+              Description: policy.description,
+              Tags: [{ Key: 'motir-role', Value: role.tag }],
+            }),
+          );
+          wantedArns.add(required(created.Policy?.Arn, 'Policy.Arn'));
+          changed = true;
+          continue;
+        } catch (err) {
+          // A concurrent pass created it between the list and the create:
+          // converge the one it made.
+          if (!iamAlreadyExists(err)) throw err;
+          existing = await localPoliciesUnder(iam, role.policyPath);
+          found = existing.get(policy.name);
+          if (!found) throw err;
+        }
+      }
+      wantedArns.add(found.arn);
+      if (await convergePolicyVersion(iam, found, document)) changed = true;
+    }
+
+    const attached = await attachedUnder(iam, role.roleName, role.policyPath);
+    for (const arn of wantedArns) {
+      if (attached.has(arn)) continue;
+      await call(
+        'iam',
+        iam,
+        new AttachRolePolicyCommand({ RoleName: role.roleName, PolicyArn: arn }),
+      );
+      changed = true;
+    }
+
+    const wantedNames = new Set(role.policies.map((p) => p.name));
+    for (const [name, stale] of existing) {
+      if (wantedNames.has(name)) continue;
+      if (attached.has(stale.arn)) {
+        await call(
+          'iam',
+          iam,
+          new DetachRolePolicyCommand({ RoleName: role.roleName, PolicyArn: stale.arn }),
+        );
+      }
+      await deleteManagedPolicy(iam, stale.arn);
+      changed = true;
+    }
+
+    const inline = await inlinePolicyNames(iam, role.roleName);
+    if (inline.includes(role.legacyInlinePolicyName)) {
+      try {
+        await call(
+          'iam',
+          iam,
+          new DeleteRolePolicyCommand({
+            RoleName: role.roleName,
+            PolicyName: role.legacyInlinePolicyName,
+          }),
+        );
+        changed = true;
+      } catch (err) {
+        // A concurrent pass deleted it first.
+        if (!iamAbsent(err)) throw err;
+      }
+    }
+    return { roleCreated, changed };
+  }
+
+  /** The names of the role's inline policies. */
+  async function inlinePolicyNames(iam: AwsSdkClient, roleName: string): Promise<string[]> {
+    const names: string[] = [];
+    let marker: string | undefined;
+    do {
+      const page = await call<{ PolicyNames?: string[]; IsTruncated?: boolean; Marker?: string }>(
+        'iam',
+        iam,
+        new ListRolePoliciesCommand({ RoleName: roleName, ...(marker ? { Marker: marker } : {}) }),
+      );
+      names.push(...(page.PolicyNames ?? []));
+      marker = page.IsTruncated ? (page.Marker ?? undefined) : undefined;
+    } while (marker);
+    return names;
   }
 
   /** A quota's applied value; an account whose quota was never changed may have
@@ -931,15 +1249,16 @@ export function createAwsManagementApi(
       }
     },
 
-    async ensureTenantDeployRole(credentials, policyDocument) {
-      const { roleCreated, policyPut } = await ensureRoleWithPolicy(credentials, {
+    async ensureTenantDeployRole(credentials, policies) {
+      const { roleCreated, changed } = await ensureRoleWithManagedPolicies(credentials, {
         roleName: AWS_TENANT_DEPLOY_ROLE,
-        policyName: AWS_TENANT_DEPLOY_ROLE,
-        policyDocument,
+        policyPath: AWS_TENANT_DEPLOY_POLICY_PATH,
+        policies,
+        legacyInlinePolicyName: AWS_TENANT_DEPLOY_ROLE,
         maxSessionSeconds: TENANT_DEPLOY_SESSION_SECONDS,
         tag: 'tenant-deploy',
       });
-      return { created: roleCreated, policyChanged: policyPut };
+      return { created: roleCreated, policyChanged: changed };
     },
 
     async ensureAccountTag(accountId, key, value) {
@@ -1183,6 +1502,10 @@ export function awsRunnerTrustPolicy(trustedRoleArn: string): AwsPolicyDocument 
   };
 }
 
+function iamAlreadyExists(err: unknown): boolean {
+  return err instanceof AwsManagementApiError && err.awsCode === 'EntityAlreadyExists';
+}
+
 function samePolicy(a: string, b: string): boolean {
   try {
     return JSON.stringify(JSON.parse(a)) === JSON.stringify(JSON.parse(b));
@@ -1195,6 +1518,38 @@ function samePolicy(a: string, b: string): boolean {
 export interface AwsPolicyDocument {
   Version: '2012-10-17';
   Statement: Array<Record<string, unknown>>;
+}
+
+/** A customer-managed policy a role should carry (MOTIR-11878). */
+export interface AwsManagedPolicy {
+  /** The policy's name, unique in the account. */
+  name: string;
+  /** What it is for, stored on the policy at creation. */
+  description: string;
+  document: AwsPolicyDocument;
+}
+
+/** Why IAM would refuse `policies` as one role's managed set: a document over
+ *  `AWS_MANAGED_POLICY_MAX_CHARS` (measured as sent, with no whitespace), more
+ *  than `AWS_ROLE_MANAGED_POLICIES_MAX` policies, or a name used twice. Empty
+ *  when it would accept them. */
+export function managedPolicySetProblems(policies: readonly AwsManagedPolicy[]): string[] {
+  const problems: string[] = [];
+  if (policies.length > AWS_ROLE_MANAGED_POLICIES_MAX) {
+    problems.push(
+      `${policies.length} policies, over the ${AWS_ROLE_MANAGED_POLICIES_MAX} a role may hold`,
+    );
+  }
+  const seen = new Set<string>();
+  for (const policy of policies) {
+    if (seen.has(policy.name)) problems.push(`${policy.name} is named twice`);
+    seen.add(policy.name);
+    const size = JSON.stringify(policy.document).length;
+    if (size > AWS_MANAGED_POLICY_MAX_CHARS) {
+      problems.push(`${policy.name} is ${size} characters, over ${AWS_MANAGED_POLICY_MAX_CHARS}`);
+    }
+  }
+  return problems;
 }
 
 /**

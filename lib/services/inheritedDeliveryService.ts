@@ -9,7 +9,8 @@ import { withdrawPullRequestApprovalGateOnSetChange } from './pullRequestApprova
 import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { recomputeWorkItemFixReason } from './fixReasonService';
 
-// INHERITED DELIVERIES ARE DERIVED, SO THEY ARE RECONCILED (Bugs MOTIR-11835 · MOTIR-11839).
+// INHERITED DELIVERIES ARE DERIVED, SO THEY ARE RECONCILED (Bugs MOTIR-11835 · MOTIR-11839 ·
+// MOTIR-11901).
 //
 // With a project's "Complete children when a parent is done"
 // (`autoCompleteChildrenOnParentDone`) on, closing a parent closes its children — which is
@@ -28,6 +29,8 @@ import { recomputeWorkItemFixReason } from './fixReasonService';
 //
 //   · a link and an unlink (`githubPullRequestService`) — the explicit rows changed;
 //   · a re-parent, by any door (`workItemsService`, a plan's `modify`) — the tree changed;
+//   · a delete (`workItemsService.deleteWorkItem`) — the tree lost the card, and the FK
+//     cascade took its explicit rows but not what its ancestors inherited from them;
 //   · the switch itself (`projectStatusAutomationService`) — the rule changed.
 //
 // ⚠️ ONLY `inherited` ROWS ARE EVER REMOVED. A row someone linked to an ancestor explicitly
