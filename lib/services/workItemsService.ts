@@ -383,6 +383,7 @@ import { recomputeWorkItemFixReason } from './fixReasonService';
 import {
   reconcileInheritedDeliveries,
   reconcileInheritedDeliveriesAfterMove,
+  reconcileInheritedDeliveriesForSubtree,
   settleDeliverySetChanges,
 } from './inheritedDeliveryService';
 import { recomputeWorkItemResumeState } from './resumeStateService';
@@ -4807,6 +4808,11 @@ export const workItemsService = {
       // withdrawn — gates first, in the decide door's lock order (MOTIR-7109).
       await withdrawQuestionsOnArchive(id, tx);
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
+      // The downward cascade never reaches an archived card, so no ancestor inherits a pull
+      // request from it, or from anything under it, any more; each ancestor whose set
+      // shrank is re-asked over what is left. The archived card itself is asked nothing
+      // (MOTIR-11917). After the archive write, so the reconcile reads it archived.
+      await reconcileInheritedDeliveriesForSubtree(id, tx);
       // An archived card is waiting on no repair (MOTIR-6602), nor on a gate (MOTIR-7707).
       await recomputeWorkItemFixReason(id, tx);
       await recomputeWorkItemResumeState(id, tx);
@@ -4864,6 +4870,9 @@ export const workItemsService = {
 
       const wasArchivedAt = current.archivedAt?.toISOString() ?? null;
       const row = await workItemRepository.unarchive(id, tx); // throws WorkItemNotFoundError if absent
+      // The restore puts the card back in the cascade's reach, so its ancestors inherit its
+      // pull requests again and are re-asked over the larger set (MOTIR-11917).
+      await reconcileInheritedDeliveriesForSubtree(id, tx);
       // …and a restored one may be again (MOTIR-6602, MOTIR-7707).
       await recomputeWorkItemFixReason(id, tx);
       await recomputeWorkItemResumeState(id, tx);
