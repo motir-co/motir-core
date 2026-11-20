@@ -18,7 +18,9 @@ import type { RawPreplanStateResponse } from '@/lib/ai/types';
 // linked to in its own right is never touched.
 //
 // Deleting the child is one more such input (Bug MOTIR-11901): the FK cascade took the
-// child's own row, but not the row its parent inherited from it.
+// child's own row, but not the row its parent inherited from it. Archiving it is another
+// (Bug MOTIR-11917): the downward cascade never reaches an archived child, so its parent
+// must not merge its pull request.
 
 vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 vi.mock('@/lib/ai/motirAiClient', () => ({ getPreplanState: vi.fn() }));
@@ -494,6 +496,42 @@ describe('each removal re-asks the parent over its new set (AC 3)', () => {
     ]);
   });
 
+  it('on an archive: the question over both is withdrawn as `set_changed` and asked again over #30 alone, and the archived child is asked nothing (Bug MOTIR-11917)', async () => {
+    const { s, parent, child, before } = await askedOverBoth('11917-gate-archive@example.com');
+
+    await workItemsService.archiveWorkItem(child.id, s.ctx);
+
+    expect(await deliveries(parent.id)).toEqual(['#30']);
+    const gates = await mergeGatesOf(parent.id);
+    expect(gates.find((g) => g.id === before.id)).toMatchObject({
+      state: 'superseded',
+      supersededCause: 'set_changed',
+    });
+    expect(gates.filter((g) => g.state === 'awaiting').map((g) => g.subjectVersion)).toEqual([
+      'moooon/acme#30@sha-story',
+    ]);
+    // #31 is no longer an ancestor's, yet the child is archived: no question about it.
+    expect(await mergeGatesOf(child.id)).toEqual([]);
+  });
+
+  it('on an unarchive: the story is asked over both again, and the child still nothing (Bug MOTIR-11917)', async () => {
+    const { s, parent, child } = await askedOverBoth('11917-gate-unarchive@example.com');
+    await workItemsService.archiveWorkItem(child.id, s.ctx);
+    const [alone] = await awaitingOf(parent.id);
+
+    await workItemsService.unarchiveWorkItem(child.id, s.ctx);
+
+    expect(await deliveries(parent.id)).toEqual(['#30', '#31 inherited']);
+    expect((await mergeGatesOf(parent.id)).find((g) => g.id === alone!.id)).toMatchObject({
+      state: 'superseded',
+      supersededCause: 'set_changed',
+    });
+    const [again] = await awaitingOf(parent.id);
+    expect(again!.subjectVersion).toContain('#30@sha-story');
+    expect(again!.subjectVersion).toContain('#31@sha-child');
+    expect(await mergeGatesOf(child.id)).toEqual([]);
+  });
+
   it("unlinking the story's inherited row while the child delivers it leaves the question alone", async () => {
     const { s, parent, before } = await askedOverBoth('11839-gate-noop@example.com');
 
@@ -607,6 +645,119 @@ describe('deleting a child (Bug MOTIR-11901)', () => {
       ['#65'],
       ['#65 inherited'],
     ]);
+  });
+});
+
+describe('archiving a child (Bug MOTIR-11917)', () => {
+  // The downward cascade never reaches an archived child (`findChildren` filters
+  // `archivedAt`), so completing the story would leave it open: the story inherits nothing
+  // from it while it is archived, and inherits it again on the restore.
+  it('reproduction: the story stops delivering the pull request its archived child delivers, and delivers it again on the restore', async () => {
+    const s = await makeScenario('11917-archive@example.com');
+    const {
+      parent,
+      kids: [child],
+    } = await story(s);
+    await link(child!.identifier, 70);
+    expect(await deliveries(parent.id)).toEqual(['#70 inherited']);
+
+    await workItemsService.archiveWorkItem(child!.id, s.ctx);
+
+    expect(await deliveries(child!.id)).toEqual(['#70']);
+    expect(await deliveries(parent.id)).toEqual([]);
+
+    await workItemsService.unarchiveWorkItem(child!.id, s.ctx);
+
+    expect(await deliveries(child!.id)).toEqual(['#70']);
+    expect(await deliveries(parent.id)).toEqual(['#70 inherited']);
+  });
+
+  it('keeps a delivery the story was linked to explicitly', async () => {
+    const s = await makeScenario('11917-explicit@example.com');
+    const {
+      parent,
+      kids: [child],
+    } = await story(s);
+    await link(child!.identifier, 71);
+    await link(parent.identifier, 71);
+
+    await workItemsService.archiveWorkItem(child!.id, s.ctx);
+
+    expect(await deliveries(parent.id)).toEqual(['#71']);
+  });
+
+  it('keeps it while a live child still delivers the same pull request', async () => {
+    const s = await makeScenario('11917-sibling@example.com');
+    const {
+      parent,
+      kids: [a, b],
+    } = await story(s, 'The story', 2);
+    await link(a!.identifier, 72);
+    await link(b!.identifier, 72);
+
+    await workItemsService.archiveWorkItem(a!.id, s.ctx);
+    expect(await deliveries(parent.id)).toEqual(['#72 inherited']);
+
+    await workItemsService.archiveWorkItem(b!.id, s.ctx);
+    expect(await deliveries(parent.id)).toEqual([]);
+  });
+
+  it('archiving a task retracts what it and its story inherited from the subtask under it, and the restore writes both back', async () => {
+    const s = await makeScenario('11917-subtree@example.com');
+    const epic = await create(s, 'epic', 'The epic');
+    const top = await create(s, 'story', 'The story', epic.id);
+    const parked = await create(s, 'task', 'The archived task', top.id);
+    const sub = await create(s, 'subtask', 'Its subtask', parked.id);
+    const kept = await create(s, 'task', 'The kept task', top.id);
+    await link(sub.identifier, 73);
+    await link(kept.identifier, 74);
+    expect(await deliveries(top.id)).toEqual(['#73 inherited', '#74 inherited']);
+
+    await workItemsService.archiveWorkItem(parked.id, s.ctx);
+
+    expect(await deliveries(sub.id)).toEqual(['#73']);
+    expect(await deliveries(parked.id)).toEqual([]);
+    expect(await deliveries(top.id)).toEqual(['#74 inherited']);
+
+    await workItemsService.unarchiveWorkItem(parked.id, s.ctx);
+
+    expect(await deliveries(parked.id)).toEqual(['#73 inherited']);
+    expect(await deliveries(top.id)).toEqual(['#73 inherited', '#74 inherited']);
+    expect(await deliveries(epic.id)).toEqual([]);
+  });
+
+  it('a link made while the child is archived writes no inherited row', async () => {
+    const s = await makeScenario('11917-link-archived@example.com');
+    const {
+      parent,
+      kids: [child],
+    } = await story(s);
+    await workItemsService.archiveWorkItem(child!.id, s.ctx);
+
+    await link(child!.identifier, 75);
+
+    expect(await deliveries(child!.id)).toEqual(['#75']);
+    expect(await deliveries(parent.id)).toEqual([]);
+  });
+
+  it('archiving a card that delivers nothing, or a top-level one, leaves every other row alone', async () => {
+    const s = await makeScenario('11917-noop@example.com');
+    const {
+      parent,
+      kids: [child, quiet],
+    } = await story(s, 'The story', 2);
+    const lone = await create(s, 'task', 'A lone task');
+    await link(child!.identifier, 76);
+    await link(lone.identifier, 77);
+
+    await workItemsService.archiveWorkItem(quiet!.id, s.ctx);
+    await workItemsService.archiveWorkItem(lone.id, s.ctx);
+
+    expect([
+      await deliveries(child!.id),
+      await deliveries(parent.id),
+      await deliveries(lone.id),
+    ]).toEqual([['#76'], ['#76 inherited'], ['#77']]);
   });
 });
 
