@@ -385,29 +385,27 @@ describe('moving a child to another parent (AC 2)', () => {
 
 describe('each removal re-asks the parent over its new set (AC 3)', () => {
   /** A story with its own green pull request #30 and a child's green #31, asked once over both. */
-  async function askedOverBoth(email: string) {
+  async function askedOverBoth(email: string, childKind: 'subtask' | 'task' = 'subtask') {
     const s = await makeScenario(email);
-    const {
-      parent,
-      kids: [child],
-    } = await story(s);
-    for (const item of [parent, child!]) {
+    const parent = await create(s, 'story', 'The story');
+    const child = await create(s, childKind, 'The child', parent.id);
+    for (const item of [parent, child]) {
       await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
     }
     const storyRef = `story/${parent.identifier}`;
-    const childRef = `subtask/${child!.identifier}`;
+    const childRef = `subtask/${child.identifier}`;
     await link(parent.identifier, 30, storyRef);
-    await link(child!.identifier, 31, childRef);
+    await link(child.identifier, 31, childRef);
     await pullRequestEvent(30, storyRef);
     await pullRequestEvent(31, childRef);
-    await workItemsService.updateStatus(child!.id, 'implemented', s.ctx);
+    await workItemsService.updateStatus(child.id, 'implemented', s.ctx);
     await workItemsService.updateStatus(parent.id, 'implemented', s.ctx);
     await ci('sha-story', 30);
     await ci('sha-child', 31);
     const [before] = await awaitingOf(parent.id);
     expect(before!.subjectVersion).toContain('#30@sha-story');
     expect(before!.subjectVersion).toContain('#31@sha-child');
-    return { s, parent, child: child!, before: before! };
+    return { s, parent, child: child, before: before! };
   }
 
   it('on an unlink: the question over both is withdrawn as `set_changed` and asked again over #30 alone', async () => {
@@ -442,6 +440,49 @@ describe('each removal re-asks the parent over its new set (AC 3)', () => {
     expect(await deliveries(to.id)).toEqual(['#31 inherited']);
     // The child is still asked nothing: its pull request is its new story's.
     expect(await mergeGatesOf(child.id)).toEqual([]);
+  });
+
+  for (const [how, moveOut] of [
+    [
+      'moved to the top level',
+      (s: Scenario, id: string) => workItemsService.moveWorkItem(id, { newParentId: null }, s.ctx),
+    ],
+    [
+      'filed into a folder',
+      async (s: Scenario, id: string) => {
+        const folder = await foldersService.createFolder(
+          { projectId: s.project.id, parentFolderId: null, name: 'Parked' },
+          s.ctx,
+        );
+        return workItemsService.fileWorkItem(id, { folderId: folder.id }, s.ctx);
+      },
+    ],
+  ] as const) {
+    it(`on a child ${how}: the story is re-asked over #30, and the child is asked about its own #31`, async () => {
+      const { s, parent, child } = await askedOverBoth(
+        `11839-gate-out-${how.length}@example.com`,
+        'task',
+      );
+
+      await moveOut(s, child.id);
+
+      expect((await awaitingOf(parent.id)).map((g) => g.subjectVersion)).toEqual([
+        'moooon/acme#30@sha-story',
+      ]);
+      expect((await awaitingOf(child.id)).map((g) => g.subjectVersion)).toEqual([
+        'moooon/acme#31@sha-child',
+      ]);
+    });
+  }
+
+  it("unlinking the story's inherited row while the child delivers it leaves the question alone", async () => {
+    const { s, parent, before } = await askedOverBoth('11839-gate-noop@example.com');
+
+    expect(await unlink(s, parent, 31)).toMatchObject({ removed: false });
+
+    expect(await mergeGatesOf(parent.id)).toEqual([
+      expect.objectContaining({ id: before.id, state: 'awaiting' }),
+    ]);
   });
 
   it('on the switch turned off: the story is re-asked over #30, and the child is asked about its own #31', async () => {

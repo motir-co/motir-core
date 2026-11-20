@@ -715,13 +715,9 @@ export const githubPullRequestService = {
       // The ancestors that inherited the pull request from this link lose it too,
       // and keep it only where it is still theirs — an explicit link of their
       // own, or another descendant still delivering it (MOTIR-11839).
-      if (count > 0) {
-        await settleDeliverySetChanges(
-          [workItemId, ...(await reconcileInheritedDeliveries([pullRequestId], tx))],
-          tx,
-        );
-      }
-      return { removed: count > 0 && !(await stillDelivers(workItemId, pullRequestId, tx)) };
+      return {
+        removed: count > 0 && (await settleUnlink(workItemId, pullRequestId, tx)),
+      };
     }).then(async (result) => {
       // The mirror of the link arm (MOTIR-3675): removing the last delivery makes
       // the pull request unlinked again, and the check has to say so. Post-commit
@@ -803,14 +799,8 @@ export const githubPullRequestService = {
       // recompute (MOTIR-5470) — all four link doors change the delivery set, so
       // all four re-decide the verdict folded over it.
       // The inherited rows follow, as on the sibling arm (MOTIR-11839).
-      if (count > 0) {
-        await settleDeliverySetChanges(
-          [input.workItemId, ...(await reconcileInheritedDeliveries([pr.id], tx))],
-          tx,
-        );
-      }
       return {
-        removed: count > 0 && !(await stillDelivers(input.workItemId, pr.id, tx)),
+        removed: count > 0 && (await settleUnlink(input.workItemId, pr.id, tx)),
         pullRequestId: pr.id,
       };
     }).then(async (result) => {
@@ -936,16 +926,23 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 /**
- * Whether the card still delivers the pull request after an unlink — true only when the
- * removed row was an INHERITED one the reconcile wrote straight back, because a
- * descendant still delivers it (MOTIR-11839). The unlink then reports `removed: false`
- * rather than a removal the card does not show.
+ * After an unlink removed a row: reconcile the inherited rows of that pull request and
+ * run the set-change follow-up on every card whose set changed, the unlinked card
+ * first. Answers whether the card really stopped delivering it.
+ *
+ * The removed row comes straight back when it was an INHERITED one a descendant still
+ * justifies (MOTIR-11839). Nothing's set changed then, so nothing is settled — settling
+ * would only withdraw and re-ask an unchanged question — and the unlink answers
+ * `removed: false` rather than a removal the card does not show.
  */
-async function stillDelivers(
+async function settleUnlink(
   workItemId: string,
   pullRequestId: string,
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
+  const changed = await reconcileInheritedDeliveries([pullRequestId], tx);
   const rows = await workItemDeliveryRepository.listByPullRequest(pullRequestId, tx);
-  return rows.some((row) => row.workItemId === workItemId);
+  if (rows.some((row) => row.workItemId === workItemId)) return false;
+  await settleDeliverySetChanges([workItemId, ...changed], tx);
+  return true;
 }

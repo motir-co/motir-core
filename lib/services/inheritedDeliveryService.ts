@@ -165,12 +165,26 @@ export async function reconcileInheritedDeliveriesAfterMove(
   movedItemId: string,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  const subtree = await workItemRepository.findSubtree(movedItemId, tx);
+  const subtreeIds = new Set(
+    (await workItemRepository.findSubtree(movedItemId, tx)).map((row) => row.id),
+  );
   const pullRequestIds = await workItemDeliveryRepository.listPullRequestIdsByWorkItems(
-    subtree.map((row) => row.id),
+    [...subtreeIds],
     tx,
   );
-  await settleDeliverySetChanges(await reconcileInheritedDeliveries(pullRequestIds, tx), tx);
+  const changed = await reconcileInheritedDeliveries(pullRequestIds, tx);
+  if (changed.length === 0) return;
+  // The reconcile reads the tree AFTER the move, so it cannot see that a card in the
+  // moved subtree USED to sit under an ancestor whose set just changed: a child moved to
+  // the top level has no ancestors left to compare. Its own gate set changed all the same
+  // (the pull request the old parent covered is its own again), so every card in the
+  // subtree that delivers one of these pull requests is settled too.
+  const subtreeHolders = (
+    await workItemDeliveryRepository.listInheritanceRowsByPullRequests(pullRequestIds, tx)
+  )
+    .map((row) => row.workItemId)
+    .filter((id) => subtreeIds.has(id));
+  await settleDeliverySetChanges([...changed, ...subtreeHolders], tx);
 }
 
 /**
