@@ -5,9 +5,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import { withdrawPullRequestApprovalGateOnSetChange } from './pullRequestApprovalGates';
-import { recomputeWorkItemCiState } from './deliveryVerdict';
-import { recomputeWorkItemFixReason } from './fixReasonService';
+import { reconcileInheritedDeliveries, settleDeliverySetChanges } from './inheritedDeliveryService';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
 import { resyncLinkedPullRequest } from './changeRequestStatusSync';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -364,11 +362,9 @@ export const githubPullRequestService = {
       if (adoption === 'adopted') deferAdoptedRepoRouting(item.projectId, pr.repoId, ctx);
       // The parent's merge set takes in the child's pull request when closing the
       // parent closes the child (MOTIR-11835).
-      const ancestorsAdded = await inheritDeliveryToAncestors(
-        item,
-        { githubPullRequestId: pullRequestId, repoId: pr.repoId },
-        tx,
-      );
+      // A reconcile rather than an append, so a stale inherited row on this pull
+      // request is corrected by the same rule that writes a new one (MOTIR-11839).
+      const inheritanceChanged = await reconcileInheritedDeliveries([pullRequestId], tx);
       // A NEW member changes the set an approve-and-merge gate asked about, and
       // the set the card's own CI verdict is folded over, so the verdict is
       // recomputed in the same transaction (MOTIR-5470). This is defect 4 of the
@@ -378,7 +374,10 @@ export const githubPullRequestService = {
       // pull request whose checks have already finished is never. The link is
       // exactly the moment the answer changes. The same set is what the card's
       // to-fix answer reads (MOTIR-6602).
-      await settleDeliverySetChange(currentItemId, !alreadyDelivered, ancestorsAdded, tx);
+      await settleDeliverySetChanges(
+        [...(alreadyDelivered ? [] : [currentItemId]), ...inheritanceChanged],
+        tx,
+      );
       return toLinkedPullRequestDto(pr);
     }).then(async (dto) => {
       // MOTIR-3675 — turn the unlinked-pull-request check GREEN, now rather than
@@ -605,18 +604,17 @@ export const githubPullRequestService = {
       if (adoption === 'adopted') deferAdoptedRepoRouting(item.projectId, repo.id, ctx);
       // The same inheritance the sibling arm makes (MOTIR-11835) — and this is the
       // arm a child's run calls, so the one where it matters.
-      const ancestorsAdded = await inheritDeliveryToAncestors(
-        item,
-        { githubPullRequestId: prId, repoId: repo.id },
-        tx,
-      );
+      const inheritanceChanged = await reconcileInheritedDeliveries([prId], tx);
       // The AGENT's link door owes the withdrawal and the recompute exactly as the
       // picker's does (MOTIR-5470). It is the arm that matters MORE, not less:
       // this is the call a run makes seconds after `gh pr create`, so it is the
       // one that decides what a card's badge says for the whole life of that pull
       // request — and the one that can write the FIRST delivery a card has ever
       // had.
-      await settleDeliverySetChange(input.workItemId, !alreadyDelivered, ancestorsAdded, tx);
+      await settleDeliverySetChanges(
+        [...(alreadyDelivered ? [] : [input.workItemId]), ...inheritanceChanged],
+        tx,
+      );
 
       return {
         link: toLinkedPullRequestDto(updated),
@@ -658,8 +656,16 @@ export const githubPullRequestService = {
    * The pull-request MIRROR row. It holds no association to remove — the scalar
    * that used to sit beside this table was dropped by MOTIR-3757 — so this door
    * deletes one delivery row and leaves `github_pull_request` exactly as the
-   * webhook last wrote it. There is no provenance flag left to reason about
-   * either: MOTIR-4894 retired the one an unlink used to leave standing.
+   * webhook last wrote it.
+   *
+   * ── What it DOES reach beyond the one row ─────────────────────────────────
+   * The rows this link made the card's ancestors inherit (`inherited`, MOTIR-11835).
+   * They are reconciled, not deleted blind: an ancestor keeps the pull request
+   * where it is still its own — linked explicitly, or delivered by another
+   * descendant — and loses it otherwise (MOTIR-11839). With "Complete children
+   * when a parent is done" on, unlinking an ancestor's INHERITED row while a
+   * descendant still delivers the pull request therefore leaves it standing: the
+   * rule writes it back, because that parent's merge still closes that child.
    *
    * Returns whether a row was actually removed, so a caller can say "nothing to
    * unlink" rather than reporting a success that did nothing.
@@ -698,18 +704,24 @@ export const githubPullRequestService = {
       // The row left the card, so the card's merge question about it goes too, in
       // the same transaction: a member left the set the approve-and-merge gate asked
       // about (MOTIR-5482). The per-pull-request gate retired with MOTIR-5611.
+      //
+      // And the card's CI verdict is folded over that same set, so removing a
+      // member re-decides it (MOTIR-5470). This direction is the one that
+      // strands a card visibly: retracting a mis-linked RED pull request left
+      // the card reading `failing` with nothing red left on it, and no event
+      // was ever coming to correct it — the pull request it would have come
+      // from is the one that just stopped delivering this card.
+      //
+      // The ancestors that inherited the pull request from this link lose it too,
+      // and keep it only where it is still theirs — an explicit link of their
+      // own, or another descendant still delivering it (MOTIR-11839).
       if (count > 0) {
-        await withdrawPullRequestApprovalGateOnSetChange(workItemId, tx);
-        // And the card's CI verdict is folded over that same set, so removing a
-        // member re-decides it (MOTIR-5470). This direction is the one that
-        // strands a card visibly: retracting a mis-linked RED pull request left
-        // the card reading `failing` with nothing red left on it, and no event
-        // was ever coming to correct it — the pull request it would have come
-        // from is the one that just stopped delivering this card.
-        await recomputeWorkItemCiState(workItemId, tx);
-        await recomputeWorkItemFixReason(workItemId, tx);
+        await settleDeliverySetChanges(
+          [workItemId, ...(await reconcileInheritedDeliveries([pullRequestId], tx))],
+          tx,
+        );
       }
-      return { removed: count > 0 };
+      return { removed: count > 0 && !(await stillDelivers(workItemId, pullRequestId, tx)) };
     }).then(async (result) => {
       // The mirror of the link arm (MOTIR-3675): removing the last delivery makes
       // the pull request unlinked again, and the check has to say so. Post-commit
@@ -790,12 +802,17 @@ export const githubPullRequestService = {
       // The same withdrawal the sibling arm makes (MOTIR-5482), and the same
       // recompute (MOTIR-5470) — all four link doors change the delivery set, so
       // all four re-decide the verdict folded over it.
+      // The inherited rows follow, as on the sibling arm (MOTIR-11839).
       if (count > 0) {
-        await withdrawPullRequestApprovalGateOnSetChange(input.workItemId, tx);
-        await recomputeWorkItemCiState(input.workItemId, tx);
-        await recomputeWorkItemFixReason(input.workItemId, tx);
+        await settleDeliverySetChanges(
+          [input.workItemId, ...(await reconcileInheritedDeliveries([pr.id], tx))],
+          tx,
+        );
       }
-      return { removed: count > 0, pullRequestId: pr.id };
+      return {
+        removed: count > 0 && !(await stillDelivers(input.workItemId, pr.id, tx)),
+        pullRequestId: pr.id,
+      };
     }).then(async (result) => {
       // The same post-commit refresh both other arms do (MOTIR-3675): removing the
       // LAST delivery makes the pull request unlinked again and its check has to
@@ -919,95 +936,16 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 /**
- * THE PARENT'S MERGE SET TAKES IN ITS CHILDREN'S PULL REQUESTS (MOTIR-11835).
- *
- * With the project's "Complete children when a parent is done"
- * (`autoCompleteChildrenOnParentDone`) on, closing a parent closes its children —
- * which is only true to the code when every child's pull request merged with
- * the parent. A child shipped in another repository is linked to its OWN pull
- * request, and nothing put that pull request in the parent's set: approving the
- * story merged only the story's, the cascade closed the child, and the child's
- * own approve-and-merge question was left awaiting on a Done card whose workflow
- * has no way back to Approved.
- *
- * So a link writes the same delivery on every ancestor up to (not including) the
- * epic — whether or not that ancestor has a pull request of its own. Since
- * MOTIR-11624 a child delivery its ancestor also delivers owes no merge question
- * on the child (`gateSetFor`), so the parent's ONE question covers every child's
- * pull request and approving it merges them before the cascade closes the
- * children. An epic is never a merge target — it is not a run target and owes
- * no approve-and-merge question — so the walk stops below it.
- *
- * With the setting off a parent's close leaves its children alone, so nothing is
- * inherited. Returns the ancestors whose set this call CHANGED (an ancestor that
- * already delivered the pull request is not one), for the caller to withdraw and
- * recompute exactly as it does for the card it linked.
+ * Whether the card still delivers the pull request after an unlink — true only when the
+ * removed row was an INHERITED one the reconcile wrote straight back, because a
+ * descendant still delivers it (MOTIR-11839). The unlink then reports `removed: false`
+ * rather than a removal the card does not show.
  */
-async function inheritDeliveryToAncestors(
-  item: { id: string; projectId: string; workspaceId: string; parentId: string | null },
-  delivery: { githubPullRequestId: string; repoId: string },
+async function stillDelivers(
+  workItemId: string,
+  pullRequestId: string,
   tx: Prisma.TransactionClient,
-): Promise<string[]> {
-  if (!item.parentId) return [];
-  const automation = await projectRepository.findStatusAutomation(item.projectId, tx);
-  if (!automation?.autoCompleteChildrenOnParentDone) return [];
-
-  const alreadyDelivering = new Set(
-    (await workItemDeliveryRepository.listByPullRequest(delivery.githubPullRequestId, tx)).map(
-      (row) => row.workItemId,
-    ),
-  );
-  const added: string[] = [];
-  // The tree is acyclic by trigger; the visited set only bounds the walk if that
-  // invariant were ever broken, rather than looping inside a transaction.
-  const visited = new Set<string>([item.id]);
-  let parentId: string | null = item.parentId;
-  while (parentId && !visited.has(parentId)) {
-    visited.add(parentId);
-    const parent = await workItemRepository.findById(parentId, tx);
-    if (!parent || parent.workspaceId !== item.workspaceId || parent.kind === 'epic') break;
-    if (!alreadyDelivering.has(parent.id)) {
-      await workItemDeliveryRepository.add(
-        {
-          workspaceId: item.workspaceId,
-          workItemId: parent.id,
-          githubPullRequestId: delivery.githubPullRequestId,
-          repoId: delivery.repoId,
-          // Marked, so the merge sync can tell it from a pull request the parent
-          // carries in its own right (`changeRequestStatusSync`).
-          inherited: true,
-        },
-        tx,
-      );
-      added.push(parent.id);
-    }
-    parentId = parent.parentId;
-  }
-  return added;
-}
-
-/**
- * The set-change follow-up a link owes every card whose delivery set it changed
- * (MOTIR-5482 · MOTIR-5470 · MOTIR-6602), in order: withdraw the gate that asked
- * about the old set, then recompute the CI verdict and the to-fix answer folded
- * over the new one. The linked card is owed it when its own row is new OR when an
- * ancestor newly delivers the same pull request — the latter takes the pull
- * request out of the card's own gate set (`gateSetFor`), so a question it already
- * carries is no longer the right one (MOTIR-11835).
- */
-async function settleDeliverySetChange(
-  linkedItemId: string,
-  linkedRowIsNew: boolean,
-  ancestorsAdded: string[],
-  tx: Prisma.TransactionClient,
-): Promise<void> {
-  const changed = [
-    ...(linkedRowIsNew || ancestorsAdded.length > 0 ? [linkedItemId] : []),
-    ...ancestorsAdded,
-  ];
-  for (const id of changed) {
-    await withdrawPullRequestApprovalGateOnSetChange(id, tx);
-    await recomputeWorkItemCiState(id, tx);
-    await recomputeWorkItemFixReason(id, tx);
-  }
+): Promise<boolean> {
+  const rows = await workItemDeliveryRepository.listByPullRequest(pullRequestId, tx);
+  return rows.some((row) => row.workItemId === workItemId);
 }

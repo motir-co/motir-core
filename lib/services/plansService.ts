@@ -338,6 +338,7 @@ import {
 } from '@/lib/services/planGateDoor';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { endSessionWithin } from '@/lib/services/planSessionEndService';
+import { reconcileInheritedDeliveriesAfterMove } from '@/lib/services/inheritedDeliveryService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
 // every planner produces into. A `Plan` bundles proposed `PlanItem` operations
@@ -4498,6 +4499,10 @@ async function materialize(
     ctx.workspaceId,
     tx,
   );
+
+  // …and the inherited deliveries across each re-parent, by the same rule a move
+  // through `workItemsService` follows (MOTIR-11839).
+  for (const move of reparented) await reconcileInheritedDeliveriesAfterMove(move.workItemId, tx);
 
   // ⚠️ THE RESTING STATUS — the half the product owner asked for (bug
   // MOTIR-5640 · MOTIR-5646; AMENDMENT 16 D6/D7). Every target THIS PLAN parked
