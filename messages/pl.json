@@ -14129,7 +14129,18 @@
         "pendingFleet": "na runnerach hostowanych przez GitHub do następnego zadania we flocie — runner tego zadania pozwala przenieść je do floty ({label})",
         "unknownStatus": "nie udało się odczytać — GitHub odpowiedział HTTP {status}",
         "unknownUnreachable": "nie udało się odczytać — nie można połączyć się z GitHub",
-        "none": "Żadne prywatne repozytorium w {org} nie ma skonfigurowanej domyślnej konfiguracji CodeQL."
+        "none": "Żadne prywatne repozytorium w {org} nie ma skonfigurowanej domyślnej konfiguracji CodeQL.",
+        "skippedStatus": "pominięte przy tej zmianie — GitHub odpowiedział HTTP {status} przy odczycie ustawienia, więc runner pozostał bez zmian",
+        "skippedUnreachable": "pominięte przy tej zmianie — nie można było połączyć się z GitHub, aby odczytać ustawienie, więc runner pozostał bez zmian",
+        "readBackStatus": "przeniesione na {runner}, ale przy ponownym odczycie ustawienia GitHub odpowiada teraz HTTP {status}",
+        "readBackUnreachable": "przeniesione na {runner}, ale nie można było połączyć się z GitHub, aby ponownie odczytać ustawienie",
+        "readBackMismatch": "przeniesione na {runner}, ale GitHub zgłasza teraz {found}",
+        "found": {
+          "standard": "runnery hostowane przez GitHub",
+          "labeled": "etykieta runnera {label}",
+          "notConfigured": "domyślna konfiguracja nieskonfigurowana",
+          "unavailable": "skanowanie kodu niedostępne"
+        }
       },
       "monitoringLine": "Maszyny Motir są widoczne pod moooon B.V. w Monitorowanie › Flota",
       "onCallout": {
@@ -14254,7 +14265,8 @@
       },
       "done": {
         "on": "Włączono. Od teraz nowe zadania żądają floty.",
-        "off": "Wyłączono. Nowe zadania wracają na runnery hostowane przez GitHub."
+        "off": "Wyłączono. Nowe zadania wracają na runnery hostowane przez GitHub.",
+        "codeScanningAttention": "Domyślna konfiguracja CodeQL niektórych repozytoriów wymaga sprawdzenia — zobacz Domyślna konfiguracja CodeQL poniżej."
       },
       "direction": {
         "on": "włączono",

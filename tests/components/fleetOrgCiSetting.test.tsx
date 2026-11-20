@@ -699,6 +699,96 @@ describe('FleetOrgCiSetting — CodeQL default setup per repository (MOTIR-10289
   });
 });
 
+describe('FleetOrgCiSetting — what a flip skipped or could not confirm (MOTIR-11933)', () => {
+  const lines = () =>
+    within(screen.getByTestId('fleet-org-ci-code-scanning'))
+      .getAllByRole('listitem')
+      .map((li) => li.textContent);
+
+  it('an OFF that skipped an unreadable repository warns, and that repository’s line says why', async () => {
+    setFleetOrgCiAction.mockResolvedValueOnce({
+      ok: true,
+      outcome: 'changed',
+      codeScanning: { skipped: [{ repo: 'motir-ai', status: 500 }], unverified: [] },
+    });
+    render(
+      state({
+        enabled: true,
+        codeScanning: [
+          { repo: 'gateway', state: 'github_hosted' },
+          { repo: 'motir-ai', state: 'unknown', status: 500 },
+        ],
+      }),
+    );
+    await flipWith('fleet broke');
+    const answer = screen.getByTestId('fleet-org-ci-answer');
+    expect(answer.getAttribute('data-tone')).toBe('warning');
+    expect(answer.textContent).toBe(
+      "Turned off. New jobs go back to GitHub-hosted runners.Some repositories' CodeQL default setup needs a look — see CodeQL default setup below.",
+    );
+    expect(lines()).toEqual([
+      'gateway — on GitHub-hosted runners',
+      'motir-ai — skipped by this change — GitHub answered HTTP 500 when its setting was read, so its runner was left as it was',
+    ]);
+  });
+
+  it('names a skip GitHub could not be reached for, and every read-back problem, on its own line', async () => {
+    setFleetOrgCiAction.mockResolvedValueOnce({
+      ok: true,
+      outcome: 'changed',
+      codeScanning: {
+        skipped: [{ repo: 'api', status: null }],
+        unverified: [
+          { repo: 'b500', to: 'fleet', problem: 'read_failed', status: 500 },
+          { repo: 'c-down', to: 'fleet', problem: 'read_failed', status: null },
+          { repo: 'd-std', to: 'fleet', problem: 'mismatch', found: { state: 'standard' } },
+          {
+            repo: 'e-label',
+            to: 'github_hosted',
+            problem: 'mismatch',
+            found: { state: 'labeled', label: 'motir-runner' },
+          },
+          { repo: 'f-none', to: 'fleet', problem: 'mismatch', found: { state: 'not_configured' } },
+          { repo: 'g-off', to: 'fleet', problem: 'mismatch', found: { state: 'unavailable' } },
+        ],
+      },
+    });
+    render(
+      state({
+        codeScanning: [
+          { repo: 'api', state: 'unknown', status: null },
+          { repo: 'b500', state: 'unknown', status: 500 },
+          { repo: 'c-down', state: 'unknown', status: null },
+          { repo: 'd-std', state: 'github_hosted' },
+          { repo: 'e-label', state: 'fleet' },
+          // Listed although the page's read hides these states, because the flip names them.
+          { repo: 'f-none', state: 'not_configured' },
+          { repo: 'g-off', state: 'unavailable' },
+          { repo: 'h-quiet', state: 'not_configured' },
+        ],
+      }),
+    );
+    await flipWith('onto the fleet');
+    expect(lines()).toEqual([
+      'api — skipped by this change — GitHub could not be reached to read its setting, so its runner was left as it was',
+      'b500 — moved to the fleet, but GitHub now answers HTTP 500 when the setting is read back',
+      'c-down — moved to the fleet, but GitHub could not be reached to read the setting back',
+      'd-std — moved to the fleet, but GitHub now reports GitHub-hosted runners',
+      'e-label — moved to GitHub-hosted runners, but GitHub now reports the runner label motir-runner',
+      'f-none — moved to the fleet, but GitHub now reports default setup not configured',
+      'g-off — moved to the fleet, but GitHub now reports code scanning unavailable',
+    ]);
+  });
+
+  it('a changed flip with nothing to look at keeps the plain answer and the read-back lines', async () => {
+    setFleetOrgCiAction.mockResolvedValueOnce({ ok: true, outcome: 'changed' });
+    render(state({ codeScanning: [{ repo: 'api', state: 'github_hosted' }] }));
+    await flipWith('onto the fleet');
+    expect(screen.getByTestId('fleet-org-ci-answer').getAttribute('data-tone')).toBe('info');
+    expect(lines()).toEqual(['api — on GitHub-hosted runners']);
+  });
+});
+
 describe('FleetOrgCiSetting — the arm64 line (MOTIR-11786)', () => {
   const arm64Row = () => screen.getByTestId('fleet-org-ci-arm64-variable');
   const readiness = () => screen.getByTestId('fleet-org-ci-arm64-readiness');

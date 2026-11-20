@@ -80,7 +80,11 @@ beforeEach(() => {
 
 describe('setFleetOrgCiAction', () => {
   it('changed — calls the service once with the pair and revalidates the page', async () => {
-    setEnabled.mockResolvedValueOnce({ outcome: 'changed', state: stored(true) });
+    setEnabled.mockResolvedValueOnce({
+      outcome: 'changed',
+      state: stored(true),
+      codeScanning: { skipped: [], unverified: [] },
+    });
     expect(await setFleetOrgCiAction(PROJECT, ORG, true, 'Moving CI')).toEqual({
       ok: true,
       outcome: 'changed',
@@ -98,10 +102,35 @@ describe('setFleetOrgCiAction', () => {
   it('changed — an ON the arm64 pool is not ready for still answers changed (MOTIR-11786)', async () => {
     // The service skips the MOTIR_RUNNER_ARM64 write and succeeds; it never
     // raises NOT_READY for arm64, so the action carries the plain success.
-    setEnabled.mockResolvedValueOnce({ outcome: 'changed', state: stored(true) });
+    setEnabled.mockResolvedValueOnce({
+      outcome: 'changed',
+      state: stored(true),
+      codeScanning: { skipped: [], unverified: [] },
+    });
     const result = await setFleetOrgCiAction(PROJECT, ORG, true, 'Moving CI');
     expect(result).toEqual({ ok: true, outcome: 'changed' });
     expect(revalidatePath).toHaveBeenCalledWith('/admin/fleet-settings');
+  });
+
+  it('changed — a flip that skipped a repository or could not confirm a move carries both (MOTIR-11933)', async () => {
+    const codeScanning = {
+      skipped: [{ repo: 'motir-ai', status: 500 }],
+      unverified: [{ repo: 'gateway', to: 'github_hosted', problem: 'read_failed', status: 502 }],
+    };
+    setEnabled.mockResolvedValueOnce({ outcome: 'changed', state: stored(false), codeScanning });
+    expect(await setFleetOrgCiAction(PROJECT, ORG, false, 'fleet broke')).toEqual({
+      ok: true,
+      outcome: 'changed',
+      codeScanning,
+    });
+    setEnabled.mockResolvedValueOnce({
+      outcome: 'changed',
+      state: stored(false),
+      codeScanning: { skipped: [], unverified: codeScanning.unverified },
+    });
+    expect(await setFleetOrgCiAction(PROJECT, ORG, false, 'again')).toMatchObject({
+      codeScanning: { skipped: [], unverified: codeScanning.unverified },
+    });
   });
 
   it('GITHUB_WRITE_FAILED — an arm64 refusal reaches the page as the same code', async () => {

@@ -14129,7 +14129,18 @@
         "pendingFleet": "sur des runners hébergés par GitHub jusqu'au prochain job de la flotte — le runner de ce job permet de le passer sur la flotte ({label})",
         "unknownStatus": "lecture impossible : GitHub a répondu HTTP {status}",
         "unknownUnreachable": "lecture impossible : GitHub était injoignable",
-        "none": "Aucun dépôt privé sur {org} n’a la configuration par défaut de CodeQL activée."
+        "none": "Aucun dépôt privé sur {org} n’a la configuration par défaut de CodeQL activée.",
+        "skippedStatus": "ignoré par ce changement : GitHub a répondu HTTP {status} à la lecture de son réglage, son runner est donc resté tel quel",
+        "skippedUnreachable": "ignoré par ce changement : GitHub était injoignable pour lire son réglage, son runner est donc resté tel quel",
+        "readBackStatus": "passé sur {runner}, mais GitHub répond maintenant HTTP {status} à la relecture du réglage",
+        "readBackUnreachable": "passé sur {runner}, mais GitHub était injoignable pour relire le réglage",
+        "readBackMismatch": "passé sur {runner}, mais GitHub indique maintenant {found}",
+        "found": {
+          "standard": "des runners hébergés par GitHub",
+          "labeled": "le libellé de runner {label}",
+          "notConfigured": "configuration par défaut non configurée",
+          "unavailable": "analyse du code indisponible"
+        }
       },
       "monitoringLine": "Les machines de Motir apparaissent sous moooon B.V. dans Supervision › Flotte",
       "onCallout": {
@@ -14254,7 +14265,8 @@
       },
       "done": {
         "on": "Activé. Les nouveaux jobs sollicitent désormais la flotte.",
-        "off": "Désactivé. Les nouveaux jobs repassent sur les runners hébergés par GitHub."
+        "off": "Désactivé. Les nouveaux jobs repassent sur les runners hébergés par GitHub.",
+        "codeScanningAttention": "La configuration par défaut de CodeQL de certains dépôts mérite un coup d'œil : voir Configuration par défaut de CodeQL ci-dessous."
       },
       "direction": {
         "on": "activé",

@@ -14129,7 +14129,18 @@
         "pendingFleet": "en runners alojados en GitHub hasta el próximo trabajo de la flota — el runner de ese trabajo permite moverlo a la flota ({label})",
         "unknownStatus": "no se pudo leer: GitHub respondió HTTP {status}",
         "unknownUnreachable": "no se pudo leer: no se pudo contactar con GitHub",
-        "none": "Ningún repositorio privado en {org} tiene configurada la configuración predeterminada de CodeQL."
+        "none": "Ningún repositorio privado en {org} tiene configurada la configuración predeterminada de CodeQL.",
+        "skippedStatus": "omitido en este cambio: GitHub respondió HTTP {status} al leer su configuración, así que su runner quedó como estaba",
+        "skippedUnreachable": "omitido en este cambio: no se pudo contactar con GitHub para leer su configuración, así que su runner quedó como estaba",
+        "readBackStatus": "movido a {runner}, pero GitHub ahora responde HTTP {status} al volver a leer la configuración",
+        "readBackUnreachable": "movido a {runner}, pero no se pudo contactar con GitHub para volver a leer la configuración",
+        "readBackMismatch": "movido a {runner}, pero GitHub ahora indica {found}",
+        "found": {
+          "standard": "runners alojados en GitHub",
+          "labeled": "la etiqueta de runner {label}",
+          "notConfigured": "configuración predeterminada no configurada",
+          "unavailable": "análisis de código no disponible"
+        }
       },
       "monitoringLine": "Las máquinas de Motir aparecen bajo moooon B.V. en Monitorización › Flota",
       "onCallout": {
@@ -14254,7 +14265,8 @@
       },
       "done": {
         "on": "Activado. A partir de ahora los nuevos jobs solicitan la flota.",
-        "off": "Desactivado. Los nuevos jobs vuelven a los runners alojados por GitHub."
+        "off": "Desactivado. Los nuevos jobs vuelven a los runners alojados por GitHub.",
+        "codeScanningAttention": "La configuración predeterminada de CodeQL de algunos repositorios necesita revisión: consulta Configuración predeterminada de CodeQL más abajo."
       },
       "direction": {
         "on": "activado",

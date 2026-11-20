@@ -14129,7 +14129,18 @@
         "pendingFleet": "su runner ospitati da GitHub fino al prossimo job della flotta — il runner di quel job permette di spostarlo sulla flotta ({label})",
         "unknownStatus": "impossibile leggere: GitHub ha risposto HTTP {status}",
         "unknownUnreachable": "impossibile leggere: GitHub non era raggiungibile",
-        "none": "Nessun repository privato su {org} ha la configurazione predefinita di CodeQL attiva."
+        "none": "Nessun repository privato su {org} ha la configurazione predefinita di CodeQL attiva.",
+        "skippedStatus": "saltato da questa modifica: GitHub ha risposto HTTP {status} alla lettura dell'impostazione, quindi il runner è rimasto com'era",
+        "skippedUnreachable": "saltato da questa modifica: GitHub non era raggiungibile per leggere l'impostazione, quindi il runner è rimasto com'era",
+        "readBackStatus": "spostato su {runner}, ma GitHub ora risponde HTTP {status} quando l'impostazione viene riletta",
+        "readBackUnreachable": "spostato su {runner}, ma GitHub non era raggiungibile per rileggere l'impostazione",
+        "readBackMismatch": "spostato su {runner}, ma GitHub ora riporta {found}",
+        "found": {
+          "standard": "runner ospitati da GitHub",
+          "labeled": "l'etichetta runner {label}",
+          "notConfigured": "configurazione predefinita non configurata",
+          "unavailable": "scansione del codice non disponibile"
+        }
       },
       "monitoringLine": "Le macchine di Motir compaiono sotto moooon B.V. in Monitoraggio › Flotta",
       "onCallout": {
@@ -14254,7 +14265,8 @@
       },
       "done": {
         "on": "Attivata. Da ora i nuovi job richiedono la flotta.",
-        "off": "Disattivata. I nuovi job tornano sui runner ospitati da GitHub."
+        "off": "Disattivata. I nuovi job tornano sui runner ospitati da GitHub.",
+        "codeScanningAttention": "La configurazione predefinita di CodeQL di alcuni repository va controllata: vedi Configurazione predefinita di CodeQL qui sotto."
       },
       "direction": {
         "on": "attivata",

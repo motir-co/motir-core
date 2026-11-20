@@ -94,6 +94,11 @@ interface World {
   /** Fail the next default-setup call of this method on this repository. */
   failSetup: { repo: string; method: string; status: number | null; message?: string } | null;
   setupCalls: Array<{ method: string; repo: string; body: Record<string, unknown> | null }>;
+  /** After a PATCH lands on this repository, every later GET of it answers this
+   *  status (MOTIR-11933: a move that leaves GitHub unable to serve the setting). */
+  brokenAfterMove: Record<string, number>;
+  /** A PATCH of this repository answers 202 and changes nothing. */
+  ignoresMove: string[];
 }
 
 interface GithubDefaultSetup {
@@ -200,8 +205,13 @@ function defaultSetupCall(repo: string, method: string, raw?: string): Response 
     return json(fail.status, { message: fail.message ?? 'Resource not accessible by integration' });
   }
   const current = world.setups[repo] ?? NOT_CONFIGURED;
+  const moved = world.setupCalls.some((c) => c.repo === repo && c.method === 'PATCH');
+  if (method === 'GET' && moved && world.brokenAfterMove[repo] !== undefined) {
+    return json(world.brokenAfterMove[repo]!, { message: 'Server Error' });
+  }
   if (method === 'GET') return json(200, { languages: ['actions'], ...current });
   if (current.state !== 'configured') return json(422, { message: 'not configured' });
+  if (world.ignoresMove.includes(repo)) return json(202, { run_id: 1 });
   world.setups[repo] = {
     state: 'configured',
     runner_type: body?.['runner_type'] === 'labeled' ? 'labeled' : 'standard',
@@ -347,6 +357,8 @@ beforeEach(async () => {
     setups: {},
     failSetup: null,
     setupCalls: [],
+    brokenAfterMove: {},
+    ignoresMove: [],
   };
   installGitHub();
   fx = await makeWorkItemFixture({ name: 'Motir', identifier: 'MOTIR' });
@@ -955,23 +967,209 @@ describe('CodeQL default setup travels with the flip (MOTIR-10289)', () => {
     },
   );
 
-  it('a failed read of a default setup refuses the flip before any write', async () => {
-    world.setups = { api: { ...STANDARD } };
-    world.failSetup = { repo: 'api', method: 'GET', status: 502 };
-    const err = await service.setEnabled(superadmin, pair(), true, 'x').catch((e: unknown) => e);
-    expect(err).toMatchObject({ repo: 'api', status: 502, operation: 'read', to: 'fleet' });
-    expect(writes()).toEqual([]);
-    expect(setupWrites()).toEqual([]);
-    expect(await auditRows()).toHaveLength(0);
+  it('OFF with one default setup GitHub cannot read (500) skips it and recovers everything else (MOTIR-11933)', async () => {
+    await adminDb.platformFleetOrgCi.create({
+      data: { projectId: fx.projectId, org: ORG, enabled: true, lastReason: 'seeded' },
+    });
+    world.variable = { value: MOTIR_RUNNER_LABEL, visibility: ORG_VARIABLE_VISIBILITY };
+    world.arm64Variable = { value: MOTIR_ARM64_RUNNER_LABEL, visibility: ORG_VARIABLE_VISIBILITY };
+    world.setups = { api: { ...LABELED }, gateway: { ...LABELED }, meta: { ...LABELED } };
+    world.failSetup = { repo: 'api', method: 'GET', status: 500, message: 'Server Error' };
+
+    const result = await service.setEnabled(superadmin, pair(), false, 'fleet broke');
+
+    expect(result.outcome).toBe('changed');
+    // Both variables are gone: new jobs fall back to GitHub-hosted.
+    expect(world.variable).toBeNull();
+    expect(world.arm64Variable).toBeNull();
+    // The readable repositories moved; the unreadable one was never written.
+    expect(setupWrites()).toEqual([
+      { method: 'PATCH', repo: 'gateway', body: { runner_type: 'standard' } },
+      { method: 'PATCH', repo: 'meta', body: { runner_type: 'standard' } },
+    ]);
+    expect(world.setups['api']).toEqual(LABELED);
+    // The row and the audit entry are stored, the skip carried on both.
+    expect((await storedRow())?.enabled).toBe(false);
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.metadata).toMatchObject({
+      codeScanningMoved: ['gateway', 'meta'],
+      codeScanningSkipped: [{ repo: 'api', status: 500 }],
+    });
+    expect(result).toMatchObject({
+      codeScanning: { skipped: [{ repo: 'api', status: 500 }], unverified: [] },
+    });
   });
 
-  it("a missing App permission on the read is an error, never read as 'no default setup'", async () => {
-    world.failSetup = { repo: 'api', method: 'GET', status: 403 };
-    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toMatchObject({
-      repo: 'api',
-      status: 403,
-      operation: 'read',
+  it('ON skips a default setup it cannot read the same way, and moves the rest (MOTIR-11933)', async () => {
+    world.setups = { api: { ...STANDARD }, gateway: { ...STANDARD } };
+    world.failSetup = { repo: 'api', method: 'GET', status: 502 };
+
+    const result = await service.setEnabled(superadmin, pair(), true, 'onto the fleet');
+
+    expect(result).toMatchObject({
+      outcome: 'changed',
+      codeScanning: { skipped: [{ repo: 'api', status: 502 }], unverified: [] },
     });
+    expect(world.variable).toMatchObject({ value: MOTIR_RUNNER_LABEL });
+    expect(setupWrites()).toEqual([
+      {
+        method: 'PATCH',
+        repo: 'gateway',
+        body: { runner_type: 'labeled', runner_label: MOTIR_RUNNER_LABEL },
+      },
+    ]);
+    expect(world.setups['api']).toEqual(STANDARD);
+    expect((await storedRow())?.enabled).toBe(true);
+    expect((await auditRows()).at(-1)!.metadata).toMatchObject({
+      codeScanningMoved: ['gateway'],
+      codeScanningSkipped: [{ repo: 'api', status: 502 }],
+    });
+  });
+
+  it("a missing App permission or a transport failure on the read is skipped and named, never read as 'no default setup'", async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    world.setups = { meta: { ...STANDARD } };
+    world.failSetup = { repo: 'api', method: 'GET', status: 403 };
+    const forbidden = await service.setEnabled(superadmin, pair(), true, 'x');
+    expect(forbidden).toMatchObject({ codeScanning: { skipped: [{ repo: 'api', status: 403 }] } });
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('the flip skips it'),
+      { org: ORG, repo: 'api', status: 403 },
+    );
+
+    world.failSetup = { repo: 'api', method: 'GET', status: null };
+    const unreachable = await service.setEnabled(superadmin, pair(), false, 'y');
+    expect(unreachable).toMatchObject({
+      codeScanning: { skipped: [{ repo: 'api', status: null }] },
+    });
+  });
+
+  it('a flip whose every repository reads and every move holds answers nothing to look at', async () => {
+    world.setups = { api: { ...STANDARD }, meta: { ...LABELED } };
+    const result = await service.setEnabled(superadmin, pair(), true, 'onto the fleet');
+    expect(result).toMatchObject({ codeScanning: { skipped: [], unverified: [] } });
+    // Each move is read back once, after its PATCH.
+    expect(world.setupCalls.filter((c) => c.repo === 'api').map((c) => c.method)).toEqual([
+      'GET',
+      'PATCH',
+      'GET',
+    ]);
+  });
+
+  it('a move GitHub then answers 500 to on read-back is reported, and the flip stays committed (MOTIR-11933)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    world.setups = { api: { ...STANDARD }, gateway: { ...STANDARD } };
+    world.brokenAfterMove = { api: 500 };
+
+    const result = await service.setEnabled(superadmin, pair(), true, 'onto the fleet');
+
+    expect(result).toMatchObject({
+      outcome: 'changed',
+      codeScanning: {
+        skipped: [],
+        unverified: [{ repo: 'api', to: 'fleet', problem: 'read_failed', status: 500 }],
+      },
+    });
+    expect((await storedRow())?.enabled).toBe(true);
+    expect(world.variable).toMatchObject({ value: MOTIR_RUNNER_LABEL });
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('does not confirm'),
+      { org: ORG, repositories: ['api'] },
+    );
+    // The page's own read-back shows the same repository as unreadable.
+    const { codeScanning } = await service.getState(superadmin, pair());
+    expect(codeScanning.find((c) => c.repo === 'api')).toEqual({
+      repo: 'api',
+      state: 'unknown',
+      status: 500,
+    });
+  });
+
+  it('a move GitHub accepted but did not apply reports the runner it found (MOTIR-11933)', async () => {
+    await adminDb.platformFleetOrgCi.create({
+      data: { projectId: fx.projectId, org: ORG, enabled: true, lastReason: 'seeded' },
+    });
+    world.variable = { value: MOTIR_RUNNER_LABEL, visibility: ORG_VARIABLE_VISIBILITY };
+    world.setups = { api: { ...LABELED }, meta: { ...LABELED } };
+    world.ignoresMove = ['api'];
+
+    const result = await service.setEnabled(superadmin, pair(), false, 'back to hosted');
+
+    expect(result).toMatchObject({
+      codeScanning: {
+        unverified: [
+          {
+            repo: 'api',
+            to: 'github_hosted',
+            problem: 'mismatch',
+            found: { state: 'labeled', label: MOTIR_RUNNER_LABEL },
+          },
+        ],
+      },
+    });
+  });
+
+  it.each([
+    ['standard runners', { ...STANDARD }, { state: 'standard' }],
+    [
+      'another label',
+      { state: 'configured', runner_type: 'labeled', runner_label: 'big-box' },
+      { state: 'labeled', label: 'big-box' },
+    ],
+    ['no default setup', { ...NOT_CONFIGURED }, { state: 'not_configured' }],
+  ] as const)(
+    'an ON move that reads back as %s is a mismatch naming it',
+    async (_l, after, found) => {
+      world.setups = { api: { ...STANDARD } };
+      const real = codeScanningDefaultSetupClient.setRunner.bind(codeScanningDefaultSetupClient);
+      vi.spyOn(codeScanningDefaultSetupClient, 'setRunner').mockImplementationOnce(
+        async (owner, name, runner, target) => {
+          await real(owner, name, runner, target);
+          world.setups['api'] = { ...after } as GithubDefaultSetup;
+        },
+      );
+      const result = await service.setEnabled(superadmin, pair(), true, 'x');
+      expect(result).toMatchObject({
+        codeScanning: { unverified: [{ repo: 'api', to: 'fleet', problem: 'mismatch', found }] },
+      });
+    },
+  );
+
+  it('a read-back that loses code scanning altogether is a mismatch, and a transport failure a failed read', async () => {
+    world.setups = { api: { ...STANDARD }, meta: { ...STANDARD } };
+    const real = codeScanningDefaultSetupClient.get.bind(codeScanningDefaultSetupClient);
+    const movedRepo = (name: string) =>
+      world.setupCalls.some((c) => c.repo === name && c.method === 'PATCH');
+    vi.spyOn(codeScanningDefaultSetupClient, 'get').mockImplementation(async (o, n, t) => {
+      // The pre-reads pass; after its move api reads back unavailable, meta unreachable.
+      if (n === 'api' && movedRepo('api')) return { state: 'unavailable' };
+      if (n === 'meta' && movedRepo('meta')) {
+        const { CodeScanningDefaultSetupApiError } =
+          await import('@/lib/github/codeScanningDefaultSetup');
+        throw new CodeScanningDefaultSetupApiError(null, 'fetch failed');
+      }
+      return real(o, n, t);
+    });
+    const result = await service.setEnabled(superadmin, pair(), true, 'x');
+    expect(result).toMatchObject({
+      codeScanning: {
+        unverified: [
+          { repo: 'api', problem: 'mismatch', found: { state: 'unavailable' } },
+          { repo: 'meta', problem: 'read_failed', status: null },
+        ],
+      },
+    });
+  });
+
+  it('a read-back failure that is not GitHub’s re-throws', async () => {
+    world.setups = { api: { ...STANDARD } };
+    const real = codeScanningDefaultSetupClient.get.bind(codeScanningDefaultSetupClient);
+    const boom = new RangeError('read-back: not GitHub');
+    vi.spyOn(codeScanningDefaultSetupClient, 'get')
+      .mockImplementationOnce(real)
+      .mockRejectedValueOnce(boom);
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toBe(boom);
   });
 
   it('a repository without code scanning is skipped by the flip and shown as unavailable', async () => {
