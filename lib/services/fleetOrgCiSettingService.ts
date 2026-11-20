@@ -848,7 +848,7 @@ export const fleetOrgCiSettingService = {
               arm64VariableOutcome,
               codeScanningMoved: moved.map((m) => m.repo.name),
               codeScanningDeferred: deferred.map((m) => m.repo.name),
-              codeScanningSkipped: skipped,
+              codeScanningSkipped: skipped.map((s) => ({ repo: s.repo, status: s.status })),
             },
           };
           await record(entry);
