@@ -151,7 +151,7 @@ const USAGE = [
   '  fleet-admin capacity-request-close <request> <note> --operator <email>',
   '  fleet-admin hosting-tenant ensure <organization id>',
   '  fleet-admin hosting-tenant converge-deploy-policy [--organization <id>]',
-  '  fleet-admin hosting-serverless converge-roles --trust <principal ARN> [--trust ...] [--dry-run]',
+  '  fleet-admin hosting-serverless converge-roles [--dry-run]',
   "    the serverless hosting account's deploy and execution roles onto their definitions;",
   '    --trust names every principal that may assume the deploy role (it replaces the trust)',
   '  fleet-admin check-quota --account-id <12-digit AWS account id> [--region <region>]',

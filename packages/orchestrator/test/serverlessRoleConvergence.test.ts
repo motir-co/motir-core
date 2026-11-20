@@ -5,6 +5,7 @@ import {
   defaultServerlessIamClientFactory,
   iamCanonicalStatements,
   iamPolicyDiff,
+  iamTrustDiff,
   type ServerlessIamClientFactory,
 } from '../src/adapters/serverless/roleConvergence';
 import { serverlessRoleDefinitions } from '../src/adapters/serverless/roles';
@@ -12,7 +13,6 @@ import { OrchestratorApiError } from '../src/errors';
 import {
   ServerlessRoleMissingError,
   ServerlessRoleReadBackMismatchError,
-  ServerlessRoleTrustRefusedError,
 } from '../src/hosting/errors';
 
 // MOTIR-11921 — the converge of the serverless account's two roles: it reads
@@ -21,15 +21,13 @@ import {
 
 const ACCOUNT = '212859366014';
 const REGION = 'us-east-1';
-const PRINCIPALS = [
-  'arn:aws:iam::576360162297:user/zhuyue',
-  'arn:aws:iam::576360162297:role/motir-add-shard',
-];
+const OPERATOR = 'arn:aws:iam::576360162297:user/zhuyue';
+const MANAGEMENT = 'arn:aws:iam::576360162297:role/motir-add-shard';
+const PRINCIPALS = [OPERATOR, MANAGEMENT];
 const CREDENTIALS = { accessKeyId: 'ASIA', secretAccessKey: 's', sessionToken: 't' };
 const INPUT = {
   accountId: ACCOUNT,
   region: REGION,
-  deployTrustPrincipals: PRINCIPALS,
   credentials: CREDENTIALS,
 };
 const [DEPLOY, EXEC] = serverlessRoleDefinitions(INPUT);
@@ -205,7 +203,7 @@ describe('convergeServerlessRoles', () => {
             Version: '2012-10-17',
             Statement: {
               Effect: 'Allow',
-              Principal: { AWS: PRINCIPALS[0] },
+              Principal: { AWS: OPERATOR },
               Action: 'sts:AssumeRole',
             },
           }),
@@ -218,7 +216,12 @@ describe('convergeServerlessRoles', () => {
       { command: 'UpdateAssumeRolePolicy', role: 'motir-hosting-serverless-deploy' },
       { command: 'PutRolePolicy', role: 'mh-shared-exec' },
     ]);
-    expect(results[0]).toMatchObject({ trust: 'changed', trustDiff: ['~#0'], policy: 'unchanged' });
+    // The live trust lacks the management role: the diff names the principal.
+    expect(results[0]).toMatchObject({
+      trust: 'changed',
+      trustDiff: [`+${MANAGEMENT}`],
+      policy: 'unchanged',
+    });
     expect(results[1]).toMatchObject({
       policy: 'changed',
       policyDiff: ['+OwnLogs', '+OverflowEnv'],
@@ -329,17 +332,6 @@ describe('convergeServerlessRoles', () => {
     expect((err as OrchestratorApiError).status).toBeNull();
   });
 
-  it('refuses an empty trust before any call', async () => {
-    const live = liveAccount();
-    await expect(
-      convergeServerlessRoles(
-        { ...INPUT, deployTrustPrincipals: [] },
-        { iamClientFactory: live.factory },
-      ),
-    ).rejects.toThrow(ServerlessRoleTrustRefusedError);
-    expect(live.reads).toEqual([]);
-  });
-
   it('builds a real IAM client when no seam is given', () => {
     expect(
       typeof defaultServerlessIamClientFactory({ region: REGION, credentials: CREDENTIALS }).send,
@@ -391,7 +383,56 @@ describe('iamCanonicalStatements', () => {
     expect(iamCanonicalStatements('{}').size).toBe(0);
   });
 
+  it('keeps a repeated Sid as its own statement, so it is compared too', () => {
+    const doc: AwsPolicyDocument = {
+      Version: '2012-10-17',
+      Statement: [
+        { Sid: 'X', Effect: 'Allow', Action: 'a', Resource: '*' },
+        { Sid: 'X', Effect: 'Allow', Action: 'b', Resource: '*' },
+      ],
+    };
+    expect([...iamCanonicalStatements(doc).keys()]).toEqual(['X', 'X#1']);
+    expect(
+      iamPolicyDiff({ Version: '2012-10-17', Statement: [doc.Statement[0]!] }, JSON.stringify(doc)),
+    ).toEqual(['-X#1']);
+  });
+
   it('reports every statement as added when there is no live document', () => {
     expect(iamPolicyDiff(EXEC.policy, null)).toEqual(['+OwnLogs', '+OverflowEnv']);
+  });
+});
+
+describe('iamTrustDiff', () => {
+  const trust = (principal: unknown, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [{ Effect: 'Allow', Principal: principal, Action: 'sts:AssumeRole', ...extra }],
+    });
+
+  it('names a principal the converge would remove, and one it would grant', () => {
+    expect(
+      iamTrustDiff(DEPLOY.trustPolicy, trust({ AWS: [OPERATOR, 'arn:aws:iam::1:user/x'] })),
+    ).toEqual([`+${MANAGEMENT}`, '-arn:aws:iam::1:user/x']);
+  });
+
+  it('is empty when the trust matches, and statement-level when only the rest differs', () => {
+    expect(iamTrustDiff(DEPLOY.trustPolicy, trust({ AWS: PRINCIPALS }))).toEqual([]);
+    expect(
+      iamTrustDiff(
+        DEPLOY.trustPolicy,
+        trust(
+          { AWS: PRINCIPALS },
+          { Condition: { Bool: { 'aws:MultiFactorAuthPresent': 'true' } } },
+        ),
+      ),
+    ).toEqual(['~#0']);
+  });
+
+  it('reads a bare-string principal, a service, and a missing live trust', () => {
+    expect(iamTrustDiff(EXEC.trustPolicy, trust('*'))).toEqual(['+lambda.amazonaws.com', '-*']);
+    expect(iamTrustDiff(EXEC.trustPolicy, null)).toEqual(['+lambda.amazonaws.com']);
+    expect(
+      iamTrustDiff(EXEC.trustPolicy, JSON.stringify({ Statement: { Effect: 'Allow' } })),
+    ).toEqual(['+lambda.amazonaws.com']);
   });
 });

@@ -16,9 +16,9 @@ import {
   serverlessDeployPolicy,
   serverlessDeployTrustPolicy,
   serverlessExecPolicy,
+  SERVERLESS_DEPLOY_TRUST_PRINCIPALS,
   serverlessRoleDefinitions,
 } from '../src/adapters/serverless/roles';
-import { ServerlessRoleTrustRefusedError } from '../src/hosting/errors';
 
 // MOTIR-11921 — the serverless account's two roles as code. The definitions
 // carry every statement the live policies held on 2026-11-20, and the deploy
@@ -457,20 +457,30 @@ describe('the definitions as they stood live on 2026-11-20', () => {
     expect(allowedBy(EXEC, 'secretsmanager:GetSecretValue', SECRET)).toEqual(['OverflowEnv']);
   });
 
-  it('trusts Lambda for the execution role and exactly the named principals for the deploy role', () => {
+  it('trusts Lambda for the execution role and exactly the principals in code for the deploy role', () => {
     expect(SERVERLESS_EXEC_TRUST_POLICY.Statement).toEqual([
       { Effect: 'Allow', Principal: { Service: 'lambda.amazonaws.com' }, Action: 'sts:AssumeRole' },
     ]);
-    expect(serverlessDeployTrustPolicy([MANAGEMENT, OPERATOR]).Statement).toEqual([
+    expect(serverlessDeployTrustPolicy().Statement).toEqual([
       { Effect: 'Allow', Principal: { AWS: [MANAGEMENT, OPERATOR] }, Action: 'sts:AssumeRole' },
     ]);
   });
 
-  it('pairs each role with its policy name, deploy role first, and drops a repeated principal', () => {
-    const [deploy, exec] = serverlessRoleDefinitions({
-      ...SCOPE,
-      deployTrustPrincipals: [OPERATOR, OPERATOR, MANAGEMENT],
-    });
+  // The live trust on 2026-11-20 (MOTIR-9970): the converge REPLACES the trust with
+  // this list, so losing the management role would lock production out of the
+  // deploy role. Pinned here so removing one is a reviewed change to this test.
+  it('pins the deploy trust to the management role and the operator, each a user or role ARN', () => {
+    expect([...SERVERLESS_DEPLOY_TRUST_PRINCIPALS].sort()).toEqual([MANAGEMENT, OPERATOR].sort());
+    expect(new Set(SERVERLESS_DEPLOY_TRUST_PRINCIPALS).size).toBe(
+      SERVERLESS_DEPLOY_TRUST_PRINCIPALS.length,
+    );
+    for (const arn of SERVERLESS_DEPLOY_TRUST_PRINCIPALS) {
+      expect(arn).toMatch(/^arn:aws:iam::\d{12}:(role|user)\/[\w+=,.@/-]+$/);
+    }
+  });
+
+  it('pairs each role with its policy name and trust, deploy role first', () => {
+    const [deploy, exec] = serverlessRoleDefinitions(SCOPE);
     expect([deploy.roleName, deploy.policyName]).toEqual([
       SERVERLESS_DEPLOY_ROLE,
       SERVERLESS_DEPLOY_POLICY,
@@ -479,22 +489,9 @@ describe('the definitions as they stood live on 2026-11-20', () => {
       SERVERLESS_EXEC_ROLE,
       SERVERLESS_EXEC_POLICY,
     ]);
-    expect(deploy.trustPolicy).toEqual(serverlessDeployTrustPolicy([OPERATOR, MANAGEMENT]));
+    expect(deploy.trustPolicy).toEqual(serverlessDeployTrustPolicy());
+    expect(deploy.policy).toEqual(DEPLOY);
     expect(exec.trustPolicy).toBe(SERVERLESS_EXEC_TRUST_POLICY);
-  });
-
-  it('refuses a deploy role nobody may assume, or a principal that is not a user or role', () => {
-    expect(() => serverlessRoleDefinitions({ ...SCOPE, deployTrustPrincipals: [] })).toThrow(
-      ServerlessRoleTrustRefusedError,
-    );
-    expect(() => serverlessRoleDefinitions({ ...SCOPE, deployTrustPrincipals: ['*'] })).toThrow(
-      /is not an IAM user or role ARN/,
-    );
-    expect(() =>
-      serverlessRoleDefinitions({
-        ...SCOPE,
-        deployTrustPrincipals: ['arn:aws:iam::576360162297:root'],
-      }),
-    ).toThrow(ServerlessRoleTrustRefusedError);
+    expect(exec.policy).toEqual(EXEC);
   });
 });

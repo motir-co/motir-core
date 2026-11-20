@@ -17,12 +17,11 @@ import {
 // and the converge runs as that account's member access role, assumed from
 // Motir's management role (`AWS_ORG_ADMIN_ROLE_ARN`) — never as the scoped role,
 // which holds no IAM action. The definitions are `@motir/orchestrator`'s
-// `serverlessRoleDefinitions`; this file only finds the account and the session.
+// `serverlessRoleDefinitions` (the deploy role's trust principals included); this
+// file only finds the account and the session.
 // Nothing returned carries a credential.
 
 export interface ServerlessHostingRolesInput {
-  /** Who may assume the deploy role: the management role and the operator. */
-  readonly trustPrincipals: readonly string[];
   /** Read and report only. */
   readonly dryRun: boolean;
 }
@@ -51,7 +50,6 @@ export const serverlessHostingRolesService = {
       {
         accountId,
         region,
-        deployTrustPrincipals: input.trustPrincipals,
         dryRun: input.dryRun,
         credentials: {
           accessKeyId: session.accessKeyId,

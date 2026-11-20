@@ -1,4 +1,3 @@
-import { ServerlessRoleTrustRefusedError } from '../../hosting/errors';
 import type { AwsPolicyDocument } from '../aws/management';
 import { SERVERLESS_ECR_ROOT, SERVERLESS_EXEC_ROLE } from './names';
 
@@ -187,9 +186,26 @@ export function serverlessDeployPolicy(scope: ServerlessRoleScope): AwsPolicyDoc
   };
 }
 
-/** The deploy role's trust: `sts:AssumeRole` for exactly `principals` — Motir's
- *  management role and the operator who runs the deploy check (MOTIR-9970). */
-export function serverlessDeployTrustPolicy(principals: readonly string[]): AwsPolicyDocument {
+/**
+ * Who may assume the deploy role (MOTIR-9970): Motir's management role, which
+ * every serverless call in production assumes the deploy role from, and the
+ * operator who runs the deploy check by hand.
+ *
+ * ⚠️ THIS LIST IS THE DEFINITION, and the converge REPLACES the live trust with
+ * it: dropping an entry here locks that principal out on the next converge.
+ * Dropping `role/motir-add-shard` stops every serverless deploy and every
+ * signed function-URL request in production. Change it in review, run
+ * `converge-roles --dry-run` first, and read the `+arn` / `-arn` it prints.
+ */
+export const SERVERLESS_DEPLOY_TRUST_PRINCIPALS: readonly string[] = [
+  'arn:aws:iam::576360162297:role/motir-add-shard',
+  'arn:aws:iam::576360162297:user/zhuyue',
+];
+
+/** The deploy role's trust: `sts:AssumeRole` for exactly `principals`. */
+export function serverlessDeployTrustPolicy(
+  principals: readonly string[] = SERVERLESS_DEPLOY_TRUST_PRINCIPALS,
+): AwsPolicyDocument {
   return {
     Version: '2012-10-17',
     Statement: [
@@ -236,37 +252,23 @@ export const SERVERLESS_EXEC_TRUST_POLICY: AwsPolicyDocument = {
   ],
 };
 
-export interface ServerlessRoleDefinitionsInput extends ServerlessRoleScope {
-  /** Who may assume the deploy role. At least one; refused when empty. */
-  readonly deployTrustPrincipals: readonly string[];
-}
-
-const PRINCIPAL_ARN = /^arn:aws[a-z-]*:iam::\d{12}:(role|user)\/[\w+=,.@/-]+$/;
-
 /** Both roles' definitions, deploy role first. */
 export function serverlessRoleDefinitions(
-  input: ServerlessRoleDefinitionsInput,
+  scope: ServerlessRoleScope,
 ): [ServerlessRoleDefinition, ServerlessRoleDefinition] {
-  if (input.deployTrustPrincipals.length === 0) {
-    throw new ServerlessRoleTrustRefusedError('no trusted principal was given');
-  }
-  for (const arn of input.deployTrustPrincipals) {
-    if (!PRINCIPAL_ARN.test(arn))
-      throw new ServerlessRoleTrustRefusedError(`${arn} is not an IAM user or role ARN`);
-  }
-  const scope = { accountId: input.accountId, region: input.region };
+  const { accountId, region } = scope;
   return [
     {
       roleName: SERVERLESS_DEPLOY_ROLE,
       policyName: SERVERLESS_DEPLOY_POLICY,
-      trustPolicy: serverlessDeployTrustPolicy([...new Set(input.deployTrustPrincipals)]),
-      policy: serverlessDeployPolicy(scope),
+      trustPolicy: serverlessDeployTrustPolicy(),
+      policy: serverlessDeployPolicy({ accountId, region }),
     },
     {
       roleName: SERVERLESS_EXEC_ROLE,
       policyName: SERVERLESS_EXEC_POLICY,
       trustPolicy: SERVERLESS_EXEC_TRUST_POLICY,
-      policy: serverlessExecPolicy(scope),
+      policy: serverlessExecPolicy({ accountId, region }),
     },
   ];
 }

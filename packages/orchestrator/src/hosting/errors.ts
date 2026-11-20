@@ -107,16 +107,6 @@ export class ReleaseCommandUnsupportedError extends Error {
   }
 }
 
-/** The serverless deploy role's trust was asked for no principal, or for one
- *  that is not an IAM user or role ARN (MOTIR-11921). Refused before any call. */
-export class ServerlessRoleTrustRefusedError extends Error {
-  readonly code = 'HOSTING_SERVERLESS_ROLE_TRUST_REFUSED' as const;
-  constructor(readonly detail: string) {
-    super(`The serverless deploy role's trust was refused: ${detail}.`);
-    this.name = 'ServerlessRoleTrustRefusedError';
-  }
-}
-
 /** A serverless IAM role the converge expects does not exist in the account
  *  (MOTIR-11921). The converge never creates a role, it only converges one. */
 export class ServerlessRoleMissingError extends Error {

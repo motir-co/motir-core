@@ -42,9 +42,13 @@ export interface ServerlessRoleConvergence {
   readonly roleName: string;
   readonly trust: ServerlessRolePartOutcome;
   readonly policy: ServerlessRolePartOutcome;
+  /** How the trust differs, principal by principal: `+arn` (only in the
+   *  definition, would be granted), `-arn` (only live, would be REMOVED).
+   *  Statement-level (`~#0`) only when the principals agree and something else
+   *  differs. Empty when unchanged. */
+  readonly trustDiff: readonly string[];
   /** The statements that differ, as `+Sid` (only in the definition), `-Sid`
    *  (only live) or `~Sid` (both, different). Empty when unchanged. */
-  readonly trustDiff: readonly string[];
   readonly policyDiff: readonly string[];
 }
 
@@ -56,8 +60,6 @@ export type ServerlessIamClientFactory = (options: {
 export interface ConvergeServerlessRolesInput {
   readonly accountId: string;
   readonly region: string;
-  /** Who may assume the deploy role (`./roles`). */
-  readonly deployTrustPrincipals: readonly string[];
   /** An administrator session in the serverless account. */
   readonly credentials: AwsCredentialIdentity;
   /** Read and report only; write nothing. */
@@ -131,7 +133,13 @@ export function iamCanonicalStatements(document: AwsPolicyDocument | string): Ma
   const statements = (Array.isArray(raw) ? raw : [raw]) as Array<{ [key: string]: Json }>;
   const byKey = new Map<string, string>();
   statements.forEach((statement, index) => {
-    byKey.set(statementKey(statement, index), JSON.stringify(canonicalStatement(statement)));
+    // A repeated Sid (IAM refuses one on write, a hand-edited read might not)
+    // keeps every statement: the second is keyed `Sid#index`, so it is compared.
+    const key = statementKey(statement, index);
+    byKey.set(
+      byKey.has(key) ? `${key}#${index}` : key,
+      JSON.stringify(canonicalStatement(statement)),
+    );
   });
   return byKey;
 }
@@ -151,6 +159,43 @@ export function iamPolicyDiff(
   }
   for (const key of have.keys()) if (!want.has(key)) diff.push(`-${key}`);
   return diff;
+}
+
+function principalsOf(document: AwsPolicyDocument | string | null): Set<string> {
+  const out = new Set<string>();
+  if (document === null) return out;
+  const parsed = (typeof document === 'string' ? JSON.parse(document) : document) as {
+    Statement?: Json;
+  };
+  const raw = parsed.Statement ?? [];
+  for (const statement of (Array.isArray(raw) ? raw : [raw]) as Array<{ [key: string]: Json }>) {
+    const principal = statement['Principal'];
+    if (typeof principal === 'string') out.add(principal);
+    else if (principal !== null && typeof principal === 'object' && !Array.isArray(principal)) {
+      for (const value of Object.values(principal)) {
+        for (const item of Array.isArray(value) ? value : [value]) out.add(String(item));
+      }
+    }
+  }
+  return out;
+}
+
+/** How a live TRUST policy differs from `wanted`, principal by principal:
+ *  `+arn` would be granted, `-arn` would be removed. Falls back to the
+ *  statement diff when the principals agree but something else differs. */
+export function iamTrustDiff(
+  wanted: AwsPolicyDocument,
+  live: AwsPolicyDocument | string | null,
+): string[] {
+  const statements = iamPolicyDiff(wanted, live);
+  if (statements.length === 0) return [];
+  const want = principalsOf(wanted);
+  const have = principalsOf(live);
+  const diff = [
+    ...[...want].filter((p) => !have.has(p)).map((p) => `+${p}`),
+    ...[...have].filter((p) => !want.has(p)).map((p) => `-${p}`),
+  ];
+  return diff.length > 0 ? diff : statements;
 }
 
 // ── The converge ────────────────────────────────────────────────────────────
@@ -218,7 +263,7 @@ async function convergeRole(
   reader: ReturnType<typeof roleReader>,
   dryRun: boolean,
 ): Promise<ServerlessRoleConvergence> {
-  const trustDiff = iamPolicyDiff(role.trustPolicy, await reader.trust(role.roleName));
+  const trustDiff = iamTrustDiff(role.trustPolicy, await reader.trust(role.roleName));
   const livePolicyDiff = iamPolicyDiff(
     role.policy,
     await reader.policy(role.roleName, role.policyName),

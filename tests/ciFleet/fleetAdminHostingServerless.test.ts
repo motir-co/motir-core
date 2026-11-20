@@ -29,11 +29,7 @@ beforeEach(() => {
 function account(
   drift: (roles: Map<string, { trust: string; policy: string }>) => void = () => {},
 ) {
-  const [deploy, exec] = serverlessRoleDefinitions({
-    accountId: ACCOUNT,
-    region: REGION,
-    deployTrustPrincipals: [MANAGEMENT, OPERATOR],
-  });
+  const [deploy, exec] = serverlessRoleDefinitions({ accountId: ACCOUNT, region: REGION });
   const roles = new Map(
     [deploy, exec].map((r) => [
       r.roleName,
@@ -85,12 +81,10 @@ const run = (argv: string[], deps: ReturnType<typeof account>['deps']) =>
     hostingServerless: { converge: (input) => serverlessHostingRolesService.converge(input, deps) },
   });
 
-const TRUST = ['--trust', MANAGEMENT, '--trust', OPERATOR];
-
 describe('fleet-admin hosting-serverless converge-roles', () => {
   it('writes nothing to roles that match, as the member access role of the account', async () => {
     const live = account();
-    expect(await run(['converge-roles', ...TRUST], live.deps)).toBe(EXIT_OK);
+    expect(await run(['converge-roles'], live.deps)).toBe(EXIT_OK);
     expect(live.sessions).toEqual([ACCOUNT]);
     expect(live.writes).toEqual([]);
     expect(out).toEqual([
@@ -109,7 +103,7 @@ describe('fleet-admin hosting-serverless converge-roles', () => {
         }),
       );
     });
-    expect(await run(['converge-roles', ...TRUST], live.deps)).toBe(EXIT_OK);
+    expect(await run(['converge-roles'], live.deps)).toBe(EXIT_OK);
     expect(live.writes).toEqual(['PutRolePolicy motir-hosting-serverless-deploy']);
     expect(out[0]).toBe(
       'role motir-hosting-serverless-deploy: trust unchanged, policy changed ' +
@@ -118,33 +112,48 @@ describe('fleet-admin hosting-serverless converge-roles', () => {
     expect(out[2]).toBe(`serverless roles in ${ACCOUNT}: 2 role(s), 1 changed, 1 unchanged`);
     // A second run finds nothing left to write.
     out = [];
-    expect(await run(['converge-roles', ...TRUST], live.deps)).toBe(EXIT_OK);
+    expect(await run(['converge-roles'], live.deps)).toBe(EXIT_OK);
     expect(live.writes).toHaveLength(1);
     expect(out[2]).toContain('0 changed, 2 unchanged');
   });
 
-  it('reports a trust that names a different principal set, and --dry-run writes nothing', async () => {
-    const live = account();
-    expect(await run(['converge-roles', '--trust', OPERATOR, '--dry-run'], live.deps)).toBe(
-      EXIT_OK,
-    );
+  it('names the principal a trust change would remove, and --dry-run writes nothing', async () => {
+    // Someone hand-edited the live trust: the management role is gone and a
+    // stranger is in. The dry run says so principal by principal.
+    const live = account((roles) => {
+      roles.get('motir-hosting-serverless-deploy')!.trust = encodeURIComponent(
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: { AWS: [OPERATOR, 'arn:aws:iam::111111111111:user/stranger'] },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+      );
+    });
+    expect(await run(['converge-roles', '--dry-run'], live.deps)).toBe(EXIT_OK);
     expect(live.writes).toEqual([]);
     expect(out).toEqual([
-      'role motir-hosting-serverless-deploy: trust would_change (~#0), policy unchanged',
+      `role motir-hosting-serverless-deploy: trust would_change (+${MANAGEMENT} -arn:aws:iam::111111111111:user/stranger), policy unchanged`,
       'role mh-shared-exec: trust unchanged, policy unchanged',
       `serverless roles in ${ACCOUNT}: 2 role(s), 1 would change, 1 unchanged (dry run, nothing written)`,
     ]);
+    // Applied, the trust is back to the code's two principals.
+    out = [];
+    expect(await run(['converge-roles'], live.deps)).toBe(EXIT_OK);
+    expect(live.writes).toEqual(['UpdateAssumeRolePolicy motir-hosting-serverless-deploy']);
   });
 
   it.each([
-    ['no --trust', ['converge-roles']],
-    ['an empty --trust', ['converge-roles', '--trust', ' ']],
-    ['a positional', ['converge-roles', 'extra', ...TRUST]],
+    ['a positional', ['converge-roles', 'extra']],
     ['another subcommand', ['ensure']],
   ])('prints the usage and exits 1 for %s', async (_, argv) => {
     expect(await run(argv, account().deps)).toBe(EXIT_ERROR);
     expect(out).toEqual([]);
-    expect(err.join('\n')).toContain('hosting-serverless converge-roles --trust <principal ARN>');
+    expect(err.join('\n')).toContain('hosting-serverless converge-roles [--dry-run]');
   });
 
   it('exits 1 with the error, never a credential, when the converge refuses', async () => {
@@ -159,23 +168,23 @@ describe('fleet-admin hosting-serverless converge-roles', () => {
         }),
       },
     };
-    expect(await run(['converge-roles', ...TRUST], refusing)).toBe(EXIT_ERROR);
+    expect(await run(['converge-roles'], refusing)).toBe(EXIT_ERROR);
     expect(err.join('\n')).toContain('motir-hosting-serverless-deploy does not exist');
     expect([...out, ...err].join('\n')).not.toContain(SECRET);
   });
 
-  it('refuses a principal that is not a user or role ARN', async () => {
-    expect(await run(['converge-roles', '--trust', '*'], account().deps)).toBe(EXIT_ERROR);
-    expect(err.join('\n')).toContain('is not an IAM user or role ARN');
+  it('refuses --trust: who may assume the role is defined in code, not typed', async () => {
+    const live = account();
+    expect(await run(['converge-roles', '--trust', OPERATOR], live.deps)).toBe(EXIT_ERROR);
+    expect(err.join('\n')).toContain("Unknown option '--trust'");
+    expect(live.sessions).toEqual([]);
   });
 
   it('reaches the service by default, which names the unset account variable', async () => {
     const saved = process.env['MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN'];
     delete process.env['MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN'];
     try {
-      expect(await runFleetAdmin(['hosting-serverless', 'converge-roles', ...TRUST], io)).toBe(
-        EXIT_ERROR,
-      );
+      expect(await runFleetAdmin(['hosting-serverless', 'converge-roles'], io)).toBe(EXIT_ERROR);
       expect(err.join('\n')).toContain('MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN');
     } finally {
       if (saved !== undefined) process.env['MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN'] = saved;
@@ -184,9 +193,7 @@ describe('fleet-admin hosting-serverless converge-roles', () => {
 
   it('lists the command in the usage', async () => {
     expect(await runFleetAdmin([], io)).toBe(EXIT_ERROR);
-    expect(err.join('\n')).toContain(
-      'fleet-admin hosting-serverless converge-roles --trust <principal ARN>',
-    );
+    expect(err.join('\n')).toContain('fleet-admin hosting-serverless converge-roles [--dry-run]');
   });
 });
 
@@ -195,9 +202,9 @@ describe('serverlessHostingRolesService defaults', () => {
     const saved = process.env['MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN'];
     delete process.env['MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN'];
     try {
-      await expect(
-        serverlessHostingRolesService.converge({ trustPrincipals: [OPERATOR], dryRun: true }),
-      ).rejects.toThrow(/MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN/);
+      await expect(serverlessHostingRolesService.converge({ dryRun: true })).rejects.toThrow(
+        /MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN/,
+      );
     } finally {
       if (saved !== undefined) process.env['MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN'] = saved;
     }
@@ -209,7 +216,7 @@ describe('serverlessHostingRolesService defaults', () => {
     try {
       await expect(
         serverlessHostingRolesService.converge(
-          { trustPrincipals: [OPERATOR], dryRun: true },
+          { dryRun: true },
           { config: { accountId: ACCOUNT, region: REGION } },
         ),
       ).rejects.toThrow(/AWS_ORG_ADMIN_ROLE_ARN/);
