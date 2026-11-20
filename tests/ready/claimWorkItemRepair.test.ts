@@ -1040,3 +1040,41 @@ describe('claimRepair — a member the host reports conflicted (MOTIR-5913)', ()
     expect(await fixRuns(card.id)).toHaveLength(0);
   });
 });
+
+describe('claimRepair — a push whose checks have not reported (MOTIR-11932)', () => {
+  const OLD = 'c'.repeat(40); // the commit `deliveredPr` writes its check rows at
+  const NEW = 'd'.repeat(40);
+
+  it('a red member whose stored head moved past its rows is not failing until the new head reports', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'pushed a fix' });
+    await setStatus(card.id, 'implemented');
+    const repo = await connectRepairRepo(fx, 'web');
+    const pr = await deliveredPr(fx, card.id, repo, {
+      headRef: 'a',
+      checks: { Vitest: 'failure', Lint: 'success' },
+    });
+
+    // At the head the rows were written at, the member is red and the card is claimable.
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { headSha: OLD } });
+    expect((await workItemRepairService.getRepairView(card.id, fx.ctx))?.state).toBe('offer');
+
+    // The fix is pushed: the host head moves and nothing has reported there yet. The OLD
+    // commit's red is not this head's verdict, so there is nothing failing to repair.
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { headSha: NEW } });
+    const result = await claim(fx, card.identifier);
+    expect(result).toMatchObject({ outcome: 'not_repairable', reason: 'not_failing' });
+    expect(await fixRuns(card.id)).toHaveLength(0);
+    expect((await workItemRepairService.getRepairView(card.id, fx.ctx))?.state).not.toBe('offer');
+
+    // Once the new head reports red, it is failing again — the head's own rows decide.
+    await adminDb.githubCheckRun.create({
+      data: { pullRequestId: pr.id, commitSha: NEW, checkName: 'Vitest', conclusion: 'failure' },
+    });
+    const again = await claim(fx, card.identifier);
+    expect(again.outcome).toBe('claimed');
+    expect(again.pullRequests).toEqual([
+      expect.objectContaining({ number: pr.number, ci: 'failing', failingChecks: ['Vitest'] }),
+    ]);
+  });
+});

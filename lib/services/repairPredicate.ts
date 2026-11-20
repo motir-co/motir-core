@@ -10,7 +10,7 @@ import type {
   WorkItemRepairRefusal,
 } from '@/lib/dto/workItemRepair';
 import { isConflictedAtCurrentHead, isOutOfDateAtCurrentHead } from '@/lib/github/mergeability';
-import { derivePrCiState } from '@/lib/github/prCiState';
+import type { PrCiState } from '@/lib/github/prCiState';
 import {
   checkRowsAtHead,
   isCiUndecidedAtHead,
@@ -159,7 +159,7 @@ function repairableOutcome(exit: { rawReason: string; disposition: string }): bo
 /** One open member as a repair hands it over — the claim's wire row. */
 function toRepairPullRequest(m: {
   row: DeliveryWithChecks;
-  ci: ReturnType<typeof derivePrCiState>;
+  ci: PrCiState;
   exit: GithubPullRequestQueueExit | null;
   conflicted: boolean;
   outOfDate: boolean;
@@ -174,8 +174,8 @@ function toRepairPullRequest(m: {
     headRef: row.pullRequest.headRef,
     baseRef: row.pullRequest.baseRef,
     ci,
-    // The names behind the verdict, from the SAME window `derivePrCiState`
-    // judged — so a give-up can say which check is still red.
+    // The names behind the verdict, from the SAME rows `prCiStateAtHead`
+    // judged — the head's own — so a give-up can say which check is still red.
     failingChecks: [
       ...new Set(
         checkRowsAtHead(row.pullRequest)
@@ -244,8 +244,10 @@ export async function evaluateRepair(
     return { ok: false, reason: 'not_implemented', runTargetKey: null, failing: [], running: [] };
   }
 
-  // The verdict is `derivePrCiState` — the one the Development pill and
-  // `ciPromotion` read — per member. Only an OPEN member can be repaired: a push
+  // The verdict is `prCiStateAtHead` — the one the Development pill and
+  // `ciPromotion` read — per member: the check rows AT the stored host head, never an
+  // older commit's, so a push whose checks have not reported is not `failing`
+  // (MOTIR-11932). Only an OPEN member can be repaired: a push
   // cannot change a merged or closed pull request, so its colour says nothing
   // about what an agent could do.
   const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);

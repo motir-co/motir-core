@@ -22,8 +22,7 @@ import type {
   GithubPullRequestWithContext,
 } from '@/lib/repositories/githubPullRequestRepository';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
-import { derivePrCiState } from '@/lib/github/prCiState';
-import { pullRequestHead } from '@/lib/github/pullRequestHead';
+import { prCiStateAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
 import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
 import { previewUrl } from '@/lib/preview/url';
 
@@ -110,7 +109,13 @@ export function toLinkedPullRequestDto(
     repo: `${row.repo.owner}/${row.repo.name}`,
     number: row.number,
     state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
-    ci: derivePrCiState(row.checkRuns),
+    // ⚠️ BOTH FIELDS ARE READ AT ONE COMMIT — the stored host head (MOTIR-11932). `ci` was
+    // the verdict at the newest CHECK-ROW sha while `headSha` was the host's, so for the
+    // minutes between a push and its first check row the pair said "the new head is red"
+    // with the previous commit's red. `prCiStateAtHead` is `null` there: nothing has
+    // reported at this head yet. A row with no stored head falls back to the newest
+    // check-row sha for both, exactly as before.
+    ci: prCiStateAtHead(row),
     headSha: pullRequestHead(row),
     url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.number}`,
     baseRef: row.baseRef,
