@@ -160,8 +160,9 @@ const mergeRadio = (page: Page, label: string) =>
   main(page).getByRole('radio').filter({ hasText: label });
 const modelCombobox = (page: Page) =>
   developmentSection(page).getByRole('combobox', { name: en.runs.hosted.picker.label });
-// The picker is a popover in a portal, outside <main>: found by its test id.
-const agentPicker = (page: Page) => page.getByTestId('review-in-my-agent-picker');
+// The picker is a popover in a portal, outside <main>: found by its dialog role and name.
+const agentPicker = (page: Page) =>
+  page.getByRole('dialog', { name: ar.doors.myAgent, exact: true });
 
 // ── GitHub, through the real webhook route ──────────────────────────────────
 
