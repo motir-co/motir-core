@@ -44,7 +44,6 @@ const { projectsService } = await import('@/lib/services/projectsService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
-const { approvalGateSettingsService } = await import('@/lib/services/approvalGateSettingsService');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 const { pullRequestApprovalGateHandler } =
   await import('@/lib/approvalGates/pullRequestApprovalHandler');
@@ -343,13 +342,7 @@ async function childSharingWithStory(
   opts: { gate: boolean },
 ) {
   const s = await makeScenario(slug);
-  if (opts.gate) {
-    await approvalGateSettingsService.updateSettings(
-      s.project.id,
-      { reviewAgentSource: 'own' },
-      s.ctx,
-    );
-  } else {
+  if (!opts.gate) {
     await adminDb.project.update({
       where: { id: s.project.id },
       data: { reviewAgentEnabled: false },

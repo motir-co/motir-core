@@ -5,6 +5,7 @@ import {
   ReviewVerdictAnswerExistsError,
   ReviewVerdictInvalidError,
   ReviewVerdictLateError,
+  ReviewVerdictRunTokenNotAllowedError,
   ReviewVerdictSecondError,
 } from '@/lib/agentReview/errors';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
@@ -24,6 +25,7 @@ import {
   type SubmitReviewVerdictInput,
 } from '@/lib/dto/agentReview';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import {
   reviewVerdictRecordRepository,
   type ReviewVerdictRecordCreateRow,
@@ -139,8 +141,10 @@ function normalise(input: SubmitReviewVerdictInput): SubmitReviewVerdictInput {
   };
 }
 
-/** A decided `agent_review` gate at the version — the gate-on half of SECOND. */
-function decidedAt(gate: ApprovalGate | null, version: string): boolean {
+/** A decided `agent_review` gate at the version — the gate-on half of SECOND. Exported for
+ *  the hosted review with no gate (`agentReviewRunService.submitVerdict`), which gives this
+ *  door's outcomes and so must read SECOND the same way. */
+export function decidedAt(gate: ApprovalGate | null, version: string): boolean {
   return (
     gate !== null &&
     gate.subjectVersion === version &&
@@ -149,11 +153,15 @@ function decidedAt(gate: ApprovalGate | null, version: string): boolean {
 }
 
 /**
- * Withdraw the card's awaiting approve-and-merge gate on a send-back (§12.14), and recompute
- * the card's To fix answer — gates first, then the card, the order every withdrawal takes.
- * Returns the gates withdrawn.
+ * Withdraw the card's awaiting approve-and-merge gate on a send-back (§12.14). The caller
+ * then recomputes the card's To fix answer — gates first, then the card, the order every
+ * withdrawal takes. Returns the gates withdrawn. Exported so the hosted review with no gate
+ * (§12.18) sends back exactly as this door does, rather than through a copy.
  */
-async function applySendBack(workItemId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+export async function applySendBack(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
   // ⚠️ …AND A STORY RUN'S AWAITING ACCEPTANCE QUESTION WITH IT. The video is the evidence
   // for that merge and its press merges, so a send-back that left it awaiting would keep
   // the story in To approve over the code just sent back (`pullRequestApprovalHandler`'s
@@ -197,7 +205,7 @@ async function applySendBack(workItemId: string, tx: Prisma.TransactionClient): 
  * one with its story, so a verdict at `current` never matched the awaiting gate and a
  * verdict at the gate's version was refused late — the gate was never decided.
  */
-async function reviewSubjectDeliveries(
+export async function reviewSubjectDeliveries(
   item: { id: string; identifier: string; parentId: string | null },
   deliveries: readonly WorkItemDeliveryWithChecks[],
   workspaceId: string,
@@ -224,6 +232,33 @@ type FirstPass =
   | { decide: { gateId: string } }
   | { recorded: ReviewVerdictRecord; withdrew: string[] };
 
+/**
+ * THE RUN-TOKEN ADMISSION (Story MOTIR-11941 · MOTIR-11953; `approval-gates.md` §12.18): the
+ * token's run must be a RUNNING review in a person's own agent (`origin: instance`, `command:
+ * review`) with a leg on `workItemId`. Its token was minted as the person who started it, so
+ * `ctx.userId` is already that person. Anything else is {@link ReviewVerdictRunTokenNotAllowedError}.
+ */
+async function assertOwnAgentReviewRun(
+  runId: string,
+  workItemId: string,
+  ctx: ServiceContext,
+): Promise<void> {
+  const admitted = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    async (tx) => {
+      const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
+      return (
+        run !== null &&
+        run.origin === 'instance' &&
+        run.command === 'review' &&
+        run.status === 'running' &&
+        run.cards.some((leg) => leg.workItemId === workItemId)
+      );
+    },
+  );
+  if (!admitted) throw new ReviewVerdictRunTokenNotAllowedError();
+}
+
 export const reviewVerdictService = {
   /**
    * Submit ONE agent verdict for a run-target card (§12.11). Returns what it did —
@@ -244,6 +279,11 @@ export const reviewVerdictService = {
     const input = normalise(rawInput);
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
     await projectAccessService.assertPermission(projectId, ctx, 'work_item:edit');
+    // ONE run kind's token is admitted (MOTIR-11953): a review in the person's own agent,
+    // running, with a leg on this card — refused before anything is stored.
+    if (ctx.tokenDispatchRunId !== undefined) {
+      await assertOwnAgentReviewRun(ctx.tokenDispatchRunId, item.id, ctx);
+    }
 
     const verdict = gateVerdictOf(input.verdict);
     const rowOf = (
@@ -375,7 +415,13 @@ export const reviewVerdictService = {
         const record = await reviewVerdictRecordService.record(rowOf('decided', gateId), tx);
         reviewBotPostService.requestPostAfterCommit(ctx.workspaceId, record.id);
         // A hosted run still reviewing this gate can no longer decide anything (§12.12).
-        agentReviewStartService.cancelRunsAfterCommit(ctx.workspaceId, [gateId]);
+        // The own-agent review that sent THIS verdict is closing itself: it is spared, or
+        // the review that answered would read as cancelled (MOTIR-11951).
+        agentReviewStartService.cancelRunsAfterCommit(
+          ctx.workspaceId,
+          [gateId],
+          ctx.tokenDispatchRunId,
+        );
         const withdrew = verdict === 'changes_requested' ? await applySendBack(item.id, tx) : [];
         if (withdrew.length > 0) await recomputeWorkItemFixReason(item.id, tx);
         return { record, withdrew };

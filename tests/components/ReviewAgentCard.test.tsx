@@ -8,24 +8,25 @@ import { ReviewAgentCard } from '@/app/(authed)/settings/project/approvals/_comp
 import { PrMergeModeCard } from '@/app/(authed)/settings/project/approvals/_components/PrMergeModeCard';
 import { MergeModeAndReviewAgentCards } from '@/app/(authed)/settings/project/approvals/_components/MergeModeAndReviewAgentCards';
 import type { PrMergeModeValue } from '@/lib/dto/projects';
-import type { ReviewAgentSourceValue } from '@/lib/dto/approvalGateSettings';
 
-// The REVIEW-AGENT switch (MOTIR-6823), built to
-// `design/projects/approvals--review-agent.mock.html` (MOTIR-6816), and the
-// exclusion it forms with *Merge automatically* (`approval-gates.md` §12.2a).
-// The room is manage-only, so there is no read-only case.
+// The REVIEW setting (MOTIR-6823, reworked by MOTIR-11946), built to
+// `design/github/review-path--person-starts.mock.html` Panels 1, 1b, 1c (§ 33.1): a gate on
+// approve-and-merge a person starts from the item, with no *Who reviews* choice and no
+// AI-credits note, and the exclusion it forms with *Merge automatically* (`approval-gates.md`
+// §12.2a). The room is manage-only, so there is no read-only case.
 
-const ON_WHAT = 'Every work item is reviewed before you are asked to approve it.';
-const OFF_WHAT = 'A work item is offered for approval as soon as its checks pass.';
+const ON_WHAT =
+  'An item in In review waits for a passing review before anyone is asked to approve its merge.';
+const OFF_WHAT =
+  'An item can be approved for merge as soon as its checks pass. It can still be reviewed from the item; the verdict is recorded and holds nothing.';
 const UNAVAILABLE_WHAT =
-  'This project merges automatically, so nothing waits for a review. Choose Ask before merging to turn the review agent on.';
-const BILLING = "Each review is a Motir agent run, paid from your organisation's AI credits.";
+  'This project merges automatically, so no person approves a merge for a review to stand in front of. Choose Ask before merging to turn Review on.';
 const OFF_NOTE =
-  'Turning this off cancels reviews in progress — those work items go straight to the ordinary flow.';
-const BLOCKED = 'Turn the review agent off to merge automatically.';
+  'Turning this off releases items waiting for a review: they go straight to approve-and-merge. A review already running still records its verdict.';
+const BLOCKED = 'Turn Review off to merge automatically.';
 const ASK = 'Ask before merging';
-const HOSTED = 'Motir agent';
-const OWN = 'Your own agent';
+/** The words the retired source choice and billing note carried — none may render. */
+const RETIRED = [/Who reviews/, /Your own agent/, /AI credits/, /Uses AI credits/];
 const POSTING = 'Post agent reviews on pull requests';
 const POSTING_ON =
   "Motir's GitHub app comments every verdict on the pull requests, and asks for changes on a send-back. It never approves.";
@@ -51,7 +52,6 @@ function settings(over: Record<string, unknown>) {
     acceptanceVideoEnabled: false,
     reviewAgentEnabled: true,
     designApprovalGate: true,
-    reviewAgentSource: 'hosted',
     reviewBotPostsEnabled: true,
     ...over,
   });
@@ -61,7 +61,7 @@ const AUTO = 'Merge automatically';
 function renderCard(
   initialEnabled: boolean,
   prMergeMode: PrMergeModeValue = 'manual',
-  extra: { initialSource?: ReviewAgentSourceValue; initialBotPostsEnabled?: boolean } = {},
+  extra: { initialBotPostsEnabled?: boolean } = {},
 ) {
   return renderWithIntl(
     <ToastProvider>
@@ -75,27 +75,20 @@ function renderCard(
   );
 }
 
-function renderPair(
-  mode: PrMergeModeValue,
-  enabled: boolean,
-  locale?: 'zh',
-  source?: ReviewAgentSourceValue,
-) {
+function renderPair(mode: PrMergeModeValue, enabled: boolean, locale?: 'zh') {
   return renderWithIntl(
     <ToastProvider>
       <MergeModeAndReviewAgentCards
         projectKey="ACME"
         initialPrMergeMode={mode}
         initialReviewAgentEnabled={enabled}
-        initialReviewAgentSource={source}
       />
     </ToastProvider>,
     locale ? { locale, messages: zh } : undefined,
   );
 }
 
-const reviewSwitch = (name = 'Review agent') =>
-  screen.getByRole('switch', { name }) as HTMLButtonElement;
+const reviewSwitch = (name = 'Review') => screen.getByRole('switch', { name }) as HTMLButtonElement;
 const option = (name: string) =>
   screen.getByRole('radio', { name: new RegExp(name) }) as HTMLButtonElement;
 const botSwitch = (name = POSTING) => screen.getByRole('switch', { name }) as HTMLButtonElement;
@@ -115,29 +108,30 @@ describe('ReviewAgentCard — the three states', () => {
   it('OFF (the default): named Off, the gloss says what happens instead, no footer note (S2)', () => {
     const { container } = renderCard(false);
     expect(container.querySelector('#review-agent')).not.toBeNull();
-    expect(screen.getByRole('heading', { name: 'Review agent' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Review' })).toBeTruthy();
     expect(screen.getByText('Off')).toBeTruthy();
     expect(screen.getByText(OFF_WHAT)).toBeTruthy();
     expect(reviewSwitch().getAttribute('aria-checked')).toBe('false');
     expect(reviewSwitch().disabled).toBe(false);
-    expect(screen.queryByText(BILLING)).toBeNull();
     expect(screen.queryByText(OFF_NOTE)).toBeNull();
   });
 
-  it('ON: named On, with the billing line AND the switch-off note', () => {
+  it('ON: named On, with the switch-off note and no AI-credits note', () => {
     renderCard(true);
     expect(screen.getByText('On')).toBeTruthy();
     expect(screen.getByText(ON_WHAT)).toBeTruthy();
     expect(reviewSwitch().getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByText(BILLING)).toBeTruthy();
     expect(screen.getByText(OFF_NOTE)).toBeTruthy();
+    expect(screen.queryByText(/AI credits/)).toBeNull();
   });
 
-  it('the description emphasises the moment it stands in front of', () => {
+  it('the description names the gate it is and who starts a review', () => {
     const { container } = renderCard(false);
     const strongs = [...container.querySelectorAll('strong')].map((s) => s.textContent);
-    expect(strongs).toContain('before you are asked to approve it');
-    expect(strongs).toContain('To fix');
+    expect(strongs).toEqual(['approve-and-merge']);
+    expect(textOf(container.querySelector('h2 + p'))).toBe(
+      'A gate on approve-and-merge. With it on, a work item can’t be approved for merge until an agent review of its current pull requests passes. Nothing starts a review by itself: a person starts it from the item.',
+    );
   });
 
   it.each([
@@ -156,7 +150,7 @@ describe('ReviewAgentCard — the three states', () => {
       expect(screen.queryByText('Off')).toBeNull();
       expect(reviewSwitch().getAttribute('aria-checked')).toBe('false');
       expect(reviewSwitch().disabled).toBe(true);
-      expect(screen.getByText(BILLING)).toBeTruthy();
+      expect(screen.queryByText(/AI credits/)).toBeNull();
       expect(screen.queryByText(OFF_NOTE)).toBeNull();
 
       fireEvent.click(reviewSwitch());
@@ -331,129 +325,63 @@ describe('the pair on the page — each card reads the other’s CURRENT value',
 
   it('renders in zh with every string from the catalog', () => {
     renderPair('manual', true, 'zh');
-    expect(screen.getByRole('heading', { name: '审查智能体' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '审查' })).toBeTruthy();
     expect(screen.getByText('已开启')).toBeTruthy();
-    expect(screen.getByText('每个工作项都会先经过审查，然后才会请你批准。')).toBeTruthy();
     expect(
-      screen.getByText('每次审查都是一次 Motir 智能体运行，费用从你组织的 AI 额度中扣除。'),
+      screen.getByText('处于评审中的工作项会等待审查通过，然后才会请人批准合并。'),
     ).toBeTruthy();
     expect(
-      screen.getByText('关闭后，进行中的审查会被取消——这些工作项将直接进入常规流程。'),
+      screen.getByText(
+        '关闭后，等待审查的工作项会被放行，直接进入批准并合并。已在运行的审查仍会记录其结论。',
+      ),
     ).toBeTruthy();
-    expect(screen.getByText('关闭审查智能体后才能自动合并。')).toBeTruthy();
-    expect(reviewSwitch('审查智能体').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('关闭审查后才能自动合并。')).toBeTruthy();
+    expect(reviewSwitch('审查').getAttribute('aria-checked')).toBe('true');
+    // The merge-mode card above keeps its own radiogroup; the Review card has none.
+    expect(document.querySelector('#review-agent [role="radiogroup"]')).toBeNull();
+    expect(screen.queryByText(/AI 额度/)).toBeNull();
+    expect(botSwitch('在拉取请求上发布智能体审查').getAttribute('aria-checked')).toBe('true');
   });
 
   it('renders the Unavailable state in zh', () => {
     renderPair('auto', false, 'zh');
     expect(screen.getByText('不可用')).toBeTruthy();
     expect(textOf(screen.getByText(/该项目会自动合并/))).toBe(
-      '该项目会自动合并，因此没有需要等待审查的内容。请选择合并前询问以开启审查智能体。',
+      '该项目会自动合并，没有人批准合并，审查也就无处把关。请选择合并前询问以开启审查。',
     );
   });
 });
 
-describe('ReviewAgentCard — Who reviews (MOTIR-10337 · S3, S4)', () => {
-  it('is hidden while the review agent is off (S2) and in an auto project', () => {
+describe('ReviewAgentCard — no review source (MOTIR-11946 · Panels 1, 1b, 1c)', () => {
+  it.each([
+    [false, 'manual'],
+    [true, 'manual'],
+    [false, 'auto'],
+    [true, 'auto'],
+  ] as const)('enabled %s, %s: no Who reviews choice and no AI-credits note', (enabled, mode) => {
+    const { container } = renderCard(enabled, mode);
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(screen.queryAllByRole('radio')).toEqual([]);
+    for (const words of RETIRED) expect(container.textContent).not.toMatch(words);
+  });
+
+  it('no PATCH the card sends carries a review source', async () => {
+    const { calls } = deferredFetch();
     renderCard(false);
-    expect(screen.queryByRole('radiogroup', { name: 'Who reviews' })).toBeNull();
-    cleanup();
-    renderCard(true, 'auto');
-    expect(screen.queryByRole('radiogroup', { name: 'Who reviews' })).toBeNull();
-  });
-
-  it('defaults to Motir’s hosted agent, with the credits gloss and the billing line', () => {
-    const { container } = renderCard(true);
-    const group = screen.getByRole('radiogroup', { name: 'Who reviews' });
-    expect(group).toBeTruthy();
-    expect(option(HOSTED).getAttribute('aria-checked')).toBe('true');
-    expect(option(OWN).getAttribute('aria-checked')).toBe('false');
-    expect(option(HOSTED).textContent).toContain('Uses AI credits.');
-    expect(screen.getByText(BILLING)).toBeTruthy();
-    expect(container.querySelector('code')?.textContent).toBe('motir review');
-  });
-
-  it('with the own source: free, waits for `motir review`, and no hosted billing line', () => {
-    renderCard(true, 'manual', { initialSource: 'own' });
-    expect(option(OWN).getAttribute('aria-checked')).toBe('true');
-    expect(textOf(option(OWN))).toContain(
-      'Free. The review waits until someone runs motir review from their own agent. Nothing starts by itself.',
-    );
-    expect(screen.queryByText(BILLING)).toBeNull();
-    // The switch-off note follows the switch, not the source (S4).
-    expect(screen.getByText(OFF_NOTE)).toBeTruthy();
-  });
-
-  it('choosing own PATCHes the source ALONE, optimistically, then back to hosted', async () => {
-    const { spy, calls } = deferredFetch();
-    renderCard(true);
-
-    fireEvent.click(option(OWN));
-    expect(option(OWN).getAttribute('aria-checked')).toBe('true');
-    expect(screen.queryByText(BILLING)).toBeNull();
-    // S7: every control is disabled while the write is in flight.
-    expect(option(HOSTED).disabled).toBe(true);
-    expect(reviewSwitch().disabled).toBe(true);
-    expect(botSwitch().disabled).toBe(true);
-    expect(spy.mock.calls[0]![0]).toBe('/api/projects/MOTIR/approval-gates');
-    expect(calls[0]!.body).toEqual({ reviewAgentSource: 'own' });
-    await act(async () => calls[0]!.answer(settings({ reviewAgentSource: 'own' })));
-    expect(await screen.findByText('Saved')).toBeTruthy();
-    await waitFor(() => expect(option(HOSTED).disabled).toBe(false));
-
-    fireEvent.click(option(HOSTED));
-    expect(calls[1]!.body).toEqual({ reviewAgentSource: 'hosted' });
-    await act(async () => calls[1]!.answer(settings({ reviewAgentSource: 'hosted' })));
-    await waitFor(() => expect(option(HOSTED).getAttribute('aria-checked')).toBe('true'));
-    expect(screen.getByText(BILLING)).toBeTruthy();
-    expect(reviewSwitch().getAttribute('aria-checked')).toBe('true');
-    expect(botSwitch().getAttribute('aria-checked')).toBe('true');
-  });
-
-  it('choosing the selected option sends nothing', () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
-    renderCard(true);
-    fireEvent.click(option(HOSTED));
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('takes the server’s value from the response', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => settings({ reviewAgentSource: 'hosted' })),
-    );
-    renderCard(true);
-    fireEvent.click(option(OWN));
-    expect(await screen.findByText('Saved')).toBeTruthy();
-    await waitFor(() => expect(option(HOSTED).getAttribute('aria-checked')).toBe('true'));
-  });
-
-  it('a failed source write puts the old value BACK with the error toast', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => Response.json({ code: 'INTERNAL' }, { status: 500 })),
-    );
-    renderCard(true);
-    fireEvent.click(option(OWN));
-    expect(await screen.findByText(SAVE_ERROR)).toBeTruthy();
-    expect(option(HOSTED).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByText(BILLING)).toBeTruthy();
-  });
-
-  it('the radio cards are keyboard operable and named', async () => {
-    const { spy, calls } = deferredFetch();
-    renderCard(true);
-    const own = option(OWN);
-    own.focus();
-    expect(document.activeElement).toBe(own);
-    expect(own.tagName).toBe('BUTTON');
-    fireEvent.click(own); // a <button> is activated by Enter/Space as a click
-    expect(spy).toHaveBeenCalledTimes(1);
-    expect(calls[0]!.body).toEqual({ reviewAgentSource: 'own' });
-    // Settle it: React entangles every pending async transition, so a write left
-    // in flight would hold later tests' transitions pending.
-    await act(async () => calls[0]!.answer(settings({ reviewAgentSource: 'own' })));
+    fireEvent.click(reviewSwitch());
+    await act(async () => calls[0]!.answer(settings({ reviewAgentEnabled: true })));
+    await waitFor(() => expect(botSwitch().disabled).toBe(false));
+    fireEvent.click(botSwitch());
+    await act(async () => calls[1]!.answer(settings({ reviewBotPostsEnabled: false })));
+    await waitFor(() => expect(reviewSwitch().disabled).toBe(false));
+    fireEvent.click(reviewSwitch());
+    await act(async () => calls[2]!.answer(settings({ reviewAgentEnabled: false })));
+    expect(calls.map((c) => c.body)).toEqual([
+      { reviewAgentEnabled: true },
+      { reviewBotPostsEnabled: false },
+      { reviewAgentEnabled: false },
+    ]);
+    for (const c of calls) expect(c.body).not.toHaveProperty('reviewAgentSource');
   });
 });
 
@@ -477,22 +405,19 @@ describe('ReviewAgentCard — bot posting (MOTIR-10337 · S2, S5)', () => {
     expect(screen.getByText(POSTING_OFF)).toBeTruthy();
   });
 
-  it('a flip PATCHes reviewBotPostsEnabled ALONE and leaves the switch and the source', async () => {
+  it('a flip PATCHes reviewBotPostsEnabled ALONE and leaves the Review switch', async () => {
     const { calls } = deferredFetch();
-    renderCard(true, 'manual', { initialSource: 'own' });
+    renderCard(true, 'manual');
 
     fireEvent.click(botSwitch());
     expect(botSwitch().getAttribute('aria-checked')).toBe('false');
     expect(screen.getByText(POSTING_OFF)).toBeTruthy();
     expect(calls[0]!.body).toEqual({ reviewBotPostsEnabled: false });
-    await act(async () =>
-      calls[0]!.answer(settings({ reviewBotPostsEnabled: false, reviewAgentSource: 'own' })),
-    );
+    await act(async () => calls[0]!.answer(settings({ reviewBotPostsEnabled: false })));
     expect(await screen.findByText('Saved')).toBeTruthy();
     await waitFor(() => expect(botSwitch().disabled).toBe(false));
     expect(botSwitch().getAttribute('aria-checked')).toBe('false');
     expect(reviewSwitch().getAttribute('aria-checked')).toBe('true');
-    expect(option(OWN).getAttribute('aria-checked')).toBe('true');
 
     fireEvent.click(botSwitch());
     expect(calls[1]!.body).toEqual({ reviewBotPostsEnabled: true });
@@ -519,22 +444,6 @@ describe('ReviewAgentCard — the per-control sequence guard', () => {
   // state (a double activation inside one task). A click on a disabled <button>
   // never reaches React, so these cases call the element's React handler directly
   // — the same function that race would run.
-  it('an OLDER response of the same control never lands over a newer write', async () => {
-    const { calls } = deferredFetch();
-    renderCard(true);
-
-    act(() => press(option(OWN)));
-    act(() => press(option(HOSTED)));
-    expect(calls.map((c) => c.body)).toEqual([
-      { reviewAgentSource: 'own' },
-      { reviewAgentSource: 'hosted' },
-    ]);
-    await act(async () => calls[1]!.answer(settings({ reviewAgentSource: 'hosted' })));
-    await act(async () => calls[0]!.answer(settings({ reviewAgentSource: 'own' })));
-    await waitFor(() => expect(option(HOSTED).disabled).toBe(false));
-    expect(option(HOSTED).getAttribute('aria-checked')).toBe('true');
-  });
-
   it('an OLDER failure never puts a value back over a newer write', async () => {
     const { calls } = deferredFetch();
     renderCard(true);
@@ -554,26 +463,25 @@ describe('ReviewAgentCard — the per-control sequence guard', () => {
 
   it('writes of DIFFERENT controls reconcile only their own value', async () => {
     const { calls } = deferredFetch();
-    renderCard(true);
+    renderCard(false);
 
     act(() => {
-      press(option(OWN));
+      press(reviewSwitch());
       press(botSwitch());
     });
     expect(calls.map((c) => c.body)).toEqual([
-      { reviewAgentSource: 'own' },
+      { reviewAgentEnabled: true },
       { reviewBotPostsEnabled: false },
     ]);
-    // The bot write fails first; the source write then succeeds with a DTO whose
-    // bot value is stale — the source control must not apply it.
+    // The bot write fails first; the Review write then succeeds with a DTO whose bot
+    // value is stale — the Review control must not apply it.
     await act(async () => calls[1]!.answer(Response.json({ code: 'INTERNAL' }, { status: 500 })));
     await act(async () =>
-      calls[0]!.answer(settings({ reviewAgentSource: 'own', reviewBotPostsEnabled: false })),
+      calls[0]!.answer(settings({ reviewAgentEnabled: true, reviewBotPostsEnabled: false })),
     );
-    await waitFor(() => expect(option(OWN).disabled).toBe(false));
-    expect(option(OWN).getAttribute('aria-checked')).toBe('true');
-    expect(botSwitch().getAttribute('aria-checked')).toBe('true');
+    await waitFor(() => expect(reviewSwitch().disabled).toBe(false));
     expect(reviewSwitch().getAttribute('aria-checked')).toBe('true');
+    expect(botSwitch().getAttribute('aria-checked')).toBe('true');
   });
 
   it('the enabled switch carries its own guard too', async () => {
@@ -590,57 +498,5 @@ describe('ReviewAgentCard — the per-control sequence guard', () => {
     await waitFor(() => expect(reviewSwitch().disabled).toBe(false));
     expect(reviewSwitch().getAttribute('aria-checked')).toBe('false');
     expect(screen.getByText('Off')).toBeTruthy();
-  });
-});
-
-describe('the exclusion holds under EITHER source (S6)', () => {
-  it.each<ReviewAgentSourceValue>(['hosted', 'own'])(
-    'source %s: Merge automatically is disabled with the shipped line while the agent is on',
-    (source) => {
-      renderPair('manual', true, undefined, source);
-      expect(option(AUTO).disabled).toBe(true);
-      expect(option(AUTO).getAttribute('aria-disabled')).toBe('true');
-      expect(screen.getByText(BLOCKED)).toBeTruthy();
-      expect(option(source === 'own' ? OWN : HOSTED).getAttribute('aria-checked')).toBe('true');
-    },
-  );
-
-  it.each<ReviewAgentSourceValue>(['hosted', 'own'])(
-    'source %s: an auto project leaves the review agent Unavailable',
-    (source) => {
-      renderPair('auto', false, undefined, source);
-      expect(screen.getByText('Unavailable')).toBeTruthy();
-      expect(reviewSwitch().disabled).toBe(true);
-      expect(option(AUTO).disabled).toBe(false);
-    },
-  );
-
-  it('choosing a source does not re-enable Merge automatically', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => settings({ reviewAgentSource: 'own' })),
-    );
-    renderPair('manual', true);
-    fireEvent.click(option(OWN));
-    expect(await screen.findByText('Saved')).toBeTruthy();
-    expect(option(AUTO).disabled).toBe(true);
-    expect(screen.getByText(BLOCKED)).toBeTruthy();
-  });
-
-  it('renders the source choice and bot posting in zh', () => {
-    renderPair('manual', true, 'zh', 'own');
-    expect(screen.getByRole('radiogroup', { name: '由谁审查' })).toBeTruthy();
-    expect(option('Motir 智能体').getAttribute('aria-checked')).toBe('false');
-    expect(option('你自己的智能体').getAttribute('aria-checked')).toBe('true');
-    expect(textOf(option('你自己的智能体'))).toContain(
-      '免费。审查会等待有人从自己的智能体运行 motir review。不会自动开始。',
-    );
-    expect(botSwitch('在拉取请求上发布智能体审查').getAttribute('aria-checked')).toBe('true');
-    expect(
-      screen.getByText(
-        'Motir 的 GitHub 应用会在拉取请求上评论每个结论，并在退回时要求修改。它从不批准。',
-      ),
-    ).toBeTruthy();
-    expect(screen.getByText('关闭审查智能体后才能自动合并。')).toBeTruthy();
   });
 });

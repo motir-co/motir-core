@@ -618,7 +618,7 @@ describe('every hosted start path is refused on the full model, and opens, claim
     expect((await post(card.identifier, { model: FULL, mode: 'fix' })).status).toBe(201);
   });
 
-  it('the review start on the full default model; through the requested job the gate stays awaiting', async () => {
+  it('the review start on the full default model; a press is refused by name and the gate stays awaiting', async () => {
     offered = { ids: [FULL, OPEN], default: FULL };
     const card = await freshCard();
     const gate = await adminDb.approvalGate.create({
@@ -640,15 +640,20 @@ describe('every hosted start path is refused on the full model, and opens, claim
     expect(refused).toBeInstanceOf(HostedRunNoCapacityError);
     expect(refused).toMatchObject({ model: FULL, reason: await pickerReason(FULL) });
 
-    expect(
-      await agentReviewStartService.startRequested({ workspaceId: fx.workspaceId, ...input }),
-    ).toEqual({
-      outcome: 'refused',
-      reason: 'hosted_run_no_capacity',
+    // A person's press (MOTIR-11944) on the same card in In review: the refusal is THROWN to
+    // the presser by name, and nothing is written onto the gate, which stays awaiting.
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'in_review' } });
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { prMergeMode: 'manual', reviewAgentEnabled: true },
     });
+    const pressed = await agentReviewStartService
+      .startRequested({ workItemKey: card.identifier }, fx.ctx)
+      .catch((err: unknown) => err);
+    expect(pressed).toBeInstanceOf(HostedRunNoCapacityError);
     expect(await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).toMatchObject({
       state: 'awaiting',
-      reviewUnavailableReason: 'hosted_run_no_capacity',
+      reviewUnavailableReason: null,
     });
     expect(await runCount()).toBe(0);
     await expectNothingSpent();

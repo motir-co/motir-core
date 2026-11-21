@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
@@ -66,7 +67,15 @@ const RUN = {
   id: 'run-611',
   label: 'motir review · 2026-09-29 09:41 UTC',
   startedAt: '2026-09-29T09:41:00.000Z',
+  status: 'running' as const,
+  origin: 'hosted' as const,
+  agentName: null,
+  byViewer: false,
 };
+/** The same run, ended — what a review that could not run links. */
+const ENDED = { ...RUN, status: 'failed' as const };
+/** A review a person started in their own agent, still running (§ 33.5). */
+const OWN = { ...RUN, origin: 'instance' as const, agentName: 'Laptop agent', byViewer: true };
 
 function view(gate: ApprovalGateDTO, over: Partial<AgentReviewViewDto> = {}): AgentReviewViewDto {
   return {
@@ -115,9 +124,11 @@ function renderLeading(
   {
     repair = null,
     messages,
+    doors,
   }: {
     repair?: WorkItemRepairViewDto | null;
     messages?: Record<string, unknown>;
+    doors?: React.ReactNode;
   } = {},
 ) {
   return render(
@@ -137,6 +148,7 @@ function renderLeading(
       gateActions={pageActions()}
       handOver={{ routedToViewer: true }}
       agentReview={review}
+      reviewDoors={doors}
     />,
     messages ? { messages, locale: 'zh' } : {},
   );
@@ -144,6 +156,7 @@ function renderLeading(
 
 const band = () => screen.getByTestId('agent-review-band');
 const button = (name: string) => screen.queryByRole('button', { name });
+const DOORS = <div data-testid="stub-doors">the doors</div>;
 
 describe('Reviewing (Panel 1)', () => {
   it('names the kind, the Reviewing pill, the run, and draws no verbs', () => {
@@ -160,8 +173,8 @@ describe('Reviewing (Panel 1)', () => {
     expect(screen.getByText(ar.reviewing.why)).toBeTruthy();
     // No Approve verbs, no review verbs, no call-to-action band into the overlay.
     expect(button(pra.verb.approveAndMerge)).toBeNull();
-    expect(button(ar.verb.reviewAgain)).toBeNull();
     expect(button(ar.verb.continueWithout)).toBeNull();
+    expect(screen.queryByTestId('stub-doors')).toBeNull();
     // The settings door, handed only to a holder of `workflow:manage`.
     const door = screen.getByRole('link', { name: en.approvalGate.settingsDoor.reviewAgent });
     expect(door.getAttribute('href')).toBe('/settings/project/approvals#review-agent');
@@ -170,9 +183,7 @@ describe('Reviewing (Panel 1)', () => {
   it('a reader it is not routed to reads the same line, and still no verbs', () => {
     renderLeading(view(reviewGate(), { canDecide: false }));
     expect(screen.getByText(ar.reviewing.why)).toBeTruthy();
-    expect(
-      screen.queryAllByRole('button').filter((b) => b.textContent === ar.verb.reviewAgain),
-    ).toHaveLength(0);
+    expect(button(ar.verb.continueWithout)).toBeNull();
   });
 });
 
@@ -190,24 +201,28 @@ describe('Review could not run (Panels 4a, 4b, 4d)', () => {
     ['review_start_failed', ar.couldNotRun.reason.unknown],
   ];
   it.each(cases)('code %s reads its own line', (code, line) => {
-    renderLeading(view(reviewGate(), { reviewUnavailableReason: code }));
+    renderLeading(view(reviewGate(), { run: ENDED, reviewUnavailableReason: code }));
     expect(band().textContent).toContain('Review could not run:');
     expect(band().textContent).toContain(line);
   });
 
   it('no_verdict links the run that ended without one', () => {
-    renderLeading(view(reviewGate(), { reviewUnavailableReason: 'no_verdict' }));
+    renderLeading(view(reviewGate(), { run: ENDED, reviewUnavailableReason: 'no_verdict' }));
     expect(band().textContent).toContain('the review run ended without a verdict');
     expect(within(band()).getByTestId('agent-review-run-link').getAttribute('href')).toBe(
       '/runs?run=run-611',
     );
   });
 
-  it('routed: the Could not run pill, the why line, Continue without and Review again', () => {
-    renderLeading(view(reviewGate(), { reviewUnavailableReason: 'hosted_run_out_of_credits' }));
+  it('routed: the Could not run pill, the why line, Continue without and the doors again', () => {
+    renderLeading(
+      view(reviewGate(), { run: ENDED, reviewUnavailableReason: 'hosted_run_out_of_credits' }),
+      { doors: DOORS },
+    );
     expect(screen.getByText(ar.state.couldNotRun)).toBeTruthy();
     expect(screen.getByText(ar.couldNotRun.why)).toBeTruthy();
-    expect(button(ar.verb.reviewAgain)).toBeTruthy();
+    expect(screen.getByText(ar.doors.leadAgain)).toBeTruthy();
+    expect(screen.getByTestId('stub-doors')).toBeTruthy();
     expect(button(ar.verb.continueWithout)).toBeTruthy();
     expect(button(pra.verb.approveAndMerge)).toBeNull();
   });
@@ -215,6 +230,7 @@ describe('Review could not run (Panels 4a, 4b, 4d)', () => {
   it('not routed (state B): the reason, who it waits on, and NO verbs', () => {
     renderLeading(
       view(reviewGate(), {
+        run: ENDED,
         reviewUnavailableReason: 'hosted_run_out_of_credits',
         canDecide: false,
       }),
@@ -226,53 +242,92 @@ describe('Review could not run (Panels 4a, 4b, 4d)', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText(en.approvalGate.state.awaiting)).toBeTruthy();
-    expect(button(ar.verb.reviewAgain)).toBeNull();
+    expect(screen.queryByText(ar.doors.leadAgain)).toBeNull();
     expect(button(ar.verb.continueWithout)).toBeNull();
   });
 });
 
-describe('Review again (§12.6)', () => {
-  it('calls the start card route, then reads Reviewing again and re-reads the page', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify({ gateId: 'g' }), { status: 202 }));
-    const review = view(reviewGate(), { reviewUnavailableReason: 'hosted_run_out_of_credits' });
-    renderLeading(review);
-    await act(async () => {
-      fireEvent.click(button(ar.verb.reviewAgain)!);
-    });
-    expect(fetchSpy).toHaveBeenCalledWith(
-      `/api/approval-gates/${review.gate.id}/review-again`,
-      expect.objectContaining({ method: 'POST' }),
-    );
-    expect(refreshSpy).toHaveBeenCalled();
-    expect(band().dataset.state).toBe('reviewing');
-    expect(screen.getByText(ar.state.reviewing)).toBeTruthy();
-    expect(button(ar.verb.reviewAgain)).toBeNull();
-    fetchSpy.mockRestore();
+describe('Waiting for a review (§ 33.4): nothing reviews by itself', () => {
+  const waiting = () => view(reviewGate(), { run: null });
+
+  it('routed: the Waiting pill, the lead and the doors, the why line, Continue without', () => {
+    renderLeading(waiting(), { doors: DOORS });
+    expect(band().dataset.state).toBe('waiting');
+    expect(within(band()).getByText(ar.doors.title)).toBeTruthy();
+    expect(within(band()).getByText(ar.doors.lead)).toBeTruthy();
+    expect(screen.getByTestId('stub-doors')).toBeTruthy();
+    expect(screen.getAllByText(ar.state.waiting).length).toBeGreaterThan(0);
+    expect(screen.getByText(ar.doors.waitingWhy)).toBeTruthy();
+    expect(button(ar.verb.continueWithout)).toBeTruthy();
+    expect(button(pra.verb.approveAndMerge)).toBeNull();
   });
 
-  it('a refused press is drawn in place and the review is unchanged', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify({ code: 'X' }), { status: 403 }));
-    renderLeading(view(reviewGate(), { reviewUnavailableReason: 'hosted_run_out_of_credits' }));
-    await act(async () => {
-      fireEvent.click(button(ar.verb.reviewAgain)!);
-    });
-    expect(screen.getByRole('alert').textContent).toContain(
-      en.approvalGate.refusal.notAuthorised.title,
+  it('with no doors handed in, the routed reader still gets the motir review command', () => {
+    renderLeading(waiting());
+    expect(band().textContent).toContain('motir review ACME-12');
+  });
+
+  it('the settings door shows while it waits, for a holder of workflow:manage', () => {
+    renderLeading(
+      view(reviewGate(), { run: null, settingsDoorHref: '/settings/project/approvals#x' }),
     );
-    expect(band().dataset.state).toBe('could-not-run');
-    expect(refreshSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+    expect(
+      screen
+        .getByRole('link', { name: en.approvalGate.settingsDoor.reviewAgent })
+        .getAttribute('href'),
+    ).toBe('/settings/project/approvals#x');
+  });
+
+  it('not routed: the title, who it waits on, no doors and no verbs', () => {
+    renderLeading(view(reviewGate(), { run: null, canDecide: false }), { doors: DOORS });
+    expect(within(band()).getByText(ar.doors.title)).toBeTruthy();
+    expect(screen.queryByTestId('stub-doors')).toBeNull();
+    expect(
+      screen.getByText(
+        'Waiting for Zhu Yue to start a review. Nothing merges until a review passes or they continue without it.',
+      ),
+    ).toBeTruthy();
+    expect(button(ar.verb.continueWithout)).toBeNull();
+  });
+
+  it('a run that ended without a reason on the gate reads Waiting, not Reviewing', () => {
+    renderLeading(view(reviewGate(), { run: ENDED }), { doors: DOORS });
+    expect(band().dataset.state).toBe('waiting');
+  });
+});
+
+describe('Reviewing in my agent (§ 33.5)', () => {
+  it('started by the viewer: the agent named, the Working pill, the run, and no doors', () => {
+    renderLeading(view(reviewGate(), { run: OWN }), { doors: DOORS });
+    expect(band().dataset.state).toBe('own-reviewing');
+    expect(within(band()).getByText('Reviewing in Laptop agent')).toBeTruthy();
+    expect(band().textContent).toContain('by you');
+    expect(band().textContent).toContain(
+      'Your agent runs motir review ACME-12 and records its verdict here.',
+    );
+    expect(within(band()).getByTestId('agent-review-run-link').getAttribute('href')).toBe(
+      '/runs?run=run-611',
+    );
+    expect(screen.queryByTestId('stub-doors')).toBeNull();
+    expect(button(ar.verb.continueWithout)).toBeNull();
+  });
+
+  it('started by someone else, its agent gone: the neutral title and line', () => {
+    renderLeading(view(reviewGate(), { run: { ...OWN, byViewer: false, agentName: null } }));
+    expect(within(band()).getByText(ar.own.titleNoAgent)).toBeTruthy();
+    expect(band().textContent).not.toContain('by you');
+    expect(band().textContent).toContain(
+      'The agent runs motir review ACME-12 and records its verdict here.',
+    );
   });
 });
 
 describe('Continue without the review hands over to the approval overlay (§12.3, MOTIR-6323)', () => {
   it('opens the overlay on the card’s agent_review gate — no confirm here, nothing decided', async () => {
     window.history.replaceState(null, '', '/items/ACME-12?tab=activity');
-    renderLeading(view(reviewGate(), { reviewUnavailableReason: 'hosted_run_out_of_credits' }));
+    renderLeading(
+      view(reviewGate(), { run: ENDED, reviewUnavailableReason: 'hosted_run_out_of_credits' }),
+    );
     await act(async () => {
       fireEvent.click(button(ar.verb.continueWithout)!);
     });
@@ -286,9 +341,8 @@ describe('Continue without the review hands over to the approval overlay (§12.3
     expect(screen.queryByLabelText(ar.override.label)).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(refreshSpy).not.toHaveBeenCalled();
-    // The frame still stands, with both of its buttons.
+    // The frame still stands, its Continue without still there.
     expect(band().dataset.state).toBe('could-not-run');
-    expect(button(ar.verb.reviewAgain)).toBeTruthy();
     expect(button(ar.verb.continueWithout)).toBeTruthy();
   });
 });
@@ -327,7 +381,6 @@ describe('Sent back by the review agent (Panel 3)', () => {
     expect(part.textContent).not.toContain('Checks are failing');
     // No verbs of any kind.
     expect(button(pra.verb.approveAndMerge)).toBeNull();
-    expect(button(ar.verb.reviewAgain)).toBeNull();
   });
 });
 
@@ -462,9 +515,11 @@ describe('zh', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const states: AgentReviewViewDto[] = [
       view(reviewGate()),
-      view(reviewGate(), { reviewUnavailableReason: 'no_verdict' }),
-      view(reviewGate(), { reviewUnavailableReason: 'weird_code' }),
-      view(reviewGate(), { reviewUnavailableReason: 'hosted_run_no_capacity' }),
+      view(reviewGate(), { run: null }),
+      view(reviewGate(), { run: OWN }),
+      view(reviewGate(), { run: ENDED, reviewUnavailableReason: 'no_verdict' }),
+      view(reviewGate(), { run: ENDED, reviewUnavailableReason: 'weird_code' }),
+      view(reviewGate(), { run: ENDED, reviewUnavailableReason: 'hosted_run_no_capacity' }),
       view(reviewGate({ state: 'changes_requested', noteMd: FINDINGS })),
     ];
     for (const s of states) {
@@ -487,9 +542,12 @@ describe('the helpers', () => {
   });
 
   it('the no-capacity line reads in zh, never the unknown fallback (MOTIR-9633)', () => {
-    renderLeading(view(reviewGate(), { reviewUnavailableReason: 'hosted_run_no_capacity' }), {
-      messages: zh,
-    });
+    renderLeading(
+      view(reviewGate(), { run: ENDED, reviewUnavailableReason: 'hosted_run_no_capacity' }),
+      {
+        messages: zh,
+      },
+    );
     expect(band().textContent).toContain(zh.approvalGate.agentReview.couldNotRun.reason.noCapacity);
     expect(band().getAttribute('data-reason')).toBe('noCapacity');
   });

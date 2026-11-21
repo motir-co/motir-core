@@ -3167,8 +3167,8 @@
             "desc": "Właściciel lub administrator organizacji zatrzymał jednego z Twoich agentów na stronie Fleet organizacji."
           },
           "review_to_run": {
-            "label": "Recenzja czeka na twojego agenta",
-            "desc": "Twój projekt recenzuje własnym agentem, a recenzję elementu roboczego uruchamiasz sam poleceniem motir review."
+            "label": "Przegląd czeka na uruchomienie",
+            "desc": "Element roboczy przypisany do Ciebie czeka na przegląd: uruchom go z poziomu elementu lub wykonaj motir review."
           },
           "review_sent_back": {
             "label": "Agent poprosił o zmiany",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> aktualizuje <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> wysyła Ci powiadomienie",
       "accessRefused": "Kod projektu <s>{project}</s> jest gotowy, ale nie możesz go jeszcze otworzyć — spróbuj wysłać zaproszenie ponownie",
-      "reviewToRun": "Recenzja <s>{key}</s> czeka na twojego agenta",
+      "reviewToRun": "Przegląd <s>{key}</s> czeka na uruchomienie",
       "reviewSentBack": "Agent poprosił o zmiany w <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> uśpił Twojego agenta <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> wspomina o Tobie na stronie <s>{page}</s>",
@@ -17197,7 +17197,8 @@
       "kindLabel": "Przegląd agenta",
       "state": {
         "reviewing": "Przeglądanie",
-        "couldNotRun": "Nie można było uruchomić"
+        "couldNotRun": "Nie można było uruchomić",
+        "waiting": "Czeka na przegląd"
       },
       "reviewing": {
         "title": "Agent przeglądający przegląda tę wersję",
@@ -17239,7 +17240,6 @@
         "whyNotYours": "Czeka na: {name}. Nic nie zostanie scalone, dopóki przegląd się nie odbędzie lub ta osoba nie zdecyduje się kontynuować bez niego."
       },
       "verb": {
-        "reviewAgain": "Przejrzyj ponownie",
         "continueWithout": "Kontynuuj bez przeglądu"
       },
       "override": {
@@ -17253,6 +17253,31 @@
         "bandTitle": "Kontynuowano bez przeglądu",
         "bandNote": "Agent przeglądający nie przejrzał tych commitów ({count, plural, one {# commit} few {# commity} many {# commitów} other {# commita}}).",
         "record": "Kontynuowano bez przeglądu — <b>{name}</b> · {when}"
+      },
+      "doors": {
+        "title": "Czeka na przegląd",
+        "lead": "Nic nie przegląda się samo. Uruchom przegląd tych pull requestów na ich bieżących commitach.",
+        "leadOff": "Przegląd jest wyłączony w tym projekcie, więc werdykt jest zapisywany na elemencie i niczego nie wstrzymuje. Nadal możesz poprosić o przegląd.",
+        "leadAgain": "Uruchom przegląd ponownie:",
+        "motirAgent": "Przejrzyj z agentem Motir",
+        "myAgent": "Przejrzyj w moim agencie",
+        "orRun": "lub wykonaj",
+        "creditsNote": "Przejrzyj z agentem Motir to uruchomienie agenta Motir, opłacane z kredytów AI Twojej organizacji. Przejrzyj w moim agencie i motir review korzystają z Twojego własnego agenta.",
+        "waitingWhy": "Nic nie zostanie scalone ani nikt nie zostanie poproszony o zatwierdzenie, dopóki przegląd nie zakończy się sukcesem lub ktoś nie będzie kontynuować bez niego.",
+        "waitingWhyNotYours": "Czeka, aż {name} uruchomi przegląd. Nic nie zostanie scalone, dopóki przegląd nie zakończy się sukcesem lub ta osoba nie będzie kontynuować bez niego."
+      },
+      "own": {
+        "title": "Przegląd w {agent}",
+        "titleNoAgent": "Przegląd w agencie",
+        "metaYou": "Uruchomione przez Ciebie <when></when> · <run>{label}</run>",
+        "meta": "Uruchomione <when></when> · <run>{label}</run>",
+        "lineYou": "Twój agent wykonuje motir review {key} i zapisuje tutaj swój werdykt. Opcje wrócą, jeśli uruchomienie zakończy się bez werdyktu.",
+        "line": "Agent wykonuje motir review {key} i zapisuje tutaj swój werdykt. Opcje wrócą, jeśli uruchomienie zakończy się bez werdyktu."
+      },
+      "picker": {
+        "title": "Przejrzyj {key} w jednym ze swoich agentów",
+        "lead": "Twój agent wykonuje motir review {key} i przesyła werdykt w Twoim imieniu.",
+        "lastUsed": "Ostatnio użyty przy tym elemencie"
       }
     },
     "autoRerun": {
@@ -17341,10 +17366,9 @@
         "couldNotRunName": "Nie udało się uruchomić przeglądu agenta — czeka na ciebie",
         "couldNotRunOn": "Nie udało się uruchomić przeglądu · {name}",
         "couldNotRunOnName": "Nie udało się uruchomić przeglądu agenta — czeka na: {name}",
-        "waitingYours": "Czeka na twojego agenta przeglądu",
-        "waitingYoursName": "Czeka na twojego agenta przeglądu — uruchom motir review {key}",
-        "waitingOn": "Czeka na agenta przeglądu użytkownika {name}",
-        "waitingOnName": "Czeka na agenta przeglądu użytkownika {name}"
+        "waiting": "Czeka na przegląd",
+        "waitingStart": "Czeka na przegląd — uruchom go z poziomu elementu lub wykonaj motir review {key}",
+        "waitingStartBy": "Czeka na przegląd — {name} może go uruchomić"
       },
       "command": {
         "copy": "Kopiuj motir review {key}",
@@ -17406,9 +17430,9 @@
         "close": "Zamknij"
       },
       "toRun": {
-        "sentence": "Przejrzyj <title>{name}</title> swoim agentem",
+        "sentence": "Uruchom przegląd <title>{name}</title>",
         "tag": "Przegląd do uruchomienia",
-        "details": "To jeszcze nie zatwierdzenie. Poprosimy o twoje zatwierdzenie, gdy przegląd przejdzie.",
+        "details": "To jeszcze nie zatwierdzenie. Otwórz element, aby uruchomić przegląd; o zatwierdzenie poprosimy, gdy przegląd się powiedzie.",
         "open": "Otwórz {key}: {sentence}"
       },
       "dismiss": {
@@ -17494,31 +17518,23 @@
       "auto": {
         "label": "Scalaj automatycznie",
         "hint": "Gdy testy przejdą, Motir scala pull request, nikogo nie pytając. Zapis mówi, że pozwoliło na to to ustawienie — a nie, że zatwierdził to człowiek.",
-        "blockedByReviewAgent": "Wyłącz agenta przeglądającego, aby scalać automatycznie."
+        "blockedByReviewAgent": "Wyłącz przegląd, aby scalać automatycznie."
       },
       "saved": "Zapisano",
       "saveError": "Nie udało się zapisać — spróbuj ponownie."
     },
     "reviewAgent": {
-      "title": "Agent przeglądający",
-      "desc": "Gdy pull requesty elementu roboczego przejdą testy, agent Motir czyta zmianę w odniesieniu do elementu — jego opisu, kryteriów akceptacji i sekcji „Jak testować” — <strong>zanim zostaniesz poproszony o zatwierdzenie</strong>. Jeśli znajdzie problem, element trafia do sekcji <strong>Do naprawy</strong> wraz z ustaleniami agenta i nikt nie jest proszony o jego zatwierdzenie.",
+      "title": "Przegląd",
+      "desc": "Bramka przed <strong>zatwierdzeniem i scaleniem</strong>. Gdy jest włączona, elementu roboczego nie można zatwierdzić do scalenia, dopóki przegląd Agenta jego bieżących pull requestów nie zakończy się pomyślnie. Żaden przegląd nie startuje sam: uruchamia go osoba z poziomu elementu.",
       "on": "Włączony",
       "off": "Wyłączony",
-      "onWhat": "Każdy element roboczy jest przeglądany, zanim pojawi się prośba o jego zatwierdzenie.",
-      "offWhat": "Element roboczy jest kierowany do zatwierdzenia, gdy tylko przejdą jego testy.",
+      "onWhat": "Element W przeglądzie czeka na pomyślny przegląd, zanim ktokolwiek zostanie poproszony o zatwierdzenie scalenia.",
+      "offWhat": "Element można zatwierdzić do scalenia, gdy tylko przejdą jego testy. Nadal można go przejrzeć z poziomu elementu; werdykt zostaje zapisany i niczego nie wstrzymuje.",
       "unavailable": "Niedostępny",
-      "unavailableWhat": "Ten projekt scala automatycznie, więc nic nie czeka na przegląd. Wybierz <strong>Pytaj przed scaleniem</strong>, aby włączyć agenta przeglądającego.",
-      "billingNote": "Każdy przegląd to uruchomienie agenta Motir, opłacane z kredytów AI Twojej organizacji.",
-      "offNote": "Wyłączenie anuluje trwające przeglądy — te elementy robocze trafiają od razu do zwykłego przepływu.",
+      "unavailableWhat": "Ten projekt scala automatycznie, więc żadna osoba nie zatwierdza scalenia, przed którym mógłby stanąć przegląd. Wybierz <strong>Pytaj przed scaleniem</strong>, aby włączyć przegląd.",
+      "offNote": "Wyłączenie zwalnia elementy czekające na przegląd: przechodzą prosto do zatwierdzenia i scalenia. Przegląd, który już trwa, nadal zapisuje swój werdykt.",
       "saved": "Zapisano",
       "saveError": "Nie udało się zapisać — spróbuj ponownie.",
-      "source": {
-        "label": "Kto przegląda",
-        "hosted": "Agent Motir",
-        "hostedWhat": "Motir rozpoczyna uruchomienie przeglądu, gdy kontrole przejdą. <strong>Zużywa kredyty AI.</strong>",
-        "own": "Twój własny agent",
-        "ownWhat": "Bezpłatnie. Przegląd czeka, aż ktoś uruchomi <cmd>motir review</cmd> ze swojego agenta. Nic nie rusza samo."
-      },
       "posting": {
         "title": "Publikuj przeglądy agenta w pull requestach",
         "on": "Aplikacja GitHub Motir komentuje każdy werdykt w pull requestach i prosi o zmiany przy odesłaniu. Nigdy nie zatwierdza.",

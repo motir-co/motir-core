@@ -110,6 +110,14 @@ describe('agentReviewViewService.readForWorkItem', () => {
     expect(view?.run?.id).toBe(again.id);
     expect(view?.run?.label).toBe('motir review · 2026-09-29 10:02 UTC');
     expect(view?.run?.startedAt).toBe('2026-09-29T10:02:00.000Z');
+    // The run's own facts the frame decides its state from (MOTIR-11948): a hosted run the
+    // reader started, its status as stored (the default `running`), no agent name.
+    expect(view?.run).toMatchObject({
+      status: 'running',
+      origin: 'hosted',
+      agentName: null,
+      byViewer: true,
+    });
     // The fixture's member is an admin: the routed authority answers, and the stamp is handed.
     expect(typeof view?.canDecide).toBe('boolean');
   });

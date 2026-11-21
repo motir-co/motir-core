@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { Bot, ChevronDown, ChevronRight, Loader2, TriangleAlert, User } from 'lucide-react';
+import { RunTonePill } from '@/components/runs/RunTonePill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Pill } from '@/components/ui/Pill';
 import type { AgentReviewRunRefDto } from '@/lib/dto/agentReview';
@@ -183,9 +184,13 @@ export function ReviewingBand({
 export function CouldNotRunBand({
   reason,
   run,
+  children = null,
 }: {
   reason: string;
   run: AgentReviewRunRefDto | null;
+  /** The review doors offered again under the reason (Story MOTIR-11941 · MOTIR-11948;
+   *  § 33.4 Panel 4d) — *Start the review again:* and the doors. */
+  children?: ReactNode;
 }) {
   const t = useTranslations('approvalGate.agentReview');
   const copy = couldNotRunCopyOf(reason);
@@ -212,6 +217,92 @@ export function CouldNotRunBand({
           })}
         </span>
       </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * WAITING FOR A REVIEW (Story MOTIR-11941 · MOTIR-11948; `design/github` § 33.4 Panels 4,
+ * 4h–4j) — an awaiting `agent_review` gate with no review in flight: nothing reviews by
+ * itself, so a person starts it. The title, then — for a reader who may start it — the lead
+ * and the doors; anyone else reads the title alone, and band 3 names who can start it.
+ */
+export function WaitingForReviewBand({ children = null }: { children?: ReactNode }) {
+  const t = useTranslations('approvalGate.agentReview');
+  return (
+    <div className={BAND} role="group" data-testid="agent-review-band" data-state="waiting">
+      <div className={HEAD}>
+        <h4 className={TITLE}>
+          <Bot className={GLYPH} aria-hidden />
+          {t('doors.title')}
+        </h4>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * THE REVIEW PART WITH REVIEW OFF (§ 33.4 Panel 4f) — the approve-and-merge frame's own
+ * band slot, with no gate wording: the lead says a verdict is recorded and holds nothing,
+ * then the doors.
+ */
+export function ReviewOffBand({ children }: { children: ReactNode }) {
+  return (
+    <div className={BAND} role="group" data-testid="agent-review-band" data-state="review-off">
+      {children}
+    </div>
+  );
+}
+
+/** The doors' lead line — `text-[13px]`, the band's body ink. */
+export function ReviewDoorsLead({ children }: { children: ReactNode }) {
+  return <p className="m-0 text-[13px] leading-normal text-(--el-text)">{children}</p>;
+}
+
+/**
+ * A REVIEW IN ONE OF A PERSON'S OWN AGENTS, IN FLIGHT (§ 33.4 Panel 4e) — a sent run's
+ * read-back: *Reviewing in {agent}* with the spinner, *Working*, who started it and when,
+ * and its run link. The doors are hidden until the run ends; with no verdict they return.
+ */
+export function OwnAgentReviewingBand({
+  run,
+  identifier,
+  now,
+}: {
+  run: AgentReviewRunRefDto;
+  identifier: string;
+  now?: number;
+}) {
+  const t = useTranslations('approvalGate.agentReview.own');
+  const tPicker = useTranslations('runs.agent.picker');
+  const locale = useLocale();
+  const [clock] = useState(() => now ?? Date.now());
+  const when = () => (
+    <time dateTime={run.startedAt} title={formatRunInstant(run.startedAt, locale)}>
+      {relativeLabel(run.startedAt, locale, clock)}
+    </time>
+  );
+  return (
+    <div className={BAND} role="status" data-testid="agent-review-band" data-state="own-reviewing">
+      <div className={HEAD}>
+        <h4 className={TITLE}>
+          <Loader2 className={`${GLYPH} animate-spin`} aria-hidden />
+          {run.agentName ? t('title', { agent: run.agentName }) : t('titleNoAgent')}
+        </h4>
+        <RunTonePill tone="running">{tPicker('busyPill')}</RunTonePill>
+        <span className={META}>
+          {t.rich(run.byViewer ? 'metaYou' : 'meta', {
+            when,
+            label: run.label,
+            run: runLink(run),
+          })}
+        </span>
+      </div>
+      <p className="m-0 text-[13px] leading-normal text-(--el-text-secondary)">
+        {t(run.byViewer ? 'lineYou' : 'line', { key: identifier })}
+      </p>
     </div>
   );
 }

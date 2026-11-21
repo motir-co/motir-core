@@ -73,7 +73,7 @@ const REVIEWED: CardReviewDTO = {
 const WAITING_YOURS: CardReviewDTO = {
   identifier: 'PROD-2',
   marker: {
-    kind: 'waiting_for_own_agent',
+    kind: 'waiting_for_review',
     routedTo: { id: 'u-me', name: 'Me' },
     forViewer: true,
     command: 'motir review PROD-2',
@@ -132,7 +132,7 @@ describe('the board card — the review marker in the exclusive slot', () => {
   it('takes the slot in place of the priority, is named by the card, and offers no command', () => {
     renderCard(card({ id: 'c2', key: 2, review: WAITING_YOURS }));
     const marker = document.querySelector('[data-review-marker]') as HTMLElement;
-    expect(marker.textContent).toBe('Waiting for your review agent');
+    expect(marker.textContent).toBe('Waiting for a review');
     expect(marker.hasAttribute('data-review-loud')).toBe(true);
     expect(screen.queryByText('High')).toBeNull();
     expect(describedBy()).toContain(marker.id);
@@ -192,7 +192,7 @@ describe('the board card — the review marker in the exclusive slot', () => {
     );
     expect(document.querySelector('[data-decision-marker]')).toBeNull();
     expect(document.querySelector('[data-review-marker]')?.textContent).toBe(
-      'Waiting for your review agent',
+      'Waiting for a review',
     );
     cleanup();
 
@@ -235,7 +235,7 @@ describe('the board card — the review marker in the exclusive slot', () => {
       locale: 'zh',
       messages: zhMessages,
     });
-    expect(document.querySelector('[data-review-marker]')?.textContent).toBe('等待你的审查智能体');
+    expect(document.querySelector('[data-review-marker]')?.textContent).toBe('等待审查');
   });
 });
 
@@ -308,7 +308,7 @@ describe('the List row — glyphs in the STATUS cell', () => {
     expect(reviewed.tabIndex).toBe(0);
     expect(reviewed.closest('button')).toBeNull();
     const waiting = within(screen.getByTestId('issue-row-PROD-2')).getByRole('img', {
-      name: 'Waiting for your review agent — run motir review PROD-2',
+      name: 'Waiting for a review — start it from the item, or run motir review PROD-2',
     });
     expect(waiting.closest('button')).toBeNull();
     const row3 = screen.getByTestId('issue-row-PROD-3');

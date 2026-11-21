@@ -26,23 +26,42 @@ export const reviewPullRequestSchema = z.object({
   url: z.string(),
 });
 
-/** `GET /api/v1/work-items/{key}/review-prompt`. */
-export const reviewPromptSchema = z.object({
+const reviewPromptBase = {
   key: z.string(),
-  /** The `agent_review` gate the verdict answers. */
-  gateId: z.string(),
   /** The version under review — the verdict names it back as `subjectVersion`. */
   subjectVersion: z.string(),
   pullRequests: z.array(reviewPullRequestSchema),
   /** The server-assembled brief the review agent is handed. */
   prompt: z.string(),
-});
+};
+
+/**
+ * `GET /api/v1/work-items/{key}/review-prompt`.
+ *
+ * ⚠️ TWO VARIANTS, AND THE GATE-ON ONE IS THE SHIPPED SHAPE BYTE FOR BYTE (Story MOTIR-11941
+ * · MOTIR-11952, contract 1.88.0). A review with no gate (Review off, `approval-gates.md`
+ * §12.18) answers `gateId: null`. Relaxing the shipped `gateId` to nullable would RETYPE a
+ * declared field, which `docs/decisions/public-api-conventions.md` §8 forbids, so the shape is
+ * SPLIT the way 1.21.0 split the subsumption advisory: the shipped variant unchanged, and a
+ * gate-off variant no client has received before beside it.
+ */
+export const reviewPromptSchema = z.union([
+  z.object({
+    ...reviewPromptBase,
+    /** The `agent_review` gate the verdict answers. */
+    gateId: z.string(),
+  }),
+  z.object({
+    ...reviewPromptBase,
+    /** A review with no gate: the verdict is stored as a review record (§12.18). */
+    gateId: z.null(),
+  }),
+]);
 export type V1ReviewPrompt = z.infer<typeof reviewPromptSchema>;
 
 export function presentReviewPrompt(dto: ReviewPromptDto): V1ReviewPrompt {
-  return {
+  const shared = {
     key: dto.key,
-    gateId: dto.gateId,
     subjectVersion: dto.subjectVersion,
     pullRequests: dto.pullRequests.map((pr) => ({
       repository: pr.repository,
@@ -54,6 +73,7 @@ export function presentReviewPrompt(dto: ReviewPromptDto): V1ReviewPrompt {
     })),
     prompt: dto.prompt,
   };
+  return dto.gateId === null ? { ...shared, gateId: null } : { ...shared, gateId: dto.gateId };
 }
 
 /**
@@ -105,27 +125,48 @@ export const agentReviewLoggedBugSchema = z.object({
   outcome: z.enum(['filed', 'already_filed']),
 });
 
-/** What an ACCEPTED verdict did. */
-export const agentReviewResultSchema = z.object({
+const agentReviewResultBase = {
   key: z.string(),
-  gateId: z.string(),
   verdict: z.enum(REVIEW_VERDICTS),
   state: z.enum(['approved', 'changes_requested']),
   subjectVersion: z.string(),
   decidedAt: z.string().datetime(),
   /** Every bug the verdict carried, in its order — `[]` when it carried none. */
   bugs: z.array(agentReviewLoggedBugSchema),
-});
+};
+
+/**
+ * What an ACCEPTED verdict did — split as {@link reviewPromptSchema} is (contract 1.88.0).
+ * The gate-on variant is the shipped shape plus `outcome: 'decided'` (§8's allowed new field
+ * on an existing shape); the gate-off variant answers `gateId: null` and
+ * `outcome: 'recorded'` — the verdict was stored as a review record and decided no gate.
+ */
+export const agentReviewResultSchema = z.union([
+  z.object({
+    ...agentReviewResultBase,
+    gateId: z.string(),
+    /** The verdict decided the gate. */
+    outcome: z.literal('decided'),
+  }),
+  z.object({
+    ...agentReviewResultBase,
+    gateId: z.null(),
+    /** The verdict was stored as a review record; no gate was decided (§12.18). */
+    outcome: z.literal('recorded'),
+  }),
+]);
 export type V1AgentReviewResult = z.infer<typeof agentReviewResultSchema>;
 
 export function presentAgentReviewResult(dto: AgentReviewVerdictResultDto): V1AgentReviewResult {
-  return {
+  const shared = {
     key: dto.key,
-    gateId: dto.gateId,
     verdict: dto.verdict,
     state: dto.state,
     subjectVersion: dto.subjectVersion,
     decidedAt: dto.decidedAt,
     bugs: dto.bugs.map((b) => ({ key: b.key, title: b.title, outcome: b.outcome })),
   };
+  return dto.gateId === null
+    ? { ...shared, gateId: null, outcome: 'recorded' }
+    : { ...shared, gateId: dto.gateId, outcome: 'decided' };
 }

@@ -894,6 +894,8 @@ async function startStub(): Promise<Stub> {
           return json(200, {
             key,
             gateId: `gate_${key}`,
+            // The verdict decided the gate (contract 1.88.0, MOTIR-11952).
+            outcome: 'decided',
             verdict: b.verdict,
             state: b.verdict === 'pass' ? 'approved' : 'changes_requested',
             subjectVersion: b.subjectVersion,

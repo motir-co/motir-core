@@ -185,7 +185,17 @@ const gatesOf = (workItemId: string, kind: ApprovalGateKind) =>
 const awaitingOf = async (workItemId: string, kind: ApprovalGateKind) =>
   (await gatesOf(workItemId, kind)).filter((g) => g.state === 'awaiting');
 
-const reviewRequests = () => sent.filter((e) => e.name === 'agent-review/requested');
+/** Every review event that left — none, since nothing reviews by itself (MOTIR-11943). */
+const reviewRequests = () => sent.filter((e) => e.name.startsWith('agent-review/'));
+
+/** The `review_to_run` notifications a person holds, by dedupe key, oldest first. */
+const reviewToRunKeys = async (recipientUserId: string) =>
+  (
+    await adminDb.notification.findMany({
+      where: { recipientUserId, type: 'review_to_run' },
+      orderBy: { createdAt: 'asc' },
+    })
+  ).map((row) => row.dedupeKey);
 const autoMerges = () => sent.filter((e) => e.name === 'pull-request/auto-merge.requested');
 
 const version = (number: number, sha: string) => `moooon/acme#${number}@${sha}`;
@@ -223,7 +233,7 @@ afterAll(async () => {
 });
 
 describe('§12.2 — a green set with the switch on asks the REVIEW, not the merge', () => {
-  it('switch on, manual, green: one awaiting agent_review, no merge gate, one request emitted after commit', async () => {
+  it('switch on, manual, green: one awaiting agent_review, no merge gate, no review request, the routed person told once', async () => {
     const { s, item, review } = await reviewing('raise', 61);
 
     expect(await awaitingOf(item.id, REVIEW)).toHaveLength(1);
@@ -232,17 +242,10 @@ describe('§12.2 — a green set with the switch on asks the REVIEW, not the mer
     expect(review.subjectVersion).toBe(version(61, 'sha-a'));
     expect(review.routedToId).toBe(item.reporterId);
 
-    expect(reviewRequests()).toHaveLength(1);
-    expect(reviewRequests()[0]!.data).toEqual({
-      workspaceId: s.workspace.id,
-      gateId: review.id,
-      workItemId: item.id,
-      subjectVersion: version(61, 'sha-a'),
-      // The request's own key — the job's dedup and the review run's idempotency (MOTIR-6820).
-      idempotencyKey: `agent-review:${review.id}:raise`,
-    });
-    // Sent only once the raising transaction had committed.
-    expect(reviewRequests()[0]!.reviewsAtSend).toBe(1);
+    // Nothing reviews by itself (MOTIR-11943): the raise requests no review run…
+    expect(reviewRequests()).toHaveLength(0);
+    // …it tells the routed person, once, after the raising transaction committed.
+    expect(await reviewToRunKeys(s.user.id)).toEqual([`review_to_run:${review.id}`]);
   });
 
   it('the review is never on a person’s To approve list', async () => {
@@ -254,7 +257,7 @@ describe('§12.2 — a green set with the switch on asks the REVIEW, not the mer
     expect(await approvalGatesService.countAwaitingMe(home)).toBe(1);
   });
 
-  it('the reconcile tick raises it too, and emits for the gate it created', async () => {
+  it('the reconcile tick raises it too, and notifies for the gate it created, requesting no run', async () => {
     const { s, item, review } = await reviewing('tick', 63);
     // Withdrawn behind the product's back, then asked again by a reconcile — the path
     // the tick, a status move and a queue exit all take.
@@ -270,7 +273,11 @@ describe('§12.2 — a green set with the switch on asks the REVIEW, not the mer
     const [again] = await awaitingOf(item.id, REVIEW);
     expect(again!.id).not.toBe(review.id);
     expect(again!.subjectVersion).toBe(version(63, 'sha-a'));
-    expect(reviewRequests().map((e) => e.data['gateId'])).toEqual([again!.id]);
+    expect(reviewRequests()).toHaveLength(0);
+    expect(await reviewToRunKeys(s.user.id)).toEqual([
+      `review_to_run:${review.id}`,
+      `review_to_run:${again!.id}`,
+    ]);
   });
 });
 
@@ -293,7 +300,7 @@ describe('§12.4 — what each decision does', () => {
     // It moved nothing, and asked for no second review.
     expect(await statusOf(item.id)).toBe('in_review');
     expect(await awaitingOf(item.id, REVIEW)).toHaveLength(0);
-    expect(reviewRequests()).toHaveLength(1);
+    expect(reviewRequests()).toHaveLength(0);
   });
 
   it('the agent’s REQUEST CHANGES moves no status and derives To fix changes_requested', async () => {
@@ -355,7 +362,7 @@ describe('§12.2 — one review per version', () => {
   });
 
   it('a review WITHDRAWN at the same version is asked again — red, then green at the same head', async () => {
-    const { item, review } = await reviewing('red-green', 68);
+    const { s, item, review } = await reviewing('red-green', 68);
 
     await ci('failure', 'sha-a', 68);
     const withdrawn = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: review.id } });
@@ -368,11 +375,12 @@ describe('§12.2 — one review per version', () => {
     expect(again).toBeDefined();
     expect(again!.id).not.toBe(review.id);
     expect(again!.subjectVersion).toBe(version(68, 'sha-a'));
-    expect(reviewRequests().map((e) => e.data['gateId'])).toEqual([again!.id]);
+    expect(reviewRequests()).toHaveLength(0);
+    expect(await reviewToRunKeys(s.user.id)).toContain(`review_to_run:${again!.id}`);
   });
 
   it('a check PENDING again at the same head withdraws the review as `ci_rerunning`; the next green asks it again (MOTIR-6946)', async () => {
-    const { item, review } = await reviewing('rerun-green', 69);
+    const { s, item, review } = await reviewing('rerun-green', 69);
     const checkRun = (status: string, conclusion: string | null = null) =>
       githubWebhookService.handleEvent('check_run', {
         action: status === 'completed' ? 'completed' : 'created',
@@ -401,7 +409,8 @@ describe('§12.2 — one review per version', () => {
     expect(again!.subjectVersion).toBe(version(69, 'sha-a'));
     expect(await gatesOf(item.id, MERGE)).toHaveLength(0);
     expect(await statusOf(item.id)).toBe('in_review');
-    expect(reviewRequests().map((e) => e.data['gateId'])).toEqual([again!.id]);
+    expect(reviewRequests()).toHaveLength(0);
+    expect(await reviewToRunKeys(s.user.id)).toContain(`review_to_run:${again!.id}`);
   });
 });
 

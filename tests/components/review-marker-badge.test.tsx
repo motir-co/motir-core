@@ -32,7 +32,7 @@ const COULD_NOT_RUN_YOURS: ReviewMarkerDTO = {
   forViewer: true,
 };
 const WAITING_YOURS: ReviewMarkerDTO = {
-  kind: 'waiting_for_own_agent',
+  kind: 'waiting_for_review',
   routedTo: ANA,
   forViewer: true,
   command: 'motir review ACME-412',
@@ -73,13 +73,13 @@ describe('ReviewMarker — label form', () => {
     expect(marker()!.className).not.toContain('--el-tint-yellow');
   });
 
-  it('waiting is loud for you with the command in its title; others read whose agent', () => {
+  it('waiting is loud for you with how to start it in its title; others read who can start it', () => {
     render(<ReviewMarker marker={WAITING_YOURS} identifier="ACME-412" />);
-    expect(marker()!.textContent).toBe('Waiting for your review agent');
+    expect(marker()!.textContent).toBe('Waiting for a review');
     expect(marker()!.getAttribute('title')).toBe(
-      'Waiting for your review agent — run motir review ACME-412',
+      'Waiting for a review — start it from the item, or run motir review ACME-412',
     );
-    expect(marker()!.querySelector('.lucide-square-terminal')).toBeTruthy();
+    expect(marker()!.querySelector('.lucide-scan-search')).toBeTruthy();
     cleanup();
 
     render(
@@ -88,7 +88,10 @@ describe('ReviewMarker — label form', () => {
         identifier="ACME-412"
       />,
     );
-    expect(marker()!.textContent).toBe("Waiting for this work item's assignee's review agent");
+    expect(marker()!.textContent).toBe('Waiting for a review');
+    expect(marker()!.getAttribute('title')).toBe(
+      "Waiting for a review — this work item's assignee can start it",
+    );
   });
 
   it('carries a trailing glyph and extra classes for the header pointer', () => {
@@ -117,7 +120,7 @@ describe('ReviewMarker — glyph form (status cell)', () => {
   it('is an image named by the full sentence; loud is the yellow disc, quiet is bare', () => {
     render(<ReviewMarker form="glyph" marker={WAITING_YOURS} identifier="ACME-412" />);
     const loud = screen.getByRole('img', {
-      name: 'Waiting for your review agent — run motir review ACME-412',
+      name: 'Waiting for a review — start it from the item, or run motir review ACME-412',
     });
     expect(loud.className).toContain('--el-tint-yellow');
     expect(loud.className).toContain('shrink-0');

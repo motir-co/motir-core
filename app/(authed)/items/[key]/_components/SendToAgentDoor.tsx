@@ -47,11 +47,68 @@ export function SendToAgentDoor() {
   const t = useTranslations('runs.agent');
   const door = useHostedRun();
   const agentDoor = door?.agentDoor ?? null;
+  if (!door || !agentDoor) return null;
+  const sendingId = agentDoor.sendingId;
+  return (
+    <AgentPicker
+      itemKey={door.itemKey}
+      projectName={agentDoor.projectName}
+      label={sendingId ? t('door.starting') : t('door.send')}
+      ariaLabel={t('door.send')}
+      variant="secondary"
+      disabled={!door.ready || door.starting}
+      title={t('picker.title', { key: door.itemKey })}
+      lead={t('picker.lead')}
+      sendingId={sendingId}
+      onChoose={agentDoor.send}
+    />
+  );
+}
+
+/**
+ * THE PICKER OF THE READER'S OWN AGENTS — *Send to my agent*'s, reused by *Review in my
+ * agent* (Story MOTIR-11941 · MOTIR-11948; `design/github` § 33.5) with its own head. The
+ * list is the server's (`GET …/agent-runs/agents`), read on every opening; pressing a free
+ * row IS the start. `preselect` makes one agent the active row with a one-line note under
+ * it — the agent this reader last used on the item.
+ */
+export function AgentPicker({
+  itemKey,
+  projectName,
+  label,
+  ariaLabel,
+  variant,
+  disabled,
+  title,
+  lead,
+  sendingId,
+  onChoose,
+  preselect = null,
+  testId = 'send-to-agent',
+}: {
+  itemKey: string;
+  projectName: string;
+  /** The trigger's words — the press's own *Starting…* while a send is pending. */
+  label: string;
+  /** The popover's accessible name. */
+  ariaLabel: string;
+  variant: 'primary' | 'secondary';
+  disabled: boolean;
+  title: string;
+  lead: string;
+  /** The agent a send is pending on: the popover stays open and that row spins. */
+  sendingId: string | null;
+  onChoose: (agent: AgentForCardDto) => Promise<void> | void;
+  preselect?: { id: string; note: string } | null;
+  /** The trigger's test id; the panel's are `<testId>-picker`, `-empty`, `-create`. */
+  testId?: string;
+}) {
+  const t = useTranslations('runs.agent');
   const [open, setOpen] = useState(false);
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [active, setActive] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const itemKey = door?.itemKey ?? '';
+  const preselectId = preselect?.id ?? null;
 
   const read = useCallback(async (): Promise<void> => {
     setLoad({ state: 'loading' });
@@ -65,11 +122,12 @@ export function SendToAgentDoor() {
       }
       const body = (await res.json()) as { agents: AgentForCardDto[] };
       setLoad({ state: 'ok', agents: body.agents });
-      setActive(body.agents.find(pickable)?.id ?? null);
+      const preselected = body.agents.find((a) => a.id === preselectId && pickable(a));
+      setActive(preselected?.id ?? body.agents.find(pickable)?.id ?? null);
     } catch {
       setLoad({ state: 'failed' });
     }
-  }, [itemKey]);
+  }, [itemKey, preselectId]);
 
   // Every opening reads the list afresh — so after a refusal the busy (or gone)
   // row says so the next time the picker opens.
@@ -80,21 +138,16 @@ export function SendToAgentDoor() {
     })();
   }, [open, read]);
 
-  const sendingId = agentDoor?.sendingId ?? null;
-  const send = agentDoor?.send;
   // Only a row that can take the work calls this: an off row has no press, and
   // the keys walk the free rows alone.
   const choose = useCallback(
     async (agent: AgentForCardDto): Promise<void> => {
-      await send?.(agent);
+      await onChoose(agent);
       setOpen(false);
     },
-    [send],
+    [onChoose],
   );
 
-  if (!door || !agentDoor) return null;
-
-  const disabled = !door.ready || door.starting;
   const agents = load.state === 'ok' ? load.agents : [];
   const free = agents.filter(pickable);
 
@@ -118,43 +171,41 @@ export function SendToAgentDoor() {
       <Popover.Trigger asChild>
         <Button
           type="button"
-          variant="secondary"
+          variant={variant}
           size="sm"
           disabled={disabled}
           aria-haspopup="dialog"
-          data-testid="send-to-agent"
+          data-testid={testId}
           leftIcon={<SquareTerminal className="size-3.5" aria-hidden="true" />}
           rightIcon={<ChevronDown className="size-3.5" aria-hidden="true" />}
         >
-          {sendingId ? t('door.starting') : t('door.send')}
+          {label}
         </Button>
       </Popover.Trigger>
       <Popover.Content
         align="end"
         width="25rem"
         className="max-w-[calc(100vw-2rem)]"
-        aria-label={t('door.send')}
-        data-testid="send-to-agent-picker"
+        aria-label={ariaLabel}
+        data-testid={`${testId}-picker`}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           listRef.current?.focus();
         }}
       >
         {load.state === 'ok' && agents.length === 0 ? (
-          <EmptyFace projectName={agentDoor.projectName} />
+          <EmptyFace projectName={projectName} testId={testId} />
         ) : (
           <>
             <div className="border-b border-(--el-border-soft) px-(--spacing-control-x) pt-2.5 pb-2 font-sans">
-              <p className="text-sm font-semibold text-(--el-text)">
-                {t('picker.title', { key: itemKey })}
-              </p>
-              <p className="mt-0.5 text-xs text-(--el-text-secondary)">{t('picker.lead')}</p>
+              <p className="text-sm font-semibold text-(--el-text)">{title}</p>
+              <p className="mt-0.5 text-xs text-(--el-text-secondary)">{lead}</p>
             </div>
             {load.state === 'loading' ? (
               <p
                 role="status"
                 className="px-(--spacing-control-x) py-3 font-sans text-xs text-(--el-text-secondary)"
-                data-testid="send-to-agent-loading"
+                data-testid={`${testId}-loading`}
               >
                 {t('picker.loading')}
               </p>
@@ -162,7 +213,7 @@ export function SendToAgentDoor() {
               <div
                 role="alert"
                 className="flex items-center gap-2 px-(--spacing-control-x) py-3 font-sans text-xs text-(--el-text)"
-                data-testid="send-to-agent-failed"
+                data-testid={`${testId}-failed`}
               >
                 <span>{t('picker.failed')}</span>
                 <Button type="button" variant="secondary" size="sm" onClick={() => void read()}>
@@ -185,6 +236,7 @@ export function SendToAgentDoor() {
                     agent={agent}
                     active={agent.id === active}
                     sending={agent.id === sendingId}
+                    note={preselect && agent.id === preselect.id ? preselect.note : null}
                     onChoose={() => void choose(agent)}
                     onHover={() => (pickable(agent) ? setActive(agent.id) : undefined)}
                   />
@@ -192,7 +244,7 @@ export function SendToAgentDoor() {
               </ul>
             )}
             <div className="flex items-center gap-1.5 border-t border-(--el-border-soft) px-(--spacing-control-x) py-2 font-sans text-xs text-(--el-text-secondary)">
-              <span>{t('picker.foot', { project: agentDoor.projectName })}</span>
+              <span>{t('picker.foot', { project: projectName })}</span>
               <Link
                 href="/my-agents"
                 className="ml-auto whitespace-nowrap text-(--el-link) underline"
@@ -208,12 +260,12 @@ export function SendToAgentDoor() {
 }
 
 /** Panel 4: no agent on the project — what an agent is, and where to make one. */
-function EmptyFace({ projectName }: { projectName: string }) {
+function EmptyFace({ projectName, testId }: { projectName: string; testId: string }) {
   const t = useTranslations('runs.agent.empty');
   return (
     <div
       className="flex flex-col gap-1 px-(--spacing-control-x) py-3.5 font-sans"
-      data-testid="send-to-agent-empty"
+      data-testid={`${testId}-empty`}
     >
       <p className="text-sm font-semibold text-(--el-text)">
         {t('title', { project: projectName })}
@@ -222,7 +274,7 @@ function EmptyFace({ projectName }: { projectName: string }) {
       <Link
         href="/my-agents"
         className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'self-start')}
-        data-testid="send-to-agent-create"
+        data-testid={`${testId}-create`}
       >
         <SquareTerminal className="size-3.5" aria-hidden="true" />
         {t('create')}
@@ -237,12 +289,15 @@ function AgentRow({
   agent,
   active,
   sending,
+  note = null,
   onChoose,
   onHover,
 }: {
   agent: AgentForCardDto;
   active: boolean;
   sending: boolean;
+  /** A one-line note under the row — *Last used on this item* (§ 33.5). */
+  note?: string | null;
   onChoose: () => void;
   onHover: () => void;
 }) {
@@ -305,6 +360,14 @@ function AgentRow({
         )}
       </span>
       {busy ? <BusyLine agent={agent} /> : off ? <WhyLine agent={agent} /> : null}
+      {note ? (
+        <span
+          className="col-span-2 block text-xs text-(--el-text-secondary)"
+          data-testid="agent-row-note"
+        >
+          {note}
+        </span>
+      ) : null}
     </li>
   );
 }

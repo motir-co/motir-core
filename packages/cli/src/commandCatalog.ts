@@ -874,7 +874,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       },
       {
         flags: '--command <command>',
-        description: 'What the session is for: run (the default), fix or continue.',
+        description: 'What the session is for: run (the default), fix, continue or review.',
       },
     ],
   },

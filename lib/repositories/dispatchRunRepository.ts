@@ -1,6 +1,7 @@
 import type {
   DispatchCommand,
   DispatchRun,
+  DispatchRunOrigin,
   DispatchRunStatus,
   Prisma,
 } from '@/generated/prisma/client';
@@ -94,6 +95,11 @@ export interface RunningDispatchRunInAgent {
   startedAt: Date;
   createdById: string | null;
 }
+
+/** A running review run — hosted (no agent) or in a person's own agent. */
+export type RunningReviewRun = Omit<RunningDispatchRunInAgent, 'agentInstanceId'> & {
+  agentInstanceId: string | null;
+};
 
 const RUNNING_IN_AGENT_SELECT = {
   id: true,
@@ -848,32 +854,78 @@ export const dispatchRunRepository = {
    * under `agent-review:<gateId>:…`, so the gate's in-flight review is this read. Served
    * by the `(workspace_id, idempotency_key)` unique index's prefix.
    */
+  /** How many runs, of any status, were opened under an idempotency-key `prefix` — a review
+   *  press's attempt counter (`reviewPressKey`, `reviewItemRunKey`; MOTIR-11944). */
+  async countByIdempotencyKeyPrefix(
+    workspaceId: string,
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.dispatchRun.count({ where: { workspaceId, idempotencyKey: { startsWith: prefix } } });
+  },
+
+  /**
+   * THE REVIEW IN FLIGHT FOR AN ITEM, whatever started it (Story MOTIR-11941 · MOTIR-11945):
+   * the oldest RUNNING `review` run with a leg on `workItemId` — hosted or in a person's own
+   * agent, gate on or off — or null. Review in my agent reads it as *a review is in flight*
+   * with Review off, and both review doors re-check it under the item's review lock before
+   * they open a run (`lib/agentReview/reviewOpenGuard.ts`).
+   */
+  async findRunningReviewByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<RunningReviewRun | null> {
+    return tx.dispatchRun.findFirst({
+      where: { command: 'review', status: 'running', cards: { some: { workItemId } } },
+      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+      select: RUNNING_IN_AGENT_SELECT,
+    });
+  },
+
   async listRunningByIdempotencyKeyPrefix(
     workspaceId: string,
     prefix: string,
     tx: Prisma.TransactionClient,
-  ): Promise<Array<{ id: string }>> {
+  ): Promise<Array<{ id: string; origin: DispatchRunOrigin }>> {
     return tx.dispatchRun.findMany({
       where: { workspaceId, status: 'running', idempotencyKey: { startsWith: prefix } },
       orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
-      select: { id: true },
+      select: { id: true, origin: true },
     });
   },
 
   /**
    * The LATEST run, in any status, whose idempotency key starts with `prefix` — the
    * review run an `agent_review` gate's band links (MOTIR-6825): every review run of a
-   * gate is opened under `agent-review:<gateId>:…`, so its newest run is this read.
+   * gate is opened under `agent-review:<gateId>:…`, so its newest run is this read. Its
+   * status, origin, starter and agent say whether a review is in flight, and in whose agent
+   * (Story MOTIR-11941 · MOTIR-11948).
    */
   async findLatestByIdempotencyKeyPrefix(
     workspaceId: string,
     prefix: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ id: string; command: DispatchRun['command']; startedAt: Date } | null> {
+  ): Promise<{
+    id: string;
+    command: DispatchRun['command'];
+    startedAt: Date;
+    status: DispatchRun['status'];
+    origin: DispatchRun['origin'];
+    createdById: string | null;
+    agentInstance: { name: string } | null;
+  } | null> {
     return tx.dispatchRun.findFirst({
       where: { workspaceId, idempotencyKey: { startsWith: prefix } },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
-      select: { id: true, command: true, startedAt: true },
+      select: {
+        id: true,
+        command: true,
+        startedAt: true,
+        status: true,
+        origin: true,
+        createdById: true,
+        agentInstance: { select: { name: true } },
+      },
     });
   },
 

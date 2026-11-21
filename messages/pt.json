@@ -3167,8 +3167,8 @@
             "desc": "Um proprietário ou administrador da organização parou um dos seus agentes na página Fleet da organização."
           },
           "review_to_run": {
-            "label": "Uma revisão está à espera do seu agente",
-            "desc": "O seu projeto revê com o seu próprio agente, e a revisão de um item de trabalho é sua para executar com motir review."
+            "label": "Uma revisão aguarda ser iniciada",
+            "desc": "Um item de trabalho atribuído a você aguarda uma revisão: inicie-a a partir do item ou execute motir review."
           },
           "review_sent_back": {
             "label": "Um agente pediu alterações",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> atualizou <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> enviou uma notificação para você",
       "accessRefused": "O código de <s>{project}</s> está pronto, mas você ainda não pode abri-lo — tente enviar o convite novamente",
-      "reviewToRun": "Uma revisão de <s>{key}</s> está à espera do seu agente",
+      "reviewToRun": "Uma revisão de <s>{key}</s> aguarda ser iniciada",
       "reviewSentBack": "Um agente pediu alterações em <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> hibernou seu agente <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> mencionou você em <s>{page}</s>",
@@ -17197,7 +17197,8 @@
       "kindLabel": "Revisão por agente",
       "state": {
         "reviewing": "Revisando",
-        "couldNotRun": "Não pôde ser executada"
+        "couldNotRun": "Não pôde ser executada",
+        "waiting": "Aguardando uma revisão"
       },
       "reviewing": {
         "title": "O agente revisor está revisando esta versão",
@@ -17239,7 +17240,6 @@
         "whyNotYours": "Aguardando {name}. Nada é mesclado até que a revisão seja executada, ou que essa pessoa continue sem ela."
       },
       "verb": {
-        "reviewAgain": "Revisar novamente",
         "continueWithout": "Continuar sem a revisão"
       },
       "override": {
@@ -17253,6 +17253,31 @@
         "bandTitle": "Continuado sem a revisão",
         "bandNote": "O agente revisor não revisou {count, plural, one {este # commit} other {estes # commits}}.",
         "record": "Continuado sem a revisão por <b>{name}</b> · {when}"
+      },
+      "doors": {
+        "title": "Aguardando uma revisão",
+        "lead": "Nada é revisado sozinho. Inicie uma revisão destas pull requests nos seus commits atuais.",
+        "leadOff": "A revisão está desativada neste projeto, então um veredito é registrado no item e não retém nada. Você ainda pode pedir uma revisão.",
+        "leadAgain": "Inicie a revisão novamente:",
+        "motirAgent": "Revisar com o agente Motir",
+        "myAgent": "Revisar no meu agente",
+        "orRun": "ou execute",
+        "creditsNote": "Revisar com o agente Motir é uma execução do agente Motir, paga com os créditos de IA da sua organização. Revisar no meu agente e motir review usam o seu próprio agente.",
+        "waitingWhy": "Nada é mesclado, e ninguém é solicitado a aprovar, até que uma revisão passe ou alguém continue sem ela.",
+        "waitingWhyNotYours": "Aguardando {name} iniciar uma revisão. Nada é mesclado até que uma revisão passe ou essa pessoa continue sem ela."
+      },
+      "own": {
+        "title": "Revisando em {agent}",
+        "titleNoAgent": "Revisando em um agente",
+        "metaYou": "Iniciada <when></when> por você · <run>{label}</run>",
+        "meta": "Iniciada <when></when> · <run>{label}</run>",
+        "lineYou": "O seu agente executa motir review {key} e registra o veredito aqui. As opções voltam se a execução terminar sem veredito.",
+        "line": "O agente executa motir review {key} e registra o veredito aqui. As opções voltam se a execução terminar sem veredito."
+      },
+      "picker": {
+        "title": "Revisar {key} em um dos seus agentes",
+        "lead": "O seu agente executa motir review {key} e envia o veredito em seu nome.",
+        "lastUsed": "Usado por último neste item"
       }
     },
     "autoRerun": {
@@ -17341,10 +17366,9 @@
         "couldNotRunName": "Não foi possível executar a revisão do agente — aguardando você",
         "couldNotRunOn": "Não foi possível executar a revisão · {name}",
         "couldNotRunOnName": "Não foi possível executar a revisão do agente — aguardando {name}",
-        "waitingYours": "Aguardando seu agente de revisão",
-        "waitingYoursName": "Aguardando seu agente de revisão — execute motir review {key}",
-        "waitingOn": "Aguardando o agente de revisão de {name}",
-        "waitingOnName": "Aguardando o agente de revisão de {name}"
+        "waiting": "Aguardando uma revisão",
+        "waitingStart": "Aguardando uma revisão — inicie-a a partir do item ou execute motir review {key}",
+        "waitingStartBy": "Aguardando uma revisão — {name} pode iniciá-la"
       },
       "command": {
         "copy": "Copiar motir review {key}",
@@ -17406,9 +17430,9 @@
         "close": "Fechar"
       },
       "toRun": {
-        "sentence": "Revise <title>{name}</title> com seu agente",
+        "sentence": "Iniciar uma revisão de <title>{name}</title>",
         "tag": "Revisão a executar",
-        "details": "Ainda não é uma aprovação. Sua aprovação é pedida quando a revisão passar.",
+        "details": "Ainda não é uma aprovação. Abra o item para iniciar a revisão; sua aprovação é solicitada quando ela passar.",
         "open": "Abrir {key}: {sentence}"
       },
       "dismiss": {
@@ -17494,31 +17518,23 @@
       "auto": {
         "label": "Fazer merge automaticamente",
         "hint": "Quando as verificações passam, o Motir faz o merge do pull request sem perguntar a ninguém. O registro diz que esta configuração permitiu — não que uma pessoa aprovou.",
-        "blockedByReviewAgent": "Desative o agente revisor para fazer merge automaticamente."
+        "blockedByReviewAgent": "Desative a revisão para fazer merge automaticamente."
       },
       "saved": "Salvo",
       "saveError": "Não foi possível salvar — tente novamente."
     },
     "reviewAgent": {
-      "title": "Agente revisor",
-      "desc": "Quando os pull requests de um item de trabalho passam nas verificações, um agente do Motir lê a alteração em relação ao item — a descrição, os critérios de aceitação e o Como testar — <strong>antes que você seja solicitado a aprová-lo</strong>. Se encontrar um problema, o item vai para <strong>A corrigir</strong> com as constatações do agente, e ninguém é solicitado a aprová-lo.",
+      "title": "Revisão",
+      "desc": "Uma barreira antes de <strong>aprovar e fazer merge</strong>. Com ela ativada, um item de trabalho não pode ser aprovado para merge até que uma revisão do Agente dos seus pull requests atuais seja aprovada. Nenhuma revisão começa sozinha: uma pessoa a inicia a partir do item.",
       "on": "Ativado",
       "off": "Desativado",
-      "onWhat": "Todo item de trabalho é revisado antes que você seja solicitado a aprová-lo.",
-      "offWhat": "Um item de trabalho é oferecido para aprovação assim que as verificações passam.",
+      "onWhat": "Um item Em revisão aguarda uma revisão aprovada antes que alguém seja solicitado a aprovar o merge.",
+      "offWhat": "Um item pode ser aprovado para merge assim que suas verificações passam. Ele ainda pode ser revisado a partir do item; o veredito é registrado e não bloqueia nada.",
       "unavailable": "Indisponível",
-      "unavailableWhat": "Este projeto faz merge automaticamente, então nada aguarda uma revisão. Escolha <strong>Perguntar antes do merge</strong> para ativar o agente revisor.",
-      "billingNote": "Cada revisão é uma execução do agente Motir, paga com os créditos de IA da sua organização.",
-      "offNote": "Desativar isto cancela as revisões em andamento — esses itens de trabalho seguem direto para o fluxo comum.",
+      "unavailableWhat": "Este projeto faz merge automaticamente, então nenhuma pessoa aprova um merge diante do qual uma revisão possa se colocar. Escolha <strong>Perguntar antes do merge</strong> para ativar a revisão.",
+      "offNote": "Ao desativar, os itens que aguardam uma revisão são liberados: vão direto para aprovar e fazer merge. Uma revisão que já está em andamento ainda registra seu veredito.",
       "saved": "Salvo",
       "saveError": "Não foi possível salvar — tente novamente.",
-      "source": {
-        "label": "Quem revisa",
-        "hosted": "Agente Motir",
-        "hostedWhat": "O Motir inicia uma execução de revisão quando as verificações passam. <strong>Usa créditos de IA.</strong>",
-        "own": "Seu próprio agente",
-        "ownWhat": "Grátis. A revisão espera até alguém executar <cmd>motir review</cmd> a partir do próprio agente. Nada começa sozinho."
-      },
       "posting": {
         "title": "Publicar as revisões do agente nos pull requests",
         "on": "O app do GitHub do Motir comenta cada veredito nos pull requests e pede alterações ao devolver o trabalho. Ele nunca aprova.",

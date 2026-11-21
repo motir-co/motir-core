@@ -608,7 +608,10 @@ export function buildProgram(): Command {
   // probe, so `run` must stay registered under this exact name.
   register(agentTerminal, 'agent-terminal run')
     .option('--run-id <id>', 'The run to open a session for (its credentials are read on stdin).')
-    .option('--command <command>', 'What the session is for: run (the default), fix or continue.')
+    .option(
+      '--command <command>',
+      'What the session is for: run (the default), fix, continue or review.',
+    )
     .action(async (key: string, opts: AgentTerminalRunOptions) => {
       await agentTerminalRunCommand(key, opts);
     });

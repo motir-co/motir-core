@@ -553,8 +553,12 @@ describe('the control socket', () => {
     expect(
       parseControlRequest('{"op":"run","runId":"a","workItemKey":"ACME-7","command":"continue"}'),
     ).toMatchObject({ command: 'continue' });
+    // A review in the person's own agent (MOTIR-11953).
+    expect(
+      parseControlRequest('{"op":"run","runId":"a","workItemKey":"ACME-7","command":"review"}'),
+    ).toMatchObject({ command: 'review' });
     // A command outside the set is a bad request, so the server spawns nothing.
-    for (const command of ['run_scope', 'review', 'nope', '', 7, null]) {
+    for (const command of ['run_scope', 'nope', '', 7, null]) {
       expect(
         parseControlRequest(
           JSON.stringify({ op: 'run', runId: 'a', workItemKey: 'ACME-7', command }),
@@ -624,7 +628,7 @@ describe('motir agent-terminal run --command (MOTIR-9045)', () => {
     expect(Object.keys(flagged as object)).not.toContain('command');
   });
 
-  it('refuses a command outside the three before any state or socket is touched', async () => {
+  it('refuses a command outside the four before any state or socket is touched', async () => {
     const stateRoot = temp();
     let asked = 0;
     const err = await agentTerminalRunCommand(
@@ -642,7 +646,7 @@ describe('motir agent-terminal run --command (MOTIR-9045)', () => {
       },
     ).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(CliError);
-    expect((err as CliError).message).toBe('--command must be one of run, fix, continue.');
+    expect((err as CliError).message).toBe('--command must be one of run, fix, continue, review.');
     expect(asked).toBe(0);
     expect(existsSync(join(stateRoot, 'run_c'))).toBe(false);
   });

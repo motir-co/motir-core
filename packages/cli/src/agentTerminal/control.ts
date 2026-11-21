@@ -61,11 +61,12 @@ export function runWorkspaceDir(home: string, runId: string): string {
 }
 
 /**
- * What a run session is for (MOTIR-9045). A CLI-local copy of the app's
- * `AGENT_RUN_COMMANDS` — `packages/cli` cannot import `lib/` — checked against
- * it by one test so the two cannot drift. Absent on the wire means `run`.
+ * What a run session is for (MOTIR-9045; `review` since MOTIR-11953 — a review in the
+ * person's own agent). A CLI-local copy of the app's `AGENT_RUN_COMMANDS` —
+ * `packages/cli` cannot import `lib/` — checked against it by one test so the two
+ * cannot drift. Absent on the wire means `run`.
  */
-export const AGENT_RUN_COMMANDS = ['run', 'fix', 'continue'] as const;
+export const AGENT_RUN_COMMANDS = ['run', 'fix', 'continue', 'review'] as const;
 export type AgentRunCommand = (typeof AGENT_RUN_COMMANDS)[number];
 
 export function isAgentRunCommand(value: unknown): value is AgentRunCommand {

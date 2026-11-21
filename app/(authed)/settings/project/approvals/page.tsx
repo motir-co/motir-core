@@ -100,7 +100,6 @@ export default async function ProjectApprovalsPage() {
         projectKey={ctx.project.identifier}
         initialPrMergeMode={prMergeMode}
         initialReviewAgentEnabled={settings.reviewAgentEnabled}
-        initialReviewAgentSource={settings.reviewAgentSource}
         initialReviewBotPostsEnabled={settings.reviewBotPostsEnabled}
       />
     </div>

@@ -103,7 +103,7 @@ describe('the process each command opens', () => {
     }
   });
 
-  for (const command of ['fix', 'continue'] as const) {
+  for (const command of ['fix', 'continue', 'review'] as const) {
     it(`\`${command}\` opens \`motir ${command} <KEY>\` with the run id in the environment and no --run-id`, async () => {
       const h = await start();
       const answer = await ask(h, { op: 'run', runId: 'run_9', workItemKey: 'MOTIR-7', command });
@@ -141,8 +141,8 @@ describe('the process each command opens', () => {
   });
 });
 
-describe('a command outside the three reaches no spawn', () => {
-  for (const command of ['review', 'superfix', 42]) {
+describe('a command outside the four reaches no spawn', () => {
+  for (const command of ['REVIEW', 'run_scope', 'superfix', 42]) {
     it(`refuses ${JSON.stringify(command)} bad_request`, async () => {
       const h = await start();
       const answer = await raw(

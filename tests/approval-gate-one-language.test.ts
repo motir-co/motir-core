@@ -413,11 +413,9 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // decision.
       writes: 'awaiting',
       callers: [
+        // MOTIR-11943 retired the review source, so Settings no longer clears the reason
+        // (MOTIR-10332's switch to `own` is gone): only a start and a hosted run write it.
         'lib/services/agentReviewStartService.ts',
-        // MOTIR-10332 (`approval-gates.md` §12.10): switching the review source to `own`
-        // CLEARS the reason on each awaiting review — could-not-run is hosted-only (§12.6).
-        // The gate stays `awaiting`; nothing is decided.
-        'lib/services/approvalGateSettingsService.ts',
         'lib/services/hostedRunService.ts',
       ],
     },

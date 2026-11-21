@@ -144,7 +144,7 @@ export function hostedRunSeamEnv(): Record<string, string> {
     E2E_TEST_HOSTED_RUN: '1',
     MOTIR_FLEET_ORCHESTRATOR: 'fake',
     // The paid-AI-plan gate (Story MOTIR-6906 · MOTIR-6909): a hosted run the
-    // worker boots (the review agent's `agent-review/requested`) asks motir-ai for
+    // worker boots (a held run's admission pass) asks motir-ai for
     // the org's subscription first. Without the billing seam that read fails, the
     // plan reads `unknown`, and the boot defers — so the worker reads the same
     // billing fixture the webServer does.

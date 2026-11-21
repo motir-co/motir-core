@@ -26,7 +26,6 @@ import { fakeOrchestrator } from '@motir/orchestrator';
 import type { ApprovalGateKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
-import type { AgentReviewRequestedData } from '@/lib/jobs/types';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import type { SubmitReviewVerdictInput } from '@/lib/dto/agentReview';
 import { adminDb } from '../helpers/adminDb';
@@ -35,6 +34,7 @@ import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { hostAnswersCleanAt } from '../helpers/hostMergeability';
 import { linkPrByIdentifier } from '../helpers/prLink';
 import { bearer } from '../fixtures/apiV1Fixtures';
+import { pressReview } from '../helpers/reviewRequest';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -43,7 +43,6 @@ const { workItemsService } = await import('@/lib/services/workItemsService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
 const { approvalGateSettingsService } = await import('@/lib/services/approvalGateSettingsService');
-const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { reviewVerdictService } = await import('@/lib/services/reviewVerdictService');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 const { reviewDismissalService } = await import('@/lib/services/reviewDismissalService');
@@ -294,10 +293,8 @@ const ci = (headSha: string, number: number) =>
 const gatesOf = (workItemId: string, kind: ApprovalGateKind) =>
   adminDb.approvalGate.findMany({ where: { workItemId, kind }, orderBy: { createdAt: 'asc' } });
 
-const reviewRequests = () =>
-  sent
-    .filter((e) => e.name === 'agent-review/requested')
-    .map((e) => e.data as unknown as AgentReviewRequestedData);
+/** Every review event that left — none since nothing reviews by itself (MOTIR-11943). */
+const reviewRequests = () => sent.filter((e) => e.name.startsWith('agent-review/'));
 
 const runRows = (workspaceId: string) =>
   adminDb.dispatchRun.findMany({ where: { workspaceId }, orderBy: { startedAt: 'asc' } });
@@ -325,9 +322,10 @@ async function reviewing(slug: string, number: number) {
   await ci('sha-a', number);
   const review = (await gatesOf(item.id, REVIEW)).find((g) => g.state === 'awaiting');
   expect(review, 'the green verdict raised the review').toBeDefined();
-  const [request] = reviewRequests();
-  expect(request, 'the raise requested its review').toBeDefined();
-  return { s, item, review: review!, request: request! };
+  // Nothing reviews by itself (MOTIR-11943): the raise requests no run, so a case that
+  // goes on to a hosted review sends the request a person's press would.
+  expect(reviewRequests(), 'the raise requests no review by itself').toEqual([]);
+  return { s, item, review: review!, request: review! };
 }
 
 grantPaidAiPlan();
@@ -443,19 +441,16 @@ async function deliveredGateOff(slug: string, number: number) {
   return { s, item, approval: approval[0]! };
 }
 
-/** A card holding an awaiting review under `source`, its hosted run started when hosted. */
+/**
+ * A card holding an awaiting review: `hosted` — a person started a hosted review run on it;
+ * `own` — nobody started one, so it waits for the routed person to run it in their own
+ * agent (no project setting decides which any more, MOTIR-11943).
+ */
 async function reviewingUnder(source: 'hosted' | 'own', slug: string, number: number) {
   const scenario = await reviewing(slug, number);
-  if (source === 'own') {
-    await approvalGateSettingsService.updateSettings(
-      scenario.s.project.id,
-      { reviewAgentSource: 'own' },
-      scenario.s.ctx,
-    );
-  } else {
-    expect((await agentReviewStartService.startRequested(scenario.request)).outcome).toBe(
-      'started',
-    );
+  if (source === 'hosted') {
+    // The press a person makes (MOTIR-11944): the routed person, at the gate's version.
+    expect((await pressReview(scenario.request)).created).toBe(true);
   }
   sent.length = 0;
   return scenario;

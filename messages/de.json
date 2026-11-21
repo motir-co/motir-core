@@ -3167,8 +3167,8 @@
             "desc": "Ein Inhaber oder Admin der Organisation hat einen Ihrer Agenten auf der Fleet-Seite der Organisation gestoppt."
           },
           "review_to_run": {
-            "label": "Ein Review wartet auf deinen Agenten",
-            "desc": "Dein Projekt prüft mit deinem eigenen Agenten, und das Review eines Arbeitselements führst du mit motir review aus."
+            "label": "Eine Prüfung wartet darauf, gestartet zu werden",
+            "desc": "Ein Arbeitselement, das an Sie weitergeleitet wurde, wartet auf eine Prüfung: Starten Sie sie am Element oder führen Sie motir review aus."
           },
           "review_sent_back": {
             "label": "Ein Agent hat Änderungen angefordert",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> hat <s>{key}</s> aktualisiert",
       "genericNoKey": "<s>{actor}</s> hat Ihnen eine Benachrichtigung gesendet",
       "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden",
-      "reviewToRun": "Ein Review von <s>{key}</s> wartet auf deinen Agenten",
+      "reviewToRun": "Eine Prüfung von <s>{key}</s> wartet darauf, gestartet zu werden",
       "reviewSentBack": "Ein Agent hat Änderungen an <s>{key}</s> angefordert",
       "agentHibernatedByAdmin": "<s>{actor}</s> hat Ihren Agenten <s>{agent}</s> in den Ruhezustand versetzt",
       "pageMentioned": "<s>{actor}</s> hat Sie in <s>{page}</s> erwähnt",
@@ -17197,7 +17197,8 @@
       "kindLabel": "Agent-Prüfung",
       "state": {
         "reviewing": "Wird geprüft",
-        "couldNotRun": "Konnte nicht laufen"
+        "couldNotRun": "Konnte nicht laufen",
+        "waiting": "Wartet auf eine Prüfung"
       },
       "reviewing": {
         "title": "Der Prüf-Agent prüft diese Version",
@@ -17239,7 +17240,6 @@
         "whyNotYours": "Wartet auf {name}. Bis die Prüfung läuft oder diese Person ohne sie fortfährt, wird nichts gemergt."
       },
       "verb": {
-        "reviewAgain": "Erneut prüfen",
         "continueWithout": "Ohne Prüfung fortfahren"
       },
       "override": {
@@ -17253,6 +17253,31 @@
         "bandTitle": "Ohne Prüfung fortgefahren",
         "bandNote": "Der Prüf-Agent hat {count, plural, one {diesen # Commit} other {diese # Commits}} nicht geprüft.",
         "record": "Ohne Prüfung fortgefahren von <b>{name}</b> · {when}"
+      },
+      "doors": {
+        "title": "Wartet auf eine Prüfung",
+        "lead": "Nichts prüft von selbst. Starten Sie eine Prüfung dieser Pull Requests bei ihren aktuellen Commits.",
+        "leadOff": "Die Prüfung ist in diesem Projekt aus, daher wird ein Ergebnis am Element festgehalten und hält nichts auf. Sie können trotzdem eine Prüfung anfordern.",
+        "leadAgain": "Prüfung erneut starten:",
+        "motirAgent": "Mit Motir-Agent prüfen",
+        "myAgent": "In meinem Agenten prüfen",
+        "orRun": "oder führen Sie aus",
+        "creditsNote": "Mit Motir-Agent prüfen ist ein Motir-Agentenlauf, bezahlt aus den KI-Guthaben Ihrer Organisation. In meinem Agenten prüfen und motir review nutzen Ihren eigenen Agenten.",
+        "waitingWhy": "Nichts wird zusammengeführt und niemand wird um Genehmigung gebeten, bis eine Prüfung bestanden ist oder jemand ohne sie fortfährt.",
+        "waitingWhyNotYours": "Wartet darauf, dass {name} eine Prüfung startet. Nichts wird zusammengeführt, bis eine Prüfung bestanden ist oder diese Person ohne sie fortfährt."
+      },
+      "own": {
+        "title": "Prüfung in {agent}",
+        "titleNoAgent": "Prüfung in einem Agenten",
+        "metaYou": "Von Ihnen gestartet <when></when> · <run>{label}</run>",
+        "meta": "Gestartet <when></when> · <run>{label}</run>",
+        "lineYou": "Ihr Agent führt motir review {key} aus und hält sein Ergebnis hier fest. Die Optionen kehren zurück, wenn der Lauf ohne Ergebnis endet.",
+        "line": "Der Agent führt motir review {key} aus und hält sein Ergebnis hier fest. Die Optionen kehren zurück, wenn der Lauf ohne Ergebnis endet."
+      },
+      "picker": {
+        "title": "{key} in einem Ihrer Agenten prüfen",
+        "lead": "Ihr Agent führt motir review {key} aus und reicht sein Ergebnis unter Ihrem Namen ein.",
+        "lastUsed": "Zuletzt bei diesem Element verwendet"
       }
     },
     "autoRerun": {
@@ -17341,10 +17366,9 @@
         "couldNotRunName": "Das Agenten-Review konnte nicht laufen — wartet auf Sie",
         "couldNotRunOn": "Review konnte nicht laufen · {name}",
         "couldNotRunOnName": "Das Agenten-Review konnte nicht laufen — wartet auf {name}",
-        "waitingYours": "Wartet auf Ihren Review-Agenten",
-        "waitingYoursName": "Wartet auf Ihren Review-Agenten — führen Sie motir review {key} aus",
-        "waitingOn": "Wartet auf den Review-Agenten von {name}",
-        "waitingOnName": "Wartet auf den Review-Agenten von {name}"
+        "waiting": "Wartet auf eine Prüfung",
+        "waitingStart": "Wartet auf eine Prüfung — starten Sie sie am Element oder führen Sie motir review {key} aus",
+        "waitingStartBy": "Wartet auf eine Prüfung — {name} kann sie starten"
       },
       "command": {
         "copy": "motir review {key} kopieren",
@@ -17406,9 +17430,9 @@
         "close": "Schließen"
       },
       "toRun": {
-        "sentence": "<title>{name}</title> mit Ihrem Agenten prüfen",
+        "sentence": "Prüfung von <title>{name}</title> starten",
         "tag": "Review auszuführen",
-        "details": "Noch keine Genehmigung. Ihre Genehmigung wird angefragt, sobald das Review bestanden ist.",
+        "details": "Noch keine Genehmigung. Öffnen Sie das Element, um die Prüfung zu starten; Ihre Genehmigung wird angefragt, sobald sie bestanden ist.",
         "open": "{key} öffnen: {sentence}"
       },
       "dismiss": {
@@ -17494,31 +17518,23 @@
       "auto": {
         "label": "Automatisch mergen",
         "hint": "Wenn die Checks bestehen, mergt Motir den Pull Request, ohne jemanden zu fragen. Die Aufzeichnung vermerkt, dass diese Einstellung es erlaubt hat — nicht, dass eine Person es genehmigt hat.",
-        "blockedByReviewAgent": "Schalten Sie den Prüf-Agenten aus, um automatisch zu mergen."
+        "blockedByReviewAgent": "Schalten Sie die Prüfung aus, um automatisch zu mergen."
       },
       "saved": "Gespeichert",
       "saveError": "Speichern fehlgeschlagen — versuchen Sie es erneut."
     },
     "reviewAgent": {
-      "title": "Prüf-Agent",
-      "desc": "Wenn die Pull Requests eines Arbeitselements ihre Checks bestehen, liest ein Motir-Agent die Änderung im Abgleich mit dem Element — seiner Beschreibung, seinen Abnahmekriterien und „How to test“ — <strong>bevor Sie um Genehmigung gebeten werden</strong>. Findet er ein Problem, kommt das Element mit den Befunden des Agenten in <strong>Zu reparieren</strong>, und niemand wird um Genehmigung gebeten.",
+      "title": "Prüfung",
+      "desc": "Eine Schranke vor <strong>Genehmigen und Mergen</strong>. Ist sie eingeschaltet, kann ein Arbeitselement erst zum Mergen genehmigt werden, wenn eine Agent-Prüfung seiner aktuellen Pull Requests bestanden ist. Keine Prüfung startet von selbst: Eine Person startet sie am Element.",
       "on": "Ein",
       "off": "Aus",
-      "onWhat": "Jedes Arbeitselement wird geprüft, bevor Sie um Genehmigung gebeten werden.",
-      "offWhat": "Ein Arbeitselement wird zur Genehmigung angeboten, sobald seine Checks bestehen.",
+      "onWhat": "Ein Element in „In Prüfung“ wartet auf eine bestandene Prüfung, bevor jemand gebeten wird, sein Mergen zu genehmigen.",
+      "offWhat": "Ein Element kann zum Mergen genehmigt werden, sobald seine Checks bestanden sind. Es kann weiterhin am Element geprüft werden; das Urteil wird festgehalten und hält nichts auf.",
       "unavailable": "Nicht verfügbar",
-      "unavailableWhat": "Dieses Projekt mergt automatisch, daher wartet nichts auf eine Prüfung. Wählen Sie <strong>Vor dem Mergen fragen</strong>, um den Prüf-Agenten einzuschalten.",
-      "billingNote": "Jede Prüfung ist ein Motir-Agent-Lauf, bezahlt aus den AI-Credits Ihrer Organisation.",
-      "offNote": "Das Ausschalten bricht laufende Prüfungen ab — diese Arbeitselemente gehen direkt in den gewöhnlichen Ablauf.",
+      "unavailableWhat": "Dieses Projekt mergt automatisch, daher genehmigt keine Person ein Mergen, vor dem eine Prüfung stehen könnte. Wählen Sie <strong>Vor dem Mergen fragen</strong>, um die Prüfung einzuschalten.",
+      "offNote": "Wenn Sie dies ausschalten, werden Elemente freigegeben, die auf eine Prüfung warten: Sie gehen direkt zu Genehmigen und Mergen. Eine bereits laufende Prüfung hält ihr Urteil trotzdem fest.",
       "saved": "Gespeichert",
       "saveError": "Speichern fehlgeschlagen — versuchen Sie es erneut.",
-      "source": {
-        "label": "Wer prüft",
-        "hosted": "Motir-Agent",
-        "hostedWhat": "Motir startet einen Prüf-Lauf, sobald die Checks bestanden sind. <strong>Verbraucht AI-Credits.</strong>",
-        "own": "Ihr eigener Agent",
-        "ownWhat": "Kostenlos. Die Prüfung wartet, bis jemand <cmd>motir review</cmd> mit dem eigenen Agent ausführt. Nichts startet von selbst."
-      },
       "posting": {
         "title": "Agent-Prüfungen in Pull Requests posten",
         "on": "Motirs GitHub-App kommentiert jedes Ergebnis in den Pull Requests und fordert bei einer Rückgabe Änderungen an. Sie genehmigt nie.",

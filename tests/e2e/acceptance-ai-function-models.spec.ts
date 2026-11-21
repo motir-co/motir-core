@@ -409,7 +409,7 @@ async function startHosted(page: Page, key: string, baseURL: string): Promise<st
   return model;
 }
 
-/** Deliver the card's pull request green, so the review agent's job starts a review run. */
+/** Deliver the card's pull request green, so the card's review is raised. */
 async function deliverGreen(page: Page, card: ReviewAgentCard): Promise<void> {
   const headRef = `review/${card.identifier.toLowerCase()}`;
   const opened = await postSignedWebhook(
@@ -441,7 +441,25 @@ async function deliverGreen(page: Page, card: ReviewAgentCard): Promise<void> {
   expect(green.status()).toBe(200);
 }
 
-/** The review run the worker booted for `card`, by the fake orchestrator's record. */
+/** The person's press for the hosted review, once the green has raised it (MOTIR-11944). */
+async function pressHostedReview(page: Page, card: ReviewAgentCard): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        adminDb.approvalGate.count({
+          where: { workItemId: card.id, kind: 'agent_review', state: 'awaiting' },
+        }),
+      { timeout: 60_000, message: `the review awaits on ${card.identifier}` },
+    )
+    .toBe(1);
+  const res = await page.request.post(
+    `/api/work-items/${card.identifier}/review-with-motir-agent`,
+    { data: {} },
+  );
+  expect(res.status(), await res.text()).toBe(201);
+}
+
+/** The review run started for `card`, by the fake orchestrator's record. */
 async function reviewRunId(card: ReviewAgentCard): Promise<string> {
   const find = () =>
     Object.values(readFakeContainers()).find(
@@ -721,6 +739,9 @@ test('platform defaults, a Standard org locked, a Pro org choosing its models, a
 
   await chapter('A hosted review runs on the organisation’s review-agent model', async () => {
     await deliverGreen(page, reviewed);
+    // Nothing reviews by itself (MOTIR-11943): the green raises the review, and the person
+    // presses *Review with Motir agent* with no model picked — the run takes the default.
+    await pressHostedReview(page, reviewed);
     const runId = await reviewRunId(reviewed);
     expect(await mintedModel(runId)).toBe(ORG_REVIEW);
     await page.goto(`/items/${reviewed.identifier}`);

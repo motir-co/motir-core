@@ -3,6 +3,10 @@
 // page shows (the MOTIR-6868 design's panel 5) — never a 500. The
 // route maps each `code` to a status in `lib/agentInstances/errorResponse.ts`.
 
+import type {
+  AgentRunAgentRefusal,
+  ReviewInMyAgentNotOfferedReason,
+} from '@/lib/dto/agentInstanceRuns';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 
 /** An instance that does not exist, is deleted, or is not the caller's (§8) — one answer for all three. */
@@ -387,5 +391,44 @@ export class AgentInstancePlacementError extends Error {
       `The agent could not be created on its account: ${cause instanceof Error ? cause.message : String(cause)}`,
     );
     this.name = 'AgentInstancePlacementError';
+  }
+}
+
+/**
+ * A `review` run asked for with nothing to review (Story MOTIR-11941 · MOTIR-11945) — 400.
+ * A review run in an agent names the gate and the version it reviews, and only the
+ * *Review in my agent* door supplies them; the generic agent-runs route cannot.
+ */
+export class AgentRunReviewTargetRequiredError extends Error {
+  readonly code = 'agent_run_review_target_required' as const;
+  constructor() {
+    super('A review in your agent is started from the item’s Review in my agent button.');
+    this.name = 'AgentRunReviewTargetRequiredError';
+  }
+}
+
+const REVIEW_IN_MY_AGENT_MESSAGES: Record<ReviewInMyAgentNotOfferedReason, string> = {
+  not_in_review: 'This item is not in review.',
+  no_pull_request: 'This item has no pull request to review.',
+  gate_not_awaiting: 'This item’s review is not waiting for a verdict at its current version.',
+  review_in_flight: 'A review of this item is already running.',
+  cannot_decide: 'You can’t decide this item’s review.',
+  no_agent: 'You have no agent on this project. Create one in My agents.',
+  agent_unusable: 'Your agent can’t run a review right now.',
+};
+
+/**
+ * A *Review in my agent* press the door's read would not offer (MOTIR-11945) — 409 with
+ * the read's own reason (and the agent's refusal on `agent_unusable`). Nothing is opened.
+ */
+export class ReviewInMyAgentNotOfferedError extends Error {
+  readonly code = 'review_in_my_agent_not_offered' as const;
+  constructor(
+    readonly workItemKey: string,
+    readonly reason: ReviewInMyAgentNotOfferedReason,
+    readonly refusal: AgentRunAgentRefusal | null = null,
+  ) {
+    super(REVIEW_IN_MY_AGENT_MESSAGES[reason]);
+    this.name = 'ReviewInMyAgentNotOfferedError';
   }
 }

@@ -49,9 +49,11 @@ export async function POST(
     typeof body?.idempotencyKey === 'string' && body.idempotencyKey.trim()
       ? body.idempotencyKey.trim()
       : undefined;
-  // MOTIR-9045: what the run is for — `run` (the default), `fix` or `continue`.
+  // MOTIR-9045: what the run is for — `run` (the default), `fix` or `continue`. A
+  // `review` (MOTIR-11945) is refused by the service here: only the review door names
+  // what it reviews.
   if (body?.command !== undefined && !isAgentRunCommand(body.command)) {
-    return problem('BAD_REQUEST', '`command` must be one of run, fix or continue.', 400);
+    return problem('BAD_REQUEST', '`command` must be one of run, fix, continue or review.', 400);
   }
   const command = body?.command as AgentRunCommand | undefined;
 

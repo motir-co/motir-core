@@ -205,6 +205,19 @@ export interface DispatchRunDto {
    * and for a LOCAL `fix` run (whose `run_opened` the CLI writes, recording none of it).
    */
   repair?: DispatchRunRepairDto | null;
+  /**
+   * What a `review` run reviews (Story MOTIR-11941 · MOTIR-11953), read from its
+   * `run_opened`: the gate (null with Review off) and the delivery-set version. A review in
+   * the person's own agent adopts its run and compares the served prompt against this. Only
+   * the single-run read fills it; null for every other command.
+   */
+  review?: DispatchRunReviewDto | null;
+}
+
+/** What a review run reviews, as its `run_opened` recorded it (MOTIR-11953). */
+export interface DispatchRunReviewDto {
+  gateId: string | null;
+  subjectVersion: string;
 }
 
 /** A hosted repair's decision, as its `run_opened` recorded it (MOTIR-6928 · MOTIR-6929). */

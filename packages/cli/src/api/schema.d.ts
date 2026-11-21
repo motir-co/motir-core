@@ -3153,6 +3153,10 @@ export interface components {
                     decidedAt: string;
                 } | null;
             } | null;
+            review?: {
+                gateId: string | null;
+                subjectVersion: string;
+            } | null;
         };
         DispatchRunCard: {
             id: string;
@@ -3251,6 +3255,10 @@ export interface components {
                         decidedAt: string;
                     } | null;
                 } | null;
+                review?: {
+                    gateId: string | null;
+                    subjectVersion: string;
+                } | null;
             };
             created: boolean;
         };
@@ -3305,7 +3313,6 @@ export interface components {
         };
         ReviewPrompt: {
             key: string;
-            gateId: string;
             subjectVersion: string;
             pullRequests: {
                 repository: string;
@@ -3316,10 +3323,23 @@ export interface components {
                 url: string;
             }[];
             prompt: string;
+            gateId: string;
+        } | {
+            key: string;
+            subjectVersion: string;
+            pullRequests: {
+                repository: string;
+                number: number;
+                headSha: string;
+                baseBranch: string | null;
+                headBranch: string | null;
+                url: string;
+            }[];
+            prompt: string;
+            gateId: null;
         };
         AgentReviewResult: {
             key: string;
-            gateId: string;
             /** @enum {string} */
             verdict: "pass" | "changes_requested";
             /** @enum {string} */
@@ -3333,6 +3353,27 @@ export interface components {
                 /** @enum {string} */
                 outcome: "filed" | "already_filed";
             }[];
+            gateId: string;
+            /** @constant */
+            outcome: "decided";
+        } | {
+            key: string;
+            /** @enum {string} */
+            verdict: "pass" | "changes_requested";
+            /** @enum {string} */
+            state: "approved" | "changes_requested";
+            subjectVersion: string;
+            /** Format: date-time */
+            decidedAt: string;
+            bugs: {
+                key: string;
+                title: string;
+                /** @enum {string} */
+                outcome: "filed" | "already_filed";
+            }[];
+            gateId: null;
+            /** @constant */
+            outcome: "recorded";
         };
         ReviewVerdictResult: {
             key: string;
