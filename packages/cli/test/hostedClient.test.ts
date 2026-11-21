@@ -111,6 +111,8 @@ describe('client.getDispatchRun — the run a hosted CLI adopts', () => {
       continues: null,
       // Not a hosted fix run, so it carries no repair decision (MOTIR-6929).
       repair: null,
+      // Not a review run, so it names no review target (MOTIR-11953).
+      review: null,
     });
   });
 });
