@@ -21,22 +21,33 @@ import { describe, expect, it } from 'vitest';
 // exactly right for them.
 
 const ROOT = join(__dirname, '..', '..');
-/** The directive, after any leading comments. */
-const USE_CLIENT = /^(?:\s*(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/))*\s*['"]use client['"]/;
-
-function clientModules(): string[] {
+/** Source files under the scanned roots that mention the directive at all. */
+function candidateModules(): { file: string; source: string }[] {
   return execFileSync('git', ['ls-files', '--', 'app', 'components', 'lib'], {
     cwd: ROOT,
     encoding: 'utf8',
   })
     .split('\n')
     .filter((f) => /\.tsx?$/.test(f) && !/\.d\.ts$/.test(f))
-    .filter((f) => USE_CLIENT.test(readFileSync(join(ROOT, f), 'utf8')));
+    .map((file) => ({ file, source: readFileSync(join(ROOT, file), 'utf8') }))
+    .filter(({ source }) => source.includes('use client'));
+}
+
+/** The module's first statement is the `'use client'` directive (comments before it allowed). */
+function isClientModule(sf: ts.SourceFile): boolean {
+  const first = sf.statements[0];
+  return (
+    first !== undefined &&
+    ts.isExpressionStatement(first) &&
+    ts.isStringLiteral(first.expression) &&
+    first.expression.text === 'use client'
+  );
 }
 
 /** `file:line` of every one-argument `<x>.relativeTime(…)` call in `source`. */
 function oneArgumentRelativeTimeCalls(file: string, source: string): string[] {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  if (!isClientModule(sf)) return [];
   const found: string[] = [];
   const visit = (node: ts.Node): void => {
     if (
@@ -64,13 +75,20 @@ describe('client relative times measure against the live clock (MOTIR-11970)', (
     expect(oneArgumentRelativeTimeCalls('f.tsx', src)).toEqual(['f.tsx:2']);
   });
 
+  it('a server module, or a comment before the directive, is read correctly', () => {
+    const server = 'const a = format.relativeTime(new Date(x));';
+    expect(oneArgumentRelativeTimeCalls('s.tsx', server)).toEqual([]);
+    const commented = ['// header', '/* note */', "'use client';", 'format.relativeTime(x);'];
+    expect(oneArgumentRelativeTimeCalls('c.tsx', commented.join('\n'))).toEqual(['c.tsx:4']);
+  });
+
   it('no client module calls `.relativeTime(date)` with one argument', () => {
-    const files = clientModules();
+    const files = candidateModules();
     // The scan is over the real tree: an empty file list would pass vacuously.
     expect(files.length).toBeGreaterThan(100);
-    const offenders = files.flatMap((f) =>
-      oneArgumentRelativeTimeCalls(f, readFileSync(join(ROOT, f), 'utf8')),
-    );
+    const offenders = files
+      .filter(({ source }) => source.includes('relativeTime'))
+      .flatMap(({ file, source }) => oneArgumentRelativeTimeCalls(file, source));
     expect(
       offenders,
       'Use `useRelativeTime()` from `@/lib/hooks/useRelativeTime` in a client component',
