@@ -30,6 +30,16 @@ export const APP_GITHUB = { id: 7_270_003, login: 'motir-e2e[bot]' } as const;
 
 export async function seedReviewPath(slug: string): Promise<ContinueHostedSeed> {
   const s = await seedReviewAgent(slug);
+  // ⚠️ "COMPLETE CHILDREN WHEN A PARENT IS DONE" IS OFF HERE (Bug MOTIR-11955). With it on, a
+  // pull request linked to a child is linked to every non-epic ancestor as well, and the
+  // parent's one merge question covers it — the child is asked nothing (MOTIR-11835). The
+  // walk's two PARTS are children of a story that each answer their own review and merge
+  // question (MOTIR-11673), which is the shape a project with the switch off has. Nothing in
+  // this walk relies on the cascade: no story here delivers or merges a pull request.
+  await adminDb.project.update({
+    where: { id: s.hosted.projectId },
+    data: { autoCompleteChildrenOnParentDone: false },
+  });
   // The routed person's linked GitHub account. The token is never read on this path (the
   // author fact compares ids), so a placeholder ciphertext stands in for it.
   await adminDb.githubIdentity.create({

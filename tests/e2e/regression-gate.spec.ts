@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './_helpers/promoted-regression';
-import { resetDatabase } from './_helpers/db-reset';
+import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { paidOrgState, resetBillingFixture, setOrgBillingState } from './_helpers/billing';
 import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
@@ -169,6 +169,15 @@ async function openAndLink(page: Page, card: SeededCard, scenario: Scenario): Pr
   }
 }
 
+/** The project's "Complete children when a parent is done" switch, which decides whether a
+ *  pull request linked to a child is linked to its ancestors as well (MOTIR-11835). */
+async function setInheritedChildLinks(projectId: string, on: boolean): Promise<void> {
+  await adminDb.project.update({
+    where: { id: projectId },
+    data: { autoCompleteChildrenOnParentDone: on },
+  });
+}
+
 /** Turn a card's linked pull requests green — the verdict that raises the merge question. */
 async function turnGreen(page: Page, card: SeededCard, scenario: Scenario): Promise<void> {
   for (const [repo, number] of membersOf(scenario)) {
@@ -242,7 +251,17 @@ test.describe('the acceptance-video gate', () => {
       if (scenario !== 'held') await turnGreen(page, cards.story, scenario);
     }
     // The single-card run delivered from the E2E SUBTASK, so the pull requests are ITS.
+    //
+    // ⚠️ ONLY WHILE "COMPLETE CHILDREN WHEN A PARENT IS DONE" IS OFF (Bug MOTIR-11955). With
+    // it on, the link door writes the subtask's pull requests on the story too (MOTIR-11835),
+    // so the story delivers them and is asked as a story run — the shape `storyRun` already
+    // walks. The single-card shape this chapter is about (MOTIR-5903) is a project with the
+    // switch off, and the switch is read only when a link is written. So it is off for these
+    // two links and back on before anything merges, because the story-run chapters rely on
+    // the cascade closing the children of a merged story.
+    await setInheritedChildLinks(seed.projectId, false);
     await openAndLink(page, seed.singleCard.e2e, 'singleCard');
+    await setInheritedChildLinks(seed.projectId, true);
     await turnGreen(page, seed.singleCard.e2e, 'singleCard');
 
     for (const cards of [seed.storyRun, seed.singleCard, seed.held, seed.zh]) {
