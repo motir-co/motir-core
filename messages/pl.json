@@ -3167,8 +3167,8 @@
             "desc": "Właściciel lub administrator organizacji zatrzymał jednego z Twoich agentów na stronie Fleet organizacji."
           },
           "review_to_run": {
-            "label": "Recenzja czeka na twojego agenta",
-            "desc": "Twój projekt recenzuje własnym agentem, a recenzję elementu roboczego uruchamiasz sam poleceniem motir review."
+            "label": "Przegląd czeka na uruchomienie",
+            "desc": "Element roboczy przypisany do Ciebie czeka na przegląd: uruchom go z poziomu elementu lub wykonaj motir review."
           },
           "review_sent_back": {
             "label": "Agent poprosił o zmiany",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> aktualizuje <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> wysyła Ci powiadomienie",
       "accessRefused": "Kod projektu <s>{project}</s> jest gotowy, ale nie możesz go jeszcze otworzyć — spróbuj wysłać zaproszenie ponownie",
-      "reviewToRun": "Recenzja <s>{key}</s> czeka na twojego agenta",
+      "reviewToRun": "Przegląd <s>{key}</s> czeka na uruchomienie",
       "reviewSentBack": "Agent poprosił o zmiany w <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> uśpił Twojego agenta <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> wspomina o Tobie na stronie <s>{page}</s>",
@@ -17341,10 +17341,9 @@
         "couldNotRunName": "Nie udało się uruchomić przeglądu agenta — czeka na ciebie",
         "couldNotRunOn": "Nie udało się uruchomić przeglądu · {name}",
         "couldNotRunOnName": "Nie udało się uruchomić przeglądu agenta — czeka na: {name}",
-        "waitingYours": "Czeka na twojego agenta przeglądu",
-        "waitingYoursName": "Czeka na twojego agenta przeglądu — uruchom motir review {key}",
-        "waitingOn": "Czeka na agenta przeglądu użytkownika {name}",
-        "waitingOnName": "Czeka na agenta przeglądu użytkownika {name}"
+        "waiting": "Czeka na przegląd",
+        "waitingStart": "Czeka na przegląd — uruchom go z poziomu elementu lub wykonaj motir review {key}",
+        "waitingStartBy": "Czeka na przegląd — {name} może go uruchomić"
       },
       "command": {
         "copy": "Kopiuj motir review {key}",
@@ -17406,9 +17405,9 @@
         "close": "Zamknij"
       },
       "toRun": {
-        "sentence": "Przejrzyj <title>{name}</title> swoim agentem",
+        "sentence": "Uruchom przegląd <title>{name}</title>",
         "tag": "Przegląd do uruchomienia",
-        "details": "To jeszcze nie zatwierdzenie. Poprosimy o twoje zatwierdzenie, gdy przegląd przejdzie.",
+        "details": "To jeszcze nie zatwierdzenie. Otwórz element, aby uruchomić przegląd; o zatwierdzenie poprosimy, gdy przegląd się powiedzie.",
         "open": "Otwórz {key}: {sentence}"
       },
       "dismiss": {

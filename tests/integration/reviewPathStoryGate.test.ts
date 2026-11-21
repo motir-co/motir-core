@@ -1297,7 +1297,7 @@ describe('the review state read model over the assembled path', () => {
       lastReviewedVersion: setVersion(A),
       command: `motir review ${item.identifier}`,
     });
-    // The head move raised a new review: Waiting for your review agent, at the new version.
+    // The head move raised a new review: Waiting for a review, at the new version.
     const fresh = await awaitingOf(item.id, REVIEW);
     expect(fresh.map((g) => g.subjectVersion)).toEqual([setVersion(A, 'sha-b')]);
     expect(moved?.marker).toMatchObject({ kind: 'waiting_for_review', forViewer: true });

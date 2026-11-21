@@ -63,7 +63,7 @@ describe('ReviewMarkerHeaderLink', () => {
   it('the waiting marker for the reader carries the command chip AFTER the pointer', () => {
     render(<ReviewMarkerHeaderLink marker={WAITING} identifier="ACME-412" />);
     const pointer = screen.getByRole('button', {
-      name: 'Waiting for your review agent — run motir review ACME-412. Go to the agent review',
+      name: 'Waiting for a review — start it from the item, or run motir review ACME-412. Go to the agent review',
     });
     const copy = screen.getByRole('button', { name: 'Copy motir review ACME-412' });
     expect(pointer.contains(copy)).toBe(false);
@@ -76,7 +76,7 @@ describe('ReviewMarkerHeaderLink', () => {
     );
     expect(
       screen.getByRole('button', {
-        name: "Waiting for Ana Ruiz's review agent. Go to the agent review",
+        name: 'Waiting for a review — Ana Ruiz can start it. Go to the agent review',
       }),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Copy motir review/ })).toBeNull();

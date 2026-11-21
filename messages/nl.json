@@ -3167,8 +3167,8 @@
             "desc": "Een eigenaar of beheerder van de organisatie heeft een van je agents gestopt via de Fleet-pagina van de organisatie."
           },
           "review_to_run": {
-            "label": "Een review wacht op je agent",
-            "desc": "Je project reviewt met je eigen agent, en de review van een werkitem start je zelf met motir review."
+            "label": "Een review wacht om gestart te worden",
+            "desc": "Een werkitem dat aan jou is toegewezen, wacht op een review: start hem vanuit het item of voer motir review uit."
           },
           "review_sent_back": {
             "label": "Een agent vroeg om wijzigingen",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> heeft <s>{key}</s> bijgewerkt",
       "genericNoKey": "<s>{actor}</s> heeft je een melding gestuurd",
       "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen",
-      "reviewToRun": "Een review van <s>{key}</s> wacht op je agent",
+      "reviewToRun": "Een review van <s>{key}</s> wacht om gestart te worden",
       "reviewSentBack": "Een agent vroeg om wijzigingen aan <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> heeft je agent <s>{agent}</s> in slaapstand gezet",
       "pageMentioned": "<s>{actor}</s> heeft je vermeld op <s>{page}</s>",
@@ -17341,10 +17341,9 @@
         "couldNotRunName": "De agent-review kon niet draaien — wacht op jou",
         "couldNotRunOn": "Review kon niet draaien · {name}",
         "couldNotRunOnName": "De agent-review kon niet draaien — wacht op {name}",
-        "waitingYours": "Wacht op je review-agent",
-        "waitingYoursName": "Wacht op je review-agent — voer motir review {key} uit",
-        "waitingOn": "Wacht op de review-agent van {name}",
-        "waitingOnName": "Wacht op de review-agent van {name}"
+        "waiting": "Wacht op een review",
+        "waitingStart": "Wacht op een review — start hem vanuit het item of voer motir review {key} uit",
+        "waitingStartBy": "Wacht op een review — {name} kan hem starten"
       },
       "command": {
         "copy": "motir review {key} kopiëren",
@@ -17406,9 +17405,9 @@
         "close": "Sluiten"
       },
       "toRun": {
-        "sentence": "Beoordeel <title>{name}</title> met je agent",
+        "sentence": "Start een review van <title>{name}</title>",
         "tag": "Review uit te voeren",
-        "details": "Nog geen goedkeuring. Je goedkeuring wordt gevraagd zodra de review slaagt.",
+        "details": "Nog geen goedkeuring. Open het item om de review te starten; je goedkeuring wordt gevraagd zodra hij slaagt.",
         "open": "{key} openen: {sentence}"
       },
       "dismiss": {

@@ -3167,8 +3167,8 @@
             "desc": "Ein Inhaber oder Admin der Organisation hat einen Ihrer Agenten auf der Fleet-Seite der Organisation gestoppt."
           },
           "review_to_run": {
-            "label": "Ein Review wartet auf deinen Agenten",
-            "desc": "Dein Projekt prüft mit deinem eigenen Agenten, und das Review eines Arbeitselements führst du mit motir review aus."
+            "label": "Eine Prüfung wartet darauf, gestartet zu werden",
+            "desc": "Ein Arbeitselement, das an Sie weitergeleitet wurde, wartet auf eine Prüfung: Starten Sie sie am Element oder führen Sie motir review aus."
           },
           "review_sent_back": {
             "label": "Ein Agent hat Änderungen angefordert",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> hat <s>{key}</s> aktualisiert",
       "genericNoKey": "<s>{actor}</s> hat Ihnen eine Benachrichtigung gesendet",
       "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden",
-      "reviewToRun": "Ein Review von <s>{key}</s> wartet auf deinen Agenten",
+      "reviewToRun": "Eine Prüfung von <s>{key}</s> wartet darauf, gestartet zu werden",
       "reviewSentBack": "Ein Agent hat Änderungen an <s>{key}</s> angefordert",
       "agentHibernatedByAdmin": "<s>{actor}</s> hat Ihren Agenten <s>{agent}</s> in den Ruhezustand versetzt",
       "pageMentioned": "<s>{actor}</s> hat Sie in <s>{page}</s> erwähnt",
@@ -17341,10 +17341,9 @@
         "couldNotRunName": "Das Agenten-Review konnte nicht laufen — wartet auf Sie",
         "couldNotRunOn": "Review konnte nicht laufen · {name}",
         "couldNotRunOnName": "Das Agenten-Review konnte nicht laufen — wartet auf {name}",
-        "waitingYours": "Wartet auf Ihren Review-Agenten",
-        "waitingYoursName": "Wartet auf Ihren Review-Agenten — führen Sie motir review {key} aus",
-        "waitingOn": "Wartet auf den Review-Agenten von {name}",
-        "waitingOnName": "Wartet auf den Review-Agenten von {name}"
+        "waiting": "Wartet auf eine Prüfung",
+        "waitingStart": "Wartet auf eine Prüfung — starten Sie sie am Element oder führen Sie motir review {key} aus",
+        "waitingStartBy": "Wartet auf eine Prüfung — {name} kann sie starten"
       },
       "command": {
         "copy": "motir review {key} kopieren",
@@ -17406,9 +17405,9 @@
         "close": "Schließen"
       },
       "toRun": {
-        "sentence": "<title>{name}</title> mit Ihrem Agenten prüfen",
+        "sentence": "Prüfung von <title>{name}</title> starten",
         "tag": "Review auszuführen",
-        "details": "Noch keine Genehmigung. Ihre Genehmigung wird angefragt, sobald das Review bestanden ist.",
+        "details": "Noch keine Genehmigung. Öffnen Sie das Element, um die Prüfung zu starten; Ihre Genehmigung wird angefragt, sobald sie bestanden ist.",
         "open": "{key} öffnen: {sentence}"
       },
       "dismiss": {

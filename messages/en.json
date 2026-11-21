@@ -3167,8 +3167,8 @@
             "desc": "An organization owner or admin stopped one of your agents from the organization's Fleet page."
           },
           "review_to_run": {
-            "label": "A review is waiting for your agent",
-            "desc": "Your project reviews with your own agent, and a work item's review is yours to run with motir review."
+            "label": "A review is waiting to be started",
+            "desc": "A work item routed to you is waiting for a review: start it from the item, or run motir review."
           },
           "review_sent_back": {
             "label": "An agent asked for changes",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> updated <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> sent you a notification",
       "accessRefused": "<s>{project}</s>'s code is ready, but you can't open it yet — try sending the invitation again",
-      "reviewToRun": "A review of <s>{key}</s> is waiting for your agent",
+      "reviewToRun": "A review of <s>{key}</s> is waiting to be started",
       "reviewSentBack": "An agent asked for changes on <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> hibernated your agent <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> mentioned you on <s>{page}</s>",
@@ -17338,10 +17338,9 @@
         "couldNotRunName": "The agent review could not run — waiting on you",
         "couldNotRunOn": "Review could not run · {name}",
         "couldNotRunOnName": "The agent review could not run — waiting on {name}",
-        "waitingYours": "Waiting for your review agent",
-        "waitingYoursName": "Waiting for your review agent — run motir review {key}",
-        "waitingOn": "Waiting for {name}'s review agent",
-        "waitingOnName": "Waiting for {name}'s review agent"
+        "waiting": "Waiting for a review",
+        "waitingStart": "Waiting for a review — start it from the item, or run motir review {key}",
+        "waitingStartBy": "Waiting for a review — {name} can start it"
       },
       "command": {
         "copy": "Copy motir review {key}",
@@ -17403,9 +17402,9 @@
         "close": "Close"
       },
       "toRun": {
-        "sentence": "Review <title>{name}</title> with your agent",
+        "sentence": "Start a review of <title>{name}</title>",
         "tag": "Review to run",
-        "details": "Not an approval yet. Your approval is asked once the review passes.",
+        "details": "Not an approval yet. Open the item to start the review; your approval is asked once it passes.",
         "open": "Open {key}: {sentence}"
       },
       "dismiss": {

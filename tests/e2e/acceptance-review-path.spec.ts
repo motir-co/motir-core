@@ -422,13 +422,13 @@ test.describe('the review path', () => {
       await autoMergeBlocked(page);
     });
 
-    // ── 2 · Waiting for your review agent ───────────────────────────────────
+    // ── 2 · Waiting for a review ────────────────────────────────────────────
     const shaOne = { mainTeammate: headShaFor(27101), mainApp: headShaFor(27102) };
     const mainV1 = versionOf([
       ['mainTeammate', shaOne.mainTeammate],
       ['mainApp', shaOne.mainApp],
     ]);
-    await chapter('Green, and waiting for your review agent — on the board card', async () => {
+    await chapter('Green, and waiting for a review — on the board card', async () => {
       await green(page, 'mainTeammate', shaOne.mainTeammate);
       await green(page, 'mainApp', shaOne.mainApp);
       await awaitGate(mainCard, 'agent_review', mainV1);
@@ -437,7 +437,7 @@ test.describe('the review path', () => {
       await expect(marker).toHaveAttribute('data-review-marker', 'waiting_for_review', {
         timeout: FIRST_PAINT_MS,
       });
-      await expect(marker).toContainText(rp.marker.waitingYours);
+      await expect(marker).toContainText(rp.marker.waiting);
       // Nothing reviews by itself (MOTIR-11943): no hosted run starts on the raise.
       expect(hostedRunsFor(mainCard)).toEqual([]);
     });
@@ -451,7 +451,7 @@ test.describe('the review path', () => {
       );
       await page.goto(`/items/${mainCard.identifier}`);
       const headerMarker = main(page).locator('[data-review-header-marker]');
-      await expect(headerMarker).toContainText(rp.marker.waitingYours, { timeout: FIRST_PAINT_MS });
+      await expect(headerMarker).toContainText(rp.marker.waiting, { timeout: FIRST_PAINT_MS });
       const copy = main(page).getByTestId(`review-command-copy-${mainCard.identifier}`);
       await expect(copy).toBeVisible();
       await copy.click();

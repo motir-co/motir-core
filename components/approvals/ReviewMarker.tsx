@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Bot, BotOff, SquareTerminal } from 'lucide-react';
+import { Bot, BotOff, ScanSearch } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import type { ReviewMarkerDTO } from '@/lib/dto/reviewState';
 
@@ -11,15 +11,20 @@ import type { ReviewMarkerDTO } from '@/lib/dto/reviewState';
 // component, TWO forms, mirroring `DecisionWaitingMarker`, whose slot, size and precedence
 // they take.
 //
-// | marker                        | loud for          | glyph            |
-// | Agent reviewing               | nobody — quiet    | `Bot`            |
-// | Review could not run          | the routed person | `BotOff`         |
-// | Waiting for your review agent | the routed person | `SquareTerminal` |
+// | marker               | loud for          | glyph        |
+// | Agent reviewing      | nobody — quiet    | `Bot`        |
+// | Review could not run | the routed person | `BotOff`     |
+// | Waiting for a review | the routed person | `ScanSearch` |
 //
-// ⚠️ LOUD AND QUIET DIFFER IN FILL, INK AND WORDS TOGETHER, never in colour alone: the
-// routed person's pill is `tone="awaiting"` (the glyph form a yellow disc) and says *your*;
-// everyone else's is neutral and names the person. The three glyph SHAPES differ from each
-// other and from the decision marker's `Stamp` / `Hourglass`. Glyphs are `aria-hidden`; the
+// *Waiting for a review* is ONE marker for an awaiting `agent_review` gate with no review in
+// flight, whoever started reviews before (Story MOTIR-11941 · MOTIR-11947;
+// `design/github/design-notes.md` § 33.2): nothing reviews by itself, so a person starts it.
+//
+// ⚠️ LOUD AND QUIET DIFFER IN FILL, INK AND SENTENCE TOGETHER, never in colour alone: the
+// routed person's pill is `tone="awaiting"` (the glyph form a yellow disc) and its sentence
+// says how to start the review; everyone else's is neutral and its sentence names who can
+// start it. *Waiting for a review*'s words are the same in both (§ 33.2). The three glyph
+// SHAPES differ from each other and from the decision marker's `Stamp` / `Hourglass`. Glyphs are `aria-hidden`; the
 // words, or the glyph form's accessible name, carry the meaning.
 //
 // ⚠️ IT DRAWS WHAT THE READ MODEL RETURNED (`reviewStateService`) and computes nothing: who
@@ -70,20 +75,20 @@ export function useReviewMarkerCopy(marker: ReviewMarkerDTO, identifier: string)
       return marker.forViewer
         ? {
             loud: true,
-            words: t('reviewPath.marker.waitingYours'),
-            sentence: t('reviewPath.marker.waitingYoursName', { key: identifier }),
+            words: t('reviewPath.marker.waiting'),
+            sentence: t('reviewPath.marker.waitingStart', { key: identifier }),
           }
         : {
             loud: false,
-            words: t('reviewPath.marker.waitingOn', { name }),
-            sentence: t('reviewPath.marker.waitingOnName', { name }),
+            words: t('reviewPath.marker.waiting'),
+            sentence: t('reviewPath.marker.waitingStartBy', { name }),
           };
   }
 }
 
 function MarkerGlyph({ kind, className }: { kind: ReviewMarkerDTO['kind']; className: string }) {
   if (kind === 'could_not_run') return <BotOff className={className} aria-hidden />;
-  if (kind === 'waiting_for_review') return <SquareTerminal className={className} aria-hidden />;
+  if (kind === 'waiting_for_review') return <ScanSearch className={className} aria-hidden />;
   return <Bot className={className} aria-hidden />;
 }
 

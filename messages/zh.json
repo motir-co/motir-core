@@ -3167,8 +3167,8 @@
             "desc": "组织的所有者或管理员在组织的 Fleet 页面停止了你的一个智能体。"
           },
           "review_to_run": {
-            "label": "有一个评审在等你的智能体",
-            "desc": "你的项目使用你自己的智能体评审，一个工作项的评审需要你用 motir review 来运行。"
+            "label": "有一个审查等待发起",
+            "desc": "一个分派给你的工作项正在等待审查：从工作项上发起，或运行 motir review。"
           },
           "review_sent_back": {
             "label": "智能体要求修改",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> 给你发送了一条通知",
       "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请",
-      "reviewToRun": "<s>{key}</s> 的评审正在等你的智能体",
+      "reviewToRun": "<s>{key}</s> 的审查正在等待发起",
       "reviewSentBack": "智能体要求修改 <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠",
       "pageMentioned": "<s>{actor}</s> 在 <s>{page}</s> 中提到了你",
@@ -17332,10 +17332,9 @@
         "couldNotRunName": "智能体审查无法运行 — 等待你处理",
         "couldNotRunOn": "审查无法运行 · {name}",
         "couldNotRunOnName": "智能体审查无法运行 — 等待 {name} 处理",
-        "waitingYours": "等待你的审查智能体",
-        "waitingYoursName": "等待你的审查智能体 — 运行 motir review {key}",
-        "waitingOn": "等待 {name} 的审查智能体",
-        "waitingOnName": "等待 {name} 的审查智能体"
+        "waiting": "等待审查",
+        "waitingStart": "等待审查 — 从工作项上发起，或运行 motir review {key}",
+        "waitingStartBy": "等待审查 — {name} 可以发起"
       },
       "command": {
         "copy": "复制 motir review {key}",
@@ -17397,9 +17396,9 @@
         "close": "关闭"
       },
       "toRun": {
-        "sentence": "用你的智能体审查<title>{name}</title>",
+        "sentence": "发起对<title>{name}</title>的审查",
         "tag": "待运行审查",
-        "details": "尚不是审批。审查通过后才会请求你的审批。",
+        "details": "尚不是审批。打开工作项发起审查；审查通过后才会请求你的审批。",
         "open": "打开 {key}：{sentence}"
       },
       "dismiss": {
