@@ -333,10 +333,15 @@ describe('deploy, describe, rollback', () => {
       {
         name: 'app',
         image: 'docker.io/traefik/whoami@sha256:abc',
-        exec: ['/whoami'],
+        cmd: ['/whoami'],
         env: { WHOAMI_NAME: 'release-1' },
       },
     ]);
+    // MOTIR-11956: the start argv rides `cmd`, the field Fly runs. `exec` is
+    // stored but never run, and an `entrypoint` would drop the image's own.
+    const app = container(config, 'app');
+    expect(app).not.toHaveProperty('exec');
+    expect(app).not.toHaveProperty('entrypoint');
     // Each container runs its own image; nothing runs at the Machine level.
     expect(config).not.toHaveProperty('image');
     expect(config).not.toHaveProperty('init');
@@ -513,6 +518,41 @@ describe('deploy, describe, rollback', () => {
       },
     });
     expect(container(live, 'app')['image']).toBe('docker.io/traefik/whoami@sha256:abc');
+  });
+
+  it('rollback moves a kept pre-MOTIR-11956 `exec` argv into `cmd`, so the restored release runs its command', async () => {
+    const p = port();
+    await p.deploy(input());
+    await p.deploy(input({ artifact: { kind: 'image', ref: 'img:2' } }));
+    // The first version as the adapter wrote it before the fix: argv in `exec`.
+    const machine = apps.get(PROD)![0]!;
+    const first = machine.versions[0]!.user_config;
+    const legacy = (first['containers'] as Array<Record<string, unknown>>).map((c) => {
+      if (c['name'] !== 'app') return c;
+      const { cmd, ...rest } = c;
+      return { ...rest, exec: cmd };
+    });
+    machine.versions[0]!.user_config = { ...first, containers: legacy };
+    await p.rollback({ appRef: PROD, environment: { kind: 'production' } });
+    const app = container(apps.get(PROD)![0]!.config, 'app');
+    expect(app['cmd']).toEqual(['/whoami']);
+    expect(app).not.toHaveProperty('exec');
+  });
+
+  it('rollback keeps a kept version’s own `cmd` and drops a stray `exec` beside it', async () => {
+    const p = port();
+    await p.deploy(input());
+    await p.deploy(input());
+    const machine = apps.get(PROD)![0]!;
+    const first = machine.versions[0]!.user_config;
+    const both = (first['containers'] as Array<Record<string, unknown>>).map((c) =>
+      c['name'] === 'app' ? { ...c, exec: ['/ignored'] } : c,
+    );
+    machine.versions[0]!.user_config = { ...first, containers: both };
+    await p.rollback({ appRef: PROD, environment: { kind: 'production' } });
+    const app = container(apps.get(PROD)![0]!.config, 'app');
+    expect(app['cmd']).toEqual(['/whoami']);
+    expect(app).not.toHaveProperty('exec');
   });
 
   it('rollback refuses a kept version with no guarded app rather than restore it unguarded', async () => {

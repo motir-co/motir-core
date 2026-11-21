@@ -282,7 +282,14 @@ function machineConfig(
       {
         name: HOSTING_CONTAINERS.app,
         image: imageOf(input),
-        exec: argvOf(runtime.startCommand),
+        // `cmd`, never `exec` (MOTIR-11956): Fly stores a container's `exec`
+        // but does not run it, so the container ran the image's own default
+        // instead — for `node:22-alpine` a REPL that exits 0 at once with no
+        // TTY. `cmd` replaces the image's CMD under its unchanged ENTRYPOINT,
+        // the meaning `startCommand` has on every other target (the persistent
+        // adapter's `init.cmd`, Lambda's `ImageConfig.Command`), so an image
+        // entrypoint that prepares the process before it execs still runs.
+        cmd: argvOf(runtime.startCommand),
         env: Object.fromEntries(input.env.map((v) => [v.name, v.value])),
       },
     ],
@@ -332,7 +339,16 @@ function keptAppContainer(
   const app = containers.find((c) => c?.['name'] === HOSTING_CONTAINERS.app);
   const guard = containers.find((c) => c?.['name'] === HOSTING_CONTAINERS.guard);
   const port = Number(asRecord(guard?.['env'])?.['MOTIR_GUARD_APP_PORT']);
-  return app && Number.isInteger(port) && port > 0 ? { container: app, port } : null;
+  return app && Number.isInteger(port) && port > 0 ? { container: commandAsCmd(app), port } : null;
+}
+
+/** A kept app container with its start argv in `cmd`. A version written before
+ *  MOTIR-11956 carries the argv in `exec`, which Fly does not run, so restoring
+ *  it as kept would roll back to a release that never starts its command. */
+function commandAsCmd(app: Record<string, unknown>): Record<string, unknown> {
+  if (!('exec' in app)) return app;
+  const { exec, ...rest } = app;
+  return 'cmd' in rest ? rest : { ...rest, cmd: exec };
 }
 
 /** The raw machine fields `toFlyMachine` does not keep: the config version and
