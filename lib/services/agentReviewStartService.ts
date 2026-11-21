@@ -243,9 +243,19 @@ export const agentReviewStartService = {
    * container down at the next poll. A run in a person's own agent (*Review in my agent*,
    * MOTIR-11945) is ended through `agentInstanceRunService.end`, which stops its session in
    * the agent. Never a throw. Returns the runs it ended.
+   *
+   * `exceptRunId` is the run whose OWN verdict decided the gate (a review in the person's
+   * own agent answering on its run token): it is closing itself, and cancelling it would
+   * record the review that answered as cancelled.
    */
-  async cancelRunsForGates(workspaceId: string, gateIds: readonly string[]): Promise<string[]> {
-    const runs = await runningReviewRuns(workspaceId, gateIds);
+  async cancelRunsForGates(
+    workspaceId: string,
+    gateIds: readonly string[],
+    exceptRunId?: string,
+  ): Promise<string[]> {
+    const runs = (await runningReviewRuns(workspaceId, gateIds)).filter(
+      (run) => run.id !== exceptRunId,
+    );
     const detail = 'its review was superseded before a verdict';
     for (const run of runs) {
       // A review in a person's own agent (MOTIR-11945) is ended through the agent's end
@@ -266,10 +276,14 @@ export const agentReviewStartService = {
    * cancels nothing here, and says so: the review run's supervisor still reads its gate
    * before every poll and tears a superseded review down itself.
    */
-  cancelRunsAfterCommit(workspaceId: string, gateIds: readonly string[]): void {
+  cancelRunsAfterCommit(
+    workspaceId: string,
+    gateIds: readonly string[],
+    exceptRunId?: string,
+  ): void {
     if (gateIds.length === 0) return;
     const deferred = deferUntilCommit(async () => {
-      await agentReviewStartService.cancelRunsForGates(workspaceId, gateIds);
+      await agentReviewStartService.cancelRunsForGates(workspaceId, gateIds, exceptRunId);
     });
     if (!deferred) {
       console.warn(

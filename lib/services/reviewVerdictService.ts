@@ -415,7 +415,13 @@ export const reviewVerdictService = {
         const record = await reviewVerdictRecordService.record(rowOf('decided', gateId), tx);
         reviewBotPostService.requestPostAfterCommit(ctx.workspaceId, record.id);
         // A hosted run still reviewing this gate can no longer decide anything (§12.12).
-        agentReviewStartService.cancelRunsAfterCommit(ctx.workspaceId, [gateId]);
+        // The own-agent review that sent THIS verdict is closing itself: it is spared, or
+        // the review that answered would read as cancelled (MOTIR-11951).
+        agentReviewStartService.cancelRunsAfterCommit(
+          ctx.workspaceId,
+          [gateId],
+          ctx.tokenDispatchRunId,
+        );
         const withdrew = verdict === 'changes_requested' ? await applySendBack(item.id, tx) : [];
         if (withdrew.length > 0) await recomputeWorkItemFixReason(item.id, tx);
         return { record, withdrew };

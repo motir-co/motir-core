@@ -166,9 +166,12 @@ const records = (workItemId: string) =>
 
 describe('the verdict door admits an own-agent review run’s token, for its own card', () => {
   it('Review on: decides the awaiting gate as the person, with the agent’s harness and model', async () => {
-    const { item, gate, version, headers } = await ownReview(true);
+    const { item, gate, version, headers, runId } = await ownReview(true);
     const res = await postVerdict(item.identifier, headers, verdict(version));
     expect(res.status, String(await codeOf(res))).toBe(200);
+    // The run that answered is closing itself: its own verdict does not cancel it.
+    const run = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: runId } });
+    expect(run.status).toBe('running');
     expect(await res.json()).toMatchObject({
       key: item.identifier,
       outcome: 'decided',
