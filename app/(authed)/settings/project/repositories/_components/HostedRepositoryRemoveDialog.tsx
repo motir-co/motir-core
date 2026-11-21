@@ -144,7 +144,7 @@ export function HostedRepositoryRemoveDialog({
             <Consequences impact={check.impact} />
             <p className="font-sans text-sm text-(--el-text-secondary)">{t('kept')}</p>
             {check.impact.repository === 'motir' ? (
-              <div className="flex flex-col gap-2 rounded-(--radius-card) bg-(--el-tint-sky) p-3 font-sans text-sm text-(--el-text-strong)">
+              <div className="flex flex-col gap-2 rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding-12) font-sans text-sm text-(--el-text-strong)">
                 <p>
                   <b>{t('keepTitle')}</b> {t('keepBody')}
                 </p>
@@ -187,7 +187,7 @@ export function HostedRepositoryRemoveDialog({
             {check.phase === 'failed' ? (
               <div
                 role="alert"
-                className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) p-3 font-sans text-sm text-(--el-text-strong)"
+                className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding-12) font-sans text-sm text-(--el-text-strong)"
               >
                 <TriangleAlert
                   className="mt-0.5 h-4 w-4 shrink-0 text-(--el-danger-on-surface)"
@@ -198,7 +198,7 @@ export function HostedRepositoryRemoveDialog({
             ) : (
               <p
                 role="status"
-                className="flex items-center gap-2 rounded-(--radius-card) border border-(--el-border) p-3 font-sans text-sm text-(--el-text-secondary)"
+                className="flex items-center gap-2 rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding-12) font-sans text-sm text-(--el-text-secondary)"
               >
                 <Loader2
                   className="h-4 w-4 shrink-0 animate-spin text-(--el-icon-muted)"
