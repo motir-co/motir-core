@@ -80,13 +80,25 @@ export function CommandChip({
     </button>
   );
   return (
-    <span className="flex shrink-0 items-center gap-1">
-      <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-mono whitespace-nowrap text-(--el-code-text)">
+    // ⚠️ IT FITS THE BOX IT IS GIVEN (Bug MOTIR-11982). The chip used to be `shrink-0` around
+    // a `whitespace-nowrap` code, so a fixed track narrower than the command — To approve's
+    // 220px DETAILS track — had the copy button painted over the next column. The code now
+    // shrinks and truncates (the whole command on its `title`), and the button never does,
+    // so the button always stays inside the chip's box. Copy still copies the full command.
+    <span className="flex max-w-full min-w-0 items-center gap-1">
+      <code
+        title={command}
+        className="min-w-0 truncate rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-mono whitespace-nowrap text-(--el-code-text)"
+      >
         {command}
       </code>
       {tooltip ? <Tooltip content={tooltip}>{button}</Tooltip> : button}
       {copiedLabel ? (
-        <span role="status" aria-live="polite" className="text-xs text-(--el-text-secondary)">
+        <span
+          role="status"
+          aria-live="polite"
+          className="shrink-0 text-xs text-(--el-text-secondary)"
+        >
           {copied ? copiedLabel : ''}
         </span>
       ) : null}

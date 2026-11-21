@@ -6746,6 +6746,25 @@ raise (`hosted-agent-run.md` §8.1, amended there by §8.8), §12.6's _Review ag
   unchanged), §12.3's _Continue without the review_, §12.4's verdict effects and To fix, §12.5's
   withdrawals and run cancellation, §12.11's run-token route, and §12.13–§12.16.
 
+#### 12.19 A review to run is WAITING ON YOU, and its row opens the review's approval — AMENDED 2026-11-22 (Bugs MOTIR-11983 · MOTIR-11984), DECIDED BY THE REQUESTER
+
+This amends §12.1's routing row and its 2026-11-04 amendment, which kept a review to run
+out of every count as _"not an approval"_:
+
+- **It is counted.** The Workbench's _Waiting on you_ badge (`homeService.tabCounts`, and
+  with it the landing cascade) is the approvals routed to the reader **plus** the reviews to
+  run routed to them, the latter counted on the list's own builder
+  (`reviewsToRunRoutedToWhere`). The tab's watermark reads the same set. A review waiting for
+  a person to start it holds the card as surely as an approval does, and a badge reading 0
+  above a row is a row nobody opens.
+- **It is still not an approval.** `awaitingRoutedToWhere` keeps `kind: { not: 'agent_review' }`:
+  the approvals list, its `total` and the decision-waiting marker are unchanged, and the row
+  stays its own kind (§12.1).
+- **Its row opens the `agent_review` approval overlay in place** — the address the
+  Development frame already writes for _Continue without the review_ (§12.3) — rather than
+  the item page. The overlay holds the review's state and _Continue without the review_; a
+  modifier click still opens the item.
+
 #### 12.9 What this section does NOT decide
 
 - **The review RUN** — its command, mode, attribution, billing, credential,

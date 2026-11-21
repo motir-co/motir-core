@@ -17432,7 +17432,7 @@
       "toRun": {
         "sentence": "Prüfung von <title>{name}</title> starten",
         "tag": "Review auszuführen",
-        "details": "Noch keine Genehmigung. Öffnen Sie das Element, um die Prüfung zu starten; Ihre Genehmigung wird angefragt, sobald sie bestanden ist.",
+        "details": "Noch keine Genehmigung. Öffnen Sie es, um die Prüfung zu starten oder ohne sie fortzufahren; Ihre Genehmigung wird angefragt, sobald sie bestanden ist.",
         "open": "{key} öffnen: {sentence}"
       },
       "dismiss": {

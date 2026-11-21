@@ -1,6 +1,6 @@
 'use client';
 
-import { Children, useCallback, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { Children, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -20,7 +20,7 @@ import { ApprovalReviewLine } from '@/components/approvals/ApprovalReviewLine';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
-import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
+import { useOpenApproval } from './useOpenApproval';
 import { planRowDestination } from '@/lib/planning/planDestination';
 import { planSentenceOf } from '@/lib/planning/planSentence';
 import { PlanDestinationTag } from '@/components/planning/PlanDestinationTag';
@@ -260,32 +260,6 @@ export type ApprovalRowRecord =
    * three different pieces of news.
    */
   | { section: 'held'; row: ApprovalQueueRowDto };
-
-/**
- * Open a row's approval over the page the list is on.
- *
- * The host page's own query — the tab, the page of the list — is kept, so the
- * overlay's close lands back on exactly it.
- */
-function useOpenApproval(): (row: {
-  workItem: { identifier: string };
-  kind: ApprovalGateKindDTO;
-}) => void {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  return useCallback(
-    (row) => {
-      const qs = searchParams.toString();
-      shallowPush(
-        withApprovalOverlay(`${pathname}${qs ? `?${qs}` : ''}`, {
-          itemKey: row.workItem.identifier,
-          kind: row.kind,
-        }),
-      );
-    },
-    [pathname, searchParams],
-  );
-}
 
 /** A row's glyph: the shipped design-type mark for the one registered kind. */
 function KindGlyph({ kind }: { kind: ApprovalGateKindDTO }) {

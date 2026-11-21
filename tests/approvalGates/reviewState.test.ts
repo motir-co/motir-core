@@ -49,6 +49,8 @@ const { approvalGateSettingsService } = await import('@/lib/services/approvalGat
 const { reviewVerdictService } = await import('@/lib/services/reviewVerdictService');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 const { reviewDismissalService } = await import('@/lib/services/reviewDismissalService');
+const { homeService } = await import('@/lib/services/homeService');
+const { resolveWorkbenchLanding } = await import('@/lib/workbench/landing');
 
 const MODEL = 'claude-opus-5-5';
 const AI = 'https://ai.test';
@@ -860,6 +862,33 @@ describe('a review to run', () => {
     expect((await approvalGatesService.listReviewsToRun(homeCtx(s))).map((r) => r.gateId)).toEqual([
       next!.id,
     ]);
+  });
+
+  // Bug MOTIR-11984: a review waiting for the reader to start it is waiting on them — the
+  // Waiting on you badge counts it (and lands there), on the list's own predicate, and the
+  // tab's watermark moves with it; it is still no approval row.
+  it('is counted on the Waiting on you badge, lands there and moves its watermark', async () => {
+    const { s, review } = await reviewingUnder('own', 'run-count', 97);
+    const before = (await workbenchWatermarkService.read(homeCtx(s))).tabs.approvals;
+
+    const rows = await approvalGatesService.listReviewsToRun(homeCtx(s));
+    expect(rows.map((r) => r.gateId)).toEqual([review.id]);
+    const queue = await approvalGatesService.listAwaitingMe(homeCtx(s));
+    expect(queue.items.map((row) => row.gateId)).not.toContain(review.id);
+    const counts = await homeService.tabCounts(homeCtx(s));
+    expect(counts.approvals).toBe(queue.total + rows.length);
+    expect(counts.approvals).toBeGreaterThanOrEqual(1);
+    expect(resolveWorkbenchLanding(counts)).toBe('approvals');
+
+    // Skipping it (the gate leaves `awaiting`) drops the count and moves the watermark.
+    await adminDb.approvalGate.update({
+      where: { id: review.id },
+      data: { state: 'superseded', supersededCause: 'ci_failed' },
+    });
+    const after = await homeService.tabCounts(homeCtx(s));
+    expect(after.approvals).toBe(counts.approvals - 1);
+    const moved = (await workbenchWatermarkService.read(homeCtx(s))).tabs.approvals;
+    expect(moved).not.toEqual(before);
   });
 
   it('is never listed or notified for a gate that is not awaiting', async () => {

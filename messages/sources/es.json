@@ -13359,7 +13359,7 @@
   "approvalGate.reviewPath.view.close": "Close",
   "approvalGate.reviewPath.toRun.sentence": "Start a review of <title>{name}</title>",
   "approvalGate.reviewPath.toRun.tag": "Review to run",
-  "approvalGate.reviewPath.toRun.details": "Not an approval yet. Open the item to start the review; your approval is asked once it passes.",
+  "approvalGate.reviewPath.toRun.details": "Not an approval yet. Open it to start the review or to continue without it; your approval is asked once it passes.",
   "approvalGate.reviewPath.toRun.open": "Open {key}: {sentence}",
   "approvalGate.reviewPath.dismiss.button": "Dismiss the review",
   "approvalGate.reviewPath.dismiss.title": "Dismiss the agent's review?",

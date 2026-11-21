@@ -17432,7 +17432,7 @@
       "toRun": {
         "sentence": "Lancer une relecture de <title>{name}</title>",
         "tag": "Revue à lancer",
-        "details": "Ce n’est pas encore une approbation. Ouvrez l’élément pour lancer la relecture ; votre approbation est sollicitée une fois qu’elle a réussi.",
+        "details": "Ce n’est pas encore une approbation. Ouvrez-la pour lancer la relecture ou continuer sans elle ; votre approbation est sollicitée une fois qu’elle a réussi.",
         "open": "Ouvrir {key} : {sentence}"
       },
       "dismiss": {

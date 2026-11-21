@@ -17432,7 +17432,7 @@
       "toRun": {
         "sentence": "Avvia una revisione di <title>{name}</title>",
         "tag": "Revisione da eseguire",
-        "details": "Non è ancora un’approvazione. Apri l’elemento per avviare la revisione; la tua approvazione viene richiesta quando la revisione è superata.",
+        "details": "Non è ancora un’approvazione. Aprila per avviare la revisione o per continuare senza; la tua approvazione viene richiesta quando la revisione è superata.",
         "open": "Apri {key}: {sentence}"
       },
       "dismiss": {

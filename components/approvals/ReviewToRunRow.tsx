@@ -1,12 +1,13 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { Bot } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { ReviewCommand } from '@/components/approvals/ReviewCommand';
 import { useRelativeLabel } from './useRelativeLabel';
+import { useOpenApproval } from './useOpenApproval';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
 
@@ -17,8 +18,13 @@ import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
 // `Bot` on the 18px yellow disc (an approval row has its kind glyph), the sentence *Start a
 // review of {title}*, the command chip in the DETAILS track, the *Review to run* tag in the
 // Decide track (where an approval row has *Review*), and the second line *Not an approval
-// yet…*. Pressing the row opens the card, where the review is started — there is no overlay
-// for it. Copy is the one verb.
+// yet…*. Copy is the one verb.
+//
+// ⚠️ PRESSING THE ROW OPENS THE `agent_review` APPROVAL OVERLAY IN PLACE (Bug MOTIR-11983;
+// `design/github/design-notes.md` § 34, amending § 33.3), as every other To approve row
+// opens its own — never a trip to the item page. The overlay holds the review's state and
+// *Continue without the review*. A modifier or non-primary click keeps the link's native
+// meaning (the item, in a new tab), which is why the href stays real.
 
 export function ReviewToRunRow({
   row,
@@ -35,6 +41,14 @@ export function ReviewToRunRow({
     <span className="font-medium text-(--el-text)">{chunks}</span>
   );
   const sentenceText = t.markup('sentence', { name: row.title, title: (chunks) => chunks });
+  const openApproval = useOpenApproval();
+  function onRowClick(e: MouseEvent<HTMLAnchorElement>) {
+    // `ApprovalRow`'s exact condition: keyboard Enter on the anchor dispatches a primary
+    // click, so it takes this same path.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    openApproval({ workItem: { identifier: row.identifier }, kind: 'agent_review' });
+  }
   return (
     <div
       role="row"
@@ -46,7 +60,9 @@ export function ReviewToRunRow({
       <div role="cell" className="flex min-w-0 items-center gap-2">
         <Link
           href={routes.item(row.identifier)}
+          aria-haspopup="dialog"
           aria-label={t('open', { key: row.identifier, sentence: sentenceText })}
+          onClick={onRowClick}
           className="absolute inset-0 z-0 focus:outline-none"
         />
         <span
@@ -63,7 +79,9 @@ export function ReviewToRunRow({
         </span>
       </div>
       <div role="presentation" className="flex flex-wrap items-center gap-2 pl-6 md:contents">
-        <div role="cell" className="relative z-10 flex min-w-0 items-center">
+        {/* `text-xs`: the chip sizes to the list’s small text, and it truncates rather than
+            painting into WAITED, whatever the key’s length (Bug MOTIR-11982). */}
+        <div role="cell" className="relative z-10 flex min-w-0 items-center text-xs">
           <ReviewCommand command={row.command} identifier={row.identifier} />
         </div>
         <div role="cell" className="flex min-w-0 items-center">

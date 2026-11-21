@@ -1224,9 +1224,11 @@ export const approvalGateRepository = {
    * gate. Oldest first, bounded by `take`.
    *
    * ⚠️ A SEPARATE READ, NOT AN ARM OF `awaitingRoutedToWhere`. A review to run asks the
-   * person to RUN something, not to decide it, so it is listed as its own row kind and is
-   * never counted as an approval: that predicate's `kind: { not: 'agent_review' }` stays,
-   * and the approvals list, its count, the home count and the marker are unchanged.
+   * person to RUN something, not to decide it, so it is listed as its own row kind, never
+   * as an approval: that predicate's `kind: { not: 'agent_review' }` stays, and the
+   * approvals list and the marker are unchanged. It IS waiting on the reader, though, so
+   * the Waiting on you badge counts it beside the approvals (Bug MOTIR-11984,
+   * {@link countAwaitingReviewsToRunRoutedTo}).
    */
   async findAwaitingReviewsToRunRoutedTo(
     scope: Pick<AwaitingRoutingScope, 'projectIds' | 'userId'>,
@@ -1235,13 +1237,7 @@ export const approvalGateRepository = {
   ) {
     if (scope.projectIds.length === 0) return [];
     return tx.approvalGate.findMany({
-      where: {
-        projectId: { in: scope.projectIds },
-        kind: 'agent_review',
-        state: 'awaiting',
-        project: { reviewAgentEnabled: true },
-        workItem: { archivedAt: null, ...routedCardWhere(scope.userId) },
-      },
+      where: reviewsToRunRoutedToWhere(scope),
       select: {
         id: true,
         projectId: true,
@@ -1252,6 +1248,40 @@ export const approvalGateRepository = {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take,
     });
+  },
+
+  /**
+   * HOW MANY reviews to run {@link findAwaitingReviewsToRunRoutedTo} would list, over the
+   * whole set — the second half of the Waiting on you badge (Bug MOTIR-11984). A review
+   * waiting for the reader to start it is something waiting on them, so the strip counts
+   * it beside the approvals; it stays its own row kind, out of the approvals list and the
+   * decision marker. Counted on the list's own builder, so the badge and the rows cannot
+   * disagree.
+   */
+  async countAwaitingReviewsToRunRoutedTo(
+    scope: Pick<AwaitingRoutingScope, 'projectIds' | 'userId'>,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (scope.projectIds.length === 0) return 0;
+    return tx.approvalGate.count({ where: reviewsToRunRoutedToWhere(scope) });
+  },
+
+  /**
+   * THE REVIEWS TO RUN's half of the Waiting on you watermark (Bug MOTIR-11984) — the
+   * count and the newest `updatedAt` over the list's own builder, so a review raised,
+   * started or skipped moves the tab's change detector as it moves the badge.
+   */
+  async watermarkAwaitingReviewsToRunRoutedTo(
+    scope: Pick<AwaitingRoutingScope, 'projectIds' | 'userId'>,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ count: number; latest: Date | null }> {
+    if (scope.projectIds.length === 0) return { count: 0, latest: null };
+    const row = await tx.approvalGate.aggregate({
+      where: reviewsToRunRoutedToWhere(scope),
+      _count: { _all: true },
+      _max: { updatedAt: true },
+    });
+    return { count: row._count._all, latest: row._max.updatedAt ?? null };
   },
 
   /**
@@ -1552,6 +1582,24 @@ function routedCardWhere(userId: string): Prisma.WorkItemWhereInput {
 }
 
 /**
+ * THE REVIEWS TO RUN routed to a reader (Story MOTIR-10327 · MOTIR-10340) — every AWAITING
+ * `agent_review` gate of a project whose review agent is on, routed by §2's rule. The ONE
+ * statement of the set, read by the list, the badge's count and the watermark (Bug
+ * MOTIR-11984), so the three cannot drift.
+ */
+function reviewsToRunRoutedToWhere(
+  scope: Pick<AwaitingRoutingScope, 'projectIds' | 'userId'>,
+): Prisma.ApprovalGateWhereInput {
+  return {
+    projectId: { in: scope.projectIds },
+    kind: 'agent_review',
+    state: 'awaiting',
+    project: { reviewAgentEnabled: true },
+    workItem: { archivedAt: null, ...routedCardWhere(scope.userId) },
+  };
+}
+
+/**
  * §2's routing predicate, written ONCE — the list and the count both call it.
  *
  * The `OR` is the SQL spelling of `assigneeId ?? reporterId`: the second arm is
@@ -1576,10 +1624,11 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
       // nothing reassigns a plan's requester, so the creation answer IS the live one.
       { workItemId: null, routedToId: scope.userId },
     ],
-    // ⚠️ THE REVIEW AGENT'S QUESTION IS NEVER ON A PERSON'S LIST (MOTIR-6819;
-    // `approval-gates.md` §12.1). It is routed by §2's rule only so the routed person can
-    // CONTINUE WITHOUT THE REVIEW on the card (§12.3); it asks the agent, not them, so it
-    // is excluded here — the list, its count, the home count and the marker all read this.
+    // ⚠️ THE REVIEW AGENT'S QUESTION IS NEVER AN APPROVAL ROW (MOTIR-6819;
+    // `approval-gates.md` §12.1). It is routed by §2's rule so the routed person can
+    // CONTINUE WITHOUT THE REVIEW (§12.3); it is excluded here — the approvals list and the
+    // marker read this. A review waiting to be STARTED is listed and counted through
+    // `reviewsToRunRoutedToWhere` instead (Bug MOTIR-11984).
     kind: { not: 'agent_review' },
     ...CARRIED_MERGE_GATE_EXCLUDED,
     AND: [
