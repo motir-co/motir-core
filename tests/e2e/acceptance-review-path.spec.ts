@@ -452,7 +452,10 @@ test.describe('the review path', () => {
       await page.goto(`/items/${mainCard.identifier}`);
       const headerMarker = main(page).locator('[data-review-header-marker]');
       await expect(headerMarker).toContainText(rp.marker.waiting, { timeout: FIRST_PAINT_MS });
-      const copy = main(page).getByTestId(`review-command-copy-${mainCard.identifier}`);
+      // The header's copy: the doors band under it offers the same command (MOTIR-11947).
+      const copy = main(page)
+        .locator('header')
+        .getByTestId(`review-command-copy-${mainCard.identifier}`);
       await expect(copy).toBeVisible();
       await copy.click();
       await expect(main(page).getByText(rp.command.copied, { exact: true })).toBeVisible();
