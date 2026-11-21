@@ -34,6 +34,19 @@ argv the stub vendor CLI records is the product's. What the real fix does around
 (check the branches out, push, watch CI) needs a real GitHub and is not played: the stub
 runs the agent, then waits for the file the spec writes to say how the fix ended
 (`green` closes the run `completed`, `gave_up` closes it `halted`).
+
+THE `review` FORM (Story MOTIR-11941 - MOTIR-11951). `motir review <KEY>` is what a run
+started from *Review in my agent* (`command: 'review'`, `origin: 'instance'`) re-enters,
+adopting the server-opened run through `MOTIR_DISPATCH_RUN_ID` as a fix does. It plays the
+real CLI's own-agent pipeline (`packages/cli/src/commands/review.ts`) over the same
+`/api/v1` doors, with the run's OWN token: what the run reviews is read off the run
+(`view.review`), the served `review-prompt` must still name that version (a moved head is
+closed `completed` with nothing submitted, as the real one does), and the ONE verdict goes
+through the user-token door `POST /api/v1/work-items/<KEY>/review-verdict` with the agent's
+harness (its profile's label, from `MOTIR_SANDBOX_AGENT`) and its self-reported model. No
+coding agent runs: the review's words are printed to the session and the run's log, and the
+verdict is the content of the release file the spec writes (`{"verdict", "findingsMd"?,
+"summaryMd"?, "model"}`), so the spec decides what the agent concluded without a clock.
 """
 import json
 import os
@@ -212,11 +225,94 @@ def fix(key):
     return 0
 
 
+# The harness an own-agent verdict names: the agent profile's label (the CLI's `ownHarness`).
+PROFILE_LABELS = {"claude": "Claude Code", "codex": "Codex"}
+
+
+def review(key):
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGHUP, stop)
+    run_id = os.environ.get("MOTIR_DISPATCH_RUN_ID", "")
+    state = os.environ.get("MOTIR_HOSTED_STATE", "")
+    if os.environ.get("MOTIR_AGENT_RUN") != "1" or not state or not run_id:
+        say("not started as a review in an agent (MOTIR_AGENT_RUN / MOTIR_HOSTED_STATE / MOTIR_DISPATCH_RUN_ID unset)")
+        return 2
+    with open(os.path.join(state, "run.json"), encoding="utf-8") as fh:
+        access = json.load(fh)
+    if access.get("runId") not in (None, run_id):
+        say(f"run.json names {access.get('runId')}, not {run_id}")
+        return 2
+    api = Api(access["apiUrl"], access["token"])
+    say(f"motir review {key} - agent mode, run {run_id}")
+    view = api.must("GET", f"/api/v1/dispatch-runs/{run_id}")
+    if view.get("command") != "review":
+        say(f"run {run_id} is a {view.get('command')} run, not a review")
+        api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "halted"})
+        return 1
+    target = view.get("review")
+    if not target:
+        say(f"cannot review on run {run_id} - the run records no review target")
+        api.events(run_id, [{"kind": "card_settled", "workItemKey": key, "disposition": "failed",
+                             "data": {"reason": "the run records no review target"}}])
+        api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "halted"})
+        return 20
+    served = api.must("GET", f"/api/v1/work-items/{key}/review-prompt")
+    version = served["subjectVersion"]
+    if target.get("subjectVersion") != version or target.get("gateId") != served.get("gateId"):
+        say(f"{key}: the code moved since this review was started - it is now under review as {version}.")
+        api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "completed"})
+        return 0
+    say(f"Adopted run {run_id}: reviewing {key} at {version}.")
+    for pr in served.get("pullRequests", []):
+        say(f"  {pr['repository']} #{pr['number']} at {pr['headSha']}")
+    api.events(run_id, [{"kind": "checkout_ready", "workItemKey": key, "disposition": "running",
+                         "data": {"checkouts": served.get("pullRequests", []), "branch": None}}])
+    api.events(run_id, [{"kind": "agent_started", "workItemKey": key, "data": {"step": "review"}}])
+    for line in (
+        f"Reviewing {key} against its acceptance criteria…",
+        "Reading the pull requests at their reviewed heads…",
+    ):
+        print(line, flush=True)
+        api.events(run_id, [{"kind": "log", "workItemKey": key, "body": line + "\n"}])
+    release = os.path.join(os.environ["HOME"], ".motir-e2e", f"release-{run_id}")
+    while not os.path.exists(release):
+        time.sleep(1)
+        api.heartbeat(run_id)
+    with open(release, encoding="utf-8") as fh:
+        concluded = json.load(fh)
+    model = concluded.get("model") or view.get("model") or "unknown"
+    api.events(run_id, [{"kind": "agent_exited", "workItemKey": key, "exitCode": 0, "model": model,
+                         "data": {"step": "review", "exitCode": 0, "model": model, "signal": None}}])
+    profile = os.environ.get("MOTIR_SANDBOX_AGENT", "").strip()
+    status, decided = api.call("POST", f"/api/v1/work-items/{key}/review-verdict", {
+        "subjectVersion": version,
+        "verdict": concluded["verdict"],
+        "summaryMd": concluded.get("summaryMd"),
+        "findingsMd": concluded.get("findingsMd"),
+        "checklist": [],
+        "harness": PROFILE_LABELS.get(profile, profile or "Claude Code"),
+        "model": model,
+    })
+    if status != 200:
+        say(f"POST review-verdict answered {status}: {str(decided)[:300]}")
+        api.events(run_id, [{"kind": "card_settled", "workItemKey": key, "disposition": "failed"}])
+        api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "halted"})
+        return 1
+    said = "approved" if decided["verdict"] == "approved" else "changes requested"
+    say(f"{key}: verdict submitted - {said} at {decided['subjectVersion']}.")
+    api.events(run_id, [{"kind": "card_settled", "workItemKey": key, "disposition": "implemented",
+                         "data": {"verdict": decided["verdict"], "outcome": decided.get("outcome")}}])
+    api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "completed"})
+    return 0
+
+
 def main():
     global CHILD
     args = sys.argv[1:]
     if len(args) == 2 and args[0] == "fix":
         return fix(args[1])
+    if len(args) == 2 and args[0] == "review":
+        return review(args[1])
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGHUP, stop)
     if len(args) < 4 or args[0] != "run" or args[2] != "--run-id":
