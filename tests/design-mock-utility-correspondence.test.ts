@@ -862,6 +862,9 @@ export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
   // `rounded-t` arrived with MOTIR-11545's outcome tab — the You are here tab's
   // frame (`CardEdgeTab`), square at the bottom where it joins the card.
   'rounded-t': ['border-top-left-radius', 'border-top-right-radius'],
+  // `rounded-b` arrived with MOTIR-11942's review-doors delta — the Development gate frame's
+  // footer band (`DevelopmentGateFrame`), square at the top where it joins the rows.
+  'rounded-b': ['border-bottom-left-radius', 'border-bottom-right-radius'],
   shadow: ['--tw-shadow'],
   size: ['width', 'height'],
   stroke: ['stroke'],
