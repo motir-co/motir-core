@@ -46,6 +46,17 @@ export function reviewPressKey(gateId: string, attempt: number): string {
   return `${reviewRunKeyPrefix(gateId)}press:${attempt}`;
 }
 
+/**
+ * The key of a review run opened in one of the person's OWN agents for `gateId`
+ * (*Review in my agent*, Story MOTIR-11941 · MOTIR-11945) — the press's own request key
+ * under {@link reviewRunKeyPrefix}, so the hosted door's prefix read, the marker and the
+ * supersede cancel see an own-agent review exactly as they see a hosted one. The `agent:`
+ * segment keeps a client's request key from ever spelling a hosted press's `press:<n>`.
+ */
+export function reviewAgentRunKey(gateId: string, requestKey: string): string {
+  return `${reviewRunKeyPrefix(gateId)}agent:${requestKey}`;
+}
+
 const ITEM_PREFIX = 'agent-review-item:';
 
 function versionDigest(subjectVersion: string): string {
@@ -64,6 +75,22 @@ export function reviewItemRunKey(
   requestId: string,
 ): string {
   return `${reviewItemRunKeyPrefix(workItemId, subjectVersion)}${requestId}`;
+}
+
+/**
+ * The key of an own-agent review run (*Review in my agent*, MOTIR-11945) for what it
+ * reviews: under the gate's prefix ({@link reviewAgentRunKey}) with Review on, else the
+ * item's gate-off key ({@link reviewItemRunKey}) at the version, its request id carrying
+ * the same `agent:` segment.
+ */
+export function reviewOwnAgentRunKey(
+  workItemId: string,
+  target: { gateId: string | null; subjectVersion: string },
+  requestKey: string,
+): string {
+  return target.gateId !== null
+    ? reviewAgentRunKey(target.gateId, requestKey)
+    : reviewItemRunKey(workItemId, target.subjectVersion, `agent:${requestKey}`);
 }
 
 /** The gate a review run's idempotency key names, or null for any other key. */

@@ -3,6 +3,8 @@ import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import { checkAgentRunCredits, type AgentModel } from '@/lib/ai/motirAiClient';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { DispatchRunTerminalError, DuplicateDispatchRunError } from '@/lib/dispatchRuns/errors';
+import { ReviewStartNotOfferedError } from '@/lib/agentReview/errors';
+import { reviewInFlightUnderLock } from '@/lib/agentReview/reviewOpenGuard';
 import { gateIdOfReviewRunKey } from '@/lib/agentReview/reviewRunKey';
 import { REVIEW_NO_VERDICT_REASON } from '@/lib/agentReview/reviewState';
 import {
@@ -1102,9 +1104,10 @@ async function startReview(
       );
   const checked = await preflight({ model: reviewModel }, project.id, [item.id], ctx, 'read');
 
-  // Two presses racing past the read above both reach this insert with the SAME key
-  // (`reviewPressKey`, MOTIR-11944); `dispatch_run`'s `(workspace_id, idempotency_key)`
-  // unique refuses the second, which then answers the winner's run — exactly one starts.
+  // Two presses racing past the read above both reach this open with the SAME key
+  // (`reviewPressKey`, MOTIR-11944). The item's review lock (`reviewInFlightUnderLock`,
+  // MOTIR-11945) serialises them, so the second answers the winner's run; the unique index
+  // `(workspace_id, idempotency_key)` still backs that up — exactly one starts.
   let opened: Awaited<ReturnType<typeof dispatchRunService.open>>;
   try {
     opened = await dispatchRunService.open(
@@ -1119,6 +1122,19 @@ async function startReview(
         cards: [{ key: item.identifier, disposition: 'queued' }],
       },
       ctx,
+      {
+        // One review of the item at a time across BOTH doors (MOTIR-11945): an own-agent
+        // review opened since the caller's in-flight check refuses this one, under the lock.
+        beforeOpen: async (tx) => {
+          const running = await reviewInFlightUnderLock(tx, {
+            workspaceId: ctx.workspaceId,
+            workItemId: item.id,
+            idempotencyKey: input.idempotencyKey,
+          });
+          /* v8 ignore next -- race-only: a review opened between the caller's check and here */
+          if (running) throw new ReviewStartNotOfferedError(item.identifier, 'review_in_flight');
+        },
+      },
     );
   } catch (err) {
     if (!(err instanceof DuplicateDispatchRunError)) throw err;

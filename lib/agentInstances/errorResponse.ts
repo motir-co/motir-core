@@ -30,6 +30,8 @@ import {
   AgentRunCommandInvalidError,
   AgentRunCommandMismatchError,
   AgentRunRepairRefusedError,
+  AgentRunReviewTargetRequiredError,
+  ReviewInMyAgentNotOfferedError,
   AgentRunCancelForbiddenError,
   AgentRunNotFoundError,
 } from './errors';
@@ -106,6 +108,16 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
   }
   if (err instanceof AgentRunCommandInvalidError) {
     return NextResponse.json({ code: 'BAD_REQUEST', error: err.message }, { status: 400 });
+  }
+  if (err instanceof AgentRunReviewTargetRequiredError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  if (err instanceof ReviewInMyAgentNotOfferedError) {
+    // A press the door would not offer (MOTIR-11945): the read's own reason, nothing opened.
+    return NextResponse.json(
+      { code: err.code, error: err.message, reason: err.reason, refusal: err.refusal },
+      { status: 409 },
+    );
   }
   if (err instanceof AgentRunCommandMismatchError) {
     // An idempotency key reused for another command (MOTIR-9045) — names the run.

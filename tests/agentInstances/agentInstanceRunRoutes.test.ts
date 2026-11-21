@@ -151,13 +151,18 @@ describe('POST /api/work-items/[id]/agent-runs — the run command (MOTIR-9045)'
     expect((await runOf(res)).command).toBe('continue');
   });
 
-  it('answers 400 and opens nothing for a command outside run, fix and continue', async () => {
+  it('answers 400 and opens nothing for a command outside run, fix, continue and review', async () => {
     const id = await agent();
     const item = await card();
-    for (const command of ['run_scope', 'review', 'batch', 'next', 'auto', 7, '', null, {}]) {
+    for (const command of ['run_scope', 'batch', 'next', 'auto', 7, '', null, {}]) {
       const res = await start(item.identifier, { agentInstanceId: id, command });
       expect(res.status).toBe(400);
     }
+    // MOTIR-11945: a `review` is a known command, and this route still refuses it — it has
+    // no gate or version to review, which only the Review in my agent door supplies.
+    const review = await start(item.identifier, { agentInstanceId: id, command: 'review' });
+    expect(review.status).toBe(400);
+    expect(await review.json()).toMatchObject({ code: 'agent_run_review_target_required' });
     expect(await adminDb.dispatchRun.count()).toBe(0);
   });
 
@@ -364,7 +369,7 @@ describe('the launch job', () => {
 });
 
 describe('the pure pieces', () => {
-  it('the launch command is total over DispatchCommand: only fix and continue name theirs (MOTIR-9045)', () => {
+  it('the launch command is total over DispatchCommand: only fix, continue and review name theirs (MOTIR-9045, MOTIR-11945)', () => {
     const shipped = agentRunLaunchCommand('PROD-7', 'run-1');
     expect(agentRunLaunchCommand('PROD-7', 'run-1', 'run')).toEqual(shipped);
     for (const command of [
@@ -373,11 +378,10 @@ describe('the pure pieces', () => {
       'next',
       'batch',
       'auto',
-      'review',
     ] as const satisfies readonly DispatchCommand[]) {
       expect(agentRunLaunchCommand('PROD-7', 'run-1', command)).toEqual(shipped);
     }
-    for (const command of ['fix', 'continue'] as const) {
+    for (const command of ['fix', 'continue', 'review'] as const) {
       expect(agentRunLaunchCommand('PROD-7', 'run-1', command)).toEqual([
         ...shipped,
         '--command',
@@ -390,8 +394,10 @@ describe('the pure pieces', () => {
     );
   });
 
-  it('the CLI’s three commands are exactly the service’s AGENT_RUN_COMMANDS', () => {
-    expect([...CLI_RUN_COMMANDS]).toEqual([...AGENT_RUN_COMMANDS]);
+  it('the CLI’s commands are the service’s AGENT_RUN_COMMANDS, but for review until the in-agent flow', () => {
+    // MOTIR-11945 adds `review` to the app's list; the in-agent review flow (MOTIR-11953)
+    // adds it to the CLI's copy and restores strict equality.
+    expect([...CLI_RUN_COMMANDS, 'review']).toEqual([...AGENT_RUN_COMMANDS]);
     expect(isAgentRunCommand('fix')).toBe(true);
     expect(isAgentRunCommand('run_scope')).toBe(false);
     expect(isAgentRunCommand(undefined)).toBe(false);

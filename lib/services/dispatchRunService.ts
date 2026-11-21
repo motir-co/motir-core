@@ -199,6 +199,17 @@ export interface OpenDispatchRunCardInput {
   skipReason?: DispatchSkipReason | undefined;
 }
 
+/** What {@link dispatchRunService.open} runs besides the insert. */
+export interface OpenDispatchRunOptions {
+  /**
+   * Runs FIRST inside the open's own transaction, before the idempotency read and the
+   * insert (Story MOTIR-11941 · MOTIR-11945): a caller that must decide and open under
+   * ONE lock — the review doors' *one review at a time* — takes it here and throws to open
+   * nothing. The transaction is bound to the caller's workspace and project.
+   */
+  beforeOpen?: (tx: Prisma.TransactionClient) => Promise<void>;
+}
+
 export interface OpenDispatchRunInput {
   projectKey: string;
   command: DispatchCommand;
@@ -1067,16 +1078,21 @@ export const dispatchRunService = {
    * narrow race between that read and the insert, and a `P2002` is translated
    * rather than allowed to escape.
    */
-  async open(input: OpenDispatchRunInput, ctx: ServiceContext): Promise<DispatchRunOpenedDto> {
+  async open(
+    input: OpenDispatchRunInput,
+    ctx: ServiceContext,
+    options: OpenDispatchRunOptions = {},
+  ): Promise<DispatchRunOpenedDto> {
     assertRunTokenScope(null, ctx);
     const project = await projectsService.getByKey(input.projectKey, ctx);
     await projectAccessService.assertCanEdit(project.id, ctx);
 
     const bound = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id };
     try {
-      return await withWorkspaceContext(bound, (tx) =>
-        dispatchRunService.openWithin(project.id, input, ctx, tx),
-      );
+      return await withWorkspaceContext(bound, async (tx) => {
+        await options.beforeOpen?.(tx);
+        return dispatchRunService.openWithin(project.id, input, ctx, tx);
+      });
     } catch (err) {
       throw await namedAgentBusy(err, bound);
     }

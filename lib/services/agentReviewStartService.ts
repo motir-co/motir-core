@@ -1,4 +1,4 @@
-import type { Prisma } from '@/generated/prisma/client';
+import type { DispatchRunOrigin } from '@/generated/prisma/client';
 import { ReviewStartForbiddenError, ReviewStartNotOfferedError } from '@/lib/agentReview/errors';
 import {
   reviewItemRunKey,
@@ -6,17 +6,16 @@ import {
   reviewPressKey,
   reviewRunKeyPrefix,
 } from '@/lib/agentReview/reviewRunKey';
-import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
-import { withoutAncestorDeliveries } from '@/lib/approvalGates/ownDeliveries';
+import { ownDeliverySetVersion } from '@/lib/agentReview/ownVersion';
 import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import { HostedRunBootFailedError } from '@/lib/hostedRuns/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { resolveGateAuthority } from '@/lib/services/approvalGatesService';
+import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService';
 import { hostedRunService, type HostedRunStartOptions } from '@/lib/services/hostedRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -76,37 +75,24 @@ type ReviewSubject =
       keyOf: (attempt: number) => string;
     };
 
-/** The item's own current delivery-set version — measured as the verdict door measures it. */
-async function ownVersionOf(
-  item: { id: string; parentId: string | null },
-  workspaceId: string,
-  tx: Prisma.TransactionClient,
-): Promise<string | null> {
-  const { own } = await withoutAncestorDeliveries(
-    { id: item.id, parentId: item.parentId, workspaceId },
-    await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
-    tx,
-  );
-  return own.length === 0 ? null : deliverySetVersion(own.map((d) => deliveryMemberVersion(d)));
-}
-
 /** The running review runs of each gate, by the key prefix every one of them carries. */
 async function runningReviewRuns(
   workspaceId: string,
   gateIds: readonly string[],
-): Promise<string[]> {
+): Promise<Array<{ id: string; origin: DispatchRunOrigin }>> {
   if (gateIds.length === 0) return [];
   return withWorkspaceServiceContext(workspaceId, async (tx) => {
-    const ids: string[] = [];
+    const runs: Array<{ id: string; origin: DispatchRunOrigin }> = [];
     for (const gateId of gateIds) {
-      const runs = await dispatchRunRepository.listRunningByIdempotencyKeyPrefix(
-        workspaceId,
-        reviewRunKeyPrefix(gateId),
-        tx,
+      runs.push(
+        ...(await dispatchRunRepository.listRunningByIdempotencyKeyPrefix(
+          workspaceId,
+          reviewRunKeyPrefix(gateId),
+          tx,
+        )),
       );
-      ids.push(...runs.map((r) => r.id));
     }
-    return ids;
+    return runs;
   });
 }
 
@@ -186,7 +172,7 @@ export const agentReviewStartService = {
           keyOf: (n) => reviewPressKey(gate.id, n),
         };
       } else {
-        const version = await ownVersionOf(item, ctx.workspaceId, tx);
+        const version = await ownDeliverySetVersion(item, ctx.workspaceId, tx);
         if (version === null) throw new ReviewStartNotOfferedError(identifier, 'no_pull_request');
         found = {
           gateId: null,
@@ -271,20 +257,25 @@ export const agentReviewStartService = {
   /**
    * CANCEL the review runs in flight for `gateIds` — the gates a withdrawal or the
    * switch-off has just superseded (`approval-gates.md` §12.5: *a superseded review's RUN
-   * is cancelled*). Each run is ended through the hosted end path as `cancelled`: its key,
-   * credential and git tokens are revoked at once and its supervisor tears the container
-   * down at the next poll. Never a throw. Returns the runs it ended.
+   * is cancelled*). A hosted run is ended through the hosted end path as `cancelled`: its
+   * key, credential and git tokens are revoked at once and its supervisor tears the
+   * container down at the next poll. A run in a person's own agent (*Review in my agent*,
+   * MOTIR-11945) is ended through `agentInstanceRunService.end`, which stops its session in
+   * the agent. Never a throw. Returns the runs it ended.
    */
   async cancelRunsForGates(workspaceId: string, gateIds: readonly string[]): Promise<string[]> {
-    const runIds = await runningReviewRuns(workspaceId, gateIds);
-    for (const runId of runIds) {
-      await hostedRunService.endHostedRun(
-        runId,
-        'cancelled',
-        'its review was superseded before a verdict',
-      );
+    const runs = await runningReviewRuns(workspaceId, gateIds);
+    const detail = 'its review was superseded before a verdict';
+    for (const run of runs) {
+      // A review in a person's own agent (MOTIR-11945) is ended through the agent's end
+      // path, which also stops its session in the agent; a hosted one through the hosted end.
+      if (run.origin === 'instance') {
+        await agentInstanceRunService.end(run.id, 'cancelled', detail, { stopSession: true });
+      } else {
+        await hostedRunService.endHostedRun(run.id, 'cancelled', detail);
+      }
     }
-    return runIds;
+    return runs.map((r) => r.id);
   },
 
   /**
