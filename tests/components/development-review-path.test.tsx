@@ -319,6 +319,14 @@ describe('the review doors with review off (MOTIR-11948; Â§ 33.4 Panels 4f, 4câ€
     expect(screen.getByText(doorsCopy.leadOff)).toBeTruthy();
     expect(screen.getByTestId('stub-doors')).toBeTruthy();
     expect(line()).toBeNull();
+    expect(screen.queryByText(authorNote.title)).toBeNull();
+  });
+
+  it('the routed author of every pull request keeps the author note under the doors', () => {
+    renderFrame({ gate: AWAITING, reviewPath: off({ authorOfEveryPr: true }) }, DOORS);
+    expect(band().dataset.state).toBe('review-off');
+    expect(line()).toBeNull();
+    expect(screen.getByRole('note').textContent).toContain(authorNote.title);
   });
 
   it('a reader not routed keeps the shipped review line, with no doors', () => {

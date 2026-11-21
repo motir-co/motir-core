@@ -45,6 +45,7 @@ import { withdrawnMergeCopy, type WithdrawnMessage } from './withdrawnMergeCopy'
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import type { AgentReviewRunRefDto, AgentReviewViewDto } from '@/lib/dto/agentReview';
 import type { ApprovedReviewDTO, GateReviewPathDTO, ItemReviewRunDTO } from '@/lib/dto/reviewState';
+import { AuthorNote } from '@/components/approvals/AuthorNote';
 import { ReviewCommand } from '@/components/approvals/ReviewCommand';
 import { GateReviewSentBack, GateReviewSummary } from '@/components/approvals/GateReviewPath';
 import { ApprovalReviewLine } from '@/components/approvals/ApprovalReviewLine';
@@ -987,9 +988,17 @@ export function DevelopmentGateFrame({
       {offDoors}
     </ReviewOffBand>
   ) : null;
+  // The doors take the review LINE's place with Review off; the author note stays, because
+  // the routed author of every pull request still cannot approve on GitHub (§ 32.4 G4).
   const reviewSummary: ReactNode =
-    lineHere && reviewPath && !offPart ? (
-      <GateReviewSummary line={lineHere} reviewPath={reviewPath} identifier={itemIdentifier} />
+    lineHere && reviewPath ? (
+      !offPart ? (
+        <GateReviewSummary line={lineHere} reviewPath={reviewPath} identifier={itemIdentifier} />
+      ) : reviewPath.viewerIsRouted && reviewPath.authorOfEveryPr ? (
+        <div className="mb-3">
+          <AuthorNote />
+        </div>
+      ) : null
     ) : null;
   const reviewBand: ReactNode = isAgentReview ? (
     gate.state === 'awaiting' ? (
