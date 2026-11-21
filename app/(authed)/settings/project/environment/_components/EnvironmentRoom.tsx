@@ -875,6 +875,10 @@ function RecentChanges({
   onRetry: () => void;
 }) {
   const t = useTranslations('settings.environment');
+  // A live clock, not the request's pinned `now` (MOTIR-11969 · MOTIR-11970).
+  // The room re-fetches this list in place after every write, so a row can be
+  // newer than the instant the page loaded; `useRelativeTime` measures it
+  // against the page-wide live clock and reads a just-written row as now.
   const relativeTime = useRelativeTime();
   const headingId = useId();
   return (
@@ -915,7 +919,7 @@ function RecentChanges({
               <code className="font-mono text-(--el-text-identifier)">{change.name}</code>
               {change.isSecret ? <Pill tone="neutral">{t('changes.secret')}</Pill> : null}
               <span className="ml-auto text-xs text-(--el-text-secondary)">
-                <time dateTime={change.createdAt}>{relativeTime(new Date(change.createdAt))}</time>
+                <time dateTime={change.createdAt}>{relativeTime(change.createdAt)}</time>
               </span>
             </li>
           ))}

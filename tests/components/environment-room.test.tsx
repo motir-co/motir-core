@@ -7,6 +7,7 @@ import {
   type EnvironmentRepositoryOption,
 } from '@/app/(authed)/settings/project/environment/_components/EnvironmentRoom';
 import type { EnvironmentChangeDto, EnvironmentEntryDto } from '@/lib/dto/environmentConfig';
+import { resetRelativeTimeClockForTests } from '@/lib/hooks/useRelativeTime';
 import type { EnvironmentName } from '@/lib/environmentConfig/vocabulary';
 
 // EnvironmentRoom (Story MOTIR-9795 · MOTIR-9966) — the Environment settings room,
@@ -36,6 +37,7 @@ function fakeRoutes() {
   let failNext: { method: string; status: number } | null = null;
   let refuseName: string | null = null;
   let hold: Promise<void> | null = null;
+  let changeAgeMs = 60_000;
   let id = 0;
 
   const json = (status: number, body: unknown) =>
@@ -69,7 +71,7 @@ function fakeRoutes() {
           isSecret,
           actorId: 'u1',
           actorName: 'Ada Park',
-          createdAt: new Date(Date.now() - 60_000).toISOString(),
+          createdAt: new Date(Date.now() - changeAgeMs).toISOString(),
         },
         ...prev,
       ]);
@@ -119,6 +121,10 @@ function fakeRoutes() {
     },
     refuse(name: string) {
       refuseName = name;
+    },
+    /** Stamp the next change records this many ms before the clock (0 = the write instant). */
+    changeAge(ms: number) {
+      changeAgeMs = ms;
     },
     holdWrites() {
       let release!: () => void;
@@ -175,6 +181,7 @@ async function mount(
     canEdit: boolean;
     showReleaseTab: boolean;
     initialEnvironment: EnvironmentName;
+    now: Date;
   }> = {},
 ) {
   renderWithIntl(
@@ -186,7 +193,7 @@ async function mount(
       canEdit={props.canEdit ?? true}
       showReleaseTab={props.showReleaseTab ?? false}
     />,
-    { now: new Date() },
+    { now: props.now ?? new Date() },
   );
   await settle();
 }
@@ -588,6 +595,61 @@ describe('recent changes', () => {
     const list = screen.getByTestId('environment-changes');
     expect(list.innerHTML).not.toContain(SECRET);
     expect(screen.getByRole('heading', { name: 'Recent changes · Production' })).toBeTruthy();
+  });
+
+  // MOTIR-11969 — the provider's `now` is pinned once per request (finding
+  // #89); the room re-fetches this list in place, so a label measured against
+  // that pin put a just-made change in the future and froze every older row.
+  describe('relative times follow a live clock, not the page-load instant', () => {
+    const PIN = new Date('2026-11-21T21:30:00.000Z');
+    const label = (name: string, action: string) =>
+      screen
+        .getAllByTestId('environment-change')
+        .find((r) => r.textContent?.includes(action) && r.textContent.includes(name))!
+        .querySelector('time')!.textContent;
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+      vi.setSystemTime(PIN);
+      // Each case is a fresh page load: the shared live clock (MOTIR-11970)
+      // forgets the previous case's observation of the same pin.
+      resetRelativeTimeClockForTests();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('a change made after load reads as just made, and an older row ages without a reload', async () => {
+      await mount({ now: PIN });
+      await add('GREETING', 'hello'); // recorded one minute before the pin
+      expect(label('GREETING', 'added')).toBe('1 minute ago');
+
+      // The page stays open for three minutes; the clock ticks in place.
+      await act(async () => {
+        vi.advanceTimersByTime(3 * 60_000);
+      });
+      expect(label('GREETING', 'added')).toBe('4 minutes ago');
+
+      // A change written now — after the pin, and after the last tick.
+      routes.changeAge(0);
+      vi.setSystemTime(new Date(Date.now() + 30_000));
+      await add('API_KEY', SECRET, true);
+      expect(label('API_KEY', 'added')).toBe('now');
+      for (const row of screen.getAllByTestId('environment-change')) {
+        expect(row.querySelector('time')!.textContent).not.toMatch(/^in /);
+      }
+    });
+
+    it('first paint measures against the pinned instant, so SSR and hydration agree', async () => {
+      // The browser clock is three minutes past the pin before any tick has run:
+      // the first render still uses the pin, exactly what the server rendered.
+      vi.setSystemTime(new Date(PIN.getTime() + 3 * 60_000));
+      routes.changeAge(4 * 60_000);
+      await mount({ now: PIN });
+      await add('GREETING', 'hello'); // recorded at PIN - 1 min
+      expect(label('GREETING', 'added')).toBe('1 minute ago');
+      expect(consoleLines.join('\n')).not.toContain('ENVIRONMENT_FALLBACK');
+    });
   });
 });
 
