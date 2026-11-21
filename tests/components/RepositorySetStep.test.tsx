@@ -40,6 +40,7 @@ const ROW_DEFAULTS = {
   // the default is the honest "nobody has been invited to this yet".
   access: { state: 'not_invited', login: null, invitationUrl: null },
   createdAt: '2026-07-30T10:00:00.000Z',
+  hostedDeletionStartedAt: null,
   updatedAt: '2026-07-30T10:00:00.000Z',
 } as const;
 

@@ -40,6 +40,20 @@ export interface HostedApplicationInsert {
   productionAddress: string | null;
 }
 
+/** The teardown read of {@link hostedApplicationRepository.findTeardownByProjectRepository}. */
+export interface HostedApplicationTeardown {
+  id: string;
+  projectRepositoryId: string;
+  target: HostingTarget;
+  slug: string;
+  productionAddress: string | null;
+  productionAppName: string | null;
+  currentReleaseId: string | null;
+  previousReleaseId: string | null;
+  databaseProjectId: string | null;
+  customDomainCount: number;
+}
+
 export const hostedApplicationRepository = {
   async findById(
     id: string,
@@ -242,6 +256,47 @@ export const hostedApplicationRepository = {
    * A lock over zero rows locks nothing and reports success, so the caller turns
    * `false` into a refusal (the `workspaceRepository.lockByIdForUpdate` rule).
    */
+  /**
+   * What deleting a hosted repository must tear down of its application
+   * (MOTIR-11981; design/repository-set §19): the production app, its database,
+   * the releases that name it and how many custom domains are bound to it. A
+   * select, not the release list — the teardown needs only the pointers.
+   */
+  async findTeardownByProjectRepository(
+    projectRepositoryId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedApplicationTeardown | null> {
+    const row = await tx.hostedApplication.findUnique({
+      where: { projectRepositoryId },
+      select: {
+        id: true,
+        projectRepositoryId: true,
+        target: true,
+        slug: true,
+        productionAddress: true,
+        productionAppName: true,
+        currentReleaseId: true,
+        previousReleaseId: true,
+        databaseProjectId: true,
+        _count: { select: { customDomains: true } },
+      },
+    });
+    if (!row) return null;
+    const { _count, ...rest } = row;
+    return { ...rest, customDomainCount: _count.customDomains };
+  },
+
+  /**
+   * Delete an application row once its production app and database are gone
+   * (MOTIR-11981). Its releases cascade with it, and every custom domain bound
+   * to it is released by the schema's own `SetNull`. Idempotent: an
+   * already-deleted row deletes nothing.
+   */
+  async deleteById(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.hostedApplication.deleteMany({ where: { id } });
+    return result.count;
+  },
+
   async lockForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "hosted_application" WHERE "id" = ${id} FOR UPDATE

@@ -191,6 +191,7 @@ function row(opts: {
     hostingSize: null,
     position: 'a0',
     createdAt: '2026-08-19T00:00:00.000Z',
+    hostedDeletionStartedAt: null,
     updatedAt: '2026-08-19T00:00:00.000Z',
   };
 }

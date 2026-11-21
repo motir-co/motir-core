@@ -11214,6 +11214,15 @@ model ProjectRepo {
   /// Why a `failed` takeover failed, so a stalled handoff is RECORDED rather
   /// than inferred. Cleared on every retry, exactly like `failureReason`.
   takeoverFailureReason      String?                   @map("takeover_failure_reason")
+  /// ── DELETING a Motir-hosted repository (MOTIR-11981; design/repository-set §19) ──
+  ///
+  /// Set when a hosted delete STARTS, before its first host call. The delete is a
+  /// sequence — previews, production, the GitHub repository — with this row deleted
+  /// LAST, so a row that still carries the stamp is a delete that stopped part way:
+  /// the Repositories room reads it as "Deletion didn't finish", and Try again runs
+  /// the same idempotent sequence to finish what is left. Never cleared: the row
+  /// leaves with the delete that completes.
+  hostedDeletionStartedAt    DateTime?                 @map("hosted_deletion_started_at")
   /// ── HOSTING (Story MOTIR-9791 · MOTIR-9808) ─────────────────────────────
   ///
   /// Where this Motir repo's app runs, what it is for and how big it is — the

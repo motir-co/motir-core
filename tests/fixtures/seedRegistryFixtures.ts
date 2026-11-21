@@ -74,6 +74,7 @@ export function seedRow(over: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
     hostingSize: 'small',
     position: 'a0',
     createdAt: AT,
+    hostedDeletionStartedAt: null,
     updatedAt: AT,
     ...over,
   };

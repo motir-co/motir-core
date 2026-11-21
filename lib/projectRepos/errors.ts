@@ -419,3 +419,51 @@ export class RepoEstablishBusyError extends Error {
     this.name = 'RepoEstablishBusyError';
   }
 }
+
+/**
+ * Thrown when a Motir-hosted repository cannot be deleted or removed RIGHT NOW
+ * because a takeover hand-off is in flight (MOTIR-11981; design repository-set
+ * §19.3): the repository is on its way to the person's own account, and once it
+ * lands the row is theirs and removable. A 409, not a failure.
+ */
+export class ProjectRepoRemovalBlockedError extends Error {
+  readonly code = 'PROJECT_REPO_REMOVAL_BLOCKED' as const;
+  constructor(readonly rowId: string) {
+    super(
+      `Repository row ${rowId} is being handed over to its new owner and cannot be removed until the hand-off finishes.`,
+    );
+    this.name = 'ProjectRepoRemovalBlockedError';
+  }
+}
+
+/**
+ * Thrown when a hosted repository's delete stopped part way (MOTIR-11981; design
+ * repository-set §19.6): one of its host steps — previews, production, the
+ * GitHub repository — failed. The row keeps its deletion stamp, so the room reads
+ * "Deletion didn't finish", and a retry runs the same idempotent sequence to
+ * finish what is left. `step` names the step; never a raw host body.
+ */
+export class HostedRepositoryDeletionError extends Error {
+  readonly code = 'HOSTED_REPOSITORY_DELETION_UNFINISHED' as const;
+  constructor(
+    readonly step: 'previews' | 'production' | 'repository',
+    readonly detail: string,
+  ) {
+    super(`The hosted repository's delete stopped at its ${step} step: ${detail}`);
+    this.name = 'HostedRepositoryDeletionError';
+  }
+}
+
+/**
+ * Thrown when the hosted delete's confirm cannot read what the delete would
+ * remove (MOTIR-11981; design repository-set §19.4) — GitHub could not say
+ * whether the repository still exists. The confirm shows "Check again" and
+ * nothing can be confirmed. A 502: the upstream did not answer.
+ */
+export class HostedRepositoryCheckFailedError extends Error {
+  readonly code = 'HOSTED_REPOSITORY_CHECK_FAILED' as const;
+  constructor(readonly detail: string) {
+    super(`Motir could not check what runs from the repository: ${detail}`);
+    this.name = 'HostedRepositoryCheckFailedError';
+  }
+}

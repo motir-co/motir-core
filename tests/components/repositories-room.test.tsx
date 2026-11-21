@@ -91,7 +91,13 @@ describe('the room — which rows offer a move (design §14, panel 1)', () => {
         'You already own this one — nothing to move, and Motir never bills its CI.',
       ),
     ).toBeTruthy();
-    expect(within(yours).queryByRole('button')).toBeNull();
+    // Nothing to MOVE. Its one control since MOTIR-11981 (design §19.3) is the
+    // quiet Remove from this project.
+    expect(
+      within(yours)
+        .getAllByRole('button')
+        .map((b) => b.getAttribute('aria-label')),
+    ).toEqual(['Remove acme-inc/design-tokens from this project']);
   });
 
   it('renders the empty room rather than an empty list when the project has NEITHER registry', () => {
@@ -1037,6 +1043,296 @@ describe('the island survives what the network does to it (§14.10)', () => {
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
+// DELETING A MOTIR-HOSTED REPOSITORY (bug MOTIR-11979 · MOTIR-11981; design
+// repository-set §19). What would be WRONG without this card, each as behaviour:
+//
+//   1. The door is per row: Delete repository on a row Motir holds, Remove from
+//      this project on one it does not, and none on a hand-off in flight.
+//   2. The confirm never guesses (§19.4): while the check reads, nothing can be
+//      confirmed; when it fails, it says so and offers Check again.
+//   3. The weight follows the read: anything to destroy ⇒ the danger confirm,
+//      typed name and all; nothing ⇒ §17.6's quiet remove.
+//   4. The page-state contract (§19.12): success removes the row from the island
+//      AND refreshes the server tree; a failure re-reads the set, so a row the
+//      delete left MARKED renders as the unfinished state with Try again.
+
+const DESTRUCTIVE = {
+  repository: 'motir',
+  production: { address: 'acme-booking.motir.site', domains: 1 },
+  previews: 2,
+  environmentValues: 3,
+  openWorkItems: 1,
+  destructive: true,
+};
+
+/** The room's wire with the removal read and the DELETE answered as given. */
+function hostedRemoveFetch(opts: {
+  impact?: unknown;
+  impactStatus?: number;
+  deleteStatus?: number;
+  afterDelete?: ProjectRepoDto[];
+}) {
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    const u = String(url);
+    if (u.endsWith('/removal')) {
+      return opts.impactStatus && opts.impactStatus !== 200
+        ? new Response('{}', { status: opts.impactStatus })
+        : jsonOk(opts.impact ?? DESTRUCTIVE);
+    }
+    if (init?.method === 'DELETE') {
+      if (opts.afterDelete) currentRows = opts.afterDelete;
+      return new Response(null, { status: opts.deleteStatus ?? 204 });
+    }
+    return jsonOk(defaultFetch(u));
+  });
+}
+
+const deleteCalls = () =>
+  fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE');
+
+describe('deleting a Motir-hosted repository (design §19)', () => {
+  it('offers Delete on a held row, Remove on a yours row, and nothing on a hand-off in flight', () => {
+    renderRoom({
+      rows: [
+        hostedRow(),
+        connectedRow(),
+        hostedRow({ id: 'row-api', role: 'api', name: 'acme-api', takeover: takeover() }),
+      ],
+    });
+    expect(
+      within(screen.getByTestId('takeover-row-web')).getByRole('button', {
+        name: 'Delete motir-projects/acme-booking-web',
+      }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId('takeover-row-shared')).getByRole('button', {
+        name: 'Remove acme-inc/design-tokens from this project',
+      }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId('takeover-row-api')).queryByRole('button', {
+        name: /^(Delete|Remove)/,
+      }),
+    ).toBeNull();
+  });
+
+  it('checks before it confirms, then lists what goes and holds Delete until the name is typed', async () => {
+    let answer: (r: Response) => void = () => {};
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).endsWith('/removal')
+        ? new Promise<Response>((resolve) => (answer = resolve))
+        : jsonOk(defaultFetch(String(url))),
+    );
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: 'Delete motir-projects/acme-booking-web' }));
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(within(dialog).getByRole('status').textContent).toContain(
+      'Checking what runs from motir-projects/acme-booking-web…',
+    );
+    expect(
+      (within(dialog).getByRole('button', { name: 'Delete repository' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    await act(async () => answer(jsonOk(DESTRUCTIVE)));
+    const text = dialog.textContent ?? '';
+    expect(text).toContain('Delete motir-projects/acme-booking-web?');
+    expect(text).toContain('Production at acme-booking.motir.site');
+    expect(text).toContain('1 custom domain');
+    expect(text).toContain('2 preview apps');
+    expect(text).toContain('3 environment values');
+    expect(text).toContain('1 open work item');
+    expect(within(dialog).getByRole('button', { name: 'Take it over instead' })).toBeTruthy();
+
+    const confirm = within(dialog).getByRole('button', {
+      name: 'Delete repository',
+    }) as HTMLButtonElement;
+    const input = within(dialog).getByLabelText('Type acme-booking-web to confirm');
+    fireEvent.change(input, { target: { value: 'motir-projects/acme-booking-web' } });
+    expect(confirm.disabled).toBe(true);
+    expect(dialog.textContent).toContain('That isn’t this repository’s name.');
+    fireEvent.change(input, { target: { value: 'acme-booking-web' } });
+    expect(confirm.disabled).toBe(false);
+  });
+
+  it('removes the row from the island and refreshes the server tree on success', async () => {
+    hostedRemoveFetch({ afterDelete: [connectedRow()] });
+    renderRoom({ rows: [hostedRow(), connectedRow()] });
+    await click(screen.getByRole('button', { name: 'Delete motir-projects/acme-booking-web' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(await within(dialog).findByLabelText('Type acme-booking-web to confirm'), {
+      target: { value: 'acme-booking-web' },
+    });
+    await click(within(dialog).getByRole('button', { name: 'Delete repository' }));
+
+    await waitFor(() => expect(screen.queryByTestId('takeover-row-web')).toBeNull());
+    expect(String(deleteCalls()[0]![0])).toBe('/api/projects/ACME/repositories/row-web');
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByTestId('takeover-row-shared')).toBeTruthy();
+  });
+
+  it('on a failed delete, says so, re-reads the set and shows the row unfinished with Try again', async () => {
+    const marked = hostedRow({ hostedDeletionStartedAt: NOW });
+    hostedRemoveFetch({ deleteStatus: 502, afterDelete: [marked] });
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: 'Delete motir-projects/acme-booking-web' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(await within(dialog).findByLabelText('Type acme-booking-web to confirm'), {
+      target: { value: 'acme-booking-web' },
+    });
+    await click(within(dialog).getByRole('button', { name: 'Delete repository' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Motir couldn’t finish deleting motir-projects/acme-booking-web. What it already removed stays removed. Try again to finish the rest.',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(refresh).not.toHaveBeenCalled();
+    const row = screen.getByTestId('takeover-row-web');
+    await waitFor(() => expect(within(row).getByText('Deletion didn’t finish')).toBeTruthy());
+    expect(within(row).getByRole('alert').textContent).toContain('Motir stopped part way');
+    // No move offered on a row that is half deleted; Try again reopens the check.
+    expect(within(row).queryByRole('button', { name: /to my GitHub/ })).toBeNull();
+    await click(
+      within(row).getByRole('button', { name: 'Try again · motir-projects/acme-booking-web' }),
+    );
+    expect(await screen.findByRole('alertdialog')).toBeTruthy();
+  });
+
+  it('uses the quiet confirm when nothing would be destroyed', async () => {
+    hostedRemoveFetch({
+      impact: {
+        repository: 'gone',
+        production: null,
+        previews: 0,
+        environmentValues: 1,
+        openWorkItems: 0,
+        destructive: false,
+      },
+      afterDelete: [],
+    });
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: 'Delete motir-projects/acme-booking-web' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Remove motir-projects/acme-booking-web from this project?',
+    });
+    expect(dialog.textContent).toContain(
+      'motir-projects/acme-booking-web is no longer on GitHub, so nothing there is deleted. Removing it takes it out of this project, with its one environment value.',
+    );
+    expect(within(dialog).queryByRole('textbox')).toBeNull();
+    await click(within(dialog).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(screen.queryByTestId('takeover-row-web')).toBeNull());
+    expect(deleteCalls()).toHaveLength(1);
+  });
+
+  it('says the yours and never-created bodies in their own words', async () => {
+    hostedRemoveFetch({
+      impact: {
+        repository: 'yours',
+        production: null,
+        previews: 0,
+        environmentValues: 0,
+        openWorkItems: 0,
+        destructive: false,
+      },
+    });
+    renderRoom({ rows: [connectedRow()] });
+    await click(
+      screen.getByRole('button', { name: 'Remove acme-inc/design-tokens from this project' }),
+    );
+    expect((await screen.findByRole('dialog')).textContent).toContain(
+      'acme-inc/design-tokens is yours now and stays in your GitHub account.',
+    );
+    await click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    cleanup();
+
+    hostedRemoveFetch({
+      impact: {
+        repository: 'never',
+        production: null,
+        previews: 0,
+        environmentValues: 0,
+        openWorkItems: 0,
+        destructive: false,
+      },
+    });
+    renderRoom({ rows: [hostedRow({ state: 'proposed', realizedRepo: null })] });
+    await click(screen.getByRole('button', { name: 'Remove acme-booking-web from this project' }));
+    expect((await screen.findByRole('dialog')).textContent).toContain(
+      'Motir never created this repository, so nothing is deleted.',
+    );
+  });
+
+  it('names a gone repository that still runs production in the danger confirm', async () => {
+    hostedRemoveFetch({
+      impact: {
+        ...DESTRUCTIVE,
+        repository: 'gone',
+        previews: 0,
+        environmentValues: 0,
+        openWorkItems: 0,
+      },
+    });
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: 'Delete motir-projects/acme-booking-web' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await waitFor(() =>
+      expect(dialog.textContent).toContain('The repository is already gone from GitHub'),
+    );
+    expect(dialog.textContent).toContain(
+      'Remove motir-projects/acme-booking-web and shut down what runs from it?',
+    );
+    expect(within(dialog).queryByRole('button', { name: 'Take it over instead' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Remove and shut down' })).toBeTruthy();
+  });
+
+  it('refuses to confirm when the check fails, and Check again reads it once more', async () => {
+    hostedRemoveFetch({ impactStatus: 502 });
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: 'Delete motir-projects/acme-booking-web' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await waitFor(() =>
+      expect(within(dialog).getByRole('alert').textContent).toContain(
+        'Motir couldn’t check what runs from motir-projects/acme-booking-web',
+      ),
+    );
+    expect(within(dialog).queryByRole('button', { name: 'Delete repository' })).toBeNull();
+
+    hostedRemoveFetch({});
+    await click(within(dialog).getByRole('button', { name: 'Check again' }));
+    await waitFor(() =>
+      expect(within(dialog).getByLabelText('Type acme-booking-web to confirm')).toBeTruthy(),
+    );
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith('/removal'))).toHaveLength(2);
+  });
+
+  it('treats a check that cannot reach the server as failed', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/removal')) throw new TypeError('offline');
+      return jsonOk(defaultFetch(String(url)));
+    });
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: 'Delete motir-projects/acme-booking-web' }));
+    expect(await within(screen.getByRole('alertdialog')).findByRole('alert')).toBeTruthy();
+  });
+
+  it('hands over to the takeover flow from inside the confirm', async () => {
+    hostedRemoveFetch({});
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: 'Delete motir-projects/acme-booking-web' }));
+    await click(await screen.findByRole('button', { name: 'Take it over instead' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(deleteCalls()).toHaveLength(0);
+  });
+});
+
 function roomView(
   overrides: Partial<ProjectRepoRoomViewDto> & { rows: ProjectRepoDto[] },
 ): ProjectRepoRoomViewDto {
@@ -1160,6 +1456,7 @@ function hostedRow(overrides: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
     hostingSize: null,
     position: 'a0',
     createdAt: NOW,
+    hostedDeletionStartedAt: null,
     updatedAt: NOW,
     ...overrides,
   };

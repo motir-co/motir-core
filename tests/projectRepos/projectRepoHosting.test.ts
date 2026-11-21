@@ -175,6 +175,7 @@ describe('toProjectRepoDto hosting fields', () => {
     previewEnabledAt: null,
     previewCredentialExpiresAt: null,
     createdAt: new Date('2026-10-28T00:00:00Z'),
+    hostedDeletionStartedAt: null,
     updatedAt: new Date('2026-10-28T00:00:00Z'),
     githubRepo: null,
     collaborators: [],
