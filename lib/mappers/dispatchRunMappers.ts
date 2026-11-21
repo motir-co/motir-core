@@ -20,6 +20,7 @@ import type {
   DispatchRunLegCountsDto,
   DispatchRunListItemDto,
   DispatchRunRepairDto,
+  DispatchRunReviewDto,
   DispatchRunScopeDto,
 } from '@/lib/dto/dispatchRuns';
 
@@ -336,6 +337,19 @@ export function toDispatchRunContinuesDto(data: unknown): DispatchRunContinuesDt
 
 const REPAIR_CLASSES = new Set(['ci', 'acceptance_rerun', 'review']);
 const REVIEW_GATES = new Set(['agent_review', 'pull_request_approval']);
+
+/**
+ * A `review` run's `run_opened` data as what it reviews (MOTIR-11953) — written by both
+ * review doors (`hostedRunService.startReview`, `agentInstanceRunService.start`). Read
+ * defensively: no version, or a gate id that is neither a string nor null, reads as null
+ * rather than a guess, so a review never runs against a version nobody opened it for.
+ */
+export function toDispatchRunReviewDto(data: unknown): DispatchRunReviewDto | null {
+  const d = (data ?? {}) as { gateId?: unknown; subjectVersion?: unknown };
+  if (typeof d.subjectVersion !== 'string' || d.subjectVersion.length === 0) return null;
+  if (d.gateId !== null && (typeof d.gateId !== 'string' || d.gateId.length === 0)) return null;
+  return { gateId: d.gateId, subjectVersion: d.subjectVersion };
+}
 
 /**
  * A HOSTED `fix` run's `run_opened` data as what it repairs (MOTIR-6929). Written by

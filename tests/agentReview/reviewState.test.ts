@@ -24,7 +24,6 @@ function facts(overrides: Partial<ReviewStateFacts> = {}): ReviewStateFacts {
     identifier: 'ACME-7',
     finished: false,
     reviewAgentEnabled: true,
-    reviewAgentSource: 'hosted',
     currentVersion: V1,
     members: [
       { repo: 'acme/app', number: 1, headSha: 'aaa', authorGithubUserId: '42', reviews: [] },
@@ -77,11 +76,19 @@ function record(overrides: Partial<ReviewStateRecord> = {}): ReviewStateRecord {
 }
 
 describe('deriveReviewState — the marker', () => {
-  it('reads Agent reviewing only while a hosted run is in flight', () => {
+  it('reads Agent reviewing only while a hosted run is in flight, with no review to run', () => {
+    const inFlight = deriveReviewState(facts({ agentGates: [gate()], reviewRunInFlight: true }));
+    expect(inFlight.marker).toEqual({ kind: 'agent_reviewing' });
+    expect(inFlight.reviewToRun).toBeNull();
+    // A run in flight outranks a stale reason: the run is what answers the gate now.
     expect(
-      deriveReviewState(facts({ agentGates: [gate()], reviewRunInFlight: true })).marker,
+      deriveReviewState(
+        facts({ agentGates: [gate({ reviewUnavailableReason: 'x' })], reviewRunInFlight: true }),
+      ).marker,
     ).toEqual({ kind: 'agent_reviewing' });
-    expect(deriveReviewState(facts({ agentGates: [gate()] })).marker).toBeNull();
+    expect(deriveReviewState(facts({ agentGates: [gate()] })).marker?.kind).toBe(
+      'waiting_for_review',
+    );
   });
 
   it('reads Review could not run with the reason, aimed at the routed person', () => {
@@ -96,12 +103,10 @@ describe('deriveReviewState — the marker', () => {
     });
   });
 
-  it('reads Waiting for your review agent with the command for the source own', () => {
-    const state = deriveReviewState(
-      facts({ reviewAgentSource: 'own', agentGates: [gate({ reviewUnavailableReason: 'x' })] }),
-    );
+  it('reads ONE Waiting for a review state, with the command, whenever nothing is running', () => {
+    const state = deriveReviewState(facts({ agentGates: [gate()] }));
     expect(state.marker).toEqual({
-      kind: 'waiting_for_own_agent',
+      kind: 'waiting_for_review',
       routedTo: { id: 'u1', name: 'Ada' },
       forViewer: true,
       command: 'motir review ACME-7',

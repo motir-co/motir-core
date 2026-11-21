@@ -130,11 +130,6 @@ const ALLOWED: readonly Allowed[] = [
   },
   {
     file: 'components/github/DevelopmentGateFrame.tsx',
-    symbol: 'pressReviewAgain',
-    reason: "the reader's OWN *Review again* press, which starts one review run.",
-  },
-  {
-    file: 'components/github/DevelopmentGateFrame.tsx',
     symbol: 'onShowCurrentVersion',
     reason: "the reader's OWN *Show the current version* press on a withdrawn gate.",
   },

@@ -87,7 +87,6 @@ import {
   githubWebhookInboxSweep,
 } from './definitions/githubWebhookDelivery';
 import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
-import { agentReviewRequested } from './definitions/agentReviewRequested';
 import {
   reviewBotPost,
   reviewBotReconcile,
@@ -225,8 +224,6 @@ export const jobDefinitions = [
   githubWebhookDelivery,
   githubWebhookInboxSweep,
   pullRequestAutoMerge,
-  // The review run's start (Story MOTIR-1626 · MOTIR-6820).
-  agentReviewRequested,
   // Motir's App bot posts each agent verdict and dismisses its own Request changes
   // (Story MOTIR-10327 · MOTIR-10335).
   reviewBotPost,

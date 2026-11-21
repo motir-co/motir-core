@@ -258,9 +258,9 @@ describe('2 · the control request refuses what it does not know', () => {
     expect(parseControlRequest(JSON.stringify({ op: 'run', runId: 'run_1' }))).toBeNull();
   });
 
-  it('refuses a command outside run, fix and continue rather than coercing it to run', () => {
-    expect(AGENT_RUN_COMMANDS).toEqual(['run', 'fix', 'continue']);
-    for (const command of ['run_scope', 'review', 'FIX', '', 7, null]) {
+  it('refuses a command outside run, fix, continue and review rather than coercing it to run', () => {
+    expect(AGENT_RUN_COMMANDS).toEqual(['run', 'fix', 'continue', 'review']);
+    for (const command of ['run_scope', 'REVIEW', 'FIX', '', 7, null]) {
       expect(parseControlRequest(JSON.stringify({ ...run, command }))).toBeNull();
     }
   });

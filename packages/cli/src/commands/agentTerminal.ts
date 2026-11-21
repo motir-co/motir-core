@@ -75,7 +75,7 @@ export interface AgentTerminalRunIdOptions {
 
 /** `agent-terminal run` only (MOTIR-9045): the run, and what the session is for. */
 export interface AgentTerminalRunOptions extends AgentTerminalRunIdOptions {
-  /** run (the default), fix or continue. */
+  /** run (the default), fix, continue or review (MOTIR-11953). */
   command?: string;
 }
 
@@ -235,7 +235,7 @@ function requireRunId(raw: string | undefined): string {
   return raw;
 }
 
-/** `--command`: absent is a plain run; anything outside the three is refused up front. */
+/** `--command`: absent is a plain run; anything outside the four is refused up front. */
 function requireCommand(raw: string | undefined): AgentRunCommand | undefined {
   if (raw === undefined) return undefined;
   if (!isAgentRunCommand(raw)) {
@@ -311,7 +311,7 @@ export async function agentTerminalRunCommand(
   try {
     response = await ask(
       deps,
-      // A plain run sends today's request byte for byte; only a fix or a continue names its command.
+      // A plain run sends today's request byte for byte; any other command is named.
       {
         op: 'run',
         runId,

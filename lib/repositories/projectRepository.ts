@@ -3,7 +3,6 @@ import {
   type EstimationStatistic,
   type PointScale,
   type PrMergeMode,
-  type ReviewAgentSource,
   type Project,
   type ProjectAccessMode,
   type ProjectRepoOwnership,
@@ -985,7 +984,6 @@ export const projectRepository = {
       acceptanceVideoEnabled?: boolean;
       reviewAgentEnabled?: boolean;
       designApprovalGate?: boolean;
-      reviewAgentSource?: ReviewAgentSource;
       reviewBotPostsEnabled?: boolean;
     },
     tx: Prisma.TransactionClient,
@@ -1092,11 +1090,10 @@ export const projectRepository = {
   ): Promise<{
     prMergeMode: PrMergeMode;
     reviewAgentEnabled: boolean;
-    reviewAgentSource: ReviewAgentSource;
   } | null> {
     return tx.project.findUnique({
       where: { id },
-      select: { prMergeMode: true, reviewAgentEnabled: true, reviewAgentSource: true },
+      select: { prMergeMode: true, reviewAgentEnabled: true },
     });
   },
 

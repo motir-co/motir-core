@@ -495,8 +495,8 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
   /**
    * The process a run's command turns into (MOTIR-9050): `<cli> <command> <KEY>`, the
    * shape the hosted entrypoint's `cliArgs` already uses. `motir run` is the only one of
-   * the three that registers `--run-id`, so it keeps that argument; `fix` and `continue`
-   * adopt the server-opened run through `MOTIR_DISPATCH_RUN_ID`, as both already do. The
+   * the four that registers `--run-id`, so it keeps that argument; `fix`, `continue` and
+   * `review` (MOTIR-11953) adopt the server-opened run through `MOTIR_DISPATCH_RUN_ID`. The
    * switch is TOTAL over the command, with no fallback to `run`: a fix started as a run
    * would work the card again instead of repairing its branch.
    */
@@ -510,6 +510,9 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
         return { args: [command, workItemKey, '--run-id', runId], env: runEnv(runId) };
       case 'fix':
       case 'continue':
+      // A review in the person's own agent (MOTIR-11953): `motir review <KEY>` adopts the
+      // run by its id, as a fix and a continue do.
+      case 'review':
         return {
           args: [command, workItemKey],
           env: { ...runEnv(runId), [RUN_ID_ENV_VAR]: runId },

@@ -138,6 +138,19 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     binding: 'run_cards',
     calledBy: 'cli',
   },
+  // The USER-TOKEN VERDICT DOOR (MOTIR-10333), opened to ONE run kind (Story MOTIR-11941 ·
+  // MOTIR-11953): a review in the person's OWN agent posts its verdict here with its run
+  // token, as the person who started it. ⚠️ NARROWER THAN `run_cards`: the service admits
+  // only a RUNNING `origin: instance`, `command: review` run whose leg is the card
+  // (`RUN_TOKEN_NOT_ALLOWED` otherwise); a hosted review keeps `…/agent-review`, which in
+  // turn refuses an instance review's token.
+  {
+    operationId: 'submitWorkItemReviewVerdict',
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/review-verdict',
+    binding: 'run_cards',
+    calledBy: 'cli',
+  },
   {
     operationId: 'claimWorkItem',
     method: 'POST',

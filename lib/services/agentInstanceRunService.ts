@@ -18,7 +18,11 @@ import {
   AgentRunCommandInvalidError,
   AgentRunCommandMismatchError,
   AgentRunRepairRefusedError,
+  AgentRunReviewTargetRequiredError,
+  ReviewInMyAgentNotOfferedError,
 } from '@/lib/agentInstances/errors';
+import { reviewInFlightUnderLock } from '@/lib/agentReview/reviewOpenGuard';
+import { reviewOwnAgentRunKey } from '@/lib/agentReview/reviewRunKey';
 import {
   AGENT_RUN_COMMANDS,
   DEFAULT_AGENT_RUN_COMMAND,
@@ -52,6 +56,7 @@ import {
   revokeRunGitCredentials,
 } from '@/lib/github/runGitCredential';
 import {
+  HostedRunRepositoryNotReadableError,
   HostedRunRepositoryNotWritableError,
   type RunGitWriteRefusal,
 } from '@/lib/hostedRuns/errors';
@@ -159,6 +164,19 @@ export interface StartAgentRunInput {
    * `DispatchCommand`, recorded on the run and on its `run_opened` event.
    */
   command?: AgentRunCommand | undefined;
+  /**
+   * What a `review` run reviews (Story MOTIR-11941 · MOTIR-11945) — supplied ONLY by the
+   * Review in my agent door, which has decided the item may be reviewed: the awaiting
+   * `agent_review` gate (null with Review off) and the delivery-set version under review.
+   * A `review` start without it is refused with `AgentRunReviewTargetRequiredError`.
+   */
+  review?: AgentRunReviewTarget | undefined;
+}
+
+/** The gate (null with Review off) and the delivery-set version a review run reviews. */
+export interface AgentRunReviewTarget {
+  gateId: string | null;
+  subjectVersion: string;
 }
 
 /** How long the launch job waits for a woken agent to come up before failing the run. */
@@ -393,20 +411,25 @@ async function readyLegs(
   return { legIds: [item.id], isParent: false };
 }
 
-/** Every repository of the run writable by Motir's App — the hosted pre-flight (§4 check 7). */
-async function assertRepositoriesWritable(
+/**
+ * Every repository of the run reachable by Motir's App — the hosted pre-flight (§4 check
+ * 7): WRITABLE for a run that pushes, READABLE for a review (MOTIR-11945).
+ */
+async function assertRepositoriesReachable(
   projectId: string,
   legIds: string[],
   ctx: ServiceContext,
+  need: 'read' | 'write',
 ): Promise<void> {
   const repositories = await repositoriesForItems(projectId, ctx.workspaceId, legIds);
-  const access = await hostedRunWriteAccess(repositories, 'write');
+  const access = await hostedRunWriteAccess(repositories, need);
   const refusals = access.filter((a): a is Extract<typeof a, { ok: false }> => !a.ok);
   if (refusals.length > 0) {
-    throw new HostedRunRepositoryNotWritableError(
-      refusals.map(({ ok: _ok, app: _app, ...refusal }) => refusal as RunGitWriteRefusal),
-      repositories.length,
+    const named = refusals.map(
+      ({ ok: _ok, app: _app, ...refusal }) => refusal as RunGitWriteRefusal,
     );
+    if (need === 'read') throw new HostedRunRepositoryNotReadableError(named);
+    throw new HostedRunRepositoryNotWritableError(named, repositories.length);
   }
 }
 
@@ -440,6 +463,10 @@ export const agentInstanceRunService = {
     if (!isAgentRunCommand(requested)) {
       throw new AgentRunCommandInvalidError(String(requested), AGENT_RUN_COMMANDS);
     }
+    // A review names what it reviews; only the review door knows (MOTIR-11945).
+    const isReview = requested === 'review';
+    const reviewTarget = isReview ? (input.review ?? null) : null;
+    if (isReview && !reviewTarget) throw new AgentRunReviewTargetRequiredError();
 
     // ── 1 · Access: `instance:use` on the project and edit on the card ────────
     const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
@@ -447,9 +474,17 @@ export const agentInstanceRunService = {
     await projectAccessService.assertCanEdit(project.id, ctx);
     const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
 
+    // A review run's key is DERIVED from the press's request key, under the key space the
+    // review reads search (MOTIR-11945): the gate's `reviewRunKeyPrefix`, or with Review
+    // off the item's `reviewItemRunKeyPrefix` at the version. The hosted door's in-flight
+    // read, the marker and the supersede cancel then see it as they see a hosted review.
+    const runKey = reviewTarget
+      ? reviewOwnAgentRunKey(item.id, reviewTarget, input.idempotencyKey ?? randomUUID())
+      : input.idempotencyKey;
+
     // ── 0 · The same press again — answered with the run it already started ──
-    if (input.idempotencyKey) {
-      const key = input.idempotencyKey;
+    if (input.idempotencyKey && runKey) {
+      const key = runKey;
       const already = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, key, tx),
       );
@@ -480,10 +515,12 @@ export const agentInstanceRunService = {
     // ── 3 · The card is ready ────────────────────────────────────────────────
     // A `fix` claims nothing and previews no scope (MOTIR-9049): it is decided by the
     // repair claim in step 9, so a story card or an `implemented` one is not refused here.
+    // A `review` neither (MOTIR-11945): it implements nothing, so it claims nothing either.
     const isFix = requested === 'fix';
-    const { legIds, isParent } = isFix
-      ? { legIds: [item.id], isParent: false }
-      : await readyLegs(project, item, ctx);
+    const { legIds, isParent } =
+      isFix || isReview
+        ? { legIds: [item.id], isParent: false }
+        : await readyLegs(project, item, ctx);
 
     // ── 4 · No run already running in the agent (the index is the real guard) ─
     const running = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -520,7 +557,8 @@ export const agentInstanceRunService = {
     }
 
     // ── 7 · Every repository writable; the CI-credit gate every dispatch runs ─
-    await assertRepositoriesWritable(project.id, legIds, ctx);
+    // A review only READS the code (MOTIR-11945), as the hosted review's pre-flight has it.
+    await assertRepositoriesReachable(project.id, legIds, ctx, isReview ? 'read' : 'write');
     await ciAllowanceService.assertDispatchAllowed(ctx);
 
     // ── 8 · Wake, when the agent sleeps — its refusals pass through UNCHANGED ─
@@ -597,11 +635,27 @@ export const agentInstanceRunService = {
           reportedBy: 'cli',
           agentInstanceId: agent.id,
           agent: agent.profileId,
-          idempotencyKey: input.idempotencyKey,
+          idempotencyKey: runKey,
           cards: legKeys.map((key) => ({ key, disposition: 'queued' as const })),
           ...(isParent ? { scopeKey: identifier, scopeLabel: item.title } : {}),
         },
         ctx,
+        reviewTarget && runKey
+          ? {
+              // ONE review of the item at a time across both doors, decided and opened
+              // under the item's review lock (MOTIR-11945): two presses with different
+              // keys cannot both pass the door's read and both open.
+              beforeOpen: async (tx) => {
+                const running = await reviewInFlightUnderLock(tx, {
+                  workspaceId: ctx.workspaceId,
+                  workItemId: item.id,
+                  idempotencyKey: runKey,
+                });
+                if (running)
+                  throw new ReviewInMyAgentNotOfferedError(identifier, 'review_in_flight');
+              },
+            }
+          : {},
       );
     } catch (err) {
       // Lost the race to another start: the winner is named, with its card.
@@ -612,25 +666,7 @@ export const agentInstanceRunService = {
     /* v8 ignore next -- race-only: two presses of one key both passed the read above */
     if (!opened.created) return { dispatchRunId: run.id, created: false, woke };
 
-    try {
-      await dispatchRunService.appendEvents(
-        run.id,
-        [
-          {
-            kind: 'run_opened',
-            data: {
-              command,
-              key: identifier,
-              origin: 'instance',
-              agentInstanceId: agent.id,
-              agent: agent.profileId,
-            },
-          },
-        ],
-        ctx,
-      );
-
-      // ── 10 · Claim and stamp every leg — `byok`, harness = the profile (§5) ─
+    const claimAndStampLegs = async (): Promise<void> => {
       if (isParent) {
         const claim = await scopeClaimService.claimScope(
           { kind: 'work_item', projectId: project.id, identifier },
@@ -657,6 +693,33 @@ export const agentInstanceRunService = {
           }
         },
       );
+    };
+    try {
+      await dispatchRunService.appendEvents(
+        run.id,
+        [
+          {
+            kind: 'run_opened',
+            data: {
+              command,
+              key: identifier,
+              origin: 'instance',
+              agentInstanceId: agent.id,
+              agent: agent.profileId,
+              // What the in-agent review reads (MOTIR-11945): the gate (null with Review
+              // off) and the version, as the hosted review's `run_opened` names them.
+              ...(reviewTarget
+                ? { gateId: reviewTarget.gateId, subjectVersion: reviewTarget.subjectVersion }
+                : {}),
+            },
+          },
+        ],
+        ctx,
+      );
+
+      // ── 10 · Claim and stamp every leg — `byok`, harness = the profile (§5) ─
+      // A review claims nothing and stamps no provenance (MOTIR-11945): it implements nothing.
+      if (!isReview) await claimAndStampLegs();
 
       // ── 11 · Hand the launch to its durable job — nothing secret in it ─────
       await sendEvent(

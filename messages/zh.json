@@ -3167,8 +3167,8 @@
             "desc": "组织的所有者或管理员在组织的 Fleet 页面停止了你的一个智能体。"
           },
           "review_to_run": {
-            "label": "有一个评审在等你的智能体",
-            "desc": "你的项目使用你自己的智能体评审，一个工作项的评审需要你用 motir review 来运行。"
+            "label": "有一个审查等待发起",
+            "desc": "一个分派给你的工作项正在等待审查：从工作项上发起，或运行 motir review。"
           },
           "review_sent_back": {
             "label": "智能体要求修改",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> 给你发送了一条通知",
       "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请",
-      "reviewToRun": "<s>{key}</s> 的评审正在等你的智能体",
+      "reviewToRun": "<s>{key}</s> 的审查正在等待发起",
       "reviewSentBack": "智能体要求修改 <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠",
       "pageMentioned": "<s>{actor}</s> 在 <s>{page}</s> 中提到了你",
@@ -17188,7 +17188,8 @@
       "kindLabel": "智能体审查",
       "state": {
         "reviewing": "审查中",
-        "couldNotRun": "未能运行"
+        "couldNotRun": "未能运行",
+        "waiting": "等待审查"
       },
       "reviewing": {
         "title": "审查智能体正在审查这个版本",
@@ -17230,7 +17231,6 @@
         "whyNotYours": "等待 {name} 处理。在审查完成或对方决定不经审查继续之前，不会合并任何内容。"
       },
       "verb": {
-        "reviewAgain": "重新审查",
         "continueWithout": "不经审查继续"
       },
       "override": {
@@ -17244,6 +17244,31 @@
         "bandTitle": "已不经审查继续",
         "bandNote": "审查智能体没有审查这 {count, plural, other {#}} 个提交。",
         "record": "<b>{name}</b> 决定不经审查继续 · {when}"
+      },
+      "doors": {
+        "title": "等待审查",
+        "lead": "审查不会自动开始。请对这些拉取请求的当前提交发起审查。",
+        "leadOff": "该项目未开启审查，因此结论只会记录在工作项上，不会阻挡合并。你仍可以发起审查。",
+        "leadAgain": "重新发起审查：",
+        "motirAgent": "用 Motir 智能体审查",
+        "myAgent": "用我的智能体审查",
+        "orRun": "或运行",
+        "creditsNote": "用 Motir 智能体审查是一次 Motir 智能体运行，费用从你组织的 AI 额度中扣除。用我的智能体审查和 motir review 使用你自己的智能体。",
+        "waitingWhy": "在审查通过或有人决定不经审查继续之前，不会合并任何内容，也不会请任何人批准。",
+        "waitingWhyNotYours": "等待 {name} 发起审查。在审查通过或对方决定不经审查继续之前，不会合并任何内容。"
+      },
+      "own": {
+        "title": "正在 {agent} 中审查",
+        "titleNoAgent": "正在某个智能体中审查",
+        "metaYou": "由你于<when></when>发起 · <run>{label}</run>",
+        "meta": "于<when></when>发起 · <run>{label}</run>",
+        "lineYou": "你的智能体运行 motir review {key}，并在此记录结论。如果运行结束时没有结论，这些入口会重新出现。",
+        "line": "该智能体运行 motir review {key}，并在此记录结论。如果运行结束时没有结论，这些入口会重新出现。"
+      },
+      "picker": {
+        "title": "在你的一个智能体中审查 {key}",
+        "lead": "你的智能体会运行 motir review {key}，并以你的名义提交结论。",
+        "lastUsed": "上次在此工作项上使用"
       }
     },
     "autoRerun": {
@@ -17332,10 +17357,9 @@
         "couldNotRunName": "智能体审查无法运行 — 等待你处理",
         "couldNotRunOn": "审查无法运行 · {name}",
         "couldNotRunOnName": "智能体审查无法运行 — 等待 {name} 处理",
-        "waitingYours": "等待你的审查智能体",
-        "waitingYoursName": "等待你的审查智能体 — 运行 motir review {key}",
-        "waitingOn": "等待 {name} 的审查智能体",
-        "waitingOnName": "等待 {name} 的审查智能体"
+        "waiting": "等待审查",
+        "waitingStart": "等待审查 — 从工作项上发起，或运行 motir review {key}",
+        "waitingStartBy": "等待审查 — {name} 可以发起"
       },
       "command": {
         "copy": "复制 motir review {key}",
@@ -17397,9 +17421,9 @@
         "close": "关闭"
       },
       "toRun": {
-        "sentence": "用你的智能体审查<title>{name}</title>",
+        "sentence": "发起对<title>{name}</title>的审查",
         "tag": "待运行审查",
-        "details": "尚不是审批。审查通过后才会请求你的审批。",
+        "details": "尚不是审批。打开工作项发起审查；审查通过后才会请求你的审批。",
         "open": "打开 {key}：{sentence}"
       },
       "dismiss": {
@@ -17485,31 +17509,23 @@
       "auto": {
         "label": "自动合并",
         "hint": "检查通过后，Motir 会直接合并该拉取请求，无需询问任何人。记录会写明是此设置允许了合并——而不是有人批准了它。",
-        "blockedByReviewAgent": "关闭审查智能体后才能自动合并。"
+        "blockedByReviewAgent": "关闭审查后才能自动合并。"
       },
       "saved": "已保存",
       "saveError": "保存失败，请重试。"
     },
     "reviewAgent": {
-      "title": "审查智能体",
-      "desc": "当工作项的拉取请求通过检查后，Motir 智能体会对照工作项——它的描述、验收标准和测试方法——审查这次变更，<strong>然后才会请你批准</strong>。如果发现问题，工作项会带着智能体的发现进入<strong>待修复</strong>，不会请任何人批准。",
+      "title": "审查",
+      "desc": "<strong>批准并合并</strong>前的一道关卡。开启后，在智能体对工作项当前拉取请求的审查通过之前，不能批准合并。审查不会自动开始：由人从工作项上发起。",
       "on": "已开启",
       "off": "已关闭",
-      "onWhat": "每个工作项都会先经过审查，然后才会请你批准。",
-      "offWhat": "工作项的检查一通过，就会提交给你批准。",
+      "onWhat": "处于评审中的工作项会等待审查通过，然后才会请人批准合并。",
+      "offWhat": "工作项的检查一通过就可以批准合并。仍可从工作项上发起审查；结论会被记录，但不会阻挡合并。",
       "unavailable": "不可用",
-      "unavailableWhat": "该项目会自动合并，因此没有需要等待审查的内容。请选择<strong>合并前询问</strong>以开启审查智能体。",
-      "billingNote": "每次审查都是一次 Motir 智能体运行，费用从你组织的 AI 额度中扣除。",
-      "offNote": "关闭后，进行中的审查会被取消——这些工作项将直接进入常规流程。",
+      "unavailableWhat": "该项目会自动合并，没有人批准合并，审查也就无处把关。请选择<strong>合并前询问</strong>以开启审查。",
+      "offNote": "关闭后，等待审查的工作项会被放行，直接进入批准并合并。已在运行的审查仍会记录其结论。",
       "saved": "已保存",
       "saveError": "保存失败，请重试。",
-      "source": {
-        "label": "由谁审查",
-        "hosted": "Motir 智能体",
-        "hostedWhat": "检查通过后，Motir 会启动一次审查运行。<strong>会消耗 AI 额度。</strong>",
-        "own": "你自己的智能体",
-        "ownWhat": "免费。审查会等待有人从自己的智能体运行 <cmd>motir review</cmd>。不会自动开始。"
-      },
       "posting": {
         "title": "在拉取请求上发布智能体审查",
         "on": "Motir 的 GitHub 应用会在拉取请求上评论每个结论，并在退回时要求修改。它从不批准。",

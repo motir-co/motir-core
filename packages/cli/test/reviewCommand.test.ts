@@ -4,9 +4,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CommandResult, CommandRunner } from '../src/git.js';
-import type { AgentReviewVerdict, ReviewPrompt } from '../src/client.js';
+import type { AgentReviewVerdict, ReviewPrompt, ReviewVerdictSubmission } from '../src/client.js';
 import type { RunAgentOptions } from '../src/agentRun.js';
-import { ReviewStaleError } from '../src/errors.js';
+import { ApiRefusalError, ReviewStaleError } from '../src/errors.js';
 
 // `motir review <KEY>` (Story MOTIR-1626 · MOTIR-6824; `hosted-agent-run.md` §8). The
 // session, the agent and git are injected; what is under test is that the container
@@ -141,6 +141,10 @@ function setup(over: {
   legs?: string[];
   prompt?: ReviewPrompt;
   submit?: (key: string, v: AgentReviewVerdict) => Promise<unknown>;
+  origin?: string;
+  model?: string | null;
+  review?: { gateId: string | null; subjectVersion: string } | null;
+  submitDoor?: (key: string, v: ReviewVerdictSubmission) => Promise<unknown>;
 }) {
   const root = mkdtempSync(join(tmpdir(), 'motir-review-'));
   h = { root, calls: [], git: [], events: [], closed: [], agentRuns: [], locked: 0 };
@@ -151,10 +155,23 @@ function setup(over: {
         runId: id,
         status: 'running',
         command: over.command ?? 'review',
-        origin: 'hosted',
-        model: null,
+        origin: over.origin ?? 'hosted',
+        model: over.model ?? null,
         endedAt: null,
         cards: [{ key: KEY, position: 0, disposition: 'queued' }],
+        review: over.review === undefined ? null : over.review,
+      };
+    },
+    submitReviewVerdict: async (key: string, verdict: ReviewVerdictSubmission) => {
+      h.calls.push({ tool: 'review_verdict', args: { key, verdict } });
+      if (over.submitDoor) return over.submitDoor(key, verdict);
+      return {
+        key,
+        recordId: 'rec_1',
+        outcome: 'decided' as const,
+        verdict: verdict.verdict,
+        subjectVersion: verdict.subjectVersion,
+        gateId: 'gate_1',
       };
     },
     reviewPrompt: async (key: string) => {
@@ -167,6 +184,7 @@ function setup(over: {
       return {
         key,
         gateId: 'gate_1',
+        outcome: 'decided' as const,
         verdict: verdict.verdict,
         state: verdict.verdict === 'pass' ? 'approved' : 'changes_requested',
         subjectVersion: verdict.subjectVersion,
@@ -822,6 +840,7 @@ describe('the client — the review prompt, and the verdict (a late one typed)',
           body: {
             key: req.params.key,
             gateId: 'gate_1',
+            outcome: 'decided',
             verdict: 'pass',
             state: 'approved',
             subjectVersion: VERSION_2,
@@ -886,6 +905,47 @@ describe('the client — the review prompt, and the verdict (a late one typed)',
   });
 });
 
+describe('the client — a review with no gate (contract 1.88.0)', () => {
+  it('reads a prompt with gateId null and a verdict stored as a review record', async () => {
+    const { startTestServer } = await import('./helpers/testServer.js');
+    const { MotirClient } = await import('../src/client.js');
+    const prompt = { ...served(true), gateId: null };
+    const server = await startTestServer({
+      token: 'run-token',
+      v1: {
+        'GET /api/v1/work-items/{key}/review-prompt': { body: prompt },
+        'POST /api/v1/work-items/{key}/agent-review': (req) => ({
+          body: {
+            key: req.params.key,
+            gateId: null,
+            outcome: 'recorded',
+            verdict: 'pass',
+            state: 'approved',
+            subjectVersion: VERSION_2,
+            decidedAt: '2026-11-20T10:00:00.000Z',
+            bugs: [],
+          },
+        }),
+      },
+    });
+    try {
+      const client = new MotirClient({ serverUrl: server.url, token: 'run-token' });
+      expect((await client.reviewPrompt(KEY)).gateId).toBeNull();
+      expect(
+        await client.submitAgentReview(KEY, {
+          subjectVersion: VERSION_2,
+          verdict: 'pass',
+          summaryMd: 'ok',
+          findingsMd: null,
+          bugs: [],
+        }),
+      ).toMatchObject({ gateId: null, outcome: 'recorded' });
+    } finally {
+      await server.close();
+    }
+  });
+});
+
 describe('agent_exited carries the reviewer’s self-reported model TOP-LEVEL (MOTIR-7504)', () => {
   it.each([['m'], [null]] as const)('model %s', async (model) => {
     setup({});
@@ -904,5 +964,249 @@ describe('agent_exited carries the reviewer’s self-reported model TOP-LEVEL (M
     expect(exited).toHaveLength(1);
     expect(exited[0]).toMatchObject({ exitCode: 0, model });
     expect(exited[0]!.data).toMatchObject({ step: 'review', model });
+  });
+});
+
+// ── In the person's OWN agent (Story MOTIR-11941 · MOTIR-11953) ─────────────
+
+describe('motir review in the person’s own agent — the run’s target, the agent’s profile, the verdict door', () => {
+  const OWN_ENV = {
+    ...HOSTED_ENV,
+    MOTIR_AGENT_RUN: '1',
+    MOTIR_SANDBOX_AGENT: 'claude',
+    MOTIR_RUN_TOKEN: 'run-token-secret',
+  };
+  const TARGET = { gateId: 'gate_1', subjectVersion: VERSION };
+  const own = (over: Record<string, unknown> = {}) => deps({ env: { ...OWN_ENV }, ...over });
+  const doorPosts = () => h.calls.filter((c) => c.tool === 'review_verdict');
+
+  it('runs the agent’s own profile without the hosted addendum, and posts ONE verdict to the door', async () => {
+    setup({ origin: 'instance', review: TARGET, model: 'claude-run-model' });
+    const prepare = vi.fn();
+    await reviewCommand(
+      KEY,
+      own({
+        prepareCheckouts: prepare,
+        runAgentFn: agentWriting(
+          JSON.stringify({ verdict: 'pass', summaryMd: 'Meets it.' }),
+          0,
+          'claude-self-report',
+        ),
+      }),
+    );
+    expect(process.exitCode).toBeUndefined();
+    expect(h.locked).toBe(1);
+    // No hosted preparer: the agent's image wires its own code graph.
+    expect(prepare).not.toHaveBeenCalled();
+    const [agent] = h.agentRuns;
+    expect(agent!.command.binary).toBe('claude');
+    expect(agent!.command.promptAddendum).toBeUndefined();
+    expect(agent!.command.env!.MOTIR_REVIEW_VERDICT_FILE).toBeTruthy();
+    expect(agent!.prompt).toContain(agent!.command.env!.MOTIR_REVIEW_VERDICT_FILE!);
+    // The run token is withheld from the agent, as on every agent-mode run.
+    expect(agent!.command.env!.MOTIR_RUN_TOKEN).toBeUndefined();
+    expect(verdictPosts()).toEqual([]);
+    expect(doorPosts()).toEqual([
+      {
+        tool: 'review_verdict',
+        args: {
+          key: KEY,
+          verdict: {
+            subjectVersion: VERSION,
+            verdict: 'approved',
+            summaryMd: 'Meets it.',
+            findingsMd: null,
+            harness: 'Claude Code',
+            model: 'claude-self-report',
+          },
+        },
+      },
+    ]);
+    expect(h.events.at(-1)).toMatchObject({
+      kind: 'card_settled',
+      disposition: 'implemented',
+      data: { verdict: 'approved', outcome: 'decided' },
+    });
+    expect(h.closed).toEqual(['completed']);
+  });
+
+  it('changes requested, with bugs: written into the findings, named, never dropped; model falls back to the run’s', async () => {
+    setup({
+      origin: 'instance',
+      review: { gateId: null, subjectVersion: VERSION },
+      prompt: { ...served(), gateId: null },
+      model: 'run-model',
+    });
+    const lines: string[] = [];
+    vi.mocked(process.stderr.write).mockImplementation((s) => (lines.push(String(s)), true));
+    await reviewCommand(
+      KEY,
+      own({
+        runAgentFn: agentWriting(
+          JSON.stringify({
+            verdict: 'changes_requested',
+            findingsMd: '- src/a.ts:3 breaks AC1',
+            bugs: [{ title: 'Clock drifts', descriptionMd: 'footer.tsx:40' }],
+          }),
+        ),
+      }),
+    );
+    const [post] = doorPosts();
+    const sent = (post!.args as { verdict: ReviewVerdictSubmission }).verdict;
+    expect(sent).toMatchObject({ verdict: 'changes_requested', model: 'run-model' });
+    expect(sent.findingsMd).toBe(
+      '- src/a.ts:3 breaks AC1\n\n## Bugs the review logged\n\n### Clock drifts\n\nfooter.tsx:40',
+    );
+    expect(lines.join('')).toMatch(/bug noted in the findings \(not filed\): Clock drifts/);
+    expect(h.events.at(-1)).toMatchObject({ data: { bugsInFindings: 1 } });
+  });
+
+  it('no model from the agent or the run: `unknown`, never a guess', async () => {
+    setup({ origin: 'instance', review: TARGET });
+    await reviewCommand(
+      KEY,
+      own({ runAgentFn: agentWriting(JSON.stringify({ verdict: 'pass' })) }),
+    );
+    expect((doorPosts()[0]!.args as { verdict: ReviewVerdictSubmission }).verdict.model).toBe(
+      'unknown',
+    );
+  });
+
+  it('a late or second verdict is recorded and decides nothing — exits ZERO; any other refusal surfaces', async () => {
+    for (const code of ['REVIEW_VERDICT_LATE', 'REVIEW_VERDICT_SECOND']) {
+      setup({
+        origin: 'instance',
+        review: TARGET,
+        submitDoor: async () => {
+          throw new ApiRefusalError('decided nothing', 409, code);
+        },
+      });
+      await reviewCommand(
+        KEY,
+        own({ runAgentFn: agentWriting(JSON.stringify({ verdict: 'pass' })) }),
+      );
+      expect(process.exitCode).toBeUndefined();
+      expect(h.events.at(-1)).toMatchObject({ data: { verdict: 'approved', stale: true } });
+      expect(h.closed).toEqual(['completed']);
+    }
+    setup({
+      origin: 'instance',
+      review: TARGET,
+      submitDoor: async () => {
+        throw new ApiRefusalError('nope', 403, 'RUN_TOKEN_NOT_ALLOWED');
+      },
+    });
+    await expect(
+      reviewCommand(KEY, own({ runAgentFn: agentWriting(JSON.stringify({ verdict: 'pass' })) })),
+    ).rejects.toThrow('nope');
+    expect(h.closed).toEqual(['halted']);
+  });
+
+  it('the run’s own target decides “moved”, not the launcher’s environment', async () => {
+    setup({ origin: 'instance', review: { gateId: 'gate_1', subjectVersion: 'older' } });
+    const agent = vi.fn();
+    await reviewCommand(KEY, own({ runAgentFn: agent }));
+    expect(agent).not.toHaveBeenCalled();
+    expect(doorPosts()).toEqual([]);
+    expect(h.closed).toEqual(['completed']);
+
+    setup({ origin: 'instance', review: { gateId: 'gate_old', subjectVersion: VERSION } });
+    await reviewCommand(KEY, own({ runAgentFn: agent }));
+    expect(agent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a hosted review run (not ours to answer) without closing it', async () => {
+    setup({ origin: 'hosted', review: TARGET });
+    await expect(reviewCommand(KEY, own())).rejects.toMatchObject({
+      message: expect.stringMatching(/is a hosted review, not one opened in an agent/),
+      exitCode: 20,
+    });
+    expect(h.closed).toEqual([]);
+  });
+
+  it('a run that records no target is closed halted on the way out', async () => {
+    setup({ origin: 'instance', review: null });
+    await expect(reviewCommand(KEY, own())).rejects.toMatchObject({
+      message: expect.stringMatching(/records no review target/),
+      exitCode: 20,
+    });
+    expect(h.events.at(-1)).toMatchObject({ kind: 'card_settled', disposition: 'failed' });
+    expect(h.closed).toEqual(['halted']);
+  });
+});
+
+describe('ownReviewFindings — the bugs travel in the findings, within the door’s limit', () => {
+  it('passes findings through with no bugs, writes them in alone, and cuts at the limit', async () => {
+    const { ownReviewFindings } = await import('../src/commands/review.js');
+    const base: AgentReviewVerdict = {
+      subjectVersion: VERSION,
+      verdict: 'pass',
+      summaryMd: null,
+      findingsMd: null,
+      bugs: [],
+    };
+    expect(ownReviewFindings(base)).toBeNull();
+    expect(ownReviewFindings({ ...base, findingsMd: 'nit' })).toBe('nit');
+    expect(ownReviewFindings({ ...base, bugs: [{ title: 'T', descriptionMd: 'D' }] })).toBe(
+      '## Bugs the review logged\n\n### T\n\nD',
+    );
+    const long = ownReviewFindings({
+      ...base,
+      findingsMd: 'x'.repeat(60_000),
+      bugs: [{ title: 'T', descriptionMd: 'y'.repeat(20_000) }],
+    })!;
+    expect(long).toHaveLength(65_536);
+    expect(long.endsWith('…(cut to the verdict’s length limit)')).toBe(true);
+  });
+});
+
+describe('the client — the review-verdict door, and the run’s review target (contract 1.89.0)', () => {
+  it('posts the door body with an empty checklist, and reads `review` off the run', async () => {
+    const { startTestServer } = await import('./helpers/testServer.js');
+    const { MotirClient } = await import('../src/client.js');
+    const server = await startTestServer({
+      token: 'run-token',
+      v1: {
+        'POST /api/v1/work-items/{key}/review-verdict': (req) => ({
+          body: {
+            key: req.params.key,
+            recordId: 'rec_1',
+            outcome: 'recorded',
+            verdict: 'approved',
+            subjectVersion: VERSION,
+            gateId: null,
+            withdrewApprovalGateIds: [],
+            submittedAt: '2026-11-21T10:00:00.000Z',
+          },
+        }),
+      },
+    });
+    try {
+      const client = new MotirClient({ serverUrl: server.url, token: 'run-token' });
+      expect(
+        await client.submitReviewVerdict(KEY, {
+          subjectVersion: VERSION,
+          verdict: 'approved',
+          summaryMd: 'ok',
+          findingsMd: null,
+          harness: 'Claude Code',
+          model: 'm',
+        }),
+      ).toEqual({
+        key: KEY,
+        recordId: 'rec_1',
+        outcome: 'recorded',
+        verdict: 'approved',
+        subjectVersion: VERSION,
+        gateId: null,
+      });
+      expect(server.v1Calls.at(-1)).toMatchObject({
+        method: 'POST',
+        path: `/api/v1/work-items/${KEY}/review-verdict`,
+        body: { verdict: 'approved', checklist: [], harness: 'Claude Code', model: 'm' },
+      });
+    } finally {
+      await server.close();
+    }
   });
 });

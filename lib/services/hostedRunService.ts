@@ -1,10 +1,12 @@
-import type { Prisma, ReviewAgentSource } from '@/generated/prisma/client';
 import { FLEET_CONTAINER_SIZE, type TeardownReason } from '@motir/orchestrator';
 import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import { checkAgentRunCredits, type AgentModel } from '@/lib/ai/motirAiClient';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
-import { DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
+import { DispatchRunTerminalError, DuplicateDispatchRunError } from '@/lib/dispatchRuns/errors';
+import { ReviewStartNotOfferedError } from '@/lib/agentReview/errors';
+import { reviewInFlightUnderLock } from '@/lib/agentReview/reviewOpenGuard';
 import { gateIdOfReviewRunKey } from '@/lib/agentReview/reviewRunKey';
+import { REVIEW_NO_VERDICT_REASON } from '@/lib/agentReview/reviewState';
 import {
   hostedRunWriteAccess,
   repositoriesForItems,
@@ -140,16 +142,23 @@ type ResolvedStartInput = StartHostedRunInput & { model: string };
  */
 export interface StartHostedReviewInput {
   workItemId: string;
-  gateId: string;
+  /** The gate the run answers, or null for a review with no gate — Review off
+   *  (`approval-gates.md` §12.18), keyed `reviewItemRunKey` and versioned over the item's
+   *  own delivery set as the user-token verdict door measures it. */
+  gateId: string | null;
   subjectVersion: string;
   /** The request's key (`lib/agentReview/reviewRunKey.ts`) — the run's idempotency key,
    *  which is how the run names its gate. */
   idempotencyKey: string;
+  /** The model the presser picked (MOTIR-11944) — one Run hosted offers, checked by the
+   *  same pre-flight `assertOffered` as a build run's. Absent, the review's own model. */
+  model?: string;
 }
 
 /** The `reviewUnavailableReason` a review run that ended without a verdict leaves on its
- *  still-awaiting gate (`approval-gates.md` §12.6, the column's own comment). */
-export const REVIEW_NO_VERDICT_REASON = 'no_verdict';
+ *  still-awaiting gate (`approval-gates.md` §12.6) — defined beside the review state, which
+ *  derives the same reason for a review with no gate (§12.18). */
+export { REVIEW_NO_VERDICT_REASON };
 
 /** The teardown detail of a review run whose gate was superseded (§12.5). */
 export const HOSTED_REVIEW_SUPERSEDED_DETAIL = 'its review was superseded';
@@ -1085,23 +1094,57 @@ async function startReview(
   // it qualifies, else the platform review-agent model, else the run default. A
   // chosen id goes through `preflight`'s `assertOffered` and capacity check like a
   // build run's.
-  const { layer } = await orgHostedModelResolutionService.readOrgLayer(ctx);
-  const reviewModel = await hostedRunModelService.reviewModelFor(layer);
+  // A model the presser picked (MOTIR-11944) is taken through the same pre-flight, which
+  // refuses one that is not offered (`HostedModelNotOfferedError`) before anything opens.
+  const picked = input.model?.trim();
+  const reviewModel = picked
+    ? picked
+    : await hostedRunModelService.reviewModelFor(
+        (await orgHostedModelResolutionService.readOrgLayer(ctx)).layer,
+      );
   const checked = await preflight({ model: reviewModel }, project.id, [item.id], ctx, 'read');
 
-  const opened = await dispatchRunService.open(
-    {
-      projectKey: project.identifier,
-      command: 'review',
-      origin: 'hosted',
-      reportedBy: 'cli',
-      agent: 'opencode',
-      model: checked.model,
-      idempotencyKey: input.idempotencyKey,
-      cards: [{ key: item.identifier, disposition: 'queued' }],
-    },
-    ctx,
-  );
+  // Two presses racing past the read above both reach this open with the SAME key
+  // (`reviewPressKey`, MOTIR-11944). The item's review lock (`reviewInFlightUnderLock`,
+  // MOTIR-11945) serialises them, so the second answers the winner's run; the unique index
+  // `(workspace_id, idempotency_key)` still backs that up — exactly one starts.
+  let opened: Awaited<ReturnType<typeof dispatchRunService.open>>;
+  try {
+    opened = await dispatchRunService.open(
+      {
+        projectKey: project.identifier,
+        command: 'review',
+        origin: 'hosted',
+        reportedBy: 'cli',
+        agent: 'opencode',
+        model: checked.model,
+        idempotencyKey: input.idempotencyKey,
+        cards: [{ key: item.identifier, disposition: 'queued' }],
+      },
+      ctx,
+      {
+        // One review of the item at a time across BOTH doors (MOTIR-11945): an own-agent
+        // review opened since the caller's in-flight check refuses this one, under the lock.
+        beforeOpen: async (tx) => {
+          const running = await reviewInFlightUnderLock(tx, {
+            workspaceId: ctx.workspaceId,
+            workItemId: item.id,
+            idempotencyKey: input.idempotencyKey,
+          });
+          /* v8 ignore next -- race-only: a review opened between the caller's check and here */
+          if (running) throw new ReviewStartNotOfferedError(item.identifier, 'review_in_flight');
+        },
+      },
+    );
+  } catch (err) {
+    if (!(err instanceof DuplicateDispatchRunError)) throw err;
+    const winner = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, input.idempotencyKey, tx),
+    );
+    /* v8 ignore next -- the winner's row committed before the unique refused this insert */
+    if (!winner) throw err;
+    return { dispatchRunId: winner.id, created: false };
+  }
   const run = opened.run;
   /* v8 ignore next -- race-only: two deliveries of one request both passed the read above */
   if (!opened.created) return { dispatchRunId: run.id, created: false };
@@ -1133,7 +1176,9 @@ async function startReview(
       options,
       {
         MOTIR_RUN_MODE: 'review',
-        MOTIR_REVIEW_GATE_ID: input.gateId,
+        // A review with no gate boots with no gate id: the CLI's boot check compares the
+        // gate only when the variable is set (`packages/cli/src/commands/review.ts`).
+        ...(input.gateId === null ? {} : { MOTIR_REVIEW_GATE_ID: input.gateId }),
         MOTIR_REVIEW_VERSION: input.subjectVersion,
       },
       false,
@@ -1159,17 +1204,6 @@ async function startReview(
  * only over no reason (a refusal its start recorded is the more specific one). Never a
  * throw: the end path must finish.
  */
-/** The review source of the project a gate belongs to, or null when the gate is gone. */
-async function reviewSourceOfGate(
-  gateId: string,
-  tx: Prisma.TransactionClient,
-): Promise<ReviewAgentSource | null> {
-  const gate = await approvalGateRepository.findById(gateId, tx);
-  if (!gate) return null;
-  const settings = await projectRepository.findMergeSettings(gate.projectId, tx);
-  return settings?.reviewAgentSource ?? null;
-}
-
 async function recordReviewEnd(run: {
   id: string;
   workspaceId: string;
@@ -1177,15 +1211,13 @@ async function recordReviewEnd(run: {
   idempotencyKey: string | null;
 }): Promise<void> {
   if (run.command !== 'review') return;
+  // A review with no gate (`reviewItemRunKey`, §12.18) has nowhere to write its reason:
+  // its key names no gate, so this returns, and the review state read derives *could not
+  // run* from the run itself (`reviewStateRepository.listItemReviewRuns`).
   const gateId = gateIdOfReviewRunKey(run.idempotencyKey);
   if (!gateId) return;
   try {
     await withWorkspaceServiceContext(run.workspaceId, async (tx) => {
-      // A run cancelled by a switch of the source to `own` ends here too, after the
-      // switch cleared the gate's reason: could-not-run is a HOSTED-only state
-      // (`approval-gates.md` §12.6), so it is not written back onto a gate whose
-      // project now reviews with its own agent.
-      if ((await reviewSourceOfGate(gateId, tx)) === 'own') return;
       await approvalGateRepository.setReviewUnavailableReason(
         gateId,
         REVIEW_NO_VERDICT_REASON,

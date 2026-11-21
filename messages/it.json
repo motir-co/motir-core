@@ -3167,8 +3167,8 @@
             "desc": "Un proprietario o un amministratore dell’organizzazione ha arrestato uno dei tuoi agenti dalla pagina Fleet dell’organizzazione."
           },
           "review_to_run": {
-            "label": "Una revisione aspetta il tuo agente",
-            "desc": "Il tuo progetto esegue le revisioni con il tuo agente, e la revisione di un elemento di lavoro la avvii tu con motir review."
+            "label": "Una revisione attende di essere avviata",
+            "desc": "Un elemento di lavoro assegnato a te attende una revisione: avviala dall’elemento o esegui motir review."
           },
           "review_sent_back": {
             "label": "Un agente ha chiesto modifiche",
@@ -6253,7 +6253,7 @@
       "generic": "<s>{actor}</s> ha aggiornato <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> ti ha inviato una notifica",
       "accessRefused": "Il codice di <s>{project}</s> è pronto, ma non puoi ancora aprirlo: prova a inviare di nuovo l’invito",
-      "reviewToRun": "Una revisione di <s>{key}</s> aspetta il tuo agente",
+      "reviewToRun": "Una revisione di <s>{key}</s> attende di essere avviata",
       "reviewSentBack": "Un agente ha chiesto modifiche a <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> ha ibernato il tuo agente <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> ti ha menzionato in <s>{page}</s>",
@@ -17197,7 +17197,8 @@
       "kindLabel": "Revisione dell’agente",
       "state": {
         "reviewing": "In revisione",
-        "couldNotRun": "Impossibile eseguire"
+        "couldNotRun": "Impossibile eseguire",
+        "waiting": "In attesa di una revisione"
       },
       "reviewing": {
         "title": "L’agente di revisione sta revisionando questa versione",
@@ -17239,7 +17240,6 @@
         "whyNotYours": "In attesa di {name}. Non viene unito nulla finché la revisione non viene eseguita, o non prosegue senza."
       },
       "verb": {
-        "reviewAgain": "Revisiona di nuovo",
         "continueWithout": "Prosegui senza la revisione"
       },
       "override": {
@@ -17253,6 +17253,31 @@
         "bandTitle": "Proseguito senza la revisione",
         "bandNote": "L’agente di revisione non ha revisionato {count, plural, one {questo # commit} other {questi # commit}}.",
         "record": "Proseguito senza la revisione da <b>{name}</b> · {when}"
+      },
+      "doors": {
+        "title": "In attesa di una revisione",
+        "lead": "Niente si revisiona da solo. Avvia una revisione di queste pull request ai loro commit attuali.",
+        "leadOff": "La revisione è disattivata in questo progetto, quindi un verdetto viene registrato sull’elemento e non blocca nulla. Puoi comunque chiedere una revisione.",
+        "leadAgain": "Avvia di nuovo la revisione:",
+        "motirAgent": "Revisiona con l’agente Motir",
+        "myAgent": "Revisiona nel mio agente",
+        "orRun": "oppure esegui",
+        "creditsNote": "Revisiona con l’agente Motir è un’esecuzione dell’agente Motir, pagata con i crediti IA della tua organizzazione. Revisiona nel mio agente e motir review usano il tuo agente.",
+        "waitingWhy": "Non viene unito nulla, e a nessuno viene chiesto di approvare, finché una revisione non viene superata o qualcuno non continua senza.",
+        "waitingWhyNotYours": "In attesa che {name} avvii una revisione. Non viene unito nulla finché una revisione non viene superata o questa persona non continua senza."
+      },
+      "own": {
+        "title": "Revisione in {agent}",
+        "titleNoAgent": "Revisione in un agente",
+        "metaYou": "Avviata <when></when> da te · <run>{label}</run>",
+        "meta": "Avviata <when></when> · <run>{label}</run>",
+        "lineYou": "Il tuo agente esegue motir review {key} e registra qui il suo verdetto. Le opzioni tornano se l’esecuzione termina senza verdetto.",
+        "line": "L’agente esegue motir review {key} e registra qui il suo verdetto. Le opzioni tornano se l’esecuzione termina senza verdetto."
+      },
+      "picker": {
+        "title": "Revisiona {key} in uno dei tuoi agenti",
+        "lead": "Il tuo agente esegue motir review {key} e invia il suo verdetto a tuo nome.",
+        "lastUsed": "Usato per ultimo su questo elemento"
       }
     },
     "autoRerun": {
@@ -17341,10 +17366,9 @@
         "couldNotRunName": "Impossibile eseguire la revisione dell'agente — in attesa di te",
         "couldNotRunOn": "Impossibile eseguire la revisione · {name}",
         "couldNotRunOnName": "Impossibile eseguire la revisione dell'agente — in attesa di {name}",
-        "waitingYours": "In attesa del tuo agente di revisione",
-        "waitingYoursName": "In attesa del tuo agente di revisione — esegui motir review {key}",
-        "waitingOn": "In attesa dell'agente di revisione di {name}",
-        "waitingOnName": "In attesa dell'agente di revisione di {name}"
+        "waiting": "In attesa di una revisione",
+        "waitingStart": "In attesa di una revisione — avviala dall’elemento o esegui motir review {key}",
+        "waitingStartBy": "In attesa di una revisione — {name} può avviarla"
       },
       "command": {
         "copy": "Copia motir review {key}",
@@ -17406,9 +17430,9 @@
         "close": "Chiudi"
       },
       "toRun": {
-        "sentence": "Revisiona <title>{name}</title> con il tuo agente",
+        "sentence": "Avvia una revisione di <title>{name}</title>",
         "tag": "Revisione da eseguire",
-        "details": "Non è ancora un'approvazione. La tua approvazione viene chiesta quando la revisione passa.",
+        "details": "Non è ancora un’approvazione. Apri l’elemento per avviare la revisione; la tua approvazione viene richiesta quando la revisione è superata.",
         "open": "Apri {key}: {sentence}"
       },
       "dismiss": {
@@ -17494,31 +17518,23 @@
       "auto": {
         "label": "Unisci automaticamente",
         "hint": "Quando i controlli passano, Motir unisce la pull request senza chiedere a nessuno. Il registro indica che lo ha consentito questa impostazione — non che una persona l’ha approvata.",
-        "blockedByReviewAgent": "Disattiva l’agente di revisione per unire automaticamente."
+        "blockedByReviewAgent": "Disattiva la revisione per unire automaticamente."
       },
       "saved": "Salvato",
       "saveError": "Impossibile salvare — riprova."
     },
     "reviewAgent": {
-      "title": "Agente di revisione",
-      "desc": "Quando le pull request di un elemento di lavoro superano i controlli, un agente Motir legge la modifica confrontandola con l’elemento — la sua descrizione, i criteri di accettazione e Come testare — <strong>prima che ti venga chiesto di approvarla</strong>. Se trova un problema, l’elemento va in <strong>Da correggere</strong> con i rilievi dell’agente, e a nessuno viene chiesto di approvarlo.",
+      "title": "Revisione",
+      "desc": "Un controllo prima di <strong>approva e unisci</strong>. Se è attivo, un elemento di lavoro non può essere approvato per il merge finché una revisione dell’Agente delle sue pull request attuali non viene superata. Nessuna revisione parte da sola: la avvia una persona dall’elemento.",
       "on": "Attivo",
       "off": "Disattivo",
-      "onWhat": "Ogni elemento di lavoro viene revisionato prima che ti venga chiesto di approvarlo.",
-      "offWhat": "Un elemento di lavoro viene proposto per l’approvazione appena i controlli passano.",
+      "onWhat": "Un elemento In revisione attende una revisione superata prima che a qualcuno venga chiesto di approvarne il merge.",
+      "offWhat": "Un elemento può essere approvato per il merge appena i suoi controlli passano. Può ancora essere revisionato dall’elemento; il verdetto viene registrato e non blocca nulla.",
       "unavailable": "Non disponibile",
-      "unavailableWhat": "Questo progetto unisce automaticamente, quindi nulla attende una revisione. Scegli <strong>Chiedi prima del merge</strong> per attivare l’agente di revisione.",
-      "billingNote": "Ogni revisione è un’esecuzione dell’agente Motir, pagata con i crediti AI della tua organizzazione.",
-      "offNote": "Disattivandolo, le revisioni in corso vengono annullate — quegli elementi di lavoro passano direttamente al flusso ordinario.",
+      "unavailableWhat": "Questo progetto unisce automaticamente, quindi nessuna persona approva un merge davanti al quale possa porsi una revisione. Scegli <strong>Chiedi prima del merge</strong> per attivare la revisione.",
+      "offNote": "Disattivandola, gli elementi in attesa di una revisione vengono rilasciati: passano direttamente ad approva e unisci. Una revisione già in corso registra comunque il suo verdetto.",
       "saved": "Salvato",
       "saveError": "Impossibile salvare — riprova.",
-      "source": {
-        "label": "Chi esegue la revisione",
-        "hosted": "Agente Motir",
-        "hostedWhat": "Motir avvia un’esecuzione di revisione quando i controlli passano. <strong>Usa crediti AI.</strong>",
-        "own": "Il tuo agente",
-        "ownWhat": "Gratis. La revisione attende che qualcuno esegua <cmd>motir review</cmd> dal proprio agente. Niente parte da solo."
-      },
       "posting": {
         "title": "Pubblica le revisioni dell’agente sulle pull request",
         "on": "L’app GitHub di Motir commenta ogni verdetto sulle pull request e chiede modifiche quando rimanda indietro il lavoro. Non approva mai.",

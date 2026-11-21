@@ -464,6 +464,7 @@ export function DevelopmentSectionBody({
   autoQueueExits = null,
   decision = null,
   agentReview = null,
+  reviewDoors,
   repairHostedDoor,
   repairMyAgentDoor,
 }: {
@@ -638,6 +639,9 @@ export function DevelopmentSectionBody({
    * frame is as it was.
    */
   agentReview?: AgentReviewViewDto | null;
+  /** THE REVIEW DOORS (MOTIR-11948; § 33.4) — the frame decides when they show. The item
+   *  page passes them for a viewer who may run the card hosted; every other host omits them. */
+  reviewDoors?: ReactNode;
   /**
    * THE HOSTED REPAIR DOOR (MOTIR-6930; design § 30 Panels 3–3e): *Fix on the hosted
    * agent*, drawn in the fix part beside the copyable `motir fix <KEY>` for a card a review
@@ -869,6 +873,7 @@ export function DevelopmentSectionBody({
         canReplan={canReplan}
         designRefusal={designRefusal}
         agentReview={agentReview}
+        reviewDoors={reviewDoors}
       >
         {block}
       </DevelopmentGateFrame>

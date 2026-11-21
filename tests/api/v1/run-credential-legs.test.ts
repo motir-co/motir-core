@@ -122,7 +122,7 @@ const CARD_ROUTES: CardRoute[] = [
 ];
 
 /**
- * The review run's two routes (MOTIR-6821) answer ONLY a `command: review` run's token, so
+ * The review run's routes (MOTIR-6821, MOTIR-11953) answer ONLY a `command: review` run's token, so
  * the `run_scope` token this file mints is refused there by the review-run check before any
  * leg question arises. Their binding — the run's own card, and a refusal for a card outside
  * it — is proven in `tests/api/v1/agent-review-routes.test.ts` with a review run's token.
@@ -130,6 +130,9 @@ const CARD_ROUTES: CardRoute[] = [
 const REVIEW_RUN_ONLY = [
   'GET /api/v1/work-items/{key}/review-prompt',
   'POST /api/v1/work-items/{key}/agent-review',
+  // An own-agent review's token only (MOTIR-11953), proven in
+  // `tests/agentInstances/reviewInMyAgentVerdict.test.ts`.
+  'POST /api/v1/work-items/{key}/review-verdict',
 ];
 
 async function seedItem(

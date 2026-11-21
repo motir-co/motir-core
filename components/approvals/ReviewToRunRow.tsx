@@ -11,13 +11,14 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
 
 // A REVIEW TO RUN on To approve (Story MOTIR-10327 · MOTIR-10342; `design/github/design-notes.md`
-// § 32.5, `approvals-row--review-path.mock.html` A2) — a card whose review waits on the
-// reader's OWN agent, listed AS A REVIEW TO RUN, NOT AN APPROVAL. Told apart from an approval
-// row by every cell: a `Bot` on the 18px yellow disc (an approval row has its kind glyph), the
-// sentence *Review {title} with your agent*, the command chip in the DETAILS track, the
-// *Review to run* tag in the Decide track (where an approval row has *Review*), and the second
-// line *Not an approval yet…*. Pressing the row opens the card — there is no overlay for it.
-// Copy is the one verb.
+// § 32.5, `approvals-row--review-path.mock.html` A2; source-free words since Story
+// MOTIR-11941 · MOTIR-11947, § 33.3) — a card whose review waits for someone to START it,
+// listed AS A REVIEW TO RUN, NOT AN APPROVAL. Told apart from an approval row by every cell: a
+// `Bot` on the 18px yellow disc (an approval row has its kind glyph), the sentence *Start a
+// review of {title}*, the command chip in the DETAILS track, the *Review to run* tag in the
+// Decide track (where an approval row has *Review*), and the second line *Not an approval
+// yet…*. Pressing the row opens the card, where the review is started — there is no overlay
+// for it. Copy is the one verb.
 
 export function ReviewToRunRow({
   row,

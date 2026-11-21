@@ -142,3 +142,54 @@ export type FixInMyAgentDoorDto =
       /** Set on `agent_unusable`. */
       refusal: AgentRunAgentRefusal | null;
     };
+
+/** Why *Review in my agent* is not offered, in the order the read decides it (MOTIR-11945). */
+export type ReviewInMyAgentNotOfferedReason =
+  | 'not_in_review'
+  | 'no_pull_request'
+  | 'gate_not_awaiting'
+  | 'review_in_flight'
+  | 'cannot_decide'
+  | 'no_agent'
+  | 'agent_unusable';
+
+/** The own-agent review in flight, as the door shows it while it runs. */
+export interface ReviewInMyAgentRunDto {
+  id: string;
+  label: string;
+  startedAt: string;
+  /** The agent the review runs in, when it is one of the viewer's own; else null. */
+  agentName: string | null;
+  /** True when the viewer started it. */
+  byViewer: boolean;
+}
+
+/**
+ * THE "REVIEW IN MY AGENT" DOOR'S STATE for one item (Story MOTIR-11941 · MOTIR-11945;
+ * `approval-gates.md` §12.18) — the Fix in my agent door's shape. `offered: false` is an
+ * ANSWER, never a permission problem. `review_in_flight` carries the run when the review in
+ * flight is an own-agent one (null for a hosted review); `agent_unusable` carries the agent's
+ * own refusal verbatim.
+ *
+ * Offered carries what a start would review — the gate (null with Review off) and the
+ * delivery-set version — and the agent the door picked: the one this viewer last used on the
+ * item while it is usable, else their first usable agent.
+ */
+export type ReviewInMyAgentDoorDto =
+  | {
+      offered: true;
+      agent: Pick<AgentForCardDto, 'id' | 'name' | 'profileId' | 'profileName' | 'state'>;
+      /** The agent is the one this viewer last used on the item — the picker preselects
+       *  it with *Last used on this item* (MOTIR-11948; design § 33.5). */
+      lastUsedOnItem: boolean;
+      gateId: string | null;
+      subjectVersion: string;
+    }
+  | {
+      offered: false;
+      reason: ReviewInMyAgentNotOfferedReason;
+      /** Set on `review_in_flight` for an own-agent review. */
+      run: ReviewInMyAgentRunDto | null;
+      /** Set on `agent_unusable`. */
+      refusal: AgentRunAgentRefusal | null;
+    };

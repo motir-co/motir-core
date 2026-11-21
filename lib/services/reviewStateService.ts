@@ -17,12 +17,15 @@ import {
   toReviewStateDto,
   type ApprovedReviewDTO,
   type CardReviewMap,
+  type ItemReviewRunDTO,
   type ReviewStateDTO,
 } from '@/lib/dto/reviewState';
+import { dispatchRunLabel } from '@/lib/howToTest/author';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
   reviewStateRepository,
+  type ItemReviewRunRow,
   type ReviewStateCardRow,
   type ReviewStatePersonRow,
 } from '@/lib/repositories/reviewStateRepository';
@@ -176,10 +179,47 @@ export async function readReviewStates(
   );
   const recordsByCard = groupBy(records, (r) => r.workItemId);
   const dismissalsByCard = groupBy(dismissals, (d) => d.workItemId);
+  const setByCard = new Map(
+    cards.map(
+      (card) => [card.id, setOf(deliveriesByCard.get(card.id) ?? [], reviewsByPr)] as const,
+    ),
+  );
+
+  // ⚠️ A REVIEW WITH NO GATE IS READ ONLY WHILE REVIEW IS OFF (§12.18). With Review on, a
+  // hosted review always answers a gate, and the gate's own in-flight read above is the
+  // one source the marker derives from; reading both would let them disagree.
+  const itemRunRows = project.reviewAgentEnabled
+    ? new Map<string, ItemReviewRunRow>()
+    : await reviewStateRepository.listItemReviewRuns(
+        ctx.workspaceId,
+        cards.flatMap((card) => {
+          const version = setByCard.get(card.id)?.version;
+          return version ? [{ workItemId: card.id, subjectVersion: version }] : [];
+        }),
+        tx,
+      );
+  // What is reviewing, as the review part names it (MOTIR-11948): the run's label, and
+  // whether the reader started it.
+  const itemRuns = new Map<string, ItemReviewRunDTO>(
+    [...itemRunRows].map(([id, row]) => [
+      id,
+      {
+        state: row.state,
+        reason: row.reason,
+        dispatchRunId: row.dispatchRunId,
+        origin: row.origin,
+        label: dispatchRunLabel('review', row.startedAt),
+        startedAt: row.startedAt.toISOString(),
+        agentName: row.agentName,
+        byViewer: row.createdById !== null && row.createdById === ctx.userId,
+      },
+    ]),
+  );
 
   const stateOf = (card: ReviewStateCardRow): ReviewState => {
     const id = card.id;
-    const set = setOf(deliveriesByCard.get(id) ?? [], reviewsByPr);
+    /* v8 ignore next -- every listed card has a set computed above. */
+    const set = setByCard.get(id) ?? { version: null, members: [] };
     const routedId = routedIdOf(card);
     const routed = personById.get(routedId);
     const gates = gatesByCard.get(id) ?? [];
@@ -187,7 +227,6 @@ export async function readReviewStates(
       identifier: card.identifier,
       finished: isFinished(card),
       reviewAgentEnabled: project.reviewAgentEnabled,
-      reviewAgentSource: project.reviewAgentSource,
       currentVersion: set.version,
       members: set.members,
       agentGates: gates.map((gate) => ({ ...gate, decidedByName: nameOf(gate.decidedById) })),
@@ -212,7 +251,12 @@ export async function readReviewStates(
   const cardById = new Map(cards.map((card) => [card.id, card] as const));
   for (const id of allIds) {
     const card = cardById.get(id);
-    if (card?.projectId === projectId) out.set(id, toReviewStateDto(card, stateOf(card)));
+    if (card?.projectId === projectId) {
+      out.set(
+        id,
+        toReviewStateDto(card, stateOf(card), itemRuns.get(id) ?? null, project.reviewAgentEnabled),
+      );
+    }
   }
   return out;
 }

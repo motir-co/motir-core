@@ -160,10 +160,12 @@ export function agentRunLaunchCommand(
   command: DispatchCommand = 'run',
 ): string[] {
   const base = [...AS_NODE, 'run', workItemKey, '--run-id', dispatchRunId];
-  // MOTIR-9045: only a `fix` or `continue` names its command. Every other value a
-  // run row can hold launches today's argv, so an image whose bundled CLI
-  // predates `--command` keeps starting ordinary runs.
-  return command === 'fix' || command === 'continue' ? [...base, '--command', command] : base;
+  // MOTIR-9045: only a `fix`, `continue` or `review` (MOTIR-11945) names its command.
+  // Every other value a run row can hold launches today's argv, so an image whose
+  // bundled CLI predates `--command` keeps starting ordinary runs.
+  return command === 'fix' || command === 'continue' || command === 'review'
+    ? [...base, '--command', command]
+    : base;
 }
 
 /**

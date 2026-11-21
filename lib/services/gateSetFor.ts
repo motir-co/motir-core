@@ -33,8 +33,7 @@ import {
 } from '@/lib/mergeQueue/queueExit';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
-import { sendEvent } from '@/lib/jobs/sendEvent';
-import { reviewRaiseKey } from '@/lib/agentReview/reviewRunKey';
+import { reviewToRunService } from './reviewToRunService';
 import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
 import { mergeCandidateHead } from './mergeGates';
 import { workflowsService } from './workflowsService';
@@ -401,7 +400,7 @@ export async function reconcileGatesFor(
       tx,
     );
     raised.push(owed.kind);
-    if (created.kind === 'agent_review') requestAgentReviewAfterCommit(created);
+    if (created.kind === 'agent_review') notifyReviewRaisedAfterCommit(created);
   }
   return raised;
 }
@@ -488,45 +487,38 @@ async function withdrawMergeQuestionOfAncestorSet(
 }
 
 /**
- * ASK FOR THE REVIEW RUN once the transaction that raised this `agent_review` gate has
- * committed (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.2,
- * `hosted-agent-run.md` §8.1 — *one review run per awaiting gate, started by the server
- * from the gate's raise*).
+ * TELL THE ROUTED PERSON THEIR REVIEW IS WAITING once the transaction that raised this
+ * `agent_review` gate has committed (Story MOTIR-11941 · MOTIR-11943; `approval-gates.md`
+ * §12). ⚠️ A REVIEW STARTS ONLY ON A PERSON'S PRESS: the raise requests no review run and
+ * emits no `agent-review/requested` — it notifies, once, through
+ * `reviewToRunService.notifyRaised`, whose `review_to_run:<gateId>` dedupe key absorbs a
+ * redelivered raise or a later reconcile.
  *
- * ⚠️ HERE, AT THE ONE CREATOR, so every raise path emits it — the promotion, a status move
- * into review, the reconcile tick, a queue exit, every withdrawal's re-raise — without a
- * return value threaded out of a dozen callers' transactions. It is deferred through the
- * transaction helpers' after-commit scope (`lib/workspaces/afterCommit.ts`): a job
- * enqueued before the commit could look for a gate that then rolled back.
+ * ⚠️ HERE, AT THE ONE CREATOR, so every raise path notifies — the promotion, a status move
+ * into review, the reconcile tick, a queue exit, every withdrawal's re-raise after a head
+ * move — without a return value threaded out of a dozen callers' transactions. It is
+ * deferred through the transaction helpers' after-commit scope
+ * (`lib/workspaces/afterCommit.ts`): a notification written before the commit could name
+ * a gate that then rolled back.
  *
- * ⚠️ A RAISE OUTSIDE ANY HELPER SCOPE EMITS NOTHING, and says so. Only a bare
+ * ⚠️ A RAISE OUTSIDE ANY HELPER SCOPE NOTIFIES NOBODY, and says so. Only a bare
  * `db.$transaction` gets here unscoped (the RLS guards keep those rare, and no production
- * raise path uses one): the gate still stands awaiting on the card, and the person it is
- * routed to can start the review from it (§12.6's *Review again*, MOTIR-6820).
+ * raise path uses one): the gate still stands awaiting on the card, and its marker says
+ * the review is waiting.
  */
-function requestAgentReviewAfterCommit(gate: {
+function notifyReviewRaisedAfterCommit(gate: {
   id: string;
   workspaceId: string;
   workItemId: string | null;
-  subjectVersion: string | null;
 }): void {
-  const { id: gateId, workspaceId, workItemId, subjectVersion } = gate;
-  // The predicate raises the review only at a named set version, on a card.
-  /* v8 ignore next */
-  if (workItemId === null || subjectVersion === null) return;
-  const deferred = deferUntilCommit(() =>
-    sendEvent('agent-review/requested', {
-      workspaceId,
-      gateId,
-      workItemId,
-      subjectVersion,
-      idempotencyKey: reviewRaiseKey(gateId),
-    }),
-  );
+  const { id: gateId, workspaceId, workItemId } = gate;
+  const deferred = deferUntilCommit(async () => {
+    await reviewToRunService.notifyRaised(workspaceId, gateId);
+  });
   if (!deferred) {
     console.warn(
       '[gateSetFor] an agent_review gate was raised outside a transaction scope; ' +
-        'no review run was requested for it',
+        'nobody was notified that its review is waiting',
       { gateId, workItemId },
     );
   }

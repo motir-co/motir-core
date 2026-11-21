@@ -260,13 +260,16 @@ describe('ReviewToRunRow', () => {
     render(<ReviewToRunRow row={TO_RUN} gridTemplate="1fr auto auto auto" />, { now: NOW });
     const row = screen.getByTestId('review-to-run-row-g-9');
     expect(row.hasAttribute('data-review-to-run')).toBe(true);
-    expect(row.textContent).toContain('Review Export button with your agent');
+    expect(row.textContent).toContain('Start a review of Export button');
     expect(row.textContent).toContain('ACME-9');
     expect(row.textContent).toContain('Review to run');
-    expect(row.textContent).toContain('Not an approval yet');
+    expect(row.textContent).toContain(
+      'Not an approval yet. Open the item to start the review; your approval is asked once it passes.',
+    );
+    expect(row.textContent).not.toContain('agent');
     expect(screen.getByTestId('review-command-copy-ACME-9')).toBeTruthy();
     const door = screen.getByRole('link', {
-      name: 'Open ACME-9: Review Export button with your agent',
+      name: 'Open ACME-9: Start a review of Export button',
     });
     expect(door.getAttribute('href')).toBe('/items/ACME-9');
   });
@@ -277,7 +280,7 @@ describe('ReviewToRunRow', () => {
       messages: zhMessages,
     });
     const row = screen.getByTestId('review-to-run-row-g-9');
-    expect(row.textContent).toContain('用你的智能体审查Export button');
+    expect(row.textContent).toContain('发起对Export button的审查');
     expect(row.textContent).toContain('待运行审查');
   });
 });
@@ -472,6 +475,8 @@ function stateOf(over: Partial<ReviewStateDTO>): ReviewStateDTO {
     authorOfEveryPr: false,
     routedTo: null,
     viewerIsRouted: false,
+    itemReviewRun: null,
+    reviewOn: true,
     ...over,
   };
 }
@@ -492,6 +497,8 @@ describe('the read-model slices', () => {
       viewerIsRouted: true,
       authorOfEveryPr: true,
       sentBackRecord,
+      reviewOn: true,
+      itemReviewRun: null,
     });
   });
 
