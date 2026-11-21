@@ -831,10 +831,8 @@ test.describe('the review path', () => {
     await beat();
 
     await chapter('A hosted review that could not run is aimed at you', async () => {
-      writeHostedRunFixture({
-        models: { ids: [DEFAULT_MODEL], default: DEFAULT_MODEL },
-        mayRun: false,
-      });
+      // The press starts the run (MOTIR-11944); the lane's run seam answers no verdict, so it
+      // ends WITHOUT one — a review that could not run.
       await green(page, 'hostedCouldNotRun', headShaFor(PRS.hostedCouldNotRun.number));
       await requestHostedReview(
         page,
@@ -848,7 +846,7 @@ test.describe('the review path', () => {
             timeout: 60_000,
           },
         )
-        .toBe('hosted_run_out_of_credits');
+        .toBe('no_verdict');
       await page.goto('/boards');
       const marker = (await revealBoardCard(page, couldNotRun)).locator('[data-review-marker]');
       await expect(marker).toHaveAttribute('data-review-marker', 'could_not_run', {

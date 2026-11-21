@@ -8,15 +8,15 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 // to To fix — on REAL Postgres, through the product's own doors:
 //
 //   · the green verdict and every head move are GitHub webhooks into `githubWebhookService`;
-//   · the `agent-review/requested` request is the `job_event` row the REAL dispatcher wrote
-//     (nothing stubs `sendEvent`), handed to the REAL job definition through the engine
-//     test harness — exactly what a worker claiming the row does. ⚠️ NOTHING REVIEWS BY
-//     ITSELF (Story MOTIR-11941 · MOTIR-11943): the raise writes no request, so each
-//     sequence sends the one a person's press would, through the same dispatcher;
+//   · ⚠️ NOTHING REVIEWS BY ITSELF (Story MOTIR-11941 · MOTIR-11943): the raise starts no
+//     run, so each sequence presses *Review with Motir agent* — the session route
+//     `POST /api/work-items/{key}/review-with-motir-agent` (MOTIR-11944), which starts the
+//     hosted review synchronously, as Run hosted does;
 //   · the review run boots on the FAKE ORCHESTRATOR (`MOTIR_FLEET_ORCHESTRATOR=fake`), and
 //     the verdict is posted with the run token the container was handed
 //     (`MOTIR_RUN_TOKEN` in the boot spec), through `POST /api/v1/work-items/{key}/agent-review`;
-//   · a person's presses are the session routes (decide, Review again, the switch, the
+//   · a person's presses are the session routes (decide, Review with Motir agent, the
+//     shipped Review again shim, the switch, the
 //     merge mode, Fix in Motir agent); `motir fix` is `POST /api/v1/work-items/{key}/repair`.
 //
 // ⚠️ THE STUBS, AND NOTHING ELSE: the SESSION (a route test has no cookie jar and no
@@ -40,19 +40,14 @@ import { db } from '@/lib/db';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { gateIdOfReviewRunKey } from '@/lib/agentReview/reviewRunKey';
-import { agentReviewRequested } from '@/lib/jobs/definitions/agentReviewRequested';
-import type { AgentReviewRequestedData } from '@/lib/jobs/types';
-import { sendEvent } from '@/lib/jobs/sendEvent';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { REVIEW_AGENT_REVIEWER_NAME } from '@/lib/workItems/fixReason';
 import { bearer, withTokenFor } from '../fixtures/apiV1Fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { grantPaidAiPlan } from '../helpers/paidAiPlan';
-import { JobTestEngine } from '../helpers/jobs';
 import { linkPr } from '../helpers/prLink';
 import { hostAnswersCleanAt } from '../helpers/hostMergeability';
-import { reviewRequestFor } from '../helpers/reviewRequest';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -73,6 +68,8 @@ const repairRoute = await import('@/app/api/v1/work-items/[key]/repair/route');
 const gitCredentialRoute = await import('@/app/api/v1/dispatch-runs/[id]/git-credential/route');
 const decideRoute = await import('@/app/api/approval-gates/[id]/decide/route');
 const reviewAgainRoute = await import('@/app/api/approval-gates/[id]/review-again/route');
+const reviewWithAgentRoute =
+  await import('@/app/api/work-items/[id]/review-with-motir-agent/route');
 const gatesSettingsRoute = await import('@/app/api/projects/[key]/approval-gates/route');
 const mergeModeRoute = await import('@/app/api/projects/[key]/pr-merge-mode/route');
 const hostedRunsRoute = await import('@/app/api/work-items/[id]/hosted-runs/route');
@@ -457,43 +454,14 @@ const eventsNamed = async (name: string) =>
 const queuedRuns = (jobId: string) =>
   adminDb.jobQueueRun.findMany({ where: { jobId }, orderBy: { createdAt: 'asc' } });
 
-const reviewRequests = async (workItemId: string) =>
-  (await eventsNamed('agent-review/requested')).filter(
-    (d) => d['workItemId'] === workItemId,
-  ) as unknown as AgentReviewRequestedData[];
-
-/**
- * A PERSON ASKS FOR THE REVIEW (MOTIR-11943): the raise requested none, so the request a
- * press sends is written through the REAL dispatcher, under the gate's raise key, and read
- * back as the `job_event` row a worker would claim.
- */
-async function requestReview(gate: {
-  id: string;
-  workspaceId: string;
-  workItemId: string | null;
-  subjectVersion: string | null;
-}): Promise<AgentReviewRequestedData> {
-  const before = await reviewRequests(gate.workItemId!);
-  expect(
-    before.filter((r) => r.gateId === gate.id),
-    'the raise requested no review by itself',
-  ).toEqual([]);
-  await sendEvent('agent-review/requested', reviewRequestFor(gate));
-  const after = await reviewRequests(gate.workItemId!);
-  const request = after.find((r) => r.gateId === gate.id);
-  expect(request, 'the press wrote ONE request').toBeDefined();
-  return request!;
-}
-
-/** A worker claims the request and runs the `agent-review/requested` job on it. */
-async function runReviewJob(request: AgentReviewRequestedData) {
-  const outcome = await new JobTestEngine({
-    function: agentReviewRequested,
-    events: [{ name: 'agent-review/requested', data: request }],
-  }).execute();
-  if (outcome.error) throw outcome.error;
-  return outcome.result as { outcome: string; dispatchRunId?: string };
-}
+/** The review runs opened for one gate — every attempt's key carries the gate's prefix. */
+const reviewRunsOfGate = async (gateId: string) =>
+  (
+    await adminDb.dispatchRun.findMany({
+      where: { command: 'review', idempotencyKey: { startsWith: `agent-review:${gateId}:` } },
+      orderBy: { startedAt: 'asc' },
+    })
+  ).map((r) => ({ id: r.id, status: r.status, idempotencyKey: r.idempotencyKey }));
 
 /** The container the fake orchestrator booted for `dispatchRunId` — its env is what a run holds. */
 function bootOf(dispatchRunId: string): Record<string, string> {
@@ -564,6 +532,19 @@ async function pressDecide(
   );
 }
 
+/** *Review with Motir agent* (MOTIR-11944) — a person's press on the item, by its key. */
+async function pressReviewWithAgent(user: User, key: string, body: Record<string, unknown> = {}) {
+  await signInAs(user);
+  return reviewWithAgentRoute.POST(
+    new Request(`${APP}/work-items/${key}/review-with-motir-agent`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+    idParams(key),
+  );
+}
+
+/** The shipped *Review again* button's route — a shim onto the same press until its UI goes. */
 async function pressReviewAgain(user: User, gateId: string) {
   await signInAs(user);
   return reviewAgainRoute.POST(
@@ -626,7 +607,8 @@ const verdictEvents = (dispatchRunId: string) =>
 
 /**
  * The first half of every sequence: the card goes green with the switch on, ONE review is
- * raised and ONE request emitted; the job starts ONE review run on the fake orchestrator.
+ * raised and nothing starts; the routed person's press starts ONE review run on the fake
+ * orchestrator.
  */
 async function greenToReviewRun(w: World, number: number, sha = 'sha-a') {
   const d = await deliveredCard(w, number);
@@ -637,16 +619,22 @@ async function greenToReviewRun(w: World, number: number, sha = 'sha-a') {
   const review = reviews[0]!;
   expect(review.subjectVersion).toBe(versionOf(w, d, sha));
   expect(await gatesOf(d.item.id, MERGE), 'the merge question waits for the review').toEqual([]);
-  const request = await requestReview(review);
-  expect(request).toMatchObject({ gateId: review.id, subjectVersion: review.subjectVersion });
+  expect(await reviewRunsOfGate(review.id), 'the raise started no review by itself').toEqual([]);
 
-  const started = await runReviewJob(request);
-  expect(started.outcome).toBe('started');
+  const pressed = await pressReviewWithAgent(w.owner, d.item.identifier);
+  expect(pressed.status).toBe(201);
+  const answer = await json(pressed);
+  expect(answer).toMatchObject({ created: true, gateId: review.id });
   const runs = (await runsOf(w.workspace.id, 'review')).filter((r) =>
     r.idempotencyKey?.startsWith(`agent-review:${review.id}:`),
   );
-  expect(runs, 'the job opened ONE review run').toHaveLength(1);
+  expect(runs, 'the press opened ONE review run').toHaveLength(1);
   const run = runs[0]!;
+  expect(run).toMatchObject({
+    id: answer['dispatchRunId'],
+    idempotencyKey: `agent-review:${review.id}:press:1`,
+    createdById: w.owner.id,
+  });
   const env = bootOf(run.id);
   expect(env).toMatchObject({
     MOTIR_RUN_MODE: 'review',
@@ -733,7 +721,7 @@ describe('1 · manual, pass — green → review → review run → verdict → 
     await hostedRunService.endHostedRun(run.id, 'exited', 'the container exited 0');
     expect((await gateRow(review.id)).reviewUnavailableReason).toBeNull();
     // Nothing else was asked for: no second review, no fix, no status move by the review.
-    expect(await reviewRequests(d.item.id)).toHaveLength(1);
+    expect(await reviewRunsOfGate(review.id)).toHaveLength(1);
     expect(await runsOf(w.workspace.id, 'fix')).toEqual([]);
     expect((await cardRow(d.item.id)).fixReason).toBeNull();
   });
@@ -788,7 +776,10 @@ describe('2 · the review agent and `auto` merging exclude each other (§12.2a)'
       ),
     ).toBe(true);
     expect(await gatesOf(d.item.id, REVIEW)).toEqual([]);
-    expect(await eventsNamed('agent-review/requested')).toEqual([]);
+    expect(
+      await eventsNamed('agent-review/requested'),
+      'nothing asks for a review by itself',
+    ).toEqual([]);
   });
 });
 
@@ -859,9 +850,8 @@ describe('3 · sent back — changes_requested → To fix → `motir fix` claims
     expect(next[0]!.id).not.toBe(review.id);
     expect(next[0]!.subjectVersion).toBe(versionOf(w, d, 'sha-b'));
     // The new version waits for a person too; their request starts its review.
-    expect(await reviewRequests(d.item.id)).toHaveLength(1);
-    const nextRequest = await requestReview(next[0]!);
-    expect((await runReviewJob(nextRequest)).outcome).toBe('started');
+    expect(await reviewRunsOfGate(next[0]!.id)).toEqual([]);
+    expect((await pressReviewWithAgent(w.owner, d.item.identifier)).status).toBe(201);
     expect(await runsOf(w.workspace.id, 'review')).toHaveLength(2);
   });
 });
@@ -943,7 +933,7 @@ describe('5 · stale — a push mid-review supersedes the review; the late verdi
 
 // ── 6. Could not run ─────────────────────────────────────────────────────────────
 
-describe('6 · could not run — no credits → reason on the gate → Review again → no verdict → the override', () => {
+describe('6 · could not run — no credits refused by name → a run → no verdict → the press again → the override', () => {
   it('walks every could-not-run branch and leaves only by a person’s written reason', async () => {
     const w = await makeWorld();
     const d = await deliveredCard(w, 151);
@@ -952,41 +942,32 @@ describe('6 · could not run — no credits → reason on the gate → Review ag
     const [review] = await awaitingOf(d.item.id, REVIEW);
     expect(review).toBeDefined();
 
-    // Out-of-credits pre-flight: the reason is on the gate, no run, nothing booted.
-    const raise = await requestReview(review!);
-    expect((await runReviewJob(raise)).outcome).not.toBe('started');
+    // Out-of-credits pre-flight: the press is refused BY NAME, and nothing is written onto
+    // the gate (the person was told why on the spot) — no run, nothing booted.
+    const refused = await pressReviewWithAgent(w.owner, d.item.identifier);
+    expect(refused.status).toBe(402);
+    expect((await json(refused))['code']).toBe('hosted_run_out_of_credits');
     expect(await gateRow(review!.id)).toMatchObject({
       state: 'awaiting',
-      reviewUnavailableReason: 'hosted_run_out_of_credits',
+      reviewUnavailableReason: null,
     });
     expect(await runsOf(w.workspace.id, 'review')).toEqual([]);
     expect(fakeOrchestrator.provisioned).toEqual([]);
 
-    // Review again while the credits are unchanged: the press is taken, the request's own
-    // pre-flight refuses again, and the reason is back — still no run.
-    const again1 = await pressReviewAgain(w.owner, review!.id);
-    expect(again1.status).toBe(202);
-    const requests1 = await reviewRequests(d.item.id);
-    expect(requests1).toHaveLength(2);
-    await runReviewJob(requests1[1]!);
-    expect((await gateRow(review!.id)).reviewUnavailableReason).toBe('hosted_run_out_of_credits');
-    expect(await runsOf(w.workspace.id, 'review')).toEqual([]);
-
-    // The credits fixture changes: Review again now starts ONE run, for the same gate.
+    // The credits fixture changes: the press now starts ONE run, for the same gate.
     host.mayRun = true;
-    expect((await pressReviewAgain(w.owner, review!.id)).status).toBe(202);
-    const requests2 = await reviewRequests(d.item.id);
-    expect(requests2).toHaveLength(3);
-    expect((await runReviewJob(requests2[2]!)).outcome).toBe('started');
+    expect((await pressReviewWithAgent(w.owner, d.item.identifier)).status).toBe(201);
     const [run] = await runsOf(w.workspace.id, 'review');
     expect(run).toBeDefined();
     expect(bootOf(run!.id)['MOTIR_REVIEW_GATE_ID']).toBe(review!.id);
-    expect((await gateRow(review!.id)).reviewUnavailableReason).toBeNull();
-    // …and while that run is in flight, Review again is not offered: nothing more is asked.
-    const whileRunning = await pressReviewAgain(w.owner, review!.id);
+    // …and while that run is in flight, a second press starts nothing more.
+    const whileRunning = await pressReviewWithAgent(w.owner, d.item.identifier);
     expect(whileRunning.status).toBe(409);
-    expect((await json(whileRunning))['code']).toBe('REVIEW_AGAIN_NOT_OFFERED');
-    expect(await reviewRequests(d.item.id)).toHaveLength(3);
+    expect(await json(whileRunning)).toMatchObject({
+      code: 'REVIEW_START_NOT_OFFERED',
+      reason: 'review_in_flight',
+    });
+    expect(await reviewRunsOfGate(review!.id)).toHaveLength(1);
 
     // The run exits WITHOUT a verdict: that is written onto the gate, which stays awaiting.
     await hostedRunService.endHostedRun(run!.id, 'exited', 'the container exited 0');
@@ -994,6 +975,18 @@ describe('6 · could not run — no credits → reason on the gate → Review ag
       state: 'awaiting',
       reviewUnavailableReason: 'no_verdict',
     });
+
+    // The shipped Review again button presses the same start: a fresh attempt under the
+    // next key, the reason cleared while it runs — and it too ends without a verdict.
+    expect((await pressReviewAgain(w.owner, review!.id)).status).toBe(202);
+    const attempts = await reviewRunsOfGate(review!.id);
+    expect(attempts.map((r) => r.idempotencyKey)).toEqual([
+      `agent-review:${review!.id}:press:1`,
+      `agent-review:${review!.id}:press:2`,
+    ]);
+    expect((await gateRow(review!.id)).reviewUnavailableReason).toBeNull();
+    await hostedRunService.endHostedRun(attempts[1]!.id, 'exited', 'the container exited 0');
+    expect((await gateRow(review!.id)).reviewUnavailableReason).toBe('no_verdict');
 
     // The override: refused without a note, then decided with one — the ordinary flow follows.
     const noNote = await pressDecide(w, d.item.id, REVIEW, { decision: 'approve' });
@@ -1060,7 +1053,10 @@ describe('7 · switch off — mid-review, and from the start', () => {
     ).toEqual([`${autoPr.id}:sha-a`]);
     expect(await gatesOf(a.item.id, MERGE)).toEqual([]);
 
-    expect(await eventsNamed('agent-review/requested')).toEqual([]);
+    expect(
+      await eventsNamed('agent-review/requested'),
+      'nothing asks for a review by itself',
+    ).toEqual([]);
     expect(await adminDb.dispatchRun.count({ where: { command: 'review' } })).toBe(0);
   });
 });
@@ -1279,57 +1275,35 @@ describe('10 · Fix in Motir agent — the press → the fix run → its push �
     expect(next).toHaveLength(1);
     expect(next[0]!.subjectVersion).toBe(versionOf(w, d, 'sha-fixed'));
     // …which waits for a person: its raise requested no run.
-    expect(await reviewRequests(d.item.id)).toHaveLength(1);
+    expect(await reviewRunsOfGate(next[0]!.id)).toEqual([]);
   });
 });
 
 // ── 11. The edges the journeys pass by ─────────────────────────────────────────────
 
 describe('11 · the edges the journeys pass by — each on the assembled path', () => {
-  it('the job starts nothing for a gate it cannot find, a review that could not run, or one already running', async () => {
+  it('the press starts nothing for a card it cannot find, a refused pre-flight, or a review already running', async () => {
     const w = await makeWorld();
-    // A request naming no gate (a gate deleted with its card, say).
-    expect(
-      await runReviewJob({
-        workspaceId: w.workspace.id,
-        gateId: 'no-such-gate',
-        workItemId: 'no-such-card',
-        subjectVersion: 'x',
-        idempotencyKey: 'agent-review:no-such-gate:raise',
-      }),
-    ).toEqual({ outcome: 'skipped', why: 'gate_missing' });
+    // A key naming no card the presser can see.
+    const missing = await pressReviewWithAgent(w.owner, 'ACME-999999');
+    expect(missing.status).toBe(404);
 
-    // A refused review is not retried by a redelivery of its raise — only Review again.
+    // A refused pre-flight writes nothing and opens no run; the press after it is fresh.
     host.mayRun = false;
     const d = await deliveredCard(w, 301);
     await allGreen(w, d, 'sha-a');
     const [gate] = await awaitingOf(d.item.id, REVIEW);
-    const raise = await requestReview(gate!);
-    expect((await runReviewJob(raise)).outcome).toBe('refused');
-    host.mayRun = true;
-    expect(
-      await runReviewJob({ ...raise, idempotencyKey: `agent-review:${raise.gateId}:again:x` }),
-    ).toEqual({ outcome: 'skipped', why: 'could_not_run' });
+    expect((await pressReviewWithAgent(w.owner, d.item.identifier)).status).toBe(402);
     expect(await runsOf(w.workspace.id, 'review')).toEqual([]);
+    expect((await gateRow(gate!.id)).reviewUnavailableReason).toBeNull();
+    host.mayRun = true;
 
-    // With a review run in flight for the gate, a second request starts no second run.
+    // With a review run in flight for the gate, a second press starts no second run.
     const r = await greenToReviewRun(w, 311);
-    expect(
-      await runReviewJob({
-        workspaceId: w.workspace.id,
-        gateId: r.review.id,
-        workItemId: r.d.item.id,
-        subjectVersion: r.review.subjectVersion!,
-        idempotencyKey: `agent-review:${r.review.id}:again:y`,
-      }),
-    ).toEqual({ outcome: 'skipped', why: 'run_in_flight' });
-    expect(
-      (await runsOf(w.workspace.id, 'review')).filter((x) =>
-        x.idempotencyKey?.startsWith(`agent-review:${r.review.id}:`),
-      ),
-    ).toHaveLength(1);
+    expect((await pressReviewWithAgent(w.owner, r.d.item.identifier)).status).toBe(409);
+    expect(await reviewRunsOfGate(r.review.id)).toHaveLength(1);
     // A key that is not a review run's names no gate.
-    expect(gateIdOfReviewRunKey(`agent-review:${r.review.id}:raise`)).toBe(r.review.id);
+    expect(gateIdOfReviewRunKey(`agent-review:${r.review.id}:press:1`)).toBe(r.review.id);
     expect(gateIdOfReviewRunKey('agent-review:')).toBeNull();
     expect(gateIdOfReviewRunKey('fix-1')).toBeNull();
   });
@@ -1435,14 +1409,17 @@ describe('11 · the edges the journeys pass by — each on the assembled path', 
     expect(await awaitingOf(d.item.id, MERGE)).toHaveLength(1);
   });
 
-  it('Review again’s door: signed out, no gate named, not the routed person, and a decided review', async () => {
+  it('the Review again shim’s door: signed out, no gate named, not the routed person, and a decided review', async () => {
     const w = await makeWorld();
     const d = await deliveredCard(w, 351);
     host.mayRun = false;
     await allGreen(w, d, 'sha-a');
     const [review] = await awaitingOf(d.item.id, REVIEW);
-    await runReviewJob(await requestReview(review!));
-    expect((await gateRow(review!.id)).reviewUnavailableReason).toBe('hosted_run_out_of_credits');
+    // A review that could not run, as an earlier run's end leaves it.
+    await adminDb.approvalGate.update({
+      where: { id: review!.id },
+      data: { reviewUnavailableReason: 'no_verdict' },
+    });
 
     requireCompliantWorkspaceContext.mockResolvedValue({
       ok: false,
@@ -1466,17 +1443,18 @@ describe('11 · the edges the journeys pass by — each on the assembled path', 
     await workspacesService.addMember({ userId: member.id, workspaceId: w.workspace.id });
     const forbidden = await pressReviewAgain(member, review!.id);
     expect(forbidden.status).toBe(403);
-    expect((await gateRow(review!.id)).reviewUnavailableReason).toBe('hosted_run_out_of_credits');
+    expect((await json(forbidden))['code']).toBe('REVIEW_START_FORBIDDEN');
+    expect((await gateRow(review!.id)).reviewUnavailableReason).toBe('no_verdict');
 
     // Continued without the review: it is decided, and there is nothing left to run again.
     await pressDecide(w, d.item.id, REVIEW, { decision: 'approve', noteMd: 'Checked by hand.' });
     const decided = await pressReviewAgain(w.owner, review!.id);
     expect(decided.status).toBe(409);
     expect(await json(decided)).toMatchObject({
-      code: 'REVIEW_AGAIN_NOT_OFFERED',
-      reason: 'not_awaiting',
+      code: 'REVIEW_START_NOT_OFFERED',
+      reason: 'gate_not_awaiting',
     });
-    expect(await reviewRequests(d.item.id)).toHaveLength(1);
+    expect(await reviewRunsOfGate(review!.id)).toEqual([]);
   });
 
   it('a supersede outside a transaction scope cancels nothing itself — the run’s supervisor does', async () => {

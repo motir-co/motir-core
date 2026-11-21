@@ -50,14 +50,14 @@ import zh from '@/messages/zh.json';
 //
 //   * THE REVIEW RUN'S CONTAINER — the fake orchestrator (`MOTIR_FLEET_ORCHESTRATOR=fake`).
 //     ⚠️ NOTHING REVIEWS BY ITSELF (Story MOTIR-11941 · MOTIR-11943): the green raises the
-//     review and starts no run, which the spec asserts. It then asks for the run as a person
-//     does (`_helpers/request-hosted-review.ts`); the REAL `agent-review/requested` job, run by the
-//     lane's job worker, starts the review run; the spec then PLAYS the container: it reads the run's own `MOTIR_RUN_TOKEN` from
+//     review and starts no run, which the spec asserts. It then presses *Review with Motir
+//     agent* as a person does (`_helpers/request-hosted-review.ts`), which starts the review
+//     run in the server (MOTIR-11944); the spec then PLAYS the container: it reads the run's own `MOTIR_RUN_TOKEN` from
 //     the fake orchestrator's record and posts the ONE verdict through the real
 //     `POST /api/v1/work-items/{key}/agent-review`, then closes the run as the CLI does.
 //   * CREDITS, MODELS AND THE REPOSITORY READ — `lib/test-hosted-run-mock.ts`'s fixture. The
-//     could-not-run case is `mayRun: false`: the real pre-flight refuses, and the job
-//     records the refusal's own code on the gate.
+//     out-of-credits case is `mayRun: false`: the real pre-flight refuses the press by name and
+//     writes nothing onto the gate; the could-not-run case is a run that closes without a verdict.
 //   * GITHUB — signed deliveries to the real `/api/github/webhook` route (open, green, push,
 //     merged) and the merge intercept (`E2E_TEST_GITHUB_MERGE`, `lib/test-github-merge-mock.ts`).
 //   * The zh chapter's sent-back card is SEEDED (`fix-hosted-seed.ts`, MOTIR-6930's): the
@@ -476,27 +476,42 @@ test.describe('the review agent', () => {
 
     // ── 6 ─────────────────────────────────────────────────────────────────────
     const couldNotRunSha = headShaFor(PRS.couldNotRun.number);
-    await chapter('Out of credits: Review could not run', async () => {
+    await chapter('Out of credits, then a run with no verdict: Review could not run', async () => {
       // FAKE: the credit check answers `mayRun: false` — the organisation is out of credits.
       writeHostedRunFixture({
         models: { ids: [DEFAULT_MODEL], default: DEFAULT_MODEL },
         mayRun: false,
       });
       await green(page, couldNotRun, 'couldNotRun', couldNotRunSha);
-      await requestReview(page, couldNotRun, versionOf('couldNotRun', couldNotRunSha));
-      // The job ran and the pre-flight refused: the refusal's own code is on the gate.
+      const version = versionOf('couldNotRun', couldNotRunSha);
+      // The press is refused BY NAME (402) and nothing is written onto the gate.
+      await requestHostedReview(page, couldNotRun.id, version, 402);
+      expect((await awaitingReview(couldNotRun))?.reviewUnavailableReason ?? null).toBeNull();
+      // With credits, the press starts the run — which closes WITHOUT a verdict.
+      writeHostedRunFixture({
+        models: { ids: [DEFAULT_MODEL], default: DEFAULT_MODEL },
+        mayRun: true,
+      });
+      const pressed = await page.request.post(
+        `/api/work-items/${couldNotRun.identifier}/review-with-motir-agent`,
+        { data: {} },
+      );
+      expect(pressed.status()).toBe(201);
+      const run = await bootedReview(couldNotRun, version, baseURL);
+      await closeRun(run.api, run.dispatchRunId, 'completed');
+      await run.api.dispose();
       await expect
         .poll(async () => (await awaitingReview(couldNotRun))?.reviewUnavailableReason ?? null, {
           timeout: 60_000,
         })
-        .toBe('hosted_run_out_of_credits');
+        .toBe('no_verdict');
       await page.goto(`/items/${couldNotRun.identifier}`);
       await expect(reviewBand(page)).toHaveAttribute('data-state', 'could-not-run', {
         timeout: FIRST_PAINT_MS,
       });
       // On camera: the band sits below the description — bring it into view.
       await reviewBand(page).scrollIntoViewIfNeeded();
-      await expect(reviewBand(page)).toContainText(ar.couldNotRun.reason.no_credits);
+      await expect(reviewBand(page)).toContainText('the review run ended without a verdict');
       await expect(
         developmentSection(page).getByRole('button', { name: ar.verb.reviewAgain }),
       ).toBeVisible();

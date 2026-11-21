@@ -1,27 +1,23 @@
 import { NextResponse } from 'next/server';
-import {
-  ReviewAgainForbiddenError,
-  ReviewAgainGateNotFoundError,
-  ReviewAgainNotOfferedError,
-} from '@/lib/agentReview/errors';
+import { ReviewStartForbiddenError, ReviewStartNotOfferedError } from '@/lib/agentReview/errors';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
+import { hostedStartRefusalResponse } from '@/lib/hostedRuns/startRefusalResponse';
 import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 
-// POST /api/approval-gates/[id]/review-again (Story MOTIR-1626 · MOTIR-6820;
-// `approval-gates.md` §12.6) — *Review again* on an `agent_review` gate whose review
-// COULD NOT RUN: clear its `reviewUnavailableReason` and request ONE new hosted review run
-// for the same gate and version. There is no automatic retry; this press is the only one.
+// POST /api/approval-gates/[id]/review-again (Story MOTIR-1626 · MOTIR-6820) — the shipped
+// *Review again* button's route, RE-POINTED by Story MOTIR-11941 · MOTIR-11944 at
+// *Review with Motir agent*'s press start (`approval-gates.md` §12.18): it reads the gate's
+// item and starts the same press run, with no model and no client key, so the shipped
+// button keeps working until the review doors UI card deletes this route together with its
+// only caller (`components/github/reviewAgainRequest.ts`).
 //
-// SESSION-AUTHED, like the decide door one directory over: the press is a person's, the
-// one the review is routed to (assignee → reporter, or `approval:decide_any`), at the
-// kind's `work_item:edit` floor — the authority *Continue without the review* takes.
+// Answers as before: 202 `{ gateId }` — the run started (or the press collapsed into one);
+// 404 — no review the caller can see; 403 — outside the routed set; 409
+// `REVIEW_START_NOT_OFFERED` with `reason`; and the hosted pre-flight refusals by Run hosted's
+// codes.
 //
-// Answers: 202 `{ gateId }` — the request is queued, the run starts in the background;
-// 404 — no such review the caller can see (never a 403 that leaks existence); 403 — a
-// member who is not the routed person; 409 `REVIEW_AGAIN_NOT_OFFERED` with `reason`
-// (`not_awaiting` · `no_reason` · `run_in_flight`).
-//
-// Thin HTTP layer (CLAUDE.md § 4-layer): session gate → ONE service call → map errors.
+// Thin HTTP layer: session gate → ONE service call → map errors.
 
 const NO_STORE = { 'Cache-Control': 'no-store' } as const;
 
@@ -40,26 +36,28 @@ export async function POST(
       { status: 400, headers: NO_STORE },
     );
   }
+  const notFound = () =>
+    NextResponse.json({ code: 'NOT_FOUND' }, { status: 404, headers: NO_STORE });
 
   try {
-    const result = await agentReviewStartService.reviewAgain(gateId, gate.ctx);
-    return NextResponse.json(result, { status: 202, headers: NO_STORE });
+    await agentReviewStartService.startForGate(gateId, gate.ctx);
+    return NextResponse.json({ gateId }, { status: 202, headers: NO_STORE });
   } catch (err) {
-    if (err instanceof ReviewAgainGateNotFoundError) {
-      return NextResponse.json({ code: 'NOT_FOUND' }, { status: 404, headers: NO_STORE });
-    }
-    if (err instanceof ReviewAgainForbiddenError) {
+    if (err instanceof WorkItemNotFoundError) return notFound();
+    if (err instanceof ReviewStartForbiddenError) {
       return NextResponse.json(
         { code: err.code, error: err.message },
         { status: 403, headers: NO_STORE },
       );
     }
-    if (err instanceof ReviewAgainNotOfferedError) {
+    if (err instanceof ReviewStartNotOfferedError) {
       return NextResponse.json(
         { code: err.code, reason: err.reason, error: err.message },
         { status: 409, headers: NO_STORE },
       );
     }
+    const refused = hostedStartRefusalResponse(err);
+    if (refused) return refused;
     throw err;
   }
 }

@@ -23,13 +23,12 @@ import { fakeOrchestrator } from '@motir/orchestrator';
 import type { ApprovalGateKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
-import type { AgentReviewRequestedData } from '@/lib/jobs/types';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { linkPrByIdentifier } from '../helpers/prLink';
-import { reviewRequestFor } from '../helpers/reviewRequest';
+import { pressReview } from '../helpers/reviewRequest';
 import { hostAnswersCleanAt } from '../helpers/hostMergeability';
 
 const { usersService } = await import('@/lib/services/usersService');
@@ -39,7 +38,6 @@ const { workItemsService } = await import('@/lib/services/workItemsService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
 const { approvalGateSettingsService } = await import('@/lib/services/approvalGateSettingsService');
-const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { hostedRunService } = await import('@/lib/services/hostedRunService');
 const { projectPrMergeModeService } = await import('@/lib/services/projectPrMergeModeService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
@@ -260,10 +258,8 @@ const gatesOf = (workItemId: string, kind: ApprovalGateKind) =>
 
 const gateRow = (id: string) => adminDb.approvalGate.findUniqueOrThrow({ where: { id } });
 
-const reviewRequests = () =>
-  sent
-    .filter((e) => e.name === 'agent-review/requested')
-    .map((e) => e.data as unknown as AgentReviewRequestedData);
+/** Every review event that left — none, since nothing reviews by itself. */
+const reviewRequests = () => sent.filter((e) => e.name.startsWith('agent-review/'));
 
 const runRows = (workspaceId: string) =>
   adminDb.dispatchRun.findMany({ where: { workspaceId }, orderBy: { startedAt: 'asc' } });
@@ -466,43 +462,33 @@ describe('a raise outside any transaction helper scope', () => {
 // ── The start lane a person's press uses ──────────────────────────────────────
 
 describe('startRequested reads no source', () => {
-  it('starts ONE hosted run for a fresh request even with the column at own; then already_started, run_in_flight', async () => {
+  it('a press starts ONE hosted run even with the column at own; a second press while it runs is review_in_flight', async () => {
     const { s, review } = await reviewing('start-own', 64, 'own');
-    const request = reviewRequestFor(review);
-    const first = await agentReviewStartService.startRequested(request);
-    expect(first.outcome).toBe('started');
+    const first = await pressReview(review);
+    expect(first).toMatchObject({ created: true, gateId: review.id });
     expect(await runRows(s.workspace.id)).toHaveLength(1);
 
-    // The same key again is that run.
-    expect(await agentReviewStartService.startRequested(request)).toEqual({
-      outcome: 'already_started',
-      dispatchRunId: (first as { dispatchRunId: string }).dispatchRunId,
+    // A second press while it runs: one review at a time.
+    await expect(pressReview(review)).rejects.toMatchObject({
+      code: 'REVIEW_START_NOT_OFFERED',
+      reason: 'review_in_flight',
     });
-    // A second key while it runs: one review at a time.
-    expect(
-      await agentReviewStartService.startRequested(
-        reviewRequestFor(review, `agent-review:${review.id}:again:second`),
-      ),
-    ).toEqual({ outcome: 'skipped', why: 'run_in_flight' });
     expect(await runRows(s.workspace.id)).toHaveLength(1);
   });
 
-  it('a request at a moved version answers version_moved and starts nothing', async () => {
+  it('a press on a gate no longer awaiting answers gate_not_awaiting and starts nothing', async () => {
     const { s, review } = await reviewing('start-moved', 65, 'own');
-    expect(
-      await agentReviewStartService.startRequested({
-        ...reviewRequestFor(review),
-        subjectVersion: 'acme/app#65@another',
-      }),
-    ).toEqual({ outcome: 'skipped', why: 'version_moved' });
+    await adminDb.approvalGate.update({
+      where: { id: review.id },
+      data: { state: 'superseded', supersededCause: 'head_moved' },
+    });
+    await expect(pressReview(review)).rejects.toMatchObject({ reason: 'gate_not_awaiting' });
     expect(await runRows(s.workspace.id)).toEqual([]);
   });
 
   it('a hosted run that ends without a verdict leaves its reason on the awaiting gate, with the column at own', async () => {
     const { s, review } = await reviewing('end-own', 66, 'own');
-    expect((await agentReviewStartService.startRequested(reviewRequestFor(review))).outcome).toBe(
-      'started',
-    );
+    expect((await pressReview(review)).created).toBe(true);
     const [run] = await runRows(s.workspace.id);
     await hostedRunService.endHostedRun(run!.id, 'exited', 'the container exited 0');
     expect((await runRow(run!.id)).status).not.toBe('running');

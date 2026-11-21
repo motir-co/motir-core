@@ -1,76 +1,93 @@
+import type { Prisma } from '@/generated/prisma/client';
+import { ReviewStartForbiddenError, ReviewStartNotOfferedError } from '@/lib/agentReview/errors';
 import {
-  ReviewAgainForbiddenError,
-  ReviewAgainGateNotFoundError,
-  ReviewAgainNotOfferedError,
-} from '@/lib/agentReview/errors';
-import { reviewAgainKey, reviewRaiseKey, reviewRunKeyPrefix } from '@/lib/agentReview/reviewRunKey';
-import type { AgentReviewRequestedData } from '@/lib/jobs/types';
-import { sendEvent } from '@/lib/jobs/sendEvent';
+  reviewItemRunKey,
+  reviewItemRunKeyPrefix,
+  reviewPressKey,
+  reviewRunKeyPrefix,
+} from '@/lib/agentReview/reviewRunKey';
+import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { withoutAncestorDeliveries } from '@/lib/approvalGates/ownDeliveries';
+import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
+import { HostedRunBootFailedError } from '@/lib/hostedRuns/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { resolveGateAuthority } from '@/lib/services/approvalGatesService';
 import { hostedRunService, type HostedRunStartOptions } from '@/lib/services/hostedRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
-// THE REVIEW RUN'S LIFECYCLE AROUND ITS GATE (Story MOTIR-1626 · MOTIR-6820; ADR
-// `docs/decisions/hosted-agent-run.md` §8.1, §8.4 and `approval-gates.md` §12.5–§12.6).
+// THE REVIEW RUN'S LIFECYCLE (Story MOTIR-1626 · MOTIR-6820, reshaped by Story MOTIR-11941 ·
+// MOTIR-11944; `approval-gates.md` §12.5, §12.18 and `hosted-agent-run.md` §8.8).
 //
-// Three doors, one rule — a review run exists only for an AWAITING `agent_review` gate:
-//
-//   · START — the `agent-review/requested` job: ONE hosted `review` run for the gate the
-//     event names, while that gate is still awaiting at the event's version. ⚠️ NOTHING
-//     REQUESTS ONE BY ITSELF (Story MOTIR-11941 · MOTIR-11943): the gate's raise only
-//     notifies the routed person (`reviewToRunService.notifyRaised`, from the one gate
-//     creator in `gateSetFor.ts`); a review starts when a person presses for it. A refusal
-//     before anything boots is written onto the gate as its `reviewUnavailableReason`
-//     (the refusal's own code), and the gate stays awaiting. Nothing retries it.
-//   · REVIEW AGAIN — the routed person's press on a review that could not run: it clears
-//     the reason and requests ONE new run for the same gate and version (§12.6).
-//   · CANCEL — a superseded gate's run in flight is cancelled (§12.5): the withdrawal and
-//     the switch-off seams call {@link agentReviewStartService.cancelRunsAfterCommit}.
+//   · START — *Review with Motir agent*, a person's press: ONE hosted `review` run for the
+//     item, gate on or off ({@link agentReviewStartService.startRequested}). NOTHING starts
+//     a review by itself: the gate's raise only notifies the routed person
+//     (`reviewToRunService.notifyRaised`). The press replaced *Review again* — a review that
+//     could not run is started again by the same press, which clears the gate's reason.
+//   · CANCEL — a superseded gate's run in flight is cancelled (§12.5): the withdrawal and the
+//     switch-off seams call {@link agentReviewStartService.cancelRunsAfterCommit}.
 //
 // A run's END without a verdict is written by the hosted end path itself
 // (`hostedRunService.endHostedRun`), which every way a run ends goes through.
 //
-// ⚠️ IDEMPOTENT PER REQUEST, NOT PER GATE. The raise and each *Review again* press are
-// separate requests with keys of their own (`lib/agentReview/reviewRunKey.ts`); the key
-// is the job's dedup and the run's idempotency key. So a redelivered event starts nothing
-// twice, and *Review again* can still start a new attempt for the same gate.
+// ⚠️ ONE AT A TIME, WITHOUT A LOCK ACROSS THE BOOT. The in-flight check is the cheap path;
+// the guarantee is the run's key, DETERMINISTIC per attempt (`reviewPressKey`,
+// `reviewItemRunKey`): two presses racing past the check compute the same key, and
+// `dispatch_run`'s `(workspace_id, idempotency_key)` unique makes the second answer the
+// first's run (`created: false`).
 
-/** What {@link agentReviewStartService.startRequested} did — JSON, for the job's ledger. */
-export type AgentReviewStartOutcome =
-  | { outcome: 'started'; dispatchRunId: string }
-  | { outcome: 'already_started'; dispatchRunId: string }
-  | {
-      outcome: 'skipped';
-      why: 'gate_missing' | 'not_awaiting' | 'version_moved' | 'could_not_run' | 'run_in_flight';
-    }
-  | { outcome: 'refused'; reason: string };
-
-/** The reason code a start refusal is recorded under — the refusal's own `code`. */
-function refusalCodeOf(err: unknown): string {
-  const code = (err as { code?: unknown } | null)?.code;
-  return typeof code === 'string' && code.length > 0 ? code : 'review_start_failed';
+/** The project key a `MOTIR-<n>` identifier belongs to. */
+function projectKeyOf(identifier: string): string {
+  const dash = identifier.lastIndexOf('-');
+  return dash > 0 ? identifier.slice(0, dash) : identifier;
 }
 
-/** WHO a review run is attributed to (§8.1): the card's assignee, else its reporter, else
- *  the workspace's stand-in manager — the actor the CI-feedback path writes as. */
-async function attributedUserId(
-  item: { assigneeId: string | null; reporterId: string | null },
+/** What a press did: the run it started, or the run it collapsed into (`created: false`). */
+export interface ReviewStartResult {
+  dispatchRunId: string;
+  created: boolean;
+  /** The gate the run answers; null for a review with no gate (Review off). */
+  gateId: string | null;
+}
+
+/** What one press asks for — the item by its KEY, and optionally the model the person picked. */
+export interface ReviewStartInput {
+  workItemKey: string;
+  model?: string;
+  /** Accepted for parity with Run hosted's body; the attempt key is what collapses a retry. */
+  idempotencyKey?: string;
+}
+
+/** What is reviewed: the gate and its version (Review on), or the item at its version. */
+type ReviewSubject =
+  | { gateId: string; subjectVersion: string; prefix: string; keyOf: (attempt: number) => string }
+  | {
+      gateId: null;
+      subjectVersion: string;
+      prefix: string;
+      keyOf: (attempt: number) => string;
+    };
+
+/** The item's own current delivery-set version — measured as the verdict door measures it. */
+async function ownVersionOf(
+  item: { id: string; parentId: string | null },
   workspaceId: string,
+  tx: Prisma.TransactionClient,
 ): Promise<string | null> {
-  if (item.assigneeId) return item.assigneeId;
-  if (item.reporterId) return item.reporterId;
-  const manager = await withWorkspaceServiceContext(workspaceId, (tx) =>
-    workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId, tx),
+  const { own } = await withoutAncestorDeliveries(
+    { id: item.id, parentId: item.parentId, workspaceId },
+    await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+    tx,
   );
-  return manager?.userId ?? null;
+  return own.length === 0 ? null : deliverySetVersion(own.map((d) => deliveryMemberVersion(d)));
 }
 
 /** The running review runs of each gate, by the key prefix every one of them carries. */
@@ -95,131 +112,160 @@ async function runningReviewRuns(
 
 export const agentReviewStartService = {
   /**
-   * THE `agent-review/requested` JOB's body — start ONE hosted review run for the gate a
-   * person's press asked to review. No raise path requests one (MOTIR-11943), and no
-   * project setting decides whether it runs: the request IS the decision.
+   * *REVIEW WITH MOTIR AGENT* (§12.18, `hosted-agent-run.md` §8.8) — a person's press starts
+   * ONE hosted review run for the item, with the model they picked, gate on or off. `ctx` is
+   * the PRESSER: the run's creator, its run token's owner and the one whose organisation's
+   * AI credits pay. In order:
    *
-   * Starts nothing — and writes nothing — when the gate is gone, no longer awaiting, at
-   * another version, already carries a could-not-run reason (only *Review again* clears
-   * it; nothing retries by itself), or already has a review run in flight. A refusal
-   * before the run boots writes its code onto the gate and is returned, never thrown: a
-   * refused review is an answer, not a job failure to retry.
+   *   1. WHO — `project:browse` (else the item's not-found, no leak), then `work_item:edit`
+   *      and `resolveGateAuthority`'s routed set ({@link ReviewStartForbiddenError});
+   *   2. the `hosted_runs` lane (the org-feature-disabled refusal Run hosted gives);
+   *   3. WHAT — the item In review; with Review on its awaiting `agent_review` gate at its
+   *      version, with Review off the item at its own current version
+   *      ({@link ReviewStartNotOfferedError}: `not_in_review`, `gate_not_awaiting`,
+   *      `no_pull_request`);
+   *   4. one at a time — a run already running under the subject's prefix is
+   *      `review_in_flight`;
+   *   5. the DETERMINISTIC attempt key — one more than the runs opened under the prefix;
+   *   6. `hostedRunService.startReview`, whose pre-flight refusals are THROWN to the caller
+   *      (the person is told why on the spot, and nothing is written onto the gate);
+   *   7. once a run is open (`created: true`), the gate's could-not-run reason is cleared.
    */
   async startRequested(
-    data: AgentReviewRequestedData,
+    input: ReviewStartInput,
+    ctx: ServiceContext,
     options: HostedRunStartOptions = {},
-  ): Promise<AgentReviewStartOutcome> {
-    const { workspaceId, gateId, subjectVersion } = data;
-    const idempotencyKey = data.idempotencyKey ?? reviewRaiseKey(gateId);
+  ): Promise<ReviewStartResult> {
+    const identifier = input.workItemKey.trim().toUpperCase();
+    const scope = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 
-    const read = await withWorkspaceServiceContext(workspaceId, async (tx) => {
-      const gate = await approvalGateRepository.findById(gateId, tx);
-      const item = gate?.workItemId ? await workItemRepository.findById(gate.workItemId, tx) : null;
-      const already = await dispatchRunRepository.findByIdempotencyKey(
-        workspaceId,
-        idempotencyKey,
+    // 1 · WHO may press — the authority *Continue without the review* takes.
+    const item = await withWorkspaceContext(scope, async (tx) => {
+      const project = await projectRepository.findByIdentifier(
+        ctx.workspaceId,
+        projectKeyOf(identifier),
         tx,
       );
-      return { gate, item, already };
+      const found = project
+        ? await workItemRepository.findByIdentifier(project.id, identifier, tx)
+        : null;
+      if (!project || !found) throw new WorkItemNotFoundError(identifier);
+      let held;
+      try {
+        held = await projectAccessService.getPermissions(found.projectId, ctx, tx);
+      } catch (err) {
+        if (err instanceof ProjectNotFoundError) throw new WorkItemNotFoundError(identifier);
+        /* v8 ignore next -- a database fault mid-read; nothing to translate */
+        throw err;
+      }
+      if (!held.has('project:browse')) throw new WorkItemNotFoundError(identifier);
+      if (!held.has('work_item:edit') || !(await resolveGateAuthority(found, ctx, tx, held))) {
+        throw new ReviewStartForbiddenError(identifier);
+      }
+      return { ...found, reviewAgentEnabled: project.reviewAgentEnabled };
     });
-    // A redelivery of a request whose run was opened: it is that run, whatever it did.
-    if (read.already) return { outcome: 'already_started', dispatchRunId: read.already.id };
 
-    const { gate, item } = read;
-    if (!gate || gate.kind !== 'agent_review' || !item || gate.workspaceId !== workspaceId) {
-      return { outcome: 'skipped', why: 'gate_missing' };
-    }
-    if (gate.state !== 'awaiting') return { outcome: 'skipped', why: 'not_awaiting' };
-    if (gate.subjectVersion !== subjectVersion) return { outcome: 'skipped', why: 'version_moved' };
-    if (gate.reviewUnavailableReason !== null) return { outcome: 'skipped', why: 'could_not_run' };
-    if ((await runningReviewRuns(workspaceId, [gateId])).length > 0) {
-      return { outcome: 'skipped', why: 'run_in_flight' };
-    }
+    // 2 · The hosted lane.
+    await assertWorkspaceFeatureEnabled(ctx.workspaceId, 'hosted_runs');
 
-    const record = async (reason: string): Promise<AgentReviewStartOutcome> => {
-      await withWorkspaceServiceContext(workspaceId, (tx) =>
-        approvalGateRepository.setReviewUnavailableReason(gateId, reason, tx),
+    // 3–5 · WHAT is reviewed, one at a time, under the attempt's key.
+    const { subject, attempt } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      if (item.status !== 'in_review') {
+        throw new ReviewStartNotOfferedError(identifier, 'not_in_review');
+      }
+      let found: ReviewSubject;
+      if (item.reviewAgentEnabled) {
+        const gate = await approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx);
+        if (!gate || gate.state !== 'awaiting' || gate.subjectVersion === null) {
+          throw new ReviewStartNotOfferedError(identifier, 'gate_not_awaiting');
+        }
+        found = {
+          gateId: gate.id,
+          subjectVersion: gate.subjectVersion,
+          prefix: reviewRunKeyPrefix(gate.id),
+          keyOf: (n) => reviewPressKey(gate.id, n),
+        };
+      } else {
+        const version = await ownVersionOf(item, ctx.workspaceId, tx);
+        if (version === null) throw new ReviewStartNotOfferedError(identifier, 'no_pull_request');
+        found = {
+          gateId: null,
+          subjectVersion: version,
+          prefix: reviewItemRunKeyPrefix(item.id, version),
+          keyOf: (n) => reviewItemRunKey(item.id, version, String(n)),
+        };
+      }
+      const running = await dispatchRunRepository.listRunningByIdempotencyKeyPrefix(
+        ctx.workspaceId,
+        found.prefix,
+        tx,
       );
-      return { outcome: 'refused', reason };
-    };
+      if (running.length > 0) throw new ReviewStartNotOfferedError(identifier, 'review_in_flight');
+      const opened = await dispatchRunRepository.countByIdempotencyKeyPrefix(
+        ctx.workspaceId,
+        found.prefix,
+        tx,
+      );
+      return { subject: found, attempt: opened + 1 };
+    });
 
-    const userId = await attributedUserId(item, workspaceId);
-    if (!userId) return record('review_no_actor');
-
+    // 6 · Start — the presser's context, the picked model. A refusal is thrown. A boot the
+    // fleet refused happened AFTER the run opened, so it is a review that could not run: its
+    // end path left the generic `no_verdict`, and the boot's own reason is the specific one.
+    let started: { dispatchRunId: string; created: boolean };
     try {
-      const started = await hostedRunService.startReview(
-        { workItemId: item.id, gateId, subjectVersion, idempotencyKey },
-        { userId, workspaceId },
+      started = await hostedRunService.startReview(
+        {
+          workItemId: item.id,
+          gateId: subject.gateId,
+          subjectVersion: subject.subjectVersion,
+          idempotencyKey: subject.keyOf(attempt),
+          ...(input.model?.trim() ? { model: input.model.trim() } : {}),
+        },
+        ctx,
         options,
       );
-      return started.created
-        ? { outcome: 'started', dispatchRunId: started.dispatchRunId }
-        : { outcome: 'already_started', dispatchRunId: started.dispatchRunId };
     } catch (err) {
-      // Every refusal before the boot, and a start that failed after the run opened (the
-      // end path has already closed that run): the review could not run.
-      return record(refusalCodeOf(err));
+      if (err instanceof HostedRunBootFailedError && subject.gateId !== null) {
+        const gateId = subject.gateId;
+        await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          approvalGateRepository.setReviewUnavailableReason(gateId, err.code, tx),
+        );
+      }
+      throw err;
     }
+
+    // 7 · A fresh attempt after *Review could not run* reads *Agent reviewing* again.
+    if (started.created && subject.gateId !== null) {
+      const gateId = subject.gateId;
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        approvalGateRepository.setReviewUnavailableReason(gateId, null, tx),
+      );
+    }
+    return {
+      dispatchRunId: started.dispatchRunId,
+      created: started.created,
+      gateId: subject.gateId,
+    };
   },
 
   /**
-   * *REVIEW AGAIN* (`approval-gates.md` §12.6) — the routed person re-requests ONE review
-   * run for the SAME gate and version, and the could-not-run reason is cleared while it
-   * runs. Offered only on an awaiting `agent_review` that carries a reason and has no
-   * review run in flight; authorised exactly as *Continue without the review* is (§12.3):
-   * the kind's `work_item:edit` floor, then `resolveGateAuthority`'s routed set.
-   *
-   * The clear and the request are one decision: the request is emitted only once the
-   * clear has committed, under a key of its own.
+   * The shipped *Review again* route's press (MOTIR-11944), until the review doors UI card
+   * deletes it: the gate's item, started by {@link startRequested} with no model. The gate is
+   * read under the caller's own workspace, so a gate of another workspace or another kind is
+   * the item's not-found.
    */
-  async reviewAgain(gateId: string, ctx: ServiceContext): Promise<{ gateId: string }> {
-    return withWorkspaceContext(
+  async startForGate(gateId: string, ctx: ServiceContext): Promise<ReviewStartResult> {
+    const key = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
-        const locked = await approvalGateRepository.lockById(gateId, tx);
-        if (!locked || locked.kind !== 'agent_review' || !locked.workItemId) {
-          throw new ReviewAgainGateNotFoundError(gateId);
-        }
-        const item = await workItemRepository.findById(locked.workItemId, tx);
-        if (!item) throw new ReviewAgainGateNotFoundError(gateId);
-
-        let held;
-        try {
-          held = await projectAccessService.getPermissions(item.projectId, ctx, tx);
-        } catch (err) {
-          if (err instanceof ProjectNotFoundError) throw new ReviewAgainGateNotFoundError(gateId);
-          throw err;
-        }
-        if (!held.has('project:browse')) throw new ReviewAgainGateNotFoundError(gateId);
-        if (!held.has('work_item:edit') || !(await resolveGateAuthority(item, ctx, tx, held))) {
-          throw new ReviewAgainForbiddenError(gateId);
-        }
-
-        if (locked.state !== 'awaiting' || locked.subjectVersion === null) {
-          throw new ReviewAgainNotOfferedError(gateId, 'not_awaiting');
-        }
         const gate = await approvalGateRepository.findById(gateId, tx);
-        if (!gate?.reviewUnavailableReason)
-          throw new ReviewAgainNotOfferedError(gateId, 'no_reason');
-        const inFlight = await dispatchRunRepository.listRunningByIdempotencyKeyPrefix(
-          ctx.workspaceId,
-          reviewRunKeyPrefix(gateId),
-          tx,
-        );
-        if (inFlight.length > 0) throw new ReviewAgainNotOfferedError(gateId, 'run_in_flight');
-
-        await approvalGateRepository.setReviewUnavailableReason(gateId, null, tx);
-        const request: AgentReviewRequestedData = {
-          workspaceId: ctx.workspaceId,
-          gateId,
-          workItemId: item.id,
-          subjectVersion: locked.subjectVersion,
-          idempotencyKey: reviewAgainKey(gateId),
-        };
-        deferUntilCommit(() => sendEvent('agent-review/requested', request));
-        return { gateId };
+        if (!gate || gate.kind !== 'agent_review' || !gate.workItemId) return null;
+        return (await workItemRepository.findById(gate.workItemId, tx))?.identifier ?? null;
       },
     );
+    if (!key) throw new WorkItemNotFoundError(gateId);
+    return agentReviewStartService.startRequested({ workItemKey: key }, ctx);
   },
 
   /**

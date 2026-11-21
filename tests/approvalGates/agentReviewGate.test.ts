@@ -185,7 +185,8 @@ const gatesOf = (workItemId: string, kind: ApprovalGateKind) =>
 const awaitingOf = async (workItemId: string, kind: ApprovalGateKind) =>
   (await gatesOf(workItemId, kind)).filter((g) => g.state === 'awaiting');
 
-const reviewRequests = () => sent.filter((e) => e.name === 'agent-review/requested');
+/** Every review event that left — none, since nothing reviews by itself (MOTIR-11943). */
+const reviewRequests = () => sent.filter((e) => e.name.startsWith('agent-review/'));
 
 /** The `review_to_run` notifications a person holds, by dedupe key, oldest first. */
 const reviewToRunKeys = async (recipientUserId: string) =>

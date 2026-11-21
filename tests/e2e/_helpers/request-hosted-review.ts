@@ -6,12 +6,11 @@ import { adminDb } from './db-reset';
 // goes on to exercise a hosted review run first proves the raise started nothing, then asks
 // for the run the way a person does.
 //
-// ⚠️ THE DOOR, UNTIL THE REVIEW DOORS LAND. The one shipped door that requests a hosted run
-// is *Review again* — the routed person's press, offered on a review that could not run
-// (`POST /api/approval-gates/[id]/review-again`). So the gate is marked as such through the
-// owner client, and the press goes through the real route in the signed-in session: the
-// SERVER emits `agent-review/requested`, and the lane's job worker runs the real job. The
-// session must be the person the review is routed to (the card's assignee, else reporter).
+// THE DOOR is *Review with Motir agent* (MOTIR-11944): the routed person's press,
+// `POST /api/work-items/<KEY>/review-with-motir-agent`, through the real route in the
+// signed-in session. It starts the hosted review run synchronously, in the server, as Run
+// hosted does — no job is involved. The session must be a person the review is routed to
+// (the card's assignee, else reporter).
 
 /** The card's awaiting review gate, newest first — the committed read. */
 const awaitingReview = (workItemId: string) =>
@@ -41,14 +40,22 @@ export async function reviewRaisedAndWaiting(workItemId: string, version: string
   return gate;
 }
 
-/** Prove the raise started nothing, then ask for the hosted review as the routed person. */
-export async function requestHostedReview(page: Page, workItemId: string, version: string) {
+/**
+ * Prove the raise started nothing, then press for the hosted review as the routed person.
+ * `expected` is the press's answer: 201 for a started run, or a pre-flight refusal's status
+ * (402 out of credits), which writes nothing onto the gate.
+ */
+export async function requestHostedReview(
+  page: Page,
+  workItemId: string,
+  version: string,
+  expected = 201,
+) {
   const gate = await reviewRaisedAndWaiting(workItemId, version);
-  await adminDb.approvalGate.update({
-    where: { id: gate.id },
-    data: { reviewUnavailableReason: 'e2e_person_starts_the_review' },
+  const { identifier } = await adminDb.workItem.findUniqueOrThrow({ where: { id: workItemId } });
+  const res = await page.request.post(`/api/work-items/${identifier}/review-with-motir-agent`, {
+    data: {},
   });
-  const res = await page.request.post(`/api/approval-gates/${gate.id}/review-again`);
-  expect(res.status(), 'the request for a hosted review was taken').toBe(202);
+  expect(res.status(), 'the press for a hosted review was answered').toBe(expected);
   return gate;
 }

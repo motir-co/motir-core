@@ -83,67 +83,56 @@ export class ReviewStaleError extends Error {
   }
 }
 
-// ── REVIEW AGAIN (Story MOTIR-1626 · MOTIR-6820; `approval-gates.md` §12.6) ──────────────
+// ── REVIEW WITH MOTIR AGENT (Story MOTIR-11941 · MOTIR-11944; `approval-gates.md` §12.18,
+// `hosted-agent-run.md` §8.8) ────────────────────────────────────────────────────────────
 //
-// The routed person's press on a review that COULD NOT RUN. Raised by
-// `agentReviewStartService.reviewAgain` and mapped by the session route
-// `POST /api/approval-gates/[id]/review-again`.
+// A person's press that starts ONE hosted review run, gate on or off. Raised by
+// `agentReviewStartService.startRequested` and mapped by the session route
+// `POST /api/work-items/[id]/review-with-motir-agent`. It replaced *Review again*, whose
+// three errors it retired: a review that could not run is started again by the same press.
+// A caller who cannot browse the item is answered the item's own not-found, never a 403.
 
 /**
- * 404 — no `agent_review` gate by that id that the caller can see: missing, another
- * workspace, a card the caller cannot browse, or a gate of another kind. One answer for
- * all of them, so the route leaks no existence.
+ * 403 — the caller may see the item but is not in the routed set (the assignee, the
+ * reporter when there is no assignee, or `approval:decide_any`), or lacks `work_item:edit`
+ * — the authority *Continue without the review* takes (§12.3).
  */
-export class ReviewAgainGateNotFoundError extends Error {
-  readonly code = 'REVIEW_AGAIN_GATE_NOT_FOUND';
-  constructor(readonly gateId: string) {
-    super('There is no agent review here to run again.');
-    this.name = 'ReviewAgainGateNotFoundError';
+export class ReviewStartForbiddenError extends Error {
+  readonly code = 'REVIEW_START_FORBIDDEN';
+  constructor(readonly workItemKey: string) {
+    super('Only the person this review is routed to can start it.');
+    this.name = 'ReviewStartForbiddenError';
   }
 }
 
-/**
- * 403 — the caller may see the card but is not the person the review is routed to (the
- * assignee, the reporter when there is no assignee, or `approval:decide_any`), or lacks
- * the kind's `work_item:edit` floor — the SAME authority *Continue without the review*
- * takes (§12.3, §12.6).
- */
-export class ReviewAgainForbiddenError extends Error {
-  readonly code = 'REVIEW_AGAIN_FORBIDDEN';
-  constructor(readonly gateId: string) {
-    super('Only the person this review is routed to can run it again.');
-    this.name = 'ReviewAgainForbiddenError';
-  }
-}
-
-/** Why *Review again* is not offered on this gate right now. */
-export type ReviewAgainRefusal =
-  /** The gate is no longer awaiting — decided, or withdrawn by a head move or the switch. */
-  | 'not_awaiting'
-  /** The review has not failed to run: there is no `reviewUnavailableReason` to clear. */
-  | 'no_reason'
-  /** A review run for this gate is still running — one review at a time. */
-  | 'run_in_flight';
+/** Why a review cannot be started on this item right now. */
+export type ReviewStartRefusal =
+  /** The item is not In review. */
+  | 'not_in_review'
+  /** Review is on and no `agent_review` gate is awaiting — decided, withdrawn or not raised. */
+  | 'gate_not_awaiting'
+  /** Review is off and the item has no pull request of its own to review. */
+  | 'no_pull_request'
+  /** A review run of this gate, or of this item at this version, is already running. */
+  | 'review_in_flight';
 
 /** What each refusal tells the person. */
-const REVIEW_AGAIN_REFUSAL_MESSAGES: Record<ReviewAgainRefusal, string> = {
-  not_awaiting: 'This review is no longer waiting, so it cannot be run again.',
-  no_reason: 'This review has not failed to run, so there is nothing to run again.',
-  run_in_flight: 'A review of this version is already running.',
+const REVIEW_START_REFUSAL_MESSAGES: Record<ReviewStartRefusal, string> = {
+  not_in_review: 'A review can be started only while the item is In review.',
+  gate_not_awaiting: 'This item has no review waiting to be started.',
+  no_pull_request: 'This item has no pull request of its own to review.',
+  review_in_flight: 'A review of this version is already running.',
 };
 
-/**
- * 409 — *Review again* is offered only on an AWAITING review that could not run and has
- * no run in flight (§12.6). Nothing was cleared and nothing was requested.
- */
-export class ReviewAgainNotOfferedError extends Error {
-  readonly code = 'REVIEW_AGAIN_NOT_OFFERED';
+/** 409 — the press is not offered on this item now. Nothing was started or written. */
+export class ReviewStartNotOfferedError extends Error {
+  readonly code = 'REVIEW_START_NOT_OFFERED';
   constructor(
-    readonly gateId: string,
-    readonly reason: ReviewAgainRefusal,
+    readonly workItemKey: string,
+    readonly reason: ReviewStartRefusal,
   ) {
-    super(REVIEW_AGAIN_REFUSAL_MESSAGES[reason]);
-    this.name = 'ReviewAgainNotOfferedError';
+    super(REVIEW_START_REFUSAL_MESSAGES[reason]);
+    this.name = 'ReviewStartNotOfferedError';
   }
 }
 

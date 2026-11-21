@@ -1,31 +1,32 @@
-import type { AgentReviewRequestedData } from '@/lib/jobs/types';
-import { reviewRaiseKey } from '@/lib/agentReview/reviewRunKey';
+import type { ReviewStartResult } from '@/lib/services/agentReviewStartService';
+import type { HostedRunStartOptions } from '@/lib/services/hostedRunService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { adminDb } from './adminDb';
 
 /**
- * THE REVIEW REQUEST A PERSON'S PRESS SENDS for an awaiting `agent_review` gate (Story
- * MOTIR-11941 · MOTIR-11943). Nothing requests a review by itself any more — the raise
- * only notifies — so a suite that goes on to exercise a hosted review run builds the
- * request here and hands it to `agentReviewStartService.startRequested` (or the job)
- * itself. The key defaults to the gate's raise key, so one request per gate stays
- * idempotent exactly as the old automatic start was.
+ * A PERSON'S PRESS of *Review with Motir agent* (Story MOTIR-11941 · MOTIR-11944,
+ * `approval-gates.md` §12.18) for the item a review gate (or any `{ workItemId }`) names.
+ * Nothing starts a review by itself, so a suite that goes on to exercise a hosted review run
+ * presses for it here, through the real `agentReviewStartService.startRequested`.
+ *
+ * The presser defaults to the person the review is routed to — the assignee, else the
+ * reporter — who holds the authority the press asks for; pass `ctx` to press as someone
+ * else. The service is imported lazily, so a suite's `vi.mock`s apply to it.
  */
-export function reviewRequestFor(
-  gate: {
-    id: string;
-    workspaceId: string;
-    workItemId: string | null;
-    subjectVersion: string | null;
-  },
-  idempotencyKey: string = reviewRaiseKey(gate.id),
-): AgentReviewRequestedData {
-  if (gate.workItemId === null || gate.subjectVersion === null) {
-    throw new Error(`gate ${gate.id} is not a review gate on a card at a named version`);
-  }
-  return {
-    workspaceId: gate.workspaceId,
-    gateId: gate.id,
-    workItemId: gate.workItemId,
-    subjectVersion: gate.subjectVersion,
-    idempotencyKey,
+export async function pressReview(
+  target: { workItemId: string | null; workspaceId: string },
+  opts: { ctx?: ServiceContext; model?: string; options?: HostedRunStartOptions } = {},
+): Promise<ReviewStartResult> {
+  if (target.workItemId === null) throw new Error('a review press needs the item it reviews');
+  const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: target.workItemId } });
+  const ctx = opts.ctx ?? {
+    userId: item.assigneeId ?? item.reporterId,
+    workspaceId: target.workspaceId,
   };
+  const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
+  return agentReviewStartService.startRequested(
+    { workItemKey: item.identifier, ...(opts.model ? { model: opts.model } : {}) },
+    ctx,
+    opts.options ?? {},
+  );
 }

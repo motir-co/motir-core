@@ -2,7 +2,7 @@ import { FLEET_CONTAINER_SIZE, type TeardownReason } from '@motir/orchestrator';
 import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import { checkAgentRunCredits, type AgentModel } from '@/lib/ai/motirAiClient';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
-import { DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
+import { DispatchRunTerminalError, DuplicateDispatchRunError } from '@/lib/dispatchRuns/errors';
 import { gateIdOfReviewRunKey } from '@/lib/agentReview/reviewRunKey';
 import { REVIEW_NO_VERDICT_REASON } from '@/lib/agentReview/reviewState';
 import {
@@ -148,6 +148,9 @@ export interface StartHostedReviewInput {
   /** The request's key (`lib/agentReview/reviewRunKey.ts`) — the run's idempotency key,
    *  which is how the run names its gate. */
   idempotencyKey: string;
+  /** The model the presser picked (MOTIR-11944) — one Run hosted offers, checked by the
+   *  same pre-flight `assertOffered` as a build run's. Absent, the review's own model. */
+  model?: string;
 }
 
 /** The `reviewUnavailableReason` a review run that ended without a verdict leaves on its
@@ -1089,23 +1092,43 @@ async function startReview(
   // it qualifies, else the platform review-agent model, else the run default. A
   // chosen id goes through `preflight`'s `assertOffered` and capacity check like a
   // build run's.
-  const { layer } = await orgHostedModelResolutionService.readOrgLayer(ctx);
-  const reviewModel = await hostedRunModelService.reviewModelFor(layer);
+  // A model the presser picked (MOTIR-11944) is taken through the same pre-flight, which
+  // refuses one that is not offered (`HostedModelNotOfferedError`) before anything opens.
+  const picked = input.model?.trim();
+  const reviewModel = picked
+    ? picked
+    : await hostedRunModelService.reviewModelFor(
+        (await orgHostedModelResolutionService.readOrgLayer(ctx)).layer,
+      );
   const checked = await preflight({ model: reviewModel }, project.id, [item.id], ctx, 'read');
 
-  const opened = await dispatchRunService.open(
-    {
-      projectKey: project.identifier,
-      command: 'review',
-      origin: 'hosted',
-      reportedBy: 'cli',
-      agent: 'opencode',
-      model: checked.model,
-      idempotencyKey: input.idempotencyKey,
-      cards: [{ key: item.identifier, disposition: 'queued' }],
-    },
-    ctx,
-  );
+  // Two presses racing past the read above both reach this insert with the SAME key
+  // (`reviewPressKey`, MOTIR-11944); `dispatch_run`'s `(workspace_id, idempotency_key)`
+  // unique refuses the second, which then answers the winner's run — exactly one starts.
+  let opened: Awaited<ReturnType<typeof dispatchRunService.open>>;
+  try {
+    opened = await dispatchRunService.open(
+      {
+        projectKey: project.identifier,
+        command: 'review',
+        origin: 'hosted',
+        reportedBy: 'cli',
+        agent: 'opencode',
+        model: checked.model,
+        idempotencyKey: input.idempotencyKey,
+        cards: [{ key: item.identifier, disposition: 'queued' }],
+      },
+      ctx,
+    );
+  } catch (err) {
+    if (!(err instanceof DuplicateDispatchRunError)) throw err;
+    const winner = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, input.idempotencyKey, tx),
+    );
+    /* v8 ignore next -- the winner's row committed before the unique refused this insert */
+    if (!winner) throw err;
+    return { dispatchRunId: winner.id, created: false };
+  }
   const run = opened.run;
   /* v8 ignore next -- race-only: two deliveries of one request both passed the read above */
   if (!opened.created) return { dispatchRunId: run.id, created: false };

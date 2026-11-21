@@ -29,7 +29,7 @@ import { deliveredPr, setStatus } from '../../helpers/repairFixtures';
 // Every press that boots a container is driven here: Run hosted and Continue hosted
 // through the ROUTE HANDLER, Fix in Motir agent through the same route with
 // `mode: 'fix'`, and the review run through `hostedRunService.startReview`, the one
-// call the review job's body makes (`agentReviewStartService.startRequested`). All
+// call a person's *Review with Motir agent* press makes (`agentReviewStartService.startRequested`). All
 // against the real Postgres, with the seams CLAUDE.md allows: the session gates, and
 // `fetch` at the external boundary — motir-ai's `/v1/agent-models` and credit
 // pre-flight, the gateway's run-key mint and GitHub. The fleet is the fake orchestrator.

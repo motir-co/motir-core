@@ -1,23 +1,8 @@
-import { orgFeatureDisabledResponse } from '@/lib/featureFlags/errorResponse';
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { OrchestratorNotConfiguredError } from '@motir/orchestrator';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
-import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
-import {
-  HostedContinueRefusedError,
-  HostedFixRefusedError,
-  HostedModelNotOfferedError,
-  HostedModelsUnavailableError,
-  HostedRunBootFailedError,
-  HostedRunCardNotReadyError,
-  HostedRunCreditsUnavailableError,
-  HostedRunKeyNotMintedError,
-  HostedRunNoCapacityError,
-  HostedRunOutOfCreditsError,
-  HostedRunRepositoryNotWritableError,
-  RunGitCredentialUnavailableError,
-} from '@/lib/hostedRuns/errors';
+import { HostedContinueRefusedError, HostedFixRefusedError } from '@/lib/hostedRuns/errors';
+import { hostedStartRefusalResponse } from '@/lib/hostedRuns/startRefusalResponse';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -95,26 +80,11 @@ export async function POST(
       { status: started.created ? 201 : 200, headers: NO_STORE },
     );
   } catch (err) {
-    // The `hosted_runs` kill-switch (MOTIR-750), or a suspended org.
-    const switchedOff = orgFeatureDisabledResponse(err);
-    if (switchedOff) return switchedOff;
-    if (err instanceof HostedModelNotOfferedError) return problem(err.code, err.message, 422);
-    if (err instanceof HostedModelsUnavailableError) return problem(err.code, err.message, 503);
-    if (err instanceof HostedRunNoCapacityError) {
-      return problem(err.code, err.message, 409, { model: err.model, reason: err.reason });
-    }
-    if (err instanceof HostedRunOutOfCreditsError) {
-      return problem(err.code, err.message, 402, { balanceCredits: err.balanceCredits });
-    }
-    if (err instanceof CiCreditsExhaustedError) return problem(err.code, err.message, 402);
-    if (err instanceof HostedRunCreditsUnavailableError) return problem(err.code, err.message, 503);
-    if (err instanceof HostedRunRepositoryNotWritableError) {
-      return problem(err.code, err.message, 409, {
-        repositories: err.refusals,
-        totalRepositories: err.totalRepositories,
-      });
-    }
-    if (err instanceof HostedRunCardNotReadyError) return problem(err.code, err.message, 409);
+    // The pre-flight refusals every hosted start answers alike — the `hosted_runs`
+    // kill-switch (MOTIR-750) and a suspended org among them — shared with *Review with
+    // Motir agent* (MOTIR-11944) so both buttons tell a person the same thing.
+    const refused = hostedStartRefusalResponse(err);
+    if (refused) return refused;
     if (err instanceof HostedContinueRefusedError) {
       return problem(err.code, err.message, 409, {
         ...(err.holder ? { holder: err.holder, startedAt: err.startedAt } : {}),
@@ -128,20 +98,6 @@ export async function POST(
         ...(err.repairClass ? { repairClass: err.repairClass } : {}),
         ...(err.runTargetKey ? { runTargetKey: err.runTargetKey } : {}),
       });
-    }
-    if (err instanceof HostedRunBootFailedError) {
-      return problem(err.code, err.message, 503, { dispatchRunId: err.dispatchRunId });
-    }
-    if (
-      err instanceof RunGitCredentialUnavailableError ||
-      err instanceof HostedRunKeyNotMintedError ||
-      err instanceof OrchestratorNotConfiguredError
-    ) {
-      return problem(
-        'hosted_run_unavailable',
-        'Motir agent runs are not available right now. Try again shortly.',
-        503,
-      );
     }
     if (err instanceof WorkItemNotFoundError || err instanceof ProjectNotFoundError) {
       return problem(err.code, err.message, 404);

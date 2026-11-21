@@ -36,7 +36,6 @@ import { fakeOrchestrator } from '@motir/orchestrator';
 import type { ApprovalGateKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
-import type { AgentReviewRequestedData } from '@/lib/jobs/types';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import type { SubmitReviewVerdictInput } from '@/lib/dto/agentReview';
 import type { MergeChangeRequestResult } from '@/lib/git/types';
@@ -46,7 +45,7 @@ import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { hostAnswersCleanAt } from '../helpers/hostMergeability';
 import { linkPrByIdentifier } from '../helpers/prLink';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
-import { reviewRequestFor } from '../helpers/reviewRequest';
+import { pressReview } from '../helpers/reviewRequest';
 import { createTestUser } from '../fixtures/userFixtures';
 import { bearer, withTokenFor } from '../fixtures/apiV1Fixtures';
 
@@ -58,7 +57,6 @@ const { githubInstallationService } = await import('@/lib/services/githubInstall
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
 const { approvalGateSettingsService } = await import('@/lib/services/approvalGateSettingsService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
-const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { reviewVerdictService } = await import('@/lib/services/reviewVerdictService');
 const { reviewDismissalService } = await import('@/lib/services/reviewDismissalService');
 const { reviewBotPostService } = await import('@/lib/services/reviewBotPostService');
@@ -424,8 +422,8 @@ const reviewToRunRows = (recipientUserId: string) =>
   });
 
 const eventsNamed = (name: string) => sent.filter((e) => e.name === name).map((e) => e.data);
-const reviewRequests = () =>
-  eventsNamed('agent-review/requested') as unknown as AgentReviewRequestedData[];
+/** Every review event that left — none, since nothing reviews by itself (MOTIR-11943). */
+const reviewRequests = () => sent.filter((e) => e.name.startsWith('agent-review/'));
 
 /** The post job's event for the newest answering verdict, as the door emitted it. */
 function postRequest(): { workspaceId: string; recordId: string } {
@@ -449,7 +447,7 @@ const homeCtx = (s: Scenario, ctx: { userId: string; workspaceId: string } = s.c
  * A card delivered by the two-PR set, green at `sha-a`. `gate` on raises the review gate
  * (with the RETIRED `review_agent_source` column holding `source`, which decides nothing
  * any more); off asks to approve and merge at once. The raise requests no review run
- * (MOTIR-11943), so `request` is the one a person's press would send.
+ * (MOTIR-11943), so `request` is the gate a person's press starts the review for.
  */
 async function deliveredSet(
   t: Tenant,
@@ -482,7 +480,7 @@ async function deliveredSet(
     expect(review).toBeUndefined();
   }
   expect(reviewRequests(), 'the raise requests no review by itself').toEqual([]);
-  const request = review ? reviewRequestFor(review) : undefined;
+  const request = review ?? undefined;
   return { s, item, review: review ?? null, approval: approval ?? null, request };
 }
 
@@ -777,7 +775,7 @@ describe('the verdict door — gate on, under each source', () => {
 
   it('source hosted: the door decides the review and cancels the in-flight run, whose credential then answers nothing; a live hosted run still decides through its own route', async () => {
     const { s, item, review, request } = await deliveredSet(A, { gate: true });
-    expect((await agentReviewStartService.startRequested(request!)).outcome).toBe('started');
+    expect((await pressReview(request!)).created).toBe(true);
     const [run] = await runRows(s.workspace.id);
     expect(run!.status).toBe('running');
     // The run's credential, minted while it runs — as the hosted container holds it.
@@ -819,9 +817,7 @@ describe('the verdict door — gate on, under each source', () => {
     await ci(A, 'sha-a', 211);
     expect(reviewRequests()).toEqual([]);
     const [nextGate] = await awaitingOf(other.id, REVIEW);
-    expect(
-      (await agentReviewStartService.startRequested(reviewRequestFor(nextGate!))).outcome,
-    ).toBe('started');
+    expect((await pressReview(nextGate!)).created).toBe(true);
     const live = (await runRows(s.workspace.id)).find((r) => r.status === 'running')!;
     const res = await hostedSubmit(
       s,
@@ -926,7 +922,7 @@ describe('the verdict door — refusals store nothing', () => {
       reviewVerdictService.submit(s.project.id, item.identifier, input(setVersion(A)), viewer.ctx),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
 
-    expect((await agentReviewStartService.startRequested(request!)).outcome).toBe('started');
+    expect((await pressReview(request!)).created).toBe(true);
     const [run] = await runRows(s.workspace.id);
     const res = await postVerdictRoute(bearer(await runToken(s, run!.id)), item.identifier, {
       verdict: 'approved',
@@ -1317,7 +1313,7 @@ describe('the review state read model over the assembled path', () => {
 
   it('markers from the matching rows: Agent reviewing and Review could not run (hosted), none with the agent off', async () => {
     const { s, item, review, request } = await deliveredSet(A, { gate: true });
-    expect((await agentReviewStartService.startRequested(request!)).outcome).toBe('started');
+    expect((await pressReview(request!)).created).toBe(true);
     expect((await stateOf(s, item.id))?.marker).toEqual({ kind: 'agent_reviewing' });
     // While the run runs it is what answers the gate; once it ended, its reason shows.
     await adminDb.dispatchRun.updateMany({
@@ -1413,7 +1409,7 @@ describe('the retired review source on an awaiting review', () => {
     ]);
 
     // A person's request starts the hosted review even with the column at `own`.
-    expect((await agentReviewStartService.startRequested(request!)).outcome).toBe('started');
+    expect((await pressReview(request!)).created).toBe(true);
     expect((await runRows(s.workspace.id)).map((r) => r.status)).toEqual(['running']);
     expect((await stateOf(s, item.id))?.marker).toEqual({ kind: 'agent_reviewing' });
     expect(
@@ -1487,8 +1483,7 @@ describe('the hosted review prompt over the run target’s tree', () => {
     await ci(A, 'sha-a', PERSON_PR);
     expect(reviewRequests()).toEqual([]);
     const [storyReview] = await awaitingOf(story.id, REVIEW);
-    const request = reviewRequestFor(storyReview!);
-    expect((await agentReviewStartService.startRequested(request)).outcome).toBe('started');
+    expect((await pressReview(storyReview!)).created).toBe(true);
 
     const prompt = await readPrompt(s, story.identifier);
     expect(prompt).toContain('CRITERIA CHECKLIST — this card and every card under it');
@@ -1523,9 +1518,7 @@ describe('the hosted review prompt over the run target’s tree', () => {
     await ci(A, 'sha-a', BOT_PR);
     expect(reviewRequests()).toEqual([]);
     const [loneReview] = await awaitingOf(single.id, REVIEW);
-    expect(
-      (await agentReviewStartService.startRequested(reviewRequestFor(loneReview!))).outcome,
-    ).toBe('started');
+    expect((await pressReview(loneReview!)).created).toBe(true);
     const own = await readPrompt(s, single.identifier);
     expect(own).toContain('ACCEPTANCE CRITERIA');
     expect(own).toContain('  - A lone card holds.');

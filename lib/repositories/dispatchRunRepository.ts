@@ -848,6 +848,16 @@ export const dispatchRunRepository = {
    * under `agent-review:<gateId>:…`, so the gate's in-flight review is this read. Served
    * by the `(workspace_id, idempotency_key)` unique index's prefix.
    */
+  /** How many runs, of any status, were opened under an idempotency-key `prefix` — a review
+   *  press's attempt counter (`reviewPressKey`, `reviewItemRunKey`; MOTIR-11944). */
+  async countByIdempotencyKeyPrefix(
+    workspaceId: string,
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.dispatchRun.count({ where: { workspaceId, idempotencyKey: { startsWith: prefix } } });
+  },
+
   async listRunningByIdempotencyKeyPrefix(
     workspaceId: string,
     prefix: string,

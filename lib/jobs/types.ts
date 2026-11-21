@@ -849,12 +849,6 @@ export interface JobEventDataMap {
   'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
   'page/embedding.requested': PageEmbeddingRequestedData;
   'pull-request/auto-merge.requested': PullRequestAutoMergeRequestedData;
-  /** An `agent_review` gate was RAISED (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md`
-   *  §12.2, `hosted-agent-run.md` §8.1) — start ONE review run for it. Emitted after the
-   *  raising transaction commits. Consumed by `agent-review/requested`
-   *  (`lib/jobs/definitions/agentReviewRequested.ts`, MOTIR-6820), and emitted again by
-   *  *Review again*. */
-  'agent-review/requested': AgentReviewRequestedData;
   /** A person DISMISSED a standing agent send-back (Story MOTIR-10327 · MOTIR-10334;
    *  `approval-gates.md` §12.15). Emitted after the dismissal commits, never on a
    *  rollback. The bot-posting consumer (MOTIR-10335) dismisses the bot's own Request
@@ -1004,31 +998,6 @@ export interface PullRequestHeadMovedData {
   headSha: string;
   /** `<pullRequestId>:<headSha>` — a redelivered push for the same head enqueues nothing new. */
   idempotencyKey: string;
-}
-
-/**
- * The `agent-review/requested` event payload (Story MOTIR-1626 · MOTIR-6819; ADR
- * `approval-gates.md` §12.2, `hosted-agent-run.md` §8.1) — one per `agent_review` gate ROW
- * CREATED, emitted after the creating transaction commits (`lib/workspaces/afterCommit.ts`).
- * The consumer (MOTIR-6820) re-reads the gate by id and starts a review run only while it
- * is still `awaiting` at `subjectVersion`.
- */
-export interface AgentReviewRequestedData {
-  workspaceId: string;
-  /** The `agent_review` gate the run answers. */
-  gateId: string;
-  /** The RUN TARGET the gate hangs on (§12.1). */
-  workItemId: string;
-  /** The delivery-set version the review is about — `deliverySetVersion`'s spelling. */
-  subjectVersion: string;
-  /**
-   * The REQUEST's key (MOTIR-6820) — `agent-review:<gateId>:raise` for the gate's raise,
-   * `agent-review:<gateId>:again:<uuid>` for one *Review again* press
-   * (`lib/agentReview/reviewRunKey.ts`). The job's dedup key and the review run's
-   * idempotency key, so a redelivered request starts nothing twice. Absent on an event
-   * emitted before it existed: the consumer then reads it as the raise.
-   */
-  idempotencyKey?: string;
 }
 
 /** The `review-bot/post.requested` payload (MOTIR-10335) — ids only; the job re-reads. */

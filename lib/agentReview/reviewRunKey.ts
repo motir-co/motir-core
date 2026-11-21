@@ -1,18 +1,18 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
 // WHICH GATE A REVIEW RUN ANSWERS, spelled on the run itself (Story MOTIR-1626 ·
 // MOTIR-6820; `hosted-agent-run.md` §8.1, `approval-gates.md` §12.6).
 //
 // ⚠️ THE GATE ID RIDES THE RUN'S IDEMPOTENCY KEY, AND THAT IS THE RECORD. A review run is
-// opened by the server, once per REQUEST for a gate — the raise's, or one *Review again*
-// press's — and the request's own key is the run's `idempotencyKey`:
+// opened by the server, once per PRESS for a gate (MOTIR-11944, `approval-gates.md` §12.18),
+// and the press's own key is the run's `idempotencyKey`:
 //
-//   agent-review:<gateId>:raise              the gate's raise (MOTIR-6819's emit)
-//   agent-review:<gateId>:again:<uuid>       one *Review again* press
+//   agent-review:<gateId>:press:<attempt>    a person's press, its attempt counted from 1
 //
-// So a redelivered event opens nothing twice (`dispatch_run`'s
-// `(workspace_id, idempotency_key)` unique), a *Review again* is a NEW attempt with a key
-// of its own, and "the review running for this gate" is a prefix read — without a column
+// (Runs of the retired automatic start carry `…:raise` and `…:again:<uuid>`; they sit under
+// the same prefix and count as attempts.) So a retried press opens nothing twice
+// (`dispatch_run`'s `(workspace_id, idempotency_key)` unique), the next press after a run
+// ended is a NEW attempt, and "the review running for this gate" is a prefix read — without a column
 // on `dispatch_run` that only one command would ever fill. The run's `run_opened` event
 // carries the gate id and version as well, for a reader of the run page.
 //
@@ -36,14 +36,14 @@ export function reviewRunKeyPrefix(gateId: string): string {
   return `${PREFIX}${gateId}:`;
 }
 
-/** The request key of the gate's RAISE — what MOTIR-6819's emit carries. */
-export function reviewRaiseKey(gateId: string): string {
-  return `${reviewRunKeyPrefix(gateId)}raise`;
-}
-
-/** A fresh request key for ONE *Review again* press. */
-export function reviewAgainKey(gateId: string): string {
-  return `${reviewRunKeyPrefix(gateId)}again:${randomUUID()}`;
+/**
+ * The key of a person's press for `gateId`'s review — its `attempt`-th run, counted from 1
+ * over every review run already opened under {@link reviewRunKeyPrefix} (MOTIR-11944). It is
+ * DETERMINISTIC, so two presses racing past the in-flight check compute the same key and
+ * `dispatch_run`'s unique index collapses them onto ONE run.
+ */
+export function reviewPressKey(gateId: string, attempt: number): string {
+  return `${reviewRunKeyPrefix(gateId)}press:${attempt}`;
 }
 
 const ITEM_PREFIX = 'agent-review-item:';

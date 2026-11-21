@@ -47,7 +47,6 @@ import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 import type { ApprovalGateKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
-import type { AgentReviewRequestedData } from '@/lib/jobs/types';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import type { SubmitReviewVerdictInput } from '@/lib/dto/agentReview';
 import { adminDb } from '../helpers/adminDb';
@@ -58,7 +57,7 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { bearer, withTokenFor } from '../fixtures/apiV1Fixtures';
-import { reviewRequestFor } from '../helpers/reviewRequest';
+import { pressReview } from '../helpers/reviewRequest';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -66,7 +65,6 @@ const { projectsService } = await import('@/lib/services/projectsService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
-const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { approvalGateRepository } = await import('@/lib/repositories/approvalGateRepository');
 const { reviewVerdictService } = await import('@/lib/services/reviewVerdictService');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
@@ -285,10 +283,8 @@ const gatesOf = (workItemId: string, kind: ApprovalGateKind) =>
 
 const gateRow = (id: string) => adminDb.approvalGate.findUniqueOrThrow({ where: { id } });
 
-const reviewRequests = () =>
-  sent
-    .filter((e) => e.name === 'agent-review/requested')
-    .map((e) => e.data as unknown as AgentReviewRequestedData);
+/** Every review event that left — none since nothing reviews by itself (MOTIR-11943). */
+const reviewRequests = () => sent.filter((e) => e.name.startsWith('agent-review/'));
 
 const runRows = (workspaceId: string) =>
   adminDb.dispatchRun.findMany({ where: { workspaceId }, orderBy: { startedAt: 'asc' } });
@@ -319,7 +315,7 @@ async function reviewing(slug: string, number: number) {
   // Nothing reviews by itself (MOTIR-11943): the raise requests no run, so a case that
   // goes on to a hosted review sends the request a person's press would.
   expect(reviewRequests(), 'the raise requests no review by itself').toEqual([]);
-  return { s, item, review: review!, request: reviewRequestFor(review!) };
+  return { s, item, review: review!, request: review! };
 }
 
 grantPaidAiPlan();
@@ -442,9 +438,8 @@ async function deliveredGateOff(slug: string, number: number) {
 async function reviewingUnder(source: 'hosted' | 'own', slug: string, number: number) {
   const scenario = await reviewing(slug, number);
   if (source === 'hosted') {
-    expect((await agentReviewStartService.startRequested(scenario.request)).outcome).toBe(
-      'started',
-    );
+    // The press a person makes (MOTIR-11944): the routed person, at the gate's version.
+    expect((await pressReview(scenario.request)).created).toBe(true);
   }
   sent.length = 0;
   return scenario;
