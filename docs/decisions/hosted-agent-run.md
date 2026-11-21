@@ -375,19 +375,23 @@ A card a review sent back — To fix `changes_requested` — can be repaired on 
 
 #### 8.8 · The review run starts on a person's press — AMENDED 2026-11-20 (Story MOTIR-11941)
 
-The rule is `approval-gates.md` §12.18. This is what it changes for the hosted run.
+A review starts only when a person starts it: the hosted review run starts on a person's press
+of _Review with Motir agent_, and on nothing else. The rule is `approval-gates.md` §12.18; this
+is what it changes for the hosted run.
 
-- **A gate's raise starts nothing.** No request job is emitted, and no run is opened. The
-  hosted review run is started by a person pressing _Review with Motir agent_ on the card,
-  which the server offers to whoever `resolveGateAuthority` allows with `work_item:edit`,
-  whether the project's _Review_ setting is on or off.
-- **One press, one run.** The press opens ONE `command: review` run for the awaiting gate and
-  its version, under a fresh request key (`lib/agentReview/reviewRunKey.ts`). A run already in
+- **Nothing starts a run by itself.** The gate's raise, turning _Review_ on and a head move's
+  re-raise emit no request job and open no run. The press is offered to whoever
+  `resolveGateAuthority` allows with `work_item:edit`, whether the project's _Review_ setting is
+  on or off.
+- **One press, one run.** The press opens ONE `command: review` run for the gate and its
+  version, under a request key of its own (`lib/agentReview/reviewRunKey.ts`). A run already in
   flight for the gate refuses the press. A gate whose run could not run (§8.4's last point)
-  offers the same press again; there is no separate _Review again_.
-- **Attributed to the person who pressed**, and billed to the organisation at the agent-lane
-  rate, as every hosted run (§1). The pre-flights of §8.1 apply to the press, and a refusal
-  is written onto the gate as the reason the review could not run.
+  offers the same press again; there is no separate _Review again_. With _Review_ off there is
+  no gate, and the run's verdict is stored as a review record for the item at the reviewed
+  version, which gates nothing.
+- **Attributed to the person who pressed**, and charged to the organisation's AI credits at the
+  agent-lane rate, as every hosted run (§1). The pre-flights of §8.1 apply to the press, and a
+  refusal is written onto the gate as the reason the review could not run.
 - **Everything else in §8.1–§8.7 holds**: what the run reads, what it never writes, how the
   verdict reaches Motir, the optional convention and the bugs it logs.
 

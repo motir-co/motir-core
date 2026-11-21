@@ -6464,7 +6464,7 @@ cancelled, or exited without submitting one).
   in the note, which belongs to whoever decides it (MOTIR-6820 writes it). The
   Development frame shows _Review could not run_ with that reason (MOTIR-6817).
 - ~~**_Review again_** — a press by the routed person, same authority as the override — re-requests ONE review run for the same gate and version, and clears the reason while it runs.~~
-  **Superseded 2026-11-20 (Story MOTIR-11941, §12.18):** _Review again_ is folded into _Review with Motir agent_, which
+  **Superseded 2026-11-20 (Story MOTIR-11941, §12.18):** that press is folded into _Review with Motir agent_, which
   starts ONE run for the same gate and version and clears the reason while it
   runs. **There is no automatic retry.**
 - **The escape is 12.3's _Continue without the review_.** Nothing is waved
@@ -6707,39 +6707,44 @@ the change was recorded nowhere. Both review doors now log it.
 
 #### 12.18 A review starts only when a person starts it — AMENDED 2026-11-20 (Story MOTIR-11941)
 
-This replaces the review run's start from the raise (`hosted-agent-run.md` §8.1, amended
-there by §8.8), §12.6's _Review again_ and all of §12.10. The sentences it supersedes are
-struck in place above, each with a pointer here.
+A review starts only when a person starts it. This replaces the review run's start from the
+raise (`hosted-agent-run.md` §8.1, amended there by §8.8), §12.6's _Review again_ and all of
+§12.10. The sentences it supersedes are struck in place above, each with a pointer here.
 
-- **The setting is named _Review_, and it has no source.** `Project.reviewAgentEnabled` is the
-  one switch: on, a green delivery set raises an `agent_review` gate before the approval is
-  asked (§12.2); off, it raises none. `Project.reviewAgentSource` stays in the schema, but
-  nothing reads it, and the settings PATCH ignores it.
-- **Nothing starts a review by itself.** The raise opens no hosted run, emits no request job,
-  and retries nothing. A raised gate waits until a person starts its review, or until §12.3's
-  _Continue without the review_ or §12.15's dismiss settles it.
-- **Three doors start a review, and only a person opens each.** They are _Review with Motir
-  agent_ (one hosted review run for the gate and its version, hosted-agent-run.md §8.8),
-  `motir review` in the person's own agent (the user-token verdict door, §12.11), and the
-  review prompt copied from the card for any other agent. Each is offered to whoever
-  `resolveGateAuthority` allows with `work_item:edit` on the card, and is offered whether
-  _Review_ is on or off: with it off, the verdict decides what §12.12 says a gate-off verdict
-  decides.
-- **_Review again_ is folded into _Review with Motir agent_.** A gate whose hosted run could
-  not run (§12.6) offers the same press, which starts ONE new run for the same gate and
-  version and clears the reason while it runs. There is still no automatic retry.
-- **One marker, _Waiting for a review_.** An awaiting `agent_review` gate with no run in flight
-  reads _Waiting for a review_. One with a run in flight reads _Agent reviewing_, and one whose
-  run failed reads _Could not run_, in that order of precedence.
-- **Every awaiting gate is listed and notified once.** The routed person's To approve lists
-  it as a review to run, never as an approval, and the raise notifies them once, after the
-  raising transaction commits.
-- **What does not change:** the gate's raise and supersede (§12.2, §12.5), §12.2a's exclusion
-  of `auto` merging while the switch is on, the verdict routes and what a verdict decides
-  (§12.11, §12.12), late and second verdicts (§12.13), send-backs (§12.14), dismissing the
-  review (§12.15), bot-posted verdicts and their own switch (§12.16), the bug-logging rule
-  (§12.17), the hosted repair run (§12.4b) and the review run's billing and attribution
-  (hosted-agent-run.md §8.1).
+- **The setting a person sees is named _Review_, and it gates approve-and-merge.** On, a green
+  delivery set raises an `agent_review` gate before the approval is asked (§12.2); off, it
+  raises none. The internal names stay: the `agent_review` kind, `reviewAgentEnabled` and the
+  API field names.
+- **There is no project review source.** `reviewAgentSource` is read by nothing, the settings
+  PATCH ignores it, and the column stays in the schema unread. Every project with _Review_ on
+  keeps it on.
+- **Nothing starts a review by itself**: not the gate raise, not turning _Review_ on, and not a
+  head move's re-raise (§12.5). A hosted review run starts only when a person presses _Review
+  with Motir agent_. It is one run in flight per gate, keyed per request
+  (`lib/agentReview/reviewRunKey.ts`), charged to the organisation's AI credits, and attributed
+  to the person who pressed.
+- **Three doors, offered to the routed set holding `work_item:edit`** (`resolveGateAuthority`,
+  the authority §12.3's _Continue without the review_ uses), **with _Review_ on or off**:
+  - _Review with Motir agent_, the hosted review run (`hosted-agent-run.md` §8.8);
+  - _Review in my agent_, a review mode on My agents runs that runs `motir review <KEY>` and
+    submits through §12.11's user-token verdict door;
+  - the copyable `motir review <KEY>`, run in the person's own agent, through the same door.
+- **With _Review_ off, a verdict from any door is a review record that gates nothing** (§12.12's
+  gate-off rule). That includes a hosted run's verdict, which, with no gate, is stored for the
+  item at the reviewed version.
+- **_Review again_ becomes _Review with Motir agent_.** A gate whose hosted run could not run
+  (§12.6) offers the same press, which starts ONE new run for the same gate and version and
+  clears the reason while it runs. There is still no automatic retry.
+- **One marker, _Waiting for a review_**, replaces the source-dependent markers. An awaiting
+  `agent_review` gate with no run in flight reads _Waiting for a review_; one with a run in
+  flight reads _Agent reviewing_, and one whose run failed reads _Could not run_, in that order
+  of precedence.
+- **Every awaiting `agent_review` gate is listed and notified once, with no source condition.**
+  The routed person's To approve lists it as a review to run, never as an approval, and the
+  raise notifies them once, after the raising transaction commits.
+- **Unchanged:** §12.2a (_Review_ excludes Merge automatically, its two typed refusals
+  unchanged), §12.3's _Continue without the review_, §12.4's verdict effects and To fix, §12.5's
+  withdrawals and run cancellation, §12.11's run-token route, and §12.13–§12.16.
 
 #### 12.9 What this section does NOT decide
 
