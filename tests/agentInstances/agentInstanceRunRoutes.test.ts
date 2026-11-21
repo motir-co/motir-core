@@ -394,11 +394,11 @@ describe('the pure pieces', () => {
     );
   });
 
-  it('the CLI’s commands are the service’s AGENT_RUN_COMMANDS, but for review until the in-agent flow', () => {
-    // MOTIR-11945 adds `review` to the app's list; the in-agent review flow (MOTIR-11953)
-    // adds it to the CLI's copy and restores strict equality.
-    expect([...CLI_RUN_COMMANDS, 'review']).toEqual([...AGENT_RUN_COMMANDS]);
+  it('the CLI’s commands are exactly the service’s AGENT_RUN_COMMANDS (MOTIR-11953)', () => {
+    // A command the terminal cannot launch would open a run nothing answers.
+    expect([...CLI_RUN_COMMANDS]).toEqual([...AGENT_RUN_COMMANDS]);
     expect(isAgentRunCommand('fix')).toBe(true);
+    expect(isAgentRunCommand('review')).toBe(true);
     expect(isAgentRunCommand('run_scope')).toBe(false);
     expect(isAgentRunCommand(undefined)).toBe(false);
   });

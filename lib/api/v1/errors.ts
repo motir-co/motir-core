@@ -216,6 +216,10 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // ── MOTIR-6821, a hosted REVIEW run's prompt and verdict (`hosted-agent-run.md` §8) ──
   // 403 — not a review run's own credential: a PAT, a device token, a BUILD run's token.
   REVIEW_RUN_TOKEN_REQUIRED: 403,
+  // 403 — a run token at the user-token verdict door that is not a RUNNING review in the
+  // person's own agent with a leg on the card (Story MOTIR-11941 · MOTIR-11953). The same
+  // code the route layer answers a run token at a door that admits none.
+  RUN_TOKEN_NOT_ALLOWED: 403,
   // 404 — the card has no `agent_review` gate at all; nothing to review or answer.
   REVIEW_GATE_NOT_FOUND: 404,
   // 409 — this run already gave its ONE verdict (§8.4).

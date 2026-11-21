@@ -136,6 +136,21 @@ export class ReviewStartNotOfferedError extends Error {
   }
 }
 
+/**
+ * 403 — a run token at the user-token verdict door that the door does not admit (Story
+ * MOTIR-11941 · MOTIR-11953): it admits ONE run kind, a RUNNING review in the person's own
+ * agent (`origin: instance`, `command: review`) whose leg is the card. A hosted review's
+ * token (it answers at `…/agent-review`), a build run's, an ended review's and one naming
+ * another card are all this, before anything is stored.
+ */
+export class ReviewVerdictRunTokenNotAllowedError extends Error {
+  readonly code = 'RUN_TOKEN_NOT_ALLOWED';
+  constructor() {
+    super('Only a review running in your own agent may submit its verdict with its run token.');
+    this.name = 'ReviewVerdictRunTokenNotAllowedError';
+  }
+}
+
 // ── THE USER-TOKEN VERDICT DOOR (Story MOTIR-10327 · MOTIR-10333; `approval-gates.md`
 // §12.11–§12.13) ───────────────────────────────────────────────────────────────────────
 //

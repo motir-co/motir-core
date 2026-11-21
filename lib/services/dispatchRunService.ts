@@ -58,6 +58,7 @@ import {
   toDispatchRunCardDto,
   toDispatchRunContinuesDto,
   toDispatchRunRepairDto,
+  toDispatchRunReviewDto,
   toDispatchRunDto,
   toDispatchRunEventDto,
   toDispatchRunLegGateDto,
@@ -2051,7 +2052,7 @@ export const dispatchRunService = {
         await assertMayReadRun(run, ctx, tx);
         const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
         const opened =
-          run.command === 'continue' || run.command === 'fix'
+          run.command === 'continue' || run.command === 'fix' || run.command === 'review'
             ? await dispatchRunEventRepository.findLatestOfKind(runId, 'run_opened', tx)
             : null;
         return {
@@ -2059,6 +2060,8 @@ export const dispatchRunService = {
           continues: run.command === 'continue' ? toDispatchRunContinuesDto(opened?.data) : null,
           // A hosted repair's decision (MOTIR-6929) — what its container adopts.
           repair: run.command === 'fix' ? toDispatchRunRepairDto(opened?.data) : null,
+          // What a review run reviews (MOTIR-11953) — what a review in an agent adopts.
+          review: run.command === 'review' ? toDispatchRunReviewDto(opened?.data) : null,
         };
       },
     );

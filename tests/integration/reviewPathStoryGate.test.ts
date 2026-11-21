@@ -930,7 +930,9 @@ describe('the verdict door — refusals store nothing', () => {
       harness: 'Codex',
       model: 'gpt-x',
     });
+    // A HOSTED review's token: only an own-agent review's is admitted (MOTIR-11953).
     expect(res.status).toBe(403);
+    expect(((await res.json()) as { code?: string }).code).toBe('RUN_TOKEN_NOT_ALLOWED');
 
     const empty = await reviewVerdictService
       .submit(s.project.id, item.identifier, sendBack(setVersion(A), { findingsMd: ' ' }), s.ctx)

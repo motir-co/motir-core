@@ -838,6 +838,10 @@ export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): Dispatch
           findings: body.repair.findings ? { ...body.repair.findings } : null,
         }
       : null,
+    // A server older than contract 1.89.0 sends no `review` (MOTIR-11953).
+    review: body.review
+      ? { gateId: body.review.gateId, subjectVersion: body.review.subjectVersion }
+      : null,
   };
 }
 

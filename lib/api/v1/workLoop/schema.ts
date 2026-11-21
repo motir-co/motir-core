@@ -2404,6 +2404,18 @@ export const dispatchRunSchema = z.object({
     })
     .nullable()
     .optional(),
+  /**
+   * What a `review` run reviews (MOTIR-11953, contract 1.89.0) — only on `getDispatchRun`,
+   * read from its `run_opened`: the `agent_review` gate (null with Review off) and the
+   * delivery-set version. Null for every other command.
+   */
+  review: z
+    .object({
+      gateId: z.string().nullable(),
+      subjectVersion: z.string(),
+    })
+    .nullable()
+    .optional(),
 });
 
 /** What OPEN answers with. */

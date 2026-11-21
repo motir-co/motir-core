@@ -3153,6 +3153,10 @@ export interface components {
                     decidedAt: string;
                 } | null;
             } | null;
+            review?: {
+                gateId: string | null;
+                subjectVersion: string;
+            } | null;
         };
         DispatchRunCard: {
             id: string;
@@ -3250,6 +3254,10 @@ export interface components {
                         decidedUnderAuthority: string | null;
                         decidedAt: string;
                     } | null;
+                } | null;
+                review?: {
+                    gateId: string | null;
+                    subjectVersion: string;
                 } | null;
             };
             created: boolean;

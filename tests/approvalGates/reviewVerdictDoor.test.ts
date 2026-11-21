@@ -1295,7 +1295,7 @@ describe('POST /api/v1/work-items/{key}/review-verdict', () => {
     expect(((await res.json()) as Record<string, unknown>)['code']).toBe('REVIEW_VERDICT_LATE');
   });
 
-  it('a run token is not accepted here', async () => {
+  it('a HOSTED review run’s token is not accepted here (only an own-agent review’s, MOTIR-11953)', async () => {
     const { s, item } = await reviewingUnder('hosted', 'rest-run-token', 95);
     const [run] = await runRows(s.workspace.id);
     const { runCredentialService } = await import('@/lib/services/runCredentialService');
@@ -1311,6 +1311,7 @@ describe('POST /api/v1/work-items/{key}/review-verdict', () => {
       model: 'gpt-x',
     });
     expect(res.status).toBe(403);
+    expect(((await res.json()) as Record<string, unknown>)['code']).toBe('RUN_TOKEN_NOT_ALLOWED');
     expect(await recordsOf(item.id)).toEqual([]);
   });
 });

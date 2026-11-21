@@ -1,4 +1,4 @@
-import type { Prisma } from '@/generated/prisma/client';
+import type { DispatchRunOrigin, Prisma } from '@/generated/prisma/client';
 import {
   ReviewGateNotFoundError,
   ReviewVerdictAnswerExistsError,
@@ -87,6 +87,12 @@ type VerdictOutcome = 'decided' | 'recorded' | ReviewStaleCause;
 
 interface ReviewRunRef {
   id: string;
+  /**
+   * Who executes the run (MOTIR-11953): `hosted` for Motir's review container, `instance`
+   * for a review in the person's own agent, whose verdict goes to the user-token verdict door
+   * with its own harness and model — never to this hosted door.
+   */
+  origin: DispatchRunOrigin;
   /** The model the run reviewed on — the verdict record's model. */
   model: string | null;
   /**
@@ -118,7 +124,12 @@ async function requireReviewRun(ctx: ServiceContext): Promise<ReviewRunRef> {
     const run = await dispatchRunRepository.findById(runId, tx);
     if (!run || run.command !== 'review') throw new ReviewRunTokenRequiredError();
     const opened = await dispatchRunEventRepository.findLatestOfKind(run.id, 'run_opened', tx);
-    return { id: run.id, model: run.model, gateOffVersion: gateOffVersionOf(opened?.data) };
+    return {
+      id: run.id,
+      origin: run.origin,
+      model: run.model,
+      gateOffVersion: gateOffVersionOf(opened?.data),
+    };
   });
 }
 
@@ -554,6 +565,9 @@ export const agentReviewRunService = {
     ctx: ServiceContext,
   ): Promise<AgentReviewVerdictResultDto> {
     const run = await requireReviewRun(ctx);
+    // An own-agent review (MOTIR-11953) submits to the user-token verdict door, which records
+    // its harness and model; here it would be recorded as Motir's hosted review.
+    if (run.origin === 'instance') throw new ReviewRunTokenRequiredError();
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
     if (await hasVerdict(run, ctx)) throw new ReviewVerdictAlreadySubmittedError(run.id);
 

@@ -1286,5 +1286,18 @@
  *   is not retyped to nullable — the gate-off variants are shapes no client has received.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.88.0` after `1.87.0` above.
+ *
+ * - `1.89.0` — Story MOTIR-11941 · MOTIR-11953 adds `review` to `DispatchRun`
+ *   (`GET …/dispatch-runs/{id}`): `{ gateId, subjectVersion }` for a `command: review` run,
+ *   read from its `run_opened` (`gateId` null with Review off), null for every other
+ *   command. A review in the person's own agent adopts its run and reads what it reviews
+ *   here, as a hosted repair reads `repair`. And `POST …/work-items/{key}/review-verdict`
+ *   now admits ONE run token — a running review in the person's own agent with a leg on
+ *   the card — answering any other run token `RUN_TOKEN_NOT_ALLOWED` (403) as before.
+ *
+ *   Additive: a new optional field (§8's allowed list), and a door admitting a caller it
+ *   refused, with the same code for every caller it still refuses.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.89.0` after `1.88.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.88.0';
+export const V1_CONTRACT_VERSION = '1.89.0';

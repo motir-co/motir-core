@@ -429,3 +429,29 @@ describe('toDispatchRunView — an adopted hosted REPAIR run (MOTIR-6929)', () =
     expect(toDispatchRunView(base as never).repair).toBeNull();
   });
 });
+
+describe('toDispatchRunView — a review run’s target (MOTIR-11953, contract 1.89.0)', () => {
+  const base = {
+    id: 'run-review',
+    status: 'running',
+    command: 'review',
+    origin: 'instance',
+    model: null,
+    endedAt: null,
+    cards: [{ key: 'ACME-12', position: 0, disposition: 'running' }],
+    continues: null,
+    repair: null,
+  };
+
+  it('maps the gate and version the run was opened for, a null gate included', () => {
+    const review = { gateId: 'g1', subjectVersion: 'acme/web#7@abc123' };
+    expect(toDispatchRunView({ ...base, review } as never).review).toEqual(review);
+    expect(
+      toDispatchRunView({ ...base, review: { ...review, gateId: null } } as never).review,
+    ).toEqual({ ...review, gateId: null });
+  });
+
+  it('reads a server older than 1.89.0 — no `review` — as null', () => {
+    expect(toDispatchRunView(base as never).review).toBeNull();
+  });
+});

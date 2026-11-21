@@ -5,6 +5,7 @@ import {
   ReviewVerdictAnswerExistsError,
   ReviewVerdictInvalidError,
   ReviewVerdictLateError,
+  ReviewVerdictRunTokenNotAllowedError,
   ReviewVerdictSecondError,
 } from '@/lib/agentReview/errors';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
@@ -24,6 +25,7 @@ import {
   type SubmitReviewVerdictInput,
 } from '@/lib/dto/agentReview';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import {
   reviewVerdictRecordRepository,
   type ReviewVerdictRecordCreateRow,
@@ -230,6 +232,33 @@ type FirstPass =
   | { decide: { gateId: string } }
   | { recorded: ReviewVerdictRecord; withdrew: string[] };
 
+/**
+ * THE RUN-TOKEN ADMISSION (Story MOTIR-11941 · MOTIR-11953; `approval-gates.md` §12.18): the
+ * token's run must be a RUNNING review in a person's own agent (`origin: instance`, `command:
+ * review`) with a leg on `workItemId`. Its token was minted as the person who started it, so
+ * `ctx.userId` is already that person. Anything else is {@link ReviewVerdictRunTokenNotAllowedError}.
+ */
+async function assertOwnAgentReviewRun(
+  runId: string,
+  workItemId: string,
+  ctx: ServiceContext,
+): Promise<void> {
+  const admitted = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    async (tx) => {
+      const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
+      return (
+        run !== null &&
+        run.origin === 'instance' &&
+        run.command === 'review' &&
+        run.status === 'running' &&
+        run.cards.some((leg) => leg.workItemId === workItemId)
+      );
+    },
+  );
+  if (!admitted) throw new ReviewVerdictRunTokenNotAllowedError();
+}
+
 export const reviewVerdictService = {
   /**
    * Submit ONE agent verdict for a run-target card (§12.11). Returns what it did —
@@ -250,6 +279,11 @@ export const reviewVerdictService = {
     const input = normalise(rawInput);
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
     await projectAccessService.assertPermission(projectId, ctx, 'work_item:edit');
+    // ONE run kind's token is admitted (MOTIR-11953): a review in the person's own agent,
+    // running, with a leg on this card — refused before anything is stored.
+    if (ctx.tokenDispatchRunId !== undefined) {
+      await assertOwnAgentReviewRun(ctx.tokenDispatchRunId, item.id, ctx);
+    }
 
     const verdict = gateVerdictOf(input.verdict);
     const rowOf = (

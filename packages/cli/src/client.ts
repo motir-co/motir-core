@@ -1219,6 +1219,18 @@ export interface DispatchRunView {
    * absent from a server older than contract 1.59.0.
    */
   repair?: DispatchRunRepair | null;
+  /**
+   * What a `review` run reviews (MOTIR-11953) — the gate (null with Review off) and the
+   * delivery-set version the run was opened for. Null for any other command; absent from a
+   * server older than contract 1.89.0.
+   */
+  review?: DispatchRunReview | null;
+}
+
+/** What a review run was opened to review (MOTIR-11953). */
+export interface DispatchRunReview {
+  gateId: string | null;
+  subjectVersion: string;
 }
 
 /** A hosted repair's decision, read back from its run (MOTIR-6929). */
@@ -1296,6 +1308,32 @@ export interface AgentReviewLoggedBug {
   key: string;
   title: string;
   outcome: 'filed' | 'already_filed';
+}
+
+/**
+ * A verdict through the review-verdict door (`POST …/review-verdict`, MOTIR-11953) — the
+ * door a person's own agent answers its `review` run through.
+ */
+export interface ReviewVerdictSubmission {
+  subjectVersion: string;
+  verdict: 'approved' | 'changes_requested';
+  summaryMd: string | null;
+  findingsMd: string | null;
+  /** The harness the review ran in, e.g. `Claude Code`. */
+  harness: string;
+  /** The model the review ran on. */
+  model: string;
+}
+
+/** What the review-verdict door did with an accepted verdict. */
+export interface ReviewVerdictResult {
+  key: string;
+  recordId: string;
+  /** `decided` — it decided the awaiting review gate; `recorded` — the gate was off. */
+  outcome: 'decided' | 'recorded';
+  verdict: 'approved' | 'changes_requested';
+  subjectVersion: string;
+  gateId: string | null;
 }
 
 /** What an ACCEPTED verdict did. */
@@ -2545,6 +2583,37 @@ export class MotirClient {
       subjectVersion: body.subjectVersion,
       decidedAt: body.decidedAt,
       bugs: body.bugs.map((b) => ({ key: b.key, title: b.title, outcome: b.outcome })),
+    };
+  }
+
+  /**
+   * SUBMIT an own-agent review run's ONE verdict through the review-verdict door
+   * (MOTIR-11953). The run's own token is admitted for its own card; a late or second
+   * verdict is a refusal (`REVIEW_VERDICT_LATE` / `REVIEW_VERDICT_SECOND`) the caller reads.
+   */
+  async submitReviewVerdict(
+    key: string,
+    verdict: ReviewVerdictSubmission,
+  ): Promise<ReviewVerdictResult> {
+    const body = await this.v1.request('submitWorkItemReviewVerdict', {
+      path: { key },
+      body: {
+        verdict: verdict.verdict,
+        subjectVersion: verdict.subjectVersion,
+        summaryMd: verdict.summaryMd,
+        findingsMd: verdict.findingsMd,
+        checklist: [],
+        harness: verdict.harness,
+        model: verdict.model,
+      },
+    });
+    return {
+      key: body.key,
+      recordId: body.recordId,
+      outcome: body.outcome,
+      verdict: body.verdict,
+      subjectVersion: body.subjectVersion,
+      gateId: body.gateId,
     };
   }
 
