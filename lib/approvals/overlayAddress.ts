@@ -48,10 +48,11 @@ export const APPROVAL_GATE_KINDS = [
   // planning surface, and the overlay address is NOT extended to it (ADR
   // `approval-gates.md` §11.5b). Listed so the tuple stays total over the enum.
   'plan_approval',
-  // An ADDRESS the overlay opens, though no To-approve row writes it: the review agent's
-  // gate is never on that list (ADR §12.1). The item page's Development frame writes it —
+  // An ADDRESS the overlay opens: the item page's Development frame writes it —
   // *Continue without the review* hands over here, where the one decision on the kind is
-  // made (§12.3; MOTIR-6323's rule that every decision is the overlay's).
+  // made (§12.3; MOTIR-6323's rule that every decision is the overlay's) — and so does a
+  // To approve review-to-run row's press (Bug MOTIR-11983; ADR §12.19). The gate is still
+  // never an approval row (§12.1).
   'agent_review',
   // The manual-work question a run raised (MOTIR-7474): its Waiting on you row opens
   // here, where Mark done is pressed (`manual-work-gate.md` §5).
