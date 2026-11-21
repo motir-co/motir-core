@@ -301,12 +301,14 @@ A card's delivery set has gone green in a project with the review agent on, and 
 
 #### 8.1 · What starts, and as whom
 
-- **One review run per awaiting `agent_review` gate**, started by the server from the gate's raise (the `agent-review/requested` job, MOTIR-6820), and again only on _Review again_. Nothing else starts one, and nothing retries one.
+- ~~**One review run per awaiting `agent_review` gate**, started by the server from the gate's raise (the `agent-review/requested` job, MOTIR-6820), and again only on _Review again_. Nothing else starts one, and nothing retries one.~~
+  **Superseded 2026-11-20 (Story MOTIR-11941, §8.8):** a review run starts only on a person's press of _Review with Motir agent_. Nothing else starts one, and nothing retries one.
 - It is a `DispatchRun` with **`command: review`** (a new `DispatchCommand` member), **`origin: hosted`**, and **`MOTIR_RUN_MODE=review`** in the container. The launcher's `run` / `continue` seam (`packages/cli/sandbox/hosted/entrypoint.ts`, MOTIR-6527) gains that third mode, and the container runs `motir review <KEY>` (MOTIR-6824).
 - **It makes NO to-do claim.** The card is already in the review band, and a review changes nobody's claim on it. The run is not a claim either: the gate it answers is the one-review-at-a-time lock.
 - **Every Run-hosted pre-flight still applies**: the fleet slot, the organisation's agent credits, the offered model (§7, taking the default), and a credential for every delivery-set repository (§4). A refusal before anything boots opens no container and is written onto the gate as the reason the review could not run.
-- **Attributed to the card's assignee, else its reporter, else the workspace's stand-in manager** — the actor the CI-feedback path already writes as when no person pressed anything. `DispatchRun.dispatcherId`, the run token's owner and the verdict's `decidedById` are that user. The authority column, not the user, says a machine decided (`approval-gates.md` §12.3).
-- **Billed to the organisation at the agent-lane rate**, exactly as any hosted run: the same run key, the same meter by `DispatchRun.id` (§1). A review is paid work, which is why the switch defaults off.
+- ~~**Attributed to the card's assignee, else its reporter, else the workspace's stand-in manager** — the actor the CI-feedback path already writes as when no person pressed anything. `DispatchRun.dispatcherId`, the run token's owner and the verdict's `decidedById` are that user.~~
+  **Superseded 2026-11-20 (Story MOTIR-11941, §8.8):** it is attributed to the person who pressed: `DispatchRun.dispatcherId`, the run token's owner and the verdict's `decidedById` are that user. The authority column, not the user, says a machine decided (`approval-gates.md` §12.3).
+- **Billed to the organisation at the agent-lane rate**, exactly as any hosted run: the same run key, the same meter by `DispatchRun.id` (§1). A review is paid work~~, which is why the switch defaults off~~ (amended 2026-11-20, §8.8: it starts only when a person starts it).
 
 #### 8.2 · What it reads
 
@@ -370,6 +372,24 @@ A card a review sent back — To fix `changes_requested` — can be repaired on 
 - **It pushes to those branches, and opens nothing.** Unlike §8.3's review, a repair must write: its credential is §4's, with `contents: write` on each repository of the delivery set. It opens no pull request, merges nothing, and posts nothing to GitHub.
 - **Attributed to the person who pressed**, billed to the organisation at the agent-lane rate, and identified by `DispatchRun.id` as every hosted run (§1).
 - **Its ends are §2's**, with one difference: no end moves the card. A push moves the head, which retires the review's version, and CI's next green is reviewed again. A repair that ends without pushing leaves the card To fix.
+
+#### 8.8 · The review run starts on a person's press — AMENDED 2026-11-20 (Story MOTIR-11941)
+
+The rule is `approval-gates.md` §12.18. This is what it changes for the hosted run.
+
+- **A gate's raise starts nothing.** No request job is emitted, and no run is opened. The
+  hosted review run is started by a person pressing _Review with Motir agent_ on the card,
+  which the server offers to whoever `resolveGateAuthority` allows with `work_item:edit`,
+  whether the project's _Review_ setting is on or off.
+- **One press, one run.** The press opens ONE `command: review` run for the awaiting gate and
+  its version, under a fresh request key (`lib/agentReview/reviewRunKey.ts`). A run already in
+  flight for the gate refuses the press. A gate whose run could not run (§8.4's last point)
+  offers the same press again; there is no separate _Review again_.
+- **Attributed to the person who pressed**, and billed to the organisation at the agent-lane
+  rate, as every hosted run (§1). The pre-flights of §8.1 apply to the press, and a refusal
+  is written onto the gate as the reason the review could not run.
+- **Everything else in §8.1–§8.7 holds**: what the run reads, what it never writes, how the
+  verdict reaches Motir, the optional convention and the bugs it logs.
 
 ### 9 · The gateway origin a hosted-run container dials — AMENDED 2026-10-26 (MOTIR-7656, for Story MOTIR-714 · 9.4)
 
