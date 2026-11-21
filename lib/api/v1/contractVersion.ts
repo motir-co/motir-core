@@ -1272,5 +1272,19 @@
  *   a new code for a new condition (§8's allowed list).
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.87.0` after `1.86.0` above.
+ *
+ * - `1.88.0` — Story MOTIR-11941 · MOTIR-11952 adds a GATE-OFF variant to the review run's
+ *   `ReviewPrompt` (`GET …/work-items/{key}/review-prompt`) and `AgentReviewResult`
+ *   (`POST …/work-items/{key}/agent-review`): with Review off a person can start a hosted
+ *   review of an item that has no `agent_review` gate (`approval-gates.md` §12.18), so the
+ *   prompt answers `gateId: null` and the run's own version, and an accepted verdict stored
+ *   as a review record answers `gateId: null` with `outcome: 'recorded'`. The result gains
+ *   `outcome` (`'decided'` on the gate-on variant).
+ *
+ *   Additive, split as 1.21.0 split the subsumption advisory: the gate-on variants keep the
+ *   shipped shape (plus the result's new `outcome` field, §8's allowed list), and `gateId`
+ *   is not retyped to nullable — the gate-off variants are shapes no client has received.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.88.0` after `1.87.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.87.0';
+export const V1_CONTRACT_VERSION = '1.88.0';

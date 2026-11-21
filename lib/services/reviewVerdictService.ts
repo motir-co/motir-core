@@ -139,8 +139,10 @@ function normalise(input: SubmitReviewVerdictInput): SubmitReviewVerdictInput {
   };
 }
 
-/** A decided `agent_review` gate at the version — the gate-on half of SECOND. */
-function decidedAt(gate: ApprovalGate | null, version: string): boolean {
+/** A decided `agent_review` gate at the version — the gate-on half of SECOND. Exported for
+ *  the hosted review with no gate (`agentReviewRunService.submitVerdict`), which gives this
+ *  door's outcomes and so must read SECOND the same way. */
+export function decidedAt(gate: ApprovalGate | null, version: string): boolean {
   return (
     gate !== null &&
     gate.subjectVersion === version &&
@@ -149,11 +151,15 @@ function decidedAt(gate: ApprovalGate | null, version: string): boolean {
 }
 
 /**
- * Withdraw the card's awaiting approve-and-merge gate on a send-back (§12.14), and recompute
- * the card's To fix answer — gates first, then the card, the order every withdrawal takes.
- * Returns the gates withdrawn.
+ * Withdraw the card's awaiting approve-and-merge gate on a send-back (§12.14). The caller
+ * then recomputes the card's To fix answer — gates first, then the card, the order every
+ * withdrawal takes. Returns the gates withdrawn. Exported so the hosted review with no gate
+ * (§12.18) sends back exactly as this door does, rather than through a copy.
  */
-async function applySendBack(workItemId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+export async function applySendBack(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
   // ⚠️ …AND A STORY RUN'S AWAITING ACCEPTANCE QUESTION WITH IT. The video is the evidence
   // for that merge and its press merges, so a send-back that left it awaiting would keep
   // the story in To approve over the code just sent back (`pullRequestApprovalHandler`'s
@@ -197,7 +203,7 @@ async function applySendBack(workItemId: string, tx: Prisma.TransactionClient): 
  * one with its story, so a verdict at `current` never matched the awaiting gate and a
  * verdict at the gate's version was refused late — the gate was never decided.
  */
-async function reviewSubjectDeliveries(
+export async function reviewSubjectDeliveries(
   item: { id: string; identifier: string; parentId: string | null },
   deliveries: readonly WorkItemDeliveryWithChecks[],
   workspaceId: string,

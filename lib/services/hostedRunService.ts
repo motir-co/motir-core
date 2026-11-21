@@ -4,6 +4,7 @@ import { checkAgentRunCredits, type AgentModel } from '@/lib/ai/motirAiClient';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
 import { gateIdOfReviewRunKey } from '@/lib/agentReview/reviewRunKey';
+import { REVIEW_NO_VERDICT_REASON } from '@/lib/agentReview/reviewState';
 import {
   hostedRunWriteAccess,
   repositoriesForItems,
@@ -139,7 +140,10 @@ type ResolvedStartInput = StartHostedRunInput & { model: string };
  */
 export interface StartHostedReviewInput {
   workItemId: string;
-  gateId: string;
+  /** The gate the run answers, or null for a review with no gate — Review off
+   *  (`approval-gates.md` §12.18), keyed `reviewItemRunKey` and versioned over the item's
+   *  own delivery set as the user-token verdict door measures it. */
+  gateId: string | null;
   subjectVersion: string;
   /** The request's key (`lib/agentReview/reviewRunKey.ts`) — the run's idempotency key,
    *  which is how the run names its gate. */
@@ -147,8 +151,9 @@ export interface StartHostedReviewInput {
 }
 
 /** The `reviewUnavailableReason` a review run that ended without a verdict leaves on its
- *  still-awaiting gate (`approval-gates.md` §12.6, the column's own comment). */
-export const REVIEW_NO_VERDICT_REASON = 'no_verdict';
+ *  still-awaiting gate (`approval-gates.md` §12.6) — defined beside the review state, which
+ *  derives the same reason for a review with no gate (§12.18). */
+export { REVIEW_NO_VERDICT_REASON };
 
 /** The teardown detail of a review run whose gate was superseded (§12.5). */
 export const HOSTED_REVIEW_SUPERSEDED_DETAIL = 'its review was superseded';
@@ -1132,7 +1137,9 @@ async function startReview(
       options,
       {
         MOTIR_RUN_MODE: 'review',
-        MOTIR_REVIEW_GATE_ID: input.gateId,
+        // A review with no gate boots with no gate id: the CLI's boot check compares the
+        // gate only when the variable is set (`packages/cli/src/commands/review.ts`).
+        ...(input.gateId === null ? {} : { MOTIR_REVIEW_GATE_ID: input.gateId }),
         MOTIR_REVIEW_VERSION: input.subjectVersion,
       },
       false,
@@ -1165,6 +1172,9 @@ async function recordReviewEnd(run: {
   idempotencyKey: string | null;
 }): Promise<void> {
   if (run.command !== 'review') return;
+  // A review with no gate (`reviewItemRunKey`, §12.18) has nowhere to write its reason:
+  // its key names no gate, so this returns, and the review state read derives *could not
+  // run* from the run itself (`reviewStateRepository.listItemReviewRuns`).
   const gateId = gateIdOfReviewRunKey(run.idempotencyKey);
   if (!gateId) return;
   try {

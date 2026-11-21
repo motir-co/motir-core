@@ -19,6 +19,11 @@ import { countableReviewsAtHead, type CountableReview } from '@/lib/approvalGate
 /** The `harness` the hosted review run records on its verdict rows. */
 export const HOSTED_REVIEW_HARNESS = 'Motir hosted review';
 
+/** The reason a review run that ended without a verdict is read with (`approval-gates.md`
+ *  §12.6, the `reviewUnavailableReason` column's own comment): written onto a still-awaiting
+ *  gate, and derived for a review with no gate (§12.18) from the run itself. */
+export const REVIEW_NO_VERDICT_REASON = 'no_verdict';
+
 /** A verdict record ANSWERS its version when it decided the gate or stood as the review. */
 const ANSWERING = new Set<ReviewVerdictRecord['outcome']>(['decided', 'recorded']);
 

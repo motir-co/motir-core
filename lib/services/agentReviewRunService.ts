@@ -7,6 +7,7 @@ import {
   ReviewVerdictAlreadySubmittedError,
   type ReviewStaleCause,
 } from '@/lib/agentReview/errors';
+import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { HOSTED_REVIEW_HARNESS } from '@/lib/agentReview/reviewState';
 import {
@@ -33,10 +34,12 @@ import { approvalGateRepository } from '@/lib/repositories/approvalGateRepositor
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { reviewVerdictRecordService } from '@/lib/services/reviewVerdictRecordService';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
 import { DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
 import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import {
@@ -45,6 +48,11 @@ import {
   type ReviewBugInput,
 } from '@/lib/services/reviewBugFilingService';
 import { reviewConventionsService } from '@/lib/services/reviewConventionsService';
+import {
+  applySendBack,
+  decidedAt,
+  reviewSubjectDeliveries,
+} from '@/lib/services/reviewVerdictService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -73,25 +81,45 @@ import { readProject } from '@/lib/workspaces/tenantRead';
 // (`PERMISSION_DENIED`, 403) and nothing is decided. The token's own grant
 // (`HOSTED_RUN_TOKEN_GRANT`) already holds the key, so no grant widening was needed.
 
-/** The data a `review_verdict` event carries — what the run concluded and what became of it. */
-type VerdictOutcome = 'decided' | ReviewStaleCause;
+/** The data a `review_verdict` event carries — what the run concluded and what became of it.
+ *  `recorded` is a review with no gate (§12.18): the verdict is the review record. */
+type VerdictOutcome = 'decided' | 'recorded' | ReviewStaleCause;
 
 interface ReviewRunRef {
   id: string;
   /** The model the run reviewed on — the verdict record's model. */
   model: string | null;
+  /**
+   * The version a review with NO GATE was opened at (Story MOTIR-11941 · MOTIR-11952,
+   * `approval-gates.md` §12.18) — its `run_opened` names `gateId: null` and this version.
+   * Null for a run opened for a gate, whose version is the gate's.
+   */
+  gateOffVersion: string | null;
+}
+
+/**
+ * The version a run's `run_opened` event opened a GATE-OFF review at, or null when the event
+ * names a gate (or is missing). Decided by the event, never the key's prefix, so any review
+ * run opened with no gate — hosted, or a My agents review run — reads the same way.
+ */
+function gateOffVersionOf(data: unknown): string | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const opened = data as { gateId?: unknown; subjectVersion?: unknown };
+  return opened.gateId === null && typeof opened.subjectVersion === 'string'
+    ? opened.subjectVersion
+    : null;
 }
 
 /** The token's run, when it is a REVIEW run — else the refusal. Nothing is read for a PAT. */
 async function requireReviewRun(ctx: ServiceContext): Promise<ReviewRunRef> {
   const runId = ctx.tokenDispatchRunId;
   if (runId === undefined) throw new ReviewRunTokenRequiredError();
-  const run = await withWorkspaceContext(
-    { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    (tx) => dispatchRunRepository.findById(runId, tx),
-  );
-  if (!run || run.command !== 'review') throw new ReviewRunTokenRequiredError();
-  return { id: run.id, model: run.model };
+  return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+    const run = await dispatchRunRepository.findById(runId, tx);
+    if (!run || run.command !== 'review') throw new ReviewRunTokenRequiredError();
+    const opened = await dispatchRunEventRepository.findLatestOfKind(run.id, 'run_opened', tx);
+    return { id: run.id, model: run.model, gateOffVersion: gateOffVersionOf(opened?.data) };
+  });
 }
 
 function pullRequestUrl(repository: string, number: number): string {
@@ -287,6 +315,90 @@ function staleCauseOf(err: unknown): ReviewStaleCause | null {
   return null;
 }
 
+/** What the gate-off first pass found — a refusal, a gate to decide, or the stored record. */
+type GateOffPass =
+  | { refused: 'stale_version' | 'already_decided'; gateId: string | null }
+  | { decide: true }
+  | { recorded: { id: string; createdAt: Date } };
+
+/**
+ * A REVIEW WITH NO GATE's verdict (Story MOTIR-11941 · MOTIR-11952; `approval-gates.md`
+ * §12.18, §12.12–§12.14) — the user-token door's branch order (`reviewVerdictService.submit`),
+ * fed by the run and measured at the item's CURRENT own version, in ONE transaction:
+ *
+ *   1. LATE — the verdict's version is not the current one;
+ *   2. SECOND — an answering record, or a decided review gate, already at that version;
+ *   3. an AWAITING `agent_review` gate at that version (Review was turned on while the run
+ *      ran) — the caller decides it exactly as a gate-on run does;
+ *   4. otherwise RECORDED — the verdict is the review record, posted by the bot after
+ *      commit; a send-back withdraws an awaiting approve-and-merge gate under
+ *      `agent_changes_requested` and recomputes To fix, in the same transaction.
+ *
+ * The helpers are the door's own (exported, never copied), so the two doors cannot drift.
+ * A concurrent answer at the version loses on the partial unique index and is stored SECOND.
+ */
+async function gateOffPass(
+  run: ReviewRunRef,
+  item: { id: string; identifier: string; projectId: string; parentId: string | null },
+  input: { subjectVersion: string; verdict: ReviewVerdict },
+  text: { summaryMd: string | null; findingsMd: string | null },
+  ctx: ServiceContext,
+): Promise<GateOffPass> {
+  const scope = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  try {
+    return await withWorkspaceContext(scope, async (tx): Promise<GateOffPass> => {
+      const deliveries = await reviewSubjectDeliveries(
+        item,
+        await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+        ctx.workspaceId,
+        tx,
+      );
+      const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
+      const review = await approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx);
+      const reviewAtVersion = review?.subjectVersion === input.subjectVersion ? review : null;
+      if (current === null || input.subjectVersion !== current) {
+        return { refused: 'stale_version', gateId: reviewAtVersion?.id ?? null };
+      }
+      const answered = await reviewVerdictRecordRepository.findAnswerAt(item.id, current, tx);
+      if (answered || decidedAt(review, current)) {
+        return { refused: 'already_decided', gateId: reviewAtVersion?.id ?? null };
+      }
+      if (review && review.state === 'awaiting' && review.subjectVersion === current) {
+        return { decide: true };
+      }
+      const recorded = await reviewVerdictRecordService.record(
+        {
+          workspaceId: ctx.workspaceId,
+          projectId: item.projectId,
+          workItemId: item.id,
+          gateId: null,
+          subjectVersion: current,
+          verdict: input.verdict,
+          outcome: 'recorded',
+          summaryMd: text.summaryMd,
+          findingsMd: text.findingsMd,
+          checklist: [],
+          submittedById: ctx.userId,
+          harness: HOSTED_REVIEW_HARNESS,
+          model: run.model ?? 'unknown',
+        },
+        tx,
+      );
+      reviewBotPostService.requestPostAfterCommit(ctx.workspaceId, recorded.id);
+      if (input.verdict === 'changes_requested') await applySendBack(item.id, tx);
+      await recomputeWorkItemFixReason(item.id, tx);
+      return { recorded: { id: recorded.id, createdAt: recorded.createdAt } };
+    });
+  } catch (err) {
+    /* v8 ignore next 4 -- race-only: another door's answer at this version committed between
+       the `findAnswerAt` read above and this insert, and the partial unique index refused it. */
+    if (err instanceof ReviewVerdictAnswerExistsError) {
+      return { refused: 'already_decided', gateId: null };
+    }
+    throw err;
+  }
+}
+
 export const agentReviewRunService = {
   /**
    * THE REVIEW PROMPT (§8.2) — the card's two bodies, its acceptance criteria, its
@@ -299,7 +411,7 @@ export const agentReviewRunService = {
     identifier: string,
     ctx: ServiceContext,
   ): Promise<ReviewPromptDto> {
-    await requireReviewRun(ctx);
+    const run = await requireReviewRun(ctx);
     const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
@@ -307,16 +419,28 @@ export const agentReviewRunService = {
     // The card binding — the run's own cards only (`runTokenScopeService`).
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
 
-    const { gate, deliveries, tree } = await withWorkspaceContext(
+    // ⚠️ A REVIEW WITH NO GATE IS REVIEWED AT THE RUN'S VERSION (§12.18), read off its
+    // `run_opened`, never a gate's — the item may have no `agent_review` gate at all. A run
+    // opened for a gate keeps reading the gate's version, and still refuses without one.
+    const { reviewed, deliveries, tree } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        if (run.gateOffVersion !== null) {
+          return {
+            reviewed: { gateId: null, subjectVersion: run.gateOffVersion },
+            deliveries: await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+            tree: await readCriteriaTree(item.id, tx),
+          };
+        }
         const found = await approvalGateRepository.findLatestByWorkItem(
           item.id,
           'agent_review',
           tx,
         );
         return {
-          gate: found,
+          reviewed: found?.subjectVersion
+            ? { gateId: found.id, subjectVersion: found.subjectVersion }
+            : null,
           deliveries: found
             ? await workItemDeliveryRepository.listByWorkItemWithChecks(found.subjectId, tx)
             : [],
@@ -324,7 +448,7 @@ export const agentReviewRunService = {
         };
       },
     );
-    if (!gate?.subjectVersion) throw new ReviewGateNotFoundError(item.identifier);
+    if (!reviewed) throw new ReviewGateNotFoundError(item.identifier);
 
     const howToTest = await testInstructionsService.getCurrentByIdentifier(
       projectId,
@@ -334,7 +458,7 @@ export const agentReviewRunService = {
 
     // Each member AS THE GATE NAMES IT — repository, number and the reviewed head — with
     // the branch names Motir holds for that pull request beside it.
-    const pullRequests: ReviewPullRequestForPrompt[] = membersOf(gate.subjectVersion).map(
+    const pullRequests: ReviewPullRequestForPrompt[] = membersOf(reviewed.subjectVersion).map(
       (member) => {
         const row = deliveries.find(
           (d) =>
@@ -372,7 +496,7 @@ export const agentReviewRunService = {
       descriptionMd: item.descriptionMd,
       explanationMd: item.explanationMd,
       howToTestMd: howToTest.record?.bodyMd ?? null,
-      subjectVersion: gate.subjectVersion,
+      subjectVersion: reviewed.subjectVersion,
       pullRequests,
       conventions,
       criteriaTree: await criteriaTreeOf(tree, projectId, ctx.workspaceId),
@@ -381,8 +505,8 @@ export const agentReviewRunService = {
 
     return {
       key: item.identifier,
-      gateId: gate.id,
-      subjectVersion: gate.subjectVersion,
+      gateId: reviewed.gateId,
+      subjectVersion: reviewed.subjectVersion,
       pullRequests: pullRequests.map(
         (pr): ReviewPullRequestDto => ({
           repository: pr.repository,
@@ -464,6 +588,43 @@ export const agentReviewRunService = {
         ctx,
       );
 
+    // ⚠️ A REVIEW WITH NO GATE (§12.18) answers as the user-token door does. Only an
+    // awaiting gate at the run's version — Review turned on while it ran — falls through to
+    // the gate-on decide below; every gate-on run takes none of this.
+    if (run.gateOffVersion !== null) {
+      const pass = await gateOffPass(run, item, input, { summaryMd, findingsMd }, ctx);
+      if ('refused' in pass) {
+        await record(pass.refused, pass.gateId);
+        await recordVerdictRow(
+          run,
+          item,
+          {
+            verdict: input.verdict,
+            subjectVersion: input.subjectVersion,
+            outcome: pass.refused === 'already_decided' ? 'second' : 'late',
+            gateId: pass.gateId,
+            summaryMd,
+            findingsMd,
+          },
+          ctx,
+        );
+        throw new ReviewStaleError(pass.refused, input.subjectVersion, bugKeys);
+      }
+      if ('recorded' in pass) {
+        await record('recorded', null);
+        return {
+          key: item.identifier,
+          gateId: null,
+          outcome: 'recorded',
+          verdict: input.verdict,
+          state: input.verdict === 'pass' ? 'approved' : 'changes_requested',
+          subjectVersion: input.subjectVersion,
+          decidedAt: pass.recorded.createdAt.toISOString(),
+          bugs: loggedBugs,
+        };
+      }
+    }
+
     let decided;
     try {
       decided = await approvalGatesService.decideAgentReview(
@@ -521,6 +682,7 @@ export const agentReviewRunService = {
     return {
       key: item.identifier,
       gateId: decided.gate.id,
+      outcome: 'decided',
       verdict: input.verdict,
       state: input.verdict === 'pass' ? 'approved' : 'changes_requested',
       subjectVersion: decided.gate.subjectVersion ?? input.subjectVersion,

@@ -472,6 +472,7 @@ function stateOf(over: Partial<ReviewStateDTO>): ReviewStateDTO {
     authorOfEveryPr: false,
     routedTo: null,
     viewerIsRouted: false,
+    itemReviewRun: null,
     ...over,
   };
 }

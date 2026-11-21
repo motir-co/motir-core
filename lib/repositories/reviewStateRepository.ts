@@ -1,5 +1,10 @@
 import type { ApprovalGate, Prisma } from '@/generated/prisma/client';
-import { gateIdOfReviewRunKey, reviewRunKeyPrefix } from '@/lib/agentReview/reviewRunKey';
+import {
+  gateIdOfReviewRunKey,
+  reviewItemRunKeyPrefix,
+  reviewRunKeyPrefix,
+} from '@/lib/agentReview/reviewRunKey';
+import { REVIEW_NO_VERDICT_REASON } from '@/lib/agentReview/reviewState';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 
 // The BATCH READS of the review state read model (Story MOTIR-10327 · MOTIR-10340). Each is
@@ -37,6 +42,15 @@ export type ReviewStateRecordRow = Prisma.ReviewVerdictRecordGetPayload<{
 export type ReviewStateDismissalRow = Prisma.ReviewDismissalGetPayload<{
   include: { dismissedBy: { select: { id: true; name: true } } };
 }>;
+
+/** A review with no gate, as the read answers it for one item at one version (§12.18). */
+export interface ItemReviewRunRow {
+  /** `in_flight` while the latest run runs; `could_not_run` when it ended with no verdict. */
+  state: 'in_flight' | 'could_not_run';
+  dispatchRunId: string;
+  /** {@link REVIEW_NO_VERDICT_REASON} on `could_not_run`; null while in flight. */
+  reason: string | null;
+}
 
 export const reviewStateRepository = {
   /** The cards themselves, in ONE query. */
@@ -191,6 +205,70 @@ export const reviewStateRepository = {
     return new Set(
       runs.map((run) => gateIdOfReviewRunKey(run.idempotencyKey)).filter((id) => id !== null),
     );
+  },
+
+  /**
+   * THE REVIEWS WITH NO GATE of a set of items, each at one version (Story MOTIR-11941 ·
+   * MOTIR-11952; `approval-gates.md` §12.18) — every such run is opened under
+   * `reviewItemRunKeyPrefix(workItemId, version)`. Per item, the LATEST run under its prefix
+   * decides the answer: `in_flight` while it runs, `could_not_run` (with
+   * {@link REVIEW_NO_VERDICT_REASON}) once it ended with no `review_verdict` event, and no
+   * entry after one that submitted a verdict — so a later run under a new request id is
+   * what the answer follows.
+   *
+   * TWO QUERIES for the whole page, whatever its size: the runs, then the verdict events of
+   * the ended latest runs. `workspaceId` is in the `where` as well as the RLS binding, as
+   * {@link listGateIdsWithRunningReview} has it.
+   */
+  async listItemReviewRuns(
+    workspaceId: string,
+    items: readonly { workItemId: string; subjectVersion: string }[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, ItemReviewRunRow>> {
+    const out = new Map<string, ItemReviewRunRow>();
+    if (items.length === 0) return out;
+    const prefixes = items.map((item) => ({
+      workItemId: item.workItemId,
+      prefix: reviewItemRunKeyPrefix(item.workItemId, item.subjectVersion),
+    }));
+    const runs = await tx.dispatchRun.findMany({
+      where: {
+        workspaceId,
+        command: 'review',
+        OR: prefixes.map(({ prefix }) => ({ idempotencyKey: { startsWith: prefix } })),
+      },
+      select: { id: true, status: true, idempotencyKey: true },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+    });
+    const latest = new Map<string, { id: string; status: string }>();
+    for (const { workItemId, prefix } of prefixes) {
+      const run = runs.find((r) => r.idempotencyKey?.startsWith(prefix));
+      if (run) latest.set(workItemId, run);
+    }
+    const ended = [...latest.values()].filter((run) => run.status !== 'running').map((r) => r.id);
+    const withVerdict = new Set(
+      ended.length === 0
+        ? []
+        : (
+            await tx.dispatchRunEvent.findMany({
+              where: { dispatchRunId: { in: ended }, kind: 'review_verdict' },
+              select: { dispatchRunId: true },
+              distinct: ['dispatchRunId'],
+            })
+          ).map((event) => event.dispatchRunId),
+    );
+    for (const [workItemId, run] of latest) {
+      if (run.status === 'running') {
+        out.set(workItemId, { state: 'in_flight', dispatchRunId: run.id, reason: null });
+      } else if (!withVerdict.has(run.id)) {
+        out.set(workItemId, {
+          state: 'could_not_run',
+          dispatchRunId: run.id,
+          reason: REVIEW_NO_VERDICT_REASON,
+        });
+      }
+    }
+    return out;
   },
 
   /**

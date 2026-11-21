@@ -167,6 +167,7 @@ function setup(over: {
       return {
         key,
         gateId: 'gate_1',
+        outcome: 'decided' as const,
         verdict: verdict.verdict,
         state: verdict.verdict === 'pass' ? 'approved' : 'changes_requested',
         subjectVersion: verdict.subjectVersion,
@@ -822,6 +823,7 @@ describe('the client — the review prompt, and the verdict (a late one typed)',
           body: {
             key: req.params.key,
             gateId: 'gate_1',
+            outcome: 'decided',
             verdict: 'pass',
             state: 'approved',
             subjectVersion: VERSION_2,
@@ -880,6 +882,47 @@ describe('the client — the review prompt, and the verdict (a late one typed)',
       expect(late).toBeInstanceOf(ReviewStaleError);
       expect((late as ReviewStaleError).exitCode).toBe(0);
       expect((late as Error).message).toMatch(/withdrawn/);
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+describe('the client — a review with no gate (contract 1.88.0)', () => {
+  it('reads a prompt with gateId null and a verdict stored as a review record', async () => {
+    const { startTestServer } = await import('./helpers/testServer.js');
+    const { MotirClient } = await import('../src/client.js');
+    const prompt = { ...served(true), gateId: null };
+    const server = await startTestServer({
+      token: 'run-token',
+      v1: {
+        'GET /api/v1/work-items/{key}/review-prompt': { body: prompt },
+        'POST /api/v1/work-items/{key}/agent-review': (req) => ({
+          body: {
+            key: req.params.key,
+            gateId: null,
+            outcome: 'recorded',
+            verdict: 'pass',
+            state: 'approved',
+            subjectVersion: VERSION_2,
+            decidedAt: '2026-11-20T10:00:00.000Z',
+            bugs: [],
+          },
+        }),
+      },
+    });
+    try {
+      const client = new MotirClient({ serverUrl: server.url, token: 'run-token' });
+      expect((await client.reviewPrompt(KEY)).gateId).toBeNull();
+      expect(
+        await client.submitAgentReview(KEY, {
+          subjectVersion: VERSION_2,
+          verdict: 'pass',
+          summaryMd: 'ok',
+          findingsMd: null,
+          bugs: [],
+        }),
+      ).toMatchObject({ gateId: null, outcome: 'recorded' });
     } finally {
       await server.close();
     }

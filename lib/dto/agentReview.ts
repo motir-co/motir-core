@@ -20,7 +20,9 @@ export interface ReviewPullRequestDto {
 /** `GET …/review-prompt` — the brief, and the coordinates the launcher checks out. */
 export interface ReviewPromptDto {
   key: string;
-  gateId: string;
+  /** The `agent_review` gate the verdict answers; null for a review with no gate (Review
+   *  off, `approval-gates.md` §12.18), reviewed at the run's own version. */
+  gateId: string | null;
   /** The version under review — what the verdict must name back. */
   subjectVersion: string;
   pullRequests: ReviewPullRequestDto[];
@@ -40,9 +42,13 @@ export interface ReviewLoggedBugDto {
 /** What the verdict route did with an ACCEPTED verdict. */
 export interface AgentReviewVerdictResultDto {
   key: string;
-  gateId: string;
+  /** The gate the verdict decided; null when it was stored as a review record (§12.18). */
+  gateId: string | null;
+  /** `decided` — a gate's answer; `recorded` — a review with no gate, stored as the record. */
+  outcome: 'decided' | 'recorded';
   verdict: ReviewVerdict;
-  /** The gate's state after the decision — `approved` or `changes_requested`. */
+  /** The gate's state after the decision — `approved` or `changes_requested` — or, for a
+   *  recorded verdict, the state that verdict stands for. */
   state: 'approved' | 'changes_requested';
   subjectVersion: string;
   decidedAt: string;

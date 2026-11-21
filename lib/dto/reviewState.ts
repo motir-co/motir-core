@@ -102,6 +102,17 @@ export interface ReviewStateDTO {
   routedTo: ReviewStatePersonDTO | null;
   /** The reader is the routed person. */
   viewerIsRouted: boolean;
+  /**
+   * A hosted review with NO GATE of the item at its current version (Story MOTIR-11941 ·
+   * MOTIR-11952; `approval-gates.md` §12.18) — `in_flight` while it runs, `could_not_run`
+   * once it ended with no verdict. Filled ONLY while the project's Review is off; with
+   * Review on the gate's own read (the marker) stays the answer, and this is null.
+   */
+  itemReviewRun: {
+    state: 'in_flight' | 'could_not_run';
+    dispatchRunId: string;
+    reason: string | null;
+  } | null;
 }
 
 function personDto(person: ReviewStatePerson | null): ReviewStatePersonDTO | null {
@@ -164,6 +175,7 @@ function refDto(ref: ReviewRecordRef | null): ReviewRecordRefDTO | null {
 export function toReviewStateDto(
   card: { id: string; identifier: string },
   state: ReviewState,
+  itemReviewRun: ReviewStateDTO['itemReviewRun'] = null,
 ): ReviewStateDTO {
   return {
     workItemId: card.id,
@@ -187,6 +199,7 @@ export function toReviewStateDto(
     authorOfEveryPr: state.authorOfEveryPr,
     routedTo: personDto(state.routedTo),
     viewerIsRouted: state.viewerIsRouted,
+    itemReviewRun: itemReviewRun ? { ...itemReviewRun } : null,
   };
 }
 

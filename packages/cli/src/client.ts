@@ -1266,7 +1266,8 @@ export interface ReviewPullRequest {
 /** `GET /api/v1/work-items/{key}/review-prompt` (MOTIR-6821). */
 export interface ReviewPrompt {
   key: string;
-  gateId: string;
+  /** Null for a review with no gate (Review off, contract 1.88.0). */
+  gateId: string | null;
   /** The version under review — the verdict names it back. */
   subjectVersion: string;
   pullRequests: ReviewPullRequest[];
@@ -1300,7 +1301,10 @@ export interface AgentReviewLoggedBug {
 /** What an ACCEPTED verdict did. */
 export interface AgentReviewResult {
   key: string;
-  gateId: string;
+  /** Null when the verdict was stored as a review record and decided no gate (1.88.0). */
+  gateId: string | null;
+  /** `decided` — a gate's answer; `recorded` — stored as a review record (1.88.0). */
+  outcome: 'decided' | 'recorded';
   verdict: 'pass' | 'changes_requested';
   state: 'approved' | 'changes_requested';
   subjectVersion: string;
@@ -2535,6 +2539,7 @@ export class MotirClient {
     return {
       key: body.key,
       gateId: body.gateId,
+      outcome: body.outcome,
       verdict: body.verdict,
       state: body.state,
       subjectVersion: body.subjectVersion,

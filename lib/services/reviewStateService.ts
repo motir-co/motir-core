@@ -176,10 +176,30 @@ export async function readReviewStates(
   );
   const recordsByCard = groupBy(records, (r) => r.workItemId);
   const dismissalsByCard = groupBy(dismissals, (d) => d.workItemId);
+  const setByCard = new Map(
+    cards.map(
+      (card) => [card.id, setOf(deliveriesByCard.get(card.id) ?? [], reviewsByPr)] as const,
+    ),
+  );
+
+  // ⚠️ A REVIEW WITH NO GATE IS READ ONLY WHILE REVIEW IS OFF (§12.18). With Review on, a
+  // hosted review always answers a gate, and the gate's own in-flight read above is the
+  // one source the marker derives from; reading both would let them disagree.
+  const itemRuns = project.reviewAgentEnabled
+    ? new Map<string, NonNullable<ReviewStateDTO['itemReviewRun']>>()
+    : await reviewStateRepository.listItemReviewRuns(
+        ctx.workspaceId,
+        cards.flatMap((card) => {
+          const version = setByCard.get(card.id)?.version;
+          return version ? [{ workItemId: card.id, subjectVersion: version }] : [];
+        }),
+        tx,
+      );
 
   const stateOf = (card: ReviewStateCardRow): ReviewState => {
     const id = card.id;
-    const set = setOf(deliveriesByCard.get(id) ?? [], reviewsByPr);
+    /* v8 ignore next -- every listed card has a set computed above. */
+    const set = setByCard.get(id) ?? { version: null, members: [] };
     const routedId = routedIdOf(card);
     const routed = personById.get(routedId);
     const gates = gatesByCard.get(id) ?? [];
@@ -211,7 +231,9 @@ export async function readReviewStates(
   const cardById = new Map(cards.map((card) => [card.id, card] as const));
   for (const id of allIds) {
     const card = cardById.get(id);
-    if (card?.projectId === projectId) out.set(id, toReviewStateDto(card, stateOf(card)));
+    if (card?.projectId === projectId) {
+      out.set(id, toReviewStateDto(card, stateOf(card), itemRuns.get(id) ?? null));
+    }
   }
   return out;
 }
