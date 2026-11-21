@@ -55,8 +55,8 @@ import zh from '@/messages/zh.json';
 // each is walked: *Review with Motir agent* with a picked model (Agent reviewing, then the
 // pass, the approve-and-merge row and the Reviewed badge; and a run that could not review,
 // which brings the doors back with no *Review again*), *Review in my agent* (the agent's
-// own progress, its send-back with the person, harness and model, and *Dismiss the
-// review*), and the command's door (a verdict with the person's token). A push takes the
+// own progress, its send-back with the person, harness and model, which with Review on
+// stands with nothing to dismiss), and the command's door (a verdict with the person's token). A push takes the
 // badge away and waits again with nothing started. With Review off the doors still review
 // and the verdict holds nothing. A teammate outside the routed set sees no doors; a person
 // with no agent of their own is pointed at My agents. Then the same surfaces in 中文.
@@ -119,7 +119,6 @@ const SEND_BACK_FINDINGS = [
   '',
   '- `lib/limit.ts:20` — the bucket map is module state. Key it by the API token.',
 ].join('\n');
-const DISMISS_REASON = 'Per-process limits are this card’s scope; per-key is MOTIR-2.';
 
 const fill = (text: string, vars: Record<string, string | number>) =>
   text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key]));
@@ -690,28 +689,18 @@ test.describe('review is a gate a person starts', () => {
     });
     await beat();
 
-    await chapter('Dismiss the review: the approve-and-merge row comes back', async () => {
+    await chapter('Sent back with Review on: the person fixes it, nothing to dismiss', async () => {
       await openItem(page, myAgent);
-      const control = main(page).getByTestId('dismiss-review');
-      await control.scrollIntoViewIfNeeded();
-      await control.getByRole('button', { name: rp.dismiss.button, exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: rp.dismiss.title });
-      await expect(dialog).toBeVisible();
-      await dialog.getByRole('textbox').fill(DISMISS_REASON);
-      const dismissed = doorPost(page, myAgent, 'review-dismissal');
-      await dialog.getByRole('button', { name: rp.dismiss.confirm, exact: true }).click();
-      expect((await dismissed).status()).toBe(200);
-      await awaitReviewGate(myAgent, 'pull_request_approval', myAgentV);
-      await page.goto('/workbench?tab=approvals');
-      const row = toApproveRow(page, myAgent);
-      await expect(row.locator('[data-review-line]')).toHaveAttribute(
-        'data-review-line',
-        'review_dismissed',
-        { timeout: FIRST_PAINT_MS },
-      );
-      await expect(row).toContainText(
-        plain(rp.line.dismissed, { name: s.owner.name, reason: DISMISS_REASON }),
-      );
+      await expect(band(page)).toHaveAttribute('data-state', 'sent-back', {
+        timeout: FIRST_PAINT_MS,
+      });
+      // Dismiss is a Review-off control (§ 32.6), and a Sent back band draws no verbs (§ 33.4):
+      // with Review on the send-back stands until a push moves the code.
+      await expect(main(page).getByTestId('dismiss-review')).toHaveCount(0);
+      await expect(
+        main(page).getByRole('button', { name: ar.verb.continueWithout, exact: true }),
+      ).toHaveCount(0);
+      expect(await awaitingReviewGate(myAgent, 'pull_request_approval')).toBeNull();
     });
     await beat();
 
