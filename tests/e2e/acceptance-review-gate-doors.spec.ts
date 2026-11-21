@@ -142,8 +142,10 @@ const firstSha = (pr: PrName) => headShaFor(PRS[pr].number);
 // ── Locators ────────────────────────────────────────────────────────────────
 
 const main = (page: Page) => page.getByRole('main');
-const band = (page: Page) => developmentSection(page).getByTestId('agent-review-band');
-const doors = (page: Page) => developmentSection(page).getByTestId('review-doors');
+const band = (page: Page, title?: string) =>
+  developmentSection(page, title).getByTestId('agent-review-band');
+const doors = (page: Page, title?: string) =>
+  developmentSection(page, title).getByTestId('review-doors');
 const headerMarker = (page: Page) => main(page).locator('[data-review-header-marker]');
 const listRow = (page: Page, card: ReviewAgentCard) =>
   main(page).getByRole('row').filter({ hasText: card.identifier });
@@ -829,17 +831,21 @@ test.describe('review is a gate a person starts', () => {
     });
 
     await chapter('中文 — the marker and the three doors', async () => {
-      await openItem(page, hosted);
+      const zDev = zh.github.development.title;
+      await page.goto(`/items/${hosted.identifier}`);
+      await expect(developmentSection(page, zDev)).toBeVisible({ timeout: FIRST_PAINT_MS });
       await expect(headerMarker(page)).toContainText(zrp.marker.waiting, {
         timeout: FIRST_PAINT_MS,
       });
-      await expect(band(page)).toContainText(zar.doors.title);
-      await expect(doors(page).getByTestId('review-with-motir-agent')).toHaveText(
+      await expect(band(page, zDev)).toContainText(zar.doors.title);
+      await expect(doors(page, zDev).getByTestId('review-with-motir-agent')).toHaveText(
         zar.doors.motirAgent,
       );
-      await expect(doors(page).getByTestId('review-in-my-agent')).toContainText(zar.doors.myAgent);
-      await expect(doors(page)).toContainText(zar.doors.orRun);
-      await expect(doors(page).getByTestId('review-credits-note')).toContainText(
+      await expect(doors(page, zDev).getByTestId('review-in-my-agent')).toContainText(
+        zar.doors.myAgent,
+      );
+      await expect(doors(page, zDev)).toContainText(zar.doors.orRun);
+      await expect(doors(page, zDev).getByTestId('review-credits-note')).toContainText(
         zar.doors.creditsNote,
       );
       for (const english of [
