@@ -17197,7 +17197,8 @@
       "kindLabel": "Agentreview",
       "state": {
         "reviewing": "Bezig met review",
-        "couldNotRun": "Kon niet draaien"
+        "couldNotRun": "Kon niet draaien",
+        "waiting": "Wacht op een review"
       },
       "reviewing": {
         "title": "De reviewagent beoordeelt deze versie",
@@ -17239,7 +17240,6 @@
         "whyNotYours": "Wacht op {name}. Er wordt niets gemerged totdat de review draait, of zij zonder review doorgaan."
       },
       "verb": {
-        "reviewAgain": "Opnieuw reviewen",
         "continueWithout": "Doorgaan zonder review"
       },
       "override": {
@@ -17253,6 +17253,31 @@
         "bandTitle": "Doorgegaan zonder review",
         "bandNote": "De reviewagent heeft deze {count, plural, one {# commit} other {# commits}} niet beoordeeld.",
         "record": "Doorgegaan zonder review door <b>{name}</b> · {when}"
+      },
+      "doors": {
+        "title": "Wacht op een review",
+        "lead": "Niets reviewt vanzelf. Start een review van deze pull requests op hun huidige commits.",
+        "leadOff": "Review staat uit in dit project, dus een oordeel wordt op het item vastgelegd en houdt niets tegen. Je kunt nog steeds om een review vragen.",
+        "leadAgain": "Start de review opnieuw:",
+        "motirAgent": "Review met Motir-agent",
+        "myAgent": "Review in mijn agent",
+        "orRun": "of voer uit",
+        "creditsNote": "Review met Motir-agent is een Motir-agentrun, betaald uit de AI-tegoeden van je organisatie. Review in mijn agent en motir review gebruiken je eigen agent.",
+        "waitingWhy": "Er wordt niets samengevoegd, en niemand wordt om goedkeuring gevraagd, totdat een review slaagt of iemand zonder verdergaat.",
+        "waitingWhyNotYours": "Wacht tot {name} een review start. Er wordt niets samengevoegd totdat een review slaagt of die persoon zonder verdergaat."
+      },
+      "own": {
+        "title": "Review in {agent}",
+        "titleNoAgent": "Review in een agent",
+        "metaYou": "Door jou gestart <when></when> · <run>{label}</run>",
+        "meta": "Gestart <when></when> · <run>{label}</run>",
+        "lineYou": "Je agent voert motir review {key} uit en legt zijn oordeel hier vast. De opties komen terug als de run zonder oordeel eindigt.",
+        "line": "De agent voert motir review {key} uit en legt zijn oordeel hier vast. De opties komen terug als de run zonder oordeel eindigt."
+      },
+      "picker": {
+        "title": "Review {key} in een van je agents",
+        "lead": "Je agent voert motir review {key} uit en dient zijn oordeel in onder jouw naam.",
+        "lastUsed": "Laatst gebruikt op dit item"
       }
     },
     "autoRerun": {

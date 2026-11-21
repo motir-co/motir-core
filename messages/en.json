@@ -17194,7 +17194,8 @@
       "kindLabel": "Agent review",
       "state": {
         "reviewing": "Reviewing",
-        "couldNotRun": "Could not run"
+        "couldNotRun": "Could not run",
+        "waiting": "Waiting for a review"
       },
       "reviewing": {
         "title": "The review agent is reviewing this version",
@@ -17236,7 +17237,6 @@
         "whyNotYours": "Waiting on {name}. Nothing merges until the review runs, or they continue without it."
       },
       "verb": {
-        "reviewAgain": "Review again",
         "continueWithout": "Continue without the review"
       },
       "override": {
@@ -17250,6 +17250,31 @@
         "bandTitle": "Continued without the review",
         "bandNote": "The review agent did not review these {count, plural, one {# commit} other {# commits}}.",
         "record": "Continued without the review by <b>{name}</b> · {when}"
+      },
+      "doors": {
+        "title": "Waiting for a review",
+        "lead": "Nothing reviews by itself. Start a review of these pull requests at their current commits.",
+        "leadOff": "Review is off in this project, so a verdict is recorded on the item and holds nothing. You can still ask for a review.",
+        "leadAgain": "Start the review again:",
+        "motirAgent": "Review with Motir agent",
+        "myAgent": "Review in my agent",
+        "orRun": "or run",
+        "creditsNote": "Review with Motir agent is a Motir agent run, paid from your organisation’s AI credits. Review in my agent and motir review use your own agent.",
+        "waitingWhy": "Nothing merges, and nobody is asked to approve, until a review passes or someone continues without it.",
+        "waitingWhyNotYours": "Waiting for {name} to start a review. Nothing merges until a review passes or they continue without it."
+      },
+      "own": {
+        "title": "Reviewing in {agent}",
+        "titleNoAgent": "Reviewing in an agent",
+        "metaYou": "Started <when></when> by you · <run>{label}</run>",
+        "meta": "Started <when></when> · <run>{label}</run>",
+        "lineYou": "Your agent runs motir review {key} and records its verdict here. The doors come back if the run ends without one.",
+        "line": "The agent runs motir review {key} and records its verdict here. The doors come back if the run ends without one."
+      },
+      "picker": {
+        "title": "Review {key} in one of your agents",
+        "lead": "Your agent runs motir review {key} and submits its verdict under your name.",
+        "lastUsed": "Last used on this item"
       }
     },
     "autoRerun": {

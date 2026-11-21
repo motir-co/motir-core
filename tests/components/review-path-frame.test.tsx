@@ -476,6 +476,7 @@ function stateOf(over: Partial<ReviewStateDTO>): ReviewStateDTO {
     routedTo: null,
     viewerIsRouted: false,
     itemReviewRun: null,
+    reviewOn: true,
     ...over,
   };
 }
@@ -496,6 +497,8 @@ describe('the read-model slices', () => {
       viewerIsRouted: true,
       authorOfEveryPr: true,
       sentBackRecord,
+      reviewOn: true,
+      itemReviewRun: null,
     });
   });
 

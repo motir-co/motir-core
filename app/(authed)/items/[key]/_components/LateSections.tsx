@@ -23,6 +23,7 @@ import { GuideMeThroughSection, type GuideMeThroughProgress } from './GuideMeThr
 import { ContinueHostedDoor, ContinueHostedNotice } from './ContinueHostedDoor';
 import { FixHostedDoor } from './FixHostedDoor';
 import { FixInMyAgentDoor } from './FixInMyAgentDoor';
+import { ReviewDoorsDoor } from './ReviewDoorsDoor';
 import { RunHostedButton } from './RunHostedButton';
 import { ContinuePart } from '@/components/github/ContinuePart';
 import { formatRunTimes } from './runTimes';
@@ -639,9 +640,15 @@ export async function LateUpperSections({
                   // THE AGENT REVIEW (MOTIR-6825; § 30): its states when it leads, and its pass
                   // or override above the approve-and-merge gate. Its one decision, *Continue
                   // without the review*, HANDS OVER to the approval overlay like every other
-                  // (MOTIR-6323) — no decide door is passed here. *Review again* is the start
-                  // card's route (a new run, not a decision), pressed from the frame.
+                  // (MOTIR-6323) — no decide door is passed here.
                   agentReview={r.agentReview}
+                  // THE REVIEW DOORS (MOTIR-11948; § 33.4): *Review with Motir agent* for whoever
+                  // may run the card hosted (the Run hosted rule), *Review in my agent* where the
+                  // reader may also use agents on the project (the Send to my agent rule). The
+                  // frame decides when they show.
+                  reviewDoors={
+                    hostedDoor ? <ReviewDoorsDoor agents={hostedDoor.agents ?? null} /> : undefined
+                  }
                   canReplan={canReplan}
                   gateActions={{ retryMember: retryApproveAndMergeMemberAction }}
                   // An `auto` card's exits (MOTIR-5635): Queue again for a reader who may edit.

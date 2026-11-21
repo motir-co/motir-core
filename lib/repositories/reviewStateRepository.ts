@@ -50,6 +50,12 @@ export interface ItemReviewRunRow {
   dispatchRunId: string;
   /** {@link REVIEW_NO_VERDICT_REASON} on `could_not_run`; null while in flight. */
   reason: string | null;
+  /** The run itself — who opened it, when, and in whose agent (`instance`) or Motir's
+   *  (`hosted`) — so the review part can say what is reviewing (MOTIR-11948). */
+  origin: 'hosted' | 'instance' | 'local';
+  startedAt: Date;
+  createdById: string | null;
+  agentName: string | null;
 }
 
 export const reviewStateRepository = {
@@ -237,10 +243,18 @@ export const reviewStateRepository = {
         command: 'review',
         OR: prefixes.map(({ prefix }) => ({ idempotencyKey: { startsWith: prefix } })),
       },
-      select: { id: true, status: true, idempotencyKey: true },
+      select: {
+        id: true,
+        status: true,
+        idempotencyKey: true,
+        origin: true,
+        startedAt: true,
+        createdById: true,
+        agentInstance: { select: { name: true } },
+      },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
     });
-    const latest = new Map<string, { id: string; status: string }>();
+    const latest = new Map<string, (typeof runs)[number]>();
     for (const { workItemId, prefix } of prefixes) {
       const run = runs.find((r) => r.idempotencyKey?.startsWith(prefix));
       if (run) latest.set(workItemId, run);
@@ -258,14 +272,17 @@ export const reviewStateRepository = {
           ).map((event) => event.dispatchRunId),
     );
     for (const [workItemId, run] of latest) {
+      const facts = {
+        dispatchRunId: run.id,
+        origin: run.origin,
+        startedAt: run.startedAt,
+        createdById: run.createdById,
+        agentName: run.agentInstance?.name ?? null,
+      };
       if (run.status === 'running') {
-        out.set(workItemId, { state: 'in_flight', dispatchRunId: run.id, reason: null });
+        out.set(workItemId, { state: 'in_flight', reason: null, ...facts });
       } else if (!withVerdict.has(run.id)) {
-        out.set(workItemId, {
-          state: 'could_not_run',
-          dispatchRunId: run.id,
-          reason: REVIEW_NO_VERDICT_REASON,
-        });
+        out.set(workItemId, { state: 'could_not_run', reason: REVIEW_NO_VERDICT_REASON, ...facts });
       }
     }
     return out;

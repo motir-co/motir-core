@@ -514,9 +514,10 @@ test.describe('the review agent', () => {
       // On camera: the band sits below the description — bring it into view.
       await reviewBand(page).scrollIntoViewIfNeeded();
       await expect(reviewBand(page)).toContainText('the review run ended without a verdict');
-      await expect(
-        developmentSection(page).getByRole('button', { name: ar.verb.reviewAgain }),
-      ).toBeVisible();
+      // The review doors stand in the band again (MOTIR-11948): start it once more from here.
+      const doors = developmentSection(page).getByTestId('review-doors');
+      await expect(doors).toBeVisible();
+      await expect(doors).toContainText(`motir review ${couldNotRun.identifier}`);
     });
     await beat();
 

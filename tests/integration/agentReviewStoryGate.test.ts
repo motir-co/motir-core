@@ -67,7 +67,6 @@ const promptRoute = await import('@/app/api/v1/work-items/[key]/review-prompt/ro
 const repairRoute = await import('@/app/api/v1/work-items/[key]/repair/route');
 const gitCredentialRoute = await import('@/app/api/v1/dispatch-runs/[id]/git-credential/route');
 const decideRoute = await import('@/app/api/approval-gates/[id]/decide/route');
-const reviewAgainRoute = await import('@/app/api/approval-gates/[id]/review-again/route');
 const reviewWithAgentRoute =
   await import('@/app/api/work-items/[id]/review-with-motir-agent/route');
 const gatesSettingsRoute = await import('@/app/api/projects/[key]/approval-gates/route');
@@ -544,15 +543,6 @@ async function pressReviewWithAgent(user: User, key: string, body: Record<string
   );
 }
 
-/** The shipped *Review again* button's route — a shim onto the same press until its UI goes. */
-async function pressReviewAgain(user: User, gateId: string) {
-  await signInAs(user);
-  return reviewAgainRoute.POST(
-    new Request(`${APP}/approval-gates/${gateId}/review-again`, { method: 'POST' }),
-    idParams(gateId),
-  );
-}
-
 async function patchSettings(user: User, projectKey: string, body: Record<string, unknown>) {
   await signInAs(user);
   return gatesSettingsRoute.PATCH(
@@ -976,9 +966,9 @@ describe('6 · could not run — no credits refused by name → a run → no ver
       reviewUnavailableReason: 'no_verdict',
     });
 
-    // The shipped Review again button presses the same start: a fresh attempt under the
-    // next key, the reason cleared while it runs — and it too ends without a verdict.
-    expect((await pressReviewAgain(w.owner, review!.id)).status).toBe(202);
+    // A second press of *Review with Motir agent* is a fresh attempt under the next key,
+    // the reason cleared while it runs — and it too ends without a verdict.
+    expect((await pressReviewWithAgent(w.owner, d.item.identifier)).status).toBe(201);
     const attempts = await reviewRunsOfGate(review!.id);
     expect(attempts.map((r) => r.idempotencyKey)).toEqual([
       `agent-review:${review!.id}:press:1`,
@@ -1097,7 +1087,7 @@ describe('8 · tenant isolation — a verdict token, a session and a PAT stay in
       where: { id: rb.review.id },
       data: { reviewUnavailableReason: 'hosted_run_out_of_credits' },
     });
-    expect((await pressReviewAgain(a.owner, rb.review.id)).status).toBe(404);
+    expect((await pressReviewWithAgent(a.owner, rb.d.item.identifier)).status).toBe(404);
 
     // A's token cannot claim B's repair.
     const pat = await withTokenFor(a.owner, a.workspace as never, {
@@ -1409,7 +1399,7 @@ describe('11 · the edges the journeys pass by — each on the assembled path', 
     expect(await awaitingOf(d.item.id, MERGE)).toHaveLength(1);
   });
 
-  it('the Review again shim’s door: signed out, no gate named, not the routed person, and a decided review', async () => {
+  it('the Review with Motir agent door: signed out, an unknown item, not the routed person, and a decided review', async () => {
     const w = await makeWorld();
     const d = await deliveredCard(w, 351);
     host.mayRun = false;
@@ -1427,13 +1417,16 @@ describe('11 · the edges the journeys pass by — each on the assembled path', 
     });
     expect(
       (
-        await reviewAgainRoute.POST(
-          new Request(`${APP}/approval-gates/${review!.id}/review-again`, { method: 'POST' }),
-          idParams(review!.id),
+        await reviewWithAgentRoute.POST(
+          new Request(`${APP}/work-items/${d.item.identifier}/review-with-motir-agent`, {
+            method: 'POST',
+            body: '{}',
+          }),
+          idParams(d.item.identifier),
         )
       ).status,
     ).toBe(401);
-    expect((await pressReviewAgain(w.owner, '  ')).status).toBe(400);
+    expect((await pressReviewWithAgent(w.owner, 'NOPE-999')).status).toBe(404);
 
     const member = await usersService.createUser({
       email: `member-${randomBytes(3).toString('hex')}@example.com`,
@@ -1441,14 +1434,14 @@ describe('11 · the edges the journeys pass by — each on the assembled path', 
       name: 'Not routed',
     });
     await workspacesService.addMember({ userId: member.id, workspaceId: w.workspace.id });
-    const forbidden = await pressReviewAgain(member, review!.id);
+    const forbidden = await pressReviewWithAgent(member, d.item.identifier);
     expect(forbidden.status).toBe(403);
     expect((await json(forbidden))['code']).toBe('REVIEW_START_FORBIDDEN');
     expect((await gateRow(review!.id)).reviewUnavailableReason).toBe('no_verdict');
 
     // Continued without the review: it is decided, and there is nothing left to run again.
     await pressDecide(w, d.item.id, REVIEW, { decision: 'approve', noteMd: 'Checked by hand.' });
-    const decided = await pressReviewAgain(w.owner, review!.id);
+    const decided = await pressReviewWithAgent(w.owner, d.item.identifier);
     expect(decided.status).toBe(409);
     expect(await json(decided)).toMatchObject({
       code: 'REVIEW_START_NOT_OFFERED',

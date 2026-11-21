@@ -17197,7 +17197,8 @@
       "kindLabel": "Agent-Prüfung",
       "state": {
         "reviewing": "Wird geprüft",
-        "couldNotRun": "Konnte nicht laufen"
+        "couldNotRun": "Konnte nicht laufen",
+        "waiting": "Wartet auf eine Prüfung"
       },
       "reviewing": {
         "title": "Der Prüf-Agent prüft diese Version",
@@ -17239,7 +17240,6 @@
         "whyNotYours": "Wartet auf {name}. Bis die Prüfung läuft oder diese Person ohne sie fortfährt, wird nichts gemergt."
       },
       "verb": {
-        "reviewAgain": "Erneut prüfen",
         "continueWithout": "Ohne Prüfung fortfahren"
       },
       "override": {
@@ -17253,6 +17253,31 @@
         "bandTitle": "Ohne Prüfung fortgefahren",
         "bandNote": "Der Prüf-Agent hat {count, plural, one {diesen # Commit} other {diese # Commits}} nicht geprüft.",
         "record": "Ohne Prüfung fortgefahren von <b>{name}</b> · {when}"
+      },
+      "doors": {
+        "title": "Wartet auf eine Prüfung",
+        "lead": "Nichts prüft von selbst. Starten Sie eine Prüfung dieser Pull Requests bei ihren aktuellen Commits.",
+        "leadOff": "Die Prüfung ist in diesem Projekt aus, daher wird ein Ergebnis am Element festgehalten und hält nichts auf. Sie können trotzdem eine Prüfung anfordern.",
+        "leadAgain": "Prüfung erneut starten:",
+        "motirAgent": "Mit Motir-Agent prüfen",
+        "myAgent": "In meinem Agenten prüfen",
+        "orRun": "oder führen Sie aus",
+        "creditsNote": "Mit Motir-Agent prüfen ist ein Motir-Agentenlauf, bezahlt aus den KI-Guthaben Ihrer Organisation. In meinem Agenten prüfen und motir review nutzen Ihren eigenen Agenten.",
+        "waitingWhy": "Nichts wird zusammengeführt und niemand wird um Genehmigung gebeten, bis eine Prüfung bestanden ist oder jemand ohne sie fortfährt.",
+        "waitingWhyNotYours": "Wartet darauf, dass {name} eine Prüfung startet. Nichts wird zusammengeführt, bis eine Prüfung bestanden ist oder diese Person ohne sie fortfährt."
+      },
+      "own": {
+        "title": "Prüfung in {agent}",
+        "titleNoAgent": "Prüfung in einem Agenten",
+        "metaYou": "Von Ihnen gestartet <when></when> · <run>{label}</run>",
+        "meta": "Gestartet <when></when> · <run>{label}</run>",
+        "lineYou": "Ihr Agent führt motir review {key} aus und hält sein Ergebnis hier fest. Die Optionen kehren zurück, wenn der Lauf ohne Ergebnis endet.",
+        "line": "Der Agent führt motir review {key} aus und hält sein Ergebnis hier fest. Die Optionen kehren zurück, wenn der Lauf ohne Ergebnis endet."
+      },
+      "picker": {
+        "title": "{key} in einem Ihrer Agenten prüfen",
+        "lead": "Ihr Agent führt motir review {key} aus und reicht sein Ergebnis unter Ihrem Namen ein.",
+        "lastUsed": "Zuletzt bei diesem Element verwendet"
       }
     },
     "autoRerun": {

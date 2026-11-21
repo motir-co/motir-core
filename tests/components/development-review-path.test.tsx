@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import type React from 'react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
@@ -9,7 +10,7 @@ import type {
   DevelopmentGateRead,
 } from '@/components/github/DevelopmentGateFrame';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
-import type { GateReviewPathDTO, ReviewLineDTO } from '@/lib/dto/reviewState';
+import type { GateReviewPathDTO, ItemReviewRunDTO, ReviewLineDTO } from '@/lib/dto/reviewState';
 import { AWAITING_MERGE_GATE, CORE_PR, GATEWAY_PR, recordDto } from '../helpers/howToTestFixtures';
 
 // THE REVIEW PATH IN THE DEVELOPMENT FRAME (Story MOTIR-10327 · MOTIR-10342;
@@ -55,11 +56,16 @@ function path(over: Partial<GateReviewPathDTO> = {}): GateReviewPathDTO {
     viewerIsRouted: false,
     authorOfEveryPr: false,
     sentBackRecord: null,
+    reviewOn: true,
+    itemReviewRun: null,
     ...over,
   };
 }
 
-function renderFrame(read: Partial<DevelopmentGateRead> & { gate: ApprovalGateDTO }) {
+function renderFrame(
+  read: Partial<DevelopmentGateRead> & { gate: ApprovalGateDTO },
+  reviewDoors?: React.ReactNode,
+) {
   return render(
     <DevelopmentSectionBody
       pullRequests={[CORE_PR, GATEWAY_PR]}
@@ -80,6 +86,7 @@ function renderFrame(read: Partial<DevelopmentGateRead> & { gate: ApprovalGateDT
           retryMember: vi.fn(),
         } as never as DevelopmentGateActions
       }
+      reviewDoors={reviewDoors}
     />,
   );
 }
@@ -286,5 +293,96 @@ describe('the review line on a story run’s acceptance frame (MOTIR-10533)', ()
       reviewPath: path(),
     });
     expect(line()).toBeNull();
+  });
+});
+
+describe('the review doors with review off (MOTIR-11948; § 33.4 Panels 4f, 4c–4e)', () => {
+  const doorsCopy = en.approvalGate.agentReview.doors;
+  const DOORS = <div data-testid="stub-doors">the doors</div>;
+  const off = (over: Partial<GateReviewPathDTO> = {}) =>
+    path({ reviewOn: false, viewerIsRouted: true, ...over });
+  const RUN: ItemReviewRunDTO = {
+    dispatchRunId: 'run-9',
+    origin: 'hosted',
+    label: 'motir review · 2026-11-20 10:00 UTC',
+    startedAt: '2026-11-20T10:00:00.000Z',
+    agentName: null,
+    byViewer: false,
+    state: 'in_flight',
+    reason: null,
+  };
+  const band = () => screen.getByTestId('agent-review-band');
+
+  it('no review at these commits: the doors take the review line’s place, under the off lead', () => {
+    renderFrame({ gate: AWAITING, reviewPath: off() }, DOORS);
+    expect(band().dataset.state).toBe('review-off');
+    expect(screen.getByText(doorsCopy.leadOff)).toBeTruthy();
+    expect(screen.getByTestId('stub-doors')).toBeTruthy();
+    expect(line()).toBeNull();
+  });
+
+  it('a reader not routed keeps the shipped review line, with no doors', () => {
+    renderFrame({ gate: AWAITING, reviewPath: off({ viewerIsRouted: false }) }, DOORS);
+    expect(screen.queryByTestId('stub-doors')).toBeNull();
+    expect(line()?.getAttribute('data-review-line')).toBe('not_reviewed');
+  });
+
+  it('a hosted review in flight draws Reviewing, and no doors', () => {
+    renderFrame({ gate: AWAITING, reviewPath: off({ itemReviewRun: RUN }) }, DOORS);
+    expect(band().dataset.state).toBe('reviewing');
+    expect(screen.queryByTestId('stub-doors')).toBeNull();
+  });
+
+  it('an own-agent review in flight draws Reviewing in {agent}', () => {
+    renderFrame(
+      {
+        gate: AWAITING,
+        reviewPath: off({
+          itemReviewRun: { ...RUN, origin: 'instance', agentName: 'yue-laptop', byViewer: true },
+        }),
+      },
+      DOORS,
+    );
+    expect(band().dataset.state).toBe('own-reviewing');
+    expect(band().textContent).toContain('Reviewing in yue-laptop');
+  });
+
+  it('a review that ended with no verdict: the reason, then the doors again', () => {
+    renderFrame(
+      {
+        gate: AWAITING,
+        reviewPath: off({
+          itemReviewRun: { ...RUN, state: 'could_not_run', reason: 'no_verdict' },
+        }),
+      },
+      DOORS,
+    );
+    expect(band().dataset.state).toBe('could-not-run');
+    expect(screen.getByText(doorsCopy.leadAgain)).toBeTruthy();
+    expect(screen.getByTestId('stub-doors')).toBeTruthy();
+  });
+
+  it('…and for a reader not routed, the reason alone', () => {
+    renderFrame(
+      {
+        gate: AWAITING,
+        reviewPath: off({
+          viewerIsRouted: false,
+          itemReviewRun: { ...RUN, state: 'could_not_run', reason: 'no_verdict' },
+        }),
+      },
+      DOORS,
+    );
+    expect(band().dataset.state).toBe('could-not-run');
+    expect(screen.queryByTestId('stub-doors')).toBeNull();
+  });
+
+  it('review on, or no doors handed in: the shipped review line', () => {
+    renderFrame({ gate: AWAITING, reviewPath: off({ reviewOn: true }) }, DOORS);
+    expect(line()).not.toBeNull();
+    expect(screen.queryByTestId('stub-doors')).toBeNull();
+    cleanup();
+    renderFrame({ gate: AWAITING, reviewPath: off() });
+    expect(line()).not.toBeNull();
   });
 });

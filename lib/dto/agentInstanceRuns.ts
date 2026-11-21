@@ -179,6 +179,9 @@ export type ReviewInMyAgentDoorDto =
   | {
       offered: true;
       agent: Pick<AgentForCardDto, 'id' | 'name' | 'profileId' | 'profileName' | 'state'>;
+      /** The agent is the one this viewer last used on the item — the picker preselects
+       *  it with *Last used on this item* (MOTIR-11948; design § 33.5). */
+      lastUsedOnItem: boolean;
       gateId: string | null;
       subjectVersion: string;
     }

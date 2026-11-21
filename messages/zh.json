@@ -17188,7 +17188,8 @@
       "kindLabel": "智能体审查",
       "state": {
         "reviewing": "审查中",
-        "couldNotRun": "未能运行"
+        "couldNotRun": "未能运行",
+        "waiting": "等待审查"
       },
       "reviewing": {
         "title": "审查智能体正在审查这个版本",
@@ -17230,7 +17231,6 @@
         "whyNotYours": "等待 {name} 处理。在审查完成或对方决定不经审查继续之前，不会合并任何内容。"
       },
       "verb": {
-        "reviewAgain": "重新审查",
         "continueWithout": "不经审查继续"
       },
       "override": {
@@ -17244,6 +17244,31 @@
         "bandTitle": "已不经审查继续",
         "bandNote": "审查智能体没有审查这 {count, plural, other {#}} 个提交。",
         "record": "<b>{name}</b> 决定不经审查继续 · {when}"
+      },
+      "doors": {
+        "title": "等待审查",
+        "lead": "审查不会自动开始。请对这些拉取请求的当前提交发起审查。",
+        "leadOff": "该项目未开启审查，因此结论只会记录在工作项上，不会阻挡合并。你仍可以发起审查。",
+        "leadAgain": "重新发起审查：",
+        "motirAgent": "用 Motir 智能体审查",
+        "myAgent": "用我的智能体审查",
+        "orRun": "或运行",
+        "creditsNote": "用 Motir 智能体审查是一次 Motir 智能体运行，费用从你组织的 AI 额度中扣除。用我的智能体审查和 motir review 使用你自己的智能体。",
+        "waitingWhy": "在审查通过或有人决定不经审查继续之前，不会合并任何内容，也不会请任何人批准。",
+        "waitingWhyNotYours": "等待 {name} 发起审查。在审查通过或对方决定不经审查继续之前，不会合并任何内容。"
+      },
+      "own": {
+        "title": "正在 {agent} 中审查",
+        "titleNoAgent": "正在某个智能体中审查",
+        "metaYou": "由你于<when></when>发起 · <run>{label}</run>",
+        "meta": "于<when></when>发起 · <run>{label}</run>",
+        "lineYou": "你的智能体运行 motir review {key}，并在此记录结论。如果运行结束时没有结论，这些入口会重新出现。",
+        "line": "该智能体运行 motir review {key}，并在此记录结论。如果运行结束时没有结论，这些入口会重新出现。"
+      },
+      "picker": {
+        "title": "在你的一个智能体中审查 {key}",
+        "lead": "你的智能体会运行 motir review {key}，并以你的名义提交结论。",
+        "lastUsed": "上次在此工作项上使用"
       }
     },
     "autoRerun": {

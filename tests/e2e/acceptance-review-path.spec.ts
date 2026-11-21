@@ -845,9 +845,10 @@ test.describe('the review path', () => {
         rp.marker.couldNotRun,
         { timeout: FIRST_PAINT_MS },
       );
-      await expect(
-        developmentSection(page).getByRole('button', { name: ar.verb.reviewAgain }),
-      ).toBeVisible();
+      // The review doors stand in the band again (MOTIR-11948): start it once more from here.
+      const doors = developmentSection(page).getByTestId('review-doors');
+      await expect(doors).toBeVisible();
+      await expect(doors).toContainText(`motir review ${couldNotRun.identifier}`);
       await expect(
         developmentSection(page).getByRole('button', {
           name: ar.verb.continueWithout,

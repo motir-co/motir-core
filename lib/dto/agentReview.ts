@@ -68,6 +68,15 @@ export interface AgentReviewRunRefDto {
   label: string;
   /** ISO-8601. */
   startedAt: string;
+  /** The run's status — `running` is a review IN FLIGHT, which hides the review doors
+   *  (Story MOTIR-11941 · MOTIR-11948; design § 33.4). */
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
+  /** Motir's agent (`hosted`) or one of a person's own agents (`instance`). */
+  origin: 'hosted' | 'instance' | 'local';
+  /** The agent's name for an `instance` run — *Reviewing in {agent}*; null otherwise. */
+  agentName: string | null;
+  /** The reader started it. */
+  byViewer: boolean;
 }
 
 /**

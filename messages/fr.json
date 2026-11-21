@@ -17197,7 +17197,8 @@
       "kindLabel": "Relecture par l'agent",
       "state": {
         "reviewing": "Relecture en cours",
-        "couldNotRun": "N'a pas pu s'exécuter"
+        "couldNotRun": "N'a pas pu s'exécuter",
+        "waiting": "En attente d’une relecture"
       },
       "reviewing": {
         "title": "L'agent de relecture examine cette version",
@@ -17239,7 +17240,6 @@
         "whyNotYours": "En attente de {name}. Rien n'est fusionné tant que la relecture ne s'est pas exécutée, ou que cette personne ne continue pas sans elle."
       },
       "verb": {
-        "reviewAgain": "Relancer la relecture",
         "continueWithout": "Continuer sans la relecture"
       },
       "override": {
@@ -17253,6 +17253,31 @@
         "bandTitle": "Poursuivi sans la relecture",
         "bandNote": "L'agent de relecture n'a pas relu {count, plural, one {ce commit} other {ces # commits}}.",
         "record": "Poursuivi sans la relecture par <b>{name}</b> · {when}"
+      },
+      "doors": {
+        "title": "En attente d’une relecture",
+        "lead": "Rien ne se relit tout seul. Lancez une relecture de ces pull requests à leurs commits actuels.",
+        "leadOff": "La relecture est désactivée dans ce projet : un verdict est donc enregistré sur l’élément et ne bloque rien. Vous pouvez quand même demander une relecture.",
+        "leadAgain": "Relancer la relecture :",
+        "motirAgent": "Relire avec l’agent Motir",
+        "myAgent": "Relire dans mon agent",
+        "orRun": "ou exécutez",
+        "creditsNote": "Relire avec l’agent Motir est une exécution de l’agent Motir, payée sur les crédits IA de votre organisation. Relire dans mon agent et motir review utilisent votre propre agent.",
+        "waitingWhy": "Rien n’est fusionné, et personne n’est sollicité pour approuver, tant qu’une relecture n’a pas réussi ou que quelqu’un ne continue pas sans elle.",
+        "waitingWhyNotYours": "En attente que {name} lance une relecture. Rien n’est fusionné tant qu’une relecture n’a pas réussi ou que cette personne ne continue pas sans elle."
+      },
+      "own": {
+        "title": "Relecture dans {agent}",
+        "titleNoAgent": "Relecture dans un agent",
+        "metaYou": "Lancée <when></when> par vous · <run>{label}</run>",
+        "meta": "Lancée <when></when> · <run>{label}</run>",
+        "lineYou": "Votre agent exécute motir review {key} et enregistre son verdict ici. Les options reviennent si l’exécution se termine sans verdict.",
+        "line": "L’agent exécute motir review {key} et enregistre son verdict ici. Les options reviennent si l’exécution se termine sans verdict."
+      },
+      "picker": {
+        "title": "Relire {key} dans l’un de vos agents",
+        "lead": "Votre agent exécute motir review {key} et soumet son verdict en votre nom.",
+        "lastUsed": "Utilisé en dernier sur cet élément"
       }
     },
     "autoRerun": {

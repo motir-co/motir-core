@@ -174,7 +174,7 @@ async function chooseAgent(
   identifier: string,
   ctx: ServiceContext,
 ): Promise<
-  | { kind: 'chosen'; agent: AgentForCardDto }
+  | { kind: 'chosen'; agent: AgentForCardDto; lastUsed: boolean }
   | { kind: 'none' }
   | { kind: 'unusable'; agent: AgentForCardDto }
 > {
@@ -187,7 +187,7 @@ async function chooseAgent(
   const last = lastId ? agents.find((a) => a.id === lastId) : undefined;
   const usable =
     (last && last.refusal === null ? last : undefined) ?? agents.find((a) => !a.refusal);
-  if (usable) return { kind: 'chosen', agent: usable };
+  if (usable) return { kind: 'chosen', agent: usable, lastUsed: usable === last };
   return { kind: 'unusable', agent: last ?? (agents[0] as AgentForCardDto) };
 }
 
@@ -221,6 +221,7 @@ export const reviewInMyAgentService = {
     return {
       offered: true,
       agent: { id, name, profileId, profileName, state },
+      lastUsedOnItem: choice.lastUsed,
       gateId: evaluation.subject.gateId,
       subjectVersion: evaluation.subject.subjectVersion,
     };

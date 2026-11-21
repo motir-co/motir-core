@@ -76,7 +76,6 @@ const STORY_FILES = [
   'lib/services/reviewConventionsService.ts',
   'lib/workItems/reviewSentBack.ts',
   'lib/workspaces/afterCommit.ts',
-  'app/api/approval-gates/**/review-again/route.ts',
   'app/api/v1/work-items/**/agent-review/route.ts',
   'app/api/v1/work-items/**/review-prompt/route.ts',
 ] as const;

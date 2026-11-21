@@ -340,9 +340,17 @@ async function submit(
 const bodyOf = async (res: Response) => (await res.json()) as Record<string, unknown>;
 const recordsOf = (workItemId: string) =>
   adminDb.reviewVerdictRecord.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
-const itemRuns = (s: Scenario, items: { workItemId: string; subjectVersion: string }[]) =>
+const itemRunRows = (s: Scenario, items: { workItemId: string; subjectVersion: string }[]) =>
   withWorkspaceContext(s.ctx, (tx) =>
     reviewStateRepository.listItemReviewRuns(s.workspace.id, items, tx),
+  );
+/** The rows' state, run and reason — the run's own facts are asserted where they matter. */
+const itemRuns = async (s: Scenario, items: { workItemId: string; subjectVersion: string }[]) =>
+  new Map(
+    [...(await itemRunRows(s, items))].map(([id, r]) => [
+      id,
+      { state: r.state, dispatchRunId: r.dispatchRunId, reason: r.reason },
+    ]),
   );
 
 grantPaidAiPlan();
@@ -451,6 +459,12 @@ describe('hostedRunService.startReview with no gate', () => {
         ],
       ]),
     );
+    // The run's own facts, which the review part draws (MOTIR-11948): who, what, when.
+    const [row] = [
+      ...(await itemRunRows(s, [{ workItemId: item.id, subjectVersion: v }])).values(),
+    ];
+    expect(row).toMatchObject({ origin: 'hosted', agentName: null, createdById: s.user.id });
+    expect(row!.startedAt).toBeInstanceOf(Date);
   });
 });
 
@@ -669,11 +683,16 @@ describe('reviewStateRepository.listItemReviewRuns and the review state', () => 
     // The review state carries it while Review is off — and not once it is on.
     const states = await reviewStateService.forCards(s.project.id, [one.id, two.id], s.ctx);
     expect(states.get(one.id)?.itemReviewRun).toBeNull();
-    expect(states.get(two.id)?.itemReviewRun).toEqual({
+    expect(states.get(two.id)?.itemReviewRun).toMatchObject({
       state: 'in_flight',
       dispatchRunId: running.runId,
       reason: null,
+      // The run's own facts the review part draws (MOTIR-11948).
+      origin: expect.any(String),
+      label: expect.stringContaining('motir review'),
+      byViewer: expect.any(Boolean),
     });
+    expect(states.get(two.id)?.reviewOn).toBe(false);
     await adminDb.project.update({
       where: { id: s.project.id },
       data: { reviewAgentEnabled: true },

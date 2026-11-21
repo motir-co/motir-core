@@ -265,6 +265,7 @@ describe('the door’s read — every reason, in order', () => {
     expect(await res.json()).toEqual({
       offered: true,
       agent: expect.objectContaining({ id, name: 'yue-claude', profileId: 'claude' }),
+      lastUsedOnItem: false,
       gateId: gate!.id,
       subjectVersion: version,
     });
@@ -451,6 +452,7 @@ describe('the door’s read — every reason, in order', () => {
     expect(await reviewInMyAgentService.readDoor(item.identifier, fx.ctx)).toMatchObject({
       offered: true,
       agent: { id: lastUsed },
+      lastUsedOnItem: true,
     });
 
     // A review in it that ended without a verdict leaves the door offered again, on it.
@@ -463,6 +465,7 @@ describe('the door’s read — every reason, in order', () => {
     expect(await reviewInMyAgentService.readDoor(item.identifier, fx.ctx)).toMatchObject({
       offered: true,
       agent: { id: lastUsed },
+      lastUsedOnItem: true,
     });
 
     // Unusable, it gives way to the first usable one.
@@ -470,6 +473,7 @@ describe('the door’s read — every reason, in order', () => {
     expect(await reviewInMyAgentService.readDoor(item.identifier, fx.ctx)).toMatchObject({
       offered: true,
       agent: { id: defaultId },
+      lastUsedOnItem: false,
     });
     // And with every agent unusable, the refusal named is the last-used agent's.
     await adminDb.agentInstance.update({

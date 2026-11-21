@@ -90,6 +90,10 @@ function reviewView(over: Partial<AgentReviewViewDto> = {}): AgentReviewViewDto 
       id: 'run-611',
       label: 'motir review · 2026-09-29 09:41 UTC',
       startedAt: '2026-09-29T09:41:00.000Z',
+      status: 'succeeded',
+      origin: 'hosted',
+      agentName: null,
+      byViewer: false,
     },
     settingsDoorHref: null,
     findingsRefs: {},
@@ -150,7 +154,6 @@ const verbButtons = (dialog: HTMLElement) =>
     .filter((name) =>
       [
         ar.verb.continueWithout,
-        ar.verb.reviewAgain,
         pra.verb.approveAndMerge,
         en.approvalGate.verb.approve,
         en.approvalGate.verb.requestChanges,
@@ -210,7 +213,12 @@ describe('an agent_review address opens the overlay on its gate', () => {
 
   it('while the review is still running, nothing is offered', async () => {
     fetchApprovalGateOverlay.mockResolvedValue(
-      reviewRead({ agentReview: reviewView({ reviewUnavailableReason: null }) }),
+      reviewRead({
+        agentReview: reviewView({
+          reviewUnavailableReason: null,
+          run: { ...reviewView().run!, status: 'running' },
+        }),
+      }),
     );
     const dialog = await openReview();
 
@@ -360,7 +368,6 @@ describe('zh', () => {
     const dialog = await openReview(zh);
     const zar = zh.approvalGate.agentReview;
     expect(within(dialog).getByRole('button', { name: zar.verb.continueWithout })).toBeTruthy();
-    expect(within(dialog).queryByRole('button', { name: zar.verb.reviewAgain })).toBeNull();
     expect(dialog.textContent).not.toContain('approvalGate.');
   });
 });

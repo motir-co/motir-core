@@ -108,11 +108,32 @@ export interface ReviewStateDTO {
    * once it ended with no verdict. Filled ONLY while the project's Review is off; with
    * Review on the gate's own read (the marker) stays the answer, and this is null.
    */
-  itemReviewRun: {
-    state: 'in_flight' | 'could_not_run';
-    dispatchRunId: string;
-    reason: string | null;
-  } | null;
+  itemReviewRun: ItemReviewRunDTO | null;
+  /** The project's Review switch (`reviewAgentEnabled`). */
+  reviewOn: boolean;
+}
+
+/**
+ * A review run as the review part names it (Story MOTIR-11941 · MOTIR-11948; design § 33.4):
+ * Motir's (`hosted`) or one of a person's own agents (`instance`, with its name), who
+ * started it and when, and the run's own label for its link.
+ */
+export interface ReviewRunFactsDTO {
+  dispatchRunId: string;
+  origin: 'hosted' | 'instance' | 'local';
+  label: string;
+  /** ISO-8601. */
+  startedAt: string;
+  /** The agent's name for an `instance` run; null otherwise, or once the agent is gone. */
+  agentName: string | null;
+  /** The reader started it. */
+  byViewer: boolean;
+}
+
+/** {@link ReviewStateDTO.itemReviewRun}. */
+export interface ItemReviewRunDTO extends ReviewRunFactsDTO {
+  state: 'in_flight' | 'could_not_run';
+  reason: string | null;
 }
 
 function personDto(person: ReviewStatePerson | null): ReviewStatePersonDTO | null {
@@ -176,6 +197,7 @@ export function toReviewStateDto(
   card: { id: string; identifier: string },
   state: ReviewState,
   itemReviewRun: ReviewStateDTO['itemReviewRun'] = null,
+  reviewOn = true,
 ): ReviewStateDTO {
   return {
     workItemId: card.id,
@@ -200,6 +222,7 @@ export function toReviewStateDto(
     routedTo: personDto(state.routedTo),
     viewerIsRouted: state.viewerIsRouted,
     itemReviewRun: itemReviewRun ? { ...itemReviewRun } : null,
+    reviewOn,
   };
 }
 
@@ -294,6 +317,12 @@ export interface GateReviewPathDTO {
   viewerIsRouted: boolean;
   authorOfEveryPr: boolean;
   sentBackRecord: ReviewStateDTO['sentBackRecord'];
+  /** The project's Review switch — off, the review part offers its doors on the
+   *  approve-and-merge frame (Story MOTIR-11941 · MOTIR-11948; design § 33.4, 4f). */
+  reviewOn: boolean;
+  /** {@link ReviewStateDTO.itemReviewRun} — a gate-off review in flight, or one that ended
+   *  with no verdict; null with Review on. */
+  itemReviewRun: ItemReviewRunDTO | null;
 }
 
 export function toGateReviewPathDto(state: ReviewStateDTO): GateReviewPathDTO {
@@ -305,6 +334,8 @@ export function toGateReviewPathDto(state: ReviewStateDTO): GateReviewPathDTO {
     viewerIsRouted: state.viewerIsRouted,
     authorOfEveryPr: state.authorOfEveryPr,
     sentBackRecord: state.sentBackRecord,
+    reviewOn: state.reviewOn,
+    itemReviewRun: state.itemReviewRun,
   };
 }
 

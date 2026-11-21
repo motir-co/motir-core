@@ -897,17 +897,35 @@ export const dispatchRunRepository = {
   /**
    * The LATEST run, in any status, whose idempotency key starts with `prefix` — the
    * review run an `agent_review` gate's band links (MOTIR-6825): every review run of a
-   * gate is opened under `agent-review:<gateId>:…`, so its newest run is this read.
+   * gate is opened under `agent-review:<gateId>:…`, so its newest run is this read. Its
+   * status, origin, starter and agent say whether a review is in flight, and in whose agent
+   * (Story MOTIR-11941 · MOTIR-11948).
    */
   async findLatestByIdempotencyKeyPrefix(
     workspaceId: string,
     prefix: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ id: string; command: DispatchRun['command']; startedAt: Date } | null> {
+  ): Promise<{
+    id: string;
+    command: DispatchRun['command'];
+    startedAt: Date;
+    status: DispatchRun['status'];
+    origin: DispatchRun['origin'];
+    createdById: string | null;
+    agentInstance: { name: string } | null;
+  } | null> {
     return tx.dispatchRun.findFirst({
       where: { workspaceId, idempotencyKey: { startsWith: prefix } },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
-      select: { id: true, command: true, startedAt: true },
+      select: {
+        id: true,
+        command: true,
+        startedAt: true,
+        status: true,
+        origin: true,
+        createdById: true,
+        agentInstance: { select: { name: true } },
+      },
     });
   },
 

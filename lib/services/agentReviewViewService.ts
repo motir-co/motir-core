@@ -57,6 +57,10 @@ export const agentReviewViewService = {
             id: run.id,
             label: dispatchRunLabel(run.command, run.startedAt),
             startedAt: run.startedAt.toISOString(),
+            status: run.status,
+            origin: run.origin,
+            agentName: run.agentInstance?.name ?? null,
+            byViewer: run.createdById !== null && run.createdById === ctx.userId,
           }
         : null,
       settingsDoorHref: read.settingsDoor?.href ?? null,

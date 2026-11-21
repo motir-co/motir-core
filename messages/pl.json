@@ -17197,7 +17197,8 @@
       "kindLabel": "Przegląd agenta",
       "state": {
         "reviewing": "Przeglądanie",
-        "couldNotRun": "Nie można było uruchomić"
+        "couldNotRun": "Nie można było uruchomić",
+        "waiting": "Czeka na przegląd"
       },
       "reviewing": {
         "title": "Agent przeglądający przegląda tę wersję",
@@ -17239,7 +17240,6 @@
         "whyNotYours": "Czeka na: {name}. Nic nie zostanie scalone, dopóki przegląd się nie odbędzie lub ta osoba nie zdecyduje się kontynuować bez niego."
       },
       "verb": {
-        "reviewAgain": "Przejrzyj ponownie",
         "continueWithout": "Kontynuuj bez przeglądu"
       },
       "override": {
@@ -17253,6 +17253,31 @@
         "bandTitle": "Kontynuowano bez przeglądu",
         "bandNote": "Agent przeglądający nie przejrzał tych commitów ({count, plural, one {# commit} few {# commity} many {# commitów} other {# commita}}).",
         "record": "Kontynuowano bez przeglądu — <b>{name}</b> · {when}"
+      },
+      "doors": {
+        "title": "Czeka na przegląd",
+        "lead": "Nic nie przegląda się samo. Uruchom przegląd tych pull requestów na ich bieżących commitach.",
+        "leadOff": "Przegląd jest wyłączony w tym projekcie, więc werdykt jest zapisywany na elemencie i niczego nie wstrzymuje. Nadal możesz poprosić o przegląd.",
+        "leadAgain": "Uruchom przegląd ponownie:",
+        "motirAgent": "Przejrzyj z agentem Motir",
+        "myAgent": "Przejrzyj w moim agencie",
+        "orRun": "lub wykonaj",
+        "creditsNote": "Przejrzyj z agentem Motir to uruchomienie agenta Motir, opłacane z kredytów AI Twojej organizacji. Przejrzyj w moim agencie i motir review korzystają z Twojego własnego agenta.",
+        "waitingWhy": "Nic nie zostanie scalone ani nikt nie zostanie poproszony o zatwierdzenie, dopóki przegląd nie zakończy się sukcesem lub ktoś nie będzie kontynuować bez niego.",
+        "waitingWhyNotYours": "Czeka, aż {name} uruchomi przegląd. Nic nie zostanie scalone, dopóki przegląd nie zakończy się sukcesem lub ta osoba nie będzie kontynuować bez niego."
+      },
+      "own": {
+        "title": "Przegląd w {agent}",
+        "titleNoAgent": "Przegląd w agencie",
+        "metaYou": "Uruchomione przez Ciebie <when></when> · <run>{label}</run>",
+        "meta": "Uruchomione <when></when> · <run>{label}</run>",
+        "lineYou": "Twój agent wykonuje motir review {key} i zapisuje tutaj swój werdykt. Opcje wrócą, jeśli uruchomienie zakończy się bez werdyktu.",
+        "line": "Agent wykonuje motir review {key} i zapisuje tutaj swój werdykt. Opcje wrócą, jeśli uruchomienie zakończy się bez werdyktu."
+      },
+      "picker": {
+        "title": "Przejrzyj {key} w jednym ze swoich agentów",
+        "lead": "Twój agent wykonuje motir review {key} i przesyła werdykt w Twoim imieniu.",
+        "lastUsed": "Ostatnio użyty przy tym elemencie"
       }
     },
     "autoRerun": {

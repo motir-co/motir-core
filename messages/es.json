@@ -17197,7 +17197,8 @@
       "kindLabel": "Revisión del Agente",
       "state": {
         "reviewing": "Revisando",
-        "couldNotRun": "No se pudo ejecutar"
+        "couldNotRun": "No se pudo ejecutar",
+        "waiting": "Esperando una revisión"
       },
       "reviewing": {
         "title": "El Agente de revisión está revisando esta versión",
@@ -17239,7 +17240,6 @@
         "whyNotYours": "Esperando a {name}. No se fusiona nada hasta que se ejecute la revisión o esa persona continúe sin ella."
       },
       "verb": {
-        "reviewAgain": "Volver a revisar",
         "continueWithout": "Continuar sin la revisión"
       },
       "override": {
@@ -17253,6 +17253,31 @@
         "bandTitle": "Se continuó sin la revisión",
         "bandNote": "El Agente de revisión no revisó {count, plural, one {este # commit} other {estos # commits}}.",
         "record": "<b>{name}</b> continuó sin la revisión · {when}"
+      },
+      "doors": {
+        "title": "Esperando una revisión",
+        "lead": "Nada se revisa por sí solo. Inicia una revisión de estas pull requests en sus commits actuales.",
+        "leadOff": "La revisión está desactivada en este proyecto, así que el veredicto se registra en el elemento y no retiene nada. Aun así puedes pedir una revisión.",
+        "leadAgain": "Vuelve a iniciar la revisión:",
+        "motirAgent": "Revisar con el agente de Motir",
+        "myAgent": "Revisar en mi agente",
+        "orRun": "o ejecuta",
+        "creditsNote": "Revisar con el agente de Motir es una ejecución del agente de Motir, pagada con los créditos de IA de tu organización. Revisar en mi agente y motir review usan tu propio agente.",
+        "waitingWhy": "No se fusiona nada, ni se pide aprobación a nadie, hasta que una revisión se supere o alguien continúe sin ella.",
+        "waitingWhyNotYours": "Esperando a que {name} inicie una revisión. No se fusiona nada hasta que una revisión se supere o esa persona continúe sin ella."
+      },
+      "own": {
+        "title": "Revisando en {agent}",
+        "titleNoAgent": "Revisando en un agente",
+        "metaYou": "Iniciada <when></when> por ti · <run>{label}</run>",
+        "meta": "Iniciada <when></when> · <run>{label}</run>",
+        "lineYou": "Tu agente ejecuta motir review {key} y registra aquí su veredicto. Las opciones vuelven si la ejecución termina sin veredicto.",
+        "line": "El agente ejecuta motir review {key} y registra aquí su veredicto. Las opciones vuelven si la ejecución termina sin veredicto."
+      },
+      "picker": {
+        "title": "Revisar {key} en uno de tus agentes",
+        "lead": "Tu agente ejecuta motir review {key} y envía su veredicto en tu nombre.",
+        "lastUsed": "Usado por última vez en este elemento"
       }
     },
     "autoRerun": {
