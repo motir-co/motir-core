@@ -611,7 +611,9 @@ test.describe('the review agent', () => {
             exact: true,
           }),
         ).toBeVisible({ timeout: FIRST_PAINT_MS });
-        await expect(reviewBand(page)).toHaveCount(0);
+        // No review is waiting: the band reads Review off and only offers the doors, which
+        // still review with Review off (MOTIR-11948).
+        await expect(reviewBand(page)).toHaveAttribute('data-state', 'review-off');
         expect(await awaitingReview(switchedOff)).toBeNull();
       },
     );
