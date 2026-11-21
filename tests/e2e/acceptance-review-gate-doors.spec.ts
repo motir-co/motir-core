@@ -446,6 +446,7 @@ test.describe('review is a gate a person starts', () => {
       await waitingWithNothingStarted(hosted, hostedV1, s.owner.id, ledger);
       // …and no approve-and-merge question until a review passes.
       expect(await awaitingReviewGate(hosted, 'pull_request_approval')).toBeNull();
+      await page.goto('/boards');
       const marker = (await revealReviewBoardCard(page, hosted)).locator('[data-review-marker]');
       await expect(marker).toHaveAttribute('data-review-marker', 'waiting_for_review', {
         timeout: FIRST_PAINT_MS,
