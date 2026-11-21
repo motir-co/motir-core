@@ -50,7 +50,6 @@ const { githubInstallationService } = await import('@/lib/services/githubInstall
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
 const { approvalGateSettingsService } = await import('@/lib/services/approvalGateSettingsService');
-const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { hostedRunService } = await import('@/lib/services/hostedRunService');
 const { agentRunCapacityService } = await import('@/lib/services/agentRunCapacityService');
 const { reviewStateService } = await import('@/lib/services/reviewStateService');
@@ -808,19 +807,6 @@ describe('a review run that ends without a verdict, and the press that starts it
     ]);
     expect((await gateRow(review!.id)).reviewUnavailableReason).toBeNull();
     expect(reviewEvents()).toEqual([]);
-  });
-
-  it('the shipped Review again route’s press (startForGate) is the same start; an unknown gate is not-found', async () => {
-    const { s, review } = await reviewing('for-gate', 108);
-    const result = await agentReviewStartService.startForGate(review!.id, s.ctx);
-    expect(result).toMatchObject({ created: true, gateId: review!.id });
-    expect((await runRows(s.workspace.id))[0]!.idempotencyKey).toBe(
-      `agent-review:${review!.id}:press:1`,
-    );
-
-    expect(
-      await refusalOf(agentReviewStartService.startForGate('no-such-gate', s.ctx)),
-    ).toBeInstanceOf(WorkItemNotFoundError);
   });
 });
 

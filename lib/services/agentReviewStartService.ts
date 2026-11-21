@@ -236,25 +236,6 @@ export const agentReviewStartService = {
   },
 
   /**
-   * The shipped *Review again* route's press (MOTIR-11944), until the review doors UI card
-   * deletes it: the gate's item, started by {@link startRequested} with no model. The gate is
-   * read under the caller's own workspace, so a gate of another workspace or another kind is
-   * the item's not-found.
-   */
-  async startForGate(gateId: string, ctx: ServiceContext): Promise<ReviewStartResult> {
-    const key = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        const gate = await approvalGateRepository.findById(gateId, tx);
-        if (!gate || gate.kind !== 'agent_review' || !gate.workItemId) return null;
-        return (await workItemRepository.findById(gate.workItemId, tx))?.identifier ?? null;
-      },
-    );
-    if (!key) throw new WorkItemNotFoundError(gateId);
-    return agentReviewStartService.startRequested({ workItemKey: key }, ctx);
-  },
-
-  /**
    * CANCEL the review runs in flight for `gateIds` — the gates a withdrawal or the
    * switch-off has just superseded (`approval-gates.md` §12.5: *a superseded review's RUN
    * is cancelled*). A hosted run is ended through the hosted end path as `cancelled`: its
