@@ -398,6 +398,10 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
       'clipboard verb — copies the check-plan command on a planner finding record page (MOTIR-11463)',
     'github.development.howToTest.code.copy':
       'clipboard verb — copies a How to test command block (MOTIR-5336)',
+    // The SETTING, not the `review` type: the heading of the Review card on Settings →
+    // Approvals, a project switch with no work-item type chip on the page (MOTIR-11946).
+    'approvals.reviewAgent.title':
+      'the Review setting — the gate on approve-and-merge, on Settings → Approvals (MOTIR-11946)',
     'publicProjects.copyFeed': 'clipboard verb — copies the public feed URL',
     'settings.apiTokens.created.copy': 'clipboard verb — copies the new API token',
     'settings.customDomains.action.copy': 'clipboard verb — copies a DNS record value (MOTIR-9529)',
@@ -886,7 +890,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'approvalGate.choice.question': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'approvalOverlay.withdrawn.conflict': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
-    'approvals.reviewAgent.desc': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'monitoring.description': "a Sentry issue — the monitor's own noun",
     'monitoring.error.body': "a Sentry issue — the monitor's own noun",
     'monitoring.empty.body': "a Sentry issue — the monitor's own noun",
@@ -1012,8 +1015,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       'to ask / a request (ordinary verb or noun) — not a work item',
     'approvalOverlay.subjectGone.agent_review':
       'to ask / a request (ordinary verb or noun) — not a work item',
-    'approvals.reviewAgent.desc': 'to ask / a request (ordinary verb or noun) — not a work item',
-    'approvals.reviewAgent.onWhat': 'to ask / a request (ordinary verb or noun) — not a work item',
     'monitoring.banner.state_error.body':
       'to ask / a request (ordinary verb or noun) — not a work item',
     'visitor.requestedFeatures.featureRequest':

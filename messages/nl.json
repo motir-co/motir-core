@@ -17494,31 +17494,23 @@
       "auto": {
         "label": "Automatisch mergen",
         "hint": "Als de checks slagen, merget Motir de pull request zonder iemand te vragen. De registratie zegt dat deze instelling het toestond — niet dat iemand het heeft goedgekeurd.",
-        "blockedByReviewAgent": "Zet de reviewagent uit om automatisch te mergen."
+        "blockedByReviewAgent": "Zet Review uit om automatisch te mergen."
       },
       "saved": "Opgeslagen",
       "saveError": "Kan niet opslaan — probeer het opnieuw."
     },
     "reviewAgent": {
-      "title": "Reviewagent",
-      "desc": "Als de pull requests van een werkitem hun checks halen, leest een Motir-agent de wijziging naast het item — de beschrijving, de acceptatiecriteria en Hoe te testen — <strong>voordat jou om Goedkeuring wordt gevraagd</strong>. Als hij een probleem vindt, gaat het item naar <strong>Te repareren</strong> met de bevindingen van de agent, en wordt niemand om Goedkeuring gevraagd.",
+      "title": "Review",
+      "desc": "Een poort vóór <strong>goedkeuren en mergen</strong>. Staat hij aan, dan kan een werkitem pas worden goedgekeurd voor de merge als een Agent-review van zijn huidige pull requests is geslaagd. Geen review start vanzelf: een persoon start hem vanuit het item.",
       "on": "Aan",
       "off": "Uit",
-      "onWhat": "Elk werkitem wordt gereviewd voordat jou om Goedkeuring wordt gevraagd.",
-      "offWhat": "Een werkitem wordt ter Goedkeuring aangeboden zodra de checks slagen.",
+      "onWhat": "Een item In review wacht op een geslaagde review voordat iemand wordt gevraagd de merge goed te keuren.",
+      "offWhat": "Een item kan worden goedgekeurd voor de merge zodra de checks slagen. Het kan nog steeds vanuit het item worden gereviewd; het oordeel wordt vastgelegd en houdt niets tegen.",
       "unavailable": "Niet beschikbaar",
-      "unavailableWhat": "Dit project merget automatisch, dus er wacht niets op een review. Kies <strong>Vragen voor het mergen</strong> om de reviewagent aan te zetten.",
-      "billingNote": "Elke review is een Motir-agentrun, betaald uit de AI-credits van je organisatie.",
-      "offNote": "Dit uitzetten annuleert lopende reviews — die werkitems gaan meteen door naar de gewone stroom.",
+      "unavailableWhat": "Dit project merget automatisch, dus geen persoon keurt een merge goed waar een review voor kan staan. Kies <strong>Vragen voor het mergen</strong> om Review aan te zetten.",
+      "offNote": "Als je dit uitzet, worden items die op een review wachten vrijgegeven: ze gaan direct naar goedkeuren en mergen. Een review die al loopt, legt zijn oordeel toch vast.",
       "saved": "Opgeslagen",
       "saveError": "Kan niet opslaan — probeer het opnieuw.",
-      "source": {
-        "label": "Wie reviewt",
-        "hosted": "Motir-agent",
-        "hostedWhat": "Motir start een reviewrun zodra de checks slagen. <strong>Gebruikt AI-credits.</strong>",
-        "own": "Je eigen agent",
-        "ownWhat": "Gratis. De review wacht tot iemand <cmd>motir review</cmd> vanuit de eigen agent uitvoert. Er start niets vanzelf."
-      },
       "posting": {
         "title": "Agentreviews op pull requests plaatsen",
         "on": "De GitHub-app van Motir plaatst elk oordeel als reactie op de pull requests en vraagt om wijzigingen bij een terugzending. Hij keurt nooit goed.",

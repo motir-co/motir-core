@@ -17494,31 +17494,23 @@
       "auto": {
         "label": "Fazer merge automaticamente",
         "hint": "Quando as verificações passam, o Motir faz o merge do pull request sem perguntar a ninguém. O registro diz que esta configuração permitiu — não que uma pessoa aprovou.",
-        "blockedByReviewAgent": "Desative o agente revisor para fazer merge automaticamente."
+        "blockedByReviewAgent": "Desative a revisão para fazer merge automaticamente."
       },
       "saved": "Salvo",
       "saveError": "Não foi possível salvar — tente novamente."
     },
     "reviewAgent": {
-      "title": "Agente revisor",
-      "desc": "Quando os pull requests de um item de trabalho passam nas verificações, um agente do Motir lê a alteração em relação ao item — a descrição, os critérios de aceitação e o Como testar — <strong>antes que você seja solicitado a aprová-lo</strong>. Se encontrar um problema, o item vai para <strong>A corrigir</strong> com as constatações do agente, e ninguém é solicitado a aprová-lo.",
+      "title": "Revisão",
+      "desc": "Uma barreira antes de <strong>aprovar e fazer merge</strong>. Com ela ativada, um item de trabalho não pode ser aprovado para merge até que uma revisão do Agente dos seus pull requests atuais seja aprovada. Nenhuma revisão começa sozinha: uma pessoa a inicia a partir do item.",
       "on": "Ativado",
       "off": "Desativado",
-      "onWhat": "Todo item de trabalho é revisado antes que você seja solicitado a aprová-lo.",
-      "offWhat": "Um item de trabalho é oferecido para aprovação assim que as verificações passam.",
+      "onWhat": "Um item Em revisão aguarda uma revisão aprovada antes que alguém seja solicitado a aprovar o merge.",
+      "offWhat": "Um item pode ser aprovado para merge assim que suas verificações passam. Ele ainda pode ser revisado a partir do item; o veredito é registrado e não bloqueia nada.",
       "unavailable": "Indisponível",
-      "unavailableWhat": "Este projeto faz merge automaticamente, então nada aguarda uma revisão. Escolha <strong>Perguntar antes do merge</strong> para ativar o agente revisor.",
-      "billingNote": "Cada revisão é uma execução do agente Motir, paga com os créditos de IA da sua organização.",
-      "offNote": "Desativar isto cancela as revisões em andamento — esses itens de trabalho seguem direto para o fluxo comum.",
+      "unavailableWhat": "Este projeto faz merge automaticamente, então nenhuma pessoa aprova um merge diante do qual uma revisão possa se colocar. Escolha <strong>Perguntar antes do merge</strong> para ativar a revisão.",
+      "offNote": "Ao desativar, os itens que aguardam uma revisão são liberados: vão direto para aprovar e fazer merge. Uma revisão que já está em andamento ainda registra seu veredito.",
       "saved": "Salvo",
       "saveError": "Não foi possível salvar — tente novamente.",
-      "source": {
-        "label": "Quem revisa",
-        "hosted": "Agente Motir",
-        "hostedWhat": "O Motir inicia uma execução de revisão quando as verificações passam. <strong>Usa créditos de IA.</strong>",
-        "own": "Seu próprio agente",
-        "ownWhat": "Grátis. A revisão espera até alguém executar <cmd>motir review</cmd> a partir do próprio agente. Nada começa sozinho."
-      },
       "posting": {
         "title": "Publicar as revisões do agente nos pull requests",
         "on": "O app do GitHub do Motir comenta cada veredito nos pull requests e pede alterações ao devolver o trabalho. Ele nunca aprova.",

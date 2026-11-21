@@ -176,7 +176,6 @@ describe('the READ takes `workflow:manage` — a member is refused it (MOTIR-539
       acceptanceVideoEnabled: false,
       reviewAgentEnabled: false,
       designApprovalGate: true,
-      reviewAgentSource: 'hosted',
       reviewBotPostsEnabled: true,
     });
 
@@ -187,7 +186,6 @@ describe('the READ takes `workflow:manage` — a member is refused it (MOTIR-539
       acceptanceVideoEnabled: false,
       reviewAgentEnabled: false,
       designApprovalGate: true,
-      reviewAgentSource: 'hosted',
       reviewBotPostsEnabled: true,
     });
   });
@@ -230,7 +228,6 @@ describe('the WRITE keeps `workflow:manage` (MOTIR-5278, unchanged by MOTIR-5394
       acceptanceVideoEnabled: true,
       reviewAgentEnabled: false,
       designApprovalGate: true,
-      reviewAgentSource: 'hosted',
       reviewBotPostsEnabled: true,
     });
     expect(await storedAcceptanceVideo(s.projectId)).toBe(true);
@@ -264,7 +261,6 @@ describe('the DESIGN-APPROVAL switch takes the same key (MOTIR-697)', () => {
       acceptanceVideoEnabled: false,
       reviewAgentEnabled: false,
       designApprovalGate: false,
-      reviewAgentSource: 'hosted',
       reviewBotPostsEnabled: true,
     });
     expect(await storedDesignApproval(s.projectId)).toBe(false);

@@ -17494,31 +17494,23 @@
       "auto": {
         "label": "Unisci automaticamente",
         "hint": "Quando i controlli passano, Motir unisce la pull request senza chiedere a nessuno. Il registro indica che lo ha consentito questa impostazione — non che una persona l’ha approvata.",
-        "blockedByReviewAgent": "Disattiva l’agente di revisione per unire automaticamente."
+        "blockedByReviewAgent": "Disattiva la revisione per unire automaticamente."
       },
       "saved": "Salvato",
       "saveError": "Impossibile salvare — riprova."
     },
     "reviewAgent": {
-      "title": "Agente di revisione",
-      "desc": "Quando le pull request di un elemento di lavoro superano i controlli, un agente Motir legge la modifica confrontandola con l’elemento — la sua descrizione, i criteri di accettazione e Come testare — <strong>prima che ti venga chiesto di approvarla</strong>. Se trova un problema, l’elemento va in <strong>Da correggere</strong> con i rilievi dell’agente, e a nessuno viene chiesto di approvarlo.",
+      "title": "Revisione",
+      "desc": "Un controllo prima di <strong>approva e unisci</strong>. Se è attivo, un elemento di lavoro non può essere approvato per il merge finché una revisione dell’Agente delle sue pull request attuali non viene superata. Nessuna revisione parte da sola: la avvia una persona dall’elemento.",
       "on": "Attivo",
       "off": "Disattivo",
-      "onWhat": "Ogni elemento di lavoro viene revisionato prima che ti venga chiesto di approvarlo.",
-      "offWhat": "Un elemento di lavoro viene proposto per l’approvazione appena i controlli passano.",
+      "onWhat": "Un elemento In revisione attende una revisione superata prima che a qualcuno venga chiesto di approvarne il merge.",
+      "offWhat": "Un elemento può essere approvato per il merge appena i suoi controlli passano. Può ancora essere revisionato dall’elemento; il verdetto viene registrato e non blocca nulla.",
       "unavailable": "Non disponibile",
-      "unavailableWhat": "Questo progetto unisce automaticamente, quindi nulla attende una revisione. Scegli <strong>Chiedi prima del merge</strong> per attivare l’agente di revisione.",
-      "billingNote": "Ogni revisione è un’esecuzione dell’agente Motir, pagata con i crediti AI della tua organizzazione.",
-      "offNote": "Disattivandolo, le revisioni in corso vengono annullate — quegli elementi di lavoro passano direttamente al flusso ordinario.",
+      "unavailableWhat": "Questo progetto unisce automaticamente, quindi nessuna persona approva un merge davanti al quale possa porsi una revisione. Scegli <strong>Chiedi prima del merge</strong> per attivare la revisione.",
+      "offNote": "Disattivandola, gli elementi in attesa di una revisione vengono rilasciati: passano direttamente ad approva e unisci. Una revisione già in corso registra comunque il suo verdetto.",
       "saved": "Salvato",
       "saveError": "Impossibile salvare — riprova.",
-      "source": {
-        "label": "Chi esegue la revisione",
-        "hosted": "Agente Motir",
-        "hostedWhat": "Motir avvia un’esecuzione di revisione quando i controlli passano. <strong>Usa crediti AI.</strong>",
-        "own": "Il tuo agente",
-        "ownWhat": "Gratis. La revisione attende che qualcuno esegua <cmd>motir review</cmd> dal proprio agente. Niente parte da solo."
-      },
       "posting": {
         "title": "Pubblica le revisioni dell’agente sulle pull request",
         "on": "L’app GitHub di Motir commenta ogni verdetto sulle pull request e chiede modifiche quando rimanda indietro il lavoro. Non approva mai.",

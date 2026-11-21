@@ -11,7 +11,6 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { ProjectNotFoundError, ReviewAgentNeedsManualMergeError } from '@/lib/projects/errors';
 import type {
   ApprovalGateSettingsDTO,
-  ReviewAgentSourceValue,
   UpdateApprovalGateSettingsInput,
 } from '@/lib/dto/approvalGateSettings';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -39,22 +38,19 @@ import type { Prisma } from '@/generated/prisma/client';
  * A dedicated `gate:manage` is a reasonable later split and is deliberately NOT
  * made here: this card has no warrant to add a permission to the catalog.
  */
-/** The room's switches, read off the project row — one mapping for every return.
- *  `reviewAgentSource` is still READ here, for the settings room's radio, until the Review
- *  settings card (MOTIR-11944) removes the field with it; nothing WRITES or acts on it any
- *  more (MOTIR-11943). */
+/** The room's switches, read off the project row — one mapping for every return. The
+ *  `review_agent_source` column stays in the schema, unread: nothing chooses who reviews any
+ *  more (MOTIR-11943, MOTIR-11946). */
 function toSettingsDTO(project: {
   acceptanceVideoEnabled: boolean;
   reviewAgentEnabled: boolean;
   designApprovalGate: boolean;
-  reviewAgentSource: ReviewAgentSourceValue;
   reviewBotPostsEnabled: boolean;
 }): ApprovalGateSettingsDTO {
   return {
     acceptanceVideoEnabled: project.acceptanceVideoEnabled,
     reviewAgentEnabled: project.reviewAgentEnabled,
     designApprovalGate: project.designApprovalGate,
-    reviewAgentSource: project.reviewAgentSource,
     reviewBotPostsEnabled: project.reviewBotPostsEnabled,
   };
 }

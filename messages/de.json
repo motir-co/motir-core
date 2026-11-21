@@ -17494,31 +17494,23 @@
       "auto": {
         "label": "Automatisch mergen",
         "hint": "Wenn die Checks bestehen, mergt Motir den Pull Request, ohne jemanden zu fragen. Die Aufzeichnung vermerkt, dass diese Einstellung es erlaubt hat — nicht, dass eine Person es genehmigt hat.",
-        "blockedByReviewAgent": "Schalten Sie den Prüf-Agenten aus, um automatisch zu mergen."
+        "blockedByReviewAgent": "Schalten Sie die Prüfung aus, um automatisch zu mergen."
       },
       "saved": "Gespeichert",
       "saveError": "Speichern fehlgeschlagen — versuchen Sie es erneut."
     },
     "reviewAgent": {
-      "title": "Prüf-Agent",
-      "desc": "Wenn die Pull Requests eines Arbeitselements ihre Checks bestehen, liest ein Motir-Agent die Änderung im Abgleich mit dem Element — seiner Beschreibung, seinen Abnahmekriterien und „How to test“ — <strong>bevor Sie um Genehmigung gebeten werden</strong>. Findet er ein Problem, kommt das Element mit den Befunden des Agenten in <strong>Zu reparieren</strong>, und niemand wird um Genehmigung gebeten.",
+      "title": "Prüfung",
+      "desc": "Eine Schranke vor <strong>Genehmigen und Mergen</strong>. Ist sie eingeschaltet, kann ein Arbeitselement erst zum Mergen genehmigt werden, wenn eine Agent-Prüfung seiner aktuellen Pull Requests bestanden ist. Keine Prüfung startet von selbst: Eine Person startet sie am Element.",
       "on": "Ein",
       "off": "Aus",
-      "onWhat": "Jedes Arbeitselement wird geprüft, bevor Sie um Genehmigung gebeten werden.",
-      "offWhat": "Ein Arbeitselement wird zur Genehmigung angeboten, sobald seine Checks bestehen.",
+      "onWhat": "Ein Element in „In Prüfung“ wartet auf eine bestandene Prüfung, bevor jemand gebeten wird, sein Mergen zu genehmigen.",
+      "offWhat": "Ein Element kann zum Mergen genehmigt werden, sobald seine Checks bestanden sind. Es kann weiterhin am Element geprüft werden; das Urteil wird festgehalten und hält nichts auf.",
       "unavailable": "Nicht verfügbar",
-      "unavailableWhat": "Dieses Projekt mergt automatisch, daher wartet nichts auf eine Prüfung. Wählen Sie <strong>Vor dem Mergen fragen</strong>, um den Prüf-Agenten einzuschalten.",
-      "billingNote": "Jede Prüfung ist ein Motir-Agent-Lauf, bezahlt aus den AI-Credits Ihrer Organisation.",
-      "offNote": "Das Ausschalten bricht laufende Prüfungen ab — diese Arbeitselemente gehen direkt in den gewöhnlichen Ablauf.",
+      "unavailableWhat": "Dieses Projekt mergt automatisch, daher genehmigt keine Person ein Mergen, vor dem eine Prüfung stehen könnte. Wählen Sie <strong>Vor dem Mergen fragen</strong>, um die Prüfung einzuschalten.",
+      "offNote": "Wenn Sie dies ausschalten, werden Elemente freigegeben, die auf eine Prüfung warten: Sie gehen direkt zu Genehmigen und Mergen. Eine bereits laufende Prüfung hält ihr Urteil trotzdem fest.",
       "saved": "Gespeichert",
       "saveError": "Speichern fehlgeschlagen — versuchen Sie es erneut.",
-      "source": {
-        "label": "Wer prüft",
-        "hosted": "Motir-Agent",
-        "hostedWhat": "Motir startet einen Prüf-Lauf, sobald die Checks bestanden sind. <strong>Verbraucht AI-Credits.</strong>",
-        "own": "Ihr eigener Agent",
-        "ownWhat": "Kostenlos. Die Prüfung wartet, bis jemand <cmd>motir review</cmd> mit dem eigenen Agent ausführt. Nichts startet von selbst."
-      },
       "posting": {
         "title": "Agent-Prüfungen in Pull Requests posten",
         "on": "Motirs GitHub-App kommentiert jedes Ergebnis in den Pull Requests und fordert bei einer Rückgabe Änderungen an. Sie genehmigt nie.",

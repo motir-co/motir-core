@@ -510,10 +510,10 @@ describe('the PATCH accepts and ignores the retired source', () => {
 
     const res = await gatesRoute.PATCH(patchBody(body), params('ACME'));
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
-      reviewAgentEnabled: true,
-      reviewAgentSource: 'hosted',
-    });
+    const answered = (await res.json()) as Record<string, unknown>;
+    expect(answered).toMatchObject({ reviewAgentEnabled: true });
+    // The settings read carries no source at all since MOTIR-11946.
+    expect(answered).not.toHaveProperty('reviewAgentSource');
     expect((await projectRow(s.project.id)).reviewAgentSource).toBe('hosted');
     expect(sent).toEqual([]);
     expect(await runRows(s.workspace.id)).toEqual([]);
@@ -535,16 +535,12 @@ describe('the PATCH accepts and ignores the retired source', () => {
     });
   });
 
-  it('the settings read still maps the stored column for the settings room', async () => {
+  it('the settings read no longer carries the stored column (MOTIR-11946)', async () => {
     const s = await makeScenario('read-dto');
     await storeSource(s.project.id, 'own');
-    await expect(
-      approvalGateSettingsService.getSettings(s.project.id, s.ctx),
-    ).resolves.toMatchObject({
-      reviewAgentEnabled: true,
-      reviewAgentSource: 'own',
-      reviewBotPostsEnabled: true,
-    });
+    const settings = await approvalGateSettingsService.getSettings(s.project.id, s.ctx);
+    expect(settings).toMatchObject({ reviewAgentEnabled: true, reviewBotPostsEnabled: true });
+    expect(settings).not.toHaveProperty('reviewAgentSource');
   });
 });
 

@@ -17494,31 +17494,23 @@
       "auto": {
         "label": "Scalaj automatycznie",
         "hint": "Gdy testy przejdą, Motir scala pull request, nikogo nie pytając. Zapis mówi, że pozwoliło na to to ustawienie — a nie, że zatwierdził to człowiek.",
-        "blockedByReviewAgent": "Wyłącz agenta przeglądającego, aby scalać automatycznie."
+        "blockedByReviewAgent": "Wyłącz przegląd, aby scalać automatycznie."
       },
       "saved": "Zapisano",
       "saveError": "Nie udało się zapisać — spróbuj ponownie."
     },
     "reviewAgent": {
-      "title": "Agent przeglądający",
-      "desc": "Gdy pull requesty elementu roboczego przejdą testy, agent Motir czyta zmianę w odniesieniu do elementu — jego opisu, kryteriów akceptacji i sekcji „Jak testować” — <strong>zanim zostaniesz poproszony o zatwierdzenie</strong>. Jeśli znajdzie problem, element trafia do sekcji <strong>Do naprawy</strong> wraz z ustaleniami agenta i nikt nie jest proszony o jego zatwierdzenie.",
+      "title": "Przegląd",
+      "desc": "Bramka przed <strong>zatwierdzeniem i scaleniem</strong>. Gdy jest włączona, elementu roboczego nie można zatwierdzić do scalenia, dopóki przegląd Agenta jego bieżących pull requestów nie zakończy się pomyślnie. Żaden przegląd nie startuje sam: uruchamia go osoba z poziomu elementu.",
       "on": "Włączony",
       "off": "Wyłączony",
-      "onWhat": "Każdy element roboczy jest przeglądany, zanim pojawi się prośba o jego zatwierdzenie.",
-      "offWhat": "Element roboczy jest kierowany do zatwierdzenia, gdy tylko przejdą jego testy.",
+      "onWhat": "Element W przeglądzie czeka na pomyślny przegląd, zanim ktokolwiek zostanie poproszony o zatwierdzenie scalenia.",
+      "offWhat": "Element można zatwierdzić do scalenia, gdy tylko przejdą jego testy. Nadal można go przejrzeć z poziomu elementu; werdykt zostaje zapisany i niczego nie wstrzymuje.",
       "unavailable": "Niedostępny",
-      "unavailableWhat": "Ten projekt scala automatycznie, więc nic nie czeka na przegląd. Wybierz <strong>Pytaj przed scaleniem</strong>, aby włączyć agenta przeglądającego.",
-      "billingNote": "Każdy przegląd to uruchomienie agenta Motir, opłacane z kredytów AI Twojej organizacji.",
-      "offNote": "Wyłączenie anuluje trwające przeglądy — te elementy robocze trafiają od razu do zwykłego przepływu.",
+      "unavailableWhat": "Ten projekt scala automatycznie, więc żadna osoba nie zatwierdza scalenia, przed którym mógłby stanąć przegląd. Wybierz <strong>Pytaj przed scaleniem</strong>, aby włączyć przegląd.",
+      "offNote": "Wyłączenie zwalnia elementy czekające na przegląd: przechodzą prosto do zatwierdzenia i scalenia. Przegląd, który już trwa, nadal zapisuje swój werdykt.",
       "saved": "Zapisano",
       "saveError": "Nie udało się zapisać — spróbuj ponownie.",
-      "source": {
-        "label": "Kto przegląda",
-        "hosted": "Agent Motir",
-        "hostedWhat": "Motir rozpoczyna uruchomienie przeglądu, gdy kontrole przejdą. <strong>Zużywa kredyty AI.</strong>",
-        "own": "Twój własny agent",
-        "ownWhat": "Bezpłatnie. Przegląd czeka, aż ktoś uruchomi <cmd>motir review</cmd> ze swojego agenta. Nic nie rusza samo."
-      },
       "posting": {
         "title": "Publikuj przeglądy agenta w pull requestach",
         "on": "Aplikacja GitHub Motir komentuje każdy werdykt w pull requestach i prosi o zmiany przy odesłaniu. Nigdy nie zatwierdza.",

@@ -17494,31 +17494,23 @@
       "auto": {
         "label": "Fusionar automáticamente",
         "hint": "Cuando pasan sus comprobaciones, Motir fusiona el pull request sin preguntar a nadie. El registro indica que lo permitió este ajuste, no que lo aprobara una persona.",
-        "blockedByReviewAgent": "Desactiva el Agente de revisión para fusionar automáticamente."
+        "blockedByReviewAgent": "Desactiva la revisión para fusionar automáticamente."
       },
       "saved": "Guardado",
       "saveError": "No se pudo guardar. Vuelve a intentarlo."
     },
     "reviewAgent": {
-      "title": "Agente de revisión",
-      "desc": "Cuando los pull requests de un elemento de trabajo pasan sus comprobaciones, un Agente de Motir lee el cambio frente al elemento (su descripción, sus Criterios de aceptación y su Cómo probar) <strong>antes de que se te pida aprobarlo</strong>. Si encuentra un problema, el elemento pasa a <strong>Por corregir</strong> con los hallazgos del Agente, y no se pide a nadie que lo apruebe.",
+      "title": "Revisión",
+      "desc": "Una barrera antes de <strong>aprobar y fusionar</strong>. Con ella activada, un elemento de trabajo no puede aprobarse para fusionar hasta que pase una revisión del Agente de sus pull requests actuales. Ninguna revisión empieza sola: una persona la inicia desde el elemento.",
       "on": "Activado",
       "off": "Desactivado",
-      "onWhat": "Cada elemento de trabajo se revisa antes de que se te pida aprobarlo.",
-      "offWhat": "Un elemento de trabajo se ofrece para Aprobación en cuanto pasan sus comprobaciones.",
+      "onWhat": "Un elemento En revisión espera una revisión aprobada antes de que se pida a alguien aprobar su fusión.",
+      "offWhat": "Un elemento puede aprobarse para fusionar en cuanto pasan sus comprobaciones. Todavía puede revisarse desde el elemento; el veredicto se registra y no bloquea nada.",
       "unavailable": "No disponible",
-      "unavailableWhat": "Este proyecto fusiona automáticamente, así que nada espera una revisión. Elige <strong>Preguntar antes de fusionar</strong> para activar el Agente de revisión.",
-      "billingNote": "Cada revisión es una ejecución del agente Motir, pagada con los créditos de IA de tu organización.",
-      "offNote": "Desactivarlo cancela las revisiones en curso: esos elementos de trabajo pasan directamente al flujo habitual.",
+      "unavailableWhat": "Este proyecto fusiona automáticamente, así que ninguna persona aprueba una fusión ante la que pueda situarse una revisión. Elige <strong>Preguntar antes de fusionar</strong> para activar la revisión.",
+      "offNote": "Al desactivarla se liberan los elementos que esperan una revisión: pasan directamente a aprobar y fusionar. Una revisión que ya está en curso sigue registrando su veredicto.",
       "saved": "Guardado",
       "saveError": "No se pudo guardar. Vuelve a intentarlo.",
-      "source": {
-        "label": "Quién revisa",
-        "hosted": "Agente Motir",
-        "hostedWhat": "Motir inicia una Ejecución de revisión cuando pasan las comprobaciones. <strong>Usa créditos de IA.</strong>",
-        "own": "Tu propio Agente",
-        "ownWhat": "Gratis. La revisión espera a que alguien ejecute <cmd>motir review</cmd> desde su propio Agente. Nada empieza por sí solo."
-      },
       "posting": {
         "title": "Publicar las revisiones del Agente en los pull requests",
         "on": "La app de GitHub de Motir comenta cada veredicto en los pull requests y pide cambios cuando devuelve el trabajo. Nunca aprueba.",

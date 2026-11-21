@@ -164,9 +164,10 @@ const toApprove = (page: Page, messages = en) =>
   main(page).getByRole('table', { name: messages.workbench.tabs.toApprove });
 const toApproveRow = (page: Page, card: ReviewAgentCard, messages = en) =>
   toApprove(page, messages).getByRole('row').filter({ hasText: card.identifier });
-const reviewAgentSwitch = (page: Page, name = ra.title) => main(page).getByRole('switch', { name });
-const sourceRadio = (page: Page, label: string) =>
-  main(page).getByRole('radio').filter({ hasText: label });
+// `exact`: the setting is titled *Review* (MOTIR-11946), a substring of the bot-posting
+// switch's *Post agent reviews on pull requests*.
+const reviewAgentSwitch = (page: Page, name = ra.title) =>
+  main(page).getByRole('switch', { name, exact: true });
 const autoMergeRadio = (page: Page) =>
   main(page).getByRole('radio').filter({ hasText: en.approvals.mergeMode.auto.label });
 const statusCard = (page: Page): Locator =>
@@ -297,15 +298,6 @@ const approvalSettingsSaved = (page: Page, projectKey: string) =>
       res.request().method() === 'PATCH',
   );
 
-async function chooseSource(page: Page, projectKey: string, source: 'hosted' | 'own') {
-  const saved = approvalSettingsSaved(page, projectKey);
-  await sourceRadio(page, ra.source[source]).click();
-  const res = await saved;
-  // The PATCH accepts the retired source and ignores it (MOTIR-11943), so its answer no
-  // longer echoes the choice; the radio and this helper go with the Review settings card.
-  expect(res.status()).toBe(200);
-}
-
 async function setReviewAgent(page: Page, projectKey: string, on: boolean) {
   const toggle = reviewAgentSwitch(page);
   await expect(toggle).toHaveAttribute('aria-checked', on ? 'false' : 'true', {
@@ -319,7 +311,7 @@ async function setReviewAgent(page: Page, projectKey: string, on: boolean) {
   await expect(toggle).toHaveAttribute('aria-checked', on ? 'true' : 'false');
 }
 
-/** The Merge automatically radio is disabled, with its explanation — under either source. */
+/** The Merge automatically radio is disabled, with its explanation, while Review is on. */
 async function autoMergeBlocked(page: Page) {
   await expect(autoMergeRadio(page)).toHaveAttribute('aria-disabled', 'true');
   await expect(main(page)).toContainText(en.approvals.mergeMode.auto.blockedByReviewAgent);
@@ -415,30 +407,18 @@ test.describe('the review path', () => {
       await openPullRequest(page, card, pr);
     }
 
-    // ── 1 · Settings: the source choice ─────────────────────────────────────
-    await chapter(
-      'Settings → Approvals: turn the review agent on, choose Your own agent',
-      async () => {
-        await page.goto('/settings/project/approvals');
-        await setReviewAgent(page, projectKey, true);
-        await main(page).locator('#review-agent').scrollIntoViewIfNeeded();
-        // Motir agent is the default, with its billing note.
-        await expect(sourceRadio(page, ra.source.hosted)).toHaveAttribute('aria-checked', 'true');
-        await expect(main(page)).toContainText(ra.billingNote);
-        await autoMergeBlocked(page);
-
-        await chooseSource(page, projectKey, 'own');
-        await expect(main(page)).toContainText(plain(ra.source.ownWhat));
-        await expect(main(page)).not.toContainText(ra.billingNote);
-        await autoMergeBlocked(page);
-      },
-    );
-    await beat();
-
-    await chapter('Hosted and back: Merge automatically stays disabled under both', async () => {
-      await chooseSource(page, projectKey, 'hosted');
-      await autoMergeBlocked(page);
-      await chooseSource(page, projectKey, 'own');
+    // ── 1 · Settings: the Review gate, with no source choice (MOTIR-11946) ──
+    await chapter('Settings → Approvals: turn Review on — no source to choose', async () => {
+      await page.goto('/settings/project/approvals');
+      await setReviewAgent(page, projectKey, true);
+      const card = main(page).locator('#review-agent');
+      await card.scrollIntoViewIfNeeded();
+      await expect(card.getByRole('heading', { name: ra.title, exact: true })).toBeVisible();
+      await expect(card).toContainText(plain(ra.desc));
+      // Nothing chooses who reviews, and no AI-credits note sits on the setting.
+      await expect(card.getByRole('radiogroup')).toHaveCount(0);
+      await expect(card.getByRole('radio')).toHaveCount(0);
+      await expect(card).not.toContainText('AI credits');
       await autoMergeBlocked(page);
     });
 
@@ -914,9 +894,10 @@ test.describe('the review path', () => {
       await page.goto('/settings/project/approvals');
       await expect(reviewAgentSwitch(page, zra.title)).toBeVisible({ timeout: FIRST_PAINT_MS });
       await main(page).locator('#review-agent').scrollIntoViewIfNeeded();
-      await expect(main(page)).toContainText(zra.source.label);
-      await expect(sourceRadio(page, zra.source.hosted)).toHaveAttribute('aria-checked', 'true');
-      await expect(main(page)).toContainText(zra.source.own);
+      await expect(
+        main(page).locator('#review-agent').getByRole('heading', { name: zra.title }),
+      ).toBeVisible();
+      await expect(main(page).locator('#review-agent').getByRole('radio')).toHaveCount(0);
       await expect(main(page)).not.toContainText('approvals.reviewAgent');
 
       // By now the hosted run on `reviewing` has ended with no verdict (the lane's run

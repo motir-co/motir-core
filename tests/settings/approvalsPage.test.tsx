@@ -72,15 +72,12 @@ beforeEach(() => {
 });
 
 describe('the Approvals page seeds the review-agent island from the DTO', () => {
-  it.each([
-    ['own', false],
-    ['hosted', true],
-  ] as const)('source %s, bot posting %s', async (source, botPosts) => {
+  // No review source is read or passed any more (MOTIR-11946).
+  it.each([[false], [true]] as const)('bot posting %s', async (botPosts) => {
     h.getSettings.mockResolvedValue({
       acceptanceVideoEnabled: false,
       reviewAgentEnabled: true,
       designApprovalGate: true,
-      reviewAgentSource: source,
       reviewBotPostsEnabled: botPosts,
     });
     render((await ProjectApprovalsPage()) as ReactElement);
@@ -89,7 +86,6 @@ describe('the Approvals page seeds the review-agent island from the DTO', () => 
       projectKey: 'ACME',
       initialPrMergeMode: 'manual',
       initialReviewAgentEnabled: true,
-      initialReviewAgentSource: source,
       initialReviewBotPostsEnabled: botPosts,
     });
   });

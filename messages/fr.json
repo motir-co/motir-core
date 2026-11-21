@@ -17494,31 +17494,23 @@
       "auto": {
         "label": "Fusionner automatiquement",
         "hint": "Lorsque ses vérifications réussissent, Motir fusionne la pull request sans demander à personne. L'historique indique que ce paramètre l'a permis — pas qu'une personne l'a approuvée.",
-        "blockedByReviewAgent": "Désactivez l'agent de relecture pour fusionner automatiquement."
+        "blockedByReviewAgent": "Désactivez la relecture pour fusionner automatiquement."
       },
       "saved": "Enregistré",
       "saveError": "Impossible d'enregistrer — réessayez."
     },
     "reviewAgent": {
-      "title": "Agent de relecture",
-      "desc": "Lorsque les pull requests d'un élément de travail réussissent leurs vérifications, un agent Motir confronte la modification à l'élément — sa description, ses critères d'acceptation et sa section Comment tester — <strong>avant que l'on vous demande de l'approuver</strong>. S'il trouve un problème, l'élément passe dans <strong>À corriger</strong> avec les constats de l'agent, et personne n'est sollicité pour l'approuver.",
+      "title": "Relecture",
+      "desc": "Une barrière avant <strong>approuver et fusionner</strong>. Activée, un élément de travail ne peut pas être approuvé pour la fusion tant qu’une relecture par un Agent de ses pull requests actuelles n’a pas réussi. Aucune relecture ne démarre seule : une personne la lance depuis l’élément.",
       "on": "Activé",
       "off": "Désactivé",
-      "onWhat": "Chaque élément de travail est relu avant que l'on vous demande de l'approuver.",
-      "offWhat": "Un élément de travail est proposé à l'approbation dès que ses vérifications réussissent.",
+      "onWhat": "Un élément En revue attend une relecture réussie avant que quiconque soit invité à approuver sa fusion.",
+      "offWhat": "Un élément peut être approuvé pour la fusion dès que ses vérifications réussissent. Il peut toujours être relu depuis l’élément ; le verdict est enregistré et ne bloque rien.",
       "unavailable": "Indisponible",
-      "unavailableWhat": "Ce projet fusionne automatiquement, rien n'attend donc de relecture. Choisissez <strong>Demander avant de fusionner</strong> pour activer l'agent de relecture.",
-      "billingNote": "Chaque relecture est une exécution de l'agent Motir, payée sur les crédits IA de votre organisation.",
-      "offNote": "Désactiver cette option annule les relectures en cours — ces éléments de travail passent directement au flux ordinaire.",
+      "unavailableWhat": "Ce projet fusionne automatiquement : aucune personne n’approuve de fusion devant laquelle une relecture pourrait se placer. Choisissez <strong>Demander avant de fusionner</strong> pour activer la relecture.",
+      "offNote": "La désactiver libère les éléments qui attendent une relecture : ils passent directement à approuver et fusionner. Une relecture déjà en cours enregistre quand même son verdict.",
       "saved": "Enregistré",
       "saveError": "Impossible d'enregistrer — réessayez.",
-      "source": {
-        "label": "Qui relit",
-        "hosted": "Agent Motir",
-        "hostedWhat": "Motir lance une exécution de relecture quand les vérifications passent. <strong>Consomme des crédits IA.</strong>",
-        "own": "Votre propre agent",
-        "ownWhat": "Gratuit. La relecture attend que quelqu'un lance <cmd>motir review</cmd> depuis son propre agent. Rien ne démarre tout seul."
-      },
       "posting": {
         "title": "Publier les relectures de l'agent sur les pull requests",
         "on": "L'app GitHub de Motir commente chaque verdict sur les pull requests et réclame des modifications lors d'un renvoi. Elle n'approuve jamais.",

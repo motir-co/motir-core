@@ -119,8 +119,10 @@ const statusCard = (page: Page): Locator =>
   page
     .locator('[data-surface="card"]')
     .filter({ has: page.getByRole('button', { name: 'Edit Status' }) });
+// `exact`: the setting is titled *Review* (MOTIR-11946), a substring of the bot-posting
+// switch's *Post agent reviews on pull requests*.
 const reviewAgentSwitch = (page: Page, name = en.approvals.reviewAgent.title) =>
-  main(page).getByRole('switch', { name });
+  main(page).getByRole('switch', { name, exact: true });
 const autoMergeRadio = (page: Page) =>
   main(page).getByRole('radio').filter({ hasText: en.approvals.mergeMode.auto.label });
 
