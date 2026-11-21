@@ -16,7 +16,11 @@ import {
   variableWrites,
   withoutVariablesWrite,
 } from './_helpers/fleet-org-ci';
-import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
+import {
+  MOTIR_RUNNER_ARM64_VARIABLE,
+  MOTIR_RUNNER_LABEL,
+  MOTIR_RUNNER_VARIABLE,
+} from '@/lib/ciFleet/config';
 import enMessages from '@/messages/en.json';
 
 /**
@@ -366,8 +370,17 @@ test('a superadmin reads the fleet readiness verdict, turns Motir CI on and off 
         org: orgKey,
         status: 204,
       }),
+      // OFF deletes the arm64 variable too, whatever ON wrote (MOTIR-11786). ON skipped
+      // it here (no arm64 pool in this lane), so GitHub answers the delete 404 — absent.
+      expect.objectContaining({
+        method: 'DELETE',
+        path: `/orgs/${org}/actions/variables/${MOTIR_RUNNER_ARM64_VARIABLE}`,
+        org: orgKey,
+        status: 404,
+      }),
     ]);
     expect(readStoredVariable(org, MOTIR_RUNNER_VARIABLE)).toBeNull();
+    expect(readStoredVariable(org, MOTIR_RUNNER_ARM64_VARIABLE)).toBeNull();
     expect(await readSettingRow(seed)).toMatchObject({ enabled: false, lastReason: REASON_OFF });
     expect(await countFleetAuditRows()).toBe(2);
   });
