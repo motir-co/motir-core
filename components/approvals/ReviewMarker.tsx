@@ -66,7 +66,7 @@ export function useReviewMarkerCopy(marker: ReviewMarkerDTO, identifier: string)
             words: t('reviewPath.marker.couldNotRunOn', { name }),
             sentence: t('reviewPath.marker.couldNotRunOnName', { name }),
           };
-    case 'waiting_for_own_agent':
+    case 'waiting_for_review':
       return marker.forViewer
         ? {
             loud: true,
@@ -83,7 +83,7 @@ export function useReviewMarkerCopy(marker: ReviewMarkerDTO, identifier: string)
 
 function MarkerGlyph({ kind, className }: { kind: ReviewMarkerDTO['kind']; className: string }) {
   if (kind === 'could_not_run') return <BotOff className={className} aria-hidden />;
-  if (kind === 'waiting_for_own_agent') return <SquareTerminal className={className} aria-hidden />;
+  if (kind === 'waiting_for_review') return <SquareTerminal className={className} aria-hidden />;
   return <Bot className={className} aria-hidden />;
 }
 

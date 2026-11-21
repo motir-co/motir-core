@@ -73,7 +73,7 @@ const REVIEWED: CardReviewDTO = {
 const WAITING_YOURS: CardReviewDTO = {
   identifier: 'PROD-2',
   marker: {
-    kind: 'waiting_for_own_agent',
+    kind: 'waiting_for_review',
     routedTo: { id: 'u-me', name: 'Me' },
     forViewer: true,
     command: 'motir review PROD-2',

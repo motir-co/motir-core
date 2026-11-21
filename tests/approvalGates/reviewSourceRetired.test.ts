@@ -1,14 +1,15 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// THE REVIEW-AGENT SOURCE and the bot-posting switch (Story MOTIR-10327 · MOTIR-10332;
-// `approval-gates.md` §12.10 and §12.16), against REAL Postgres: the project field and
-// its PATCH route, the hosted start gated on the source in the `agent-review/requested`
-// job body, the source switch with a review awaiting, and the §12.2a exclusion with
-// Merge automatically under both sources. The review is raised by the real
-// webhook-driven green verdict, the hosted run starts on the fake orchestrator, and
-// motir-ai, the gateway and GitHub are stubbed at their HTTP seam, as
-// `tests/agentReview/agentReviewStart.test.ts` stubs them.
+// THE REVIEW SOURCE IS RETIRED (Story MOTIR-11941 · MOTIR-11943; `approval-gates.md` §12),
+// against REAL Postgres. Nothing reviews by itself: the raise requests no hosted run under
+// either stored `review_agent_source` value, it notifies the routed person once instead,
+// and the reviews-to-run list, the start lane a person's press uses, and a hosted run's
+// end read no source. The PATCH accepts and ignores the field. The column stays in the
+// schema, unread by behaviour. The review is raised by the real webhook-driven green
+// verdict, the hosted run starts on the fake orchestrator, and motir-ai, the gateway and
+// GitHub are stubbed at their HTTP seam, as `tests/agentReview/agentReviewStart.test.ts`
+// stubs them.
 
 const sent: Array<{ name: string; data: Record<string, unknown> }> = [];
 vi.mock('@/lib/jobs/sendEvent', async (importOriginal) => ({
@@ -28,6 +29,8 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { linkPrByIdentifier } from '../helpers/prLink';
+import { reviewRequestFor } from '../helpers/reviewRequest';
+import { hostAnswersCleanAt } from '../helpers/hostMergeability';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -39,14 +42,13 @@ const { approvalGateSettingsService } = await import('@/lib/services/approvalGat
 const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { hostedRunService } = await import('@/lib/services/hostedRunService');
 const { projectPrMergeModeService } = await import('@/lib/services/projectPrMergeModeService');
-const { approvalGateRepository } = await import('@/lib/repositories/approvalGateRepository');
+const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
+const { reviewToRunService } = await import('@/lib/services/reviewToRunService');
+const { reviewStateService } = await import('@/lib/services/reviewStateService');
+const { reconcileGatesFor } = await import('@/lib/services/gateSetFor');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
-const { ReviewAgainNotOfferedError } = await import('@/lib/agentReview/errors');
-const {
-  InvalidReviewAgentSourceError,
-  MergeModeReviewAgentOnError,
-  ReviewAgentNeedsManualMergeError,
-} = await import('@/lib/projects/errors');
+const { MergeModeReviewAgentOnError, ReviewAgentNeedsManualMergeError } =
+  await import('@/lib/projects/errors');
 
 const { requireCompliantWorkspaceContext } = vi.hoisted(() => ({
   requireCompliantWorkspaceContext: vi.fn(),
@@ -266,9 +268,25 @@ const reviewRequests = () =>
 const runRows = (workspaceId: string) =>
   adminDb.dispatchRun.findMany({ where: { workspaceId }, orderBy: { startedAt: 'asc' } });
 
-/** A card delivered by pull request `number`, green at `sha-a`, holding its review. */
-async function reviewing(slug: string, number: number) {
+type Stored = 'hosted' | 'own';
+
+/** Write the RETIRED column directly — no door writes it any more. */
+const storeSource = (projectId: string, source: Stored) =>
+  adminDb.project.update({ where: { id: projectId }, data: { reviewAgentSource: source } });
+
+const reviewToRunRows = (recipientUserId: string) =>
+  adminDb.notification.findMany({
+    where: { recipientUserId, type: 'review_to_run' },
+    orderBy: { createdAt: 'asc' },
+  });
+
+/**
+ * A card delivered by pull request `number`, green at `sha-a`, holding its review — raised
+ * with the retired column already holding `stored`.
+ */
+async function reviewing(slug: string, number: number, stored: Stored = 'hosted') {
   const s = await makeScenario(slug);
+  await storeSource(s.project.id, stored);
   const item = await workItemsService.createWorkItem(
     { projectId: s.project.id, kind: 'task', title: `Card ${number}` },
     s.ctx,
@@ -289,9 +307,7 @@ async function reviewing(slug: string, number: number) {
   await ci('sha-a', number);
   const review = (await gatesOf(item.id, REVIEW)).find((g) => g.state === 'awaiting');
   expect(review, 'the green verdict raised the review').toBeDefined();
-  const [request] = reviewRequests();
-  expect(request, 'the raise requested its review').toBeDefined();
-  return { s, item, review: review!, request: request! };
+  return { s, item, review: review! };
 }
 
 grantPaidAiPlan();
@@ -333,11 +349,6 @@ afterAll(async () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const setSource = (
-  s: { project: { id: string }; ctx: { userId: string; workspaceId: string } },
-  source: 'hosted' | 'own',
-) => approvalGateSettingsService.updateSettings(s.project.id, { reviewAgentSource: source }, s.ctx);
-
 const projectRow = (id: string) => adminDb.project.findUniqueOrThrow({ where: { id } });
 
 const runRow = (id: string) => adminDb.dispatchRun.findUniqueOrThrow({ where: { id } });
@@ -349,308 +360,284 @@ const patchBody = (body: unknown) =>
     body: JSON.stringify(body),
   });
 
-/** A card reviewing under the HOSTED source, its raise run started and in flight. */
-async function reviewingInFlight(slug: string, number: number) {
-  const scenario = await reviewing(slug, number);
-  expect((await agentReviewStartService.startRequested(scenario.request)).outcome).toBe('started');
-  const [run] = await runRows(scenario.s.workspace.id);
-  expect(run!.status).toBe('running');
-  sent.length = 0;
-  return { ...scenario, run: run! };
-}
+const homeCtx = (s: {
+  user: { id: string };
+  workspace: { id: string };
+  project: { id: string };
+}) => ({
+  userId: s.user.id,
+  workspaceId: s.workspace.id,
+  projectId: s.project.id,
+});
 
-// ── The fields ────────────────────────────────────────────────────────────────
+// ── Nothing reviews by itself ─────────────────────────────────────────────────
 
-describe('the review source and bot-posting fields (MOTIR-10332)', () => {
-  it('an existing project row defaults to source hosted and bot posting on, read by the service and GET', async () => {
-    const s = await makeScenario('defaults');
-    const row = await projectRow(s.project.id);
-    expect(row.reviewAgentSource).toBe('hosted');
-    expect(row.reviewBotPostsEnabled).toBe(true);
+describe('the raise starts nothing under either stored source', () => {
+  it.each(['hosted', 'own'] as const)(
+    'stored %s: the gate waits at its version, no request, no run, nothing billed, one notification',
+    async (stored) => {
+      const { s, item, review } = await reviewing(
+        `raise-${stored}`,
+        stored === 'hosted' ? 61 : 62,
+        stored,
+      );
+      expect(reviewRequests()).toEqual([]);
+      expect(await runRows(s.workspace.id)).toEqual([]);
+      expect(mintCalls()).toEqual([]);
+      expect(fakeOrchestrator.provisioned).toHaveLength(0);
+      const gate = await gateRow(review.id);
+      expect(gate.state).toBe('awaiting');
+      expect(gate.reviewUnavailableReason).toBeNull();
 
-    await expect(approvalGateSettingsService.getSettings(s.project.id, s.ctx)).resolves.toEqual({
-      acceptanceVideoEnabled: row.acceptanceVideoEnabled,
-      reviewAgentEnabled: true,
-      designApprovalGate: row.designApprovalGate,
-      reviewAgentSource: 'hosted',
-      reviewBotPostsEnabled: true,
+      // The routed person (the reporter here) was told once, after commit.
+      const rows = await reviewToRunRows(s.user.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        workItemId: item.id,
+        dedupeKey: `review_to_run:${review.id}`,
+        data: { kind: 'review_to_run', command: `motir review ${item.identifier}` },
+      });
+      // A redelivered notify writes no second row.
+      expect(await reviewToRunService.notifyRaised(s.workspace.id, review.id)).toBe('notified');
+      expect(await reviewToRunRows(s.user.id)).toHaveLength(1);
+
+      const state = (await reviewStateService.forCards(s.project.id, [item.id], s.ctx)).get(
+        item.id,
+      );
+      expect(state?.marker).toEqual({
+        kind: 'waiting_for_review',
+        routedTo: expect.objectContaining({ id: s.user.id }),
+        forViewer: true,
+        command: `motir review ${item.identifier}`,
+      });
+      expect(state?.reviewToRun).toEqual({
+        gateId: review.id,
+        command: `motir review ${item.identifier}`,
+      });
+      // …and it is listed as a review to run, whichever value the column holds.
+      expect(
+        (await approvalGatesService.listReviewsToRun(homeCtx(s))).map((row) => row.gateId),
+      ).toEqual([review.id]);
+    },
+  );
+
+  it('notifyRaised answers not_a_review_to_run with the review agent off, or for a gate that is not an awaiting review', async () => {
+    const { s, review } = await reviewing('notify-off', 63);
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { reviewAgentEnabled: false },
+    });
+    expect(await reviewToRunService.notifyRaised(s.workspace.id, review.id)).toBe(
+      'not_a_review_to_run',
+    );
+    expect(await reviewToRunService.notifyRaised(s.workspace.id, 'no-such-gate')).toBe(
+      'not_a_review_to_run',
+    );
+  });
+});
+
+describe('a raise outside any transaction helper scope', () => {
+  it('notifies nobody and says so; the gate still stands awaiting', async () => {
+    const { s, item, review } = await reviewing('unscoped', 67);
+    await adminDb.approvalGate.update({
+      where: { id: review.id },
+      data: { state: 'superseded', supersededCause: 'ci_failed' },
+    });
+    await adminDb.notification.deleteMany({ where: { recipientUserId: s.user.id } });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // A bare transaction opens no after-commit scope: the creator cannot defer its notify.
+    await adminDb.$transaction(async (tx) => {
+      const fresh = await tx.workItem.findUniqueOrThrow({ where: { id: item.id } });
+      expect(await reconcileGatesFor(fresh, tx)).toEqual([REVIEW]);
     });
 
-    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: s.ctx });
-    const res = await gatesRoute.GET(new Request('https://app.motir.co/x'), params('ACME'));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
-      reviewAgentSource: 'hosted',
-      reviewBotPostsEnabled: true,
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('raised outside a transaction scope'),
+      expect.objectContaining({ workItemId: item.id }),
+    );
+    const [again] = (await gatesOf(item.id, REVIEW)).filter((g) => g.state === 'awaiting');
+    expect(again).toBeDefined();
+    expect(await reviewToRunRows(s.user.id)).toEqual([]);
+    expect(reviewRequests()).toEqual([]);
+  });
+});
+
+// ── The start lane a person's press uses ──────────────────────────────────────
+
+describe('startRequested reads no source', () => {
+  it('starts ONE hosted run for a fresh request even with the column at own; then already_started, run_in_flight', async () => {
+    const { s, review } = await reviewing('start-own', 64, 'own');
+    const request = reviewRequestFor(review);
+    const first = await agentReviewStartService.startRequested(request);
+    expect(first.outcome).toBe('started');
+    expect(await runRows(s.workspace.id)).toHaveLength(1);
+
+    // The same key again is that run.
+    expect(await agentReviewStartService.startRequested(request)).toEqual({
+      outcome: 'already_started',
+      dispatchRunId: (first as { dispatchRunId: string }).dispatchRunId,
     });
+    // A second key while it runs: one review at a time.
+    expect(
+      await agentReviewStartService.startRequested(
+        reviewRequestFor(review, `agent-review:${review.id}:again:second`),
+      ),
+    ).toEqual({ outcome: 'skipped', why: 'run_in_flight' });
+    expect(await runRows(s.workspace.id)).toHaveLength(1);
   });
 
-  it('a PATCH naming one field writes only that field', async () => {
-    const s = await makeScenario('subset');
+  it('a request at a moved version answers version_moved and starts nothing', async () => {
+    const { s, review } = await reviewing('start-moved', 65, 'own');
+    expect(
+      await agentReviewStartService.startRequested({
+        ...reviewRequestFor(review),
+        subjectVersion: 'acme/app#65@another',
+      }),
+    ).toEqual({ outcome: 'skipped', why: 'version_moved' });
+    expect(await runRows(s.workspace.id)).toEqual([]);
+  });
+
+  it('a hosted run that ends without a verdict leaves its reason on the awaiting gate, with the column at own', async () => {
+    const { s, review } = await reviewing('end-own', 66, 'own');
+    expect((await agentReviewStartService.startRequested(reviewRequestFor(review))).outcome).toBe(
+      'started',
+    );
+    const [run] = await runRows(s.workspace.id);
+    await hostedRunService.endHostedRun(run!.id, 'exited', 'the container exited 0');
+    expect((await runRow(run!.id)).status).not.toBe('running');
+    expect((await gateRow(review.id)).reviewUnavailableReason).toBe('no_verdict');
+  });
+});
+
+// ── The retired field on the PATCH ────────────────────────────────────────────
+
+describe('the PATCH accepts and ignores the retired source', () => {
+  it.each([
+    ['own', { reviewAgentSource: 'own' }],
+    ['an unknown value', { reviewAgentSource: 'robot' }],
+    ['a non-string', { reviewAgentSource: 1 }],
+  ])('%s answers 200, leaves the column unchanged and emits nothing', async (label, body) => {
+    const { s, review } = await reviewing(`patch-${label.length}`, 70 + label.length);
+    sent.length = 0;
     requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: s.ctx });
 
-    const res = await gatesRoute.PATCH(patchBody({ reviewAgentSource: 'own' }), params('ACME'));
+    const res = await gatesRoute.PATCH(patchBody(body), params('ACME'));
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       reviewAgentEnabled: true,
-      reviewAgentSource: 'own',
-      reviewBotPostsEnabled: true,
+      reviewAgentSource: 'hosted',
     });
+    expect((await projectRow(s.project.id)).reviewAgentSource).toBe('hosted');
+    expect(sent).toEqual([]);
+    expect(await runRows(s.workspace.id)).toEqual([]);
+    expect((await gateRow(review.id)).state).toBe('awaiting');
+  });
 
-    const res2 = await gatesRoute.PATCH(
-      patchBody({ reviewBotPostsEnabled: false }),
+  it('a body carrying the field beside a real switch writes only the switch', async () => {
+    const s = await makeScenario('patch-beside');
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: s.ctx });
+    const res = await gatesRoute.PATCH(
+      patchBody({ reviewAgentSource: 'own', reviewBotPostsEnabled: false }),
       params('ACME'),
     );
-    expect(res2.status).toBe(200);
-    const row = await projectRow(s.project.id);
-    expect(row).toMatchObject({
+    expect(res.status).toBe(200);
+    expect(await projectRow(s.project.id)).toMatchObject({
       reviewAgentEnabled: true,
-      reviewAgentSource: 'own',
+      reviewAgentSource: 'hosted',
       reviewBotPostsEnabled: false,
     });
   });
 
-  it.each([
-    ['a source outside hosted | own', { reviewAgentSource: 'robot' }],
-    ['a non-string source', { reviewAgentSource: 1 }],
-    ['a non-boolean bot-posting switch', { reviewBotPostsEnabled: 'yes' }],
-  ])('the route refuses %s with 400 and writes nothing', async (_label, body) => {
-    const s = await makeScenario(`bad-${_label.length}`);
-    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: s.ctx });
-
-    const res = await gatesRoute.PATCH(patchBody(body), params('ACME'));
-    expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ code: 'BAD_REQUEST' });
-    expect(await projectRow(s.project.id)).toMatchObject({
-      reviewAgentSource: 'hosted',
+  it('the settings read still maps the stored column for the settings room', async () => {
+    const s = await makeScenario('read-dto');
+    await storeSource(s.project.id, 'own');
+    await expect(
+      approvalGateSettingsService.getSettings(s.project.id, s.ctx),
+    ).resolves.toMatchObject({
+      reviewAgentEnabled: true,
+      reviewAgentSource: 'own',
       reviewBotPostsEnabled: true,
     });
   });
+});
 
-  it('the service refuses an unknown source with its typed error', async () => {
-    const s = await makeScenario('bad-service');
-    await expect(
-      approvalGateSettingsService.updateSettings(
-        s.project.id,
-        { reviewAgentSource: 'robot' as unknown as 'own' },
-        s.ctx,
-      ),
-    ).rejects.toBeInstanceOf(InvalidReviewAgentSourceError);
-  });
+// ── Turning Review on, and a head move ────────────────────────────────────────
 
-  it('the source is stored while the agent is off, and both values survive a disable', async () => {
-    const s = await makeScenario('stored-off');
+describe('turning Review on starts nothing, and a head move re-raises a waiting review', () => {
+  it('turning Review on raises no review on a card already asking to approve and merge', async () => {
+    const s = await makeScenario('enable');
     await approvalGateSettingsService.updateSettings(
       s.project.id,
       { reviewAgentEnabled: false },
       s.ctx,
     );
-    await approvalGateSettingsService.updateSettings(
-      s.project.id,
-      { reviewAgentSource: 'own', reviewBotPostsEnabled: false },
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Card 80' },
       s.ctx,
     );
+    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    const headRef = `subtask/${item.identifier}-80`;
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: 80,
+      headRef,
+    });
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('opened', 80, headRef),
+    );
+    await ci('sha-a', 80);
+    expect(
+      (await gatesOf(item.id, 'pull_request_approval')).filter((g) => g.state === 'awaiting'),
+    ).toHaveLength(1);
+    sent.length = 0;
+
     await approvalGateSettingsService.updateSettings(
       s.project.id,
       { reviewAgentEnabled: true },
       s.ctx,
     );
-    await approvalGateSettingsService.updateSettings(
-      s.project.id,
-      { reviewAgentEnabled: false },
-      s.ctx,
-    );
-    expect(await projectRow(s.project.id)).toMatchObject({
-      reviewAgentEnabled: false,
-      reviewAgentSource: 'own',
-      reviewBotPostsEnabled: false,
-    });
+
+    expect(await gatesOf(item.id, REVIEW)).toEqual([]);
     expect(reviewRequests()).toEqual([]);
-  });
-});
-
-// ── The hosted start, gated on the source ─────────────────────────────────────
-
-describe('the hosted run starts only for source hosted', () => {
-  it('source hosted: the raise starts one hosted run, as before', async () => {
-    const { s, request } = await reviewing('hosted-start', 61);
-    expect((await agentReviewStartService.startRequested(request)).outcome).toBe('started');
-    expect(await runRows(s.workspace.id)).toHaveLength(1);
-  });
-
-  it('source own: the gate stands awaiting at its version, no run, nothing billed, no could-not-run reason', async () => {
-    // The source is set BEFORE the green verdict raises the review.
-    const { s, review, request } = await reviewingUnder('own', 'own-start', 62);
-    expect(await agentReviewStartService.startRequested(request)).toEqual({
-      outcome: 'skipped',
-      why: 'source_own',
-    });
     expect(await runRows(s.workspace.id)).toEqual([]);
-    expect(mintCalls()).toEqual([]);
-    expect(fakeOrchestrator.provisioned).toHaveLength(0);
-    const gate = await gateRow(review.id);
-    expect(gate.state).toBe('awaiting');
-    expect(gate.subjectVersion).toBe(review.subjectVersion);
-    expect(gate.reviewUnavailableReason).toBeNull();
   });
 
-  it('source own: Review again is refused with source_own', async () => {
-    const { s, review } = await reviewingUnder('own', 'own-again', 63);
-    // A reason left from before the switch would otherwise offer it.
-    await adminDb.approvalGate.update({
-      where: { id: review.id },
-      data: { reviewUnavailableReason: 'hosted_run_out_of_credits' },
-    });
-    const refused = await agentReviewStartService
-      .reviewAgain(review.id, s.ctx)
-      .catch((err: unknown) => err);
-    expect(refused).toBeInstanceOf(ReviewAgainNotOfferedError);
-    expect((refused as InstanceType<typeof ReviewAgainNotOfferedError>).reason).toBe('source_own');
+  it('a head move supersedes the review and re-raises it at the new version, waiting, notified once', async () => {
+    const { s, item, review } = await reviewing('head-move', 81);
+    sent.length = 0;
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('synchronize', 81, `subtask/${item.identifier}-81`, {
+        head: { ref: `subtask/${item.identifier}-81`, sha: 'sha-b' },
+      }),
+    );
+    await hostAnswersCleanAt(s.workspace.id, 81, 'sha-b');
+    await ci('sha-b', 81);
+
+    expect((await gateRow(review.id)).state).toBe('superseded');
+    const next = (await gatesOf(item.id, REVIEW)).find((g) => g.state === 'awaiting');
+    expect(next, 'the head move re-raised the review').toBeDefined();
+    expect(next!.id).not.toBe(review.id);
+    expect(next!.subjectVersion).not.toBe(review.subjectVersion);
     expect(reviewRequests()).toEqual([]);
+    expect(await runRows(s.workspace.id)).toEqual([]);
+    const rows = await reviewToRunRows(s.user.id);
+    expect(rows.map((row) => row.dedupeKey)).toEqual([
+      `review_to_run:${review.id}`,
+      `review_to_run:${next!.id}`,
+    ]);
   });
 });
 
-/** Like {@link reviewing}, with the project's source set before the review is raised. */
-async function reviewingUnder(source: 'hosted' | 'own', slug: string, number: number) {
-  const s = await makeScenario(slug);
-  await setSource(s, source);
-  const item = await workItemsService.createWorkItem(
-    { projectId: s.project.id, kind: 'task', title: `Card ${number}` },
-    s.ctx,
-  );
-  await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
-  const headRef = `subtask/${item.identifier}-${number}`;
-  await linkPrByIdentifier({
-    identifier: item.identifier,
-    owner: 'moooon',
-    name: 'acme',
-    number,
-    headRef,
-  });
-  await githubWebhookService.handleEvent(
-    'pull_request',
-    pullRequestPayload('opened', number, headRef),
-  );
-  await ci('sha-a', number);
-  const review = (await gatesOf(item.id, REVIEW)).find((g) => g.state === 'awaiting');
-  expect(review, 'the green verdict raised the review under either source').toBeDefined();
-  const [request] = reviewRequests();
-  expect(request, 'the raise requests a start under either source').toBeDefined();
-  sent.length = 0;
-  return { s, item, review: review!, request: request! };
-}
+// ── §12.2a — the exclusion with Merge automatically ───────────────────────────
 
-// ── The source switch with a review awaiting ──────────────────────────────────
-
-describe('switching the source with a review awaiting', () => {
-  it('hosted → own cancels the in-flight run after commit, clears the reason, and leaves the gate awaiting', async () => {
-    const { s, review, run } = await reviewingInFlight('to-own', 71);
-    await adminDb.approvalGate.update({
-      where: { id: review.id },
-      data: { reviewUnavailableReason: 'hosted_run_out_of_credits' },
-    });
-
-    await setSource(s, 'own');
-
-    expect((await runRow(run.id)).status).toBe('cancelled');
-    const gate = await gateRow(review.id);
-    expect(gate.state).toBe('awaiting');
-    expect(gate.subjectVersion).toBe(review.subjectVersion);
-    expect(gate.reviewUnavailableReason).toBeNull();
-    expect(reviewRequests()).toEqual([]);
-
-    // The cancelled run's end does not write no_verdict back onto the awaiting gate.
-    await hostedRunService.endHostedRun(run.id, 'exited', 'the container exited 0');
-    expect((await gateRow(review.id)).reviewUnavailableReason).toBeNull();
-  });
-
-  it('a rolled-back hosted → own switch cancels nothing and writes nothing', async () => {
-    const { s, review, run } = await reviewingInFlight('rollback', 72);
-    await adminDb.approvalGate.update({
-      where: { id: review.id },
-      data: { reviewUnavailableReason: 'hosted_run_out_of_credits' },
-    });
-    vi.spyOn(approvalGateRepository, 'setReviewUnavailableReason').mockRejectedValueOnce(
-      new Error('boom'),
-    );
-
-    await expect(setSource(s, 'own')).rejects.toThrow('boom');
-
-    expect((await runRow(run.id)).status).toBe('running');
-    expect((await projectRow(s.project.id)).reviewAgentSource).toBe('hosted');
-    expect((await gateRow(review.id)).reviewUnavailableReason).toBe('hosted_run_out_of_credits');
-  });
-
-  it('own → hosted requests ONE start per awaiting gate under a fresh key, and it starts a run', async () => {
-    const { s, review } = await reviewingUnder('own', 'to-hosted', 73);
-
-    await setSource(s, 'hosted');
-
-    const requests = reviewRequests();
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({
-      gateId: review.id,
-      subjectVersion: review.subjectVersion,
-      workspaceId: s.workspace.id,
-    });
-    expect(requests[0]!.idempotencyKey).toMatch(new RegExp(`^agent-review:${review.id}:source:`));
-    expect((await agentReviewStartService.startRequested(requests[0]!)).outcome).toBe('started');
-    expect(await runRows(s.workspace.id)).toHaveLength(1);
-  });
-
-  it('a gate whose run an earlier switch cancelled starts again on the way back to hosted', async () => {
-    const { s, review, run } = await reviewingInFlight('round-trip', 74);
-    await setSource(s, 'own');
-    expect((await runRow(run.id)).status).toBe('cancelled');
-
-    await setSource(s, 'hosted');
-    const [request] = reviewRequests();
-    expect(request).toBeDefined();
-    expect(request!.gateId).toBe(review.id);
-    expect((await agentReviewStartService.startRequested(request!)).outcome).toBe('started');
-
-    const runs = await runRows(s.workspace.id);
-    expect(runs).toHaveLength(2);
-    expect(runs[1]!.status).toBe('running');
-    expect(runs[1]!.idempotencyKey).toBe(request!.idempotencyKey);
-  });
-
-  it('switching to the source already set starts and cancels nothing', async () => {
-    const { s, run } = await reviewingInFlight('same-source', 75);
-    await setSource(s, 'hosted');
-    expect(reviewRequests()).toEqual([]);
-    expect((await runRow(run.id)).status).toBe('running');
-  });
-
-  it('a source switch with the agent off acts on no gate', async () => {
-    const { s, review } = await reviewingUnder('own', 'switch-off-agent', 76);
-    await approvalGateSettingsService.updateSettings(
-      s.project.id,
-      { reviewAgentEnabled: false, reviewAgentSource: 'hosted' },
-      s.ctx,
-    );
-    expect((await gateRow(review.id)).state).toBe('superseded');
-    expect(reviewRequests()).toEqual([]);
-  });
-
-  it('disabling the agent under source own retires the awaiting review, as under hosted', async () => {
-    const { s, review } = await reviewingUnder('own', 'disable-own', 77);
-    await approvalGateSettingsService.updateSettings(
-      s.project.id,
-      { reviewAgentEnabled: false },
-      s.ctx,
-    );
-    expect((await gateRow(review.id)).state).toBe('superseded');
-    expect((await projectRow(s.project.id)).reviewAgentSource).toBe('own');
-  });
-});
-
-// ── §12.2a — the exclusion with Merge automatically, under both sources ───────
-
-describe('the review agent and Merge automatically exclude each other under either source (§12.2a)', () => {
-  it.each(['hosted', 'own'] as const)('source %s: both refusals fire', async (source) => {
-    const s = await makeScenario(`exclusion-${source}`);
-    await setSource(s, source);
+describe('the review agent and Merge automatically still exclude each other (§12.2a)', () => {
+  it('both refusals fire, and the refused enable answers 409 on the route', async () => {
+    const s = await makeScenario('exclusion');
 
     await expect(
       projectPrMergeModeService.setPrMergeMode(s.project.id, 'auto', s.ctx),
@@ -665,10 +652,14 @@ describe('the review agent and Merge automatically exclude each other under eith
     await expect(
       approvalGateSettingsService.updateSettings(s.project.id, { reviewAgentEnabled: true }, s.ctx),
     ).rejects.toBeInstanceOf(ReviewAgentNeedsManualMergeError);
+
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: s.ctx });
+    const res = await gatesRoute.PATCH(patchBody({ reviewAgentEnabled: true }), params('ACME'));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'REVIEW_AGENT_NEEDS_MANUAL_MERGE' });
     expect(await projectRow(s.project.id)).toMatchObject({
       reviewAgentEnabled: false,
       prMergeMode: 'auto',
-      reviewAgentSource: source,
     });
   });
 });

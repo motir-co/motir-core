@@ -62,6 +62,5 @@ export interface UpdateApprovalGateSettingsInput {
   acceptanceVideoEnabled?: boolean;
   reviewAgentEnabled?: boolean;
   designApprovalGate?: boolean;
-  reviewAgentSource?: ReviewAgentSourceValue;
   reviewBotPostsEnabled?: boolean;
 }

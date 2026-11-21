@@ -42,7 +42,7 @@ export type ReviewMarkerDTO =
       forViewer: boolean;
     }
   | {
-      kind: 'waiting_for_own_agent';
+      kind: 'waiting_for_review';
       routedTo: ReviewStatePersonDTO | null;
       forViewer: boolean;
       /** `motir review <KEY>` — the copyable command. */
@@ -131,9 +131,9 @@ function markerDto(marker: ReviewMarker | null): ReviewMarkerDTO | null {
         routedTo: personDto(marker.routedTo),
         forViewer: marker.forViewer,
       };
-    case 'waiting_for_own_agent':
+    case 'waiting_for_review':
       return {
-        kind: 'waiting_for_own_agent',
+        kind: 'waiting_for_review',
         routedTo: personDto(marker.routedTo),
         forViewer: marker.forViewer,
         command: marker.command,

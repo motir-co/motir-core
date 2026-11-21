@@ -187,7 +187,6 @@ export async function readReviewStates(
       identifier: card.identifier,
       finished: isFinished(card),
       reviewAgentEnabled: project.reviewAgentEnabled,
-      reviewAgentSource: project.reviewAgentSource,
       currentVersion: set.version,
       members: set.members,
       agentGates: gates.map((gate) => ({ ...gate, decidedByName: nameOf(gate.decidedById) })),

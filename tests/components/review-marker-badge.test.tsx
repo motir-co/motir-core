@@ -32,7 +32,7 @@ const COULD_NOT_RUN_YOURS: ReviewMarkerDTO = {
   forViewer: true,
 };
 const WAITING_YOURS: ReviewMarkerDTO = {
-  kind: 'waiting_for_own_agent',
+  kind: 'waiting_for_review',
   routedTo: ANA,
   forViewer: true,
   command: 'motir review ACME-412',

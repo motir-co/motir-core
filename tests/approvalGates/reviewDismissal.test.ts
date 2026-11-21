@@ -58,6 +58,7 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { bearer, withTokenFor } from '../fixtures/apiV1Fixtures';
+import { reviewRequestFor } from '../helpers/reviewRequest';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -65,7 +66,6 @@ const { projectsService } = await import('@/lib/services/projectsService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
-const { approvalGateSettingsService } = await import('@/lib/services/approvalGateSettingsService');
 const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { approvalGateRepository } = await import('@/lib/repositories/approvalGateRepository');
 const { reviewVerdictService } = await import('@/lib/services/reviewVerdictService');
@@ -316,9 +316,10 @@ async function reviewing(slug: string, number: number) {
   await ci('sha-a', number);
   const review = (await gatesOf(item.id, REVIEW)).find((g) => g.state === 'awaiting');
   expect(review, 'the green verdict raised the review').toBeDefined();
-  const [request] = reviewRequests();
-  expect(request, 'the raise requested its review').toBeDefined();
-  return { s, item, review: review!, request: request! };
+  // Nothing reviews by itself (MOTIR-11943): the raise requests no run, so a case that
+  // goes on to a hosted review sends the request a person's press would.
+  expect(reviewRequests(), 'the raise requests no review by itself').toEqual([]);
+  return { s, item, review: review!, request: reviewRequestFor(review!) };
 }
 
 grantPaidAiPlan();
@@ -433,16 +434,14 @@ async function deliveredGateOff(slug: string, number: number) {
   return { s, item, approval: approval[0]! };
 }
 
-/** A card holding an awaiting review under `source`, its hosted run started when hosted. */
+/**
+ * A card holding an awaiting review: `hosted` — a person started a hosted review run on it;
+ * `own` — nobody started one, so it waits for the routed person to run it in their own
+ * agent (no project setting decides which any more, MOTIR-11943).
+ */
 async function reviewingUnder(source: 'hosted' | 'own', slug: string, number: number) {
   const scenario = await reviewing(slug, number);
-  if (source === 'own') {
-    await approvalGateSettingsService.updateSettings(
-      scenario.s.project.id,
-      { reviewAgentSource: 'own' },
-      scenario.s.ctx,
-    );
-  } else {
+  if (source === 'hosted') {
     expect((await agentReviewStartService.startRequested(scenario.request)).outcome).toBe(
       'started',
     );

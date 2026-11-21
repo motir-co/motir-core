@@ -1,9 +1,4 @@
-import type {
-  ApprovalGate,
-  ReviewAgentSource,
-  ReviewDismissal,
-  ReviewVerdictRecord,
-} from '@/generated/prisma/client';
+import type { ApprovalGate, ReviewDismissal, ReviewVerdictRecord } from '@/generated/prisma/client';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { standingReviewRefusalFrom } from '@/lib/approvalGates/reviewRefusal';
 import { countableReviewsAtHead, type CountableReview } from '@/lib/approvalGates/reviewVerdict';
@@ -88,7 +83,6 @@ export interface ReviewStateFacts {
   /** The card's status is in the done category (Done or Cancelled). */
   finished: boolean;
   reviewAgentEnabled: boolean;
-  reviewAgentSource: ReviewAgentSource;
   /** `deliverySetVersion` of the card's set; null when it is empty or a head is unknown. */
   currentVersion: string | null;
   members: readonly ReviewStateMember[];
@@ -141,7 +135,7 @@ export type ReviewMarker =
       forViewer: boolean;
     }
   | {
-      kind: 'waiting_for_own_agent';
+      kind: 'waiting_for_review';
       routedTo: ReviewStatePerson | null;
       forViewer: boolean;
       command: string;
@@ -261,15 +255,10 @@ function markerOf(
   viewerIsRouted: boolean,
 ): ReviewMarker | null {
   if (!facts.reviewAgentEnabled || !awaiting) return null;
-  if (facts.reviewAgentSource === 'own') {
-    return {
-      kind: 'waiting_for_own_agent',
-      routedTo: facts.routedTo,
-      forViewer: viewerIsRouted,
-      command: reviewCommand(facts.identifier),
-    };
-  }
-  // §12.6 is a hosted-only state: the reason on the row, aimed at the routed person.
+  // A hosted review a person started is running on this gate.
+  if (facts.reviewRunInFlight) return { kind: 'agent_reviewing' };
+  // §12.6: the hosted run ended without a verdict — the reason on the row, aimed at the
+  // routed person.
   if (awaiting.reviewUnavailableReason) {
     return {
       kind: 'could_not_run',
@@ -278,7 +267,14 @@ function markerOf(
       forViewer: viewerIsRouted,
     };
   }
-  return facts.reviewRunInFlight ? { kind: 'agent_reviewing' } : null;
+  // ONE waiting state for every reader (MOTIR-11943): nothing reviews by itself, so the
+  // gate waits for a person to start a review — whichever way they run it.
+  return {
+    kind: 'waiting_for_review',
+    routedTo: facts.routedTo,
+    forViewer: viewerIsRouted,
+    command: reviewCommand(facts.identifier),
+  };
 }
 
 function githubApprovalsOf(members: readonly ReviewStateMember[]): ReviewLine['githubApprovals'] {
@@ -433,7 +429,7 @@ export function deriveReviewState(facts: ReviewStateFacts): ReviewState {
         ? { recordId: standing.recordId, findingsMd: standing.noteMd, at: standing.decidedAt }
         : null,
     reviewToRun:
-      facts.reviewAgentEnabled && facts.reviewAgentSource === 'own' && awaiting
+      facts.reviewAgentEnabled && awaiting && !facts.reviewRunInFlight
         ? { gateId: awaiting.id, command: reviewCommand(facts.identifier) }
         : null,
     authorOfEveryPr,

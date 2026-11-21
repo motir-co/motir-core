@@ -65,7 +65,7 @@ export function ReviewMarkerHeaderLink({
       <span className="sr-only" role="status" aria-live="polite">
         {pending ? t('waiting.opening', { decision: noun }) : ''}
       </span>
-      {marker.kind === 'waiting_for_own_agent' && marker.forViewer && marker.command ? (
+      {marker.kind === 'waiting_for_review' && marker.forViewer && marker.command ? (
         <ReviewCommand command={marker.command} identifier={identifier} />
       ) : null}
     </>

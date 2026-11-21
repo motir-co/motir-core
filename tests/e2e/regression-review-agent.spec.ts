@@ -15,6 +15,7 @@ import {
 } from './_helpers/hosted-run-boundary';
 import type { ContinueHostedSeed } from './_helpers/continue-hosted-seed';
 import { seedSentBackCard } from './_helpers/fix-hosted-seed';
+import { requestHostedReview } from './_helpers/request-hosted-review';
 import {
   REVIEW_REPO,
   seedDeliveringCard,
@@ -48,8 +49,10 @@ import zh from '@/messages/zh.json';
 //    edges") ─────────────────────────────────────────────────────────────────
 //
 //   * THE REVIEW RUN'S CONTAINER — the fake orchestrator (`MOTIR_FLEET_ORCHESTRATOR=fake`).
-//     The REAL `agent-review/requested` job, run by the lane's job worker, starts the review
-//     run; the spec then PLAYS the container: it reads the run's own `MOTIR_RUN_TOKEN` from
+//     ⚠️ NOTHING REVIEWS BY ITSELF (Story MOTIR-11941 · MOTIR-11943): the green raises the
+//     review and starts no run, which the spec asserts. It then asks for the run as a person
+//     does (`_helpers/request-hosted-review.ts`); the REAL `agent-review/requested` job, run by the
+//     lane's job worker, starts the review run; the spec then PLAYS the container: it reads the run's own `MOTIR_RUN_TOKEN` from
 //     the fake orchestrator's record and posts the ONE verdict through the real
 //     `POST /api/v1/work-items/{key}/agent-review`, then closes the run as the CLI does.
 //   * CREDITS, MODELS AND THE REPOSITORY READ — `lib/test-hosted-run-mock.ts`'s fixture. The
@@ -246,6 +249,10 @@ const awaitingReview = (card: ReviewAgentCard) =>
     orderBy: { createdAt: 'desc' },
   });
 
+/** Ask for the card's hosted review at `version`, as a person does (MOTIR-11943). */
+const requestReview = (page: Page, card: ReviewAgentCard, version: string) =>
+  requestHostedReview(page, card.id, version);
+
 test.describe('the review agent', () => {
   let s: ContinueHostedSeed;
 
@@ -309,15 +316,19 @@ test.describe('the review agent', () => {
     // ── 2 ─────────────────────────────────────────────────────────────────────
     const passedSha = headShaFor(PRS.passed.number);
     await chapter(
-      'A green pull request: nothing on To approve — the card reads Reviewing',
+      'A green pull request: no approval on To approve; a person starts the review and the card reads Reviewing',
       async () => {
         await green(page, passed, 'passed', passedSha);
-        // The review is raised INSTEAD of the merge question: To approve stays empty.
+        // The review is raised INSTEAD of the merge question: To approve lists it as a
+        // review to run, never as an approval.
         await page.goto('/workbench?tab=approvals');
-        await expect(main(page).getByText(en.workbench.empty.approvals.title)).toBeVisible({
-          timeout: FIRST_PAINT_MS,
+        const toRun = main(page).locator('[data-review-to-run]').filter({
+          hasText: passed.identifier,
         });
-        // The real job booted the review run on the fake orchestrator.
+        await expect(toRun).toBeVisible({ timeout: FIRST_PAINT_MS });
+        await expect(toRun.getByRole('button', { name: /approve/i })).toHaveCount(0);
+        // Nothing reviews by itself: a person asks, and the real job boots the review run.
+        await requestReview(page, passed, versionOf('passed', passedSha));
         const run = await bootedReview(passed, versionOf('passed', passedSha), baseURL);
         await page.goto(`/items/${passed.identifier}`);
         await expect(reviewBand(page)).toHaveAttribute('data-state', 'reviewing', {
@@ -406,6 +417,7 @@ test.describe('the review agent', () => {
     const sentBackSha = headShaFor(PRS.sentBack.number);
     await chapter('A second card is sent back — it is on To fix with motir fix', async () => {
       await green(page, sentBack, 'sentBack', sentBackSha);
+      await requestReview(page, sentBack, versionOf('sentBack', sentBackSha));
       const run = await bootedReview(sentBack, versionOf('sentBack', sentBackSha), baseURL);
       await submitVerdict(sentBack, run, {
         verdict: 'changes_requested',
@@ -449,7 +461,8 @@ test.describe('the review agent', () => {
       const repaired = 'e'.repeat(40);
       await push(page, sentBack, 'sentBack', repaired);
       await green(page, sentBack, 'sentBack', repaired);
-      // A NEW review, at the NEW version, and its run booted.
+      // A NEW review, at the NEW version — it waits until a person asks, then its run boots.
+      await requestReview(page, sentBack, versionOf('sentBack', repaired));
       const run = await bootedReview(sentBack, versionOf('sentBack', repaired), baseURL);
       await run.api.dispose();
       await page.reload();
@@ -470,6 +483,7 @@ test.describe('the review agent', () => {
         mayRun: false,
       });
       await green(page, couldNotRun, 'couldNotRun', couldNotRunSha);
+      await requestReview(page, couldNotRun, versionOf('couldNotRun', couldNotRunSha));
       // The job ran and the pre-flight refused: the refusal's own code is on the gate.
       await expect
         .poll(async () => (await awaitingReview(couldNotRun))?.reviewUnavailableReason ?? null, {

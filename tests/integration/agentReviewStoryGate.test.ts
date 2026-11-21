@@ -10,7 +10,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 //   · the green verdict and every head move are GitHub webhooks into `githubWebhookService`;
 //   · the `agent-review/requested` request is the `job_event` row the REAL dispatcher wrote
 //     (nothing stubs `sendEvent`), handed to the REAL job definition through the engine
-//     test harness — exactly what a worker claiming the row does;
+//     test harness — exactly what a worker claiming the row does. ⚠️ NOTHING REVIEWS BY
+//     ITSELF (Story MOTIR-11941 · MOTIR-11943): the raise writes no request, so each
+//     sequence sends the one a person's press would, through the same dispatcher;
 //   · the review run boots on the FAKE ORCHESTRATOR (`MOTIR_FLEET_ORCHESTRATOR=fake`), and
 //     the verdict is posted with the run token the container was handed
 //     (`MOTIR_RUN_TOKEN` in the boot spec), through `POST /api/v1/work-items/{key}/agent-review`;
@@ -40,6 +42,7 @@ import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { gateIdOfReviewRunKey } from '@/lib/agentReview/reviewRunKey';
 import { agentReviewRequested } from '@/lib/jobs/definitions/agentReviewRequested';
 import type { AgentReviewRequestedData } from '@/lib/jobs/types';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { REVIEW_AGENT_REVIEWER_NAME } from '@/lib/workItems/fixReason';
 import { bearer, withTokenFor } from '../fixtures/apiV1Fixtures';
@@ -49,6 +52,7 @@ import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { JobTestEngine } from '../helpers/jobs';
 import { linkPr } from '../helpers/prLink';
 import { hostAnswersCleanAt } from '../helpers/hostMergeability';
+import { reviewRequestFor } from '../helpers/reviewRequest';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -458,6 +462,29 @@ const reviewRequests = async (workItemId: string) =>
     (d) => d['workItemId'] === workItemId,
   ) as unknown as AgentReviewRequestedData[];
 
+/**
+ * A PERSON ASKS FOR THE REVIEW (MOTIR-11943): the raise requested none, so the request a
+ * press sends is written through the REAL dispatcher, under the gate's raise key, and read
+ * back as the `job_event` row a worker would claim.
+ */
+async function requestReview(gate: {
+  id: string;
+  workspaceId: string;
+  workItemId: string | null;
+  subjectVersion: string | null;
+}): Promise<AgentReviewRequestedData> {
+  const before = await reviewRequests(gate.workItemId!);
+  expect(
+    before.filter((r) => r.gateId === gate.id),
+    'the raise requested no review by itself',
+  ).toEqual([]);
+  await sendEvent('agent-review/requested', reviewRequestFor(gate));
+  const after = await reviewRequests(gate.workItemId!);
+  const request = after.find((r) => r.gateId === gate.id);
+  expect(request, 'the press wrote ONE request').toBeDefined();
+  return request!;
+}
+
 /** A worker claims the request and runs the `agent-review/requested` job on it. */
 async function runReviewJob(request: AgentReviewRequestedData) {
   const outcome = await new JobTestEngine({
@@ -610,11 +637,10 @@ async function greenToReviewRun(w: World, number: number, sha = 'sha-a') {
   const review = reviews[0]!;
   expect(review.subjectVersion).toBe(versionOf(w, d, sha));
   expect(await gatesOf(d.item.id, MERGE), 'the merge question waits for the review').toEqual([]);
-  const requests = await reviewRequests(d.item.id);
-  expect(requests, 'the raise emitted ONE request').toHaveLength(1);
-  expect(requests[0]).toMatchObject({ gateId: review.id, subjectVersion: review.subjectVersion });
+  const request = await requestReview(review);
+  expect(request).toMatchObject({ gateId: review.id, subjectVersion: review.subjectVersion });
 
-  const started = await runReviewJob(requests[0]!);
+  const started = await runReviewJob(request);
   expect(started.outcome).toBe('started');
   const runs = (await runsOf(w.workspace.id, 'review')).filter((r) =>
     r.idempotencyKey?.startsWith(`agent-review:${review.id}:`),
@@ -832,10 +858,10 @@ describe('3 · sent back — changes_requested → To fix → `motir fix` claims
     expect(next).toHaveLength(1);
     expect(next[0]!.id).not.toBe(review.id);
     expect(next[0]!.subjectVersion).toBe(versionOf(w, d, 'sha-b'));
-    const requests = await reviewRequests(d.item.id);
-    expect(requests).toHaveLength(2);
-    expect(requests[1]).toMatchObject({ gateId: next[0]!.id });
-    expect((await runReviewJob(requests[1]!)).outcome).toBe('started');
+    // The new version waits for a person too; their request starts its review.
+    expect(await reviewRequests(d.item.id)).toHaveLength(1);
+    const nextRequest = await requestReview(next[0]!);
+    expect((await runReviewJob(nextRequest)).outcome).toBe('started');
     expect(await runsOf(w.workspace.id, 'review')).toHaveLength(2);
   });
 });
@@ -927,8 +953,8 @@ describe('6 · could not run — no credits → reason on the gate → Review ag
     expect(review).toBeDefined();
 
     // Out-of-credits pre-flight: the reason is on the gate, no run, nothing booted.
-    const [raise] = await reviewRequests(d.item.id);
-    expect((await runReviewJob(raise!)).outcome).not.toBe('started');
+    const raise = await requestReview(review!);
+    expect((await runReviewJob(raise)).outcome).not.toBe('started');
     expect(await gateRow(review!.id)).toMatchObject({
       state: 'awaiting',
       reviewUnavailableReason: 'hosted_run_out_of_credits',
@@ -1252,7 +1278,8 @@ describe('10 · Fix in Motir agent — the press → the fix run → its push �
     const next = await awaitingOf(d.item.id, REVIEW);
     expect(next).toHaveLength(1);
     expect(next[0]!.subjectVersion).toBe(versionOf(w, d, 'sha-fixed'));
-    expect(await reviewRequests(d.item.id)).toHaveLength(2);
+    // …which waits for a person: its raise requested no run.
+    expect(await reviewRequests(d.item.id)).toHaveLength(1);
   });
 });
 
@@ -1276,11 +1303,12 @@ describe('11 · the edges the journeys pass by — each on the assembled path', 
     host.mayRun = false;
     const d = await deliveredCard(w, 301);
     await allGreen(w, d, 'sha-a');
-    const [raise] = await reviewRequests(d.item.id);
-    expect((await runReviewJob(raise!)).outcome).toBe('refused');
+    const [gate] = await awaitingOf(d.item.id, REVIEW);
+    const raise = await requestReview(gate!);
+    expect((await runReviewJob(raise)).outcome).toBe('refused');
     host.mayRun = true;
     expect(
-      await runReviewJob({ ...raise!, idempotencyKey: `agent-review:${raise!.gateId}:again:x` }),
+      await runReviewJob({ ...raise, idempotencyKey: `agent-review:${raise.gateId}:again:x` }),
     ).toEqual({ outcome: 'skipped', why: 'could_not_run' });
     expect(await runsOf(w.workspace.id, 'review')).toEqual([]);
 
@@ -1413,7 +1441,7 @@ describe('11 · the edges the journeys pass by — each on the assembled path', 
     host.mayRun = false;
     await allGreen(w, d, 'sha-a');
     const [review] = await awaitingOf(d.item.id, REVIEW);
-    await runReviewJob((await reviewRequests(d.item.id))[0]!);
+    await runReviewJob(await requestReview(review!));
     expect((await gateRow(review!.id)).reviewUnavailableReason).toBe('hosted_run_out_of_credits');
 
     requireCompliantWorkspaceContext.mockResolvedValue({

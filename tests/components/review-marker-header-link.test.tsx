@@ -15,7 +15,7 @@ import zhMessages from '@/messages/zh.json';
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 const WAITING: ReviewMarkerDTO = {
-  kind: 'waiting_for_own_agent',
+  kind: 'waiting_for_review',
   routedTo: { id: 'u1', name: 'Ana Ruiz' },
   forViewer: true,
   command: 'motir review ACME-412',

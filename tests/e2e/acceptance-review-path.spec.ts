@@ -12,6 +12,7 @@ import {
   resetHostedRunJournal,
   writeHostedRunFixture,
 } from './_helpers/hosted-run-boundary';
+import { requestHostedReview } from './_helpers/request-hosted-review';
 import type { ContinueHostedSeed } from './_helpers/continue-hosted-seed';
 import type { ReviewAgentCard } from './_helpers/review-agent-seed';
 import {
@@ -300,9 +301,9 @@ async function chooseSource(page: Page, projectKey: string, source: 'hosted' | '
   const saved = approvalSettingsSaved(page, projectKey);
   await sourceRadio(page, ra.source[source]).click();
   const res = await saved;
+  // The PATCH accepts the retired source and ignores it (MOTIR-11943), so its answer no
+  // longer echoes the choice; the radio and this helper go with the Review settings card.
   expect(res.status()).toBe(200);
-  expect(await res.json()).toMatchObject({ reviewAgentSource: source });
-  await expect(sourceRadio(page, ra.source[source])).toHaveAttribute('aria-checked', 'true');
 }
 
 async function setReviewAgent(page: Page, projectKey: string, on: boolean) {
@@ -453,11 +454,11 @@ test.describe('the review path', () => {
       await awaitGate(mainCard, 'agent_review', mainV1);
       await page.goto('/boards');
       const marker = boardCard(page, mainCard).locator('[data-review-marker]');
-      await expect(marker).toHaveAttribute('data-review-marker', 'waiting_for_own_agent', {
+      await expect(marker).toHaveAttribute('data-review-marker', 'waiting_for_review', {
         timeout: FIRST_PAINT_MS,
       });
       await expect(marker).toContainText(rp.marker.waitingYours);
-      // No hosted run starts for a project reviewing with its own agent.
+      // Nothing reviews by itself (MOTIR-11943): no hosted run starts on the raise.
       expect(hostedRunsFor(mainCard)).toEqual([]);
     });
 
@@ -465,7 +466,7 @@ test.describe('the review path', () => {
       await page.goto('/items');
       await expect(listRow(page, mainCard).locator('[data-review-marker]')).toHaveAttribute(
         'data-review-marker',
-        'waiting_for_own_agent',
+        'waiting_for_review',
         { timeout: FIRST_PAINT_MS },
       );
       await page.goto(`/items/${mainCard.identifier}`);
@@ -806,10 +807,10 @@ test.describe('the review path', () => {
     await chapter('Back on, with Motir’s hosted agent: Agent reviewing', async () => {
       await page.goto('/settings/project/approvals');
       await setReviewAgent(page, projectKey, true);
-      await chooseSource(page, projectKey, 'hosted');
       const v = versionOf([['hostedReviewing', headShaFor(PRS.hostedReviewing.number)]]);
       await green(page, 'hostedReviewing', headShaFor(PRS.hostedReviewing.number));
-      // The real job booted the hosted review run, and it is in flight.
+      // The raise started nothing; a person asks, and the real job boots the hosted review.
+      await requestHostedReview(page, reviewing.id, v);
       await bootedReview(reviewing, v);
       await page.goto('/boards');
       await expect(
@@ -835,6 +836,11 @@ test.describe('the review path', () => {
         mayRun: false,
       });
       await green(page, 'hostedCouldNotRun', headShaFor(PRS.hostedCouldNotRun.number));
+      await requestHostedReview(
+        page,
+        couldNotRun.id,
+        versionOf([['hostedCouldNotRun', headShaFor(PRS.hostedCouldNotRun.number)]]),
+      );
       await expect
         .poll(
           async () => (await gateOf(couldNotRun, 'agent_review'))?.reviewUnavailableReason ?? null,

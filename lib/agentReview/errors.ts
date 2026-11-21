@@ -123,17 +123,13 @@ export type ReviewAgainRefusal =
   /** The review has not failed to run: there is no `reviewUnavailableReason` to clear. */
   | 'no_reason'
   /** A review run for this gate is still running — one review at a time. */
-  | 'run_in_flight'
-  /** The project's review source is `own`: no hosted run is started (§12.6, §12.10). */
-  | 'source_own';
+  | 'run_in_flight';
 
 /** What each refusal tells the person. */
 const REVIEW_AGAIN_REFUSAL_MESSAGES: Record<ReviewAgainRefusal, string> = {
   not_awaiting: 'This review is no longer waiting, so it cannot be run again.',
   no_reason: 'This review has not failed to run, so there is nothing to run again.',
   run_in_flight: 'A review of this version is already running.',
-  source_own:
-    'This project reviews with your own agent, so Motir does not start a review run. Run `motir review` from your agent.',
 };
 
 /**

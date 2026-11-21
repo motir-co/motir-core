@@ -9,7 +9,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 //
 // The review is raised by the real webhook-driven green verdict, a hosted run starts on
 // the fake orchestrator, and motir-ai, the gateway and GitHub are stubbed at their HTTP
-// seam, as `tests/approvalGates/reviewAgentSource.test.ts` stubs them. The cases a
+// seam, as `tests/approvalGates/reviewSourceRetired.test.ts` stubs them. The cases a
 // plausible wrong door passes are the ones pinned hardest:
 //   - a gate-off send-back must WITHDRAW the approve-and-merge question and keep it
 //     withdrawn on a CI redelivery at the same head — and a push must bring it back;
@@ -40,6 +40,7 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { bearer, withTokenFor } from '../fixtures/apiV1Fixtures';
+import { reviewRequestFor } from '../helpers/reviewRequest';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -47,7 +48,6 @@ const { projectsService } = await import('@/lib/services/projectsService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
-const { approvalGateSettingsService } = await import('@/lib/services/approvalGateSettingsService');
 const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
 const { reviewVerdictService } = await import('@/lib/services/reviewVerdictService');
@@ -310,9 +310,10 @@ async function reviewing(slug: string, number: number) {
   await ci('sha-a', number);
   const review = (await gatesOf(item.id, REVIEW)).find((g) => g.state === 'awaiting');
   expect(review, 'the green verdict raised the review').toBeDefined();
-  const [request] = reviewRequests();
-  expect(request, 'the raise requested its review').toBeDefined();
-  return { s, item, review: review!, request: request! };
+  // Nothing reviews by itself (MOTIR-11943): the raise requests no run, so a case that
+  // goes on to a hosted review sends the request a person's press would.
+  expect(reviewRequests(), 'the raise requests no review by itself').toEqual([]);
+  return { s, item, review: review!, request: reviewRequestFor(review!) };
 }
 
 grantPaidAiPlan();
@@ -435,16 +436,14 @@ async function deliveredGateOff(slug: string, number: number) {
   return { s, item, approval: approval[0]! };
 }
 
-/** A card holding an awaiting review under `source`, its hosted run started when hosted. */
+/**
+ * A card holding an awaiting review: `hosted` — a person started a hosted review run on it;
+ * `own` — nobody started one, so it waits for the routed person to run it in their own
+ * agent (no project setting decides which any more, MOTIR-11943).
+ */
 async function reviewingUnder(source: 'hosted' | 'own', slug: string, number: number) {
   const scenario = await reviewing(slug, number);
-  if (source === 'own') {
-    await approvalGateSettingsService.updateSettings(
-      scenario.s.project.id,
-      { reviewAgentSource: 'own' },
-      scenario.s.ctx,
-    );
-  } else {
+  if (source === 'hosted') {
     expect((await agentReviewStartService.startRequested(scenario.request)).outcome).toBe(
       'started',
     );
@@ -896,12 +895,6 @@ async function childUnderTestedStory(
       where: { id: s.project.id },
       data: { reviewAgentEnabled: false },
     });
-  } else {
-    await approvalGateSettingsService.updateSettings(
-      s.project.id,
-      { reviewAgentSource: 'own' },
-      s.ctx,
-    );
   }
   const story = await workItemsService.createWorkItem(
     { projectId: s.project.id, kind: 'story', title: 'The story' },

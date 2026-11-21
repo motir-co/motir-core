@@ -38,6 +38,7 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { bearer } from '../fixtures/apiV1Fixtures';
+import { reviewRequestFor } from '../helpers/reviewRequest';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -288,9 +289,10 @@ async function reviewing(slug: string, number: number) {
   await ci('sha-a', number);
   const review = (await gatesOf(item.id, REVIEW)).find((g) => g.state === 'awaiting');
   expect(review, 'the green verdict raised the review').toBeDefined();
-  const [request] = reviewRequests();
-  expect(request, 'the raise requested its review').toBeDefined();
-  return { s, item, review: review!, request: request! };
+  // Nothing reviews by itself (MOTIR-11943): the raise requests no run, so a case that
+  // goes on to a hosted review sends the request a person's press would.
+  expect(reviewRequests(), 'the raise requests no review by itself').toEqual([]);
+  return { s, item, review: review!, request: reviewRequestFor(review!) };
 }
 
 grantPaidAiPlan();
@@ -403,16 +405,14 @@ async function deliveredGateOff(slug: string, number: number) {
   return { s, item, approval: approval[0]! };
 }
 
-/** A card holding an awaiting review under `source`, its hosted run started when hosted. */
+/**
+ * A card holding an awaiting review: `hosted` — a person started a hosted review run on it;
+ * `own` — nobody started one, so it waits for the routed person to run it in their own
+ * agent (no project setting decides which any more, MOTIR-11943).
+ */
 async function reviewingUnder(source: 'hosted' | 'own', slug: string, number: number) {
   const scenario = await reviewing(slug, number);
-  if (source === 'own') {
-    await approvalGateSettingsService.updateSettings(
-      scenario.s.project.id,
-      { reviewAgentSource: 'own' },
-      scenario.s.ctx,
-    );
-  } else {
+  if (source === 'hosted') {
     expect((await agentReviewStartService.startRequested(scenario.request)).outcome).toBe(
       'started',
     );
@@ -544,11 +544,16 @@ async function deliveredChild(
 // ── The marker, under each source ─────────────────────────────────────────────
 
 describe('the review marker', () => {
-  it('hosted: Agent reviewing while the run is in flight, Review could not run with a reason', async () => {
+  it('hosted: Agent reviewing while the run is in flight, Review could not run with a reason once it ended', async () => {
     const { s, item, review } = await reviewingUnder('hosted', 'mk-hosted', 81);
     expect((await stateOf(s, item.id))?.marker).toEqual({ kind: 'agent_reviewing' });
     expect((await stateOf(s, item.id))?.reviewToRun).toBeNull();
 
+    // The run is what answers the gate while it runs; once it has ended, its reason shows.
+    await adminDb.dispatchRun.updateMany({
+      where: { workspaceId: s.workspace.id },
+      data: { status: 'failed' },
+    });
     await adminDb.approvalGate.update({
       where: { id: review.id },
       data: { reviewUnavailableReason: 'review_no_credits' },
@@ -565,7 +570,7 @@ describe('the review marker', () => {
     const { s, item, review } = await reviewingUnder('own', 'mk-own', 82);
     const state = await stateOf(s, item.id);
     expect(state?.marker).toEqual({
-      kind: 'waiting_for_own_agent',
+      kind: 'waiting_for_review',
       routedTo: { id: s.user.id, name: 'Owner' },
       forViewer: true,
       command: `motir review ${item.identifier}`,
@@ -808,7 +813,7 @@ describe('a container', () => {
 
 describe('a review to run', () => {
   it('is listed on To approve apart from the approvals, and notified exactly once per gate', async () => {
-    const { s, item, review, request } = await reviewingUnder('own', 'run', 95);
+    const { s, item, review } = await reviewingUnder('own', 'run', 95);
 
     const rows = await approvalGatesService.listReviewsToRun(homeCtx(s));
     expect(rows).toEqual([
@@ -827,7 +832,7 @@ describe('a review to run', () => {
     const queue = await approvalGatesService.listAwaitingMe(homeCtx(s));
     expect(queue.items.map((row) => row.gateId)).not.toContain(review.id);
 
-    // The switch to `own` notified the routed person once…
+    // The raise notified the routed person once…
     const first = await reviewToRunRows(s.user.id);
     expect(first).toHaveLength(1);
     expect(first[0]).toMatchObject({
@@ -841,8 +846,7 @@ describe('a review to run', () => {
         command: `motir review ${item.identifier}`,
       },
     });
-    // …and a retried raise job, a second notify and a re-read notify nobody again.
-    expect((await agentReviewStartService.startRequested(request)).outcome).toBe('skipped');
+    // …and a second notify and a re-read notify nobody again.
     expect(await reviewToRunService.notifyRaised(s.workspace.id, review.id)).toBe('notified');
     await approvalGatesService.listReviewsToRun(homeCtx(s));
     expect(await reviewToRunRows(s.user.id)).toHaveLength(1);
@@ -852,20 +856,24 @@ describe('a review to run', () => {
     await pushTo(item.identifier, 95, 'sha-b');
     await hostAnswersCleanAt(s.workspace.id, 95, 'sha-b');
     await ci('sha-b', 95);
-    const [next] = reviewRequests();
+    expect(reviewRequests(), 'the re-raise requests no review either').toEqual([]);
+    const next = (await gatesOf(item.id, REVIEW)).find((g) => g.state === 'awaiting');
     expect(next?.subjectVersion).toBe(versionOf(95, 'sha-b'));
-    expect((await agentReviewStartService.startRequested(next!)).outcome).toBe('skipped');
-    expect((await agentReviewStartService.startRequested(next!)).outcome).toBe('skipped');
     const all = await reviewToRunRows(s.user.id);
     expect(all).toHaveLength(2);
-    expect(all[1]!.dedupeKey).toBe(`review_to_run:${next!.gateId}`);
+    expect(all[1]!.dedupeKey).toBe(`review_to_run:${next!.id}`);
     expect((await approvalGatesService.listReviewsToRun(homeCtx(s))).map((r) => r.gateId)).toEqual([
-      next!.gateId,
+      next!.id,
     ]);
   });
 
-  it('is never listed or notified for the source hosted, nor for a gate that is not awaiting', async () => {
-    const { s, item, review } = await reviewingUnder('hosted', 'run-hosted', 96);
+  it('is never listed or notified for a gate that is not awaiting', async () => {
+    const { s, item, review } = await reviewing('run-decided', 96);
+    await adminDb.approvalGate.update({
+      where: { id: review.id },
+      data: { state: 'superseded', supersededCause: 'ci_failed' },
+    });
+    await adminDb.notification.deleteMany({ where: { recipientUserId: s.user.id } });
     expect(await approvalGatesService.listReviewsToRun(homeCtx(s))).toEqual([]);
     expect(await reviewToRunService.notifyRaised(s.workspace.id, review.id)).toBe(
       'not_a_review_to_run',
@@ -884,7 +892,7 @@ describe('a review to run', () => {
       await approvalGatesService.listReviewsToRun({ ...mate, projectId: s.project.id }),
     ).toEqual([]);
     const theirs = await stateOf(s, item.id, mate);
-    expect(theirs?.marker).toMatchObject({ kind: 'waiting_for_own_agent', forViewer: false });
+    expect(theirs?.marker).toMatchObject({ kind: 'waiting_for_review', forViewer: false });
     expect(theirs?.viewerIsRouted).toBe(false);
   });
 });
@@ -1021,14 +1029,12 @@ describe('access and the edges', () => {
 
   it('writes no review-to-run row for a person who turned it off', async () => {
     const { s, review } = await reviewing('pref-off', 127);
+    // The raise notified while the preference was still on; clear that row, then turn it
+    // off, so the notify below is the one the preference decides.
+    await adminDb.notification.deleteMany({ where: { recipientUserId: s.user.id } });
     await adminDb.notificationPreference.create({
       data: { userId: s.user.id, eventType: 'review_to_run', channel: 'in_app', enabled: false },
     });
-    await approvalGateSettingsService.updateSettings(
-      s.project.id,
-      { reviewAgentSource: 'own' },
-      s.ctx,
-    );
     expect(await reviewToRunService.notifyRaised(s.workspace.id, review.id)).toBe('off');
     expect(await reviewToRunRows(s.user.id)).toEqual([]);
   });
@@ -1086,7 +1092,7 @@ describe('the surfaces’ read — cardReviewsFor and the board', () => {
     const cards = board.columns.flatMap((c) => c.cards);
     const mine = cards.find((c) => c.id === item.id);
     expect(mine?.review?.marker).toMatchObject({
-      kind: 'waiting_for_own_agent',
+      kind: 'waiting_for_review',
       command: `motir review ${item.identifier}`,
     });
     const plain = cards.find((c) => c.id === second.id);

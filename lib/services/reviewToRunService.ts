@@ -8,21 +8,18 @@ import { notificationFanInService } from '@/lib/services/notificationFanInServic
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // A REVIEW TO RUN IS NOTIFIED ONCE (Story MOTIR-10327 · MOTIR-10340; `approval-gates.md`
-// §12.1's 2026-11-04 amendment, §12.10). With the review source `own` nothing starts a
-// review by itself, so the routed person is told — once per awaiting `agent_review` gate —
-// that a review is theirs to run.
+// §12.1's 2026-11-04 amendment, §12.10; Story MOTIR-11941 · MOTIR-11943). Nothing starts a
+// review by itself, so the routed person is told — once per awaiting `agent_review` gate,
+// whichever way they will run it — that a review is waiting on them.
 //
 // ⚠️ ONCE BY THE DEDUPE KEY, NOT BY A FLAG. The key is `review_to_run:<gateId>`, and the
 // `(dedupeKey, recipientUserId)` unique absorbs every repeat: a redelivered raise, a retried
-// job, a second switch to `own`. A head move supersedes the gate and raises a NEW one at the
+// job, a later reconcile. A head move supersedes the gate and raises a NEW one at the
 // new version, whose id is a new key — so it notifies once for itself.
 //
-// ⚠️ CALLED WHERE THE GATE BECOMES A REVIEW TO RUN, after its transaction committed: the
-// raise job's `own` branch (`agentReviewStartService.startRequested`, which every raise path
-// funnels through) and the switch from `hosted` to `own`
-// (`approvalGateSettingsService`), which turns gates already awaiting into reviews to run.
-// Best-effort, as every notification is: a row that could not be written never fails the
-// raise or the switch.
+// ⚠️ ONE CALLER: the one gate creator (`gateSetFor.ts`'s `reconcileGatesFor`), after the
+// transaction that raised the gate committed — so every raise path notifies. Best-effort,
+// as every notification is: a row that could not be written never fails the raise.
 
 /** What one notify call did. */
 export type ReviewToRunNotifyOutcome = 'notified' | 'not_a_review_to_run' | 'no_recipient' | 'off';
@@ -39,9 +36,7 @@ export const reviewToRunService = {
       /* v8 ignore next -- the gate cascades with its card. */
       if (!item) return null;
       const settings = await projectRepository.findMergeSettings(item.projectId, tx);
-      if (!settings?.reviewAgentEnabled || settings.reviewAgentSource !== 'own') {
-        return null;
-      }
+      if (!settings?.reviewAgentEnabled) return null;
       return { item };
     });
     if (!read) return 'not_a_review_to_run';

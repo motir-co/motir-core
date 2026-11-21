@@ -82,7 +82,6 @@ vi.mock('@/lib/platform/auth', async () => {
 import { fakeOrchestrator } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
-import type { AgentReviewRequestedData } from '@/lib/jobs/types';
 import type { OrgRunModelsDTO, OrgPlannerModelsDTO } from '@/lib/dto/orgAiModels';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
@@ -90,6 +89,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../../helpers/db';
 import { grantPaidAiPlan } from '../../helpers/paidAiPlan';
 import { linkPrByIdentifier } from '../../helpers/prLink';
+import { reviewRequestFor } from '../../helpers/reviewRequest';
 
 const settingsRoute = await import('@/app/api/projects/[key]/hosted-agent-settings/route');
 const modelsRoute = await import('@/app/api/hosted-runs/models/route');
@@ -892,10 +892,14 @@ async function reviewing(slug: string) {
       pull_requests: [{ number }],
     },
   });
-  const request = sent
-    .filter((e) => e.name === 'agent-review/requested')
-    .map((e) => e.data as unknown as AgentReviewRequestedData)[0];
-  expect(request, 'the green verdict requested its review').toBeDefined();
+  // Nothing reviews by itself (MOTIR-11943): the green raises the review and requests no
+  // run, so the case sends the request a person's press would.
+  expect(sent.filter((e) => e.name === 'agent-review/requested')).toEqual([]);
+  const gate = await adminDb.approvalGate.findFirst({
+    where: { workItemId: item.id, kind: 'agent_review', state: 'awaiting' },
+  });
+  expect(gate, 'the green verdict raised its review').not.toBeNull();
+  const request = reviewRequestFor(gate!);
   signInAs(user);
   return { organizationId: workspace.organizationId, workspaceId: workspace.id, request: request! };
 }
