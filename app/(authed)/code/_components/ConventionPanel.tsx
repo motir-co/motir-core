@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/utils/cn';
 import type { CodingConventionDTO, ConventionSurfaceDTO } from '@/lib/dto/codeHealth';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The longest convention a person may save, in characters — the same number the
 // server enforces (`CONVENTION_MAX_CHARS` in aiConventionService, which a client
@@ -633,7 +634,7 @@ function VersionHistory({
   currentId: string | null;
 }) {
   const t = useTranslations('codeHealth');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   if (versions.length === 0) return null;
   return (
     <Card
@@ -653,7 +654,7 @@ function VersionHistory({
               <Pill status="planned">{t('convention.historyCurrent')}</Pill>
             ) : null}
             <span className="text-xs text-(--el-text-muted)">
-              {format.relativeTime(new Date(v.createdAt))}
+              {relativeTime(new Date(v.createdAt))}
             </span>
           </li>
         ))}

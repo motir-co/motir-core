@@ -39,6 +39,7 @@ import {
   type FleetReadinessCondition,
   type FleetTranslate,
 } from './fleetReadinessCopy';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 /**
  * ONE (project, org) pair's fleet CI setting and its readiness verdict —
@@ -113,7 +114,7 @@ type T = ReturnType<typeof useTranslations<'platformAdmin.fleetSettings'>>;
 
 export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettingProps) {
   const t = useTranslations('platformAdmin.fleetSettings');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const router = useRouter();
   const titleId = useId();
   const blockedId = useId();
@@ -333,7 +334,7 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
                 <>
                   {t('meta.changedBy', {
                     email: state.updatedBy.email,
-                    when: state.updatedAt ? format.relativeTime(new Date(state.updatedAt)) : '',
+                    when: state.updatedAt ? relativeTime(new Date(state.updatedAt)) : '',
                     reason: state.lastReason ?? '',
                   })}{' '}
                   <Link
@@ -739,13 +740,13 @@ function ReadinessCard({
   onRecheck: () => void;
 }) {
   const t = useTranslations('platformAdmin.fleetSettings');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const listId = useId();
   const { readiness } = state;
   const notMet = readiness.conditions.filter((c) => c.state !== 'met');
   const unmet = notMet.filter((c) => c.state === 'unmet').length;
   const unknown = notMet.filter((c) => c.state === 'unknown').length;
-  const when = format.relativeTime(new Date(readiness.checkedAt));
+  const when = relativeTime(new Date(readiness.checkedAt));
 
   return (
     <Card

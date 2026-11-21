@@ -2,7 +2,7 @@
 
 import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useState } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { CheckCheck, CircleX } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
@@ -18,6 +18,7 @@ import { TriageAvatar } from './TriageAvatar';
 import { PromotePopover, type PromoteTarget } from './PromotePopover';
 import { MergePicker } from './MergePicker';
 import { SnoozePopover } from './SnoozePopover';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The right detail pane of the triage inbox (Subtask 6.11.6, design panel 1) —
 // kind line, title, attribution card, body, attachments, read-only comments,
@@ -50,7 +51,7 @@ function CommentRowReadOnly({
   comment: CommentDTO;
   workItemRefs: WorkItemRefMap;
 }) {
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   return (
     <div className="flex gap-2">
       <TriageAvatar name={comment.author.name} />
@@ -58,7 +59,7 @@ function CommentRowReadOnly({
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-medium text-(--el-text)">{comment.author.name}</span>
           <span className="text-xs text-(--el-text-secondary)">
-            {format.relativeTime(new Date(comment.createdAt))}
+            {relativeTime(new Date(comment.createdAt))}
           </span>
         </div>
         <MarkdownView
@@ -73,7 +74,7 @@ function CommentRowReadOnly({
 
 export function TriageDetail({ detail, busy, handlers }: TriageDetailProps) {
   const t = useTranslations('triage');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const [declineOpen, setDeclineOpen] = useState(false);
   const [declineComment, setDeclineComment] = useState('');
   const id = detail.id;
@@ -93,7 +94,7 @@ export function TriageDetail({ detail, busy, handlers }: TriageDetailProps) {
           <IssueTypeIcon type={detail.kind} className="h-4 w-4" />
           <span className="font-medium text-(--el-text-secondary)">{kindLabel}</span>
           <span aria-hidden>·</span>
-          <span>{format.relativeTime(new Date(detail.triagedAt))}</span>
+          <span>{relativeTime(new Date(detail.triagedAt))}</span>
         </div>
 
         {/* Title */}

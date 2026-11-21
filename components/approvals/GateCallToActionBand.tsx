@@ -3,13 +3,14 @@
 import type { MouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { ScanEye } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 /**
  * THE CALL-TO-ACTION BAND — `approval-cta.mock.html` panels 1, 2 and 5, flush in
@@ -50,7 +51,7 @@ export function GateCallToActionBand({
   buttonLabel?: string;
 }) {
   const t = useTranslations('approvalGate');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -84,7 +85,7 @@ export function GateCallToActionBand({
         <span className="text-xs text-(--el-text-secondary)" suppressHydrationWarning>
           {subjectLabel}
           {' · '}
-          {t('cta.asked', { when: format.relativeTime(new Date(askedAt)) })}
+          {t('cta.asked', { when: relativeTime(new Date(askedAt)) })}
         </span>
         <span className="ml-auto">
           <Pill tone="awaiting">{t('state.awaitingYou')}</Pill>

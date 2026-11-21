@@ -6,7 +6,7 @@ import {
 } from '@/components/planning/CodeUnreadableTurn';
 import { Fragment, forwardRef, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useFormatter, useLocale, useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   Bot,
   Check,
@@ -175,6 +175,7 @@ import {
 import { workbenchTabHref } from '@/lib/workbench/tab';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import { PlanHistorySection } from '@/components/planning/PlanHistorySection';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
@@ -560,7 +561,7 @@ export function PlanChangeRail({
   const tWorkbenchPlanning = useTranslations('workbench.planning');
   const tWorkbenchPlanningSession = useTranslations('workbench.planningSession');
   const tr = useTranslations('planningWorkspace.restart');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const [draft, setDraft] = useState(initialDraft ?? '');
   // THE SEEDED SEND THAT FAILED keeps its words (MOTIR-6210). The composer clears
   // the field the moment it submits, and an anchored first turn has no optimistic
@@ -1696,7 +1697,7 @@ export function PlanChangeRail({
             <PenLine className="mt-px size-3.5 flex-none" aria-hidden />
             <span>
               {tWorkbenchPlanning('reopened', {
-                when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                when: relativeTime(new Date(state.reopened.lastActivityAt)),
               })}
             </span>
           </p>
@@ -1712,7 +1713,7 @@ export function PlanChangeRail({
             <RotateCcw className="mt-px size-3.5 flex-none" aria-hidden />
             <span>
               {tWorkbenchPlanningSession('reopened', {
-                when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                when: relativeTime(new Date(state.reopened.lastActivityAt)),
               })}
             </span>
           </p>
@@ -1728,11 +1729,11 @@ export function PlanChangeRail({
             <span>
               {state.reopened.mine
                 ? tp('surface.reopenedYours', {
-                    when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                    when: relativeTime(new Date(state.reopened.lastActivityAt)),
                   })
                 : tp('surface.reopened', {
                     name: state.reopened.startedBy?.name ?? ts('someone'),
-                    when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                    when: relativeTime(new Date(state.reopened.lastActivityAt)),
                   })}
             </span>
           </p>
@@ -1745,11 +1746,11 @@ export function PlanChangeRail({
             <span>
               {state.reopened.mine
                 ? ts('reopenedYours', {
-                    when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                    when: relativeTime(new Date(state.reopened.lastActivityAt)),
                   })
                 : ts('reopened', {
                     name: state.reopened.startedBy?.name ?? ts('someone'),
-                    when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                    when: relativeTime(new Date(state.reopened.lastActivityAt)),
                   })}
             </span>
           </p>
@@ -3499,8 +3500,8 @@ function GatedReviewBlock({
 function FollowUpCard({ pick }: { pick: PlanningSeedPickDTO }) {
   const t = useTranslations('planningWorkspace');
   const tc = useTranslations('approvalGate.choice');
-  const format = useFormatter();
-  const when = pick.decidedAt ? format.relativeTime(new Date(pick.decidedAt)) : '';
+  const relativeTime = useRelativeTime();
+  const when = pick.decidedAt ? relativeTime(new Date(pick.decidedAt)) : '';
   return (
     <div
       data-testid="pick-followup-card"

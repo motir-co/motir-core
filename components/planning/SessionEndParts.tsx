@@ -19,6 +19,7 @@ import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
 import { useOpenPlanOverlay } from '@/lib/hooks/useOpenPlanOverlay';
 import type { PlanChangeSessionDto, PlanTargetHeldByDto } from '@/lib/dto/planChange';
 import { carriesWaitingPlan } from '@/lib/planning/sessionCarry';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 export { carriesWaitingPlan };
 
@@ -35,8 +36,9 @@ type EndReason = NonNullable<PlanChangeSessionDto['endReason']>;
 /** The end time, as the rail words a moment: relative, the full date-time in `title`. */
 function useWhen() {
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   return (iso: string) => ({
-    label: format.relativeTime(new Date(iso)),
+    label: relativeTime(new Date(iso)),
     title: format.dateTime(new Date(iso), { dateStyle: 'medium', timeStyle: 'short' }),
   });
 }

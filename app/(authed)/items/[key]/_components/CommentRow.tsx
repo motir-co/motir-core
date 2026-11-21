@@ -11,6 +11,7 @@ import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { Avatar } from '../../_components/issueCellPrimitives';
 import { CommentComposer } from './CommentComposer';
 import { deleteCommentAction, editCommentAction } from '../commentActions';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // One comment row (Subtask 5.1.5), per `comments.mock.html` panel 1: 22px
 // initial-letter Avatar · author · relative time (absolute on hover via
@@ -53,6 +54,7 @@ export function CommentRow({
   const t = useTranslations('comments');
   const tc = useTranslations('common');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const [editing, setEditing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -104,7 +106,7 @@ export function CommentRow({
             className="text-(--el-text-muted) font-sans text-xs"
             title={format.dateTime(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
           >
-            {format.relativeTime(createdAt)}
+            {relativeTime(createdAt)}
           </span>
           {comment.editedAt ? (
             <span

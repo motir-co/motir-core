@@ -15,6 +15,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { ReviewFindingsDto, ReviewFindingsRefDto } from '@/lib/dto/agentReview';
 import type { ReviewFindingsTarget } from '@/components/approvals/ReviewFindingsInPlace';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // THE IN-PLACE FINDINGS VIEW — `ReviewFindingsDialog` (MOTIR-10460;
 // `design/workbench/design-notes.md` § 42.1, § 42.4, § 42.7,
@@ -58,6 +59,7 @@ function ReviewMeta({ review, earlier }: { review: ReviewFindingsDto; earlier: b
   const t = useTranslations('approvalGate.reviewPath.view');
   const tActivity = useTranslations('activity');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const at = new Date(review.at);
   const reviewer = review.reviewer;
   const who =
@@ -95,7 +97,7 @@ function ReviewMeta({ review, earlier }: { review: ReviewFindingsDto; earlier: b
           dateTime={review.at}
           title={format.dateTime(at, { dateStyle: 'medium', timeStyle: 'short' })}
         >
-          {format.relativeTime(at)}
+          {relativeTime(at)}
         </time>
       </div>
       {review.commits.length > 0 ? (

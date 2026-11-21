@@ -8,6 +8,7 @@ import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Pill } from '@/components/ui/Pill';
 import { agentVerdictAnchor, reviewCommitsLabel } from '@/lib/agentReview/verdictActivity';
 import type { ActivityAgentVerdictPartDto, ActivityEntryDto } from '@/lib/dto/activity';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // ONE AGENT VERDICT in the card's activity (Story MOTIR-10327 · MOTIR-10338), built to
 // `design/work-items/decision-waiting--review-path.mock.html` M12 and
@@ -51,6 +52,7 @@ export function AgentVerdictActivityRow({
   const tActivity = useTranslations('activity');
   const tLine = useTranslations('approvalGate.reviewPath.line');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const changedAt = new Date(entry.changedAt);
   const anchor = agentVerdictAnchor(part.recordId);
   const findingsId = useId();
@@ -120,7 +122,7 @@ export function AgentVerdictActivityRow({
             className="ml-1 text-xs whitespace-nowrap text-(--el-text-secondary)"
             title={format.dateTime(changedAt, { dateStyle: 'medium', timeStyle: 'short' })}
           >
-            {format.relativeTime(changedAt)}
+            {relativeTime(changedAt)}
           </span>
         </p>
         {decidedNothing ? (

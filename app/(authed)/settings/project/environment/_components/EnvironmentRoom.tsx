@@ -35,6 +35,7 @@ import {
   isReservedEnvironmentName,
 } from '@/lib/environmentConfig/reservedNames';
 import type { EnvironmentName } from '@/lib/environmentConfig/vocabulary';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // EnvironmentRoom (Story MOTIR-9795 · MOTIR-9966) — a Motir repository's values per
 // environment, per `design/environment/environment.mock.html` and
@@ -874,7 +875,7 @@ function RecentChanges({
   onRetry: () => void;
 }) {
   const t = useTranslations('settings.environment');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const headingId = useId();
   return (
     <section
@@ -914,9 +915,7 @@ function RecentChanges({
               <code className="font-mono text-(--el-text-identifier)">{change.name}</code>
               {change.isSecret ? <Pill tone="neutral">{t('changes.secret')}</Pill> : null}
               <span className="ml-auto text-xs text-(--el-text-secondary)">
-                <time dateTime={change.createdAt}>
-                  {format.relativeTime(new Date(change.createdAt))}
-                </time>
+                <time dateTime={change.createdAt}>{relativeTime(new Date(change.createdAt))}</time>
               </span>
             </li>
           ))}

@@ -1,10 +1,11 @@
 'use client';
 
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { Pill } from '@/components/ui/Pill';
 import type { PlanSessionRowDto, PlanSessionStateDto } from '@/lib/dto/planSessions';
 import { cn } from '@/lib/utils/cn';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // ONE row of the overlay's History (Story MOTIR-9218 · MOTIR-9307; design MOTIR-9305
 // panel 3): the session's first turn, its anchor chip, when it was last active, an
@@ -49,12 +50,12 @@ export interface PlanHistoryRowProps {
 export function PlanHistoryRow({ session, current, onOpen, onFocusLast }: PlanHistoryRowProps) {
   const t = useTranslations('planningWorkspace.history');
   const ts = useTranslations('aiPlanning.sessions');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
 
   const title = session.firstTurn ?? session.latestPlan?.title ?? ts('untitled');
   const ended = session.endedAt !== null;
   const status = ended ? t('status.ended') : t('status.open');
-  const when = format.relativeTime(new Date(session.lastActivityAt));
+  const when = relativeTime(new Date(session.lastActivityAt));
   const [firstKey, ...moreKeys] = session.targetKeys;
   const showsPlan = session.planCount > 0;
 
