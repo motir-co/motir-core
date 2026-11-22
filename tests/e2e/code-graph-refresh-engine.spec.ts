@@ -32,6 +32,8 @@ import {
 } from './_helpers/migrate-index-seed';
 
 const REFRESH_JOB = 'system.code-graph-refresh';
+/** The `period: '2m'` the refresh job's debounce carried before MOTIR-11884. */
+const RETIRED_DEBOUNCE_MS = 120_000;
 const [STOREFRONT, BILLING_API] = E2E_INDEX_REPOS;
 
 // ⚠️ THE ONE LONG WAIT IS EXPRESSED AS STATE. A SIGKILLed worker holds its claim
@@ -129,7 +131,14 @@ test('a same-repo BURST is one run PER push, each handed off — nothing coalesc
   expect(rows, 'four pushes, four runs').toHaveLength(4);
   expect(new Set(rows.map((r) => r.eventId)).size).toBe(4);
   expect(rows.every((r) => r.debounceKey === null)).toBe(true);
-  expect(rows.every((r) => r.runAt.getTime() <= Date.now())).toBe(true);
+  // ⚠️ "Due at once" is read against the row's OWN creation, never against the
+  // clock now: the worker may already have claimed a run and deferred it to its
+  // next status poll (`INDEX_HANDOFF_POLL_INTERVAL_MS`, 5 s), which moves
+  // `run_at` ahead of the clock. The
+  // retired debounce put `run_at` a whole period (two minutes) after creation.
+  expect(rows.every((r) => r.runAt.getTime() - r.createdAt.getTime() < RETIRED_DEBOUNCE_MS)).toBe(
+    true,
+  );
 
   await expect
     .poll(async () => (await succeeded()).length, {
