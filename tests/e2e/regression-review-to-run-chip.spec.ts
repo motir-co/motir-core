@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import type { Locator } from '@playwright/test';
 import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
@@ -16,19 +16,22 @@ import {
   type ReviewPullRequest,
 } from './_helpers/review-path-flow';
 
-// THE REVIEW-TO-RUN ROW'S COMMAND FITS ITS DETAILS TRACK (Bug MOTIR-11982).
+// THE REVIEW-TO-RUN ROW'S COMMAND SITS ON LINE 2, WHOLE (Bug MOTIR-11982; MOTIR-12032).
 //
-// To approve lists a card that waits for its review as a *Review to run* row whose DETAILS
-// cell carries the copyable `motir review <KEY>`. That track is a FIXED 220px
-// (`APPROVALS_GRID_TEMPLATE`; the full view's is 200px), and the chip used to be wider than
-// it: first its copy button painted over WAITED, then — once the code truncated — the real
-// command read `motir review MOTIR-119…`. jsdom has no layout, so a class-name test passes
-// on both defects; this spec measures the real row in Chromium.
+// Waiting on you lists a card that waits for its review as a *Review to run* row. Since
+// MOTIR-12032 (`design/workbench/design-notes.md` § 45) the row is laid out like a To fix
+// row: line 1 the work item on the approvals grid, with an EMPTY DETAILS cell, and line 2 the
+// waiting sentence on the left and the copyable `motir review <KEY>` on the right. The chip
+// used to sit in the fixed 220px DETAILS track, where it painted over WAITED and then
+// truncated the real command (MOTIR-11982). jsdom has no layout, so a class-name test passes
+// on every one of those defects; this spec measures the real row in Chromium.
 //
 // The key is the worst real shape: a five-letter project key and a five-digit number
-// (`XXXXX-11971`, as long as `MOTIR-11971`). Asserted, at the real 220px track and at the
-// full view's 200px: the code is NOT truncated (`scrollWidth <= clientWidth`), the copy
-// button stays inside the DETAILS cell, and both still hold once the press confirms.
+// (`XXXXX-11971`, as long as `MOTIR-11971`). Asserted at desktop and at 390px: the command
+// is the only one in the row and sits on line 2; DETAILS is empty; the code is NOT
+// truncated (`scrollWidth <= clientWidth`); the chip and its copy button stay inside line 2
+// and the row; and all of it still holds once the press confirms — which copies without
+// opening the row's overlay.
 //
 // The state is reached through the same doors as `regression-review-path-phone.spec.ts`: a
 // teammate's pull request goes green in a project that reviews with the person's own agent,
@@ -48,39 +51,39 @@ const PR: ReviewPullRequest = {
 const MERGE_CONTROL_PATH = process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH']!;
 const MERGE_JOURNAL_PATH = process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH']!;
 
-/** The full view's grid template, read from its one source so the 200px case cannot drift. */
-function fullViewGridTemplate(): string {
-  const src = readFileSync('components/approvals/ApprovalRow.tsx', 'utf8');
-  const m = src.match(/APPROVALS_FULL_VIEW_GRID_TEMPLATE = '([^']+)'/);
-  if (!m) throw new Error('APPROVALS_FULL_VIEW_GRID_TEMPLATE not found in ApprovalRow.tsx');
-  return m[1]!;
-}
-
-async function chipFitsItsCell(code: Locator, button: Locator, track: number): Promise<void> {
+async function chipSitsOnLine2(row: Locator, code: Locator, button: Locator): Promise<void> {
   const g = await code.evaluate(
     (node, btnSel) => {
-      const cell = node.closest('[role="cell"]')!;
-      const btn = cell.querySelector(btnSel)!;
-      const c = cell.getBoundingClientRect();
+      const rowEl = node.closest('[role="row"]')!;
+      const line = node.closest('[data-testid^="review-to-run-line-"]');
+      const btn = rowEl.querySelector(btnSel)!;
+      const l = (line ?? rowEl).getBoundingClientRect();
+      const r = rowEl.getBoundingClientRect();
       const b = btn.getBoundingClientRect();
       return {
+        onLine2: line !== null,
+        codes: rowEl.querySelectorAll('code').length,
         scroll: node.scrollWidth,
         client: node.clientWidth,
-        cellWidth: c.width,
-        cellLeft: c.left,
-        cellRight: c.right,
+        lineLeft: l.left,
+        lineRight: l.right,
+        rowRight: r.right,
         btnLeft: b.left,
         btnRight: b.right,
+        pageScroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     },
     `[data-testid="${await button.getAttribute('data-testid')}"]`,
   );
-  expect(Math.round(g.cellWidth), 'the DETAILS cell is the track').toBe(track);
+  expect(g.onLine2, 'the command is on line 2').toBe(true);
+  expect(g.codes, 'the row renders the command once').toBe(1);
   expect(g.scroll, 'the whole command shows — nothing is truncated').toBeLessThanOrEqual(g.client);
-  expect(g.btnLeft, 'the copy button starts inside DETAILS').toBeGreaterThanOrEqual(g.cellLeft);
-  expect(g.btnRight, 'the copy button ends inside DETAILS, never over WAITED').toBeLessThanOrEqual(
-    g.cellRight + 0.5,
-  );
+  expect(g.btnLeft, 'the copy button starts inside line 2').toBeGreaterThanOrEqual(g.lineLeft);
+  expect(g.btnRight, 'the copy button ends inside line 2').toBeLessThanOrEqual(g.lineRight + 0.5);
+  expect(g.lineRight, 'line 2 stays inside the row').toBeLessThanOrEqual(g.rowRight + 0.5);
+  expect(g.pageScroll, 'no horizontal page scroll').toBeLessThanOrEqual(0);
+  const details = row.locator('[data-testid^="review-to-run-details-"]');
+  await expect(details, 'DETAILS holds nothing').toBeEmpty();
 }
 
 test.describe('the review-to-run command chip', () => {
@@ -103,7 +106,7 @@ test.describe('the review-to-run command chip', () => {
     await signIn(page, s.owner.email, s.hosted.password);
   });
 
-  test('motir review XXXXX-11971 fits the 220px and 200px DETAILS tracks whole', async ({
+  test('motir review XXXXX-11971 sits whole on line 2, at desktop and at 390px', async ({
     page,
   }) => {
     await adminDb.project.update({
@@ -126,29 +129,30 @@ test.describe('the review-to-run command chip', () => {
     await page.goto('/workbench?tab=approvals');
     const row = page.locator('[data-review-to-run]').filter({ hasText: card.identifier });
     await expect(row).toBeVisible({ timeout: FIRST_PAINT_MS });
+    const line = row.getByTestId(`review-to-run-line-${card.identifier}`);
     const command = `motir review ${card.identifier}`;
-    const code = row.locator('code', { hasText: command });
-    const button = row.getByTestId(`review-command-copy-${card.identifier}`);
+    const code = line.locator('code', { hasText: command });
+    const button = line.getByTestId(`review-command-copy-${card.identifier}`);
     await expect(code).toHaveAttribute('title', command);
+    // The owner may run the card hosted, so door 1 leads the right group (§ 45.2).
+    await expect(line.getByTestId('review-with-motir-agent')).toBeVisible();
 
-    await test.step('at rest, in the real 220px track', async () => {
-      await chipFitsItsCell(code, button, 220);
+    await test.step('at rest, at desktop', async () => {
+      await chipSitsOnLine2(row, code, button);
     });
 
-    await test.step('after the press confirms, the command still fits', async () => {
+    await test.step('the press copies and confirms without opening the row', async () => {
       await button.click();
       await expect(row.getByRole('status')).toHaveText(/\S/);
-      await chipFitsItsCell(code, button, 220);
+      await chipSitsOnLine2(row, code, button);
       expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
     });
 
-    await test.step('in the full view’s 200px track', async () => {
-      const template = fullViewGridTemplate();
-      expect(template).toContain('200px');
-      await row.evaluate((el, t) => {
-        (el as HTMLElement).style.gridTemplateColumns = t;
-      }, template);
-      await chipFitsItsCell(code, button, 200);
+    await test.step('at 390px', async () => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(line).toBeVisible();
+      await chipSitsOnLine2(row, code, button);
     });
   });
 });

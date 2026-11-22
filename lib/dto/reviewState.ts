@@ -241,8 +241,14 @@ export interface ReviewToRunRowDTO {
   subjectVersion: string | null;
   /** When the review was raised. */
   raisedAt: string;
-  /** `motir review <KEY>` — the row's one verb is Copy. */
+  /** `motir review <KEY>` — copied from the row's chip. */
   command: string;
+  /**
+   * The reader may run the card on the hosted agent — `work_item:edit` in its project, the
+   * predicate To fix's `canFixHosted` reads — so the row offers *Review with Motir agent*
+   * (MOTIR-12032; `design/workbench/design-notes.md` § 45.2).
+   */
+  canReviewHosted: boolean;
 }
 
 /**

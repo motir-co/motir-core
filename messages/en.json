@@ -17587,7 +17587,8 @@
       "toRun": {
         "sentence": "Start a review of <title>{name}</title>",
         "tag": "Review to run",
-        "details": "Not an approval yet. Open it to start the review or to continue without it; your approval is asked once it passes.",
+        "reason": "<b>Waiting for a review.</b> Your approval is asked once it passes.",
+        "creditsNote": "Review with Motir agent is paid from your organisation’s AI credits. motir review runs in your own agent.",
         "open": "Open {key}: {sentence}"
       },
       "dismiss": {

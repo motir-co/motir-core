@@ -103,7 +103,9 @@ export function useReviewWithMotirAgent(
   return { start, starting, refusal: standingRefusal(refusal, selectedModel) };
 }
 
-function HostedRow({
+/** Door 1's row — the picker and *Review with Motir agent*. Also drawn on Waiting on you's
+ *  review-to-run row (MOTIR-12032). Mount under a `HostedModelsProvider`. */
+export function ReviewHostedRow({
   starting,
   onPress,
   refused,
@@ -146,7 +148,8 @@ function HostedRow({
   );
 }
 
-function HostedRefusalNotice({ refusal }: { refusal: ReviewHostedRefusal }) {
+/** Door 1's refusal, drawn from the route's own answer; `laneOff` draws nothing. */
+export function ReviewHostedRefusalNotice({ refusal }: { refusal: ReviewHostedRefusal }) {
   const tRun = useTranslations('runs.hosted.refused');
   const testId = `review-hosted-refused-${refusal.kind}`;
   if (refusal.kind === 'laneOff') return null;
@@ -198,7 +201,7 @@ export function ReviewDoors({
     <div className="flex min-w-0 flex-col gap-2" data-testid="review-doors">
       <div className="flex flex-wrap items-center gap-2">
         {hostedShown ? (
-          <HostedRow
+          <ReviewHostedRow
             starting={press.starting}
             onPress={() => void press.start()}
             refused={press.refusal?.kind === 'noCapacity'}
@@ -227,7 +230,7 @@ export function ReviewDoors({
           <span>{t('creditsNote')}</span>
         </p>
       ) : null}
-      {hostedShown && press.refusal ? <HostedRefusalNotice refusal={press.refusal} /> : null}
+      {hostedShown && press.refusal ? <ReviewHostedRefusalNotice refusal={press.refusal} /> : null}
       {hostedShown && models?.models.state === 'unavailable' ? (
         <ModelsUnavailable onRetry={models.reloadModels} testIdPrefix="review-hosted" />
       ) : null}
