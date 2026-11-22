@@ -296,19 +296,25 @@ describe('ReviewToRunRow', () => {
     expect(shallowPush).not.toHaveBeenCalled();
   });
 
-  // Bug MOTIR-11982: the chip truncates its code (whole command on `title`) and never
-  // shrinks its button, in the list's small text, so it cannot paint into WAITED.
-  it('the command chip fits its track: truncating code, full command on its title, xs text', () => {
+  // Bug MOTIR-11982: the row's chip is the COMPACT one, so a real `motir review MOTIR-NNNNN`
+  // fits the 220px DETAILS track whole; the truncate is only the last guard. jsdom has no
+  // layout, so this holds the MECHANISM; the geometry is held in a real browser by
+  // `tests/e2e/regression-review-to-run-chip.spec.ts`.
+  it('the command chip is compact: 11px code, 24px button, Copied read aloud only', () => {
     render(<ReviewToRunRow row={TO_RUN} gridTemplate="1fr auto auto auto" />, { now: NOW });
     const code = screen.getByText('motir review ACME-9');
     expect(code.tagName).toBe('CODE');
     expect(code.getAttribute('title')).toBe('motir review ACME-9');
     expect(code.className).toContain('truncate');
     expect(code.className).toContain('min-w-0');
-    expect(code.className).not.toContain('shrink-0');
+    expect(code.className).toContain('text-[11px]');
+    expect(code.className).toContain('px-(--spacing-chip-x-4)');
     const button = screen.getByTestId('review-command-copy-ACME-9');
     expect(button.className).toContain('shrink-0');
-    expect(code.closest('[role="cell"]')!.className).toContain('text-xs');
+    expect(button.className).toContain('h-6 w-6');
+    // The status is out of the flex flow, so its gap and its words cost the code no width.
+    const status = code.closest('[role="cell"]')!.querySelector('[role="status"]')!;
+    expect(status.className).toBe('sr-only');
   });
 
   it('renders in zh', () => {

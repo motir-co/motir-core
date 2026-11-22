@@ -79,10 +79,11 @@ export function ReviewToRunRow({
         </span>
       </div>
       <div role="presentation" className="flex flex-wrap items-center gap-2 pl-6 md:contents">
-        {/* `text-xs`: the chip sizes to the list’s small text, and it truncates rather than
-            painting into WAITED, whatever the key’s length (Bug MOTIR-11982). */}
+        {/* The compact chip: `motir review MOTIR-NNNNN` fits the 220px DETAILS track whole
+            (and the full view's 200px), and a longer key truncates rather than painting into
+            WAITED (Bug MOTIR-11982; geometry held by `regression-review-to-run-chip.spec.ts`). */}
         <div role="cell" className="relative z-10 flex min-w-0 items-center text-xs">
-          <ReviewCommand command={row.command} identifier={row.identifier} />
+          <ReviewCommand command={row.command} identifier={row.identifier} density="compact" />
         </div>
         <div role="cell" className="flex min-w-0 items-center">
           <span
