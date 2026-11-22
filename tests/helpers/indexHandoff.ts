@@ -12,6 +12,7 @@ import { INDEX_AI_URL, INDEX_SERVICE_TOKEN, stubAppCredentials } from './indexFl
 //             GET  /v1/code-audit                "already audited" (a neutral first audit)
 //   GitHub    /access_tokens                     an installation token
 //             /commits/<ref>                     the live head, `handoffWorld.head`
+//             /compare/<base>...<head>           `handoffWorld.compare` (MOTIR-11887)
 //             /tarball/<ref>                     a 302 to a URL carrying `SOURCE_URL_SENTINEL`
 //
 // Any other request throws, so a call to the container path (a credential mint, a
@@ -45,6 +46,14 @@ export const handoffWorld: {
   tarballRefs: string[];
   headReads: string[];
   aiPaths: string[];
+  /**
+   * What GitHub's comparison answers (MOTIR-11887): the files it lists, or a
+   * status it refuses with. `null` (the default) throws, so a case that never
+   * expected a comparison fails by name if one is asked.
+   */
+  compare: { files: GithubCompareFile[] } | { status: number } | null;
+  /** Every comparison asked, as `base...head`. */
+  compareReads: string[];
 } = {
   allowanceOutcome: 'ok',
   head: HANDOFF_HEAD,
@@ -56,7 +65,16 @@ export const handoffWorld: {
   tarballRefs: [],
   headReads: [],
   aiPaths: [],
+  compare: null,
+  compareReads: [],
 };
+
+/** One `files[]` entry of GitHub's compare answer — names only. */
+export interface GithubCompareFile {
+  filename: string;
+  status: 'added' | 'modified' | 'removed' | 'renamed';
+  previous_filename?: string;
+}
 
 /** A status answer: the four fields, every one null unless given. */
 export function statusAnswer(fields: Partial<Record<string, unknown>> = {}): StatusAnswer {
@@ -132,6 +150,8 @@ export function stubIndexHandoff(): void {
   handoffWorld.tarballRefs = [];
   handoffWorld.headReads = [];
   handoffWorld.aiPaths = [];
+  handoffWorld.compare = null;
+  handoffWorld.compareReads = [];
   stubAppCredentials();
   vi.stubEnv('MOTIR_AI_URL', INDEX_AI_URL);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', INDEX_SERVICE_TOKEN);
@@ -196,6 +216,14 @@ export function stubIndexHandoff(): void {
       if (commits) {
         handoffWorld.headReads.push(decodeURIComponent(commits[1]!));
         return new Response(handoffWorld.head, { status: 200 });
+      }
+      const compare = /\/repos\/[^/]+\/[^/]+\/compare\/([^/]+)$/.exec(parsed.pathname);
+      if (compare) {
+        handoffWorld.compareReads.push(decodeURIComponent(compare[1]!));
+        const answer = handoffWorld.compare;
+        if (answer === null) throw new Error(`unexpected comparison ${parsed.pathname}`);
+        if ('status' in answer) return json(answer.status, { message: 'Server Error' });
+        return json(200, { files: answer.files, commits: [] });
       }
       const tarball = /\/repos\/[^/]+\/[^/]+\/tarball\/([^/]+)$/.exec(parsed.pathname);
       if (tarball) {
