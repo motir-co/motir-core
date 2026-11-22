@@ -1,8 +1,12 @@
 import type { WorkItemRunDiscrepancyRecordDto } from '@/lib/dto/runDiscrepancy';
-import { toWorkItemRunDiscrepancyRecordDto } from '@/lib/mappers/runDiscrepancyMappers';
+import {
+  runDiscrepancyRecordBodies,
+  toWorkItemRunDiscrepancyRecordDto,
+} from '@/lib/mappers/runDiscrepancyMappers';
 import { runDiscrepancyRecordRepository } from '@/lib/repositories/runDiscrepancyRecordRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { resolveMarkdownBodiesWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectAccessService } from './projectAccessService';
@@ -36,6 +40,11 @@ export const runDiscrepancyReadService = {
     const records = await withWorkspaceContext({ ...binding, projectId: item.projectId }, (tx) =>
       runDiscrepancyRecordRepository.listByWorkItem(item.id, tx),
     );
-    return records.map(toWorkItemRunDiscrepancyRecordDto);
+    // ONE read resolves the cards every record links, for this reader (MOTIR-10023).
+    const workItemRefs = await resolveMarkdownBodiesWorkItemRefs(
+      records.flatMap(runDiscrepancyRecordBodies),
+      ctx,
+    );
+    return records.map((record) => toWorkItemRunDiscrepancyRecordDto(record, workItemRefs));
   },
 };

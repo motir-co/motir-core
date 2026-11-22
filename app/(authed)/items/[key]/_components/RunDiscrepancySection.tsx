@@ -12,6 +12,7 @@ import type {
 } from '@/lib/dto/runDiscrepancy';
 import { runsHref } from '@/lib/runs/runsAddress';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { ContentSectionCard } from './ContentSectionCard';
 import { RUN_DISCREPANCY_SECTION_ID } from './decisionAnchor';
 
@@ -62,18 +63,38 @@ function Chip({ kind, n }: { kind: Kind; n: number }) {
 }
 
 /** A label and its text. Side by side from `sm` up; the label above its text at phone width. */
-function Field({ label, value }: { label: string; value: string }) {
+function Field({
+  label,
+  value,
+  workItemRefs,
+}: {
+  label: string;
+  value: string;
+  workItemRefs: WorkItemRefMap;
+}) {
   return (
     <div className="flex flex-col gap-0.5 sm:grid sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:gap-3">
       <dt className="font-sans text-sm font-medium text-(--el-text-secondary)">{label}</dt>
       <dd className="min-w-0 [overflow-wrap:anywhere]">
-        <MarkdownView value={value} className="text-sm text-(--el-text)" />
+        <MarkdownView
+          value={value}
+          workItemRefs={workItemRefs}
+          className="text-sm text-(--el-text)"
+        />
       </dd>
     </div>
   );
 }
 
-function EntryBlock({ kind, entry }: { kind: Kind; entry: RunDiscrepancyEntryDto }) {
+function EntryBlock({
+  kind,
+  entry,
+  workItemRefs,
+}: {
+  kind: Kind;
+  entry: RunDiscrepancyEntryDto;
+  workItemRefs: WorkItemRefMap;
+}) {
   const t = useTranslations('issueViews.runDiscrepancy');
   return (
     <li
@@ -84,18 +105,34 @@ function EntryBlock({ kind, entry }: { kind: Kind; entry: RunDiscrepancyEntryDto
         <Chip kind={kind} n={entry.position} />
       </div>
       <dl className="flex flex-col gap-2">
-        <Field label={kind === 'point' ? t('planAsked') : t('planSaid')} value={entry.planText} />
-        <Field label={kind === 'point' ? t('built') : t('chose')} value={entry.outcomeText} />
-        <Field label={t('why')} value={entry.why} />
+        <Field
+          label={kind === 'point' ? t('planAsked') : t('planSaid')}
+          value={entry.planText}
+          workItemRefs={workItemRefs}
+        />
+        <Field
+          label={kind === 'point' ? t('built') : t('chose')}
+          value={entry.outcomeText}
+          workItemRefs={workItemRefs}
+        />
+        <Field label={t('why')} value={entry.why} workItemRefs={workItemRefs} />
         {kind === 'decision' && entry.alternatives !== null ? (
-          <Field label={t('alternatives')} value={entry.alternatives} />
+          <Field label={t('alternatives')} value={entry.alternatives} workItemRefs={workItemRefs} />
         ) : null}
       </dl>
     </li>
   );
 }
 
-function Group({ kind, entries }: { kind: Kind; entries: readonly RunDiscrepancyEntryDto[] }) {
+function Group({
+  kind,
+  entries,
+  workItemRefs,
+}: {
+  kind: Kind;
+  entries: readonly RunDiscrepancyEntryDto[];
+  workItemRefs: WorkItemRefMap;
+}) {
   const t = useTranslations('issueViews.runDiscrepancy');
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? entries : entries.slice(0, VISIBLE_ENTRIES);
@@ -120,7 +157,7 @@ function Group({ kind, entries }: { kind: Kind; entries: readonly RunDiscrepancy
       </div>
       <ol className="flex flex-col gap-2">
         {shown.map((entry) => (
-          <EntryBlock key={entry.position} kind={kind} entry={entry} />
+          <EntryBlock key={entry.position} kind={kind} entry={entry} workItemRefs={workItemRefs} />
         ))}
       </ol>
       {entries.length > VISIBLE_ENTRIES ? (
@@ -206,8 +243,12 @@ function RecordBody({ record }: { record: RunDiscrepancyRecordView }) {
           </div>
         </div>
       ) : null}
-      {record.points.length > 0 ? <Group kind="point" entries={record.points} /> : null}
-      {record.decisions.length > 0 ? <Group kind="decision" entries={record.decisions} /> : null}
+      {record.points.length > 0 ? (
+        <Group kind="point" entries={record.points} workItemRefs={record.workItemRefs} />
+      ) : null}
+      {record.decisions.length > 0 ? (
+        <Group kind="decision" entries={record.decisions} workItemRefs={record.workItemRefs} />
+      ) : null}
     </div>
   );
 }

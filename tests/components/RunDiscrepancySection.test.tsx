@@ -49,6 +49,7 @@ function view(over: Partial<RunDiscrepancyRecordView> = {}): RunDiscrepancyRecor
     decisionCount: 1,
     points: [entry(1)],
     decisions: [entry(1, { planText: 'SAID-1', outcomeText: 'CHOSE-1', alternatives: 'ALT-1' })],
+    workItemRefs: {},
     ...over,
   };
 }
@@ -115,6 +116,35 @@ describe('collapsed by default', () => {
     expect(
       within(screen.getByTestId('run-discrepancy-decision')).queryByText('Alternatives'),
     ).toBeNull();
+  });
+});
+
+describe('card links in an entry', () => {
+  it('draw as the live card from the record’s ref map, not as deleted', () => {
+    const ref = {
+      accessible: true,
+      id: 'wi_9',
+      identifier: 'MOTIR-9',
+      title: 'The linked card',
+      kind: 'task',
+      archived: false,
+      status: null,
+      type: null,
+    };
+    render(
+      <RunDiscrepancySection
+        records={[
+          view({
+            points: [entry(1, { why: 'see [MOTIR-9](motir:wi_9)' })],
+            workItemRefs: { wi_9: ref } as never,
+          }),
+        ]}
+      />,
+    );
+    fireEvent.click(showButton());
+    const point = screen.getByTestId('run-discrepancy-point');
+    expect(point.textContent).toContain('MOTIR-9');
+    expect(point.textContent).not.toContain('no longer exists');
   });
 });
 

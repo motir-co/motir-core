@@ -3,6 +3,7 @@ import type {
   RunDiscrepancyEntryDto,
   WorkItemRunDiscrepancyRecordDto,
 } from '@/lib/dto/runDiscrepancy';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { RunDiscrepancyRecordForWorkItem } from '@/lib/repositories/runDiscrepancyRecordRepository';
 
 // `run_discrepancy_record` rows → the work item page's DTO (Task MOTIR-11996). PURE.
@@ -28,8 +29,14 @@ function entriesOf(
     .map(toEntryDto);
 }
 
+/** Every text field of a record's entries — what its card links are read from. */
+export function runDiscrepancyRecordBodies(record: RunDiscrepancyRecordForWorkItem): string[] {
+  return record.entries.flatMap((e) => [e.planText, e.outcomeText, e.why, e.alternatives ?? '']);
+}
+
 export function toWorkItemRunDiscrepancyRecordDto(
   record: RunDiscrepancyRecordForWorkItem,
+  workItemRefs: WorkItemRefMap,
 ): WorkItemRunDiscrepancyRecordDto {
   return {
     id: record.id,
@@ -43,5 +50,6 @@ export function toWorkItemRunDiscrepancyRecordDto(
     decisionCount: record.decisionCount,
     points: entriesOf(record.entries, 'point'),
     decisions: entriesOf(record.entries, 'decision'),
+    workItemRefs,
   };
 }

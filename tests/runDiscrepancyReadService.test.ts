@@ -139,6 +139,7 @@ describe('runDiscrepancyReadService.listForWorkItem', () => {
         { position: 2, planText: 'A2', outcomeText: 'B2', why: 'W2', alternatives: null },
       ],
       decisions: [{ position: 1, planText: 's', outcomeText: 'c', why: 'w', alternatives: null }],
+      workItemRefs: {},
     });
     expect(records[1]).toMatchObject({
       recordedAt: '2026-11-01T08:00:00.000Z',
@@ -188,6 +189,24 @@ describe('runDiscrepancyReadService.listForWorkItem', () => {
 
     const [read] = await runDiscrepancyReadService.listForWorkItem(c.id, fx.ctx);
     expect(read).toMatchObject({ recordedByName: null, source: 'backfilled' });
+  });
+
+  it('resolves the cards its entries link, for the reader, so they draw as live chips', async () => {
+    const fx = await makeWorkItemFixture();
+    const c = await card(fx);
+    const linked = await card(fx, 'The linked card');
+    await runDiscrepancyService.recordDiscrepancy(
+      {
+        key: c.key,
+        points: [{ ...POINT, why: `see [${linked.key}](motir:${linked.id})` }],
+        decisions: [{ ...DECISION, alternatives: `[${linked.key}](motir:${linked.id})` }],
+      },
+      fx.ctx,
+    );
+
+    const [read] = await runDiscrepancyReadService.listForWorkItem(c.id, fx.ctx);
+    expect(Object.keys(read!.workItemRefs)).toContain(linked.id);
+    expect(read!.workItemRefs[linked.id]).toMatchObject({ title: 'The linked card' });
   });
 
   it('only this card’s records', async () => {

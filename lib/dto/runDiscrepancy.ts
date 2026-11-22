@@ -1,4 +1,5 @@
 import type { RunDiscrepancySource } from '@/generated/prisma/client';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 // A card's run discrepancy records as its Run discrepancy section reads them (Task
 // MOTIR-11996; `design/runs/design-notes.md` § _Run discrepancy — the record gets its own
@@ -34,4 +35,9 @@ export interface WorkItemRunDiscrepancyRecordDto {
   /** Ordered by `position`. Empty on `backfill_unreadable`. */
   points: RunDiscrepancyEntryDto[];
   decisions: RunDiscrepancyEntryDto[];
+  /**
+   * The cards its entries link (`[KEY](motir:<id>)`), resolved for the reader on the
+   * server, so `MarkdownView` draws them as live chips rather than as deleted (MOTIR-10023).
+   */
+  workItemRefs: WorkItemRefMap;
 }
