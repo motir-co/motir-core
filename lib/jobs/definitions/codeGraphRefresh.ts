@@ -1,5 +1,5 @@
 import { defineJob } from '../defineJob';
-import { runIndexFleetSteps } from '../indexFleetSteps';
+import { runIndexHandoffSteps } from '../indexHandoffSteps';
 import type { CodeGraphRefreshData } from '../types';
 
 // Code-graph REFRESH job (Story 7.10 · MOTIR-893, the completing feed slice;
@@ -10,11 +10,13 @@ import type { CodeGraphRefreshData } from '../types';
 // to a stored repo, so the webhook returns 2xx fast and the re-index never runs
 // inline in the delivery.
 //
-// ⚠️ IT RUNS ON THE FLEET, LIKE THE FIRST INDEX — the SAME step shape,
-// `runIndexFleetSteps`, not a copy of it. THE BYTES ARE GONE FROM THIS PROCESS:
-// dispatch resolves a pre-signed tarball URL and boots ONE CONTAINER per
-// (repo × project) which fetches and builds the graph itself
-// (`docs/decisions/code-graph-index-fleet.md` §2, §11).
+// ⚠️ IT HANDS THE WORK OFF, LIKE THE FIRST INDEX (MOTIR-11883) — the SAME step
+// shape, `runIndexHandoffSteps`, as a `refresh`: the live default-branch head and a
+// pre-signed source URL minted AT it go to motir-ai, which starts motir-codegraph's
+// job, and the run polls motir-ai's status route until that commit settles. Every
+// enqueue caller (the GitHub and GitLab push webhooks, the stale-session refresh,
+// the catch-up sweep) reaches it unchanged. What follows is the history of the
+// container path it replaces, kept because the debounce below still answers it.
 //
 // WHY IT MOVED (MOTIR-2057). MOTIR-1981 moved `system.code-graph-index` onto the
 // fleet and left this job — architecturally the same work — on the
@@ -178,7 +180,7 @@ export const codeGraphRefresh = defineJob(
   },
   async (ctx, services) => {
     const data = ctx.event.data as CodeGraphRefreshData;
-    return runIndexFleetSteps(
+    return runIndexHandoffSteps(
       ctx,
       services,
       {

@@ -6,7 +6,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
 import { resolveRefreshDisposition } from '@/lib/ai/codeContext';
-import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
+import { fleetCodeGraphRefresh as codeGraphRefresh } from '../helpers/fleetIndexJobs';
 import type { CodeGraphRefreshData } from '@/lib/jobs/types';
 
 // A SESSION-START REFRESH DOES NOT SIT OUT THE PUSH DEBOUNCE (MOTIR-5360).

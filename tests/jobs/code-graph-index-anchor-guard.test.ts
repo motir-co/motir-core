@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobTestEngine } from '../helpers/jobs';
-import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
+import { fleetCodeGraphRefresh as codeGraphRefresh } from '../helpers/fleetIndexJobs';
 import {
   codeGraphIndexService,
   isUsableAnchorProjectId,

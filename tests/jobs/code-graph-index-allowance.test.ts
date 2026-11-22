@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
 import { askIndexAllowanceUnlessBooted } from '@/lib/jobs/indexFleetSteps';
 import { jobServices } from '@/lib/jobs/services';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';

@@ -351,6 +351,9 @@ export type IndexRepoResult =
        *  index allowance (MOTIR-4593): nothing was admitted or booted, and the
        *  repository row records the same reason. */
       reason: IndexSkipReason | IndexPauseReason;
+      /** MOTIR-11883. The service's own sentence for a size refusal, as motir-ai
+       *  passed it through. Absent on every other verdict. */
+      detail?: string;
     }
   | {
       indexed: true;
@@ -379,6 +382,10 @@ export type IndexRepoResult =
       /** MOTIR-4945. Absent when no container reported a mode — which, mid-rollout,
        *  is every run whose `index-boot` memo predates this card. */
       indexModes?: IndexModeRecord[];
+      /** MOTIR-11883. Present on a run whose graph motir-codegraph published through
+       *  motir-ai's handoff; absent on an old-fleet row. It is what tells the two
+       *  kinds of succeeded row apart. */
+      indexedBy?: 'motir-codegraph';
     };
 
 /**

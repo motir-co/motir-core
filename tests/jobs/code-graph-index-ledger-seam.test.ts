@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { JobTestEngine } from '../helpers/jobs';
 import type { JobQueueRun } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
 import { recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';

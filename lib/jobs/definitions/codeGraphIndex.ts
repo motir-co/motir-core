@@ -1,5 +1,5 @@
 import { defineJob } from '../defineJob';
-import { runIndexFleetSteps } from '../indexFleetSteps';
+import { runIndexHandoffSteps } from '../indexHandoffSteps';
 import type { CodeGraphIndexData } from '../types';
 
 // Code-graph INDEX job (Story 7.5 · MOTIR-1500, re-shaped by Story MOTIR-1981 ·
@@ -9,13 +9,14 @@ import type { CodeGraphIndexData } from '../types';
 // GitHub/motir-ai call can never roll back or block the grant mirror (the
 // side-effects-outside-tx rule).
 //
-// ⚠️ THE BYTES ARE GONE FROM THIS PROCESS. It used to fetch the repo's tarball
-// into the function's heap and upload it to motir-ai once per project; since
-// MOTIR-2027 it resolves a pre-signed URL and dispatches ONE CONTAINER per
-// (repo × project) that fetches and builds the graph itself
-// (`docs/decisions/code-graph-index-fleet.md` §2). The step shape that drives
-// it is `runIndexFleetSteps` — read the note there for why supervision is a
-// sequence of bounded steps and not a loop.
+// ⚠️ IT HANDS THE INDEX OFF (MOTIR-11883). Since MOTIR-2027 it booted ONE
+// indexer container that fetched and built the graph itself; it now reads the
+// repository's live default-branch head, mints a pre-signed source URL AT it and
+// hands both to motir-ai as a `first_index`, which starts motir-codegraph's job,
+// then polls motir-ai's status route until the commit is published, refused or
+// failed. `runIndexHandoffSteps` is the step shape — read the note there for
+// which calls are memoized and why. The container path (`runIndexFleetSteps`)
+// stays in the tree, unreached, until its own deletion.
 //
 // SYSTEM-scoped (`system.*`): the work spans an installation's workspace + its
 // projects, resolved under `withSystemContext` inside the service — like every
@@ -85,7 +86,7 @@ import type { CodeGraphIndexData } from '../types';
 // `derive-first-audit` step closes that, firing the repo's `code_audit` +
 // `propose_convention` pair when — and only when — it has no derived audit yet.
 //
-// IT LIVES HERE AND NOT IN `runIndexFleetSteps` ON PURPOSE. That function is
+// IT LIVES HERE AND NOT IN `runIndexHandoffSteps` ON PURPOSE. That function is
 // shared with `system.code-graph-refresh` (MOTIR-2057), and the record decides
 // the FIRST audit only: whether an audit should refresh when a repo is re-indexed
 // after new commits is a separate, recurring-spend question §4 deliberately
@@ -96,7 +97,7 @@ export const codeGraphIndex = defineJob(
   { id: 'system.code-graph-index', retryPolicy: 'idempotent' },
   async (ctx, services) => {
     const data = ctx.event.data as CodeGraphIndexData;
-    const result = await runIndexFleetSteps(
+    const result = await runIndexHandoffSteps(
       ctx,
       services,
       {
@@ -115,7 +116,7 @@ export const codeGraphIndex = defineJob(
     // vanished-tenant verdicts and `provider_cannot_index` return `indexed: false`
     // WITHOUT throwing (they are the ledger's contract), and none of them put a
     // graph anywhere — there is nothing to assess. A FAILED index never reaches
-    // this line at all: `runIndexFleetSteps` throws.
+    // this line at all: `runIndexHandoffSteps` throws.
     //
     // Its OWN step, so the derivation is checkpointed exactly once per run and a
     // replay reads the memo rather than re-submitting. `deriveFirstAudit` never

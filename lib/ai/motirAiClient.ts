@@ -1787,6 +1787,204 @@ export async function mintCodeGraphRunCredential(input: {
   };
 }
 
+// ── The code-graph INDEX HANDOFF and STATUS (MOTIR-11883 · story MOTIR-11022) ──
+//
+// motir-core no longer boots an indexer container. Its index and refresh jobs hand
+// motir-ai what they hold — the repository, the head commit and a pre-signed source
+// URL minted AT that commit — and motir-ai, motir-codegraph's only client, starts the
+// service's job. The jobs then poll the status route until the handed commit is
+// published, refused or failed (motir-ai `docs/contract.md`, both routes).
+//
+// ⚠️ THE SOURCE URL IS A BEARER SECRET. It is sent in the handoff body and appears
+// nowhere else: no error this client throws carries the body, and motir-ai's own
+// refusal of it is a fixed sentence that never repeats it.
+
+/** What motir-core can ask motir-codegraph to do, in motir-ai's spelling. */
+export type CodeGraphIndexHandoffKind = 'first_index' | 'push' | 'refresh';
+
+interface CodeGraphIndexHandoffCommon {
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  /** `owner/name`. */
+  repoRef: string;
+  /** The default-branch head the source URL was minted at — 40 lowercase hex. */
+  commitSha: string;
+  /** The default branch's NAME. */
+  ref: string;
+  /** The pre-signed archive URL at `commitSha`. A bearer secret. */
+  sourceUrl: string;
+}
+
+/** One handoff: a push carries the previous head and the host's changed paths. */
+export type CodeGraphIndexHandoffInput =
+  | (CodeGraphIndexHandoffCommon & { kind: 'first_index' | 'refresh' })
+  | (CodeGraphIndexHandoffCommon & {
+      kind: 'push';
+      previousCommitSha: string;
+      changedPaths: string[];
+    });
+
+/**
+ * motir-ai's answer to a handoff. `registration_in_progress` is its `429
+ * rate_limited`: another request holds the repository's registration claim, nothing
+ * was sent to the service, and the caller retries shortly.
+ */
+export type CodeGraphIndexHandoffAnswer =
+  | { outcome: 'accepted'; jobId: string }
+  | { outcome: 'registration_in_progress' };
+
+/**
+ * POST /v1/code-graph/index-handoff — start ONE first-index, push or refresh in
+ * motir-codegraph through motir-ai. Every refusal other than the registration
+ * retry is the §5 typed error; no error names the body.
+ */
+export async function handOffCodeGraphIndex(
+  input: CodeGraphIndexHandoffInput,
+): Promise<CodeGraphIndexHandoffAnswer> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/code-graph/index-handoff`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({
+      coreOrganizationId: input.coreOrganizationId,
+      coreWorkspaceId: input.coreWorkspaceId,
+      coreProjectId: input.coreProjectId,
+      repoRef: input.repoRef,
+      kind: input.kind,
+      commitSha: input.commitSha,
+      ref: input.ref,
+      sourceUrl: input.sourceUrl,
+      ...(input.kind === 'push'
+        ? { previousCommitSha: input.previousCommitSha, changedPaths: input.changedPaths }
+        : {}),
+    }),
+  });
+  if (!res.ok) {
+    const problem = await readProblem(res);
+    if (problem.code === 'rate_limited') return { outcome: 'registration_in_progress' };
+    throw errorFromProblem(problem);
+  }
+  // Validated, not cast: the job id is what the run records as the job it handed.
+  const body = (await res.json()) as { jobId?: unknown } | null;
+  if (!body || typeof body.jobId !== 'string' || body.jobId.length === 0) {
+    throw new MotirAiUnavailableError(
+      'motir-ai returned no job id from POST /v1/code-graph/index-handoff',
+    );
+  }
+  return { outcome: 'accepted', jobId: body.jobId };
+}
+
+/** The commit the service last PUBLISHED for the default branch. */
+export interface CodeGraphIndexedCommit {
+  commit: string;
+  publishedAt: string;
+}
+
+/** The service's queued or running job for the repository. */
+export interface CodeGraphInProgressJob {
+  jobId: string;
+  kind: string;
+  commit: string | null;
+  ref: string | null;
+  state: string;
+  enqueuedAt: string;
+  startedAt: string | null;
+}
+
+/** The service's most recent failed or refused job. `repository_too_large` is the
+ *  size refusal; every other reason is a failure. */
+export interface CodeGraphLastFailure {
+  reason: string;
+  commit: string | null;
+  kind: string;
+  message: string;
+  failedAt: string;
+}
+
+/** GET /v1/code-graph/index-status's answer, under the route's own names. */
+export interface CodeGraphIndexStatus {
+  /** `indexed` or `not_indexed`, the service's literal. */
+  state: string;
+  indexedCommit: CodeGraphIndexedCommit | null;
+  inProgressJob: CodeGraphInProgressJob | null;
+  lastFailure: CodeGraphLastFailure | null;
+}
+
+const INDEX_STATUS_ROUTE = 'GET /v1/code-graph/index-status';
+
+function malformedStatus(field: string): MotirAiUnavailableError {
+  return new MotirAiUnavailableError(
+    `motir-ai returned a malformed '${field}' from ${INDEX_STATUS_ROUTE}`,
+  );
+}
+
+const isStrOrNull = (v: unknown): v is string | null => v === null || typeof v === 'string';
+
+/** A nullable object field: null stays null, an object is checked member by member. */
+function statusObject<T>(
+  body: Record<string, unknown>,
+  field: string,
+  members: Record<keyof T, (v: unknown) => boolean>,
+): T | null {
+  const value = body[field];
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) throw malformedStatus(field);
+  const record = value as Record<string, unknown>;
+  for (const [key, check] of Object.entries(members) as [string, (v: unknown) => boolean][]) {
+    if (!check(record[key])) throw malformedStatus(`${field}.${key}`);
+  }
+  return Object.fromEntries(Object.keys(members).map((key) => [key, record[key]])) as T;
+}
+
+/**
+ * GET /v1/code-graph/index-status — the service's status of ONE repository, by
+ * motir-core's organisation and the repository. A read: motir-ai creates nothing.
+ * The body is validated, because the index job settles on it.
+ */
+export async function readCodeGraphIndexStatus(input: {
+  coreOrganizationId: string;
+  repoRef: string;
+}): Promise<CodeGraphIndexStatus> {
+  const { url, serviceToken } = config();
+  const query = new URLSearchParams({
+    coreOrganizationId: input.coreOrganizationId,
+    repoRef: input.repoRef,
+  });
+  const res = await aiFetch(`${url}/v1/code-graph/index-status?${query.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as unknown;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw malformedStatus('body');
+  const record = body as Record<string, unknown>;
+  if (!isStr(record['state'])) throw malformedStatus('state');
+  return {
+    state: record['state'],
+    indexedCommit: statusObject<CodeGraphIndexedCommit>(record, 'indexedCommit', {
+      commit: isStr,
+      publishedAt: isStr,
+    }),
+    inProgressJob: statusObject<CodeGraphInProgressJob>(record, 'inProgressJob', {
+      jobId: isStr,
+      kind: isStr,
+      commit: isStrOrNull,
+      ref: isStrOrNull,
+      state: isStr,
+      enqueuedAt: isStr,
+      startedAt: isStrOrNull,
+    }),
+    lastFailure: statusObject<CodeGraphLastFailure>(record, 'lastFailure', {
+      reason: isStr,
+      commit: isStrOrNull,
+      kind: isStr,
+      message: isStr,
+      failedAt: isStr,
+    }),
+  };
+}
+
 /**
  * WHAT THE CONTAINER ITSELF DID on one index run (MOTIR-5058).
  *

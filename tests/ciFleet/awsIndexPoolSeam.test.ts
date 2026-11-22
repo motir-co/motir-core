@@ -14,7 +14,7 @@ import {
   INDEX_POOL_FULL_PAUSE_REASON,
 } from '@/lib/ciFleet/indexAllowance';
 import { fleetKindOnPool, wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
 import type { CodeGraphIndexData } from '@/lib/jobs/types';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { AWS_INDEXER_AMI_ENV_VAR, AWS_RUNNER_AMI_ENV_VAR } from '@/lib/orchestrator';

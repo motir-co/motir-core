@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import type { IndexAllowanceVerdict } from '@/lib/ciFleet/indexAllowance';
-import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
+import { fleetCodeGraphRefresh as codeGraphRefresh } from '../helpers/fleetIndexJobs';
 import {
   CODE_GRAPH_INDEX_CATCH_UP_CRON,
   codeGraphIndexCatchUp,

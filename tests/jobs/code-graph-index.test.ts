@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
-import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
+import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
+import { fleetCodeGraphRefresh as codeGraphRefresh } from '../helpers/fleetIndexJobs';
 import { jobServices } from '@/lib/jobs/services';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';

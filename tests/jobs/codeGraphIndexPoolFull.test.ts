@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import type { CodeGraphIndexData } from '@/lib/jobs/types';
 import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
 import { INDEX_POOL_FULL_PAUSE_REASON } from '@/lib/ciFleet/indexAllowance';
 import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
 import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';

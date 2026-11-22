@@ -8,7 +8,7 @@ import { defineJob } from '@/lib/jobs/defineJob';
 import { dispatchEventToEngine } from '@/lib/jobs/engine/dispatcher';
 import { debouncedRunAt, resolveDebounceKey } from '@/lib/jobs/engine/debounce';
 import { parseEventExpression, resolveEventExpression } from '@/lib/jobs/engine/eventExpression';
-import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
+import { fleetCodeGraphRefresh as codeGraphRefresh } from '../helpers/fleetIndexJobs';
 import { pageEmbeddingRequested } from '@/lib/jobs/definitions/pageEmbedding';
 import { productionConfigRedeploy } from '@/lib/jobs/definitions/productionConfigRedeploy';
 import { releaseDeploymentStatus } from '@/lib/jobs/definitions/releaseDeploymentStatus';
