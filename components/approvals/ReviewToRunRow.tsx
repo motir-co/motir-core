@@ -13,6 +13,7 @@ import {
 } from '@/components/github/ReviewDoors';
 import { ModelsEmpty, ModelsUnavailable } from '@/components/hosted/ContinueHostedControl';
 import { useHostedModels } from '@/components/hosted/HostedModelsProvider';
+import { useSurfaceTitleText } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useRelativeLabel } from './useRelativeLabel';
 import { useOpenApproval } from './useOpenApproval';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
@@ -53,7 +54,9 @@ export function ReviewToRunRow({
   const locale = useLocale();
   const routes = useReaderRoutes();
   const relativeLabel = useRelativeLabel();
-  const sentenceText = t.markup('sentence', { name: row.title, title: (chunks) => chunks });
+  // The title in the reader's language where the project auto-translates, as `ApprovalRow`'s.
+  const shownTitle = useSurfaceTitleText(row.workItemId, row.title);
+  const sentenceText = t.markup('sentence', { name: shownTitle, title: (chunks) => chunks });
   const openApproval = useOpenApproval();
   function onRowClick(e: MouseEvent<HTMLAnchorElement>) {
     // `ApprovalRow`'s exact condition: keyboard Enter on the anchor dispatches a primary
@@ -93,7 +96,7 @@ export function ReviewToRunRow({
             {row.identifier}
           </span>
           <span className="min-w-0 flex-1 truncate text-sm text-(--el-text) group-hover:underline">
-            {row.title}
+            {shownTitle}
           </span>
         </div>
         <div role="presentation" className="flex flex-wrap items-center gap-2 pl-6 md:contents">
