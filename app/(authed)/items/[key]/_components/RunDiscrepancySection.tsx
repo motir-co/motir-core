@@ -11,6 +11,7 @@ import type {
   WorkItemRunDiscrepancyRecordDto,
 } from '@/lib/dto/runDiscrepancy';
 import { runsHref } from '@/lib/runs/runsAddress';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import { ContentSectionCard } from './ContentSectionCard';
 import { RUN_DISCREPANCY_SECTION_ID } from './decisionAnchor';
 
@@ -156,13 +157,15 @@ function recordedLine(t: T, record: RunDiscrepancyRecordView): string {
 
 function Provenance({ record }: { record: RunDiscrepancyRecordView }) {
   const t = useTranslations('issueViews.runDiscrepancy');
+  // The Visitor tree renders this body too (MOTIR-6888): the run's address is the reader's.
+  const routes = useReaderRoutes();
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)">
       <span>{recordedLine(t, record)}</span>
       <span aria-hidden>·</span>
       {record.run && record.runStartedAtLabel !== null ? (
         <a
-          href={runsHref({ run: record.run.id })}
+          href={routes.view(runsHref({ run: record.run.id }))}
           aria-label={t('inRunAria', { time: record.runStartedAtLabel })}
           className="font-medium text-(--el-link) underline underline-offset-2 hover:text-(--el-link-pressed)"
         >
