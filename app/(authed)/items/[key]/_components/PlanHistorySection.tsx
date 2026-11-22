@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import {
   Bot,
   CheckCircle2,
@@ -25,6 +25,7 @@ import type {
 import { ContentSectionCard } from './ContentSectionCard';
 import { PLAN_HISTORY_FIRST_PAGE, PLAN_HISTORY_MORE_PAGE } from './planHistoryPaging';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The PLAN HISTORY section on the work-item detail page (Story MOTIR-5542 ·
 // MOTIR-5547), per design/work-items/plan-history.mock.html + design-notes
@@ -187,7 +188,7 @@ function PlanHistoryRow({ entry }: { entry: WorkItemPlanHistoryEntryDto }) {
   const t = useTranslations('issueViews');
   const tPlan = useTranslations('aiPlanning');
   const tReview = useTranslations('planReview');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const Icon = STATUS_ICON[entry.planStatus];
   const title = entry.planTitle?.trim() || tReview('untitledPlan');
 
@@ -196,7 +197,7 @@ function PlanHistoryRow({ entry }: { entry: WorkItemPlanHistoryEntryDto }) {
   // absence is a whole sentence, never a placeholder.
   let decided: string | null = null;
   if (entry.decidedAt && (entry.planStatus === 'approved' || entry.planStatus === 'declined')) {
-    const when = format.relativeTime(new Date(entry.decidedAt));
+    const when = relativeTime(new Date(entry.decidedAt));
     if (entry.planStatus === 'approved') {
       decided = entry.decidedByName
         ? tPlan('approvedByName', { when, name: entry.decidedByName })
@@ -246,9 +247,7 @@ function PlanHistoryRow({ entry }: { entry: WorkItemPlanHistoryEntryDto }) {
         <span className="truncate text-sm font-semibold text-(--el-text)">{title}</span>
         <span className="text-[13px] text-(--el-text-secondary)">{relationSentence(entry, t)}</span>
         <span className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-(--el-text-secondary)">
-          <span>
-            {tPlan('createdAt', { when: format.relativeTime(new Date(entry.createdAt)) })}
-          </span>
+          <span>{tPlan('createdAt', { when: relativeTime(new Date(entry.createdAt)) })}</span>
           {decided ? <span>{decided}</span> : null}
           {author ? (
             <span className="inline-flex min-w-0 items-center gap-1.5">

@@ -3,7 +3,7 @@
 import { useId, useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { CircleAlert, Cloud, Info, Server } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -14,6 +14,7 @@ import { Pill } from '@/components/ui/Pill';
 import { Switch } from '@/components/ui/Switch';
 import type { FleetKindSwitchStateDTO } from '@/lib/dto/fleetKindSwitch';
 import { setAgentHostingAction } from '../actions';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 /**
  * The AGENT HOSTING section — where NEW agent instances are created, Fly or the
@@ -40,7 +41,7 @@ export interface AgentHostingSettingProps {
 
 export function AgentHostingSetting({ state }: AgentHostingSettingProps) {
   const t = useTranslations('platformAdmin.fleetSettings.agentHosting');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const titleId = useId();
   const reasonFieldId = useId();
   const [confirming, setConfirming] = useState(false);
@@ -154,7 +155,7 @@ export function AgentHostingSetting({ state }: AgentHostingSettingProps) {
                 <>
                   {t('meta.changedBy', {
                     email: state.updatedBy.email,
-                    when: state.updatedAt ? format.relativeTime(new Date(state.updatedAt)) : '',
+                    when: state.updatedAt ? relativeTime(new Date(state.updatedAt)) : '',
                     reason: state.lastReason ?? '',
                   })}{' '}
                   <Link

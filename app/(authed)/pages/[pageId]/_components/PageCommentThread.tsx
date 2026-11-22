@@ -10,6 +10,7 @@ import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { PageCommentThreadDto } from '@/lib/pages';
 import { CommentComposer } from '@/app/(authed)/items/[key]/_components/CommentComposer';
 import { PageCommentItem } from './PageCommentItem';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // ONE THREAD of a page's discussion (Story MOTIR-10866 · MOTIR-10874), the
 // design's *Thread* (`design/pages/design-notes.md` § Discussion): the resolved
@@ -250,8 +251,9 @@ export function PageCommentThread({
 function ResolvedLine({ thread }: { thread: PageCommentThreadDto }) {
   const t = useTranslations('pages.discussion');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const at = new Date(thread.resolvedAt!);
-  const time = format.relativeTime(at);
+  const time = relativeTime(at);
   return (
     <p className="flex items-center gap-1.5 text-[12.5px] text-(--el-text-secondary)">
       <CircleCheck className="h-3.5 w-3.5 shrink-0 text-(--el-success)" aria-hidden />

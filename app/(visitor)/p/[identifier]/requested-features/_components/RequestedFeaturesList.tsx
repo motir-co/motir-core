@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { AlertCircle, Bug, ChevronUp, Inbox, Lightbulb, Loader2, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -13,6 +13,7 @@ import type {
   VisitorPendingRequestDto,
   VisitorPendingRequestPageDto,
 } from '@/lib/dto/publicRequests';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The Visitor's Requested features list (MOTIR-6769; design MOTIR-6767 panels
 // 1–3, 5). A CLIENT island seeded from the server's page one: "Load more" appends
@@ -190,7 +191,7 @@ function RequestRow({
   onToggle: () => void;
 }) {
   const t = useTranslations('visitor.requestedFeatures');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const isBug = request.kind === 'bug';
   return (
     <li
@@ -222,7 +223,7 @@ function RequestRow({
             <span>{request.submitterName}</span>
           </span>
           <span aria-hidden>·</span>
-          <span>{format.relativeTime(new Date(request.createdAt))}</span>
+          <span>{relativeTime(new Date(request.createdAt))}</span>
         </span>
         {vote.error ? (
           <span

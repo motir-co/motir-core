@@ -16,6 +16,7 @@ import {
   resumeRefusalKeyOf,
   stopPhraseKeyOf,
 } from '@/app/(authed)/workbench/_components/planningSessionWords';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // A SESSION THAT WAITS, IN THE OVERLAY (Story MOTIR-7905 · MOTIR-7918; design
 // `design/ai-chat/design-notes.md` § _The overlay waits with you_, mock
@@ -64,6 +65,7 @@ export function FailedWaitingNotice({
   const tw = useTranslations('planningWorkspace.waiting');
   const tl = useTranslations('planningWorkspace.providerLimit');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const stop = stopPhraseKeyOf(failure);
   const providerLimit = providerLimitView(failure, null) === 'stopped' && !resuming;
   const refusal = resumeError === null ? null : resumeRefusalKeyOf(resumeError);
@@ -100,7 +102,7 @@ export function FailedWaitingNotice({
             timeStyle: 'short',
           })}
         >
-          {t('failedAt', { when: format.relativeTime(new Date(failure.failedAt)) })}
+          {t('failedAt', { when: relativeTime(new Date(failure.failedAt)) })}
         </span>
       </p>
       {/* The halted walk's own account of what it left unplanned (MOTIR-10209): every line —
@@ -171,8 +173,8 @@ export function WaitingPlanFailureLine({
 }) {
   const tw = useTranslations('planningWorkspace.waiting');
   const tl = useTranslations('planningWorkspace.providerLimit');
-  const format = useFormatter();
-  const when = format.relativeTime(new Date(failure.failedAt));
+  const relativeTime = useRelativeTime();
+  const when = relativeTime(new Date(failure.failedAt));
   const providerLimit = providerLimitView(failure, null) === 'stopped';
   const key = planAgain
     ? again

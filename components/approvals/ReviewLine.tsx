@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { CircleDashed, SkipForward, Undo2, User } from 'lucide-react';
 import { ReviewCommand } from '@/components/approvals/ReviewCommand';
 import { ReviewedGlyph } from '@/components/approvals/ReviewedBadge';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils/cn';
 import { findingsHrefOf } from '@/lib/agentReview/verdictActivity';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { ReviewLineDTO, ReviewRecordRefDTO } from '@/lib/dto/reviewState';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // THE REVIEW LINE (Story MOTIR-10327 · MOTIR-10342; `design/github/design-notes.md` § 32.4,
 // `approvals-row--review-path.mock.html` A1, `approve-and-merge--review-path.mock.html`
@@ -51,7 +52,7 @@ export function ReviewLine({
 }) {
   const t = useTranslations('approvalGate.reviewPath.line');
   const tGate = useTranslations('approvalGate');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const routes = useReaderRoutes();
   const itemHref = routes.item(identifier);
   const b = (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>;
@@ -80,7 +81,7 @@ export function ReviewLine({
         : reviewer.kind === 'hosted'
           ? t('whoHosted')
           : t('whoOwn', { name: nameOf(reviewer.person), harness: reviewer.harness });
-      const when = line.at ? format.relativeTime(new Date(line.at)) : '';
+      const when = line.at ? relativeTime(new Date(line.at)) : '';
       const findings = findingsHrefOf(itemHref, recordRef);
       glyph = <ReviewedGlyph className="text-(--el-icon-muted)" />;
       body = (

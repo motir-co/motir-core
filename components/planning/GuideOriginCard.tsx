@@ -1,7 +1,8 @@
 'use client';
 
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import type { PlanningSeedGuideDTO } from '@/lib/dto/planningSeed';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 /**
  * THE *FROM A GUIDE* CARD (design MOTIR-8686 sheet 9; Story MOTIR-8684 · MOTIR-8693) —
@@ -15,10 +16,10 @@ import type { PlanningSeedGuideDTO } from '@/lib/dto/planningSeed';
  */
 export function GuideOriginCard({ guide }: { guide: PlanningSeedGuideDTO }) {
   const t = useTranslations('planningWorkspace.guideSeed');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   // A first open shows the card at the moment of the send, before the offer's
   // confirmation is read back: it reads as just now.
-  const when = guide.confirmedAt ? format.relativeTime(new Date(guide.confirmedAt)) : t('justNow');
+  const when = guide.confirmedAt ? relativeTime(new Date(guide.confirmedAt)) : t('justNow');
   return (
     <div
       data-testid="guide-origin-card"

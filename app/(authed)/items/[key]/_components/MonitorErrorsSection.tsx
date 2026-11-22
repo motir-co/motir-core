@@ -22,6 +22,7 @@ import { Popover } from '@/components/ui/Popover';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { MonitorLinkRefusal } from '../actions';
 import { MonitorErrorEvidence } from './MonitorErrorEvidence';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The work-item page's ERRORS section — its rows (Story MOTIR-4932 · Subtask
 // MOTIR-5732), drawn by `design/monitoring/work-item-errors.mock.html` and
@@ -93,10 +94,11 @@ function useWhen(): (at: string) => {
   t: (chunks: ReactNode) => ReactNode;
 } {
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   return (at: string) => {
     const date = new Date(at);
     return {
-      when: format.relativeTime(date),
+      when: relativeTime(date),
       t: (chunks: ReactNode) => (
         <span
           className="underline decoration-dotted"
@@ -187,6 +189,7 @@ function AssigneeNote({ link }: { link: MonitorIssueLinkDto }) {
 export function ErrorRow({ link, action }: { link: MonitorIssueLinkDto; action?: ReactNode }) {
   const t = useTranslations('monitorErrors');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const gone = link.resolve.state === 'gone';
   const pill = levelPillProps(link.level);
   const lastSeen = new Date(link.lastSeenAt);
@@ -250,7 +253,7 @@ export function ErrorRow({ link, action }: { link: MonitorIssueLinkDto; action?:
             className="min-w-[112px] font-sans text-xs whitespace-nowrap text-(--el-text-secondary)"
             title={format.dateTime(lastSeen, { dateStyle: 'medium', timeStyle: 'short' })}
           >
-            {t('lastSeen', { when: format.relativeTime(lastSeen) })}
+            {t('lastSeen', { when: relativeTime(lastSeen) })}
           </span>
         </span>
         {gone || !link.permalink ? (
