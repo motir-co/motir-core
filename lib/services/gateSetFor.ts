@@ -1,6 +1,7 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { deliveryMemberVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
+  PRIMARY_GATE_KINDS,
   primaryApprovalStandsForMerge,
   resolveGateSet,
   type AwaitableGateKind,
@@ -299,6 +300,7 @@ export async function gateSetFor(
     members,
     prMergeMode: mode?.prMergeMode ?? null,
     reviewAgentEnabled: mode?.reviewAgentEnabled ?? false,
+    designApprovedBySystem: mode ? !mode.designApprovalGate : false,
     latestAgentReviewGate,
     agentSendBackVersion: latestAgentSendBack?.subjectVersion ?? null,
     dismissedSendBackVersion: latestDismissal?.subjectVersion ?? null,
@@ -377,6 +379,13 @@ export async function reconcileGatesFor(
   } else if (set.ridesAncestorPullRequestsOnly) {
     await withdrawMergeQuestionOfAncestorSet(item, tx);
   }
+  // ⚠️ THE REVIEW'S HOLD ON THE PRIMARIES (Bug MOTIR-11992; `approval-gates.md` §12.20). A
+  // second cause every caller can see, for the same reason the status axis is one: it is the
+  // gate set's OWN answer, read under the lock the caller holds, not a check-set event one
+  // withdrawer owns. So it is withdrawn here, where the set is in hand.
+  if (set.primariesHeldByReview) {
+    await withdrawPrimariesHeldByReview(item, tx, set);
+  }
   if (set.awaited.length === 0) return [];
 
   const awaiting = await approvalGateRepository.findAwaitingByWorkItem(item.id, tx);
@@ -451,6 +460,51 @@ export async function withdrawMergeQuestionOffReview(
     console.warn('[gateSetFor] merge question withdrawn: the card is not in review', {
       workItemId: item.id,
       status: item.status,
+      withdrawn,
+    });
+  }
+  return withdrawn;
+}
+
+/**
+ * WITHDRAW EVERY AWAITING PRIMARY QUESTION WHILE THE REVIEW HAS NOT PASSED (Bug MOTIR-11992;
+ * `approval-gates.md` §12.20) — the card's awaiting `design_result`, `decision_approval` and
+ * `acceptance_result`, superseded as `review_not_passed`: with the review gate on, no
+ * approval is asked of code before its review has passed. It retires a primary raised
+ * before the review was owed (a design published while the set was unnamed), and every one
+ * raised before this rule, on the next reconcile — the 30-minute sweep's included. The pass
+ * (`agentReviewHandler.approve`, a Dismiss) reconciles, and the set asks them again.
+ *
+ * Returns how many rows it superseded. A DECIDED gate is never touched: the repository's
+ * `state: 'awaiting'` equality is the whole guard.
+ *
+ * ⚠️ IT TRUSTS THE SET'S HOLD, and asks nothing of its own: the caller passes only when
+ * {@link GateSet.primariesHeldByReview} is true, so the rule stays in `resolveGateSet` alone.
+ *
+ * ⚠️ AND IT WITHDRAWS ONLY WHAT THE SET HOLDS — never a kind the same set still AWAITS. A
+ * design the system approves is not held (`designApprovedBySystem`), so its awaiting gate is
+ * still owed; withdrawing it would make the raise below create a fresh copy on every
+ * reconcile, and a person pressing the one they opened would meet a superseded gate.
+ */
+export async function withdrawPrimariesHeldByReview(
+  item: WorkItem,
+  tx: Prisma.TransactionClient,
+  set: Pick<GateSet, 'awaited'>,
+): Promise<number> {
+  let withdrawn = 0;
+  const stillOwed = new Set(set.awaited.map((gate) => gate.kind));
+  for (const kind of PRIMARY_GATE_KINDS) {
+    if (stillOwed.has(kind)) continue;
+    withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(
+      item.id,
+      kind,
+      'review_not_passed',
+      tx,
+    );
+  }
+  if (withdrawn > 0) {
+    console.warn('[gateSetFor] primary question withdrawn: the review has not passed', {
+      workItemId: item.id,
       withdrawn,
     });
   }

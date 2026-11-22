@@ -59,6 +59,7 @@ describe('resolveGateSet — the decision question', () => {
         { kind: 'pull_request_approval', subjectId: CARD, subjectVersion: 'acme/web#1@head-1' },
       ],
       primary: 'decision_approval',
+      primariesHeldByReview: false,
     });
   });
 
@@ -100,6 +101,7 @@ describe('resolveGateSet — the decision question', () => {
         { kind: 'pull_request_approval', subjectId: CARD, subjectVersion: 'acme/web#1@head-1' },
       ],
       primary: 'pull_request_approval',
+      primariesHeldByReview: false,
     });
   });
 
@@ -107,7 +109,7 @@ describe('resolveGateSet — the decision question', () => {
     const carried = resolveGateSet(
       input({ decision: { identity: ONE, latestGate: gate('approved') } }),
     );
-    expect(carried).toEqual({ awaited: [], primary: null });
+    expect(carried).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
 
     // …only while the card has had no merge gate at all (MOTIR-5666's clause).
     const later = resolveGateSet(
@@ -156,7 +158,11 @@ describe('resolveGateSet — the decision question', () => {
   });
 
   it('a terminal card asks nothing, decision included', () => {
-    expect(resolveGateSet(input({ cardIsTerminal: true }))).toEqual({ awaited: [], primary: null });
+    expect(resolveGateSet(input({ cardIsTerminal: true }))).toEqual({
+      awaited: [],
+      primary: null,
+      primariesHeldByReview: false,
+    });
   });
 });
 

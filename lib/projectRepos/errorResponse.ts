@@ -18,6 +18,9 @@ import {
   ProjectRepoTakeoverStateError,
   RealizedRepoAlreadyClaimedError,
   RepoTransferRefusedError,
+  ProjectRepoRemovalBlockedError,
+  HostedRepositoryDeletionError,
+  HostedRepositoryCheckFailedError,
   RepoEstablishBusyError,
   RepoExistsWithOtherSpecError,
 } from '@/lib/projectRepos/errors';
@@ -83,7 +86,8 @@ export function mapProjectRepoError(err: unknown): NextResponse | null {
     err instanceof GithubIdentityRequiredError ||
     // MOTIR-11038 — the creation door's two dispositions, for its v1 transport.
     err instanceof RepoExistsWithOtherSpecError ||
-    err instanceof RepoEstablishBusyError
+    err instanceof RepoEstablishBusyError ||
+    err instanceof ProjectRepoRemovalBlockedError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
@@ -118,6 +122,12 @@ export function mapProjectRepoError(err: unknown): NextResponse | null {
   }
   if (err instanceof AiPlanUnknownError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });
+  }
+  if (
+    err instanceof HostedRepositoryDeletionError ||
+    err instanceof HostedRepositoryCheckFailedError
+  ) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 502 });
   }
   if (err instanceof RepoTransferRefusedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 502 });

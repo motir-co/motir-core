@@ -9,6 +9,7 @@ import {
   FolderGit2,
   MoveUpRight,
   RefreshCw,
+  Trash2,
   TriangleAlert,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -57,7 +58,7 @@ const STALE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 
 /** The row's rendering mode — derived once, so every branch below reads one
  *  value instead of re-deriving the same `takeover?.state` ladder. */
-type RowMode = 'hosted' | 'yours' | 'pending' | 'reinstall' | 'failed' | 'other';
+type RowMode = 'hosted' | 'yours' | 'pending' | 'reinstall' | 'failed' | 'other' | 'unfinished';
 
 export interface TakeoverRowProps {
   row: ProjectRepoDto;
@@ -89,6 +90,11 @@ export interface TakeoverRowProps {
   /** A re-point the server refused, shown under the picker until the next pick. */
   seedRefusal?: SeedRefusalState | null;
   onRepoint?: (row: ProjectRepoDto, entry: SeedRegistryEntryDto) => void;
+  /**
+   * Delete or remove the row (MOTIR-11981; design repository-set §19.3) — opens
+   * the room's confirm. Absent, the row draws no such action.
+   */
+  onRemove?: (row: ProjectRepoDto) => void;
 }
 
 export function TakeoverRow({
@@ -103,12 +109,17 @@ export function TakeoverRow({
   seed,
   seedRefusal = null,
   onRepoint,
+  onRemove,
 }: TakeoverRowProps) {
   const t = useTranslations('repositoryTakeover');
+  const tr = useTranslations('repositoryTakeover.hostedRemove');
   const ts = useTranslations('repositorySet');
   const format = useFormatter();
 
   const mode = rowMode(row);
+  // A row the person already owns: an unfinished removal there never deleted the
+  // repository, only part of what Motir runs from it (§19.6, review of #4382).
+  const yoursRow = row.takeover?.state === 'done' || row.state === 'connected';
   const target = row.takeover?.targetOwner ?? githubLogin ?? '';
   const repoRef = row.realizedRepo?.repoRef ?? row.name;
   const shortName = row.realizedRepo?.name ?? row.name;
@@ -161,6 +172,11 @@ export function TakeoverRow({
           {mode === 'failed' ? (
             <StateWord icon={<TriangleAlert className={ICON} />} tone="danger">
               {t('stateFailed')}
+            </StateWord>
+          ) : null}
+          {mode === 'unfinished' ? (
+            <StateWord icon={<TriangleAlert className={ICON} />} tone="danger">
+              {yoursRow ? tr('stateUnfinishedYours') : tr('stateUnfinished')}
             </StateWord>
           ) : null}
           {notCreated ? (
@@ -256,6 +272,14 @@ export function TakeoverRow({
           </div>
         ) : null}
 
+        {/* §19.6 — a delete that stopped part way. `role="alert"`: what is gone
+            stays gone, and the reader would not otherwise learn the rest is not. */}
+        {mode === 'unfinished' ? (
+          <p role="alert" className="min-w-0 text-sm text-(--el-danger-surface-text)">
+            {yoursRow ? tr('unfinishedDetailYours') : tr('unfinishedDetail')}
+          </p>
+        ) : null}
+
         {/* ── The ways forward. Every non-settled state keeps one, which is what
             "no state is a dead end" means here. ───────────────────────────── */}
         <div className="flex flex-wrap items-center gap-2 empty:hidden">
@@ -320,6 +344,52 @@ export function TakeoverRow({
               </Button>
             </>
           ) : null}
+
+          {/* §19.6 — Try again is the unfinished row's ONLY action: production and
+              previews may already be gone, so a takeover would hand over a
+              half-dismantled repository. It re-opens the confirm on a fresh check. */}
+          {mode === 'unfinished' && onRemove ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              aria-label={`${tr('retryDelete')} · ${repoRef}`}
+              onClick={() => onRemove(row)}
+              leftIcon={<Trash2 className="size-3.5 shrink-0" aria-hidden />}
+            >
+              {tr('retryDelete')}
+            </Button>
+          ) : null}
+
+          {/* §19.3 — the destructive action sits at the END of the row's own
+              actions, furthest from its main way forward. A row Motir holds is
+              DELETED (the repository goes with it); a row with nothing of Motir's
+              to delete is REMOVED. A hand-off in flight offers neither. */}
+          {onRemove && (mode === 'hosted' || mode === 'failed') ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              aria-label={tr('deleteActionLabel', { repo: repoRef })}
+              onClick={() => onRemove(row)}
+              leftIcon={<Trash2 className="size-3.5 shrink-0" aria-hidden />}
+              className="ml-auto shrink-0 text-(--el-danger-on-surface) hover:bg-(--el-danger-surface)"
+            >
+              {tr('deleteAction')}
+            </Button>
+          ) : null}
+          {onRemove && (mode === 'other' || mode === 'yours') ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              aria-label={tr('removeActionLabel', { repo: repoRef })}
+              onClick={() => onRemove(row)}
+              className="ml-auto shrink-0 text-(--el-danger-on-surface) hover:bg-(--el-danger-surface)"
+            >
+              {tr('removeAction')}
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -337,6 +407,8 @@ const ROW_TINT: Record<RowMode, string> = {
   pending: 'bg-(--el-warning-surface) border-(--el-border-soft)',
   reinstall: 'bg-(--el-warning-surface) border-(--el-border-soft)',
   failed: 'bg-(--el-danger-surface) border-(--el-border-soft)',
+  // §19.6 — the shipped `failed` register: a delete that did not finish is red.
+  unfinished: 'bg-(--el-danger-surface) border-(--el-border-soft)',
   other: 'bg-(--el-card) border-(--el-border)',
 };
 
@@ -350,6 +422,9 @@ const ROW_TINT: Record<RowMode, string> = {
  * ever sees it is looking at a transfer that has been asked for.
  */
 function rowMode(row: ProjectRepoDto): RowMode {
+  // A delete that started and left the row behind outranks every other state:
+  // whatever the row was, part of it is already gone (§19.6).
+  if (row.hostedDeletionStartedAt) return 'unfinished';
   const takeover = row.takeover?.state ?? null;
   if (takeover === 'requested' || takeover === 'transfer_pending') return 'pending';
   if (takeover === 'awaiting_reinstall') return 'reinstall';

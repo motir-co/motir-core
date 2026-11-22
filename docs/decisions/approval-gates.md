@@ -6289,9 +6289,11 @@ this version has passed or been overridden.
   `changes_requested`, or overridden — is never raised again. A redelivered or
   repeated green verdict at the same version starts nothing: it finds the
   decided row and raises no gate, so no second review run starts (12.6).
-- **A PRIMARY question is not delayed** — `design_result`, `decision_approval`
+- ~~**A PRIMARY question is not delayed** — `design_result`, `decision_approval`
   and `acceptance_result` are still raised on their own triggers (§1, §8's
-  FIFTH AMENDMENT). What the review holds is the MERGE, and that includes the
+  FIFTH AMENDMENT).~~ **Reversed 2026-11-22 by the requester (Bug MOTIR-11992,
+  §12.20):** with the review gate on, a primary question waits until the review at
+  the current version has passed. What the review holds is the MERGE, and that includes the
   merge a primary's press CARRIES (§8's FIFTH AMENDMENT clause 5, the carry in
   `resolveGateSet`). **A primary approved while the review is awaiting records
   its decision and carries nothing yet**; the merge it authorised is settled
@@ -6764,6 +6766,37 @@ out of every count as _"not an approval"_:
   Development frame already writes for _Continue without the review_ (§12.3) — rather than
   the item page. The overlay holds the review's state and _Continue without the review_; a
   modifier click still opens the item.
+
+#### 12.20 No approval is asked before the review has passed — AMENDED 2026-11-22 (Bug MOTIR-11992), DECIDED BY THE REQUESTER
+
+This reverses §12.2's _"a primary question is not delayed"_. With it, the review held the merge
+question only: a story's acceptance video, a design result or a decision document was asked at
+the same moment as the review, so To approve listed an approval and a review to run about the
+same commits, and a person could approve work no review had looked at (seen on MOTIR-11319,
+2026-11-22, where one reconcile raised `agent_review` and `acceptance_result` together).
+
+- **The rule.** With the review gate on, no approval is asked of code before its review has
+  passed. `resolveGateSet` computes `agentReviewStanding` once, ahead of every question, and asks
+  no PRIMARY (`design_result`, `decision_approval`, `acceptance_result`) while it is `owed` or
+  `refused`. `owed` includes a set that is not green yet: the review is asked at green, so the
+  primaries wait for green and then for the review.
+- **What releases it** is what `agentReviewStanding` already reads as `passed`: the agent's pass,
+  a person's _Continue without the review_ (§12.3), or a Dismiss of a send-back at that version
+  (§12.15). §12.4's pass reconciles, so the primaries and the merge question are asked together
+  at the reviewed version, the primary leading as before.
+- **What holds nothing.** `not_required` is unchanged: the gate off, an `auto` project (§12.2a),
+  a card with no named set (a design or decision with no pull request yet, a subtask-run
+  story's video), and a set whose merge question was already asked at this version. A story
+  run whose every member has merged holds nothing either, since there is no review left to ask.
+  A gate-off send-back (§12.14) holds what it held before and nothing more.
+- **A design the system approves is not held.** With design approval switched off
+  (`Project.designApprovalGate`), the publish raises the design gate and approves it in its own
+  transaction, and no person is asked; a gate raised later by the reconcile would be routed to
+  one. The merge that approval carries still waits on the review (§12.2's carry).
+- **An awaiting primary is withdrawn.** `reconcileGatesFor` supersedes an awaiting primary on a
+  card whose set holds them, under a new cause, `review_not_passed`. It retires a primary raised
+  before the review was owed and every one raised before this amendment, on the next reconcile
+  (the 30-minute sweep included). A decided primary is history and stays.
 
 #### 12.9 What this section does NOT decide
 

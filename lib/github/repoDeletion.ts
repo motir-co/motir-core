@@ -66,9 +66,7 @@ export const repoDeletionClient = {
     } catch (err) {
       throw new RepoDeletionError(null, err instanceof Error ? err.message : 'unknown');
     }
-    const url =
-      `${GITHUB_API}/repos/${encodeURIComponent(input.owner)}/` +
-      `${encodeURIComponent(input.repo)}`;
+    const url = repoUrl(input);
 
     let res: Response;
     try {
@@ -87,7 +85,45 @@ export const repoDeletionClient = {
     if (res.status === 404) return 'absent';
     throw new RepoDeletionError(res.status, await errorDetail(res));
   },
+
+  /**
+   * Whether the repository still exists — the read the hosted delete's confirm
+   * makes before it says what it would delete (MOTIR-11981; design
+   * repository-set §19.4). The same installation token and the same 404 rule as
+   * the delete: `'present'` on `200`, `'absent'` on `404`, and
+   * {@link RepoDeletionError} otherwise, so a confirm never guesses.
+   */
+  async probeRepo(input: DeleteRepoInput): Promise<'present' | 'absent'> {
+    let token: string;
+    try {
+      ({ token } = await mintInstallationToken(input.installationId, 'provisioning'));
+    } catch (err) {
+      throw new RepoDeletionError(null, err instanceof Error ? err.message : 'unknown');
+    }
+    let res: Response;
+    try {
+      res = await githubFetch('repoDeletion', repoUrl(input), {
+        method: 'GET',
+        headers: {
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+          authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (err) {
+      throw new RepoDeletionError(null, err instanceof Error ? err.message : 'unknown');
+    }
+    if (res.status === 200) return 'present';
+    if (res.status === 404) return 'absent';
+    throw new RepoDeletionError(res.status, await errorDetail(res));
+  },
 };
+
+function repoUrl(input: DeleteRepoInput): string {
+  return (
+    `${GITHUB_API}/repos/${encodeURIComponent(input.owner)}/` + `${encodeURIComponent(input.repo)}`
+  );
+}
 
 /** GitHub's `message`, trimmed to a short developer detail — never the payload. */
 export async function errorDetail(res: Response): Promise<string> {

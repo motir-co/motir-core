@@ -227,6 +227,7 @@ function repositorySet(): { projectKey: string; view: ProjectRepoEstablishViewDt
             takeover: null,
             access: { state: 'not_invited', login: null, invitationUrl: null },
             createdAt: '2026-07-31T00:00:00.000Z',
+            hostedDeletionStartedAt: null,
             updatedAt: '2026-07-31T00:00:00.000Z',
           },
         ],

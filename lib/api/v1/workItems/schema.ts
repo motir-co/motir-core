@@ -1739,6 +1739,7 @@ const APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES = [
   'replanned',
   'answered',
   'session_ended',
+  'review_not_passed',
 ] as const satisfies readonly ApprovalGateSupersedeCauseDTO[];
 const _gateCausesTotal: AssertTotal<
   ApprovalGateSupersedeCauseDTO,

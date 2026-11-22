@@ -70,6 +70,7 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     // which names a row resolves to.
     collaborators: [],
     createdAt: now,
+    hostedDeletionStartedAt: null,
     updatedAt: now,
     githubRepo: {
       // MOTIR-4644's drift columns — part of the row's shape since that card,

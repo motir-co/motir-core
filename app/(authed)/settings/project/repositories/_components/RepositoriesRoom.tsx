@@ -12,6 +12,7 @@ import { splitRoomSections } from '@/lib/projectRepos/roomSections';
 import { TakeoverRow } from './TakeoverRow';
 import type { SeedRefusalState } from './RowSeed';
 import { TakeoverModal } from './TakeoverModal';
+import { HostedRepositoryRemoveDialog } from './HostedRepositoryRemoveDialog';
 import { OrganizationRepositories } from './OrganizationRepositories';
 import { AddRepositoryButton, AddRepositoryPicker } from './AddRepositoryPicker';
 import type { OrgRepoOptionDto, OrgRepoProviderDto } from '@/lib/dto/organizationRepos';
@@ -153,6 +154,11 @@ export function RepositoriesRoom({
   const rowsRef = useRef(view.rows);
   const [failed, setFailed] = useState(false);
   const [modalRow, setModalRow] = useState<ProjectRepoDto | null>(null);
+  // The hosted-remove confirm's row (MOTIR-11981; design §19), and the repository
+  // whose delete stopped part way — the banner names it with the delete's own
+  // sentence instead of the generic one.
+  const [removeRow, setRemoveRow] = useState<ProjectRepoDto | null>(null);
+  const [deleteFailedRepo, setDeleteFailedRepo] = useState<string | null>(null);
   // A refused re-point per row (MOTIR-712, design MOTIR-705 §1.4) — shown under
   // that row's picker until its next pick, and never on a sibling.
   const [seedRefusals, setSeedRefusals] = useState<Record<string, SeedRefusalState>>({});
@@ -330,6 +336,53 @@ export function RepositoriesRoom({
   const onCheckAgain = useCallback((row: ProjectRepoDto) => void call(row, {}), [call]);
 
   /**
+   * DELETE / REMOVE A MOTIR-HOSTED ROW (MOTIR-11981; design §19.6 + §19.12) — the
+   * same DELETE the organisation links use; the server decides what it deletes.
+   *
+   * ⚠️ BOTH SURFACES, as `onRemoveFromProject`. Success removes the row from THIS
+   * ISLAND at once (surface 3) and `router.refresh()` re-reads the header summary
+   * (surface 2). A failure closes the confirm, shows the delete's own sentence in
+   * the room's banner, and RE-READS the set — the row is now marked unfinished on
+   * the server, and the island would otherwise keep drawing it as it was.
+   */
+  const onConfirmRemove = useCallback(
+    async (row: ProjectRepoDto) => {
+      setBusyRowId(row.id);
+      busyRef.current = true;
+      setFailed(false);
+      setDeleteFailedRepo(null);
+      let ok = false;
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectKey)}/repositories/${encodeURIComponent(row.id)}`,
+          { method: 'DELETE' },
+        );
+        ok = res.ok;
+      } catch {
+        ok = false;
+      } finally {
+        busyRef.current = false;
+        setBusyRowId(null);
+      }
+      setRemoveRow(null);
+      if (!ok) {
+        setDeleteFailedRepo(row.realizedRepo?.repoRef ?? row.name);
+        await refetch();
+        return;
+      }
+      putRows(rowsRef.current.filter((r) => r.id !== row.id));
+      router.refresh();
+    },
+    [projectKey, putRows, refetch, router],
+  );
+
+  /** Take it over instead — from inside the delete confirm (§19.2). */
+  const onTakeOverInstead = useCallback((row: ProjectRepoDto) => {
+    setRemoveRow(null);
+    setModalRow(row);
+  }, []);
+
+  /**
    * RE-POINT a not-yet-created row's starter (MOTIR-712; design MOTIR-705 §1.3),
    * sent at once as the row's other edits are. The row the PATCH returns is
    * applied locally (surface 1), and `router.refresh()` re-reads the seeds — a
@@ -503,13 +556,17 @@ export function RepositoriesRoom({
 
   return (
     <div className="flex flex-col gap-6">
-      {failed ? (
+      {failed || deleteFailedRepo ? (
         <p
           role="alert"
           className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-danger-surface) p-(--spacing-card-padding) text-sm text-(--el-danger-surface-text)"
         >
           <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span className="min-w-0">{t('actionError')}</span>
+          <span className="min-w-0">
+            {deleteFailedRepo
+              ? t('hostedRemove.deleteError', { repo: deleteFailedRepo })
+              : t('actionError')}
+          </span>
         </p>
       ) : null}
 
@@ -561,6 +618,7 @@ export function RepositoriesRoom({
                 seed={view.seeds[row.id]}
                 seedRefusal={seedRefusals[row.id] ?? null}
                 onRepoint={onRepoint}
+                onRemove={setRemoveRow}
               />
             ))}
           </div>
@@ -614,6 +672,17 @@ export function RepositoriesRoom({
         onOpenChange={setPickerOpen}
         onPick={onPick}
       />
+
+      {removeRow ? (
+        <HostedRepositoryRemoveDialog
+          row={removeRow}
+          projectKey={projectKey}
+          pending={busyRowId === removeRow.id}
+          onClose={() => setRemoveRow(null)}
+          onConfirm={(row) => void onConfirmRemove(row)}
+          onTakeOver={onTakeOverInstead}
+        />
+      ) : null}
 
       {modalRow ? (
         <TakeoverModal
