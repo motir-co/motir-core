@@ -7,14 +7,8 @@ import {
   RunDiscrepancyInvalidError,
   UnknownDispatchRunCardError,
 } from '@/lib/dispatchRuns/errors';
-import {
-  composeDiscrepancyComment,
-  type RunDecisionPoint,
-  type RunDiscrepancyPoint,
-} from '@/lib/dispatchRuns/discrepancyComment';
+import type { RunDecisionPoint, RunDiscrepancyPoint } from '@/lib/dispatchRuns/discrepancyComment';
 import { toEntryInputs } from '@/lib/dispatchRuns/discrepancyRecord';
-import { sendEvent } from '@/lib/jobs/sendEvent';
-import { commentRepository } from '@/lib/repositories/commentRepository';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
@@ -34,23 +28,31 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //
 // A runner that finds its card wrong only about the HOW builds through it and calls
 // `record_run_discrepancy` ONCE with every point (what the plan asked · what was built · why).
-// This service writes ONE comment on the card listing the points, and — when the card has an
-// OPEN LEG on a running dispatch run — ONE `discrepancy_recorded` finding on that leg whose
-// `data` is a POINTER (`{ commentId, pointCount, dispatchRunCardId }`), never the text.
+// This service writes ONE `run_discrepancy_record` on the card holding the points, and — when
+// the card has an OPEN LEG on a running dispatch run — ONE `discrepancy_recorded` finding on
+// that leg whose `data` is a POINTER (`{ recordId, pointCount, dispatchRunCardId }`), never
+// the text.
+//
+// ⚠️ NO COMMENT (MOTIR-11996). Until then the call also wrote a card comment listing the
+// points, the record's VIEW. The record is now the only write, and the work item page's Run
+// discrepancy section is how a person reads it (`design/runs` § _Run discrepancy — the record
+// gets its own section_). Comments earlier runs wrote stay where they are, as ordinary
+// comments; nothing here reads, edits or deletes them.
 //
 // ⚠️ ONE TRANSACTION, AND THE FINDING IS NOT BEST-EFFORT. `recordFinding` swallows every
-// failure because it observes a write that already committed. Here the comment IS the act and
-// the answer must say truthfully whether the record exists, so a failed finding write fails the
-// whole call and NOTHING is written (the runner then states the record is missing).
+// failure because it observes a write that already committed. Here the record IS the act and
+// the answer must say truthfully whether it exists, so a failed finding write fails the whole
+// call and NOTHING is written (the runner then states the record is missing).
 //
 // ⚠️ ONE RECORD PER LEG. The run row is locked `FOR UPDATE` first — the same lock the event
 // append takes, so it also serialises the `seq` allocation — and the dedupe
 // (`findFindingOnRun`, keyed on `data.dispatchRunCardId`) is read UNDER it, so two concurrent
 // calls cannot both pass. A second call is refused with `DISCREPANCY_ALREADY_RECORDED` and
-// writes no second comment.
+// writes no second record.
 //
-// ⚠️ NO OPEN LEG IS NOT AN ERROR. The comment is still written and `recorded` is false: a card
-// with no run record, or no approving plan, still gets its discrepancy.
+// ⚠️ NO OPEN LEG IS NOT AN ERROR. The record is still written — tied to the card and project,
+// with no run and no leg — and `recorded` is false: a card with no run record, or no approving
+// plan, still gets its discrepancy.
 //
 // `reportedBy` on the event is the RUN's own reporter (`cli` or `agent`), so a reader knows
 // whose account the record is in.
@@ -58,18 +60,15 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // ⚠️ DECISIONS RIDE THE SAME RECORD (MOTIR-10000). A run that DECIDED something the plan left
 // open — by the repository's conventions, then industry best practice — sends it as a
 // `decisions` entry (`planSaid · chose · why`, `alternatives` optional) in this same ONE call,
-// beside any build-through points or alone. One comment, one finding, one record per leg, as
-// before: the comment gives the decisions their own section, and the finding's `pointCount`
+// beside any build-through points or alone. One finding and one record per leg, as before:
+// the record keeps the decisions as entries of their own kind, and the finding's `pointCount`
 // counts every entry (so the run's strip never reads _0 points_ on a decisions-only record)
-// while `decisionCount` says how many of them were decisions. Points-only calls are unchanged
-// byte for byte, so a build-through, and the planning-bug path that reads it, behave as they did.
+// while `decisionCount` says how many of them were decisions.
 //
-// ⚠️ THE RECORD IS DATA, AND THE COMMENT IS ITS VIEW (MOTIR-11361). Every accepted call also
-// writes ONE `run_discrepancy_record` with its points and decisions as entry rows, field by
-// field as validated here, in the SAME transaction as the comment — the no-open-leg arm
-// included (no run, no leg; still tied to the card and project). Editing or deleting the
-// comment changes nothing in it: the record's `comment_id` is `SET NULL` on a delete, and
-// nothing reads the comment back. The record's `dispatch_run_card_id` is UNIQUE, so the
+// ⚠️ THE RECORD IS DATA (MOTIR-11361). Every accepted call writes ONE `run_discrepancy_record`
+// with its points and decisions as entry rows, field by field as validated here — the
+// no-open-leg arm included. Its `comment_id` stays null: only a record backfilled from an
+// earlier run's comment carries one. The record's `dispatch_run_card_id` is UNIQUE, so the
 // one-record-per-leg rule holds in the database as well as under the run lock; the dedupe
 // reads it beside the finding, because a leg on a run that has hit its event cap gets a
 // record and no finding.
@@ -82,7 +81,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // refuses a run token. Given `runId`, the leg is the card's leg on THAT run, read under that
 // run's lock, and a card that is not an open leg of it is refused (`UNKNOWN_DISPATCH_RUN_CARD`)
 // before anything is written: a run's credential reaches only its own cards, so the
-// "no open leg, comment anyway" arm is the agent door's alone.
+// "no open leg, record anyway" arm is the agent door's alone.
 
 /** What the runner sends. */
 export interface RecordDiscrepancyInput {
@@ -96,7 +95,8 @@ export interface RecordDiscrepancyInput {
 
 /** The whole answer — acknowledgement only. */
 export interface RecordDiscrepancyResult {
-  commentId: string;
+  /** The `run_discrepancy_record` written — the card's Run discrepancy section shows it. */
+  recordId: string;
   /** Whether a finding was written on an open leg of a running dispatch run. */
   recorded: boolean;
 }
@@ -199,7 +199,7 @@ export const runDiscrepancyService = {
     await projectAccessService.assertPermission(project.id, ctx, 'work_item:edit');
 
     const bound = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id };
-    const { result, workItemId } = await withWorkspaceContext(bound, async (tx) => {
+    return withWorkspaceContext(bound, async (tx) => {
       const item = await workItemRepository.findByIdentifier(project.id, key, tx);
       if (!item) throw new WorkItemNotFoundError(key);
 
@@ -240,25 +240,14 @@ export const runDiscrepancyService = {
         run = await dispatchRunRepository.findById(leg.dispatchRunId, tx);
       }
 
-      const comment = await commentRepository.create(
-        {
-          workspaceId: ctx.workspaceId,
-          workItemId: item.id,
-          authorId: ctx.userId,
-          parentCommentId: null,
-          bodyMd: composeDiscrepancyComment(points, decisions),
-        },
-        tx,
-      );
-
-      await runDiscrepancyRecordRepository.create(
+      const record = await runDiscrepancyRecordRepository.create(
         {
           workspaceId: ctx.workspaceId,
           projectId: project.id,
           workItemId: item.id,
           dispatchRunId: leg?.dispatchRunId ?? null,
           dispatchRunCardId: leg?.id ?? null,
-          commentId: comment.id,
+          commentId: null,
           recordedById: ctx.userId,
           source: 'recorded',
           pointCount: points.length,
@@ -282,9 +271,9 @@ export const runDiscrepancyService = {
                 seq,
                 kind: 'discrepancy_recorded',
                 reportedBy: run.reportedBy,
-                // A POINTER and counts — never the text, which lives in the comment.
+                // A POINTER and counts — never the text, which lives in the record.
                 data: {
-                  commentId: comment.id,
+                  recordId: record.id,
                   pointCount: points.length + decisions.length,
                   // Only when there are any, so a points-only record writes what it always did.
                   ...(decisions.length > 0 ? { decisionCount: decisions.length } : {}),
@@ -297,19 +286,7 @@ export const runDiscrepancyService = {
           recorded = true;
         }
       }
-      return { result: { commentId: comment.id, recorded }, workItemId: item.id };
+      return { recordId: record.id, recorded };
     });
-
-    // Post-commit, like every comment: a rollback must not have notified watchers.
-    await sendEvent('work-item/comment.created', {
-      workspaceId: ctx.workspaceId,
-      workItemId,
-      commentId: result.commentId,
-      authorId: ctx.userId,
-      mentionedUserIds: [],
-      ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
-    });
-
-    return result;
   },
 };

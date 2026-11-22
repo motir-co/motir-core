@@ -233,11 +233,11 @@ describe('a DISCREPANCY the run recorded (MOTIR-8659 · design § A DISCREPANCY)
   const discrepancy = (seq: number, cardId: string, data: unknown) =>
     ev({ kind: 'discrepancy_recorded', seq, cardId, data });
 
-  it('renders the label, the leg’s key and the plural count, with a door to the work item', () => {
+  it('renders the label, the leg’s key and the plural count, with a door to its section', () => {
     render(
       <RunFindings
         events={[
-          discrepancy(1, 'leg_1', { commentId: 'c1', pointCount: 3, dispatchRunCardId: 'leg_1' }),
+          discrepancy(1, 'leg_1', { recordId: 'r1', pointCount: 3, dispatchRunCardId: 'leg_1' }),
         ]}
         cards={legs}
       />,
@@ -247,7 +247,8 @@ describe('a DISCREPANCY the run recorded (MOTIR-8659 · design § A DISCREPANCY)
     expect(row.textContent).toContain('MOTIR-100');
     expect(row.textContent).toContain('3 points');
     const door = screen.getByRole('link', { name: 'Open →' });
-    expect(door.getAttribute('href')).toBe('/items/MOTIR-100');
+    // MOTIR-11996: the door lands on the card's Run discrepancy section.
+    expect(door.getAttribute('href')).toBe('/items/MOTIR-100#run-discrepancy');
   });
 
   it('uses the singular for one point', () => {
@@ -316,7 +317,7 @@ describe('a DISCREPANCY the run recorded (MOTIR-8659 · design § A DISCREPANCY)
     render(
       <RunFindings
         events={[
-          discrepancy(1, 'leg_1', { commentId: 'c1', pointCount: 1, planAsked: 'SECRET-ASKED' }),
+          discrepancy(1, 'leg_1', { recordId: 'r1', pointCount: 1, planAsked: 'SECRET-ASKED' }),
         ]}
         cards={legs}
       />,

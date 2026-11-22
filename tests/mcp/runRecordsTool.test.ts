@@ -20,6 +20,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
+import { linkLegacyDiscrepancyComment } from '../helpers/legacyDiscrepancyComment';
 import { truncateAuthTables } from '../helpers/db';
 
 // `search_run_records` / `get_run_record` (MOTIR-10240) over real Postgres,
@@ -270,7 +271,7 @@ describe('get_run_record', () => {
     const a = await card('A');
     const b = await card('B');
     const runId = await openRun([a, b]);
-    const { commentId } = await runDiscrepancyService.recordDiscrepancy(
+    const { recordId } = await runDiscrepancyService.recordDiscrepancy(
       {
         key: a,
         points: [{ planAsked: 'SENT-ASKED', built: 'SENT-BUILT', why: 'SENT-WHY' }],
@@ -280,6 +281,8 @@ describe('get_run_record', () => {
       },
       fx.ctx,
     );
+    // A record from before MOTIR-11996, which the door wrote a comment beside.
+    const commentId = await linkLegacyDiscrepancyComment(recordId);
     const res = await call(fx.ctx, GET_RUN_RECORD_TOOL_NAME, {
       projectKey: fx.projectIdentifier,
       runId,

@@ -146,7 +146,7 @@ describe('registered, permissioned, declared', () => {
 });
 
 describe('over the REAL /api/mcp with a token minted from EXACTLY CLI_TOKEN_GRANT', () => {
-  it('on a card with an open leg it records, and answers { commentId, recorded: true }', async () => {
+  it('on a card with an open leg it records, and answers { recordId, recorded: true }', async () => {
     const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
     const key = await card(fx);
     await openLeg(fx, key);
@@ -155,12 +155,17 @@ describe('over the REAL /api/mcp with a token minted from EXACTLY CLI_TOKEN_GRAN
     const result = await record(client, { key, points: [POINT] });
 
     expect(result.isError, textOf(result)).toBeFalsy();
-    expect(Object.keys(result.structuredContent!).sort()).toEqual(['commentId', 'recorded']);
+    expect(Object.keys(result.structuredContent!).sort()).toEqual(['recordId', 'recorded']);
     expect(result.structuredContent).toMatchObject({ recorded: true });
+    // MOTIR-11996: the answer names the RECORD, and the card gets no comment.
+    const { recordId } = result.structuredContent as { recordId: string };
+    const row = await adminDb.runDiscrepancyRecord.findUniqueOrThrow({ where: { id: recordId } });
+    expect(row.commentId).toBeNull();
+    expect(await adminDb.comment.count()).toBe(0);
     await client.close();
   });
 
-  it('with no open leg it still writes the comment and answers recorded: false', async () => {
+  it('with no open leg it still writes the record, no comment, and answers recorded: false', async () => {
     const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
     const key = await card(fx);
     const client = await cliClient(fx);
@@ -169,6 +174,10 @@ describe('over the REAL /api/mcp with a token minted from EXACTLY CLI_TOKEN_GRAN
 
     expect(result.isError, textOf(result)).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ recorded: false });
+    expect(textOf(result)).toContain('nothing was recorded on a run');
+    const { recordId } = result.structuredContent as { recordId: string };
+    expect(await adminDb.runDiscrepancyRecord.count({ where: { id: recordId } })).toBe(1);
+    expect(await adminDb.comment.count()).toBe(0);
     await client.close();
   });
 });
@@ -180,7 +189,7 @@ describe('decisions (MOTIR-10000) — the same door, round-tripped', () => {
     why: 'Every other list endpoint in the repository pages this way.',
   };
 
-  it('decisions alone record on the open leg and land in the comment', async () => {
+  it('decisions alone record on the open leg and land in the record', async () => {
     const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
     const key = await card(fx);
     await openLeg(fx, key);
@@ -191,10 +200,12 @@ describe('decisions (MOTIR-10000) — the same door, round-tripped', () => {
     expect(result.isError, textOf(result)).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ recorded: true });
     expect(textOf(result)).toContain('the decisions you made');
-    const comment = await adminDb.comment.findUniqueOrThrow({
-      where: { id: (result.structuredContent as { commentId: string }).commentId },
+    const row = await adminDb.runDiscrepancyRecord.findUniqueOrThrow({
+      where: { id: (result.structuredContent as { recordId: string }).recordId },
+      include: { entries: true },
     });
-    expect(comment.bodyMd).toContain(DECISION.chose);
+    expect(row.entries.map((e) => e.outcomeText)).toEqual([DECISION.chose]);
+    expect(await adminDb.comment.count()).toBe(0);
     const [finding] = await adminDb.dispatchRunEvent.findMany({
       where: { kind: 'discrepancy_recorded' },
     });

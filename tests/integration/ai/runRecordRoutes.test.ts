@@ -18,6 +18,7 @@ import { POST as SEARCH } from '@/app/api/internal/ai/search-run-records/route';
 import { POST as GET_ONE } from '@/app/api/internal/ai/get-run-record/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { linkLegacyDiscrepancyComment } from '../../helpers/legacyDiscrepancyComment';
 import { truncateAuthTables } from '../../helpers/db';
 
 // MOTIR-10240 — the RUN-RECORD door end to end on a real Postgres: the service,
@@ -427,7 +428,8 @@ describe('POST /api/internal/ai/get-run-record', () => {
       decisionCount: 1,
       bodyTruncated: false,
     });
-    expect(legA.discrepancy.commentId).toEqual(expect.any(String));
+    // MOTIR-11996: the door writes no comment, so a new record links none.
+    expect(legA.discrepancy.commentId).toBeNull();
     expect(legA.discrepancy.bodyMd).toContain('SENTINEL-BUILT');
     expect(legA.discrepancy.bodyMd).toContain('SENTINEL-CHOSE');
     // MOTIR-11361: the fields themselves, from the structured record.
@@ -445,10 +447,12 @@ describe('POST /api/internal/ai/get-run-record', () => {
     // Long enough that the rendered record passes the body bound.
     const long = 'x'.repeat(RUN_DISCREPANCY_FIELD_MAX);
     const points = Array.from({ length: 10 }, () => ({ planAsked: long, built: long, why: long }));
-    const { commentId } = await runDiscrepancyService.recordDiscrepancy(
+    const { recordId } = await runDiscrepancyService.recordDiscrepancy(
       { key: a.key, points },
       fx.ctx,
     );
+    // A record from before MOTIR-11996, which the door wrote a comment beside.
+    const commentId = await linkLegacyDiscrepancyComment(recordId);
     await adminDb.dispatchRun.update({ where: { id: runId }, data: { origin: 'instance' } });
     const seq = (await adminDb.dispatchRunEvent.count({ where: { dispatchRunId: runId } })) + 10;
     await adminDb.dispatchRunEvent.create({

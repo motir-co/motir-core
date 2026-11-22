@@ -446,9 +446,9 @@ export const pl: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'Runner zapisuje, co zbudował inaczej niż według planu błędnego tylko co do JAK, oraz decyzje podjęte tam, gdzie plan milczał — komentarz do elementu i wpis przebiegu, przyjęte do wiadomości.',
+      'Runner zapisuje, co zbudował inaczej niż według planu błędnego tylko co do JAK, oraz decyzje podjęte tam, gdzie plan milczał — zapis rozbieżności widoczny w elemencie i ustalenie w uruchomieniu, przyjęte do wiadomości.',
     source:
-      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a discrepancy record the card shows, and a finding on its run, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

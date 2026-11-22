@@ -2865,9 +2865,9 @@ function openPullRequestStep(): string[] {
  *
  * ⚠️ A DECISION IS RECORDED, NOT ONLY MADE. It rides `record_run_discrepancy` as `decisions`,
  * in the SAME one call as any build-through points (the door keeps one record per leg), so it
- * lands as a card comment and on the run's findings; the pull request lists it too. The block
- * is self-contained: THE CARD IS WRONG and FOUND A DEFECT are not touched by it, so the
- * build-through and the bug paths read exactly as they did.
+ * lands as the card's discrepancy record and on the run's findings; the pull request lists it
+ * too. The block is self-contained: THE CARD IS WRONG and FOUND A DEFECT are not touched by
+ * it, so the build-through and the bug paths read exactly as they did.
  *
  * Rendered for every agent lane — code and decision page — and never for a MANUAL item, which
  * a person does and which has no run to record on.
@@ -3119,8 +3119,8 @@ function buildThroughSteps(
     '     1–20 points, each field 1–2000 characters. Put EVERY deviation in this one',
     '     call, never one call per point. Do not repeat it: a second call is refused',
     '     DISCREPANCY_ALREADY_RECORDED and writes nothing. It answers',
-    `     { commentId, recorded }; recorded: false means ${src.key} has no open run leg.`,
-    '     The comment was still written, and that is NOT a failure. A point that',
+    `     { recordId, recorded }; recorded: false means ${src.key} has no open run leg.`,
+    '     The record was still written, and that is NOT a failure. A point that',
     '     describes something STILL broken after this card is done is a defect: file',
     '     it as a bug first, by the defect branch that follows this section, and cite',
     "     its key in that point's why.",

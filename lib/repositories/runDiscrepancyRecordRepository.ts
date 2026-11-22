@@ -8,7 +8,8 @@ import type {
 
 // Single Prisma operations on `run_discrepancy_record` and its `run_discrepancy_entry`
 // rows (Task MOTIR-11361) — a run's discrepancy record as data. The SERVICES own every
-// decision (`runDiscrepancyService` writes, `runRecordReadService` reads,
+// decision (`runDiscrepancyService` writes, `runRecordReadService` and
+// `runDiscrepancyReadService` read,
 // `runDiscrepancyBackfillService` fills the past); this leaf holds none of it.
 //
 // `tx` on every method, reads included: both tables are RLS-gated on `app.workspace_id`
@@ -17,6 +18,13 @@ import type {
 /** A record with its entries, points then decisions, each in the order the run sent them. */
 export type RunDiscrepancyRecordWithEntries = RunDiscrepancyRecord & {
   entries: RunDiscrepancyEntry[];
+};
+
+/** A card's record as its Run discrepancy section reads it: the entries, the recorder's
+ *  name and the run's start joined in the same query (MOTIR-11996). */
+export type RunDiscrepancyRecordForWorkItem = RunDiscrepancyRecordWithEntries & {
+  recordedBy: { name: string } | null;
+  dispatchRun: { id: string; startedAt: Date } | null;
 };
 
 /** One entry as the writer hands it over; `workspaceId` and `recordId` are filled in. */
@@ -105,6 +113,22 @@ export const runDiscrepancyRecordRepository = {
       where: { dispatchRunId },
       include: { entries: { orderBy: ENTRY_ORDER } },
       orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /** Every record one card holds, with entries, recorder and run, NEWEST first. */
+  async listByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<RunDiscrepancyRecordForWorkItem[]> {
+    return tx.runDiscrepancyRecord.findMany({
+      where: { workItemId },
+      include: {
+        entries: { orderBy: ENTRY_ORDER },
+        recordedBy: { select: { name: true } },
+        dispatchRun: { select: { id: true, startedAt: true } },
+      },
+      orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
     });
   },
 

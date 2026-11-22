@@ -1120,8 +1120,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   record_run_discrepancy: {
     summary:
-      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
-    descriptionFingerprint: 'd5fd54f98dd3',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a discrepancy record the card shows, and a finding on its run, acknowledged.',
+    descriptionFingerprint: '39301bc3eba5',
   },
   create_plan: {
     summary:

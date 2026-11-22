@@ -1299,5 +1299,21 @@
  *   refused, with the same code for every caller it still refuses.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.89.0` after `1.88.0` above.
+ *
+ * - `1.90.0` — Task MOTIR-11996 RENAMES `RunDiscrepancyAcknowledgement.commentId` to
+ *   `recordId` (`POST …/dispatch-runs/{id}/discrepancy`): the call writes no card comment any
+ *   more — the `run_discrepancy_record` is the only write and the card's Run discrepancy
+ *   section shows it — so the acknowledgement names the record. `recorded` is unchanged.
+ *
+ *   NOT additive, and deliberately so: a rename is what §8 reserves for a new major. The card
+ *   decides it — *"The tool's and the route's answers no longer carry a `commentId`. They
+ *   identify the record instead"* — and it overrides §8 for this one field, as `1.55.0` did
+ *   for its operation. A MINOR, because the path version stays `1` and nothing else moves.
+ *   Its one client is the `motir` CLI, which discards the answer: a CLI built before this
+ *   version validates the body, so it prints *could not record the discrepancies* although
+ *   the record was written, until it runs a build that reads `recordId` (this change's
+ *   `packages/cli/src/client.ts`).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.90.0` after `1.89.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.89.0';
+export const V1_CONTRACT_VERSION = '1.90.0';
