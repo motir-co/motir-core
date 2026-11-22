@@ -139,6 +139,13 @@ const commentsOn = (key: string) =>
     orderBy: { createdAt: 'asc' },
   });
 
+// Since MOTIR-11996 the door's write on the CARD is the record, never a comment.
+const recordsOn = (key: string) =>
+  adminDb.runDiscrepancyRecord.findMany({
+    where: { workItem: { identifier: key } },
+    include: { entries: { orderBy: [{ kind: 'asc' }, { position: 'asc' }] } },
+  });
+
 async function legId(runId: string, key: string): Promise<string> {
   const leg = await adminDb.dispatchRunCard.findFirstOrThrow({
     where: { dispatchRunId: runId, workItem: { identifier: key } },
@@ -147,7 +154,7 @@ async function legId(runId: string, key: string): Promise<string> {
 }
 
 describe('the three kinds of leg, each from a CLI_TOKEN_GRANT token (cases 1–3)', () => {
-  it('1 · a CLI leg: one comment, one event, the pointer only, reportedBy "cli"', async () => {
+  it('1 · a CLI leg: one record, no comment, one event, the pointer only, reportedBy "cli"', async () => {
     const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
     const key = await task(fx, 'Built through');
     const runId = await openCliLegs(fx, [key]);
@@ -156,20 +163,19 @@ describe('the three kinds of leg, each from a CLI_TOKEN_GRANT token (cases 1–3
     const result = await record(client, key);
 
     expect(result.isError, textOf(result)).toBeFalsy();
-    expect(Object.keys(result.structuredContent!).sort()).toEqual(['commentId', 'recorded']);
+    expect(Object.keys(result.structuredContent!).sort()).toEqual(['recordId', 'recorded']);
     expect(result.structuredContent).toMatchObject({ recorded: true });
 
-    const comments = await commentsOn(key);
-    expect(comments).toHaveLength(1);
-    const body = comments[0]!.bodyMd;
-    const order = POINT_TEXTS.map((t) => body.indexOf(t));
-    expect(order.every((n) => n > -1)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(await commentsOn(key)).toHaveLength(0);
+    const records = await recordsOn(key);
+    expect(records).toHaveLength(1);
+    const texts = records[0]!.entries.flatMap((e) => [e.planText, e.outcomeText, e.why]);
+    for (const t of POINT_TEXTS) expect(texts).toContain(t);
 
     const events = await discrepancyEvents(runId);
     expect(events).toHaveLength(1);
     expect(events[0]!.data).toStrictEqual({
-      commentId: (result.structuredContent as { commentId: string }).commentId,
+      recordId: (result.structuredContent as { recordId: string }).recordId,
       pointCount: 3,
       dispatchRunCardId: await legId(runId, key),
     });
@@ -196,18 +202,19 @@ describe('the three kinds of leg, each from a CLI_TOKEN_GRANT token (cases 1–3
     const result = await record(client, key);
 
     expect(result.isError, textOf(result)).toBeFalsy();
-    expect(Object.keys(result.structuredContent!).sort()).toEqual(['commentId', 'recorded']);
+    expect(Object.keys(result.structuredContent!).sort()).toEqual(['recordId', 'recorded']);
     expect(result.structuredContent).toMatchObject({ recorded: true });
     const events = await discrepancyEvents(runId);
     expect(events).toHaveLength(1);
     expect(events[0]!.data).toStrictEqual({
-      commentId: (result.structuredContent as { commentId: string }).commentId,
+      recordId: (result.structuredContent as { recordId: string }).recordId,
       pointCount: 3,
       dispatchRunCardId: await legId(runId, key),
     });
     // Decision page §8.2: the record follows the run's own reporter.
     expect(events[0]!.reportedBy).toBe('agent');
-    expect(await commentsOn(key)).toHaveLength(1);
+    expect(await recordsOn(key)).toHaveLength(1);
+    expect(await commentsOn(key)).toHaveLength(0);
     await client.close();
   });
 
@@ -239,9 +246,9 @@ describe('the three kinds of leg, each from a CLI_TOKEN_GRANT token (cases 1–3
     );
     const parentLeg = await legId(runId, parent);
     expect(events.some((e) => e.dispatchRunCardId === parentLeg)).toBe(false);
-    expect(await commentsOn(a)).toHaveLength(1);
-    expect(await commentsOn(b)).toHaveLength(1);
-    expect(await commentsOn(parent)).toHaveLength(0);
+    expect(await recordsOn(a)).toHaveLength(1);
+    expect(await recordsOn(b)).toHaveLength(1);
+    expect(await recordsOn(parent)).toHaveLength(0);
     await client.close();
   });
 });
@@ -258,7 +265,7 @@ describe('one record per leg (cases 4–5)', () => {
 
     expect(again.isError).toBe(true);
     expect(textOf(again)).toMatch(/^DISCREPANCY_ALREADY_RECORDED: /);
-    expect(await commentsOn(key)).toHaveLength(1);
+    expect(await recordsOn(key)).toHaveLength(1);
     expect(await discrepancyEvents(runId)).toHaveLength(1);
     await client.close();
   });
@@ -279,14 +286,14 @@ describe('one record per leg (cases 4–5)', () => {
     const refused = results.filter((r) => r.isError);
     expect(refused).toHaveLength(1);
     expect(textOf(refused[0]!)).toMatch(/^DISCREPANCY_ALREADY_RECORDED: /);
-    expect(await commentsOn(key)).toHaveLength(1);
+    expect(await recordsOn(key)).toHaveLength(1);
     expect(await discrepancyEvents(runId)).toHaveLength(1);
     await Promise.all([one.close(), two.close()]);
   });
 });
 
 describe('a card with no open leg (case 6)', () => {
-  it('6 · answers recorded: false, writes the comment, and writes no event anywhere', async () => {
+  it('6 · answers recorded: false, writes the record and no comment, and no event anywhere', async () => {
     const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
     const key = await task(fx, 'Never run');
     const client = await connectWithGrant(fx);
@@ -295,7 +302,8 @@ describe('a card with no open leg (case 6)', () => {
 
     expect(result.isError, textOf(result)).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ recorded: false });
-    expect(await commentsOn(key)).toHaveLength(1);
+    expect(await recordsOn(key)).toHaveLength(1);
+    expect(await commentsOn(key)).toHaveLength(0);
     expect(await adminDb.dispatchRunEvent.count({ where: { kind: 'discrepancy_recorded' } })).toBe(
       0,
     );
@@ -319,9 +327,9 @@ describe('the composed read (case 7)', () => {
     expect(found).toHaveLength(1);
     expect(found[0]!.cardId).toBe(leg);
     expect(Object.keys(found[0]!.data as object).sort()).toEqual([
-      'commentId',
       'dispatchRunCardId',
       'pointCount',
+      'recordId',
     ]);
     expect(detail.cards.find((c) => c.id === leg)?.key).toBe(key);
 
@@ -451,7 +459,7 @@ describe('refusals and tenancy (cases 10–11)', () => {
     const denied = await record(noEdit, key);
     expect(denied.isError).toBe(true);
 
-    expect(await adminDb.comment.count()).toBe(0);
+    expect(await adminDb.runDiscrepancyRecord.count()).toBe(0);
     expect(await adminDb.dispatchRunEvent.count({ where: { kind: 'discrepancy_recorded' } })).toBe(
       0,
     );
@@ -467,8 +475,12 @@ describe('refusals and tenancy (cases 10–11)', () => {
 
     expect((await record(client, key)).isError).toBeFalsy();
 
-    expect(await adminDb.comment.count({ where: { workspaceId: fx.workspaceId } })).toBe(1);
-    expect(await adminDb.comment.count({ where: { workspaceId: other.workspaceId } })).toBe(0);
+    expect(
+      await adminDb.runDiscrepancyRecord.count({ where: { workspaceId: fx.workspaceId } }),
+    ).toBe(1);
+    expect(
+      await adminDb.runDiscrepancyRecord.count({ where: { workspaceId: other.workspaceId } }),
+    ).toBe(0);
     expect(
       await adminDb.dispatchRunEvent.count({
         where: { kind: 'discrepancy_recorded', workspaceId: other.workspaceId },

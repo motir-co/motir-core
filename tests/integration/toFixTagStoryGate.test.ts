@@ -377,7 +377,9 @@ describe('every projection agrees, for a card per reason reached through its eve
       repair: 'fix',
       notePreview: 'Rename the export button.',
     });
-  });
+    // It seeds six cards through the real webhook doors and reads six projections:
+    // about 7 s on an idle machine, over the 15 s default on a loaded CI shard.
+  }, 60_000);
 
   it('the conflicting card has GREEN checks and still carries its reason — independent signals', async () => {
     const s = await makeScenario('tag-gate-green@example.com');

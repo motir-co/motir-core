@@ -24,7 +24,7 @@ import {
 // points, delivers the card and closes its run. The claim of the story is that a
 // PERSON then finds that record where they already look — the findings strip of
 // the run modal opened from `/runs`, beside the bug — and that its door leads to
-// the work item whose Activity lists the comment with every point.
+// the work item's Run discrepancy section, open, listing every point.
 //
 // ⚠️ THE AGENT IS A SCRIPTED MCP CLIENT, not a coding agent, exactly as in
 // `regression-agent-reported-run.spec.ts`. A real agent is non-deterministic and
@@ -38,10 +38,11 @@ import {
 // assertion that no point's text appears in the dialog is that boundary. It is
 // made non-vacuous by reading the same three strings on the item page afterwards.
 //
-// ⚠️ THE DOOR LANDS ON THE WORK ITEM, NOT ON A COMMENT. `design/runs/design-notes.md`
-// § A DISCREPANCY the run recorded (decision 5) found that the item page cannot
-// address a single comment, so the notes win over the card's wording: the door is
-// `/items/<key>`, and the comment is read in its Activity section.
+// ⚠️ THE DOOR LANDS ON THE RECORD'S OWN SECTION (MOTIR-11996). The door used to be
+// `/items/<key>`, with the record read as a comment in Activity, because the page could
+// not address one comment. The door writes no comment now: the record is the card's
+// Run discrepancy section, and the door is `/items/<key>#run-discrepancy`, which opens it
+// (`design/runs/design-notes.md` § _Run discrepancy — the record gets its own section_).
 
 const EMAIL = 'run-discrepancy@example.com';
 const HARNESS = 'Claude Code';
@@ -94,7 +95,7 @@ test('an agent builds a card through a wrong HOW, and its discrepancy is where y
 
   let runId = '';
   let legId = '';
-  let commentId = '';
+  let recordId = '';
   let bugKey = '';
 
   await chapter('The agent claims a card and opens its run', async () => {
@@ -140,21 +141,21 @@ test('an agent builds a card through a wrong HOW, and its discrepancy is where y
   });
 
   await chapter('It records ONE discrepancy with three points', async () => {
-    const recorded = await callMotirTool<{ commentId: string; recorded: boolean }>(
+    const recorded = await callMotirTool<{ recordId: string; recorded: boolean }>(
       agent,
       RECORD_RUN_DISCREPANCY_TOOL_NAME,
       { key: card, points: POINTS },
     );
-    expect(Object.keys(recorded).sort()).toEqual(['commentId', 'recorded']);
+    expect(Object.keys(recorded).sort()).toEqual(['recordId', 'recorded']);
     expect(recorded.recorded).toBe(true);
-    commentId = recorded.commentId;
+    recordId = recorded.recordId;
 
     const found = (await runEvents(runId)).filter((e) => e.kind === 'discrepancy_recorded');
     expect(found).toHaveLength(1);
     legId = found[0]!.cardId ?? '';
     expect(legId).not.toBe('');
     // A POINTER and a count — no key beyond these three, and no text.
-    expect(found[0]!.data).toEqual({ commentId, pointCount: 3, dispatchRunCardId: legId });
+    expect(found[0]!.data).toEqual({ recordId, pointCount: 3, dispatchRunCardId: legId });
   });
 
   await chapter('The agent delivers the card and closes its run', async () => {
@@ -208,25 +209,34 @@ test('an agent builds a card through a wrong HOW, and its discrepancy is where y
     await beat();
   });
 
-  await chapter('The door opens the work item, whose Activity lists every point', async () => {
-    await dialog.getByTestId('finding-discrepancy').getByRole('link', { name: 'Open →' }).click();
-    await expect(page).toHaveURL(new RegExp(`/items/${card}$`));
-    await expect(page.getByText('Implemented').first()).toBeVisible();
+  await chapter(
+    'The door opens the card at its Run discrepancy section, listing every point',
+    async () => {
+      // MOTIR-11996: the record has its own section, and the door lands on it, open.
+      await dialog.getByTestId('finding-discrepancy').getByRole('link', { name: 'Open →' }).click();
+      await expect(page).toHaveURL(new RegExp(`/items/${card}#run-discrepancy$`));
+      await expect(page.getByText('Implemented').first()).toBeVisible();
 
-    const main = page.getByRole('main');
-    await expect(main.getByText('Built through a plan that was wrong about the HOW')).toBeVisible();
-    const body = (await main.textContent()) ?? '';
-    let cursor = -1;
-    for (const p of POINTS) {
-      for (const field of [p.planAsked, p.built, p.why]) {
-        const at = body.indexOf(field, cursor + 1);
-        expect(at, `"${field}" appears after the previous point text`).toBeGreaterThan(cursor);
-        cursor = at;
+      const section = page.locator('#run-discrepancy');
+      await expect(section.getByRole('heading', { name: 'Run discrepancy' })).toBeVisible();
+      await expect(section.getByTestId('run-discrepancy-point')).toHaveCount(3);
+      // …and no comment on the card repeats it.
+      await expect(
+        page.getByRole('main').getByText('Built through a plan that was wrong about the HOW'),
+      ).toHaveCount(0);
+      const body = (await section.textContent()) ?? '';
+      let cursor = -1;
+      for (const p of POINTS) {
+        for (const field of [p.planAsked, p.built, p.why]) {
+          const at = body.indexOf(field, cursor + 1);
+          expect(at, `"${field}" appears after the previous point text`).toBeGreaterThan(cursor);
+          cursor = at;
+        }
       }
-    }
-    expect(commentId).not.toBe('');
-    await beat();
-  });
+      expect(recordId).not.toBe('');
+      await beat();
+    },
+  );
 
   await agent.close();
 });

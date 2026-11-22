@@ -1415,6 +1415,45 @@
     }
   },
   "issueViews": {
+    "runDiscrepancy": {
+      "title": "Afwijkingen van de run",
+      "gloss": "wat een run bouwde of besliste dat het plan niet zei",
+      "recordCount": "{count, plural, one {# vastlegging} other {# vastleggingen}}",
+      "recordedBy": "Vastgelegd op {time} door {name}",
+      "recordedByFormer": "Vastgelegd op {time} door een voormalig lid",
+      "inRun": "Run van {time}",
+      "inRunAria": "Open de run van {time}",
+      "noRun": "Geen onderdeel van een run",
+      "pointsHeading": "Anders gebouwd dan gepland",
+      "pointsCount": "{count, plural, one {# punt} other {# punten}}",
+      "pointsGloss": "De uitkomst bleef behouden. De route ernaartoe veranderde.",
+      "decisionsHeading": "Besloten waar het plan niets zei",
+      "decisionsCount": "{count, plural, one {# beslissing} other {# beslissingen}}",
+      "decisionsGloss": "Eerst volgens de conventies van de repository, daarna volgens de best practices in de branche.",
+      "pointLabel": "Punt {n}",
+      "decisionLabel": "Beslissing {n}",
+      "planAsked": "Plan vroeg",
+      "built": "Gebouwd",
+      "why": "Waarom",
+      "planSaid": "Plan zei",
+      "chose": "Gekozen",
+      "alternatives": "Alternatieven",
+      "showMorePoints": "{count, plural, one {Nog # punt tonen} other {Nog # punten tonen}}",
+      "showMoreDecisions": "{count, plural, one {Nog # beslissing tonen} other {Nog # beslissingen tonen}}",
+      "showFewer": "Minder tonen",
+      "showRecord": "Deze vastlegging tonen",
+      "hideRecord": "Deze vastlegging verbergen",
+      "show": "Tonen",
+      "hide": "Verbergen",
+      "summaryOne": "vastgelegd op {time} door {name}",
+      "summaryOneFormer": "vastgelegd op {time} door een voormalig lid",
+      "summaryLatest": "laatst vastgelegd op {time} door {name}",
+      "summaryLatestFormer": "laatst vastgelegd op {time} door een voormalig lid",
+      "summaryNoEntries": "Deze vastlegging kon niet worden hersteld",
+      "backfilled": "Hersteld uit een opmerking die de run schreef voordat vastleggingen werden bewaard.",
+      "unreadableTitle": "Deze vastlegging kon niet worden hersteld",
+      "unreadableBody": "De opmerking werd verwijderd of bewerkt voordat vastleggingen werden bewaard, dus {points, plural, =0 {geen punten} one {# punt} other {# punten}} en {decisions, plural, =0 {geen beslissingen} one {# beslissing} other {# beslissingen}} gingen verloren."
+    },
     "heading": "Werkitems",
     "labelsField": "Labels",
     "labelsPlaceholder": "Een label toevoegen…",
@@ -15178,7 +15217,7 @@
       },
       "pools": {
         "title": "Pools",
-        "subtitle": "Hoe groot elke vlootpool is en hoeveel machines er nu in draaien: eerst de installatievloot in Motirs eigen AWS-account, dan de add-shard-accounts waarop de jobs van tenants draaien.",
+        "subtitle": "Hoe groot elke vlootpool is en hoeveel machines er nu in draaien: eerst de installatievloot in Motirs eigen AWS-account, dan de add-shard-accounts waarop de jobs van tenants draaien, dan de AWS-quota van de accounts waarin de apps van enterprise-tenants worden gehost.",
         "notApplicable": "Niet van toepassing",
         "loading": {
           "install": "Motirs eigen account laden",
@@ -15367,6 +15406,80 @@
         },
         "computed": "Berekend door de inrichtingsronde van {time} ({age}). Alleen-lezen: motir-studio wordt in GitHub op een repository geïnstalleerd, niet hier.",
         "loading": "Blinde vlekken van de CI-vloot laden"
+      },
+      "tenants": {
+        "title": "Hostingaccounts van tenants · enterprise-apps",
+        "subtitle": "Eén AWS-account per enterprise-organisatie, waarin haar apps met AWS als doel draaien. Elk quotum wordt live uit Service Quotas in dat account gelezen en vergeleken met het doel waarnaar de account-bootstrap het verhoogt.",
+        "loading": "Hostingaccounts van tenants laden",
+        "pill": {
+          "below": "{count, plural, one {# quotum onder doel, geen verhoging} other {# quota onder doel, geen verhoging}}",
+          "notRead": "{count, plural, one {# account niet gelezen} other {# accounts niet gelezen}}"
+        },
+        "account": {
+          "title": "Per organisatie",
+          "noAwsAccount": "Nog geen AWS-account",
+          "accountLabel": "AWS-account {id}"
+        },
+        "search": {
+          "label": "Hostingaccounts van tenants doorzoeken",
+          "placeholder": "Organisatie of account-ID"
+        },
+        "noMatch": {
+          "title": "Geen account komt overeen met ‘{q}’",
+          "body": "De zoekopdracht kijkt naar de naam van de organisatie, de AWS-account-ID en de accountnaam.",
+          "clear": "Zoekopdracht wissen"
+        },
+        "foot": "{from}–{to} van {total, plural, one {# account} other {# accounts}} · accounts met een quotum onder doel en zonder verhoging staan bovenaan",
+        "footMatch": "{from}–{to} van {total, plural, one {# account} other {# accounts}} die overeenkomen met ‘{q}’ · accounts met een quotum onder doel en zonder verhoging staan bovenaan",
+        "pagerLabel": "Pagina’s van de hostingaccounts van tenants",
+        "state": {
+          "requested": "Aangevraagd",
+          "creating": "Wordt aangemaakt",
+          "bootstrapping": "Bootstrap bezig",
+          "ready": "Gereed",
+          "refused": "Geweigerd"
+        },
+        "notReady": {
+          "requested": "Quota worden gelezen zodra het account gereed is. Het account is nog niet aangemaakt.",
+          "creating": "Quota worden gelezen zodra het account gereed is. AWS maakt het account aan.",
+          "bootstrapping": "Quota worden gelezen zodra het account gereed is. De bootstrap richt de deployrol, de tags en de quotumverhogingen in.",
+          "refused": "{count, plural, one {AWS weigerde het account één keer aan te maken, {age}.} other {AWS weigerde het account # keer aan te maken, laatst {age}.}} De reconciliatie probeert het opnieuw na de wachttijd; quota worden gelezen zodra het account gereed is.",
+          "refusedNever": "Quota worden gelezen zodra het account gereed is. AWS weigerde het account aan te maken; de reconciliatie probeert het opnieuw na de wachttijd."
+        },
+        "col": {
+          "quota": "Quotum",
+          "applied": "Toegepast",
+          "target": "Doel",
+          "raise": "Open verhoging"
+        },
+        "quota": {
+          "lambda-concurrent-executions": "Gelijktijdige Lambda-uitvoeringen",
+          "fargate-on-demand-vcpu": "Fargate On-Demand vCPU"
+        },
+        "value": {
+          "count": "{n}",
+          "vcpu": "{n} vCPU"
+        },
+        "atTarget": "Op doel",
+        "short": "{n} onder doel",
+        "below": "Onder doel · geen verhoging",
+        "raise": {
+          "to": "naar {value}",
+          "filed": "ingediend {age}",
+          "none": "Geen open verhoging"
+        },
+        "notRead": {
+          "body": "De quota van dit account zijn niet geladen (de sessie van de lidrol of Service Quotas antwoordde niet), dus er wordt geen waarde getoond. De andere accounts worden niet beïnvloed."
+        },
+        "empty": {
+          "title": "Geen hostingaccounts van tenants",
+          "body": "Een enterprise-organisatie krijgt een eigen AWS-account zodra een van haar projecten voor het eerst AWS als doel heeft."
+        },
+        "error": {
+          "title": "Kan de hostingaccounts van tenants niet lezen",
+          "body": "Het lezen van de tenantaccounts gaf geen antwoord, dus er wordt geen account vermeld; niets daarvan is nul. De pools hierboven en de rest van deze pagina worden niet beïnvloed. Laad de pagina opnieuw om het nog eens te proberen."
+        },
+        "readOnly": "Alleen-lezen. Hier wordt geen verhoging ingediend: de bootstrap van het tenantaccount dient elke verhoging in."
       }
     }
   },
@@ -17477,7 +17590,7 @@
       "toRun": {
         "sentence": "Start een review van <title>{name}</title>",
         "tag": "Review uit te voeren",
-        "details": "Nog geen goedkeuring. Open het item om de review te starten; je goedkeuring wordt gevraagd zodra hij slaagt.",
+        "details": "Nog geen goedkeuring. Open hem om de review te starten of zonder review verder te gaan; je goedkeuring wordt gevraagd zodra hij slaagt.",
         "open": "{key} openen: {sentence}"
       },
       "dismiss": {

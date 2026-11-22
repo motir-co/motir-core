@@ -8,8 +8,10 @@ import { refusalBackoffMs } from '@/lib/ciFleet/poolGrowthPolicy';
 import { hostingTenantAccountReconcile } from '@/lib/jobs/definitions/hostingTenantAccountReconcile';
 import type { FleetHeadroomAlert } from '@/lib/monitoring/fleetShardHeadroomAlert';
 import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
+import type { TenantQuotaRaises } from '@/lib/services/hostingTenantAccountBootstrapService';
 import {
   hostingTenantAccountService as service,
+  TENANT_QUOTA_RECHECK_MS,
   type TenantReconcileDeps,
 } from '@/lib/services/hostingTenantAccountService';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -37,6 +39,12 @@ let createFailure: Error | null;
 let bootstrapFailure: Error | null;
 /** Create calls that made an account (a replay finds it). */
 let accountsMade: Set<string>;
+/** Ready-account quota checks, by organisation, in call order (MOTIR-12011). */
+let quotaChecks: string[];
+/** What a quota check answers per organisation; at target when unset. */
+let quotaAnswers: Map<string, TenantQuotaRaises>;
+/** What the next quota check throws, once. */
+let quotaFailure: Error | null;
 
 async function seedOrg() {
   orgSeq += 1;
@@ -76,6 +84,15 @@ function deps(at: Date = T0): TenantReconcileDeps {
       }
       return { roleCreated: true };
     },
+    checkQuotas: async (organizationId) => {
+      quotaChecks.push(organizationId);
+      if (quotaFailure) {
+        const failure = quotaFailure;
+        quotaFailure = null;
+        throw failure;
+      }
+      return quotaAnswers.get(organizationId) ?? { quotaRaisesFiled: 0, quotaRaisesPending: 0 };
+    },
   };
 }
 
@@ -98,6 +115,9 @@ beforeEach(async () => {
   createFailure = null;
   bootstrapFailure = null;
   accountsMade = new Set();
+  quotaChecks = [];
+  quotaAnswers = new Map();
+  quotaFailure = null;
   logs = [];
   for (const level of ['info', 'log', 'warn', 'error'] as const) {
     vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
@@ -142,6 +162,7 @@ describe('runReconcile', () => {
     expect(summary).toEqual({
       ran: true,
       organizations: [{ organizationId: org.id, outcome: 'ready' }],
+      quotaChecks: [],
       failures: 0,
     });
     expect(creates).toEqual([org.id]);
@@ -155,6 +176,7 @@ describe('runReconcile', () => {
     expect(await service.runReconcile(deps(minutes(1)))).toEqual({
       ran: true,
       organizations: [],
+      quotaChecks: [],
       failures: 0,
     });
     expect(await service.reconcileOrganization(org.id, deps(minutes(2)))).toEqual({
@@ -163,6 +185,7 @@ describe('runReconcile', () => {
     });
     expect(creates).toHaveLength(1);
     expect(bootstraps).toHaveLength(1);
+    expect(quotaChecks).toEqual([]);
     expect(await adminDb.fleetShard.count()).toBe(shardsBefore);
   });
 
@@ -286,9 +309,11 @@ describe('runReconcile', () => {
     expect(await service.runReconcile(deps())).toEqual({
       ran: false,
       organizations: [],
+      quotaChecks: [],
       failures: 0,
     });
     expect(creates).toEqual([]);
+    expect(quotaChecks).toEqual([]);
   });
 
   it('releases the lease after a failing organisation, and still reconciles the others', async () => {
@@ -314,6 +339,131 @@ describe('runReconcile', () => {
     expect((await rowOf(failing.id))!.state).toBe('creating');
     expect(await adminDb.fleetGrowthPassLease.findUnique({ where: { id: LEASE_ID } })).toBeNull();
     expect((await service.runReconcile(deps(minutes(1)))).ran).toBe(true);
+  });
+});
+
+// MOTIR-12011: a `ready` row never walks again, so the pass re-checks its quota
+// targets itself, hourly, through the check dep alone — never create or
+// bootstrap. What a check files is `ensureQuotaRaise`'s (the AWS adapter's
+// tests and the integration gate); here, when a check is due and what is kept.
+describe('the ready-account quota re-check', () => {
+  /** A row already ready, as one made before the re-check existed: never checked. */
+  async function seedReady(quotasCheckedAt: Date | null = null) {
+    const org = await seedOrg();
+    await service.ensureForOrganization(org.id);
+    await adminDb.hostingTenantAccount.update({
+      where: { organizationId: org.id },
+      data: { state: 'ready', awsAccountId: ACCOUNT_ID, quotasCheckedAt },
+    });
+    return org;
+  }
+  const hours = (n: number) => minutes(n * 60);
+
+  it('checks a ready row never checked on the next pass, and records when', async () => {
+    const org = await seedReady();
+    quotaAnswers.set(org.id, { quotaRaisesFiled: 1, quotaRaisesPending: 2 });
+
+    expect(await service.runReconcile(deps())).toEqual({
+      ran: true,
+      organizations: [],
+      quotaChecks: [{ organizationId: org.id, outcome: 'raise_filed' }],
+      failures: 0,
+    });
+    expect(quotaChecks).toEqual([org.id]);
+    expect(creates).toEqual([]);
+    expect(bootstraps).toEqual([]);
+    expect(await rowOf(org.id)).toMatchObject({ state: 'ready', quotasCheckedAt: T0 });
+  });
+
+  it('counts the bootstrap as the first check, then checks once the interval has passed', async () => {
+    const org = await seedOrg();
+    await service.ensureForOrganization(org.id);
+    await service.runReconcile(deps());
+    expect(await rowOf(org.id)).toMatchObject({ state: 'ready', quotasCheckedAt: T0 });
+
+    const justInside = new Date(T0.getTime() + TENANT_QUOTA_RECHECK_MS - 60_000);
+    expect((await service.runReconcile(deps(justInside))).quotaChecks).toEqual([]);
+    expect(quotaChecks).toEqual([]);
+
+    const due = new Date(T0.getTime() + TENANT_QUOTA_RECHECK_MS + 60_000);
+    expect((await service.runReconcile(deps(due))).quotaChecks).toEqual([
+      { organizationId: org.id, outcome: 'at_target' },
+    ]);
+    expect(
+      (await service.runReconcile(deps(new Date(due.getTime() + 60_000)))).quotaChecks,
+    ).toEqual([]);
+    expect(quotaChecks).toEqual([org.id]);
+    expect(bootstraps).toEqual([org.id]);
+    expect((await rowOf(org.id))!.quotasCheckedAt).toEqual(due);
+  });
+
+  it('answers each outcome: at target, a raise filed, a raise already open', async () => {
+    const [atTarget, filed, pending] = [await seedReady(), await seedReady(), await seedReady()];
+    quotaAnswers.set(filed.id, { quotaRaisesFiled: 1, quotaRaisesPending: 1 });
+    quotaAnswers.set(pending.id, { quotaRaisesFiled: 0, quotaRaisesPending: 1 });
+
+    const summary = await service.runReconcile(deps());
+    expect(new Map(summary.quotaChecks.map((c) => [c.organizationId, c.outcome]))).toEqual(
+      new Map([
+        [atTarget.id, 'at_target'],
+        [filed.id, 'raise_filed'],
+        [pending.id, 'raise_pending'],
+      ]),
+    );
+    expect(summary.failures).toBe(0);
+  });
+
+  it('checks the stalest first, and skips a row checked within the interval', async () => {
+    const recent = await seedReady(hours(-0.5));
+    const stale = await seedReady(hours(-3));
+    const older = await seedReady(hours(-5));
+    const never = await seedReady(null);
+
+    await service.runReconcile(deps());
+    expect(quotaChecks).toEqual([never.id, older.id, stale.id]);
+    expect((await rowOf(recent.id))!.quotasCheckedAt).toEqual(hours(-0.5));
+  });
+
+  it('a failed check is counted and logged by name, records nothing, and is retried next pass', async () => {
+    const org = await seedReady(hours(-2));
+    quotaFailure = Object.assign(new Error(`assume failed ${SECRET}`), { name: 'AccessDenied' });
+
+    const failed = await service.runReconcile(deps());
+    expect(failed.quotaChecks).toEqual([{ organizationId: org.id, outcome: 'failed' }]);
+    expect(failed.failures).toBe(1);
+    expect((await rowOf(org.id))!.quotasCheckedAt).toEqual(hours(-2));
+    expect(logs.join('\n')).toContain('AccessDenied');
+    expect(logs.join('\n')).not.toContain(SECRET);
+    expect(await adminDb.fleetGrowthPassLease.findUnique({ where: { id: LEASE_ID } })).toBeNull();
+
+    const retried = await service.runReconcile(deps(minutes(1)));
+    expect(retried.quotaChecks).toEqual([{ organizationId: org.id, outcome: 'at_target' }]);
+    expect((await rowOf(org.id))!.quotasCheckedAt).toEqual(minutes(1));
+  });
+
+  it('one failing check never stops the others, nor the walk of an unready row', async () => {
+    const failing = await seedReady();
+    const fine = await seedReady();
+    const walking = await seedOrg();
+    await service.ensureForOrganization(walking.id);
+    const d = deps();
+    d.checkQuotas = async (organizationId) => {
+      quotaChecks.push(organizationId);
+      if (organizationId === failing.id) throw new TypeError('broken');
+      return { quotaRaisesFiled: 0, quotaRaisesPending: 0 };
+    };
+
+    const summary = await service.runReconcile(d);
+    expect(summary.organizations).toEqual([{ organizationId: walking.id, outcome: 'ready' }]);
+    expect(new Map(summary.quotaChecks.map((c) => [c.organizationId, c.outcome]))).toEqual(
+      new Map([
+        [failing.id, 'failed'],
+        [fine.id, 'at_target'],
+      ]),
+    );
+    expect(summary.failures).toBe(1);
+    // The row that reached ready this pass was checked by its bootstrap.
+    expect(quotaChecks).not.toContain(walking.id);
   });
 });
 

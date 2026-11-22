@@ -8,7 +8,16 @@ import { CommandChip } from '@/components/ui/CommandChip';
 // review path's words: *Copy motir review {key}*, the in-place *Copied*, and the shipped
 // success toast naming the command. Never on a board card (the card is one button).
 
-export function ReviewCommand({ command, identifier }: { command: string; identifier: string }) {
+export function ReviewCommand({
+  command,
+  identifier,
+  density,
+}: {
+  command: string;
+  identifier: string;
+  /** `compact` in a fixed narrow track — To approve's DETAILS (Bug MOTIR-11982). */
+  density?: 'default' | 'compact';
+}) {
   const t = useTranslations('approvalGate.reviewPath.command');
   return (
     <CommandChip
@@ -18,6 +27,7 @@ export function ReviewCommand({ command, identifier }: { command: string; identi
       toastTitle={t('toastTitle')}
       toastBody={t('toastBody', { command })}
       testId={`review-command-copy-${identifier}`}
+      density={density}
     />
   );
 }

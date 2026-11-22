@@ -384,13 +384,41 @@ export interface AwsManagementApi {
   ): Promise<{ created: boolean; policyChanged: boolean }>;
   /** `key=value` on the account in Organizations, written only when it differs. */
   ensureAccountTag(accountId: string, key: string, value: string): Promise<{ tagged: boolean }>;
-  /** A quota at `target.desiredValue` or above: nothing filed when it already is,
-   *  or when a raise of it is open (`pending`); else a raise is filed. */
+  /** A quota at `target.desiredValue` or above: nothing filed when its APPLIED
+   *  value already is, or when a raise of it is open (`pending`); else a raise is
+   *  filed. A quota with no applied value is not at target, whatever the AWS
+   *  default says (MOTIR-12011). */
   ensureQuotaRaise(
     credentials: AwsSessionCredentials,
     regionId: string,
     target: AwsQuotaTarget,
   ): Promise<{ filed: boolean; pending: boolean }>;
+  /** A quota's APPLIED value in the account and its newest open raise, read only
+   *  (MOTIR-12014). `applied` is null when AWS has no applied value for the
+   *  account (`NoSuchResourceException`) — never the AWS default, which is not
+   *  what the account runs at. Any other failure throws. */
+  readQuotaStatus(
+    credentials: AwsSessionCredentials,
+    regionId: string,
+    quota: AwsQuotaRef,
+  ): Promise<AwsQuotaStatus>;
+}
+
+/** One Service Quotas quota, by service and code. */
+export interface AwsQuotaRef {
+  serviceCode: string;
+  quotaCode: string;
+}
+
+/** An open (`PENDING` or `CASE_OPENED`) raise of a quota, with when it was filed. */
+export interface AwsOpenQuotaRaise extends AwsQuotaIncreaseRequest {
+  createdAt: Date | null;
+}
+
+/** What `readQuotaStatus` read. */
+export interface AwsQuotaStatus {
+  applied: number | null;
+  openRaise: AwsOpenQuotaRaise | null;
 }
 
 /** One Service Quotas quota and the value wanted for it. */
@@ -467,6 +495,7 @@ interface RequestedQuotaShape {
   Id?: string;
   Status?: string;
   DesiredValue?: number;
+  Created?: Date;
 }
 
 function quotaRequestOf(quota: RequestedQuotaShape): AwsQuotaIncreaseRequest {
@@ -1050,34 +1079,46 @@ export function createAwsManagementApi(
     return names;
   }
 
-  /** A quota's applied value; an account whose quota was never changed may have
-   *  no applied value yet, and the default is then what applies. */
+  /** A quota's APPLIED value in the account, or null when Service Quotas holds
+   *  none for it (`NoSuchResourceException`): an account whose quota was never
+   *  changed may have no applied value yet. */
+  async function appliedQuotaValue(
+    quotas: AwsSdkClient,
+    serviceCode: string,
+    quotaCode: string,
+  ): Promise<number | null> {
+    try {
+      const answer = await call<{ Quota?: { Value?: number } }>(
+        'service-quotas',
+        quotas,
+        new GetServiceQuotaCommand({ ServiceCode: serviceCode, QuotaCode: quotaCode }),
+      );
+      return Math.floor(required(answer.Quota?.Value, 'Quota.Value'));
+    } catch (err) {
+      if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'NoSuchResourceException') {
+        throw err;
+      }
+      return null;
+    }
+  }
+
+  /** A quota's applied value, the AWS default standing in when the account has
+   *  none — the pool's vCPU reading (`readVcpuQuota`). Never the tenant raise's
+   *  at-target test: the default is AWS's general value, not the account's
+   *  (MOTIR-12011: Lambda's default is 1000 where a new account is held at 10). */
   async function appliedQuota(
     quotas: AwsSdkClient,
     serviceCode: string,
     quotaCode: string,
   ): Promise<number> {
-    const input = { ServiceCode: serviceCode, QuotaCode: quotaCode };
-    let value: number | undefined;
-    try {
-      const answer = await call<{ Quota?: { Value?: number } }>(
-        'service-quotas',
-        quotas,
-        new GetServiceQuotaCommand(input),
-      );
-      value = answer.Quota?.Value;
-    } catch (err) {
-      if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'NoSuchResourceException') {
-        throw err;
-      }
-      const answer = await call<{ Quota?: { Value?: number } }>(
-        'service-quotas',
-        quotas,
-        new GetAWSDefaultServiceQuotaCommand(input),
-      );
-      value = answer.Quota?.Value;
-    }
-    return Math.floor(required(value, 'Quota.Value'));
+    const applied = await appliedQuotaValue(quotas, serviceCode, quotaCode);
+    if (applied !== null) return applied;
+    const answer = await call<{ Quota?: { Value?: number } }>(
+      'service-quotas',
+      quotas,
+      new GetAWSDefaultServiceQuotaCommand({ ServiceCode: serviceCode, QuotaCode: quotaCode }),
+    );
+    return Math.floor(required(answer.Quota?.Value, 'Quota.Value'));
   }
 
   async function openQuotaRequest(
@@ -1289,7 +1330,11 @@ export function createAwsManagementApi(
     async ensureQuotaRaise(credentials, regionId, target) {
       const quotas = client('service-quotas', credentials, regionId);
       const { serviceCode, quotaCode, desiredValue } = target;
-      if ((await appliedQuota(quotas, serviceCode, quotaCode)) >= desiredValue) {
+      // At target only on the account's OWN applied value. With none recorded the
+      // AWS default is no evidence — a new account can be held far below it — so
+      // the raise is filed (MOTIR-12011).
+      const applied = await appliedQuotaValue(quotas, serviceCode, quotaCode);
+      if (applied !== null && applied >= desiredValue) {
         return { filed: false, pending: false };
       }
       if (await openQuotaRequest(quotas, serviceCode, quotaCode)) {
@@ -1316,6 +1361,47 @@ export function createAwsManagementApi(
         return { filed: false, pending: true };
       }
       return { filed: true, pending: true };
+    },
+
+    async readQuotaStatus(credentials, regionId, quota) {
+      const quotas = client('service-quotas', credentials, regionId);
+      const { serviceCode, quotaCode } = quota;
+      let applied: number | null = null;
+      try {
+        const answer = await call<{ Quota?: { Value?: number } }>(
+          'service-quotas',
+          quotas,
+          new GetServiceQuotaCommand({ ServiceCode: serviceCode, QuotaCode: quotaCode }),
+        );
+        applied = Math.floor(required(answer.Quota?.Value, 'Quota.Value'));
+      } catch (err) {
+        if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'NoSuchResourceException') {
+          throw err;
+        }
+      }
+      // The NEWEST open raise across both open statuses: a quota has at most one
+      // in practice, and the newest is the one that says what happens next.
+      let openRaise: AwsOpenQuotaRaise | null = null;
+      for (const status of OPEN_QUOTA_REQUEST_STATUSES) {
+        const answer = await call<{ RequestedQuotas?: RequestedQuotaShape[] }>(
+          'service-quotas',
+          quotas,
+          new ListRequestedServiceQuotaChangeHistoryByQuotaCommand({
+            ServiceCode: serviceCode,
+            QuotaCode: quotaCode,
+            Status: status,
+          }),
+        );
+        for (const requested of answer.RequestedQuotas ?? []) {
+          const createdAt = requested.Created instanceof Date ? requested.Created : null;
+          const newer =
+            openRaise === null ||
+            (createdAt !== null &&
+              (openRaise.createdAt === null || createdAt > openRaise.createdAt));
+          if (newer) openRaise = { ...quotaRequestOf(requested), createdAt };
+        }
+      }
+      return { applied, openRaise };
     },
 
     async moveAccountToOrganizationalUnit(accountId, organizationalUnitId) {

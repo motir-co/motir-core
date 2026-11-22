@@ -5,6 +5,7 @@ import {
   pointerOf,
   runDiscrepancyBackfillService,
 } from '@/lib/services/runDiscrepancyBackfillService';
+import { composeDiscrepancyComment } from '@/lib/dispatchRuns/discrepancyComment';
 import { runDiscrepancyService } from '@/lib/services/runDiscrepancyService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { run as runScript, parseArgs } from '@/scripts/backfill-run-discrepancy-records';
@@ -13,9 +14,11 @@ import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // THE BACKFILL of run discrepancy records written before they were data (Task MOTIR-11361),
-// on a real Postgres. Each legacy state is made the honest way — record through the real
-// door, then delete the structured row, which is what a pre-MOTIR-11361 call left behind —
-// and the sweep is asked to put it back, or to REPORT why it cannot.
+// on a real Postgres. Each legacy state is rebuilt from the real door: record through it, then
+// put back what a pre-MOTIR-11361 call left — the comment the door then wrote (composed by the
+// same composer) and a finding pointing at it — and delete the structured row. Since
+// MOTIR-11996 the door writes no comment, so the comment is written here, as it was then. The
+// sweep is asked to put the record back, or to REPORT why it cannot.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -55,15 +58,51 @@ async function openLeg(fx: WorkItemFixture, key: string): Promise<string> {
   return run.id;
 }
 
+/**
+ * A call as the door made it before MOTIR-11996: the record, plus the comment and a finding
+ * pointing at that comment by `commentId`. Answers the comment's id and the record's.
+ */
+async function preCommentless(
+  fx: WorkItemFixture,
+  key: string,
+  input: { points?: (typeof POINT)[]; decisions?: (typeof DECISION)[] },
+) {
+  const { recordId } = await runDiscrepancyService.recordDiscrepancy({ key, ...input }, fx.ctx);
+  const row = await adminDb.runDiscrepancyRecord.findUniqueOrThrow({ where: { id: recordId } });
+  const comment = await adminDb.comment.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      workItemId: row.workItemId,
+      authorId: fx.ctx.userId,
+      bodyMd: composeDiscrepancyComment(input.points ?? [], input.decisions ?? []),
+    },
+  });
+  await adminDb.runDiscrepancyRecord.update({
+    where: { id: recordId },
+    data: { commentId: comment.id },
+  });
+  if (row.dispatchRunCardId !== null) {
+    const finding = await adminDb.dispatchRunEvent.findFirstOrThrow({
+      where: { kind: 'discrepancy_recorded', dispatchRunCardId: row.dispatchRunCardId },
+    });
+    const { recordId: _pointer, ...rest } = finding.data as Record<string, unknown>;
+    await adminDb.dispatchRunEvent.update({
+      where: { id: finding.id },
+      data: { data: { commentId: comment.id, ...rest } as never },
+    });
+  }
+  return { commentId: comment.id, recordId };
+}
+
 /** A record as a pre-MOTIR-11361 call left it: the comment (and finding), no row. */
 async function legacy(
   fx: WorkItemFixture,
   key: string,
   input: { points?: (typeof POINT)[]; decisions?: (typeof DECISION)[] },
 ) {
-  const result = await runDiscrepancyService.recordDiscrepancy({ key, ...input }, fx.ctx);
-  await adminDb.runDiscrepancyRecord.deleteMany({ where: { commentId: result.commentId } });
-  return result.commentId;
+  const { commentId, recordId } = await preCommentless(fx, key, input);
+  await adminDb.runDiscrepancyRecord.delete({ where: { id: recordId } });
+  return commentId;
 }
 
 const rows = () =>
@@ -280,10 +319,7 @@ describe('runDiscrepancyBackfillService.backfill', () => {
     // A comment already recorded on one leg, and a second finding on another leg of the
     // same card pointing at it: its record would collide on the unique comment.
     const runOne = await openLeg(fx, a.key);
-    const { commentId } = await runDiscrepancyService.recordDiscrepancy(
-      { key: a.key, points: [POINT] },
-      fx.ctx,
-    );
+    const { commentId } = await preCommentless(fx, a.key, { points: [POINT] });
     await dispatchRunService.close(runOne, { stopReason: 'completed' }, fx.ctx);
     const runTwo = await openLeg(fx, a.key);
     const legTwo = await adminDb.dispatchRunCard.findFirstOrThrow({

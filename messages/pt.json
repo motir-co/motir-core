@@ -1415,6 +1415,45 @@
     }
   },
   "issueViews": {
+    "runDiscrepancy": {
+      "title": "Discrepâncias da execução",
+      "gloss": "o que uma execução construiu ou decidiu e o plano não dizia",
+      "recordCount": "{count, plural, one {# registro} other {# registros}}",
+      "recordedBy": "Registrado em {time} por {name}",
+      "recordedByFormer": "Registrado em {time} por um ex-membro",
+      "inRun": "Execução de {time}",
+      "inRunAria": "Abrir a execução de {time}",
+      "noRun": "Não faz parte de uma execução",
+      "pointsHeading": "Construído de forma diferente do plano",
+      "pointsCount": "{count, plural, one {# ponto} other {# pontos}}",
+      "pointsGloss": "O resultado foi mantido. O caminho até ele mudou.",
+      "decisionsHeading": "Decidido onde o plano não dizia nada",
+      "decisionsCount": "{count, plural, one {# decisão} other {# decisões}}",
+      "decisionsGloss": "Primeiro pelas convenções do repositório, depois pelas boas práticas do setor.",
+      "pointLabel": "Ponto {n}",
+      "decisionLabel": "Decisão {n}",
+      "planAsked": "O plano pedia",
+      "built": "Construído",
+      "why": "Por quê",
+      "planSaid": "O plano dizia",
+      "chose": "Escolhido",
+      "alternatives": "Alternativas",
+      "showMorePoints": "{count, plural, one {Mostrar mais # ponto} other {Mostrar mais # pontos}}",
+      "showMoreDecisions": "{count, plural, one {Mostrar mais # decisão} other {Mostrar mais # decisões}}",
+      "showFewer": "Mostrar menos",
+      "showRecord": "Mostrar este registro",
+      "hideRecord": "Ocultar este registro",
+      "show": "Mostrar",
+      "hide": "Ocultar",
+      "summaryOne": "registrado em {time} por {name}",
+      "summaryOneFormer": "registrado em {time} por um ex-membro",
+      "summaryLatest": "último registro em {time} por {name}",
+      "summaryLatestFormer": "último registro em {time} por um ex-membro",
+      "summaryNoEntries": "Não foi possível recuperar este registro",
+      "backfilled": "Recuperado de um comentário que a execução escreveu antes de os registros serem guardados.",
+      "unreadableTitle": "Não foi possível recuperar este registro",
+      "unreadableBody": "O comentário foi excluído ou editado antes de os registros serem guardados, então {points, plural, =0 {nenhum ponto} one {# ponto} other {# pontos}} e {decisions, plural, =0 {nenhuma decisão} one {# decisão} other {# decisões}} foram perdidos."
+    },
     "heading": "Itens de trabalho",
     "labelsField": "Etiquetas",
     "labelsPlaceholder": "Adicionar uma etiqueta…",
@@ -15178,7 +15217,7 @@
       },
       "pools": {
         "title": "Pools",
-        "subtitle": "O tamanho de cada pool da frota e quantas máquinas rodam nele agora: primeiro a frota de instalação na conta AWS da própria Motir, depois as contas add-shard em que rodam os jobs dos clientes.",
+        "subtitle": "O tamanho de cada pool da frota e quantas máquinas rodam nele agora: primeiro a frota de instalação na própria conta da AWS do Motir, depois as contas add-shard em que rodam os jobs dos tenants e, por fim, as cotas da AWS das contas que hospedam os apps dos tenants enterprise.",
         "notApplicable": "Não se aplica",
         "loading": {
           "install": "Carregando a conta da própria Motir",
@@ -15367,6 +15406,80 @@
         },
         "computed": "Calculado pela varredura de provisionamento de {time} ({age}). Somente leitura: o motir-studio é instalado em um repositório no GitHub, não aqui.",
         "loading": "Carregando os pontos cegos da frota de CI"
+      },
+      "tenants": {
+        "title": "Contas de hospedagem de tenants · apps enterprise",
+        "subtitle": "Uma conta da AWS por organização enterprise, onde rodam seus apps com destino AWS. Cada cota é lida ao vivo do Service Quotas nessa conta e comparada com a meta para a qual o bootstrap da conta a eleva.",
+        "loading": "Carregando as contas de hospedagem de tenants",
+        "pill": {
+          "below": "{count, plural, one {# cota abaixo da meta, sem aumento} other {# cotas abaixo da meta, sem aumento}}",
+          "notRead": "{count, plural, one {# conta não lida} other {# contas não lidas}}"
+        },
+        "account": {
+          "title": "Por organização",
+          "noAwsAccount": "Ainda sem conta da AWS",
+          "accountLabel": "Conta da AWS {id}"
+        },
+        "search": {
+          "label": "Pesquisar contas de hospedagem de tenants",
+          "placeholder": "Organização ou ID da conta"
+        },
+        "noMatch": {
+          "title": "Nenhuma conta corresponde a “{q}”",
+          "body": "A pesquisa considera o nome da organização, o ID da conta da AWS e o nome da conta.",
+          "clear": "Limpar a pesquisa"
+        },
+        "foot": "{from}–{to} de {total, plural, one {# conta} other {# contas}} · contas com uma cota abaixo da meta e sem aumento vêm primeiro",
+        "footMatch": "{from}–{to} de {total, plural, one {# conta} other {# contas}} que correspondem a “{q}” · contas com uma cota abaixo da meta e sem aumento vêm primeiro",
+        "pagerLabel": "Páginas das contas de hospedagem de tenants",
+        "state": {
+          "requested": "Solicitada",
+          "creating": "Em criação",
+          "bootstrapping": "Em bootstrap",
+          "ready": "Pronta",
+          "refused": "Recusada"
+        },
+        "notReady": {
+          "requested": "As cotas são lidas quando a conta fica pronta. A conta ainda não foi criada.",
+          "creating": "As cotas são lidas quando a conta fica pronta. A AWS está criando a conta.",
+          "bootstrapping": "As cotas são lidas quando a conta fica pronta. O bootstrap está configurando a função de deploy, as tags e os aumentos de cota.",
+          "refused": "{count, plural, one {A AWS recusou criar a conta uma vez, {age}.} other {A AWS recusou criar a conta # vezes, a última {age}.}} A reconciliação tenta de novo após a espera; as cotas são lidas quando a conta fica pronta.",
+          "refusedNever": "As cotas são lidas quando a conta fica pronta. A AWS recusou criar a conta; a reconciliação tenta de novo após a espera."
+        },
+        "col": {
+          "quota": "Cota",
+          "applied": "Aplicada",
+          "target": "Meta",
+          "raise": "Aumento aberto"
+        },
+        "quota": {
+          "lambda-concurrent-executions": "Execuções simultâneas do Lambda",
+          "fargate-on-demand-vcpu": "vCPU sob demanda do Fargate"
+        },
+        "value": {
+          "count": "{n}",
+          "vcpu": "{n} vCPU"
+        },
+        "atTarget": "Na meta",
+        "short": "{n} abaixo da meta",
+        "below": "Abaixo da meta · sem aumento",
+        "raise": {
+          "to": "para {value}",
+          "filed": "solicitado {age}",
+          "none": "Nenhum aumento aberto"
+        },
+        "notRead": {
+          "body": "As cotas desta conta não carregaram (a sessão da função de membro ou o Service Quotas não respondeu), então nenhum valor é exibido. As outras contas não são afetadas."
+        },
+        "empty": {
+          "title": "Nenhuma conta de hospedagem de tenants",
+          "body": "Uma organização enterprise recebe sua própria conta da AWS na primeira vez que um de seus projetos tem a AWS como destino."
+        },
+        "error": {
+          "title": "Não foi possível ler as contas de hospedagem de tenants",
+          "body": "A leitura das contas de tenants não respondeu, então nenhuma conta é listada; nada disso é zero. Os pools acima e o restante desta página não são afetados. Recarregue para tentar de novo."
+        },
+        "readOnly": "Somente leitura. Nada aqui solicita aumento: o bootstrap da conta do tenant solicita cada um."
       }
     }
   },
@@ -17477,7 +17590,7 @@
       "toRun": {
         "sentence": "Iniciar uma revisão de <title>{name}</title>",
         "tag": "Revisão a executar",
-        "details": "Ainda não é uma aprovação. Abra o item para iniciar a revisão; sua aprovação é solicitada quando ela passar.",
+        "details": "Ainda não é uma aprovação. Abra para iniciar a revisão ou continuar sem ela; sua aprovação é solicitada quando ela passar.",
         "open": "Abrir {key}: {sentence}"
       },
       "dismiss": {

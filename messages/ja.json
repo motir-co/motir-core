@@ -1415,6 +1415,45 @@
     }
   },
   "issueViews": {
+    "runDiscrepancy": {
+      "title": "実行の相違記録",
+      "gloss": "計画に書かれていなかった、実行が構築または決定した内容",
+      "recordCount": "{count, plural, other {#件の記録}}",
+      "recordedBy": "{time} に {name} が記録",
+      "recordedByFormer": "{time} に元メンバーが記録",
+      "inRun": "{time} の実行",
+      "inRunAria": "{time} の実行を開く",
+      "noRun": "実行の一部ではありません",
+      "pointsHeading": "計画と異なる構築",
+      "pointsCount": "{count, plural, other {#件の相違}}",
+      "pointsGloss": "結果は維持され、そこへ至る道筋が変わりました。",
+      "decisionsHeading": "計画に書かれていなかった点の決定",
+      "decisionsCount": "{count, plural, other {#件の決定}}",
+      "decisionsGloss": "まずリポジトリの規約に、次に業界のベストプラクティスに従いました。",
+      "pointLabel": "相違 {n}",
+      "decisionLabel": "決定 {n}",
+      "planAsked": "計画の要求",
+      "built": "構築内容",
+      "why": "理由",
+      "planSaid": "計画の記載",
+      "chose": "選択",
+      "alternatives": "検討した他の案",
+      "showMorePoints": "{count, plural, other {相違をあと#件表示}}",
+      "showMoreDecisions": "{count, plural, other {決定をあと#件表示}}",
+      "showFewer": "表示を減らす",
+      "showRecord": "この記録を表示",
+      "hideRecord": "この記録を隠す",
+      "show": "表示",
+      "hide": "隠す",
+      "summaryOne": "{time} に {name} が記録",
+      "summaryOneFormer": "{time} に元メンバーが記録",
+      "summaryLatest": "最新は {time} に {name} が記録",
+      "summaryLatestFormer": "最新は {time} に元メンバーが記録",
+      "summaryNoEntries": "この記録は復元できませんでした",
+      "backfilled": "記録が保存されるようになる前に実行が書いたコメントから復元しました。",
+      "unreadableTitle": "この記録は復元できませんでした",
+      "unreadableBody": "記録が保存されるようになる前にコメントが削除または編集されたため、{points, plural, =0 {相違なし} other {#件の相違}}と{decisions, plural, =0 {決定なし} other {#件の決定}}が失われました。"
+    },
     "heading": "作業項目",
     "labelsField": "ラベル",
     "labelsPlaceholder": "ラベルを追加…",
@@ -15175,7 +15214,7 @@
       },
       "pools": {
         "title": "プール",
-        "subtitle": "各フリートプールの大きさと、いま稼働しているマシン数。まず Motir 自身の AWS アカウントのインストールフリート、次にテナントのジョブが動く add-shard アカウントです。",
+        "subtitle": "各フリートプールの大きさと、現在その中で動いているマシンの数です。まず Motir 自身の AWS アカウントにあるインストールフリート、次にテナントのジョブが動く add-shard アカウント、最後にエンタープライズテナントのアプリをホストするアカウントの AWS クォータです。",
         "notApplicable": "該当なし",
         "loading": {
           "install": "Motir 自身のアカウントを読み込み中",
@@ -15364,6 +15403,80 @@
         },
         "computed": "{time} のプロビジョニングスイープで計算（{age}）。読み取り専用：motir-studio はここではなく GitHub でリポジトリにインストールします。",
         "loading": "CI フリートの死角を読み込んでいます"
+      },
+      "tenants": {
+        "title": "テナントホスティングアカウント · エンタープライズアプリ",
+        "subtitle": "エンタープライズ組織ごとに 1 つの AWS アカウントがあり、AWS をターゲットとするアプリがそこで動きます。各クォータはそのアカウントの Service Quotas からライブで読み取り、アカウントのブートストラップが引き上げる目標値と比較します。",
+        "loading": "テナントホスティングアカウントを読み込んでいます",
+        "pill": {
+          "below": "{count, plural, other {目標未満で引き上げなしのクォータ # 件}}",
+          "notRead": "{count, plural, other {未読み込みのアカウント # 件}}"
+        },
+        "account": {
+          "title": "組織別",
+          "noAwsAccount": "AWS アカウントはまだありません",
+          "accountLabel": "AWS アカウント {id}"
+        },
+        "search": {
+          "label": "テナントホスティングアカウントを検索",
+          "placeholder": "組織またはアカウント ID"
+        },
+        "noMatch": {
+          "title": "「{q}」に一致するアカウントはありません",
+          "body": "検索は組織名、AWS アカウント ID、アカウント名を対象とします。",
+          "clear": "検索をクリア"
+        },
+        "foot": "{total, plural, other {# 件のアカウント}}中 {from}–{to} 件 · 目標未満で引き上げのないクォータがあるアカウントを先頭に表示",
+        "footMatch": "「{q}」に一致する{total, plural, other {# 件のアカウント}}中 {from}–{to} 件 · 目標未満で引き上げのないクォータがあるアカウントを先頭に表示",
+        "pagerLabel": "テナントホスティングアカウントのページ",
+        "state": {
+          "requested": "リクエスト済み",
+          "creating": "作成中",
+          "bootstrapping": "ブートストラップ中",
+          "ready": "準備完了",
+          "refused": "拒否"
+        },
+        "notReady": {
+          "requested": "クォータはアカウントの準備ができてから読み取ります。アカウントはまだ作成されていません。",
+          "creating": "クォータはアカウントの準備ができてから読み取ります。AWS がアカウントを作成しています。",
+          "bootstrapping": "クォータはアカウントの準備ができてから読み取ります。ブートストラップがデプロイロール、タグ、クォータの引き上げを設定しています。",
+          "refused": "{count, plural, other {AWS はアカウントの作成を # 回拒否しました(最後は{age})。}}調整処理はバックオフの後に再試行します。クォータはアカウントの準備ができてから読み取ります。",
+          "refusedNever": "クォータはアカウントの準備ができてから読み取ります。AWS はアカウントの作成を拒否しました。調整処理はバックオフの後に再試行します。"
+        },
+        "col": {
+          "quota": "クォータ",
+          "applied": "適用値",
+          "target": "目標",
+          "raise": "未完了の引き上げ"
+        },
+        "quota": {
+          "lambda-concurrent-executions": "Lambda の同時実行数",
+          "fargate-on-demand-vcpu": "Fargate オンデマンド vCPU"
+        },
+        "value": {
+          "count": "{n}",
+          "vcpu": "{n} vCPU"
+        },
+        "atTarget": "目標達成",
+        "short": "目標まであと {n}",
+        "below": "目標未満 · 引き上げなし",
+        "raise": {
+          "to": "{value} へ",
+          "filed": "{age}に申請",
+          "none": "未完了の引き上げなし"
+        },
+        "notRead": {
+          "body": "このアカウントのクォータを読み込めませんでした(メンバーロールのセッションまたは Service Quotas が応答しませんでした)。そのため数値は表示しません。他のアカウントには影響ありません。"
+        },
+        "empty": {
+          "title": "テナントホスティングアカウントはありません",
+          "body": "エンタープライズ組織は、そのプロジェクトのいずれかが初めて AWS をターゲットにしたときに専用の AWS アカウントを受け取ります。"
+        },
+        "error": {
+          "title": "テナントホスティングアカウントを読み取れませんでした",
+          "body": "テナントアカウントの読み取りが応答しなかったため、アカウントは一覧表示されません。いずれもゼロではありません。上のプールとこのページの他の部分には影響ありません。再読み込みしてもう一度お試しください。"
+        },
+        "readOnly": "読み取り専用です。ここでは引き上げを申請しません。各申請はテナントアカウントのブートストラップが行います。"
       }
     }
   },
@@ -17474,7 +17587,7 @@
       "toRun": {
         "sentence": "<title>{name}</title> のレビューを開始",
         "tag": "実行待ちのレビュー",
-        "details": "まだ承認ではありません。項目を開いてレビューを開始してください。合格すると承認を求められます。",
+        "details": "まだ承認ではありません。開いてレビューを開始するか、レビューなしで続行してください。合格すると承認を求められます。",
         "open": "{key} を開く: {sentence}"
       },
       "dismiss": {

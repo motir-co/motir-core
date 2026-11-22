@@ -8,6 +8,7 @@ import {
   type AwsOrganizationAccount,
   type AwsManagedPolicy,
   type AwsPolicyDocument,
+  type AwsQuotaRef,
   type AwsQuotaTarget,
   type AwsSessionCredentials,
   type AwsStackInstanceTarget,
@@ -435,6 +436,26 @@ export class FakeOrganization implements AwsManagementApi {
     this.openQuotaRaises.set(key, target.desiredValue);
     this.failOnceAfter('quotaRaiseFiled');
     return { filed: true, pending: true };
+  }
+
+  /** A quota never set reads as no applied value (null), as AWS answers it. */
+  async readQuotaStatus(credentials: AwsSessionCredentials, _regionId: string, quota: AwsQuotaRef) {
+    const accountId = this.sessionAccount.get(credentials) ?? 'unknown';
+    this.calls.push(`readQuotaStatus:${accountId}:${quota.quotaCode}`);
+    const key = `${accountId}:${quota.quotaCode}`;
+    const desired = this.openQuotaRaises.get(key);
+    return {
+      applied: this.appliedQuotas.get(key) ?? null,
+      openRaise:
+        desired === undefined
+          ? null
+          : {
+              requestId: `raise-${key}`,
+              status: 'PENDING',
+              desiredValue: desired,
+              createdAt: null,
+            },
+    };
   }
 }
 

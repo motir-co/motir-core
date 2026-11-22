@@ -1415,6 +1415,45 @@
     }
   },
   "issueViews": {
+    "runDiscrepancy": {
+      "title": "Écarts de l’exécution",
+      "gloss": "ce qu’une exécution a construit ou décidé sans que le plan le dise",
+      "recordCount": "{count, plural, one {# enregistrement} other {# enregistrements}}",
+      "recordedBy": "Enregistré le {time} par {name}",
+      "recordedByFormer": "Enregistré le {time} par un ancien membre",
+      "inRun": "Exécution du {time}",
+      "inRunAria": "Ouvrir l’exécution du {time}",
+      "noRun": "Ne fait partie d’aucune exécution",
+      "pointsHeading": "Construit autrement que prévu",
+      "pointsCount": "{count, plural, one {# point} other {# points}}",
+      "pointsGloss": "Le résultat a été conservé. Le chemin pour y arriver a changé.",
+      "decisionsHeading": "Décidé là où le plan ne disait rien",
+      "decisionsCount": "{count, plural, one {# décision} other {# décisions}}",
+      "decisionsGloss": "D’abord selon les conventions du dépôt, puis selon les bonnes pratiques du secteur.",
+      "pointLabel": "Point {n}",
+      "decisionLabel": "Décision {n}",
+      "planAsked": "Le plan demandait",
+      "built": "Construit",
+      "why": "Pourquoi",
+      "planSaid": "Le plan disait",
+      "chose": "Choisi",
+      "alternatives": "Alternatives",
+      "showMorePoints": "{count, plural, one {Afficher # point de plus} other {Afficher # points de plus}}",
+      "showMoreDecisions": "{count, plural, one {Afficher # décision de plus} other {Afficher # décisions de plus}}",
+      "showFewer": "Afficher moins",
+      "showRecord": "Afficher cet enregistrement",
+      "hideRecord": "Masquer cet enregistrement",
+      "show": "Afficher",
+      "hide": "Masquer",
+      "summaryOne": "enregistré le {time} par {name}",
+      "summaryOneFormer": "enregistré le {time} par un ancien membre",
+      "summaryLatest": "dernier enregistrement le {time} par {name}",
+      "summaryLatestFormer": "dernier enregistrement le {time} par un ancien membre",
+      "summaryNoEntries": "Cet enregistrement n’a pas pu être récupéré",
+      "backfilled": "Récupéré d’un commentaire écrit par l’exécution avant que les enregistrements ne soient conservés.",
+      "unreadableTitle": "Cet enregistrement n’a pas pu être récupéré",
+      "unreadableBody": "Son commentaire a été supprimé ou modifié avant que les enregistrements ne soient conservés, donc {points, plural, =0 {aucun point} one {# point} other {# points}} et {decisions, plural, =0 {aucune décision} one {# décision} other {# décisions}} ont été perdus."
+    },
     "heading": "Éléments de travail",
     "labelsField": "Étiquettes",
     "labelsPlaceholder": "Ajouter une étiquette…",
@@ -15178,7 +15217,7 @@
       },
       "pools": {
         "title": "Pools",
-        "subtitle": "La taille de chaque pool de la flotte et le nombre de machines qui y tournent maintenant : d’abord la flotte d’installation dans le compte AWS propre à Motir, puis les comptes add-shard sur lesquels tournent les jobs des clients.",
+        "subtitle": "La taille de chaque pool de la flotte et le nombre de machines qui y tournent maintenant : d’abord la flotte d’installation dans le compte AWS de Motir, puis les comptes add-shard sur lesquels tournent les jobs des locataires, puis les quotas AWS des comptes qui hébergent les apps des locataires enterprise.",
         "notApplicable": "Sans objet",
         "loading": {
           "install": "Chargement du compte propre à Motir",
@@ -15367,6 +15406,80 @@
         },
         "computed": "Calculé par le passage de provisionnement de {time} ({age}). Lecture seule : motir-studio s’installe sur un dépôt dans GitHub, pas ici.",
         "loading": "Chargement des angles morts de la flotte CI"
+      },
+      "tenants": {
+        "title": "Comptes d’hébergement des locataires · apps enterprise",
+        "subtitle": "Un compte AWS par organisation enterprise, où tournent ses apps ciblant AWS. Chaque quota est lu en direct depuis Service Quotas dans ce compte et comparé à la cible à laquelle le bootstrap du compte le relève.",
+        "loading": "Chargement des comptes d’hébergement des locataires",
+        "pill": {
+          "below": "{count, plural, one {# quota sous la cible, sans relèvement} other {# quotas sous la cible, sans relèvement}}",
+          "notRead": "{count, plural, one {# compte non lu} other {# comptes non lus}}"
+        },
+        "account": {
+          "title": "Par organisation",
+          "noAwsAccount": "Pas encore de compte AWS",
+          "accountLabel": "Compte AWS {id}"
+        },
+        "search": {
+          "label": "Rechercher dans les comptes d’hébergement des locataires",
+          "placeholder": "Organisation ou ID de compte"
+        },
+        "noMatch": {
+          "title": "Aucun compte ne correspond à « {q} »",
+          "body": "La recherche porte sur le nom de l’organisation, l’ID du compte AWS et le nom du compte.",
+          "clear": "Effacer la recherche"
+        },
+        "foot": "{from}–{to} sur {total, plural, one {# compte} other {# comptes}} · les comptes ayant un quota sous la cible sans relèvement viennent en premier",
+        "footMatch": "{from}–{to} sur {total, plural, one {# compte} other {# comptes}} correspondant à « {q} » · les comptes ayant un quota sous la cible sans relèvement viennent en premier",
+        "pagerLabel": "Pages des comptes d’hébergement des locataires",
+        "state": {
+          "requested": "Demandé",
+          "creating": "En création",
+          "bootstrapping": "Bootstrap en cours",
+          "ready": "Prêt",
+          "refused": "Refusé"
+        },
+        "notReady": {
+          "requested": "Les quotas sont lus une fois le compte prêt. Le compte n’a pas encore été créé.",
+          "creating": "Les quotas sont lus une fois le compte prêt. AWS est en train de créer le compte.",
+          "bootstrapping": "Les quotas sont lus une fois le compte prêt. Le bootstrap configure son rôle de déploiement, ses tags et ses relèvements de quota.",
+          "refused": "{count, plural, one {AWS a refusé de créer le compte une fois, {age}.} other {AWS a refusé de créer le compte # fois, la dernière {age}.}} La réconciliation réessaie après son délai ; les quotas sont lus une fois le compte prêt.",
+          "refusedNever": "Les quotas sont lus une fois le compte prêt. AWS a refusé de créer le compte ; la réconciliation réessaie après son délai."
+        },
+        "col": {
+          "quota": "Quota",
+          "applied": "Appliqué",
+          "target": "Cible",
+          "raise": "Relèvement ouvert"
+        },
+        "quota": {
+          "lambda-concurrent-executions": "Exécutions simultanées Lambda",
+          "fargate-on-demand-vcpu": "Fargate On-Demand vCPU"
+        },
+        "value": {
+          "count": "{n}",
+          "vcpu": "{n} vCPU"
+        },
+        "atTarget": "Cible atteinte",
+        "short": "{n} sous la cible",
+        "below": "Sous la cible · sans relèvement",
+        "raise": {
+          "to": "à {value}",
+          "filed": "déposé {age}",
+          "none": "Aucun relèvement ouvert"
+        },
+        "notRead": {
+          "body": "Les quotas de ce compte n’ont pas été chargés (la session du rôle membre ou Service Quotas n’a pas répondu), aucune valeur n’est donc affichée. Les autres comptes ne sont pas concernés."
+        },
+        "empty": {
+          "title": "Aucun compte d’hébergement de locataire",
+          "body": "Une organisation enterprise obtient son propre compte AWS la première fois qu’un de ses projets cible AWS."
+        },
+        "error": {
+          "title": "Impossible de lire les comptes d’hébergement des locataires",
+          "body": "La lecture des comptes des locataires n’a pas répondu, aucun compte n’est donc listé ; rien de tout cela n’est zéro. Les pools ci-dessus et le reste de cette page ne sont pas concernés. Rechargez la page pour réessayer."
+        },
+        "readOnly": "Lecture seule. Rien ici ne dépose de relèvement : le bootstrap du compte locataire dépose chacun d’eux."
       }
     }
   },
@@ -17477,7 +17590,7 @@
       "toRun": {
         "sentence": "Lancer une relecture de <title>{name}</title>",
         "tag": "Revue à lancer",
-        "details": "Ce n’est pas encore une approbation. Ouvrez l’élément pour lancer la relecture ; votre approbation est sollicitée une fois qu’elle a réussi.",
+        "details": "Ce n’est pas encore une approbation. Ouvrez-la pour lancer la relecture ou continuer sans elle ; votre approbation est sollicitée une fois qu’elle a réussi.",
         "open": "Ouvrir {key} : {sentence}"
       },
       "dismiss": {

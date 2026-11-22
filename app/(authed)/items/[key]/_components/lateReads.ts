@@ -1,6 +1,8 @@
 import 'server-only';
 import type { ItemGatedRunDto } from '@/lib/dto/home';
 import { resumeRunDetailService } from '@/lib/services/resumeRunDetailService';
+import { runDiscrepancyReadService } from '@/lib/services/runDiscrepancyReadService';
+import type { WorkItemRunDiscrepancyRecordDto } from '@/lib/dto/runDiscrepancy';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { commentsService } from '@/lib/services/commentsService';
@@ -244,6 +246,12 @@ export interface LateReads {
    * section then renders as it did before the marker existed).
    */
   gatedRun: ItemGatedRunDto | null;
+  /**
+   * The card's run discrepancy records, newest first (Task MOTIR-11996; `design/runs` §
+   * _Run discrepancy — the record gets its own section_). `[]` for the commonest card, which
+   * has none, and on a failed read: the section is then not drawn, as for no record.
+   */
+  runDiscrepancies: WorkItemRunDiscrepancyRecordDto[];
 }
 
 export interface LateReadsInput {
@@ -404,6 +412,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       confirmGate,
       agentReview,
       gatedRun,
+      runDiscrepancies,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -640,6 +649,13 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           return null;
         }
       })(),
+      (async () => {
+        try {
+          return await runDiscrepancyReadService.listForWorkItem(itemId, ctx);
+        } catch {
+          return [];
+        }
+      })(),
     ]);
 
     return {
@@ -671,6 +687,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       confirmGate,
       agentReview,
       gatedRun,
+      runDiscrepancies,
     };
   })();
 }

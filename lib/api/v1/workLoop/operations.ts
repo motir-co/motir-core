@@ -1139,10 +1139,11 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'The RUN records that its agent BUILT THROUGH `key`, a card the run holds, whose plan was ' +
       'wrong only about the route — the same record as the `record_run_discrepancy` MCP tool, ' +
       'sent by the CLI with the run\u2019s own credential after the agent exits, from the points ' +
-      'the agent wrote into its self-report. It writes ONE comment on the card listing every ' +
-      'point (what the plan asked · what was built · why) — and every DECISION the agent made ' +
-      'where the plan was silent (what it said · what was chosen · why), in their own section ' +
-      '(MOTIR-10000) — and ONE finding on the card\u2019s leg of THIS run. At least one point or ' +
+      'the agent wrote into its self-report. It writes ONE discrepancy record on the card, ' +
+      'holding every point (what the plan asked · what was built · why) and every DECISION the ' +
+      'agent made where the plan was silent (what it said · what was chosen · why; MOTIR-10000) ' +
+      '— the card\u2019s Run discrepancy section shows it, and no comment is written ' +
+      '(MOTIR-11996) — and ONE finding on the card\u2019s leg of THIS run. At least one point or ' +
       'one decision. ONE record per leg: a second is refused `DISCREPANCY_ALREADY_RECORDED` and ' +
       'writes nothing. A card that is not an open leg of the run is refused ' +
       '`UNKNOWN_DISPATCH_RUN_CARD`. Only the operator who opened the run may record for it.',
@@ -1165,7 +1166,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     response: {
       status: 200,
       body: { kind: 'object', schema: runDiscrepancyAcknowledgementSchema },
-      description: 'The acknowledgement: the comment written, and whether the run recorded it.',
+      description: 'The acknowledgement: the record written, and whether the run recorded it.',
     },
     // 403 for a run token naming another run, or a caller who may not edit the card;
     // 404 for an unknown, cross-workspace or another operator's run, or an unknown card;

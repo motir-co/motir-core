@@ -1415,6 +1415,45 @@
     }
   },
   "issueViews": {
+    "runDiscrepancy": {
+      "title": "Abweichungen des Laufs",
+      "gloss": "was ein Lauf gebaut oder entschieden hat, das der Plan nicht vorgab",
+      "recordCount": "{count, plural, one {# Eintrag} other {# Einträge}}",
+      "recordedBy": "Erfasst {time} von {name}",
+      "recordedByFormer": "Erfasst {time} von einem ehemaligen Mitglied",
+      "inRun": "Lauf vom {time}",
+      "inRunAria": "Lauf vom {time} öffnen",
+      "noRun": "Nicht Teil eines Laufs",
+      "pointsHeading": "Anders gebaut als geplant",
+      "pointsCount": "{count, plural, one {# Punkt} other {# Punkte}}",
+      "pointsGloss": "Das Ergebnis blieb erhalten. Der Weg dorthin hat sich geändert.",
+      "decisionsHeading": "Entschieden, wo der Plan nichts sagte",
+      "decisionsCount": "{count, plural, one {# Entscheidung} other {# Entscheidungen}}",
+      "decisionsGloss": "Zuerst nach den Konventionen des Repositorys, dann nach bewährter Branchenpraxis.",
+      "pointLabel": "Punkt {n}",
+      "decisionLabel": "Entscheidung {n}",
+      "planAsked": "Plan verlangte",
+      "built": "Gebaut",
+      "why": "Warum",
+      "planSaid": "Plan sagte",
+      "chose": "Gewählt",
+      "alternatives": "Alternativen",
+      "showMorePoints": "{count, plural, one {# weiteren Punkt anzeigen} other {# weitere Punkte anzeigen}}",
+      "showMoreDecisions": "{count, plural, one {# weitere Entscheidung anzeigen} other {# weitere Entscheidungen anzeigen}}",
+      "showFewer": "Weniger anzeigen",
+      "showRecord": "Diesen Eintrag anzeigen",
+      "hideRecord": "Diesen Eintrag ausblenden",
+      "show": "Anzeigen",
+      "hide": "Ausblenden",
+      "summaryOne": "erfasst {time} von {name}",
+      "summaryOneFormer": "erfasst {time} von einem ehemaligen Mitglied",
+      "summaryLatest": "zuletzt erfasst {time} von {name}",
+      "summaryLatestFormer": "zuletzt erfasst {time} von einem ehemaligen Mitglied",
+      "summaryNoEntries": "Dieser Eintrag konnte nicht wiederhergestellt werden",
+      "backfilled": "Wiederhergestellt aus einem Kommentar, den der Lauf schrieb, bevor Einträge gespeichert wurden.",
+      "unreadableTitle": "Dieser Eintrag konnte nicht wiederhergestellt werden",
+      "unreadableBody": "Sein Kommentar wurde gelöscht oder bearbeitet, bevor Einträge gespeichert wurden, daher gingen {points, plural, =0 {keine Punkte} one {# Punkt} other {# Punkte}} und {decisions, plural, =0 {keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}} verloren."
+    },
     "heading": "Arbeitselemente",
     "labelsField": "Labels",
     "labelsPlaceholder": "Label hinzufügen…",
@@ -15178,7 +15217,7 @@
       },
       "pools": {
         "title": "Pools",
-        "subtitle": "Wie groß jeder Flotten-Pool ist und wie viele Maschinen jetzt darin laufen: zuerst die Installationsflotte im eigenen AWS-Konto von Motir, dann die Add-Shard-Konten, auf denen die Jobs der Mandanten laufen.",
+        "subtitle": "Wie groß jeder Flottenpool ist und wie viele Maschinen gerade darin laufen: zuerst die Installationsflotte in Motirs eigenem AWS-Konto, dann die Add-Shard-Konten, auf denen die Jobs der Mandanten laufen, dann die AWS-Kontingente der Konten, in denen die Apps der Enterprise-Mandanten gehostet werden.",
         "notApplicable": "Nicht zutreffend",
         "loading": {
           "install": "Motirs eigenes Konto wird geladen",
@@ -15367,6 +15406,80 @@
         },
         "computed": "Berechnet vom Bereitstellungsdurchlauf um {time} ({age}). Schreibgeschützt: motir-studio wird in GitHub auf einem Repository installiert, nicht hier.",
         "loading": "Blinde Flecken der CI-Flotte werden geladen"
+      },
+      "tenants": {
+        "title": "Mandanten-Hostingkonten · Enterprise-Apps",
+        "subtitle": "Ein AWS-Konto pro Enterprise-Organisation, in dem ihre Apps mit AWS-Ziel laufen. Jedes Kontingent wird live aus Service Quotas in diesem Konto gelesen und mit dem Ziel verglichen, auf das der Konto-Bootstrap es anhebt.",
+        "loading": "Mandanten-Hostingkonten werden geladen",
+        "pill": {
+          "below": "{count, plural, one {# Kontingent unter Ziel, keine Anhebung} other {# Kontingente unter Ziel, keine Anhebung}}",
+          "notRead": "{count, plural, one {# Konto nicht gelesen} other {# Konten nicht gelesen}}"
+        },
+        "account": {
+          "title": "Nach Organisation",
+          "noAwsAccount": "Noch kein AWS-Konto",
+          "accountLabel": "AWS-Konto {id}"
+        },
+        "search": {
+          "label": "Mandanten-Hostingkonten durchsuchen",
+          "placeholder": "Organisation oder Konto-ID"
+        },
+        "noMatch": {
+          "title": "Kein Konto passt zu „{q}“",
+          "body": "Die Suche berücksichtigt den Namen der Organisation, die AWS-Konto-ID und den Kontonamen.",
+          "clear": "Suche zurücksetzen"
+        },
+        "foot": "{from}–{to} von {total, plural, one {# Konto} other {# Konten}} · Konten mit einem Kontingent unter Ziel und ohne Anhebung stehen zuerst",
+        "footMatch": "{from}–{to} von {total, plural, one {# Konto} other {# Konten}} passend zu „{q}“ · Konten mit einem Kontingent unter Ziel und ohne Anhebung stehen zuerst",
+        "pagerLabel": "Seiten der Mandanten-Hostingkonten",
+        "state": {
+          "requested": "Angefordert",
+          "creating": "Wird erstellt",
+          "bootstrapping": "Bootstrap läuft",
+          "ready": "Bereit",
+          "refused": "Abgelehnt"
+        },
+        "notReady": {
+          "requested": "Kontingente werden gelesen, sobald das Konto bereit ist. Das Konto wurde noch nicht erstellt.",
+          "creating": "Kontingente werden gelesen, sobald das Konto bereit ist. AWS erstellt das Konto gerade.",
+          "bootstrapping": "Kontingente werden gelesen, sobald das Konto bereit ist. Der Bootstrap richtet die Deploy-Rolle, die Tags und die Kontingentanhebungen ein.",
+          "refused": "{count, plural, one {AWS hat die Erstellung des Kontos einmal abgelehnt, {age}.} other {AWS hat die Erstellung des Kontos # Mal abgelehnt, zuletzt {age}.}} Der Abgleich versucht es nach seiner Wartezeit erneut; Kontingente werden gelesen, sobald das Konto bereit ist.",
+          "refusedNever": "Kontingente werden gelesen, sobald das Konto bereit ist. AWS hat die Erstellung des Kontos abgelehnt; der Abgleich versucht es nach seiner Wartezeit erneut."
+        },
+        "col": {
+          "quota": "Kontingent",
+          "applied": "Angewendet",
+          "target": "Ziel",
+          "raise": "Offene Anhebung"
+        },
+        "quota": {
+          "lambda-concurrent-executions": "Gleichzeitige Lambda-Ausführungen",
+          "fargate-on-demand-vcpu": "Fargate On-Demand vCPU"
+        },
+        "value": {
+          "count": "{n}",
+          "vcpu": "{n} vCPU"
+        },
+        "atTarget": "Ziel erreicht",
+        "short": "{n} unter Ziel",
+        "below": "Unter Ziel · keine Anhebung",
+        "raise": {
+          "to": "auf {value}",
+          "filed": "eingereicht {age}",
+          "none": "Keine offene Anhebung"
+        },
+        "notRead": {
+          "body": "Die Kontingente dieses Kontos wurden nicht geladen – die Sitzung der Mitgliedsrolle oder Service Quotas hat nicht geantwortet –, daher wird kein Wert angezeigt. Die anderen Konten sind nicht betroffen."
+        },
+        "empty": {
+          "title": "Keine Mandanten-Hostingkonten",
+          "body": "Eine Enterprise-Organisation erhält ihr eigenes AWS-Konto, sobald eines ihrer Projekte zum ersten Mal AWS als Ziel hat."
+        },
+        "error": {
+          "title": "Die Mandanten-Hostingkonten konnten nicht gelesen werden",
+          "body": "Das Lesen der Mandantenkonten hat nicht geantwortet, daher wird kein Konto aufgeführt – nichts davon ist null. Die Pools oben und der Rest dieser Seite sind nicht betroffen. Laden Sie die Seite neu, um es erneut zu versuchen."
+        },
+        "readOnly": "Nur lesend. Hier wird keine Anhebung eingereicht: Der Bootstrap des Mandantenkontos reicht jede einzelne ein."
       }
     }
   },
@@ -17477,7 +17590,7 @@
       "toRun": {
         "sentence": "Prüfung von <title>{name}</title> starten",
         "tag": "Review auszuführen",
-        "details": "Noch keine Genehmigung. Öffnen Sie das Element, um die Prüfung zu starten; Ihre Genehmigung wird angefragt, sobald sie bestanden ist.",
+        "details": "Noch keine Genehmigung. Öffnen Sie es, um die Prüfung zu starten oder ohne sie fortzufahren; Ihre Genehmigung wird angefragt, sobald sie bestanden ist.",
         "open": "{key} öffnen: {sentence}"
       },
       "dismiss": {

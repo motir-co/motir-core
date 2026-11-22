@@ -1415,6 +1415,45 @@
     }
   },
   "issueViews": {
+    "runDiscrepancy": {
+      "title": "Run discrepancy",
+      "gloss": "what a run built or decided that the plan didn’t say",
+      "recordCount": "{count, plural, one {# record} other {# records}}",
+      "recordedBy": "Recorded {time} by {name}",
+      "recordedByFormer": "Recorded {time} by a former member",
+      "inRun": "Run of {time}",
+      "inRunAria": "Open the run of {time}",
+      "noRun": "Not part of a run",
+      "pointsHeading": "Built differently from the plan",
+      "pointsCount": "{count, plural, one {# point} other {# points}}",
+      "pointsGloss": "The outcome was kept. The route to it changed.",
+      "decisionsHeading": "Decided where the plan was silent",
+      "decisionsCount": "{count, plural, one {# decision} other {# decisions}}",
+      "decisionsGloss": "By the repository’s conventions first, then industry best practice.",
+      "pointLabel": "Point {n}",
+      "decisionLabel": "Decision {n}",
+      "planAsked": "Plan asked",
+      "built": "Built",
+      "why": "Why",
+      "planSaid": "Plan said",
+      "chose": "Chose",
+      "alternatives": "Alternatives",
+      "showMorePoints": "{count, plural, one {Show # more point} other {Show # more points}}",
+      "showMoreDecisions": "{count, plural, one {Show # more decision} other {Show # more decisions}}",
+      "showFewer": "Show fewer",
+      "showRecord": "Show this record",
+      "hideRecord": "Hide this record",
+      "show": "Show",
+      "hide": "Hide",
+      "summaryOne": "recorded {time} by {name}",
+      "summaryOneFormer": "recorded {time} by a former member",
+      "summaryLatest": "latest recorded {time} by {name}",
+      "summaryLatestFormer": "latest recorded {time} by a former member",
+      "summaryNoEntries": "This record couldn’t be recovered",
+      "backfilled": "Recovered from a comment the run wrote before records were kept.",
+      "unreadableTitle": "This record couldn’t be recovered",
+      "unreadableBody": "Its comment was deleted or edited before records were kept, so {points, plural, =0 {no points} one {# point} other {# points}} and {decisions, plural, =0 {no decisions} one {# decision} other {# decisions}} were lost."
+    },
     "heading": "Work Items",
     "labelsField": "Labels",
     "labelsPlaceholder": "Add a label…",
@@ -15175,7 +15214,7 @@
       },
       "pools": {
         "title": "Pools",
-        "subtitle": "How big each fleet pool is and how many machines run in it now: first the install fleet in Motir’s own AWS account, then the add-shard accounts tenants’ jobs run on.",
+        "subtitle": "How big each fleet pool is and how many machines run in it now: first the install fleet in Motir’s own AWS account, then the add-shard accounts tenants’ jobs run on, then the AWS quotas of the accounts enterprise tenants’ apps are hosted in.",
         "notApplicable": "Not applicable",
         "loading": {
           "install": "Loading Motir’s own account",
@@ -15364,6 +15403,80 @@
         },
         "computed": "Computed by the provision sweep of {time} ({age}). Read-only: motir-studio is installed on a repo in GitHub, not here.",
         "loading": "Loading the CI fleet's blind spots"
+      },
+      "tenants": {
+        "title": "Tenant hosting accounts · enterprise apps",
+        "subtitle": "One AWS account per enterprise organisation, where its AWS-target apps run. Each quota is read live from Service Quotas in that account, against the target the account bootstrap raises it to.",
+        "loading": "Loading the tenant hosting accounts",
+        "pill": {
+          "below": "{count, plural, one {# quota below target, no raise} other {# quotas below target, no raise}}",
+          "notRead": "{count, plural, one {# account not read} other {# accounts not read}}"
+        },
+        "account": {
+          "title": "By organisation",
+          "noAwsAccount": "No AWS account yet",
+          "accountLabel": "AWS account {id}"
+        },
+        "search": {
+          "label": "Search tenant hosting accounts",
+          "placeholder": "Organisation or account id"
+        },
+        "noMatch": {
+          "title": "No account matches “{q}”",
+          "body": "The search looks at the organisation’s name, the AWS account id and the account name.",
+          "clear": "Clear the search"
+        },
+        "foot": "{from}–{to} of {total, plural, one {# account} other {# accounts}} · accounts with a quota below target and no raise come first",
+        "footMatch": "{from}–{to} of {total, plural, one {# account} other {# accounts}} matching “{q}” · accounts with a quota below target and no raise come first",
+        "pagerLabel": "Tenant hosting accounts pages",
+        "state": {
+          "requested": "Requested",
+          "creating": "Creating",
+          "bootstrapping": "Bootstrapping",
+          "ready": "Ready",
+          "refused": "Refused"
+        },
+        "notReady": {
+          "requested": "Quotas are read once the account is ready. The account has not been created yet.",
+          "creating": "Quotas are read once the account is ready. AWS is creating the account.",
+          "bootstrapping": "Quotas are read once the account is ready. The bootstrap is setting up its deploy role, tags and quota raises.",
+          "refused": "{count, plural, one {AWS refused to create the account once, {age}.} other {AWS refused to create the account # times, last {age}.}} The reconcile tries again after its backoff; quotas are read once the account is ready.",
+          "refusedNever": "Quotas are read once the account is ready. AWS refused to create the account; the reconcile tries again after its backoff."
+        },
+        "col": {
+          "quota": "Quota",
+          "applied": "Applied",
+          "target": "Target",
+          "raise": "Open raise"
+        },
+        "quota": {
+          "lambda-concurrent-executions": "Lambda concurrent executions",
+          "fargate-on-demand-vcpu": "Fargate On-Demand vCPU"
+        },
+        "value": {
+          "count": "{n}",
+          "vcpu": "{n} vCPU"
+        },
+        "atTarget": "At target",
+        "short": "{n} short of target",
+        "below": "Below target · no raise",
+        "raise": {
+          "to": "to {value}",
+          "filed": "filed {age}",
+          "none": "No open raise"
+        },
+        "notRead": {
+          "body": "This account’s quotas didn’t load — the member-role session or Service Quotas did not answer — so no figure is shown. The other accounts are unaffected."
+        },
+        "empty": {
+          "title": "No tenant hosting accounts",
+          "body": "An enterprise organisation gets its own AWS account the first time one of its projects targets AWS."
+        },
+        "error": {
+          "title": "Couldn’t read the tenant hosting accounts",
+          "body": "The tenant accounts read didn’t answer, so no account is listed — none of it is zero. The pools above and the rest of this page are unaffected. Reload to try again."
+        },
+        "readOnly": "Read-only. Nothing here files a raise: the tenant account bootstrap files each one."
       }
     }
   },
@@ -17474,7 +17587,7 @@
       "toRun": {
         "sentence": "Start a review of <title>{name}</title>",
         "tag": "Review to run",
-        "details": "Not an approval yet. Open the item to start the review; your approval is asked once it passes.",
+        "details": "Not an approval yet. Open it to start the review or to continue without it; your approval is asked once it passes.",
         "open": "Open {key}: {sentence}"
       },
       "dismiss": {

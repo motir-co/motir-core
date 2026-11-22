@@ -13,3 +13,8 @@ export const DEVELOPMENT_SECTION_ID = 'development';
 // The Pages section's fragment id (Story MOTIR-7565 · MOTIR-7575):
 // `/items/<KEY>#pages` lands on it once the late stack has streamed it in.
 export const PAGES_SECTION_ID = 'pages';
+
+// The Run discrepancy section's fragment id (Task MOTIR-11996; `design/runs` § _Run
+// discrepancy — the record gets its own section_, decision 3): the run modal's findings
+// strip lands on `/items/<KEY>#run-discrepancy`, and arriving there opens the section.
+export const RUN_DISCREPANCY_SECTION_ID = 'run-discrepancy';

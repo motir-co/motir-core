@@ -1415,6 +1415,45 @@
     }
   },
   "issueViews": {
+    "runDiscrepancy": {
+      "title": "Discrepancias de la ejecución",
+      "gloss": "lo que una ejecución construyó o decidió y el plan no decía",
+      "recordCount": "{count, plural, one {# registro} other {# registros}}",
+      "recordedBy": "Registrado el {time} por {name}",
+      "recordedByFormer": "Registrado el {time} por un exmiembro",
+      "inRun": "Ejecución del {time}",
+      "inRunAria": "Abrir la ejecución del {time}",
+      "noRun": "No forma parte de una ejecución",
+      "pointsHeading": "Construido de forma distinta al plan",
+      "pointsCount": "{count, plural, one {# punto} other {# puntos}}",
+      "pointsGloss": "Se mantuvo el resultado. Cambió el camino para llegar a él.",
+      "decisionsHeading": "Decidido donde el plan no decía nada",
+      "decisionsCount": "{count, plural, one {# decisión} other {# decisiones}}",
+      "decisionsGloss": "Primero según las convenciones del repositorio y después según las buenas prácticas del sector.",
+      "pointLabel": "Punto {n}",
+      "decisionLabel": "Decisión {n}",
+      "planAsked": "El plan pedía",
+      "built": "Construido",
+      "why": "Por qué",
+      "planSaid": "El plan decía",
+      "chose": "Elegido",
+      "alternatives": "Alternativas",
+      "showMorePoints": "{count, plural, one {Mostrar # punto más} other {Mostrar # puntos más}}",
+      "showMoreDecisions": "{count, plural, one {Mostrar # decisión más} other {Mostrar # decisiones más}}",
+      "showFewer": "Mostrar menos",
+      "showRecord": "Mostrar este registro",
+      "hideRecord": "Ocultar este registro",
+      "show": "Mostrar",
+      "hide": "Ocultar",
+      "summaryOne": "registrado el {time} por {name}",
+      "summaryOneFormer": "registrado el {time} por un exmiembro",
+      "summaryLatest": "último registro el {time} por {name}",
+      "summaryLatestFormer": "último registro el {time} por un exmiembro",
+      "summaryNoEntries": "No se pudo recuperar este registro",
+      "backfilled": "Recuperado de un comentario que escribió la ejecución antes de que se guardaran los registros.",
+      "unreadableTitle": "No se pudo recuperar este registro",
+      "unreadableBody": "Su comentario se eliminó o editó antes de que se guardaran los registros, así que se perdieron {points, plural, =0 {ningún punto} one {# punto} other {# puntos}} y {decisions, plural, =0 {ninguna decisión} one {# decisión} other {# decisiones}}."
+    },
     "heading": "Elementos de trabajo",
     "labelsField": "Etiquetas",
     "labelsPlaceholder": "Añadir una etiqueta…",
@@ -15178,7 +15217,7 @@
       },
       "pools": {
         "title": "Pools",
-        "subtitle": "Lo grande que es cada pool de la flota y cuántas máquinas se ejecutan en él ahora: primero la flota de instalación en la cuenta de AWS propia de Motir, luego las cuentas add-shard en las que se ejecutan los trabajos de los clientes.",
+        "subtitle": "El tamaño de cada pool de la flota y cuántas máquinas se ejecutan en él ahora: primero la flota de instalación en la propia cuenta de AWS de Motir, luego las cuentas add-shard donde se ejecutan los jobs de los inquilinos y, por último, las cuotas de AWS de las cuentas que alojan las apps de los inquilinos enterprise.",
         "notApplicable": "No aplica",
         "loading": {
           "install": "Cargando la cuenta propia de Motir",
@@ -15367,6 +15406,80 @@
         },
         "computed": "Calculado por el barrido de aprovisionamiento de {time} ({age}). Solo lectura: motir-studio se instala en un repositorio en GitHub, no aquí.",
         "loading": "Cargando los puntos ciegos de la flota de CI"
+      },
+      "tenants": {
+        "title": "Cuentas de alojamiento de inquilinos · apps enterprise",
+        "subtitle": "Una cuenta de AWS por organización enterprise, donde se ejecutan sus apps con destino AWS. Cada cuota se lee en vivo desde Service Quotas en esa cuenta y se compara con el objetivo al que la eleva el bootstrap de la cuenta.",
+        "loading": "Cargando las cuentas de alojamiento de inquilinos",
+        "pill": {
+          "below": "{count, plural, one {# cuota por debajo del objetivo, sin aumento} other {# cuotas por debajo del objetivo, sin aumento}}",
+          "notRead": "{count, plural, one {# cuenta no leída} other {# cuentas no leídas}}"
+        },
+        "account": {
+          "title": "Por organización",
+          "noAwsAccount": "Aún sin cuenta de AWS",
+          "accountLabel": "Cuenta de AWS {id}"
+        },
+        "search": {
+          "label": "Buscar cuentas de alojamiento de inquilinos",
+          "placeholder": "Organización o ID de cuenta"
+        },
+        "noMatch": {
+          "title": "Ninguna cuenta coincide con “{q}”",
+          "body": "La búsqueda tiene en cuenta el nombre de la organización, el ID de la cuenta de AWS y el nombre de la cuenta.",
+          "clear": "Borrar la búsqueda"
+        },
+        "foot": "{from}–{to} de {total, plural, one {# cuenta} other {# cuentas}} · primero las cuentas con una cuota por debajo del objetivo y sin aumento",
+        "footMatch": "{from}–{to} de {total, plural, one {# cuenta} other {# cuentas}} que coinciden con “{q}” · primero las cuentas con una cuota por debajo del objetivo y sin aumento",
+        "pagerLabel": "Páginas de las cuentas de alojamiento de inquilinos",
+        "state": {
+          "requested": "Solicitada",
+          "creating": "Creándose",
+          "bootstrapping": "En bootstrap",
+          "ready": "Lista",
+          "refused": "Rechazada"
+        },
+        "notReady": {
+          "requested": "Las cuotas se leen cuando la cuenta está lista. La cuenta aún no se ha creado.",
+          "creating": "Las cuotas se leen cuando la cuenta está lista. AWS está creando la cuenta.",
+          "bootstrapping": "Las cuotas se leen cuando la cuenta está lista. El bootstrap está configurando su rol de despliegue, las etiquetas y los aumentos de cuota.",
+          "refused": "{count, plural, one {AWS se negó a crear la cuenta una vez, {age}.} other {AWS se negó a crear la cuenta # veces, la última {age}.}} La reconciliación lo vuelve a intentar tras su espera; las cuotas se leen cuando la cuenta está lista.",
+          "refusedNever": "Las cuotas se leen cuando la cuenta está lista. AWS se negó a crear la cuenta; la reconciliación lo vuelve a intentar tras su espera."
+        },
+        "col": {
+          "quota": "Cuota",
+          "applied": "Aplicada",
+          "target": "Objetivo",
+          "raise": "Aumento abierto"
+        },
+        "quota": {
+          "lambda-concurrent-executions": "Ejecuciones simultáneas de Lambda",
+          "fargate-on-demand-vcpu": "vCPU bajo demanda de Fargate"
+        },
+        "value": {
+          "count": "{n}",
+          "vcpu": "{n} vCPU"
+        },
+        "atTarget": "En el objetivo",
+        "short": "{n} por debajo del objetivo",
+        "below": "Por debajo del objetivo · sin aumento",
+        "raise": {
+          "to": "a {value}",
+          "filed": "solicitado {age}",
+          "none": "Sin aumento abierto"
+        },
+        "notRead": {
+          "body": "Las cuotas de esta cuenta no se cargaron (la sesión del rol de miembro o Service Quotas no respondió), así que no se muestra ninguna cifra. Las demás cuentas no se ven afectadas."
+        },
+        "empty": {
+          "title": "No hay cuentas de alojamiento de inquilinos",
+          "body": "Una organización enterprise obtiene su propia cuenta de AWS la primera vez que uno de sus proyectos tiene AWS como destino."
+        },
+        "error": {
+          "title": "No se pudieron leer las cuentas de alojamiento de inquilinos",
+          "body": "La lectura de las cuentas de inquilinos no respondió, así que no se lista ninguna cuenta; nada de ello es cero. Los pools de arriba y el resto de esta página no se ven afectados. Vuelve a cargar para intentarlo de nuevo."
+        },
+        "readOnly": "Solo lectura. Aquí no se solicita ningún aumento: el bootstrap de la cuenta del inquilino solicita cada uno."
       }
     }
   },
@@ -17477,7 +17590,7 @@
       "toRun": {
         "sentence": "Iniciar una revisión de <title>{name}</title>",
         "tag": "Revisión por ejecutar",
-        "details": "Aún no es una aprobación. Abre el elemento para iniciar la revisión; se te pedirá tu aprobación cuando pase.",
+        "details": "Aún no es una aprobación. Ábrelo para iniciar la revisión o continuar sin ella; se te pedirá tu aprobación cuando pase.",
         "open": "Abrir {key}: {sentence}"
       },
       "dismiss": {

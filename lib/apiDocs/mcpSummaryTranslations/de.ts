@@ -452,9 +452,9 @@ export const de: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'Ein Runner hält fest, was er anders gebaut hat als ein nur im WIE falscher Plan, und welche Entscheidungen er traf, wo der Plan schwieg – ein Kommentar am Element und ein Laufeintrag, bestätigt.',
+      'Ein Runner hält fest, was er anders gebaut hat als ein nur im WIE falscher Plan, und welche Entscheidungen er traf, wo der Plan schwieg – ein Abweichungseintrag, den das Element zeigt, und ein Befund am Lauf, bestätigt.',
     source:
-      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a discrepancy record the card shows, and a finding on its run, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

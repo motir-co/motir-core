@@ -528,7 +528,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
     'one documented exception — `watcher` carries no `updatedAt`, so its freshness lives ' +
     'across a relation Prisma cannot `_max` through.';
 
-  it('is ONE transaction of nineteen statements, and the shape is the point', async () => {
+  it('is ONE transaction of twenty statements, and the shape is the point', async () => {
     for (let i = 0; i < 10; i += 1) await card(`Bulk ${i}`);
     await gateOn({ title: 'Decide me', assigneeId: fx.ownerId });
 
@@ -582,6 +582,9 @@ describe('COST — this read runs once a second per open Workbench', () => {
       // row — this fixture's gate is a design result — the review reading itself is
       // skipped, so the steady-state cost is this one statement.
       'approvalGate.findMany',
+      // …and the REVIEWS TO RUN the tab lists and its badge counts (Bug MOTIR-11984), on
+      // the list's own predicate: one aggregate, as the approvals queue's.
+      'approvalGate.aggregate',
     ]);
   });
 
@@ -593,12 +596,16 @@ describe('COST — this read runs once a second per open Workbench', () => {
     // ⚠️ TWO statements for the review, never one per row: the cards come from one
     // `findMany` on the gate predicate, and their verdict records, dismissals, deliveries
     // and GitHub reviews from ONE raw query over those cards (MOTIR-10504).
-    expect(seen.slice(-2), REMEDY).toEqual(['approvalGate.findMany', '$queryRaw']);
-    expect(seen).toHaveLength(20);
+    // (The reviews-to-run aggregate, MOTIR-11984, runs in the same fan-out, so it may land
+    // before or after the raw query.)
+    expect([...seen.slice(-3)].sort(), REMEDY).toEqual(
+      ['$queryRaw', 'approvalGate.aggregate', 'approvalGate.findMany'].sort(),
+    );
+    expect(seen).toHaveLength(21);
 
     // A second row adds no statement.
     await gateOn({ title: 'Merge me too', assigneeId: fx.ownerId, kind: 'pull_request_approval' });
-    expect(await statementsOf(() => workbenchWatermarkService.read(ctx()))).toHaveLength(20);
+    expect(await statementsOf(() => workbenchWatermarkService.read(ctx()))).toHaveLength(21);
   });
 
   it('costs TWO statements more than the count read the strip already does — the control', async () => {
@@ -607,7 +614,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
     const watermark = await statementsOf(() => workbenchWatermarkService.read(ctx()));
     const counts = await statementsOf(() => homeService.tabCounts(ctx()));
 
-    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Nineteen statements is
+    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Twenty statements is
     // not obviously cheap or expensive in the abstract; what settles it is that
     // the strip ALREADY issues seventeen to render its badges for the tabs this
     // read covers, and this read answers strictly more — every tab's freshness as
@@ -631,7 +638,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
       if (i % 3 === 0) await watch(row.id, fx.ownerId);
     }
     const big = await statementsOf(() => workbenchWatermarkService.read(ctx()));
-    expect(big).toHaveLength(19);
+    expect(big).toHaveLength(20);
   });
 
   it('runs on indexes that are actually present', async () => {

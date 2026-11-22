@@ -3933,3 +3933,26 @@ Retired keys: `approvals.reviewAgent.source.*`, `approvals.reviewAgent.billingNo
 ### 33.9 What this asset does NOT decide
 
 What a review checks (the hosted prompt and the `motir review` checklist), the verdict door, Dismiss, bot posting beyond its switch, To fix and its doors, and the approve-and-merge verbs below a pass are all unchanged and not drawn here beyond context. The routes, the reads and the My agents review mode belong to the code cards of MOTIR-11941.
+
+## 34 · The REVIEW-TO-RUN ROW opens the review's approval, is counted on _Waiting on you_, and its command fits its track (Bugs MOTIR-11982 · MOTIR-11983 · MOTIR-11984, 2026-11-22)
+
+Amends § 33.3 (and § 32.5). Every cell of the row is unchanged except as stated; no new
+token and no new primitive.
+
+- **The press opens the `agent_review` approval overlay in place**, over the Workbench, as
+  every other To approve row opens its own (`useOpenApproval`), never the item page. The
+  overlay is § 33.4's review part with band 3's _Continue without the review_. A modifier or
+  non-primary click keeps the link's native meaning (the item, in a new tab); the row's link
+  carries `aria-haspopup="dialog"`.
+- **The second line** now reads _Not an approval yet. Open it to start the review or to
+  continue without it; your approval is asked once it passes._ (`approvalGate.reviewPath.toRun.details`,
+  every locale).
+- **The command chip fits the DETAILS track.** It takes the list's `text-xs`, and the shared
+  `CommandChip` now truncates its `<code>` (full command on `title`) while the copy button
+  never shrinks, so the button can never paint into WAITED at 220px (or the full view's
+  200px), whatever the key's length. Copy still copies the whole command.
+- **The badge counts it.** _Waiting on you_ is the approvals plus the reviews to run routed
+  to the reader (ADR `approval-gates.md` §12.19); the row stays out of the approvals' own
+  `total`. A review that is already running is no review to run: once _Review with Motir
+  agent_ (or the reader's own agent) starts it, the row leaves the tab and the badge drops by
+  one, and it comes back only if that run ends with no verdict.

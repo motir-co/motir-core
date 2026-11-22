@@ -55,7 +55,9 @@ export type V1RunDiscrepancyBody = z.infer<typeof runDiscrepancyBodySchema>;
 
 /** The answer — the same acknowledgement `record_run_discrepancy` gives. */
 export const runDiscrepancyAcknowledgementSchema = z.object({
-  commentId: z.string(),
+  /** The `run_discrepancy_record` written; the card's Run discrepancy section shows it. The
+   *  call writes no comment (MOTIR-11996). */
+  recordId: z.string(),
   recorded: z.boolean(),
 });
 export type V1RunDiscrepancyAcknowledgement = z.infer<typeof runDiscrepancyAcknowledgementSchema>;
@@ -63,7 +65,7 @@ export type V1RunDiscrepancyAcknowledgement = z.infer<typeof runDiscrepancyAckno
 export function presentRunDiscrepancyAcknowledgement(
   result: RecordDiscrepancyResult,
 ): V1RunDiscrepancyAcknowledgement {
-  return { commentId: result.commentId, recorded: result.recorded };
+  return { recordId: result.recordId, recorded: result.recorded };
 }
 
 const briefField = z.string().max(RUN_STOP_FIELD_MAX);
