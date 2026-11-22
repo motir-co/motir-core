@@ -641,7 +641,7 @@ describe('the Approvals list — the reviews to run and the hosted door', () => 
     canReviewHosted,
   });
   const fetchMock = vi.fn(
-    async () =>
+    async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(
         JSON.stringify({ models: [{ id: 'm-1', provider: 'anthropic' }], default: 'm-1' }),
         {
