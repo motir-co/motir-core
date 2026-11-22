@@ -334,6 +334,15 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       'no request is made, no budget is spent and no increment runs.',
   ],
   [
+    'tests/helpers/indexHandoff.ts',
+    'Its one 429 is a STUBBED motir-ai answer: the helper replaces `fetch` and returns ' +
+      '`429 rate_limited` from `/v1/code-graph/index-handoff` when a case sets ' +
+      "`handoffWorld.handoff = 'rate_limited'`, so the index handoff step " +
+      '(`lib/jobs/indexHandoffSteps.ts` through `lib/ai/motirAiClient.ts`) can be driven down ' +
+      'its registration-retry arm (MOTIR-11022). motir-core spends no budget of its own and ' +
+      'counts no increment through the shared store for it.',
+  ],
+  [
     'tests/two-instance/limits.spec.ts',
     'Its 429s come from two `next start` PROCESSES the lane spawns (MOTIR-8617), each ' +
       'resolving its own shared store from its own env — a store this test process ' +
