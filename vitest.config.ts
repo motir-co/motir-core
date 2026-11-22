@@ -729,6 +729,13 @@ export default defineConfig({
         'lib/gateway/statusProvider.ts',
         'lib/monitoring/sentryErrorCount.ts',
         'lib/monitoring/errorCountProvider.ts',
+        // Story MOTIR-8339 · Subtask MOTIR-12002 — the tenant-app key client and its
+        // service. MEASURED over `tests/gateway/appKeyClient.test.ts` and
+        // `tests/services/tenantAppKeyService.test.ts`: 100 lines / 100 functions,
+        // branches 96–100. Pinned at the project's 90.
+        'lib/gateway/appKeyClient.ts',
+        'lib/services/tenantAppKeyService.ts',
+        'lib/tenantAppKeys/errors.ts',
         // Story MOTIR-3416 · Subtask MOTIR-3472 — the SCHEDULED cutover's own new
         // surface. `lib/jobs/engine/scheduler.ts` needs no entry: the glob above
         // is a glob precisely so a new engine file joins the gate without anyone
@@ -6032,6 +6039,10 @@ export default defineConfig({
         'lib/gateway/statusClient.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/gateway/statusProvider.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/monitoring/sentryErrorCount.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-12002 — the tenant-app key client; see the `include` note.
+        'lib/gateway/appKeyClient.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/tenantAppKeyService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/tenantAppKeys/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/monitoring/errorCountProvider.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workspaces/membershipGate.ts': { branches: 90, functions: 90, lines: 90 },
         // Bug MOTIR-2643 — MEASURED before being pinned, on this branch, with
