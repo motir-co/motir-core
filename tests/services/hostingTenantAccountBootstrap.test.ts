@@ -11,7 +11,10 @@ import {
   tenantDeployPolicyDocument,
 } from '@/lib/ciFleet/hostingTenantAccounts';
 import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
-import { bootstrapTenantAccount } from '@/lib/services/hostingTenantAccountBootstrapService';
+import {
+  bootstrapTenantAccount,
+  ensureTenantQuotaRaises,
+} from '@/lib/services/hostingTenantAccountBootstrapService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { FakeOrganization, type FakeOrganizationStep } from '../helpers/addShardFakes';
 import { adminDb } from '../helpers/adminDb';
@@ -150,6 +153,32 @@ describe('bootstrapTenantAccount', () => {
     organization.openQuotaRaises.set(`${ACCOUNT_ID}:${open!.quotaCode}`, open!.desiredValue);
 
     expect(await run(org.id)).toMatchObject({ quotaRaisesFiled: 0, quotaRaisesPending: 1 });
+  });
+
+  // MOTIR-12011: the reconcile's re-check of a ready account — the quota raises
+  // alone, never the role or the tag.
+  it('re-checks only the quota targets: files a missing raise, then nothing', async () => {
+    const org = await seedRecordedOrg();
+    const [filed, missing] = TENANT_QUOTA_TARGETS;
+    organization.openQuotaRaises.set(`${ACCOUNT_ID}:${filed!.quotaCode}`, filed!.desiredValue);
+
+    const check = (id: string) => ensureTenantQuotaRaises(id, { management: organization });
+    expect(await check(org.id)).toEqual({ quotaRaisesFiled: 1, quotaRaisesPending: 2 });
+    expect(organization.openQuotaRaises.get(`${ACCOUNT_ID}:${missing!.quotaCode}`)).toBe(
+      missing!.desiredValue,
+    );
+    expect(await check(org.id)).toEqual({ quotaRaisesFiled: 0, quotaRaisesPending: 2 });
+    expect(organization.calls).toEqual([
+      `assumeMemberRole:${ACCOUNT_ID}`,
+      `ensureQuotaRaise:${ACCOUNT_ID}:${filed!.quotaCode}`,
+      `ensureQuotaRaise:${ACCOUNT_ID}:${missing!.quotaCode}`,
+      `assumeMemberRole:${ACCOUNT_ID}`,
+      `ensureQuotaRaise:${ACCOUNT_ID}:${filed!.quotaCode}`,
+      `ensureQuotaRaise:${ACCOUNT_ID}:${missing!.quotaCode}`,
+    ]);
+
+    const unrecorded = await seedRecordedOrg(null);
+    await expect(check(unrecorded.id)).rejects.toBeInstanceOf(FleetShardProvisioningRefusedError);
   });
 
   it('refuses a record with no account id before any AWS call', async () => {

@@ -16,7 +16,9 @@ import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenant
 import {
   bootstrapTenantAccount,
   convergeTenantDeployPolicy,
+  ensureTenantQuotaRaises,
   type TenantDeployPolicyConvergence,
+  type TenantQuotaRaises,
 } from '@/lib/services/hostingTenantAccountBootstrapService';
 import { createOrFindTenantAccount } from '@/lib/services/hostingTenantAccountProvisioningService';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -46,11 +48,23 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // nothing. Any other failure leaves the state as it was for the next minute.
 // One organisation's failure never stops the rest. Nothing here touches the
 // fleet's tables, and the summary and logs carry outcome and error names only.
+//
+// A `ready` row never walks again, so the same pass also RE-CHECKS each ready
+// account's quota targets once `TENANT_QUOTA_RECHECK_MS` has passed since they
+// were last checked (MOTIR-12011): the member role is assumed and each quota is
+// brought to target or a raise — filed when it is below target with none open —
+// and nothing else of the bootstrap runs. The bootstrap's own check counts as
+// the first; a row that was ready before the column existed is due at once.
 
 const LOG = '[hostingTenantAccount]';
 const LEASE_ID = 'hosting-tenant-account-reconcile';
 /** Longer than any pass; a crashed run's lease expires after it. */
 const LEASE_MS = 10 * 60_000;
+/** How long a `ready` account's quota targets stand before the reconcile checks
+ *  them again. A raise takes AWS hours to days to decide, so an hourly read
+ *  catches a skipped one long before anything is deployed at scale, at two
+ *  Service Quotas reads per account an hour. */
+export const TENANT_QUOTA_RECHECK_MS = 60 * 60_000;
 
 /** Where an organisation's tenant account stands, for a caller about to deploy. */
 export interface TenantAccountAnswer {
@@ -81,11 +95,29 @@ export interface TenantOrgReconcile {
   outcome: TenantAccountOutcome;
 }
 
+/** What re-checking one `ready` account's quota targets did (MOTIR-12011). */
+export type TenantQuotaCheckOutcome =
+  /** Every quota was at target; nothing was filed. */
+  | 'at_target'
+  /** At least one raise was filed this pass. */
+  | 'raise_filed'
+  /** Nothing was filed, and at least one quota waits on a raise already open. */
+  | 'raise_pending'
+  /** A step failed; the check is due again next pass. */
+  | 'failed';
+
+export interface TenantQuotaCheck {
+  organizationId: string;
+  outcome: TenantQuotaCheckOutcome;
+}
+
 export interface TenantReconcileSummary {
   /** False when another run held the pass. */
   ran: boolean;
   organizations: TenantOrgReconcile[];
-  /** Organisations whose turn failed. */
+  /** The `ready` accounts whose quota targets were due a re-check. */
+  quotaChecks: TenantQuotaCheck[];
+  /** Organisations whose turn or quota check failed. */
   failures: number;
 }
 
@@ -96,6 +128,8 @@ export interface TenantReconcileDeps {
   create?: (organizationId: string) => Promise<{ accountId: string }>;
   /** Bootstrap the account; the default reaches AWS. */
   bootstrap?: (organizationId: string) => Promise<unknown>;
+  /** Re-check a ready account's quota targets; the default reaches AWS. */
+  checkQuotas?: (organizationId: string) => Promise<TenantQuotaRaises>;
 }
 
 /** What converging one organisation's deploy-role policy did (MOTIR-10005). */
@@ -194,7 +228,9 @@ async function walk(
 
   if (state === 'bootstrapping') {
     await deps.bootstrap(organizationId);
-    await setState(organizationId, 'ready');
+    await withSystemContext((tx) =>
+      hostingTenantAccountRepository.markReadyInTx(organizationId, now, tx),
+    );
   }
   return 'ready';
 }
@@ -227,7 +263,52 @@ function resolveDeps(deps: TenantReconcileDeps): Required<TenantReconcileDeps> {
     alert: deps.alert ?? alertFleetShardHeadroom,
     create: deps.create ?? ((organizationId) => createOrFindTenantAccount(organizationId)),
     bootstrap: deps.bootstrap ?? ((organizationId) => bootstrapTenantAccount(organizationId)),
+    checkQuotas: deps.checkQuotas ?? ((organizationId) => ensureTenantQuotaRaises(organizationId)),
   };
+}
+
+function quotaCheckOutcomeOf(raises: TenantQuotaRaises): TenantQuotaCheckOutcome {
+  if (raises.quotaRaisesFiled > 0) return 'raise_filed';
+  if (raises.quotaRaisesPending > 0) return 'raise_pending';
+  return 'at_target';
+}
+
+/** Re-check one ready account's quota targets and record when. Never throws; a
+ *  failure records nothing, so the check is due again next pass. */
+async function checkQuotasOf(
+  organizationId: string,
+  now: Date,
+  deps: Required<TenantReconcileDeps>,
+): Promise<TenantQuotaCheck> {
+  try {
+    const outcome = quotaCheckOutcomeOf(await deps.checkQuotas(organizationId));
+    await withSystemContext((tx) =>
+      hostingTenantAccountRepository.recordQuotasCheckedInTx(organizationId, now, tx),
+    );
+    return { organizationId, outcome };
+  } catch (err) {
+    console.error(`${LOG} a ready tenant account's quota check failed`, {
+      organizationId,
+      error: errorName(err),
+    });
+    return { organizationId, outcome: 'failed' };
+  }
+}
+
+/** Every ready account whose quota targets are due, checked in turn. */
+async function checkDueQuotas(
+  now: Date,
+  deps: Required<TenantReconcileDeps>,
+): Promise<TenantQuotaCheck[]> {
+  const due = await withSystemContext((tx) =>
+    hostingTenantAccountRepository.listReadyQuotaCheckDueInTx(
+      new Date(now.getTime() - TENANT_QUOTA_RECHECK_MS),
+      tx,
+    ),
+  );
+  const checks: TenantQuotaCheck[] = [];
+  for (const row of due) checks.push(await checkQuotasOf(row.organizationId, now, deps));
+  return checks;
 }
 
 export const hostingTenantAccountService = {
@@ -261,10 +342,16 @@ export const hostingTenantAccountService = {
     }
   },
 
-  /** One pass over every row not yet ready, holding the lease. */
+  /** One pass over every row not yet ready, then every ready row whose quota
+   *  targets are due a re-check, holding the lease. */
   async runReconcile(deps: TenantReconcileDeps = {}): Promise<TenantReconcileSummary> {
     const now = (deps.now ?? (() => new Date()))();
-    const summary: TenantReconcileSummary = { ran: true, organizations: [], failures: 0 };
+    const summary: TenantReconcileSummary = {
+      ran: true,
+      organizations: [],
+      quotaChecks: [],
+      failures: 0,
+    };
     const ran = await withReconcileLease(now, async () => {
       const rows = await withSystemContext((tx) =>
         hostingTenantAccountRepository.listUnreadyInTx(tx),
@@ -277,6 +364,8 @@ export const hostingTenantAccountService = {
         if (outcome.outcome === 'failed') summary.failures += 1;
         summary.organizations.push(outcome);
       }
+      summary.quotaChecks = await checkDueQuotas(now, resolveDeps({ ...deps, now: () => now }));
+      summary.failures += summary.quotaChecks.filter((c) => c.outcome === 'failed').length;
     });
     if (ran === null) return { ...summary, ran: false };
     return summary;

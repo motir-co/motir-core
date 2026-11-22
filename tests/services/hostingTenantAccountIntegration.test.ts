@@ -14,10 +14,14 @@ import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenant
 import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import { fleetShardHeadroomService } from '@/lib/services/fleetShardHeadroomService';
 import { fleetPoolStatusService } from '@/lib/services/fleetPoolStatusService';
-import { bootstrapTenantAccount } from '@/lib/services/hostingTenantAccountBootstrapService';
+import {
+  bootstrapTenantAccount,
+  ensureTenantQuotaRaises,
+} from '@/lib/services/hostingTenantAccountBootstrapService';
 import { createOrFindTenantAccount } from '@/lib/services/hostingTenantAccountProvisioningService';
 import {
   hostingTenantAccountService,
+  TENANT_QUOTA_RECHECK_MS,
   type TenantReconcileDeps,
 } from '@/lib/services/hostingTenantAccountService';
 import { planCapsService } from '@/lib/services/planCapsService';
@@ -80,6 +84,8 @@ function deps(at: Date = T0): TenantReconcileDeps {
       createOrFindTenantAccount(organizationId, { management: organization, env: ENV }),
     bootstrap: (organizationId) =>
       bootstrapTenantAccount(organizationId, { management: organization }),
+    checkQuotas: (organizationId) =>
+      ensureTenantQuotaRaises(organizationId, { management: organization }),
   };
 }
 
@@ -229,6 +235,62 @@ describe('a ready account', () => {
       { state: 'ready', ready: true, accountId },
       { state: 'ready', ready: true, accountId },
     ]);
+  });
+});
+
+// MOTIR-12011: the bootstrap read a quota as at target that the account did not
+// have, and a `ready` account never re-runs the bootstrap. The hourly re-check,
+// through the real `ensureTenantQuotaRaises` over the fake, files the skipped
+// raise — and nothing for a quota at target or one already raised — without
+// touching the role or the tag.
+describe('a ready account’s quota re-check', () => {
+  const [FARGATE, LAMBDA] = TENANT_QUOTA_TARGETS;
+
+  it('files the skipped raise, files nothing more, and never re-runs the rest of the bootstrap', async () => {
+    const org = await seedOrg();
+    await hostingTenantAccountService.ensureForOrganization(org.id);
+    await passUntilReady(org.id);
+    const accountId = organization.accounts.get(tenantAccountName(org.id))!.accountId;
+    // As the bug left it: the Fargate raise filed, the Lambda one never filed.
+    organization.openQuotaRaises.delete(`${accountId}:${LAMBDA!.quotaCode}`);
+    expect(organization.openQuotaRaises.has(`${accountId}:${FARGATE!.quotaCode}`)).toBe(true);
+    const callsAtReady = organization.calls.length;
+
+    const due = new Date(T0.getTime() + TENANT_QUOTA_RECHECK_MS + 60_000);
+    const first = await hostingTenantAccountService.runReconcile(deps(due));
+    expect(first.quotaChecks).toEqual([{ organizationId: org.id, outcome: 'raise_filed' }]);
+    expect(organization.openQuotaRaises.get(`${accountId}:${LAMBDA!.quotaCode}`)).toBe(
+      LAMBDA!.desiredValue,
+    );
+    expect(organization.calls.slice(callsAtReady)).toEqual([
+      `assumeMemberRole:${accountId}`,
+      `ensureQuotaRaise:${accountId}:${FARGATE!.quotaCode}`,
+      `ensureQuotaRaise:${accountId}:${LAMBDA!.quotaCode}`,
+    ]);
+
+    // Both raises open: the next due check files nothing.
+    const later = new Date(due.getTime() + TENANT_QUOTA_RECHECK_MS + 60_000);
+    const second = await hostingTenantAccountService.runReconcile(deps(later));
+    expect(second.quotaChecks).toEqual([{ organizationId: org.id, outcome: 'raise_pending' }]);
+
+    // Both granted: at target, nothing filed.
+    for (const target of [FARGATE!, LAMBDA!]) {
+      organization.openQuotaRaises.delete(`${accountId}:${target.quotaCode}`);
+      organization.appliedQuotas.set(`${accountId}:${target.quotaCode}`, target.desiredValue);
+    }
+    const granted = new Date(later.getTime() + TENANT_QUOTA_RECHECK_MS + 60_000);
+    const third = await hostingTenantAccountService.runReconcile(deps(granted));
+    expect(third.quotaChecks).toEqual([{ organizationId: org.id, outcome: 'at_target' }]);
+    expect([...organization.openQuotaRaises.keys()].filter((k) => k.startsWith(accountId))).toEqual(
+      [],
+    );
+
+    const after = organization.calls.slice(callsAtReady);
+    expect(after.filter((c) => /ensureTenantDeployRole|ensureAccountTag|create/i.test(c))).toEqual(
+      [],
+    );
+    expect(await rowOf(org.id)).toMatchObject({ state: 'ready', quotasCheckedAt: granted });
+    expectNoLeak();
   });
 });
 

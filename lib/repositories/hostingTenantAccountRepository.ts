@@ -35,7 +35,7 @@ export const hostingTenantAccountRepository = {
       DO UPDATE SET "organization_id" = EXCLUDED."organization_id"
       RETURNING "id", "organization_id" AS "organizationId", "aws_account_id" AS "awsAccountId",
         "state", "refused_count" AS "refusedCount", "last_refused_at" AS "lastRefusedAt",
-        "ou_id" AS "ouId", "region", "created_at" AS "createdAt", "updated_at" AS "updatedAt"`;
+        "ou_id" AS "ouId", "quotas_checked_at" AS "quotasCheckedAt", "region", "created_at" AS "createdAt", "updated_at" AS "updatedAt"`;
     return rows[0]!;
   },
 
@@ -53,6 +53,46 @@ export const hostingTenantAccountRepository = {
     return tx.hostingTenantAccount.findMany({
       where: { state: 'ready' },
       orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /** Every `ready` row whose quota targets were last checked before `dueBefore`,
+   *  or never, oldest check first — what the reconcile re-checks (MOTIR-12011). */
+  async listReadyQuotaCheckDueInTx(
+    dueBefore: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostingTenantAccount[]> {
+    return tx.hostingTenantAccount.findMany({
+      where: {
+        state: 'ready',
+        OR: [{ quotasCheckedAt: null }, { quotasCheckedAt: { lt: dueBefore } }],
+      },
+      orderBy: [{ quotasCheckedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
+    });
+  },
+
+  /** The row reached `ready` at `at`: its bootstrap has just checked the quota
+   *  targets, so the next re-check is counted from then. */
+  async markReadyInTx(
+    organizationId: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostingTenantAccount> {
+    return tx.hostingTenantAccount.update({
+      where: { organizationId },
+      data: { state: 'ready', quotasCheckedAt: at },
+    });
+  },
+
+  /** A `ready` row's quota targets were checked at `at`. */
+  async recordQuotasCheckedInTx(
+    organizationId: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostingTenantAccount> {
+    return tx.hostingTenantAccount.update({
+      where: { organizationId },
+      data: { quotasCheckedAt: at },
     });
   },
 
