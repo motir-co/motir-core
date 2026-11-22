@@ -16494,6 +16494,7 @@
         "closed_without_decision": "Het werkitem is gesloten zonder dat iemand het als klaar heeft gemarkeerd, dus deze vraag is ingetrokken.",
         "not_ready": "Het werkitem wordt geblokkeerd door ander werk, dus deze vraag is ingetrokken tot het kan beginnen.",
         "replanned": "Het werkitem is opnieuw gepland, dus deze vraag is ingetrokken.",
+        "review_not_passed": "De review van deze commits is nog niet geslaagd, dus deze vraag is ingetrokken. Hij wordt opnieuw gesteld zodra de review is geslaagd.",
         "unknown": "Deze vraag is ingetrokken. De reden is niet vastgelegd."
       },
       "causeByKind": {

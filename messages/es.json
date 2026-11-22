@@ -16494,6 +16494,7 @@
         "closed_without_decision": "El elemento de trabajo se cerró sin que nadie lo marcara como hecho, así que esta pregunta se retiró.",
         "not_ready": "El elemento de trabajo está bloqueado por otro trabajo, así que esta pregunta se retiró hasta que pueda empezarse.",
         "replanned": "El elemento de trabajo se replanificó, así que esta pregunta se retiró.",
+        "review_not_passed": "La revisión de estos commits aún no se ha superado, así que esta pregunta se retiró. Se vuelve a hacer en cuanto la revisión se supere.",
         "unknown": "Esta pregunta se retiró. No se registró el motivo."
       },
       "causeByKind": {

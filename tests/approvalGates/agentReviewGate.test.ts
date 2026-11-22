@@ -674,6 +674,32 @@ describe('§12.2 — a primary’s CARRIED merge waits for the review', () => {
     expect(autoMerges()[0]!.data).toMatchObject({ workItemId: item.id, headSha: 'sha-a' });
   });
 
+  it('an awaiting design the SYSTEM would approve is never churned by the review hold (MOTIR-11992)', async () => {
+    const s = await makeScenario('system-design');
+    const item = await designCard(s, 82);
+    await publish(s, item.id, 'v1');
+    const [design] = await awaitingOf(item.id, 'design_result');
+    expect(design).toBeDefined();
+    // Design approval switched off AFTER the gate was raised: a flip never decides a gate
+    // already waiting, so it stays awaiting — and the set still owes it, unheld.
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { designApprovalGate: false },
+    });
+
+    await ci('success', 'sha-a', 82);
+    expect(await awaitingOf(item.id, REVIEW)).toHaveLength(1);
+    for (let tick = 0; tick < 2; tick += 1) {
+      await withWorkspaceContext(s.ctx, async (tx) => {
+        const fresh = await tx.workItem.findUniqueOrThrow({ where: { id: item.id } });
+        await reconcileGatesFor(fresh, tx);
+      });
+    }
+
+    const designs = await gatesOf(item.id, 'design_result');
+    expect(designs.map((g) => [g.id, g.state])).toEqual([[design!.id, 'awaiting']]);
+  });
+
   it('a refused review keeps holding the carried merge', async () => {
     const s = await makeScenario('carry-refused');
     const item = await designCard(s, 81);

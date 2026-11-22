@@ -12739,6 +12739,7 @@
   "approvalGate.withdrawn.cause.closed_without_decision": "The work item was closed without anyone marking it done, so this question was withdrawn.",
   "approvalGate.withdrawn.cause.not_ready": "The work item is blocked by other work, so this question was withdrawn until it can be started.",
   "approvalGate.withdrawn.cause.replanned": "The work item was re-planned, so this question was withdrawn.",
+  "approvalGate.withdrawn.cause.review_not_passed": "The review has not passed at these commits, so this question was withdrawn. It is asked again once the review passes.",
   "approvalGate.withdrawn.cause.unknown": "This question was withdrawn. The reason was not recorded.",
   "approvalGate.withdrawn.causeByKind.decision_approval.head_moved": "A push changed the decision document, so this question was withdrawn.",
   "approvalGate.withdrawn.causeByKind.manual_work.pulled_back": "The work item was cancelled or archived, so this question was withdrawn.",
