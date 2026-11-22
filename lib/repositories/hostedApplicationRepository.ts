@@ -297,6 +297,17 @@ export const hostedApplicationRepository = {
     return result.count;
   },
 
+  /**
+   * Forget production's releases and app name once the app is destroyed
+   * (MOTIR-11981), so a retried teardown has nothing left on the host to reach.
+   */
+  async clearProductionPointers(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.hostedApplication.updateMany({
+      where: { id },
+      data: { currentReleaseId: null, previousReleaseId: null, productionAppName: null },
+    });
+  },
+
   async lockForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "hosted_application" WHERE "id" = ${id} FOR UPDATE

@@ -10481,8 +10481,11 @@
       "goneTitle": "{repo}을(를) 제거하고 여기서 실행되는 것을 종료하시겠습니까?",
       "goneLead": "저장소는 이미 GitHub에서 사라졌지만 아직 여기서 실행되는 것이 있습니다. 제거하면 그것이 종료됩니다. 되돌릴 수 없습니다.",
       "goneConfirm": "제거하고 종료",
+      "yoursTitle": "{repo}을(를) 제거하고 Motir가 여기서 실행하는 항목을 종료할까요?",
+      "yoursLead": "{repo}은(는) 내 GitHub 계정에 그대로 남습니다. 이 프로젝트에서 제거하면 Motir가 여기서 실행하는 항목이 종료됩니다. 되돌릴 수 없습니다.",
       "consequenceRepo": "<b>저장소와 그 코드</b>: GitHub의 모든 브랜치, 커밋 및 풀 리퀘스트.",
       "consequenceRepoGone": "<b>저장소는 이미 GitHub에서 사라졌습니다</b>. 따라서 GitHub에서는 아무것도 삭제되지 않습니다.",
+      "consequenceRepoYours": "<b>저장소는 내 GitHub 계정에 그대로 남으며</b>, GitHub에서는 아무것도 바뀌지 않습니다.",
       "consequenceProduction": "<b>{address}의 프로덕션</b>이 종료되고, 해당 앱과 데이터베이스가 삭제됩니다.",
       "consequenceDomains": "{count, plural, other {<b>사용자 지정 도메인 #개</b>의 제공이 중단되고 해제됩니다.}}",
       "consequencePreviews": "{count, plural, other {<b>미리보기 앱 #개</b>가 닫히고 삭제됩니다.}}",
@@ -10505,6 +10508,8 @@
       "removeConfirm": "제거",
       "stateUnfinished": "삭제가 완료되지 않았습니다",
       "unfinishedDetail": "Motir가 이 저장소를 삭제하던 중에 멈췄습니다. 이미 삭제된 것은 삭제된 상태로 유지되며, 다시 시도하면 나머지가 완료됩니다.",
+      "stateUnfinishedYours": "제거가 완료되지 않음",
+      "unfinishedDetailYours": "Motir가 이 저장소에서 실행하는 항목을 종료하다가 중간에 멈췄습니다. 저장소 자체는 내 GitHub 계정에 남아 있으며, 다시 시도하면 나머지가 완료됩니다.",
       "retryDelete": "다시 시도"
     }
   },

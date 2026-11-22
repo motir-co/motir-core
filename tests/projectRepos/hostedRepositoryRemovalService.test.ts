@@ -190,6 +190,16 @@ async function environmentValues(rowId: string, count: number) {
         value: 'v',
       },
     });
+    await adminDb.environmentConfigChange.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectRepositoryId: rowId,
+        environment: 'production',
+        name: `KEY_${i}`,
+        action: 'added',
+        isSecret: false,
+      },
+    });
   }
 }
 
@@ -368,6 +378,10 @@ describe('remove — the delete sequence (§19.6)', () => {
     expect(
       await adminDb.environmentConfigEntry.count({ where: { projectRepositoryId: row.id } }),
     ).toBe(0);
+    // …and their change history, which the confirm promises goes with them.
+    expect(
+      await adminDb.environmentConfigChange.count({ where: { projectRepositoryId: row.id } }),
+    ).toBe(0);
     expect(await adminDb.workItemRepo.count({ where: { projectRepoId: row.id } })).toBe(0);
     // Kept: the custom domain (released, not deleted), the work item, the mirror.
     expect(await adminDb.publicAddress.findUnique({ where: { id: domain.id } })).toMatchObject({
@@ -413,6 +427,52 @@ describe('remove — the delete sequence (§19.6)', () => {
     expect(previewEnablementService.disable).not.toHaveBeenCalled();
     expect(previewLifecycleService.teardownRepository).toHaveBeenCalled();
     expect(repoDeletionClient.deleteRepo).not.toHaveBeenCalled();
+    expect(await adminDb.projectRepo.count({ where: { id: row.id } })).toBe(0);
+  });
+
+  it('shuts down production for a taken-over row and never touches the repository (review of #4382)', async () => {
+    const { row } = await hostedRow({ takeoverState: 'done', owner: 'yue' });
+    const { app } = await production(row.id);
+    const destroyApp = vi.spyOn(getHostingDeployPort('fly'), 'destroyApp');
+
+    // The check reads it as the person's own, and still destructive.
+    expect(await hostedRepositoryRemovalService.getRemovalImpact(row.id, fx.ctx)).toMatchObject({
+      repository: 'yours',
+      production: { address: 'shop--acme.motir.site', domains: 1 },
+      destructive: true,
+    });
+    expect(repoDeletionClient.probeRepo).not.toHaveBeenCalled();
+
+    await hostedRepositoryRemovalService.remove(row.id, fx.ctx);
+    expect(destroyApp).toHaveBeenCalledWith({ appRef: 'mh-shop' });
+    expect(previewEnablementService.disable).not.toHaveBeenCalled();
+    expect(repoDeletionClient.deleteRepo).not.toHaveBeenCalled();
+    expect(await adminDb.hostedApplication.count({ where: { id: app.id } })).toBe(0);
+    expect(await adminDb.projectRepo.count({ where: { id: row.id } })).toBe(0);
+  });
+
+  it('does not reach the host again on a retry after production’s app was destroyed', async () => {
+    const { row } = await hostedRow();
+    const { app } = await production(row.id);
+    const port = getHostingDeployPort('fly');
+    const destroyApp = vi.spyOn(port, 'destroyApp');
+    const ensureApp = vi.spyOn(port, 'ensureApp');
+    vi.spyOn(getDatabasePort(), 'deleteDatabase').mockRejectedValueOnce(new Error('neon'));
+
+    await expect(hostedRepositoryRemovalService.remove(row.id, fx.ctx)).rejects.toMatchObject({
+      step: 'production',
+    });
+    expect(await adminDb.hostedApplication.findUnique({ where: { id: app.id } })).toMatchObject({
+      currentReleaseId: null,
+      productionAppName: null,
+    });
+
+    vi.mocked(hostedReleaseUsageService.settleReleaseUsage).mockClear();
+    destroyApp.mockClear();
+    await hostedRepositoryRemovalService.remove(row.id, fx.ctx);
+    expect(hostedReleaseUsageService.settleReleaseUsage).not.toHaveBeenCalled();
+    expect(ensureApp).not.toHaveBeenCalled();
+    expect(destroyApp).not.toHaveBeenCalled();
     expect(await adminDb.projectRepo.count({ where: { id: row.id } })).toBe(0);
   });
 

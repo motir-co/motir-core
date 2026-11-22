@@ -10484,8 +10484,11 @@
       "goneTitle": "Remove {repo} and shut down what runs from it?",
       "goneLead": "The repository is already gone from GitHub, but something still runs from it. Removing it shuts that down. It can’t be undone.",
       "goneConfirm": "Remove and shut down",
+      "yoursTitle": "Remove {repo} and shut down what Motir runs from it?",
+      "yoursLead": "{repo} stays in your GitHub account. Removing it from this project shuts down what Motir runs from it. It can’t be undone.",
       "consequenceRepo": "<b>The repository and its code</b>: every branch, commit and pull request on GitHub.",
       "consequenceRepoGone": "<b>The repository is already gone from GitHub</b>, so nothing there is deleted.",
+      "consequenceRepoYours": "<b>The repository stays in your GitHub account</b>, and nothing on GitHub changes.",
       "consequenceProduction": "<b>Production at {address}</b> is shut down, and its app and its database are deleted.",
       "consequenceDomains": "{count, plural, one {<b># custom domain</b> stops serving and is released.} other {<b># custom domains</b> stop serving and are released.}}",
       "consequencePreviews": "{count, plural, one {<b># preview app</b> is closed and destroyed.} other {<b># preview apps</b> are closed and destroyed.}}",
@@ -10508,6 +10511,8 @@
       "removeConfirm": "Remove",
       "stateUnfinished": "Deletion didn’t finish",
       "unfinishedDetail": "Motir stopped part way through deleting this repository. What is already gone stays gone, and trying again finishes the rest.",
+      "stateUnfinishedYours": "Removal didn’t finish",
+      "unfinishedDetailYours": "Motir stopped part way through shutting down what it runs from this repository. The repository itself stays in your GitHub account, and trying again finishes the rest.",
       "retryDelete": "Try again"
     }
   },

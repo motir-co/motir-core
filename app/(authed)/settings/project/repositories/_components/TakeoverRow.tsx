@@ -117,6 +117,9 @@ export function TakeoverRow({
   const format = useFormatter();
 
   const mode = rowMode(row);
+  // A row the person already owns: an unfinished removal there never deleted the
+  // repository, only part of what Motir runs from it (§19.6, review of #4382).
+  const yoursRow = row.takeover?.state === 'done' || row.state === 'connected';
   const target = row.takeover?.targetOwner ?? githubLogin ?? '';
   const repoRef = row.realizedRepo?.repoRef ?? row.name;
   const shortName = row.realizedRepo?.name ?? row.name;
@@ -173,7 +176,7 @@ export function TakeoverRow({
           ) : null}
           {mode === 'unfinished' ? (
             <StateWord icon={<TriangleAlert className={ICON} />} tone="danger">
-              {tr('stateUnfinished')}
+              {yoursRow ? tr('stateUnfinishedYours') : tr('stateUnfinished')}
             </StateWord>
           ) : null}
           {notCreated ? (
@@ -273,7 +276,7 @@ export function TakeoverRow({
             stays gone, and the reader would not otherwise learn the rest is not. */}
         {mode === 'unfinished' ? (
           <p role="alert" className="min-w-0 text-sm text-(--el-danger-surface-text)">
-            {tr('unfinishedDetail')}
+            {yoursRow ? tr('unfinishedDetailYours') : tr('unfinishedDetail')}
           </p>
         ) : null}
 

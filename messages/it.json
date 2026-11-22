@@ -10487,8 +10487,11 @@
       "goneTitle": "Rimuovere {repo} e spegnere ciò che viene eseguito da esso?",
       "goneLead": "Il repository non è più su GitHub, ma qualcosa viene ancora eseguito da esso. Rimuoverlo lo spegne. Non può essere annullato.",
       "goneConfirm": "Rimuovi e spegni",
+      "yoursTitle": "Rimuovere {repo} e arrestare ciò che Motir esegue da esso?",
+      "yoursLead": "{repo} resta nel tuo account GitHub. Rimuoverlo da questo progetto arresta ciò che Motir esegue da esso. Non può essere annullato.",
       "consequenceRepo": "<b>Il repository e il suo codice</b>: ogni branch, commit e pull request su GitHub.",
       "consequenceRepoGone": "<b>Il repository non è più su GitHub</b>, quindi lì non viene eliminato nulla.",
+      "consequenceRepoYours": "<b>Il repository resta nel tuo account GitHub</b> e su GitHub non cambia nulla.",
       "consequenceProduction": "<b>La produzione su {address}</b> viene spenta, e la sua app e il suo database vengono eliminati.",
       "consequenceDomains": "{count, plural, one {<b># dominio personalizzato</b> smette di essere servito e viene rilasciato.} other {<b># domini personalizzati</b> smettono di essere serviti e vengono rilasciati.}}",
       "consequencePreviews": "{count, plural, one {<b># app di anteprima</b> viene chiusa ed eliminata.} other {<b># app di anteprima</b> vengono chiuse ed eliminate.}}",
@@ -10511,6 +10514,8 @@
       "removeConfirm": "Rimuovi",
       "stateUnfinished": "Eliminazione non completata",
       "unfinishedDetail": "Motir si è fermato a metà dell’eliminazione di questo repository. Ciò che è già stato eliminato resta eliminato, e riprovare completa il resto.",
+      "stateUnfinishedYours": "La rimozione non è terminata",
+      "unfinishedDetailYours": "Motir si è fermato a metà mentre arrestava ciò che esegue da questo repository. Il repository resta nel tuo account GitHub, e riprovare completa il resto.",
       "retryDelete": "Riprova"
     }
   },

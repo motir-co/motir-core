@@ -10487,8 +10487,11 @@
       "goneTitle": "Usunąć {repo} i wyłączyć to, co z niego działa?",
       "goneLead": "Repozytorium zniknęło już z GitHuba, ale coś nadal z niego działa. Usunięcie to wyłączy. Tej operacji nie można cofnąć.",
       "goneConfirm": "Usuń i wyłącz",
+      "yoursTitle": "Usunąć {repo} i wyłączyć to, co Motir z niego uruchamia?",
+      "yoursLead": "{repo} pozostaje na Twoim koncie GitHub. Usunięcie go z tego projektu wyłącza to, co Motir z niego uruchamia. Tej operacji nie można cofnąć.",
       "consequenceRepo": "<b>Repozytorium i jego kod</b>: każda gałąź, commit i pull request na GitHubie.",
       "consequenceRepoGone": "<b>Repozytorium zniknęło już z GitHuba</b>, więc nic tam nie zostanie usunięte.",
+      "consequenceRepoYours": "<b>Repozytorium pozostaje na Twoim koncie GitHub</b> i na GitHubie nic się nie zmienia.",
       "consequenceProduction": "<b>Produkcja pod adresem {address}</b> zostanie wyłączona, a jej aplikacja i baza danych usunięte.",
       "consequenceDomains": "{count, plural, one {<b># własna domena</b> przestaje działać i zostaje zwolniona.} few {<b># własne domeny</b> przestają działać i zostają zwolnione.} many {<b># własnych domen</b> przestaje działać i zostaje zwolnionych.} other {<b># własnej domeny</b> przestaje działać i zostaje zwolnione.}}",
       "consequencePreviews": "{count, plural, one {<b># aplikacja podglądu</b> zostaje zamknięta i usunięta.} few {<b># aplikacje podglądu</b> zostają zamknięte i usunięte.} many {<b># aplikacji podglądu</b> zostaje zamkniętych i usuniętych.} other {<b># aplikacji podglądu</b> zostaje zamkniętych i usuniętych.}}",
@@ -10511,6 +10514,8 @@
       "removeConfirm": "Usuń",
       "stateUnfinished": "Usuwanie nie zostało ukończone",
       "unfinishedDetail": "Motir zatrzymał się w trakcie usuwania tego repozytorium. To, co już zniknęło, pozostaje usunięte, a ponowna próba dokończy resztę.",
+      "stateUnfinishedYours": "Usuwanie nie zostało ukończone",
+      "unfinishedDetailYours": "Motir zatrzymał się w trakcie wyłączania tego, co uruchamia z tego repozytorium. Samo repozytorium pozostaje na Twoim koncie GitHub, a ponowna próba dokończy resztę.",
       "retryDelete": "Spróbuj ponownie"
     }
   },

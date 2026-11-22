@@ -10487,8 +10487,11 @@
       "goneTitle": "{repo} entfernen und herunterfahren, was daraus läuft?",
       "goneLead": "Das Repository ist auf GitHub bereits gelöscht, aber es läuft noch etwas daraus. Das Entfernen fährt es herunter. Dies kann nicht rückgängig gemacht werden.",
       "goneConfirm": "Entfernen und herunterfahren",
+      "yoursTitle": "{repo} entfernen und herunterfahren, was Motir daraus betreibt?",
+      "yoursLead": "{repo} bleibt in Ihrem GitHub-Konto. Wenn Sie es aus diesem Projekt entfernen, wird heruntergefahren, was Motir daraus betreibt. Dies kann nicht rückgängig gemacht werden.",
       "consequenceRepo": "<b>Das Repository und sein Code</b>: jeder Branch, jeder Commit und jeder Pull Request auf GitHub.",
       "consequenceRepoGone": "<b>Das Repository ist auf GitHub bereits gelöscht</b>, daher wird dort nichts gelöscht.",
+      "consequenceRepoYours": "<b>Das Repository bleibt in Ihrem GitHub-Konto</b>, und auf GitHub ändert sich nichts.",
       "consequenceProduction": "<b>Die Produktion unter {address}</b> wird heruntergefahren, und ihre App und ihre Datenbank werden gelöscht.",
       "consequenceDomains": "{count, plural, one {<b># eigene Domain</b> wird nicht mehr ausgeliefert und freigegeben.} other {<b># eigene Domains</b> werden nicht mehr ausgeliefert und freigegeben.}}",
       "consequencePreviews": "{count, plural, one {<b># Vorschau-App</b> wird geschlossen und gelöscht.} other {<b># Vorschau-Apps</b> werden geschlossen und gelöscht.}}",
@@ -10511,6 +10514,8 @@
       "removeConfirm": "Entfernen",
       "stateUnfinished": "Löschen nicht abgeschlossen",
       "unfinishedDetail": "Motir hat das Löschen dieses Repositorys mittendrin abgebrochen. Was bereits gelöscht ist, bleibt gelöscht, und ein erneuter Versuch schließt den Rest ab.",
+      "stateUnfinishedYours": "Entfernen nicht abgeschlossen",
+      "unfinishedDetailYours": "Motir hat das Herunterfahren dessen, was es aus diesem Repository betreibt, mittendrin abgebrochen. Das Repository selbst bleibt in Ihrem GitHub-Konto, und ein erneuter Versuch schließt den Rest ab.",
       "retryDelete": "Erneut versuchen"
     }
   },

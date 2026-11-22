@@ -10487,8 +10487,11 @@
       "goneTitle": "{repo} verwijderen en afsluiten wat ervandaan draait?",
       "goneLead": "De repository is al van GitHub verdwenen, maar er draait nog iets vanuit. Verwijderen sluit dat af. Dit kan niet ongedaan worden gemaakt.",
       "goneConfirm": "Verwijderen en afsluiten",
+      "yoursTitle": "{repo} verwijderen en stoppen wat Motir ervan draait?",
+      "yoursLead": "{repo} blijft in je GitHub-account. Als je het uit dit project verwijdert, stopt wat Motir ervan draait. Dit kan niet ongedaan worden gemaakt.",
       "consequenceRepo": "<b>De repository en de code</b>: elke branch, commit en pull request op GitHub.",
       "consequenceRepoGone": "<b>De repository is al van GitHub verdwenen</b>, dus daar wordt niets verwijderd.",
+      "consequenceRepoYours": "<b>De repository blijft in je GitHub-account</b> en er verandert niets op GitHub.",
       "consequenceProduction": "<b>Productie op {address}</b> wordt afgesloten, en de app en de database worden verwijderd.",
       "consequenceDomains": "{count, plural, one {<b># eigen domein</b> wordt niet meer geserveerd en wordt vrijgegeven.} other {<b># eigen domeinen</b> worden niet meer geserveerd en worden vrijgegeven.}}",
       "consequencePreviews": "{count, plural, one {<b># preview-app</b> wordt gesloten en vernietigd.} other {<b># preview-apps</b> worden gesloten en vernietigd.}}",
@@ -10511,6 +10514,8 @@
       "removeConfirm": "Verwijderen",
       "stateUnfinished": "Verwijderen niet voltooid",
       "unfinishedDetail": "Motir is halverwege het verwijderen van deze repository gestopt. Wat al weg is, blijft weg, en opnieuw proberen rondt de rest af.",
+      "stateUnfinishedYours": "Verwijderen is niet voltooid",
+      "unfinishedDetailYours": "Motir is halverwege gestopt met het stoppen van wat het vanuit deze repository draait. De repository zelf blijft in je GitHub-account, en opnieuw proberen maakt de rest af.",
       "retryDelete": "Opnieuw proberen"
     }
   },

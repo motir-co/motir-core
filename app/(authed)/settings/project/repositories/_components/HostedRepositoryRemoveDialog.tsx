@@ -114,8 +114,17 @@ export function HostedRepositoryRemoveDialog({
     );
   }
 
-  const gone = check.phase === 'ready' && check.impact.repository !== 'motir';
-  const title = gone ? t('goneTitle', { repo }) : t('deleteTitle', { repo });
+  // Which register the danger confirm speaks in: Motir's repository is DELETED;
+  // the person's own (taken over, with production still running) STAYS, and only
+  // what Motir runs from it shuts down; one already gone from GitHub is neither.
+  const holding = check.phase === 'ready' ? check.impact.repository : 'motir';
+  const register = holding === 'motir' ? 'delete' : holding === 'yours' ? 'yours' : 'gone';
+  const title =
+    register === 'delete'
+      ? t('deleteTitle', { repo })
+      : register === 'yours'
+        ? t('yoursTitle', { repo })
+        : t('goneTitle', { repo });
   const matches = typed === name;
 
   return (
@@ -127,7 +136,11 @@ export function HostedRepositoryRemoveDialog({
         <div className="min-w-0">
           <h2 className="font-serif text-xl font-semibold break-words text-(--el-text)">{title}</h2>
           <p className="mt-1 font-sans text-sm text-(--el-text-secondary)">
-            {gone ? t('goneLead') : t('deleteLead')}
+            {register === 'delete'
+              ? t('deleteLead')
+              : register === 'yours'
+                ? t('yoursLead', { repo })
+                : t('goneLead')}
           </p>
         </div>
       </div>
@@ -177,7 +190,7 @@ export function HostedRepositoryRemoveDialog({
               {t('cancel')}
             </Button>
             <Button type="submit" variant="danger" disabled={!matches || pending} loading={pending}>
-              {pending ? t('pending') : gone ? t('goneConfirm') : t('confirm')}
+              {pending ? t('pending') : register === 'delete' ? t('confirm') : t('goneConfirm')}
             </Button>
           </Modal.Footer>
         </form>
@@ -236,11 +249,13 @@ function Consequences({ impact }: { impact: HostedRepositoryRemovalDto }) {
   const { production } = impact;
   return (
     <ul className="divide-y divide-(--el-border-soft) rounded-(--radius-card) border border-(--el-border)">
-      {impact.repository === 'motir' || impact.repository === 'gone' ? (
+      {impact.repository !== 'never' ? (
         <Consequence icon={<FolderGit2 className="h-4 w-4" aria-hidden />}>
           {impact.repository === 'motir'
             ? t.rich('consequenceRepo', { b: bold })
-            : t.rich('consequenceRepoGone', { b: bold })}
+            : impact.repository === 'yours'
+              ? t.rich('consequenceRepoYours', { b: bold })
+              : t.rich('consequenceRepoGone', { b: bold })}
         </Consequence>
       ) : null}
       {production ? (

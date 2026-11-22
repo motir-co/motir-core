@@ -10484,8 +10484,11 @@
       "goneTitle": "{repo} を削除し、そこから実行されているものを停止しますか？",
       "goneLead": "リポジトリはすでに GitHub から削除されていますが、まだそこから実行されているものがあります。削除するとそれが停止します。元に戻すことはできません。",
       "goneConfirm": "削除して停止",
+      "yoursTitle": "{repo} を削除し、Motir がそこから実行しているものを停止しますか？",
+      "yoursLead": "{repo} はあなたの GitHub アカウントに残ります。このプロジェクトから削除すると、Motir がそこから実行しているものが停止します。この操作は元に戻せません。",
       "consequenceRepo": "<b>リポジトリとそのコード</b>：GitHub 上のすべてのブランチ、コミット、プルリクエスト。",
       "consequenceRepoGone": "<b>リポジトリはすでに GitHub から削除されています</b>。そのため、GitHub 上では何も削除されません。",
+      "consequenceRepoYours": "<b>リポジトリはあなたの GitHub アカウントに残ります</b>。GitHub 上では何も変わりません。",
       "consequenceProduction": "<b>{address} の本番環境</b>が停止され、そのアプリとデータベースが削除されます。",
       "consequenceDomains": "{count, plural, other {<b>独自ドメイン # 件</b>の配信が停止され、解放されます。}}",
       "consequencePreviews": "{count, plural, other {<b>プレビューアプリ # 件</b>が閉じられ、破棄されます。}}",
@@ -10508,6 +10511,8 @@
       "removeConfirm": "削除",
       "stateUnfinished": "削除が完了しませんでした",
       "unfinishedDetail": "Motir はこのリポジトリの削除を途中で停止しました。すでに削除されたものは削除されたままで、もう一度試すと残りが完了します。",
+      "stateUnfinishedYours": "削除が完了しませんでした",
+      "unfinishedDetailYours": "Motir はこのリポジトリから実行しているものの停止を途中で中断しました。リポジトリ自体はあなたの GitHub アカウントに残り、もう一度試すと残りが完了します。",
       "retryDelete": "もう一度試す"
     }
   },

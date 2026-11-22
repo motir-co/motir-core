@@ -10487,8 +10487,11 @@
       "goneTitle": "Remover {repo} e desligar o que roda a partir dele?",
       "goneLead": "O repositório já não está no GitHub, mas algo ainda roda a partir dele. Removê-lo desliga isso. Não é possível desfazer.",
       "goneConfirm": "Remover e desligar",
+      "yoursTitle": "Remover {repo} e desligar o que o Motir executa a partir dele?",
+      "yoursLead": "{repo} continua na sua conta do GitHub. Removê-lo deste projeto desliga o que o Motir executa a partir dele. Isso não pode ser desfeito.",
       "consequenceRepo": "<b>O repositório e seu código</b>: cada branch, commit e pull request no GitHub.",
       "consequenceRepoGone": "<b>O repositório já não está no GitHub</b>, então nada é excluído lá.",
+      "consequenceRepoYours": "<b>O repositório continua na sua conta do GitHub</b>, e nada muda no GitHub.",
       "consequenceProduction": "<b>A produção em {address}</b> é desligada, e seu app e seu banco de dados são excluídos.",
       "consequenceDomains": "{count, plural, one {<b># domínio personalizado</b> deixa de responder e é liberado.} other {<b># domínios personalizados</b> deixam de responder e são liberados.}}",
       "consequencePreviews": "{count, plural, one {<b># app de prévia</b> é fechado e destruído.} other {<b># apps de prévia</b> são fechados e destruídos.}}",
@@ -10511,6 +10514,8 @@
       "removeConfirm": "Remover",
       "stateUnfinished": "A exclusão não terminou",
       "unfinishedDetail": "O Motir parou no meio da exclusão deste repositório. O que já foi excluído continua excluído, e tentar novamente termina o resto.",
+      "stateUnfinishedYours": "A remoção não terminou",
+      "unfinishedDetailYours": "O Motir parou no meio do desligamento do que executa a partir deste repositório. O repositório em si continua na sua conta do GitHub, e tentar novamente termina o resto.",
       "retryDelete": "Tentar novamente"
     }
   },

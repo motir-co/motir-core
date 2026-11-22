@@ -201,9 +201,9 @@ export const hostedRepositoryRemovalService = {
     //       repository, then every open preview closed and torn down.
     if (row.githubRepo) {
       try {
-        if (holding === 'motir' || holding === 'gone') {
-          await previewEnablementService.disable(rowId);
-        }
+        // Only on a repository Motir holds: a taken-over one is the person's,
+        // and Motir does not touch its settings (the apps it runs still go).
+        if (holding === 'motir') await previewEnablementService.disable(rowId);
         await previewLifecycleService.teardownRepository(rowId, {
           pushNamespace: row.previewPushNamespace,
         });
@@ -267,6 +267,14 @@ export const hostedRepositoryRemovalService = {
           ).appRef
         : null);
     if (appRef) await port.destroyApp({ appRef });
+    // The app is gone: forget the releases and its name, so a retry after a
+    // later step fails neither re-settles usage (which re-resolves the app on
+    // the host) nor destroys it again.
+    if (app.currentReleaseId || app.previousReleaseId || app.productionAppName) {
+      await withWorkspaceServiceContext(workspaceId, (tx) =>
+        hostedApplicationRepository.clearProductionPointers(app.id, tx),
+      );
+    }
     if (app.databaseProjectId) {
       const databases = getDatabasePort();
       await databases.deleteDatabase({

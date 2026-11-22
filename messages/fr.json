@@ -10487,8 +10487,11 @@
       "goneTitle": "Retirer {repo} et arrêter ce qui s’exécute depuis celui-ci ?",
       "goneLead": "Le dépôt n’existe déjà plus sur GitHub, mais quelque chose s’exécute encore depuis celui-ci. Le retirer l’arrête. Cette action est irréversible.",
       "goneConfirm": "Retirer et arrêter",
+      "yoursTitle": "Retirer {repo} et arrêter ce que Motir exécute à partir de celui-ci ?",
+      "yoursLead": "{repo} reste dans votre compte GitHub. Le retirer de ce projet arrête ce que Motir exécute à partir de celui-ci. Cette action est irréversible.",
       "consequenceRepo": "<b>Le dépôt et son code</b> : chaque branche, chaque commit et chaque pull request sur GitHub.",
       "consequenceRepoGone": "<b>Le dépôt n’existe déjà plus sur GitHub</b>, donc rien n’y est supprimé.",
+      "consequenceRepoYours": "<b>Le dépôt reste dans votre compte GitHub</b>, et rien ne change sur GitHub.",
       "consequenceProduction": "<b>La production sur {address}</b> est arrêtée, et son app et sa base de données sont supprimées.",
       "consequenceDomains": "{count, plural, one {<b># domaine personnalisé</b> cesse d’être servi et est libéré.} other {<b># domaines personnalisés</b> cessent d’être servis et sont libérés.}}",
       "consequencePreviews": "{count, plural, one {<b># app de prévisualisation</b> est fermée et détruite.} other {<b># apps de prévisualisation</b> sont fermées et détruites.}}",
@@ -10511,6 +10514,8 @@
       "removeConfirm": "Retirer",
       "stateUnfinished": "La suppression n’a pas abouti",
       "unfinishedDetail": "Motir s’est arrêté en cours de suppression de ce dépôt. Ce qui est déjà supprimé le reste, et une nouvelle tentative termine le reste.",
+      "stateUnfinishedYours": "Le retrait n’a pas abouti",
+      "unfinishedDetailYours": "Motir s’est arrêté en cours d’arrêt de ce qu’il exécute à partir de ce dépôt. Le dépôt lui-même reste dans votre compte GitHub, et réessayer termine le reste.",
       "retryDelete": "Réessayer"
     }
   },

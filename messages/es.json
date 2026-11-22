@@ -10487,8 +10487,11 @@
       "goneTitle": "¿Quitar {repo} y apagar lo que se ejecuta desde él?",
       "goneLead": "El repositorio ya no está en GitHub, pero algo todavía se ejecuta desde él. Quitarlo lo apaga. No se puede deshacer.",
       "goneConfirm": "Quitar y apagar",
+      "yoursTitle": "¿Quitar {repo} y apagar lo que Motir ejecuta desde él?",
+      "yoursLead": "{repo} se queda en tu cuenta de GitHub. Quitarlo de este proyecto apaga lo que Motir ejecuta desde él. No se puede deshacer.",
       "consequenceRepo": "<b>El repositorio y su código</b>: cada rama, commit y pull request en GitHub.",
       "consequenceRepoGone": "<b>El repositorio ya no está en GitHub</b>, así que allí no se elimina nada.",
+      "consequenceRepoYours": "<b>El repositorio se queda en tu cuenta de GitHub</b> y nada cambia en GitHub.",
       "consequenceProduction": "<b>Producción en {address}</b> se apaga, y se eliminan su app y su base de datos.",
       "consequenceDomains": "{count, plural, one {<b># dominio personalizado</b> deja de servir y se libera.} other {<b># dominios personalizados</b> dejan de servir y se liberan.}}",
       "consequencePreviews": "{count, plural, one {<b># app de vista previa</b> se cierra y se destruye.} other {<b># apps de vista previa</b> se cierran y se destruyen.}}",
@@ -10511,6 +10514,8 @@
       "removeConfirm": "Quitar",
       "stateUnfinished": "La eliminación no terminó",
       "unfinishedDetail": "Motir se detuvo a mitad de eliminar este repositorio. Lo que ya no está sigue sin estar, y volver a intentarlo termina el resto.",
+      "stateUnfinishedYours": "La eliminación no terminó",
+      "unfinishedDetailYours": "Motir se detuvo a mitad de apagar lo que ejecuta desde este repositorio. El repositorio en sí se queda en tu cuenta de GitHub, y volver a intentarlo termina el resto.",
       "retryDelete": "Volver a intentar"
     }
   },

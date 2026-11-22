@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { SEED_SOURCE_FLY_STARTER } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -103,6 +103,19 @@ describe('hostedApplicationRepository — the hosted delete’s teardown', () =>
         hostedApplicationRepository.findTeardownByProjectRepository('no-such-row', tx),
       ),
     ).toBeNull();
+  });
+
+  it('forgets production’s releases and app name once the app is destroyed', async () => {
+    const { app } = await application();
+    await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      hostedApplicationRepository.clearProductionPointers(app.id, tx),
+    );
+    expect(
+      await adminDb.hostedApplication.findUnique({
+        where: { id: app.id },
+        select: { currentReleaseId: true, previousReleaseId: true, productionAppName: true },
+      }),
+    ).toEqual({ currentReleaseId: null, previousReleaseId: null, productionAppName: null });
   });
 
   it('deletes the application with its releases, releases its domains, and is idempotent', async () => {

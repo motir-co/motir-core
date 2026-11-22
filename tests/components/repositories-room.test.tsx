@@ -1292,6 +1292,47 @@ describe('deleting a Motir-hosted repository (design §19)', () => {
     expect(within(dialog).getByRole('button', { name: 'Remove and shut down' })).toBeTruthy();
   });
 
+  it('keeps a taken-over repository that still runs production out of the gone wording (review of #4382)', async () => {
+    hostedRemoveFetch({
+      impact: {
+        ...DESTRUCTIVE,
+        repository: 'yours',
+        previews: 0,
+        environmentValues: 0,
+        openWorkItems: 0,
+      },
+    });
+    renderRoom({ rows: [connectedRow()] });
+    await click(
+      screen.getByRole('button', { name: 'Remove acme-inc/design-tokens from this project' }),
+    );
+    const dialog = await screen.findByRole('alertdialog');
+    await waitFor(() =>
+      expect(dialog.textContent).toContain(
+        'Remove acme-inc/design-tokens and shut down what Motir runs from it?',
+      ),
+    );
+    const text = dialog.textContent ?? '';
+    expect(text).toContain('acme-inc/design-tokens stays in your GitHub account.');
+    expect(text).toContain(
+      'The repository stays in your GitHub account, and nothing on GitHub changes.',
+    );
+    expect(text).toContain('Production at acme-booking.motir.site');
+    expect(text).not.toContain('already gone from GitHub');
+    expect(within(dialog).queryByRole('button', { name: 'Take it over instead' })).toBeNull();
+    expect(within(dialog).getByLabelText('Type design-tokens to confirm')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Remove and shut down' })).toBeTruthy();
+  });
+
+  it('never says a taken-over row’s repository was being deleted when its removal stops', () => {
+    renderRoom({ rows: [{ ...connectedRow(), hostedDeletionStartedAt: NOW }] });
+    const row = screen.getByTestId('takeover-row-shared');
+    expect(within(row).getByText('Removal didn’t finish')).toBeTruthy();
+    const alert = within(row).getByRole('alert').textContent ?? '';
+    expect(alert).toContain('The repository itself stays in your GitHub account');
+    expect(alert).not.toContain('deleting this repository');
+  });
+
   it('refuses to confirm when the check fails, and Check again reads it once more', async () => {
     hostedRemoveFetch({ impactStatus: 502 });
     renderRoom({ rows: [hostedRow()] });
