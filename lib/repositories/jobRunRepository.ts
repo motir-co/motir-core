@@ -30,6 +30,13 @@ const RUNNING_CODE_GRAPH_RUN = {
 // Data access for the job_run ledger (Story 1.6 · Subtask 1.6.2). Single-op
 // methods only; writes require `tx` (the 4-layer contract). jobRunsService
 // owns the transactions and the DTO mapping.
+/**
+ * The `output.indexedBy` a `system.code-graph-index` / `-refresh` run writes when
+ * it handed the repository to motir-ai and motir-codegraph published it
+ * (MOTIR-11883). An old-fleet run wrote no such field.
+ */
+export const CODE_GRAPH_HANDOFF_INDEXED_BY = 'motir-codegraph' as const;
+
 export const jobRunRepository = {
   /** Read one run by id. Used inside the finish transaction to read startedAt. */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<JobRun | null> {
@@ -377,6 +384,43 @@ export const jobRunRepository = {
       select: { id: true },
     });
     return rows.map((row) => row.id);
+  },
+
+  /**
+   * THE FIRST-INDEX GATE'S READ (MOTIR-11885 · story MOTIR-11022): the `repoRef`s
+   * of this workspace's SUCCEEDED `system.code-graph-index` rows written by the
+   * handoff to motir-codegraph — `output.indexedBy` is
+   * {@link CODE_GRAPH_HANDOFF_INDEXED_BY}. An old-fleet success carries
+   * `output.repoRef` alone and does NOT count here, so a repository only the old
+   * fleet indexed is handed to the new service by the next bind, reconcile or
+   * sweep.
+   *
+   * ⚠️ ONLY the two first-index gates read this (`enqueueFirstIndexForRepos`,
+   * `sweepReposMissingFirstIndex`). Every reader that reports what a user can see
+   * — the onboarding wizard, the project index state, `get_project_state`, the
+   * code-context staleness read — stays on
+   * {@link listSucceededCodeGraphIndexRepoRefs}: until the reads move onto the
+   * service, the old graph is still what they serve.
+   */
+  async listHandoffIndexedCodeGraphRepoRefs(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.jobRun.findMany({
+      where: {
+        workspaceId,
+        functionId: 'system.code-graph-index',
+        status: 'succeeded',
+        output: { path: ['indexedBy'], equals: CODE_GRAPH_HANDOFF_INDEXED_BY },
+      },
+      select: { output: true },
+    });
+    const refs = new Set<string>();
+    for (const row of rows) {
+      const output = row.output as { repoRef?: unknown } | null;
+      if (output && typeof output.repoRef === 'string') refs.add(output.repoRef);
+    }
+    return [...refs];
   },
 
   async listSucceededCodeGraphIndexRepoRefs(

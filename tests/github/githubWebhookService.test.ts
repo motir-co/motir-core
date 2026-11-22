@@ -848,7 +848,8 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
   }
 
   /** Seed the ledger row that MEANS "this repo has a code graph": a succeeded
-   *  `system.code-graph-index` run carrying the repo's `output.repoRef`. */
+   *  `system.code-graph-index` run carrying the repo's `output.repoRef`. *  Since MOTIR-11885 the first-index gate counts only a row the HANDOFF wrote
+   *  (`output.indexedBy: 'motir-codegraph'`); an old-fleet row is enqueued again. */
   async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise<void> {
     await adminDb.jobRun.create({
       data: {
@@ -859,7 +860,7 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
         lane: 'engine',
         attempt: 0,
         status: 'succeeded',
-        output: { indexed: true, repoRef, projectsIndexed: 1 },
+        output: { indexed: true, repoRef, projectsIndexed: 1, indexedBy: 'motir-codegraph' },
       },
     });
   }

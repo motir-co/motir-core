@@ -5,6 +5,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
@@ -58,7 +59,8 @@ async function connectRepos(
   });
 }
 
-/** The ledger row that MEANS "this repo has a code graph". */
+/** The ledger row that MEANS "this repo has a code graph": since MOTIR-11885 a
+ *  succeeded run the HANDOFF wrote (`output.indexedBy: 'motir-codegraph'`). */
 async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise<void> {
   await adminDb.jobRun.create({
     data: {
@@ -66,6 +68,22 @@ async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
       eventId: `evt-${workspaceId}-${repoRef}`,
+      lane: 'engine',
+      attempt: 0,
+      status: 'succeeded',
+      output: { indexed: true, repoRef, projectsIndexed: 1, indexedBy: 'motir-codegraph' },
+    },
+  });
+}
+
+/** An OLD-FLEET success: `output.repoRef` and no `indexedBy`. */
+async function seedOldFleetIndex(workspaceId: string, repoRef: string): Promise<void> {
+  await adminDb.jobRun.create({
+    data: {
+      workspaceId,
+      functionId: 'system.code-graph-index',
+      eventName: 'system.code-graph-index',
+      eventId: `evt-old-${workspaceId}-${repoRef}`,
       lane: 'engine',
       attempt: 0,
       status: 'succeeded',
@@ -291,6 +309,118 @@ describe('codeGraphIndexService.sweepReposMissingFirstIndex (MOTIR-1961)', () =>
   });
 });
 
+describe('an old-fleet success no longer counts as a graph (MOTIR-11885)', () => {
+  it('the sweep lists a repo whose only succeeded row is old-fleet, and not one with a handoff row', async () => {
+    const { workspaceId } = await makeWorkspace('sweep-old-fleet@example.com');
+    await connectRepos(workspaceId, 'inst-1', [
+      { repoId: '111', name: 'motir-core' },
+      { repoId: '222', name: 'motir-ai' },
+    ]);
+    await seedOldFleetIndex(workspaceId, 'moooon/motir-core');
+    await seedOldFleetIndex(workspaceId, 'moooon/motir-ai');
+    await seedSucceededIndex(workspaceId, 'moooon/motir-ai');
+
+    const report = await codeGraphIndexService.sweepReposMissingFirstIndex();
+
+    expect(report).toMatchObject({ scanned: 2, alreadyIndexed: 1, enqueued: 1 });
+    expect(report.missing.map((r) => r.repoRef)).toEqual(['moooon/motir-core']);
+    expect(enqueuedRepoRefs()).toEqual(['moooon/motir-core']);
+  });
+
+  it('the reconcile gate enqueues an old-fleet-only repo and skips a handoff-indexed one', async () => {
+    const { workspaceId } = await makeWorkspace('gate-old-fleet@example.com');
+    await seedOldFleetIndex(workspaceId, 'moooon/motir-core');
+    await seedSucceededIndex(workspaceId, 'moooon/motir-ai');
+
+    await codeGraphIndexService.enqueueFirstIndexForRepos({
+      installationId: 'inst-1',
+      workspaceId,
+      repos: [
+        {
+          providerRepoId: '111',
+          owner: 'moooon',
+          name: 'motir-core',
+          defaultBranch: 'main',
+          archived: false,
+        },
+        {
+          providerRepoId: '222',
+          owner: 'moooon',
+          name: 'motir-ai',
+          defaultBranch: 'main',
+          archived: false,
+        },
+      ],
+    });
+
+    expect(enqueuedRepoRefs()).toEqual(['moooon/motir-core']);
+  });
+
+  it('the broad ledger read every other reader uses still counts the old-fleet row', async () => {
+    const { workspaceId } = await makeWorkspace('broad-old-fleet@example.com');
+    await seedOldFleetIndex(workspaceId, 'moooon/motir-core');
+    await expect(
+      withSystemContext((tx) =>
+        jobRunRepository.listSucceededCodeGraphIndexRepoRefs(workspaceId, tx),
+      ),
+    ).resolves.toEqual(['moooon/motir-core']);
+  });
+});
+
+describe('jobRunRepository.listHandoffIndexedCodeGraphRepoRefs (MOTIR-11885)', () => {
+  const row = (
+    workspaceId: string,
+    over: { functionId?: string; status?: 'succeeded' | 'failed' | 'running'; output?: object },
+  ) =>
+    adminDb.jobRun.create({
+      data: {
+        workspaceId,
+        functionId: over.functionId ?? 'system.code-graph-index',
+        eventName: over.functionId ?? 'system.code-graph-index',
+        eventId: `evt-${Math.random()}`,
+        lane: 'engine',
+        attempt: 0,
+        status: over.status ?? 'succeeded',
+        output: (over.output ?? {
+          indexed: true,
+          repoRef: 'moooon/handoff',
+          indexedBy: 'motir-codegraph',
+        }) as object,
+      },
+    });
+
+  it('answers only succeeded handoff rows of this workspace’s first-index job, each ref once', async () => {
+    const { workspaceId } = await makeWorkspace('read-handoff@example.com');
+    const other = await makeWorkspace('read-handoff-other@example.com');
+    await row(workspaceId, {});
+    await row(workspaceId, {}); // the same ref twice
+    await row(workspaceId, { output: { indexed: true, repoRef: 'moooon/old' } });
+    await row(workspaceId, {
+      status: 'failed',
+      output: { repoRef: 'moooon/failed', indexedBy: 'motir-codegraph' },
+    });
+    await row(workspaceId, {
+      status: 'running',
+      output: { repoRef: 'moooon/running', indexedBy: 'motir-codegraph' },
+    });
+    await row(workspaceId, {
+      functionId: 'system.code-graph-refresh',
+      output: { repoRef: 'moooon/refresh', indexedBy: 'motir-codegraph' },
+    });
+    await row(workspaceId, { output: { indexed: false, indexedBy: 'motir-codegraph' } });
+    await row(workspaceId, { output: { repoRef: 'moooon/other-writer', indexedBy: 'fleet' } });
+    await row(other.workspaceId, {
+      output: { repoRef: 'moooon/theirs', indexedBy: 'motir-codegraph' },
+    });
+
+    await expect(
+      withSystemContext((tx) =>
+        jobRunRepository.listHandoffIndexedCodeGraphRepoRefs(workspaceId, tx),
+      ),
+    ).resolves.toEqual(['moooon/handoff']);
+  });
+});
+
 describe('codeGraphIndexService.enqueueFirstIndexForRepos (MOTIR-1961)', () => {
   it('reads the ledger and enqueues only the repos without a graph', async () => {
     const { workspaceId } = await makeWorkspace('gate-basic@example.com');
@@ -325,7 +455,7 @@ describe('codeGraphIndexService.enqueueFirstIndexForRepos (MOTIR-1961)', () => {
     // not throw. Losing the ledger means enqueueing everything, which the
     // idempotent job converges on — the safe direction to fail in.
     const { workspaceId } = await makeWorkspace('gate-ledger-down@example.com');
-    vi.spyOn(jobRunRepository, 'listSucceededCodeGraphIndexRepoRefs').mockRejectedValue(
+    vi.spyOn(jobRunRepository, 'listHandoffIndexedCodeGraphRepoRefs').mockRejectedValue(
       new Error('ledger unreadable'),
     );
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});

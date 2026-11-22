@@ -9,6 +9,7 @@ import {
 } from '@/lib/ciFleet/indexAllowance';
 import { getGitProvider, requireRepoTarballUrlResolver, type ChangedFilesResult } from '@/lib/git';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { CODE_GRAPH_HANDOFF_INDEXED_BY } from '@/lib/repositories/jobRunRepository';
 import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import {
@@ -289,7 +290,7 @@ export async function runIndexHandoffSteps(
       indexed: true,
       repoRef: target.repoRef,
       projectsIndexed: 1,
-      indexedBy: 'motir-codegraph',
+      indexedBy: CODE_GRAPH_HANDOFF_INDEXED_BY,
       ...(settled.kind === 'superseded' ? { supersededBy: settled.publishedCommit } : {}),
     };
   }
