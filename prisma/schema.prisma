@@ -13038,6 +13038,34 @@ model FleetGrowthPassLease {
   @@map("fleet_growth_pass_lease")
 }
 
+/// THE DEFERRED CODEQL MOVE's cross-process claim and memory (MOTIR-12034), one
+/// row per GitHub repository, `org` and `repo` stored lower-cased. Every runner
+/// boot fires the catch-up (`fleetCodeScanningCatchUpService`), and a CI run that
+/// starts ten jobs boots ten runners in the same second on separate workers — so
+/// the move is claimed HERE, never in process memory:
+///   · `heldUntil` / `holder` — the single-flight LEASE. A boot moves the
+///     repository's default setup only after taking it in one statement, and only
+///     while no lease is live and no landed move is remembered. A boot that dies
+///     holding it is outlived by `heldUntil`.
+///   · `onFleetUntil` — a move that LANDED (or a setup read already on the fleet
+///     label), remembered across processes for the recheck window, so a burst of
+///     boots right after a move neither reads GitHub nor PATCHes again.
+/// Keyed on the repository, not the project: a default setup is GitHub's, one
+/// per repository whichever project connected it. Platform-only, as
+/// `fleet_growth_pass_lease`.
+model FleetCodeScanningMove {
+  org          String
+  repo         String
+  heldUntil    DateTime  @map("held_until")
+  /// The boot holding the lease — settled only by that boot.
+  holder       String
+  onFleetUntil DateTime? @map("on_fleet_until")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@id([org, repo])
+  @@map("fleet_code_scanning_move")
+}
+
 /// A Host organisation's refused account creations (Story MOTIR-9365 ·
 /// MOTIR-9582), one row per (organisation, slot): how many `CreateAccount`
 /// refusals in a row, and when the last one was. The reconcile backs a slot off
