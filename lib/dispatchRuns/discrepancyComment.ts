@@ -1,21 +1,24 @@
-// The card comment a run's discrepancy record leaves (Story MOTIR-8651 · MOTIR-8655,
-// decision page MOTIR-8654). PURE: points in, markdown out — no I/O, no clock.
+// A run's discrepancy record as MARKDOWN (Story MOTIR-8651 · MOTIR-8655, decision page
+// MOTIR-8654). PURE: points in, markdown out — no I/O, no clock.
 //
-// The comment is the record's TEXT. The `discrepancy_recorded` finding on the run carries
-// only a pointer to it, so a customer's words stay in the card's own tenant.
+// ⚠️ NO LONGER A COMMENT (MOTIR-11996). This was the card comment `record_run_discrepancy`
+// wrote beside the record, its VIEW. The call writes no comment now: the record —
+// `run_discrepancy_record` + its entries (MOTIR-11361) — is the only write, and the work
+// item page's Run discrepancy section shows it. What stays here:
 //
-// ⚠️ TWO KINDS OF ENTRY, ONE COMMENT (MOTIR-10000). A POINT is the plan being WRONG about
-// the HOW (a build-through); a DECISION is the plan being SILENT and the run deciding by the
+// - `composeDiscrepancyComment` renders a record as the markdown the comment carried, which
+//   `get_run_record` still returns as a record's `bodyMd`, so its callers read what they did.
+// - `parseDiscrepancyComment` below is the composer's INVERSE, and exists only for the
+//   backfill of comments written before that table: it accepts a body exactly when
+//   composing what it parsed gives the body back, so an edited comment that no longer reads
+//   as a record is reported, never guessed at. Comments earlier runs wrote stay on their
+//   cards as ordinary comments.
+//
+// ⚠️ TWO KINDS OF ENTRY (MOTIR-10000). A POINT is the plan being WRONG about the HOW (a
+// build-through); a DECISION is the plan being SILENT and the run deciding by the
 // repository's conventions, then industry best practice. Each gets its own section, so a
 // reader never takes a decision for a defect of the plan; a record with only decisions keeps
-// the build-through header out of the comment entirely.
-//
-// ⚠️ THE COMMENT IS THE VIEW, NOT THE RECORD (MOTIR-11361). The record is
-// `run_discrepancy_record` + its entries, written beside this comment in one transaction.
-// `parseDiscrepancyComment` below is the composer's INVERSE, and exists only for the
-// backfill of comments written before that table: it accepts a body exactly when composing
-// what it parsed gives the body back, so an edited comment that no longer reads as a record
-// is reported, never guessed at.
+// the build-through header out of the markdown entirely.
 
 /** One point of a discrepancy: what the plan asked · what was built · why. */
 export interface RunDiscrepancyPoint {

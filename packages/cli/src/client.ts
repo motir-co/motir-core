@@ -2653,8 +2653,9 @@ export class MotirClient {
 
   /**
    * The run's DISCREPANCY record (MOTIR-8722) — the agent BUILT THROUGH `key`, a card this
-   * run holds, and wrote what it built differently into its self-report. One comment on the
-   * card and one finding on its leg of this run. The DECISIONS it made where the plan was
+   * run holds, and wrote what it built differently into its self-report. One discrepancy
+   * record on the card — its Run discrepancy section shows it; no comment since MOTIR-11996 —
+   * and one finding on its leg of this run. The DECISIONS it made where the plan was
    * silent (MOTIR-10000) ride the same record; `decisions` is omitted when there are none, so
    * a points-only record sends the body it always sent.
    */
@@ -2663,7 +2664,7 @@ export class MotirClient {
     key: string;
     points: { planAsked: string; built: string; why: string }[];
     decisions?: { planSaid: string; chose: string; why: string; alternatives?: string }[];
-  }): Promise<{ commentId: string; recorded: boolean }> {
+  }): Promise<{ recordId: string; recorded: boolean }> {
     const body = await this.v1.request('recordDispatchRunDiscrepancy', {
       path: { id: args.runId },
       body: {
@@ -2672,7 +2673,7 @@ export class MotirClient {
         ...(args.decisions && args.decisions.length > 0 ? { decisions: args.decisions } : {}),
       },
     });
-    return { commentId: body.commentId, recorded: body.recorded };
+    return { recordId: body.recordId, recorded: body.recorded };
   }
 
   /**

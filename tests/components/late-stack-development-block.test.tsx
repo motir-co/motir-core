@@ -166,6 +166,7 @@ function reads(): LateReads {
     // No agent review on the card (MOTIR-6825).
     agentReview: null,
     gatedRun: null,
+    runDiscrepancies: [],
   };
 }
 

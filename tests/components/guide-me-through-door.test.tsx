@@ -96,6 +96,7 @@ function reads(): LateReads {
     confirmGate: { ...NO_GATE, body: null, workItemRefs: {} },
     agentReview: null,
     gatedRun: null,
+    runDiscrepancies: [],
   } as LateReads;
 }
 

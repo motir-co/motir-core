@@ -445,9 +445,9 @@ export const ja: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'ランナーが、HOW だけが誤っている計画と異なる形で実装した内容と、計画が何も定めていなかった点で下した判断を記録します。作業項目へのコメントと実行記録が残り、受理されます。',
+      'ランナーが、HOW だけが誤っている計画と異なる形で実装した内容と、計画が何も定めていなかった点で下した判断を記録します。作業項目に表示される相違記録と実行上の検出事項が残り、受理されます。',
     source:
-      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a discrepancy record the card shows, and a finding on its run, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

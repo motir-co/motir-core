@@ -134,8 +134,10 @@ export const dispatchRunEventRepository = {
   /**
    * Every `discrepancy_recorded` finding the BOUND workspace holds, oldest first, with its
    * leg's card and its run's project — the MOTIR-11361 backfill's population. The `data`
-   * is the finding's POINTER (`{ commentId, pointCount, decisionCount?, dispatchRunCardId }`);
-   * since MOTIR-11361 the record itself is `run_discrepancy_record`, which the reads use.
+   * is the finding's POINTER (`{ commentId, pointCount, decisionCount?, dispatchRunCardId }`
+   * before MOTIR-11996, `{ recordId, … }` since — a finding with no `commentId` has its
+   * record already and the backfill skips it); since MOTIR-11361 the record itself is
+   * `run_discrepancy_record`, which the reads use.
    */
   async listDiscrepancyFindingsForBackfill(
     workspaceId: string,

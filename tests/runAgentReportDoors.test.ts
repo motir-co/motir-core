@@ -122,6 +122,12 @@ async function post(
 const comments = (card: Card) =>
   adminDb.comment.findMany({ where: { workItemId: card.id }, orderBy: { createdAt: 'asc' } });
 
+const records = (card: Card) =>
+  adminDb.runDiscrepancyRecord.findMany({
+    where: { workItemId: card.id },
+    include: { entries: { orderBy: [{ kind: 'asc' }, { position: 'asc' }] } },
+  });
+
 const statusOf = async (card: Card) =>
   (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).status;
 
@@ -148,7 +154,7 @@ describe('both doors are on the run-token list, bound to their own run, called b
 
 describe('a BUILD-THROUGH, recorded by the run on the leg and the card', () => {
   it.each(['hosted', 'instance'] as const)(
-    'a %s run records its points: one comment, one finding on THIS run’s leg, one per leg',
+    'a %s run records its points: one record, no comment, one finding on THIS run’s leg, one per leg',
     async (origin) => {
       const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
       const card = await inProgressCard(fx);
@@ -156,26 +162,29 @@ describe('a BUILD-THROUGH, recorded by the run on the leg and the card', () => {
 
       const res = await post('discrepancy', runId, headers, { key: card.key, points: [POINT] });
       expect(res.status).toBe(200);
-      const ack = (await res.json()) as { commentId: string; recorded: boolean };
+      const ack = (await res.json()) as { recordId: string; recorded: boolean };
+      expect(Object.keys(ack).sort()).toEqual(['recordId', 'recorded']);
       expect(ack.recorded).toBe(true);
 
-      const written = await comments(card);
-      expect(written).toHaveLength(1);
-      expect(written[0]!.id).toBe(ack.commentId);
-      for (const sentinel of Object.values(POINT)) {
-        expect(written[0]!.bodyMd).toContain(sentinel);
-      }
+      // MOTIR-11996: the record is the only write on the card — no comment.
+      expect(await comments(card)).toHaveLength(0);
+      const written = await records(card);
+      expect(written.map((r) => r.id)).toEqual([ack.recordId]);
+      expect(written[0]!.entries.map((e) => [e.planText, e.outcomeText, e.why])).toEqual([
+        [POINT.planAsked, POINT.built, POINT.why],
+      ]);
       const events = await adminDb.dispatchRunEvent.findMany({
         where: { dispatchRunId: runId, kind: 'discrepancy_recorded' },
       });
       expect(events).toHaveLength(1);
-      expect(events[0]!.data).toMatchObject({ commentId: ack.commentId, pointCount: 1 });
+      expect(events[0]!.data).toMatchObject({ recordId: ack.recordId, pointCount: 1 });
+      expect(events[0]!.data).not.toHaveProperty('commentId');
 
       // ONE record per leg — the agent's own call, or a retry, writes nothing more.
       const again = await post('discrepancy', runId, headers, { key: card.key, points: [POINT] });
       expect(again.status).toBe(409);
       expect(((await again.json()) as { code: string }).code).toBe('DISCREPANCY_ALREADY_RECORDED');
-      expect(await comments(card)).toHaveLength(1);
+      expect(await records(card)).toHaveLength(1);
     },
   );
 
@@ -192,7 +201,7 @@ describe('a BUILD-THROUGH, recorded by the run on the leg and the card', () => {
     });
     expect(res.status).toBe(403);
     expect(((await res.json()) as { code: string }).code).toBe('DISPATCH_RUN_TOKEN_OUT_OF_SCOPE');
-    expect(await comments(other)).toHaveLength(0);
+    expect(await records(other)).toHaveLength(0);
   });
 
   it('a card that is not a leg of the run is refused, and nothing is written', async () => {
@@ -204,7 +213,7 @@ describe('a BUILD-THROUGH, recorded by the run on the leg and the card', () => {
     const res = await post('discrepancy', runId, headers, { key: elsewhere.key, points: [POINT] });
     expect(res.status).toBe(422);
     expect(((await res.json()) as { code: string }).code).toBe('UNKNOWN_DISPATCH_RUN_CARD');
-    expect(await comments(elsewhere)).toHaveLength(0);
+    expect(await records(elsewhere)).toHaveLength(0);
   });
 
   it('no points, or a field over 2000 characters, is a 422 that writes nothing', async () => {
@@ -216,7 +225,7 @@ describe('a BUILD-THROUGH, recorded by the run on the leg and the card', () => {
       const res = await post('discrepancy', runId, headers, { key: card.key, points });
       expect(res.status).toBe(422);
     }
-    expect(await comments(card)).toHaveLength(0);
+    expect(await records(card)).toHaveLength(0);
   });
 
   it('DECISIONS ride the same record (MOTIR-10000): alone, counted, and bounded', async () => {
@@ -239,12 +248,19 @@ describe('a BUILD-THROUGH, recorded by the run on the leg and the card', () => {
       const res = await post('discrepancy', runId, headers, body);
       expect(res.status, JSON.stringify(body)).toBe(422);
     }
-    expect(await comments(card)).toHaveLength(0);
+    expect(await records(card)).toHaveLength(0);
 
     const res = await post('discrepancy', runId, headers, { key: card.key, decisions: [DECISION] });
     expect(res.status).toBe(200);
-    const [written] = await comments(card);
-    for (const sentinel of Object.values(DECISION)) expect(written!.bodyMd).toContain(sentinel);
+    expect(await comments(card)).toHaveLength(0);
+    const [written] = await records(card);
+    expect(written!.entries[0]).toMatchObject({
+      kind: 'decision',
+      planText: DECISION.planSaid,
+      outcomeText: DECISION.chose,
+      why: DECISION.why,
+      alternatives: DECISION.alternatives,
+    });
     const events = await adminDb.dispatchRunEvent.findMany({
       where: { dispatchRunId: runId, kind: 'discrepancy_recorded' },
     });

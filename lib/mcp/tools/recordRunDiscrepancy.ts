@@ -19,15 +19,17 @@ import { workItemKeyField } from './workItemRef';
 // the discrepancy record*.
 //
 // This is a TRANSPORT over ONE service call, `runDiscrepancyService.recordDiscrepancy`, which
-// owns the bounds, the card comment, the leg, the one-record-per-leg rule and the finding.
+// owns the bounds, the record, the leg, the one-record-per-leg rule and the finding.
 // Nothing here decides, reads or writes anything of its own. The bounds (1–20 points, each
 // field 1–2000 characters) are the SERVICE's, not the schema's: a schema-level refusal would
 // reach the runner as a generic input-validation error, where the service's
 // `RUN_DISCREPANCY_INVALID` names the point and the field.
 //
-// ⚠️ THE ANSWER IS AN ACKNOWLEDGEMENT — `{ commentId, recorded }` — and nothing else.
-// `recorded` says whether the card had an open leg on a running dispatch run, so a finding was
-// written; `false` is not an error (the comment is still on the card).
+// ⚠️ THE ANSWER IS AN ACKNOWLEDGEMENT — `{ recordId, recorded }` — and nothing else.
+// `recordId` names the `run_discrepancy_record` written, which the card's Run discrepancy
+// section shows; `recorded` says whether the card had an open leg on a running dispatch run,
+// so a finding was written; `false` is not an error (the record is still on the card). Since
+// MOTIR-11996 the call writes NO comment.
 //
 // ⚠️ `work_item:edit`, which `CLI_TOKEN_GRANT` ALREADY holds — the grant is not widened, so a
 // sandboxed `motir run` agent and a `motir-run` skill session (a workspace PAT) both reach it.
@@ -109,8 +111,8 @@ function acknowledgementText(
   return result.recorded
     ? `Discrepancy recorded on ${key} and on its run. Open your pull request next, and say in its ` +
         `description ${state}.`
-    : `Discrepancy written as a comment on ${key}, which has no open dispatch leg, so nothing was ` +
-        `recorded on a run. Open your pull request next, and say in its description ${state}.`;
+    : `Discrepancy recorded on ${key}, which has no open dispatch leg, so nothing was recorded ` +
+        `on a run. Open your pull request next, and say in its description ${state}.`;
 }
 
 /** The adapter: one service call, the acknowledgement back as-is. */
@@ -125,7 +127,7 @@ export async function runRecordRunDiscrepancy(
   return toolOk(
     acknowledgementText(args.key.trim().toUpperCase(), result, (args.decisions ?? []).length > 0),
     exempt(RECORD_RUN_DISCREPANCY_TOOL_NAME, {
-      commentId: result.commentId,
+      recordId: result.recordId,
       recorded: result.recorded,
     }),
   );
@@ -144,15 +146,16 @@ export function registerRecordRunDiscrepancy(
         'about the HOW (a false precondition you worked around, existing code you adapted, a ' +
         'planned route you could not follow) while its outcome and acceptance criteria stayed ' +
         'reachable. Call it ONCE, after you build and before you open the pull request, with ' +
-        '`key` and EVERY point as `{ planAsked, built, why }`. It writes ONE comment on the ' +
-        'card listing the points and, when the card has an open dispatch leg, one record on ' +
-        'its run. It returns only `{ commentId, recorded }`, where `recorded` says whether a ' +
-        'run was recorded on — `false` is not an error, the comment is still written. A second ' +
+        '`key` and EVERY point as `{ planAsked, built, why }`. It writes ONE discrepancy record ' +
+        "on the card — shown in the card's Run discrepancy section, never as a comment — and, " +
+        'when the card has an open dispatch leg, one finding on its run. It returns only ' +
+        '`{ recordId, recorded }`, where `recorded` says whether a run was recorded on — ' +
+        '`false` is not an error, the record is still written. A second ' +
         'call on the same leg is refused with `DISCREPANCY_ALREADY_RECORDED` and writes ' +
         'nothing. The SAME call also records the DECISIONS you made where the card left the HOW ' +
         "open — never ask the user; decide by the repository's conventions, then industry best " +
         'practice — as `decisions`, each `{ planSaid, chose, why, alternatives? }`, beside the ' +
-        'points or alone (omit `points` then); the comment lists them in their own section. A ' +
+        'points or alone (omit `points` then); the record keeps them apart from the points. A ' +
         'record with neither, more than ' +
         `${RUN_DISCREPANCY_POINTS_MAX} of either, or a field over ${RUN_DISCREPANCY_FIELD_MAX} ` +
         'characters is refused with `RUN_DISCREPANCY_INVALID`. If the WHAT itself cannot be ' +

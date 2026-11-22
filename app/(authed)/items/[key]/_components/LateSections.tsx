@@ -18,6 +18,8 @@ import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDev
 import type { DevelopmentGateRead } from '@/components/github/DevelopmentGateFrame';
 import { DesignResultPanel } from './DesignResultPanel';
 import { RunSection } from './RunSection';
+import { RunDiscrepancySection } from './RunDiscrepancySection';
+import { toRunDiscrepancyViews } from './runDiscrepancyViews';
 import { HostedRunProvider } from './HostedRunProvider';
 import { GuideMeThroughSection, type GuideMeThroughProgress } from './GuideMeThroughSection';
 import { ContinueHostedDoor, ContinueHostedNotice } from './ContinueHostedDoor';
@@ -46,7 +48,8 @@ import { RUN_HISTORY_PAGE, type LateReads } from './lateReads';
 // The item page's LATE STACK (Subtask MOTIR-3436), allocated by
 // `design/work-items/design-notes.md` § *The item page at ARRIVAL, and while it
 // STREAMS* — the tier table's third tier: Run, Development, Acceptance, Design
-// result, Attachments and Activity.
+// result, Attachments and Activity — and, since MOTIR-11996, Run discrepancy between
+// Run and Development, drawn only when the card holds a record.
 //
 // ⚠️ RUN SITS ABOVE DEVELOPMENT, and the order is CAUSAL rather than merely
 // adjacent (Yue, 2026-08-29; `design/runs/design-notes.md` § Placement). The run
@@ -501,6 +504,13 @@ export async function LateUpperSections({
           ) : (
             runCard
           )}
+          {/* RUN DISCREPANCY (Task MOTIR-11996; `design/runs` § _Run discrepancy — the
+              record gets its own section_, decision 1): directly below Run and above
+              Development — the record is what the run produced, and a reviewer reads it
+              before the pull requests it explains. It reads the same `lateReads` promise,
+              so it settles in this tick with no pending face of its own; a manual card
+              shows it in the same place. No record, no section. */}
+          <RunDiscrepancySection records={toRunDiscrepancyViews(r.runDiscrepancies, locale)} />
           {/* THE HOW-TO-TEST WRITE DOORS (Story MOTIR-5450 · MOTIR-5455, design § 24).
           Mounted ONLY for an actor holding `work_item:edit` and ONLY here: the
           block asks for this context and draws no door without it, so the

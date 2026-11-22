@@ -447,9 +447,9 @@ export const nl: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'Een runner legt vast wat hij anders bouwde dan een plan dat alleen in het HOE niet klopte, en welke beslissingen hij nam waar het plan niets zei — een opmerking op het werkitem en een runregistratie, bevestigd.',
+      'Een runner legt vast wat hij anders bouwde dan een plan dat alleen in het HOE niet klopte, en welke beslissingen hij nam waar het plan niets zei — een afwijkingsvastlegging die het werkitem toont en een bevinding op de run, bevestigd.',
     source:
-      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a discrepancy record the card shows, and a finding on its run, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

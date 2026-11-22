@@ -192,7 +192,7 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
   RunDiscrepancyAcknowledgement:
     'The run’s DISCREPANCY record (MOTIR-8722) is posted over `/api/v1` by the `motir` CLI ' +
     'around the agent, on the run’s own credential, which `verifyMcpToken` refuses. Its MCP ' +
-    'sibling `record_run_discrepancy` answers the same `{ commentId, recorded }` ' +
+    'sibling `record_run_discrepancy` answers the same `{ recordId, recorded }` ' +
     'acknowledgement, and is exempt from the payload guard because an acknowledgement represents ' +
     'no resource (`EXEMPT_TOOLS`), so there is no probed payload to compare this against.',
   RunHowToTestAcknowledgement:
