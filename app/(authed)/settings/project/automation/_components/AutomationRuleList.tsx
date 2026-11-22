@@ -1,6 +1,6 @@
 'use client';
 
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { Bot, CheckCircle2, CircleAlert, MinusCircle, Plus, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -11,6 +11,7 @@ import { AUTOMATION_RULES_PER_PROJECT_CAP } from '@/lib/automation/constants';
 import type { AutomationRuleDto, AutomationRuleSummaryDto } from '@/lib/dto/automationRules';
 import { AutoDisabledBanner, MemberAvatar } from './AutomationParts';
 import { AutomationRuleActionsMenu } from './AutomationRuleActionsMenu';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The rule list (Story 6.6 · Subtask 6.6.5), per
 // design/projects/automation.mock.html panels 0 + 6: one row per rule (Switch ·
@@ -198,7 +199,7 @@ function RuleRow({
  * (MOTIR-6396), never-fired → faint "Never run". */
 function LastRun({ rule, auto }: { rule: AutomationRuleSummaryDto; auto: boolean }) {
   const t = useTranslations('settings.automation');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
 
   if (auto) {
     return (
@@ -214,7 +215,7 @@ function LastRun({ rule, auto }: { rule: AutomationRuleSummaryDto; auto: boolean
     return <span className="text-(--el-text-muted)">{t('row.neverRun')}</span>;
   }
 
-  const time = format.relativeTime(new Date(lastRun.at));
+  const time = relativeTime(new Date(lastRun.at));
   if (lastRun.status === 'success') {
     return (
       <span className="flex items-center gap-1 text-(--el-text-muted)">

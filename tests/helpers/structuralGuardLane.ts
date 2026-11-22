@@ -461,6 +461,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // live-update roots (~540 files) and parses each through the compiler API. It
   // opens no database; its scanner imports only `typescript` and `node:*`.
   'tests/architecture/no-refresh-on-live-paths.test.ts',
+  // ── tests/i18n/ — client relative times use the live clock (MOTIR-11970) ──
+  // Lists `app/`, `components/` and `lib/` with `git ls-files`, reads every
+  // `'use client'` module and parses it through the compiler API for a
+  // one-argument `.relativeTime(…)`. It opens no database and renders nothing.
+  'tests/i18n/client-relative-time-guard.test.ts',
   // MOTIR-8418 — Story MOTIR-8413's at-work sweeps: static reads of its enumerated
   // surface (`tests/helpers/atWorkStorySurface.ts`), no render and no database.
   'tests/planning/atWorkSurfaceGuards.test.ts',

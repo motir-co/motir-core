@@ -7,6 +7,7 @@ import {
   type EnvironmentRepositoryOption,
 } from '@/app/(authed)/settings/project/environment/_components/EnvironmentRoom';
 import type { EnvironmentChangeDto, EnvironmentEntryDto } from '@/lib/dto/environmentConfig';
+import { resetRelativeTimeClockForTests } from '@/lib/hooks/useRelativeTime';
 import type { EnvironmentName } from '@/lib/environmentConfig/vocabulary';
 
 // EnvironmentRoom (Story MOTIR-9795 · MOTIR-9966) — the Environment settings room,
@@ -610,6 +611,9 @@ describe('recent changes', () => {
     beforeEach(() => {
       vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
       vi.setSystemTime(PIN);
+      // Each case is a fresh page load: the shared live clock (MOTIR-11970)
+      // forgets the previous case's observation of the same pin.
+      resetRelativeTimeClockForTests();
     });
     afterEach(() => {
       vi.useRealTimers();

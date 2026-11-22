@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { ChevronDown, ChevronRight, History, MoveRight } from 'lucide-react';
 import type { PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
 import { normalizeRevisionKind, type RevisionKind } from '@/lib/onboarding/revisions';
 import { RevisionDiff } from './RevisionDiff';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The forward-only REVISION LOG viewer (Subtask 7.3.71 / MOTIR-1179) — one
 // artifact's when / why / what timeline. FORWARD-ONLY by design (7.3.25 / 1038):
@@ -77,13 +78,13 @@ const KIND_TINT: Record<RevisionKind, string> = {
 
 function RevisionEntry({ rev, isCurrent }: { rev: PreplanRevisionDTO; isCurrent: boolean }) {
   const t = useTranslations('onboarding.chat.revisions');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const [open, setOpen] = useState(false);
 
   const kind = normalizeRevisionKind(rev.changeKind);
   // The baseline has no diff to expand; every later version does.
   const expandable = rev.version > 1;
-  const when = format.relativeTime(new Date(rev.createdAt));
+  const when = relativeTime(new Date(rev.createdAt));
 
   return (
     <li className="rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface)">

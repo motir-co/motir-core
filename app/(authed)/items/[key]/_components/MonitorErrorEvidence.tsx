@@ -13,6 +13,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import type { MonitorEvidenceFrameDto, MonitorIssueEvidenceDto } from '@/lib/dto/monitorIssueLink';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The EVIDENCE of one linked error (Story MOTIR-5975 · Subtask MOTIR-5980), drawn
 // by `design/monitoring/work-item-errors--evidence.mock.html` and
@@ -103,10 +104,11 @@ const QUIET_LINE =
 /** A relative time with the absolute one on hover — the section's `useWhen`. */
 function useWhen(): (at: string) => { when: string; t: (chunks: ReactNode) => ReactNode } {
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   return (at: string) => {
     const date = new Date(at);
     return {
-      when: format.relativeTime(date),
+      when: relativeTime(date),
       t: (chunks: ReactNode) => (
         <span
           className="underline decoration-dotted"

@@ -24,6 +24,7 @@ import type {
   AutomationExecutionPageDto,
   AutomationExecutionStatusDto,
 } from '@/lib/dto/automationRules';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The per-rule audit log (Story 6.6 · Subtask 6.6.6), per
 // design/projects/automation.mock.html panel 5: a paginated, newest-first view
@@ -186,6 +187,7 @@ function StatusPill({ status }: { status: AutomationExecutionStatusDto }) {
 function ExecutionRow({ execution }: { execution: AutomationExecutionDto }) {
   const t = useTranslations('settings.automation.log');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const [expanded, setExpanded] = useState(false);
 
   const createdAt = new Date(execution.createdAt);
@@ -238,7 +240,7 @@ function ExecutionRow({ execution }: { execution: AutomationExecutionDto }) {
             className="font-sans text-xs text-(--el-text-muted)"
             title={format.dateTime(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
           >
-            {format.relativeTime(createdAt)}
+            {relativeTime(createdAt)}
           </span>
           {isFailure ? (
             <button

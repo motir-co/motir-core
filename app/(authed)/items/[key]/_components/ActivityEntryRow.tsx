@@ -16,6 +16,7 @@ import { StatusPill } from '@/components/issues/StatusPill';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import { reviewCommitsLabel } from '@/lib/agentReview/verdictActivity';
 import { AgentVerdictActivityRow } from './AgentVerdictActivityRow';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // One History feed row (Story 5.5 · Subtask 5.5.4), per
 // `design/work-items/activity-history.mock.html` panels 1–2: comment-row-
@@ -132,6 +133,7 @@ function RevisionEntryRow({
   const t = useTranslations('activity');
   const tReview = useTranslations('approvalGate.reviewPath.activity');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const locale = useLocale() as Locale;
   const changedAt = new Date(entry.changedAt);
 
@@ -402,7 +404,7 @@ function RevisionEntryRow({
             className="text-(--el-text-muted) ml-1 text-xs whitespace-nowrap"
             title={format.dateTime(changedAt, { dateStyle: 'medium', timeStyle: 'short' })}
           >
-            {format.relativeTime(changedAt)}
+            {relativeTime(changedAt)}
           </span>
         </p>
         {values}

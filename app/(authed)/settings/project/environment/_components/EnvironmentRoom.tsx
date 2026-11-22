@@ -10,7 +10,7 @@ import {
   type KeyboardEvent,
   type Ref,
 } from 'react';
-import { useFormatter, useNow, useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { CircleCheck, FolderGit2, History, Inbox, Lock } from 'lucide-react';
 import { Button, type ButtonProps } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -35,6 +35,7 @@ import {
   isReservedEnvironmentName,
 } from '@/lib/environmentConfig/reservedNames';
 import type { EnvironmentName } from '@/lib/environmentConfig/vocabulary';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // EnvironmentRoom (Story MOTIR-9795 · MOTIR-9966) — a Motir repository's values per
 // environment, per `design/environment/environment.mock.html` and
@@ -874,20 +875,11 @@ function RecentChanges({
   onRetry: () => void;
 }) {
   const t = useTranslations('settings.environment');
-  const format = useFormatter();
-  // A live clock, not the request's pinned `now` (MOTIR-11969). The room
-  // re-fetches this list in place after every write, so a row can be newer
-  // than the instant the page loaded; measured against that frozen instant it
-  // read "in 3 minutes", and every older row stayed as old as it was at load.
-  // `useNow` starts at the provider's pinned instant, so SSR and hydration
-  // still agree on first paint (finding #89), then ticks once a minute.
-  const now = useNow({ updateInterval: 60_000 });
-  // Between ticks a just-written row is up to a minute ahead of `now` (and
-  // server clock skew can do the same), so a future instant reads as now.
-  const when = (iso: string) => {
-    const date = new Date(iso);
-    return format.relativeTime(date > now ? now : date, now);
-  };
+  // A live clock, not the request's pinned `now` (MOTIR-11969 · MOTIR-11970).
+  // The room re-fetches this list in place after every write, so a row can be
+  // newer than the instant the page loaded; `useRelativeTime` measures it
+  // against the page-wide live clock and reads a just-written row as now.
+  const relativeTime = useRelativeTime();
   const headingId = useId();
   return (
     <section
@@ -927,7 +919,7 @@ function RecentChanges({
               <code className="font-mono text-(--el-text-identifier)">{change.name}</code>
               {change.isSecret ? <Pill tone="neutral">{t('changes.secret')}</Pill> : null}
               <span className="ml-auto text-xs text-(--el-text-secondary)">
-                <time dateTime={change.createdAt}>{when(change.createdAt)}</time>
+                <time dateTime={change.createdAt}>{relativeTime(change.createdAt)}</time>
               </span>
             </li>
           ))}

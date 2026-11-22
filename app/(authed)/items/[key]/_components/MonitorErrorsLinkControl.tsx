@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useTransition } from 'r
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { Activity, CircleAlert, Plus, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
@@ -18,6 +18,7 @@ import type {
 import { linkMonitorIssueAction, searchMonitorIssuesAction } from '../actions';
 import { levelPillProps } from './MonitorErrorsSection';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // LINK an error from the work-item page (Story MOTIR-4932 · Subtask MOTIR-5744),
 // drawn by `design/monitoring/work-item-errors.mock.html` §14 panels 5b–5c, 6
@@ -262,7 +263,7 @@ function OpenLinkErrorForm() {
   const routes = useReaderRoutes();
   const t = useTranslations('monitorErrors');
   const tc = useTranslations('common');
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const { cancel, submit, moveFrom, dismissMove, error, pending, workItemId } = useLinkControl();
   const [selected, setSelected] = useState<string | null>(null);
   const [failures, setFailures] = useState<MonitorIssueSearchFailureDto[]>([]);
@@ -292,7 +293,7 @@ function OpenLinkErrorForm() {
       secondary: t('candidate', {
         connection: connectionLabel(c),
         count: c.eventCount,
-        when: format.relativeTime(new Date(c.lastSeenAt)),
+        when: relativeTime(new Date(c.lastSeenAt)),
       }),
       icon: <Activity className="h-4 w-4 text-(--el-icon-muted)" />,
       // Decision 4: an issue another work item holds shows `Linked to <KEY>` in the

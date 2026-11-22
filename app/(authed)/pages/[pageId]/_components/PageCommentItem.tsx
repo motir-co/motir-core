@@ -10,6 +10,7 @@ import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { PageCommentDto } from '@/lib/pages';
 import { Avatar } from '@/app/(authed)/items/_components/issueCellPrimitives';
 import { CommentComposer } from '@/app/(authed)/items/[key]/_components/CommentComposer';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // ONE PAGE COMMENT (Story MOTIR-10866 · MOTIR-10874), the design's *Root comment*
 // / *Reply* with its *Comment meta* and *Comment actions*
@@ -61,6 +62,7 @@ export function PageCommentItem({
   const t = useTranslations('comments');
   const tc = useTranslations('common');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const [editing, setEditing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -105,7 +107,7 @@ export function PageCommentItem({
             className="font-sans text-xs text-(--el-text-muted)"
             title={format.dateTime(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
           >
-            {format.relativeTime(createdAt)}
+            {relativeTime(createdAt)}
           </time>
           {comment.editedAt ? (
             <span

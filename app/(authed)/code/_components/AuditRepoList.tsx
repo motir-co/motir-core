@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { GithubMark } from '@/components/icons/GithubMark';
 import type { RepoAuditRow } from '@/lib/codeHealth/repoAuditRows';
 import { orderRepoAuditRows, rollupRepoAuditRows } from '@/lib/codeHealth/repoAuditRows';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // Panel 7 (MOTIR-2207): the layer ABOVE the audit report that chooses whose
 // report is on screen — a worst-first list of the connected repos, each row
@@ -70,6 +71,7 @@ export function AuditRepoList({
 }) {
   const t = useTranslations('codeHealth.audit.repos');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
 
   // §7 — with one connected repo there is nothing to choose between.
   if (rows.length <= 1) return null;
@@ -148,7 +150,7 @@ export function AuditRepoList({
                 ? startedWhen(row.startedAt, (at, now) => format.relativeTime(at, now))
                 : row.auditedAt === null
                   ? null
-                  : format.relativeTime(new Date(row.auditedAt))
+                  : relativeTime(new Date(row.auditedAt))
             }
           />
         ))}

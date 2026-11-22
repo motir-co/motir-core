@@ -34,6 +34,7 @@ import { triggerDownload } from './attachmentDownload';
 import { AttachmentGlyph } from './AttachmentGlyph';
 import { AttachmentPreview, isPreviewable } from './AttachmentPreview';
 import { ContentSectionCard } from './ContentSectionCard';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // The Attachments panel in the detail page's reserved Epic-5 slot (Story 5.2 ·
 // Subtask 5.2.5) — `design/work-items/attachments.mock.html` is the layout
@@ -507,6 +508,7 @@ function AttachmentCard({
 }) {
   const t = useTranslations('attachments');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const createdAt = new Date(attachment.createdAt);
 
   return (
@@ -541,7 +543,7 @@ function AttachmentCard({
             className="text-(--el-text-muted) truncate font-sans text-[11px]"
             title={format.dateTime(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
           >
-            {format.relativeTime(createdAt)} · {formatBytes(attachment.sizeBytes)}
+            {relativeTime(createdAt)} · {formatBytes(attachment.sizeBytes)}
           </span>
         </div>
       </button>
@@ -577,6 +579,7 @@ function AttachmentRow({
 }) {
   const t = useTranslations('attachments');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const createdAt = new Date(attachment.createdAt);
 
   return (
@@ -605,7 +608,7 @@ function AttachmentRow({
         className="text-(--el-text-secondary) w-[76px] shrink-0 truncate font-sans text-xs"
         title={format.dateTime(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
       >
-        {format.relativeTime(createdAt)}
+        {relativeTime(createdAt)}
       </span>
       <span
         className="text-(--el-text-secondary) w-[92px] shrink-0 truncate font-sans text-xs"

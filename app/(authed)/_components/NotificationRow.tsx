@@ -17,6 +17,7 @@ import {
 import { agentVerdictHref } from '@/lib/agentReview/verdictActivity';
 import { cn } from '@/lib/utils/cn';
 import type { NotificationData, NotificationDTO } from '@/lib/dto/notifications';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // One notification row in the drawer feed (Subtask 5.7.5), per
 // design/notifications/drawer.mock.html panels 0–1: the leading accent unread
@@ -127,6 +128,7 @@ export function NotificationRow({
 }) {
   const t = useTranslations('notifications');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
 
   const read = notification.readAt !== null;
   const meta = TYPE_META[notification.type] ?? DEFAULT_META;
@@ -266,7 +268,7 @@ export function NotificationRow({
             className="shrink-0 text-[11px] whitespace-nowrap text-(--el-text-secondary)"
             title={format.dateTime(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
           >
-            {format.relativeTime(createdAt)}
+            {relativeTime(createdAt)}
           </span>
         </span>
         {/* The excerpt takes `--el-text-secondary` on BOTH arms (MOTIR-2475):

@@ -18,6 +18,7 @@ import { ContentSectionCard } from './ContentSectionCard';
 import { PAGES_SECTION_ID } from './decisionAnchor';
 import { LinkPageForm } from './LinkPageForm';
 import { Place } from './PagePlace';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // THE PAGES SECTION on the work item page (Story MOTIR-7565 · MOTIR-7575), per
 // `design/work-items/item--pages-section.mock.html` + design-notes § *The Pages
@@ -124,6 +125,7 @@ function PageRow({ row }: { row: WorkItemPageLinkRowDto }) {
   const t = useTranslations('issueViews');
   const tPages = useTranslations('pages');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const updated = new Date(row.updatedAt);
   // The read's flag is the only input: anything but `live` is the unavailable arm.
   const live = row.state === 'live';
@@ -157,7 +159,7 @@ function PageRow({ row }: { row: WorkItemPageLinkRowDto }) {
             title={format.dateTime(updated, { dateStyle: 'medium', timeStyle: 'short' })}
             className="min-w-[5.5rem] text-right text-xs whitespace-nowrap text-(--el-text-secondary)"
           >
-            {format.relativeTime(updated)}
+            {relativeTime(updated)}
           </time>
         ) : (
           <span className="min-w-[5.5rem] text-right text-xs whitespace-nowrap text-(--el-text-secondary)">

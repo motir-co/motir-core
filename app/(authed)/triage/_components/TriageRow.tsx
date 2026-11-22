@@ -6,6 +6,7 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { cn } from '@/lib/utils/cn';
 import type { TriageQueueItemDto } from '@/lib/dto/triage';
 import { TriageAvatar } from './TriageAvatar';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // One queue row in the triage inbox (Subtask 6.11.6) — a NEW arrangement of
 // shipped primitives, not a new primitive. Kind glyph (hued via IssueTypeIcon —
@@ -23,6 +24,7 @@ export interface TriageRowProps {
 export function TriageRow({ item, active, onSelect }: TriageRowProps) {
   const t = useTranslations('triage');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
 
   const submitterName = item.submitter.name ?? t('unknownSubmitter');
   const isPublic = item.submitter.kind === 'public';
@@ -54,7 +56,7 @@ export function TriageRow({ item, active, onSelect }: TriageRowProps) {
           className="line-clamp-2 flex-1 text-sm font-medium text-(--el-text)"
         />
         <span className="shrink-0 text-xs text-(--el-text-secondary)">
-          {format.relativeTime(new Date(item.triagedAt))}
+          {relativeTime(new Date(item.triagedAt))}
         </span>
       </div>
 

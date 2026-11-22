@@ -23,6 +23,7 @@ import { findingsHrefOf } from '@/lib/agentReview/verdictActivity';
 import { cn } from '@/lib/utils/cn';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { CardReviewDTO, ReviewReviewerDTO } from '@/lib/dto/reviewState';
+import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 
 // THE REVIEWED BADGE (Story MOTIR-10327 · MOTIR-10341; `design/github/design-notes.md`
 // § 32.3, `design/work-items/decision-waiting--review-path.mock.html` M5, M6, M8, M10, M11) —
@@ -76,6 +77,7 @@ function ReviewedCardBody({
   const t = useTranslations('approvalGate.reviewPath.badge.card');
   const tGate = useTranslations('approvalGate');
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const routes = useReaderRoutes();
   const when = new Date(at);
   // ON THE WORKBENCH the card's link opens the review IN PLACE (MOTIR-10460; § 42.3, F8). The
@@ -101,7 +103,7 @@ function ReviewedCardBody({
           dateTime={at}
           title={format.dateTime(when, { dateStyle: 'medium', timeStyle: 'short' })}
         >
-          {format.relativeTime(when)}
+          {relativeTime(when)}
         </time>
       </p>
       <p className="m-0 mt-1 text-(--el-text-secondary)">{t('commits')}</p>
