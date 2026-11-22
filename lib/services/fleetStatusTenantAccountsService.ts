@@ -127,7 +127,10 @@ function answered(read: PromiseSettledResult<AwsQuotaStatus> | undefined): boole
 }
 
 /** Each target's read in one account; null when the session itself failed. */
-async function readAccount(management: AwsManagementApi, awsAccountId: string): Promise<QuotaReads> {
+async function readAccount(
+  management: AwsManagementApi,
+  awsAccountId: string,
+): Promise<QuotaReads> {
   let credentials;
   try {
     credentials = await management.assumeMemberRole(awsAccountId);
@@ -275,7 +278,9 @@ export const fleetStatusTenantAccountsService = {
       const accounts = orderTenantAccounts(
         rows.map((row) =>
           accountOf(row, row.awsAccountId ? reads.get(row.awsAccountId) : undefined, (target) =>
-            row.awsAccountId ? (marks.get(tenantQuotaSubject(row.awsAccountId, target)) ?? null) : null,
+            row.awsAccountId
+              ? (marks.get(tenantQuotaSubject(row.awsAccountId, target)) ?? null)
+              : null,
           ),
         ),
       );
