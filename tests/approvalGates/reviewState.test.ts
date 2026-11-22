@@ -891,6 +891,56 @@ describe('a review to run', () => {
     expect(moved).not.toEqual(before);
   });
 
+  // Bug MOTIR-11984 (the review's send-back): STARTING the review leaves its gate `awaiting`
+  // until the verdict, so the read leaves out a gate a review run is running for — the row
+  // leaves, the badge drops and the watermark moves when it starts, and the gate comes back
+  // when the run ends with no verdict.
+  it('drops a review once it is running, and brings it back if the run ends with no verdict', async () => {
+    const { s, item, review } = await reviewingUnder('own', 'run-started', 98);
+    const toRun = await approvalGatesService.listReviewsToRun(homeCtx(s));
+    expect(toRun.map((r) => r.gateId)).toEqual([review.id]);
+    const counts = await homeService.tabCounts(homeCtx(s));
+    const before = (await workbenchWatermarkService.read(homeCtx(s))).tabs.approvals;
+
+    // A running review run on the card — what Review with Motir agent (or the reader's own
+    // agent) opens; the gate stays `awaiting` under it.
+    await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: s.workspace.id,
+        projectId: s.project.id,
+        command: 'review',
+        status: 'running',
+        idempotencyKey: `agent-review:${review.id}:press:1`,
+        cards: {
+          create: {
+            workspaceId: s.workspace.id,
+            workItemId: item.id,
+            workItemKey: item.identifier,
+            position: 0,
+          },
+        },
+      },
+    });
+    expect(await approvalGatesService.listReviewsToRun(homeCtx(s))).toEqual([]);
+    const started = await homeService.tabCounts(homeCtx(s));
+    expect(started.approvals).toBe(counts.approvals - 1);
+    const moved = (await workbenchWatermarkService.read(homeCtx(s))).tabs.approvals;
+    expect(moved).not.toEqual(before);
+    expect((await adminDb.approvalGate.findUnique({ where: { id: review.id } }))?.state).toBe(
+      'awaiting',
+    );
+
+    // The run ends with no verdict: the review is one to run again.
+    await adminDb.dispatchRun.updateMany({
+      where: { workspaceId: s.workspace.id },
+      data: { status: 'failed' },
+    });
+    expect((await approvalGatesService.listReviewsToRun(homeCtx(s))).map((r) => r.gateId)).toEqual([
+      review.id,
+    ]);
+    expect((await homeService.tabCounts(homeCtx(s))).approvals).toBe(counts.approvals);
+  });
+
   it('is never listed or notified for a gate that is not awaiting', async () => {
     const { s, item, review } = await reviewing('run-decided', 96);
     await adminDb.approvalGate.update({

@@ -1586,6 +1586,15 @@ function routedCardWhere(userId: string): Prisma.WorkItemWhereInput {
  * `agent_review` gate of a project whose review agent is on, routed by §2's rule. The ONE
  * statement of the set, read by the list, the badge's count and the watermark (Bug
  * MOTIR-11984), so the three cannot drift.
+ *
+ * ⚠️ A REVIEW ALREADY RUNNING IS NOT ONE TO RUN (Bug MOTIR-11984, `approval-gates.md`
+ * §12.19). Starting a review — the hosted press or the reader's own agent — leaves its gate
+ * `awaiting` until the verdict, so a card with a `running` review run is left out: the row
+ * leaves, the badge drops and the watermark's count moves when the run starts, and the gate
+ * comes back if the run ends with no verdict. A card holds one review run at a time across
+ * both doors (`reviewInFlightUnderLock`, MOTIR-11945), and this is that guard's own test
+ * (`findRunningReviewByWorkItem`), written as a relation so the polled watermark stays one
+ * statement.
  */
 function reviewsToRunRoutedToWhere(
   scope: Pick<AwaitingRoutingScope, 'projectIds' | 'userId'>,
@@ -1595,7 +1604,11 @@ function reviewsToRunRoutedToWhere(
     kind: 'agent_review',
     state: 'awaiting',
     project: { reviewAgentEnabled: true },
-    workItem: { archivedAt: null, ...routedCardWhere(scope.userId) },
+    workItem: {
+      archivedAt: null,
+      ...routedCardWhere(scope.userId),
+      dispatchRunCards: { none: { dispatchRun: { command: 'review', status: 'running' } } },
+    },
   };
 }
 

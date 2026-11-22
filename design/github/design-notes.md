@@ -3953,4 +3953,6 @@ token and no new primitive.
   200px), whatever the key's length. Copy still copies the whole command.
 - **The badge counts it.** _Waiting on you_ is the approvals plus the reviews to run routed
   to the reader (ADR `approval-gates.md` §12.19); the row stays out of the approvals' own
-  `total`.
+  `total`. A review that is already running is no review to run: once _Review with Motir
+  agent_ (or the reader's own agent) starts it, the row leaves the tab and the badge drops by
+  one, and it comes back only if that run ends with no verdict.

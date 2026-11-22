@@ -6759,6 +6759,11 @@ out of every count as _"not an approval"_:
   (`reviewsToRunRoutedToWhere`). The tab's watermark reads the same set. A review waiting for
   a person to start it holds the card as surely as an approval does, and a badge reading 0
   above a row is a row nobody opens.
+- **A review already running is not one to run.** Starting a review (the hosted press, or a
+  person's own agent) leaves its gate `awaiting` until the verdict, so the builder leaves out
+  a card with a `running` review run (one per card at a time, MOTIR-11945). The row leaves, the
+  badge drops and the watermark's count moves when the run starts; a run that ends with no
+  verdict puts the gate back.
 - **It is still not an approval.** `awaitingRoutedToWhere` keeps `kind: { not: 'agent_review' }`:
   the approvals list, its `total` and the decision-waiting marker are unchanged, and the row
   stays its own kind (§12.1).
