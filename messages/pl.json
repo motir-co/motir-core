@@ -17590,7 +17590,8 @@
       "toRun": {
         "sentence": "Uruchom przegląd <title>{name}</title>",
         "tag": "Przegląd do uruchomienia",
-        "details": "To jeszcze nie zatwierdzenie. Otwórz, aby uruchomić przegląd lub kontynuować bez niego; o zatwierdzenie poprosimy, gdy przegląd się powiedzie.",
+        "reason": "<b>Czeka na przegląd.</b> O zatwierdzenie poprosimy, gdy przegląd się powiedzie.",
+        "creditsNote": "Przejrzyj z agentem Motir jest opłacane z kredytów AI Twojej organizacji. motir review działa w Twoim własnym agencie.",
         "open": "Otwórz {key}: {sentence}"
       },
       "dismiss": {

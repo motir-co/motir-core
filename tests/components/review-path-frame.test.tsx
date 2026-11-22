@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 
 // THE REVIEW PATH ON TO APPROVE AND IN THE GATE FRAME (Story MOTIR-10327 · MOTIR-10342;
@@ -254,21 +254,34 @@ const TO_RUN: ReviewToRunRowDTO = {
   subjectVersion: 'v2',
   raisedAt: '2026-11-05T11:00:00Z',
   command: 'motir review ACME-9',
+  canReviewHosted: false,
 };
 
+// The row is laid out like a To fix row since MOTIR-12032 (`design/workbench/design-notes.md`
+// § 45): line 1 the work item, line 2 why it waits and what starts it. The hosted door it
+// offers is held by `tests/components/review-to-run-row.test.tsx`.
 describe('ReviewToRunRow', () => {
-  it('is a review to run, not an approval: sentence, key, command, tag and second line', () => {
+  it('is a review to run, not an approval: line 1 the work item, line 2 the reason and the command', () => {
     render(<ReviewToRunRow row={TO_RUN} gridTemplate="1fr auto auto auto" />, { now: NOW });
     const row = screen.getByTestId('review-to-run-row-g-9');
     expect(row.hasAttribute('data-review-to-run')).toBe(true);
-    expect(row.textContent).toContain('Start a review of Export button');
     expect(row.textContent).toContain('ACME-9');
+    expect(row.textContent).toContain('Export button');
     expect(row.textContent).toContain('Review to run');
-    expect(row.textContent).toContain(
-      'Not an approval yet. Open it to start the review or to continue without it; your approval is asked once it passes.',
+    // The sentence left the visible row; it stays the row link's accessible name.
+    expect(row.textContent).not.toContain('Start a review of');
+    const line = screen.getByTestId('review-to-run-line-ACME-9');
+    expect(line.textContent).toContain(
+      'Waiting for a review. Your approval is asked once it passes.',
     );
-    expect(row.textContent).not.toContain('agent');
-    expect(screen.getByTestId('review-command-copy-ACME-9')).toBeTruthy();
+    expect(line.querySelector('b')?.textContent).toBe('Waiting for a review.');
+    // The command is on line 2 and nowhere else; DETAILS holds nothing.
+    expect(within(line).getByTestId('review-command-copy-ACME-9')).toBeTruthy();
+    expect(row.querySelectorAll('code')).toHaveLength(1);
+    expect(screen.getByTestId('review-to-run-details-ACME-9').childNodes).toHaveLength(0);
+    // No hosted door for a reader who may not run the card hosted.
+    expect(screen.queryByTestId('review-with-motir-agent')).toBeNull();
+    expect(screen.queryByTestId('review-to-run-credits-note')).toBeNull();
     const door = screen.getByRole('link', {
       name: 'Open ACME-9: Start a review of Export button',
     });
@@ -277,7 +290,7 @@ describe('ReviewToRunRow', () => {
   });
 
   // Bug MOTIR-11983: the press opens the `agent_review` approval overlay in place, as every
-  // other To approve row does — never the item page; a modifier click keeps the link.
+  // other Waiting on you row does — never the item page; a modifier click keeps the link.
   it('a primary press opens the agent_review overlay in place; a modifier click does not', () => {
     vi.mocked(shallowPush).mockClear();
     render(<ReviewToRunRow row={TO_RUN} gridTemplate="1fr auto auto auto" />, { now: NOW });
@@ -296,35 +309,43 @@ describe('ReviewToRunRow', () => {
     expect(shallowPush).not.toHaveBeenCalled();
   });
 
-  // Bug MOTIR-11982: the row's chip is the COMPACT one, so a real `motir review MOTIR-NNNNN`
-  // fits the 220px DETAILS track whole; the truncate is only the last guard. jsdom has no
-  // layout, so this holds the MECHANISM; the geometry is held in a real browser by
+  // § 45.2: out of the 220px DETAILS track the chip takes its DEFAULT density, the To fix
+  // chip's size, and sits above the row's stretched link. jsdom has no layout, so this
+  // holds the MECHANISM; the geometry is held in a real browser by
   // `tests/e2e/regression-review-to-run-chip.spec.ts`.
-  it('the command chip is compact: 11px code, 24px button, Copied read aloud only', () => {
+  it('the command chip is the default one, above the row link, and its press copies without opening the row', async () => {
+    vi.mocked(shallowPush).mockClear();
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     render(<ReviewToRunRow row={TO_RUN} gridTemplate="1fr auto auto auto" />, { now: NOW });
     const code = screen.getByText('motir review ACME-9');
     expect(code.tagName).toBe('CODE');
-    expect(code.getAttribute('title')).toBe('motir review ACME-9');
-    expect(code.className).toContain('truncate');
-    expect(code.className).toContain('min-w-0');
-    expect(code.className).toContain('text-[11px]');
-    expect(code.className).toContain('px-(--spacing-chip-x-2)');
+    expect(code.className).not.toContain('text-[11px]');
+    expect(code.className).toContain('px-(--spacing-tooltip-x)');
     const button = screen.getByTestId('review-command-copy-ACME-9');
-    expect(button.className).toContain('shrink-0');
-    expect(button.className).toContain('h-6 w-6');
-    // The status is out of the flex flow, so its gap and its words cost the code no width.
-    const status = code.closest('[role="cell"]')!.querySelector('[role="status"]')!;
-    expect(status.className).toBe('sr-only');
+    expect(button.className).toContain('h-(--height-control)');
+    expect(button.closest('.relative.z-10')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(writeText).toHaveBeenCalledWith('motir review ACME-9');
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    expect(shallowPush, 'the chip never opens the overlay').not.toHaveBeenCalled();
   });
 
-  it('renders in zh', () => {
+  it('renders in zh as the design notes give it', () => {
     render(<ReviewToRunRow row={TO_RUN} gridTemplate="1fr" />, {
       locale: 'zh',
       messages: zhMessages,
     });
     const row = screen.getByTestId('review-to-run-row-g-9');
-    expect(row.textContent).toContain('发起对Export button的审查');
     expect(row.textContent).toContain('待运行审查');
+    expect(screen.getByTestId('review-to-run-line-ACME-9').textContent).toContain(
+      '等待审查。审查通过后才会请求你的审批。',
+    );
+    expect(
+      screen.getByRole('link', { name: '打开 ACME-9：发起对Export button的审查' }),
+    ).toBeTruthy();
   });
 });
 

@@ -65,6 +65,7 @@ export const WORK_CONTENT_RENDER_SITES: readonly RenderSite[] = [
     'page host: /roadmap (the alert renders under the canvas card)',
   ),
   covered('components/approvals/ApprovalRow.tsx', 'hosts: /approvals, /workbench'),
+  covered('components/approvals/ReviewToRunRow.tsx', 'host: /workbench (Waiting on you)'),
 
   exempt(
     'app/(authed)/items/[key]/_view.tsx',

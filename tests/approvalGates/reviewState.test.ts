@@ -823,6 +823,7 @@ describe('a review to run', () => {
         subjectVersion: versionOf(95),
         raisedAt: review.createdAt.toISOString(),
         command: `motir review ${item.identifier}`,
+        canReviewHosted: true,
       },
     ]);
     // It is not an approval: the approvals queue does not list it.
@@ -862,6 +863,31 @@ describe('a review to run', () => {
     expect((await approvalGatesService.listReviewsToRun(homeCtx(s))).map((r) => r.gateId)).toEqual([
       next!.id,
     ]);
+  });
+
+  // MOTIR-12032 (§ 45.2): door 1, *Review with Motir agent*, is offered only to a reader who
+  // may edit work items in the card's project — To fix's `canFixHosted` predicate.
+  it('offers the hosted door only to a reader who may edit work items in the project', async () => {
+    const { s, item, review } = await reviewingUnder('own', 'hostdoor', 96);
+    const viewer = await createTestUser({ name: 'viewer' });
+    await workspacesService.addMember({ userId: viewer.id, workspaceId: s.workspace.id });
+    await addToProjectAs({
+      key: s.project.identifier,
+      actorUserId: s.user.id,
+      ctx: s.ctx,
+      targetUserId: viewer.id,
+      role: 'viewer',
+    });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: viewer.id } });
+
+    const forViewer = await approvalGatesService.listReviewsToRun({
+      userId: viewer.id,
+      workspaceId: s.workspace.id,
+      projectId: s.project.id,
+    });
+    expect(forViewer.map((r) => [r.gateId, r.canReviewHosted])).toEqual([[review.id, false]]);
+    // The owner is no longer routed it: the card is the viewer's now.
+    expect(await approvalGatesService.listReviewsToRun(homeCtx(s))).toEqual([]);
   });
 
   // Bug MOTIR-11984: a review waiting for the reader to start it is waiting on them — the

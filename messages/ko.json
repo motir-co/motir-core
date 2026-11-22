@@ -17584,7 +17584,8 @@
       "toRun": {
         "sentence": "<title>{name}</title> 리뷰 시작",
         "tag": "실행할 리뷰",
-        "details": "아직 승인이 아닙니다. 열어서 리뷰를 시작하거나 리뷰 없이 계속하세요. 리뷰가 통과하면 승인을 요청합니다.",
+        "reason": "<b>리뷰 대기 중.</b> 리뷰가 통과하면 승인을 요청합니다.",
+        "creditsNote": "Motir 에이전트로 리뷰는 조직의 AI 크레딧으로 결제됩니다. motir review는 내 에이전트에서 실행됩니다.",
         "open": "{key} 열기: {sentence}"
       },
       "dismiss": {

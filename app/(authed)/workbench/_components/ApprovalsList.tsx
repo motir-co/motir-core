@@ -11,6 +11,7 @@ import { useTabWindowContent } from './useTabWindowContent';
 import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
 import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
 import { ReviewToRunRow } from '@/components/approvals/ReviewToRunRow';
+import { HostedModelsProvider } from '@/components/hosted/HostedModelsProvider';
 
 // THE APPROVALS TAB'S LIST (Story MOTIR-4879 · Subtask MOTIR-4794), built to
 // `design/workbench/approvals-row.mock.html` and its § 20 in
@@ -128,7 +129,7 @@ export function ApprovalsList({
 }) {
   const t = useTranslations('workbench.approvals');
   const seed = useSeed(rows, ceiling, reviewsToRun);
-  const { content } = useTabWindowContent('approvals', seed, contentOf, mergeContent);
+  const { content, reread } = useTabWindowContent('approvals', seed, contentOf, mergeContent);
   // THE LIVE RULE, for the one tab § 20's settled-row decision is about
   // (Story MOTIR-5238 · MOTIR-5242). The reset key is the "next load" § 26
   // names: a re-read keeps the address and holds its rows. With no pager there is
@@ -140,7 +141,11 @@ export function ApprovalsList({
   // receipt of the decision they have only just made (§ 20, § 26).
   if (live.rows.length === 0 && content.reviewsToRun.length === 0) return <>{empty}</>;
 
-  return (
+  // *REVIEW WITH MOTIR AGENT* on a review to run (MOTIR-12032; design notes § 45.2) reads
+  // the page's ONE model list — and the page asks for none when no row offers the door.
+  const hosted = content.reviewsToRun.some((row) => row.canReviewHosted);
+
+  const list = (
     <div
       data-surface="card"
       className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
@@ -176,9 +181,15 @@ export function ApprovalsList({
               arrived={live.arrivedIds.has(row.gateId)}
             />
           ))}
-          {/* THE REVIEWS TO RUN (§ 32.5, A2) — after the approvals, never counted with them. */}
+          {/* THE REVIEWS TO RUN (§ 32.5; laid out like a To fix row since § 45) — after the
+              approvals, never counted with them. */}
           {content.reviewsToRun.map((row) => (
-            <ReviewToRunRow key={row.gateId} row={row} gridTemplate={GRID_TEMPLATE} />
+            <ReviewToRunRow
+              key={row.gateId}
+              row={row}
+              gridTemplate={GRID_TEMPLATE}
+              onChanged={reread}
+            />
           ))}
         </div>
       </div>
@@ -206,6 +217,7 @@ export function ApprovalsList({
       )}
     </div>
   );
+  return hosted ? <HostedModelsProvider>{list}</HostedModelsProvider> : list;
 }
 
 /** The server's props as one seed object, kept while they are structurally the same. */
