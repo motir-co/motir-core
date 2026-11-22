@@ -15217,7 +15217,7 @@
       },
       "pools": {
         "title": "Pule",
-        "subtitle": "Jak duża jest każda pula floty i ile maszyn działa w niej teraz: najpierw flota instalacyjna na własnym koncie AWS Motir, potem konta add-shard, na których działają zadania najemców.",
+        "subtitle": "Jak duża jest każda pula floty i ile maszyn działa w niej teraz: najpierw flota instalacyjna na własnym koncie AWS Motir, potem konta add-shard, na których działają zadania najemców, a na końcu limity AWS kont, na których hostowane są aplikacje najemców enterprise.",
         "notApplicable": "Nie dotyczy",
         "loading": {
           "install": "Wczytywanie własnego konta Motir",
@@ -15406,6 +15406,80 @@
         },
         "computed": "Obliczone przez przebieg udostępniania z {time} ({age}). Tylko do odczytu: motir-studio instaluje się w repozytorium w GitHub, nie tutaj.",
         "loading": "Wczytywanie martwych punktów floty CI"
+      },
+      "tenants": {
+        "title": "Konta hostingowe najemców · aplikacje enterprise",
+        "subtitle": "Jedno konto AWS na organizację enterprise, w którym działają jej aplikacje z celem AWS. Każdy limit jest odczytywany na żywo z Service Quotas na tym koncie i porównywany z celem, do którego podnosi go bootstrap konta.",
+        "loading": "Wczytywanie kont hostingowych najemców",
+        "pill": {
+          "below": "{count, plural, one {# limit poniżej celu, bez podwyżki} few {# limity poniżej celu, bez podwyżki} many {# limitów poniżej celu, bez podwyżki} other {# limitu poniżej celu, bez podwyżki}}",
+          "notRead": "{count, plural, one {# konto nieodczytane} few {# konta nieodczytane} many {# kont nieodczytanych} other {# konta nieodczytanego}}"
+        },
+        "account": {
+          "title": "Według organizacji",
+          "noAwsAccount": "Jeszcze bez konta AWS",
+          "accountLabel": "Konto AWS {id}"
+        },
+        "search": {
+          "label": "Szukaj kont hostingowych najemców",
+          "placeholder": "Organizacja lub ID konta"
+        },
+        "noMatch": {
+          "title": "Żadne konto nie pasuje do „{q}”",
+          "body": "Wyszukiwanie obejmuje nazwę organizacji, ID konta AWS i nazwę konta.",
+          "clear": "Wyczyść wyszukiwanie"
+        },
+        "foot": "{from}–{to} z {total, plural, one {# konta} few {# kont} many {# kont} other {# konta}} · konta z limitem poniżej celu i bez podwyżki są na początku",
+        "footMatch": "{from}–{to} z {total, plural, one {# konta} few {# kont} many {# kont} other {# konta}} pasujących do „{q}” · konta z limitem poniżej celu i bez podwyżki są na początku",
+        "pagerLabel": "Strony kont hostingowych najemców",
+        "state": {
+          "requested": "Zamówione",
+          "creating": "Tworzenie",
+          "bootstrapping": "Bootstrap w toku",
+          "ready": "Gotowe",
+          "refused": "Odrzucone"
+        },
+        "notReady": {
+          "requested": "Limity są odczytywane, gdy konto jest gotowe. Konto nie zostało jeszcze utworzone.",
+          "creating": "Limity są odczytywane, gdy konto jest gotowe. AWS tworzy konto.",
+          "bootstrapping": "Limity są odczytywane, gdy konto jest gotowe. Bootstrap konfiguruje rolę wdrożeniową, tagi i podwyżki limitów.",
+          "refused": "{count, plural, one {AWS raz odmówił utworzenia konta, {age}.} few {AWS # razy odmówił utworzenia konta, ostatnio {age}.} many {AWS # razy odmówił utworzenia konta, ostatnio {age}.} other {AWS # razy odmówił utworzenia konta, ostatnio {age}.}} Uzgadnianie ponowi próbę po okresie oczekiwania; limity są odczytywane, gdy konto jest gotowe.",
+          "refusedNever": "Limity są odczytywane, gdy konto jest gotowe. AWS odmówił utworzenia konta; uzgadnianie ponowi próbę po okresie oczekiwania."
+        },
+        "col": {
+          "quota": "Limit",
+          "applied": "Zastosowany",
+          "target": "Cel",
+          "raise": "Otwarta podwyżka"
+        },
+        "quota": {
+          "lambda-concurrent-executions": "Współbieżne wykonania Lambda",
+          "fargate-on-demand-vcpu": "vCPU Fargate na żądanie"
+        },
+        "value": {
+          "count": "{n}",
+          "vcpu": "{n} vCPU"
+        },
+        "atTarget": "Cel osiągnięty",
+        "short": "{n} poniżej celu",
+        "below": "Poniżej celu · bez podwyżki",
+        "raise": {
+          "to": "do {value}",
+          "filed": "złożono {age}",
+          "none": "Brak otwartej podwyżki"
+        },
+        "notRead": {
+          "body": "Limity tego konta się nie wczytały (sesja roli członkowskiej lub Service Quotas nie odpowiedziały), więc nie jest pokazywana żadna wartość. Pozostałe konta nie są objęte problemem."
+        },
+        "empty": {
+          "title": "Brak kont hostingowych najemców",
+          "body": "Organizacja enterprise dostaje własne konto AWS, gdy jeden z jej projektów po raz pierwszy ma AWS jako cel."
+        },
+        "error": {
+          "title": "Nie udało się odczytać kont hostingowych najemców",
+          "body": "Odczyt kont najemców nie odpowiedział, więc nie jest wyświetlane żadne konto; nic z tego nie jest zerem. Pule powyżej i reszta tej strony nie są objęte problemem. Odśwież, aby spróbować ponownie."
+        },
+        "readOnly": "Tylko do odczytu. Nic tutaj nie składa podwyżki: każdą składa bootstrap konta najemcy."
       }
     }
   },

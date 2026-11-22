@@ -303,6 +303,9 @@ export default defineConfig({
         'app/**/admin/fleet-status/_components/BlindSpotsCard.tsx',
         'lib/repositories/ciFleetBlindSpotsRepository.ts',
         'lib/services/ciFleetBlindSpotsService.ts',
+        // MOTIR-12014 — the Fleet status page's tenant hosting accounts card. Pinned at 90 in `thresholds`.
+        'app/**/admin/fleet-status/_components/TenantAccountsCard.tsx',
+        'lib/services/fleetStatusTenantAccountsService.ts',
         // MOTIR-10986 — the Indexer image card's ECR read. Pinned at 90 in `thresholds`.
         'lib/awsServices/ecrImagesReader.ts',
         'lib/ideas/consoleActor.ts',
@@ -6776,6 +6779,18 @@ export default defineConfig({
           lines: 90,
         },
         'lib/services/fleetStatusPoolsService.ts': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/admin/fleet-status/_components/TenantAccountsCard.tsx': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/fleetStatusTenantAccountsService.ts': {
           statements: 90,
           branches: 90,
           functions: 90,

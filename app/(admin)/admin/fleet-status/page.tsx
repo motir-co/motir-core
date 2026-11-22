@@ -11,6 +11,10 @@ import {
 } from '@/lib/services/fleetStatusImagesService';
 import { ciFleetBlindSpotsService } from '@/lib/services/ciFleetBlindSpotsService';
 import { fleetStatusPoolsService } from '@/lib/services/fleetStatusPoolsService';
+import {
+  fleetStatusTenantAccountsService,
+  pageTenantAccounts,
+} from '@/lib/services/fleetStatusTenantAccountsService';
 import { BlindSpotsCard } from './_components/BlindSpotsCard';
 import {
   HostedImageCard,
@@ -19,6 +23,7 @@ import {
   SandboxImageCard,
 } from './_components/ImageCards';
 import { InstallFleetCard, ShardPoolsCard } from './_components/PoolCards';
+import { TenantAccountsCard } from './_components/TenantAccountsCard';
 
 /**
  * The console's FLEET STATUS page — design `platform-admin/design-notes.md`
@@ -33,6 +38,10 @@ import { InstallFleetCard, ShardPoolsCard } from './_components/PoolCards';
  * registry, GitHub or AWS that does not answer leaves only its own card saying
  * so (Panel 9). The publish records are one audited read, shared by the four
  * image cards (the Indexer image card is MOTIR-10986).
+ *
+ * Pools' third card, Tenant hosting accounts (MOTIR-12014; design MOTIR-12013,
+ * § AMENDMENT 2026-11-22), reads each tenant AWS account's quotas live; its
+ * search and page are the `tenantQ` / `tenantPage` query parameters.
  *
  * The third section, CI fleet blind spots (MOTIR-11439; design MOTIR-11467,
  * § AMENDMENT 2026-11-16), renders the latest reconcile outcome the provision
@@ -53,8 +62,15 @@ const publishRecords = cache(
     fleetStatusImagesService.publishRecords(principal),
 );
 
-export default async function AdminFleetStatusPage() {
+export default async function AdminFleetStatusPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tenantQ?: string | string[]; tenantPage?: string | string[] }>;
+}) {
   const principal = await requirePlatformStaffPage('superadmin');
+  const params = await searchParams;
+  const tenantQuery = first(params.tenantQ);
+  const tenantPage = first(params.tenantPage);
   const t = await getTranslations('platformAdmin.fleetStatus');
 
   return (
@@ -98,6 +114,17 @@ export default async function AdminFleetStatusPage() {
         </Suspense>
         <Suspense fallback={<CardSkeleton label={t('pools.loading.shard')} />}>
           <ShardPools principal={principal} />
+        </Suspense>
+        <Suspense
+          fallback={
+            <CardSkeleton
+              label={t('tenants.loading')}
+              data-element="tenant-accounts"
+              data-state="loading"
+            />
+          }
+        >
+          <TenantAccounts principal={principal} query={tenantQuery} page={tenantPage} />
         </Suspense>
       </section>
       <section aria-labelledby="blind-spots-heading" className="flex flex-col gap-4 pt-2">
@@ -203,6 +230,31 @@ async function ShardPools({ principal }: { principal: PlatformPrincipal }) {
   return (
     <ShardPoolsCard
       block={await fleetStatusPoolsService.readAddShard(principal, { now })}
+      now={now}
+    />
+  );
+}
+
+/** A repeated query parameter reads as its first value. */
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+async function TenantAccounts({
+  principal,
+  query,
+  page,
+}: {
+  principal: PlatformPrincipal;
+  query: string | undefined;
+  page: string | undefined;
+}) {
+  const now = new Date();
+  const block = await fleetStatusTenantAccountsService.read(principal, { now });
+  return (
+    <TenantAccountsCard
+      block={block}
+      page={block.status === 'ok' ? pageTenantAccounts(block.accounts, { query, page }) : null}
       now={now}
     />
   );
