@@ -55,7 +55,11 @@ const decided = (
 
 describe('resolveGateSet — the states with nothing to decide', () => {
   it('asks nothing when the card has neither a design result nor a delivery set', () => {
-    expect(resolveGateSet(input())).toEqual({ awaited: [], primary: null });
+    expect(resolveGateSet(input())).toEqual({
+      awaited: [],
+      primary: null,
+      primariesHeldByReview: false,
+    });
   });
 
   it('asks nothing on a TERMINAL card, whatever it holds', () => {
@@ -66,7 +70,7 @@ describe('resolveGateSet — the states with nothing to decide', () => {
         members: GREEN_ONE,
       }),
     );
-    expect(set).toEqual({ awaited: [], primary: null });
+    expect(set).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
   });
 
   it('asks no MERGE question in an `auto` project — Motir merges with no person', () => {
@@ -95,6 +99,7 @@ describe('resolveGateSet — the DESIGN question stands on its own', () => {
     expect(set).toEqual({
       awaited: [{ kind: 'design_result', subjectId: 'ev_1', subjectVersion: 'c0ffee' }],
       primary: 'design_result',
+      primariesHeldByReview: false,
     });
   });
 
@@ -506,6 +511,7 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
     expect(set).toEqual({
       awaited: [{ kind: 'pull_request_approval', subjectId: WORK_ITEM, subjectVersion: TWO }],
       primary: 'pull_request_approval',
+      primariesHeldByReview: false,
     });
   });
 
@@ -645,6 +651,7 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789; timing: MOTIR-
     expect(resolveGateSet(input({ currentReceipt: RECEIPT, subtreeSettled: false }))).toEqual({
       awaited: [],
       primary: null,
+      primariesHeldByReview: false,
     });
     // Absent reads as NOT settled: a caller that did not load it never asks early.
     expect(resolveGateSet(input({ currentReceipt: RECEIPT })).awaited).toEqual([]);
@@ -657,7 +664,7 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789; timing: MOTIR-
     ]) {
       // A settled subtree does not make a story run's question owed: its timing is the SET.
       const set = resolveGateSet(input({ currentReceipt: RECEIPT, members, subtreeSettled: true }));
-      expect(set).toEqual({ awaited: [], primary: null });
+      expect(set).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
     }
   });
 
@@ -702,7 +709,7 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789; timing: MOTIR-
         resolveGateSet(
           input({ currentReceipt: RECEIPT, members: ALL_MERGED, subtreeSettled: false }),
         ),
-      ).toEqual({ awaited: [], primary: null });
+      ).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
       expect(
         resolveGateSet(input({ currentReceipt: RECEIPT, members: ALL_MERGED })).awaited,
       ).toEqual([]);
@@ -732,7 +739,7 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789; timing: MOTIR-
           subtreeSettled: true,
         }),
       );
-      expect(set).toEqual({ awaited: [], primary: null });
+      expect(set).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
     });
 
     it('a member CLOSED WITHOUT MERGING still holds the question back, however settled the subtree', () => {
@@ -744,7 +751,7 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789; timing: MOTIR-
         const set = resolveGateSet(
           input({ currentReceipt: RECEIPT, members, subtreeSettled: true }),
         );
-        expect(set).toEqual({ awaited: [], primary: null });
+        expect(set).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
       }
     });
 
@@ -810,7 +817,7 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789; timing: MOTIR-
     const set = resolveGateSet(
       input({ currentReceipt: RECEIPT, members: GREEN_ONE, cardIsTerminal: true }),
     );
-    expect(set).toEqual({ awaited: [], primary: null });
+    expect(set).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
   });
 
   it('a NEWER receipt than the one approved is a new question — the approval of v1 answers nothing about v2', () => {
@@ -881,7 +888,7 @@ describe('acceptanceRefusalHoldsMerge + resolveGateSet — MOTIR-6503: a story-r
           members: GREEN_TWO,
         }),
       );
-      expect(set).toEqual({ awaited: [], primary: null });
+      expect(set).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
     });
   }
 
@@ -946,7 +953,7 @@ describe('resolveGateSet — a refused MERGE withholds a story run’s acceptanc
         latestMergeGate: decided(WORK_ITEM, VERSION, 'changes_requested'),
       }),
     );
-    expect(set).toEqual({ awaited: [], primary: null });
+    expect(set).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
   });
 
   it('a push past the refused version asks both again, acceptance leading', () => {
@@ -968,7 +975,7 @@ describe('resolveGateSet — a refused MERGE withholds a story run’s acceptanc
     const sentBack = resolveGateSet(
       input({ currentReceipt: RECEIPT, members: GREEN_ONE, agentSendBackVersion: VERSION }),
     );
-    expect(sentBack).toEqual({ awaited: [], primary: null });
+    expect(sentBack).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
 
     const dismissed = resolveGateSet(
       input({
@@ -1007,6 +1014,7 @@ describe('resolveGateSet — MOTIR-6971: the merge question is asked ONLY at `in
     expect(resolveGateSet(input({ members: GREEN_TWO, cardInReview: false }))).toEqual({
       awaited: [],
       primary: null,
+      primariesHeldByReview: false,
     });
   });
 
@@ -1024,7 +1032,7 @@ describe('resolveGateSet — MOTIR-6971: the merge question is asked ONLY at `in
   it("a STORY RUN's acceptance question takes the same condition — none while the story is out of review", () => {
     expect(
       resolveGateSet(input({ currentReceipt: RECEIPT, members: GREEN_ONE, cardInReview: false })),
-    ).toEqual({ awaited: [], primary: null });
+    ).toEqual({ awaited: [], primary: null, primariesHeldByReview: false });
     expect(
       resolveGateSet(
         input({ currentReceipt: RECEIPT, members: GREEN_ONE, cardInReview: true }),

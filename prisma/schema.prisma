@@ -5886,6 +5886,11 @@ enum ApprovalGateSupersedeCause {
   /// The planning session a `planning_session` gate asked about ENDED, for any reason
   /// (MOTIR-7913).
   session_ended
+  /// The project's REVIEW gate is on and the review at the card's current delivery-set
+  /// version has not passed — it is owed, or it sent the code back — so a PRIMARY question
+  /// (`design_result`, `decision_approval`, `acceptance_result`) that was awaiting is
+  /// withdrawn until the review passes (Bug MOTIR-11992; `approval-gates.md` §12.20).
+  review_not_passed
 
   @@map("approval_gate_supersede_cause")
 }

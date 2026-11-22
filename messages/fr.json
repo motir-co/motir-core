@@ -16450,6 +16450,7 @@
         "closed_without_decision": "L'élément de travail a été fermé sans que personne ne le marque comme terminé, cette question a donc été retirée.",
         "not_ready": "L'élément de travail est bloqué par un autre travail, cette question a donc été retirée jusqu'à ce qu'il puisse commencer.",
         "replanned": "L'élément de travail a été replanifié, cette question a donc été retirée.",
+        "review_not_passed": "La revue de ces commits n’est pas encore validée, cette question a donc été retirée. Elle sera reposée dès que la revue sera validée.",
         "unknown": "Cette question a été retirée. La raison n'a pas été enregistrée."
       },
       "causeByKind": {

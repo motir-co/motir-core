@@ -16450,6 +16450,7 @@
         "closed_without_decision": "Element roboczy został zamknięty bez oznaczenia go jako gotowy, więc to pytanie zostało wycofane.",
         "not_ready": "Element roboczy jest zablokowany przez inną pracę, więc to pytanie zostało wycofane, dopóki nie będzie można go rozpocząć.",
         "replanned": "Element roboczy został zaplanowany ponownie, więc to pytanie zostało wycofane.",
+        "review_not_passed": "Przegląd tych commitów nie został jeszcze zaliczony, więc to pytanie wycofano. Zostanie zadane ponownie, gdy przegląd zostanie zaliczony.",
         "unknown": "To pytanie zostało wycofane. Nie zapisano powodu."
       },
       "causeByKind": {

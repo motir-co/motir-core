@@ -215,7 +215,10 @@ export type ApprovalGateSupersedeCauseDTO =
    *  about — the question is answered (MOTIR-7913). */
   | 'answered'
   /** The planning session a `planning_session` gate asked about ended (MOTIR-7913). */
-  | 'session_ended';
+  | 'session_ended'
+  /** The review gate is on and the review at the current version has not passed, so an
+   *  awaiting PRIMARY question was withdrawn until it does (MOTIR-11992; ADR §12.20). */
+  | 'review_not_passed';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
