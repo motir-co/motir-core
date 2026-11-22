@@ -462,7 +462,16 @@ export function settledOutcome(
   if (status.indexedCommit?.commit === handedCommit) return { kind: 'published' };
   if (status.inProgressJob?.commit === handedCommit) return { kind: 'pending' };
   const failure = status.lastFailure;
-  if (failure?.commit === handedCommit) {
+  // ⚠️ A FAILURE OF THE HANDED COMMIT COUNTS ONLY IF IT CAME AFTER THIS HANDOFF.
+  // `lastFailure` is the repository's newest failed job, whenever it failed, and
+  // `inProgressJob` is the running job or else the oldest queued one. So when a
+  // commit that failed before is handed off again while another job is ahead of
+  // it, the old failure is all the status shows — and reading it as this run's
+  // would fail the run without ever waiting for the job it just queued.
+  if (
+    failure?.commit === handedCommit &&
+    Date.parse(failure.failedAt) >= Date.parse(handed.handedAt)
+  ) {
     return failure.reason === CODEGRAPH_SIZE_REFUSAL_REASON
       ? { kind: 'refused_for_size', message: failure.message }
       : { kind: 'failed', reason: failure.reason, message: failure.message };

@@ -108,15 +108,24 @@ export const runningAt = (commit: string): StatusAnswer =>
     },
   });
 
-/** The last failure, at `commit`. */
-export const failedAt = (commit: string, reason: string, message: string): StatusAnswer =>
+/**
+ * The last failure, at `commit`. `when` defaults to a minute after the moment the
+ * answer is built, so a failure staged before a run reads as that run's own: a run
+ * counts a failure only when it came after its handoff.
+ */
+export const failedAt = (
+  commit: string,
+  reason: string,
+  message: string,
+  when: string = new Date(Date.now() + 60_000).toISOString(),
+): StatusAnswer =>
   statusAnswer({
     lastFailure: {
       reason,
       commit,
       kind: 'first_index',
       message,
-      failedAt: '2026-11-22T10:05:00.000Z',
+      failedAt: when,
     },
   });
 

@@ -440,6 +440,38 @@ describe('the run settles on the HANDED commit', () => {
     ).toEqual({ kind: 'pending' });
   });
 
+  it('a failure of the handed commit from BEFORE the handoff is history while another job is ahead', () => {
+    // The commit failed earlier and is handed off again; the service queued the new
+    // job behind another one, so the status shows only the old failure.
+    const before = '2026-11-22T09:59:59.000Z';
+    const otherJob = (runningAt(HANDOFF_OLDER) as { inProgressJob: unknown }).inProgressJob;
+    const oldFailure = (
+      failedAt(HANDOFF_HEAD, 'fetch_failed', 'old', before) as { lastFailure: unknown }
+    ).lastFailure;
+    expect(
+      settledOutcome(
+        statusAnswer({ inProgressJob: otherJob, lastFailure: oldFailure }) as never,
+        HANDED,
+      ),
+    ).toEqual({ kind: 'pending' });
+    const oldSizeRefusal = (
+      failedAt(HANDOFF_HEAD, 'repository_too_large', 'old', before) as { lastFailure: unknown }
+    ).lastFailure;
+    expect(
+      settledOutcome(
+        statusAnswer({ inProgressJob: otherJob, lastFailure: oldSizeRefusal }) as never,
+        HANDED,
+      ),
+    ).toEqual({ kind: 'pending' });
+    // At the handoff instant it is this run's.
+    expect(
+      settledOutcome(
+        failedAt(HANDOFF_HEAD, 'fetch_failed', 'now', HANDED.handedAt) as never,
+        HANDED,
+      ),
+    ).toEqual({ kind: 'failed', reason: 'fetch_failed', message: 'now' });
+  });
+
   it('nothing published within the deadline throws timed_out', async () => {
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-22T10:00:00.000Z') });
     handoffWorld.statuses = [runningAt(HANDOFF_HEAD)];
