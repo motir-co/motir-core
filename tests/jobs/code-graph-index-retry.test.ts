@@ -8,7 +8,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
 import type { CodeGraphIndexData } from '@/lib/jobs/types';
 import {
   codeGraphIndexCatchUpService,

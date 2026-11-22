@@ -1,7 +1,11 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JobQueueRun } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import {
+  fleetCodeGraphIndex as codeGraphIndex,
+  registerFleetIndexJobs,
+  restoreHandoffIndexJobs,
+} from '../helpers/fleetIndexJobs';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { isJobRunDefer } from '@/lib/jobs/engine/defer';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
@@ -36,6 +40,13 @@ import {
 // the shipped engine actually hands the handler, which is the whole defect.
 
 const [REPO_OWNER, REPO_NAME] = INDEX_REPO_REF.split('/') as [string, string];
+
+// ⚠️ THE CLAIM IS THE CONTAINER PATH'S. Since MOTIR-11883 the shipped index job
+// hands off to motir-ai and stamps no `indexing_run_id`; `executeWithLedger`
+// resolves the handler from the engine registry, so the container-path copy is
+// swapped in for this file and the shipped one put back after it.
+beforeAll(() => registerFleetIndexJobs());
+afterAll(() => restoreHandoffIndexJobs());
 
 beforeEach(async () => {
   await truncateAuthTables();

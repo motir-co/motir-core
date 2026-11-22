@@ -19,7 +19,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
 import { MAX_DISPATCH_ATTEMPTS } from '@/lib/services/codeGraphIndexDispatchService';
 import { fakeOrchestrator } from '@motir/orchestrator';

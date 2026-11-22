@@ -13,7 +13,7 @@
 // mocked. The only seams are the millisecond budgets — and they are what made
 // the old shape hang: a 5 s first wait is enough to keep a pass in its slot.
 
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
@@ -38,6 +38,14 @@ import {
   seedIndexWorkspace,
   stubIndexFleet,
 } from '../helpers/indexFleet';
+import { registerFleetIndexJobs, restoreHandoffIndexJobs } from '../helpers/fleetIndexJobs';
+
+// ⚠️ THE CONTAINER PATH, SWAPPED INTO THE REGISTRY FOR THIS FILE ONLY. Since
+// MOTIR-11883 the shipped index jobs hand off to motir-ai; this suite pins the
+// retained container path's behaviour through the real worker, so it registers
+// the copies that still drive it and restores the shipped ones after.
+beforeAll(() => registerFleetIndexJobs());
+afterAll(() => restoreHandoffIndexJobs());
 
 /** The shipped first admission wait — what a queued run waits before it asks again. */
 const FIRST_WAIT_MS = INDEX_ADMISSION_BUDGETS.baseWaitMs;

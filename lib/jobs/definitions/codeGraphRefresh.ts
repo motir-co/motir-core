@@ -1,91 +1,42 @@
 import { defineJob } from '../defineJob';
-import { runIndexFleetSteps } from '../indexFleetSteps';
+import { runIndexHandoffSteps } from '../indexHandoffSteps';
 import type { CodeGraphRefreshData } from '../types';
 
 // Code-graph REFRESH job (Story 7.10 · MOTIR-893, the completing feed slice;
-// moved onto the INDEX FLEET by MOTIR-2057) — a default-branch PUSH to a
-// connected repo rebuilds that repo's graph for every project of its workspace.
-// Enqueued best-effort by the webhook's `push` handler
-// (`enqueueCodeGraphRefresh`, GitHub and GitLab alike) AFTER the push resolves
-// to a stored repo, so the webhook returns 2xx fast and the re-index never runs
-// inline in the delivery.
+// moved onto the INDEX FLEET by MOTIR-2057, handed off to motir-ai by MOTIR-11883)
+// — a default-branch PUSH to a connected repo, a planning session that starts on a
+// stale graph, the catch-up sweep or a manual refresh re-indexes that repo.
+// Enqueued best-effort (`enqueueCodeGraphRefresh`) AFTER the trigger resolves to a
+// stored repo, so a webhook returns 2xx fast and the index never runs inline in
+// the delivery.
 //
-// ⚠️ IT RUNS ON THE FLEET, LIKE THE FIRST INDEX — the SAME step shape,
-// `runIndexFleetSteps`, not a copy of it. THE BYTES ARE GONE FROM THIS PROCESS:
-// dispatch resolves a pre-signed tarball URL and boots ONE CONTAINER per
-// (repo × project) which fetches and builds the graph itself
-// (`docs/decisions/code-graph-index-fleet.md` §2, §11).
+// ⚠️ IT HANDS THE WORK OFF, LIKE THE FIRST INDEX (MOTIR-11883) — the SAME step
+// shape, `runIndexHandoffSteps`: the live default-branch head and a pre-signed
+// source URL minted AT it go to motir-ai, which starts motir-codegraph's job, and
+// the run polls motir-ai's status route until that commit settles. A run whose
+// payload says `refreshCause: 'push'` — the GitHub and GitLab push webhooks, and
+// only they — compares the head motir-core last stamped with the live one and hands
+// off a `push` with the host's changed paths (MOTIR-11884); every other run, and a
+// push whose comparison cannot be vouched for, is a `refresh`.
 //
-// WHY IT MOVED (MOTIR-2057). MOTIR-1981 moved `system.code-graph-index` onto the
-// fleet and left this job — architecturally the same work — on the
-// serverless→HTTP path it was retiring: fetch the whole tarball into the Vercel
-// function, POST the bytes to motir-ai, all under a 180 s client deadline (the
-// upload client that carried it is itself deleted — MOTIR-2138). `motir-core`'s own whole-tree
-// parse does not fit in 180 s, so its refresh failed DETERMINISTICALLY, and its
-// five idempotent retries then queued against motir-ai's single 1-permit parse
-// gate and starved every other repo's refresh — a ~68% failure rate for three
-// straight days (Aug 2 7/18, Aug 3 7/16, Aug 4 8/17), which is why the symptom
-// read as "intermittent motir-ai unavailability" rather than as one repo's
-// deterministic timeout. On the container path no wall clock bounds the parse,
-// because a STEP — never a run — is the unit the platform's timeout applies to
-// (`docs/jobs.md` rule 1).
-//
-// ⚠️ A REFRESH HAS ALWAYS BEEN A FULL REBUILD; the fleet does not change that,
-// and the claim that it was incremental was in THIS comment. motir-ai's
-// incremental entry is `GraphIndexPublisher.refresh` (an engine diff, optionally
-// over `changedPaths`) and NO caller has ever reached it: the bytes route this
-// job used to POST to (`POST /v1/code-graph/index`) runs `receiveAndIndex` →
-// `indexAndPublish` → `store.indexRepo`, a whole-tree build — exactly what the
-// container does. So moving to the fleet loses no incremental semantics; it
-// moves the same whole-tree parse off a 180 s budget onto a container with a
-// 30-minute one. What it DOES change is where the cost lands: a metered fleet
-// container per (repo × project) per debounced push, admitted by
-// `codeGraphIndexAdmissionService`, instead of a queue behind one parse permit.
-//
-// DEBOUNCED per repo, and THAT is now the whole difference between this job and
-// `system.code-graph-index`: rapid pushes to the same repo coalesce — Inngest
-// holds the run until `period` passes with no further same-key event, then runs
-// ONCE with the latest event. The run indexes the repo AT ITS DEFAULT BRANCH
-// (not a pinned SHA), so the one coalesced run builds the newest head — exactly
-// the semantics a debounce wants. The initial index must run promptly on install
-// and so must never sit out a debounce window, which is why the two stay separate
-// events rather than becoming one job with a flag.
-//
-// ⚠️ THE COALESCING IS MEASURED, THE `timeout` CAP IS NOT WHAT THIS COMMENT USED
-// TO CLAIM (MOTIR-2994). Coalescing was asserted here only at the config level —
-// which passes whatever the executor does — until it was driven against the real
-// scheduler: a same-key burst does produce exactly ONE run carrying the latest
-// event, and distinct repos stay independent, so the fleet cost model in
-// `docs/decisions/code-graph-index-fleet.md` §7.3/§7.4 holds. But this comment
-// also said `timeout` "caps the total deferral so a steady push stream still
-// refreshes at least every 15m", and on the dev server that is FALSE for a stream
-// faster than ~1 event/second — the cap never fires and the run lands only once
-// the stream stops. **This job is not exposed**: its producer is default-branch
-// pushes to one repo, which do not arrive at that rate. The debounce is KEPT
-// unchanged and the limit recorded; see `docs/jobs.md` § Debounce for the table.
-//
-// ⚠️ ONE EMITTER DOES NOT WAIT OUT THE PERIOD (MOTIR-5360). A planning session
-// that starts on a stale graph enqueues with `trigger: 'session_start'`
-// (`enqueueCodeGraphRefresh`), which makes its arrival due NOW. It is the SAME
-// event under the SAME key, so it coalesces into a refresh already queued for the
-// repo and pulls it forward; it never queues a second one beside it. Pushes are
-// unchanged: they still wait out `period`, and the declaration below is still
-// the default for every emitter that says nothing. The per-arrival switch lives
-// on the dispatch rather than here because the period is right for one trigger
-// and wrong for the other, and a job declares one debounce.
-//
-// ⚠️ AND THE KEY BELOW MUST KEEP NAMING ONLY REQUIRED FIELDS. A `key` expression
-// that does not resolve merges every such event into ONE debounce bucket instead
-// of skipping the debounce, so making any of `installationId` / `repoOwner` /
-// `repoName` optional on `CodeGraphRefreshData` would silently coalesce unrelated
-// repos. `tests/jobs/debounce-burst.test.ts` pins that.
+// ⚠️ THERE IS NO DEBOUNCE ANY MORE (MOTIR-11884), and DO NOT ADD ONE BACK. It
+// existed so a burst of pushes built ONE graph on a container each run paid for.
+// The service's own queue now supersedes a still-queued push of the same repository
+// and ref by a newer one (motir-codegraph `docs/api-contract.md`, the indexing
+// calls), so coalescing here would only delay the newest push by the window: every
+// event is due the moment it is enqueued, and each run hands off. A run whose handed
+// commit the service superseded or overtook settles on the newer PUBLISHED head
+// (`settledOutcome`'s superseded arm) instead of waiting out its deadline for a
+// commit that is never published. Comparing the STAMPED head with the live head
+// covers every push since the last published index, however many runs race, so no
+// run needs an earlier push's payload.
 //
 // SYSTEM-scoped (enqueued via `sendSystemEvent`, not `sendEvent`) and
 // `retryPolicy: 'idempotent'` for the reason the index job carries it: a
-// re-dispatched container rebuilds the same graph over the same commit-derived
-// key, so a transient blip is worth the `idempotent` policy's full 5-attempt budget — and every
-// phase sits inside a memoized step, so a retry RESUMES at the project that
-// failed instead of re-booting the containers that already succeeded.
+// re-handed commit rebuilds the same graph over the same commit, so a transient
+// blip is worth the `idempotent` policy's full 5-attempt budget — and the handoff
+// sits inside a memoized step, so a retry resumes polling rather than handing off
+// again.
 //
 // ⚠️ THERE IS DELIBERATELY NO `concurrency` HERE ANY MORE (MOTIR-2057), and DO
 // NOT ADD ONE BACK. It carried `concurrency: 2` for a scale-to-zero motir-ai
@@ -170,15 +121,10 @@ export const codeGraphRefresh = defineJob(
   {
     id: 'system.code-graph-refresh',
     retryPolicy: 'idempotent',
-    debounce: {
-      key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
-      period: '2m',
-      timeout: '15m',
-    },
   },
   async (ctx, services) => {
     const data = ctx.event.data as CodeGraphRefreshData;
-    return runIndexFleetSteps(
+    return runIndexHandoffSteps(
       ctx,
       services,
       {
@@ -191,6 +137,7 @@ export const codeGraphRefresh = defineJob(
         defaultBranch: data.defaultBranch,
       },
       'system.code-graph-refresh',
+      { refreshCause: data.refreshCause },
     );
   },
 );

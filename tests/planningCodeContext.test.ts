@@ -347,11 +347,11 @@ describe('resolvePlanningCodeContext', () => {
       indexedSha: SHA_A,
       defaultHead: SHA_B,
     });
-    // Through `enqueueCodeGraphRefresh` — the same event and debounce key a push
-    // uses, rather than a second trigger with its own semantics — but as a
-    // SESSION START, so it is due now instead of sitting out the 2-minute push
-    // debounce (MOTIR-5360; the row-level assertion is
-    // tests/jobs/code-graph-refresh-session-start.test.ts).
+    // Through `enqueueCodeGraphRefresh` — the same event a push uses, rather than
+    // a second trigger with its own semantics — as a SESSION START, due now
+    // (MOTIR-5360; since MOTIR-11884 nothing is debounced; the row-level assertion
+    // is tests/jobs/code-graph-refresh-session-start.test.ts). It is NOT a push, so
+    // it carries no `refreshCause` and the run hands motir-ai a plain `refresh`.
     expect(enqueueMock).toHaveBeenCalledTimes(1);
     expect(enqueueMock.mock.calls[0]![0]).toMatchObject({
       workspaceId: workspace.id,
@@ -359,6 +359,7 @@ describe('resolvePlanningCodeContext', () => {
       repoName: 'web',
       defaultBranch: 'main',
     });
+    expect(enqueueMock.mock.calls[0]![0]).not.toHaveProperty('refreshCause');
     expect(enqueueMock.mock.calls[0]![1]).toEqual({ trigger: 'session_start' });
   });
 

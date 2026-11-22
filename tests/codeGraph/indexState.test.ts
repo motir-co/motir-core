@@ -190,6 +190,11 @@ describe('⚠️ ONE derivation — no second implementation of "stale" under li
     expect(hits).toEqual([
       'lib/codeGraph/driftCount.ts',
       'lib/codeGraph/indexState.ts',
+      // MOTIR-11884 — the push handoff reads the stamped head as the BASE of the
+      // push's comparison: the previous head motir-ai diffs the new one against.
+      // It asks which paths changed between two commits, never whether a graph is
+      // behind, and never writes `stale`.
+      'lib/jobs/indexHandoffSteps.ts',
       'lib/repositories/githubRepoRepository.ts',
       'lib/repositories/projectRepoRepository.ts',
       'lib/services/codeContextService.ts',

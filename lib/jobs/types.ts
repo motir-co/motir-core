@@ -414,17 +414,21 @@ export interface CodeGraphIndexData {
 
 /**
  * The `system.code-graph-refresh` event payload (Story 7.10 · MOTIR-893) — one
- * per default-branch PUSH to a connected repo, enqueued best-effort by the
- * webhook (`enqueueCodeGraphRefresh`) after the push resolves to a stored repo.
- * Same shape as the initial index: the consumer re-fetches the repo AT ITS
- * DEFAULT BRANCH (so coalesced pushes index the latest head once) and re-drives
- * the same fetch → bytes → motir-ai path; motir-ai's indexer refreshes the
- * existing graph incrementally. The job is DEBOUNCED per repo (rapid pushes
- * coalesce into one run with the latest event), which is why this is a separate
- * event from `system.code-graph-index` — the initial index must run promptly on
- * install, never sit out a debounce window.
+ * per default-branch PUSH to a connected repo, and one per stale-session, catch-up
+ * or manual refresh. The initial index's fields, unchanged: the consumer reads the
+ * repo's live default-branch head at run time and hands motir-ai the source at it
+ * (MOTIR-11883). It is a separate event from `system.code-graph-index` because
+ * only the first index derives the first audit.
+ *
+ * `refreshCause: 'push'` (MOTIR-11884) is set ONLY by the GitHub and GitLab
+ * default-branch push webhooks. It makes the run compare the head motir-core last
+ * stamped with the live head and hand off a `push` with the host's changed paths;
+ * every payload without it is handed off as a `refresh`. Optional, so every
+ * existing producer's payload stays valid.
  */
-export type CodeGraphRefreshData = CodeGraphIndexData;
+export interface CodeGraphRefreshData extends CodeGraphIndexData {
+  refreshCause?: 'push';
+}
 
 /**
  * The `system.ci-runner-boot` event payload (Story MOTIR-1916 · MOTIR-1921) —

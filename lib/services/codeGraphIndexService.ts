@@ -351,6 +351,9 @@ export type IndexRepoResult =
        *  index allowance (MOTIR-4593): nothing was admitted or booted, and the
        *  repository row records the same reason. */
       reason: IndexSkipReason | IndexPauseReason;
+      /** MOTIR-11883. The service's own sentence for a size refusal, as motir-ai
+       *  passed it through. Absent on every other verdict. */
+      detail?: string;
     }
   | {
       indexed: true;
@@ -379,6 +382,14 @@ export type IndexRepoResult =
       /** MOTIR-4945. Absent when no container reported a mode — which, mid-rollout,
        *  is every run whose `index-boot` memo predates this card. */
       indexModes?: IndexModeRecord[];
+      /** MOTIR-11883. Present on a run whose graph motir-codegraph published through
+       *  motir-ai's handoff; absent on an old-fleet row. It is what tells the two
+       *  kinds of succeeded row apart. */
+      indexedBy?: 'motir-codegraph';
+      /** MOTIR-11884. The newer commit the service published instead of the handed
+       *  one, when the handed job was superseded or overtaken; the head stamped is
+       *  this one. */
+      supersededBy?: string;
     };
 
 /**
@@ -501,6 +512,26 @@ export interface FirstIndexSweepReport {
   alreadyIndexed: number;
   /** The repos with no code graph, in report order. */
   missing: MissingFirstIndexRepo[];
+  /** How many index jobs were actually enqueued (0 on a dry run). */
+  enqueued: number;
+}
+
+/** A repository {@link codeGraphIndexService.enqueueFirstIndexPass} left alone, and why. */
+export interface FirstIndexPassSkip {
+  workspaceId: string;
+  repoRef: string;
+  reason: 'archived';
+}
+
+/** What {@link codeGraphIndexService.enqueueFirstIndexPass} did. */
+export interface FirstIndexPassReport {
+  dryRun: boolean;
+  /** Connected repos examined. */
+  scanned: number;
+  /** The repos enqueued (or, on a dry run, that would be), in report order. */
+  repos: MissingFirstIndexRepo[];
+  /** The repos left alone, each with its reason. */
+  skipped: FirstIndexPassSkip[];
   /** How many index jobs were actually enqueued (0 on a dry run). */
   enqueued: number;
 }
@@ -706,6 +737,10 @@ export const codeGraphIndexService = {
    * failure must not fail the grant that already committed, so it degrades to
    * "nothing is indexed" (enqueue everything — convergent, since the job is
    * idempotent) rather than propagating.
+   *
+   * ⚠️ "HAS A GRAPH" MEANS A HANDOFF ROW (MOTIR-11885): only a succeeded run whose
+   * `output.indexedBy` says motir-codegraph published it counts. A repository the
+   * old fleet indexed is enqueued again, so it reaches the new service.
    */
   async enqueueFirstIndexForRepos(input: {
     installationId: string;
@@ -716,7 +751,7 @@ export const codeGraphIndexService = {
     let indexedRepoRefs: string[] = [];
     try {
       indexedRepoRefs = await withSystemContext((tx) =>
-        jobRunRepository.listSucceededCodeGraphIndexRepoRefs(input.workspaceId, tx),
+        jobRunRepository.listHandoffIndexedCodeGraphRepoRefs(input.workspaceId, tx),
       );
     } catch (err) {
       // The workspace id is passed as an ARGUMENT, never interpolated into the
@@ -756,6 +791,9 @@ export const codeGraphIndexService = {
    * Runs under system context (it spans tenants and reads the untenanted job
    * ledger). Side effects are OUTSIDE the transaction: the reads close first,
    * then the enqueues fire.
+   *
+   * ⚠️ "HAS A GRAPH" MEANS A HANDOFF ROW (MOTIR-11885), as for
+   * `enqueueFirstIndexForRepos`: an old-fleet success is listed as missing.
    */
   async sweepReposMissingFirstIndex(
     input: { workspaceId?: string; dryRun?: boolean } = {},
@@ -770,7 +808,7 @@ export const codeGraphIndexService = {
       // and a workspace typically owns several repos.
       const indexedByWorkspace = new Map<string, Set<string>>();
       for (const workspaceId of new Set(repos.map((r) => r.workspaceId))) {
-        const refs = await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(workspaceId, tx);
+        const refs = await jobRunRepository.listHandoffIndexedCodeGraphRepoRefs(workspaceId, tx);
         indexedByWorkspace.set(workspaceId, new Set(refs));
       }
       const found: MissingFirstIndexRepo[] = [];
@@ -809,6 +847,67 @@ export const codeGraphIndexService = {
       missing,
       enqueued,
     };
+  },
+
+  /**
+   * THE FIRST-INDEX PASS (MOTIR-11885 · story MOTIR-11022) — enqueue
+   * `system.code-graph-index` for EVERY connected repository that is not archived,
+   * reading NO ledger. Driven by `pnpm db:first-index-pass`.
+   *
+   * The sweep above asks "does this repository have a graph?"; this pass does not
+   * ask, because the answer the old fleet left behind is not one the new service
+   * holds. Each repository is handed to motir-ai by the job, and the job itself
+   * answers a host it cannot index (`provider_cannot_index`).
+   *
+   * Shaped as the sweep: under system context the read closes first (it spans
+   * tenants, and the application role sees every workspace's rows only there),
+   * then the enqueues fire through the one chokepoint. Stable order (the read's).
+   * An uninstalled connection's rows are already gone, so every row read is on a
+   * live installation.
+   */
+  async enqueueFirstIndexPass(
+    input: { workspaceId?: string; dryRun?: boolean } = {},
+  ): Promise<FirstIndexPassReport> {
+    const dryRun = input.dryRun ?? false;
+
+    const { scanned, toEnqueue, skipped } = await withSystemContext(async (tx) => {
+      const repos = await githubRepoRepository.listWithInstallation(tx, {
+        ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+      });
+      const live: MissingFirstIndexRepo[] = [];
+      const passed: FirstIndexPassSkip[] = [];
+      for (const repo of repos) {
+        const repoRef = repoRefOf(repo);
+        if (repo.archived) {
+          passed.push({ workspaceId: repo.workspaceId, repoRef, reason: 'archived' });
+          continue;
+        }
+        live.push({
+          workspaceId: repo.workspaceId,
+          installationId: repo.installation.installationId,
+          repoRef,
+          defaultBranch: repo.defaultBranch,
+        });
+      }
+      return { scanned: repos.length, toEnqueue: live, skipped: passed };
+    });
+
+    let enqueued = 0;
+    if (!dryRun) {
+      for (const repo of toEnqueue) {
+        const [repoOwner, repoName] = splitRepoRef(repo.repoRef);
+        await enqueueCodeGraphIndex({
+          installationId: repo.installationId,
+          workspaceId: repo.workspaceId,
+          repoOwner,
+          repoName,
+          defaultBranch: repo.defaultBranch,
+        });
+        enqueued += 1;
+      }
+    }
+
+    return { dryRun, scanned, repos: toEnqueue, skipped, enqueued };
   },
 };
 

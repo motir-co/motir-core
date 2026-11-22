@@ -489,7 +489,8 @@ export const githubWebhookService = {
   /**
    * Handle a `push` delivery — the incremental code-graph feed trigger
    * (MOTIR-893). A push to a connected repo's DEFAULT branch enqueues the
-   * debounced `system.code-graph-refresh` job (best-effort, post-tx) and
+   * `system.code-graph-refresh` job with `refreshCause: 'push'` (best-effort,
+   * post-tx; no debounce since MOTIR-11884) and
    * returns immediately — the fetch + re-index never run inline in the
    * webhook, so the 2xx stays fast. Any other ref (a feature branch, a tag, a
    * branch deletion) is a clean no-op: the graph tracks what SHIPPED, and
@@ -762,10 +763,12 @@ export const githubWebhookService = {
       outcome = 'first_index_enqueued';
       await enqueueCodeGraphIndex(indexData);
     } else {
-      // POST-tx, best-effort: the ack never hinges on the queue. The job fetches
-      // the default branch's CURRENT head at run time, so debounced/coalesced
-      // pushes index the newest state once.
-      await enqueueCodeGraphRefresh(indexData);
+      // POST-tx, best-effort: the ack never hinges on the queue. The job reads the
+      // default branch's CURRENT head at run time and, because this is a push,
+      // hands it off as a `push` with the changes since the stamped head
+      // (MOTIR-11884). The seed-only and first-index arms above send `indexData`
+      // unchanged.
+      await enqueueCodeGraphRefresh({ ...indexData, refreshCause: 'push' });
     }
     // ⚠️ THE BASE MOVED, SO ASK WHETHER ITS PULL REQUESTS STILL MERGE (MOTIR-5914, for bug
     // MOTIR-5907; design/github § 30 rule 1). A conflict usually arrives exactly like this —

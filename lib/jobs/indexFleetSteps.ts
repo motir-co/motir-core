@@ -737,7 +737,7 @@ export async function askIndexAllowanceUnlessBooted(
 /** Record a hard-stop pause on the repository (MOTIR-4593). Never throws: the
  *  run's own `indexed: false` verdict still carries the reason if this write
  *  fails. */
-async function pauseIndexingRepo(
+export async function pauseIndexingRepo(
   repoRef: string,
   organizationId: string,
   reason: string,
@@ -753,7 +753,7 @@ async function pauseIndexingRepo(
 
 /** Lift a recorded pause once the allowance lets a dispatch boot (MOTIR-4593).
  *  Never throws. */
-async function liftIndexingPause(repoRef: string): Promise<void> {
+export async function liftIndexingPause(repoRef: string): Promise<void> {
   try {
     await withSystemContext((tx) => githubRepoRepository.clearIndexPause(repoRef, tx));
   } catch (err) {
@@ -823,7 +823,7 @@ function dispatchFailure(
  * job-runtime read here does — no workspace is bound — and swallows its own
  * failure, because an index that ran is a fact and this is a note about it.
  */
-async function claimIndexingRepo(
+export async function claimIndexingRepo(
   ctx: JobContext,
   repoRef: string,
   organizationId: string,
@@ -868,7 +868,7 @@ async function claimIndexingRepo(
 /** Release the claim, recording what was indexed when there is something to
  *  record. A run with no known head clears the claim and writes no sha — the row
  *  keeps its last real answer rather than gaining a false one. */
-async function settleIndexingRepo(
+export async function settleIndexingRepo(
   repoRef: string,
   organizationId: string,
   headAtStart: string | null,

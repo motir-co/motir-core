@@ -17,7 +17,7 @@ import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisi
 import { registerShardProvisioningProvider } from '@/lib/fleetShards/provisioningProviders';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
 import type { CodeGraphIndexData } from '@/lib/jobs/types';
 import {
   AWS_INDEXER_AMI_ENV_VAR,

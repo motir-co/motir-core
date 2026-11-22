@@ -70,6 +70,7 @@ export const DATA_SCRIPTS = {
   'converge-unlanded-cards': () => import('./converge-ejected-cards'),
   'backfill-run-discrepancy': () => import('./backfill-run-discrepancy-records'),
   'backfill-aws-costs': () => import('./backfill-aws-costs'),
+  'first-index-pass': () => import('./first-index-pass'),
 } satisfies Record<string, () => Promise<DataScript>>;
 
 export type DataScriptName = keyof typeof DATA_SCRIPTS;

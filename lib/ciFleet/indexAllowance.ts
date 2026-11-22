@@ -64,6 +64,14 @@ export const INDEX_POOL_FULL_PAUSE_REASON: IndexPauseReason = 'paused_index_pool
  *  room: an account nobody has created yet is not a busy fleet. */
 export const INDEX_NO_ACCOUNT_PAUSE_REASON: IndexPauseReason = 'paused_index_no_indexer_account';
 
+/** The pause recorded when motir-codegraph REFUSED the repository as too large to
+ *  index (MOTIR-11883) — the service's own `repository_too_large` reason. Neither an
+ *  allowance stop nor Motir's capacity: re-asking changes nothing, so the catch-up
+ *  sweep never re-hands it. A later push or refresh of the repository still hands
+ *  off, and lifts the pause when the service accepts the smaller tree. */
+export const INDEX_SIZE_REFUSED_PAUSE_REASON: IndexPauseReason =
+  'paused_index_repository_too_large';
+
 /** Every pause that is Motir's indexer CAPACITY rather than the organisation's
  *  allowance or plan — the set the allowance surfaces exclude and the catch-up
  *  sweep lifts by reading the pool. */

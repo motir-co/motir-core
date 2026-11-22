@@ -55,6 +55,12 @@
 export interface StepShapePin {
   /** Where the id is written, repo-relative. A move is a review moment, so it is asserted. */
   readonly file: string;
+  /**
+   * Further files that write the SAME id over the SAME call (MOTIR-11883: the index
+   * handoff keeps three of the container path's steps, which stays in the tree,
+   * unreached, until its deletion). Every site is still held to this one shape.
+   */
+  readonly alsoIn?: readonly string[];
   /** The structural fingerprint of the awaited result. */
   readonly shape: string;
 }
@@ -299,6 +305,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   },
   'cancel-offboarding': {
     file: 'lib/jobs/indexFleetSteps.ts',
+    alsoIn: ['lib/jobs/indexHandoffSteps.ts'],
     shape: '{ cancelled: number }',
   },
   'cascade-to-children': {
@@ -442,8 +449,31 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ closed: boolean; gitCredentials: { failed: number; revoked: number }; runCredential: number; runKey: "failed" | "revoked" }',
   },
+  'index-ai-plan': {
+    file: 'lib/jobs/indexHandoffSteps.ts',
+    shape: '{ paid: boolean }',
+  },
+  'index-head-v1': {
+    file: 'lib/jobs/indexHandoffSteps.ts',
+    // MOTIR-11884. The live head, read once per run: the URL, the comparison and the
+    // settle all use it.
+    shape: '{ commitSha: string }',
+  },
+  'index-push-diff-v1': {
+    file: 'lib/jobs/indexHandoffSteps.ts',
+    // MOTIR-11884. The push-or-refresh decision over the stamped head and the host's
+    // changed paths; memoized so a retry does not ask the host again.
+    shape:
+      '{ changedPaths: Array<string>; kind: "push"; previousCommitSha: string } | { fallback: "comparison_threw" | "head_unchanged" | "host_error" | "no_stamped_head" | "no_such_ref" | "not_connected" | "revoked" | "sha_not_hex" | "too_large" | "truncated"; kind: "refresh" }',
+  },
+  'index-handoff-v1': {
+    file: 'lib/jobs/indexHandoffSteps.ts',
+    // MOTIR-11883. NEVER the source URL: it is a bearer secret and a memo is stored.
+    shape: '{ commitSha: string; handedAt: string; jobId: string }',
+  },
   'index-allowance': {
     file: 'lib/jobs/indexFleetSteps.ts',
+    alsoIn: ['lib/jobs/indexHandoffSteps.ts'],
     shape:
       '{ outcome: null | string; proceed: true } | { outcome: string; proceed: false; reason: `paused_index_${string}` }',
   },
@@ -807,6 +837,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   },
   'resolve-target-v2': {
     file: 'lib/jobs/indexFleetSteps.ts',
+    alsoIn: ['lib/jobs/indexHandoffSteps.ts'],
     // `no_commit_beyond_template` added by MOTIR-4589: a repository Motir created
     // that still holds only its seed is not indexed yet. Id KEPT — the change only
     // ADDS a member, so every memo written under the old shape is a valid value of

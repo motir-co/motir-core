@@ -473,21 +473,24 @@ describe('§3 the guards', () => {
   });
 
   it('the debounce key resolver is TOTAL — no arm silently merges unrelated events', () => {
-    // `codeGraphRefresh`'s own header names the failure: an expression that does
+    // `codeGraphRefresh`'s old header named the failure: an expression that does
     // not resolve MERGES on Inngest, so N unrelated repos index as one. There
     // must be no arm here that returns a shared bucket.
     for (const bad of ['event.ts', 'event.data.user.id', 'event.data.a + b', '"double"', '']) {
       expect(() => parseEventExpression('j', 'debounce.key', bad), bad).toThrow(/cannot evaluate/);
     }
-    // And the shipped declaration still resolves, on a real payload.
-    const declared = engineJob('system.code-graph-refresh')?.debounce;
-    expect(declared).toBeDefined();
+    // And the composed shape the refresh job declared until MOTIR-11884 still
+    // resolves, on a real payload; that job itself now declares no debounce.
+    const composed =
+      "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName";
     expect(
-      resolveEventExpression(
-        parseEventExpression('system.code-graph-refresh', 'debounce.key', declared!.key),
-        { installationId: 'i1', repoOwner: 'moooon', repoName: 'motir-core' },
-      ),
+      resolveEventExpression(parseEventExpression('j', 'debounce.key', composed), {
+        installationId: 'i1',
+        repoOwner: 'moooon',
+        repoName: 'motir-core',
+      }),
     ).toBe('i1/moooon/motir-core');
+    expect(engineJob('system.code-graph-refresh')?.debounce).toBeUndefined();
   });
 
   it('the three supervisors are REGISTERED and reachable from the emit path', () => {
@@ -590,8 +593,8 @@ describe('§3 the guards', () => {
       expect(Object.hasOwn(def, 'idempotency'), def.id).toBe(true);
       expect(Object.hasOwn(def, 'debounce'), def.id).toBe(true);
     }
-    // Exactly five SHIPPED jobs declare a debounce: the refresh, the agent
-    // instance idle timer (MOTIR-6873), whose debounce IS its 30-minute window,
+    // Exactly four SHIPPED jobs declare a debounce (the code-graph refresh lost
+    // its own to MOTIR-11884): the agent instance idle timer (MOTIR-6873), whose debounce IS its 30-minute window,
     // the page embedding job (MOTIR-9571), which folds a typing burst into
     // one run per page, the production config redeploy (MOTIR-10032), which
     // folds a burst of saves into one release per repository, and the release
@@ -607,7 +610,6 @@ describe('§3 the guards', () => {
       'hosted-release.status',
       'hosting/production-config-redeploy',
       'page/embedding.requested',
-      'system.code-graph-refresh',
     ]);
   });
 });

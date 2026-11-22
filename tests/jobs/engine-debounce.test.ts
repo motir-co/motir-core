@@ -18,6 +18,9 @@ import type { CodeGraphRefreshData } from '@/lib/jobs/types';
 
 // THE ENGINE'S DEBOUNCE (Story MOTIR-3417 · Subtask MOTIR-3483).
 //
+// (`system.code-graph-refresh` declared no debounce after MOTIR-11884; the history
+// below is why the engine has one.)
+//
 // `defineJob`'s `debounce` was declared by `system.code-graph-refresh`, forwarded
 // to Inngest, and dropped before `registerEngineJob` — so moving the refresh to
 // the engine without this would take a job whose whole point is "five pushes in a
@@ -56,9 +59,9 @@ defineJob(
     id: DEBOUNCED_ID as never,
     trigger: DEBOUNCED_TRIGGER as never,
     debounce: {
-      // The same SHAPE `codeGraphRefresh` declares — two literals joining three
-      // payload fields — because that expression is the reason the resolver had
-      // to be widened at all.
+      // The SHAPE `codeGraphRefresh` declared until MOTIR-11884 — two literals
+      // joining three payload fields — because that expression is the reason the
+      // resolver had to be widened at all.
       key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
       period: '2m',
     },
@@ -408,12 +411,14 @@ describe('an IMMEDIATE arrival — due now, and still coalesced (MOTIR-5360)', (
 });
 
 describe('the resolver is ONE resolver, widened — and TOTAL', () => {
-  it("resolves codeGraphRefresh's declared expression against a real payload", () => {
+  it('resolves the composed refresh-shaped expression against a real refresh payload', () => {
     // The AC's own comparison: the engine must produce for this expression the
-    // three fields joined by the two literals, in order — read off the SHIPPED
-    // declaration rather than a copy of it. (That declaration used to be read out
-    // of the vendor function object's `opts`; `defineJob` returns it directly.)
-    const declared = codeGraphRefresh.debounce!;
+    // three fields joined by the two literals, in order. It used to be read off
+    // `codeGraphRefresh`'s shipped declaration; that job has none since
+    // MOTIR-11884, so it is read off the probe that declares the same expression.
+    const declared = {
+      key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
+    };
 
     const data: CodeGraphRefreshData = {
       installationId: 'inst_9',
@@ -508,32 +513,32 @@ describe('the resolver is ONE resolver, widened — and TOTAL', () => {
   });
 });
 
-describe("codeGraphRefresh's declared debounce is untouched", () => {
-  it('still carries the same debounce config, read off the registered definition', () => {
-    // MOTIR-3413's boundary is that no job's observable behaviour changes. This
-    // assertion is the byte-for-byte statement of that for the one job in the
-    // tree carrying a `debounce`, and MOTIR-3418 did not touch it — only where it
-    // is READ from. It used to come off the vendor function object's `opts`,
-    // which was what the SDK KEPT after construction rather than what we passed
-    // in; there is no construction now, so the declaration and the registration
-    // are the same object.
-    expect(codeGraphRefresh.debounce).toEqual({
-      key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
-      period: '2m',
-      timeout: '15m',
-    });
+describe('codeGraphRefresh declares no debounce (MOTIR-11884)', () => {
+  it('the registered definition carries none', () => {
+    // It carried the tree's first `debounce` until MOTIR-11884: each refresh is now
+    // handed off to motir-ai, whose service queue supersedes a still-queued push of
+    // the same repository and ref, so coalescing here would only delay the newest.
+    expect(codeGraphRefresh.debounce).toBeUndefined();
   });
 
-  it('declares a debounce the engine can actually evaluate', () => {
-    // The one job in the tree with a `debounce` — if the engine could not parse
-    // it, registration would already have thrown at import.
-    expect(
-      parseEventExpression(
-        'system.code-graph-refresh',
-        'debounce.key',
-        codeGraphRefresh.debounce!.key,
-      ),
-    ).toHaveLength(5);
+  it('two same-repository refresh events dispatched back to back are TWO runs', async () => {
+    const data: CodeGraphRefreshData = {
+      installationId: 'inst_11884',
+      workspaceId: null as unknown as string,
+      repoOwner: 'moooon-B-V',
+      repoName: 'motir-core',
+      defaultBranch: 'main',
+      refreshCause: 'push',
+    };
+    const first = await dispatchEventToEngine('system.code-graph-refresh', data);
+    const second = await dispatchEventToEngine('system.code-graph-refresh', data);
+
+    expect(first.enqueued).toContain('system.code-graph-refresh');
+    expect(second.enqueued).toContain('system.code-graph-refresh');
+    expect(second.coalesced).toEqual([]);
+    const rows = await rowsFor('system.code-graph-refresh');
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.debounceKey === null)).toBe(true);
   });
 });
 

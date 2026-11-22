@@ -8,16 +8,18 @@ import { adminDb } from '../helpers/adminDb';
 // gets its `code_audit` + `propose_convention` pair, once, for that repo only.
 //
 // Driven through the REAL `system.code-graph-index` job, over the SHARED index
-// fleet fixture (`tests/helpers/indexFleet.ts`), against a REAL Postgres — the
-// same world `tests/jobs/code-graph-index.test.ts` drives. That matters: the
+// HANDOFF world (`tests/helpers/indexHandoff.ts` — motir-ai and GitHub stubbed at
+// the HTTP boundary since MOTIR-11883 moved the job off the container fleet),
+// against a REAL Postgres — the world `tests/jobs/code-graph-index-handoff.test.ts`
+// drives. That matters: the
 // property under test is not "the service submits" but "the JOB submits, without
 // changing what the job is". A service-only suite could not see the two things
 // most likely to break in production — a derivation blip failing an index that
 // already succeeded, and a failed index deriving anything at all.
 //
 // ⚠️ ONLY THE TWO CODE-HEALTH CALLS ARE MOCKED, over `importOriginal`. The index
-// path needs the REAL `mintCodeGraphRunCredential` (the fixture answers it over
-// the stubbed `fetch`), so mocking the module WHOLE would replace the world the
+// path needs the REAL `handOffCodeGraphIndex` and `readCodeGraphIndexStatus` (the
+// world answers them over the stubbed `fetch`), so mocking the module WHOLE would replace the world the
 // job runs in. The two that are replaced are the gate's read and the submit —
 // the only motir-ai calls this card adds.
 const getCodeAuditMock = vi.fn<(q: unknown) => Promise<RawCodeAuditSurface>>();
@@ -39,20 +41,12 @@ const { db } = await import('@/lib/db');
 const { codeGraphIndex } = await import('@/lib/jobs/definitions/codeGraphIndex');
 const { firstAuditTriggerService } = await import('@/lib/services/firstAuditTriggerService');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
-const { fakeOrchestrator } = await import('@motir/orchestrator');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 const { truncateAuthTables, truncateJobRuns } = await import('../helpers/db');
-const {
-  containerExitsWith,
-  INDEX_REPO_REF,
-  indexEventFor,
-  indexJobRuns,
-  driveIndexFleetFast,
-  indexStepIds,
-  resetTarballBodyTrap,
-  seedIndexWorkspace,
-  stubIndexFleet,
-} = await import('../helpers/indexFleet');
+const { INDEX_REPO_REF, indexEventFor, indexJobRuns, indexStepIds, seedIndexWorkspace } =
+  await import('../helpers/indexFleet');
+const { failedAt, HANDOFF_HEAD, handoffWorld, stubIndexHandoff } =
+  await import('../helpers/indexHandoff');
 
 const REPO_REF = INDEX_REPO_REF;
 const OTHER_REPO = { owner: 'moooon', name: 'motir-ai' };
@@ -109,14 +103,9 @@ beforeEach(async () => {
   await truncateJobRuns();
   await adminDb.fleetInFlightSlot.deleteMany({});
   _resetInstallationTokenCache();
-  fakeOrchestrator.reset();
-  resetTarballBodyTrap();
   getCodeAuditMock.mockReset();
   refreshCodeAuditMock.mockReset();
   refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
-  // The supervision loop is a real `await` since MOTIR-3484, so a job-level
-  // test would otherwise sleep at the shipped cadence.
-  driveIndexFleetFast();
 });
 
 afterEach(async () => {
@@ -153,8 +142,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
 
   it('submits exactly ONE code_audit + propose_convention pair for a repo with no audit', async () => {
     const { workspaceId, projectIds, installationId } = await seedIndexWorkspace('fa-first', 1);
-    stubIndexFleet();
-    containerExitsWith(0);
+    stubIndexHandoff();
     getCodeAuditMock.mockResolvedValue(unauditedSurface());
 
     const { result, ctx } = await runIndex({ installationId, workspaceId, projectIds });
@@ -163,8 +151,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
       indexed: true,
       repoRef: REPO_REF,
       projectsIndexed: 1,
-      coreTimings: expect.any(Array),
-      indexModes: expect.any(Array),
+      indexedBy: 'motir-codegraph',
     });
     // ONE pair. `refreshCodeAudit` is the call that submits BOTH jobs — motir-ai
     // returns an `auditJobId` and a `conventionJobId` from the one request — so
@@ -177,8 +164,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
 
   it('submits NOTHING for a repo that ALREADY has a derived audit — the idempotency gate', async () => {
     const { workspaceId, projectIds, installationId } = await seedIndexWorkspace('fa-idem', 1);
-    stubIndexFleet();
-    containerExitsWith(0);
+    stubIndexHandoff();
     // ⚠️ THE GATE IS "HAS NO AUDIT YET", NOT "IS THIS INDEX ROW NEW". A re-index,
     // a reconcile or a retry of an already-assessed repo must fire nothing — which
     // is what makes the trigger safe to hang off EVERY index completion. Reading
@@ -200,8 +186,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
       { owner: 'moooon', name: 'motir-core' },
       OTHER_REPO,
     ]);
-    stubIndexFleet();
-    containerExitsWith(0);
+    stubIndexHandoff();
     getCodeAuditMock.mockResolvedValue(unauditedSurface());
 
     await runIndex({ installationId, workspaceId, projectIds });
@@ -221,8 +206,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
     // project of the workspace, so deriving only the first project's would leave
     // the others in exactly the un-assessed state this card ends.
     const { workspaceId, projectIds, installationId } = await seedIndexWorkspace('fa-fanout', 2);
-    stubIndexFleet();
-    containerExitsWith(0);
+    stubIndexHandoff();
     getCodeAuditMock.mockResolvedValue(unauditedSurface());
 
     await runIndex({ installationId, workspaceId, projectIds });
@@ -237,10 +221,12 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
 
   it('submits NOTHING when the index job FAILS', async () => {
     const { workspaceId, projectIds, installationId } = await seedIndexWorkspace('fa-failed', 1);
-    stubIndexFleet();
-    // A non-zero exit is a container that did not index — `runIndexFleetSteps`
-    // throws, so the trigger is never reached and the repo is not claimed.
-    containerExitsWith(9);
+    stubIndexHandoff();
+    // The service reports the handed commit FAILED — `runIndexHandoffSteps`
+    // throws, so the trigger is never reached.
+    handoffWorld.statuses = [
+      failedAt(HANDOFF_HEAD, 'fetch_failed', 'The source could not be fetched.'),
+    ];
     getCodeAuditMock.mockResolvedValue(unauditedSurface());
 
     const { error, ctx } = (await runIndex({ installationId, workspaceId, projectIds })) as {
@@ -257,8 +243,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
 
   it('leaves a SUCCEEDED index untouched when the derivation throws — logged, never retried', async () => {
     const { workspaceId, projectIds, installationId } = await seedIndexWorkspace('fa-blip', 1);
-    stubIndexFleet();
-    containerExitsWith(0);
+    stubIndexHandoff();
     getCodeAuditMock.mockResolvedValue(unauditedSurface());
     // motir-ai is down at exactly the wrong moment. The index has already
     // succeeded; failing the run here would cost the ledger its `succeeded` row —
@@ -276,8 +261,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
       indexed: true,
       repoRef: REPO_REF,
       projectsIndexed: 1,
-      coreTimings: expect.any(Array),
-      indexModes: expect.any(Array),
+      indexedBy: 'motir-codegraph',
     });
     const runs = await indexJobRuns();
     expect(runs).toHaveLength(1);

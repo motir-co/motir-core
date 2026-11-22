@@ -1,6 +1,9 @@
 import { Prisma, type GithubInstallation, type GithubRepo } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
-import { INDEX_CAPACITY_PAUSE_REASONS } from '@/lib/ciFleet/indexAllowance';
+import {
+  INDEX_CAPACITY_PAUSE_REASONS,
+  INDEX_SIZE_REFUSED_PAUSE_REASON,
+} from '@/lib/ciFleet/indexAllowance';
 
 // GitHub-repo repository — single Prisma operations on the `github_repo` table
 // (Story 7.10 · MOTIR-891). `installationId` here is the INTERNAL
@@ -465,6 +468,10 @@ export const githubRepoRepository = {
       FROM "github_repo" gr
       JOIN "github_installation" gi ON gi."id" = gr."installation_id"
       WHERE gr."index_paused_reason" IS NOT NULL
+        -- motir-codegraph's size refusal (MOTIR-11883) is no allowance or capacity
+        -- wait: re-asking changes nothing, so the sweep never re-hands it. A later
+        -- push or refresh still does, and lifts it.
+        AND gr."index_paused_reason" <> ${INDEX_SIZE_REFUSED_PAUSE_REASON}
         AND gr."archived" = false
       ORDER BY gr."index_paused_at" ASC NULLS FIRST, gr."id" ASC
       LIMIT ${limit}

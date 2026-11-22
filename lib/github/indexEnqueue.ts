@@ -39,39 +39,28 @@ export async function enqueueCodeGraphIndex(data: CodeGraphIndexData): Promise<v
 }
 
 /**
- * What asked for a refresh (MOTIR-5360) — and so whether it waits out the job's
- * 2-minute debounce.
+ * What asked for a refresh (MOTIR-5360): a default-branch `push`, or a planning
+ * session that started on a stale graph (`session_start`).
  *
- *  - `push` (the default): a default-branch push landed. Pushes arrive in bursts,
- *    so the run waits for a quiet period and a burst builds ONE graph.
- *  - `session_start`: a planning session started on a stale graph. One event,
- *    with a person waiting behind it, so it is due now. It uses the SAME event
- *    and the SAME debounce key, so it coalesces into a refresh already queued for
- *    the repo (pulling it forward) rather than queueing a second one. A refresh
- *    already RUNNING for the repo still holds its (repo × project) admission slot,
- *    so a run this enqueues waits for that one rather than booting a second
- *    container (`codeGraphIndexAdmissionService`, `repo_index_in_flight`).
- *
- * The trigger decides WHEN the run becomes due and nothing else: the payload is
- * identical, there is no priority lane, and the admission caps and the fleet
- * ceiling apply to it exactly as to a push.
+ * Since MOTIR-11884 it no longer changes WHEN the run is due: the refresh job has
+ * no debounce, so every refresh is due the moment it is enqueued, whatever asked
+ * for it. The option is kept so no caller changes. What makes a push hand off as a
+ * `push` is the payload's `refreshCause`, which the push webhooks set.
  */
 export type CodeGraphRefreshTrigger = 'push' | 'session_start';
 
 /**
- * Enqueue ONE repo's incremental REFRESH job (MOTIR-893) — a default-branch
- * push landed and the graph should re-index. Best-effort like the index enqueue:
- * the webhook 2xx must never hinge on the queue, so a transport failure is
- * swallowed + logged (the debounced job is idempotent and the next push
- * re-enqueues, so a dropped refresh self-heals).
+ * Enqueue ONE repo's REFRESH job (MOTIR-893) — the graph should re-index.
+ * Best-effort like the index enqueue: the webhook 2xx must never hinge on the
+ * queue, so a transport failure is swallowed + logged (the job is idempotent and
+ * the next push re-enqueues, so a dropped refresh self-heals). Due at once.
  */
 export async function enqueueCodeGraphRefresh(
   data: CodeGraphRefreshData,
-  opts: { trigger?: CodeGraphRefreshTrigger } = {},
+  // Kept for its callers; it no longer changes when the run is due (MOTIR-11884).
+  _opts: { trigger?: CodeGraphRefreshTrigger } = {},
 ): Promise<void> {
-  await sendSystemEvent('system.code-graph-refresh', data, {
-    immediate: opts.trigger === 'session_start',
-  });
+  await sendSystemEvent('system.code-graph-refresh', data);
 }
 
 /**

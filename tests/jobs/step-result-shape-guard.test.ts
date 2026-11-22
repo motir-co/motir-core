@@ -129,7 +129,7 @@ describe('a memoized step id names its result shape', () => {
   it('pins the file each id is written in', () => {
     const moved = pinnable.flatMap((s) => {
       const pin = LIVE_STEP_SHAPES[s.stepId];
-      if (!pin || pin.file === s.file) return [];
+      if (!pin || pin.file === s.file || pin.alsoIn?.includes(s.file)) return [];
       return [`${s.stepId}: pinned in ${pin.file}, found in ${s.file}`];
     });
     expect(moved, 'a step id moved file — update its pin').toEqual([]);

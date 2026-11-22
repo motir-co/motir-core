@@ -16,7 +16,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobTestEngine, type JobTestEngineContext } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { MAX_DISPATCH_ATTEMPTS } from '@/lib/services/codeGraphIndexDispatchService';
 import { fakeOrchestrator } from '@motir/orchestrator';

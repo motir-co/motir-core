@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
@@ -31,6 +31,14 @@ import {
   seedIndexWorkspace,
   stubIndexFleet,
 } from '../helpers/indexFleet';
+import { registerFleetIndexJobs, restoreHandoffIndexJobs } from '../helpers/fleetIndexJobs';
+
+// ⚠️ THE CONTAINER PATH, SWAPPED INTO THE REGISTRY FOR THIS FILE ONLY. Since
+// MOTIR-11883 the shipped index jobs hand off to motir-ai; this suite pins the
+// retained container path's behaviour through the real worker, so it registers
+// the copies that still drive it and restores the shipped ones after.
+beforeAll(() => registerFleetIndexJobs());
+afterAll(() => restoreHandoffIndexJobs());
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STORY GATE — a supervision is a SELF-RESCHEDULING RUN (MOTIR-3778 · MOTIR-3831)
