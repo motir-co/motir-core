@@ -17516,7 +17516,7 @@
       "toRun": {
         "sentence": "Uruchom przegląd <title>{name}</title>",
         "tag": "Przegląd do uruchomienia",
-        "details": "To jeszcze nie zatwierdzenie. Otwórz element, aby uruchomić przegląd; o zatwierdzenie poprosimy, gdy przegląd się powiedzie.",
+        "details": "To jeszcze nie zatwierdzenie. Otwórz, aby uruchomić przegląd lub kontynuować bez niego; o zatwierdzenie poprosimy, gdy przegląd się powiedzie.",
         "open": "Otwórz {key}: {sentence}"
       },
       "dismiss": {

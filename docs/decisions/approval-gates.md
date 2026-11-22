@@ -6748,6 +6748,30 @@ raise (`hosted-agent-run.md` §8.1, amended there by §8.8), §12.6's _Review ag
   unchanged), §12.3's _Continue without the review_, §12.4's verdict effects and To fix, §12.5's
   withdrawals and run cancellation, §12.11's run-token route, and §12.13–§12.16.
 
+#### 12.19 A review to run is WAITING ON YOU, and its row opens the review's approval — AMENDED 2026-11-22 (Bugs MOTIR-11983 · MOTIR-11984), DECIDED BY THE REQUESTER
+
+This amends §12.1's routing row and its 2026-11-04 amendment, which kept a review to run
+out of every count as _"not an approval"_:
+
+- **It is counted.** The Workbench's _Waiting on you_ badge (`homeService.tabCounts`, and
+  with it the landing cascade) is the approvals routed to the reader **plus** the reviews to
+  run routed to them, the latter counted on the list's own builder
+  (`reviewsToRunRoutedToWhere`). The tab's watermark reads the same set. A review waiting for
+  a person to start it holds the card as surely as an approval does, and a badge reading 0
+  above a row is a row nobody opens.
+- **A review already running is not one to run.** Starting a review (the hosted press, or a
+  person's own agent) leaves its gate `awaiting` until the verdict, so the builder leaves out
+  a card with a `running` review run (one per card at a time, MOTIR-11945). The row leaves, the
+  badge drops and the watermark's count moves when the run starts; a run that ends with no
+  verdict puts the gate back.
+- **It is still not an approval.** `awaitingRoutedToWhere` keeps `kind: { not: 'agent_review' }`:
+  the approvals list, its `total` and the decision-waiting marker are unchanged, and the row
+  stays its own kind (§12.1).
+- **Its row opens the `agent_review` approval overlay in place** — the address the
+  Development frame already writes for _Continue without the review_ (§12.3) — rather than
+  the item page. The overlay holds the review's state and _Continue without the review_; a
+  modifier click still opens the item.
+
 #### 12.20 No approval is asked before the review has passed — AMENDED 2026-11-22 (Bug MOTIR-11992), DECIDED BY THE REQUESTER
 
 This reverses §12.2's _"a primary question is not delayed"_. With it, the review held the merge

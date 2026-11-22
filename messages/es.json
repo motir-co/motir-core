@@ -17516,7 +17516,7 @@
       "toRun": {
         "sentence": "Iniciar una revisión de <title>{name}</title>",
         "tag": "Revisión por ejecutar",
-        "details": "Aún no es una aprobación. Abre el elemento para iniciar la revisión; se te pedirá tu aprobación cuando pase.",
+        "details": "Aún no es una aprobación. Ábrelo para iniciar la revisión o continuar sin ella; se te pedirá tu aprobación cuando pase.",
         "open": "Abrir {key}: {sentence}"
       },
       "dismiss": {

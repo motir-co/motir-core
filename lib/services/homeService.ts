@@ -1058,6 +1058,13 @@ export const homeService = {
         ),
       ]);
       const toFix = orderedFixGroupKeys(toFixCards).length;
+      // …PLUS the REVIEWS TO RUN the tab lists (Bug MOTIR-11984): a review waiting for the
+      // reader to start it is waiting on them. Counted on the list's own builder, after the
+      // batch above so no read outlives this transaction (MOTIR-8284).
+      const reviewsToRun = await approvalGateRepository.countAwaitingReviewsToRunRoutedTo(
+        { projectIds, userId: ctx.userId },
+        tx,
+      );
       // …PLUS the reader's failed planning sessions (MOTIR-7914), counted by the same
       // predicate `listToResume` pages, so the badge equals the list's `total`.
       const toResume =
@@ -1093,7 +1100,7 @@ export const homeService = {
         toFix,
         toResume,
         recentlyFinished,
-        approvals,
+        approvals: approvals + reviewsToRun,
         watching,
         planning,
         // Transitional — `/home`'s two-tab strip, until MOTIR-4782 replaces it.
