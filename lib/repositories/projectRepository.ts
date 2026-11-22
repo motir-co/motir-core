@@ -1081,7 +1081,9 @@ export const projectRepository = {
   /**
    * The project's two MERGE-ASKING settings together — `prMergeMode` and the review
    * agent's switch (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.2/§12.2a). Read
-   * by the gate-set loader, which needs both to answer which question a green set asks.
+   * by the gate-set loader, which needs both to answer which question a green set asks —
+   * and the design-approval switch beside them, which says whether the review holds a
+   * design question back (Bug MOTIR-11992).
    */
   async findMergeSettings(
     id: string,
@@ -1090,10 +1092,11 @@ export const projectRepository = {
   ): Promise<{
     prMergeMode: PrMergeMode;
     reviewAgentEnabled: boolean;
+    designApprovalGate: boolean;
   } | null> {
     return tx.project.findUnique({
       where: { id },
-      select: { prMergeMode: true, reviewAgentEnabled: true },
+      select: { prMergeMode: true, reviewAgentEnabled: true, designApprovalGate: true },
     });
   },
 

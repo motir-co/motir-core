@@ -16533,6 +16533,7 @@
         "closed_without_decision": "O item de trabalho foi fechado sem que ninguém o marcasse como concluído, então esta pergunta foi retirada.",
         "not_ready": "O item de trabalho está bloqueado por outro trabalho, então esta pergunta foi retirada até que possa ser iniciado.",
         "replanned": "O item de trabalho foi replanejado, então esta pergunta foi retirada.",
+        "review_not_passed": "A revisão destes commits ainda não foi aprovada, então esta pergunta foi retirada. Ela volta a ser feita assim que a revisão for aprovada.",
         "unknown": "Esta pergunta foi retirada. O motivo não foi registrado."
       },
       "causeByKind": {

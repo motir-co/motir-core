@@ -101,12 +101,13 @@ describe('resolveGateSet — the review stands in front of the merge question', 
     expect(kinds({ latestMergeGate: gate('superseded', V1) })).toEqual([['agent_review', V1]]);
   });
 
-  it('a primary question is not delayed — the design is still asked beside the review', () => {
+  it('a primary question WAITS for the review — the design is not asked beside it (MOTIR-11992, §12.20)', () => {
     const set = resolveGateSet(
       input({ currentDesignEvidence: { id: 'ev_1', commitSha: 'c0ffee' } }),
     );
-    expect(set.awaited.map((g) => g.kind)).toEqual(['design_result', 'agent_review']);
-    expect(set.primary).toBe('design_result');
+    expect(set.awaited.map((g) => g.kind)).toEqual(['agent_review']);
+    expect(set.primary).toBe('agent_review');
+    expect(set.primariesHeldByReview).toBe(true);
   });
 
   it('a primary’s carried merge asks the REVIEW while it has not passed, and nothing once it has', () => {
@@ -147,7 +148,11 @@ describe('agentReviewStanding — the one statement the gate set and the carry s
 
 describe('resolveGateSet — MOTIR-6971: the review is asked only at `in_review`, like the merge it stands in front of', () => {
   it('asks NEITHER the review nor the merge of a green set on a card that is not in review', () => {
-    expect(resolveGateSet(input({ cardInReview: false }))).toEqual({ awaited: [], primary: null });
+    expect(resolveGateSet(input({ cardInReview: false }))).toEqual({
+      awaited: [],
+      primary: null,
+      primariesHeldByReview: true,
+    });
   });
 });
 
@@ -204,5 +209,117 @@ describe('resolveGateSet — an agent SEND-BACK and its DISMISSAL (MOTIR-10333 �
     expect(at(V1)).toBe('passed');
     expect(at(V2)).toBe('refused');
     expect(at(null)).toBe('refused');
+  });
+});
+
+// BUG MOTIR-11992 (`approval-gates.md` §12.20, reversing §12.2's "a primary question is not
+// delayed"): with the review gate on, no PRIMARY is asked of code before its review has
+// passed. Each primary × each standing, asked of the pure rule.
+describe('resolveGateSet — the review holds every PRIMARY question until it passes (MOTIR-11992)', () => {
+  const RECEIPT = { id: 'rcpt_1', commitSha: 'aaa1' };
+  const DESIGN = { id: 'ev_1', commitSha: 'aaa1' };
+  const DECISION: GateSetInput['decision'] = {
+    identity: {
+      resolvable: true,
+      repo: 'moooon/motir-core',
+      number: 10,
+      path: 'docs/decisions/x.md',
+      blobSha: 'blob1',
+      headSha: 'aaa1',
+    },
+    latestGate: null,
+  };
+  const primaries: [string, Partial<GateSetInput>][] = [
+    ['design_result', { currentDesignEvidence: DESIGN }],
+    ['decision_approval', { decision: DECISION }],
+    ['acceptance_result', { currentReceipt: RECEIPT }],
+  ];
+  const standings: [string, Partial<GateSetInput>, boolean][] = [
+    ['owed', {}, true],
+    ['refused', { latestAgentReviewGate: gate('changes_requested', V1) }, true],
+    ['passed', { latestAgentReviewGate: gate('approved', V1) }, false],
+    [
+      'passed by a dismissal',
+      { latestAgentReviewGate: gate('changes_requested', V1), dismissedSendBackVersion: V1 },
+      false,
+    ],
+    ['not_required — the gate off', { reviewAgentEnabled: false }, false],
+    [
+      'not_required — a merge gate asked at this version',
+      { latestMergeGate: gate('awaiting', V1) },
+      false,
+    ],
+  ];
+
+  for (const [kind, primary] of primaries) {
+    for (const [standing, over, held] of standings) {
+      it(`${kind} while the review is ${standing}: ${held ? 'held' : 'asked'}`, () => {
+        const set = resolveGateSet(input({ ...primary, ...over }));
+        expect(set.primariesHeldByReview).toBe(held);
+        expect(set.awaited.some((g) => g.kind === kind)).toBe(!held);
+        if (!held) expect(set.primary).toBe(kind);
+      });
+    }
+  }
+
+  it('a pass asks the primary AND the merge question together, the primary leading', () => {
+    const set = resolveGateSet(
+      input({ currentReceipt: RECEIPT, latestAgentReviewGate: gate('approved', V1) }),
+    );
+    expect(set.awaited.map((g) => g.kind)).toEqual(['acceptance_result', 'pull_request_approval']);
+    expect(set.primary).toBe('acceptance_result');
+  });
+
+  it('a set that is not green yet holds the primaries too — the review is still owed there', () => {
+    const set = resolveGateSet(
+      input({
+        currentDesignEvidence: DESIGN,
+        members: [{ memberVersion: V1, isMergeCandidate: false }],
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+    expect(set.primariesHeldByReview).toBe(true);
+  });
+
+  it('a card with no named set holds nothing — a design published before its pull request', () => {
+    const set = resolveGateSet(input({ currentDesignEvidence: DESIGN, members: [] }));
+    expect(set.awaited.map((g) => g.kind)).toEqual(['design_result']);
+    expect(set.primariesHeldByReview).toBe(false);
+  });
+
+  it('a story run whose every member merged holds nothing — no review is left to ask', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        members: [{ memberVersion: V1, isMergeCandidate: false, merged: true }],
+        subtreeSettled: true,
+      }),
+    );
+    expect(set.awaited.map((g) => g.kind)).toEqual(['acceptance_result']);
+    expect(set.primariesHeldByReview).toBe(false);
+  });
+
+  it('a design the SYSTEM approves is not held, and its carried merge still asks the review', () => {
+    const set = resolveGateSet(
+      input({ currentDesignEvidence: DESIGN, designApprovedBySystem: true }),
+    );
+    expect(set.awaited.map((g) => g.kind)).toEqual(['design_result', 'agent_review']);
+    // The system's approval only ever comes from the publish, so the carry is what follows.
+    expect(
+      kinds({
+        currentDesignEvidence: DESIGN,
+        designApprovedBySystem: true,
+        latestDesignGate: { state: 'approved', subjectId: DESIGN.id, subjectVersion: 'aaa1' },
+        primaryApprovalStandsForMerge: true,
+      }),
+    ).toEqual([['agent_review', V1]]);
+  });
+
+  it('a terminal card holds nothing', () => {
+    expect(resolveGateSet(input({ currentReceipt: RECEIPT, cardIsTerminal: true }))).toEqual({
+      awaited: [],
+      primary: null,
+      primariesHeldByReview: false,
+    });
   });
 });

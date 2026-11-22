@@ -2213,7 +2213,7 @@ export interface components {
             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent" | "project_setting") | null;
             decisionSource: ("ui" | "api" | "mcp" | "github" | "system") | null;
             subjectVersion: string | null;
-            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled" | "agent_changes_requested" | "subject_gone" | "no_longer_manual" | "closed_without_decision" | "not_ready" | "replanned" | "answered" | "session_ended") | null;
+            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled" | "agent_changes_requested" | "subject_gone" | "no_longer_manual" | "closed_without_decision" | "not_ready" | "replanned" | "answered" | "session_ended" | "review_not_passed") | null;
             outcomeRef: string | null;
             refusalVerdict: ("revise" | "re_plan") | null;
             offersRefusalVerdict: boolean;
@@ -6492,7 +6492,7 @@ export interface operations {
                             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent" | "project_setting") | null;
                             decisionSource: ("ui" | "api" | "mcp" | "github" | "system") | null;
                             subjectVersion: string | null;
-                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled" | "agent_changes_requested" | "subject_gone" | "no_longer_manual" | "closed_without_decision" | "not_ready" | "replanned" | "answered" | "session_ended") | null;
+                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled" | "agent_changes_requested" | "subject_gone" | "no_longer_manual" | "closed_without_decision" | "not_ready" | "replanned" | "answered" | "session_ended" | "review_not_passed") | null;
                             outcomeRef: string | null;
                             refusalVerdict: ("revise" | "re_plan") | null;
                             offersRefusalVerdict: boolean;

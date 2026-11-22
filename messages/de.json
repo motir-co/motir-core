@@ -16533,6 +16533,7 @@
         "closed_without_decision": "Das Arbeitselement wurde geschlossen, ohne dass jemand es als erledigt markiert hat, daher wurde diese Frage zurückgezogen.",
         "not_ready": "Das Arbeitselement wird durch andere Arbeit blockiert, daher wurde diese Frage zurückgezogen, bis es begonnen werden kann.",
         "replanned": "Das Arbeitselement wurde neu geplant, daher wurde diese Frage zurückgezogen.",
+        "review_not_passed": "Das Review für diese Commits ist noch nicht bestanden, daher wurde diese Frage zurückgezogen. Sie wird erneut gestellt, sobald das Review bestanden ist.",
         "unknown": "Diese Frage wurde zurückgezogen. Der Grund wurde nicht erfasst."
       },
       "causeByKind": {

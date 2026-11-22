@@ -253,6 +253,15 @@ export interface GateSetInput {
    * reads as none.
    */
   dismissedSendBackVersion?: string | null;
+  /**
+   * Whether the project has switched DESIGN APPROVAL off (`Project.designApprovalGate`
+   * false; Story MOTIR-693 · MOTIR-697), so a design gate is approved by the system at
+   * publish and no person is asked (`designEvidenceService.publish`). Read only by the
+   * review's hold on the primaries (Bug MOTIR-11992): a question nobody is asked is not an
+   * approval of unreviewed code, and the merge it carries is still held by the review.
+   * Optional; absent reads as a person being asked.
+   */
+  designApprovedBySystem?: boolean;
 }
 
 /** One question the card should be asking. */
@@ -278,6 +287,19 @@ export interface GateSet {
    * therefore primary (Q2).
    */
   primary: AwaitableGateKind | null;
+  /**
+   * Whether the REVIEW is holding the PRIMARY questions back (Bug MOTIR-11992;
+   * `approval-gates.md` §12.20, which reverses §12.2's *"a primary question is not
+   * delayed"*). True when the review gate stands in front of this card's code and the
+   * review at the set's current version has not passed: no design, decision or acceptance
+   * approval is asked of code before its review has passed.
+   *
+   * ⚠️ THE RECONCILE READS IT TO WITHDRAW, not only to skip raising. A primary already
+   * AWAITING when the hold applies — raised before the review was owed, or before this
+   * rule — is a question the set no longer owes for a reason only the set knows, so
+   * `reconcileGatesFor` supersedes it as `review_not_passed`, and the pass re-asks it.
+   */
+  primariesHeldByReview: boolean;
 }
 
 /**
@@ -597,16 +619,55 @@ export function decisionApprovalStandsForMerge(
  *     §12.2a) and no review at the current set version has been decided — see
  *     {@link agentReviewStanding}. A pass puts the merge question back for the SAME
  *     version; the agent's Request changes asks nothing more for it.
+ *  3c. **The review holds the PRIMARIES too** (Bug MOTIR-11992; §12.20, reversing §12.2's
+ *     *"a primary question is not delayed"*): while the review is `owed` or `refused`, no
+ *     design, decision or acceptance question is asked — {@link GateSet.primariesHeldByReview}.
  *  4. **The DESIGN gate is primary** whenever both are owed (Q1). A merge gate owed
  *     alone — after an approval whose merge then failed — leads by itself (Q2).
  */
 export function resolveGateSet(input: GateSetInput): GateSet {
-  if (input.cardIsTerminal) return { awaited: [], primary: null };
+  if (input.cardIsTerminal) return { awaited: [], primary: null, primariesHeldByReview: false };
 
   const awaited: AwaitedGate[] = [];
 
+  const version = setVersion(input.members);
+  const storyRun = input.members.length > 0;
+  // ⚠️ A STORY RUN WHOSE OWN PULL REQUESTS HAVE ALL MERGED HAS NO MERGE QUESTION LEFT FOR
+  // THE VIDEO TO RIDE (Bug MOTIR-10837) — read below by the acceptance timing, and here by
+  // the review hold: with nothing left to land no review can be asked, so none is waited on.
+  const everyMemberMerged = storyRun && input.members.every((member) => member.merged === true);
+  // ⚠️ THE REVIEW STANDS IN FRONT OF THE MERGE QUESTION (Story MOTIR-1626 · MOTIR-6819;
+  // `approval-gates.md` §12.2). Computed ONCE, ahead of every question, because it holds
+  // the primaries as well as the merge (below).
+  const review = agentReviewStanding({
+    reviewAgentEnabled: input.reviewAgentEnabled === true,
+    prMergeMode: input.prMergeMode,
+    workItemId: input.workItemId,
+    version,
+    latestAgentReviewGate: input.latestAgentReviewGate ?? null,
+    latestMergeGate: input.latestMergeGate,
+    dismissedVersion: input.dismissedSendBackVersion ?? null,
+  });
+  // ⚠️ AND IT HOLDS EVERY PRIMARY QUESTION TOO (Bug MOTIR-11992; §12.20, reversing §12.2's
+  // *"a primary question is not delayed"*). With the review gate on, no approval is asked of
+  // code before its review has passed: the design, the decision and a story's acceptance
+  // wait while the review is OWED (not yet decided at this version — the set may still be
+  // red) or REFUSED (sent back and not dismissed). A pass, a person's Continue without the
+  // review, or a Dismiss reads as `passed` and asks them. `not_required` — the gate off,
+  // `auto`, no version yet, or a merge question already asked at this version — holds
+  // nothing, so every such card's answer is the one it had before. A set whose every
+  // member has merged holds nothing either: there is no review left to ask.
+  const primariesHeldByReview = (review === 'owed' || review === 'refused') && !everyMemberMerged;
+
   const evidence = input.currentDesignEvidence;
+  // ⚠️ A DESIGN THE SYSTEM APPROVES IS NOT HELD. Its gate is raised and approved in the
+  // publish's own transaction, and only that site can approve it — a gate this predicate
+  // raised later, through `reconcileGatesFor`, would be routed to a person the switch says
+  // is not asked. The merge that approval carries still waits on the review (`answered`
+  // below asks the review instead).
+  const designHeld = primariesHeldByReview && input.designApprovedBySystem !== true;
   if (
+    !designHeld &&
     evidence !== null &&
     !alreadyDecided(input.latestDesignGate, evidence.id, evidence.commitSha, false)
   ) {
@@ -624,6 +685,7 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   const decision = input.decision;
   const decisionVersion = decision?.identity ? decisionSubjectVersion(decision.identity) : null;
   if (
+    !primariesHeldByReview &&
     decision?.identity &&
     !alreadyDecided(decision.latestGate, input.workItemId, decisionVersion, true)
   ) {
@@ -638,7 +700,6 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     decision?.latestGate ?? null,
   );
 
-  const version = setVersion(input.members);
   // ⚠️ Q4'S CARRY IS ONE-TIME, AND ONLY WHILE THE CARD HAS NO MERGE GATE AT ALL
   // (MOTIR-5666 found this; MOTIR-5664 shipped it without the second clause). Q4
   // holds the merge a press made BEFORE the set went green and lets it follow on
@@ -706,7 +767,6 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // A receipt row is immutable like an evidence row, so its id is the whole identity
   // (`versionIdentifies: false`).
   const receipt = input.currentReceipt;
-  const storyRun = input.members.length > 0;
   // A story run's video rides the merge question, so it takes that question's status
   // condition too (MOTIR-6971): asked only while the story is `in_review`.
   //
@@ -725,8 +785,8 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     input.latestMergeGate?.state === 'changes_requested' &&
     input.latestMergeGate.subjectId === input.workItemId &&
     input.latestMergeGate.subjectVersion === version;
-  // ⚠️ A STORY RUN WHOSE OWN PULL REQUESTS HAVE ALL MERGED HAS NO MERGE QUESTION LEFT FOR
-  // THE VIDEO TO RIDE (Bug MOTIR-10837). `everyMemberMergeable` needs a member still open,
+  // ⚠️ A STORY RUN WHOSE OWN PULL REQUESTS HAVE ALL MERGED (Bug MOTIR-10837; computed
+  // above as `everyMemberMerged`). `everyMemberMergeable` needs a member still open,
   // which is right for the merge question and can never hold once every member has merged —
   // so a receipt published after the last merge was asked of nobody. With nothing left to
   // land the story is a FINISHED story, and its video follows the settled rule a subtask
@@ -735,12 +795,12 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // terminal once the subtree is settled), so the question and its press agree. A member
   // CLOSED WITHOUT MERGING is not merged, so it keeps the story-run branch, where it is not
   // mergeable either, and still holds the question back.
-  const everyMemberMerged = storyRun && input.members.every((member) => member.merged === true);
   const acceptanceTimely =
     storyRun && !everyMemberMerged
       ? everyMemberMergeable && input.cardInReview && !mergeRefusedAtVersion && !sentBack
       : input.subtreeSettled === true;
   if (
+    !primariesHeldByReview &&
     receipt !== null &&
     acceptanceTimely &&
     !alreadyDecided(input.latestAcceptanceGate, receipt.id, receipt.commitSha, false)
@@ -789,15 +849,7 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // review, the reconcile tick, a queue exit, every withdrawal's re-raise) asks the same
   // thing. It also holds a primary's CARRIED merge: `answered` by the carry asks nothing
   // either way, and `settleGreenVerdict` reads the same standing before it merges.
-  const review = agentReviewStanding({
-    reviewAgentEnabled: input.reviewAgentEnabled === true,
-    prMergeMode: input.prMergeMode,
-    workItemId: input.workItemId,
-    version,
-    latestAgentReviewGate: input.latestAgentReviewGate ?? null,
-    latestMergeGate: input.latestMergeGate,
-    dismissedVersion: input.dismissedSendBackVersion ?? null,
-  });
+  // (`review` is computed above, where the primaries read it too.)
   // ⚠️ A STANDING AGENT SEND-BACK ASKS NOTHING AT ITS VERSION (MOTIR-10333; §12.14). With
   // the review gate off the send-back is a record, not a gate, so `review` cannot see it:
   // the merge question stays withdrawn (`agent_changes_requested`) until a push moves the
@@ -841,5 +893,5 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     awaited[0]?.kind ??
     null;
 
-  return { awaited, primary };
+  return { awaited, primary, primariesHeldByReview };
 }

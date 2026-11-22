@@ -269,6 +269,7 @@ function reads(over: Partial<LateReads>): LateReads {
     choiceGate: { ...noGate, body: null },
     confirmGate: { ...noGate, body: null },
     agentReview: null,
+    runDiscrepancies: [],
     ...over,
   } as LateReads;
 }
