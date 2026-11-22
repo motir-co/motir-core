@@ -309,6 +309,31 @@ describe('ReviewToRunRow', () => {
     expect(shallowPush).not.toHaveBeenCalled();
   });
 
+  // Task MOTIR-12064: the TITLE is a door to the work item's quick view, as an approval
+  // row's title is (§ 28, DECISION 3) — over the Workbench, keeping its tab, and NOT the
+  // overlay; a modified or middle click keeps the real href (the item in a new tab).
+  it('a plain click on the title opens the quick view in place; a modified or middle click keeps the href', () => {
+    vi.mocked(shallowPush).mockClear();
+    render(<ReviewToRunRow row={TO_RUN} gridTemplate="1fr auto auto auto" />, { now: NOW });
+    const title = screen.getByTestId('review-to-run-title-ACME-9');
+    expect(title.tagName).toBe('A');
+    expect(title.getAttribute('href')).toBe('/items/ACME-9');
+    expect(title.textContent).toBe('Export button');
+    expect(title.className, 'above the stretched row link').toContain('z-10');
+
+    const plain = fireEvent.click(title);
+    expect(plain, 'the navigation to the item is prevented').toBe(false);
+    expect(shallowPush).toHaveBeenCalledTimes(1);
+    expect(shallowPush).toHaveBeenCalledWith('/workbench?tab=approvals&peek=ACME-9');
+
+    for (const init of [{ metaKey: true }, { ctrlKey: true }, { button: 1 }]) {
+      vi.mocked(shallowPush).mockClear();
+      const passed = fireEvent.click(title, init);
+      expect(passed, `${JSON.stringify(init)} keeps the browser's own navigation`).toBe(true);
+      expect(shallowPush).not.toHaveBeenCalled();
+    }
+  });
+
   // § 45.2: out of the 220px DETAILS track the chip takes its DEFAULT density, the To fix
   // chip's size, and sits above the row's stretched link. jsdom has no layout, so this
   // holds the MECHANISM; the geometry is held in a real browser by
