@@ -21,6 +21,7 @@ vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush: vi.fn(), shallowRep
 import { ReviewLine } from '@/components/approvals/ReviewLine';
 import { ReaderRoutesProvider } from '@/lib/visitor/useReaderRoutes';
 import { ReviewToRunRow } from '@/components/approvals/ReviewToRunRow';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { AuthorNote } from '@/components/approvals/AuthorNote';
 import { ApprovalRow } from '@/components/approvals/ApprovalRow';
 import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
@@ -264,7 +265,7 @@ describe('ReviewToRunRow', () => {
     expect(row.textContent).toContain('ACME-9');
     expect(row.textContent).toContain('Review to run');
     expect(row.textContent).toContain(
-      'Not an approval yet. Open the item to start the review; your approval is asked once it passes.',
+      'Not an approval yet. Open it to start the review or to continue without it; your approval is asked once it passes.',
     );
     expect(row.textContent).not.toContain('agent');
     expect(screen.getByTestId('review-command-copy-ACME-9')).toBeTruthy();
@@ -272,6 +273,48 @@ describe('ReviewToRunRow', () => {
       name: 'Open ACME-9: Start a review of Export button',
     });
     expect(door.getAttribute('href')).toBe('/items/ACME-9');
+    expect(door.getAttribute('aria-haspopup')).toBe('dialog');
+  });
+
+  // Bug MOTIR-11983: the press opens the `agent_review` approval overlay in place, as every
+  // other To approve row does — never the item page; a modifier click keeps the link.
+  it('a primary press opens the agent_review overlay in place; a modifier click does not', () => {
+    vi.mocked(shallowPush).mockClear();
+    render(<ReviewToRunRow row={TO_RUN} gridTemplate="1fr auto auto auto" />, { now: NOW });
+    const door = screen.getByRole('link', {
+      name: 'Open ACME-9: Start a review of Export button',
+    });
+    const plain = fireEvent.click(door);
+    expect(plain, 'the navigation to the item is prevented').toBe(false);
+    expect(shallowPush).toHaveBeenCalledTimes(1);
+    const href = String(vi.mocked(shallowPush).mock.calls[0]![0]);
+    const query = new URLSearchParams(href.split('?')[1]);
+    expect([...query.values()]).toEqual(expect.arrayContaining(['ACME-9', 'agent_review']));
+
+    vi.mocked(shallowPush).mockClear();
+    fireEvent.click(door, { metaKey: true });
+    expect(shallowPush).not.toHaveBeenCalled();
+  });
+
+  // Bug MOTIR-11982: the row's chip is the COMPACT one, so a real `motir review MOTIR-NNNNN`
+  // fits the 220px DETAILS track whole; the truncate is only the last guard. jsdom has no
+  // layout, so this holds the MECHANISM; the geometry is held in a real browser by
+  // `tests/e2e/regression-review-to-run-chip.spec.ts`.
+  it('the command chip is compact: 11px code, 24px button, Copied read aloud only', () => {
+    render(<ReviewToRunRow row={TO_RUN} gridTemplate="1fr auto auto auto" />, { now: NOW });
+    const code = screen.getByText('motir review ACME-9');
+    expect(code.tagName).toBe('CODE');
+    expect(code.getAttribute('title')).toBe('motir review ACME-9');
+    expect(code.className).toContain('truncate');
+    expect(code.className).toContain('min-w-0');
+    expect(code.className).toContain('text-[11px]');
+    expect(code.className).toContain('px-(--spacing-chip-x-2)');
+    const button = screen.getByTestId('review-command-copy-ACME-9');
+    expect(button.className).toContain('shrink-0');
+    expect(button.className).toContain('h-6 w-6');
+    // The status is out of the flex flow, so its gap and its words cost the code no width.
+    const status = code.closest('[role="cell"]')!.querySelector('[role="status"]')!;
+    expect(status.className).toBe('sr-only');
   });
 
   it('renders in zh', () => {

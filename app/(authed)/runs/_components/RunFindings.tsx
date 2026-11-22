@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import type { DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
+import { RUN_DISCREPANCY_SECTION_ID } from '@/app/(authed)/items/[key]/_components/decisionAnchor';
 
 // WHAT THE RUN PRODUCED beyond code (MOTIR-3983 ·
 // `design/runs/design-notes.md` § What the run PRODUCED).
@@ -35,7 +36,8 @@ interface PlanData {
   key?: unknown;
 }
 
-/** `discrepancy_recorded.data` — a POINTER and a count; the points' text lives in the comment. */
+/** `discrepancy_recorded.data` — a POINTER and a count; the text lives in the card's record
+ *  (`run_discrepancy_record`), which its Run discrepancy section shows (MOTIR-11996). */
 interface DiscrepancyData {
   pointCount?: unknown;
 }
@@ -196,9 +198,10 @@ export function RunFindings({ events, cards }: RunFindingsProps) {
           § A DISCREPANCY the run recorded). It already happened and nothing waits
           on the reader, so it takes the info dot: no accent rule, and not the
           bug's red. Separate rows in the run's order, the count only — the points'
-          text lives in the work item's comment (Q5). ⚠️ The door lands on the WORK
-          ITEM, never an invented comment address: the item page cannot address a
-          single comment. No door when the leg's key is gone. */}
+          text lives in the work item's discrepancy RECORD (Q5; MOTIR-11361). The door
+          lands on the card's Run discrepancy section, `#run-discrepancy`, which opens
+          on arrival (MOTIR-11996, `design/runs` § _Run discrepancy_ decision 4). No
+          door when the leg's key is gone. */}
       {discrepancies.map((f) => (
         <div
           key={f.seq}
@@ -220,7 +223,7 @@ export function RunFindings({ events, cards }: RunFindingsProps) {
           </span>
           {f.itemKey !== null ? (
             <Link
-              href={routes.item(f.itemKey)}
+              href={routes.item(f.itemKey, RUN_DISCREPANCY_SECTION_ID)}
               className="flex-none font-medium text-(--el-accent-on-surface) underline-offset-2 hover:underline"
             >
               {t('findings.open')}

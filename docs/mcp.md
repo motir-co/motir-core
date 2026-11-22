@@ -4542,8 +4542,16 @@ The same call also records the **decisions the run made where the card left the
 HOW open** (MOTIR-10000). A run never asks the user about the implementation: it
 decides by the repository's conventions first, then the established industry
 best practice for the stack, and writes each decision down here — beside any
-build-through points, or alone. The comment lists them in a section of their
-own, and the run's finding counts them (`decisionCount`, and in `pointCount`).
+build-through points, or alone. The record keeps them as entries of their own
+kind, and the run's finding counts them (`decisionCount`, and in `pointCount`).
+
+**It writes no comment** (MOTIR-11996). The call writes ONE discrepancy record on
+the card (`run_discrepancy_record`, MOTIR-11361), which the work item page shows
+in its **Run discrepancy** section (`/items/<KEY>#run-discrepancy`, the run
+modal's findings door lands there), and — on an open leg — ONE
+`discrepancy_recorded` finding whose `data` is `{ recordId, pointCount,
+decisionCount?, dispatchRunCardId }`. Comments earlier runs wrote stay on their
+cards as ordinary comments.
 
 | Input       | Type   | Required | Notes                                                                                                                                                    |
 | ----------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -4551,15 +4559,16 @@ own, and the run's finding counts them (`decisionCount`, and in `pointCount`).
 | `points`    | array  | no       | Up to 20 entries of `planAsked`, `built` and `why`; each field is non-empty text of at most 2000 characters, trimmed.                                    |
 | `decisions` | array  | no       | Up to 20 entries of `planSaid`, `chose` and `why`, and optionally `alternatives`; the same field bounds. At least one point or one decision is required. |
 
-**Output** — the id of the card comment the server wrote, and whether the run
-record was written too:
+**Output** — the id of the discrepancy record the server wrote, and whether a
+finding was written on the run too:
 
 ```json
-{ "commentId": "…", "recorded": true }
+{ "recordId": "…", "recorded": true }
 ```
 
 `recorded` is `false` when the card had no open leg on a running dispatch run:
-the comment is still written, and nothing is put on a run.
+the record is still written, tied to the card with no run, and nothing is put on
+a run.
 
 **One record per leg**: a second call on the same leg is refused with
 `DISCREPANCY_ALREADY_RECORDED` and writes nothing more. Other refusals:
@@ -6385,16 +6394,18 @@ one the caller cannot see, matches nothing. Both, and a bad status, limit or
 `detail`, `exitCode`, for a hosted or in-agent run; else null) and `legs`, each
 `{ key, disposition, skipReason, exitCode, discrepancy }`. `discrepancy` is the
 leg's `record_run_discrepancy` record, read from its STRUCTURED row
-(`run_discrepancy_record`, MOTIR-11361), never from the card comment — `{ recordId,
+(`run_discrepancy_record`, MOTIR-11361), never from a card comment — `{ recordId,
 source, commentId, pointCount, decisionCount, points, decisions, bodyMd,
 bodyTruncated }` — or null. `points` are `{ planAsked, built, why }` and
 `decisions` `{ planSaid, chose, why, alternatives? }`, field by field as the run
 sent them; `pointCount` counts both kinds. `source` is `recorded`, `backfilled`
 (read back from a comment written before the row existed) or
 `backfill_unreadable` (only the counts survived: no entries, `bodyMd` null).
-`commentId` is the card comment that shows the record, null once that comment is
-deleted, which leaves the record itself untouched. `bodyMd` is the comment's
-markdown composed from the row, bounded.
+`commentId` is the card comment a record written before MOTIR-11996 was shown
+as, null once that comment is deleted and null on every record written since —
+the call writes no comment now, and the work item page's Run discrepancy section
+shows the record. `bodyMd` is the record as markdown composed from the row,
+bounded, the same shape the comment carried.
 `outcome: not_found` is one answer for an unknown id, a run of another project or
 workspace, and a run the caller may not see.
 

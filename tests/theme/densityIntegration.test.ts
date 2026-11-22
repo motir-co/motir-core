@@ -35,13 +35,11 @@ const STEP_NAMES = Object.entries(SCALE).flatMap(([base, [, steps]]) =>
 );
 
 /**
- * Steps no source references, each with the reason that is accepted. One today:
- * the sweeps use the other 20. A step added here needs a reason a reviewer can weigh.
+ * Steps no source references, each with the reason that is accepted. None today: the
+ * last one, `--spacing-chip-x-2`, is the compact `CommandChip`'s padding since Bug
+ * MOTIR-11982. A step added here needs a reason a reviewer can weigh.
  */
-const UNUSED_STEPS_ACCEPTED: Record<string, string> = {
-  '--spacing-chip-x-2':
-    'Part of the approved chip-x vocabulary (decision MOTIR-2336), but no badge in the tree pads 2px at the side, so the sweeps found no site for it.',
-};
+const UNUSED_STEPS_ACCEPTED: Record<string, string> = {};
 
 // ── source scan ──────────────────────────────────────────────────────────────
 

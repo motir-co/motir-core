@@ -143,6 +143,7 @@ async function readTabs(
       failedSessions,
       endedSessions,
       approvalReviews,
+      reviewsToRun,
     ] = await allSettledOrThrow([
       workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
         ctx.userId,
@@ -211,6 +212,9 @@ async function readTabs(
       // writes no gate — a gate-off pass, a GitHub approval at the head — changes a row's
       // review line and Reviewed badge, so it must move the tab the row is on.
       reviewsOnApprovalRows(approvalsScope, tx),
+      // …and the REVIEWS TO RUN the tab lists and the badge counts (Bug MOTIR-11984): a
+      // review raised, started or skipped moves the tab as it moves the badge.
+      approvalGateRepository.watermarkAwaitingReviewsToRunRoutedTo(approvalsScope, tx),
     ]);
     const pair = (reading: { count: number; latest: Date | null }): WorkbenchTabWatermarkDto => ({
       count: reading.count,
@@ -228,12 +232,15 @@ async function readTabs(
         ),
       }),
       recentlyFinished: pair(recentlyFinished),
-      // The gates and the review rows behind them, merged as To resume merges its three
+      // The gates, the review rows behind them and the reviews to run, merged as To resume merges its three
       // reads: the pair is a change detector, and the strip's count comes from
       // `homeService.tabCounts`, never from here.
       approvals: pair({
-        count: approvals.count + approvalReviews.count,
-        latest: latestDate(approvals.latest, approvalReviews.latest),
+        count: approvals.count + approvalReviews.count + reviewsToRun.count,
+        latest: latestDate(
+          latestDate(approvals.latest, approvalReviews.latest),
+          reviewsToRun.latest,
+        ),
       }),
       watching: pair(watching),
     };

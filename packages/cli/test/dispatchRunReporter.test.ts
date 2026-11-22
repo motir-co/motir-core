@@ -340,7 +340,7 @@ describe('the build-through and STOP writes (MOTIR-8722)', () => {
     const { client } = fakeClient({
       async recordDispatchRunDiscrepancy(args) {
         calls.push(args);
-        return { commentId: 'c1', recorded: true };
+        return { recordId: 'r1', recorded: true };
       },
       async reportDispatchRunStop(args) {
         calls.push(args);

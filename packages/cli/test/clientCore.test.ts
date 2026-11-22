@@ -585,7 +585,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
   it('posts the decisions beside the points, and leaves out an empty list (MOTIR-10000)', async () => {
     const decisions = [{ planSaid: 'nothing', chose: 'c', why: 'w', alternatives: 'a' }];
     server.scriptV1({
-      'POST /api/v1/dispatch-runs/{id}/discrepancy': { body: { commentId: 'c1', recorded: true } },
+      'POST /api/v1/dispatch-runs/{id}/discrepancy': { body: { recordId: 'r1', recorded: true } },
     });
     await connected().recordDispatchRunDiscrepancy({
       runId: 'run_1',
@@ -599,12 +599,12 @@ describe('typed wrappers — each names its operation and forwards its arguments
   it('posts a run’s discrepancy points and its STOP on the run’s own paths', async () => {
     const points = [{ planAsked: 'a', built: 'b', why: 'c' }];
     server.scriptV1({
-      'POST /api/v1/dispatch-runs/{id}/discrepancy': { body: { commentId: 'c1', recorded: true } },
+      'POST /api/v1/dispatch-runs/{id}/discrepancy': { body: { recordId: 'r1', recorded: true } },
       'POST /api/v1/dispatch-runs/{id}/stop': { body: { commentId: 'c2', movedToPlanning: true } },
     });
     await expect(
       connected().recordDispatchRunDiscrepancy({ runId: 'run_1', key: 'PROD-1', points }),
-    ).resolves.toEqual({ commentId: 'c1', recorded: true });
+    ).resolves.toEqual({ recordId: 'r1', recorded: true });
     expect(server.v1Calls[0]?.path).toBe('/api/v1/dispatch-runs/run_1/discrepancy');
     expect(server.v1Calls[0]?.body).toEqual({ key: 'PROD-1', points });
 

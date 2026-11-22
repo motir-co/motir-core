@@ -1226,7 +1226,7 @@ export interface paths {
         put?: never;
         /**
          * Record that a run built through a card whose plan was wrong about the HOW
-         * @description The RUN records that its agent BUILT THROUGH `key`, a card the run holds, whose plan was wrong only about the route — the same record as the `record_run_discrepancy` MCP tool, sent by the CLI with the run’s own credential after the agent exits, from the points the agent wrote into its self-report. It writes ONE comment on the card listing every point (what the plan asked · what was built · why) — and every DECISION the agent made where the plan was silent (what it said · what was chosen · why), in their own section (MOTIR-10000) — and ONE finding on the card’s leg of THIS run. At least one point or one decision. ONE record per leg: a second is refused `DISCREPANCY_ALREADY_RECORDED` and writes nothing. A card that is not an open leg of the run is refused `UNKNOWN_DISPATCH_RUN_CARD`. Only the operator who opened the run may record for it.
+         * @description The RUN records that its agent BUILT THROUGH `key`, a card the run holds, whose plan was wrong only about the route — the same record as the `record_run_discrepancy` MCP tool, sent by the CLI with the run’s own credential after the agent exits, from the points the agent wrote into its self-report. It writes ONE discrepancy record on the card, holding every point (what the plan asked · what was built · why) and every DECISION the agent made where the plan was silent (what it said · what was chosen · why; MOTIR-10000) — the card’s Run discrepancy section shows it, and no comment is written (MOTIR-11996) — and ONE finding on the card’s leg of THIS run. At least one point or one decision. ONE record per leg: a second is refused `DISCREPANCY_ALREADY_RECORDED` and writes nothing. A card that is not an open leg of the run is refused `UNKNOWN_DISPATCH_RUN_CARD`. Only the operator who opened the run may record for it.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -2826,7 +2826,7 @@ export interface components {
             recordedOnRun: boolean;
         };
         RunDiscrepancyAcknowledgement: {
-            commentId: string;
+            recordId: string;
             recorded: boolean;
         };
         RunStopReportAcknowledgement: {
@@ -13511,7 +13511,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The acknowledgement: the comment written, and whether the run recorded it. */
+            /** @description The acknowledgement: the record written, and whether the run recorded it. */
             200: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
