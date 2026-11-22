@@ -15217,7 +15217,7 @@
       },
       "pools": {
         "title": "Pools",
-        "subtitle": "Lo grande que es cada pool de la flota y cuántas máquinas se ejecutan en él ahora: primero la flota de instalación en la cuenta de AWS propia de Motir, luego las cuentas add-shard en las que se ejecutan los trabajos de los clientes.",
+        "subtitle": "El tamaño de cada pool de la flota y cuántas máquinas se ejecutan en él ahora: primero la flota de instalación en la propia cuenta de AWS de Motir, luego las cuentas add-shard donde se ejecutan los jobs de los inquilinos y, por último, las cuotas de AWS de las cuentas que alojan las apps de los inquilinos enterprise.",
         "notApplicable": "No aplica",
         "loading": {
           "install": "Cargando la cuenta propia de Motir",
@@ -15406,6 +15406,80 @@
         },
         "computed": "Calculado por el barrido de aprovisionamiento de {time} ({age}). Solo lectura: motir-studio se instala en un repositorio en GitHub, no aquí.",
         "loading": "Cargando los puntos ciegos de la flota de CI"
+      },
+      "tenants": {
+        "title": "Cuentas de alojamiento de inquilinos · apps enterprise",
+        "subtitle": "Una cuenta de AWS por organización enterprise, donde se ejecutan sus apps con destino AWS. Cada cuota se lee en vivo desde Service Quotas en esa cuenta y se compara con el objetivo al que la eleva el bootstrap de la cuenta.",
+        "loading": "Cargando las cuentas de alojamiento de inquilinos",
+        "pill": {
+          "below": "{count, plural, one {# cuota por debajo del objetivo, sin aumento} other {# cuotas por debajo del objetivo, sin aumento}}",
+          "notRead": "{count, plural, one {# cuenta no leída} other {# cuentas no leídas}}"
+        },
+        "account": {
+          "title": "Por organización",
+          "noAwsAccount": "Aún sin cuenta de AWS",
+          "accountLabel": "Cuenta de AWS {id}"
+        },
+        "search": {
+          "label": "Buscar cuentas de alojamiento de inquilinos",
+          "placeholder": "Organización o ID de cuenta"
+        },
+        "noMatch": {
+          "title": "Ninguna cuenta coincide con “{q}”",
+          "body": "La búsqueda tiene en cuenta el nombre de la organización, el ID de la cuenta de AWS y el nombre de la cuenta.",
+          "clear": "Borrar la búsqueda"
+        },
+        "foot": "{from}–{to} de {total, plural, one {# cuenta} other {# cuentas}} · primero las cuentas con una cuota por debajo del objetivo y sin aumento",
+        "footMatch": "{from}–{to} de {total, plural, one {# cuenta} other {# cuentas}} que coinciden con “{q}” · primero las cuentas con una cuota por debajo del objetivo y sin aumento",
+        "pagerLabel": "Páginas de las cuentas de alojamiento de inquilinos",
+        "state": {
+          "requested": "Solicitada",
+          "creating": "Creándose",
+          "bootstrapping": "En bootstrap",
+          "ready": "Lista",
+          "refused": "Rechazada"
+        },
+        "notReady": {
+          "requested": "Las cuotas se leen cuando la cuenta está lista. La cuenta aún no se ha creado.",
+          "creating": "Las cuotas se leen cuando la cuenta está lista. AWS está creando la cuenta.",
+          "bootstrapping": "Las cuotas se leen cuando la cuenta está lista. El bootstrap está configurando su rol de despliegue, las etiquetas y los aumentos de cuota.",
+          "refused": "{count, plural, one {AWS se negó a crear la cuenta una vez, {age}.} other {AWS se negó a crear la cuenta # veces, la última {age}.}} La reconciliación lo vuelve a intentar tras su espera; las cuotas se leen cuando la cuenta está lista.",
+          "refusedNever": "Las cuotas se leen cuando la cuenta está lista. AWS se negó a crear la cuenta; la reconciliación lo vuelve a intentar tras su espera."
+        },
+        "col": {
+          "quota": "Cuota",
+          "applied": "Aplicada",
+          "target": "Objetivo",
+          "raise": "Aumento abierto"
+        },
+        "quota": {
+          "lambda-concurrent-executions": "Ejecuciones simultáneas de Lambda",
+          "fargate-on-demand-vcpu": "vCPU bajo demanda de Fargate"
+        },
+        "value": {
+          "count": "{n}",
+          "vcpu": "{n} vCPU"
+        },
+        "atTarget": "En el objetivo",
+        "short": "{n} por debajo del objetivo",
+        "below": "Por debajo del objetivo · sin aumento",
+        "raise": {
+          "to": "a {value}",
+          "filed": "solicitado {age}",
+          "none": "Sin aumento abierto"
+        },
+        "notRead": {
+          "body": "Las cuotas de esta cuenta no se cargaron (la sesión del rol de miembro o Service Quotas no respondió), así que no se muestra ninguna cifra. Las demás cuentas no se ven afectadas."
+        },
+        "empty": {
+          "title": "No hay cuentas de alojamiento de inquilinos",
+          "body": "Una organización enterprise obtiene su propia cuenta de AWS la primera vez que uno de sus proyectos tiene AWS como destino."
+        },
+        "error": {
+          "title": "No se pudieron leer las cuentas de alojamiento de inquilinos",
+          "body": "La lectura de las cuentas de inquilinos no respondió, así que no se lista ninguna cuenta; nada de ello es cero. Los pools de arriba y el resto de esta página no se ven afectados. Vuelve a cargar para intentarlo de nuevo."
+        },
+        "readOnly": "Solo lectura. Aquí no se solicita ningún aumento: el bootstrap de la cuenta del inquilino solicita cada uno."
       }
     }
   },

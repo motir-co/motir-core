@@ -982,6 +982,99 @@ describe('the tenant account bootstrap calls (MOTIR-9941)', () => {
   });
 });
 
+// MOTIR-12014 — Fleet status reads each tenant account's quota as it stands:
+// the applied value (never the AWS default) and the newest open raise.
+describe('reading a tenant account quota (MOTIR-12014)', () => {
+  const LAMBDA = { serviceCode: 'lambda', quotaCode: 'L-B99A9384' };
+
+  it('answers the applied value and no raise, in the member session and region', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 1000.0 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({ RequestedQuotas: [] }),
+    });
+
+    expect(await api.readQuotaStatus(MEMBER, 'us-east-1', LAMBDA)).toEqual({
+      applied: 1000,
+      openRaise: null,
+    });
+    const read = calls.find((c) => c.command === 'GetServiceQuotaCommand')!;
+    expect(read).toMatchObject({ region: 'us-east-1', accessKeyId: MEMBER.accessKeyId });
+    expect(read.input).toEqual({ ServiceCode: 'lambda', QuotaCode: 'L-B99A9384' });
+    expect(
+      calls
+        .filter((c) => c.command === 'ListRequestedServiceQuotaChangeHistoryByQuotaCommand')
+        .map((c) => c.input['Status']),
+    ).toEqual(['PENDING', 'CASE_OPENED']);
+    expect(calls.map((c) => c.command)).not.toContain('GetAWSDefaultServiceQuotaCommand');
+    expect(calls.map((c) => c.command)).not.toContain('RequestServiceQuotaIncreaseCommand');
+  });
+
+  it('answers no applied value on NoSuchResourceException, never the default', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => {
+        throw sdkError('NoSuchResourceException');
+      },
+      GetAWSDefaultServiceQuotaCommand: () => ({ Quota: { Value: 1000 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({ RequestedQuotas: [] }),
+    });
+
+    expect(await api.readQuotaStatus(MEMBER, 'us-east-1', LAMBDA)).toEqual({
+      applied: null,
+      openRaise: null,
+    });
+    expect(calls.map((c) => c.command)).not.toContain('GetAWSDefaultServiceQuotaCommand');
+  });
+
+  it('answers the newest open raise across both open statuses', async () => {
+    const older = new Date('2026-11-20T10:00:00Z');
+    const newer = new Date('2026-11-22T09:00:00Z');
+    const { api } = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 10 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: (input) =>
+        input['Status'] === 'PENDING'
+          ? {
+              RequestedQuotas: [
+                { Id: 'q-undated', Status: 'PENDING', DesiredValue: 500 },
+                { Id: 'q-old', Status: 'PENDING', DesiredValue: 800, Created: older },
+              ],
+            }
+          : { RequestedQuotas: [{ Id: 'q-new', Status: 'CASE_OPENED', Created: newer }] },
+    });
+
+    expect(await api.readQuotaStatus(MEMBER, 'us-east-1', LAMBDA)).toEqual({
+      applied: 10,
+      openRaise: {
+        requestId: 'q-new',
+        status: 'CASE_OPENED',
+        desiredValue: null,
+        createdAt: newer,
+      },
+    });
+  });
+
+  it('surfaces any other failure by its code', async () => {
+    const { api } = harness({
+      GetServiceQuotaCommand: () => {
+        throw sdkError('AccessDeniedException', 403);
+      },
+    });
+    await expect(api.readQuotaStatus(MEMBER, 'us-east-1', LAMBDA)).rejects.toMatchObject({
+      name: 'AwsManagementApiError',
+      awsCode: 'AccessDeniedException',
+    });
+
+    const listDenied = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 10 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => {
+        throw sdkError('TooManyRequestsException', 429);
+      },
+    });
+    await expect(listDenied.api.readQuotaStatus(MEMBER, 'us-east-1', LAMBDA)).rejects.toMatchObject(
+      { awsCode: 'TooManyRequestsException' },
+    );
+  });
+});
+
 // MOTIR-11878 — the tenant deploy role's grants are customer-managed policies.
 // The IAM below is a small stateful stand-in, so a test can converge an account,
 // look at what it holds, and converge it again to see that nothing is written.

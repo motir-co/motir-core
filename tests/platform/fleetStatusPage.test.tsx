@@ -7,6 +7,7 @@ import type { RunnerAmiFreshnessDTO } from '@/lib/dto/runnerImageFreshness';
 import { fleetStatusImagesService } from '@/lib/services/fleetStatusImagesService';
 import { ciFleetBlindSpotsService } from '@/lib/services/ciFleetBlindSpotsService';
 import { fleetStatusPoolsService } from '@/lib/services/fleetStatusPoolsService';
+import { fleetStatusTenantAccountsService } from '@/lib/services/fleetStatusTenantAccountsService';
 import {
   hostedRow,
   indexerRow,
@@ -56,6 +57,9 @@ const { default: Page } = await import('@/app/(admin)/admin/fleet-status/page');
 const { HostedImageCard, IndexerImageCard, RunnerImageCard, SandboxImageCard } =
   await import('@/app/(admin)/admin/fleet-status/_components/ImageCards');
 
+type PageSearch = { tenantQ?: string | string[]; tenantPage?: string | string[] };
+const page = (search: PageSearch = {}) => Page({ searchParams: Promise.resolve(search) });
+
 const ACTOR = 'ops+fleet-status@example.test';
 let seq = 0;
 
@@ -93,6 +97,9 @@ beforeEach(async () => {
   // The CI fleet blind spots read (MOTIR-11439) has its own suite
   // (`tests/fleetStatus/ciFleetBlindSpotsService.test.ts`); here it is stubbed.
   vi.spyOn(ciFleetBlindSpotsService, 'read').mockResolvedValue({ status: 'notComputed' });
+  // The tenant hosting accounts read (MOTIR-12014) has its own suite
+  // (`tests/fleetStatus/fleetStatusTenantAccountsService.test.ts`); here it is stubbed.
+  vi.spyOn(fleetStatusTenantAccountsService, 'read').mockResolvedValue({ status: 'unavailable' });
 });
 
 afterEach(() => {
@@ -111,11 +118,12 @@ describe('the fleet status page', () => {
     async (role) => {
       await signInAs(role);
       const read = vi.spyOn(fleetStatusImagesService, 'publishRecords');
-      await expect(Page()).rejects.toBeInstanceOf(NotFoundSentinel);
+      await expect(page()).rejects.toBeInstanceOf(NotFoundSentinel);
       expect(read).not.toHaveBeenCalled();
       expect(fleetStatusPoolsService.readInstallFleet).not.toHaveBeenCalled();
       expect(fleetStatusPoolsService.readAddShard).not.toHaveBeenCalled();
       expect(ciFleetBlindSpotsService.read).not.toHaveBeenCalled();
+      expect(fleetStatusTenantAccountsService.read).not.toHaveBeenCalled();
     },
   );
 
@@ -135,7 +143,7 @@ describe('the fleet status page', () => {
       .spyOn(fleetStatusImagesService, 'readIndexer')
       .mockResolvedValue(indexerRow());
     vi.spyOn(fleetStatusImagesService, 'readSandbox').mockResolvedValue(sandboxRow());
-    const html = decode(await renderToHtml(await Page()));
+    const html = decode(await renderToHtml(await page()));
     expect(html).toContain('Operations · Fleet status');
     expect(html).toContain('The four images production boots.');
     expect(readIndexer).toHaveBeenCalledWith(null);
@@ -151,8 +159,13 @@ describe('the fleet status page', () => {
     // The Pools section: its heading, and its two cards, each streamed behind
     // its own boundary (so their place in the HTML is the order they resolved).
     expect(html.indexOf('id="pools-heading"')).toBeGreaterThan(html.indexOf('id="images-heading"'));
-    for (const pool of ['install-fleet', 'add-shard'])
+    for (const pool of ['install-fleet', 'add-shard', 'tenant-accounts'])
       expect(html).toContain(`data-pool="${pool}"`);
+    expect(html).toContain('data-pool="tenant-accounts" data-state="failed"');
+    expect(fleetStatusTenantAccountsService.read).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'superadmin' }),
+      { now: expect.any(Date) },
+    );
     expect(fleetStatusPoolsService.readInstallFleet).toHaveBeenCalledWith(
       expect.objectContaining({ role: 'superadmin' }),
       { now: expect.any(Date) },
@@ -173,6 +186,42 @@ describe('the fleet status page', () => {
     );
   });
 
+  it('the tenant card searches and pages from the query, a repeated parameter reading as its first', async () => {
+    await signInAs('superadmin');
+    vi.spyOn(fleetStatusImagesService, 'publishRecords').mockResolvedValue({
+      hosted: null,
+      runner: null,
+      indexer: null,
+      sandbox: null,
+    });
+    vi.spyOn(fleetStatusImagesService, 'readHosted').mockResolvedValue(hostedRow());
+    vi.spyOn(fleetStatusImagesService, 'readRunner').mockResolvedValue(runnerRow());
+    vi.spyOn(fleetStatusImagesService, 'readIndexer').mockResolvedValue(indexerRow());
+    vi.spyOn(fleetStatusImagesService, 'readSandbox').mockResolvedValue(sandboxRow());
+    const account = (organizationName: string) => ({
+      organizationName,
+      accountName: `motir-tenant-${organizationName.toLowerCase()}`,
+      awsAccountId: null,
+      state: 'creating' as const,
+      refusedCount: 0,
+      lastRefusedAt: null,
+      quotas: [],
+    });
+    vi.spyOn(fleetStatusTenantAccountsService, 'read').mockResolvedValue({
+      status: 'ok',
+      accounts: [account('Northwind'), account('Southgate')],
+      belowTargetCount: 0,
+      notReadCount: 0,
+    });
+    const html = decode(
+      await renderToHtml(await page({ tenantQ: ['north', 'south'], tenantPage: ['1', '9'] })),
+    );
+    expect(html).toContain('data-pool="tenant-accounts" data-state="ok"');
+    expect(html).toContain('value="north"');
+    expect(html).toContain('Northwind');
+    expect(html).not.toContain('Southgate');
+  });
+
   it('a blind-spot read that fails leaves only its own card saying so', async () => {
     await signInAs('superadmin');
     vi.spyOn(fleetStatusImagesService, 'publishRecords').mockResolvedValue({
@@ -186,7 +235,7 @@ describe('the fleet status page', () => {
     vi.spyOn(fleetStatusImagesService, 'readIndexer').mockResolvedValue(indexerRow());
     vi.spyOn(fleetStatusImagesService, 'readSandbox').mockResolvedValue(sandboxRow());
     vi.spyOn(ciFleetBlindSpotsService, 'read').mockResolvedValue({ status: 'unavailable' });
-    const html = decode(await renderToHtml(await Page()));
+    const html = decode(await renderToHtml(await page()));
     expect(html).toContain('data-element="blind-spots" data-state="failed"');
     expect(html).toContain("Couldn't read the CI fleet's blind spots");
     for (const image of ['hosted', 'runner', 'indexer', 'sandbox'])
@@ -210,7 +259,7 @@ describe('the fleet status page', () => {
     vi.spyOn(ciFleetBlindSpotsService, 'read').mockImplementation(
       () => new Promise((resolve) => setTimeout(() => resolve({ status: 'notComputed' }), 50)),
     );
-    const html = decode(await renderToHtml(await Page()));
+    const html = decode(await renderToHtml(await page()));
     // The shell carries the fallback; the streamed card replaces it.
     expect(html).toContain('data-element="blind-spots" data-state="loading"');
     expect(html).toContain("Loading the CI fleet's blind spots");
@@ -239,7 +288,7 @@ describe('the fleet status page', () => {
       detail: 'the private detail',
     });
     vi.spyOn(fleetStatusImagesService, 'readSandbox').mockResolvedValue(sandboxRow());
-    const html = decode(await renderToHtml(await Page()));
+    const html = decode(await renderToHtml(await page()));
     expect(html).toContain('data-image="runner" data-state="not_read"');
     expect(html).toContain("Couldn't read the CI runner image");
     expect(html).toContain('data-image="hosted" data-state="days_behind"');

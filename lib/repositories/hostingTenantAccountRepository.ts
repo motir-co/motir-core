@@ -47,6 +47,17 @@ export const hostingTenantAccountRepository = {
     });
   },
 
+  /** Every row with its organisation's name, oldest first — what Fleet status
+   *  lists (MOTIR-12014). */
+  async listAllWithOrganizationInTx(
+    tx: Prisma.TransactionClient,
+  ): Promise<(HostingTenantAccount & { organization: { name: string } })[]> {
+    return tx.hostingTenantAccount.findMany({
+      include: { organization: { select: { name: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
   /** Every `ready` row, oldest first — what the deploy-policy convergence walks
    *  (MOTIR-10005). */
   async listReadyInTx(tx: Prisma.TransactionClient): Promise<HostingTenantAccount[]> {
