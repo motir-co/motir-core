@@ -43,16 +43,23 @@ export const fleetCodeScanningMoveRepository = {
     return rows.length === 1;
   },
 
-  /** Give the lease back at `now` — only the holder can — and, when the setup is
-   *  on the fleet label, remember it until `onFleetUntil`. */
+  /** Settle the holder's lease — only the holder can — so it is held until
+   *  `heldUntil` (now, to give it back; later, for a cooldown) and, when the
+   *  setup is on the fleet label, remember it until `onFleetUntil`. */
   async settleInTx(
-    input: { org: string; repo: string; holder: string; now: Date; onFleetUntil: Date | null },
+    input: {
+      org: string;
+      repo: string;
+      holder: string;
+      heldUntil: Date;
+      onFleetUntil: Date | null;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const { org, repo, holder, now, onFleetUntil } = input;
+    const { org, repo, holder, heldUntil, onFleetUntil } = input;
     await tx.fleetCodeScanningMove.updateMany({
       where: { org, repo, holder },
-      data: { heldUntil: now, ...(onFleetUntil ? { onFleetUntil } : {}) },
+      data: { heldUntil, ...(onFleetUntil ? { onFleetUntil } : {}) },
     });
   },
 };

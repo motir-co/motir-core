@@ -52,6 +52,12 @@ export const ON_FLEET_RECHECK_MS = 10 * 60_000;
  *  next move by at most this. */
 export const MOVE_LEASE_MS = 5 * 60_000;
 
+/** How long a repository whose PATCH was SENT and refused is left alone. GitHub
+ *  refuses a move while an analysis runs (409), and a 5xx or a timeout may still
+ *  have been applied (a PATCH is answered 202 and applied later), so the rest of
+ *  the burst must not PATCH again right behind it. */
+export const FAILED_MOVE_COOLDOWN_MS = 2 * 60_000;
+
 export type CatchUpOutcome =
   | 'no_target'
   | 'recently_on_fleet'
@@ -79,15 +85,27 @@ function landedOnFleet(outcome: CatchUpOutcome): boolean {
   return outcome === 'moved' || outcome === 'already_on_fleet';
 }
 
+interface MoveResult {
+  outcome: CatchUpOutcome;
+  /** A PATCH reached GitHub and was refused, or its answer never came back. */
+  patchFailed: boolean;
+}
+
 /** Read the setup and move it — only ever under the repository's claim. Never
  *  throws. */
-async function moveUnderClaim(t: MoveTarget): Promise<CatchUpOutcome> {
+async function moveUnderClaim(t: MoveTarget): Promise<MoveResult> {
   const { projectId, owner, repo, org, target } = t;
+  let patchSent = false;
   try {
-    if (!(await repoVisibilityClient.isPrivate(owner, repo, target))) return 'not_private';
+    if (!(await repoVisibilityClient.isPrivate(owner, repo, target))) {
+      return { outcome: 'not_private', patchFailed: false };
+    }
     const setup = await codeScanningDefaultSetupClient.get(owner, repo, target);
-    if (setup.state !== 'configured') return 'not_configured';
-    if (runnerRequests(setup.runner, MOTIR_RUNNER_LABEL)) return 'already_on_fleet';
+    if (setup.state !== 'configured') return { outcome: 'not_configured', patchFailed: false };
+    if (runnerRequests(setup.runner, MOTIR_RUNNER_LABEL)) {
+      return { outcome: 'already_on_fleet', patchFailed: false };
+    }
+    patchSent = true;
     await codeScanningDefaultSetupClient.setRunner(
       owner,
       repo,
@@ -99,30 +117,28 @@ async function moveUnderClaim(t: MoveTarget): Promise<CatchUpOutcome> {
       org,
       repo,
     });
-    return 'moved';
+    return { outcome: 'moved', patchFailed: false };
   } catch (err) {
-    // GitHub does not count the new runner yet; the next boot tries again.
-    if (isNoRunnerWithLabelRefusal(err)) return 'still_no_runner';
+    // GitHub does not count the new runner yet, and changed nothing: the next
+    // boot tries again at once.
+    if (isNoRunnerWithLabelRefusal(err)) return { outcome: 'still_no_runner', patchFailed: false };
     logFailure(t, err);
-    return 'failed';
+    return { outcome: 'failed', patchFailed: patchSent };
   }
 }
 
-/** Give the claim back, remembering a landed move. Never throws: a lease that
- *  could not be given back expires on its own. */
-async function settle(
-  t: MoveTarget,
-  holder: string,
-  now: Date,
-  outcome: CatchUpOutcome,
-): Promise<void> {
-  const onFleetUntil = landedOnFleet(outcome)
+/** Give the claim back, remembering a landed move — or, after a refused
+ *  PATCH, hold it for the cooldown. Never throws: a lease that could not be
+ *  given back expires on its own. */
+async function settle(t: MoveTarget, holder: string, now: Date, result: MoveResult): Promise<void> {
+  const onFleetUntil = landedOnFleet(result.outcome)
     ? new Date(now.getTime() + ON_FLEET_RECHECK_MS)
     : null;
+  const heldUntil = result.patchFailed ? new Date(now.getTime() + FAILED_MOVE_COOLDOWN_MS) : now;
   try {
     await withSystemContext((tx) =>
       fleetCodeScanningMoveRepository.settleInTx(
-        { org: t.org, repo: t.name, holder, now, onFleetUntil },
+        { org: t.org, repo: t.name, holder, heldUntil, onFleetUntil },
         tx,
       ),
     );
@@ -156,9 +172,9 @@ async function claimAndMove(t: MoveTarget, now: Date): Promise<CatchUpOutcome> {
     fleetCodeScanningMoveRepository.tryClaimInTx({ org, repo: name, holder, now, heldUntil }, tx),
   );
   if (!claimed) return 'move_in_flight';
-  const outcome = await moveUnderClaim(t);
-  await settle(t, holder, now, outcome);
-  return outcome;
+  const result = await moveUnderClaim(t);
+  await settle(t, holder, now, result);
+  return result.outcome;
 }
 
 export const fleetCodeScanningCatchUpService = {

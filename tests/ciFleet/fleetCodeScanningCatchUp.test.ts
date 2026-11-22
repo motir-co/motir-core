@@ -2,10 +2,12 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { codeScanningDefaultSetupClient } from '@/lib/github/codeScanningDefaultSetup';
 import type { GithubOrgTarget } from '@/lib/github/orgTarget';
 import { db } from '@/lib/db';
 import { fleetCodeScanningMoveRepository } from '@/lib/repositories/fleetCodeScanningMoveRepository';
 import {
+  FAILED_MOVE_COOLDOWN_MS,
   fleetCodeScanningCatchUpService as service,
   MOVE_LEASE_MS,
   ON_FLEET_RECHECK_MS,
@@ -308,12 +310,30 @@ describe('fleetCodeScanningCatchUpService.afterRunnerRegistered', () => {
     expect(await catchUp(t0 + MOVE_LEASE_MS)).toBe('moved');
   });
 
-  it('gives the claim back on a failed move, so the next boot tries again at once', async () => {
+  it('holds the move for the cooldown after a refused PATCH, so the rest of the burst sends none', async () => {
     await storePair(true);
-    patchAnswer = { status: 500, message: 'Server Error' };
+    // GitHub refuses a move while an analysis of the repository runs.
+    patchAnswer = { status: 409, message: 'A code scanning analysis is in progress' };
     const t0 = 12_000_000;
     expect(await catchUp(t0)).toBe('failed');
+    expect(patches()).toHaveLength(1);
     patchAnswer = null;
+    calls = [];
+    expect(await catchUp(t0 + FAILED_MOVE_COOLDOWN_MS - 1)).toBe('move_in_flight');
+    expect(calls).toEqual([]);
+    expect(await catchUp(t0 + FAILED_MOVE_COOLDOWN_MS)).toBe('moved');
+  });
+
+  it('gives the claim back at once when the move failed before any PATCH was sent', async () => {
+    await storePair(true);
+    const t0 = 15_000_000;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const get = vi
+      .spyOn(codeScanningDefaultSetupClient, 'get')
+      .mockRejectedValueOnce(new Error('default-setup read failed'));
+    expect(await catchUp(t0)).toBe('failed');
+    expect(patches()).toEqual([]);
+    get.mockRestore();
     expect(await catchUp(t0 + 1)).toBe('moved');
   });
 
