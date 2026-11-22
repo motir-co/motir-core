@@ -3,17 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import type { GithubOrgTarget } from '@/lib/github/orgTarget';
+import { db } from '@/lib/db';
+import { fleetCodeScanningMoveRepository } from '@/lib/repositories/fleetCodeScanningMoveRepository';
 import {
-  _resetSeenOnFleet,
   fleetCodeScanningCatchUpService as service,
+  MOVE_LEASE_MS,
   ON_FLEET_RECHECK_MS,
 } from '@/lib/services/fleetCodeScanningCatchUpService';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The deferred CodeQL move a fleet boot makes once its runner is registered.
-// GitHub is a fake at `fetch`; the stored pair row is real.
+// GitHub is a fake at `fetch`; the stored pair row and the move claim are real.
 
 const ORG = 'acme-connected';
 const TARGET: GithubOrgTarget = { org: ORG, installationId: '4401', role: 'provisioning' };
@@ -27,16 +30,35 @@ interface Setup {
 }
 
 let fx: WorkItemFixture;
-let setup: Setup;
+let setups: Record<string, Setup>;
 let isPrivate: boolean;
 let patchAnswer: { status: number; message: string } | null;
+let readDelayMs: number;
 let calls: string[];
+/** Fresh copies of `@/lib/db` loaded by {@link separateInstances}, closed after. */
+let extraClients: Array<{ $disconnect(): Promise<void> }>;
+
+const STANDARD: Setup = { state: 'configured', runner_type: 'standard', runner_label: '' };
+const ON_FLEET: Setup = {
+  state: 'configured',
+  runner_type: 'labeled',
+  runner_label: MOTIR_RUNNER_LABEL,
+};
+
+/** motir-ai's default setup, as the fake GitHub holds it. */
+function setup(): Setup | undefined {
+  return setups['motir-ai'];
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+function patches(): string[] {
+  return calls.filter((c) => c.startsWith('PATCH'));
 }
 
 function installGitHub(): void {
@@ -52,11 +74,19 @@ function installGitHub(): void {
         });
       }
       calls.push(`${method} ${u.pathname}`);
-      if (u.pathname.endsWith('/code-scanning/default-setup')) {
-        if (method === 'GET') return json(200, { languages: ['actions'], ...setup });
+      const setupPath = u.pathname.match(/^\/repos\/[^/]+\/([^/]+)\/code-scanning\/default-setup$/);
+      if (setupPath) {
+        const name = setupPath[1]!;
+        if (method === 'GET') {
+          // GitHub answers the state it read when the request arrived; a slow
+          // answer is what lets concurrent boots all read before any writes.
+          const answer = json(200, { languages: ['actions'], ...setups[name] });
+          if (readDelayMs > 0) await new Promise((r) => setTimeout(r, readDelayMs));
+          return answer;
+        }
         if (patchAnswer) return json(patchAnswer.status, { message: patchAnswer.message });
         const body = JSON.parse(init!.body!) as Record<string, string>;
-        setup = {
+        setups[name] = {
           state: 'configured',
           runner_type: body['runner_type'] as Setup['runner_type'],
           runner_label: body['runner_label'] ?? '',
@@ -65,9 +95,8 @@ function installGitHub(): void {
       }
       // GitHub's paths are case-insensitive; the boot passes the owner as the
       // job's repository spells it.
-      if (u.pathname.toLowerCase() === `/repos/${ORG}/motir-ai`) {
-        return json(200, { private: isPrivate });
-      }
+      const repoPath = u.pathname.toLowerCase().match(new RegExp(`^/repos/${ORG}/([^/]+)$`));
+      if (repoPath) return json(200, { private: isPrivate });
       return json(500, { message: `unexpected ${method} ${u.pathname}` });
     }),
   );
@@ -79,14 +108,41 @@ async function storePair(enabled: boolean): Promise<void> {
   });
 }
 
-function catchUp(now?: number) {
-  return service.afterRunnerRegistered({
+type Service = typeof service;
+
+function catchUp(now?: number, opts: { via?: Service; repo?: string } = {}) {
+  return (opts.via ?? service).afterRunnerRegistered({
     projectId: fx.projectId,
     owner: 'Acme-Connected',
-    repo: 'motir-ai',
+    repo: opts.repo ?? 'motir-ai',
     target: TARGET,
     ...(now === undefined ? {} : { now }),
   });
+}
+
+/**
+ * `count` copies of the catch-up service, each loaded from a FRESH module
+ * registry — its own module state and its own `@/lib/db` client and pool, as
+ * each fleet worker has. Nothing one remembers in process memory reaches
+ * another, so only what they share in Postgres can keep them from racing.
+ */
+async function separateInstances(count: number): Promise<Service[]> {
+  const instances: Service[] = [];
+  for (let i = 0; i < count; i += 1) {
+    vi.resetModules();
+    const mod = await import('@/lib/services/fleetCodeScanningCatchUpService');
+    const dbMod = await import('@/lib/db');
+    if (dbMod.db !== db) extraClients.push(dbMod.db);
+    // Warm the client, as a running worker's is: a first query's connect would
+    // otherwise stagger the boots and hide the race.
+    await dbMod.db.platformFleetOrgCi.findFirst({ select: { id: true } });
+    instances.push(mod.fleetCodeScanningCatchUpService);
+  }
+  return instances;
+}
+
+async function clearMoves(): Promise<void> {
+  await adminDb.fleetCodeScanningMove.deleteMany({});
 }
 
 beforeEach(async () => {
@@ -99,17 +155,23 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_ID', '4242');
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   _resetInstallationTokenCache();
-  _resetSeenOnFleet();
-  setup = { state: 'configured', runner_type: 'standard', runner_label: '' };
+  await clearMoves();
+  setups = { 'motir-ai': { ...STANDARD } };
   isPrivate = true;
   patchAnswer = null;
+  readDelayMs = 0;
   calls = [];
+  extraClients = [];
   installGitHub();
   fx = await makeWorkItemFixture({ name: 'Motir', identifier: 'MOTIR' });
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(extraClients.map((c) => c.$disconnect()));
+  // Outside every truncation helper's list: cleared here so the next file a
+  // worker runs starts with no claim.
+  await clearMoves();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -119,11 +181,7 @@ describe('fleetCodeScanningCatchUpService.afterRunnerRegistered', () => {
   it('moves a configured default setup onto the fleet label when the pair is ON', async () => {
     await storePair(true);
     expect(await catchUp()).toBe('moved');
-    expect(setup).toEqual({
-      state: 'configured',
-      runner_type: 'labeled',
-      runner_label: MOTIR_RUNNER_LABEL,
-    });
+    expect(setup()).toEqual(ON_FLEET);
   });
 
   it('leaves GitHub untouched when the pair is OFF or was never stored', async () => {
@@ -150,14 +208,14 @@ describe('fleetCodeScanningCatchUpService.afterRunnerRegistered', () => {
     isPrivate = false;
     expect(await catchUp()).toBe('not_private');
     isPrivate = true;
-    setup = { state: 'not-configured', runner_type: 'standard', runner_label: '' };
+    setups['motir-ai'] = { state: 'not-configured', runner_type: 'standard', runner_label: '' };
     expect(await catchUp()).toBe('not_configured');
     expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
   });
 
   it('reads a repository already on the fleet once per recheck window', async () => {
     await storePair(true);
-    setup = { state: 'configured', runner_type: 'labeled', runner_label: MOTIR_RUNNER_LABEL };
+    setups['motir-ai'] = { ...ON_FLEET };
     const t0 = 1_000_000;
     expect(await catchUp(t0)).toBe('already_on_fleet');
     calls = [];
@@ -181,6 +239,106 @@ describe('fleetCodeScanningCatchUpService.afterRunnerRegistered', () => {
     expect(vi.mocked(console.warn)).toHaveBeenCalledWith(
       expect.stringContaining('could not move a deferred CodeQL default setup'),
       expect.objectContaining({ org: ORG, repo: 'motir-ai' }),
+    );
+  });
+  // ── MOTIR-12034 · one move per repository, across processes ──────────────
+
+  it('makes exactly ONE move when ten boots of one repository race on separate instances', async () => {
+    await storePair(true);
+    readDelayMs = 300;
+    const instances = await separateInstances(10);
+    const outcomes = await Promise.all(instances.map((via) => catchUp(undefined, { via })));
+    expect(patches()).toEqual(['PATCH /repos/Acme-Connected/motir-ai/code-scanning/default-setup']);
+    expect(outcomes.filter((o) => o === 'moved')).toHaveLength(1);
+    // Every other boot skipped: the move was in flight, or had just landed.
+    expect(
+      outcomes.every((o) => ['moved', 'move_in_flight', 'recently_on_fleet'].includes(o)),
+    ).toBe(true);
+    expect(setup()).toEqual(ON_FLEET);
+  });
+
+  it('sends nothing to GitHub from another instance within the recheck window after a move lands', async () => {
+    await storePair(true);
+    const [first, second] = await separateInstances(2);
+    const t0 = 5_000_000;
+    expect(await catchUp(t0, { via: first })).toBe('moved');
+    // GitHub's read can lag a PATCH it accepted with a 202; the store, not a
+    // fresh read, is what must stop the next boot.
+    setups['motir-ai'] = { ...STANDARD };
+    calls = [];
+    expect(await catchUp(t0 + ON_FLEET_RECHECK_MS - 1, { via: second })).toBe('recently_on_fleet');
+    expect(calls).toEqual([]);
+    // Past the window the setup is read again, and moved again if it is off.
+    expect(await catchUp(t0 + ON_FLEET_RECHECK_MS, { via: second })).toBe('moved');
+  });
+
+  it('gives each repository its own move', async () => {
+    await storePair(true);
+    setups['motir-gateway'] = { ...STANDARD };
+    const [a, b] = await separateInstances(2);
+    const outcomes = await Promise.all([
+      catchUp(undefined, { via: a }),
+      catchUp(undefined, { via: b, repo: 'motir-gateway' }),
+    ]);
+    expect(outcomes).toEqual(['moved', 'moved']);
+    expect(patches().sort()).toEqual([
+      'PATCH /repos/Acme-Connected/motir-ai/code-scanning/default-setup',
+      'PATCH /repos/Acme-Connected/motir-gateway/code-scanning/default-setup',
+    ]);
+  });
+
+  it('skips while another boot holds the move, and takes it back once a dead holder’s lease runs out', async () => {
+    await storePair(true);
+    const t0 = 9_000_000;
+    const taken = await withSystemContext((tx) =>
+      fleetCodeScanningMoveRepository.tryClaimInTx(
+        {
+          org: ORG,
+          repo: 'motir-ai',
+          holder: 'a-boot-that-died',
+          now: new Date(t0),
+          heldUntil: new Date(t0 + MOVE_LEASE_MS),
+        },
+        tx,
+      ),
+    );
+    expect(taken).toBe(true);
+    expect(await catchUp(t0 + MOVE_LEASE_MS - 1)).toBe('move_in_flight');
+    expect(calls).toEqual([]);
+    expect(await catchUp(t0 + MOVE_LEASE_MS)).toBe('moved');
+  });
+
+  it('gives the claim back on a failed move, so the next boot tries again at once', async () => {
+    await storePair(true);
+    patchAnswer = { status: 500, message: 'Server Error' };
+    const t0 = 12_000_000;
+    expect(await catchUp(t0)).toBe('failed');
+    patchAnswer = null;
+    expect(await catchUp(t0 + 1)).toBe('moved');
+  });
+
+  it('answers failed, never throwing, when the claim store cannot be reached', async () => {
+    await storePair(true);
+    vi.spyOn(fleetCodeScanningMoveRepository, 'tryClaimInTx').mockRejectedValue(
+      new Error('connection refused'),
+    );
+    expect(await catchUp()).toBe('failed');
+    expect(patches()).toEqual([]);
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('could not move a deferred CodeQL default setup'),
+      expect.objectContaining({ detail: 'connection refused' }),
+    );
+  });
+
+  it('still answers the move when the claim cannot be given back, logging it', async () => {
+    await storePair(true);
+    vi.spyOn(fleetCodeScanningMoveRepository, 'settleInTx').mockRejectedValue(
+      new Error('connection reset'),
+    );
+    expect(await catchUp()).toBe('moved');
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('could not move a deferred CodeQL default setup'),
+      expect.objectContaining({ detail: 'connection reset' }),
     );
   });
 });
