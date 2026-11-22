@@ -477,11 +477,13 @@ test.describe('review is a gate a person starts', () => {
     await chapter('To approve lists a review to run — not an approval', async () => {
       await page.goto('/workbench?tab=approvals');
       const row = main(page).locator('[data-review-to-run]').filter({ hasText: hosted.identifier });
-      await expect(row).toContainText(plain(rp.toRun.sentence, { name: hosted.title }), {
-        timeout: FIRST_PAINT_MS,
-      });
+      // Laid out like a To fix row (MOTIR-12032, `design/workbench` § 45): line 1 the work
+      // item, line 2 why it waits and the command.
+      await expect(row).toContainText(hosted.title, { timeout: FIRST_PAINT_MS });
       await expect(row).toContainText(rp.toRun.tag);
-      await expect(row.getByTestId(`review-command-copy-${hosted.identifier}`)).toBeVisible();
+      const line = row.getByTestId(`review-to-run-line-${hosted.identifier}`);
+      await expect(line).toContainText(plain(rp.toRun.reason));
+      await expect(line.getByTestId(`review-command-copy-${hosted.identifier}`)).toBeVisible();
       await expect(row.getByRole('button', { name: /approve/i })).toHaveCount(0);
       await expect(row.locator('[data-review-line]')).toHaveCount(0);
     });

@@ -17590,7 +17590,8 @@
       "toRun": {
         "sentence": "Avvia una revisione di <title>{name}</title>",
         "tag": "Revisione da eseguire",
-        "details": "Non è ancora un’approvazione. Aprila per avviare la revisione o per continuare senza; la tua approvazione viene richiesta quando la revisione è superata.",
+        "reason": "<b>In attesa di una revisione.</b> La tua approvazione viene richiesta quando la revisione è superata.",
+        "creditsNote": "Revisiona con l’agente Motir è pagato con i crediti IA della tua organizzazione. motir review viene eseguito nel tuo agente.",
         "open": "Apri {key}: {sentence}"
       },
       "dismiss": {

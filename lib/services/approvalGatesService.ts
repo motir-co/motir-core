@@ -1651,6 +1651,14 @@ export const approvalGatesService = {
         ceiling,
         tx,
       );
+      // DOOR 1 (*Review with Motir agent*, MOTIR-12032 § 45.2) is the reader's who may edit
+      // work items in the card's project — ONE permission read per project on the list,
+      // never one per row.
+      const editable = new Set<string>();
+      for (const projectId of new Set(rows.map((row) => row.projectId))) {
+        const held = await projectAccessService.getPermissions(projectId, ctx, tx);
+        if (held.has('work_item:edit')) editable.add(projectId);
+      }
       return rows.flatMap((row) =>
         row.workItem
           ? [
@@ -1663,6 +1671,7 @@ export const approvalGatesService = {
                 subjectVersion: row.subjectVersion,
                 raisedAt: row.createdAt.toISOString(),
                 command: reviewCommand(row.workItem.identifier),
+                canReviewHosted: editable.has(row.projectId),
               },
             ]
           : [],

@@ -470,12 +470,13 @@ test.describe('the review path', () => {
       const row = main(page).locator('[data-review-to-run]').filter({
         hasText: mainCard.identifier,
       });
-      await expect(row).toContainText(plain(rp.toRun.sentence, { name: mainCard.title }), {
-        timeout: FIRST_PAINT_MS,
-      });
+      // Laid out like a To fix row (MOTIR-12032, `design/workbench` § 45): line 1 the work
+      // item, line 2 why it waits and the command.
+      await expect(row).toContainText(mainCard.title, { timeout: FIRST_PAINT_MS });
       await expect(row).toContainText(rp.toRun.tag);
-      await expect(row).toContainText(rp.toRun.details);
-      await expect(row.getByTestId(`review-command-copy-${mainCard.identifier}`)).toBeVisible();
+      const line = row.getByTestId(`review-to-run-line-${mainCard.identifier}`);
+      await expect(line).toContainText(plain(rp.toRun.reason));
+      await expect(line.getByTestId(`review-command-copy-${mainCard.identifier}`)).toBeVisible();
       // It decides nothing: no approve verb on it.
       await expect(row.getByRole('button', { name: /approve/i })).toHaveCount(0);
     });

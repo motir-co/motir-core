@@ -17590,7 +17590,8 @@
       "toRun": {
         "sentence": "Iniciar uma revisão de <title>{name}</title>",
         "tag": "Revisão a executar",
-        "details": "Ainda não é uma aprovação. Abra para iniciar a revisão ou continuar sem ela; sua aprovação é solicitada quando ela passar.",
+        "reason": "<b>Aguardando uma revisão.</b> Sua aprovação é solicitada quando ela passar.",
+        "creditsNote": "Revisar com o agente Motir é pago com os créditos de IA da sua organização. motir review é executado no seu próprio agente.",
         "open": "Abrir {key}: {sentence}"
       },
       "dismiss": {

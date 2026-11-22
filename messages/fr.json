@@ -17590,7 +17590,8 @@
       "toRun": {
         "sentence": "Lancer une relecture de <title>{name}</title>",
         "tag": "Revue à lancer",
-        "details": "Ce n’est pas encore une approbation. Ouvrez-la pour lancer la relecture ou continuer sans elle ; votre approbation est sollicitée une fois qu’elle a réussi.",
+        "reason": "<b>En attente d’une relecture.</b> Votre approbation est sollicitée une fois qu’elle a réussi.",
+        "creditsNote": "Relire avec l’agent Motir est payé sur les crédits IA de votre organisation. motir review s’exécute dans votre propre agent.",
         "open": "Ouvrir {key} : {sentence}"
       },
       "dismiss": {

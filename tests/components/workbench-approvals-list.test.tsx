@@ -10,6 +10,7 @@ import type {
   ApprovalQueueRowDto,
   DesignResultSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
+import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
 
 // THE APPROVALS TAB'S LIST (Story MOTIR-4879 · Subtask MOTIR-4794), RE-SCOPED by
 // Subtask MOTIR-5225 (Story MOTIR-5214): the row no longer discloses a frame, it
@@ -621,5 +622,66 @@ describe('the Approvals list — the PULL-REQUEST row (MOTIR-5485, design-notes 
     expect(screen.getByRole('link', { name: /^Review ACME-12 / }).getAttribute('href')).toBe(
       '/items/ACME-12',
     );
+  });
+});
+
+// MOTIR-12032 (`design/workbench/design-notes.md` § 45.2): a review to run offers *Review with
+// Motir agent* to a reader who may run the card hosted, so the list mounts ONE model list —
+// and asks for none when no row offers the door.
+describe('the Approvals list — the reviews to run and the hosted door', () => {
+  const toRun = (canReviewHosted: boolean): ReviewToRunRowDTO => ({
+    kind: 'review_to_run',
+    gateId: 'g-run',
+    workItemId: 'wi-run',
+    identifier: 'ACME-30',
+    title: 'Export the totals row',
+    subjectVersion: 'v1',
+    raisedAt: new Date(Date.now() - 3_600_000).toISOString(),
+    command: 'motir review ACME-30',
+    canReviewHosted,
+  });
+  const fetchMock = vi.fn(
+    async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({ models: [{ id: 'm-1', provider: 'anthropic' }], default: 'm-1' }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+  );
+  beforeEach(() => {
+    fetchMock.mockClear();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderToRun(row: ReviewToRunRowDTO) {
+    return renderWithIntl(
+      <ApprovalsList
+        rows={[]}
+        reviewsToRun={[row]}
+        label="To approve"
+        ceiling={null}
+        empty={EMPTY}
+      />,
+    );
+  }
+
+  it('a row that offers the door mounts the models list once, and the door draws', async () => {
+    renderToRun(toRun(true));
+    await act(async () => {});
+    expect(screen.getByTestId('review-with-motir-agent')).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/hosted-runs/models')),
+    ).toHaveLength(1);
+  });
+
+  it('no row offering the door asks for no models and draws the command only', async () => {
+    renderToRun(toRun(false));
+    await act(async () => {});
+    expect(screen.queryByTestId('review-with-motir-agent')).toBeNull();
+    expect(screen.getByTestId('review-command-copy-ACME-30')).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
