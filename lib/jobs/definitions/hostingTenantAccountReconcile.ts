@@ -24,7 +24,9 @@ export const hostingTenantAccountReconcile = defineJob(
     retryPolicy: 'none',
   },
   (ctx, services) => {
-    return ctx.step.run('hosting-tenant-account-reconcile', () =>
+    // `-v2` (MOTIR-12011): the result gained `quotaChecks`, the ready-account
+    // quota re-check, so a memo under the old id is retired.
+    return ctx.step.run('hosting-tenant-account-reconcile-v2', () =>
       services.hostingTenantAccountReconcile.runReconcile(),
     );
   },

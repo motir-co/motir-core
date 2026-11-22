@@ -607,11 +607,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ fetchedAt: string; fromDay: string; lines: number; status: "fetched"; toDay: string } | { status: "not_configured" }',
   },
-  // Story MOTIR-9792 · MOTIR-9942 — the tenant account reconcile.
-  'hosting-tenant-account-reconcile': {
+  // Story MOTIR-9792 · MOTIR-9942 — the tenant account reconcile; `-v2` added
+  // the ready-account quota re-check (MOTIR-12011).
+  'hosting-tenant-account-reconcile-v2': {
     file: 'lib/jobs/definitions/hostingTenantAccountReconcile.ts',
     shape:
-      '{ failures: number; organizations: Array<{ organizationId: string; outcome: "already_ready" | "backing_off" | "failed" | "not_requested" | "ready" | "refused" }>; ran: boolean }',
+      '{ failures: number; organizations: Array<{ organizationId: string; outcome: "already_ready" | "backing_off" | "failed" | "not_requested" | "ready" | "refused" }>; quotaChecks: Array<{ organizationId: string; outcome: "at_target" | "failed" | "raise_filed" | "raise_pending" }>; ran: boolean }',
   },
   // Story MOTIR-9365 · MOTIR-9585 — the Host account state pass.
   'host-account-state': {
@@ -1030,6 +1031,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'hosting-tenant-account-reconcile': {
+    shape:
+      '{ failures: number; organizations: Array<{ organizationId: string; outcome: "already_ready" | "backing_off" | "failed" | "not_requested" | "ready" | "refused" }>; ran: boolean }',
+    supersededBy: 'hosting-tenant-account-reconcile-v2',
+    reason:
+      'MOTIR-12011 added `quotaChecks`, the per-pass record of each ready tenant account whose quota targets were re-checked. A memo under the old id carries none. Re-executing the pass on a resumed run is safe: it holds its own lease, every AWS step looks before it acts (an account is found by its derived name, a quota raise is filed only when none is open), and the job has no retries, so the next minute is its retry anyway.',
+  },
   'reconcile-github-queue-v4': {
     shape:
       '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; onDemand?: undefined | { added: number; awaiting: number; idleRunners: number; queued: number }; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined; undeliveredRepos?: Array<string> | undefined; unreadableRepos?: Array<string> | undefined }> }',

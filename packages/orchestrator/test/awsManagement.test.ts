@@ -924,17 +924,73 @@ describe('the tenant account bootstrap calls (MOTIR-9941)', () => {
     });
   });
 
-  it('files nothing for a quota at target, read from the default when never changed', async () => {
+  it('files nothing for a quota whose applied value is at target', async () => {
     const { api, calls } = harness({
-      GetServiceQuotaCommand: () => {
-        throw sdkError('NoSuchResourceException');
-      },
-      GetAWSDefaultServiceQuotaCommand: () => ({ Quota: { Value: 64 } }),
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 64 } }),
     });
 
     expect(await api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
       filed: false,
       pending: false,
+    });
+    expect(calls.map((c) => c.command)).toEqual(['GetServiceQuotaCommand']);
+  });
+
+  // MOTIR-12011: a new account held at 10 concurrent Lambda executions, where
+  // AWS's general default is 1000. With no applied value the default was read
+  // as the account's and no raise was ever filed.
+  it('files a raise for a quota with no applied value, never counting the AWS default', async () => {
+    const LAMBDA = { serviceCode: 'lambda', quotaCode: 'L-B99A9384', desiredValue: 1000 };
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => {
+        throw sdkError('NoSuchResourceException');
+      },
+      GetAWSDefaultServiceQuotaCommand: () => ({ Quota: { Value: 1000 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({ RequestedQuotas: [] }),
+      RequestServiceQuotaIncreaseCommand: () => ({
+        RequestedQuota: { Id: 'q-2', Status: 'PENDING', DesiredValue: 1000 },
+      }),
+    });
+
+    expect(await api.ensureQuotaRaise(MEMBER, 'us-east-1', LAMBDA)).toEqual({
+      filed: true,
+      pending: true,
+    });
+    expect(calls.map((c) => c.command)).not.toContain('GetAWSDefaultServiceQuotaCommand');
+    expect(calls.find((c) => c.command === 'RequestServiceQuotaIncreaseCommand')!.input).toEqual({
+      ServiceCode: 'lambda',
+      QuotaCode: 'L-B99A9384',
+      DesiredValue: 1000,
+    });
+  });
+
+  it('reports pending, filing nothing, for a quota with no applied value and a raise open', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => {
+        throw sdkError('NoSuchResourceException');
+      },
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({
+        RequestedQuotas: [{ Id: 'q-0', Status: 'PENDING', DesiredValue: 64 }],
+      }),
+    });
+
+    expect(await api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
+      filed: false,
+      pending: true,
+    });
+    expect(calls.map((c) => c.command)).not.toContain('RequestServiceQuotaIncreaseCommand');
+  });
+
+  it('surfaces a quota read that fails for any reason but a missing applied value', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => {
+        throw sdkError('AccessDeniedException', 403);
+      },
+    });
+
+    await expect(api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).rejects.toMatchObject({
+      name: 'AwsManagementApiError',
+      awsCode: 'AccessDeniedException',
     });
     expect(calls.map((c) => c.command)).not.toContain('RequestServiceQuotaIncreaseCommand');
   });

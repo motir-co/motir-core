@@ -85,6 +85,31 @@ describe('hostingTenantAccountRepository', () => {
     expect(ready).toMatchObject({ awsAccountId: '111122223333', ouId: 'ou-ab12-tenants' });
   });
 
+  it('marks a row ready with its quota check time, and lists ready rows due a re-check (MOTIR-12011)', async () => {
+    const [fresh, stale, never, unready] = [
+      await seedOrg(),
+      await seedOrg(),
+      await seedOrg(),
+      await seedOrg(),
+    ];
+    for (const org of [fresh, stale, never, unready]) await ensure(org.id);
+    expect((await ensure(never.id)).quotasCheckedAt).toBeNull();
+    const at = new Date('2026-11-22T12:00:00Z');
+    const earlier = new Date('2026-11-22T09:00:00Z');
+
+    const marked = await withSystemContext((tx) => repo.markReadyInTx(fresh.id, at, tx));
+    expect(marked).toMatchObject({ state: 'ready', quotasCheckedAt: at });
+    await withSystemContext((tx) => repo.markReadyInTx(stale.id, at, tx));
+    await withSystemContext((tx) => repo.recordQuotasCheckedInTx(stale.id, earlier, tx));
+    await withSystemContext((tx) => repo.setStateInTx(never.id, 'ready', tx));
+
+    const due = await withSystemContext((tx) =>
+      repo.listReadyQuotaCheckDueInTx(new Date('2026-11-22T11:00:00Z'), tx),
+    );
+    expect(due.map((r) => r.organizationId)).toEqual([never.id, stale.id]);
+    expect((await ensure(stale.id)).quotasCheckedAt).toEqual(earlier);
+  });
+
   it('refuses a state outside the five at the database', async () => {
     const org = await seedOrg();
     await ensure(org.id);

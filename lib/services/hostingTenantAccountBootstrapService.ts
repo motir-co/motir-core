@@ -2,6 +2,7 @@ import {
   awsManagementCredentials,
   createAwsManagementApi,
   type AwsManagementApi,
+  type AwsSessionCredentials,
 } from '@motir/orchestrator';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import {
@@ -23,7 +24,8 @@ import { withSystemContext } from '@/lib/workspaces/context';
 //      allocation;
 //   3. each `TENANT_QUOTA_TARGETS` quota at target, or a raise filed (an open
 //      raise is pending, which does not block — the adapter reads the applied
-//      value when it needs it).
+//      value when it needs it). The reconcile re-checks them on a `ready`
+//      account through `ensureTenantQuotaRaises` (MOTIR-12011).
 //
 // The member access role of the account Motir's own Organization created is the
 // only role assumed; its session stays in memory and is dropped. It sets no
@@ -36,15 +38,11 @@ export interface TenantAccountBootstrapDeps {
   management?: AwsManagementApi;
 }
 
-export interface TenantAccountBootstrapResult {
+export interface TenantAccountBootstrapResult extends TenantQuotaRaises {
   /** Whether this call created the deploy role. */
   roleCreated: boolean;
   /** Whether this call wrote the organisation tag. */
   tagged: boolean;
-  /** Quota raises this call filed. */
-  quotaRaisesFiled: number;
-  /** Quotas still below target with a raise open (filed now or earlier). */
-  quotaRaisesPending: number;
 }
 
 /** The member session of the organisation's recorded account, and the account. */
@@ -80,6 +78,22 @@ export async function bootstrapTenantAccount(
     TENANT_ORGANIZATION_TAG_KEY,
     organizationId,
   );
+  return { roleCreated, tagged, ...(await ensureQuotaTargets(management, credentials)) };
+}
+
+/** What bringing an account's quota targets to target or a raise did. */
+export interface TenantQuotaRaises {
+  /** Quota raises this call filed. */
+  quotaRaisesFiled: number;
+  /** Quotas still below target with a raise open (filed now or earlier). */
+  quotaRaisesPending: number;
+}
+
+/** Each `TENANT_QUOTA_TARGETS` quota at target, or a raise filed or open. */
+async function ensureQuotaTargets(
+  management: AwsManagementApi,
+  credentials: AwsSessionCredentials,
+): Promise<TenantQuotaRaises> {
   let quotaRaisesFiled = 0;
   let quotaRaisesPending = 0;
   for (const target of TENANT_QUOTA_TARGETS) {
@@ -87,7 +101,25 @@ export async function bootstrapTenantAccount(
     if (raise.filed) quotaRaisesFiled += 1;
     if (raise.pending) quotaRaisesPending += 1;
   }
-  return { roleCreated, tagged, quotaRaisesFiled, quotaRaisesPending };
+  return { quotaRaisesFiled, quotaRaisesPending };
+}
+
+/**
+ * Bring a `ready` account's `TENANT_QUOTA_TARGETS` to target, or a raise, again
+ * (MOTIR-12011). A `ready` account never re-runs the bootstrap, so a raise its
+ * bootstrap skipped — a quota read as at target that the account did not have —
+ * is filed only through this: assume the member role and make the same
+ * `ensureQuotaRaise` calls, which file nothing for a quota at target or one with
+ * a raise open. Touches neither the deploy role nor the tag, and writes no
+ * record state.
+ */
+export async function ensureTenantQuotaRaises(
+  organizationId: string,
+  deps: TenantAccountBootstrapDeps = {},
+): Promise<TenantQuotaRaises> {
+  const management = managementOf(deps);
+  const { credentials } = await memberSession(organizationId, management);
+  return ensureQuotaTargets(management, credentials);
 }
 
 /** What converging one account's deploy-role policy did. */
